@@ -4,9 +4,11 @@ build-backend = "uv_build"
 
 [project]
 name = "footman"
-version = "0.0.1"
+version = "0.0.2"
 description = "A task runner with typed commands, nested groups, and instant shell completion. Under construction."
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.11"
 authors = [{ name = "Willem Kokke", email = "willem@humain-studios.com" }]
 keywords = ["task-runner", "cli", "completion", "duty", "typer"]
@@ -15,6 +17,10 @@ classifiers = [
     "Environment :: Console",
     "Programming Language :: Python :: 3",
 ]
+
+[project.urls]
+Homepage = "https://github.com/willemkokke/footman"
+Repository = "https://github.com/willemkokke/footman"
 
 [project.scripts]
 footman = "footman:main"
