@@ -1,0 +1,21 @@
+[build-system]
+requires = ["uv_build>=0.11,<0.13"]
+build-backend = "uv_build"
+
+[project]
+name = "footman"
+version = "0.0.1"
+description = "A task runner with typed commands, nested groups, and instant shell completion. Under construction."
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "Willem Kokke", email = "willem@humain-studios.com" }]
+keywords = ["task-runner", "cli", "completion", "duty", "typer"]
+classifiers = [
+    "Development Status :: 1 - Planning",
+    "Environment :: Console",
+    "Programming Language :: Python :: 3",
+]
+
+[project.scripts]
+footman = "footman:main"
+fm = "footman:main"
