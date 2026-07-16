@@ -195,8 +195,8 @@ poe dist-build
 | Separator-free chaining                     | yes     | no     | reserved-word   | reserved-word | seq task |
 | Completion without re-importing             | yes     | no     | no              | no            | yes*     |
 | Zero runtime dependencies                   | yes     | no     | no              | no            | no       |
-| Output capture / replay-on-failure          | json    | no     | yes (`ctx.run`) | partial       | no       |
-| DAG / parallel                              | not yet | no     | pre/post        | pre/post      | yes      |
+| Output capture / replay-on-failure          | yes     | no     | yes (`ctx.run`) | partial       | no       |
+| DAG / parallel-by-default                   | yes     | no     | serial          | serial        | yes      |
 
 \* poe avoids re-importing only because its tasks aren't Python functions.
 
@@ -216,10 +216,11 @@ nested groups, **eager choice/type validation** (duty accepts an invalid
 `Literal` value; footman rejects it), `Literal`/`Enum`-driven completion, and
 completion that doesn't re-import your project (~15× faster per TAB).
 
-**Where footman is still behind:** no `ctx.run`-style helper yet (tasks shell out
-by hand — see the `_run` helper in `footman/tasks.py`), so duty's capture model
-is more ergonomic today; and shell-completion installers aren't wired (the
-resolver works via `fm --complete`). Both are on the roadmap.
+**Where footman is still behind:** shell-completion installers aren't wired yet
+(the resolver works via `fm --complete`), and typer's `--help` formatting is
+richer. Both are on the roadmap. (footman has since gained a `run()`/`tools`
+capture layer and a parallel-by-default DAG scheduler — the matrix above
+reflects that.)
 
 ## Other Python task runners worth contrasting
 
