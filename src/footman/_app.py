@@ -1,6 +1,6 @@
 """The execution path: load tasks, refresh the manifest, run the chain.
 
-This is everything that happens for a real ``fm ...`` invocation (as opposed to
+This is everything that happens for a real `fm ...` invocation (as opposed to
 the completion hot path). It imports the user's tasks file — paying that cost is
 fine here — resolves the command line against the freshly-built manifest, and
 runs the resulting segments, honouring the global options.
@@ -27,7 +27,7 @@ from footman.app import DEFAULT_BRAND, Brand
 from footman.split import Segment
 
 # The brand (names + version) in effect for the current invocation. Set at the
-# top of ``run()``; a CLI is one invocation per process, so a module global is
+# top of `run()`; a CLI is one invocation per process, so a module global is
 # the simplest way to reach it from the error/version helpers.
 _brand: Brand = DEFAULT_BRAND
 
@@ -60,9 +60,9 @@ def _globals_to_dict(tokens: list[str]) -> dict[str, object]:
 def _discover(g: dict[str, object]) -> tuple[list[Path], dict[str, object]] | int:
     """Resolve the task files to load and the merged config for this cwd.
 
-    ``-f/--tasks-file`` is the escape hatch: it loads exactly one file, no
-    cascade. Otherwise footman collects every ``tasks.py`` from the repo root
-    (the ``.git`` ceiling) down to the cwd. Returns ``(files, config)`` or, when
+    `-f/--tasks-file` is the escape hatch: it loads exactly one file, no
+    cascade. Otherwise footman collects every `tasks.py` from the repo root
+    (the `.git` ceiling) down to the cwd. Returns `(files, config)` or, when
     nothing was found, the exit code to return (0 for a listing, 2 otherwise).
     """
     cwd = Path.cwd()

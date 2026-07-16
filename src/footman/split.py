@@ -1,15 +1,15 @@
 """Separator-free chain splitting, driven purely by the manifest.
 
-``fm build lint --fix test`` is split into three independent segments with no
+`fm build lint --fix test` is split into three independent segments with no
 separator at all — duty's muscle memory, but with real flags and positionals.
 The manifest gives the splitter exact knowledge of every task's shape, which
-makes the split deterministic under six rules (see ``NOTES``):
+makes the split deterministic under six rules (see `NOTES`):
 
 1. params with defaults are options, never positionals (the load-bearing rule);
 2. required positionals are consumed by exact arity, eagerly validated;
 3. options bind to their own segment;
-4. list options repeat the flag (``--tag a --tag b``);
-5. variadic / ``--`` passthrough segments are terminal; ``+`` is the always
+4. list options repeat the flag (`--tag a --tag b`);
+5. variadic / `--` passthrough segments are terminal; `+` is the always
    available explicit boundary;
 6. globals precede the first task name.
 
@@ -30,7 +30,7 @@ class ChainError(Exception):
     """A malformed command line, carrying a teaching message for the user."""
 
 
-# Global options bind to ``fm`` itself and must precede the first task name.
+# Global options bind to `fm` itself and must precede the first task name.
 # (canonical, short alias, kind, value-hint)
 GLOBALS: list[tuple[str, str | None, str, str | None]] = [
     ("--help", "-h", "flag", None),
@@ -266,14 +266,14 @@ def _consume_option(seg: Segment, opts: dict, argv: list[str], i: int) -> int:
 
 
 def _values(p: dict, value: str) -> list[str]:
-    """One value, or comma-split parts for a ``csv`` list/dict parameter."""
+    """One value, or comma-split parts for a `csv` list/dict parameter."""
     if p.get("csv"):
         return [part for part in value.split(",") if part]
     return [value]
 
 
 def _consume_pair(seg: Segment, p: dict, cli: str, pair: str) -> None:
-    """Parse and validate one ``KEY=VALUE`` token for a dict parameter."""
+    """Parse and validate one `KEY=VALUE` token for a dict parameter."""
     if "=" not in pair:
         raise ChainError(f"{seg.task}: --{cli} expects KEY=VALUE (got {pair!r})")
     key, value = pair.split("=", 1)

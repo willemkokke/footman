@@ -1,9 +1,9 @@
 """Build the task DAG and run it — in parallel by default, or sequentially.
 
-The chain segments plus each task's ``pre``/``post`` form a dependency graph
+The chain segments plus each task's `pre`/`post` form a dependency graph
 (deduped by task identity). Independent nodes run concurrently on a thread pool;
 a node runs once all its prerequisites have succeeded. footman tasks are almost
-always I/O-bound (they shell out through :func:`footman.run`, releasing the GIL),
+always I/O-bound (they shell out through `footman.run`, releasing the GIL),
 so threads give real concurrency without process isolation.
 
 Output is buffered per task and flushed atomically on completion, so concurrent

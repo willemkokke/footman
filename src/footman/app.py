@@ -1,30 +1,32 @@
 """Public application entry: build a custom-branded CLI on top of footman.
 
-footman's own ``fm`` / ``footman`` commands are just the default-branded
-:class:`App`. Point your own console script at an ``App`` carrying your
+footman's own `fm` / `footman` commands are just the default-branded
+`App`. Point your own console script at an `App` carrying your
 project's names and version, and every message the user sees — errors,
-``--version``, the completion hint — uses them::
+`--version`, the completion hint — uses them:
 
-    # hse/cli.py
-    from footman import App
+```python
+# hse/cli.py
+from footman import App
 
-    app = App(name="HSE", prog="hse", version="1.4.0")
+app = App(name="HSE", prog="hse", version="1.4.0")
 
-    def main() -> None:
-        raise SystemExit(app.run())
+def main() -> None:
+    raise SystemExit(app.run())
+```
 
-.. code-block:: toml
+```toml
+# your pyproject.toml
+[project.scripts]
+hse = "hse.cli:main"
+```
 
-    # your pyproject.toml
-    [project.scripts]
-    hse = "hse.cli:main"
-
-Tasks are discovered exactly as they are for ``fm``: the ``tasks.py`` cascade
+Tasks are discovered exactly as they are for `fm`: the `tasks.py` cascade
 from the repo root down to the current directory.
 
 This module is kept import-light so the completion hot path stays fast: nothing
 here imports the registry, the manifest, or the execution layer at module load —
-those are deferred into :meth:`App.run`.
+those are deferred into `App.run`.
 """
 
 from __future__ import annotations
@@ -39,8 +41,8 @@ from footman import __version__
 class Brand:
     """The names a CLI shows the user.
 
-    ``name`` is the long / display name (the ``--version`` banner); ``prog`` is
-    the short command name (the error prefix and hints); ``version`` is *your*
+    `name` is the long / display name (the `--version` banner); `prog` is
+    the short command name (the error prefix and hints); `version` is *your*
     version string.
     """
 
@@ -53,7 +55,7 @@ DEFAULT_BRAND = Brand()
 
 
 class App:
-    """A branded footman CLI — call :meth:`run` from your console-script entry."""
+    """A branded footman CLI — call `run` from your console-script entry."""
 
     def __init__(
         self,
@@ -66,7 +68,7 @@ class App:
     def run(self, argv: list[str] | None = None) -> int:
         """Resolve and run the CLI, returning the process exit code.
 
-        Handles the stdlib-only ``--complete`` hot path before importing the
+        Handles the stdlib-only `--complete` hot path before importing the
         framework, so completion stays fast even through a custom entry point.
         """
         args = list(sys.argv[1:] if argv is None else argv)

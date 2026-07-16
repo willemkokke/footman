@@ -1,7 +1,7 @@
 """Load the task cascade and merge it into one command tree.
 
 In a monorepo you rarely want a single tasks file. footman collects every
-``tasks.py`` from the repo root down to your current directory and merges them
+`tasks.py` from the repo root down to your current directory and merges them
 top-down: a new name **appends**, a name already present **overrides** (the
 folder nearest your cwd wins), and a command group present at both levels
 **merges** (its tasks overlaid the same way). Each task remembers the folder of
@@ -21,8 +21,8 @@ from pathlib import Path
 from footman import registry
 from footman.registry import Group, Task
 
-#: Attribute stamped on every task fn: the directory of the file that defined
-#: it. The scheduler uses it as the task's working directory.
+# Attribute stamped on every task fn: the directory of the file that defined
+# it. The scheduler uses it as the task's working directory.
 DEFINING_DIR = "_footman_dir"
 
 
@@ -76,7 +76,7 @@ def load_tree(files: list[Path]) -> Group:
 
 
 def load_single(path: Path) -> Group:
-    """Load exactly one tasks file (the ``-f/--tasks-file`` escape hatch)."""
+    """Load exactly one tasks file (the `-f/--tasks-file` escape hatch)."""
     return load_tree([path])
 
 

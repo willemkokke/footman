@@ -1,15 +1,15 @@
 """Bind resolved segments to their task functions and run them.
 
 The splitter validated the command line against the manifest and produced
-string-valued :class:`~footman.split.Segment` objects. Here — on the execution
+string-valued `Segment` objects. Here — on the execution
 path, with the user's module imported — we resolve each segment to its real
 function, coerce the strings to the annotated types, and call it.
 
-Coercion covers what the manifest grammar promises: ``int``/``float``, ``Path``,
-``Enum``/``Literal`` choices, ``list[...]`` (repeatable), and ``*args`` variadic
-(which also receives anything after ``--``). A task "fails" if it raises or
-returns a non-zero ``int`` exit code; failures stop the chain unless
-``--keep-going`` is set.
+Coercion covers what the manifest grammar promises: `int`/`float`, `Path`,
+`Enum`/`Literal` choices, `list[...]` (repeatable), and `*args` variadic
+(which also receives anything after `--`). A task "fails" if it raises or
+returns a non-zero `int` exit code; failures stop the chain unless
+`--keep-going` is set.
 """
 
 from __future__ import annotations
@@ -44,7 +44,7 @@ class TaskResult:
 
 
 def resolve(root: Group, path: list[str]) -> Task:
-    """Walk *path* (``["docs", "build"]``) to its task function."""
+    """Walk *path* (`["docs", "build"]`) to its task function."""
     node = root
     for name in path[:-1]:
         node = node.groups[name]
@@ -52,10 +52,10 @@ def resolve(root: Group, path: list[str]) -> Task:
 
 
 def bind(seg: Segment, fn: Task) -> tuple[list[Any], dict[str, Any]]:
-    """Turn a segment's string values into ``(*args, **kwargs)`` for *fn*.
+    """Turn a segment's string values into `(*args, **kwargs)` for *fn*.
 
     Coercion (union member selection, list handling, one-or-many collapse) goes
-    through :mod:`footman.coerce`, the same module the manifest and splitter use.
+    through `footman.coerce`, the same module the manifest and splitter use.
     """
     sig = resolved_signature(fn)
     empty = inspect.Parameter.empty
@@ -120,9 +120,9 @@ def _call(
 def run_task(fn: Task, seg: Segment, ctx: Context) -> TaskResult:
     """Bind *seg* to *fn* and run it within *ctx* (contextvar set for run()).
 
-    ``ctx`` is injected as the first argument if the task declares a ``ctx``
-    parameter. Output routing (per-task buffering for parallel/``--json``) is the
-    caller's job via ``ctx.sink``; here we just capture its final value.
+    `ctx` is injected as the first argument if the task declares a `ctx`
+    parameter. Output routing (per-task buffering for parallel/`--json`) is the
+    caller's job via `ctx.sink`; here we just capture its final value.
     """
     try:
         args, kwargs = bind(seg, fn)
