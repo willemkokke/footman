@@ -29,6 +29,7 @@ from pathlib import Path
 from typing import Any
 
 from footman import _paths, coerce
+from footman.context import context_param_name
 from footman.params import suggest
 from footman.registry import Group
 
@@ -74,6 +75,20 @@ def param_spec(param: inspect.Parameter) -> dict[str, Any]:
         return spec
 
     peeled = coerce.peel(ann)
+    if peeled.mapping:
+        spec["kind"] = "option" if has_default else "argument"
+        spec["mapping"] = True
+        if peeled.csv:
+            spec["csv"] = True
+        if (ktags := coerce.element_tags(peeled.key)) and ktags != ["str"]:
+            spec["key_types"] = ktags
+        vchoices, _, _ = coerce.element_choices(peeled.element)
+        if vchoices is not None:
+            spec["value_choices"] = vchoices
+        elif (vtags := coerce.element_tags(peeled.element)) and vtags != ["str"]:
+            spec["value_types"] = vtags
+        return spec
+
     element = peeled.element
     if coerce.is_flag(element):
         spec["kind"] = "flag"
@@ -81,7 +96,9 @@ def param_spec(param: inspect.Parameter) -> dict[str, Any]:
 
     spec["kind"] = "option" if has_default else "argument"
     if peeled.multiple:
-        spec["multiple"] = peeled.multiple
+        spec["multiple"] = True
+        if peeled.csv:
+            spec["csv"] = True
     if peeled.completer is not None:
         spec["dynamic"] = {"strict": peeled.completer.strict}
         spec["choices"] = []
@@ -114,19 +131,23 @@ def _finish(spec: dict[str, Any], memo: dict[int, list[str]]) -> dict[str, Any]:
     return spec
 
 
+def _task_node(fn: Any, memo: dict[int, list[str]]) -> dict[str, Any]:
+    sig = resolved_signature(fn)
+    ctx_name = context_param_name(sig)  # the injected ctx param is not a CLI arg
+    return {
+        "help": (inspect.getdoc(fn) or "").partition("\n")[0],
+        "params": [
+            _finish(param_spec(p), memo)
+            for p in sig.parameters.values()
+            if p.name != ctx_name
+        ],
+    }
+
+
 def _node(g: Group, memo: dict[int, list[str]]) -> dict[str, Any]:
     return {
         "help": g.help,
-        "tasks": {
-            name: {
-                "help": (inspect.getdoc(fn) or "").partition("\n")[0],
-                "params": [
-                    _finish(param_spec(p), memo)
-                    for p in resolved_signature(fn).parameters.values()
-                ],
-            }
-            for name, fn in g.tasks.items()
-        },
+        "tasks": {name: _task_node(fn, memo) for name, fn in g.tasks.items()},
         "groups": {name: _node(sub, memo) for name, sub in g.groups.items()},
     }
 

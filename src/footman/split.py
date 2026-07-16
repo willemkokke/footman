@@ -74,13 +74,17 @@ _TYPE_PHRASE = {
 }
 
 
-def _validate(where: str, p: dict, value: str) -> None:
-    """Eagerly validate a choice/typed value; raise a taught error if wrong."""
-    label = f"<{p['name']}>" if p["kind"] == "argument" else f"--{p['name']}"
-
-    choices = p.get("choices")
+def _check(
+    where: str,
+    label: str,
+    value: str,
+    *,
+    choices: list | None = None,
+    types: list | None = None,
+    dynamic: dict | None = None,
+) -> None:
+    """Validate one string against choices or type tags; raise a taught error."""
     if choices is not None:
-        dynamic = p.get("dynamic")
         if dynamic and (not dynamic.get("strict") or not choices):
             return  # soft completer, or no candidates — suggest only, don't enforce
         if value not in choices:
@@ -91,11 +95,22 @@ def _validate(where: str, p: dict, value: str) -> None:
                 f"{where}: {label} must be one of {listing} (got {value!r}){hint}"
             )
         return
-
-    tags = p.get("types")
-    if tags and not coerce.coerce_scalar(value, tags)[0]:
-        expected = " or ".join(str(_TYPE_PHRASE.get(t, t)) for t in tags)
+    if types and not coerce.coerce_scalar(value, types)[0]:
+        expected = " or ".join(str(_TYPE_PHRASE.get(t, t)) for t in types)
         raise ChainError(f"{where}: {label} expects {expected} (got {value!r})")
+
+
+def _validate(where: str, p: dict, value: str) -> None:
+    """Eagerly validate a choice/typed value; raise a taught error if wrong."""
+    label = f"<{p['name']}>" if p["kind"] == "argument" else f"--{p['name']}"
+    _check(
+        where,
+        label,
+        value,
+        choices=p.get("choices"),
+        types=p.get("types"),
+        dynamic=p.get("dynamic"),
+    )
 
 
 def _parse_globals(argv: list[str], i: int) -> tuple[list[str], int]:
@@ -235,12 +250,40 @@ def _consume_option(seg: Segment, opts: dict, argv: list[str], i: int) -> int:
             raise ChainError(f"{seg.task}: {name} expects a value")
         value = argv[i]
         i += 1
-    _validate(seg.task, p, value)
-    if p.get("multiple"):
-        seg.values.setdefault(cli, []).append(value)
+    if p.get("mapping"):
+        for pair in _values(p, value):
+            _consume_pair(seg, p, cli, pair)
+    elif p.get("multiple"):
+        for part in _values(p, value):
+            _validate(seg.task, p, part)
+            seg.values.setdefault(cli, []).append(part)
     else:
+        _validate(seg.task, p, value)
         seg.values[cli] = value
     return i
+
+
+def _values(p: dict, value: str) -> list[str]:
+    """One value, or comma-split parts for a ``csv`` list/dict parameter."""
+    if p.get("csv"):
+        return [part for part in value.split(",") if part]
+    return [value]
+
+
+def _consume_pair(seg: Segment, p: dict, cli: str, pair: str) -> None:
+    """Parse and validate one ``KEY=VALUE`` token for a dict parameter."""
+    if "=" not in pair:
+        raise ChainError(f"{seg.task}: --{cli} expects KEY=VALUE (got {pair!r})")
+    key, value = pair.split("=", 1)
+    _check(seg.task, f"--{cli} key", key, types=p.get("key_types"))
+    _check(
+        seg.task,
+        f"--{cli} value",
+        value,
+        choices=p.get("value_choices"),
+        types=p.get("value_types"),
+    )
+    seg.values.setdefault(cli, []).append((key, value))
 
 
 def _consume_positional(seg: Segment, tree: dict, p: dict, tok: str) -> None:
@@ -254,8 +297,10 @@ def _consume_positional(seg: Segment, tree: dict, p: dict, tok: str) -> None:
             f"{'|'.join(p['choices'])} — {tok!r} looks like the next task; "
             f"did you forget <{p['name']}>?"
         )
-    _validate(seg.task, p, tok)
     if p.get("multiple"):
-        seg.values.setdefault(p["name"], []).append(tok)
+        for part in _values(p, tok):
+            _validate(seg.task, p, part)
+            seg.values.setdefault(p["name"], []).append(part)
     else:
+        _validate(seg.task, p, tok)
         seg.values[p["name"]] = tok

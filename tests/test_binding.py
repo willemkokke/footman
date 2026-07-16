@@ -6,12 +6,10 @@ import enum
 from pathlib import Path
 from typing import Literal
 
-import pytest
-
 from footman import manifest
 from footman.executor import run_chain
 from footman.registry import Group
-from footman.split import ChainError, split_chain
+from footman.split import split_chain
 
 
 class Colour(enum.Enum):
@@ -90,13 +88,18 @@ def test_variadic_plus_passthrough():
     assert seen["cmd"] == ("pytest", "-x", "--maxfail", "1")
 
 
-def test_passthrough_without_varargs_is_an_error():
+def test_passthrough_without_varargs_reaches_context():
+    from footman import passthrough
+
+    seen = {}
+
     def tasks(reg):
         @reg.task
-        def build(x: int = 1): ...
+        def build(x: int = 1):
+            seen["pt"] = passthrough()
 
-    with pytest.raises(ChainError):
-        _run(tasks, "build -- oops")
+    _run(tasks, "build -- a b")
+    assert seen["pt"] == ["a", "b"]  # available even with no *args
 
 
 def test_failure_stops_chain():

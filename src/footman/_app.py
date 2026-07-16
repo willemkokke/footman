@@ -179,6 +179,15 @@ def _print_json(results: list[executor.TaskResult]) -> None:
             "code": r.code,
             "duration_ms": round(r.duration * 1000, 3),
             "output": r.output,
+            "steps": [
+                {
+                    "command": s.command,
+                    "code": s.code,
+                    "duration_ms": round(s.duration * 1000, 3),
+                    "output": s.output,
+                }
+                for s in r.steps
+            ],
             "error": None if r.error is None else str(r.error),
         }
         for r in results
@@ -260,12 +269,18 @@ def run(argv: list[str]) -> int:
         return 0
 
     json_mode = bool(g.get("json"))
+    ctx_config = {
+        "quiet": bool(g.get("quiet")),
+        "verbose": bool(g.get("verbose")),
+        "no_color": bool(g.get("no_color")),
+    }
     try:
         results = executor.run_chain(
             reg,
             segments,
             keep_going=bool(g.get("keep_going")),
             capture=json_mode,
+            ctx_config=ctx_config,
         )
     except split.ChainError as exc:  # e.g. passthrough with no *args
         _error(str(exc))
