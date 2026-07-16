@@ -18,10 +18,12 @@ import inspect
 import io
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from footman import coerce
 from footman.context import Context, StepResult, _current, context_param_name
+from footman.discover import defining_dir
 from footman.manifest import resolved_signature
 from footman.registry import Group, Task
 from footman.split import ChainError, Segment
@@ -131,6 +133,9 @@ def run_task(fn: Task, seg: Segment, ctx: Context) -> TaskResult:
 
     if context_param_name(resolved_signature(fn)):
         args = [ctx, *args]  # ctx is the first positional parameter
+
+    if ctx.cwd is None and (home := defining_dir(fn)) is not None:
+        ctx.cwd = Path(home)  # run from the folder that defined the task
 
     token = _current.set(ctx)
     start = time.perf_counter()

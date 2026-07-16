@@ -223,15 +223,16 @@ def is_stale(manifest: dict[str, Any]) -> bool:
     return False
 
 
-def sync_manifest(root: Group, project_root: Path) -> dict[str, Any]:
+def sync_manifest(root: Group, key_dir: Path) -> dict[str, Any]:
     """Build the fresh manifest and rewrite the cache only on a hash change.
 
     Called on the execution path, which has already paid to import the tree.
-    The hash guard avoids needless disk writes (and mtime churn) when nothing
-    about the command surface changed.
+    The cache is keyed by *key_dir* (the cwd), since the effective task set is
+    the cascade from the repo root down. The hash guard avoids needless disk
+    writes (and mtime churn) when nothing about the command surface changed.
     """
     fresh = build_manifest(root)
-    path = _paths.manifest_path(project_root)
+    path = _paths.manifest_path(key_dir)
     cached = load_manifest(path)
     if cached is None or cached.get("hash") != fresh["hash"]:
         write_manifest(fresh, path)

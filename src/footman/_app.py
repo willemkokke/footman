@@ -8,14 +8,22 @@ runs the resulting segments, honouring the global options.
 
 from __future__ import annotations
 
-import importlib.util
 import json
 import os
 import sys
-import tomllib
 from pathlib import Path
 
-from footman import __version__, _paths, executor, manifest, registry, schedule, split
+from footman import (
+    __version__,
+    _paths,
+    config,
+    discover,
+    executor,
+    manifest,
+    registry,
+    schedule,
+    split,
+)
 from footman.split import Segment
 
 
@@ -44,41 +52,39 @@ def _globals_to_dict(tokens: list[str]) -> dict[str, object]:
     return result
 
 
-def _config_tasks_file(root: Path) -> str | None:
-    pyproject = root / "pyproject.toml"
-    if not pyproject.is_file():
-        return None
-    try:
-        data = tomllib.loads(pyproject.read_text("utf-8"))
-    except (OSError, tomllib.TOMLDecodeError):
-        return None
-    tool = data.get("tool", {})
-    footman_cfg = tool.get("footman", {}) if isinstance(tool, dict) else {}
-    value = footman_cfg.get("tasks") if isinstance(footman_cfg, dict) else None
-    return value if isinstance(value, str) else None
+def _discover(g: dict[str, object]) -> tuple[list[Path], dict[str, object]] | int:
+    """Resolve the task files to load and the merged config for this cwd.
 
+    ``-f/--tasks-file`` is the escape hatch: it loads exactly one file, no
+    cascade. Otherwise footman collects every ``tasks.py`` from the repo root
+    (the ``.git`` ceiling) down to the cwd. Returns ``(files, config)`` or, when
+    nothing was found, the exit code to return (0 for a listing, 2 otherwise).
+    """
+    cwd = Path.cwd()
+    ceiling = _paths.find_repo_root(cwd)
+    cfg = config.load_config(cwd, ceiling, g.get("config"))  # type: ignore[arg-type]
 
-def _locate_tasks_file(root: Path, override: str | None) -> Path:
+    override = g.get("tasks_file")
     if override:
-        return Path(override).expanduser()
-    configured = _config_tasks_file(root)
-    if configured:
-        path = Path(configured).expanduser()
-        return path if path.is_absolute() else root / path
-    return root / _paths.DEFAULT_TASKS_FILE
+        one = Path(str(override)).expanduser()
+        files = [one] if one.is_file() else []
+    else:
+        filename = cfg.get("tasks")
+        name = filename if isinstance(filename, str) else _paths.DEFAULT_TASKS_FILE
+        files = _paths.task_files(cwd, ceiling, name)
 
+    if files:
+        return files, cfg
 
-def _load_tasks(path: Path) -> registry.Group:
-    """Import *path* as a module, populating the global registry."""
-    registry.reset()
-    spec = importlib.util.spec_from_file_location("footman_tasks", path)
-    if spec is None or spec.loader is None:
-        raise ImportError(f"cannot load tasks file: {path}")
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    sys.path.insert(0, str(path.parent))  # let tasks import sibling helpers
-    spec.loader.exec_module(module)
-    return registry.root
+    looked = override or cfg.get("tasks") or _paths.DEFAULT_TASKS_FILE
+    if g.get("help") or g.get("list") or g.get("tree"):
+        print(f"No tasks file found (looked for {looked}).")
+        return 0
+    _error(
+        f"no tasks file found (looked for {looked}); "
+        f"create one or pass -f/--tasks-file."
+    )
+    return 2
 
 
 # --- rendering ---------------------------------------------------------------
@@ -227,26 +233,19 @@ def run(argv: list[str]) -> int:
             _error(f"-C {g['directory']}: {exc}")
             return 2
 
-    root_dir = _paths.find_project_root()
-    tasks_file = _locate_tasks_file(root_dir, g.get("tasks_file"))  # type: ignore[arg-type]
-
-    if not tasks_file.is_file():
-        if g.get("help") or g.get("list") or g.get("tree"):
-            print(f"No tasks file found (looked for {tasks_file}).")
-            return 0
-        _error(
-            f"no tasks file found (looked for {tasks_file}); "
-            f"create one or pass -f/--tasks-file."
-        )
-        return 2
+    found = _discover(g)
+    if isinstance(found, int):
+        return found
+    files, cfg = found
 
     try:
-        reg = _load_tasks(tasks_file)
+        reg = discover.load_tree(files)
     except Exception as exc:  # report import failures cleanly, don't crash
-        _error(f"failed to import {tasks_file}: {type(exc).__name__}: {exc}")
+        culprit = files[-1] if len(files) == 1 else "the task cascade"
+        _error(f"failed to import {culprit}: {type(exc).__name__}: {exc}")
         return 2
 
-    tree = manifest.sync_manifest(reg, root_dir)["tree"]
+    tree = manifest.sync_manifest(reg, Path.cwd())["tree"]
 
     if g.get("where"):
         return _where(reg, str(g["where"]))
@@ -269,6 +268,7 @@ def run(argv: list[str]) -> int:
         return 0
 
     json_mode = bool(g.get("json"))
+    sequential = bool(g.get("sequential")) or bool(cfg.get("sequential"))
     ctx_config = {
         "quiet": bool(g.get("quiet")),
         "verbose": bool(g.get("verbose")),
@@ -278,7 +278,7 @@ def run(argv: list[str]) -> int:
         results = schedule.run_plan(
             reg,
             segments,
-            sequential=bool(g.get("sequential")),
+            sequential=sequential,
             keep_going=bool(g.get("keep_going")),
             capture=json_mode,
             ctx_config=ctx_config,

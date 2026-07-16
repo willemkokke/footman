@@ -1,4 +1,6 @@
 dist/
+site/
+.cache/
 __pycache__/
 .venv/
 .coverage
