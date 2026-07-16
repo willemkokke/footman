@@ -41,6 +41,21 @@ def check():
     parallel(lambda: format(check=True), lint, typecheck, test)
 
 
+docs = group("docs", help="Documentation site (Zensical)")
+
+
+@docs.task
+def serve():
+    """Build and serve the docs with live reload."""
+    run("zensical serve")
+
+
+@docs.task(name="build")
+def docs_build(check: bool = False):
+    """Build the docs site into ./site (strict on --check)."""
+    run("zensical build --clean --strict" if check else "zensical build --clean")
+
+
 dist = group("dist", help="Build and publish")
 
 

@@ -26,9 +26,10 @@ decorator ergonomics — and footman keeps those ideas. Where it pushes is the
 parts that compound: completion that answers from a cache instead of
 re-importing your whole project on every TAB (~15× faster in practice), eager
 type and choice validation (including unions and dynamic value sets), native
-command groups, no `ctx` boilerplate in task signatures, and a DAG scheduler
-that runs independent tasks in parallel by default (duty and invoke can't). A
-measured
+command groups, no `ctx` boilerplate in task signatures, a DAG scheduler that
+runs independent tasks in parallel by default (duty and invoke can't), and a
+monorepo task cascade that merges a `tasks.py` per folder from the repo root
+down to where you stand. A measured
 head-to-head against duty, invoke, poe, and typer lives in
 [`comparison/`](comparison/) — modern duty has real flags and chaining, so the
 gap is validation, ergonomics, and completion latency, not grammar.
@@ -248,6 +249,52 @@ def check():
 Tasks run stop-on-first-failure by default; `-k/--keep-going` runs every
 independent branch even if one fails.
 
+## Monorepos
+
+In a monorepo you rarely want one giant tasks file. footman collects every
+`tasks.py` from the **repo root** (the nearest `.git` above you) down to your
+current directory and merges them into one command set:
+
+```text
+repo/            .git  pyproject.toml  tasks.py   →  build  test  lint
+  services/
+    api/         tasks.py                         →  serve  migrate  build*
+```
+
+Standing in `services/api`, `fm` sees `build*` (the local override), `test`,
+`lint`, `serve`, and `migrate`. The rules are the ones you'd guess:
+
+- a **new name appends**, a name already defined higher up is **overridden** by
+  the folder nearest you, and a **group present at both levels merges** (its
+  tasks overlaid the same way);
+- every task **runs from the folder of the file that defined it** — root's
+  `build` always builds from `repo/`, `api`'s `serve` from `services/api/`,
+  wherever you invoke it. (`run(cwd=…)` still overrides per command.)
+
+Completion is cached **per directory**, so `<TAB>` in `services/api` offers the
+merged set while the repo root offers only its own. `-f/--tasks-file` is the
+escape hatch: it loads exactly one file, no cascade.
+
+## Configuration
+
+Behavioural settings are discovered by the same upward walk. footman reads
+`[tool.footman]` from `pyproject.toml` and a standalone `footman.toml`
+(whole-file), from the repo root down to your cwd — **nearer files win**, so a
+package can override repo-wide defaults:
+
+```toml
+# repo/pyproject.toml
+[tool.footman]
+tasks = "tasks.py"     # the filename to look for in the cascade
+sequential = false     # run tasks one at a time by default
+
+# repo/services/api/footman.toml   (no pyproject here — a standalone file)
+sequential = true      # this package prefers serial runs
+```
+
+`--config PATH` points at a single TOML file that overrides everything else.
+Unknown keys are ignored, so a newer setting never breaks an older footman.
+
 ## Running tools
 
 Task bodies run tools through `run()` and the typed `tools.*` wrappers. `run()`
@@ -289,9 +336,10 @@ captured output) inside the task's entry.
 ## Instant completion
 
 Completion answers from a JSON manifest cached under your XDG cache dir, keyed
-by project path. The hot path is stdlib-only — it reads one file, parses JSON,
-and walks the tree; it never imports footman or your tasks. That is the whole
-latency story (measured cold-process on an M-series Mac):
+by directory (so each folder of a monorepo caches its own merged cascade). The
+hot path is stdlib-only — it reads one file, parses JSON, and walks the tree; it
+never imports footman or your tasks. That is the whole latency story (measured
+cold-process on an M-series Mac):
 
 | variant                                   |   mean |
 | ----------------------------------------- | -----: |
@@ -335,7 +383,8 @@ Global options bind to `fm` itself and go **before** the first task name
 | `--timings`               | show per-task durations                         |
 | `--json`                  | machine-readable results (captures task output) |
 | `-C`, `--directory PATH`  | run as if launched from PATH                    |
-| `-f`, `--tasks-file PATH` | use a specific tasks file                       |
+| `-f`, `--tasks-file PATH` | use one file, no cascade                        |
+| `--config PATH`           | override config with a single TOML file         |
 
 Accepted but not yet wired: `--install-completion SHELL` (prints guidance for
 now), a per-command `--help` (currently lists tasks), `-v`/`--verbose`,
@@ -350,7 +399,10 @@ rules with taught errors), typed execution (unions, one-or-many, `dict[K, V]`,
 `csv`, custom types via their constructors), dynamic completion, the
 `run()`/`tools` execution layer with capture and replay-on-failure, the DAG
 scheduler (parallel-by-default with `pre`/`post` dependencies, `parallel()`, and
-grouped non-interleaved output), and the global-option set. What's next:
+grouped non-interleaved output), the monorepo cascade (root-to-cwd task merge
+with defining-dir cwd and per-directory completion) and its config discovery
+(`[tool.footman]` / `footman.toml` / `--config`), and the global-option set.
+What's next:
 
 - shell-native completion installers (`--install-completion` for
   bash/zsh/fish/pwsh/nushell) — today the resolver works via `fm --complete`;

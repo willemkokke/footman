@@ -1,0 +1,4 @@
+{
+  "//": "MkDocs/Zensical admonitions (!!! note) use 4-space-indented bodies that markdownlint misreads as indented code blocks. MD046 enforces fenced-vs-indented consistency and false-positives on them; the real docs gate is `zensical build --strict`.",
+  "MD046": false
+}

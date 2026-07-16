@@ -48,6 +48,7 @@ GLOBALS: list[tuple[str, str | None, str, str | None]] = [
     ("--timings", None, "flag", None),
     ("--directory", "-C", "option", "PATH"),
     ("--tasks-file", "-f", "option", "PATH"),
+    ("--config", None, "option", "PATH"),
     ("--install-completion", None, "option", "SHELL"),
     ("--refresh-manifest", None, "flag", None),
 ]

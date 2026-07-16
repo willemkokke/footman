@@ -77,10 +77,11 @@ def complete_cli(args: list[str]) -> int:
 
     if manifest is None:
         # Only the derive branch needs the package; keep the standalone
-        # --manifest path free of any ``footman`` import.
+        # --manifest path free of any ``footman`` import. The cache is keyed by
+        # cwd — the effective task set is the cascade from the repo root down.
         from footman import _paths
 
-        manifest = str(_paths.manifest_path(_paths.find_project_root()))
+        manifest = str(_paths.cwd_manifest_path())
 
     tree = _load_tree(manifest)
     if tree is None:
