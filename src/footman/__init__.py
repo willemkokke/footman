@@ -18,6 +18,8 @@ if TYPE_CHECKING:
     # Give type-checkers the real types for the lazily re-exported names below;
     # at runtime these are served by ``__getattr__`` without importing registry
     # on a bare ``import footman`` (the completion hot path).
+    from footman.app import App as App
+    from footman.app import Brand as Brand
     from footman.context import Context as Context
     from footman.context import RunFailed as RunFailed
     from footman.context import parallel as parallel
@@ -31,8 +33,10 @@ if TYPE_CHECKING:
     from footman.registry import reset as reset
     from footman.registry import task as task
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 __all__ = [
+    "App",
+    "Brand",
     "Context",
     "Group",
     "Many",
@@ -58,9 +62,9 @@ def main() -> None:
         from footman._complete import complete_cli
 
         raise SystemExit(complete_cli(argv[1:]))
-    from footman._app import run
+    from footman.app import App
 
-    raise SystemExit(run(argv))
+    raise SystemExit(App().run(argv))
 
 
 def __getattr__(name: str) -> object:
@@ -78,4 +82,8 @@ def __getattr__(name: str) -> object:
         from footman import context
 
         return getattr(context, name)
+    if name in ("App", "Brand"):
+        from footman import app
+
+        return getattr(app, name)
     raise AttributeError(f"module 'footman' has no attribute {name!r}")

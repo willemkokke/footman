@@ -17,8 +17,24 @@ nav = [
   { "Monorepos & config" = "monorepos.md" },
   { "Running tools" = "tools.md" },
   { "Completion" = "completion.md" },
+  { "Custom CLI" = "custom-cli.md" },
   { "CLI reference" = "reference.md" },
+  { "API reference" = "api.md" },
+  { "Coverage" = "coverage.md" },
 ]
+
+[project.plugins.mkdocstrings.handlers.python]
+inventories = ["https://docs.python.org/3/objects.inv"]
+paths = ["src"]
+
+[project.plugins.mkdocstrings.handlers.python.options]
+docstring_style = "sphinx"
+show_source = false
+show_root_heading = true
+show_symbol_type_heading = true
+show_symbol_type_toc = true
+separate_signature = true
+heading_level = 2
 
 [project.theme]
 language = "en"

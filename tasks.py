@@ -50,6 +50,12 @@ def serve():
     run("zensical serve")
 
 
+@docs.task
+def coverage():
+    """Generate the coverage HTML report into docs/htmlcov (embedded in the site)."""
+    run("pytest --cov=footman --cov-report=html:docs/htmlcov -q")
+
+
 @docs.task(name="build")
 def docs_build(check: bool = False):
     """Build the docs site into ./site (strict on --check)."""
