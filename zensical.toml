@@ -12,6 +12,7 @@ Copyright &copy; 2026 Willem Kokke — MIT licensed
 nav = [
   { "Home" = "index.md" },
   { "Getting started" = "getting-started.md" },
+  { "Comparison" = "comparison.md" },
   { "Typed signatures" = "typing.md" },
   { "Chaining & parallelism" = "orchestration.md" },
   { "Monorepos & config" = "monorepos.md" },
