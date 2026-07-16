@@ -11,7 +11,7 @@ import pytest
 from footman import manifest
 from footman._complete import complete
 from footman.executor import run_chain
-from footman.params import Many, csv, suggest
+from footman.params import Many, nosplit, suggest
 from footman.registry import Group
 from footman.split import ChainError, split_chain
 
@@ -141,60 +141,22 @@ def test_list_or_scalar_union_is_always_a_list():
     assert seen["x"] == ["a", "b"]
 
 
-# --- csv: opt-in comma splitting --------------------------------------------
+# --- comma-splitting: on by default for collections, `nosplit` opts out ------
 
 
-def test_csv_option_splits_on_comma():
+def test_list_splits_on_comma_by_default():
     seen = {}
 
     def tasks(reg):
         @reg.task
-        def build(tags: Annotated[list[str], csv] | None = None):
+        def build(tags: list[str] | None = None):
             seen["tags"] = tags
 
     run(tasks, "build --tags a,b,c")
-    assert seen["tags"] == ["a", "b", "c"]
+    assert seen["tags"] == ["a", "b", "c"]  # no marker needed
 
 
-def test_csv_also_accepts_repeat_and_mixes():
-    seen = {}
-
-    def tasks(reg):
-        @reg.task
-        def build(tags: Annotated[list[str], csv] | None = None):
-            seen["tags"] = tags
-
-    run(tasks, "build --tags a,b --tags c")
-    assert seen["tags"] == ["a", "b", "c"]
-
-
-def test_csv_coerces_and_validates_each_part():
-    seen = {}
-
-    def tasks(reg):
-        @reg.task
-        def build(nums: Annotated[list[int], csv] | None = None):
-            seen["nums"] = nums
-
-    run(tasks, "build --nums 1,2,3")
-    assert seen["nums"] == [1, 2, 3]
-    with pytest.raises(ChainError, match="expects an integer"):
-        run(tasks, "build --nums 1,x,3")
-
-
-def test_csv_skips_empty_parts():
-    seen = {}
-
-    def tasks(reg):
-        @reg.task
-        def build(tags: Annotated[list[str], csv] | None = None):
-            seen["tags"] = tags
-
-    run(tasks, "build --tags a,,b,")
-    assert seen["tags"] == ["a", "b"]
-
-
-def test_without_csv_comma_stays_literal():
+def test_list_also_accepts_repeat_and_mixes():
     seen = {}
 
     def tasks(reg):
@@ -203,7 +165,45 @@ def test_without_csv_comma_stays_literal():
             seen["tags"] = tags
 
     run(tasks, "build --tags a,b --tags c")
-    assert seen["tags"] == ["a,b", "c"]  # opt-in only: no split without csv
+    assert seen["tags"] == ["a", "b", "c"]
+
+
+def test_split_coerces_and_validates_each_part():
+    seen = {}
+
+    def tasks(reg):
+        @reg.task
+        def build(nums: list[int] | None = None):
+            seen["nums"] = nums
+
+    run(tasks, "build --nums 1,2,3")
+    assert seen["nums"] == [1, 2, 3]
+    with pytest.raises(ChainError, match="expects an integer"):
+        run(tasks, "build --nums 1,x,3")
+
+
+def test_split_skips_empty_parts():
+    seen = {}
+
+    def tasks(reg):
+        @reg.task
+        def build(tags: list[str] | None = None):
+            seen["tags"] = tags
+
+    run(tasks, "build --tags a,,b,")
+    assert seen["tags"] == ["a", "b"]
+
+
+def test_nosplit_keeps_comma_literal():
+    seen = {}
+
+    def tasks(reg):
+        @reg.task
+        def build(names: Annotated[list[str], nosplit] | None = None):
+            seen["names"] = names
+
+    run(tasks, "build --names a,b --names c")
+    assert seen["names"] == ["a,b", "c"]  # nosplit: only the repeated flag adds items
 
 
 # --- dict[K, V] mappings -----------------------------------------------------
@@ -221,12 +221,12 @@ def test_dict_str_str():
     assert seen["env"] == {"A": "1", "B": "2"}
 
 
-def test_dict_typed_value_union_and_csv():
+def test_dict_typed_value_union_splits_by_default():
     seen = {}
 
     def tasks(reg):
         @reg.task
-        def build(opt: Annotated[dict[str, int | str], csv] | None = None):
+        def build(opt: dict[str, int | str] | None = None):
             seen["opt"] = opt
 
     run(tasks, "build --opt=x=1,bla=haha")
@@ -290,13 +290,24 @@ def test_dict_of_list_appends_on_repeated_key():
 def test_dict_manifest_spec():
     def tasks(reg):
         @reg.task
-        def build(nums: Annotated[dict[str, int], csv] | None = None): ...
+        def build(nums: dict[str, int] | None = None): ...
 
     _, tree = build_tree(tasks)
     spec = tree["tasks"]["build"]["params"][0]
     assert spec["mapping"] is True
-    assert spec["csv"] is True
+    assert "nosplit" not in spec  # collections split by default
     assert spec["value_types"] == ["int"]
+
+
+def test_nosplit_manifest_spec():
+    def tasks(reg):
+        @reg.task
+        def build(env: Annotated[dict[str, str], nosplit] | None = None): ...
+
+    _, tree = build_tree(tasks)
+    spec = tree["tasks"]["build"]["params"][0]
+    assert spec["mapping"] is True
+    assert spec["nosplit"] is True
 
 
 # --- custom / extended scalar types (coerced via their constructor) ----------

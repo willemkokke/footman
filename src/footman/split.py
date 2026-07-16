@@ -266,10 +266,14 @@ def _consume_option(seg: Segment, opts: dict, argv: list[str], i: int) -> int:
 
 
 def _values(p: dict, value: str) -> list[str]:
-    """One value, or comma-split parts for a `csv` list/dict parameter."""
-    if p.get("csv"):
-        return [part for part in value.split(",") if part]
-    return [value]
+    """Comma-split parts of a list/dict value, unless the param opts out.
+
+    Called only for collection params, so splitting is the default; a `nosplit`
+    param (values may contain commas) takes the whole token verbatim.
+    """
+    if p.get("nosplit"):
+        return [value]
+    return [part for part in value.split(",") if part] or [value]
 
 
 def _consume_pair(seg: Segment, p: dict, cli: str, pair: str) -> None:

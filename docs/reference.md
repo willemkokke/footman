@@ -54,7 +54,7 @@ def wheel(): ...
 | `parallel(*calls)`         | fan tasks/thunks out concurrently                    |
 | `passthrough()`            | arguments after `--` on the command line             |
 | `Context`                  | the task's context object (opt-in first parameter)   |
-| `Many[T]`, `csv[T]`        | one-or-many and comma-splitting annotations          |
+| `Many[T]`, `nosplit`       | one-or-many; opt a collection out of comma-splitting |
 | `suggest[T, fn]`           | dynamic completion for a parameter                   |
 | `tools.*`                  | typed wrappers for ruff, basedpyright, pytest, uv, … |
 

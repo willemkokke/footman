@@ -78,8 +78,8 @@ def param_spec(param: inspect.Parameter) -> dict[str, Any]:
     if peeled.mapping:
         spec["kind"] = "option" if has_default else "argument"
         spec["mapping"] = True
-        if peeled.csv:
-            spec["csv"] = True
+        if peeled.nosplit:
+            spec["nosplit"] = True
         if (ktags := coerce.element_tags(peeled.key)) and ktags != ["str"]:
             spec["key_types"] = ktags
         vchoices, _, _ = coerce.element_choices(peeled.element)
@@ -97,8 +97,8 @@ def param_spec(param: inspect.Parameter) -> dict[str, Any]:
     spec["kind"] = "option" if has_default else "argument"
     if peeled.multiple:
         spec["multiple"] = True
-        if peeled.csv:
-            spec["csv"] = True
+        if peeled.nosplit:
+            spec["nosplit"] = True
     if peeled.completer is not None:
         spec["dynamic"] = {"strict": peeled.completer.strict}
         spec["choices"] = []
