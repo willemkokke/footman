@@ -1,3 +1,7 @@
+---
+title: A typed task runner with instant completion
+---
+
 # footman
 
 A task runner with the soul of [duty](https://pawamoy.github.io/duty/) and the
