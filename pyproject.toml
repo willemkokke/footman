@@ -30,8 +30,10 @@ dependencies = []
 
 [project.urls]
 Homepage = "https://github.com/willemkokke/footman"
+Documentation = "https://willemkokke.github.io/footman/"
 Repository = "https://github.com/willemkokke/footman"
 Issues = "https://github.com/willemkokke/footman/issues"
+Changelog = "https://willemkokke.github.io/footman/changelog/"
 
 [project.scripts]
 footman = "footman:main"
@@ -92,4 +94,6 @@ source = ["footman"]
 
 [tool.coverage.report]
 show_missing = true
+# Gated in CI (the README's coverage claim is enforced, not aspirational).
+fail_under = 92
 exclude_also = ["if __name__ == .__main__.:", "raise NotImplementedError"]
