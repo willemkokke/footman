@@ -40,6 +40,7 @@ GLOBALS: list[tuple[str, str | None, str, str | None]] = [
     ("--where", None, "option", "TASK"),
     ("--dry-run", "-n", "flag", None),
     ("--keep-going", "-k", "flag", None),
+    ("--sequential", "-s", "flag", None),
     ("--quiet", "-q", "flag", None),
     ("--verbose", "-v", "flag", None),
     ("--no-color", None, "flag", None),

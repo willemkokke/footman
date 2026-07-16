@@ -15,7 +15,7 @@ import sys
 import tomllib
 from pathlib import Path
 
-from footman import __version__, _paths, executor, manifest, registry, split
+from footman import __version__, _paths, executor, manifest, registry, schedule, split
 from footman.split import Segment
 
 
@@ -275,9 +275,10 @@ def run(argv: list[str]) -> int:
         "no_color": bool(g.get("no_color")),
     }
     try:
-        results = executor.run_chain(
+        results = schedule.run_plan(
             reg,
             segments,
+            sequential=bool(g.get("sequential")),
             keep_going=bool(g.get("keep_going")),
             capture=json_mode,
             ctx_config=ctx_config,
