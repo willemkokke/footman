@@ -160,9 +160,13 @@ def _run_callable(cmd: Callable[..., Any], args: tuple[Any, ...]) -> tuple[int, 
 
 
 def _run_subprocess(
-    argv: list[str], env: dict[str, str], cwd: Path | None, capture: bool
+    argv: list[str] | str, env: dict[str, str], cwd: Path | None, capture: bool
 ) -> tuple[int, str]:
-    proc = subprocess.run(argv, env=env, cwd=cwd, capture_output=capture, text=True)
+    # `errors="replace"`: a tool emitting non-UTF-8 bytes must never crash the
+    # runner — mojibake in the capture beats an unhandled UnicodeDecodeError.
+    proc = subprocess.run(
+        argv, env=env, cwd=cwd, capture_output=capture, text=True, errors="replace"
+    )
     output = "" if not capture else (proc.stdout or "") + (proc.stderr or "")
     return proc.returncode, output
 
@@ -183,7 +187,11 @@ def run(
     label = title or _label(cmd, args)
 
     if ctx.dry_run:
-        out.write(f"$ {label}\n")
+        # Record the step even when not executing: `dry_run` + `quiet` is the
+        # silent-capture mode `footman.testing` builds on.
+        ctx.steps.append(StepResult(label, 0, "", 0.0))
+        if not ctx.quiet:
+            out.write(f"$ {label}\n")
         return 0
 
     show = not silent and not ctx.quiet
@@ -196,7 +204,13 @@ def run(
     if callable(cmd):
         code, output = _run_callable(cmd, args)
     else:
-        argv = shlex.split(cmd) if isinstance(cmd, str) else [str(a) for a in cmd]
+        if isinstance(cmd, str):
+            # POSIX shells split on shlex rules; Windows command lines are a
+            # single string (CreateProcess) and shlex would mangle backslash
+            # paths — hand the string straight to subprocess there.
+            argv: list[str] | str = cmd if sys.platform == "win32" else shlex.split(cmd)
+        else:
+            argv = [str(a) for a in cmd]
         run_env = {**os.environ, **ctx.env, **(env or {})}
         cwd_path = Path(cwd) if cwd is not None else ctx.cwd
         code, output = _run_subprocess(argv, run_env, cwd_path, capture)

@@ -69,12 +69,16 @@ Pass `--json` and footman prints machine-readable results:
 
 ```console
 $ fm --json test
-[
-  {"task": "test", "ok": true, "code": 0, "duration_ms": 812.4, "output": "...", "error": null}
-]
+{
+  "schema": 1,
+  "results": [
+    {"task": "test", "ok": true, "code": 0, "duration_ms": 812.4, "output": "...", "steps": [], "error": null}
+  ]
+}
 ```
 
 Task output — including anything a subprocess writes — is captured into the
 payload, so stdout stays pure machine-readable JSON. Every `run()` inside a task
 becomes a structured step (command, code, duration, captured output) in the
-task's entry.
+task's entry. The envelope is versioned (`schema`) and changes will only ever
+be additive — this is the surface to build CI and agent integrations on.

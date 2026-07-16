@@ -400,9 +400,12 @@ Run `uv run python scripts/bench_completion.py` to reproduce.
 
 ```console
 $ fm --json test
-[
-  {"task": "test", "ok": true, "code": 0, "duration_ms": 812.4, "output": "...", "error": null}
-]
+{
+  "schema": 1,
+  "results": [
+    {"task": "test", "ok": true, "code": 0, "duration_ms": 812.4, "output": "...", "steps": [], "error": null}
+  ]
+}
 ```
 
 Task output — including anything a subprocess writes — is captured into the
@@ -415,6 +418,7 @@ Global options bind to `fm` itself and go **before** the first task name
 
 | option                    | effect                                          |
 | ------------------------- | ----------------------------------------------- |
+| `-h`, `--help`            | help for `fm`, a group, or a task               |
 | `-V`, `--version`         | print the version and exit                      |
 | `-l`, `--list`            | list tasks (flat)                               |
 | `--tree`                  | list tasks (grouped by command group)           |
@@ -423,16 +427,20 @@ Global options bind to `fm` itself and go **before** the first task name
 | `-s`, `--sequential`      | run tasks one at a time (default is parallel)   |
 | `-k`, `--keep-going`      | run every segment even if one fails             |
 | `-q`, `--quiet`           | suppress the per-task summary                   |
+| `-v`, `--verbose`         | replay captured `run()` output even on success  |
+| `--no-color`              | disable ANSI colour                             |
 | `--timings`               | show per-task durations                         |
 | `--json`                  | machine-readable results (captures task output) |
 | `-C`, `--directory PATH`  | run as if launched from PATH                    |
 | `-f`, `--tasks-file PATH` | use one file, no cascade                        |
 | `--config PATH`           | override config with a single TOML file         |
 
+`--help` is the one global allowed *anywhere* before `--`: `fm deploy --help`
+is a read-only help request, never an execution. `fm --help` documents the
+runner and its globals, `fm --help docs` a group, `fm --help deploy` a task.
+
 Accepted but not yet wired: `--install-completion SHELL` (prints guidance for
-now), a per-command `--help` (currently lists tasks), `-v`/`--verbose`,
-`--no-color`, and `--refresh-manifest` (the manifest already refreshes on every
-run).
+now) and `--refresh-manifest` (the manifest already refreshes on every run).
 
 ## Status
 

@@ -86,7 +86,9 @@ def test_dry_run_prints_not_executes(capsys):
 
     _, _, results = drive(tasks, "build", dry_run=True)
     assert "$ echo SHOULD-NOT-RUN" in capsys.readouterr().out
-    assert results[0].steps == []
+    # Not executed, but recorded — dry-run steps are the testing surface.
+    assert [s.command for s in results[0].steps] == ["echo SHOULD-NOT-RUN"]
+    assert results[0].steps[0].code == 0
 
 
 def test_passthrough_accessor():
@@ -175,3 +177,57 @@ def test_tools_python_uses_interpreter(capsys):
     drive(tasks, "go", dry_run=True)
     out = capsys.readouterr().out
     assert "-V" in out and sys.executable in out
+
+
+# --- robustness edges ---------------------------------------------------------
+
+
+def test_non_utf8_subprocess_output_does_not_crash():
+    def tasks(reg):
+        @reg.task
+        def emit():
+            run(
+                [
+                    sys.executable,
+                    "-c",
+                    "import sys; sys.stdout.buffer.write(b'\\xff ok\\n')",
+                ]
+            )
+
+    _, _, results = drive(tasks, "emit")
+    assert results[0].ok
+    assert "ok" in results[0].steps[0].output  # decoded with replacement, not a crash
+
+
+def test_windows_string_commands_are_not_shlex_split(monkeypatch):
+    from footman import context as context_mod
+
+    calls = {}
+
+    def fake_run(argv, env, cwd, capture):
+        calls["argv"] = argv
+        return 0, ""
+
+    monkeypatch.setattr(context_mod, "_run_subprocess", fake_run)
+    monkeypatch.setattr(sys, "platform", "win32")
+
+    def tasks(reg):
+        @reg.task
+        def copy():
+            run(r"copy C:\tools\a.txt dest")
+
+    drive(tasks, "copy")
+    # On Windows the command line is one string (CreateProcess); shlex would
+    # have eaten the backslashes.
+    assert calls["argv"] == r"copy C:\tools\a.txt dest"
+
+
+def test_dry_run_quiet_is_silent_capture(capsys):
+    def tasks(reg):
+        @reg.task
+        def build():
+            run("echo NOPE")
+
+    _, _, results = drive(tasks, "build", dry_run=True, quiet=True)
+    assert capsys.readouterr().out == ""
+    assert [s.command for s in results[0].steps] == ["echo NOPE"]

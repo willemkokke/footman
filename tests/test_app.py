@@ -94,8 +94,9 @@ def test_dry_run_does_not_execute(project, capsys):
 def test_json_output(project, capsys):
     assert _app.run(["--json", "hi"]) == 0
     payload = json.loads(capsys.readouterr().out)
-    assert payload[0]["task"] == "hi"
-    assert payload[0]["ok"] is True
+    assert payload["schema"] == 1
+    assert payload["results"][0]["task"] == "hi"
+    assert payload["results"][0]["ok"] is True
 
 
 def test_failing_task_sets_exit_code(project):
@@ -248,3 +249,143 @@ def test_empty_task_list(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
     assert _app.run([]) == 0
     assert "No tasks defined" in capsys.readouterr().out
+
+
+# --- --help ------------------------------------------------------------------
+
+
+def test_help_alone_lists_tasks(project, capsys):
+    assert _app.run(["--help"]) == 0
+    out = capsys.readouterr().out
+    assert "hi" in out and "tools echo" in out
+
+
+def test_help_with_task_shows_usage_without_executing(project, capsys):
+    assert _app.run(["--help", "hi"]) == 0
+    out = capsys.readouterr().out
+    assert "usage: fm hi [--name VALUE]" in out
+    assert "Say hello." in out
+    assert "hello world" not in out  # the task did not run
+
+
+def test_help_never_runs_the_chain(project, capsys):
+    # `boom` exits 2 when executed; help over it must be a read-only act.
+    assert _app.run(["--help", "boom"]) == 0
+    assert "Fail on purpose." in capsys.readouterr().out
+
+
+def test_help_shows_positionals_and_types(project, capsys):
+    assert _app.run(["--help", "add"]) == 0
+    out = capsys.readouterr().out
+    assert "<a>" in out and "<b>" in out
+    assert "an integer" in out
+
+
+def test_help_with_unparseable_chain_degrades_to_listing(project, capsys):
+    assert _app.run(["--help", "nope"]) == 0
+    assert "hi" in capsys.readouterr().out
+
+
+def test_help_alone_shows_the_global_options(project, capsys):
+    assert _app.run(["--help"]) == 0
+    out = capsys.readouterr().out
+    assert "usage: fm [globals]" in out
+    assert "--dry-run" in out and "--keep-going" in out
+
+
+def test_help_anywhere_on_the_line_wins(project, capsys):
+    # `fm boom --help` must be help, not an execution of `boom` (exit 2) and
+    # not an "unknown option" error.
+    assert _app.run(["boom", "--help"]) == 0
+    assert "Fail on purpose." in capsys.readouterr().out
+    assert _app.run(["hi", "-h"]) == 0
+    assert "usage: fm hi" in capsys.readouterr().out
+
+
+def test_help_after_passthrough_is_passthrough(project, capsys):
+    # After `--` the token belongs to the task, not to fm.
+    assert _app.run(["tools", "echo", "--", "--help"]) == 0
+    assert "--help" in capsys.readouterr().out
+
+
+def test_help_for_a_group(project, capsys):
+    assert _app.run(["--help", "tools"]) == 0
+    out = capsys.readouterr().out
+    assert "usage: fm tools <task>" in out
+    assert "Extra tools" in out
+    assert "echo" in out
+
+
+# --- import failures name the culprit ----------------------------------------
+
+
+def test_tasks_import_failure_names_the_file(tmp_path, monkeypatch, capsys):
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
+    (tmp_path / "tasks.py").write_text("raise RuntimeError('boom on import')\n")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
+    assert _app.run(["hi"]) == 2
+    err = capsys.readouterr().err
+    assert "failed to import" in err and "tasks.py" in err
+
+
+def test_tasks_syntax_error_reported_cleanly(tmp_path, monkeypatch, capsys):
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
+    (tmp_path / "tasks.py").write_text("def broken(:\n")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
+    assert _app.run(["hi"]) == 2
+    err = capsys.readouterr().err
+    assert "SyntaxError" in err and "tasks.py" in err
+
+
+def test_duplicate_task_name_is_a_user_error(tmp_path, monkeypatch, capsys):
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
+    (tmp_path / "tasks.py").write_text(
+        "from footman import task\n"
+        "@task\n"
+        "def build(): ...\n"
+        "@task(name='build')\n"
+        "def build2(): ...\n"
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
+    assert _app.run(["build"]) == 2
+    err = capsys.readouterr().err
+    assert "already has a task named 'build'" in err and "tasks.py" in err
+    assert "failed to import" not in err  # a duplicate name, not a crash
+
+
+# --- config errors are loud ---------------------------------------------------
+
+
+def test_malformed_cascade_config_warns_and_continues(project, capsys):
+    (project / "footman.toml").write_text("this is = not [valid toml\n")
+    assert _app.run(["hi"]) == 0
+    captured = capsys.readouterr()
+    assert "hello world" in captured.out
+    assert "ignoring malformed config" in captured.err
+    assert "footman.toml" in captured.err
+
+
+def test_malformed_explicit_config_is_an_error(project, capsys):
+    (project / "bad.toml").write_text("this is = not [valid toml\n")
+    assert _app.run(["--config", "bad.toml", "hi"]) == 2
+    err = capsys.readouterr().err
+    assert "--config" in err and "bad.toml" in err
+
+
+# --- Ctrl-C ------------------------------------------------------------------
+
+
+def test_keyboard_interrupt_exits_130(tmp_path, monkeypatch, capsys):
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
+    (tmp_path / "tasks.py").write_text(
+        "from footman import task\n@task\ndef stop():\n    raise KeyboardInterrupt\n"
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
+    assert _app.run(["stop"]) == 130
+    assert "interrupted" in capsys.readouterr().err
+    assert _app.run(["--sequential", "stop"]) == 130
+    assert "interrupted" in capsys.readouterr().err

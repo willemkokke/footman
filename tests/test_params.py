@@ -433,11 +433,98 @@ def test_completer_deduped_per_build():
     assert _DEDUP_CALLS == [1]  # one call despite two params sharing the completer
 
 
-def test_broken_completer_does_not_break_build():
+def test_broken_strict_completer_fails_the_build():
     def tasks(reg):
         @reg.task
         def build(project: Annotated[str, suggest(lambda: 1 / 0)]): ...
 
+    with pytest.raises(manifest.CompleterError, match="ZeroDivisionError"):
+        build_tree(tasks)
+
+
+def test_broken_soft_completer_degrades_to_no_candidates():
+    def tasks(reg):
+        @reg.task
+        def build(
+            project: Annotated[str, suggest(lambda: 1 / 0, strict=False)],
+        ): ...
+
     _, tree = build_tree(tasks)
     spec = tree["tasks"]["build"]["params"][0]
     assert spec["choices"] == []  # empty -> soft (validation allows anything)
+
+
+# --- bool as a real token type (collections, dicts, unions) ------------------
+
+
+def test_dict_bool_values_coerce():
+    seen = {}
+
+    def tasks(reg):
+        @reg.task
+        def deploy(flags: dict[str, bool] | None = None):
+            seen["flags"] = flags
+
+    run(tasks, "deploy --flags cache=false,retry=1 --flags verbose=off")
+    assert seen["flags"] == {"cache": False, "retry": True, "verbose": False}
+
+
+def test_dict_bool_value_validated_eagerly():
+    def tasks(reg):
+        @reg.task
+        def deploy(flags: dict[str, bool] | None = None): ...
+
+    _, tree = build_tree(tasks)
+    with pytest.raises(ChainError, match="true or false"):
+        split_chain(tree, ["deploy", "--flags", "cache=maybe"])
+
+
+def test_list_of_bool_is_a_repeatable_option_not_a_flag():
+    seen = {}
+
+    def tasks(reg):
+        @reg.task
+        def toggles(switches: list[bool] | None = None):
+            seen["switches"] = switches
+
+    _, tree = build_tree(tasks)
+    spec = tree["tasks"]["toggles"]["params"][0]
+    assert spec["kind"] == "option" and spec.get("multiple") is True
+    assert spec["types"] == ["bool"]
+    run(tasks, "toggles --switches true,false --switches yes")
+    assert seen["switches"] == [True, False, True]
+
+
+def test_scalar_bool_is_still_a_flag():
+    def tasks(reg):
+        @reg.task
+        def lint(fix: bool = False): ...
+
+    _, tree = build_tree(tasks)
+    assert tree["tasks"]["lint"]["params"][0]["kind"] == "flag"
+
+
+def test_bool_in_union_coerces_tokens():
+    seen = {}
+
+    def tasks(reg):
+        @reg.task
+        def go(x: bool | str = "d"):
+            seen["x"] = x
+
+    run(tasks, "go --x true")
+    assert seen["x"] is True
+    run(tasks, "go --x nope")
+    assert seen["x"] == "nope"
+
+
+def test_unicode_digit_lookalikes_are_taught_errors():
+    # "²".isdigit() is true but int("²") raises; the guard must reject it
+    # eagerly with a teaching message, not crash at binding time.
+    def tasks(reg):
+        @reg.task
+        def add(a: int, b: int): ...
+
+    _, tree = build_tree(tasks)
+    with pytest.raises(ChainError, match="an integer"):
+        split_chain(tree, ["add", "²", "3"])
