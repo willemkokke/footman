@@ -7,6 +7,26 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- **A real help story.** `fm --help` documents the runner itself (usage
+  grammar plus the full global-options table, generated from the same table
+  the parser reads). `fm --help <group>` shows a group's tasks, and
+  `fm --help <task>` renders per-task usage, docstring, and typed
+  positional/option tables from the manifest. `-h`/`--help` anywhere before
+  `--` turns the whole line into a read-only help request — `fm deploy --help`
+  can never execute `deploy`.
+- **`bool` is now a real token type.** `dict[str, bool]` values and
+  `list[bool]` elements parse `true/false/1/0/yes/no/on/off` (eagerly
+  validated with a taught error) instead of collapsing to a flag or silently
+  reading every value as `True`.
+- **Dependency-cycle detection.** A cyclic `pre`/`post` graph is a taught
+  error naming the cycle; previously it ran nothing and exited 0.
+- **`py.typed` marker** — downstream type checkers now see footman's inline
+  types (the `Typing :: Typed` classifier was already claiming they could).
+- **Ctrl-C is handled**: pending tasks are cancelled, the run reports
+  `interrupted`, and the exit code is 130 — no more raw traceback.
+
 ### Changed
 
 - **Comma-splitting is now the default for collections.** A `list` / `dict`
@@ -14,11 +34,44 @@ versions may include breaking changes.
   out of the box, in addition to the repeatable form (`--tag a --tag b`). The
   old opt-*in* `csv` marker is replaced by an opt-*out* `nosplit` marker, for
   the parameters whose values may themselves contain a comma.
+- **`--json` output is now enveloped**: `{"schema": 1, "results": [...]}`
+  instead of a bare list, so post-1.0 additions never break consumers. This is
+  the blessed machine surface; future changes will be additive.
+- **Errors name their culprit.** A failing tasks-file import names the file; a
+  duplicate task name is reported as the user error it is (not "failed to
+  import"); a malformed discovered config TOML warns and is skipped; a
+  malformed `--config` file is a hard error; a *strict* `suggest()` completer
+  that raises now fails the run (it used to silently disable the validation it
+  promised).
+- Dry-run now records `StepResult`s (and honours `quiet`), so tests can assert
+  which commands *would* run without executing anything.
+
+### Fixed
+
+- `fm --help <task>` used to **execute the task**.
+- `run("...")` string commands are no longer `shlex`-split on Windows —
+  backslash paths survive; the string goes to `CreateProcess` whole.
+- Non-UTF-8 subprocess output no longer crashes `run()` (decoded with
+  `errors="replace"`).
+- Digit-lookalike tokens (`"²"`) are taught type errors instead of an
+  `int()` traceback.
+- An exception escaping a worker thread in a parallel run (including a
+  `KeyboardInterrupt` raised inside a task) now propagates instead of being
+  silently dropped and reading as success.
 
 ### Docs
 
 - Docstrings converted from reStructuredText to Markdown (renders natively via
   mkdocstrings).
+
+### CI
+
+- Releases are gated: `release.yml` now runs the full CI suite on the tagged
+  commit and refuses to publish unless the tag, `pyproject.toml`,
+  `__version__`, and the changelog all agree on the version (and the wheel
+  ships `py.typed`).
+- Coverage is enforced (`fail_under = 92`), and the strict docs build runs on
+  every PR instead of only after merge.
 
 ## [0.4.0] — 2026-07-16
 
@@ -74,19 +127,17 @@ versions may include breaking changes.
   chain grammar, and instant shell completion answered from a cached JSON
   manifest without importing your code.
 
-## [0.0.2] — 2026-07-16
+## 0.0.2 — 2026-07-16
 
 - Placeholder release claiming the `footman` name on PyPI (MIT license, project
-  URLs).
+  URLs). Not tagged in git.
 
-## [0.0.1] — 2026-07-16
+## 0.0.1 — 2026-07-16
 
-- Placeholder release claiming the `footman` name on PyPI.
+- Placeholder release claiming the `footman` name on PyPI. Not tagged in git.
 
 [Unreleased]: https://github.com/willemkokke/footman/compare/v0.4.0...HEAD
 [0.4.0]: https://github.com/willemkokke/footman/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/willemkokke/footman/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/willemkokke/footman/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/willemkokke/footman/releases/tag/v0.1.0
-[0.0.2]: https://github.com/willemkokke/footman/releases/tag/v0.0.2
-[0.0.1]: https://github.com/willemkokke/footman/releases/tag/v0.0.1

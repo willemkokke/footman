@@ -3,6 +3,9 @@ name: Release
 # Publishes to PyPI via Trusted Publishing (OIDC — no API token stored).
 # One-time setup on PyPI: add a trusted publisher for this repo with
 # workflow `release.yml` and environment `pypi`. Push a `vX.Y.Z` tag to release.
+#
+# A tag alone is not enough: the full CI suite must pass on the tagged commit,
+# and the tag must agree with pyproject.toml, `__version__`, and the changelog.
 
 on:
   push:
@@ -12,7 +15,46 @@ permissions:
   contents: read
 
 jobs:
+  checks:
+    name: CI on the tagged commit
+    uses: ./.github/workflows/ci.yml
+
+  verify-version:
+    name: tag == pyproject == __version__ == changelog
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Verify version consistency
+        run: |
+          python3 - "$GITHUB_REF_NAME" << 'EOF'
+          import re
+          import sys
+          import tomllib
+
+          tag = sys.argv[1].removeprefix("v")
+          with open("pyproject.toml", "rb") as f:
+              pyproject = tomllib.load(f)["project"]["version"]
+          init_text = open("src/footman/__init__.py", encoding="utf-8").read()
+          match = re.search(r'__version__ = "([^"]+)"', init_text)
+          init = match[1] if match else "(missing)"
+          changelog = open("CHANGELOG.md", encoding="utf-8").read()
+
+          problems = []
+          if pyproject != tag:
+              problems.append(f"pyproject.toml says {pyproject}, tag says {tag}")
+          if init != tag:
+              problems.append(f"__init__.__version__ says {init}, tag says {tag}")
+          if f"## [{tag}]" not in changelog:
+              problems.append(f"CHANGELOG.md has no '## [{tag}]' section")
+          if problems:
+              print("version mismatch — refusing to release:")
+              print("\n".join(f"  - {p}" for p in problems))
+              sys.exit(1)
+          print(f"version {tag} is consistent across tag, pyproject, __init__, changelog")
+          EOF
+
   build:
+    needs: [checks, verify-version]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -20,6 +62,8 @@ jobs:
         uses: astral-sh/setup-uv@v7
       - name: Build sdist and wheel
         run: uv build
+      - name: Wheel must ship py.typed
+        run: unzip -l dist/*.whl | grep -q "footman/py.typed"
       - uses: actions/upload-artifact@v7
         with:
           name: dist

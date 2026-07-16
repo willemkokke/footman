@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Lets release.yml require a full CI pass on the tagged commit before it
+  # will build and publish.
+  workflow_call:
 
 permissions:
   contents: read
@@ -49,3 +52,35 @@ jobs:
       - run: uv sync --frozen
       - name: Test
         run: uv run pytest -q
+
+  coverage:
+    name: coverage ≥ fail_under
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.13"
+          enable-cache: true
+      - run: uv sync --frozen
+      - name: Test with coverage gate
+        run: uv run pytest -q --cov=footman
+
+  docs:
+    name: docs build (strict)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - run: uv sync --frozen --group dev --group docs
+      # docs/coverage.md embeds the htmlcov report, so the strict build needs
+      # it to exist — same steps docs.yml uses to deploy.
+      - name: Coverage report
+        run: uv run pytest --cov=footman --cov-report=html:docs/htmlcov -q
+      - name: Build site (strict)
+        run: uv run zensical build --clean --strict
