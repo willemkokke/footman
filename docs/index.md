@@ -4,6 +4,10 @@ title: A typed task runner with instant completion
 
 # footman
 
+[![PyPI version](https://img.shields.io/pypi/v/footman?label=PyPI&color=blue)](https://pypi.org/project/footman/)
+[![Python versions](https://img.shields.io/pypi/pyversions/footman)](https://pypi.org/project/footman/)
+[![License](https://img.shields.io/pypi/l/footman)](https://github.com/willemkokke/footman/blob/main/LICENSE)
+
 A task runner with the soul of [duty](https://pawamoy.github.io/duty/) and the
 UX of [typer](https://typer.tiangolo.com/): typed function signatures become
 real flags and positionals, modules become nested command groups, and shell

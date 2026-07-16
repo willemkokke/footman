@@ -21,6 +21,7 @@ nav = [
   { "CLI reference" = "reference.md" },
   { "API reference" = "api.md" },
   { "Coverage" = "coverage.md" },
+  { "Changelog" = "changelog.md" },
 ]
 
 [project.plugins.mkdocstrings.handlers.python]
@@ -108,3 +109,7 @@ combine_header_slug = true
 [project.markdown_extensions.pymdownx.tasklist]
 custom_checkbox = true
 [project.markdown_extensions.pymdownx.tilde]
+# Include the repo-root CHANGELOG.md into docs/changelog.md — one source of truth.
+[project.markdown_extensions.pymdownx.snippets]
+base_path = ["."]
+check_paths = true
