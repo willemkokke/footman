@@ -4,12 +4,12 @@ The manifest (introspection), the splitter (validation), and the executor
 (binding) all reason about a parameter's type through this one module, so a
 parameter's CLI shape is derived in exactly one place.
 
-A parameter is normalized by :func:`peel` into ``(multiple, element, completer)``
+A parameter is normalized by `peel` into `(multiple, element, completer)`
 and its scalar *element* is described as ordered "type tags"
-(``int``/``float``/``path``/``str``) or as choices (``Literal``/``Enum``).
+(`int`/`float`/`path`/`str`) or as choices (`Literal`/`Enum`).
 Coercion tries the tags in **specificity order** — the most restrictive parser
-first, ``str`` last as the universal fallback — so ``str | int`` turns ``"5"``
-into ``5`` and ``"x"`` into ``"x"``.
+first, `str` last as the universal fallback — so `str | int` turns `"5"`
+into `5` and `"x"` into `"x"`.
 """
 
 from __future__ import annotations
@@ -73,7 +73,7 @@ def peel(ann: Any) -> Peeled:
     is_csv = False
 
     # Strip Annotated and Optional wrappers in any order/nesting, e.g. both
-    # ``Annotated[list[X], csv] | None`` and ``Annotated[list[X] | None, csv]``.
+    # `Annotated[list[X], csv] | None` and `Annotated[list[X] | None, csv]`.
     changed = True
     while changed:
         changed = False
@@ -199,10 +199,10 @@ def coerce_one(value: str, element: Any) -> Any:
 def coerce_custom(value: str, element: Any) -> Any:
     """Coerce to a type footman doesn't special-case, via its constructor.
 
-    Covers ``UUID``, ``Decimal``, and any user type whose constructor accepts a
-    string; ``datetime``/``date`` use ``fromisoformat``. Validated here at
+    Covers `UUID`, `Decimal`, and any user type whose constructor accepts a
+    string; `datetime`/`date` use `fromisoformat`. Validated here at
     execution time (the splitter only ever sees strings), and raises
-    ``ValueError`` on a bad value so footman can report it cleanly.
+    `ValueError` on a bad value so footman can report it cleanly.
     """
     if not isinstance(element, type):
         return value

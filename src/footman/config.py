@@ -1,14 +1,14 @@
 """Behavioural settings, discovered the same way tasks are.
 
-footman reads ``[tool.footman]`` from ``pyproject.toml`` and a standalone
-``footman.toml`` (whole-file), walking from the repo root down to the current
+footman reads `[tool.footman]` from `pyproject.toml` and a standalone
+`footman.toml` (whole-file), walking from the repo root down to the current
 directory. Nearer files win, so a package can override repo-wide defaults; a
-``--config PATH`` on the command line overrides everything. Recognised keys:
+`--config PATH` on the command line overrides everything. Recognised keys:
 
-* ``tasks`` — name of the task file to look for in the cascade (default
-  ``tasks.py``).
-* ``sequential`` — run tasks one at a time by default (``fm`` still overrides
-  with ``-s`` / a parallel default).
+* `tasks` — name of the task file to look for in the cascade (default
+  `tasks.py`).
+* `sequential` — run tasks one at a time by default (`fm` still overrides
+  with `-s` / a parallel default).
 
 Unknown keys are kept but ignored, so newer settings never break an older
 footman.
@@ -22,8 +22,8 @@ from typing import Any
 
 from footman import _paths
 
-#: Filenames read in each directory of the cascade. Within one directory the
-#: dedicated ``footman.toml`` wins over ``pyproject.toml``'s ``[tool.footman]``.
+# Filenames read in each directory of the cascade. Within one directory the
+# dedicated `footman.toml` wins over `pyproject.toml`'s `[tool.footman]`.
 PYPROJECT = "pyproject.toml"
 FOOTMAN_TOML = "footman.toml"
 
@@ -37,7 +37,7 @@ def _read_toml(path: Path) -> dict[str, Any] | None:
 
 
 def _footman_table(path: Path) -> dict[str, Any]:
-    """The footman settings in *path* — ``[tool.footman]`` for a pyproject,
+    """The footman settings in *path* — `[tool.footman]` for a pyproject,
     the whole file for anything else. Empty dict if absent/unreadable."""
     data = _read_toml(path)
     if data is None:

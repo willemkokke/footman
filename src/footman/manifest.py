@@ -3,20 +3,20 @@
 The manifest is a JSON description of the command tree (groups, tasks, and the
 CLI shape of every parameter). The execution path imports the user's tasks
 module anyway, so introspecting the tree and rewriting the cache is effectively
-free. The completion hot path (:mod:`footman._complete`) only ever *reads* the
+free. The completion hot path (`footman._complete`) only ever *reads* the
 cached JSON — it never imports this module or the user's code.
 
 Parameter mapping (function signature -> CLI shape):
 
-===========================  ===========================================
-``fix: bool = False``        flag ``--fix`` / ``--no-fix``
-``mode: str = "loose"``      option ``--mode VALUE``
-``env: Literal[...]``        completable, eagerly-validated choices
-``count: int = 100``         typed option, validated at parse time
-``paths: list[Path] = ()``   repeatable option (``--paths a --paths b``)
-``template: Path``           required positional (exact arity)
-``*cmd: str``                variadic trailing passthrough
-===========================  ===========================================
+| Signature                | CLI shape                                 |
+| ------------------------ | ----------------------------------------- |
+| `fix: bool = False`      | flag `--fix` / `--no-fix`                 |
+| `mode: str = "loose"`    | option `--mode VALUE`                     |
+| `env: Literal[...]`      | completable, eagerly-validated choices    |
+| `count: int = 100`       | typed option, validated at parse time     |
+| `paths: list[Path] = ()` | repeatable option (`--paths a --paths b`) |
+| `template: Path`         | required positional (exact arity)         |
+| `*cmd: str`              | variadic trailing passthrough             |
 """
 
 from __future__ import annotations
@@ -39,8 +39,8 @@ SCHEMA_VERSION = 1
 def resolved_signature(fn: Any) -> inspect.Signature:
     """Signature of *fn* with string annotations evaluated to real types.
 
-    ``from __future__ import annotations`` (and any PEP 563 usage) turns a
-    tasks file's annotations into strings; ``eval_str`` turns them back into the
+    `from __future__ import annotations` (and any PEP 563 usage) turns a
+    tasks file's annotations into strings; `eval_str` turns them back into the
     types the grammar reasons about. Falls back to the raw signature if a name
     cannot be resolved (e.g. a type defined in a local scope).
     """
@@ -53,8 +53,8 @@ def resolved_signature(fn: Any) -> inspect.Signature:
 def param_spec(param: inspect.Parameter) -> dict[str, Any]:
     """Map one function parameter to its CLI shape (one manifest entry).
 
-    Dynamic-completer params get a transient ``_completer`` key that
-    :func:`_finish` replaces with the completer's (cached) choices.
+    Dynamic-completer params get a transient `_completer` key that
+    `_finish` replaces with the completer's (cached) choices.
     """
     spec: dict[str, Any] = {"name": param.name.replace("_", "-")}
     ann = param.annotation
@@ -203,7 +203,7 @@ def write_manifest(manifest: dict[str, Any], path: Path) -> None:
 
 
 def load_manifest(path: Path) -> dict[str, Any] | None:
-    """Read a cached manifest, or ``None`` if missing/unreadable/corrupt."""
+    """Read a cached manifest, or `None` if missing/unreadable/corrupt."""
     try:
         data = json.loads(path.read_text("utf-8"))
     except (OSError, ValueError):

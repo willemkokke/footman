@@ -6,8 +6,8 @@ without importing your code.
 
 The console-script entry lives here and is deliberately thin: completion must
 dispatch to the stdlib-only hot path before importing the framework or the
-user's tasks, so :func:`main` checks ``--complete`` first and everything else is
-imported lazily. A bare ``import footman`` pays for nothing but this module.
+user's tasks, so `main` checks `--complete` first and everything else is
+imported lazily. A bare `import footman` pays for nothing but this module.
 """
 
 from __future__ import annotations
@@ -16,8 +16,8 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     # Give type-checkers the real types for the lazily re-exported names below;
-    # at runtime these are served by ``__getattr__`` without importing registry
-    # on a bare ``import footman`` (the completion hot path).
+    # at runtime these are served by `__getattr__` without importing registry
+    # on a bare `import footman` (the completion hot path).
     from footman.app import App as App
     from footman.app import Brand as Brand
     from footman.context import Context as Context
@@ -54,7 +54,7 @@ __all__ = [
 
 
 def main() -> None:
-    """Console-script entry for ``footman`` and ``fm``."""
+    """Console-script entry for `footman` and `fm`."""
     import sys
 
     argv = sys.argv[1:]

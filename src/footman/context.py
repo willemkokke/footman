@@ -1,12 +1,12 @@
-"""The run context, the ``run()`` helper, and ``parallel()``.
+"""The run context, the `run()` helper, and `parallel()`.
 
-A task never *needs* a context parameter: ``run()`` reads the current context
+A task never *needs* a context parameter: `run()` reads the current context
 from a contextvar footman sets around each running task, so a task body can just
-call ``run("ruff check src")``. A task MAY declare a first parameter named
-``ctx`` (or annotated :class:`Context`) to get the object explicitly.
+call `run("ruff check src")`. A task MAY declare a first parameter named
+`ctx` (or annotated `Context`) to get the object explicitly.
 
 Output is routed through the context so parallel tasks don't interleave: a global
-``sys.stdout`` proxy dispatches every write to the running task's ``sink``. In
+`sys.stdout` proxy dispatches every write to the running task's `sink`. In
 sequential mode a task's sink is the real stdout (live); in parallel mode it is a
 per-task buffer, flushed atomically when the task finishes.
 """
@@ -31,7 +31,7 @@ from typing import Any, TextIO
 
 @dataclass
 class StepResult:
-    """The outcome of one ``run()`` call, recorded on the context."""
+    """The outcome of one `run()` call, recorded on the context."""
 
     command: str
     code: int
@@ -65,12 +65,12 @@ def current() -> Context:
 
 
 def passthrough() -> list[str]:
-    """Arguments after ``--`` on the command line, for the running task."""
+    """Arguments after `--` on the command line, for the running task."""
     return list(current().passthrough)
 
 
 class RunFailed(Exception):
-    """A ``run()`` command exited non-zero (and ``nofail`` was not set)."""
+    """A `run()` command exited non-zero (and `nofail` was not set)."""
 
     def __init__(self, result: StepResult) -> None:
         self.result = result
@@ -78,7 +78,7 @@ class RunFailed(Exception):
 
 
 def context_param_name(sig: inspect.Signature) -> str | None:
-    """Name of the task's context parameter (first param ``ctx`` / ``Context``)."""
+    """Name of the task's context parameter (first param `ctx` / `Context`)."""
     params = list(sig.parameters.values())
     if not params:
         return None
@@ -92,7 +92,7 @@ def context_param_name(sig: inspect.Signature) -> str | None:
 
 
 class _Router:
-    """A ``sys.stdout`` proxy that sends each write to the current task's sink."""
+    """A `sys.stdout` proxy that sends each write to the current task's sink."""
 
     def __init__(self, real: TextIO) -> None:
         self.real = real
@@ -231,8 +231,8 @@ def parallel(*calls: Callable[[], Any], keep_going: bool = False) -> list[int]:
 
     Each call runs in a child of the current context with its own output buffer,
     flushed atomically on completion so concurrent output never interleaves.
-    Pass task functions directly (``parallel(lint, typecheck)``) or thunks for
-    arguments (``parallel(lambda: build("web"), lambda: build("api"))``).
+    Pass task functions directly (`parallel(lint, typecheck)`) or thunks for
+    arguments (`parallel(lambda: build("web"), lambda: build("api"))`).
     """
     from concurrent.futures import ThreadPoolExecutor
 

@@ -1,4 +1,4 @@
-"""Typed wrappers around common dev tools, built on :func:`footman.run`.
+"""Typed wrappers around common dev tools, built on `footman.run`.
 
 Each wrapper builds the command and runs it through the current task context, so
 it inherits capture, replay-on-failure, dry-run, and progress. Tools that ship a
@@ -16,7 +16,7 @@ from footman.context import run
 
 
 def ruff(*args: str, fix: bool = False, nofail: bool = False) -> int:
-    """Run ruff (the linter). ``ruff("check", "src", fix=True)``."""
+    """Run ruff (the linter). `ruff("check", "src", fix=True)`."""
     cmd = ["ruff", *args]
     if fix:
         cmd.append("--fix")
@@ -24,7 +24,7 @@ def ruff(*args: str, fix: bool = False, nofail: bool = False) -> int:
 
 
 def ruff_format(*args: str, check: bool = False, nofail: bool = False) -> int:
-    """Run ``ruff format``. ``ruff_format("src", check=True)``."""
+    """Run `ruff format`. `ruff_format("src", check=True)`."""
     cmd = ["ruff", "format", *args]
     if check:
         cmd.append("--check")
@@ -37,7 +37,7 @@ def basedpyright(*args: str, nofail: bool = False) -> int:
 
 
 def pytest(*args: str, in_process: bool = True, nofail: bool = False) -> int:
-    """Run pytest — in-process via ``pytest.main`` when available (no subprocess)."""
+    """Run pytest — in-process via `pytest.main` when available (no subprocess)."""
     if in_process:
         try:
             import pytest as _pytest
@@ -50,12 +50,12 @@ def pytest(*args: str, in_process: bool = True, nofail: bool = False) -> int:
 
 
 def uv(*args: str, nofail: bool = False) -> int:
-    """Run a uv subcommand. ``uv("build")``, ``uv("sync")``."""
+    """Run a uv subcommand. `uv("build")`, `uv("sync")`."""
     return run(["uv", *args], nofail=nofail)
 
 
 def python(*args: str, nofail: bool = False) -> int:
-    """Run the current interpreter. ``python("-m", "build")``."""
+    """Run the current interpreter. `python("-m", "build")`."""
     return run([sys.executable, *args], nofail=nofail)
 
 

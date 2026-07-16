@@ -12,15 +12,15 @@ import hashlib
 import os
 from pathlib import Path
 
-#: Ancestor markers that identify the project root. The manifest cache is keyed
-#: by cwd, but these still bound a lone-file lookup when there is no repo root.
+# Ancestor markers that identify the project root. The manifest cache is keyed
+# by cwd, but these still bound a lone-file lookup when there is no repo root.
 PROJECT_MARKERS = ("pyproject.toml", ".git", "tasks.py")
 
-#: Marks the ceiling of the upward walk — the repo root where the task cascade
-#: starts and the config search stops. ``.git`` is the natural monorepo edge.
+# Marks the ceiling of the upward walk — the repo root where the task cascade
+# starts and the config search stops. `.git` is the natural monorepo edge.
 REPO_MARKERS = (".git",)
 
-#: Default name of the tasks file, looked for in every folder of the cascade.
+# Default name of the tasks file, looked for in every folder of the cascade.
 DEFAULT_TASKS_FILE = "tasks.py"
 
 
@@ -34,9 +34,9 @@ def find_project_root(start: Path | None = None) -> Path:
 
 
 def find_repo_root(start: Path | None = None) -> Path:
-    """Ceiling of the cascade: nearest ancestor with a repo marker (``.git``).
+    """Ceiling of the cascade: nearest ancestor with a repo marker (`.git`).
 
-    Falls back to :func:`find_project_root` when there is no VCS boundary, so a
+    Falls back to `find_project_root` when there is no VCS boundary, so a
     single-package checkout still has a sensible top.
     """
     start = (start or Path.cwd()).resolve()
@@ -49,7 +49,7 @@ def find_repo_root(start: Path | None = None) -> Path:
 def dir_chain(cwd: Path, ceiling: Path) -> list[Path]:
     """Directories from *ceiling* down to *cwd* inclusive (root first).
 
-    If *ceiling* is not an ancestor of *cwd* (unrelated trees), just ``[cwd]``.
+    If *ceiling* is not an ancestor of *cwd* (unrelated trees), just `[cwd]`.
     """
     cwd = cwd.resolve()
     ceiling = ceiling.resolve()
@@ -69,7 +69,7 @@ def task_files(
 
 
 def cache_home() -> Path:
-    """Base cache directory, honouring ``XDG_CACHE_HOME``."""
+    """Base cache directory, honouring `XDG_CACHE_HOME`."""
     xdg = os.environ.get("XDG_CACHE_HOME")
     return Path(xdg) if xdg else Path.home() / ".cache"
 

@@ -1,25 +1,27 @@
-"""The task registry: the ``@task`` / ``group()`` decorator surface.
+"""The task registry: the `@task` / `group()` decorator surface.
 
-Users build their command tree in a tasks file (``tasks.py`` by default)::
+Users build their command tree in a tasks file (`tasks.py` by default):
 
-    from footman import task, group
+```python
+from footman import task, group
 
-    @task
-    def lint(fix: bool = False):
-        "Run ruff over the project."
+@task
+def lint(fix: bool = False):
+    "Run ruff over the project."
 
-    docs = group("docs", help="Documentation")
+docs = group("docs", help="Documentation")
 
-    @docs.task
-    def serve(port: int = 8000):
-        "Serve the docs locally."
+@docs.task
+def serve(port: int = 8000):
+    "Serve the docs locally."
+```
 
-A module of functions becomes a flat set of commands; each :func:`group` opens
+A module of functions becomes a flat set of commands; each `group` opens
 a nested command group. Command names are the function/group name with
-underscores turned into hyphens (``add_word`` -> ``add-word``).
+underscores turned into hyphens (`add_word` -> `add-word`).
 
 This module holds only the tree structure. Turning it into the manifest (which
-pays the cost of :mod:`inspect`) lives in :mod:`footman.manifest`, and the
+pays the cost of `inspect`) lives in `footman.manifest`, and the
 completion hot path never imports either.
 """
 
@@ -74,13 +76,15 @@ class Group:
     ) -> Task | Callable[[Task], Task]:
         """Register a function as a task.
 
-        Usable bare (``@task``) or parameterised (``@task(name="build")``) to
-        override the command name. ``pre``/``post`` declare dependency tasks (by
+        Usable bare (`@task`) or parameterised (`@task(name="build")`) to
+        override the command name. `pre`/`post` declare dependency tasks (by
         reference) that run before/after this one — the scheduler runs
-        independent prerequisites in parallel::
+        independent prerequisites in parallel:
 
-            @task(pre=[format, lint, typecheck, test])
-            def check(): ...
+        ```python
+        @task(pre=[format, lint, typecheck, test])
+        def check(): ...
+        ```
         """
 
         def register(fn: Task) -> Task:
@@ -102,15 +106,15 @@ class Group:
         return sub
 
 
-#: The implicit root registry populated by the module-level ``task``/``group``
-#: aliases (re-exported from ``footman``). Constructing an explicit ``Group`` is
-#: always an option and keeps tests free of global state.
+# The implicit root registry populated by the module-level `task`/`group`
+# aliases (re-exported from `footman`). Constructing an explicit `Group` is
+# always an option and keeps tests free of global state.
 root = Group("root")
 task = root.task
 group = root.group
 
 
 def reset() -> None:
-    """Clear the global :data:`root` registry (used by the test-suite)."""
+    """Clear the global `root` registry (used by the test-suite)."""
     root.tasks.clear()
     root.groups.clear()

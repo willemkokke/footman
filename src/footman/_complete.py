@@ -6,13 +6,13 @@ here is one file read + JSON parse + tree walk.
 
 Two ways in:
 
-* ``footman --complete [--] WORD [WORD ...]`` — the portable path. The console
+* `footman --complete [--] WORD [WORD ...]` — the portable path. The console
   script dispatches here *before importing anything else* and derives the cache
   location from the current directory.
-* ``python _complete.py --manifest PATH -- WORD [WORD ...]`` — the baked-in
+* `python _complete.py --manifest PATH -- WORD [WORD ...]` — the baked-in
   path. A generated completion script invokes the interpreter directly on this
   file with the manifest location hard-coded, skipping the console-script shim
-  and the ``footman`` package import entirely.
+  and the `footman` package import entirely.
 
 WORDs are the command line after the program name; the last word is the partial
 being completed ("" when the cursor follows a space).
@@ -66,7 +66,7 @@ def _load_tree(path: str) -> dict | None:
 
 
 def complete_cli(args: list[str]) -> int:
-    """Entry for ``footman --complete`` and the standalone resolver."""
+    """Entry for `footman --complete` and the standalone resolver."""
     manifest = None
     if args and args[0] == "--manifest":
         if len(args) < 2:
@@ -77,7 +77,7 @@ def complete_cli(args: list[str]) -> int:
 
     if manifest is None:
         # Only the derive branch needs the package; keep the standalone
-        # --manifest path free of any ``footman`` import. The cache is keyed by
+        # --manifest path free of any `footman` import. The cache is keyed by
         # cwd — the effective task set is the cascade from the repo root down.
         from footman import _paths
 
