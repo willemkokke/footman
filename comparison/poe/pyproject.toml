@@ -1,0 +1,23 @@
+# poethepoet equivalent of the shared task surface.
+#
+# Notes vs footman:
+# - tasks are shell/command STRINGS in TOML, not typed Python functions —
+#   so poe's completion is fast (it parses this file, never imports a project),
+#   but you give up signature -> CLI, real typing, and eager validation;
+# - options need an explicit [[tool.poe.tasks.X.args]] table each (verbose);
+# - no nested groups — names are flat (dist-build).
+
+[tool.poe.tasks]
+noop = { expr = "1" } # in-process no-op (execution-overhead benchmark)
+format = "ruff format src tests"
+typecheck = "basedpyright"
+test = "pytest"
+check = ["format", "lint", "typecheck", "test"]
+dist-build = "uv build"
+dist-clean = "rm -rf dist"
+
+[tool.poe.tasks.lint]
+help = "Lint with ruff."
+cmd = "ruff check src tests"
+# A single boolean flag already needs its own args table:
+args = [{ name = "fix", options = ["--fix"], type = "boolean" }]
