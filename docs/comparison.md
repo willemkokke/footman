@@ -1,93 +1,110 @@
 # Comparison
 
-How footman compares to the incumbent Python task runners — measured on the
-**same seven-task surface** (`lint`, `format`, `typecheck`, `test`, `check`,
-`dist build`, `dist clean`) implemented five ways. The runnable head-to-head
-lives in the repository's [`comparison/`](https://github.com/willemkokke/footman/tree/main/comparison)
+How footman stacks up against the Python task runners I measured it against —
+the same seven-task surface (`lint`, `format`, `typecheck`, `test`, `check`,
+`dist build`, `dist clean`) written five ways. The runnable head-to-head lives in
+the repo's [`comparison/`](https://github.com/willemkokke/footman/tree/main/comparison)
 directory; reproduce the numbers with `uv run python comparison/bench_compare.py`.
 
-Versions measured: duty 1.9.0, invoke 3.0.3, poethepoet 0.48.0, typer 0.27.0,
-CPython 3.13 on an M-series Mac.
+Measured on duty 1.9.0, invoke 3.0.3, poethepoet 0.48.0, typer 0.27.0, CPython
+3.13, M-series Mac.
 
-!!! note "Verified, not assumed"
+!!! note "Verified, not vibes"
 
-    Every claim below was checked against the tools directly. Notably: modern
-    **duty already has** real `--flags`, chaining with flags, and required
-    positionals — those are *not* where footman pulls ahead. The real
-    differences are validation, discovery, dependencies, and completion latency.
+    Every number and checkmark here was checked against the tools themselves, on
+    the same seven tasks — no reprinting a competitor's feature list on faith.
 
-## Completion latency — the headline
+## First, some love for duty
 
-Cold-process wall time per `<TAB>`, mean of 15 fresh processes. **Δ import** is
-the decisive column: completion time with a 0.25 s project-import cost minus
-completion time with none. A runner that re-imports your tasks on every TAB
-shows a ~0.25 s delta; one that answers from a cache shows ~0.
+Before any table makes footman look clever: I've been running my projects on
+[duty](https://pawamoy.github.io/duty/) for nearly two years, and it's been a
+pleasure the whole way. footman exists *because* of duty — the `ctx.run` capture
+model, the lazy tool wrappers, the decorator ergonomics are all ideas I'm
+happily standing on. This is a "here's what I wanted to tweak," not a takedown.
+And duty still wins outright in one place: its `tools` standard library is far
+more extensive and detailed than footman's handful — dozens of tools, carefully
+typed. footman has some catching up to do there.
 
-| runner  | completion (per TAB) | Δ import | re-imports per TAB?      |
+## Completion latency
+
+Cold-process wall time per `<TAB>`, mean of 15 fresh processes. The **Δ import**
+column is the one that matters: completion time with a 0.25 s project-import cost
+minus completion time without it. Re-import your tasks on every keystroke and
+you see the whole ~0.25 s; answer from a cache and you see roughly nothing.
+
+| runner  | completion (per TAB) | Δ import | re-imports every TAB?    |
 | ------- | -------------------: | -------: | ------------------------ |
-| footman |            **23 ms** |    ~0 ms | **no** (cached manifest) |
-| poe     |                45 ms |    ~0 ms | no (reads TOML)          |
-| duty    |               346 ms |   286 ms | **yes**                  |
-| invoke  |               360 ms |   289 ms | **yes**                  |
+| footman |            **23 ms** |    ~0 ms | no — cached manifest     |
+| poe     |                45 ms |    ~0 ms | no — reads TOML          |
+| duty    |               346 ms |   286 ms | yes                      |
+| invoke  |               360 ms |   289 ms | yes                      |
 
-- **duty and invoke re-import your whole project on every TAB** — their
-  completion scripts call the tool, which loads your tasks module first. footman
-  is **~15× faster** because completion reads a cached JSON manifest and never
-  imports the framework or your code.
-- **footman pays the import cost too — but only on the execution path.** Its
-  `--list` (~313 ms) sits right alongside the others, because listing runs your
-  code. Completion is the one thing that must be instant, and is.
-- **poe is fast at completion for a different reason:** its tasks are shell
-  strings in TOML, so there's no Python to import — at the cost of everything in
-  the feature matrix below.
+duty and invoke reload your whole project on every TAB — their completion
+scripts call the tool, which imports your tasks before it can answer. footman
+reads a cached JSON manifest instead and never imports a thing, so it lands about
+15× faster. It pays the same import cost as everyone else, just on the execution
+path: `fm --list` is ~313 ms, right there with the pack. Completion is the one
+moment that has to feel instant, so that's the moment I optimised. poe is quick
+here too, for the honest reason that its tasks are TOML strings with no Python to
+load — which is also the rest of this page.
+
+> **Does this speed matter?** Not really — but I'm a little OCD and needed to
+> know I wasn't embarrassing myself. Turns out I'm not, so we can both move on.
 
 ## Is "just write a typer app" too heavy?
 
-typer is footman's closest feature-peer, and a real alternative. Isolated
-cold-process import cost over the bare-interpreter baseline:
+Genuine question, because typer is lovely and a completely reasonable choice — if
+you're building a user-facing CLI rather than a task runner, honestly, reach for
+typer. It's also footman's closest relative here: typed signatures, real flags,
+`Enum`/`Literal` validation, nested apps. The only thing I measured was startup,
+because typer has a reputation for being heavy:
 
-| import           | cost over baseline |
-| ---------------- | -----------------: |
-| `import footman` |          **+4 ms** |
-| `import typer`   |          **+24 ms** |
+| import           | cost over a bare interpreter |
+| ---------------- | ---------------------------: |
+| `import footman` |                     **+4 ms** |
+| `import typer`   |                    **+24 ms** |
 
-typer's import genuinely is ~6× heavier (it ships its own parser plus `rich` and
-`shellingham`). A single no-op launch is still nearly tied (footman ~38 ms,
-typer ~40 ms) — footman spends its budget on real work, typer on imports. The
-weight compounds where it matters: a typer app's **completion** re-invokes the
-app, paying the typer import *plus* your project import on every TAB, while
-footman answers from cache.
+typer's import really is ~6× heavier — it ships its own parser plus `rich` and
+`shellingham`. On a single launch you'd never notice (footman ~38 ms, typer
+~40 ms; footman just spends its milliseconds on parsing instead of importing).
+The difference only shows up when a typer app does completion, because that
+re-runs the app — paying the typer import *and* your project import on every TAB,
+where footman is answering from cache. Not a knock on typer; just a different job.
 
 ## Feature matrix
 
-| capability                                  | footman | typer  | duty            | invoke        | poe      |
-| ------------------------------------------- | ------- | ------ | --------------- | ------------- | -------- |
-| Typed Python-function tasks                 | yes     | yes    | yes             | yes           | no       |
-| No `ctx`/`c` boilerplate param              | yes     | yes    | no              | no            | n/a      |
-| Real `--flags`                              | yes     | yes    | yes             | yes           | yes      |
-| `Literal`/`Enum` → validated choices        | yes     | yes    | no              | no            | no       |
-| Union / one-or-many / `dict[K,V]` params    | yes     | partial| no              | no            | no       |
-| Native nested groups                        | yes     | manual | no              | manual        | no       |
-| Zero-boilerplate discovery (module = group) | yes     | no     | no              | no            | no       |
-| Separator-free chaining                     | yes     | no     | reserved-word   | reserved-word | seq task |
-| Parallel-by-default DAG (`pre`/`post`)      | yes     | no     | serial pre/post | serial pre/post | yes    |
-| `run()` capture / replay-on-failure         | yes     | no     | yes (`ctx.run`) | partial       | no       |
-| Monorepo `tasks.py` cascade                 | yes     | no     | no              | no            | no       |
-| Custom-branded CLI as a library             | yes     | yes    | no              | no            | no       |
-| Completion without re-importing             | yes     | no     | no              | no            | yes\*    |
-| Zero runtime dependencies                   | yes     | no     | no              | no            | no       |
+footman on the left, in a column of green ticks. (Yes, I noticed.)
 
-\* poe avoids re-importing only because its tasks aren't Python functions.
+| capability                                  | footman | typer   | duty          | invoke        | poe      |
+| ------------------------------------------- | :-----: | :-----: | ------------- | ------------- | -------- |
+| Typed Python-function tasks                 |   ✅    |   ✅    | ✅            | ✅            | ❌       |
+| No `ctx`/`c` boilerplate param              |   ✅    |   ✅    | ❌            | ❌            | —        |
+| Real `--flags`                              |   ✅    |   ✅    | ✅            | ✅            | ✅       |
+| `Literal`/`Enum` → validated choices        |   ✅    |   ✅    | ❌            | ❌            | ❌       |
+| Union / one-or-many / `dict[K,V]` params    |   ✅    | partial | ❌            | ❌            | ❌       |
+| Native nested groups                        |   ✅    | ✅      | ❌            | manual        | ❌       |
+| Zero-boilerplate discovery (module = group) |   ✅    |   ❌    | ❌            | ❌            | ❌       |
+| Separator-free chaining                     |   ✅    |   ❌    | reserved-word | reserved-word | seq task |
+| Parallel-by-default DAG (`pre`/`post`)      |   ✅    |   ❌    | serial        | serial        | ✅       |
+| `run()` capture / replay-on-failure         |   ✅    |   ❌    | ✅            | partial       | ❌       |
+| Extensive typed `tools` standard library    |   ❌    |   ❌    | ✅            | ❌            | ❌       |
+| Monorepo `tasks.py` cascade                 |   ✅    |   ❌    | ❌            | ❌            | ❌       |
+| Custom-branded CLI as a library             |   ✅    |   ✅    | ❌            | ❌            | ❌       |
+| Completion without re-importing             |   ✅    |   ❌    | ❌            | ❌            | ✅\*     |
+| Zero runtime dependencies                   |   ✅    |   ❌    | ❌            | ❌            | ❌       |
 
-**Where footman still trails:** shell-completion *installers* aren't wired yet
-(the resolver works today via `fm --complete`), and typer's `--help` formatting
-is richer. Both are on the roadmap.
+\* poe skips the re-import only because its tasks aren't Python functions.
+
+> I've always wanted to make a comparison table that lists my exact feature list
+> so it looks good! (The one row footman *doesn't* tick is duty's tools library —
+> credit where it's due.)
 
 ## If you're coming from…
 
 ### duty
 
-The closest migration. Drop the `ctx` parameter and shell out through `run()`:
+The gentlest move — it's the family footman grew up in. Drop the `ctx` parameter
+and shell out through `run()`:
 
 ```python
 # duty
@@ -101,16 +118,17 @@ def lint(fix: bool = False):
     run("ruff check ." + (" --fix" if fix else ""))
 ```
 
-Chaining (`duty format lint test` → `fm format lint test`) and `--flags` work
-the same. You **gain** eager choice/type validation (duty accepts an invalid
-`Literal`; footman rejects it), native nested groups, and instant completion.
-Note the flag syntax: duty also accepts `lint fix=true`; footman uses
-`--fix` / `lint --fix`.
+Chaining (`duty format lint test` → `fm format lint test`) and `--flags` carry
+over. You gain eager choice/type validation (duty happily accepts an invalid
+`Literal`; footman stops it), native nested groups, and instant completion. The
+one thing you'll miss for now is duty's big `tools` library — footman's is small
+and growing. Flag syntax note: duty also takes `lint fix=true`; footman uses
+`--fix`.
 
 ### invoke
 
-Drop the `c` parameter, and delete the manual `Collection` wiring — in footman a
-module *is* a group and a `group()` opens a sub-command:
+Drop the `c` parameter and delete the manual `Collection` wiring — in footman a
+module *is* a group and `group()` opens a sub-command:
 
 ```python
 # invoke: hand-assembled namespaces
@@ -122,7 +140,7 @@ dist = group("dist")
 def build(): ...
 ```
 
-`inv dist.build` becomes `fm dist build` (a space, not a dot). `c.run(...)` →
+`inv dist.build` becomes `fm dist build` (a space, not a dot); `c.run(...)` →
 `run(...)`.
 
 ### typer
@@ -130,14 +148,15 @@ def build(): ...
 Your typed signatures port almost verbatim — footman reads the same annotations.
 Delete the app object and the per-parameter `typer.Option`/`Argument` wrappers;
 use plain defaults plus footman's `Annotated` markers (`suggest`, `Many`,
-`nosplit`) where needed. `typer.Typer()` + `add_typer(sub)` → a module or a
-`group()`. You lose typer's rich help (for now) and gain cached completion, zero
-dependencies, and separator-free chaining.
+`nosplit`) where you need them. `typer.Typer()` + `add_typer(sub)` → a module or
+a `group()`. You'll trade typer's polished `--help` for cached completion, zero
+dependencies, and separator-free chaining — a fair swap for a task runner, though
+if you're shipping a CLI to users, typer's help is worth staying for.
 
 ### poe
 
-Move each TOML task to a Python function — you trade declarative strings for real
-Python, types, and validation:
+Move each TOML task into a Python function — you swap declarative strings for
+real Python, types, and validation:
 
 ```toml
 # poe
@@ -160,16 +179,16 @@ pay the project import only on execution, never on completion.
 
 Recipes become `@task` functions and shell lines become `run(...)`; you keep
 chaining and gain parallel-by-default execution and typed arguments. What you
-give up is the file-target / up-to-date model — footman runs commands, it is not
-a build system (see `doit` for that niche).
+give up is the file-target / up-to-date model — footman runs commands, it isn't a
+build system (see `doit` for that niche).
 
 ## Other runners
 
 Not benchmarked here, and why: **taskipy** (pyproject shell aliases, no
-Python-function tasks), **doit** (a build system with file-target/up-to-date
-tracking — a different niche), **nox** / **tox** (environment & test-matrix
-orchestration), and the non-Python **just** / **go-task** / **mise** / **make**
-(great UX and completion, no Python dynamism). `uv`'s own task support is
-[in design](https://github.com/astral-sh/uv/issues/5903) and will cover the
-simple-named-command case; footman's niche is typed Python-function tasks with
-real CLI semantics.
+Python-function tasks), **doit** (a proper build system with file-target and
+up-to-date tracking — a different game), **nox** / **tox** (environment and
+test-matrix orchestration), and the non-Python **just** / **go-task** / **mise**
+/ **make** (great UX and completion, no Python dynamism). `uv`'s own task support
+is [in design](https://github.com/astral-sh/uv/issues/5903) and will cover the
+simple-named-command case; footman's patch of ground is typed Python-function
+tasks with real CLI semantics.
