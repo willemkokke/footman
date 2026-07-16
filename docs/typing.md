@@ -12,8 +12,8 @@ parse time, with taught error messages.
 | `mode: str = "loose"`           | option `--mode VALUE`                               |
 | `mode: Literal["a", "b"]`       | completable, eagerly-validated choices              |
 | `count: int = 100`              | typed option, validated at parse time               |
-| `paths: list[Path] = ()`        | repeatable option (`--paths a --paths b`)           |
-| `env: dict[str, int]`           | `--env KEY=VAL` pairs (repeatable; `csv`-splittable)|
+| `paths: list[Path] = ()`        | repeatable or comma-separated (`--paths a,b`)       |
+| `env: dict[str, int]`           | `--env KEY=VAL` pairs (repeatable or comma-separated)|
 | `template: Path`                | required positional (exact arity)                   |
 | `*cmd: str`                     | variadic trailing passthrough                       |
 
@@ -39,17 +39,28 @@ def build(target: Many[str]): ...    # fm build web   -> "web"
                                       # fm build web api -> ["web", "api"]
 ```
 
-## Opt-in comma splitting
+## Comma-splitting and `nosplit`
 
-Mark a parameter `csv` to let a single token expand on commas — handy for
-`--tag a,b,c`. Only `,` is a separator (no alternatives), and it is
-shell-portable, including PowerShell:
+Every collection parameter (list or dict) splits a single token on commas **by
+default**, on top of the repeatable form — so `--tag a,b,c` and
+`--tag a --tag b --tag c` both work. Only `,` is a separator (no alternatives),
+and it is shell-portable, including PowerShell:
 
 ```python
-from footman import csv
+@task
+def release(tags: list[str]): ...   # fm release --tags a,b,c  -> ["a", "b", "c"]
+```
+
+When a value may itself contain a comma, mark the parameter `nosplit`: then only
+the repeated flag adds items, and a comma stays literal.
+
+```python
+from typing import Annotated
+from footman import nosplit
 
 @task
-def release(tags: csv[list[str]]): ...   # fm release --tags a,b,c
+def notify(lines: Annotated[list[str], nosplit]): ...
+# fm notify --lines "Smith, John" --lines "Doe, Jane"  -> two names, commas kept
 ```
 
 ## Dictionaries

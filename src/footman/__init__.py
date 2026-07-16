@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     from footman.context import passthrough as passthrough
     from footman.context import run as run
     from footman.params import Many as Many
-    from footman.params import csv as csv
+    from footman.params import nosplit as nosplit
     from footman.params import suggest as suggest
     from footman.registry import Group as Group
     from footman.registry import group as group
@@ -42,9 +42,9 @@ __all__ = [
     "Many",
     "RunFailed",
     "__version__",
-    "csv",
     "group",
     "main",
+    "nosplit",
     "parallel",
     "passthrough",
     "run",
@@ -74,7 +74,7 @@ def __getattr__(name: str) -> object:
         from footman import registry
 
         return getattr(registry, name)
-    if name in ("suggest", "Many", "csv"):
+    if name in ("suggest", "Many", "nosplit"):
         from footman import params
 
         return getattr(params, name)

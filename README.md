@@ -86,10 +86,10 @@ A function's signature is introspected into real CLI semantics:
 | `env: Literal["dev","prod"]`           | completable, eagerly-validated choices               |
 | `count: int = 100`                     | typed option, validated at parse time                |
 | `target: str \| int`                   | union — coerced by specificity (int before str)      |
-| `paths: list[Path] \| None`            | repeatable option (`--paths a --paths b`)            |
+| `paths: list[Path] \| None`            | repeatable or comma-separated (`--paths a,b`)        |
 | `items: Many[str \| int]`              | one or more values, each coerced                     |
-| `tags: Annotated[list[str], csv]`      | repeatable, and splits `--tags a,b,c`                |
-| `env: dict[str, int]`                  | `--env KEY=VAL` pairs (repeatable; `csv`-splittable) |
+| `names: Annotated[list[str], nosplit]` | repeatable only — values may contain commas          |
+| `env: dict[str, int]`                  | `--env KEY=VAL` pairs (repeatable or comma-separated)|
 | `labels: dict[str, list[int]]`         | repeated key appends: `--labels p=1 --labels p=2`    |
 | `project: Annotated[str, suggest(fn)]` | dynamic choices from `fn()`, cached + validated      |
 | `template: Path` (no default)          | required positional (exact arity)                    |
@@ -122,12 +122,12 @@ fm build core web 3        # targets = ["core", "web", 3]  (positional, juxtapos
 fm build core --jobs 8     # jobs = 8 (int); --jobs auto -> "auto"
 ```
 
-Multi-value **options** repeat the flag (`--tag a --tag b`) so values stay opaque
-(a value may contain commas). Opt into comma-splitting per option with `csv`:
+Multi-value **options** work two ways, and collections comma-split by default:
+repeat the flag (`--tag a --tag b`) *or* comma-separate one token (`--tag a,b`):
 
 ```python
 @task
-def build(tags: Annotated[list[str], csv] = ()):
+def build(tags: list[str] = ()):
     "..."
 ```
 
@@ -135,31 +135,38 @@ def build(tags: Annotated[list[str], csv] = ()):
 fm build --tags a,b,c        # ["a", "b", "c"]  — also works as --tags a --tags b
 ```
 
-`csv` splits on `,` and nothing else; a value that must contain a comma uses the
-repeated-flag form. (This is deliberately shell-portable — a comma-joined token
-survives bash, zsh, and PowerShell intact, unlike a bare comma *separator*.)
+Splitting is on `,` and nothing else (deliberately shell-portable — a
+comma-joined token survives bash, zsh, and PowerShell intact, unlike a bare
+comma *separator*). When a value must contain a comma, mark the parameter
+`nosplit` — then only the repeated flag adds items:
+
+```python
+@task
+def notify(lines: Annotated[list[str], nosplit] = ()):
+    "..."
+```
 
 ### Dictionaries
 
 `dict[K, V]` becomes a repeatable `KEY=VALUE` option; keys and values are typed
-and validated like everything else, and it composes with `csv`:
+and validated like everything else, and it comma-splits by default too:
 
 ```python
 @task
-def deploy(env: Annotated[dict[str, int | str], csv] | None = None,
+def deploy(env: dict[str, int | str] | None = None,
            ports: dict[str, list[int]] | None = None):
     ...
 ```
 
 ```console
 fm deploy --env DEBUG=1 --env HOST=prod          # {"DEBUG": 1, "HOST": "prod"}
-fm deploy --env=DEBUG=1,HOST=prod                # same — csv splits the pairs
+fm deploy --env=DEBUG=1,HOST=prod                # same — commas split the pairs
 fm deploy --ports web=8080 --ports web=8443      # {"web": [8080, 8443]}  (repeat appends)
 ```
 
 Values split on the *first* `=` (so a value may contain one); a scalar value's
-duplicate key is last-wins, and a `dict[K, list[E]]` appends on repeat. Under
-`csv` a value can't contain a comma — same opt-in trade as lists.
+duplicate key is last-wins, and a `dict[K, list[E]]` appends on repeat. Mark a
+dict `nosplit` when a value may itself contain a comma.
 
 ### Dynamic completion
 
@@ -432,7 +439,8 @@ run).
 **Alpha.** The core is built and tested (~95% coverage): the registry,
 signature→CLI manifest, the completion hot path, the chain grammar (all six
 rules with taught errors), typed execution (unions, one-or-many, `dict[K, V]`,
-`csv`, custom types via their constructors), dynamic completion, the
+comma-splitting with `nosplit`, custom types via their constructors), dynamic
+completion, the
 `run()`/`tools` execution layer with capture and replay-on-failure, the DAG
 scheduler (parallel-by-default with `pre`/`post` dependencies, `parallel()`, and
 grouped non-interleaved output), the monorepo cascade (root-to-cwd task merge

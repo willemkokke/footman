@@ -46,22 +46,24 @@ else:
     Many = _Many
 
 
-class _CsvMarker:
-    """Marker for `csv`."""
+class _NoSplitMarker:
+    """Marker for `nosplit`."""
 
     __slots__ = ()
 
     def __repr__(self) -> str:
-        return "csv"
+        return "nosplit"
 
 
-csv = _CsvMarker()
-"""Split a list parameter's value on commas, opt-in via `Annotated`:
+nosplit = _NoSplitMarker()
+"""Opt a list/dict parameter OUT of comma-splitting, via `Annotated`:
 
 ```python
-def build(tags: Annotated[list[str], csv] = ()): ...
+def build(names: Annotated[list[str], nosplit] = ()): ...
 ```
 
-`fm build --tags a,b,c` yields `["a", "b", "c"]`; the repeat-the-flag form
-(`--tags a --tags b`) still works too. Commas are only special where you ask
-for them — a value that must contain a comma uses the repeated flag instead."""
+By default a collection parameter splits a single token on commas
+(`--tag a,b,c` -> `["a", "b", "c"]`) *in addition to* the repeatable form
+(`--tag a --tag b`). Mark it `nosplit` when a value may itself contain a comma:
+then only the repeated flag adds items and `--name "a,b"` stays the literal
+`"a,b"`."""

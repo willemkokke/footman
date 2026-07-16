@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from pathlib import Path, PurePath
 from typing import Annotated, Any
 
-from footman.params import csv as _CSV
+from footman.params import nosplit as _NOSPLIT
 from footman.params import suggest
 
 _TAG_ORDER = {"int": 0, "float": 1, "path": 2, "str": 3}
@@ -61,7 +61,7 @@ class Peeled:
     multiple: bool  # a list-valued parameter?
     element: Any  # scalar type / Union (or, for a mapping, the value type)
     completer: suggest | None
-    csv: bool = False  # split values on commas (opt-in)
+    nosplit: bool = False  # opt OUT of comma-splitting (collections split by default)
     mapping: bool = False  # a dict[K, V] parameter?
     key: Any = None  # mapping key type
     value_multiple: bool = False  # mapping value is a list (dict[K, list[E]])
@@ -70,10 +70,10 @@ class Peeled:
 def peel(ann: Any) -> Peeled:
     """Normalize a parameter annotation into (multiple, element, completer)."""
     completer: suggest | None = None
-    is_csv = False
+    is_nosplit = False
 
     # Strip Annotated and Optional wrappers in any order/nesting, e.g. both
-    # `Annotated[list[X], csv] | None` and `Annotated[list[X] | None, csv]`.
+    # `Annotated[list[X], nosplit] | None` and `Annotated[list[X] | None, nosplit]`.
     changed = True
     while changed:
         changed = False
@@ -82,8 +82,8 @@ def peel(ann: Any) -> Peeled:
             for mark in meta:
                 if isinstance(mark, suggest):
                     completer = mark
-                elif mark is _CSV:
-                    is_csv = True
+                elif mark is _NOSPLIT:
+                    is_nosplit = True
                 elif callable(mark) and not isinstance(mark, type):
                     completer = suggest(mark)  # a bare callable == suggest(fn)
             ann, changed = base, True
@@ -101,7 +101,7 @@ def peel(ann: Any) -> Peeled:
             False,
             value.element,
             completer,
-            is_csv,
+            is_nosplit,
             mapping=True,
             key=key_type,
             value_multiple=value.multiple,
@@ -109,7 +109,7 @@ def peel(ann: Any) -> Peeled:
 
     if typing.get_origin(ann) is list:  # list[X] / Many[X]
         element = (typing.get_args(ann) or (str,))[0]
-        return Peeled(True, element, completer, is_csv)
+        return Peeled(True, element, completer, is_nosplit)
 
     if _is_union(ann):
         members = _strip_none(list(typing.get_args(ann)))
@@ -119,10 +119,10 @@ def peel(ann: Any) -> Peeled:
             for lm in lists:
                 parts += list(typing.get_args(lm)) or [str]
             parts += [m for m in members if typing.get_origin(m) is not list]
-            return Peeled(True, _union_of(parts), completer, is_csv)
-        return Peeled(False, ann, completer, is_csv)  # scalar union
+            return Peeled(True, _union_of(parts), completer, is_nosplit)
+        return Peeled(False, ann, completer, is_nosplit)  # scalar union
 
-    return Peeled(False, ann, completer, is_csv)  # plain scalar
+    return Peeled(False, ann, completer, is_nosplit)  # plain scalar
 
 
 def is_flag(element: Any) -> bool:

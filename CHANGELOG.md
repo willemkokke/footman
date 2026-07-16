@@ -7,6 +7,19 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Changed
+
+- **Comma-splitting is now the default for collections.** A `list` / `dict`
+  parameter splits a single token on commas (`--tag a,b,c` → `["a", "b", "c"]`)
+  out of the box, in addition to the repeatable form (`--tag a --tag b`). The
+  old opt-*in* `csv` marker is replaced by an opt-*out* `nosplit` marker, for
+  the parameters whose values may themselves contain a comma.
+
+### Docs
+
+- Docstrings converted from reStructuredText to Markdown (renders natively via
+  mkdocstrings).
+
 ## [0.4.0] — 2026-07-16
 
 ### Added

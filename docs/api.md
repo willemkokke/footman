@@ -34,6 +34,6 @@ straight from the `footman` package (`from footman import task, run, App`).
 
 ::: footman.params.Many
 
-::: footman.params.csv
+::: footman.params.nosplit
 
 ::: footman.params.suggest
