@@ -1,16 +1,14 @@
-"""The run context and the ``run()`` helper — how tasks execute tools.
+"""The run context, the ``run()`` helper, and ``parallel()``.
 
 A task never *needs* a context parameter: ``run()`` reads the current context
 from a contextvar footman sets around each running task, so a task body can just
 call ``run("ruff check src")``. A task MAY declare a first parameter named
-``ctx`` (or annotated :class:`Context`) to get the object explicitly — footman
-recognises it and leaves it out of the CLI mapping.
+``ctx`` (or annotated :class:`Context`) to get the object explicitly.
 
-``run()`` executes either a **command** (string or argv list -> subprocess) or a
-**callable** (a Python entry point -> in-process, no spawn). It captures output
-and stays quiet on success, replaying it only on failure (the CI-quiet model),
-unless ``--verbose``. Under ``--dry-run`` it prints the command instead of
-running it; under ``--json`` it records structured results without printing.
+Output is routed through the context so parallel tasks don't interleave: a global
+``sys.stdout`` proxy dispatches every write to the running task's ``sink``. In
+sequential mode a task's sink is the real stdout (live); in parallel mode it is a
+per-task buffer, flushed atomically when the task finishes.
 """
 
 from __future__ import annotations
@@ -22,12 +20,13 @@ import os
 import shlex
 import subprocess
 import sys
+import threading
 import time
 from collections.abc import Callable
 from contextvars import ContextVar
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Any
+from typing import Any, TextIO
 
 
 @dataclass
@@ -42,7 +41,7 @@ class StepResult:
 
 @dataclass
 class Context:
-    """State for one running task: environment, flags, passthrough, steps."""
+    """State for one running task: environment, flags, passthrough, output."""
 
     env: dict[str, str] = field(default_factory=dict)
     cwd: Path | None = None
@@ -51,7 +50,8 @@ class Context:
     verbose: bool = False
     no_color: bool = False
     passthrough: list[str] = field(default_factory=list)
-    report: bool = True  # print human progress (False under --json)
+    tty: bool = False  # use live rewrite/colour (sequential live only)
+    sink: TextIO | None = None  # where output goes; None -> real stdout
     steps: list[StepResult] = field(default_factory=list)
 
 
@@ -88,7 +88,55 @@ def context_param_name(sig: inspect.Signature) -> str | None:
     return None
 
 
-# --- execution ---------------------------------------------------------------
+# --- output routing ----------------------------------------------------------
+
+
+class _Router:
+    """A ``sys.stdout`` proxy that sends each write to the current task's sink."""
+
+    def __init__(self, real: TextIO) -> None:
+        self.real = real
+
+    def write(self, s: str) -> int:
+        return (current().sink or self.real).write(s)
+
+    def flush(self) -> None:
+        (current().sink or self.real).flush()
+
+    def isatty(self) -> bool:
+        return self.real.isatty()
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self.real, name)
+
+
+_router: _Router | None = None
+
+
+def real_stdout() -> TextIO:
+    """The underlying stdout, bypassing the routing proxy."""
+    return _router.real if _router is not None else sys.stdout
+
+
+@contextlib.contextmanager
+def routing():
+    """Install the stdout router for the duration of a run."""
+    global _router
+    real = sys.stdout
+    _router = _Router(real)
+    sys.stdout = _router  # type: ignore[assignment]
+    try:
+        yield real
+    finally:
+        sys.stdout = real
+        _router = None
+
+
+# --- run() -------------------------------------------------------------------
+
+
+def _is_code(value: Any) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
 
 
 def _label(cmd: Any, args: tuple[Any, ...]) -> str:
@@ -114,19 +162,9 @@ def _run_callable(cmd: Callable[..., Any], args: tuple[Any, ...]) -> tuple[int, 
 def _run_subprocess(
     argv: list[str], env: dict[str, str], cwd: Path | None, capture: bool
 ) -> tuple[int, str]:
-    proc = subprocess.run(
-        argv,
-        env=env,
-        cwd=cwd,
-        capture_output=capture,
-        text=True,
-    )
+    proc = subprocess.run(argv, env=env, cwd=cwd, capture_output=capture, text=True)
     output = "" if not capture else (proc.stdout or "") + (proc.stderr or "")
     return proc.returncode, output
-
-
-def _color(ctx: Context) -> bool:
-    return sys.stdout.isatty() and not ctx.no_color and "NO_COLOR" not in os.environ
 
 
 def run(
@@ -141,18 +179,18 @@ def run(
 ) -> int:
     """Run a command or a Python callable in the current task's context."""
     ctx = current()
+    out = sys.stdout
     label = title or _label(cmd, args)
 
     if ctx.dry_run:
-        if ctx.report:
-            print(f"$ {label}")
+        out.write(f"$ {label}\n")
         return 0
 
-    show = ctx.report and not silent and not ctx.quiet
-    tty = _color(ctx)
+    show = not silent and not ctx.quiet
+    color = ctx.tty and not ctx.no_color and "NO_COLOR" not in os.environ
     if show:
-        sys.stdout.write(f"→ {label}" if tty else f"→ {label}\n")
-        sys.stdout.flush()
+        out.write(f"→ {label}" if ctx.tty else f"→ {label}\n")
+        out.flush()
 
     start = time.perf_counter()
     if callable(cmd):
@@ -163,20 +201,68 @@ def run(
         cwd_path = Path(cwd) if cwd is not None else ctx.cwd
         code, output = _run_subprocess(argv, run_env, cwd_path, capture)
     duration = time.perf_counter() - start
-
     ctx.steps.append(StepResult(label, code, output, duration))
 
     if show:
         ok = code == 0
-        if tty:
-            mark = "\033[32m✓\033[0m" if ok else "\033[31m✗\033[0m"
-            sys.stdout.write(f"\r\033[K{mark} {label}  ({duration:.1f}s)\n")
+        if ctx.tty:
+            mark = (
+                ("\033[32m✓\033[0m" if ok else "\033[31m✗\033[0m")
+                if color
+                else ("ok" if ok else "FAIL")
+            )
+            out.write(f"\r\033[K{mark} {label}  ({duration:.1f}s)\n")
         else:
-            sys.stdout.write(f"{'ok' if ok else 'FAIL'}: {label}  ({duration:.1f}s)\n")
+            out.write(f"{'ok' if ok else 'FAIL'}: {label}  ({duration:.1f}s)\n")
         if capture and output and (not ok or ctx.verbose):
-            sys.stdout.write(output if output.endswith("\n") else output + "\n")
-        sys.stdout.flush()
+            out.write(output if output.endswith("\n") else output + "\n")
+        out.flush()
 
     if code != 0 and not nofail:
         raise RunFailed(ctx.steps[-1])
     return code
+
+
+# --- parallel() --------------------------------------------------------------
+
+
+def parallel(*calls: Callable[[], Any], keep_going: bool = False) -> list[int]:
+    """Run task calls / thunks concurrently; wait; fail if any fail.
+
+    Each call runs in a child of the current context with its own output buffer,
+    flushed atomically on completion so concurrent output never interleaves.
+    Pass task functions directly (``parallel(lint, typecheck)``) or thunks for
+    arguments (``parallel(lambda: build("web"), lambda: build("api"))``).
+    """
+    from concurrent.futures import ThreadPoolExecutor
+
+    parent = current()
+    dest = parent.sink or real_stdout()
+    lock = threading.Lock()
+
+    def invoke(call: Callable[[], Any]) -> tuple[int, BaseException | None]:
+        child = replace(parent, sink=io.StringIO(), steps=[])
+        token = _current.set(child)
+        try:
+            returned = call()
+            code = returned if _is_code(returned) else 0
+            error: BaseException | None = None
+        except RunFailed as exc:
+            code, error = exc.result.code or 1, exc
+        except Exception as exc:  # a failed call must not crash the pool
+            code, error = 1, exc
+        finally:
+            _current.reset(token)
+        with lock:
+            dest.write(child.sink.getvalue())  # type: ignore[union-attr]
+            dest.flush()
+        return code, error
+
+    with ThreadPoolExecutor(max_workers=max(1, len(calls))) as pool:
+        outcomes = list(pool.map(invoke, calls))
+
+    if not keep_going:
+        for _code, error in outcomes:
+            if error is not None:
+                raise error
+    return [code for code, _ in outcomes]

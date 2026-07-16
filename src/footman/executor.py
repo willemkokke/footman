@@ -14,12 +14,8 @@ returns a non-zero ``int`` exit code; failures stop the chain unless
 
 from __future__ import annotations
 
-import contextlib
 import inspect
 import io
-import os
-import sys
-import tempfile
 import time
 from dataclasses import dataclass, field
 from typing import Any
@@ -119,21 +115,13 @@ def _call(
     return 0, returned, None
 
 
-def run_segment(
-    root: Group,
-    seg: Segment,
-    *,
-    capture: bool = False,
-    ctx_config: dict[str, Any] | None = None,
-) -> TaskResult:
-    """Resolve, bind, and run a single segment within a fresh run context.
+def run_task(fn: Task, seg: Segment, ctx: Context) -> TaskResult:
+    """Bind *seg* to *fn* and run it within *ctx* (contextvar set for run()).
 
-    A :class:`~footman.context.Context` is set on the contextvar around the call
-    (so ``run()`` finds it) and injected as the first argument if the task
-    declares a ``ctx`` parameter. With *capture*, the task's output is collected
-    for the ``--json`` report (fd-level, so subprocesses are captured too).
+    ``ctx`` is injected as the first argument if the task declares a ``ctx``
+    parameter. Output routing (per-task buffering for parallel/``--json``) is the
+    caller's job via ``ctx.sink``; here we just capture its final value.
     """
-    fn = resolve(root, seg.path)
     try:
         args, kwargs = bind(seg, fn)
     except ChainError:
@@ -141,53 +129,18 @@ def run_segment(
     except Exception as exc:  # a coercion failure (e.g. a custom-type constructor)
         return _result(seg, 2, None, exc, 0.0)
 
-    ctx = Context(**(ctx_config or {}), passthrough=list(seg.passthrough or []))
-    ctx.report = not capture  # under --json, record steps but don't print
     if context_param_name(resolved_signature(fn)):
         args = [ctx, *args]  # ctx is the first positional parameter
 
     token = _current.set(ctx)
+    start = time.perf_counter()
     try:
-        if capture:
-            code, returned, error, duration, output = _call_captured(fn, args, kwargs)
-        else:
-            start = time.perf_counter()
-            code, returned, error = _call(fn, args, kwargs)
-            duration, output = time.perf_counter() - start, ""
+        code, returned, error = _call(fn, args, kwargs)
     finally:
         _current.reset(token)
-
+    duration = time.perf_counter() - start
+    output = ctx.sink.getvalue() if isinstance(ctx.sink, io.StringIO) else ""
     return _result(seg, code, returned, error, duration, output, ctx.steps)
-
-
-def _call_captured(
-    fn: Task, args: list[Any], kwargs: dict[str, Any]
-) -> tuple[int, Any, BaseException | None, float, str]:
-    py_buffer = io.StringIO()
-    with tempfile.TemporaryFile(mode="w+") as fd_buffer:
-        saved_out, saved_err = os.dup(1), os.dup(2)
-        try:
-            sys.stdout.flush()
-            sys.stderr.flush()
-            os.dup2(fd_buffer.fileno(), 1)
-            os.dup2(fd_buffer.fileno(), 2)
-            start = time.perf_counter()
-            with (
-                contextlib.redirect_stdout(py_buffer),
-                contextlib.redirect_stderr(py_buffer),
-            ):
-                code, returned, error = _call(fn, args, kwargs)
-            duration = time.perf_counter() - start
-        finally:
-            sys.stdout.flush()
-            sys.stderr.flush()
-            os.dup2(saved_out, 1)
-            os.dup2(saved_err, 2)
-            os.close(saved_out)
-            os.close(saved_err)
-        fd_buffer.seek(0)
-        fd_output = fd_buffer.read()
-    return code, returned, error, duration, py_buffer.getvalue() + fd_output
 
 
 def _result(
@@ -219,11 +172,14 @@ def run_chain(
     capture: bool = False,
     ctx_config: dict[str, Any] | None = None,
 ) -> list[TaskResult]:
-    """Run segments in order, stopping at the first failure unless keep_going."""
-    results: list[TaskResult] = []
-    for seg in segments:
-        result = run_segment(root, seg, capture=capture, ctx_config=ctx_config)
-        results.append(result)
-        if not result.ok and not keep_going:
-            break
-    return results
+    """Run a chain sequentially (a thin shim over the DAG scheduler)."""
+    from footman import schedule
+
+    return schedule.run_plan(
+        root,
+        segments,
+        sequential=True,
+        keep_going=keep_going,
+        capture=capture,
+        ctx_config=ctx_config,
+    )

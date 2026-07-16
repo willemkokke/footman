@@ -6,7 +6,7 @@ Chaining works: ``fm format lint --fix test``.
 
 from __future__ import annotations
 
-from footman import group, run, task, tools
+from footman import group, parallel, run, task, tools
 
 SRC = ("src", "tests")
 
@@ -37,11 +37,8 @@ def test(*pytest_args: str):
 
 @task
 def check():
-    """Run format --check, lint, typecheck, and test in sequence."""
-    format(check=True)
-    lint()
-    typecheck()
-    test()
+    """Run format --check, lint, typecheck, and test — in parallel."""
+    parallel(lambda: format(check=True), lint, typecheck, test)
 
 
 dist = group("dist", help="Build and publish")

@@ -20,6 +20,7 @@ if TYPE_CHECKING:
     # on a bare ``import footman`` (the completion hot path).
     from footman.context import Context as Context
     from footman.context import RunFailed as RunFailed
+    from footman.context import parallel as parallel
     from footman.context import passthrough as passthrough
     from footman.context import run as run
     from footman.params import Many as Many
@@ -40,6 +41,7 @@ __all__ = [
     "csv",
     "group",
     "main",
+    "parallel",
     "passthrough",
     "run",
     "suggest",
@@ -72,7 +74,7 @@ def __getattr__(name: str) -> object:
         from footman import params
 
         return getattr(params, name)
-    if name in ("run", "Context", "passthrough", "RunFailed"):
+    if name in ("run", "parallel", "Context", "passthrough", "RunFailed"):
         from footman import context
 
         return getattr(context, name)

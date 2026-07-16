@@ -26,7 +26,9 @@ decorator ergonomics — and footman keeps those ideas. Where it pushes is the
 parts that compound: completion that answers from a cache instead of
 re-importing your whole project on every TAB (~15× faster in practice), eager
 type and choice validation (including unions and dynamic value sets), native
-command groups, and no `ctx` boilerplate in task signatures. A measured
+command groups, no `ctx` boilerplate in task signatures, and a DAG scheduler
+that runs independent tasks in parallel by default (duty and invoke can't). A
+measured
 head-to-head against duty, invoke, poe, and typer lives in
 [`comparison/`](comparison/) — modern duty has real flags and chaining, so the
 gap is validation, ergonomics, and completion latency, not grammar.
@@ -190,10 +192,10 @@ fm: build: <project> must be one of api|core|web (got 'myprojet') — did you me
 Pass `suggest(fn, strict=False)` for best-effort data that shouldn't block a run.
 A completer shared across parameters runs once per invocation.
 
-## Chaining
+## Chaining and parallelism
 
-`fm format lint --fix test` runs three tasks in sequence — duty's muscle memory,
-but with real flags. The split is driven by the manifest, so it is
+`fm format lint --fix test` runs three tasks from one line — duty's muscle
+memory, but with real flags. The split is driven by the manifest, so it is
 deterministic; `+` is always available as an explicit boundary, and `--dry-run`
 prints the parsed plan:
 
@@ -205,7 +207,46 @@ $ fm --dry-run format lint --fix test
   -> test
 ```
 
-Tasks run stop-on-first-failure by default; `-k/--keep-going` runs them all.
+**Independent tasks run in parallel by default.** footman builds a DAG from the
+chain and each task's declared dependencies, then runs everything that isn't
+waiting on something else concurrently. Tasks are almost always I/O-bound (they
+shell out through `run()`, releasing the GIL), so threads give real wall-clock
+speedups without process isolation:
+
+```sh
+fm a b c            # three 1s tasks -> ~1.0s, not 3.0s
+fm -s a b c         # -s/--sequential runs them one at a time -> ~3.0s
+```
+
+Output never interleaves: each task's stdout is buffered and flushed as one
+contiguous block when it finishes.
+
+**Dependencies with `pre` / `post`.** Declare prerequisites and follow-ups on the
+task; footman schedules them (deduping shared deps, so a prerequisite pulled in
+twice runs once) and skips a task whose prerequisite failed:
+
+```python
+@task(pre=[fmt, lint])      # fmt and lint run (concurrently) before check
+def check(): ...
+
+@task(post=[notify])        # notify runs after deploy succeeds
+def deploy(): ...
+```
+
+**Fan out from inside a task** with `parallel()` — pass task functions directly,
+or thunks when you need arguments. It runs them concurrently, waits, and fails
+if any fail:
+
+```python
+from footman import task, parallel
+
+@task
+def check():
+    parallel(lambda: format(check=True), lint, typecheck, test)
+```
+
+Tasks run stop-on-first-failure by default; `-k/--keep-going` runs every
+independent branch even if one fails.
 
 ## Running tools
 
@@ -288,6 +329,7 @@ Global options bind to `fm` itself and go **before** the first task name
 | `--tree`                  | list tasks (grouped by command group)           |
 | `--where TASK`            | print the task's source `file:line`             |
 | `-n`, `--dry-run`         | print the parsed plan without running           |
+| `-s`, `--sequential`      | run tasks one at a time (default is parallel)   |
 | `-k`, `--keep-going`      | run every segment even if one fails             |
 | `-q`, `--quiet`           | suppress the per-task summary                   |
 | `--timings`               | show per-task durations                         |
@@ -306,12 +348,13 @@ run).
 signature→CLI manifest, the completion hot path, the chain grammar (all six
 rules with taught errors), typed execution (unions, one-or-many, `dict[K, V]`,
 `csv`, custom types via their constructors), dynamic completion, the
-`run()`/`tools` execution layer with capture and replay-on-failure, and the
-global-option set. What's next:
+`run()`/`tools` execution layer with capture and replay-on-failure, the DAG
+scheduler (parallel-by-default with `pre`/`post` dependencies, `parallel()`, and
+grouped non-interleaved output), and the global-option set. What's next:
 
 - shell-native completion installers (`--install-completion` for
   bash/zsh/fish/pwsh/nushell) — today the resolver works via `fm --complete`;
 - a live TTY progress spinner and richer `tools.*` coverage;
-- chain-aware completion, and DAG/parallel orchestration.
+- chain-aware completion.
 
 See the design notes for the full roadmap. MIT licensed.

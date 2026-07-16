@@ -25,7 +25,7 @@ completion hot path never imports either.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import Any, overload
 
 Task = Callable[..., Any]
@@ -55,21 +55,39 @@ class Group:
     @overload
     def task(self, fn: Task) -> Task: ...
     @overload
-    def task(self, fn: None = None, *, name: str = "") -> Callable[[Task], Task]: ...
+    def task(
+        self,
+        fn: None = None,
+        *,
+        name: str = "",
+        pre: Sequence[Task] = (),
+        post: Sequence[Task] = (),
+    ) -> Callable[[Task], Task]: ...
 
     def task(
-        self, fn: Task | None = None, *, name: str = ""
+        self,
+        fn: Task | None = None,
+        *,
+        name: str = "",
+        pre: Sequence[Task] = (),
+        post: Sequence[Task] = (),
     ) -> Task | Callable[[Task], Task]:
         """Register a function as a task.
 
         Usable bare (``@task``) or parameterised (``@task(name="build")``) to
-        override the command name — handy when the function name would shadow a
-        builtin or collide with another task.
+        override the command name. ``pre``/``post`` declare dependency tasks (by
+        reference) that run before/after this one — the scheduler runs
+        independent prerequisites in parallel::
+
+            @task(pre=[format, lint, typecheck, test])
+            def check(): ...
         """
 
         def register(fn: Task) -> Task:
             key = _cli_name(name or fn.__name__)
             self._claim(key)
+            fn._footman_pre = list(pre)  # type: ignore[attr-defined]
+            fn._footman_post = list(post)  # type: ignore[attr-defined]
             self.tasks[key] = fn
             return fn
 
