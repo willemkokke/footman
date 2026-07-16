@@ -42,3 +42,22 @@ else:
             return Annotated[list[item], MANY]
 
     Many = _Many
+
+
+class _CsvMarker:
+    """Marker for :data:`csv`."""
+
+    __slots__ = ()
+
+    def __repr__(self) -> str:
+        return "csv"
+
+
+#: Split a list parameter's value on commas, opt-in via ``Annotated``::
+#:
+#:     def build(tags: Annotated[list[str], csv] = ()): ...
+#:
+#: ``fm build --tags a,b,c`` yields ``["a", "b", "c"]``; the repeat-the-flag form
+#: (``--tags a --tags b``) still works too. Commas are only special where you ask
+#: for them — a value that must contain a comma uses the repeated flag instead.
+csv = _CsvMarker()

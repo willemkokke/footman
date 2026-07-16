@@ -162,9 +162,9 @@ def test_unknown_global(project, capsys):
     assert "unknown global option" in capsys.readouterr().err
 
 
-def test_passthrough_without_varargs(project, capsys):
-    assert _app.run(["hi", "--", "x"]) == 2
-    assert "nothing after" in capsys.readouterr().err
+def test_passthrough_without_varargs_is_accepted(project, capsys):
+    assert _app.run(["hi", "--", "x"]) == 0  # available via passthrough(), not an error
+    assert "hello world" in capsys.readouterr().out
 
 
 def test_where_unknown(project, capsys):

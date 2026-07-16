@@ -14,6 +14,7 @@ into ``5`` and ``"x"`` into ``"x"``.
 
 from __future__ import annotations
 
+import datetime as _datetime
 import enum
 import types
 import typing
@@ -21,6 +22,7 @@ from dataclasses import dataclass
 from pathlib import Path, PurePath
 from typing import Annotated, Any
 
+from footman.params import csv as _CSV
 from footman.params import suggest
 
 _TAG_ORDER = {"int": 0, "float": 1, "path": 2, "str": 3}
@@ -56,45 +58,71 @@ def _union_of(parts: list[Any]) -> Any:
 
 @dataclass
 class Peeled:
-    multiple: bool | str  # False | True | "one_or_many"
-    element: Any  # scalar type, or a Union of scalar types
+    multiple: bool  # a list-valued parameter?
+    element: Any  # scalar type / Union (or, for a mapping, the value type)
     completer: suggest | None
+    csv: bool = False  # split values on commas (opt-in)
+    mapping: bool = False  # a dict[K, V] parameter?
+    key: Any = None  # mapping key type
+    value_multiple: bool = False  # mapping value is a list (dict[K, list[E]])
 
 
 def peel(ann: Any) -> Peeled:
     """Normalize a parameter annotation into (multiple, element, completer)."""
     completer: suggest | None = None
+    is_csv = False
 
-    if typing.get_origin(ann) is Annotated:
-        base, *meta = typing.get_args(ann)
-        for mark in meta:
-            if isinstance(mark, suggest):
-                completer = mark
-            elif callable(mark) and not isinstance(mark, type):
-                completer = suggest(mark)  # a bare callable == suggest(fn)
-        ann = base
+    # Strip Annotated and Optional wrappers in any order/nesting, e.g. both
+    # ``Annotated[list[X], csv] | None`` and ``Annotated[list[X] | None, csv]``.
+    changed = True
+    while changed:
+        changed = False
+        if typing.get_origin(ann) is Annotated:
+            base, *meta = typing.get_args(ann)
+            for mark in meta:
+                if isinstance(mark, suggest):
+                    completer = mark
+                elif mark is _CSV:
+                    is_csv = True
+                elif callable(mark) and not isinstance(mark, type):
+                    completer = suggest(mark)  # a bare callable == suggest(fn)
+            ann, changed = base, True
+        elif _is_union(ann):
+            members = _strip_none(list(typing.get_args(ann)))
+            if len(members) == 1:
+                ann, changed = members[0], True
 
-    if _is_union(ann):  # collapse Optional / X | None
-        members = _strip_none(list(typing.get_args(ann)))
-        if len(members) == 1:
-            ann = members[0]
+    if typing.get_origin(ann) is dict:  # dict[K, V]
+        kv = typing.get_args(ann)
+        key_type = kv[0] if kv else str
+        value_type = kv[1] if len(kv) > 1 else str
+        value = peel(value_type)  # recurse: value may be scalar / union / list
+        return Peeled(
+            False,
+            value.element,
+            completer,
+            is_csv,
+            mapping=True,
+            key=key_type,
+            value_multiple=value.multiple,
+        )
 
     if typing.get_origin(ann) is list:  # list[X] / Many[X]
         element = (typing.get_args(ann) or (str,))[0]
-        return Peeled(True, element, completer)
+        return Peeled(True, element, completer, is_csv)
 
     if _is_union(ann):
         members = _strip_none(list(typing.get_args(ann)))
         lists = [m for m in members if typing.get_origin(m) is list]
-        if lists:  # list[X] | scalar... -> one-or-many
+        if lists:  # list[X] | scalar... -> a list of the merged element types
             parts: list[Any] = []
             for lm in lists:
                 parts += list(typing.get_args(lm)) or [str]
             parts += [m for m in members if typing.get_origin(m) is not list]
-            return Peeled("one_or_many", _union_of(parts), completer)
-        return Peeled(False, ann, completer)  # scalar union
+            return Peeled(True, _union_of(parts), completer, is_csv)
+        return Peeled(False, ann, completer, is_csv)  # scalar union
 
-    return Peeled(False, ann, completer)  # plain scalar
+    return Peeled(False, ann, completer, is_csv)  # plain scalar
 
 
 def is_flag(element: Any) -> bool:
@@ -162,7 +190,27 @@ def coerce_one(value: str, element: Any) -> Any:
                 return lit
         return value
     tags = element_tags(element)
-    if not tags:
+    if tags:
+        ok, out = coerce_scalar(value, tags)
+        return out if ok else value
+    return coerce_custom(value, element)
+
+
+def coerce_custom(value: str, element: Any) -> Any:
+    """Coerce to a type footman doesn't special-case, via its constructor.
+
+    Covers ``UUID``, ``Decimal``, and any user type whose constructor accepts a
+    string; ``datetime``/``date`` use ``fromisoformat``. Validated here at
+    execution time (the splitter only ever sees strings), and raises
+    ``ValueError`` on a bad value so footman can report it cleanly.
+    """
+    if not isinstance(element, type):
         return value
-    ok, out = coerce_scalar(value, tags)
-    return out if ok else value
+    try:
+        if issubclass(element, _datetime.datetime):
+            return element.fromisoformat(value)
+        if issubclass(element, _datetime.date):
+            return element.fromisoformat(value)
+        return element(value)
+    except (ValueError, TypeError) as exc:
+        raise ValueError(f"{value!r} is not a valid {element.__name__}") from exc

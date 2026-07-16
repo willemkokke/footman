@@ -21,10 +21,11 @@ import os
 import sys
 import tempfile
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from footman import coerce
+from footman.context import Context, StepResult, _current, context_param_name
 from footman.manifest import resolved_signature
 from footman.registry import Group, Task
 from footman.split import ChainError, Segment
@@ -41,6 +42,7 @@ class TaskResult:
     error: BaseException | None = None
     duration: float = 0.0
     output: str = ""
+    steps: list[StepResult] = field(default_factory=list)
 
 
 def resolve(root: Group, path: list[str]) -> Task:
@@ -61,11 +63,9 @@ def bind(seg: Segment, fn: Task) -> tuple[list[Any], dict[str, Any]]:
     empty = inspect.Parameter.empty
     var_args: list[Any] = []
     kwargs: dict[str, Any] = {}
-    has_var_positional = False
 
     for param in sig.parameters.values():
         if param.kind is inspect.Parameter.VAR_POSITIONAL:
-            has_var_positional = True
             element = str if param.annotation is empty else param.annotation
             extra = [*seg.variadic, *(seg.passthrough or [])]
             var_args = [coerce.coerce_one(v, element) for v in extra]
@@ -83,19 +83,24 @@ def bind(seg: Segment, fn: Task) -> tuple[list[Any], dict[str, Any]]:
             continue
 
         peeled = coerce.peel(param.annotation)
-        if peeled.multiple:
+        if peeled.mapping:
+            result: dict[Any, Any] = {}
+            for key, value in raw:
+                k = coerce.coerce_one(key, peeled.key)
+                v = coerce.coerce_one(value, peeled.element)
+                if peeled.value_multiple:
+                    result.setdefault(k, []).append(v)
+                else:
+                    result[k] = v
+            kwargs[param.name] = result
+        elif peeled.multiple:
             items = raw if isinstance(raw, list) else [raw]
-            coerced = [coerce.coerce_one(v, peeled.element) for v in items]
-            single = peeled.multiple == "one_or_many" and len(items) == 1
-            kwargs[param.name] = coerced[0] if single else coerced
+            kwargs[param.name] = [coerce.coerce_one(v, peeled.element) for v in items]
         else:
             kwargs[param.name] = coerce.coerce_one(raw, peeled.element)
 
-    if seg.passthrough is not None and not has_var_positional:
-        raise ChainError(
-            f"{seg.task}: nothing after `--` can be forwarded "
-            f"(the task has no *args to receive passthrough)"
-        )
+    # `--` passthrough always has a home now: a task's *args, and/or the run
+    # context (`passthrough()` / `ctx.passthrough`). So it is never an error.
     return var_args, kwargs
 
 
@@ -114,22 +119,50 @@ def _call(
     return 0, returned, None
 
 
-def run_segment(root: Group, seg: Segment, *, capture: bool = False) -> TaskResult:
-    """Resolve, bind, and run a single segment, recording the outcome.
+def run_segment(
+    root: Group,
+    seg: Segment,
+    *,
+    capture: bool = False,
+    ctx_config: dict[str, Any] | None = None,
+) -> TaskResult:
+    """Resolve, bind, and run a single segment within a fresh run context.
 
-    With *capture*, the task's output is collected into the result so the
-    ``--json`` report stays pure machine-readable output. Capture works at two
-    levels: Python-level ``sys.stdout``/``stderr`` (so it composes with pytest
-    and captures the task's own ``print``s) and the underlying file descriptors
-    (so a subprocess the task spawns is captured too).
+    A :class:`~footman.context.Context` is set on the contextvar around the call
+    (so ``run()`` finds it) and injected as the first argument if the task
+    declares a ``ctx`` parameter. With *capture*, the task's output is collected
+    for the ``--json`` report (fd-level, so subprocesses are captured too).
     """
     fn = resolve(root, seg.path)
-    args, kwargs = bind(seg, fn)
-    if not capture:
-        start = time.perf_counter()
-        code, returned, error = _call(fn, args, kwargs)
-        return _result(seg, code, returned, error, time.perf_counter() - start)
+    try:
+        args, kwargs = bind(seg, fn)
+    except ChainError:
+        raise  # e.g. passthrough with no *args — reported by the app layer
+    except Exception as exc:  # a coercion failure (e.g. a custom-type constructor)
+        return _result(seg, 2, None, exc, 0.0)
 
+    ctx = Context(**(ctx_config or {}), passthrough=list(seg.passthrough or []))
+    ctx.report = not capture  # under --json, record steps but don't print
+    if context_param_name(resolved_signature(fn)):
+        args = [ctx, *args]  # ctx is the first positional parameter
+
+    token = _current.set(ctx)
+    try:
+        if capture:
+            code, returned, error, duration, output = _call_captured(fn, args, kwargs)
+        else:
+            start = time.perf_counter()
+            code, returned, error = _call(fn, args, kwargs)
+            duration, output = time.perf_counter() - start, ""
+    finally:
+        _current.reset(token)
+
+    return _result(seg, code, returned, error, duration, output, ctx.steps)
+
+
+def _call_captured(
+    fn: Task, args: list[Any], kwargs: dict[str, Any]
+) -> tuple[int, Any, BaseException | None, float, str]:
     py_buffer = io.StringIO()
     with tempfile.TemporaryFile(mode="w+") as fd_buffer:
         saved_out, saved_err = os.dup(1), os.dup(2)
@@ -154,10 +187,7 @@ def run_segment(root: Group, seg: Segment, *, capture: bool = False) -> TaskResu
             os.close(saved_err)
         fd_buffer.seek(0)
         fd_output = fd_buffer.read()
-
-    return _result(
-        seg, code, returned, error, duration, py_buffer.getvalue() + fd_output
-    )
+    return code, returned, error, duration, py_buffer.getvalue() + fd_output
 
 
 def _result(
@@ -167,6 +197,7 @@ def _result(
     error: BaseException | None,
     duration: float,
     output: str = "",
+    steps: list[StepResult] | None = None,
 ) -> TaskResult:
     return TaskResult(
         task=seg.task,
@@ -176,6 +207,7 @@ def _result(
         error=error,
         duration=duration,
         output=output,
+        steps=steps or [],
     )
 
 
@@ -185,11 +217,12 @@ def run_chain(
     *,
     keep_going: bool = False,
     capture: bool = False,
+    ctx_config: dict[str, Any] | None = None,
 ) -> list[TaskResult]:
     """Run segments in order, stopping at the first failure unless keep_going."""
     results: list[TaskResult] = []
     for seg in segments:
-        result = run_segment(root, seg, capture=capture)
+        result = run_segment(root, seg, capture=capture, ctx_config=ctx_config)
         results.append(result)
         if not result.ok and not keep_going:
             break
