@@ -6,7 +6,7 @@ parameter's CLI shape is derived in exactly one place.
 
 A parameter is normalized by `peel` into `(multiple, element, completer)`
 and its scalar *element* is described as ordered "type tags"
-(`int`/`float`/`path`/`str`) or as choices (`Literal`/`Enum`).
+(`bool`/`int`/`float`/`path`/`str`) or as choices (`Literal`/`Enum`).
 Coercion tries the tags in **specificity order** — the most restrictive parser
 first, `str` last as the universal fallback — so `str | int` turns `"5"`
 into `5` and `"x"` into `"x"`.
@@ -25,10 +25,25 @@ from typing import Annotated, Any
 from footman.params import nosplit as _NOSPLIT
 from footman.params import suggest
 
-_TAG_ORDER = {"int": 0, "float": 1, "path": 2, "str": 3}
+_TAG_ORDER = {"bool": 0, "int": 1, "float": 2, "path": 3, "str": 4}
+
+# The tokens a non-flag `bool` accepts (a scalar `bool` is a --flag and never
+# parses a token; these cover bool inside collections, dict values, and unions).
+_BOOL_TOKENS = {
+    "true": True,
+    "1": True,
+    "yes": True,
+    "on": True,
+    "false": False,
+    "0": False,
+    "no": False,
+    "off": False,
+}
 
 
 def _tag_of(t: Any) -> str | None:
+    if t is bool:
+        return "bool"
     if t is int:
         return "int"
     if t is float:
@@ -160,9 +175,14 @@ def element_choices(
 def coerce_scalar(value: str, tags: list[str]) -> tuple[bool, Any]:
     """Try to coerce *value* to one of *tags* in specificity order."""
     for tag in sort_tags(tags):
-        if tag == "int":
+        if tag == "bool":
+            if value.lower() in _BOOL_TOKENS:
+                return True, _BOOL_TOKENS[value.lower()]
+        elif tag == "int":
+            # `isascii` guards the gap between `str.isdigit` and `int()`:
+            # "²".isdigit() is true but int("²") raises.
             digits = value[1:] if value[:1] in "+-" else value
-            if digits.isdigit():
+            if digits.isdigit() and digits.isascii():
                 return True, int(value)
         elif tag == "float":
             try:

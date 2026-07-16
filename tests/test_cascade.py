@@ -252,7 +252,7 @@ def test_config_sequential_default(mono, monkeypatch, capsys):
     # in --json mode, sequential still runs both; assert the run succeeds
     assert _app.run(["--json", "build", "test"]) == 0
     payload = json.loads(capsys.readouterr().out)
-    assert [r["task"] for r in payload] == ["build", "test"]
+    assert [r["task"] for r in payload["results"]] == ["build", "test"]
 
 
 def test_config_tasks_filename_in_cascade(mono, monkeypatch, capsys):

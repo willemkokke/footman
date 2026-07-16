@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import threading
 
+import pytest
+
 from footman import manifest, parallel, run, schedule
 from footman.registry import Group
-from footman.split import split_chain
+from footman.split import ChainError, split_chain
 
 
 def drive(build, line, **kw):
@@ -182,3 +184,18 @@ def test_parallel_output_is_grouped_not_interleaved(capsys):
     out = capsys.readouterr().out
     assert "A1\nA2\n" in out  # each task's lines stay contiguous
     assert "B1\nB2\n" in out
+
+
+def test_dependency_cycle_is_a_taught_error():
+    def tasks(reg):
+        @reg.task
+        def a(): ...
+
+        # pre=[a] makes b depend on a; post=[a] makes a depend on b: a cycle.
+        @reg.task(pre=[a], post=[a])
+        def b(): ...
+
+    with pytest.raises(ChainError, match="dependency cycle"):
+        drive(tasks, "b")
+    with pytest.raises(ChainError, match="dependency cycle"):
+        drive(tasks, "b", sequential=True)

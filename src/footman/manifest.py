@@ -36,6 +36,15 @@ from footman.registry import Group
 SCHEMA_VERSION = 1
 
 
+class CompleterError(Exception):
+    """A strict dynamic completer failed while refreshing its choices.
+
+    Raised at manifest-build time (the execution path) so a broken completer
+    surfaces as a taught error instead of silently baking an empty choice list
+    — which would disable the very validation `strict=True` promises.
+    """
+
+
 def resolved_signature(fn: Any) -> inspect.Signature:
     """Signature of *fn* with string annotations evaluated to real types.
 
@@ -90,7 +99,9 @@ def param_spec(param: inspect.Parameter) -> dict[str, Any]:
         return spec
 
     element = peeled.element
-    if coerce.is_flag(element):
+    if coerce.is_flag(element) and not peeled.multiple:
+        # Only a *scalar* bool is a --flag; `list[bool]` stays a repeatable
+        # option whose tokens parse as booleans (true/false/1/0/yes/no/on/off).
         spec["kind"] = "flag"
         return spec
 
@@ -114,12 +125,24 @@ def param_spec(param: inspect.Parameter) -> dict[str, Any]:
 
 
 def _run_completer(completer: suggest, memo: dict[int, list[str]]) -> list[str]:
-    """Call a completer at most once per build (deduped by function identity)."""
+    """Call a completer at most once per build (deduped by function identity).
+
+    A raising *strict* completer aborts the build with `CompleterError` — its
+    whole point is validation, so failing silent would validate nothing. A
+    best-effort completer (`strict=False`) degrades to no candidates.
+    """
     key = id(completer.fn)
     if key not in memo:
         try:
             memo[key] = [str(v) for v in completer.fn()]
-        except Exception:  # a broken completer must not break the build
+        except Exception as exc:
+            if completer.strict:
+                name = getattr(completer.fn, "__qualname__", repr(completer.fn))
+                raise CompleterError(
+                    f"dynamic choices from {name}() failed: "
+                    f"{type(exc).__name__}: {exc} — fix the completer, or pass "
+                    f"suggest(fn, strict=False) if this data is best-effort"
+                ) from exc
             memo[key] = []
     return memo[key]
 

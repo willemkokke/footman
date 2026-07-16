@@ -17,6 +17,7 @@ footman.
 from __future__ import annotations
 
 import tomllib
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -28,11 +29,25 @@ PYPROJECT = "pyproject.toml"
 FOOTMAN_TOML = "footman.toml"
 
 
+class ConfigError(Exception):
+    """A config TOML file exists but cannot be parsed."""
+
+
 def _read_toml(path: Path) -> dict[str, Any] | None:
+    """Parse *path*; `None` if absent/unreadable, `ConfigError` if malformed.
+
+    A missing file is normal (most directories have no config); a file that
+    exists but doesn't parse is a user mistake that must not be silently
+    read as "no settings".
+    """
     try:
-        data = tomllib.loads(path.read_text("utf-8"))
-    except (OSError, tomllib.TOMLDecodeError):
+        text = path.read_text("utf-8")
+    except OSError:
         return None
+    try:
+        data = tomllib.loads(text)
+    except tomllib.TOMLDecodeError as exc:
+        raise ConfigError(f"{path}: {exc}") from exc
     return data if isinstance(data, dict) else None
 
 
@@ -49,21 +64,40 @@ def _footman_table(path: Path) -> dict[str, Any]:
     return data
 
 
-def _dir_config(directory: Path) -> dict[str, Any]:
-    """Merged footman settings for one directory (footman.toml wins)."""
+def _dir_config(
+    directory: Path, on_warning: Callable[[str], None] | None
+) -> dict[str, Any]:
+    """Merged footman settings for one directory (footman.toml wins).
+
+    A malformed file in the discovered cascade is warned about and skipped —
+    one broken pyproject.toml between the repo root and the cwd should not
+    brick every `fm` invocation.
+    """
     merged: dict[str, Any] = {}
-    merged.update(_footman_table(directory / PYPROJECT))
-    merged.update(_footman_table(directory / FOOTMAN_TOML))
+    for name in (PYPROJECT, FOOTMAN_TOML):
+        try:
+            merged.update(_footman_table(directory / name))
+        except ConfigError as exc:
+            if on_warning is not None:
+                on_warning(f"ignoring malformed config: {exc}")
     return merged
 
 
 def load_config(
-    cwd: Path, ceiling: Path, cli_path: str | None = None
+    cwd: Path,
+    ceiling: Path,
+    cli_path: str | None = None,
+    on_warning: Callable[[str], None] | None = None,
 ) -> dict[str, Any]:
-    """Merge config from *ceiling* down to *cwd*; *cli_path* overrides all."""
+    """Merge config from *ceiling* down to *cwd*; *cli_path* overrides all.
+
+    A malformed discovered file warns (via *on_warning*) and is skipped; a
+    malformed explicit *cli_path* raises `ConfigError` — the user named that
+    file on purpose, so it failing quietly is not an option.
+    """
     merged: dict[str, Any] = {}
     for directory in _paths.dir_chain(cwd, ceiling):
-        merged.update(_dir_config(directory))
+        merged.update(_dir_config(directory, on_warning))
     if cli_path:
         merged.update(_footman_table(Path(cli_path).expanduser()))
     return merged

@@ -20,7 +20,7 @@ from typing import Any, TextIO
 
 from footman import context, executor
 from footman.registry import Group, Task
-from footman.split import Segment
+from footman.split import ChainError, Segment
 
 
 @dataclass
@@ -60,6 +60,39 @@ def _build_dag(root: Group, segments: list[Segment]) -> list[_Node]:
     for seg in segments:
         add(executor.resolve(root, seg.path), seg, True)
     return [nodes[k] for k in order]
+
+
+def _check_cycles(nodes: list[_Node]) -> None:
+    """Reject a cyclic dependency graph with a taught error naming the cycle.
+
+    Without this check the run loop would find no ready node, run nothing, and
+    exit 0 — a silent success that lies.
+    """
+    by_key = {n.key: n for n in nodes}
+    state: dict[int, int] = {}  # 1 = on the current path, 2 = fully explored
+
+    def visit(node: _Node, path: list[str]) -> None:
+        state[node.key] = 1
+        path.append(node.seg.task)
+        for dep in node.deps:
+            child = by_key.get(dep)
+            if child is None:
+                continue
+            mark = state.get(child.key, 0)
+            if mark == 1:
+                cycle = [*path[path.index(child.seg.task) :], child.seg.task]
+                raise ChainError(
+                    f"dependency cycle: {' -> '.join(cycle)} "
+                    f"(check the pre/post declarations of these tasks)"
+                )
+            if mark == 0:
+                visit(child, path)
+        path.pop()
+        state[node.key] = 2
+
+    for node in nodes:
+        if state.get(node.key, 0) == 0:
+            visit(node, [])
 
 
 def _toposort(nodes: list[_Node]) -> list[_Node]:
@@ -107,6 +140,7 @@ def run_plan(
 ) -> list[executor.TaskResult]:
     """Build and run the DAG; return results in dependency order."""
     nodes = _build_dag(root, segments)
+    _check_cycles(nodes)
     with context.routing() as real:
         if sequential:
             _run_sequential(nodes, real, keep_going, capture, ctx_config)
@@ -161,21 +195,35 @@ def _run_parallel(nodes, real, keep_going, capture, ctx_config) -> None:
 
     with ThreadPoolExecutor() as pool:
         futures: dict[Any, _Node] = {}
-        while True:
-            for n in nodes:
-                if n.state == "pending" and (
-                    dep_lost(n) or (failed and not keep_going)
-                ):
-                    n.state = "skipped"
-            for n in nodes:
-                if n.state == "pending" and dep_ok(n):
-                    n.state = "running"
-                    futures[pool.submit(run_node, n)] = n
-            if not futures:
-                break
-            completed, _ = wait(list(futures), return_when=FIRST_COMPLETED)
-            for fut in completed:
-                node = futures.pop(fut)
-                node.state = "done"
-                if not (node.result and node.result.ok):
-                    failed = True
+        try:
+            while True:
+                for n in nodes:
+                    if n.state == "pending" and (
+                        dep_lost(n) or (failed and not keep_going)
+                    ):
+                        n.state = "skipped"
+                for n in nodes:
+                    if n.state == "pending" and dep_ok(n):
+                        n.state = "running"
+                        futures[pool.submit(run_node, n)] = n
+                if not futures:
+                    break
+                completed, _ = wait(list(futures), return_when=FIRST_COMPLETED)
+                for fut in completed:
+                    node = futures.pop(fut)
+                    # `run_task` catches task exceptions itself; anything the
+                    # future carries (KeyboardInterrupt in the worker, an
+                    # internal error) must propagate, not read as success.
+                    exc = fut.exception()
+                    if exc is not None:
+                        raise exc
+                    node.state = "done"
+                    if not (node.result and node.result.ok):
+                        failed = True
+        except BaseException:
+            # Abort (Ctrl-C, or an internal error surfaced above): drop
+            # everything not yet started; the pool's exit joins the in-flight
+            # tasks (on Ctrl-C their subprocesses got the terminal's SIGINT
+            # too). The app layer reports "interrupted" and exits 130.
+            pool.shutdown(wait=False, cancel_futures=True)
+            raise

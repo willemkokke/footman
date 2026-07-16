@@ -33,6 +33,15 @@ from typing import Any, overload
 Task = Callable[..., Any]
 
 
+class RegistrationError(ValueError):
+    """A task or group name collided during registration.
+
+    Subclasses `ValueError` so existing `except ValueError` handlers keep
+    working; the app layer matches this type to report a duplicate name as a
+    user error rather than an import failure.
+    """
+
+
 def _cli_name(name: str) -> str:
     """Normalise a Python identifier to its command-line spelling."""
     return name.replace("_", "-")
@@ -50,9 +59,9 @@ class Group:
     def _claim(self, key: str) -> None:
         where = f"group {self.name!r}" if self.name != "root" else "the root"
         if key in self.tasks:
-            raise ValueError(f"{where} already has a task named {key!r}")
+            raise RegistrationError(f"{where} already has a task named {key!r}")
         if key in self.groups:
-            raise ValueError(f"{where} already has a group named {key!r}")
+            raise RegistrationError(f"{where} already has a group named {key!r}")
 
     @overload
     def task(self, fn: Task) -> Task: ...

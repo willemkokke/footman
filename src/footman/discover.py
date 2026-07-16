@@ -26,18 +26,30 @@ from footman.registry import Group, Task
 DEFINING_DIR = "_footman_dir"
 
 
+class TasksImportError(Exception):
+    """A tasks file failed to import; names the file and keeps the cause."""
+
+    def __init__(self, path: Path, original: BaseException) -> None:
+        self.path = path
+        self.original = original
+        super().__init__(f"{path}: {type(original).__name__}: {original}")
+
+
 def _import_file(path: Path, index: int) -> Group:
     """Import *path* into a fresh registry and return the populated tree."""
     registry.reset()
     spec = importlib.util.spec_from_file_location(f"footman_tasks_{index}", path)
     if spec is None or spec.loader is None:
-        raise ImportError(f"cannot load tasks file: {path}")
+        raise TasksImportError(path, ImportError("cannot load tasks file"))
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     parent = str(path.parent)
     if parent not in sys.path:
         sys.path.insert(0, parent)  # let tasks import sibling helpers
-    spec.loader.exec_module(module)
+    try:
+        spec.loader.exec_module(module)
+    except Exception as exc:
+        raise TasksImportError(path, exc) from exc
     return registry.root
 
 

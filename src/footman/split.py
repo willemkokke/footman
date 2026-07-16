@@ -30,31 +30,32 @@ class ChainError(Exception):
     """A malformed command line, carrying a teaching message for the user."""
 
 
-# Global options bind to `fm` itself and must precede the first task name.
-# (canonical, short alias, kind, value-hint)
-GLOBALS: list[tuple[str, str | None, str, str | None]] = [
-    ("--help", "-h", "flag", None),
-    ("--version", "-V", "flag", None),
-    ("--list", "-l", "flag", None),
-    ("--tree", None, "flag", None),
-    ("--where", None, "option", "TASK"),
-    ("--dry-run", "-n", "flag", None),
-    ("--keep-going", "-k", "flag", None),
-    ("--sequential", "-s", "flag", None),
-    ("--quiet", "-q", "flag", None),
-    ("--verbose", "-v", "flag", None),
-    ("--no-color", None, "flag", None),
-    ("--json", None, "flag", None),
-    ("--timings", None, "flag", None),
-    ("--directory", "-C", "option", "PATH"),
-    ("--tasks-file", "-f", "option", "PATH"),
-    ("--config", None, "option", "PATH"),
-    ("--install-completion", None, "option", "SHELL"),
-    ("--refresh-manifest", None, "flag", None),
+# Global options bind to `fm` itself and must precede the first task name
+# (`--help`/`-h` is the one exception: anywhere before `--`, it wins).
+# (canonical, short alias, kind, value-hint, help)
+GLOBALS: list[tuple[str, str | None, str, str | None, str]] = [
+    ("--help", "-h", "flag", None, "help for fm, or the named group/task"),
+    ("--version", "-V", "flag", None, "print the version and exit"),
+    ("--list", "-l", "flag", None, "list tasks (flat)"),
+    ("--tree", None, "flag", None, "list tasks grouped by command group"),
+    ("--where", None, "option", "TASK", "print the task's source file:line"),
+    ("--dry-run", "-n", "flag", None, "print the parsed plan without running"),
+    ("--keep-going", "-k", "flag", None, "run every branch even if one fails"),
+    ("--sequential", "-s", "flag", None, "run one at a time (default: parallel)"),
+    ("--quiet", "-q", "flag", None, "suppress the per-task summary"),
+    ("--verbose", "-v", "flag", None, "replay captured output even on success"),
+    ("--no-color", None, "flag", None, "disable ANSI colour"),
+    ("--json", None, "flag", None, "machine-readable results (captures output)"),
+    ("--timings", None, "flag", None, "show per-task durations"),
+    ("--directory", "-C", "option", "PATH", "run as if launched from PATH"),
+    ("--tasks-file", "-f", "option", "PATH", "use exactly one tasks file, no cascade"),
+    ("--config", None, "option", "PATH", "override config with a single TOML file"),
+    ("--install-completion", None, "option", "SHELL", "install shell completion"),
+    ("--refresh-manifest", None, "flag", None, "rebuild the completion manifest"),
 ]
-_GLOBAL_KIND = {name: kind for name, _, kind, _ in GLOBALS}
-_GLOBAL_KIND.update({alias: kind for _, alias, kind, _ in GLOBALS if alias})
-_CANON = {alias: name for name, alias, _, _ in GLOBALS if alias}
+_GLOBAL_KIND = {name: kind for name, _, kind, _, _ in GLOBALS}
+_GLOBAL_KIND.update({alias: kind for _, alias, kind, _, _ in GLOBALS if alias})
+_CANON = {alias: name for name, alias, _, _, _ in GLOBALS if alias}
 
 
 @dataclass
@@ -69,6 +70,7 @@ class Segment:
 
 
 _TYPE_PHRASE = {
+    "bool": "true or false",
     "int": "an integer",
     "float": "a number",
     "path": "a path",
@@ -88,7 +90,11 @@ def _check(
     """Validate one string against choices or type tags; raise a taught error."""
     if choices is not None:
         if dynamic and (not dynamic.get("strict") or not choices):
-            return  # soft completer, or no candidates — suggest only, don't enforce
+            # A soft completer only suggests. An empty strict list means the
+            # completer genuinely returned no candidates (a *failing* strict
+            # completer aborts the manifest build instead) — rejecting every
+            # value would brick the task, so suggest-only here too.
+            return
         if value not in choices:
             listing = "|".join(choices) if choices else "(none available)"
             close = difflib.get_close_matches(value, choices, n=1)

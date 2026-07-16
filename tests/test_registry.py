@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from footman.registry import Group
+from footman.registry import Group, RegistrationError
 
 
 def test_task_name_normalised_to_hyphens():
@@ -54,3 +54,13 @@ def test_task_group_collision_rejected():
 
         @g.task(name="x")
         def x(): ...
+
+
+def test_collision_is_a_registration_error():
+    g = Group("root")
+
+    @g.task
+    def build(): ...
+
+    with pytest.raises(RegistrationError, match="already has a task"):
+        g.task(name="build")(lambda: None)

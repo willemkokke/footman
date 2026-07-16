@@ -67,7 +67,16 @@ def _discover(g: dict[str, object]) -> tuple[list[Path], dict[str, object]] | in
     """
     cwd = Path.cwd()
     ceiling = _paths.find_repo_root(cwd)
-    cfg = config.load_config(cwd, ceiling, g.get("config"))  # type: ignore[arg-type]
+    try:
+        cfg = config.load_config(
+            cwd,
+            ceiling,
+            g.get("config"),  # type: ignore[arg-type]
+            on_warning=_error,
+        )
+    except config.ConfigError as exc:
+        _error(f"--config: {exc}")
+        return 2
 
     override = g.get("tasks_file")
     if override:
@@ -155,6 +164,179 @@ def _print_tree(node: dict, indent: str = "") -> None:
         _print_tree(sub, indent + "  ")
 
 
+_TYPE_WORD = {
+    "bool": "true/false",
+    "int": "an integer",
+    "float": "a number",
+    "path": "a path",
+    "str": "text",
+}
+
+
+def _value_hint(p: dict) -> str:
+    """The value placeholder shown for an option/argument in help output."""
+    if p.get("mapping"):
+        return "KEY=VALUE"
+    choices = p.get("choices")
+    if choices:
+        return "{" + "|".join(choices) + "}"
+    types = p.get("types")
+    if types:
+        return "|".join(t.upper() for t in types)
+    return "VALUE"
+
+
+def _usage_fragment(p: dict) -> str:
+    kind = p["kind"]
+    if kind == "flag":
+        return f"[--{p['name']}]"
+    if kind == "option":
+        core = f"--{p['name']} {_value_hint(p)}"
+        many = p.get("multiple") or p.get("mapping")
+        return f"[{core} ...]" if many else f"[{core}]"
+    if kind == "variadic":
+        return f"[<{p['name']}> ...]"
+    suffix = "..." if p.get("multiple") else ""
+    return f"<{p['name']}>{suffix}"
+
+
+def _param_label(p: dict) -> str:
+    kind = p["kind"]
+    if kind == "flag":
+        return f"--{p['name']}"
+    if kind == "option":
+        return f"--{p['name']} {_value_hint(p)}"
+    suffix = "..." if kind == "variadic" or p.get("multiple") else ""
+    return f"<{p['name']}>{suffix}"
+
+
+def _param_detail(p: dict) -> str:
+    bits: list[str] = []
+    if p["kind"] == "flag":
+        bits.append(f"flag (--no-{p['name']} to disable)")
+    choices = p.get("choices")
+    if choices:
+        bits.append("one of " + "|".join(choices))
+    elif p.get("types"):
+        bits.append(" or ".join(_TYPE_WORD.get(str(t), str(t)) for t in p["types"]))
+    if p.get("mapping"):
+        bits.append("KEY=VALUE pairs (repeat appends)")
+    if p.get("multiple") or p.get("mapping"):
+        bits.append("repeatable" if p.get("nosplit") else "repeatable/comma-split")
+    if p["kind"] == "variadic":
+        bits.append("extra arguments (also receives everything after --)")
+    return "; ".join(bits)
+
+
+def _print_task_help(tree: dict, path: list[str]) -> None:
+    node = tree
+    for name in path[:-1]:
+        node = node["groups"][name]
+    task = node["tasks"][path[-1]]
+    fragments = [f for p in task["params"] if (f := _usage_fragment(p))]
+    print(" ".join([f"usage: {_brand.prog}", *path, *fragments]))
+    if task["help"]:
+        print(f"\n  {task['help']}")
+    positionals = [p for p in task["params"] if p["kind"] in ("argument", "variadic")]
+    options = [p for p in task["params"] if p["kind"] in ("flag", "option")]
+    for title, params in (("positionals", positionals), ("options", options)):
+        if not params:
+            continue
+        rows = [(_param_label(p), _param_detail(p)) for p in params]
+        width = max(len(label) for label, _ in rows)
+        print(f"\n{title}:")
+        for label, detail in rows:
+            print(f"  {label:<{width}}  {detail}".rstrip())
+
+
+def _print_group_help(tree: dict, path: list[str]) -> None:
+    node = tree
+    for name in path:
+        node = node["groups"][name]
+    scope = " ".join(path)
+    print(f"usage: {_brand.prog} {scope} <task> [options]")
+    if node["help"]:
+        print(f"\n  {node['help']}")
+    rows = list(_iter_tasks(node))
+    if rows:
+        width = max(len(name) for name, _ in rows)
+        print("\ntasks:")
+        for name, help_text in rows:
+            print(f"  {name:<{width}}  {help_text}".rstrip())
+
+
+def _print_global_help(tree: dict) -> None:
+    prog = _brand.prog
+    print(f"usage: {prog} [globals] <task> [options] [<task> ...]")
+    print("\nglobals (before the first task):")
+    rows = []
+    for name, alias, _kind, hint, help_text in split.GLOBALS:
+        label = f"{alias}, {name}" if alias else f"    {name}"
+        if hint:
+            label += f" {hint}"
+        rows.append((label, help_text))
+    width = max(len(label) for label, _ in rows)
+    for label, help_text in rows:
+        print(f"  {label:<{width}}  {help_text}")
+    print()
+    _print_list(tree)
+    print(f"\nRun `{prog} --help <task>` for a task's options.")
+
+
+def _wants_help(argv: list[str]) -> bool:
+    """`-h`/`--help` anywhere before `--` turns the whole line into a help
+    request — asking for help must never execute anything, wherever it lands
+    on the line. After `--` it belongs to the passthrough."""
+    for tok in argv:
+        if tok == "--":
+            return False
+        if tok in ("-h", "--help"):
+            return True
+    return False
+
+
+def _help_targets(tree: dict, argv: list[str]) -> list[tuple[str, list[str]]]:
+    """Group/task paths mentioned on a `--help` line, resolved leniently.
+
+    The real splitter enforces arity — `--help add` must work even though
+    `add` alone would be "missing required argument(s)" — so this walks group
+    and task names only and skips every other token.
+    """
+    _, i = split._parse_globals(argv, 0)
+    targets: list[tuple[str, list[str]]] = []
+    while i < len(argv):
+        if argv[i] == "--":
+            break
+        node, path = tree, []
+        while i < len(argv) and argv[i] in node["groups"]:
+            path.append(argv[i])
+            node = node["groups"][argv[i]]
+            i += 1
+        if i < len(argv) and argv[i] in node["tasks"]:
+            targets.append(("task", [*path, argv[i]]))
+        elif path:
+            targets.append(("group", path))
+            continue  # the walk already consumed the group name(s)
+        i += 1
+    return targets
+
+
+def _print_help(tree: dict, argv: list[str]) -> int:
+    """`--help` alone covers fm itself; with names, the named groups/tasks."""
+    targets = _help_targets(tree, argv)
+    if not targets:
+        _print_global_help(tree)
+        return 0
+    for index, (kind, path) in enumerate(targets):
+        if index:
+            print()
+        if kind == "task":
+            _print_task_help(tree, path)
+        else:
+            _print_group_help(tree, path)
+    return 0
+
+
 def _where(root: registry.Group, dotted: str) -> int:
     path = dotted.replace(".", " ").split()
     try:
@@ -203,7 +385,9 @@ def _print_json(results: list[executor.TaskResult]) -> None:
         }
         for r in results
     ]
-    print(json.dumps(payload, indent=2))
+    # The stable machine surface: an envelope so post-1.0 additions (metadata,
+    # summaries) never have to break consumers of the results list.
+    print(json.dumps({"schema": 1, "results": payload}, indent=2))
 
 
 def _install_completion(shell: object) -> int:
@@ -219,6 +403,14 @@ def _install_completion(shell: object) -> int:
 
 
 def run(argv: list[str], brand: Brand = DEFAULT_BRAND) -> int:
+    try:
+        return _run(argv, brand)
+    except KeyboardInterrupt:
+        _error("interrupted")
+        return 130
+
+
+def _run(argv: list[str], brand: Brand) -> int:
     global _brand
     _brand = brand
     try:
@@ -248,12 +440,27 @@ def run(argv: list[str], brand: Brand = DEFAULT_BRAND) -> int:
 
     try:
         reg = discover.load_tree(files)
+    except discover.TasksImportError as exc:
+        if isinstance(exc.original, registry.RegistrationError):
+            _error(f"{exc.path}: {exc.original}")  # a user mistake, not a crash
+        else:
+            _error(
+                f"failed to import {exc.path}: "
+                f"{type(exc.original).__name__}: {exc.original}"
+            )
+        return 2
     except Exception as exc:  # report import failures cleanly, don't crash
-        culprit = files[-1] if len(files) == 1 else "the task cascade"
-        _error(f"failed to import {culprit}: {type(exc).__name__}: {exc}")
+        _error(f"failed to import the task cascade: {type(exc).__name__}: {exc}")
         return 2
 
-    tree = manifest.sync_manifest(reg, Path.cwd())["tree"]
+    try:
+        tree = manifest.sync_manifest(reg, Path.cwd())["tree"]
+    except manifest.CompleterError as exc:
+        _error(str(exc))
+        return 2
+
+    if _wants_help(argv):
+        return _print_help(tree, argv)
 
     if g.get("where"):
         return _where(reg, str(g["where"]))
