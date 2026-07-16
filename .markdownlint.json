@@ -1,6 +1,7 @@
 {
   "//": "Config tuned for MkDocs/Zensical-flavored markdown. The real docs gate is `zensical build --strict`.",
-  "MD046": false,
+  "MD013": false,
   "MD025": { "front_matter_title": "" },
-  "MD033": { "allowed_elements": ["kbd"] }
+  "MD033": { "allowed_elements": ["kbd", "iframe"] },
+  "MD046": false
 }

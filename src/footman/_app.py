@@ -14,7 +14,6 @@ import sys
 from pathlib import Path
 
 from footman import (
-    __version__,
     _paths,
     config,
     discover,
@@ -24,11 +23,17 @@ from footman import (
     schedule,
     split,
 )
+from footman.app import DEFAULT_BRAND, Brand
 from footman.split import Segment
+
+# The brand (names + version) in effect for the current invocation. Set at the
+# top of ``run()``; a CLI is one invocation per process, so a module global is
+# the simplest way to reach it from the error/version helpers.
+_brand: Brand = DEFAULT_BRAND
 
 
 def _error(message: str) -> None:
-    sys.stderr.write(f"fm: {message}\n")
+    sys.stderr.write(f"{_brand.prog}: {message}\n")
 
 
 def _globals_to_dict(tokens: list[str]) -> dict[str, object]:
@@ -204,7 +209,8 @@ def _print_json(results: list[executor.TaskResult]) -> None:
 def _install_completion(shell: object) -> int:
     _error(
         "shell completion install is not wired up yet; "
-        "the resolver works today via `fm --complete`. Coming in a later cut."
+        f"the resolver works today via `{_brand.prog} --complete`. "
+        "Coming in a later cut."
     )
     return 1
 
@@ -212,7 +218,9 @@ def _install_completion(shell: object) -> int:
 # --- orchestration -----------------------------------------------------------
 
 
-def run(argv: list[str]) -> int:
+def run(argv: list[str], brand: Brand = DEFAULT_BRAND) -> int:
+    global _brand
+    _brand = brand
     try:
         pre_globals, _ = split._parse_globals(argv, 0)
     except split.ChainError as exc:
@@ -221,7 +229,7 @@ def run(argv: list[str]) -> int:
     g = _globals_to_dict(pre_globals)
 
     if g.get("version"):
-        print(f"footman {__version__}")
+        print(f"{_brand.name} {_brand.version}")
         return 0
     if "install_completion" in g:
         return _install_completion(g.get("install_completion"))

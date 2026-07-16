@@ -4,7 +4,7 @@ build-backend = "uv_build"
 
 [project]
 name = "footman"
-version = "0.3.0"
+version = "0.4.0"
 description = "A task runner with typed commands, nested groups, and instant shell completion."
 readme = "README.md"
 license = "MIT"
@@ -44,10 +44,11 @@ dev = [
     "ruff>=0.6",
     "basedpyright>=1.18",
 ]
-# Documentation site (Zensical). Installed only to build/serve docs locally;
-# CI installs zensical directly. Never a footman runtime dependency.
+# Documentation site (Zensical + mkdocstrings for the API reference). Installed
+# only to build/serve docs. Never a footman runtime dependency.
 docs = [
     "zensical>=0.0.50",
+    "mkdocstrings-python>=1.11",
 ]
 # Incumbent task runners, installed only for the head-to-head comparison under
 # comparison/. Never a footman runtime or dev dependency.

@@ -295,6 +295,42 @@ sequential = true      # this package prefers serial runs
 `--config PATH` points at a single TOML file that overrides everything else.
 Unknown keys are ignored, so a newer setting never breaks an older footman.
 
+## Rebrand it as your own CLI
+
+`fm` and `footman` are just the default-branded instance of a public `App`.
+Point your own console script at an `App` with your project's names and version,
+and every message the user sees uses *your* branding — so an internal tool can
+ship under its own name (say `hse`) while being footman underneath:
+
+```python
+# hse/cli.py
+from footman import App
+
+app = App(name="HSE", prog="hse", version="1.4.0")
+
+def main() -> None:
+    raise SystemExit(app.run())
+```
+
+```toml
+# hse/pyproject.toml
+[project.scripts]
+hse = "hse.cli:main"
+```
+
+```console
+$ hse --version
+HSE 1.4.0
+$ hse nope
+hse: expected a task name, got 'nope' (know: build, test, deploy)
+```
+
+`name` is the long/display name (the `--version` banner), `prog` the short
+command name (error prefix and hints), `version` your own version (optional —
+footman's is used otherwise). Tasks and completion are unchanged: `hse`
+discovers the `tasks.py` cascade exactly like `fm`, and `hse --complete` stays
+on the same stdlib-only fast path.
+
 ## Running tools
 
 Task bodies run tools through `run()` and the typed `tools.*` wrappers. `run()`
