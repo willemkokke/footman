@@ -1,3 +1,8 @@
 dist/
 __pycache__/
 .venv/
+.coverage
+.pytest_cache/
+.ruff_cache/
+.DS_Store
+.claude/

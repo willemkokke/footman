@@ -1,0 +1,279 @@
+"""The execution path: load tasks, refresh the manifest, run the chain.
+
+This is everything that happens for a real ``fm ...`` invocation (as opposed to
+the completion hot path). It imports the user's tasks file — paying that cost is
+fine here — resolves the command line against the freshly-built manifest, and
+runs the resulting segments, honouring the global options.
+"""
+
+from __future__ import annotations
+
+import importlib.util
+import json
+import os
+import sys
+import tomllib
+from pathlib import Path
+
+from footman import __version__, _paths, executor, manifest, registry, split
+from footman.split import Segment
+
+
+def _error(message: str) -> None:
+    sys.stderr.write(f"fm: {message}\n")
+
+
+def _globals_to_dict(tokens: list[str]) -> dict[str, object]:
+    """Interpret the splitter's canonical global tokens into a flat mapping."""
+    result: dict[str, object] = {}
+    i = 0
+    while i < len(tokens):
+        tok = tokens[i]
+        name = tok.split("=", 1)[0]
+        key = name.lstrip("-").replace("-", "_")
+        if split._GLOBAL_KIND.get(name) == "option":
+            if "=" in tok:
+                result[key] = tok.split("=", 1)[1]
+                i += 1
+            else:
+                result[key] = tokens[i + 1] if i + 1 < len(tokens) else ""
+                i += 2
+        else:
+            result[key] = True
+            i += 1
+    return result
+
+
+def _config_tasks_file(root: Path) -> str | None:
+    pyproject = root / "pyproject.toml"
+    if not pyproject.is_file():
+        return None
+    try:
+        data = tomllib.loads(pyproject.read_text("utf-8"))
+    except (OSError, tomllib.TOMLDecodeError):
+        return None
+    tool = data.get("tool", {})
+    footman_cfg = tool.get("footman", {}) if isinstance(tool, dict) else {}
+    value = footman_cfg.get("tasks") if isinstance(footman_cfg, dict) else None
+    return value if isinstance(value, str) else None
+
+
+def _locate_tasks_file(root: Path, override: str | None) -> Path:
+    if override:
+        return Path(override).expanduser()
+    configured = _config_tasks_file(root)
+    if configured:
+        path = Path(configured).expanduser()
+        return path if path.is_absolute() else root / path
+    return root / _paths.DEFAULT_TASKS_FILE
+
+
+def _load_tasks(path: Path) -> registry.Group:
+    """Import *path* as a module, populating the global registry."""
+    registry.reset()
+    spec = importlib.util.spec_from_file_location("footman_tasks", path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"cannot load tasks file: {path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    sys.path.insert(0, str(path.parent))  # let tasks import sibling helpers
+    spec.loader.exec_module(module)
+    return registry.root
+
+
+# --- rendering ---------------------------------------------------------------
+
+
+def _format_value(value: object) -> str:
+    if value is True:
+        return ""
+    if isinstance(value, list):
+        return "[" + ", ".join(str(v) for v in value) + "]"
+    return str(value)
+
+
+def _plan_line(seg: Segment) -> str:
+    parts = []
+    for name, value in seg.values.items():
+        if value is True:
+            parts.append(f"--{name}")
+        elif value is False:
+            parts.append(f"--no-{name}")
+        else:
+            parts.append(f"{name}={_format_value(value)}")
+    if seg.variadic:
+        parts.append("*" + " ".join(seg.variadic))
+    line = f"  -> {seg.task}  " + " ".join(parts)
+    if seg.passthrough is not None:
+        line += f"  [-- {' '.join(seg.passthrough)}]"
+    return line.rstrip()
+
+
+def _print_plan(globals_: list[str], segments: list[Segment]) -> None:
+    if globals_:
+        print(f"  globals: {' '.join(globals_)}")
+    for seg in segments:
+        print(_plan_line(seg))
+
+
+def _iter_tasks(node: dict, prefix: str = ""):
+    for name, task in node["tasks"].items():
+        yield f"{prefix}{name}", task["help"]
+    for name, sub in node["groups"].items():
+        yield from _iter_tasks(sub, f"{prefix}{name} ")
+
+
+def _print_list(tree: dict) -> None:
+    rows = list(_iter_tasks(tree))
+    if not rows:
+        print("No tasks defined.")
+        return
+    width = max(len(name) for name, _ in rows)
+    print("Tasks:")
+    for name, help_text in rows:
+        print(f"  {name:<{width}}  {help_text}".rstrip())
+
+
+def _print_tree(node: dict, indent: str = "") -> None:
+    for name, task in node["tasks"].items():
+        help_text = f"  — {task['help']}" if task["help"] else ""
+        print(f"{indent}{name}{help_text}")
+    for name, sub in node["groups"].items():
+        label = f"  — {sub['help']}" if sub["help"] else ""
+        print(f"{indent}{name}/{label}")
+        _print_tree(sub, indent + "  ")
+
+
+def _where(root: registry.Group, dotted: str) -> int:
+    path = dotted.replace(".", " ").split()
+    try:
+        fn = executor.resolve(root, path)
+    except (KeyError, IndexError):
+        _error(f"--where: unknown task {dotted!r}")
+        return 2
+    code = getattr(fn, "__code__", None)
+    if code is None:
+        _error(f"--where: cannot locate source for {dotted!r}")
+        return 2
+    print(f"{code.co_filename}:{code.co_firstlineno}")
+    return 0
+
+
+def _print_summary(results: list[executor.TaskResult], *, timings: bool) -> None:
+    for result in results:
+        mark = "ok" if result.ok else "FAIL"
+        timing = f"  ({result.duration * 1000:.0f} ms)" if timings else ""
+        line = f"  {mark:>4}  {result.task}{timing}"
+        print(line)
+        if result.error is not None:
+            _error(f"{result.task}: {type(result.error).__name__}: {result.error}")
+        elif not result.ok:
+            _error(f"{result.task}: exited with code {result.code}")
+
+
+def _print_json(results: list[executor.TaskResult]) -> None:
+    payload = [
+        {
+            "task": r.task,
+            "ok": r.ok,
+            "code": r.code,
+            "duration_ms": round(r.duration * 1000, 3),
+            "output": r.output,
+            "error": None if r.error is None else str(r.error),
+        }
+        for r in results
+    ]
+    print(json.dumps(payload, indent=2))
+
+
+def _install_completion(shell: object) -> int:
+    _error(
+        "shell completion install is not wired up yet; "
+        "the resolver works today via `fm --complete`. Coming in a later cut."
+    )
+    return 1
+
+
+# --- orchestration -----------------------------------------------------------
+
+
+def run(argv: list[str]) -> int:
+    try:
+        pre_globals, _ = split._parse_globals(argv, 0)
+    except split.ChainError as exc:
+        _error(str(exc))
+        return 2
+    g = _globals_to_dict(pre_globals)
+
+    if g.get("version"):
+        print(f"footman {__version__}")
+        return 0
+    if "install_completion" in g:
+        return _install_completion(g.get("install_completion"))
+
+    if g.get("directory"):
+        try:
+            os.chdir(str(g["directory"]))
+        except OSError as exc:
+            _error(f"-C {g['directory']}: {exc}")
+            return 2
+
+    root_dir = _paths.find_project_root()
+    tasks_file = _locate_tasks_file(root_dir, g.get("tasks_file"))  # type: ignore[arg-type]
+
+    if not tasks_file.is_file():
+        if g.get("help") or g.get("list") or g.get("tree"):
+            print(f"No tasks file found (looked for {tasks_file}).")
+            return 0
+        _error(
+            f"no tasks file found (looked for {tasks_file}); "
+            f"create one or pass -f/--tasks-file."
+        )
+        return 2
+
+    try:
+        reg = _load_tasks(tasks_file)
+    except Exception as exc:  # report import failures cleanly, don't crash
+        _error(f"failed to import {tasks_file}: {type(exc).__name__}: {exc}")
+        return 2
+
+    tree = manifest.sync_manifest(reg, root_dir)["tree"]
+
+    if g.get("where"):
+        return _where(reg, str(g["where"]))
+
+    try:
+        globals_, segments = split.split_chain(tree, argv)
+    except split.ChainError as exc:
+        _error(str(exc))
+        return 2
+
+    if not segments:
+        if g.get("tree"):
+            _print_tree(tree)
+        else:
+            _print_list(tree)
+        return 0
+
+    if g.get("dry_run"):
+        _print_plan(globals_, segments)
+        return 0
+
+    json_mode = bool(g.get("json"))
+    try:
+        results = executor.run_chain(
+            reg,
+            segments,
+            keep_going=bool(g.get("keep_going")),
+            capture=json_mode,
+        )
+    except split.ChainError as exc:  # e.g. passthrough with no *args
+        _error(str(exc))
+        return 2
+
+    if json_mode:
+        _print_json(results)
+    elif not g.get("quiet"):
+        _print_summary(results, timings=bool(g.get("timings")))
+
+    return next((r.code or 1 for r in results if not r.ok), 0)

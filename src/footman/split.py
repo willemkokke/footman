@@ -1,0 +1,261 @@
+"""Separator-free chain splitting, driven purely by the manifest.
+
+``fm build lint --fix test`` is split into three independent segments with no
+separator at all — duty's muscle memory, but with real flags and positionals.
+The manifest gives the splitter exact knowledge of every task's shape, which
+makes the split deterministic under six rules (see ``NOTES``):
+
+1. params with defaults are options, never positionals (the load-bearing rule);
+2. required positionals are consumed by exact arity, eagerly validated;
+3. options bind to their own segment;
+4. list options repeat the flag (``--tag a --tag b``);
+5. variadic / ``--`` passthrough segments are terminal; ``+`` is the always
+   available explicit boundary;
+6. globals precede the first task name.
+
+Every error names the task, states the expectation, and proposes the fix —
+error messages are product surface here, not diagnostics.
+"""
+
+from __future__ import annotations
+
+import difflib
+from dataclasses import dataclass, field
+from typing import Any
+
+from footman import coerce
+
+
+class ChainError(Exception):
+    """A malformed command line, carrying a teaching message for the user."""
+
+
+# Global options bind to ``fm`` itself and must precede the first task name.
+# (canonical, short alias, kind, value-hint)
+GLOBALS: list[tuple[str, str | None, str, str | None]] = [
+    ("--help", "-h", "flag", None),
+    ("--version", "-V", "flag", None),
+    ("--list", "-l", "flag", None),
+    ("--tree", None, "flag", None),
+    ("--where", None, "option", "TASK"),
+    ("--dry-run", "-n", "flag", None),
+    ("--keep-going", "-k", "flag", None),
+    ("--quiet", "-q", "flag", None),
+    ("--verbose", "-v", "flag", None),
+    ("--no-color", None, "flag", None),
+    ("--json", None, "flag", None),
+    ("--timings", None, "flag", None),
+    ("--directory", "-C", "option", "PATH"),
+    ("--tasks-file", "-f", "option", "PATH"),
+    ("--install-completion", None, "option", "SHELL"),
+    ("--refresh-manifest", None, "flag", None),
+]
+_GLOBAL_KIND = {name: kind for name, _, kind, _ in GLOBALS}
+_GLOBAL_KIND.update({alias: kind for _, alias, kind, _ in GLOBALS if alias})
+_CANON = {alias: name for name, alias, _, _ in GLOBALS if alias}
+
+
+@dataclass
+class Segment:
+    """One resolved task invocation within a chain."""
+
+    task: str  # dotted path, e.g. "docs.build"
+    path: list[str]  # ["docs", "build"]
+    values: dict[str, Any] = field(default_factory=dict)  # cli-name -> value
+    variadic: list[str] = field(default_factory=list)
+    passthrough: list[str] | None = None
+
+
+_TYPE_PHRASE = {
+    "int": "an integer",
+    "float": "a number",
+    "path": "a path",
+    "str": "text",
+}
+
+
+def _validate(where: str, p: dict, value: str) -> None:
+    """Eagerly validate a choice/typed value; raise a taught error if wrong."""
+    label = f"<{p['name']}>" if p["kind"] == "argument" else f"--{p['name']}"
+
+    choices = p.get("choices")
+    if choices is not None:
+        dynamic = p.get("dynamic")
+        if dynamic and (not dynamic.get("strict") or not choices):
+            return  # soft completer, or no candidates — suggest only, don't enforce
+        if value not in choices:
+            listing = "|".join(choices) if choices else "(none available)"
+            close = difflib.get_close_matches(value, choices, n=1)
+            hint = f" — did you mean {close[0]!r}?" if close else ""
+            raise ChainError(
+                f"{where}: {label} must be one of {listing} (got {value!r}){hint}"
+            )
+        return
+
+    tags = p.get("types")
+    if tags and not coerce.coerce_scalar(value, tags)[0]:
+        expected = " or ".join(str(_TYPE_PHRASE.get(t, t)) for t in tags)
+        raise ChainError(f"{where}: {label} expects {expected} (got {value!r})")
+
+
+def _parse_globals(argv: list[str], i: int) -> tuple[list[str], int]:
+    globals_: list[str] = []
+    while i < len(argv) and argv[i].startswith("-") and argv[i] != "--":
+        name = argv[i].split("=", 1)[0]
+        if name not in _GLOBAL_KIND:
+            raise ChainError(
+                f"unknown global option {name} "
+                f"(global options go before the first task)"
+            )
+        globals_.append(_CANON.get(name, name) + argv[i][len(name) :])
+        i += 1
+        if _GLOBAL_KIND[name] == "option" and "=" not in globals_[-1]:
+            if i >= len(argv):
+                raise ChainError(f"{name} expects a value")
+            globals_.append(argv[i])
+            i += 1
+    return globals_, i
+
+
+def split_chain(tree: dict, argv: list[str]) -> tuple[list[str], list[Segment]]:
+    """Split *argv* into leading globals and a list of resolved segments."""
+    globals_, i = _parse_globals(argv, 0)
+    segments: list[Segment] = []
+
+    while i < len(argv):
+        node, path = tree, []
+        while i < len(argv) and argv[i] in node["groups"]:
+            path.append(argv[i])
+            node = node["groups"][argv[i]]
+            i += 1
+        if i >= len(argv) or argv[i] not in node["tasks"]:
+            got = argv[i] if i < len(argv) else "(end of line)"
+            scope = " ".join(path)
+            where = f"{scope}: " if scope else ""
+            known = ", ".join(list(node["groups"]) + list(node["tasks"]))
+            raise ChainError(
+                f"{where}expected a task name, got {got!r} (know: {known})"
+            )
+        task = node["tasks"][argv[i]]
+        path.append(argv[i])
+        i += 1
+
+        opts = {
+            "--" + p["name"]: p
+            for p in task["params"]
+            if p["kind"] in ("flag", "option")
+        }
+        # Exact-arity positionals, then a single trailing consumer for the rest:
+        # a typed multiple/one-or-many positional, or a `*args` variadic.
+        fixed = [
+            p
+            for p in task["params"]
+            if p["kind"] == "argument" and not p.get("multiple")
+        ]
+        rest = next(
+            (
+                p
+                for p in task["params"]
+                if (p["kind"] == "argument" and p.get("multiple"))
+                or p["kind"] == "variadic"
+            ),
+            None,
+        )
+        seg = Segment(task=".".join(path), path=list(path))
+        filled = 0
+        rest_count = 0
+
+        while i < len(argv):
+            tok = argv[i]
+            if tok == "+":  # explicit segment boundary
+                i += 1
+                break
+            if tok == "--":  # passthrough is terminal for the whole line
+                seg.passthrough = argv[i + 1 :]
+                i = len(argv)
+                break
+            if tok.startswith("--"):
+                i = _consume_option(seg, opts, argv, i)
+            elif filled < len(fixed):
+                _consume_positional(seg, tree, fixed[filled], tok)
+                filled += 1
+                i += 1
+            elif rest is not None:
+                if rest["kind"] == "variadic":
+                    seg.variadic.append(tok)
+                else:
+                    _consume_positional(seg, tree, rest, tok)
+                rest_count += 1
+                i += 1
+            else:
+                break  # arity satisfied: the next word starts a new segment
+
+        missing = [f"<{p['name']}>" for p in fixed[filled:]]
+        if rest is not None and rest["kind"] == "argument" and rest_count == 0:
+            missing.append(f"<{rest['name']}>")
+        if missing:
+            raise ChainError(
+                f"{seg.task}: missing required argument(s): {', '.join(missing)}"
+            )
+        segments.append(seg)
+
+    return globals_, segments
+
+
+def _consume_option(seg: Segment, opts: dict, argv: list[str], i: int) -> int:
+    tok = argv[i]
+    name = tok.split("=", 1)[0]
+    negated = False
+    p = opts.get(name)
+    if p is None and name.startswith("--no-"):
+        candidate = "--" + name[len("--no-") :]
+        if candidate in opts and opts[candidate]["kind"] == "flag":
+            p, negated = opts[candidate], True
+    if p is None:
+        hint = (
+            " (task options come right after their task; "
+            "globals go before the first task)"
+        )
+        raise ChainError(f"{seg.task}: unknown option {name}{hint}")
+
+    cli = p["name"]
+    if p["kind"] == "flag":
+        if "=" in tok:
+            raise ChainError(f"{seg.task}: --{cli} is a flag and takes no value")
+        seg.values[cli] = not negated
+        return i + 1
+
+    # value-bearing option
+    if "=" in tok:
+        value = tok.split("=", 1)[1]
+        i += 1
+    else:
+        i += 1
+        if i >= len(argv):
+            raise ChainError(f"{seg.task}: {name} expects a value")
+        value = argv[i]
+        i += 1
+    _validate(seg.task, p, value)
+    if p.get("multiple"):
+        seg.values.setdefault(cli, []).append(value)
+    else:
+        seg.values[cli] = value
+    return i
+
+
+def _consume_positional(seg: Segment, tree: dict, p: dict, tok: str) -> None:
+    if (
+        "choices" in p
+        and tok not in p["choices"]
+        and (tok in tree["tasks"] or tok in tree["groups"])
+    ):
+        raise ChainError(
+            f"{seg.task}: <{p['name']}> must be one of "
+            f"{'|'.join(p['choices'])} — {tok!r} looks like the next task; "
+            f"did you forget <{p['name']}>?"
+        )
+    _validate(seg.task, p, tok)
+    if p.get("multiple"):
+        seg.values.setdefault(p["name"], []).append(tok)
+    else:
+        seg.values[p["name"]] = tok
