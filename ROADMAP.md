@@ -4,6 +4,13 @@ A critical self-audit of footman at v0.4.0, and the plan that falls out of it.
 Every claim below was checked against the source — file and line — not
 remembered from the README. Where something is broken, it says broken.
 
+**Progress (2026-07-17).** 0.5.0 **released** (all §1 bugs fixed, §3 release
+gates live). The 0.6.0 scope (testing story §5, typing must-haves §7) and the
+0.7.0 scope (composition §6, completion installers + chain-aware completion
+§8, dead-surface cleanup) are **merged to main, unreleased** — tag when
+ready. Still open: §9 docs (README de-dup, cookbook, CI-integration page,
+troubleshooting catalog, voice pass) and the 1.0 stability-promise flip.
+
 > [!NOTE]
 > **The verdict, in three sentences.** The typed core — coercion, chain
 > grammar, manifest, scheduler, cascade — is genuinely solid and better tested
