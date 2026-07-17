@@ -44,14 +44,13 @@ def _globals_to_dict(tokens: list[str]) -> dict[str, object]:
         tok = tokens[i]
         name = tok.split("=", 1)[0]
         key = name.lstrip("-").replace("-", "_")
-        if split._GLOBAL_KIND.get(name) == "option":
-            if "=" in tok:
-                result[key] = tok.split("=", 1)[1]
-                i += 1
-            else:
-                result[key] = tokens[i + 1] if i + 1 < len(tokens) else ""
-                i += 2
-        else:
+        if "=" in tok:  # a value attached by the splitter (--name=value)
+            result[key] = tok.split("=", 1)[1]
+            i += 1
+        elif split._GLOBAL_KIND.get(name) == "option":
+            result[key] = tokens[i + 1] if i + 1 < len(tokens) else ""
+            i += 2
+        else:  # a flag, or an option? given bare
             result[key] = True
             i += 1
     return result
@@ -402,11 +401,22 @@ def _print_json(results: list[executor.TaskResult]) -> None:
 def _install_completion(shell: object) -> int:
     from footman import _shellcomp
 
-    name = str(shell or "").lower()
-    aliases = {"powershell": "pwsh", "nu": "nushell"}  # muscle-memory aliases
-    name = aliases.get(name, name)
+    supported = "|".join(_shellcomp.SHELLS)
+    if shell is True:  # bare `--install-completion`: detect the invoking shell
+        detected = _shellcomp.detect_shell()
+        if detected is None:
+            _error(
+                f"--install-completion: could not detect your shell — "
+                f"name it explicitly: one of {supported}"
+            )
+            return 2
+        print(f"detected shell: {detected}")
+        name = detected
+    else:
+        name = str(shell or "").lower()
+        aliases = {"powershell": "pwsh", "nu": "nushell"}  # muscle-memory
+        name = aliases.get(name, name)
     if name not in _shellcomp.SHELLS:
-        supported = "|".join(_shellcomp.SHELLS)
         got = f" (got {name!r})" if name else ""
         _error(f"--install-completion expects one of {supported}{got}")
         return 2

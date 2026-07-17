@@ -41,10 +41,13 @@ Group names, task names, flags, options, and both static and
 
 ## Installing the shell hook
 
-One command per shell:
+One command — footman detects which shell invoked it (by walking the
+process tree, the way typer's `shellingham` dependency does, minus the
+dependency), or takes the name explicitly:
 
 ```console
-fm --install-completion bash    # or: zsh, fish, pwsh, nushell
+fm --install-completion         # detected: bash, zsh, fish, pwsh, or nushell
+fm --install-completion zsh     # or name it yourself
 ```
 
 bash and zsh get a script under `$XDG_DATA_HOME/fm/` plus a single guarded

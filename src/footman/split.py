@@ -51,7 +51,9 @@ GLOBALS: list[tuple[str, str | None, str, str | None, str]] = [
     ("--directory", "-C", "option", "PATH", "run as if launched from PATH"),
     ("--tasks-file", "-f", "option", "PATH", "use exactly one tasks file, no cascade"),
     ("--config", None, "option", "PATH", "override config with a single TOML file"),
-    ("--install-completion", None, "option", "SHELL", "install shell completion"),
+    # "option?": the value is optional — bare `--install-completion` detects
+    # the invoking shell.
+    ("--install-completion", None, "option?", "[SHELL]", "install shell completion"),
 ]
 _GLOBAL_KIND = {name: kind for name, _, kind, _, _ in GLOBALS}
 _GLOBAL_KIND.update({alias: kind for _, alias, kind, _, _ in GLOBALS if alias})
@@ -172,11 +174,19 @@ def _parse_globals(argv: list[str], i: int) -> tuple[list[str], int]:
             )
         globals_.append(_CANON.get(name, name) + argv[i][len(name) :])
         i += 1
-        if _GLOBAL_KIND[name] == "option" and "=" not in globals_[-1]:
+        kind = _GLOBAL_KIND[name]
+        if kind == "option" and "=" not in globals_[-1]:
             if i >= len(argv):
                 raise ChainError(f"{name} expects a value")
             globals_.append(argv[i])
             i += 1
+        elif kind == "option?" and "=" not in globals_[-1]:
+            # Optional value: consume the next word only when one is present
+            # and not option-shaped; normalise to --name=value so downstream
+            # can tell "given with value" from "given bare".
+            if i < len(argv) and not argv[i].startswith("-"):
+                globals_[-1] += f"={argv[i]}"
+                i += 1
     return globals_, i
 
 

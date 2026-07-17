@@ -97,6 +97,56 @@ def test_pwsh_missing_is_a_taught_error(home, tmp_path, monkeypatch, capsys):
     assert "not found on PATH" in capsys.readouterr().err
 
 
+# --- bare --install-completion: shell auto-detection -----------------------------
+
+
+def test_bare_install_detects_and_installs(home, tmp_path, monkeypatch, capsys):
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
+    (tmp_path / "tasks.py").write_text(
+        "from footman import task\n@task\ndef t(): ...\n"
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(_shellcomp, "detect_shell", lambda: "fish")
+    assert _app.run(["--install-completion"]) == 0
+    out = capsys.readouterr().out
+    assert "detected shell: fish" in out
+    assert (home / ".config" / "fish" / "completions" / "fm.fish").exists()
+
+
+def test_bare_install_undetectable_teaches(home, tmp_path, monkeypatch, capsys):
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
+    (tmp_path / "tasks.py").write_text(
+        "from footman import task\n@task\ndef t(): ...\n"
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(_shellcomp, "detect_shell", lambda: None)
+    assert _app.run(["--install-completion"]) == 2
+    err = capsys.readouterr().err
+    assert "could not detect" in err and "bash|zsh|fish|pwsh|nushell" in err
+
+
+@pytest.mark.skipif(shutil.which("zsh") is None, reason="zsh not installed")
+def test_detection_through_a_real_shell(home, tmp_path, monkeypatch):
+    """`zsh -c 'fm --install-completion'` must detect zsh — via the process
+    tree, since $SHELL may disagree with the shell actually running us."""
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
+    (tmp_path / "tasks.py").write_text(
+        "from footman import task\n@task\ndef t(): ...\n"
+    )
+    monkeypatch.setenv("SHELL", "/bin/false")  # the login shell must not win
+    venv_bin = Path(sys.executable).parent
+    out = subprocess.run(
+        ["zsh", "-c", f'PATH="{venv_bin}:$PATH" fm --install-completion'],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        cwd=tmp_path,
+    )
+    assert out.returncode == 0, out.stderr
+    assert "detected shell: zsh" in out.stdout
+    assert (home / ".local" / "share" / "fm" / "completion.zsh").exists()
+
+
 # --- nushell -------------------------------------------------------------------
 
 
