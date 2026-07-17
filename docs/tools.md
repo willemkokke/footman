@@ -111,7 +111,13 @@ tools.coverage.html(in_process=False)              # ...or out, per call
 ```
 
 `mkdocs`, `zensical`, and `coverage` default to in-process; `tools.pytest`
-keeps its dedicated `pytest.main` path. A *preference* (`Tool(...,
+keeps its dedicated `pytest.main` path.
+
+The tool's own module is imported only when the call actually *executes* —
+resolving the entry point is pure metadata, but the `.load()` that imports
+it happens inside the callable footman runs. So a branch you never take, or
+a `--dry-run`, or a `recording()` test, costs zero tool imports; you pay
+only for the in-process tools you really invoke. A *preference* (`Tool(...,
 in_process=True)`) falls back to a subprocess when no entry point is
 installed; a *demand* (`in_process=True` at the call) errors with a taught
 message instead. `nofail` and `in_process` are the two reserved keywords —

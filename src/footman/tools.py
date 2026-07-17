@@ -58,15 +58,19 @@ def _flags(kwargs: dict[str, Any]) -> list[str]:
     return argv
 
 
-def _console_entry(name: str) -> Any | None:
-    """The installed `[console_scripts]` entry named *name*, loaded, or None."""
+def _console_entrypoint(name: str) -> Any | None:
+    """The `[console_scripts]` EntryPoint named *name*, UNLOADED, or None.
+
+    Returning the EntryPoint rather than its target keeps the tool's import
+    deferred: the module is only imported when `.load()` is called, inside
+    the callable footman runs. So a dry-run — or a branch you never take —
+    imports nothing, while the existence check here (pure metadata, no tool
+    code) is still cheap enough to decide subprocess-vs-in-process eagerly.
+    """
     from importlib.metadata import entry_points
 
     for ep in entry_points(group="console_scripts", name=name):
-        try:
-            return ep.load()
-        except Exception:
-            return None
+        return ep
     return None
 
 
@@ -139,28 +143,29 @@ class Tool:
         tail = [*self._base, *map(str, args), *_flags(kwargs)]
         wanted = self._prefer_in_process if in_process is None else in_process
         if wanted:
-            entry = _console_entry(self._argv0)
-            if entry is None and in_process is True:
-                raise ValueError(
-                    f"{self._argv0}: in_process=True, but no installed "
-                    f"console_scripts entry point named {self._argv0!r}"
-                )
-            if entry is not None:
-                title = " ".join([self._argv0, *tail])
+            ep = _console_entrypoint(self._argv0)  # metadata only — no import
+            if ep is None:
+                if in_process is True:  # a demand can't be met — fail fast
+                    raise ValueError(
+                        f"{self._argv0}: in_process=True, but no installed "
+                        f"console_scripts entry point named {self._argv0!r}"
+                    )
+                return run([self._argv0, *tail], nofail=nofail)  # prefer → subproc
+
+            def _invoke() -> Any:
+                entry = ep.load()  # the tool's import — deferred to execution,
+                # so a dry-run of this call imports nothing.
                 if _accepts_args(entry):
-                    # Direct call — no global state, fully parallel.
-                    return run(lambda: entry(tail), title=title, nofail=nofail)
+                    return entry(tail)  # click / main(argv): lock-free, parallel
+                with _argv_lock:  # legacy zero-arg main(): patch argv, serialised
+                    saved = sys.argv
+                    sys.argv = [self._argv0, *tail]
+                    try:
+                        return entry()
+                    finally:
+                        sys.argv = saved
 
-                def _invoke() -> Any:  # zero-arg main: patch argv, serialised
-                    with _argv_lock:
-                        saved = sys.argv
-                        sys.argv = [self._argv0, *tail]
-                        try:
-                            return entry()
-                        finally:
-                            sys.argv = saved
-
-                return run(_invoke, title=title, nofail=nofail)
+            return run(_invoke, title=" ".join([self._argv0, *tail]), nofail=nofail)
         return run([self._argv0, *tail], nofail=nofail)
 
     def installed_version(self) -> tuple[int, ...]:
