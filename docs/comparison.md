@@ -52,6 +52,35 @@ load — which is also the rest of this page.
 > **Does this speed matter?** Not really — but I'm a little OCD and needed to
 > know I wasn't embarrassing myself. Turns out I'm not, so we can both move on.
 
+## The same `check`, composed five ways
+
+Completion is the moment that has to feel instant; `check` is the command you
+actually run fifty times a day. So: four check steps, each an identical
+in-process 0.5 s sleep (the honest stand-in for an I/O-bound tool run — a
+real lint step spawns a subprocess and waits, which parallelises exactly like
+a sleep), composed the way each tool wants you to. Fairness cuts both ways —
+a tool that supports parallelism gets to use it. Reproduce with
+`uv run --group comparison python comparison/bench_check.py`.
+
+| runner  | composition                    | wall (mean) |
+| ------- | ------------------------------ | ----------: |
+| footman | parallel (pre-deps, *default*) |  **563 ms** |
+| poe     | parallel (`parallel` task)     |      625 ms |
+| typer   | serial (no orchestration)      |     2092 ms |
+| duty    | serial (pre-duties)            |     2120 ms |
+| invoke  | serial (pre-tasks)             |     2146 ms |
+
+The floors are 0.5 s parallel and 2.0 s serial, so everyone's *overhead* is
+a rounding error — the 4× gap is architecture, not dispatch speed. duty and
+invoke run prerequisites serially and have no parallel switch to flip; the
+same four steps simply cost the sum instead of the max. poe genuinely ticks
+this box (a dedicated `parallel` task type — credit where due); the
+difference is spelling. In poe you declare a parallel composite per case; in
+footman `pre=[fmt, lint, typecheck, test]` is parallel *by default* and goes
+serial only when you ask (`-s`). And typer hands you nothing here — four
+calls in a row, unless you hand-roll a thread pool, at which point you've
+written the scheduler yourself.
+
 ## Is "just write a typer app" too heavy?
 
 Genuine question, because typer is lovely and a completely reasonable choice — if

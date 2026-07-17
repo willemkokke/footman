@@ -65,6 +65,21 @@ def noop():
     """No-op (execution-overhead benchmark)."""
 
 
+@app.command()
+def bench_check():
+    """Composite check over four simulated 0.5 s steps (benchmark).
+
+    typer has no task orchestration — there is nothing to declare a DAG with,
+    so the idiomatic composite is four calls in a row. (You *can* hand-roll a
+    ThreadPoolExecutor here, but then you wrote the scheduler yourself, which
+    is precisely the job a task runner exists to do for you.)
+    """
+    import time
+
+    for _ in range(4):
+        time.sleep(0.5)
+
+
 @dist.command()
 def build():
     """Build the sdist and wheel."""
