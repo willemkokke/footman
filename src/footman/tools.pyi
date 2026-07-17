@@ -19,6 +19,13 @@ from typing import Any
 
 _version_cache: dict[str, tuple[int, ...]]
 
+class _Off: ...
+
+off: _Off
+
+# A boolean flag: True → --flag, off → --no-flag, False/None → omitted.
+_Flag = bool | _Off | None
+
 def _flags(kwargs: dict[str, Any]) -> list[str]: ...
 def _console_entrypoint(name: str) -> Any | None: ...
 def _accepts_args(entry: Any) -> bool: ...
@@ -42,11 +49,11 @@ class _RuffFormat(Tool):
     def __call__(  # type: ignore[override]
         self,
         *paths: str,
-        check: bool | None = ...,
-        diff: bool | None = ...,
-        preview: bool | None = ...,
+        check: _Flag = ...,
+        diff: _Flag = ...,
+        preview: _Flag = ...,
         target_version: str | None = ...,
-        no_cache: bool | None = ...,
+        no_cache: _Flag = ...,
         config: str | None = ...,
         nofail: bool = False,
         in_process: bool | None = None,
@@ -58,21 +65,28 @@ class _Ruff(Tool):
     def check(
         self,
         *paths: str,
-        fix: bool | None = ...,
-        unsafe_fixes: bool | None = ...,
-        show_fixes: bool | None = ...,
-        diff: bool | None = ...,
-        watch: bool | None = ...,
-        fix_only: bool | None = ...,
+        fix: _Flag = ...,
+        unsafe_fixes: _Flag = ...,
+        show_fixes: _Flag = ...,
+        diff: _Flag = ...,
+        watch: _Flag = ...,
+        fix_only: _Flag = ...,
         output_format: str | None = ...,
         output_file: str | None = ...,
         target_version: str | None = ...,
-        preview: bool | None = ...,
-        statistics: bool | None = ...,
+        preview: _Flag = ...,
+        statistics: _Flag = ...,
         select: Sequence[str] | None = ...,
         ignore: Sequence[str] | None = ...,
         extend_select: Sequence[str] | None = ...,
-        no_cache: bool | None = ...,
+        exit_zero: _Flag = ...,
+        exit_non_zero_on_fix: _Flag = ...,
+        quiet: _Flag = ...,
+        silent: _Flag = ...,
+        verbose: _Flag = ...,
+        isolated: _Flag = ...,
+        no_cache: _Flag = ...,
+        cache_dir: str | None = ...,
         config: str | None = ...,
         nofail: bool = False,
         **flags: Any,
@@ -82,20 +96,20 @@ class _Uv(Tool):
     def sync(
         self,
         *,
-        frozen: bool | None = ...,
-        locked: bool | None = ...,
+        frozen: _Flag = ...,
+        locked: _Flag = ...,
         group: Sequence[str] | None = ...,
-        all_groups: bool | None = ...,
-        no_dev: bool | None = ...,
-        upgrade: bool | None = ...,
+        all_groups: _Flag = ...,
+        no_dev: _Flag = ...,
+        upgrade: _Flag = ...,
         nofail: bool = False,
         **flags: Any,
     ) -> int: ...
     def build(
         self,
         *,
-        sdist: bool | None = ...,
-        wheel: bool | None = ...,
+        sdist: _Flag = ...,
+        wheel: _Flag = ...,
         out_dir: str | None = ...,
         nofail: bool = False,
         **flags: Any,
@@ -103,36 +117,34 @@ class _Uv(Tool):
     def add(
         self,
         *packages: str,
-        dev: bool | None = ...,
+        dev: _Flag = ...,
         group: str | None = ...,
         nofail: bool = False,
         **flags: Any,
     ) -> int: ...
     def lock(
-        self, *, upgrade: bool | None = ..., nofail: bool = False, **flags: Any
+        self, *, upgrade: _Flag = ..., nofail: bool = False, **flags: Any
     ) -> int: ...
     def run(self, *args: str, nofail: bool = False, **flags: Any) -> int: ...
 
 class _Git(Tool):
-    def status(
-        self, *, s: bool | None = ..., nofail: bool = False, **flags: Any
-    ) -> int: ...
+    def status(self, *, s: _Flag = ..., nofail: bool = False, **flags: Any) -> int: ...
     def add(self, *paths: str, nofail: bool = False, **flags: Any) -> int: ...
     def commit(
         self,
         *,
         message: str | None = ...,
-        all: bool | None = ...,
-        amend: bool | None = ...,
-        no_verify: bool | None = ...,
+        all: _Flag = ...,
+        amend: _Flag = ...,
+        no_verify: _Flag = ...,
         nofail: bool = False,
         **flags: Any,
     ) -> int: ...
     def push(
         self,
         *refs: str,
-        force_with_lease: bool | None = ...,
-        tags: bool | None = ...,
+        force_with_lease: _Flag = ...,
+        tags: _Flag = ...,
         nofail: bool = False,
         **flags: Any,
     ) -> int: ...
@@ -140,8 +152,8 @@ class _Git(Tool):
     def diff(
         self,
         *paths: str,
-        staged: bool | None = ...,
-        quiet: bool | None = ...,
+        staged: _Flag = ...,
+        quiet: _Flag = ...,
         nofail: bool = False,
         **flags: Any,
     ) -> int: ...
@@ -150,9 +162,9 @@ class _DockerCompose(Tool):
     def up(
         self,
         *services: str,
-        detach: bool | None = ...,
-        build: bool | None = ...,
-        wait: bool | None = ...,
+        detach: _Flag = ...,
+        build: _Flag = ...,
+        wait: _Flag = ...,
         pull: str | None = ...,
         nofail: bool = False,
         **flags: Any,
@@ -160,15 +172,15 @@ class _DockerCompose(Tool):
     def down(
         self,
         *,
-        volumes: bool | None = ...,
-        remove_orphans: bool | None = ...,
+        volumes: _Flag = ...,
+        remove_orphans: _Flag = ...,
         nofail: bool = False,
         **flags: Any,
     ) -> int: ...
     def logs(
         self,
         *services: str,
-        follow: bool | None = ...,
+        follow: _Flag = ...,
         tail: int | None = ...,
         nofail: bool = False,
         **flags: Any,
@@ -184,7 +196,7 @@ class _Docker(Tool):
         tag: str | None = ...,
         file: str | None = ...,
         platform: str | None = ...,
-        push: bool | None = ...,
+        push: _Flag = ...,
         nofail: bool = False,
         **flags: Any,
     ) -> int: ...
@@ -194,13 +206,13 @@ class _Bun(Tool):
     def add(
         self,
         *packages: str,
-        dev: bool | None = ...,
-        global_: bool | None = ...,
+        dev: _Flag = ...,
+        global_: _Flag = ...,
         nofail: bool = False,
         **flags: Any,
     ) -> int: ...
     def install(
-        self, *, frozen_lockfile: bool | None = ..., nofail: bool = False, **flags: Any
+        self, *, frozen_lockfile: _Flag = ..., nofail: bool = False, **flags: Any
     ) -> int: ...
     def run(
         self, script: str, *args: str, nofail: bool = False, **flags: Any
@@ -211,8 +223,8 @@ class _Mkdocs(Tool):
     def build(
         self,
         *,
-        strict: bool | None = ...,
-        clean: bool | None = ...,
+        strict: _Flag = ...,
+        clean: _Flag = ...,
         site_dir: str | None = ...,
         config_file: str | None = ...,
         nofail: bool = False,
@@ -223,7 +235,7 @@ class _Mkdocs(Tool):
         self,
         *,
         dev_addr: str | None = ...,
-        strict: bool | None = ...,
+        strict: _Flag = ...,
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
@@ -233,8 +245,8 @@ class _Zensical(Tool):
     def build(
         self,
         *,
-        strict: bool | None = ...,
-        clean: bool | None = ...,
+        strict: _Flag = ...,
+        clean: _Flag = ...,
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
@@ -249,7 +261,7 @@ class _Coverage(Tool):
         self,
         *,
         fail_under: float | None = ...,
-        show_missing: bool | None = ...,
+        show_missing: _Flag = ...,
         nofail: bool = False,
         **flags: Any,
     ) -> int: ...
@@ -267,9 +279,9 @@ class _Cspell(Tool):
         self,
         *globs: str,
         config: str | None = ...,
-        words_only: bool | None = ...,
-        quiet: bool | None = ...,
-        gitignore: bool | None = ...,
+        words_only: _Flag = ...,
+        quiet: _Flag = ...,
+        gitignore: _Flag = ...,
         nofail: bool = False,
         **flags: Any,
     ) -> int: ...
@@ -278,7 +290,7 @@ class _Prek(Tool):
     def run(
         self,
         *hooks: str,
-        all_files: bool | None = ...,
+        all_files: _Flag = ...,
         files: Sequence[str] | None = ...,
         nofail: bool = False,
         **flags: Any,
@@ -289,7 +301,7 @@ class _Markdownlint(Tool):
     def __call__(  # type: ignore[override]
         self,
         *globs: str,
-        fix: bool | None = ...,
+        fix: _Flag = ...,
         config: str | None = ...,
         nofail: bool = False,
         **flags: Any,
@@ -299,8 +311,8 @@ class _Basedpyright(Tool):
     def __call__(  # type: ignore[override]
         self,
         *paths: str,
-        watch: bool | None = ...,
-        outputjson: bool | None = ...,
+        watch: _Flag = ...,
+        outputjson: _Flag = ...,
         project: str | None = ...,
         nofail: bool = False,
         **flags: Any,

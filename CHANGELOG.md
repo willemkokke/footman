@@ -21,6 +21,21 @@ versions may include breaking changes.
 
 ### Added
 
+- **`off` — disable a flag a tool turns on by default.** `False`/`None`
+  mean *omit* (so a task parameter's default flows through), which left no
+  way to spell a negation. `strict=off` → `--no-strict` fills the gap and
+  completes the boolean story (`True` → `--flag`, `off` → `--no-flag`);
+  it's the same as naming the negation directly (`no_strict=True`) but
+  reads as intent and lets a variable drive it
+  (`directory_urls=pretty or off`). Typed in the stubs, so it autocompletes
+  and a garbage value is still a type error.
+- Filled a real gap in the `ruff.check` stub — `exit_zero`,
+  `exit_non_zero_on_fix`, `quiet`, `silent`, `verbose`, `isolated`,
+  `cache_dir` now autocomplete, so you're guided to the right flag instead
+  of guessing a name like `exit=` that `**flags: Any` silently accepts and
+  a `False` value quietly omits. Docs now spell out that escape hatch: an
+  unknown flag either errors at the tool (truthy) or is dropped (`False`/
+  `None`), and a literal `"--flag"` positional always sidesteps it.
 - **Tool autocompletion via stubs — zero runtime cost.** `tools.pyi` gives
   IDEs and type checkers typed verbs and common flags for the curated
   tools (`tools.ruff.check(` completes `fix=`, `select=`, …; `fix="yes"`

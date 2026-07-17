@@ -44,10 +44,42 @@ def ship():
 ```
 
 The rules, all of them: `snake_case` → `--kebab-case`; `True` → bare flag;
-`False`/`None` → omitted; a list repeats the flag (an empty one is omitted,
-so a task parameter's default flows straight through); a single-letter key
-is a short flag (`k="expr"` → `-k expr`); positional strings pass through
-untouched.
+`False`/`None` → omitted; `off` → the negation `--no-flag` (see below); a
+list repeats the flag (an empty one is omitted, so a task parameter's
+default flows straight through); a single-letter key is a short flag
+(`k="expr"` → `-k expr`); positional strings pass through untouched.
+
+### Disabling a flag that defaults on
+
+`False` and `None` mean *omit* — that's what lets a task parameter's default
+flow through (`fix: bool = False` → `fix=fix` → nothing) — so they can't
+*also* mean the negation. To turn off a flag a tool enables by default, use
+the `off` sentinel, or name the negation directly:
+
+```python
+from footman.tools import off
+
+tools.mkdocs.build(strict=off)              # → mkdocs build --no-strict
+tools.mkdocs.build(no_strict=True)          # exactly the same, by name
+```
+
+`off` shines when a variable drives it, because it completes the boolean
+story — `True` → `--flag`, `off` → `--no-flag`:
+
+```python
+@task
+def build(pretty_urls: bool = True):
+    tools.mkdocs.build(directory_urls=pretty_urls or off)
+    # pretty_urls=True  → --directory-urls
+    # pretty_urls=False → --no-directory-urls
+```
+
+And a *conditional* flag often needs no negation at all — when the flag is
+off by default, `flag=condition` already does the right thing:
+
+```python
+tools.zensical.build(clean=True, strict=check)   # --strict only when check
+```
 
 ### Why no per-flag Python parameters?
 
@@ -84,6 +116,25 @@ Which means stub drift — the thing that breaks duty's wrappers at run
 time — here degrades a *hint* at worst, and fixing it is editing one line
 of a `.pyi`. The flag lists were read from the installed tools' `--help`,
 not from memory.
+
+The flip side of "never forbid" is that the stub can't reject a flag name
+it doesn't know — `**flags: Any` accepts anything. So a mistyped flag isn't
+a type error; what happens is decided at run time by the translation rules:
+
+- a truthy value produces the flag and the **tool** rejects it loudly —
+  `ruff.check(exitzero=True)` → `ruff check --exitzero` → *unknown flag*;
+- a `False`/`None` value is omitted (the very rule that lets a task
+  parameter's default flow through), so it silently does nothing —
+  `ruff.check(exit=False)` runs a plain `ruff check`, not what you meant.
+
+That second case is the one to know: when a flag isn't autocompleting, you
+guessed a name that doesn't exist. Reach for the real one (`exit_zero`,
+here), or side-step the whole question by passing the literal flag as a
+positional — always unambiguous, never translated:
+
+```python
+tools.ruff.check(*paths, "--exit-zero")
+```
 
 For the rare task that must branch on a tool's CLI generation:
 
