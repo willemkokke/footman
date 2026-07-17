@@ -23,7 +23,10 @@ def test_group_descent(tree):
 
 def test_task_options(tree):
     out = complete(tree, ["lint", ""])
-    assert set(out) == {"--fix", "--mode", "--paths"}
+    assert {"--fix", "--mode", "--paths"} <= set(out)
+    assert "check" in out  # separator-free chains: the next task completes too
+    assert complete(tree, ["lint", "--"]) != []  # option-shaped partial: options only
+    assert all(c.startswith("--") for c in complete(tree, ["lint", "--"]))
 
 
 def test_option_value_choices(tree):
@@ -48,3 +51,37 @@ def test_required_choice_positional(tree):
 
 def test_unknown_prefix_completes_to_nothing(tree):
     assert complete(tree, ["zzz"]) == []
+
+
+# --- chain-aware completion -----------------------------------------------------
+
+
+def test_second_segment_options_are_the_second_tasks(tree):
+    # `check` has no --mode; the --mo must complete against lint's options.
+    out = complete(tree, ["check", "lint", "--mo"])
+    assert out == ["--mode"]
+
+
+def test_next_task_name_completes_after_a_chain(tree):
+    assert "check" in complete(tree, ["lint", "--fix", "che"])
+    assert complete(tree, ["lint", "--fix", "che"]) == ["check"]
+
+
+def test_option_value_not_confused_with_next_task(tree):
+    # "--mode" wants a value: its choices complete, not task names.
+    out = complete(tree, ["lint", "--mode", ""])
+    assert set(out) == {"strict", "loose"}
+
+
+def test_group_descent_in_a_later_segment(tree):
+    out = complete(tree, ["lint", "--fix", "docs", ""])
+    assert set(out) == {"serve", "build"}
+
+
+def test_plus_resets_the_segment(tree):
+    out = complete(tree, ["lint", "+", ""])
+    assert "check" in out and "docs" in out
+
+
+def test_nothing_after_passthrough(tree):
+    assert complete(tree, ["check", "--", "anything", ""]) == []

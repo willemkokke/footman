@@ -9,6 +9,19 @@ versions may include breaking changes.
 
 ### Added
 
+- **Shell completion installers.** `fm --install-completion bash|zsh|fish`
+  writes the hook and (bash/zsh) one guarded `source` line into your rc
+  file; fish needs no rc edit at all. Idempotent, branded (`hse
+  --install-completion zsh` installs for `hse`), and the generated hook
+  stays on the cached stdlib-only fast path. The bash hook survives macOS's
+  bash 3.2 (whose quoted array slices collapse to a single word — found the
+  hard way, tested for keeps).
+- **Chain-aware completion.** The resolver now walks segments the way the
+  splitter does — exact positional arity, then a trailing `Many`/variadic
+  consumer, then the next word starts a new segment — so
+  `fm format lint --fi<TAB>` completes *lint's* options, a satisfied task
+  offers the next task names, `+` resets, and after `--` nothing is offered
+  (it's the passthrough's). Latency is unchanged: same one-file-read walk.
 - **Composable task surfaces.** Three mechanisms, one contract (resolve at
   import time, re-check availability live): `@task(when=…, reason=…)`
   disables-but-lists a task that can't run here (pytest-skip semantics —

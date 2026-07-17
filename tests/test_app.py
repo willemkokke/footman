@@ -148,9 +148,9 @@ def test_quiet_suppresses_summary(project, capsys):
     assert "ok  hi" not in out  # but the summary line is suppressed
 
 
-def test_install_completion_is_stub(project, capsys):
-    assert _app.run(["--install-completion", "bash"]) == 1
-    assert "not wired up yet" in capsys.readouterr().err
+def test_install_completion_unknown_shell_teaches(project, capsys):
+    assert _app.run(["--install-completion", "tcsh"]) == 2
+    assert "bash|zsh|fish" in capsys.readouterr().err
 
 
 def test_directory_bad(project, capsys):

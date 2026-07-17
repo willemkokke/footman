@@ -41,7 +41,19 @@ Group names, task names, flags, options, and both static and
 
 ## Installing the shell hook
 
-The resolver works today via `fm --complete`. Shell-native installers
-(`--install-completion SHELL` for bash/zsh/fish/pwsh/nushell) are on the
-roadmap; until then, wire `fm --complete` into your shell's completion system
-directly.
+One command per shell:
+
+```console
+fm --install-completion bash    # or: zsh, fish
+```
+
+bash and zsh get a script under `$XDG_DATA_HOME/fm/` plus a single guarded
+`source` line in your rc file; fish gets
+`~/.config/fish/completions/fm.fish`, which fish auto-loads — no rc edit at
+all. Running the installer twice changes nothing. A custom-branded CLI
+installs completion for *its* name the same way (`hse --install-completion
+zsh`), and the generated hook calls that brand's `--complete`.
+
+pwsh and nushell installers are still on the roadmap; on those shells, wire
+`fm --complete -- WORDS...` into the completion system directly — it prints
+newline-separated candidates.
