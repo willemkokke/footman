@@ -146,7 +146,15 @@ def fm_project_dir(home, tmp_path, monkeypatch):
 
 VENV_BIN = Path(sys.executable).parent
 
+# POSIX shells on Windows (git-bash and friends) are out of scope: paths and
+# process semantics differ, and pwsh is the Windows completion story — which
+# has its own functional test running on every platform.
+_posix_shell = pytest.mark.skipif(
+    sys.platform == "win32", reason="POSIX shells on Windows are out of scope"
+)
 
+
+@_posix_shell
 @pytest.mark.skipif(shutil.which("bash") is None, reason="bash not installed")
 def test_bash_completion_functional(home, fm_project_dir):
     script = home / "completion.bash"
@@ -173,6 +181,7 @@ def test_bash_completion_functional(home, fm_project_dir):
     assert "--fix" in out.stdout.split()  # the bash-3.2 slice regression case
 
 
+@_posix_shell
 @pytest.mark.skipif(shutil.which("zsh") is None, reason="zsh not installed")
 def test_zsh_completion_functional(home, fm_project_dir):
     """Sources the real hook (registration incl. the compinit fallback), then
@@ -199,6 +208,7 @@ def test_zsh_completion_functional(home, fm_project_dir):
     assert "--fix" in out.stdout.split()  # empty current word survives quoting
 
 
+@_posix_shell
 @pytest.mark.skipif(shutil.which("fish") is None, reason="fish not installed")
 def test_fish_completion_functional(home, fm_project_dir):
     """fish can query its own completion engine: `complete -C 'fm li'`."""
@@ -250,10 +260,13 @@ def test_bare_install_undetectable_teaches(home, tmp_path, monkeypatch, capsys):
     assert "could not detect" in err and "bash|zsh|fish|pwsh|nushell" in err
 
 
+@_posix_shell
 @pytest.mark.skipif(shutil.which("zsh") is None, reason="zsh not installed")
 def test_detection_through_a_real_shell(home, tmp_path, monkeypatch):
-    """`zsh -c 'fm --install-completion'` must detect zsh — via the process
-    tree, since $SHELL may disagree with the shell actually running us."""
+    """`zsh -c '...'` must detect zsh — via the process tree, since $SHELL may
+    disagree with the shell actually running us. The trailing `:` matters: a
+    shell running `-c` with a single command exec-replaces itself, and an
+    exec'd-away shell is genuinely not in the process tree any more."""
     (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
     (tmp_path / "tasks.py").write_text(
         "from footman import task\n@task\ndef t(): ...\n"
@@ -261,7 +274,7 @@ def test_detection_through_a_real_shell(home, tmp_path, monkeypatch):
     monkeypatch.setenv("SHELL", "/bin/false")  # the login shell must not win
     venv_bin = Path(sys.executable).parent
     out = subprocess.run(
-        ["zsh", "-c", f'PATH="{venv_bin}:$PATH" fm --install-completion'],
+        ["zsh", "-c", f'PATH="{venv_bin}:$PATH"; fm --install-completion; :'],
         capture_output=True,
         text=True,
         timeout=60,
@@ -293,7 +306,7 @@ def test_detect_walks_past_uv_to_the_shell(monkeypatch):
         "run",
         _fake_ps({20: (10, "/opt/uv/uv"), 10: (1, "-zsh")}),
     )
-    assert _shellcomp.detect_shell() == "zsh"
+    assert _shellcomp._detect_posix() == "zsh"
 
 
 def test_detect_recognises_nu_by_process_name(monkeypatch):
@@ -303,21 +316,21 @@ def test_detect_recognises_nu_by_process_name(monkeypatch):
         "run",
         _fake_ps({20: (1, "/opt/homebrew/bin/nu")}),
     )
-    assert _shellcomp.detect_shell() == "nushell"
+    assert _shellcomp._detect_posix() == "nushell"
 
 
 def test_detect_falls_back_to_login_shell(monkeypatch):
     monkeypatch.setattr(_shellcomp.os, "getppid", lambda: 20)
     monkeypatch.setattr(_shellcomp.subprocess, "run", _fake_ps({}))  # ps knows nothing
     monkeypatch.setenv("SHELL", "/usr/local/bin/fish")
-    assert _shellcomp.detect_shell() == "fish"
+    assert _shellcomp._detect_posix() == "fish"
 
 
 def test_detect_gives_up_honestly(monkeypatch):
     monkeypatch.setattr(_shellcomp.os, "getppid", lambda: 20)
     monkeypatch.setattr(_shellcomp.subprocess, "run", _fake_ps({}))
     monkeypatch.setenv("SHELL", "/bin/tcsh")  # unsupported login shell
-    assert _shellcomp.detect_shell() is None
+    assert _shellcomp._detect_posix() is None
 
 
 def test_detect_stops_at_pid_one(monkeypatch):
@@ -329,7 +342,7 @@ def test_detect_stops_at_pid_one(monkeypatch):
         _fake_ps({30: (20, "python"), 20: (1, "launchd")}),
     )
     monkeypatch.delenv("SHELL", raising=False)
-    assert _shellcomp.detect_shell() is None
+    assert _shellcomp._detect_posix() is None
 
 
 # --- nushell -------------------------------------------------------------------
