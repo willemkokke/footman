@@ -62,6 +62,65 @@ def test_when_raising_predicate_reads_as_unavailable():
     assert result.exit_code == 2
 
 
+def test_requires_present_is_available():
+    def tasks(reg):
+        @reg.task(requires="io")  # a stdlib module: always importable
+        def publish(): ...
+
+    _, tree = _tree(tasks)
+    assert "disabled" not in tree["tasks"]["publish"]
+
+
+def test_requires_missing_is_listed_but_disabled():
+    def tasks(reg):
+        @reg.task(requires=["stripe_nope", "google_nope"])
+        def publish(): ...
+
+    _, tree = _tree(tasks)
+    assert tree["tasks"]["publish"]["disabled"] == "requires stripe_nope, google_nope"
+
+    reg, _ = _tree(tasks)
+    result = Runner().invoke("publish", tasks=reg)
+    assert result.exit_code == 2
+    assert "requires stripe_nope" in str(result.results[0].error)
+
+
+def test_requires_custom_reason():
+    def tasks(reg):
+        @reg.task(requires="stripe_nope", reason="pip install devkit[release]")
+        def publish(): ...
+
+    _, tree = _tree(tasks)
+    assert tree["tasks"]["publish"]["disabled"] == "pip install devkit[release]"
+
+
+def test_requires_check_does_not_import(monkeypatch):
+    # Availability is find_spec-only: building the manifest for a task that
+    # requires a module must never import that module.
+    import sys
+
+    calls = []
+    real = __import__
+
+    def tracking_import(name, *a, **k):
+        if name == "textwrap":
+            calls.append(name)
+        return real(name, *a, **k)
+
+    sys.modules.pop("textwrap", None)
+    monkeypatch.delitem(sys.modules, "textwrap", raising=False)
+    monkeypatch.setattr("builtins.__import__", tracking_import)
+
+    def tasks(reg):
+        @reg.task(requires="textwrap")  # importable, but must stay unimported
+        def publish(): ...
+
+    _, tree = _tree(tasks)
+    assert "disabled" not in tree["tasks"]["publish"]  # found via find_spec
+    assert calls == []  # ...without importing it
+    assert "textwrap" not in sys.modules
+
+
 def test_disabled_prerequisite_fails_the_dependent():
     ran = []
 

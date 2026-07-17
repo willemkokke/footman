@@ -21,6 +21,16 @@ versions may include breaking changes.
 
 ### Added
 
+- **`@task(requires=...)` — gate a task on optional dependencies,
+  import-free.** Names Python modules a task needs, checked with
+  `importlib.util.find_spec` (which locates without importing), so a shared
+  library can carry release tasks with heavy third-party deps: keep the
+  `import` in the body (paid only when the task runs), and a missing package
+  lists the task as `(unavailable: <reason>)` and refuses to run cleanly,
+  instead of a raw `ModuleNotFoundError`. Reuses the `when=` availability
+  machinery — shown in `--list`/`--help`, re-checked live, a `pre`/`post`
+  on it fails hard. New docs: *A shared library with heavy or optional
+  dependencies* in Composing tasks.
 - **`off` — disable a flag a tool turns on by default.** `False`/`None`
   mean *omit* (so a task parameter's default flows through), which left no
   way to spell a negation. `strict=off` → `--no-strict` fills the gap and

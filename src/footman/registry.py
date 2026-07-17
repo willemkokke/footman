@@ -75,6 +75,7 @@ class Group:
         pre: Sequence[Task] = (),
         post: Sequence[Task] = (),
         when: bool | Callable[[], object] = True,
+        requires: str | Sequence[str] = (),
         reason: str = "",
     ) -> Callable[[Task], Task]: ...
 
@@ -86,6 +87,7 @@ class Group:
         pre: Sequence[Task] = (),
         post: Sequence[Task] = (),
         when: bool | Callable[[], object] = True,
+        requires: str | Sequence[str] = (),
         reason: str = "",
     ) -> Task | Callable[[Task], Task]:
         """Register a function as a task.
@@ -109,18 +111,38 @@ class Group:
         def up(): ...
         ```
 
+        `requires` names Python modules the task needs — checked with
+        `importlib.util.find_spec`, which **does not import them**. The task
+        is listed as unavailable (with a taught reason) when a module is
+        absent, so a shared library can carry tasks with heavy optional
+        dependencies: keep the actual `import` in the body, so the cost is
+        paid only when the task runs, and mark the requirement here so a
+        missing dependency reads as a clean message, not an import crash:
+
+        ```python
+        @task(requires="stripe", reason="pip install devkit[release]")
+        def publish(version: str):
+            import stripe  # only imported when publish actually runs
+            ...
+        ```
+
         A callable `when` is re-evaluated live on every run — the cached
         manifest is never trusted for availability. To *hide* a task
         entirely, use plain Python: `if sys.platform == "darwin": @task ...`
         """
+
+        reqs = (requires,) if isinstance(requires, str) else tuple(requires)
 
         def register(fn: Task) -> Task:
             key = _cli_name(name or fn.__name__)
             self._claim(key)
             fn._footman_pre = list(pre)  # type: ignore[attr-defined]
             fn._footman_post = list(post)  # type: ignore[attr-defined]
+            if reqs:
+                fn._footman_requires = reqs  # type: ignore[attr-defined]
             if when is not True:
                 fn._footman_when = when  # type: ignore[attr-defined]
+            if reason:
                 fn._footman_reason = reason  # type: ignore[attr-defined]
             self.tasks[key] = fn
             return fn
@@ -150,18 +172,35 @@ def reset() -> None:
     root.groups.clear()
 
 
+def _importable(module: str) -> bool:
+    """True if *module* can be imported — checked WITHOUT importing it."""
+    import importlib.util
+
+    try:
+        return importlib.util.find_spec(module) is not None
+    except (ImportError, ValueError):
+        return False
+
+
 def availability(fn: Task) -> str | None:
     """The reason a task is unavailable here, or `None` if it can run.
 
-    A callable `when` is evaluated *live* — never from the cached manifest —
-    so `DOCKER_HOST=… fm up` works the moment the environment does. A
-    predicate that raises reads as unavailable with the exception named
-    (a broken predicate must not grant availability).
+    `requires` modules are checked import-free (`find_spec`); a callable
+    `when` is evaluated *live* — never from the cached manifest — so
+    `DOCKER_HOST=… fm up` works the moment the environment does. A predicate
+    that raises reads as unavailable with the exception named (a broken
+    predicate must not grant availability).
     """
+    custom = getattr(fn, "_footman_reason", "")
+
+    missing = [m for m in getattr(fn, "_footman_requires", ()) if not _importable(m)]
+    if missing:
+        return custom or f"requires {', '.join(missing)}"
+
     when = getattr(fn, "_footman_when", True)
     if when is True:
         return None
-    reason = getattr(fn, "_footman_reason", "") or "condition not met"
+    reason = custom or "condition not met"
     if callable(when):
         try:
             ok = bool(when())
