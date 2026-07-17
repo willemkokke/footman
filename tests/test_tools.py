@@ -165,6 +165,90 @@ def test_zero_arg_entries_fall_back_to_argv_patching(monkeypatch):
     assert sys.argv == saved
 
 
+def test_mixed_tool_output_is_never_interleaved(monkeypatch, capsys, tmp_path):
+    """Eight virtual tools — half in-process, half real subprocesses of the
+    same script — printing name+counter with overlap-forcing sleeps. The
+    aggregate stream must be perfectly block-contiguous per tool, and every
+    tool's lines strictly incremental."""
+    import re
+    import time
+
+    from footman import manifest, schedule
+    from footman.registry import Group
+    from footman.split import split_chain
+
+    lines, tool_count = 20, 8
+    script = tmp_path / "vtool.py"
+    script.write_text(
+        "import sys, time\n"
+        "name, count = sys.argv[1], int(sys.argv[2])\n"
+        "for i in range(1, count + 1):\n"
+        '    print(f"{name} {i}", flush=True)\n'
+        "    time.sleep(0.005)\n"
+    )
+
+    def make_entry(name):
+        def entry(argv):  # accepts args -> the parallel, lock-free path
+            for i in range(1, int(argv[0]) + 1):
+                print(f"{name} {i}", flush=True)
+                time.sleep(0.005)
+            return 0
+
+        return entry
+
+    names = [f"vtool-{i}" for i in range(tool_count)]
+    entries = {n: make_entry(n) for i, n in enumerate(names) if i % 2 == 0}
+    monkeypatch.setattr(tools, "_console_entry", entries.get)
+
+    reg = Group("root")
+    for i, name in enumerate(names):
+        if i % 2 == 0:
+
+            def body(n=name):
+                tools.Tool(n, in_process=True)(str(lines))
+
+        else:
+
+            def body(n=name):
+                tools.python(str(script), n, str(lines))
+
+        reg.task(name=name)(body)
+
+    tree = manifest.build_manifest(reg)["tree"]
+    _, segments = split_chain(tree, names)
+    started = time.perf_counter()
+    results = schedule.run_plan(reg, segments, ctx_config={"verbose": True})
+    wall = time.perf_counter() - started
+    # Guard against vacuity: serialised execution would need >= 8 * 100 ms of
+    # sleeps alone. Well under that proves the tools genuinely overlapped —
+    # the non-interleaving below is achieved despite concurrency, not by
+    # accidentally losing it.
+    serial_floor = tool_count * lines * 0.005
+    assert wall < serial_floor * 0.75, f"tools appear serialised ({wall:.2f}s)"
+
+    # Level 1: each step captured only its own tool, in strict order.
+    by_task = {r.task: r for r in results}
+    assert len(by_task) == tool_count and all(r.ok for r in results)
+    for name in names:
+        got = by_task[name].steps[0].output.strip().splitlines()
+        assert got == [f"{name} {i}" for i in range(1, lines + 1)]
+
+    # Level 2: the aggregate stream is block-contiguous — 100% un-interleaved.
+    counted = [
+        m.groups()
+        for line in capsys.readouterr().out.splitlines()
+        if (m := re.fullmatch(r"(vtool-\d+) (\d+)", line))
+    ]
+    assert len(counted) == tool_count * lines
+    seen_blocks = [name for name, _ in counted[::lines]]
+    assert sorted(seen_blocks) == sorted(names)  # eight blocks, one per tool
+    for start in range(0, len(counted), lines):
+        block = counted[start : start + lines]
+        block_name = block[0][0]
+        assert all(name == block_name for name, _ in block)
+        assert [int(i) for _, i in block] == list(range(1, lines + 1))
+
+
 def test_in_process_preference_survives_subcommand_chaining():
     # `.report` chains off the in-process coverage tool and keeps the mode
     # (checked without executing: real coverage mid-test-session would read
