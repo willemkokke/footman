@@ -7,6 +7,21 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- **The tools bridge runs Python tools in-process.** `Tool(...,
+  in_process=True)` (or `in_process=True` per call) resolves the tool's own
+  `[console_scripts]` entry point and calls it with `sys.argv` patched —
+  the no-transcription contract, minus the interpreter spawn. `mkdocs`,
+  `zensical`, and `coverage` default to it. Beyond speed this is a
+  correctness fix on macOS, where SIP strips `DYLD_*` from child processes:
+  a tool needing Homebrew's native libraries (mkdocs + cairo) only works
+  in-process. Preferences fall back to a subprocess when no entry point
+  exists; per-call demands error with a taught message. In-process runs
+  are serialised (they touch process-global state — `sys.argv` and the
+  capture redirect, which previously raced under the parallel scheduler);
+  subprocess tools keep their full parallelism.
+
 ## [0.8.0] — 2026-07-17
 
 ### Added

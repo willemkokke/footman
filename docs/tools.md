@@ -78,9 +78,47 @@ a comparable int tuple.
 
 ### In-process where it pays
 
-`tools.pytest(...)` runs in-process via `pytest.main` when pytest is
-importable (no interpreter spawn); `tools.python(...)` targets the current
-interpreter; `tools.sh("...")` takes a whole command line as one string.
+The bridge composes with in-process execution the same way it does with
+flags: no transcription. Every installed Python CLI declares a
+`[console_scripts]` entry point; `in_process` resolves it and calls it with
+`sys.argv` patched — the tool runs inside footman's process, no interpreter
+spawn:
+
+```python
+tools.mkdocs.build(strict=True)                    # in-process by default
+tools.Tool("griffe", in_process=True)("dump", "footman")   # opt any tool in
+tools.coverage.html(in_process=False)              # ...or out, per call
+```
+
+`mkdocs`, `zensical`, and `coverage` default to in-process; `tools.pytest`
+keeps its dedicated `pytest.main` path. A *preference* (`Tool(...,
+in_process=True)`) falls back to a subprocess when no entry point is
+installed; a *demand* (`in_process=True` at the call) errors with a taught
+message instead. `nofail` and `in_process` are the two reserved keywords —
+everything else translates to flags.
+
+Beyond speed, in-process is sometimes the only correct option. On macOS,
+SIP strips `DYLD_*` variables from child processes, so a tool that needs
+Homebrew's native libraries (mkdocs with cairo, for social cards) can never
+see them as a subprocess — but in-process, an env var set before the first
+cffi import sticks:
+
+```python
+@task
+def docs():
+    if sys.platform == "darwin":            # SIP strips DYLD_* from children;
+        os.environ.setdefault(              # in-process, this survives
+            "DYLD_FALLBACK_LIBRARY_PATH", "/opt/homebrew/lib"
+        )
+    tools.mkdocs.build(strict=True)
+```
+
+One honest trade: in-process runs touch process-global state (`sys.argv`,
+the capture redirect), so footman serialises them — two in-process tools
+queue behind each other while subprocess tools keep their full parallelism.
+
+`tools.python(...)` targets the current interpreter; `tools.sh("...")`
+takes a whole command line as one string.
 
 ### Sharing tools between projects
 
