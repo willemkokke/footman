@@ -33,7 +33,7 @@ if TYPE_CHECKING:
     from footman.registry import reset as reset
     from footman.registry import task as task
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 __all__ = [
     "App",
     "Brand",
