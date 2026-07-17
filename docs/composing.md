@@ -87,6 +87,42 @@ of a tasks file is the one form to avoid: the import executes the provider's
 decorators against *your* registry, all-or-nothing, sensitive to import
 order. `include()` exists so you never need it.
 
+### A shared library with heavy or optional dependencies
+
+Say you keep release tasks in a `devkit` library, and some need heavy
+third-party packages (an API client, a cloud SDK). You want to
+`include("devkit.tasks")` at the top of your monorepo's `tasks.py` without
+paying those imports on every `fm lint`. You already can — the lever is
+where the heavy `import` lives:
+
+```python
+# devkit/tasks.py
+from footman import task
+
+@task(requires="stripe", reason="pip install devkit[release]")
+def publish(version: str):
+    "Cut and publish a release."
+    import stripe          # imported only when publish actually runs
+    ...
+```
+
+`include()` imports `devkit.tasks` to read task *signatures* for the
+manifest, listing, and completion — it never runs a body. So a body-level
+`import stripe` costs nothing until `fm publish` executes; `fm lint`,
+`fm --list`, and every `<TAB>` stay clean. (Keep your CLI parameter types
+cheap — `version: str`, `dry_run: bool` — for the same reason; an exotic
+annotation is the one thing signature introspection might try to resolve.)
+
+`requires=` closes the last gap: the *optional* dependency. It names modules
+the task needs, checked with `importlib.util.find_spec` — which locates them
+**without importing** — so a missing package makes the task list as
+`(unavailable: pip install devkit[release])` and refuse to run with that
+message, instead of crashing with a raw `ModuleNotFoundError`. Installed or
+not, the check never imports the package; your body still does, only when it
+runs. (`find_spec` is import-free for a top-level distribution; a deeply
+dotted name like `google.cloud.storage` imports its parent packages, so name
+the top-level dist where you can.)
+
 ## Packages advertising tasks — `footman.tasks` entry points
 
 A package publishes a `Group` under the `footman.tasks` entry point:
