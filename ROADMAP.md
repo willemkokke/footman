@@ -390,6 +390,11 @@ Not gating anything, in rough order of how much I want them:
 - **Watch mode** — `fm --watch lint`: re-run on file change, debounced.
 - **JSONL event streaming** — `--json` today is a summary; agents and CI
   dashboards want per-event lines as tasks start/finish.
+- **Task-customizable `--json` payloads** — let a task contribute structured
+  data to its own entry in the envelope (a returned dict, or something like
+  `ctx.json["artifact"] = path`). Deliberately not designed yet: needs
+  thinking about schema stability (the envelope promises additive-only),
+  reserved keys, and how it composes with steps. Parked so it isn't lost.
 - **Fingerprint-based skipping** — "inputs unchanged, skip the task"
   (doit/turborepo territory; big, and the DAG is already in place).
 - **Per-task timeout and retry** — `@task(timeout=120, retries=2)`.

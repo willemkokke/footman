@@ -22,8 +22,8 @@ from dataclasses import dataclass
 from pathlib import Path, PurePath
 from typing import Annotated, Any
 
+from footman.params import _PathRequirement, between, check, env, suggest
 from footman.params import nosplit as _NOSPLIT
-from footman.params import suggest
 
 _TAG_ORDER = {"bool": 0, "int": 1, "float": 2, "path": 3, "str": 4}
 
@@ -80,12 +80,20 @@ class Peeled:
     mapping: bool = False  # a dict[K, V] parameter?
     key: Any = None  # mapping key type
     value_multiple: bool = False  # mapping value is a list (dict[K, list[E]])
+    path_req: str | None = None  # exists / file / dir requirement on a Path
+    bounds: tuple[float | None, float | None] | None = None  # inclusive lo/hi
+    env: str | None = None  # environment-variable fallback
+    checks: tuple[Any, ...] = ()  # post-coercion validators (check(fn))
 
 
 def peel(ann: Any) -> Peeled:
     """Normalize a parameter annotation into (multiple, element, completer)."""
     completer: suggest | None = None
     is_nosplit = False
+    path_req: str | None = None
+    bounds: tuple[float | None, float | None] | None = None
+    env_var: str | None = None
+    checks: tuple[Any, ...] = ()
 
     # Strip Annotated and Optional wrappers in any order/nesting, e.g. both
     # `Annotated[list[X], nosplit] | None` and `Annotated[list[X] | None, nosplit]`.
@@ -99,6 +107,17 @@ def peel(ann: Any) -> Peeled:
                     completer = mark
                 elif mark is _NOSPLIT:
                     is_nosplit = True
+                elif isinstance(mark, _PathRequirement):
+                    path_req = mark.kind
+                elif isinstance(mark, between):
+                    bounds = (mark.lo, mark.hi)
+                elif isinstance(mark, range):
+                    # A bare range: Python's half-open semantics, ints only.
+                    bounds = (mark.start, mark.stop - 1)
+                elif isinstance(mark, env):
+                    env_var = mark.var
+                elif isinstance(mark, check):
+                    checks = (*checks, mark.fn)
                 elif callable(mark) and not isinstance(mark, type):
                     completer = suggest(mark)  # a bare callable == suggest(fn)
             ann, changed = base, True
@@ -106,6 +125,13 @@ def peel(ann: Any) -> Peeled:
             members = _strip_none(list(typing.get_args(ann)))
             if len(members) == 1:
                 ann, changed = members[0], True
+
+    markers = {
+        "path_req": path_req,
+        "bounds": bounds,
+        "env": env_var,
+        "checks": checks,
+    }
 
     if typing.get_origin(ann) is dict:  # dict[K, V]
         kv = typing.get_args(ann)
@@ -120,11 +146,12 @@ def peel(ann: Any) -> Peeled:
             mapping=True,
             key=key_type,
             value_multiple=value.multiple,
+            **markers,
         )
 
     if typing.get_origin(ann) is list:  # list[X] / Many[X]
         element = (typing.get_args(ann) or (str,))[0]
-        return Peeled(True, element, completer, is_nosplit)
+        return Peeled(True, element, completer, is_nosplit, **markers)
 
     if _is_union(ann):
         members = _strip_none(list(typing.get_args(ann)))
@@ -134,10 +161,10 @@ def peel(ann: Any) -> Peeled:
             for lm in lists:
                 parts += list(typing.get_args(lm)) or [str]
             parts += [m for m in members if typing.get_origin(m) is not list]
-            return Peeled(True, _union_of(parts), completer, is_nosplit)
-        return Peeled(False, ann, completer, is_nosplit)  # scalar union
+            return Peeled(True, _union_of(parts), completer, is_nosplit, **markers)
+        return Peeled(False, ann, completer, is_nosplit, **markers)  # scalar union
 
-    return Peeled(False, ann, completer, is_nosplit)  # plain scalar
+    return Peeled(False, ann, completer, is_nosplit, **markers)  # plain scalar
 
 
 def is_flag(element: Any) -> bool:

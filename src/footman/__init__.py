@@ -25,7 +25,14 @@ if TYPE_CHECKING:
     from footman.context import parallel as parallel
     from footman.context import passthrough as passthrough
     from footman.context import run as run
+    from footman.context import use_context as use_context
     from footman.params import Many as Many
+    from footman.params import between as between
+    from footman.params import check as check
+    from footman.params import env as env
+    from footman.params import exists as exists
+    from footman.params import isdir as isdir
+    from footman.params import isfile as isfile
     from footman.params import nosplit as nosplit
     from footman.params import suggest as suggest
     from footman.registry import Group as Group
@@ -42,7 +49,13 @@ __all__ = [
     "Many",
     "RunFailed",
     "__version__",
+    "between",
+    "check",
+    "env",
+    "exists",
     "group",
+    "isdir",
+    "isfile",
     "main",
     "nosplit",
     "parallel",
@@ -50,6 +63,7 @@ __all__ = [
     "run",
     "suggest",
     "task",
+    "use_context",
 ]
 
 
@@ -74,11 +88,28 @@ def __getattr__(name: str) -> object:
         from footman import registry
 
         return getattr(registry, name)
-    if name in ("suggest", "Many", "nosplit"):
+    if name in (
+        "suggest",
+        "Many",
+        "nosplit",
+        "exists",
+        "isfile",
+        "isdir",
+        "between",
+        "env",
+        "check",
+    ):
         from footman import params
 
         return getattr(params, name)
-    if name in ("run", "parallel", "Context", "passthrough", "RunFailed"):
+    if name in (
+        "run",
+        "parallel",
+        "Context",
+        "passthrough",
+        "RunFailed",
+        "use_context",
+    ):
         from footman import context
 
         return getattr(context, name)
