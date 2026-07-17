@@ -7,6 +7,8 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-07-17
+
 ### Added
 
 - **A real help story.** `fm --help` documents the runner itself (usage
@@ -136,7 +138,8 @@ versions may include breaking changes.
 
 - Placeholder release claiming the `footman` name on PyPI. Not tagged in git.
 
-[Unreleased]: https://github.com/willemkokke/footman/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/willemkokke/footman/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/willemkokke/footman/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/willemkokke/footman/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/willemkokke/footman/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/willemkokke/footman/compare/v0.1.0...v0.2.0
