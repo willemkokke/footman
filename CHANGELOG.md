@@ -28,6 +28,13 @@ versions may include breaking changes.
   last resort. Undetectable → a taught error naming the five options.
   Verified through a real shell with `$SHELL` deliberately lying.
 
+### Docs
+
+- Two new pages: **CI & automation** (the `--json` envelope contract, exit
+  codes, keep-going/sequential in CI, agents) and **Troubleshooting** — a
+  catalogue of every taught error, generated against real output, with the
+  standing invitation that a raw traceback is a footman bug.
+
 ### CI
 
 - **Every completion hook is now functionally tested against its real
