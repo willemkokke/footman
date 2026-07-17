@@ -85,3 +85,28 @@ def test_plus_resets_the_segment(tree):
 
 def test_nothing_after_passthrough(tree):
     assert complete(tree, ["check", "--", "anything", ""]) == []
+
+
+def test_given_options_are_not_reoffered(tree):
+    # `fm lint --fix <TAB>` must not suggest --fix again — a flag binds once.
+    out = complete(tree, ["lint", "--fix", ""])
+    assert "--fix" not in out
+    assert "--mode" in out  # the unused ones remain
+    assert complete(tree, ["lint", "--fix", "--f"]) == []
+
+
+def test_negated_flag_counts_as_used(tree):
+    out = complete(tree, ["lint", "--no-fix", ""])
+    assert "--fix" not in out
+
+
+def test_repeatable_options_stay_offered(tree):
+    # --paths is list-valued: repeating it is the grammar, keep offering it.
+    out = complete(tree, ["lint", "--paths", "a", ""])
+    assert "--paths" in out
+
+
+def test_used_options_reset_per_segment(tree):
+    # --fix bound to the first lint segment; a second task starts fresh.
+    out = complete(tree, ["lint", "--fix", "check", "lint", ""])
+    assert "--fix" in out

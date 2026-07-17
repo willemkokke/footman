@@ -33,6 +33,7 @@ class _Segment:
         self.fixed: list[dict] = []
         self.rest: dict | None = None
         self.filled = 0
+        self.used: set[str] = set()  # options already given in this segment
         if task is not None:
             params = task["params"]
             self.opts = {
@@ -86,10 +87,12 @@ def complete(tree: dict, words: list[str]) -> list[str]:
         # Inside a task's tail: options and their values first.
         name = word.split("=", 1)[0]
         if name in seg.opts:
+            seg.used.add(name)
             if seg.opts[name]["kind"] == "option" and "=" not in word:
                 value_opt = seg.opts[name]
             continue
         if name.startswith("--no-") and "--" + name[len("--no-") :] in seg.opts:
+            seg.used.add("--" + name[len("--no-") :])
             continue
         if word.startswith("-"):
             continue
@@ -115,10 +118,15 @@ def complete(tree: dict, words: list[str]) -> list[str]:
         names = list(node["groups"]) + list(node["tasks"])
         return [n for n in names if n.startswith(partial)]
 
-    # Option position: this task's flags/options, plus what the next bare
-    # word could be — the pending positional's choices, the trailing
+    # Option position: this task's flags/options — minus the ones already
+    # given, unless the param legitimately repeats — plus what the next bare
+    # word could be: the pending positional's choices, the trailing
     # consumer's choices, or (arity satisfied) the next segment's names.
-    candidates = list(seg.opts)
+    candidates = [
+        name
+        for name, p in seg.opts.items()
+        if name not in seg.used or p.get("multiple") or p.get("mapping")
+    ]
     if seg.filled < len(seg.fixed):
         candidates += seg.fixed[seg.filled].get("choices", [])
     elif seg.rest is not None:
