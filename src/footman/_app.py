@@ -403,8 +403,8 @@ def _install_completion(shell: object) -> int:
     from footman import _shellcomp
 
     name = str(shell or "").lower()
-    if name == "powershell":  # muscle-memory alias
-        name = "pwsh"
+    aliases = {"powershell": "pwsh", "nu": "nushell"}  # muscle-memory aliases
+    name = aliases.get(name, name)
     if name not in _shellcomp.SHELLS:
         supported = "|".join(_shellcomp.SHELLS)
         got = f" (got {name!r})" if name else ""

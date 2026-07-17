@@ -97,6 +97,65 @@ def test_pwsh_missing_is_a_taught_error(home, tmp_path, monkeypatch, capsys):
     assert "not found on PATH" in capsys.readouterr().err
 
 
+# --- nushell -------------------------------------------------------------------
+
+
+def test_nushell_install_writes_script_and_config_line(home, monkeypatch):
+    config = home / "nu-config" / "config.nu"
+    monkeypatch.setattr(_shellcomp, "_nu_config_path", lambda: config)
+    _shellcomp.install("nushell", "fm")
+    _shellcomp.install("nushell", "fm")  # idempotent
+    script = home / ".local" / "share" / "fm" / "completion.nu"
+    body = script.read_text()
+    assert "$env.config.completions.external.completer" in body
+    assert "^fm --complete --" in body
+    assert "__fm_prev" in body  # wraps, never replaces, an existing completer
+    assert config.read_text().count("completion.nu") == 1
+
+
+def test_nu_missing_is_a_taught_error(home, tmp_path, monkeypatch, capsys):
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
+    (tmp_path / "tasks.py").write_text(
+        "from footman import task\n@task\ndef t(): ...\n"
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(_shellcomp.shutil, "which", lambda _: None)
+    assert _app.run(["--install-completion", "nu"]) == 2  # alias accepted
+    assert "not found on PATH" in capsys.readouterr().err
+
+
+@pytest.mark.skipif(shutil.which("nu") is None, reason="nushell not installed")
+def test_nushell_completion_functional(home, tmp_path, monkeypatch):
+    """The generated hook, sourced and invoked by a real nushell."""
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
+    (tmp_path / "tasks.py").write_text(
+        'from footman import task\n\n@task\ndef lint(fix: bool = False):\n    "Lint."\n'
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("XDG_CACHE_HOME", str(home / ".cache"))
+    assert _app.run(["--list"]) == 0  # builds the manifest the hot path serves
+
+    script = home / "completion.nu"
+    script.write_text(_shellcomp.script_for("nushell", "fm"), encoding="utf-8")
+    venv_bin = Path(sys.executable).parent
+    nu_script = (
+        f"$env.PATH = ($env.PATH | prepend '{venv_bin}')\n"
+        f'source "{script}"\n'
+        "do $env.config.completions.external.completer [fm li] | to text\n"
+        'do $env.config.completions.external.completer [fm lint ""] | to text\n'
+    )
+    out = subprocess.run(
+        ["nu", "-c", nu_script],
+        capture_output=True,
+        text=True,
+        timeout=90,
+        cwd=tmp_path,
+    )
+    assert out.returncode == 0, out.stderr
+    assert "lint" in out.stdout.split()
+    assert "--fix" in out.stdout.split()
+
+
 @pytest.mark.skipif(shutil.which("pwsh") is None, reason="pwsh not installed")
 def test_pwsh_completion_functional(home, tmp_path, monkeypatch):
     """The generated completer, driven by PowerShell's own completion engine."""

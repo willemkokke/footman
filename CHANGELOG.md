@@ -15,6 +15,19 @@ versions may include breaking changes.
   and Windows PowerShell alike. Idempotent, branded, and covered by a
   functional test that drives PowerShell's own completion engine on every CI
   platform.
+- **nushell completion installer.** `fm --install-completion nushell` (alias:
+  `nu`) writes an external-completer hook sourced from the config nushell
+  itself reports (`$nu.config-path`). The hook *wraps* any existing external
+  completer (carapace, …) — it answers for `fm` and passes every other
+  command through. Verified against a real nushell. Every shell footman
+  promised is now installed with one command.
+
+### Fixed
+
+- Completion no longer re-offers an option the segment already has —
+  `fm lint --fix <TAB>` suggests what can still bind, not `--fix` again.
+  Repeatable (`list`/`dict`) options rightly stay on offer, and a fresh
+  segment starts with a clean slate.
 
 ## [0.7.0] — 2026-07-17
 
