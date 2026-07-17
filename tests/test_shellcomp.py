@@ -147,6 +147,66 @@ def test_detection_through_a_real_shell(home, tmp_path, monkeypatch):
     assert (home / ".local" / "share" / "fm" / "completion.zsh").exists()
 
 
+def _fake_ps(tree: dict[int, tuple[int, str]]):
+    """A subprocess.run stand-in serving `ps -p PID -o ppid=,comm=` from a dict."""
+
+    def run(cmd, **kwargs):
+        pid = int(cmd[2])
+        if pid not in tree:
+            return subprocess.CompletedProcess(cmd, 1, "", "")
+        ppid, comm = tree[pid]
+        return subprocess.CompletedProcess(cmd, 0, f"{ppid} {comm}\n", "")
+
+    return run
+
+
+def test_detect_walks_past_uv_to_the_shell(monkeypatch):
+    # fm's parent is uv (pid 20), uv's parent is a login zsh (pid 10).
+    monkeypatch.setattr(_shellcomp.os, "getppid", lambda: 20)
+    monkeypatch.setattr(
+        _shellcomp.subprocess,
+        "run",
+        _fake_ps({20: (10, "/opt/uv/uv"), 10: (1, "-zsh")}),
+    )
+    assert _shellcomp.detect_shell() == "zsh"
+
+
+def test_detect_recognises_nu_by_process_name(monkeypatch):
+    monkeypatch.setattr(_shellcomp.os, "getppid", lambda: 20)
+    monkeypatch.setattr(
+        _shellcomp.subprocess,
+        "run",
+        _fake_ps({20: (1, "/opt/homebrew/bin/nu")}),
+    )
+    assert _shellcomp.detect_shell() == "nushell"
+
+
+def test_detect_falls_back_to_login_shell(monkeypatch):
+    monkeypatch.setattr(_shellcomp.os, "getppid", lambda: 20)
+    monkeypatch.setattr(_shellcomp.subprocess, "run", _fake_ps({}))  # ps knows nothing
+    monkeypatch.setenv("SHELL", "/usr/local/bin/fish")
+    assert _shellcomp.detect_shell() == "fish"
+
+
+def test_detect_gives_up_honestly(monkeypatch):
+    monkeypatch.setattr(_shellcomp.os, "getppid", lambda: 20)
+    monkeypatch.setattr(_shellcomp.subprocess, "run", _fake_ps({}))
+    monkeypatch.setenv("SHELL", "/bin/tcsh")  # unsupported login shell
+    assert _shellcomp.detect_shell() is None
+
+
+def test_detect_stops_at_pid_one(monkeypatch):
+    # An unbroken chain of non-shells must terminate, not loop.
+    monkeypatch.setattr(_shellcomp.os, "getppid", lambda: 30)
+    monkeypatch.setattr(
+        _shellcomp.subprocess,
+        "run",
+        _fake_ps({30: (20, "python"), 20: (1, "launchd")}),
+    )
+    monkeypatch.delenv("SHELL", raising=False)
+    assert _shellcomp.detect_shell() is None
+
+
 # --- nushell -------------------------------------------------------------------
 
 
