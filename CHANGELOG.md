@@ -9,6 +9,15 @@ versions may include breaking changes.
 
 ### Added
 
+- **Tool autocompletion via stubs — zero runtime cost.** `tools.pyi` gives
+  IDEs and type checkers typed verbs and common flags for the curated
+  tools (`tools.ruff.check(` completes `fix=`, `select=`, …; `fix="yes"`
+  is a type error), while the runtime bridge stays a few mechanical lines
+  the stub never touches. Every stubbed verb ends in `**flags: Any` and
+  unknown verbs fall through to `Tool`, so the stub can suggest but never
+  forbid — drift degrades a hint, not a run. `None` is typed as the omit
+  sentinel everywhere, matching the translation rules.
+
 - **The tools bridge runs Python tools in-process.** `Tool(...,
   in_process=True)` (or `in_process=True` per call) resolves the tool's own
   `[console_scripts]` entry point and calls it with `sys.argv` patched —
