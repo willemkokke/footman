@@ -42,7 +42,7 @@ if TYPE_CHECKING:
     from footman.registry import group as group
     from footman.registry import task as task
 
-__version__ = "0.5.0"
+__version__ = "0.7.0"
 __all__ = [
     "App",
     "Brand",
