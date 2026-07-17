@@ -420,8 +420,11 @@ def _install_completion(shell: object) -> int:
         got = f" (got {name!r})" if name else ""
         _error(f"--install-completion expects one of {supported}{got}")
         return 2
+    # Windows PowerShell and pwsh keep different $PROFILEs; an explicit
+    # `powershell` must land in the shell the user actually asked for.
+    asked_powershell = str(shell).lower() == "powershell"
     try:
-        lines = _shellcomp.install(name, _brand.prog)
+        lines = _shellcomp.install(name, _brand.prog, powershell_first=asked_powershell)
     except _shellcomp.InstallError as exc:
         _error(f"--install-completion {name}: {exc}")
         return 2
