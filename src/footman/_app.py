@@ -402,15 +402,28 @@ def _install_completion(shell: object) -> int:
 # --- orchestration -----------------------------------------------------------
 
 
-def run(argv: list[str], brand: Brand = DEFAULT_BRAND) -> int:
+def run(
+    argv: list[str],
+    brand: Brand = DEFAULT_BRAND,
+    collect: list[executor.TaskResult] | None = None,
+) -> int:
+    """Run the CLI; when *collect* is given, extend it with the TaskResults.
+
+    `collect` exists for `footman.testing.Runner`, which needs the structured
+    results as well as the exit code and printed output.
+    """
     try:
-        return _run(argv, brand)
+        return _run(argv, brand, collect)
     except KeyboardInterrupt:
         _error("interrupted")
         return 130
 
 
-def _run(argv: list[str], brand: Brand) -> int:
+def _run(
+    argv: list[str],
+    brand: Brand,
+    collect: list[executor.TaskResult] | None = None,
+) -> int:
     global _brand
     _brand = brand
     try:
@@ -455,7 +468,7 @@ def _run(argv: list[str], brand: Brand) -> int:
 
     try:
         tree = manifest.sync_manifest(reg, Path.cwd())["tree"]
-    except manifest.CompleterError as exc:
+    except manifest.ManifestError as exc:  # broken completer, bad markers, …
         _error(str(exc))
         return 2
 
@@ -501,6 +514,9 @@ def _run(argv: list[str], brand: Brand) -> int:
     except split.ChainError as exc:  # e.g. passthrough with no *args
         _error(str(exc))
         return 2
+
+    if collect is not None:
+        collect.extend(results)
 
     if json_mode:
         _print_json(results)

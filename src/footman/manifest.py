@@ -25,6 +25,7 @@ import hashlib
 import inspect
 import json
 import os
+import warnings
 from pathlib import Path
 from typing import Any
 
@@ -36,13 +37,25 @@ from footman.registry import Group
 SCHEMA_VERSION = 1
 
 
-class CompleterError(Exception):
+class ManifestError(Exception):
+    """A tasks file describes a command surface footman cannot honour.
+
+    Raised at manifest-build time (the execution path) with a taught message;
+    the app layer reports it and exits 2.
+    """
+
+
+class CompleterError(ManifestError):
     """A strict dynamic completer failed while refreshing its choices.
 
-    Raised at manifest-build time (the execution path) so a broken completer
-    surfaces as a taught error instead of silently baking an empty choice list
-    — which would disable the very validation `strict=True` promises.
+    Raised so a broken completer surfaces as a taught error instead of
+    silently baking an empty choice list — which would disable the very
+    validation `strict=True` promises.
     """
+
+
+class SpecError(ManifestError):
+    """A parameter's markers are inconsistent (e.g. `env()` with no default)."""
 
 
 def resolved_signature(fn: Any) -> inspect.Signature:
@@ -87,6 +100,7 @@ def param_spec(param: inspect.Parameter) -> dict[str, Any]:
     if peeled.mapping:
         spec["kind"] = "option" if has_default else "argument"
         spec["mapping"] = True
+        _marker_keys(spec, peeled, param, has_default)
         if peeled.nosplit:
             spec["nosplit"] = True
         if (ktags := coerce.element_tags(peeled.key)) and ktags != ["str"]:
@@ -103,9 +117,11 @@ def param_spec(param: inspect.Parameter) -> dict[str, Any]:
         # Only a *scalar* bool is a --flag; `list[bool]` stays a repeatable
         # option whose tokens parse as booleans (true/false/1/0/yes/no/on/off).
         spec["kind"] = "flag"
+        _marker_keys(spec, peeled, param, has_default)
         return spec
 
     spec["kind"] = "option" if has_default else "argument"
+    _marker_keys(spec, peeled, param, has_default)
     if peeled.multiple:
         spec["multiple"] = True
         if peeled.nosplit:
@@ -121,7 +137,50 @@ def param_spec(param: inspect.Parameter) -> dict[str, Any]:
         spec["choices"] = choices
     elif (tags := coerce.element_tags(element)) and tags != ["str"]:
         spec["types"] = tags
+    elif not tags and not isinstance(element, type):
+        # The annotation resolves to nothing footman can coerce (a string
+        # that never resolved, a value, an exotic generic): values will pass
+        # through as plain text. Silent degrade is a debugging tax — say so.
+        warnings.warn(
+            f"footman: parameter {param.name!r}: annotation {element!r} is "
+            f"not a usable type; values are passed through as text",
+            stacklevel=2,
+        )
     return spec
+
+
+def _marker_keys(
+    spec: dict[str, Any],
+    peeled: coerce.Peeled,
+    param: inspect.Parameter,
+    has_default: bool,
+) -> None:
+    """Additive manifest keys for the `Annotated` markers (path/bounds/env).
+
+    `check(fn)` deliberately never lands in the manifest — functions don't
+    serialize (the same reason `_finish` strips `_completer`); it runs at
+    binding time instead.
+    """
+    if peeled.path_req is not None:
+        spec["path"] = peeled.path_req
+    if peeled.bounds is not None:
+        lo, hi = peeled.bounds
+        if lo is not None:
+            spec["min"] = lo
+        if hi is not None:
+            spec["max"] = hi
+    if peeled.env is not None:
+        if spec.get("mapping"):
+            raise SpecError(
+                f"<{param.name}>: env() is not supported on dict parameters"
+            )
+        if not has_default:
+            raise SpecError(
+                f"<{param.name}>: env({peeled.env!r}) needs a default — an "
+                f"env fallback makes the parameter optional, so it needs "
+                f"somewhere to fall"
+            )
+        spec["env"] = peeled.env
 
 
 def _run_completer(completer: suggest, memo: dict[int, list[str]]) -> list[str]:

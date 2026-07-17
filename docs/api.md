@@ -37,3 +37,25 @@ straight from the `footman` package (`from footman import task, run, App`).
 ::: footman.params.nosplit
 
 ::: footman.params.suggest
+
+::: footman.params.exists
+
+::: footman.params.isfile
+
+::: footman.params.isdir
+
+::: footman.params.between
+
+::: footman.params.env
+
+::: footman.params.check
+
+## Testing
+
+::: footman.context.use_context
+
+::: footman.testing.Runner
+
+::: footman.testing.Result
+
+::: footman.testing.recording

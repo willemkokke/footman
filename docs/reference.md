@@ -53,15 +53,20 @@ def wheel(): ...
 
 ## Runtime helpers
 
-| Import                     | Purpose                                              |
-| -------------------------- | ---------------------------------------------------- |
-| `run(cmd, ...)`            | run a command or callable in the task context        |
-| `parallel(*calls)`         | fan tasks/thunks out concurrently                    |
-| `passthrough()`            | arguments after `--` on the command line             |
-| `Context`                  | the task's context object (opt-in first parameter)   |
-| `Many[T]`, `nosplit`       | one-or-many; opt a collection out of comma-splitting |
-| `suggest[T, fn]`           | dynamic completion for a parameter                   |
-| `tools.*`                  | typed wrappers for ruff, basedpyright, pytest, uv, … |
+| Import                       | Purpose                                              |
+| ---------------------------- | ---------------------------------------------------- |
+| `run(cmd, ...)`              | run a command or callable in the task context        |
+| `parallel(*calls)`           | fan tasks/thunks out concurrently                    |
+| `passthrough()`              | arguments after `--` on the command line             |
+| `Context`, `use_context`     | the task context; install one from your own code     |
+| `Many[T]`, `nosplit`         | one-or-many; opt a collection out of comma-splitting |
+| `Annotated[T, suggest(fn)]`  | dynamic completion for a parameter                   |
+| `exists`, `isfile`, `isdir`  | require a `Path` value to exist on disk              |
+| `between(lo, hi)`            | inclusive numeric bounds (a bare `range` works too)  |
+| `env("VAR")`                 | fall back to an environment variable (CLI > env > default) |
+| `check(fn)`                  | custom post-coercion validator (`ValueError` rejects) |
+| `tools.*`                    | typed wrappers for ruff, basedpyright, pytest, uv, … |
+| `footman.testing`            | `Runner`/`Result` + `recording()` — see [Testing](testing.md) |
 
 ## Configuration keys
 

@@ -17,6 +17,7 @@ nav = [
   { "Chaining & parallelism" = "orchestration.md" },
   { "Monorepos & config" = "monorepos.md" },
   { "Running tools" = "tools.md" },
+  { "Testing your tasks" = "testing.md" },
   { "Completion" = "completion.md" },
   { "Custom CLI" = "custom-cli.md" },
   { "CLI reference" = "reference.md" },

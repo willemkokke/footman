@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import difflib
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from footman import coerce
@@ -86,6 +87,8 @@ def _check(
     choices: list | None = None,
     types: list | None = None,
     dynamic: dict | None = None,
+    path: str | None = None,
+    bounds: tuple | None = None,
 ) -> None:
     """Validate one string against choices or type tags; raise a taught error."""
     if choices is not None:
@@ -106,11 +109,47 @@ def _check(
     if types and not coerce.coerce_scalar(value, types)[0]:
         expected = " or ".join(str(_TYPE_PHRASE.get(t, t)) for t in types)
         raise ChainError(f"{where}: {label} expects {expected} (got {value!r})")
+    if path is not None:
+        _check_path(where, label, value, path)
+    if bounds is not None:
+        _check_bounds(where, label, value, types, bounds)
+
+
+_PATH_PHRASE = {
+    "exists": ("an existing path", Path.exists),
+    "file": ("an existing file", Path.is_file),
+    "dir": ("an existing directory", Path.is_dir),
+}
+
+
+def _check_path(where: str, label: str, value: str, req: str) -> None:
+    phrase, test = _PATH_PHRASE[req]
+    if not test(Path(value)):
+        raise ChainError(f"{where}: {label} must be {phrase} (got {value!r})")
+
+
+def _check_bounds(
+    where: str, label: str, value: str, types: list | None, bounds: tuple
+) -> None:
+    ok, number = coerce.coerce_scalar(value, types or ["int", "float"])
+    if not ok or isinstance(number, bool) or not isinstance(number, (int, float)):
+        return  # the types check above already taught the type error
+    lo, hi = bounds
+    if (lo is not None and number < lo) or (hi is not None and number > hi):
+        expect = (
+            f"at least {lo}"
+            if hi is None
+            else f"at most {hi}"
+            if lo is None
+            else f"between {lo} and {hi}"
+        )
+        raise ChainError(f"{where}: {label} must be {expect} (got {value!r})")
 
 
 def _validate(where: str, p: dict, value: str) -> None:
     """Eagerly validate a choice/typed value; raise a taught error if wrong."""
     label = f"<{p['name']}>" if p["kind"] == "argument" else f"--{p['name']}"
+    bounds = (p.get("min"), p.get("max")) if "min" in p or "max" in p else None
     _check(
         where,
         label,
@@ -118,6 +157,8 @@ def _validate(where: str, p: dict, value: str) -> None:
         choices=p.get("choices"),
         types=p.get("types"),
         dynamic=p.get("dynamic"),
+        path=p.get("path"),
+        bounds=bounds,
     )
 
 

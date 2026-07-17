@@ -7,6 +7,32 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- **A first-party testing story.** `footman.testing` ships `Runner.invoke`
+  (drive a full command line in-process: exit code, stdout/stderr, structured
+  `TaskResult`s, isolated completion cache), `recording()` (capture the
+  commands a block *would* run, silently, without executing), and re-exports
+  the new public `use_context()`. Three pytest fixtures — `fm`,
+  `fm_project`, `fm_record` — auto-load via a `pytest11` entry point; pytest
+  is still not a dependency (only pytest itself imports the module).
+  footman's own suite dogfoods them. New docs page: *Testing your tasks*.
+- **Validation markers**, all in the `Annotated` idiom: `exists` / `isfile` /
+  `isdir` path requirements and `between(lo, hi)` numeric bounds (a bare
+  `range` works for ints), both validated eagerly with taught errors;
+  `env("VAR")` fallbacks (CLI > env > default, the env value flowing through
+  the same coercion/bounds/checks as a CLI token); and `check(fn)` custom
+  validators, run post-coercion, per element for collections. `env()` on a
+  parameter without a default (or on a dict) is a taught build-time error.
+- **Opaque annotations warn.** A parameter whose annotation resolves to
+  nothing footman can coerce (an unresolved name, a value) now emits a
+  `UserWarning` instead of silently treating every value as text.
+
+### Docs
+
+- Fixed the dynamic-completion examples: the documented `suggest[str, fn]`
+  syntax never existed — the real form is `Annotated[str, suggest(fn)]`.
+
 ## [0.5.0] — 2026-07-17
 
 ### Added

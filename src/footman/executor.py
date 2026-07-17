@@ -14,11 +14,13 @@ returns a non-zero `int` exit code; failures stop the chain unless
 
 from __future__ import annotations
 
+import enum
 import inspect
 import io
+import os
 import time
 from dataclasses import dataclass, field
-from pathlib import Path
+from pathlib import Path, PurePath
 from typing import Any
 
 from footman import coerce
@@ -51,11 +53,73 @@ def resolve(root: Group, path: list[str]) -> Task:
     return node.tasks[path[-1]]
 
 
+_MISSING = object()
+
+
+def _run_checks(value: Any, peeled: coerce.Peeled, label: str) -> Any:
+    """Apply `check(fn)` validators to one coerced value (element-level)."""
+    for fn in peeled.checks:
+        try:
+            fn(value)
+        except ValueError as exc:
+            raise ValueError(f"{label}: {exc}") from exc
+    return value
+
+
+def _validate_env(value: Any, peeled: coerce.Peeled, label: str) -> Any:
+    """Validate an env-sourced value against the constraints the splitter
+    would have enforced eagerly for a CLI token (choices, bounds, path)."""
+    choices, _, _ = coerce.element_choices(peeled.element)
+    if choices is not None:
+        shown = str(value.value) if isinstance(value, enum.Enum) else str(value)
+        if shown not in choices:
+            raise ValueError(
+                f"{label} must be one of {'|'.join(choices)} (got {value!r})"
+            )
+    if (
+        peeled.bounds is not None
+        and isinstance(value, (int, float))
+        and not isinstance(value, bool)
+    ):
+        lo, hi = peeled.bounds
+        if (lo is not None and value < lo) or (hi is not None and value > hi):
+            raise ValueError(f"{label} must be between {lo} and {hi} (got {value!r})")
+    if peeled.path_req is not None and isinstance(value, PurePath):
+        tests = {"exists": Path.exists, "file": Path.is_file, "dir": Path.is_dir}
+        if not tests[peeled.path_req](Path(value)):
+            raise ValueError(f"{label}: {value} does not satisfy {peeled.path_req}")
+    return value
+
+
+def _env_value(param: inspect.Parameter, peeled: coerce.Peeled) -> Any:
+    """The env-fallback path for an absent option: CLI beats env beats default.
+
+    The env string flows through the same coercion, bounds, choices, and
+    `check(fn)` validators a CLI token would — it just runs at binding time
+    (the splitter never sees the environment).
+    """
+    raw = os.environ.get(peeled.env) if peeled.env is not None else None
+    if raw is None:
+        return _MISSING
+    label = f"--{param.name.replace('_', '-')} (from ${peeled.env})"
+
+    def one(token: str) -> Any:
+        value = _validate_env(coerce.coerce_one(token, peeled.element), peeled, label)
+        return _run_checks(value, peeled, label)
+
+    if peeled.multiple:
+        parts = [raw] if peeled.nosplit else [p for p in raw.split(",") if p] or [raw]
+        return [one(p) for p in parts]
+    return one(raw)
+
+
 def bind(seg: Segment, fn: Task) -> tuple[list[Any], dict[str, Any]]:
     """Turn a segment's string values into `(*args, **kwargs)` for *fn*.
 
     Coercion (union member selection, list handling, one-or-many collapse) goes
     through `footman.coerce`, the same module the manifest and splitter use.
+    `check(fn)` validators run here on the coerced values, and absent options
+    fall back to their `env()` variable before their default.
     """
     sig = resolved_signature(fn)
     empty = inspect.Parameter.empty
@@ -71,6 +135,12 @@ def bind(seg: Segment, fn: Task) -> tuple[list[Any], dict[str, Any]]:
 
         cli = param.name.replace("_", "-")
         if cli not in seg.values:
+            if param.annotation is not empty:
+                peeled = coerce.peel(param.annotation)
+                if peeled.env is not None:
+                    value = _env_value(param, peeled)
+                    if value is not _MISSING:
+                        kwargs[param.name] = value
             continue
         raw = seg.values[cli]
         if isinstance(raw, bool):  # a flag, already resolved by the splitter
@@ -81,11 +151,12 @@ def bind(seg: Segment, fn: Task) -> tuple[list[Any], dict[str, Any]]:
             continue
 
         peeled = coerce.peel(param.annotation)
+        label = f"--{cli}"
         if peeled.mapping:
             result: dict[Any, Any] = {}
             for key, value in raw:
                 k = coerce.coerce_one(key, peeled.key)
-                v = coerce.coerce_one(value, peeled.element)
+                v = _run_checks(coerce.coerce_one(value, peeled.element), peeled, label)
                 if peeled.value_multiple:
                     result.setdefault(k, []).append(v)
                 else:
@@ -93,9 +164,14 @@ def bind(seg: Segment, fn: Task) -> tuple[list[Any], dict[str, Any]]:
             kwargs[param.name] = result
         elif peeled.multiple:
             items = raw if isinstance(raw, list) else [raw]
-            kwargs[param.name] = [coerce.coerce_one(v, peeled.element) for v in items]
+            kwargs[param.name] = [
+                _run_checks(coerce.coerce_one(v, peeled.element), peeled, label)
+                for v in items
+            ]
         else:
-            kwargs[param.name] = coerce.coerce_one(raw, peeled.element)
+            kwargs[param.name] = _run_checks(
+                coerce.coerce_one(raw, peeled.element), peeled, label
+            )
 
     # `--` passthrough always has a home now: a task's *args, and/or the run
     # context (`passthrough()` / `ctx.passthrough`). So it is never an error.

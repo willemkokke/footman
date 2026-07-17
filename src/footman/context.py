@@ -22,7 +22,7 @@ import subprocess
 import sys
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from contextvars import ContextVar
 from dataclasses import dataclass, field, replace
 from pathlib import Path
@@ -62,6 +62,28 @@ def current() -> Context:
     """The context of the running task (a fresh default one outside a run)."""
     ctx = _current.get()
     return ctx if ctx is not None else Context()
+
+
+@contextlib.contextmanager
+def use_context(ctx: Context | None = None) -> Iterator[Context]:
+    """Install *ctx* as the current run context for the duration of the block.
+
+    The public seam for calling tasks from other Python code — tests included:
+    `run()` and `tools.*` inside the block read this context instead of a
+    fresh default. `footman.testing.recording` builds on it.
+
+    ```python
+    with use_context(Context(env={"CI": "1"})) as ctx:
+        deploy()
+    assert ctx.steps[0].code == 0
+    ```
+    """
+    installed = ctx if ctx is not None else Context()
+    token = _current.set(installed)
+    try:
+        yield installed
+    finally:
+        _current.reset(token)
 
 
 def passthrough() -> list[str]:

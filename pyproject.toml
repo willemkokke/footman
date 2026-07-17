@@ -39,6 +39,11 @@ Changelog = "https://willemkokke.github.io/footman/changelog/"
 footman = "footman:main"
 fm = "footman:main"
 
+# Auto-loaded pytest fixtures (fm, fm_project, fm_record) for testing tasks.
+# Zero runtime cost: only pytest itself ever imports the module.
+[project.entry-points.pytest11]
+footman = "footman.pytest_plugin"
+
 [dependency-groups]
 dev = [
     "pytest>=8.0",
