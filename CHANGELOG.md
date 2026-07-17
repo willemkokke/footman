@@ -17,10 +17,13 @@ versions may include breaking changes.
   correctness fix on macOS, where SIP strips `DYLD_*` from child processes:
   a tool needing Homebrew's native libraries (mkdocs + cairo) only works
   in-process. Preferences fall back to a subprocess when no entry point
-  exists; per-call demands error with a taught message. In-process runs
-  are serialised (they touch process-global state — `sys.argv` and the
-  capture redirect, which previously raced under the parallel scheduler);
-  subprocess tools keep their full parallelism.
+  exists; per-call demands error with a taught message. And parallelism
+  survives: capture routes through the per-task stdout router
+  (thread-confined — also fixing a pre-existing race where the global
+  redirect could cross-contaminate concurrent in-process captures), and
+  argument-accepting entries (click commands, `main(argv=None)` — nearly
+  all of them) are called directly. Only a legacy zero-arg `main()` gets
+  the `sys.argv`-patching fallback, and only those serialise.
 
 ## [0.8.0] — 2026-07-17
 

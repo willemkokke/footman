@@ -113,9 +113,12 @@ def docs():
     tools.mkdocs.build(strict=True)
 ```
 
-One honest trade: in-process runs touch process-global state (`sys.argv`,
-the capture redirect), so footman serialises them — two in-process tools
-queue behind each other while subprocess tools keep their full parallelism.
+And in-process keeps footman's parallelism: capture routes through the
+per-task stdout router (thread-confined, no global redirect), and entries
+that accept an argument list — click commands, `main(argv=None)`, which is
+nearly all of them — are called directly, no `sys.argv` in sight. Only a
+legacy zero-argument `main()` that insists on reading `sys.argv` gets the
+patched-and-serialised fallback.
 
 `tools.python(...)` targets the current interpreter; `tools.sh("...")`
 takes a whole command line as one string.
