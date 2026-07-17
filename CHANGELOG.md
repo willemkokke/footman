@@ -21,6 +21,20 @@ versions may include breaking changes.
   completer (carapace, …) — it answers for `fm` and passes every other
   command through. Verified against a real nushell. Every shell footman
   promised is now installed with one command.
+- **`tools.*` became a bridge, not a transcription.** Every executable on
+  PATH is a tool with no declaration (`tools.terraform("plan")`), attribute
+  access chains subcommands (`tools.docker.compose.up(detach=True)`), and
+  keyword arguments translate mechanically (`fix=True` → `--fix`, lists
+  repeat, single letters go short, trailing `_` escapes keywords). This is
+  a deliberate answer to the drift in hand-transcribed wrappers — duty's
+  `ruff.check(show_source=True)` emits a flag modern ruff rejects; a bridge
+  has nothing to go stale. `tool.installed_version()` (cached, resolved
+  outside the task context) covers the rare version-dependent branch.
+  Curated spellings for ruff, uv, git, docker, bun, mkdocs, zensical,
+  coverage, cspell, prek, markdownlint (-cli2), basedpyright; pytest keeps
+  its in-process path. A tools *plugin* mechanism was considered and
+  rejected: tools are plain objects, so publishing them is publishing
+  Python — an import already beats an entry point.
 - **A live progress line for parallel runs.** On a TTY, the scheduler keeps
   one status line (`/ 2/5 (1 failed)  running: lint, test`) between the
   finished tasks' output blocks. Event-driven (no timer thread), always
@@ -37,6 +51,9 @@ versions may include breaking changes.
 
 ### Docs
 
+- **The README is a front door now** — what footman is, why it exists, one
+  taste, and pointers into the site — instead of a 460-line hand-maintained
+  copy of the documentation that drifted on every change.
 - Two new pages: **CI & automation** (the `--json` envelope contract, exit
   codes, keep-going/sequential in CI, agents) and **Troubleshooting** — a
   catalogue of every taught error, generated against real output, with the

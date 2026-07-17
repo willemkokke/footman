@@ -23,13 +23,86 @@ def check():
 - Defaults the working directory to the task's context cwd — in a
   [cascade](monorepos.md) that is the folder the task was defined in.
 
-## The `tools.*` wrappers
+## The `tools.*` bridge
 
-`footman.tools` ships typed, autocompletable wrappers built on `run()`:
+Every tool on your PATH is already wrapped — `tools.<name>` needs no
+declaration, attribute access chains subcommands, and keyword arguments
+translate into flags *mechanically*:
 
-- **In-process where possible** — Python-native tools (pytest) skip the process
-  spawn; binaries (ruff, basedpyright, uv) run as subprocesses. Either way the
-  wrapper gives you typed options and a typo-proof command line.
+```python
+from footman import task, tools
+
+@task
+def ship():
+    tools.ruff.check("src", fix=True, select=["E", "F"])
+    #  -> ruff check src --fix --select E --select F
+    tools.docker.compose.up(detach=True)
+    #  -> docker compose up --detach
+    tools.bun.add("left-pad", global_=True)   # trailing _ escapes keywords
+    #  -> bun add left-pad --global
+    tools.terraform("plan", out="tf.plan")    # never declared anywhere; works
+```
+
+The rules, all of them: `snake_case` → `--kebab-case`; `True` → bare flag;
+`False`/`None` → omitted; a list repeats the flag; a single-letter key is a
+short flag (`k="expr"` → `-k expr`); positional strings pass through
+untouched.
+
+### Why no per-flag Python parameters?
+
+duty's tools library transcribes every flag of every tool into typed Python
+parameters — five thousand careful lines, and genuinely pleasant to
+autocomplete. The cost is drift: the wrapper freezes the flag-set its author
+copied, while the tool keeps moving. duty's `ruff.check(show_source=True)`
+still emits `--show-source` today — and ruff removed that flag; the modern
+binary rejects it. There is no version machinery underneath to catch this,
+and there realistically can't be: the wrapper *is* the hardcoded version.
+
+footman's bridge sidesteps the whole class of problem: nothing is
+transcribed, so nothing goes stale. Your installed tool's `--help` is the
+one source of truth, at whatever version is installed. The trade is honest —
+you don't get IDE autocompletion of a tool's flags, and a typo'd flag errors
+at run time (exactly as it does in duty, whose transcriptions aren't
+validated eagerly either).
+
+For the rare task that must branch on a tool's CLI generation:
+
+```python
+if tools.ruff.installed_version() >= (0, 9):
+    tools.ruff.check("src", output_format="github")
+```
+
+`installed_version()` runs `<tool> --version` once per process (outside the
+task context, so `--dry-run` and test recording can't lie to it) and returns
+a comparable int tuple.
+
+### In-process where it pays
+
+`tools.pytest(...)` runs in-process via `pytest.main` when pytest is
+importable (no interpreter spawn); `tools.python(...)` targets the current
+interpreter; `tools.sh("...")` takes a whole command line as one string.
+
+### Sharing tools between projects
+
+A "tool" is a plain object — publishing one is publishing Python:
+
+```python
+# yourorg_tools/__init__.py
+from footman.tools import Tool
+
+helmfile = Tool("helmfile", "--environment", "prod")
+```
+
+```python
+# tasks.py
+from yourorg_tools import helmfile
+```
+
+We considered a plugin mechanism for tools (entry points, like
+[`footman.tasks`](composing.md) for tasks) and rejected it: tasks need
+framework machinery — registry mounting, completion, collision policy —
+but a tool has no framework surface at all. An import already does
+everything an entry point would, with less indirection.
 
 ## No `ctx` needed
 
