@@ -28,6 +28,28 @@ def test_mechanical_flag_translation():
     )
 
 
+def test_off_sentinel_emits_the_negation():
+    from footman.tools import off
+
+    # `off` disables a default-on flag; equivalent to naming it directly.
+    assert _one(lambda: tools.zensical.build(clean=True, strict=off)) == (
+        "zensical build --clean --no-strict"
+    )
+    assert _one(lambda: tools.mkdocs.build(no_strict=True)) == (
+        "mkdocs build --no-strict"
+    )
+
+
+def test_off_can_be_variable_driven():
+    from footman.tools import off
+
+    def render(directory_urls: bool):
+        return _one(lambda: tools.mkdocs.build(directory_urls=directory_urls or off))
+
+    assert render(True) == "mkdocs build --directory-urls"
+    assert render(False) == "mkdocs build --no-directory-urls"
+
+
 def test_false_none_and_empty_collections_are_omitted():
     # Empty lists/tuples vanish like False/None — so a task parameter's
     # default (`select: list[str] = ()`) passes straight through with no

@@ -11,6 +11,8 @@ installed binary rejects. Instead, keyword arguments translate
 truth, at whatever version it is:
 
 - `fix=True` → `--fix` (`False`/`None` → omitted entirely)
+- `strict=off` → `--no-strict` (disable a default-on flag; `off` is the
+  `footman.tools.off` sentinel — `no_strict=True` is the same thing by name)
 - `output_format="github"` → `--output-format github`
 - `select=["E", "F"]` → `--select E --select F` (an empty list/tuple is
   omitted entirely, so a task param's default passes straight through)
@@ -41,6 +43,25 @@ from footman.context import run
 _version_cache: dict[str, tuple[int, ...]] = {}
 
 
+class _Off:
+    """The value that disables a flag: `flag=off` → `--no-flag`.
+
+    `False`/`None` mean *omit* — so a task parameter's default flows through
+    untouched — which leaves no way to spell a negation. Hence an explicit
+    sentinel: `strict=off` turns a default-on flag off. Equivalent to naming
+    the negation directly (`no_strict=True`), but reads as intent and lets a
+    variable drive it (`strict=on_by_default and off`).
+    """
+
+    __slots__ = ()
+
+    def __repr__(self) -> str:
+        return "off"
+
+
+off = _Off()
+
+
 def _flags(kwargs: dict[str, Any]) -> list[str]:
     """Translate keyword arguments into CLI flags, mechanically."""
     argv: list[str] = []
@@ -48,6 +69,9 @@ def _flags(kwargs: dict[str, Any]) -> list[str]:
         if value is None or value is False:
             continue
         name = key.rstrip("_").replace("_", "-")
+        if value is off:
+            argv.append(f"--no-{name}")
+            continue
         flag = f"-{name}" if len(name) == 1 else f"--{name}"
         if value is True:
             argv.append(flag)

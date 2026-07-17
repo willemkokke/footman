@@ -14,7 +14,7 @@ SRC = ("src", "tests")
 @task
 def lint(fix: bool = False):
     """Lint with ruff."""
-    tools.ruff("check", *SRC, fix=fix)
+    tools.ruff.check(*SRC, fix=fix)
 
 
 @task
@@ -59,7 +59,9 @@ def coverage():
 @docs.task(name="build")
 def docs_build(check: bool = False):
     """Build the docs site into ./site (strict on --check)."""
-    run("zensical build --clean --strict" if check else "zensical build --clean")
+    # A conditional flag needs no ternary: strict=check is --strict when
+    # check is true, omitted otherwise (strict is off by default in zensical).
+    tools.zensical.build(clean=True, strict=check, in_process=False)
 
 
 dist = group("dist", help="Build and publish")
