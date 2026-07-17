@@ -7,6 +7,25 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Removed
+
+- `--refresh-manifest` — it was parsed and never read; the manifest already
+  rebuilds on every execution-path run, so the flag had no job to do.
+- `manifest.is_stale` and the manifest's `sources` block — scaffolding for a
+  staleness check no live path ever consulted.
+- `reset()` is no longer re-exported from the package root (it remains in
+  `footman.registry` for test suites); it was a test-suite helper living on
+  the public namespace.
+
+### Changed
+
+- `footman.tools` is now a real public export (`__all__`, lazy) — it was
+  load-bearing in the docs and footman's own tasks file while officially not
+  existing.
+- The `import footman` vs `import typer` cost claim is now backed by a
+  committed script (`scripts/bench_import.py`), and the comparison page's
+  repro commands include the required `--group comparison`.
+
 ### Added
 
 - **Shell completion installers.** `fm --install-completion bash|zsh|fish`

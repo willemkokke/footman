@@ -4,7 +4,8 @@ How footman stacks up against the Python task runners I measured it against —
 the same seven-task surface (`lint`, `format`, `typecheck`, `test`, `check`,
 `dist build`, `dist clean`) written five ways. The runnable head-to-head lives in
 the repo's [`comparison/`](https://github.com/willemkokke/footman/tree/main/comparison)
-directory; reproduce the numbers with `uv run python comparison/bench_compare.py`.
+directory; reproduce the numbers with
+`uv run --group comparison python comparison/bench_compare.py`.
 
 Measured on duty 1.9.0, invoke 3.0.3, poethepoet 0.48.0, typer 0.27.0, CPython
 3.13, M-series Mac.
@@ -65,7 +66,8 @@ because typer has a reputation for being heavy:
 | `import typer`   |                    **+24 ms** |
 
 typer's import really is ~6× heavier — it ships its own parser plus `rich` and
-`shellingham`. On a single launch you'd never notice (footman ~38 ms, typer
+`shellingham`. (Reproduce with
+`uv run --group comparison python scripts/bench_import.py`.) On a single launch you'd never notice (footman ~38 ms, typer
 ~40 ms; footman just spends its milliseconds on parsing instead of importing).
 The difference only shows up when a typer app does completion, because that
 re-runs the app — paying the typer import *and* your project import on every TAB,

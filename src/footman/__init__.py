@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     # Give type-checkers the real types for the lazily re-exported names below;
     # at runtime these are served by `__getattr__` without importing registry
     # on a bare `import footman` (the completion hot path).
+    from footman import tools as tools
     from footman.app import App as App
     from footman.app import Brand as Brand
     from footman.compose import include as include
@@ -39,7 +40,6 @@ if TYPE_CHECKING:
     from footman.params import suggest as suggest
     from footman.registry import Group as Group
     from footman.registry import group as group
-    from footman.registry import reset as reset
     from footman.registry import task as task
 
 __version__ = "0.5.0"
@@ -67,6 +67,7 @@ __all__ = [
     "run",
     "suggest",
     "task",
+    "tools",
     "use_context",
 ]
 
@@ -88,10 +89,14 @@ def main() -> None:
 def __getattr__(name: str) -> object:
     # Lazy re-export: `from footman import task, group` works without paying the
     # registry import on a bare `import footman` (the completion hot path).
-    if name in ("task", "group", "Group", "reset"):
+    if name in ("task", "group", "Group"):
         from footman import registry
 
         return getattr(registry, name)
+    if name == "tools":
+        import footman.tools
+
+        return footman.tools
     if name in ("include", "plugin"):
         from footman import compose
 

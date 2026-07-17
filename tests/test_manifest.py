@@ -95,15 +95,6 @@ def test_load_missing_or_corrupt_returns_none(tmp_path):
     assert manifest.load_manifest(bad) is None
 
 
-def test_staleness(root, tmp_path):
-    m = manifest.build_manifest(root)
-    assert manifest.is_stale(m) is False
-    m["sources"][0]["mtime"] += 1000
-    assert manifest.is_stale(m) is True
-    m["sources"][0]["path"] = str(tmp_path / "gone.py")
-    assert manifest.is_stale(m) is True
-
-
 def test_sync_rewrites_only_on_hash_change(root, tmp_path, monkeypatch):
     monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path)
     project = tmp_path / "proj"

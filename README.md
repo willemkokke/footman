@@ -434,13 +434,11 @@ Global options bind to `fm` itself and go **before** the first task name
 | `-C`, `--directory PATH`  | run as if launched from PATH                    |
 | `-f`, `--tasks-file PATH` | use one file, no cascade                        |
 | `--config PATH`           | override config with a single TOML file         |
+| `--install-completion SH` | install the bash/zsh/fish completion hook       |
 
 `--help` is the one global allowed *anywhere* before `--`: `fm deploy --help`
 is a read-only help request, never an execution. `fm --help` documents the
 runner and its globals, `fm --help docs` a group, `fm --help deploy` a task.
-
-Accepted but not yet wired: `--refresh-manifest` (the manifest already
-refreshes on every run).
 
 ## Status
 
