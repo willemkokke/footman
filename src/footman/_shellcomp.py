@@ -164,6 +164,10 @@ def detect_shell() -> str | None:
         # answer on that box. (Real spelling kept; Windows env lookup is
         # case-insensitive anyway.)
         return "pwsh" if os.environ.get("PSModulePath") else None  # noqa: SIM112
+    return _detect_posix()
+
+
+def _detect_posix() -> str | None:
     pid = os.getppid()
     for _ in range(10):
         if pid <= 1:
