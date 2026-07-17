@@ -123,12 +123,12 @@ def test_runner_discovers_cascade_from_cwd(tmp_path):
 def test_runner_branded_app_prefixes_errors(tmp_path):
     (tmp_path / "pyproject.toml").write_text('[project]\nname="x"\n')
     (tmp_path / "tasks.py").write_text(TASKS)
-    hse = Runner(App(name="HSE", prog="hse", version="9.9.9"))
-    result = hse.invoke("nope", cwd=tmp_path)
+    acme = Runner(App(name="Acme", prog="acme", version="9.9.9"))
+    result = acme.invoke("nope", cwd=tmp_path)
     assert result.exit_code == 2
-    assert result.stderr.startswith("hse:")
-    version = hse.invoke("--version", cwd=tmp_path)
-    assert "HSE 9.9.9" in version.stdout
+    assert result.stderr.startswith("acme:")
+    version = acme.invoke("--version", cwd=tmp_path)
+    assert "Acme 9.9.9" in version.stdout
 
 
 # --- the pytest fixtures (dogfooding the plugin) --------------------------------

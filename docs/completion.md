@@ -51,7 +51,7 @@ bash and zsh get a script under `$XDG_DATA_HOME/fm/` plus a single guarded
 `source` line in your rc file; fish gets
 `~/.config/fish/completions/fm.fish`, which fish auto-loads — no rc edit at
 all. Running the installer twice changes nothing. A custom-branded CLI
-installs completion for *its* name the same way (`hse --install-completion
+installs completion for *its* name the same way (`acme --install-completion
 zsh`), and the generated hook calls that brand's `--complete`.
 
 pwsh and nushell installers are still on the roadmap; on those shells, wire

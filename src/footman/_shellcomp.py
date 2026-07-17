@@ -3,7 +3,7 @@
 Each generated script calls `<prog> --complete -- WORD...` on TAB: the
 stdlib-only hot path that answers from the cached manifest without importing
 footman or the user's code. Scripts are generated per brand, so a custom CLI
-(`hse --install-completion zsh`) installs completion for *its* name.
+(`acme --install-completion zsh`) installs completion for *its* name.
 
 Install layout (all idempotent — running twice changes nothing):
 

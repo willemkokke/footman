@@ -30,8 +30,8 @@ versions may include breaking changes.
 
 - **Shell completion installers.** `fm --install-completion bash|zsh|fish`
   writes the hook and (bash/zsh) one guarded `source` line into your rc
-  file; fish needs no rc edit at all. Idempotent, branded (`hse
-  --install-completion zsh` installs for `hse`), and the generated hook
+  file; fish needs no rc edit at all. Idempotent, branded (`acme
+  --install-completion zsh` installs for `acme`), and the generated hook
   stays on the cached stdlib-only fast path. The bash hook survives macOS's
   bash 3.2 (whose quoted array slices collapse to a single word — found the
   hard way, tested for keeps).
