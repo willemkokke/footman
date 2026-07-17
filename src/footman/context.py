@@ -168,10 +168,20 @@ def _label(cmd: Any, args: tuple[Any, ...]) -> str:
     return cmd if isinstance(cmd, str) else " ".join(map(str, cmd))
 
 
+# In-process execution touches process-global state (redirect_stdout swaps
+# sys.stdout for every thread; tools patch sys.argv), so concurrent in-process
+# runs are serialised. Subprocess runs keep their full parallelism.
+_inproc_lock = threading.Lock()
+
+
 def _run_callable(cmd: Callable[..., Any], args: tuple[Any, ...]) -> tuple[int, str]:
     buffer = io.StringIO()
     try:
-        with contextlib.redirect_stdout(buffer), contextlib.redirect_stderr(buffer):
+        with (
+            _inproc_lock,
+            contextlib.redirect_stdout(buffer),
+            contextlib.redirect_stderr(buffer),
+        ):
             returned = cmd(*args)
     except SystemExit as exc:
         code = exc.code if isinstance(exc.code, int) else (0 if exc.code is None else 1)

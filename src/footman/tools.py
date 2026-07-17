@@ -56,21 +56,76 @@ def _flags(kwargs: dict[str, Any]) -> list[str]:
     return argv
 
 
-class Tool:
-    """One command-line tool; see the module docstring for the grammar."""
+def _console_entry(name: str) -> Any | None:
+    """The installed `[console_scripts]` entry named *name*, loaded, or None."""
+    from importlib.metadata import entry_points
 
-    def __init__(self, name: str, *base: str) -> None:
+    for ep in entry_points(group="console_scripts", name=name):
+        try:
+            return ep.load()
+        except Exception:
+            return None
+    return None
+
+
+class Tool:
+    """One command-line tool; see the module docstring for the grammar.
+
+    `in_process` (a reserved keyword, like `nofail`) runs a Python tool
+    inside footman's process instead of spawning: the tool's own
+    `[console_scripts]` entry point is resolved and called with `sys.argv`
+    patched — the same no-transcription contract, minus the interpreter
+    spawn. Beyond speed this matters for correctness: on macOS, SIP strips
+    `DYLD_*` from child processes, so a tool that needs Homebrew's native
+    libraries (mkdocs with cairo, say) can only see them in-process, where
+    an env var set before the import sticks. Tools constructed with
+    `in_process=True` default to it and fall back to a subprocess when no
+    entry point is installed; `in_process=True` at the *call* is a demand
+    and errors if the entry can't be found. In-process runs are serialised
+    (they touch process-global state); subprocesses stay fully parallel.
+    """
+
+    def __init__(self, name: str, *base: str, in_process: bool = False) -> None:
         self._argv0 = name
         self._base = list(base)
+        self._prefer_in_process = in_process
 
     def __getattr__(self, verb: str) -> Tool:
         if verb.startswith("_"):
             raise AttributeError(verb)
-        return Tool(self._argv0, *self._base, verb.replace("_", "-"))
+        sub = Tool(self._argv0, *self._base, verb.replace("_", "-"))
+        sub._prefer_in_process = self._prefer_in_process
+        return sub
 
-    def __call__(self, *args: Any, nofail: bool = False, **kwargs: Any) -> int:
-        argv = [self._argv0, *self._base, *map(str, args), *_flags(kwargs)]
-        return run(argv, nofail=nofail)
+    def __call__(
+        self,
+        *args: Any,
+        nofail: bool = False,
+        in_process: bool | None = None,
+        **kwargs: Any,
+    ) -> int:
+        tail = [*self._base, *map(str, args), *_flags(kwargs)]
+        wanted = self._prefer_in_process if in_process is None else in_process
+        if wanted:
+            entry = _console_entry(self._argv0)
+            if entry is None and in_process is True:
+                raise ValueError(
+                    f"{self._argv0}: in_process=True, but no installed "
+                    f"console_scripts entry point named {self._argv0!r}"
+                )
+            if entry is not None:
+                title = " ".join([self._argv0, *tail])
+
+                def _invoke() -> Any:
+                    saved = sys.argv
+                    sys.argv = [self._argv0, *tail]
+                    try:
+                        return entry()
+                    finally:
+                        sys.argv = saved
+
+                return run(_invoke, title=title, nofail=nofail)
+        return run([self._argv0, *tail], nofail=nofail)
 
     def installed_version(self) -> tuple[int, ...]:
         """The installed binary's version, as a comparable int tuple.
@@ -103,9 +158,9 @@ uv = Tool("uv")
 git = Tool("git")
 docker = Tool("docker")
 bun = Tool("bun")
-mkdocs = Tool("mkdocs")
-zensical = Tool("zensical")
-coverage = Tool("coverage")
+mkdocs = Tool("mkdocs", in_process=True)  # macOS: DYLD_* only survives in-process
+zensical = Tool("zensical", in_process=True)
+coverage = Tool("coverage", in_process=True)
 cspell = Tool("cspell")
 prek = Tool("prek")
 markdownlint = Tool("markdownlint-cli2")
