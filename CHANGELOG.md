@@ -7,6 +7,18 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Changed
+
+- **In-process tools import only when they actually execute.** Resolving a
+  tool's `[console_scripts]` entry point is now pure metadata; the `.load()`
+  that imports the tool's module is deferred into the callable footman runs.
+  So a `--dry-run`, a `recording()` test, or a branch you never take costs
+  zero tool imports — the property that made duty's lazy design nice, now
+  without the build-vs-run split (a call is still always a call). One
+  behaviour change: a console-scripts entry that exists but fails to import
+  now surfaces as a task failure with the real error, instead of silently
+  falling back to a subprocess.
+
 ### Added
 
 - **Tool autocompletion via stubs — zero runtime cost.** `tools.pyi` gives

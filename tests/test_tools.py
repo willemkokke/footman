@@ -87,6 +87,42 @@ def test_installed_version_unreadable_is_taught():
 # --- in-process execution ---------------------------------------------------
 
 
+class _FakeEP:
+    """A stand-in console_scripts EntryPoint: `.load()` returns the target
+    (and records that the import happened)."""
+
+    def __init__(self, target, loaded: list | None = None) -> None:
+        self._target = target
+        self._loaded = loaded
+
+    def load(self):
+        if self._loaded is not None:
+            self._loaded.append(True)
+        return self._target
+
+
+def test_dry_run_does_not_import_the_tool(monkeypatch):
+    # The property duty had: a call you don't execute costs no tool import.
+    # Under recording (dry-run), the entry point is resolved (metadata) but
+    # never loaded — so the tool's module is never imported.
+    loaded: list[bool] = []
+
+    def target(argv=None):
+        print("ran")
+        return 0
+
+    monkeypatch.setattr(
+        tools, "_console_entrypoint", lambda name: _FakeEP(target, loaded)
+    )
+    with recording() as steps:
+        tools.Tool("heavy", in_process=True)("build")
+    assert loaded == []  # dry-run imported nothing
+    assert steps[0].command == "heavy build"
+
+    tools.Tool("heavy", in_process=True)("build")  # a real run does load it
+    assert loaded == [True]
+
+
 def test_in_process_never_spawns(monkeypatch):
     # coverage ships a console_scripts entry and is installed (pytest-cov);
     # if the subprocess layer is touched, this fails loudly.
@@ -134,7 +170,11 @@ def test_in_process_tools_run_concurrently_with_separate_capture(monkeypatch):
         return entry
 
     entries = {"fake-a": make_entry("A"), "fake-b": make_entry("B")}
-    monkeypatch.setattr(tools, "_console_entry", entries.get)
+    monkeypatch.setattr(
+        tools,
+        "_console_entrypoint",
+        lambda name: _FakeEP(entries[name]) if name in entries else None,
+    )
 
     reg = Group("root")
 
@@ -162,7 +202,9 @@ def test_zero_arg_entries_fall_back_to_argv_patching(monkeypatch):
         seen["argv"] = list(sys.argv)
         return 0
 
-    monkeypatch.setattr(tools, "_console_entry", {"legacy": zero_arg_entry}.get)
+    monkeypatch.setattr(
+        tools, "_console_entrypoint", lambda name: _FakeEP(zero_arg_entry)
+    )
     saved = list(sys.argv)
     assert tools.Tool("legacy", in_process=True)("build", fast=True) == 0
     assert seen["argv"] == ["legacy", "build", "--fast"]
@@ -212,7 +254,11 @@ def test_mixed_tool_output_is_never_interleaved(monkeypatch, capsys, tmp_path):
 
     names = [f"vtool-{i}" for i in range(tool_count)]
     entries = {n: make_entry(n) for i, n in enumerate(names) if i % 2 == 0}
-    monkeypatch.setattr(tools, "_console_entry", entries.get)
+    monkeypatch.setattr(
+        tools,
+        "_console_entrypoint",
+        lambda name: _FakeEP(entries[name]) if name in entries else None,
+    )
 
     reg = Group("root")
     for i, name in enumerate(names):
