@@ -12,7 +12,8 @@ truth, at whatever version it is:
 
 - `fix=True` → `--fix` (`False`/`None` → omitted entirely)
 - `output_format="github"` → `--output-format github`
-- `select=["E", "F"]` → `--select E --select F`
+- `select=["E", "F"]` → `--select E --select F` (an empty list/tuple is
+  omitted entirely, so a task param's default passes straight through)
 - `x=1` (single letter) → `-x 1`
 - a trailing underscore escapes Python keywords: `import_="x"` → `--import x`
 

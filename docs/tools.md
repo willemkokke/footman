@@ -44,8 +44,9 @@ def ship():
 ```
 
 The rules, all of them: `snake_case` → `--kebab-case`; `True` → bare flag;
-`False`/`None` → omitted; a list repeats the flag; a single-letter key is a
-short flag (`k="expr"` → `-k expr`); positional strings pass through
+`False`/`None` → omitted; a list repeats the flag (an empty one is omitted,
+so a task parameter's default flows straight through); a single-letter key
+is a short flag (`k="expr"` → `-k expr`); positional strings pass through
 untouched.
 
 ### Why no per-flag Python parameters?

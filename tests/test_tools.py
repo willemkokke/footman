@@ -28,10 +28,14 @@ def test_mechanical_flag_translation():
     )
 
 
-def test_false_and_none_are_omitted():
-    assert _one(lambda: tools.ruff.check("src", fix=False, config=None)) == (
-        "ruff check src"
+def test_false_none_and_empty_collections_are_omitted():
+    # Empty lists/tuples vanish like False/None — so a task parameter's
+    # default (`select: list[str] = ()`) passes straight through with no
+    # `or None` ceremony at the call site.
+    cmd = _one(
+        lambda: tools.ruff.check("src", fix=False, config=None, select=[], ignore=())
     )
+    assert cmd == "ruff check src"
 
 
 def test_single_letter_kwargs_are_short_flags():
