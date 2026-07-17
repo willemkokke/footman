@@ -92,7 +92,7 @@ order. `include()` exists so you never need it.
 Say you keep release tasks in a `devkit` library, and some need heavy
 third-party packages (an API client, a cloud SDK). You want to
 `include("devkit.tasks")` at the top of your monorepo's `tasks.py` without
-paying those imports on every `fm lint`. You already can — the lever is
+paying those imports on every `fm lint`. You already can — it comes down to
 where the heavy `import` lives:
 
 ```python
