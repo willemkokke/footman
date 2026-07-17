@@ -55,7 +55,9 @@ bash and zsh get a script under `$XDG_DATA_HOME/fm/` plus a single guarded
 `~/.config/fish/completions/fm.fish`, which fish auto-loads — no rc edit at
 all. pwsh (PowerShell 7+, or Windows PowerShell via the `powershell` alias)
 gets a `Register-ArgumentCompleter` script dot-sourced from the profile
-PowerShell itself reports. nushell (alias `nu`) gets an external-completer
+PowerShell itself reports — and on a Windows machine with *both* PowerShells
+installed, from both of their profiles, since each keeps its own `$PROFILE`
+and the hook runs on either. nushell (alias `nu`) gets an external-completer
 hook sourced from the config nushell itself reports — and the hook *wraps*
 whatever external completer you already run (carapace, say), answering for
 `fm` and passing every other command through untouched. Running any

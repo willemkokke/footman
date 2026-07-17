@@ -76,7 +76,7 @@ def test_cli_install_end_to_end(home, tmp_path, monkeypatch, capsys):
 
 def test_pwsh_install_writes_script_and_profile_line(home, monkeypatch):
     profile = home / "pwsh-profile" / "Microsoft.PowerShell_profile.ps1"
-    monkeypatch.setattr(_shellcomp, "_pwsh_profile", lambda *a: profile)
+    monkeypatch.setattr(_shellcomp, "_pwsh_profiles", lambda: [profile])
     _shellcomp.install("pwsh", "fm")
     _shellcomp.install("pwsh", "fm")  # idempotent
     script = home / ".local" / "share" / "fm" / "completion.ps1"
@@ -86,24 +86,33 @@ def test_pwsh_install_writes_script_and_profile_line(home, monkeypatch):
     assert profile.read_text().count("completion.ps1") == 1
 
 
-def test_explicit_powershell_asks_powershell_first(home, tmp_path, monkeypatch):
-    # Windows PowerShell and pwsh keep different $PROFILEs — the explicit
-    # alias must query powershell.exe first, not whichever answers.
-    asked = []
+def test_pwsh_install_covers_every_powershell_profile(home, monkeypatch):
+    # PowerShell 7 and Windows PowerShell keep different $PROFILEs: on a
+    # machine with both, the hook lands in each, so completion works in
+    # whichever shell the user opens.
+    seven = home / "Documents" / "PowerShell" / "profile.ps1"
+    five = home / "Documents" / "WindowsPowerShell" / "profile.ps1"
 
     def fake_ask(candidates, args):
-        asked.append(tuple(candidates))
-        return str(home / "profile.ps1")
+        return {"pwsh": str(seven), "powershell": str(five)}.get(candidates[0])
 
     monkeypatch.setattr(_shellcomp, "_ask_shell", fake_ask)
-    (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
-    (tmp_path / "tasks.py").write_text(
-        "from footman import task\n@task\ndef t(): ...\n"
-    )
-    monkeypatch.chdir(tmp_path)
-    assert _app.run(["--install-completion", "powershell"]) == 0
-    assert _app.run(["--install-completion", "pwsh"]) == 0
-    assert asked == [("powershell", "pwsh"), ("pwsh", "powershell")]
+    lines = _shellcomp.install("pwsh", "fm")
+    _shellcomp.install("pwsh", "fm")  # idempotent across both
+    for profile in (seven, five):
+        assert profile.read_text().count("completion.ps1") == 1
+    assert sum("added" in line for line in lines) == 2
+
+
+def test_pwsh_install_single_shell_machines_get_one_profile(home, monkeypatch):
+    seven = home / "Documents" / "PowerShell" / "profile.ps1"
+
+    def fake_ask(candidates, args):
+        return str(seven) if candidates[0] == "pwsh" else None
+
+    monkeypatch.setattr(_shellcomp, "_ask_shell", fake_ask)
+    _shellcomp.install("pwsh", "fm")
+    assert seven.read_text().count("completion.ps1") == 1
 
 
 def test_pwsh_missing_is_a_taught_error(home, tmp_path, monkeypatch, capsys):

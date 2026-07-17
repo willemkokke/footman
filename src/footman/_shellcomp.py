@@ -210,20 +210,23 @@ def _ask_shell(candidates: tuple[str, ...], args: list[str]) -> str | None:
     return None
 
 
-def _pwsh_profile(candidates: tuple[str, ...] = ("pwsh", "powershell")) -> Path:
-    """The profile path PowerShell itself reports (`$PROFILE`).
+def _pwsh_profiles() -> list[Path]:
+    """Every distinct `$PROFILE` among the PowerShells on PATH.
 
-    *candidates* ordering matters on Windows: PowerShell 7 (`pwsh`) and
-    Windows PowerShell (`powershell`) keep *different* profile files, so an
-    explicit `--install-completion powershell` must ask powershell.exe, not
-    whichever binary happens to answer first.
+    PowerShell 7 (`pwsh`) and Windows PowerShell (`powershell`) keep
+    *different* profile files; on a machine with both, completion should work
+    in whichever one the user opens — so the installer targets them all.
     """
-    path = _ask_shell(candidates, ["-NoProfile", "-Command", "$PROFILE"])
-    if path is None:
+    profiles: list[Path] = []
+    for exe in ("pwsh", "powershell"):
+        path = _ask_shell((exe,), ["-NoProfile", "-Command", "$PROFILE"])
+        if path is not None and Path(path) not in profiles:
+            profiles.append(Path(path))
+    if not profiles:
         raise InstallError(
             "pwsh (or powershell) not found on PATH — install PowerShell first"
         )
-    return Path(path)
+    return profiles
 
 
 def _nu_config_path() -> Path:
@@ -234,14 +237,12 @@ def _nu_config_path() -> Path:
     return Path(path)
 
 
-def install(shell: str, prog: str, *, powershell_first: bool = False) -> list[str]:
+def install(shell: str, prog: str) -> list[str]:
     """Install completion for *shell*; return the lines to tell the user.
 
-    `powershell_first` records that the user explicitly asked for Windows
-    PowerShell — its `$PROFILE` differs from pwsh's, so the query order must
-    honour the request. Raises `KeyError` for an unsupported shell and
-    `InstallError` when the shell itself is missing — the caller owns the
-    taught error (it knows the brand).
+    Raises `KeyError` for an unsupported shell and `InstallError` when the
+    shell itself is missing — the caller owns the taught error (it knows the
+    brand).
     """
     script = script_for(shell, prog)
 
@@ -259,19 +260,18 @@ def install(shell: str, prog: str, *, powershell_first: bool = False) -> list[st
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(script, encoding="utf-8")
     if shell == "pwsh":
-        order = ("powershell", "pwsh") if powershell_first else ("pwsh", "powershell")
-        rc = _pwsh_profile(order)
-        line = f'. "{target}"'
+        # The hook runs on PowerShell 5+ unchanged, so it goes into every
+        # PowerShell profile present — both shells complete, whoever answers.
+        hooks = [(rc, f'. "{target}"') for rc in _pwsh_profiles()]
     elif shell == "nushell":
-        rc = _nu_config_path()
-        line = f'source "{target}"'
+        hooks = [(_nu_config_path(), f'source "{target}"')]
     else:
-        rc = Path.home() / f".{shell}rc"
-        line = f"source {target}"
-    changed = _append_once(rc, line)
-    note = f"added `{line}` to {rc}" if changed else f"{rc} already sources it"
-    return [
-        f"installed {target}",
-        note,
-        "restart your shell (or source the rc file) and TAB away.",
-    ]
+        hooks = [(Path.home() / f".{shell}rc", f"source {target}")]
+    lines = [f"installed {target}"]
+    for rc, line in hooks:
+        if _append_once(rc, line):
+            lines.append(f"added `{line}` to {rc}")
+        else:
+            lines.append(f"{rc} already sources it")
+    lines.append("restart your shell (or source the rc file) and TAB away.")
+    return lines
