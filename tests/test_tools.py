@@ -256,9 +256,10 @@ def test_mixed_tool_output_is_never_interleaved(monkeypatch, capsys, tmp_path):
 
 
 def test_in_process_preference_survives_subcommand_chaining():
-    # `.report` chains off the in-process coverage tool and keeps the mode
-    # (checked without executing: real coverage mid-test-session would read
-    # the live .coverage data and the project's own fail_under).
-    assert tools.coverage.report._prefer_in_process is True
-    assert tools.mkdocs.build._prefer_in_process is True
-    assert tools.git.status._prefer_in_process is False
+    # Chained subcommands keep the mode (checked without executing: real
+    # coverage mid-test-session would read the live .coverage data and the
+    # project's own fail_under). Plain Tool instances, so the probe goes
+    # through __getattr__ like any un-stubbed verb.
+    assert tools.Tool("coverage", in_process=True).report._prefer_in_process is True
+    assert tools.Tool("mkdocs", in_process=True).build._prefer_in_process is True
+    assert tools.Tool("git").status._prefer_in_process is False

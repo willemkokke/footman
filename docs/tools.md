@@ -66,6 +66,25 @@ you don't get IDE autocompletion of a tool's flags, and a typo'd flag errors
 at run time (exactly as it does in duty, whose transcriptions aren't
 validated eagerly either).
 
+### Autocomplete without the import bill
+
+The bridge does ship duty-style autocompletion after all — as a **stub
+file** (`tools.pyi`), which type checkers and IDEs read but the runtime
+never imports. `tools.ruff.check(` completes `fix=`, `select=`,
+`output_format=` and friends; `fix="yes"` is a type error before you run
+anything. Two rules keep the stub subordinate to the bridge:
+
+- every stubbed verb ends in `**flags: Any`, so the stub *suggests* flags
+  but can never forbid one — when a tool grows a flag, the bridge already
+  speaks it and the stub merely hasn't heard of it yet;
+- unknown verbs fall through to `Tool`, so nothing the runtime accepts is
+  ever a type error.
+
+Which means stub drift — the thing that breaks duty's wrappers at run
+time — here degrades a *hint* at worst, and fixing it is editing one line
+of a `.pyi`. The flag lists were read from the installed tools' `--help`,
+not from memory.
+
 For the rare task that must branch on a tool's CLI generation:
 
 ```python
