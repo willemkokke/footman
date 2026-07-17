@@ -458,6 +458,6 @@ with defining-dir cwd and per-directory completion), its config discovery
 `footman.testing` harness with pytest fixtures, and per-task `--help`.
 What's next:
 
-- a live TTY progress spinner and richer `tools.*` coverage.
+- richer `tools.*` coverage (duty's one remaining win).
 
 See [ROADMAP.md](ROADMAP.md) for the full road to 1.0. MIT licensed.
