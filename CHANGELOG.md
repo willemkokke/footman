@@ -30,11 +30,12 @@ versions may include breaking changes.
 
 ### Fixed
 
-- An explicit `--install-completion powershell` now asks `powershell.exe`
-  for its `$PROFILE` instead of preferring pwsh — Windows PowerShell and
-  PowerShell 7 keep *different* profile files, so on a machine with both,
-  the hook used to land in the shell the user didn't ask for. (The hook
-  itself runs on both; `Register-ArgumentCompleter` exists since PS 5.0.)
+- The pwsh installer now writes its hook into **every** PowerShell profile
+  present — PowerShell 7 and Windows PowerShell keep *different* `$PROFILE`
+  files, so on a machine with both, completion previously landed in only
+  one of them (and not necessarily the one the user asked for). The hook
+  runs on both shells unchanged (`Register-ArgumentCompleter` exists since
+  PS 5.0), so whichever PowerShell opens, TAB works.
 - Completion no longer re-offers an option the segment already has —
   `fm lint --fix <TAB>` suggests what can still bind, not `--fix` again.
   Repeatable (`list`/`dict`) options rightly stay on offer, and a fresh
