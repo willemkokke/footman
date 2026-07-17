@@ -52,7 +52,6 @@ GLOBALS: list[tuple[str, str | None, str, str | None, str]] = [
     ("--tasks-file", "-f", "option", "PATH", "use exactly one tasks file, no cascade"),
     ("--config", None, "option", "PATH", "override config with a single TOML file"),
     ("--install-completion", None, "option", "SHELL", "install shell completion"),
-    ("--refresh-manifest", None, "flag", None, "rebuild the completion manifest"),
 ]
 _GLOBAL_KIND = {name: kind for name, _, kind, _, _ in GLOBALS}
 _GLOBAL_KIND.update({alias: kind for _, alias, kind, _, _ in GLOBALS if alias})

@@ -239,26 +239,6 @@ def _node(g: Group, memo: dict[int, list[str]]) -> dict[str, Any]:
     }
 
 
-def _source_files(g: Group, seen: set[str] | None = None) -> list[str]:
-    """Every distinct file that defines a task in the tree (for staleness)."""
-    seen = set() if seen is None else seen
-    for fn in g.tasks.values():
-        code = getattr(fn, "__code__", None)
-        if code is not None:
-            seen.add(code.co_filename)
-    for sub in g.groups.values():
-        _source_files(sub, seen)
-    return sorted(seen)
-
-
-def _stat_record(path: str) -> dict[str, Any] | None:
-    try:
-        st = Path(path).stat()
-    except OSError:
-        return None
-    return {"path": path, "mtime": st.st_mtime, "size": st.st_size}
-
-
 def tree_hash(tree: dict[str, Any]) -> str:
     """Stable hash of the tree's structure (names, params, help)."""
     blob = json.dumps(tree, sort_keys=True, ensure_ascii=False)
@@ -272,11 +252,9 @@ def build_manifest(root: Group) -> dict[str, Any]:
     path, so paying to refresh their cached choices is free.
     """
     tree = _node(root, {})
-    sources = [rec for p in _source_files(root) if (rec := _stat_record(p))]
     return {
         "schema": SCHEMA_VERSION,
         "hash": tree_hash(tree),
-        "sources": sources,
         "tree": tree,
     }
 
@@ -296,18 +274,6 @@ def load_manifest(path: Path) -> dict[str, Any] | None:
     except (OSError, ValueError):
         return None
     return data if isinstance(data, dict) else None
-
-
-def is_stale(manifest: dict[str, Any]) -> bool:
-    """True if any recorded source file has changed since the manifest wrote."""
-    sources = manifest.get("sources") or []
-    for rec in sources:
-        current = _stat_record(rec["path"])
-        if current is None:
-            return True
-        if current["mtime"] != rec["mtime"] or current["size"] != rec["size"]:
-            return True
-    return False
 
 
 def sync_manifest(root: Group, key_dir: Path) -> dict[str, Any]:
