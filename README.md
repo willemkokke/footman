@@ -434,7 +434,7 @@ Global options bind to `fm` itself and go **before** the first task name
 | `-C`, `--directory PATH`  | run as if launched from PATH                    |
 | `-f`, `--tasks-file PATH` | use one file, no cascade                        |
 | `--config PATH`           | override config with a single TOML file         |
-| `--install-completion SH` | install the bash/zsh/fish completion hook       |
+| `--install-completion SH` | install the bash/zsh/fish/pwsh completion hook  |
 
 `--help` is the one global allowed *anywhere* before `--`: `fm deploy --help`
 is a read-only help request, never an execution. `fm --help` documents the
@@ -444,7 +444,8 @@ runner and its globals, `fm --help docs` a group, `fm --help deploy` a task.
 
 **Alpha.** The core is built and tested (coverage gated in CI): the registry,
 signature→CLI manifest, the completion hot path with chain-aware resolution
-and shell installers (`--install-completion bash|zsh|fish`), the chain grammar
+and shell installers (`--install-completion bash|zsh|fish|pwsh`), the chain
+grammar
 (all six rules with taught errors), typed execution (unions, one-or-many,
 `dict[K, V]`, comma-splitting with `nosplit`, custom types via their
 constructors, validation markers), dynamic completion, the
@@ -458,6 +459,6 @@ with defining-dir cwd and per-directory completion), its config discovery
 What's next:
 
 - a live TTY progress spinner and richer `tools.*` coverage;
-- pwsh/nushell completion.
+- nushell completion.
 
 See [ROADMAP.md](ROADMAP.md) for the full road to 1.0. MIT licensed.

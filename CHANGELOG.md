@@ -7,6 +7,15 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- **PowerShell completion installer.** `fm --install-completion pwsh` (alias:
+  `powershell`) writes a `Register-ArgumentCompleter` hook and dot-sources it
+  from the profile PowerShell itself reports (`$PROFILE`), for PowerShell 7+
+  and Windows PowerShell alike. Idempotent, branded, and covered by a
+  functional test that drives PowerShell's own completion engine on every CI
+  platform.
+
 ## [0.7.0] — 2026-07-17
 
 ### Removed

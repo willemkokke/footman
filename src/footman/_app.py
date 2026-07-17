@@ -403,12 +403,19 @@ def _install_completion(shell: object) -> int:
     from footman import _shellcomp
 
     name = str(shell or "").lower()
+    if name == "powershell":  # muscle-memory alias
+        name = "pwsh"
     if name not in _shellcomp.SHELLS:
         supported = "|".join(_shellcomp.SHELLS)
         got = f" (got {name!r})" if name else ""
         _error(f"--install-completion expects one of {supported}{got}")
         return 2
-    for line in _shellcomp.install(name, _brand.prog):
+    try:
+        lines = _shellcomp.install(name, _brand.prog)
+    except _shellcomp.InstallError as exc:
+        _error(f"--install-completion {name}: {exc}")
+        return 2
+    for line in lines:
         print(line)
     return 0
 

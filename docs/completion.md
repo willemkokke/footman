@@ -44,16 +44,19 @@ Group names, task names, flags, options, and both static and
 One command per shell:
 
 ```console
-fm --install-completion bash    # or: zsh, fish
+fm --install-completion bash    # or: zsh, fish, pwsh
 ```
 
 bash and zsh get a script under `$XDG_DATA_HOME/fm/` plus a single guarded
 `source` line in your rc file; fish gets
 `~/.config/fish/completions/fm.fish`, which fish auto-loads — no rc edit at
-all. Running the installer twice changes nothing. A custom-branded CLI
-installs completion for *its* name the same way (`acme --install-completion
-zsh`), and the generated hook calls that brand's `--complete`.
+all. pwsh (PowerShell 7+, or Windows PowerShell via the `powershell` alias)
+gets a `Register-ArgumentCompleter` script dot-sourced from the profile
+PowerShell itself reports. Running any installer twice changes nothing. A
+custom-branded CLI installs completion for *its* name the same way
+(`acme --install-completion zsh`), and the generated hook calls that brand's
+`--complete`.
 
-pwsh and nushell installers are still on the roadmap; on those shells, wire
+A nushell installer is still on the roadmap; there, wire
 `fm --complete -- WORDS...` into the completion system directly — it prints
 newline-separated candidates.

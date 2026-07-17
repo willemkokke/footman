@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import shutil
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -66,3 +69,61 @@ def test_cli_install_end_to_end(home, tmp_path, monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "installed" in out
     assert Path(home / ".config" / "fish" / "completions" / "fm.fish").exists()
+
+
+# --- pwsh ----------------------------------------------------------------------
+
+
+def test_pwsh_install_writes_script_and_profile_line(home, monkeypatch):
+    profile = home / "pwsh-profile" / "Microsoft.PowerShell_profile.ps1"
+    monkeypatch.setattr(_shellcomp, "_pwsh_profile", lambda: profile)
+    _shellcomp.install("pwsh", "fm")
+    _shellcomp.install("pwsh", "fm")  # idempotent
+    script = home / ".local" / "share" / "fm" / "completion.ps1"
+    body = script.read_text()
+    assert "Register-ArgumentCompleter -Native -CommandName fm" in body
+    assert "--complete --" in body
+    assert profile.read_text().count("completion.ps1") == 1
+
+
+def test_pwsh_missing_is_a_taught_error(home, tmp_path, monkeypatch, capsys):
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
+    (tmp_path / "tasks.py").write_text(
+        "from footman import task\n@task\ndef t(): ...\n"
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(_shellcomp.shutil, "which", lambda _: None)
+    assert _app.run(["--install-completion", "powershell"]) == 2  # alias accepted
+    assert "not found on PATH" in capsys.readouterr().err
+
+
+@pytest.mark.skipif(shutil.which("pwsh") is None, reason="pwsh not installed")
+def test_pwsh_completion_functional(home, tmp_path, monkeypatch):
+    """The generated completer, driven by PowerShell's own completion engine."""
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
+    (tmp_path / "tasks.py").write_text(
+        'from footman import task\n\n@task\ndef lint(fix: bool = False):\n    "Lint."\n'
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("XDG_CACHE_HOME", str(home / ".cache"))
+    assert _app.run(["--list"]) == 0  # builds the manifest the hot path serves
+
+    script = home / "completion.ps1"
+    script.write_text(_shellcomp.script_for("pwsh", "fm"), encoding="utf-8")
+    venv_bin = Path(sys.executable).parent
+    ps = (
+        f'$env:PATH = "{venv_bin}" + [IO.Path]::PathSeparator + $env:PATH; '
+        f". '{script}'; "
+        "$r = [System.Management.Automation.CommandCompletion]::CompleteInput("
+        '"fm li", 5, $null); '
+        "$r.CompletionMatches | ForEach-Object CompletionText"
+    )
+    out = subprocess.run(
+        ["pwsh", "-NoProfile", "-Command", ps],
+        capture_output=True,
+        text=True,
+        timeout=90,
+        cwd=tmp_path,
+    )
+    assert out.returncode == 0, out.stderr
+    assert "lint" in out.stdout.split()
