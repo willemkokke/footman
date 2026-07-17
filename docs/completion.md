@@ -44,7 +44,7 @@ Group names, task names, flags, options, and both static and
 One command per shell:
 
 ```console
-fm --install-completion bash    # or: zsh, fish, pwsh
+fm --install-completion bash    # or: zsh, fish, pwsh, nushell
 ```
 
 bash and zsh get a script under `$XDG_DATA_HOME/fm/` plus a single guarded
@@ -52,11 +52,10 @@ bash and zsh get a script under `$XDG_DATA_HOME/fm/` plus a single guarded
 `~/.config/fish/completions/fm.fish`, which fish auto-loads — no rc edit at
 all. pwsh (PowerShell 7+, or Windows PowerShell via the `powershell` alias)
 gets a `Register-ArgumentCompleter` script dot-sourced from the profile
-PowerShell itself reports. Running any installer twice changes nothing. A
-custom-branded CLI installs completion for *its* name the same way
-(`acme --install-completion zsh`), and the generated hook calls that brand's
-`--complete`.
-
-A nushell installer is still on the roadmap; there, wire
-`fm --complete -- WORDS...` into the completion system directly — it prints
-newline-separated candidates.
+PowerShell itself reports. nushell (alias `nu`) gets an external-completer
+hook sourced from the config nushell itself reports — and the hook *wraps*
+whatever external completer you already run (carapace, say), answering for
+`fm` and passing every other command through untouched. Running any
+installer twice changes nothing. A custom-branded CLI installs completion
+for *its* name the same way (`acme --install-completion zsh`), and the
+generated hook calls that brand's `--complete`.
