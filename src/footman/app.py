@@ -6,10 +6,10 @@ project's names and version, and every message the user sees — errors,
 `--version`, the completion hint — uses them:
 
 ```python
-# hse/cli.py
+# acme/cli.py
 from footman import App
 
-app = App(name="HSE", prog="hse", version="1.4.0")
+app = App(name="Acme", prog="acme", version="1.4.0")
 
 def main() -> None:
     raise SystemExit(app.run())
@@ -18,7 +18,7 @@ def main() -> None:
 ```toml
 # your pyproject.toml
 [project.scripts]
-hse = "hse.cli:main"
+acme = "acme.cli:main"
 ```
 
 Tasks are discovered exactly as they are for `fm`: the `tasks.py` cascade

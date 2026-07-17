@@ -153,10 +153,10 @@ user-facing string carries your brand, including the error prefix:
 from footman import App
 from footman.testing import Runner
 
-def test_hse_teaches_with_its_own_name(tmp_path):
-    hse = Runner(App(name="HSE", prog="hse", version="1.4.0"))
-    result = hse.invoke("nope", cwd=tmp_path)
-    assert result.stderr.startswith("hse:")
+def test_acme_teaches_with_its_own_name(tmp_path):
+    acme = Runner(App(name="Acme", prog="acme", version="1.4.0"))
+    result = acme.invoke("nope", cwd=tmp_path)
+    assert result.stderr.startswith("acme:")
 ```
 
 ## CI notes

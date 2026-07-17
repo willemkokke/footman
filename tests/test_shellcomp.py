@@ -51,9 +51,9 @@ def test_fish_install_needs_no_rc_edit(home):
 
 
 def test_branded_prog_threads_through(home):
-    body = _shellcomp.script_for("bash", "hse-tool")
-    assert "hse-tool --complete --" in body
-    assert "_hse_tool_complete" in body  # function names sanitised
+    body = _shellcomp.script_for("bash", "acme-tool")
+    assert "acme-tool --complete --" in body
+    assert "_acme_tool_complete" in body  # function names sanitised
 
 
 def test_cli_install_end_to_end(home, tmp_path, monkeypatch, capsys):

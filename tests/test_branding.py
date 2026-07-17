@@ -21,22 +21,22 @@ def test_default_app_version(capsys):
 
 
 def test_custom_brand_version(capsys):
-    app = App(name="HSE", prog="hse", version="1.4.0")
+    app = App(name="Acme", prog="acme", version="1.4.0")
     assert app.run(["-V"]) == 0
-    assert capsys.readouterr().out.strip() == "HSE 1.4.0"
+    assert capsys.readouterr().out.strip() == "Acme 1.4.0"
 
 
 def test_custom_brand_error_prefix():
-    hse = Runner(App(name="HSE", prog="hse", version="1.4.0"))
-    result = hse.invoke("-f /nope/tasks.py whatever")
+    acme = Runner(App(name="Acme", prog="acme", version="1.4.0"))
+    result = acme.invoke("-f /nope/tasks.py whatever")
     assert result.exit_code == 2
-    assert result.stderr.startswith("hse: ")
+    assert result.stderr.startswith("acme: ")
 
 
 def test_custom_version_defaults_to_footman_when_omitted(capsys):
     # prog/name can differ while version falls back to footman's own
-    App(name="HSE", prog="hse").run(["-V"])
-    assert capsys.readouterr().out.strip() == f"HSE {__version__}"
+    App(name="Acme", prog="acme").run(["-V"])
+    assert capsys.readouterr().out.strip() == f"Acme {__version__}"
 
 
 def test_app_complete_dispatches(capsys):
@@ -59,7 +59,7 @@ def test_custom_brand_runs_tasks_from_cascade(tmp_path):
     (tmp_path / "tasks.py").write_text(
         "from footman import task\n@task\ndef ship():\n    print('shipped')\n"
     )
-    hse = Runner(App(name="HSE", prog="hse", version="1.4.0"))
-    result = hse.invoke("ship", cwd=tmp_path)  # cascade discovery, rebranded
+    acme = Runner(App(name="Acme", prog="acme", version="1.4.0"))
+    result = acme.invoke("ship", cwd=tmp_path)  # cascade discovery, rebranded
     assert result.ok
     assert "shipped" in result.stdout

@@ -109,7 +109,7 @@ def _isolated(cwd: Path | None) -> Iterator[None]:
 class Runner:
     """Drive a footman CLI in-process, capturing output and results.
 
-    Pass a branded `App` to test a custom CLI (`Runner(App(prog="hse"))`) —
+    Pass a branded `App` to test a custom CLI (`Runner(App(prog="acme"))`) —
     error prefixes, `--version`, and hints then use that brand, exactly as
     they would for real users.
     """
