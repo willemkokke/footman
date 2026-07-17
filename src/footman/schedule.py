@@ -13,6 +13,7 @@ tasks never interleave.
 from __future__ import annotations
 
 import io
+import os
 import threading
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from dataclasses import dataclass, field
@@ -165,10 +166,73 @@ def _run_sequential(nodes, real, keep_going, capture, ctx_config) -> None:
         failed = failed or not node.result.ok
 
 
+_SPINNER = "|/-\\"
+_CLEAR = "\r\033[K"
+
+
+class _Progress:
+    """One live status line for a parallel run, on the *real* stdout.
+
+    Task output is buffered per task and flushed as a block on completion;
+    this line is the only thing that may write between blocks, and it always
+    clears itself before a block lands. Updates are event-driven (task
+    submits and completions) — no background timer thread. Enabled only on a
+    TTY, outside capture mode, and not under --quiet; colour follows
+    --no-color / NO_COLOR.
+    """
+
+    def __init__(self, real: TextIO, nodes: list[_Node], color: bool) -> None:
+        self.real = real
+        self.nodes = nodes
+        self.color = color
+        self.live = False
+        self.ticks = 0
+
+    def render(self) -> None:
+        self.ticks += 1
+        running = [n.seg.task for n in self.nodes if n.state == "running"]
+        finished = sum(n.state in ("done", "skipped") for n in self.nodes)
+        failures = sum(
+            n.state == "done" and not (n.result and n.result.ok) for n in self.nodes
+        )
+        line = f"{_SPINNER[self.ticks % 4]} {finished}/{len(self.nodes)}"
+        if failures:
+            text = f"{failures} failed"
+            if self.color:
+                text = f"\033[31m{text}\033[0m"
+            line += f" ({text})"
+        if running:
+            names = ", ".join(running[:4]) + (" ..." if len(running) > 4 else "")
+            line += f"  running: {names}"
+        self.real.write(f"{_CLEAR}{line}")
+        self.real.flush()
+        self.live = True
+
+    def clear(self) -> None:
+        if self.live:
+            self.real.write(_CLEAR)
+            self.real.flush()
+            self.live = False
+
+
+def _make_progress(
+    real: TextIO,
+    nodes: list[_Node],
+    ctx_config: dict[str, Any] | None,
+    capture: bool,
+) -> _Progress | None:
+    cfg = ctx_config or {}
+    if capture or cfg.get("quiet") or len(nodes) < 2 or not real.isatty():
+        return None
+    color = not cfg.get("no_color") and "NO_COLOR" not in os.environ
+    return _Progress(real, nodes, color)
+
+
 def _run_parallel(nodes, real, keep_going, capture, ctx_config) -> None:
     by_key = {n.key: n for n in nodes}
     lock = threading.Lock()
     failed = False
+    progress = _make_progress(real, nodes, ctx_config, capture)
 
     def dep_ok(n: _Node) -> bool:
         return all(
@@ -190,8 +254,12 @@ def _run_parallel(nodes, real, keep_going, capture, ctx_config) -> None:
         n.result = executor.run_task(n.fn, n.seg, ctx)
         if not capture:  # flush this task's buffered output as one block
             with lock:
+                if progress is not None:
+                    progress.clear()
                 real.write(ctx.sink.getvalue())  # type: ignore[union-attr]
                 real.flush()
+                if progress is not None:
+                    progress.render()
 
     with ThreadPoolExecutor() as pool:
         futures: dict[Any, _Node] = {}
@@ -208,6 +276,9 @@ def _run_parallel(nodes, real, keep_going, capture, ctx_config) -> None:
                         futures[pool.submit(run_node, n)] = n
                 if not futures:
                     break
+                if progress is not None:
+                    with lock:
+                        progress.render()
                 completed, _ = wait(list(futures), return_when=FIRST_COMPLETED)
                 for fut in completed:
                     node = futures.pop(fut)
@@ -225,5 +296,12 @@ def _run_parallel(nodes, real, keep_going, capture, ctx_config) -> None:
             # everything not yet started; the pool's exit joins the in-flight
             # tasks (on Ctrl-C their subprocesses got the terminal's SIGINT
             # too). The app layer reports "interrupted" and exits 130.
+            if progress is not None:
+                with lock:
+                    progress.clear()
             pool.shutdown(wait=False, cancel_futures=True)
             raise
+        finally:
+            if progress is not None:
+                with lock:
+                    progress.clear()

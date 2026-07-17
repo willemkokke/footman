@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import io
+import sys
 import threading
 
 import pytest
@@ -184,6 +186,60 @@ def test_parallel_output_is_grouped_not_interleaved(capsys):
     out = capsys.readouterr().out
     assert "A1\nA2\n" in out  # each task's lines stay contiguous
     assert "B1\nB2\n" in out
+
+
+class _Tty(io.StringIO):
+    def isatty(self) -> bool:
+        return True
+
+
+def test_parallel_progress_line_on_a_tty(monkeypatch):
+    fake = _Tty()
+    monkeypatch.setattr(sys, "stdout", fake)
+
+    def tasks(reg):
+        @reg.task
+        def a():
+            print("A-OUT")
+
+        @reg.task
+        def b():
+            print("B-OUT")
+
+    results = drive(tasks, "a b")
+    out = fake.getvalue()
+    assert all(r.ok for r in results)
+    assert "\r\x1b[K" in out  # the status line rendered and cleared
+    assert "running:" in out
+    assert "A-OUT" in out and "B-OUT" in out  # task blocks land intact
+    assert out.endswith("\r\x1b[K")  # the line never outlives the run
+
+
+def test_progress_absent_without_a_tty(capsys):
+    def tasks(reg):
+        @reg.task
+        def a(): ...
+
+        @reg.task
+        def b(): ...
+
+    drive(tasks, "a b")
+    assert "\r" not in capsys.readouterr().out  # buffers aren't TTYs: no spinner
+
+
+def test_progress_absent_when_quiet(monkeypatch):
+    fake = _Tty()
+    monkeypatch.setattr(sys, "stdout", fake)
+
+    def tasks(reg):
+        @reg.task
+        def a(): ...
+
+        @reg.task
+        def b(): ...
+
+    drive(tasks, "a b", ctx_config={"quiet": True})
+    assert "\r" not in fake.getvalue()
 
 
 def test_dependency_cycle_is_a_taught_error():

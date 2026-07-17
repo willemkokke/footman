@@ -63,6 +63,12 @@ def check():
 Tasks run stop-on-first-failure by default; `-k/--keep-going` runs every
 independent branch even if one fails.
 
+On a TTY, a parallel run keeps one live status line
+(`/ 2/5  running: lint, test`) between the finished tasks' output blocks.
+It is event-driven, always cleared before a block lands (so output stays
+non-interleaved), plain text under `--no-color`/`NO_COLOR`, and absent
+entirely under `--quiet`, `--json`, or when output is piped.
+
 ## JSON for CI and agents
 
 Pass `--json` and footman prints machine-readable results:

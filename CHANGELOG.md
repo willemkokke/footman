@@ -21,6 +21,13 @@ versions may include breaking changes.
   completer (carapace, …) — it answers for `fm` and passes every other
   command through. Verified against a real nushell. Every shell footman
   promised is now installed with one command.
+- **A live progress line for parallel runs.** On a TTY, the scheduler keeps
+  one status line (`/ 2/5 (1 failed)  running: lint, test`) between the
+  finished tasks' output blocks. Event-driven (no timer thread), always
+  cleared before a block lands so output stays non-interleaved, red only
+  when something failed, plain under `NO_COLOR`/`--no-color`, and absent
+  entirely under `--quiet`, `--json`, or a pipe. The last item on the
+  README's original roadmap besides `tools.*` growth.
 - **Bare `--install-completion` detects your shell.** No argument needed:
   footman walks the parent-process tree (the way typer's `shellingham`
   dependency does — without the dependency, and correctly skipping over
