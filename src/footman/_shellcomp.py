@@ -158,8 +158,11 @@ def detect_shell() -> str | None:
     confidently recognised.
     """
     if os.name == "nt":
-        # PSModulePath is the variable's real spelling; Windows env lookup is
-        # case-insensitive anyway, so keep the name recognisable.
+        # PSModulePath is machine-level environment on modern Windows, so
+        # this over-claims from cmd.exe — acceptable, because cmd has no
+        # completion mechanism and a PowerShell install is the most useful
+        # answer on that box. (Real spelling kept; Windows env lookup is
+        # case-insensitive anyway.)
         return "pwsh" if os.environ.get("PSModulePath") else None  # noqa: SIM112
     pid = os.getppid()
     for _ in range(10):
@@ -207,9 +210,15 @@ def _ask_shell(candidates: tuple[str, ...], args: list[str]) -> str | None:
     return None
 
 
-def _pwsh_profile() -> Path:
-    """The profile path PowerShell itself reports (`$PROFILE`)."""
-    path = _ask_shell(("pwsh", "powershell"), ["-NoProfile", "-Command", "$PROFILE"])
+def _pwsh_profile(candidates: tuple[str, ...] = ("pwsh", "powershell")) -> Path:
+    """The profile path PowerShell itself reports (`$PROFILE`).
+
+    *candidates* ordering matters on Windows: PowerShell 7 (`pwsh`) and
+    Windows PowerShell (`powershell`) keep *different* profile files, so an
+    explicit `--install-completion powershell` must ask powershell.exe, not
+    whichever binary happens to answer first.
+    """
+    path = _ask_shell(candidates, ["-NoProfile", "-Command", "$PROFILE"])
     if path is None:
         raise InstallError(
             "pwsh (or powershell) not found on PATH — install PowerShell first"
@@ -225,12 +234,14 @@ def _nu_config_path() -> Path:
     return Path(path)
 
 
-def install(shell: str, prog: str) -> list[str]:
+def install(shell: str, prog: str, *, powershell_first: bool = False) -> list[str]:
     """Install completion for *shell*; return the lines to tell the user.
 
-    Raises `KeyError` for an unsupported shell and `InstallError` when the
-    shell itself is missing — the caller owns the taught error (it knows the
-    brand).
+    `powershell_first` records that the user explicitly asked for Windows
+    PowerShell — its `$PROFILE` differs from pwsh's, so the query order must
+    honour the request. Raises `KeyError` for an unsupported shell and
+    `InstallError` when the shell itself is missing — the caller owns the
+    taught error (it knows the brand).
     """
     script = script_for(shell, prog)
 
@@ -248,7 +259,8 @@ def install(shell: str, prog: str) -> list[str]:
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(script, encoding="utf-8")
     if shell == "pwsh":
-        rc = _pwsh_profile()
+        order = ("powershell", "pwsh") if powershell_first else ("pwsh", "powershell")
+        rc = _pwsh_profile(order)
         line = f'. "{target}"'
     elif shell == "nushell":
         rc = _nu_config_path()

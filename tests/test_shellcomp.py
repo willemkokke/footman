@@ -76,7 +76,7 @@ def test_cli_install_end_to_end(home, tmp_path, monkeypatch, capsys):
 
 def test_pwsh_install_writes_script_and_profile_line(home, monkeypatch):
     profile = home / "pwsh-profile" / "Microsoft.PowerShell_profile.ps1"
-    monkeypatch.setattr(_shellcomp, "_pwsh_profile", lambda: profile)
+    monkeypatch.setattr(_shellcomp, "_pwsh_profile", lambda *a: profile)
     _shellcomp.install("pwsh", "fm")
     _shellcomp.install("pwsh", "fm")  # idempotent
     script = home / ".local" / "share" / "fm" / "completion.ps1"
@@ -84,6 +84,26 @@ def test_pwsh_install_writes_script_and_profile_line(home, monkeypatch):
     assert "Register-ArgumentCompleter -Native -CommandName fm" in body
     assert "--complete --" in body
     assert profile.read_text().count("completion.ps1") == 1
+
+
+def test_explicit_powershell_asks_powershell_first(home, tmp_path, monkeypatch):
+    # Windows PowerShell and pwsh keep different $PROFILEs — the explicit
+    # alias must query powershell.exe first, not whichever answers.
+    asked = []
+
+    def fake_ask(candidates, args):
+        asked.append(tuple(candidates))
+        return str(home / "profile.ps1")
+
+    monkeypatch.setattr(_shellcomp, "_ask_shell", fake_ask)
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
+    (tmp_path / "tasks.py").write_text(
+        "from footman import task\n@task\ndef t(): ...\n"
+    )
+    monkeypatch.chdir(tmp_path)
+    assert _app.run(["--install-completion", "powershell"]) == 0
+    assert _app.run(["--install-completion", "pwsh"]) == 0
+    assert asked == [("powershell", "pwsh"), ("pwsh", "powershell")]
 
 
 def test_pwsh_missing_is_a_taught_error(home, tmp_path, monkeypatch, capsys):
