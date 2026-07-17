@@ -126,6 +126,102 @@ def test_pwsh_missing_is_a_taught_error(home, tmp_path, monkeypatch, capsys):
     assert "not found on PATH" in capsys.readouterr().err
 
 
+# --- functional: the generated hooks driven by the real shells -------------------
+# (each skips when its shell is absent; CI's `shells` job installs them all
+# so nothing skips silently there)
+
+
+@pytest.fixture
+def fm_project_dir(home, tmp_path, monkeypatch):
+    """A tiny project with a built manifest, plus the venv bin for PATH."""
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
+    (tmp_path / "tasks.py").write_text(
+        'from footman import task\n\n@task\ndef lint(fix: bool = False):\n    "Lint."\n'
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("XDG_CACHE_HOME", str(home / ".cache"))
+    assert _app.run(["--list"]) == 0  # builds the manifest the hot path serves
+    return tmp_path
+
+
+VENV_BIN = Path(sys.executable).parent
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="bash not installed")
+def test_bash_completion_functional(home, fm_project_dir):
+    script = home / "completion.bash"
+    script.write_text(_shellcomp.script_for("bash", "fm"), encoding="utf-8")
+    body = (
+        f'PATH="{VENV_BIN}:$PATH"\n'
+        f'source "{script}"\n'
+        "COMP_WORDS=(fm li); COMP_CWORD=1\n"
+        "_fm_complete\n"
+        'printf "%s\\n" "${COMPREPLY[@]}"\n'
+        "COMP_WORDS=(fm lint --f); COMP_CWORD=2\n"
+        "_fm_complete\n"
+        'printf "%s\\n" "${COMPREPLY[@]}"\n'
+    )
+    out = subprocess.run(
+        ["bash", "-c", body],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        cwd=fm_project_dir,
+    )
+    assert out.returncode == 0, out.stderr
+    assert "lint" in out.stdout.split()
+    assert "--fix" in out.stdout.split()  # the bash-3.2 slice regression case
+
+
+@pytest.mark.skipif(shutil.which("zsh") is None, reason="zsh not installed")
+def test_zsh_completion_functional(home, fm_project_dir):
+    """Sources the real hook (registration incl. the compinit fallback), then
+    validates the hook's exact expansion idiom — full compadd needs an
+    interactive zle context no CI has."""
+    script = home / "completion.zsh"
+    script.write_text(_shellcomp.script_for("zsh", "fm"), encoding="utf-8")
+    body = (
+        f"path=('{VENV_BIN}' $path)\n"
+        f'source "{script}" || exit 9\n'
+        'words=(fm lint ""); CURRENT=3\n'
+        'raw="$(fm --complete -- "${(@)words[2,CURRENT]}" 2>/dev/null)"\n'
+        "completions=(${(f)raw})\n"
+        "print -rl -- $completions\n"
+    )
+    out = subprocess.run(
+        ["zsh", "-c", body],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        cwd=fm_project_dir,
+    )
+    assert out.returncode == 0, out.stderr
+    assert "--fix" in out.stdout.split()  # empty current word survives quoting
+
+
+@pytest.mark.skipif(shutil.which("fish") is None, reason="fish not installed")
+def test_fish_completion_functional(home, fm_project_dir):
+    """fish can query its own completion engine: `complete -C 'fm li'`."""
+    script = home / "completion.fish"
+    script.write_text(_shellcomp.script_for("fish", "fm"), encoding="utf-8")
+    body = (
+        f"set -gx PATH {VENV_BIN} $PATH\n"
+        f'source "{script}"\n'
+        'complete -C "fm li"\n'
+        'complete -C "fm lint --f"\n'
+    )
+    out = subprocess.run(
+        ["fish", "-c", body],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        cwd=fm_project_dir,
+    )
+    assert out.returncode == 0, out.stderr
+    assert "lint" in out.stdout.split()
+    assert "--fix" in out.stdout.split()
+
+
 # --- bare --install-completion: shell auto-detection -----------------------------
 
 

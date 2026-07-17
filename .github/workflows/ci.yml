@@ -53,6 +53,30 @@ jobs:
       - name: Test
         run: uv run pytest -q
 
+  shells:
+    name: completion · real shells
+    runs-on: ubuntu-latest
+    env:
+      NU_VERSION: "0.114.1"
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.13"
+          enable-cache: true
+      - name: Install zsh and fish
+        run: sudo apt-get update -q && sudo apt-get install -y -q zsh fish
+      - name: Install nushell (pinned release binary)
+        run: |
+          curl -fsSL "https://github.com/nushell/nushell/releases/download/${NU_VERSION}/nu-${NU_VERSION}-x86_64-unknown-linux-gnu.tar.gz" | tar xz
+          echo "$PWD/nu-${NU_VERSION}-x86_64-unknown-linux-gnu" >> "$GITHUB_PATH"
+      - run: uv sync --frozen
+      # -rs: report skips — every functional shell test must actually run
+      # here (bash/zsh/fish/nushell installed above; pwsh ships on runners).
+      - name: Functional completion tests
+        run: uv run pytest tests/test_shellcomp.py -q -rs
+
   coverage:
     name: coverage ≥ fail_under
     runs-on: ubuntu-latest

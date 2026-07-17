@@ -28,6 +28,16 @@ versions may include breaking changes.
   last resort. Undetectable → a taught error naming the five options.
   Verified through a real shell with `$SHELL` deliberately lying.
 
+### CI
+
+- **Every completion hook is now functionally tested against its real
+  shell.** New tests drive bash (`COMP_WORDS`/`COMPREPLY`), zsh (the hook's
+  exact expansion idiom), and fish (its own `complete -C` engine) alongside
+  the existing pwsh and nushell tests — and a dedicated `shells` CI job
+  installs zsh, fish, and a pinned nushell so none of them can skip
+  silently. The bash 3.2 slice bug taught us: a hook that hasn't met its
+  shell isn't tested.
+
 ### Fixed
 
 - The pwsh installer now writes its hook into **every** PowerShell profile
