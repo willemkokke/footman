@@ -168,27 +168,38 @@ def _label(cmd: Any, args: tuple[Any, ...]) -> str:
     return cmd if isinstance(cmd, str) else " ".join(map(str, cmd))
 
 
-# In-process execution touches process-global state (redirect_stdout swaps
-# sys.stdout for every thread; tools patch sys.argv), so concurrent in-process
-# runs are serialised. Subprocess runs keep their full parallelism.
-_inproc_lock = threading.Lock()
+def _call_for_code(cmd: Callable[..., Any], args: tuple[Any, ...]) -> int:
+    try:
+        returned = cmd(*args)
+    except SystemExit as exc:
+        return exc.code if isinstance(exc.code, int) else (0 if exc.code is None else 1)
+    if isinstance(returned, int) and not isinstance(returned, bool):
+        return returned
+    return 0
 
 
 def _run_callable(cmd: Callable[..., Any], args: tuple[Any, ...]) -> tuple[int, str]:
+    """Run a callable, capturing its stdout — parallel-safe under the router.
+
+    With the router installed, every write this thread makes already
+    dispatches through `current().sink`, so capture is a thread-confined
+    sink swap — concurrent in-process tools never touch each other's
+    output. Outside a routed run (bare calls in scripts/tests) there is no
+    router to lean on, so fall back to the classic global redirect.
+    """
     buffer = io.StringIO()
-    try:
-        with (
-            _inproc_lock,
-            contextlib.redirect_stdout(buffer),
-            contextlib.redirect_stderr(buffer),
-        ):
-            returned = cmd(*args)
-    except SystemExit as exc:
-        code = exc.code if isinstance(exc.code, int) else (0 if exc.code is None else 1)
+    if _router is not None:
+        ctx = current()
+        saved = ctx.sink
+        ctx.sink = buffer
+        try:
+            code = _call_for_code(cmd, args)
+        finally:
+            ctx.sink = saved
         return code, buffer.getvalue()
-    if isinstance(returned, int) and not isinstance(returned, bool):
-        return returned, buffer.getvalue()
-    return 0, buffer.getvalue()
+    with contextlib.redirect_stdout(buffer), contextlib.redirect_stderr(buffer):
+        code = _call_for_code(cmd, args)
+    return code, buffer.getvalue()
 
 
 def _run_subprocess(

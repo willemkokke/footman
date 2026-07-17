@@ -110,6 +110,61 @@ def test_in_process_preference_falls_back_to_subprocess():
     assert steps[0].command == "git status -s"
 
 
+def test_in_process_tools_run_concurrently_with_separate_capture(monkeypatch):
+    """Two argument-accepting in-process tools must overlap (the barrier
+    times out if they serialise) and must not cross-contaminate captures."""
+    import threading
+
+    from footman import manifest, schedule
+    from footman.registry import Group
+    from footman.split import split_chain
+
+    barrier = threading.Barrier(2, timeout=5)
+
+    def make_entry(marker):
+        def entry(argv=None):  # accepts args -> direct, lock-free path
+            barrier.wait()
+            print(f"{marker}-OUT")
+            return 0
+
+        return entry
+
+    entries = {"fake-a": make_entry("A"), "fake-b": make_entry("B")}
+    monkeypatch.setattr(tools, "_console_entry", entries.get)
+
+    reg = Group("root")
+
+    @reg.task
+    def a():
+        tools.Tool("fake-a", in_process=True)()
+
+    @reg.task
+    def b():
+        tools.Tool("fake-b", in_process=True)()
+
+    tree = manifest.build_manifest(reg)["tree"]
+    _, segments = split_chain(tree, ["a", "b"])
+    results = {r.task: r for r in schedule.run_plan(reg, segments)}
+    assert results["a"].ok and results["b"].ok
+    assert "A-OUT" in results["a"].steps[0].output
+    assert "B-OUT" not in results["a"].steps[0].output  # no cross-talk
+    assert "B-OUT" in results["b"].steps[0].output
+
+
+def test_zero_arg_entries_fall_back_to_argv_patching(monkeypatch):
+    seen = {}
+
+    def zero_arg_entry():  # reads sys.argv like an old argparse main
+        seen["argv"] = list(sys.argv)
+        return 0
+
+    monkeypatch.setattr(tools, "_console_entry", {"legacy": zero_arg_entry}.get)
+    saved = list(sys.argv)
+    assert tools.Tool("legacy", in_process=True)("build", fast=True) == 0
+    assert seen["argv"] == ["legacy", "build", "--fast"]
+    assert sys.argv == saved
+
+
 def test_in_process_preference_survives_subcommand_chaining():
     # `.report` chains off the in-process coverage tool and keeps the mode
     # (checked without executing: real coverage mid-test-session would read

@@ -32,6 +32,7 @@ from __future__ import annotations
 import re
 import subprocess
 import sys
+import threading
 from typing import Any
 
 from footman.context import run
@@ -68,21 +69,51 @@ def _console_entry(name: str) -> Any | None:
     return None
 
 
+def _accepts_args(entry: Any) -> bool:
+    """Can *entry* take the argument list directly (no sys.argv patching)?
+
+    Click commands (`cli(args)`) and argv-parameter mains
+    (`main(argv=None)`) both can — their first parameter is positional. Only
+    a true zero-arg `main()` needs `sys.argv` patched, which is process-
+    global and therefore serialised.
+    """
+    import inspect
+
+    try:
+        sig = inspect.signature(entry)
+    except (ValueError, TypeError):
+        return False
+    positional = (
+        inspect.Parameter.POSITIONAL_ONLY,
+        inspect.Parameter.POSITIONAL_OR_KEYWORD,
+        inspect.Parameter.VAR_POSITIONAL,
+    )
+    return any(p.kind in positional for p in sig.parameters.values())
+
+
+# Only the sys.argv-patching fallback needs serialising; argument-accepting
+# entries (the overwhelming majority) run fully in parallel.
+_argv_lock = threading.Lock()
+
+
 class Tool:
     """One command-line tool; see the module docstring for the grammar.
 
     `in_process` (a reserved keyword, like `nofail`) runs a Python tool
     inside footman's process instead of spawning: the tool's own
-    `[console_scripts]` entry point is resolved and called with `sys.argv`
-    patched — the same no-transcription contract, minus the interpreter
-    spawn. Beyond speed this matters for correctness: on macOS, SIP strips
-    `DYLD_*` from child processes, so a tool that needs Homebrew's native
-    libraries (mkdocs with cairo, say) can only see them in-process, where
-    an env var set before the import sticks. Tools constructed with
-    `in_process=True` default to it and fall back to a subprocess when no
-    entry point is installed; `in_process=True` at the *call* is a demand
-    and errors if the entry can't be found. In-process runs are serialised
-    (they touch process-global state); subprocesses stay fully parallel.
+    `[console_scripts]` entry point is resolved and invoked — the same
+    no-transcription contract, minus the interpreter spawn. Beyond speed
+    this matters for correctness: on macOS, SIP strips `DYLD_*` from child
+    processes, so a tool that needs Homebrew's native libraries (mkdocs
+    with cairo, say) can only see them in-process, where an env var set
+    before the import sticks. Tools constructed with `in_process=True`
+    default to it and fall back to a subprocess when no entry point is
+    installed; `in_process=True` at the *call* is a demand and errors if
+    the entry can't be found. Parallelism survives: entries that accept an
+    argument list (click commands, `main(argv=None)` — detected from the
+    signature) are called directly and capture through the per-task stdout
+    router; only a legacy zero-arg `main()` needs `sys.argv` patched, and
+    only those serialise.
     """
 
     def __init__(self, name: str, *base: str, in_process: bool = False) -> None:
@@ -115,14 +146,18 @@ class Tool:
                 )
             if entry is not None:
                 title = " ".join([self._argv0, *tail])
+                if _accepts_args(entry):
+                    # Direct call — no global state, fully parallel.
+                    return run(lambda: entry(tail), title=title, nofail=nofail)
 
-                def _invoke() -> Any:
-                    saved = sys.argv
-                    sys.argv = [self._argv0, *tail]
-                    try:
-                        return entry()
-                    finally:
-                        sys.argv = saved
+                def _invoke() -> Any:  # zero-arg main: patch argv, serialised
+                    with _argv_lock:
+                        saved = sys.argv
+                        sys.argv = [self._argv0, *tail]
+                        try:
+                            return entry()
+                        finally:
+                            sys.argv = saved
 
                 return run(_invoke, title=title, nofail=nofail)
         return run([self._argv0, *tail], nofail=nofail)
