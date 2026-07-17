@@ -138,9 +138,15 @@ def _print_plan(globals_: list[str], segments: list[Segment]) -> None:
 
 def _iter_tasks(node: dict, prefix: str = ""):
     for name, task in node["tasks"].items():
-        yield f"{prefix}{name}", task["help"]
+        yield f"{prefix}{name}", _task_line(task)
     for name, sub in node["groups"].items():
         yield from _iter_tasks(sub, f"{prefix}{name} ")
+
+
+def _task_line(task: dict) -> str:
+    """A task's one-line description, with its availability if disabled."""
+    note = f"(unavailable: {task['disabled']})" if task.get("disabled") else ""
+    return f"{task['help']}  {note}".strip() if note else task["help"]
 
 
 def _print_list(tree: dict) -> None:
@@ -156,7 +162,8 @@ def _print_list(tree: dict) -> None:
 
 def _print_tree(node: dict, indent: str = "") -> None:
     for name, task in node["tasks"].items():
-        help_text = f"  — {task['help']}" if task["help"] else ""
+        line = _task_line(task)
+        help_text = f"  — {line}" if line else ""
         print(f"{indent}{name}{help_text}")
     for name, sub in node["groups"].items():
         label = f"  — {sub['help']}" if sub["help"] else ""
@@ -237,6 +244,8 @@ def _print_task_help(tree: dict, path: list[str]) -> None:
     print(" ".join([f"usage: {_brand.prog}", *path, *fragments]))
     if task["help"]:
         print(f"\n  {task['help']}")
+    if task.get("disabled"):
+        print(f"\n  unavailable here: {task['disabled']}")
     positionals = [p for p in task["params"] if p["kind"] in ("argument", "variadic")]
     options = [p for p in task["params"] if p["kind"] in ("flag", "option")]
     for title, params in (("positionals", positionals), ("options", options)):
@@ -451,8 +460,19 @@ def _run(
         return found
     files, cfg = found
 
+    base = registry.Group("root")
+    plugins = cfg.get("plugins")
+    if isinstance(plugins, list) and plugins:
+        from footman import compose
+
+        try:
+            compose.mount_plugins(base, plugins)
+        except registry.RegistrationError as exc:
+            _error(str(exc))
+            return 2
+
     try:
-        reg = discover.load_tree(files)
+        reg = discover.load_tree(files, base=base)
     except discover.TasksImportError as exc:
         if isinstance(exc.original, registry.RegistrationError):
             _error(f"{exc.path}: {exc.original}")  # a user mistake, not a crash

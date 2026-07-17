@@ -9,6 +9,8 @@ directory. Nearer files win, so a package can override repo-wide defaults; a
   `tasks.py`).
 * `sequential` — run tasks one at a time by default (`fm` still overrides
   with `-s` / a parallel default).
+* `plugins` — `footman.tasks` entry points to mount as command groups
+  (opt-in; installing a package never adds tasks by itself).
 
 Unknown keys are kept but ignored, so newer settings never break an older
 footman.
