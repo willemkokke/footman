@@ -21,6 +21,12 @@ versions may include breaking changes.
   completer (carapace, …) — it answers for `fm` and passes every other
   command through. Verified against a real nushell. Every shell footman
   promised is now installed with one command.
+- **Bare `--install-completion` detects your shell.** No argument needed:
+  footman walks the parent-process tree (the way typer's `shellingham`
+  dependency does — without the dependency, and correctly skipping over
+  `uv run`), with the `PSModulePath` tell on Windows and `$SHELL` as the
+  last resort. Undetectable → a taught error naming the five options.
+  Verified through a real shell with `$SHELL` deliberately lying.
 
 ### Fixed
 

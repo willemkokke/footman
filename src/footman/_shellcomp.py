@@ -137,6 +137,59 @@ def _append_once(rc: Path, line: str) -> bool:
     return True
 
 
+_PROC_NAMES = {
+    "bash": "bash",
+    "zsh": "zsh",
+    "fish": "fish",
+    "nu": "nushell",
+    "pwsh": "pwsh",
+    "powershell": "pwsh",
+}
+
+
+def detect_shell() -> str | None:
+    """Best-effort, zero-dependency detection of the invoking shell.
+
+    Walks the parent-process tree (the immediate parent is often `uv`, not
+    the shell) looking for a known shell name — what shellingham does for
+    typer, without the dependency. Windows has no `ps`, so the PowerShell
+    tell there is the `PSModulePath` variable it exports to children. Falls
+    back to the login shell in `$SHELL`; returns `None` when nothing is
+    confidently recognised.
+    """
+    if os.name == "nt":
+        # PSModulePath is the variable's real spelling; Windows env lookup is
+        # case-insensitive anyway, so keep the name recognisable.
+        return "pwsh" if os.environ.get("PSModulePath") else None  # noqa: SIM112
+    pid = os.getppid()
+    for _ in range(10):
+        if pid <= 1:
+            break
+        try:
+            out = subprocess.run(
+                ["ps", "-p", str(pid), "-o", "ppid=,comm="],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            break
+        line = out.stdout.strip()
+        if out.returncode != 0 or not line:
+            break
+        ppid, _, comm = line.partition(" ")
+        # A login shell reports as "-zsh"; comm may be a full path.
+        name = Path(comm.strip()).name.lstrip("-")
+        if name in _PROC_NAMES:
+            return _PROC_NAMES[name]
+        try:
+            pid = int(ppid)
+        except ValueError:
+            break
+    login = Path(os.environ.get("SHELL", "")).name
+    return _PROC_NAMES.get(login)
+
+
 def _ask_shell(candidates: tuple[str, ...], args: list[str]) -> str | None:
     """Run the first available *candidates* binary and return its stdout."""
     for exe in candidates:

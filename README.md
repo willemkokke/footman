@@ -434,7 +434,7 @@ Global options bind to `fm` itself and go **before** the first task name
 | `-C`, `--directory PATH`  | run as if launched from PATH                    |
 | `-f`, `--tasks-file PATH` | use one file, no cascade                        |
 | `--config PATH`           | override config with a single TOML file         |
-| `--install-completion SH` | install the completion hook (bash/zsh/fish/pwsh/nushell) |
+| `--install-completion [SH]` | install the completion hook (detects your shell; or bash/zsh/fish/pwsh/nushell) |
 
 `--help` is the one global allowed *anywhere* before `--`: `fm deploy --help`
 is a read-only help request, never an execution. `fm --help` documents the
