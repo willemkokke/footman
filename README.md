@@ -439,26 +439,27 @@ Global options bind to `fm` itself and go **before** the first task name
 is a read-only help request, never an execution. `fm --help` documents the
 runner and its globals, `fm --help docs` a group, `fm --help deploy` a task.
 
-Accepted but not yet wired: `--install-completion SHELL` (prints guidance for
-now) and `--refresh-manifest` (the manifest already refreshes on every run).
+Accepted but not yet wired: `--refresh-manifest` (the manifest already
+refreshes on every run).
 
 ## Status
 
-**Alpha.** The core is built and tested (~95% coverage): the registry,
-signature→CLI manifest, the completion hot path, the chain grammar (all six
-rules with taught errors), typed execution (unions, one-or-many, `dict[K, V]`,
-comma-splitting with `nosplit`, custom types via their constructors), dynamic
-completion, the
+**Alpha.** The core is built and tested (coverage gated in CI): the registry,
+signature→CLI manifest, the completion hot path with chain-aware resolution
+and shell installers (`--install-completion bash|zsh|fish`), the chain grammar
+(all six rules with taught errors), typed execution (unions, one-or-many,
+`dict[K, V]`, comma-splitting with `nosplit`, custom types via their
+constructors, validation markers), dynamic completion, the
 `run()`/`tools` execution layer with capture and replay-on-failure, the DAG
 scheduler (parallel-by-default with `pre`/`post` dependencies, `parallel()`, and
 grouped non-interleaved output), the monorepo cascade (root-to-cwd task merge
-with defining-dir cwd and per-directory completion) and its config discovery
-(`[tool.footman]` / `footman.toml` / `--config`), and the global-option set.
+with defining-dir cwd and per-directory completion), its config discovery
+(`[tool.footman]` / `footman.toml` / `--config`), task composition
+(`when=`, `include()`, `footman.tasks` entry-point plugins), the
+`footman.testing` harness with pytest fixtures, and per-task `--help`.
 What's next:
 
-- shell-native completion installers (`--install-completion` for
-  bash/zsh/fish/pwsh/nushell) — today the resolver works via `fm --complete`;
 - a live TTY progress spinner and richer `tools.*` coverage;
-- chain-aware completion.
+- pwsh/nushell completion.
 
-See the design notes for the full roadmap. MIT licensed.
+See [ROADMAP.md](ROADMAP.md) for the full road to 1.0. MIT licensed.

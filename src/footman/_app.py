@@ -400,12 +400,17 @@ def _print_json(results: list[executor.TaskResult]) -> None:
 
 
 def _install_completion(shell: object) -> int:
-    _error(
-        "shell completion install is not wired up yet; "
-        f"the resolver works today via `{_brand.prog} --complete`. "
-        "Coming in a later cut."
-    )
-    return 1
+    from footman import _shellcomp
+
+    name = str(shell or "").lower()
+    if name not in _shellcomp.SHELLS:
+        supported = "|".join(_shellcomp.SHELLS)
+        got = f" (got {name!r})" if name else ""
+        _error(f"--install-completion expects one of {supported}{got}")
+        return 2
+    for line in _shellcomp.install(name, _brand.prog):
+        print(line)
+    return 0
 
 
 # --- orchestration -----------------------------------------------------------
