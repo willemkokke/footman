@@ -171,6 +171,7 @@ def test_mixed_tool_output_is_never_interleaved(monkeypatch, capsys, tmp_path):
     aggregate stream must be perfectly block-contiguous per tool, and every
     tool's lines strictly incremental."""
     import re
+    import threading
     import time
 
     from footman import manifest, schedule
@@ -187,8 +188,17 @@ def test_mixed_tool_output_is_never_interleaved(monkeypatch, capsys, tmp_path):
         "    time.sleep(0.005)\n"
     )
 
+    # Guard against vacuity, structurally rather than by wall clock (which
+    # flakes on slow CI runners whose interpreter startup dwarfs the sleeps):
+    # all four in-process entries must be running at once to pass this
+    # barrier. If the lock-free path ever regresses to serialised, the first
+    # entry blocks here holding the serialiser, the rest can never arrive,
+    # and the barrier breaks — failing the run on any hardware.
+    overlap = threading.Barrier(tool_count // 2, timeout=10)
+
     def make_entry(name):
         def entry(argv):  # accepts args -> the parallel, lock-free path
+            overlap.wait()
             for i in range(1, int(argv[0]) + 1):
                 print(f"{name} {i}", flush=True)
                 time.sleep(0.005)
@@ -216,15 +226,7 @@ def test_mixed_tool_output_is_never_interleaved(monkeypatch, capsys, tmp_path):
 
     tree = manifest.build_manifest(reg)["tree"]
     _, segments = split_chain(tree, names)
-    started = time.perf_counter()
     results = schedule.run_plan(reg, segments, ctx_config={"verbose": True})
-    wall = time.perf_counter() - started
-    # Guard against vacuity: serialised execution would need >= 8 * 100 ms of
-    # sleeps alone. Well under that proves the tools genuinely overlapped —
-    # the non-interleaving below is achieved despite concurrency, not by
-    # accidentally losing it.
-    serial_floor = tool_count * lines * 0.005
-    assert wall < serial_floor * 0.75, f"tools appear serialised ({wall:.2f}s)"
 
     # Level 1: each step captured only its own tool, in strict order.
     by_task = {r.task: r for r in results}
