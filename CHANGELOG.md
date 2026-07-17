@@ -7,6 +7,8 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+## [0.7.0] — 2026-07-17
+
 ### Removed
 
 - `--refresh-manifest` — it was parsed and never read; the manifest already
@@ -55,6 +57,11 @@ versions may include breaking changes.
   what *is* installed. New docs page: *Composing tasks*.
 - `registry.capture()` — the public seam for importing task-defining modules
   without touching the live registry.
+
+## [0.6.0] — 2026-07-17
+
+### Added
+
 - **A first-party testing story.** `footman.testing` ships `Runner.invoke`
   (drive a full command line in-process: exit code, stdout/stderr, structured
   `TaskResult`s, isolated completion cache), `recording()` (capture the
@@ -210,7 +217,9 @@ versions may include breaking changes.
 
 - Placeholder release claiming the `footman` name on PyPI. Not tagged in git.
 
-[Unreleased]: https://github.com/willemkokke/footman/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/willemkokke/footman/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/willemkokke/footman/compare/v0.6.0...v0.7.0
+[0.6.0]: https://github.com/willemkokke/footman/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/willemkokke/footman/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/willemkokke/footman/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/willemkokke/footman/compare/v0.2.0...v0.3.0
