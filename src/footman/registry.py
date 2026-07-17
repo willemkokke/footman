@@ -27,7 +27,8 @@ completion hot path never imports either.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+import contextlib
+from collections.abc import Callable, Iterator, Sequence
 from typing import Any, overload
 
 Task = Callable[..., Any]
@@ -73,6 +74,8 @@ class Group:
         name: str = "",
         pre: Sequence[Task] = (),
         post: Sequence[Task] = (),
+        when: bool | Callable[[], object] = True,
+        reason: str = "",
     ) -> Callable[[Task], Task]: ...
 
     def task(
@@ -82,6 +85,8 @@ class Group:
         name: str = "",
         pre: Sequence[Task] = (),
         post: Sequence[Task] = (),
+        when: bool | Callable[[], object] = True,
+        reason: str = "",
     ) -> Task | Callable[[Task], Task]:
         """Register a function as a task.
 
@@ -94,6 +99,19 @@ class Group:
         @task(pre=[format, lint, typecheck, test])
         def check(): ...
         ```
+
+        `when` disables a task that can't run *here* while keeping it listed
+        (pytest-skip semantics — the listing shows the `reason`, running it
+        refuses with the reason, and completion stays stable):
+
+        ```python
+        @task(when=lambda: shutil.which("docker"), reason="requires docker")
+        def up(): ...
+        ```
+
+        A callable `when` is re-evaluated live on every run — the cached
+        manifest is never trusted for availability. To *hide* a task
+        entirely, use plain Python: `if sys.platform == "darwin": @task ...`
         """
 
         def register(fn: Task) -> Task:
@@ -101,6 +119,9 @@ class Group:
             self._claim(key)
             fn._footman_pre = list(pre)  # type: ignore[attr-defined]
             fn._footman_post = list(post)  # type: ignore[attr-defined]
+            if when is not True:
+                fn._footman_when = when  # type: ignore[attr-defined]
+                fn._footman_reason = reason  # type: ignore[attr-defined]
             self.tasks[key] = fn
             return fn
 
@@ -127,3 +148,42 @@ def reset() -> None:
     """Clear the global `root` registry (used by the test-suite)."""
     root.tasks.clear()
     root.groups.clear()
+
+
+def availability(fn: Task) -> str | None:
+    """The reason a task is unavailable here, or `None` if it can run.
+
+    A callable `when` is evaluated *live* — never from the cached manifest —
+    so `DOCKER_HOST=… fm up` works the moment the environment does. A
+    predicate that raises reads as unavailable with the exception named
+    (a broken predicate must not grant availability).
+    """
+    when = getattr(fn, "_footman_when", True)
+    if when is True:
+        return None
+    reason = getattr(fn, "_footman_reason", "") or "condition not met"
+    if callable(when):
+        try:
+            ok = bool(when())
+        except Exception as exc:
+            return f"{reason} (when() raised {type(exc).__name__}: {exc})"
+        return None if ok else reason
+    return None if when else reason
+
+
+@contextlib.contextmanager
+def capture() -> Iterator[Group]:
+    """Redirect module-level `@task`/`group` registration into a fresh tree.
+
+    The seam `include()` uses to import a provider module without letting its
+    decorators land in the current registry: `root.tasks`/`root.groups` are
+    swapped for fresh dicts for the duration and the captured tree is yielded.
+    Reentrant — a provider may itself `include()` another provider.
+    """
+    captured = Group("root")
+    saved_tasks, saved_groups = root.tasks, root.groups
+    root.tasks, root.groups = captured.tasks, captured.groups
+    try:
+        yield captured
+    finally:
+        root.tasks, root.groups = saved_tasks, saved_groups

@@ -9,6 +9,20 @@ versions may include breaking changes.
 
 ### Added
 
+- **Composable task surfaces.** Three mechanisms, one contract (resolve at
+  import time, re-check availability live): `@task(when=…, reason=…)`
+  disables-but-lists a task that can't run here (pytest-skip semantics —
+  shown in `--list`/`--help`, refuses to run with the reason, a `pre`/`post`
+  dependency on it is a hard failure); `include(source, into=…, only=…,
+  exclude=…, override=…)` grafts another module's tasks into your tree
+  (loud on collisions and typos, provider imported under a registry capture
+  so nothing leaks, adopted tasks run from *your* directory); and packages
+  advertise a `Group` under the `footman.tasks` entry point that projects
+  opt into via `[tool.footman] plugins = ["name"]` — never auto-loaded,
+  user names shadow plugin groups, missing plugins are crisp errors naming
+  what *is* installed. New docs page: *Composing tasks*.
+- `registry.capture()` — the public seam for importing task-defining modules
+  without touching the live registry.
 - **A first-party testing story.** `footman.testing` ships `Runner.invoke`
   (drive a full command line in-process: exit code, stdout/stderr, structured
   `TaskResult`s, isolated completion cache), `recording()` (capture the

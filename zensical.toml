@@ -16,6 +16,7 @@ nav = [
   { "Typed signatures" = "typing.md" },
   { "Chaining & parallelism" = "orchestration.md" },
   { "Monorepos & config" = "monorepos.md" },
+  { "Composing tasks" = "composing.md" },
   { "Running tools" = "tools.md" },
   { "Testing your tasks" = "testing.md" },
   { "Completion" = "completion.md" },

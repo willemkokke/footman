@@ -77,9 +77,14 @@ def _overlay(base: Group, overlay: Group, directory: str) -> None:
             base.groups[name] = sub
 
 
-def load_tree(files: list[Path]) -> Group:
-    """Import each file (root first) and overlay them into one merged tree."""
-    merged = Group("root")
+def load_tree(files: list[Path], base: Group | None = None) -> Group:
+    """Import each file (root first) and overlay them into one merged tree.
+
+    *base* seeds the tree (config-mounted plugin groups go there), so
+    anything a tasks file defines overlays it — user names win over plugins
+    exactly as nearer cascade files win over farther ones.
+    """
+    merged = base if base is not None else Group("root")
     for index, path in enumerate(files):
         tree = _import_file(path, index)
         _overlay(merged, tree, str(path.parent))

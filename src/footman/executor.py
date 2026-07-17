@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 from pathlib import Path, PurePath
 from typing import Any
 
-from footman import coerce
+from footman import coerce, registry
 from footman.context import Context, StepResult, _current, context_param_name
 from footman.discover import defining_dir
 from footman.manifest import resolved_signature
@@ -193,6 +193,10 @@ def _call(
     return 0, returned, None
 
 
+class Unavailable(Exception):
+    """A `when=`-disabled task was asked to run; the message is the reason."""
+
+
 def run_task(fn: Task, seg: Segment, ctx: Context) -> TaskResult:
     """Bind *seg* to *fn* and run it within *ctx* (contextvar set for run()).
 
@@ -200,6 +204,10 @@ def run_task(fn: Task, seg: Segment, ctx: Context) -> TaskResult:
     parameter. Output routing (per-task buffering for parallel/`--json`) is the
     caller's job via `ctx.sink`; here we just capture its final value.
     """
+    # `when=` availability is re-checked live at the moment of execution —
+    # the manifest's cached answer is only ever a listing annotation.
+    if (reason := registry.availability(fn)) is not None:
+        return TaskResult(task=seg.task, ok=False, code=2, error=Unavailable(reason))
     try:
         args, kwargs = bind(seg, fn)
     except ChainError:

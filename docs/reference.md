@@ -67,6 +67,8 @@ def wheel(): ...
 | `check(fn)`                  | custom post-coercion validator (`ValueError` rejects) |
 | `tools.*`                    | typed wrappers for ruff, basedpyright, pytest, uv, … |
 | `footman.testing`            | `Runner`/`Result` + `recording()` — see [Testing](testing.md) |
+| `include`, `plugin`          | adopt tasks from modules/packages — see [Composing](composing.md) |
+| `@task(when=…, reason=…)`    | disable-but-list a task that can't run here          |
 
 ## Configuration keys
 
@@ -77,3 +79,4 @@ a file passed to `--config`. See [Monorepos & config](monorepos.md).
 | ------------ | --------------------------------------------------------- |
 | `tasks`      | Filename to look for in each folder (default `tasks.py`). |
 | `sequential` | Run tasks one at a time by default.                       |
+| `plugins`    | `footman.tasks` entry points to mount as command groups (opt-in). |

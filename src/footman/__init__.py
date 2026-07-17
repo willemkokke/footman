@@ -20,6 +20,8 @@ if TYPE_CHECKING:
     # on a bare `import footman` (the completion hot path).
     from footman.app import App as App
     from footman.app import Brand as Brand
+    from footman.compose import include as include
+    from footman.compose import plugin as plugin
     from footman.context import Context as Context
     from footman.context import RunFailed as RunFailed
     from footman.context import parallel as parallel
@@ -54,12 +56,14 @@ __all__ = [
     "env",
     "exists",
     "group",
+    "include",
     "isdir",
     "isfile",
     "main",
     "nosplit",
     "parallel",
     "passthrough",
+    "plugin",
     "run",
     "suggest",
     "task",
@@ -88,6 +92,10 @@ def __getattr__(name: str) -> object:
         from footman import registry
 
         return getattr(registry, name)
+    if name in ("include", "plugin"):
+        from footman import compose
+
+        return getattr(compose, name)
     if name in (
         "suggest",
         "Many",

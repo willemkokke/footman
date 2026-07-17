@@ -24,6 +24,14 @@ straight from the `footman` package (`from footman import task, run, App`).
 
 ::: footman.context.RunFailed
 
+## Composing tasks
+
+::: footman.compose.include
+
+::: footman.compose.plugin
+
+::: footman.registry.capture
+
 ## Custom CLI
 
 ::: footman.app.App

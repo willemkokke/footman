@@ -29,7 +29,7 @@ import warnings
 from pathlib import Path
 from typing import Any
 
-from footman import _paths, coerce
+from footman import _paths, coerce, registry
 from footman.context import context_param_name
 from footman.params import suggest
 from footman.registry import Group
@@ -216,7 +216,7 @@ def _finish(spec: dict[str, Any], memo: dict[int, list[str]]) -> dict[str, Any]:
 def _task_node(fn: Any, memo: dict[int, list[str]]) -> dict[str, Any]:
     sig = resolved_signature(fn)
     ctx_name = context_param_name(sig)  # the injected ctx param is not a CLI arg
-    return {
+    node = {
         "help": (inspect.getdoc(fn) or "").partition("\n")[0],
         "params": [
             _finish(param_spec(p), memo)
@@ -224,6 +224,11 @@ def _task_node(fn: Any, memo: dict[int, list[str]]) -> dict[str, Any]:
             if p.name != ctx_name
         ],
     }
+    # Additive availability annotation (`when=`): the name stays listed and
+    # completable either way — execution re-checks the predicate live.
+    if (reason := registry.availability(fn)) is not None:
+        node["disabled"] = reason
+    return node
 
 
 def _node(g: Group, memo: dict[int, list[str]]) -> dict[str, Any]:
