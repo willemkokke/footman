@@ -68,6 +68,37 @@ includes the project import the Python-based runners pay on every run.
 - poe stays flat because it never imports the project. (Its `noop` is an
   in-process `expr`; a `cmd` task would add a subprocess spawn on top.)
 
+### Orchestration: the same `check`, composed each tool's way
+
+The composite everyone actually runs all day: four check steps, each an
+identical in-process 0.5 s sleep (the honest stand-in for an I/O-bound tool
+run — a real lint/test step spawns a subprocess and waits, which parallelises
+exactly like a sleep). Each tool composes them **idiomatically**, and
+fairness cuts both ways: a tool with parallel support gets to use it, a tool
+without runs its native serial form.
+
+Floors: 0.5 s parallel, 2.0 s serial. Reproduce with
+`uv run --group comparison python comparison/bench_check.py`.
+
+| runner  | composition                    | wall (mean) | overhead over floor |
+| ------- | ------------------------------ | ----------: | ------------------: |
+| footman | parallel (pre-deps, *default*) |  **563 ms** |               63 ms |
+| poe     | parallel (`parallel` task)     |      625 ms |              125 ms |
+| typer   | serial (no orchestration)      |     2092 ms |               92 ms |
+| duty    | serial (pre-duties)            |     2120 ms |              120 ms |
+| invoke  | serial (pre-tasks)             |     2146 ms |              146 ms |
+
+- **The gap that matters is 4×, and it isn't overhead — it's architecture.**
+  duty and invoke run pre-tasks serially (no parallel option exists to turn
+  on); the same four steps cost the sum instead of the max.
+- **poe genuinely has parallelism** (a dedicated `parallel` task type since
+  0.48) — credit where due. The difference is spelling: in poe you declare a
+  `parallel` composite per case; footman's `pre`-deps are parallel *by
+  default* and go serial only when you ask (`-s`).
+- **typer gives you no orchestration at all** — four calls in a row. You can
+  hand-roll a `ThreadPoolExecutor` in the command body, but then you wrote
+  the scheduler yourself, which is the job a task runner exists to do.
+
 ### Launch overhead: is a typer app too heavy?
 
 The reason for measuring launch and not just completion — "just write a typer

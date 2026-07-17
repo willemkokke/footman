@@ -54,6 +54,42 @@ def noop():
     """No-op (execution-overhead benchmark)."""
 
 
+# --- orchestration benchmark: four identical I/O-bound steps ------------------
+# Each sleeps 0.5 s in-process (the stand-in for a tool run, which releases the
+# GIL exactly like a subprocess). footman composes them as pre-deps, so its
+# parallel-by-default scheduler runs them concurrently.
+import time  # noqa: E402
+
+
+@task
+def bw1():
+    """Simulated check step (0.5 s)."""
+    time.sleep(0.5)
+
+
+@task
+def bw2():
+    """Simulated check step (0.5 s)."""
+    time.sleep(0.5)
+
+
+@task
+def bw3():
+    """Simulated check step (0.5 s)."""
+    time.sleep(0.5)
+
+
+@task
+def bw4():
+    """Simulated check step (0.5 s)."""
+    time.sleep(0.5)
+
+
+@task(pre=[bw1, bw2, bw3, bw4])
+def bench_check():
+    """Composite check over the four simulated steps (benchmark)."""
+
+
 dist = group("dist", help="Build and publish")
 
 

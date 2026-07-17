@@ -60,6 +60,41 @@ def noop(ctx):
     """No-op (execution-overhead benchmark)."""
 
 
+# --- orchestration benchmark: four identical I/O-bound steps ------------------
+# duty runs pre-duties serially (verified: no parallel option exists), so its
+# composite is the serial sum.
+import time  # noqa: E402
+
+
+@duty
+def bw1(ctx):
+    """Simulated check step (0.5 s)."""
+    time.sleep(0.5)
+
+
+@duty
+def bw2(ctx):
+    """Simulated check step (0.5 s)."""
+    time.sleep(0.5)
+
+
+@duty
+def bw3(ctx):
+    """Simulated check step (0.5 s)."""
+    time.sleep(0.5)
+
+
+@duty
+def bw4(ctx):
+    """Simulated check step (0.5 s)."""
+    time.sleep(0.5)
+
+
+@duty(pre=["bw1", "bw2", "bw3", "bw4"])
+def bench_check(ctx):
+    """Composite check over the four simulated steps (benchmark)."""
+
+
 @duty
 def dist_build(ctx):
     """Build the sdist and wheel."""

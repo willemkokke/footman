@@ -59,6 +59,41 @@ def noop(c):
     """No-op (execution-overhead benchmark)."""
 
 
+# --- orchestration benchmark: four identical I/O-bound steps ------------------
+# invoke runs pre-tasks serially (no parallel option exists), so its composite
+# is the serial sum.
+import time  # noqa: E402
+
+
+@task
+def bw1(c):
+    """Simulated check step (0.5 s)."""
+    time.sleep(0.5)
+
+
+@task
+def bw2(c):
+    """Simulated check step (0.5 s)."""
+    time.sleep(0.5)
+
+
+@task
+def bw3(c):
+    """Simulated check step (0.5 s)."""
+    time.sleep(0.5)
+
+
+@task
+def bw4(c):
+    """Simulated check step (0.5 s)."""
+    time.sleep(0.5)
+
+
+@task(pre=[bw1, bw2, bw3, bw4])
+def bench_check(c):
+    """Composite check over the four simulated steps (benchmark)."""
+
+
 @task(name="build")
 def dist_build(c):
     """Build the sdist and wheel."""
@@ -76,6 +111,6 @@ dist.add_task(dist_build)
 dist.add_task(dist_clean)
 
 ns = Collection()
-for t in (lint, format, typecheck, test, check, noop):
+for t in (lint, format, typecheck, test, check, noop, bw1, bw2, bw3, bw4, bench_check):
     ns.add_task(t)
 ns.add_collection(dist)

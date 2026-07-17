@@ -21,3 +21,19 @@ help = "Lint with ruff."
 cmd = "ruff check src tests"
 # A single boolean flag already needs its own args table:
 args = [{ name = "fix", options = ["--fix"], type = "boolean" }]
+
+# --- orchestration benchmark: four identical I/O-bound steps -----------------
+# Each sleeps 0.5 s in-process (`expr` tasks don't spawn). poe 0.48 has a
+# `parallel` task type, so its composite gets to use it — fairness demands it.
+[tool.poe.tasks.bw1]
+expr = "__import__('time').sleep(0.5)"
+[tool.poe.tasks.bw2]
+expr = "__import__('time').sleep(0.5)"
+[tool.poe.tasks.bw3]
+expr = "__import__('time').sleep(0.5)"
+[tool.poe.tasks.bw4]
+expr = "__import__('time').sleep(0.5)"
+
+[tool.poe.tasks.bench-check]
+help = "Composite check over the four simulated steps (benchmark)."
+parallel = ["bw1", "bw2", "bw3", "bw4"]
