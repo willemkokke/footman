@@ -14,6 +14,11 @@ from footman.registry import Group
 from footman.split import ChainError, split_chain
 
 
+def _even(v: int) -> None:
+    if v % 2:
+        raise ValueError(f"{v} must be even")
+
+
 def build_tree(build):
     reg = Group("root")
     build(reg)
@@ -261,6 +266,35 @@ def test_variadic_annotated_manifest_has_types_and_bounds():
     spec = tree["tasks"]["add"]["params"][0]
     assert spec["types"] == ["int"]
     assert spec["min"] == 0 and spec["max"] == 10
+
+
+# --- dict value markers ------------------------------------------------------
+
+
+def test_dict_value_bounds_are_enforced():
+    seen = {}
+
+    def tasks(reg):
+        @reg.task
+        def build(opts: dict[str, Annotated[int, between(1, 5)]] | None = None):
+            seen["opts"] = opts
+
+    run(tasks, "build --opts x=3")
+    assert seen["opts"] == {"x": 3}
+
+    _, tree = build_tree(tasks)
+    with pytest.raises(ChainError, match="between 1 and 5"):
+        split_chain(tree, ["build", "--opts", "x=99"])
+
+
+def test_dict_value_check_runs_per_value():
+    def tasks(reg):
+        @reg.task
+        def build(counts: dict[str, Annotated[int, check(_even)]] | None = None): ...
+
+    results = run(tasks, "build --counts x=3")  # 3 is odd -> check fails at bind
+    assert not results[0].ok
+    assert isinstance(results[0].error, ValueError)
 
 
 def test_env_list_comma_splits(monkeypatch):
