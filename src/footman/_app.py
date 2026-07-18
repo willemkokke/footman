@@ -483,6 +483,19 @@ def _run(
             _error(f"-C {g['directory']}: {exc}")
             return 2
 
+    return _execute(argv, g, collect)
+
+
+def _execute(
+    argv: list[str],
+    g: dict[str, object],
+    collect: list[executor.TaskResult] | None,
+) -> int:
+    """Discover the cascade, load + sync its manifest, then run the tree.
+
+    Everything after globals/`--version`/`--install-completion`/`-C`: the
+    disk-backed half that `run_group` (in-memory) deliberately skips.
+    """
     found = _discover(g)
     if isinstance(found, int):
         return found
@@ -519,6 +532,24 @@ def _run(
     except manifest.ManifestError as exc:  # broken completer, bad markers, …
         _error(str(exc))
         return 2
+
+    return _run_tree(reg, tree, argv, cfg, collect)
+
+
+def _run_tree(
+    reg: registry.Group,
+    tree: dict,
+    argv: list[str],
+    cfg: dict[str, object],
+    collect: list[executor.TaskResult] | None,
+) -> int:
+    """The post-manifest tail: help/where/split/list/tree/dry-run/run/report.
+
+    Shared by the disk path (`_execute`) and the in-memory path (`run_group`),
+    so both honour `--help`/`--version`/`--list`/`--tree`/`--json` identically.
+    Globals are re-derived from `argv` (already validated upstream).
+    """
+    g = _globals_to_dict(split._parse_globals(argv, 0)[0])
 
     if _wants_help(argv):
         return _print_help(tree, argv)
@@ -572,3 +603,34 @@ def _run(
         _print_summary(results, timings=bool(g.get("timings")))
 
     return next((r.code or 1 for r in results if not r.ok), 0)
+
+
+def run_group(
+    root: registry.Group,
+    argv: list[str],
+    brand: Brand = DEFAULT_BRAND,
+    collect: list[executor.TaskResult] | None = None,
+) -> int:
+    """Drive an in-memory Group tree: globals, `--version`, manifest, run.
+
+    The in-memory sibling of `_run`, minus discovery/cascade/config and the
+    `-C`/`--install-completion` machinery those imply. No KeyboardInterrupt
+    wrapper (D13): a test runner must let Ctrl-C reach pytest. This is the
+    single shared surface `footman.testing.Runner` drives, so its Group mode
+    can never drift from the real CLI's help/version/list/tree/json behaviour.
+    """
+    global _brand
+    _brand = brand
+    try:
+        pre_globals, _ = split._parse_globals(argv, 0)
+    except split.ChainError as exc:
+        _error(str(exc))
+        return 2
+    g = _globals_to_dict(pre_globals)
+
+    if g.get("version"):
+        print(f"{_brand.name} {_brand.version}")
+        return 0
+
+    tree = manifest.build_manifest(root)["tree"]
+    return _run_tree(root, tree, argv, {}, collect)
