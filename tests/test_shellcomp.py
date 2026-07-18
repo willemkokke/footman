@@ -27,6 +27,9 @@ def test_bash_install_writes_script_and_rc_line(home):
     assert script.exists()
     body = script.read_text()
     assert "fm --complete --" in body and "complete -o default" in body
+    # F46: glob-safe — no split-and-glob COMPREPLY=($(...)); %q-quoted read loop.
+    assert "COMPREPLY=($(" not in body
+    assert "printf -v line '%q'" in body
     rc = (home / ".bashrc").read_text()
     assert f"source {script}" in rc
     assert any("installed" in line for line in lines)
