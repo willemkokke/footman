@@ -194,12 +194,14 @@ def _value_hint(p: dict) -> str:
 
 def _usage_fragment(p: dict) -> str:
     kind = p["kind"]
+    required = p.get("required")
     if kind == "flag":
-        return f"[--{p['name']}]"
+        return f"--{p['name']}" if required else f"[--{p['name']}]"
     if kind == "option":
         core = f"--{p['name']} {_value_hint(p)}"
-        many = p.get("multiple") or p.get("mapping")
-        return f"[{core} ...]" if many else f"[{core}]"
+        if p.get("multiple") or p.get("mapping"):
+            core += " ..."
+        return core if required else f"[{core}]"
     if kind == "variadic":
         return f"[<{p['name']}> ...]"
     suffix = "..." if p.get("multiple") else ""
@@ -231,6 +233,8 @@ def _param_detail(p: dict) -> str:
         bits.append("repeatable" if p.get("nosplit") else "repeatable/comma-split")
     if p["kind"] == "variadic":
         bits.append("extra arguments (also receives everything after --)")
+    if p.get("required"):
+        bits.append("required")
     return "; ".join(bits)
 
 
@@ -282,7 +286,9 @@ def _print_global_help(tree: dict) -> None:
         label = f"{alias}, {name}" if alias else f"    {name}"
         if hint:
             label += f" {hint}"
-        rows.append((label, help_text))
+        # `.replace` (not `.format`) so a help string containing braces can
+        # never crash help output.
+        rows.append((label, help_text.replace("{prog}", prog)))
     width = max(len(label) for label, _ in rows)
     for label, help_text in rows:
         print(f"  {label:<{width}}  {help_text}")

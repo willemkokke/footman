@@ -63,3 +63,14 @@ def test_custom_brand_runs_tasks_from_cascade(tmp_path):
     result = acme.invoke("ship", cwd=tmp_path)  # cascade discovery, rebranded
     assert result.ok
     assert "shipped" in result.stdout
+
+
+def test_help_globals_row_uses_brand(tmp_path):
+    (tmp_path / ".git").mkdir()
+    (tmp_path / "tasks.py").write_text(
+        "from footman import task\n@task\ndef hi():\n    print('hi')\n"
+    )
+    acme = Runner(App(name="Acme", prog="acme", version="1.4.0"))
+    result = acme.invoke("--help", cwd=tmp_path)
+    assert "help for acme" in result.stdout
+    assert "help for fm" not in result.stdout
