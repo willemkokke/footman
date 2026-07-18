@@ -138,16 +138,59 @@ def _config_home() -> Path:
     return Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config")
 
 
+def _sniff_encoding(raw: bytes) -> tuple[str, str]:
+    """(decode, append) encodings for rc bytes, sniffed from any leading BOM.
+
+    The append encoder is BOM-free (`utf-8`, `utf-16-le`/`-be`) so we never
+    inject a second BOM mid-file. With no BOM, prefer UTF-8 and fall back to
+    latin-1, which round-trips arbitrary bytes rather than raising.
+    """
+    if raw.startswith(b"\xef\xbb\xbf"):
+        return "utf-8-sig", "utf-8"
+    if raw.startswith(b"\xff\xfe"):
+        return "utf-16", "utf-16-le"
+    if raw.startswith(b"\xfe\xff"):
+        return "utf-16", "utf-16-be"
+    try:
+        raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return "latin-1", "latin-1"
+    return "utf-8", "utf-8"
+
+
 def _append_once(rc: Path, line: str) -> bool:
-    """Append *line* to *rc* unless present; True if the file changed."""
-    existing = rc.read_text(encoding="utf-8") if rc.exists() else ""
+    """Append *line* to *rc* unless present; True if the file changed.
+
+    rc files carry whatever encoding the shell wrote — a Windows PowerShell 5
+    `$PROFILE` is UTF-16 with a BOM. Read the bytes, sniff the BOM, and append
+    in the matching (BOM-free) encoding, so a UTF-16 profile is neither crashed
+    on read nor corrupted by a UTF-8 tail. A residual write failure becomes an
+    `InstallError` naming the exact line to add, routed to the existing exit-2
+    path instead of a raw traceback.
+    """
+    try:
+        raw = rc.read_bytes() if rc.exists() else b""
+    except OSError as exc:
+        raise InstallError(_manual_hint(rc, line, exc)) from exc
+
+    read_enc, append_enc = _sniff_encoding(raw)
+    existing = raw.decode(read_enc, errors="replace")
     if line in existing:
         return False
-    rc.parent.mkdir(parents=True, exist_ok=True)
+
     joiner = "" if existing.endswith("\n") or not existing else "\n"
-    with rc.open("a", encoding="utf-8") as fh:
-        fh.write(f"{joiner}{line}\n")
+    payload = f"{joiner}{line}\n".encode(append_enc)
+    try:
+        rc.parent.mkdir(parents=True, exist_ok=True)
+        with rc.open("ab") as fh:  # binary: no TextIOWrapper BOM injection
+            fh.write(payload)
+    except OSError as exc:
+        raise InstallError(_manual_hint(rc, line, exc)) from exc
     return True
+
+
+def _manual_hint(rc: Path, line: str, exc: Exception) -> str:
+    return f"could not update {rc} ({exc}) — add this line yourself: {line}"
 
 
 _PROC_NAMES = {

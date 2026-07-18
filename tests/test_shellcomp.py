@@ -42,6 +42,35 @@ def test_install_is_idempotent(home):
     assert rc.count("completion.bash") == 1  # sourced once, not twice
 
 
+def test_append_once_utf16_profile(tmp_path):
+    # F47: a WinPS5 UTF-16 profile is appended in UTF-16 — not crashed on read
+    # nor corrupted with a UTF-8 tail — with only its original BOM.
+    rc = tmp_path / "profile.ps1"
+    rc.write_bytes("Set-Alias foo bar\n".encode("utf-16"))  # utf-16 + BOM
+    assert _shellcomp._append_once(rc, '. "x"') is True
+    text = rc.read_bytes().decode("utf-16")  # round-trips
+    assert "Set-Alias foo bar" in text and '. "x"' in text
+    assert rc.read_bytes().count(b"\xff\xfe") == 1  # no second BOM mid-file
+    assert _shellcomp._append_once(rc, '. "x"') is False  # idempotent
+
+
+def test_append_once_latin1_file(tmp_path):
+    # F47: a non-UTF-8 rc file (latin-1 bytes) doesn't crash; latin-1 round-trips.
+    rc = tmp_path / ".bashrc"
+    rc.write_bytes(b"# caf\xe9\n")  # latin-1 'é' — invalid UTF-8
+    assert _shellcomp._append_once(rc, "source x") is True
+    assert b"source x" in rc.read_bytes()
+
+
+def test_append_once_unwritable_is_install_error(tmp_path):
+    # F47: a write failure is a taught InstallError (exit-2 path), not a
+    # traceback.
+    (tmp_path / "sub").write_text("i am a file, not a dir")
+    rc = tmp_path / "sub" / "rc"
+    with pytest.raises(_shellcomp.InstallError, match="add this line yourself"):
+        _shellcomp._append_once(rc, "source x")
+
+
 def test_zsh_install(home):
     _shellcomp.install("zsh", "fm")
     script = home / ".local" / "share" / "fm" / "completion.zsh"
