@@ -7,6 +7,8 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+## [0.9.0] — 2026-07-18
+
 ### Changed
 
 - **In-process tools import only when they actually execute.** Resolving a
@@ -18,6 +20,16 @@ versions may include breaking changes.
   behaviour change: a console-scripts entry that exists but fails to import
   now surfaces as a task failure with the real error, instead of silently
   falling back to a subprocess.
+- **Exit codes now follow the documented contract.** A binding refusal — a bad
+  coercion, an out-of-bounds value, an unknown option — exits **2**, not a flat
+  `1`; a `run()` command that fails propagates the command's own exit code; and
+  a failing `parallel()` thunk propagates too. `fm` mirrors what it ran.
+- **`--no-color` / `NO_COLOR` / `TERM=dumb` drop the live progress line
+  entirely**, matching piped output, instead of rewriting it without escapes.
+- **In-process tools honour cwd and env.** They run from the folder that defined
+  the task and see its environment overlay — the run-from-defining-folder
+  contract the subprocess path already obeyed — and `run(..., capture=False)`
+  streams output live instead of buffering it.
 
 ### Added
 
@@ -70,6 +82,20 @@ versions may include breaking changes.
   argument-accepting entries (click commands, `main(argv=None)` — nearly
   all of them) are called directly. Only a legacy zero-arg `main()` gets
   the `sys.argv`-patching fallback, and only those serialise.
+- **Completions that teach.** In zsh and fish, task and group descriptions
+  render next to the candidates; `--help` ends with a synthesised `Example:`
+  invocation built straight from the signature; and a "did you mean?" hint fires
+  at every not-found site (unknown task, option, choice, or `--where` target).
+  Bare `fm` now lists the tasks instead of erroring.
+- **Completions that stay fresh.** A stale-while-revalidate background refresh
+  rebuilds a directory's cached manifest once it ages past `[tool.footman]
+  completion.max_age` (default 10 min; `off`/`0` disables) — the <kbd>Tab</kbd>
+  returns the cached answer instantly and never blocks on the rebuild.
+- **`--opt=value` completes in every shell**, and value-bearing globals (`-C`,
+  `--config`, `--tasks-file`, …) no longer send the completion walk descending
+  as if their value were a task.
+- **`capture`, `Runner`, `Result`, and `recording`** import straight from
+  `footman` (previously only from `footman.testing`).
 
 ### Fixed
 
@@ -79,6 +105,34 @@ versions may include breaking changes.
   of the fresh position. The hook now flags the empty position with
   `--empty-partial` and the resolver supplies the `""` itself. **Re-run
   `fm --install-completion pwsh`** to pick up the new hook.
+- **`--help` never touches the filesystem.** `fm --install-completion fish
+  --help` used to write rc files before printing anything; and `fm --help` with
+  no tasks file now shows the global help (so a stuck newcomer sees `-f`/`-C`),
+  not a bare one-liner.
+- **`-C/--directory` restores the working directory** afterwards, so an
+  in-process caller (a test runner) is no longer left in the changed folder.
+- **`-f/--tasks-file` no longer poisons** the directory's cached completion — a
+  one-off `-f` run leaves <kbd>Tab</kbd> describing the real cascade.
+- **Plugins and the cascade are sturdier.** A plugin that fails to import is
+  taught at exit 2 instead of dumping a traceback on every invocation;
+  `availability()` never crashes on a `requires=` whose parent package raises; a
+  cascade file that registers tasks and then raises no longer leaves ghost tasks
+  behind; each `tasks.py` gets its own copy of a sibling `import helpers`; and
+  provider trees are isolated per project so one project's tasks can't leak into
+  another.
+- **Completion install is more robust.** bash `COMPREPLY` is glob-safe
+  (`printf %q`), rc-file edits sniff BOM/encoding so a UTF-16 Windows PowerShell
+  profile no longer crashes the install, and installs target the rc files shells
+  actually read (`$ZDOTDIR` for zsh; the login profile alongside `.bashrc` for
+  macOS bash).
+- **Loud errors where footman used to stay silent** — a missing or typo'd
+  `--config` file, a `**kwargs` task, `=value` on a flag-shaped global, and a
+  `--` handed to an option as its value.
+- A broad correctness pass across type coercion (strict env and variadic values,
+  unions that carry both choices and types, dict value-type markers), the
+  scheduler (each explicit chain segment runs; `parallel()` steps surface in
+  `--json`), and the tools surface (`tools.run`/`tools.sys` resolve to Tools;
+  `installed_version()` decodes UTF-8).
 
 ## [0.8.0] — 2026-07-17
 
@@ -367,7 +421,8 @@ versions may include breaking changes.
 
 - Placeholder release claiming the `footman` name on PyPI. Not tagged in git.
 
-[Unreleased]: https://github.com/willemkokke/footman/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/willemkokke/footman/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/willemkokke/footman/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/willemkokke/footman/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/willemkokke/footman/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/willemkokke/footman/compare/v0.5.0...v0.6.0
