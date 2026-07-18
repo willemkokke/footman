@@ -170,6 +170,11 @@ def _print_list(tree: dict) -> None:
 
 
 def _print_tree(node: dict, indent: str = "") -> None:
+    # Top-level empty tree (indent sentinel) → mirror _print_list rather than
+    # printing zero bytes and exiting 0.
+    if not indent and not node["tasks"] and not node["groups"]:
+        print("No tasks defined.")
+        return
     for name, task in node["tasks"].items():
         line = _task_line(task)
         help_text = f"  — {line}" if line else ""
