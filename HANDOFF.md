@@ -18,14 +18,14 @@ Implementing the 65-finding whole-repo review fix plan in `PLAN.md` (11 phases).
 | 4 required options / Any / bare collections / guards | F02,F03,F45,F00,F25,F32,F33,F30,F44 | `f566b88` | ✅ |
 | 5 scheduler duplicate segments | F09, F59 | `94ec76f` | ✅ |
 | 6 context remainder (parallel steps/fail, callable capture/cwd/env, no-color, env tests) | F12, F13, F42, F60, F17, F41, F40 | `9ca27b7`,`b5e79b0`,`3d974ce`,`9a555e4` | ✅ |
+| 7 app/compose/discovery/config (the big one, 14 items) | F36,F18,F06,F63,F37,F52,F35,F07,F08,F14,F38,F62,F29,F15,F43,F20,F57,F58 | `d232882`…`a3706b7` (14 commits) | ✅ |
 
-**32/65 findings resolved. Coverage steady ~92.3%.** `git log --oneline main..HEAD` is the ledger.
+**50/65 findings resolved. Coverage steady ~92.4%.** `git log --oneline main..HEAD` is the ledger.
 
 > **\*F39 is only half done.** Phase 2 fixed the `context.py` subprocess decode. The **`tools.py` half** (`Tool.installed_version`'s `subprocess.run` needs `encoding="utf-8", errors="replace"`) is deliberately deferred to **Phase 8.1** (same lines that commit rewrites). Don't forget it.
 
-## Remaining: Phases 7–11 (see PLAN.md for full item specs)
+## Remaining: Phases 8–11 (see PLAN.md for full item specs)
 
-- **7 — app/compose/discovery/config (14), the big one:** do **7.1 first** — the move-only `_app.py` refactor extracting `_execute` + `_run_tree` + `run_group`; then 7.2 (help-first gating), 7.3 (`-C` cwd restore), 7.4 (`-f` no manifest rewrite), 7.6 (empty `--tree`) are small edits *inside* it. 7.5 (Runner KI propagation) needs `run_group`. Then the self-contained compose/discovery/registry/config items (7.7–7.14) can go in any order.
 - **8 — tools surface (2):** 8.1 privatize `tools.py` module imports + declare them in `tools.pyi` + **AST parity test** (land before other tools.py edits) + **fold in the deferred F39 tools.py hunk**; 8.2 `recording()` kwarg overrides.
 - **9 — completion (7):** F49 `--opt=value`; F61 model value-bearing globals (drift-pin against `split.GLOBALS`); F16 pwsh `--empty-partial`; F46 bash `printf %q`; F47 rc-encoding sniff; F48 rc-file targeting; **9.7 = the new SWR completion-refresh feature (D18)**.
 - **10 — docs truth pass + test hygiene (6):** F54/F19 exit-code pins (already unblocked by Phase 1); F04 Many docs + delete the dead `MANY` sentinel (`params.py`); F55 monorepos plugins row; F56 export `capture`/`Runner`/`Result`/`recording`; F64 conftest `registry.capture()`.
@@ -51,6 +51,6 @@ Decisions are ruled in **PLAN.md Phase 0 (D1–D18)** — follow them; don't re-
 
 ## Next action
 
-Start **Phase 7** (the big one). Read `PLAN.md` Phase 7. Do **7.1 first** — the move-only `_app.py` refactor extracting `_execute` + `_run_tree` + `run_group` — then 7.2/7.3/7.4/7.6 are small edits *inside* it; 7.5 needs `run_group`; 7.7–7.14 are self-contained and can go in any order. Implement item-by-item with the gate + `--no-gpg-sign` commit loop above.
+Start **Phase 8** (tools surface, 2 items). Read `PLAN.md` Phase 8. Do **8.1 first** — privatize `tools.py` module imports so they become Tools via `__getattr__`, declare them in `tools.pyi`, add the **AST parity test**, and **fold in the deferred F39 tools.py hunk** (`Tool.installed_version`'s `subprocess.run` needs `encoding="utf-8", errors="replace"`). Then 8.2 (`recording()` kwarg overrides). Item-by-item with the gate + `--no-gpg-sign` commit loop above.
 
-Note: the branch is now **pushed** to `origin/fix/review-findings` (CI only runs on PRs, not branch pushes — no PR open yet).
+Note: the branch is **pushed** to `origin/fix/review-findings` (CI only runs on PRs, not branch pushes — no PR open yet).

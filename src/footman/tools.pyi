@@ -14,8 +14,20 @@
 # Flag lists were read from the installed tools' --help, not from memory.
 # Stub drift therefore degrades a hint, never a run.
 
+# The private aliases (`_re`, `_run`, …) mirror tools.py: they keep those names
+# out of the public namespace so `tools.run`/`tools.sys`/… resolve to Tools via
+# __getattr__, and they satisfy the AST parity test (tools.py bindings ⊆ this
+# stub). Only `_threading` is referenced here; the rest exist purely for parity.
+import re as _re  # noqa: F401
+import subprocess as _subprocess  # noqa: F401
+import sys as _sys  # noqa: F401
+import threading as _threading
 from collections.abc import Sequence
 from typing import Any
+
+from footman.context import run as _run  # noqa: F401
+
+_argv_lock: _threading.Lock
 
 _version_cache: dict[str, tuple[int, ...]]
 

@@ -84,6 +84,47 @@ def test_any_executable_is_a_tool():
     )
 
 
+def test_shadowing_names_resolve_to_tools_not_imports():
+    # F50/F53: `run`, `sys`, `re`, … used to be public module imports, so
+    # `tools.run`/`tools.sys` returned the imported object (typechecking as a
+    # Tool per the stub, crashing at runtime). Privatized, they now bridge to
+    # Tools like any other name.
+    for name in ("run", "sys", "re", "subprocess"):
+        got = getattr(tools, name)
+        assert isinstance(got, tools.Tool) and got._argv0 == name
+
+
+def test_tools_stub_declares_every_runtime_binding():
+    # Freeze the stub: every module-level runtime binding in tools.py must be
+    # declared in tools.pyi, so a privatized import can never silently reappear
+    # as a public attribute and stop being a Tool.
+    import ast
+    from pathlib import Path
+
+    def bindings(source: str) -> set[str]:
+        names: set[str] = set()
+        for node in ast.parse(source).body:
+            if isinstance(node, ast.Import):
+                names |= {a.asname or a.name.split(".")[0] for a in node.names}
+            elif isinstance(node, ast.ImportFrom):
+                names |= {a.asname or a.name for a in node.names}
+            elif isinstance(
+                node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef
+            ):
+                names.add(node.name)
+            elif isinstance(node, ast.Assign):
+                names |= {t.id for t in node.targets if isinstance(t, ast.Name)}
+            elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+                names.add(node.target.id)
+        return names
+
+    src = Path(tools.__file__)
+    runtime = bindings(src.read_text())
+    declared = bindings(src.with_suffix(".pyi").read_text())
+    missing = runtime - declared - {"annotations"}  # __future__ import allowlisted
+    assert not missing, f"tools.pyi is missing runtime bindings: {sorted(missing)}"
+
+
 def test_curated_names_map_to_real_executables():
     assert _one(lambda: tools.markdownlint("docs/index.md")) == (
         "markdownlint-cli2 docs/index.md"
