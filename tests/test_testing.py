@@ -7,6 +7,7 @@ footman's own suite consuming its own plugin is the point.
 from __future__ import annotations
 
 import json
+from typing import Literal
 
 from footman import Context, run, use_context
 from footman.app import App
@@ -154,6 +155,20 @@ def test_runner_group_json_output():
     payload = json.loads(result.stdout)
     assert payload["results"][0]["task"] == "greet"
     assert "hello J" in payload["results"][0]["output"]
+
+
+def test_help_example_uses_choice_values():
+    # 11.3: a synthesised example fills a choice param with its first choice.
+    # (Literal is imported at module level so eval_str can resolve the string
+    # annotation under `from __future__ import annotations`.)
+    g = Group("root")
+
+    @g.task
+    def release(part: Literal["major", "minor", "patch"]):
+        """Cut a release."""
+
+    result = Runner().invoke("--help release", tasks=g)
+    assert "Example: fm release major" in result.stdout
 
 
 def test_runner_group_where_locates_source():

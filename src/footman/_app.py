@@ -253,6 +253,34 @@ def _param_detail(p: dict) -> str:
     return "; ".join(bits)
 
 
+def _sample_value(p: dict) -> str:
+    """A realistic value for a param in a synthesised example: its first choice
+    when it has one, else an `<name>` placeholder."""
+    choices = p.get("choices")
+    return choices[0] if choices else f"<{p['name']}>"
+
+
+def _example(path: list[str], task: dict, prog: str) -> str:
+    """A realistic invocation synthesised straight from the signature — required
+    positionals and options with sample values, plus one representative flag.
+
+    Derived, never written, so it can't drift from the task's actual parameters.
+    Optional options are skipped as noise; the shape teaches the invocation.
+    """
+    parts = [prog, *path]
+    flag_shown = False
+    for p in task["params"]:
+        kind = p["kind"]
+        if kind in ("argument", "variadic"):
+            parts.append(_sample_value(p))
+        elif kind == "option" and p.get("required"):
+            parts.append(f"--{p['name']} {_sample_value(p)}")
+        elif kind == "flag" and (p.get("required") or not flag_shown):
+            parts.append(f"--{p['name']}")
+            flag_shown = True
+    return " ".join(parts)
+
+
 def _print_task_help(tree: dict, path: list[str]) -> None:
     node = tree
     for name in path[:-1]:
@@ -274,6 +302,7 @@ def _print_task_help(tree: dict, path: list[str]) -> None:
         print(f"\n{title}:")
         for label, detail in rows:
             print(f"  {label:<{width}}  {detail}".rstrip())
+    print(f"\nExample: {_example(path, task, _brand.prog)}")
 
 
 def _print_group_help(tree: dict, path: list[str]) -> None:
