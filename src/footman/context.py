@@ -133,6 +133,7 @@ class _Router:
 
 
 _router: _Router | None = None
+_err_router: _Router | None = None
 
 
 def real_stdout() -> TextIO:
@@ -140,18 +141,39 @@ def real_stdout() -> TextIO:
     return _router.real if _router is not None else sys.stdout
 
 
+def real_stderr() -> TextIO:
+    """The underlying stderr, bypassing the routing proxy."""
+    return _err_router.real if _err_router is not None else sys.stderr
+
+
 @contextlib.contextmanager
 def routing():
-    """Install the stdout router for the duration of a run."""
-    global _router
-    real = sys.stdout
-    _router = _Router(real)
-    sys.stdout = _router  # type: ignore[assignment]
+    """Install stdout/stderr routers for the duration of a run.
+
+    Both streams proxy through the running task's sink, so an in-process tool's
+    stderr is captured alongside its stdout (matching the merged subprocess
+    capture) instead of leaking to the terminal. The routers are *stacked*, not
+    reset to None: a nested run — e.g. `tools.pytest(in_process=True)` driving
+    the shipped `fm` fixture — restores the outer routers on exit, so the outer
+    run's capture keeps working afterwards.
+    """
+    global _router, _err_router
+    prev_out, prev_err = _router, _err_router
+    real_out, real_err = sys.stdout, sys.stderr
+    # A tool (or footman's own status line) may emit non-ASCII on a
+    # locale-encoded pipe (cp1252 on Windows CI, errors='strict' by default);
+    # degrade unencodable glyphs to '?' instead of crashing the run.
+    for stream in (real_out, real_err):
+        with contextlib.suppress(Exception):
+            if hasattr(stream, "reconfigure"):
+                stream.reconfigure(errors="replace")  # type: ignore[union-attr]
+    _router, _err_router = _Router(real_out), _Router(real_err)
+    sys.stdout, sys.stderr = _router, _err_router  # type: ignore[assignment]
     try:
-        yield real
+        yield real_out
     finally:
-        sys.stdout = real
-        _router = None
+        sys.stdout, sys.stderr = real_out, real_err
+        _router, _err_router = prev_out, prev_err
 
 
 # --- run() -------------------------------------------------------------------
@@ -203,12 +225,24 @@ def _run_callable(cmd: Callable[..., Any], args: tuple[Any, ...]) -> tuple[int, 
 
 
 def _run_subprocess(
-    argv: list[str] | str, env: dict[str, str], cwd: Path | None, capture: bool
+    argv: list[str] | str,
+    env: dict[str, str],
+    cwd: Path | None,
+    capture: bool,
+    encoding: str | None = "utf-8",
 ) -> tuple[int, str]:
-    # `errors="replace"`: a tool emitting non-UTF-8 bytes must never crash the
-    # runner — mojibake in the capture beats an unhandled UnicodeDecodeError.
+    # Dev tools (pytest, ruff, git, uv) emit UTF-8 regardless of the OS code
+    # page, so decode as UTF-8 by default rather than the locale encoding
+    # (cp1252 on Windows would mojibake the capture). `encoding=None` restores
+    # locale behavior. `errors="replace"` is the never-crash net either way.
     proc = subprocess.run(
-        argv, env=env, cwd=cwd, capture_output=capture, text=True, errors="replace"
+        argv,
+        env=env,
+        cwd=cwd,
+        capture_output=capture,
+        text=True,
+        encoding=encoding,
+        errors="replace",
     )
     output = "" if not capture else (proc.stdout or "") + (proc.stderr or "")
     return proc.returncode, output
@@ -223,8 +257,14 @@ def run(
     title: str | None = None,
     env: dict[str, str] | None = None,
     cwd: str | Path | None = None,
+    encoding: str | None = "utf-8",
 ) -> int:
-    """Run a command or a Python callable in the current task's context."""
+    """Run a command or a Python callable in the current task's context.
+
+    Subprocess output is decoded as UTF-8 by default; pass `encoding=` for a
+    tool that speaks another code page, or `encoding=None` for the locale
+    default. Ignored for callables (in-process, no bytes boundary).
+    """
     ctx = current()
     out = sys.stdout
     label = title or _label(cmd, args)
@@ -256,7 +296,7 @@ def run(
             argv = [str(a) for a in cmd]
         run_env = {**os.environ, **ctx.env, **(env or {})}
         cwd_path = Path(cwd) if cwd is not None else ctx.cwd
-        code, output = _run_subprocess(argv, run_env, cwd_path, capture)
+        code, output = _run_subprocess(argv, run_env, cwd_path, capture, encoding)
     duration = time.perf_counter() - start
     ctx.steps.append(StepResult(label, code, output, duration))
 
