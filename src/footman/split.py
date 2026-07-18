@@ -71,15 +71,6 @@ class Segment:
     passthrough: list[str] | None = None
 
 
-_TYPE_PHRASE = {
-    "bool": "true or false",
-    "int": "an integer",
-    "float": "a number",
-    "path": "a path",
-    "str": "text",
-}
-
-
 def _suggest_only(choices: list | None, dynamic: dict | None) -> bool:
     """Whether a completer only *suggests* (never rejects): a soft completer
     (`strict=False`), or a strict one whose candidate list is empty — the
@@ -104,16 +95,23 @@ def _check(
     if choices is not None:
         if _suggest_only(choices, dynamic):
             return
-        if value not in choices:
+        if value in choices:
+            return  # an exact choice needs no further type/bounds checks
+        # A union like `Literal['fast','slow'] | int` carries both choices and
+        # types: accept a value that matches either, and only teach both when
+        # neither fits.
+        if not (types and coerce.coerce_scalar(value, types)[0]):
             listing = "|".join(choices) if choices else "(none available)"
+            extra = f", or {coerce.type_phrase(types)}" if types else ""
             close = difflib.get_close_matches(value, choices, n=1)
             hint = f" — did you mean {close[0]!r}?" if close else ""
             raise ChainError(
-                f"{where}: {label} must be one of {listing} (got {value!r}){hint}"
+                f"{where}: {label} must be one of {listing}{extra} "
+                f"(got {value!r}){hint}"
             )
-        return
-    if types and not coerce.coerce_scalar(value, types)[0]:
-        expected = " or ".join(str(_TYPE_PHRASE.get(t, t)) for t in types)
+        # matched via the type path -> fall through to bounds/path below
+    elif types and not coerce.coerce_scalar(value, types)[0]:
+        expected = coerce.type_phrase(types)
         raise ChainError(f"{where}: {label} expects {expected} (got {value!r})")
     if path is not None:
         _check_path(where, label, value, path)
@@ -159,7 +157,9 @@ def _check_bounds(
 
 def _validate(where: str, p: dict, value: str) -> None:
     """Eagerly validate a choice/typed value; raise a taught error if wrong."""
-    label = f"<{p['name']}>" if p["kind"] == "argument" else f"--{p['name']}"
+    label = (
+        f"<{p['name']}>" if p["kind"] in ("argument", "variadic") else f"--{p['name']}"
+    )
     bounds = (p.get("min"), p.get("max")) if "min" in p or "max" in p else None
     _check(
         where,
@@ -265,6 +265,7 @@ def split_chain(tree: dict, argv: list[str]) -> tuple[list[str], list[Segment]]:
                 i += 1
             elif rest is not None:
                 if rest["kind"] == "variadic":
+                    _validate(seg.task, rest, tok)  # eager, like every positional
                     seg.variadic.append(tok)
                 else:
                     _consume_positional(seg, tree, rest, tok)
@@ -363,6 +364,7 @@ def _consume_positional(seg: Segment, tree: dict, p: dict, tok: str) -> None:
         "choices" in p
         and tok not in p["choices"]
         and not _suggest_only(p["choices"], p.get("dynamic"))
+        and not (p.get("types") and coerce.coerce_scalar(tok, p["types"])[0])
         and (tok in tree["tasks"] or tok in tree["groups"])
     ):
         raise ChainError(

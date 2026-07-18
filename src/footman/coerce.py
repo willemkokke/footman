@@ -63,6 +63,13 @@ def _strip_none(members: list[Any]) -> list[Any]:
     return [m for m in members if m is not type(None)]
 
 
+def union_members(element: Any) -> list[Any]:
+    """Members of a union (None stripped), or `[element]` for a non-union."""
+    if _is_union(element):
+        return _strip_none(list(typing.get_args(element)))
+    return [element]
+
+
 def _union_of(parts: list[Any]) -> Any:
     parts = list(dict.fromkeys(parts))
     union = parts[0]
@@ -187,6 +194,20 @@ def element_tags(element: Any) -> list[str]:
     return sort_tags(tags)
 
 
+_TYPE_PHRASE = {
+    "bool": "true or false",
+    "int": "an integer",
+    "float": "a number",
+    "path": "a path",
+    "str": "text",
+}
+
+
+def type_phrase(tags: list[str]) -> str:
+    """A human phrase for a list of type tags: `['int']` -> "an integer"."""
+    return " or ".join(str(_TYPE_PHRASE.get(t, t)) for t in tags)
+
+
 def element_choices(
     element: Any,
 ) -> tuple[list[str] | None, type[enum.Enum] | None, tuple | None]:
@@ -197,6 +218,31 @@ def element_choices(
     if isinstance(element, type) and issubclass(element, enum.Enum):
         return [str(m.value) for m in element], element, None
     return None, None, None
+
+
+def all_choices(element: Any) -> list[str] | None:
+    """Choice strings gathered across a union's Literal/Enum members (or a
+    scalar Literal/Enum); `None` if no member contributes choices."""
+    out: list[str] = []
+    for member in union_members(element):
+        member_choices, _, _ = element_choices(member)
+        if member_choices:
+            out.extend(member_choices)
+    return out or None
+
+
+def eagerly_checkable(element: Any) -> bool:
+    """Whether every union member is taggable (bool/int/float/path/str) or a
+    Literal/Enum — so the splitter can accept/reject a value up front. A member
+    like `UUID` or `Any` is not eagerly checkable; only binding can coerce it."""
+    for member in union_members(element):
+        if _tag_of(member) is not None:
+            continue
+        member_choices, _, _ = element_choices(member)
+        if member_choices is not None:
+            continue
+        return False
+    return True
 
 
 def coerce_scalar(value: str, tags: list[str]) -> tuple[bool, Any]:
@@ -236,11 +282,70 @@ def coerce_one(value: str, element: Any) -> Any:
             if str(lit) == value:
                 return lit
         return value
+    if _is_union(element):
+        return _coerce_union(value, element)
     tags = element_tags(element)
     if tags:
         ok, out = coerce_scalar(value, tags)
         return out if ok else value
     return coerce_custom(value, element)
+
+
+def _coerce_union(value: str, element: Any) -> Any:
+    """Coerce a token to the best-matching member of a union (best effort).
+
+    Order: an exact Literal/Enum member (so `Literal[5] | str` yields the int
+    5, not "5"), then scalar tags in specificity order, then any custom-type
+    member's constructor (so `UUID | int` binds a real UUID); falls back to the
+    raw string when nothing matches.
+    """
+    members = union_members(element)
+    for member in members:
+        _, enum_cls, literal = element_choices(member)
+        if enum_cls is not None:
+            for m in enum_cls:
+                if str(m.value) == value or m.name == value:
+                    return m
+        elif literal is not None:
+            for lit in literal:
+                if str(lit) == value:
+                    return lit
+    tags = element_tags(element)
+    if tags:
+        ok, out = coerce_scalar(value, tags)
+        if ok:
+            return out
+    for member in members:
+        if (
+            isinstance(member, type)
+            and _tag_of(member) is None
+            and not issubclass(member, enum.Enum)
+        ):
+            try:
+                return coerce_custom(value, member)
+            except ValueError:
+                continue
+    return value
+
+
+def coerce_token(value: str, element: Any) -> Any:
+    """Strict `coerce_one` for a token the splitter never validated — an env
+    fallback or a `--` passthrough value.
+
+    Raises `ValueError` when a purely tag-typed element cannot parse the token
+    (e.g. `JOBS=abc` for an `int`), rather than passing the raw string through
+    the way `coerce_one` does for CLI tokens the splitter already validated.
+    Choice and
+    custom-type membership are left to `coerce_one` (and the caller's own
+    choices check), so union values keep working.
+    """
+    if element_tags(element) and all_choices(element) is None:
+        tags = element_tags(element)
+        ok, out = coerce_scalar(value, tags)
+        if not ok:
+            raise ValueError(f"expects {type_phrase(tags)} (got {value!r})")
+        return out
+    return coerce_one(value, element)
 
 
 def coerce_custom(value: str, element: Any) -> Any:

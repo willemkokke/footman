@@ -72,15 +72,21 @@ def _run_checks(value: Any, peeled: coerce.Peeled, label: str) -> Any:
     return value
 
 
-def _validate_env(value: Any, peeled: coerce.Peeled, label: str) -> Any:
-    """Validate an env-sourced value against the constraints the splitter
-    would have enforced eagerly for a CLI token (choices, bounds, path)."""
-    choices, _, _ = coerce.element_choices(peeled.element)
+def _validate_value(value: Any, peeled: coerce.Peeled, label: str) -> Any:
+    """Validate a value the splitter never saw (env fallback, variadic /
+    passthrough token) against the constraints it would have enforced eagerly
+    for a CLI token (choices, bounds, path)."""
+    choices = coerce.all_choices(peeled.element)
     if choices is not None:
         shown = str(value.value) if isinstance(value, enum.Enum) else str(value)
-        if shown not in choices:
+        tags = coerce.element_tags(peeled.element)
+        # A mixed union (`Literal['a','b'] | int`) accepts a choice member OR a
+        # value that coerces to one of its tags — reject only when neither fits.
+        type_ok = bool(tags) and coerce.coerce_scalar(str(value), tags)[0]
+        if shown not in choices and not type_ok:
+            extra = f", or {coerce.type_phrase(tags)}" if tags else ""
             raise ValueError(
-                f"{label} must be one of {'|'.join(choices)} (got {value!r})"
+                f"{label} must be one of {'|'.join(choices)}{extra} (got {value!r})"
             )
     if (
         peeled.bounds is not None
@@ -101,6 +107,17 @@ def _validate_env(value: Any, peeled: coerce.Peeled, label: str) -> Any:
     return value
 
 
+def _coerce_extra(token: str, peeled: coerce.Peeled, label: str) -> Any:
+    """Coerce + validate one token the splitter never validated (an env
+    fallback or a `--` passthrough value): strict coercion, then the same
+    choices / bounds / path / check(fn) checks a CLI token gets."""
+    try:
+        value = coerce.coerce_token(token, peeled.element)
+    except ValueError as exc:
+        raise ValueError(f"{label} {exc}") from exc
+    return _run_checks(_validate_value(value, peeled, label), peeled, label)
+
+
 def _env_value(param: inspect.Parameter, peeled: coerce.Peeled) -> Any:
     """The env-fallback path for an absent option: CLI beats env beats default.
 
@@ -114,8 +131,7 @@ def _env_value(param: inspect.Parameter, peeled: coerce.Peeled) -> Any:
     label = f"--{param.name.replace('_', '-')} (from ${peeled.env})"
 
     def one(token: str) -> Any:
-        value = _validate_env(coerce.coerce_one(token, peeled.element), peeled, label)
-        return _run_checks(value, peeled, label)
+        return _coerce_extra(token, peeled, label)
 
     if peeled.multiple:
         parts = [raw] if peeled.nosplit else [p for p in raw.split(",") if p] or [raw]
@@ -138,9 +154,13 @@ def bind(seg: Segment, fn: Task) -> tuple[list[Any], dict[str, Any]]:
 
     for param in sig.parameters.values():
         if param.kind is inspect.Parameter.VAR_POSITIONAL:
-            element = str if param.annotation is empty else param.annotation
             extra = [*seg.variadic, *(seg.passthrough or [])]
-            var_args = [coerce.coerce_one(v, element) for v in extra]
+            if param.annotation is empty:
+                var_args = list(extra)
+            else:
+                peeled = coerce.peel(param.annotation)
+                label = f"<{param.name}>"
+                var_args = [_coerce_extra(v, peeled, label) for v in extra]
             continue
 
         cli = param.name.replace("_", "-")

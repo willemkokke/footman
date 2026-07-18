@@ -200,6 +200,69 @@ def test_env_value_is_coerced_and_bounded(monkeypatch):
     assert "between 1 and 32" in str(results[0].error)
 
 
+def test_env_uncoercible_value_is_rejected(monkeypatch):
+    def tasks(reg):
+        @reg.task
+        def test_(jobs: Annotated[int, between(1, 32), env("JOBS")] = 4): ...
+
+    monkeypatch.setenv("JOBS", "abc")
+    results = run(tasks, "test-")
+    assert not results[0].ok  # no longer binds the raw string
+    assert "expects an integer" in str(results[0].error)
+    assert "$JOBS" in str(results[0].error)
+
+
+def test_env_bool_uncoercible_is_rejected(monkeypatch):
+    def tasks(reg):
+        @reg.task
+        def deploy(prod: Annotated[bool, env("PROD")] = False): ...
+
+    monkeypatch.setenv("PROD", "maybe")
+    results = run(tasks, "deploy")
+    assert not results[0].ok  # never binds a truthy "maybe"
+    assert "true or false" in str(results[0].error)
+
+
+# --- variadic (*args) validation ---------------------------------------------
+
+
+def test_variadic_annotated_bounds_are_enforced():
+    seen = {}
+
+    def tasks(reg):
+        @reg.task
+        def add(*nums: Annotated[int, between(0, 10)]):
+            seen["sum"] = sum(nums)
+
+    run(tasks, "add 2 3")
+    assert seen["sum"] == 5
+
+    _, tree = build_tree(tasks)
+    with pytest.raises(ChainError, match="between 0 and 10"):
+        split_chain(tree, ["add", "2", "99"])
+
+
+def test_variadic_type_error_is_taught():
+    def tasks(reg):
+        @reg.task
+        def add(*nums: int): ...
+
+    _, tree = build_tree(tasks)
+    with pytest.raises(ChainError, match="expects an integer"):
+        split_chain(tree, ["add", "2", "x"])
+
+
+def test_variadic_annotated_manifest_has_types_and_bounds():
+    def tasks(reg):
+        @reg.task
+        def add(*nums: Annotated[int, between(0, 10)]): ...
+
+    _, tree = build_tree(tasks)
+    spec = tree["tasks"]["add"]["params"][0]
+    assert spec["types"] == ["int"]
+    assert spec["min"] == 0 and spec["max"] == 10
+
+
 def test_env_list_comma_splits(monkeypatch):
     seen = {}
 
