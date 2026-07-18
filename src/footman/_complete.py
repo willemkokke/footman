@@ -21,7 +21,10 @@ being completed ("" when the cursor follows a space).
 from __future__ import annotations
 
 import json
+import os
+import subprocess
 import sys
+import time
 
 # Hardcoded mirror of split.GLOBALS arity — the hot path can't import split (it
 # would pull the whole package). `test_completion_globals_mirror_split` rebuilds
@@ -215,12 +218,53 @@ def complete(tree: dict, words: list[str]) -> list[str]:
     return list(seen)
 
 
-def _load_tree(path: str) -> dict | None:
+def _load_manifest(path: str) -> dict | None:
     try:
         with open(path, "rb") as fh:
-            return json.load(fh)["tree"]
-    except (OSError, ValueError, KeyError):
+            data = json.load(fh)
+    except (OSError, ValueError):
         return None
+    return data if isinstance(data, dict) else None
+
+
+def _maybe_refresh(path: str, data: dict) -> None:
+    """Stale-while-revalidate: if the manifest is older than its baked
+    `completion_max_age`, bump its mtime and spawn a detached rebuild for *next*
+    time, then return. Never blocks the TAB (the rebuild imports the package and
+    shells completers) and never surfaces an error.
+    """
+    max_age = data.get("completion_max_age")
+    if not isinstance(max_age, int) or isinstance(max_age, bool) or max_age <= 0:
+        return  # disabled (off, or an in-memory/`-f` manifest with no age baked)
+    try:
+        if time.time() - os.stat(path).st_mtime <= max_age:
+            return
+        # Bump the mtime *before* spawning: resets the clock even if the rebuild
+        # is a no-op (sync_manifest only writes on change), and storm-guards
+        # concurrent TABs so only the first in an aged window spawns.
+        os.utime(path)
+    except OSError:
+        return
+    _spawn_refresh()
+
+
+def _spawn_refresh() -> None:
+    cmd = [sys.executable, "-c", "from footman import _refresh; _refresh.refresh_cwd()"]
+    null = subprocess.DEVNULL
+    try:
+        if os.name == "nt":
+            flags = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(
+                subprocess, "CREATE_NEW_PROCESS_GROUP", 0
+            )
+            subprocess.Popen(
+                cmd, stdin=null, stdout=null, stderr=null, creationflags=flags
+            )
+        else:
+            subprocess.Popen(
+                cmd, stdin=null, stdout=null, stderr=null, start_new_session=True
+            )
+    except OSError:
+        return  # a background refresh must never break completion
 
 
 def complete_cli(args: list[str]) -> int:
@@ -249,12 +293,13 @@ def complete_cli(args: list[str]) -> int:
 
         manifest = str(_paths.cwd_manifest_path())
 
-    tree = _load_tree(manifest)
-    if tree is None:
+    data = _load_manifest(manifest)
+    if data is None or not isinstance(data.get("tree"), dict):
         return 0  # nothing cached yet — stay silent and fast
-    out = complete(tree, args)
+    out = complete(data["tree"], args)
     if out:
         sys.stdout.write("\n".join(out) + "\n")
+    _maybe_refresh(manifest, data)  # SWR: keep dynamic completers from going stale
     return 0
 
 

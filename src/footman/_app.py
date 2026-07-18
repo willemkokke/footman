@@ -562,7 +562,9 @@ def _execute(
             # until the next plain run. Build fresh, touch no cache.
             tree = manifest.build_manifest(reg)["tree"]
         else:
-            tree = manifest.sync_manifest(reg, Path.cwd())["tree"]
+            tree = manifest.sync_manifest(
+                reg, Path.cwd(), completion_max_age=config.completion_max_age(cfg)
+            )["tree"]
     except manifest.ManifestError as exc:  # broken completer, bad markers, …
         _error(str(exc))
         return 2
