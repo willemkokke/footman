@@ -80,6 +80,15 @@ _TYPE_PHRASE = {
 }
 
 
+def _suggest_only(choices: list | None, dynamic: dict | None) -> bool:
+    """Whether a completer only *suggests* (never rejects): a soft completer
+    (`strict=False`), or a strict one whose candidate list is empty — the
+    completer genuinely returned nothing, and a *failing* strict completer
+    aborts the manifest build instead, so rejecting every value would brick
+    the task."""
+    return bool(dynamic) and (not dynamic.get("strict") or not choices)
+
+
 def _check(
     where: str,
     label: str,
@@ -93,11 +102,7 @@ def _check(
 ) -> None:
     """Validate one string against choices or type tags; raise a taught error."""
     if choices is not None:
-        if dynamic and (not dynamic.get("strict") or not choices):
-            # A soft completer only suggests. An empty strict list means the
-            # completer genuinely returned no candidates (a *failing* strict
-            # completer aborts the manifest build instead) — rejecting every
-            # value would brick the task, so suggest-only here too.
+        if _suggest_only(choices, dynamic):
             return
         if value not in choices:
             listing = "|".join(choices) if choices else "(none available)"
@@ -136,7 +141,12 @@ def _check_bounds(
     if not ok or isinstance(number, bool) or not isinstance(number, (int, float)):
         return  # the types check above already taught the type error
     lo, hi = bounds
-    if (lo is not None and number < lo) or (hi is not None and number > hi):
+    # Negated comparisons so NaN (which compares False to everything, so `< lo`
+    # and `> hi` are both False) is rejected, not silently accepted; identical
+    # to the plain comparisons for every real number.
+    if (lo is not None and not (number >= lo)) or (
+        hi is not None and not (number <= hi)
+    ):
         expect = (
             f"at least {lo}"
             if hi is None
@@ -352,6 +362,7 @@ def _consume_positional(seg: Segment, tree: dict, p: dict, tok: str) -> None:
     if (
         "choices" in p
         and tok not in p["choices"]
+        and not _suggest_only(p["choices"], p.get("dynamic"))
         and (tok in tree["tasks"] or tok in tree["groups"])
     ):
         raise ChainError(

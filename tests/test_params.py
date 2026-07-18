@@ -398,6 +398,23 @@ def test_dynamic_soft_allows_anything():
     assert seen["p"] == "anything"
 
 
+def test_soft_positional_accepts_task_name_collision():
+    seen = {}
+
+    def tasks(reg):
+        @reg.task
+        def lint(): ...
+
+        @reg.task
+        def checkout(
+            branch: Annotated[str, suggest(lambda: ["main", "dev"], strict=False)],
+        ):
+            seen["b"] = branch
+
+    run(tasks, "checkout lint")
+    assert seen["b"] == "lint"  # a soft completer never hard-rejects a value
+
+
 def test_dynamic_did_you_mean():
     def tasks(reg):
         @reg.task

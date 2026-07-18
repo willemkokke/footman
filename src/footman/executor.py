@@ -88,7 +88,11 @@ def _validate_env(value: Any, peeled: coerce.Peeled, label: str) -> Any:
         and not isinstance(value, bool)
     ):
         lo, hi = peeled.bounds
-        if (lo is not None and value < lo) or (hi is not None and value > hi):
+        # Negated form rejects NaN (compares False to everything), matching the
+        # splitter's eager bounds check; identical to </> for real numbers.
+        if (lo is not None and not (value >= lo)) or (
+            hi is not None and not (value <= hi)
+        ):
             raise ValueError(f"{label} must be between {lo} and {hi} (got {value!r})")
     if peeled.path_req is not None and isinstance(value, PurePath):
         tests = {"exists": Path.exists, "file": Path.is_file, "dir": Path.is_dir}
@@ -179,9 +183,29 @@ def bind(seg: Segment, fn: Task) -> tuple[list[Any], dict[str, Any]]:
                 coerce.coerce_one(raw, peeled.element), peeled, label
             )
 
+    # Positional-only params (`def build(target, /)`) cannot be passed by
+    # keyword, so move the leading run of them out of kwargs into positional
+    # args, in signature order. A defaultless one is splitter-enforced present,
+    # so a `hole` (a skipped optional) is only ever filled by an existing
+    # default and never leaves a gap before a supplied later param.
+    pos: list[Any] = []
+    hole: list[Any] = []
+    ctx_name = context_param_name(sig)
+    for param in sig.parameters.values():
+        if param.kind is not inspect.Parameter.POSITIONAL_ONLY:
+            break  # positional-only params always lead the signature
+        if param.name == ctx_name:
+            continue  # run_task injects ctx as the first positional itself
+        if param.name in kwargs:
+            pos += hole
+            hole = []
+            pos.append(kwargs.pop(param.name))
+        elif param.default is not empty:
+            hole.append(param.default)
+
     # `--` passthrough always has a home now: a task's *args, and/or the run
     # context (`passthrough()` / `ctx.passthrough`). So it is never an error.
-    return var_args, kwargs
+    return [*pos, *var_args], kwargs
 
 
 def _call(
