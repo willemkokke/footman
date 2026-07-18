@@ -71,22 +71,23 @@ if ! typeset -f compdef >/dev/null 2>&1; then
     autoload -Uz compinit && compinit -u
 fi
 _{fn}_complete() {{
-    local -a values displays
+    local -a items
     local raw line
     # (@) + quotes keeps the empty current word when the cursor follows a
     # space — unquoted expansion would drop it.
     raw="$({prog} --complete -- "${{(@)words[2,CURRENT]}}" 2>/dev/null)"
     for line in ${{(f)raw}}; do
-        # Each candidate is `value` or `value<tab>description`; show the
-        # description in a column via compadd -d, insert only the value.
-        values+=(${{line%%$'\\t'*}})
+        # `value:description` feeds _describe, which right-aligns the
+        # descriptions into a column and honours the user's completion colours
+        # (list-colors / descriptions format). A tab-less line — an option or a
+        # choice value — is a bare value with no description.
         if [[ $line == *$'\\t'* ]]; then
-            displays+=("${{line%%$'\\t'*}}  -- ${{line#*$'\\t'}}")
+            items+=("${{line%%$'\\t'*}}:${{line#*$'\\t'}}")
         else
-            displays+=($line)
+            items+=("$line")
         fi
     done
-    (( ${{#values}} )) && compadd -d displays -a values
+    (( ${{#items}} )) && _describe -t {fn} '{prog}' items
 }}
 compdef _{fn}_complete {prog}
 """

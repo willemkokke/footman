@@ -77,7 +77,7 @@ def test_zsh_install(home):
     script = home / ".local" / "share" / "fm" / "completion.zsh"
     body = script.read_text()
     assert "compdef _fm_complete fm" in body
-    assert "compadd -d displays -a values" in body  # 11.2: description column
+    assert "_describe -t fm 'fm' items" in body  # 11.2: aligned description column
     assert "source" in (home / ".zshrc").read_text()
 
 
