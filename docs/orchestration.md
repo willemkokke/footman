@@ -66,8 +66,8 @@ independent branch even if one fails.
 On a TTY, a parallel run keeps one live status line
 (`/ 2/5  running: lint, test`) between the finished tasks' output blocks.
 It is event-driven, always cleared before a block lands (so output stays
-non-interleaved), plain text under `--no-color`/`NO_COLOR`, and absent
-entirely under `--quiet`, `--json`, or when output is piped.
+non-interleaved), and absent entirely under `--no-color`/`NO_COLOR`/`TERM=dumb`,
+`--quiet`, `--json`, or when output is piped.
 
 ## JSON for CI and agents
 
