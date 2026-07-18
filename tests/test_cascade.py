@@ -105,6 +105,30 @@ def test_cascade_merges_groups(tmp_path):
     assert set(merged.groups["dist"].tasks) == {"build", "deploy"}
 
 
+def test_cascade_isolates_sibling_helpers(tmp_path, capsys):
+    # F14: two tasks files each `import helpers` from their own dir — each must
+    # bind ITS OWN helpers module, not whoever-imported-first-wins.
+    (tmp_path / "helpers.py").write_text("VALUE = 'root'\n")
+    root = _write(
+        tmp_path / "tasks.py",
+        "from footman import task\nimport helpers\n"
+        "@task\ndef a():\n    print(helpers.VALUE)\n",
+    )
+    svc = tmp_path / "svc"
+    svc.mkdir()
+    (svc / "helpers.py").write_text("VALUE = 'svc'\n")
+    sub = _write(
+        svc / "tasks.py",
+        "from footman import task\nimport helpers\n"
+        "@task\ndef b():\n    print(helpers.VALUE)\n",
+    )
+    merged = discover.load_tree([root, sub])
+    merged.tasks["a"]()
+    merged.tasks["b"]()
+    out = capsys.readouterr().out
+    assert "root" in out and "svc" in out  # each resolved its own sibling
+
+
 def test_cascade_tags_defining_dir(tmp_path):
     root = _write(
         tmp_path / "tasks.py", "from footman import task\n@task\ndef a():...\n"
