@@ -49,10 +49,12 @@ _{fn}_complete() {{
     done
     # Read one candidate per line and %q-quote each, so a candidate like *.md or
     # "a b" is inserted literally — never pathname-expanded the way a
-    # split-and-glob command substitution into the array would.
+    # split-and-glob command substitution into the array would. bash has no
+    # description column, so drop anything after the first tab.
     COMPREPLY=()
     local line
     while IFS= read -r line; do
+        line=${{line%%$'\\t'*}}
         printf -v line '%q' "$line"
         COMPREPLY+=("$line")
     done < <({prog} --complete -- "${{words[@]}}" 2>/dev/null)
@@ -69,13 +71,22 @@ if ! typeset -f compdef >/dev/null 2>&1; then
     autoload -Uz compinit && compinit -u
 fi
 _{fn}_complete() {{
-    local -a completions
-    local raw
+    local -a values displays
+    local raw line
     # (@) + quotes keeps the empty current word when the cursor follows a
     # space — unquoted expansion would drop it.
     raw="$({prog} --complete -- "${{(@)words[2,CURRENT]}}" 2>/dev/null)"
-    completions=(${{(f)raw}})
-    (( ${{#completions}} )) && compadd -a completions
+    for line in ${{(f)raw}}; do
+        # Each candidate is `value` or `value<tab>description`; show the
+        # description in a column via compadd -d, insert only the value.
+        values+=(${{line%%$'\\t'*}})
+        if [[ $line == *$'\\t'* ]]; then
+            displays+=("${{line%%$'\\t'*}}  -- ${{line#*$'\\t'}}")
+        else
+            displays+=($line)
+        fi
+    done
+    (( ${{#values}} )) && compadd -d displays -a values
 }}
 compdef _{fn}_complete {prog}
 """
@@ -100,8 +111,12 @@ Register-ArgumentCompleter -Native -CommandName {prog} -ScriptBlock {{
     # position instead; the resolver appends the '' itself.
     $empty = if ($wordToComplete -eq '') {{ '--empty-partial' }} else {{ $null }}
     & {prog} --complete $empty -- @words 2>$null | ForEach-Object {{
+        # `value` or `value<tab>description`: the tail becomes the tooltip.
+        $parts = $_ -split "`t", 2
+        $val = $parts[0]
+        $tip = if ($parts.Count -gt 1) {{ $parts[1] }} else {{ $val }}
         [System.Management.Automation.CompletionResult]::new(
-            $_, $_, 'ParameterValue', $_)
+            $val, $val, 'ParameterValue', $tip)
     }}
 }}
 """
@@ -113,7 +128,9 @@ let __{fn}_prev = ($env.config.completions?.external?.completer? | default null)
 $env.config.completions.external.enable = true
 $env.config.completions.external.completer = {{|spans|
     if $spans.0 == "{prog}" {{
-        ^{prog} --complete -- ...($spans | skip 1) | lines
+        # Drop any `<tab>description` tail — keep the value nushell inserts.
+        ^{prog} --complete -- ...($spans | skip 1) |
+            lines | each {{|l| $l | split row (char tab) | first }}
     }} else if $__{fn}_prev != null {{
         do $__{fn}_prev $spans
     }} else {{

@@ -105,6 +105,19 @@ class _Segment:
             )
 
 
+def _describe(name: str, node: dict) -> str:
+    """`name\\tdescription` when *name* is a task/group in *node* with a help
+    line, else the bare name.
+
+    The tab is the backward-safe wire format: shells that render descriptions
+    (zsh, fish) split on it; bash (and others) keep the first field. Options and
+    choice values carry no help, so they pass through bare.
+    """
+    item = node["tasks"].get(name) or node["groups"].get(name)
+    summary = item.get("help") if isinstance(item, dict) else ""
+    return f"{name}\t{summary}" if summary else name
+
+
 def complete(tree: dict, words: list[str]) -> list[str]:
     """Resolve completion candidates for *words* against a manifest *tree*.
 
@@ -185,7 +198,7 @@ def complete(tree: dict, words: list[str]) -> list[str]:
 
     if seg.task is None:
         names = list(node["groups"]) + list(node["tasks"])
-        return [n for n in names if n.startswith(partial)]
+        return [_describe(n, node) for n in names if n.startswith(partial)]
 
     # An attached `--opt=value` partial (zsh/fish don't split on `=`): offer the
     # option's choices as full `--opt=choice` tokens.
@@ -215,7 +228,9 @@ def complete(tree: dict, words: list[str]) -> list[str]:
     for c in candidates:
         if c.startswith(partial):
             seen.setdefault(c)
-    return list(seen)
+    # Only the next-segment task/group names carry help; options and choices
+    # aren't in tree's tasks/groups, so _describe leaves them bare.
+    return [_describe(c, tree) for c in seen]
 
 
 def _load_manifest(path: str) -> dict | None:

@@ -5,24 +5,43 @@ from __future__ import annotations
 from footman._complete import complete
 
 
+def _names(result):
+    """Candidate names, dropping any `\t`-separated description column (11.2)."""
+    return [c.split("\t", 1)[0] for c in result]
+
+
 def test_top_level_prefix(tree):
-    assert complete(tree, ["che"]) == ["check"]
+    assert _names(complete(tree, ["che"])) == ["check"]
+
+
+def test_task_names_carry_descriptions(tree):
+    # 11.2: a task/group name candidate emits `name\tsummary`; the shell hooks
+    # split on the tab to render a description column.
+    assert complete(tree, ["che"]) == [
+        "check\tRun every check (format, lint, typecheck, test)."
+    ]
+
+
+def test_options_and_choices_have_no_description(tree):
+    # Options and choice values carry no help, so they pass through bare (no tab).
+    assert complete(tree, ["lint", "--f"]) == ["--fix"]
+    assert "\t" not in "".join(complete(tree, ["lint", "--mode", ""]))
 
 
 def test_empty_partial_lists_everything(tree):
-    out = complete(tree, [""])
+    out = _names(complete(tree, [""]))
     assert "check" in out
     assert "docs" in out
     assert "workspace" in out
 
 
 def test_group_descent(tree):
-    assert set(complete(tree, ["docs", ""])) == {"serve", "build"}
-    assert complete(tree, ["docs", "ser"]) == ["serve"]
+    assert set(_names(complete(tree, ["docs", ""]))) == {"serve", "build"}
+    assert _names(complete(tree, ["docs", "ser"])) == ["serve"]
 
 
 def test_task_options(tree):
-    out = complete(tree, ["lint", ""])
+    out = _names(complete(tree, ["lint", ""]))
     assert {"--fix", "--mode", "--paths"} <= set(out)
     assert "check" in out  # separator-free chains: the next task completes too
     assert complete(tree, ["lint", "--"]) != []  # option-shaped partial: options only
@@ -90,7 +109,7 @@ def test_install_completion_completes_shells(tree):
 
 def test_leading_flag_global_then_task(tree):
     # A leading flag global (-s) is consumed; the walk still completes tasks.
-    assert "check" in complete(tree, ["-s", "che"])
+    assert "check" in _names(complete(tree, ["-s", "che"]))
 
 
 def test_completion_globals_mirror_split():
@@ -120,8 +139,7 @@ def test_second_segment_options_are_the_second_tasks(tree):
 
 
 def test_next_task_name_completes_after_a_chain(tree):
-    assert "check" in complete(tree, ["lint", "--fix", "che"])
-    assert complete(tree, ["lint", "--fix", "che"]) == ["check"]
+    assert _names(complete(tree, ["lint", "--fix", "che"])) == ["check"]
 
 
 def test_option_value_not_confused_with_next_task(tree):
@@ -131,12 +149,12 @@ def test_option_value_not_confused_with_next_task(tree):
 
 
 def test_group_descent_in_a_later_segment(tree):
-    out = complete(tree, ["lint", "--fix", "docs", ""])
+    out = _names(complete(tree, ["lint", "--fix", "docs", ""]))
     assert set(out) == {"serve", "build"}
 
 
 def test_plus_resets_the_segment(tree):
-    out = complete(tree, ["lint", "+", ""])
+    out = _names(complete(tree, ["lint", "+", ""]))
     assert "check" in out and "docs" in out
 
 
