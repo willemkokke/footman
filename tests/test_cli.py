@@ -181,8 +181,9 @@ def test_main_dispatches_version(monkeypatch, capsys):
 
 
 def test_lazy_reexports():
-    assert footman.task is not None
-    assert footman.group is not None
-    assert footman.Group is not None
+    # F56: every __all__ entry must resolve (via __getattr__ or as a real attr)
+    # — a permanent drift guard for the lazy public surface.
+    for name in footman.__all__:
+        assert getattr(footman, name) is not None, name
     with pytest.raises(AttributeError):
         _ = footman.does_not_exist
