@@ -112,7 +112,8 @@ class Group:
         ```
 
         `requires` names Python modules the task needs — checked with
-        `importlib.util.find_spec`, which **does not import them**. The task
+        `importlib.util.find_spec`, which does not import the module itself (a
+        dotted name imports its parent packages to locate it). The task
         is listed as unavailable (with a taught reason) when a module is
         absent, so a shared library can carry tasks with heavy optional
         dependencies: keep the actual `import` in the body, so the cost is
@@ -173,23 +174,31 @@ def reset() -> None:
 
 
 def _importable(module: str) -> bool:
-    """True if *module* can be imported — checked WITHOUT importing it."""
+    """True if *module* is importable, via `find_spec`.
+
+    `find_spec` doesn't import the module itself, but a dotted name imports its
+    parent packages to locate the child — so a parent whose `__init__` raises
+    (any exception, not just ImportError/ValueError) must read as
+    not-importable, never crash `fm --list` with a traceback.
+    """
     import importlib.util
 
     try:
         return importlib.util.find_spec(module) is not None
-    except (ImportError, ValueError):
+    except Exception:
         return False
 
 
 def availability(fn: Task) -> str | None:
     """The reason a task is unavailable here, or `None` if it can run.
 
-    `requires` modules are checked import-free (`find_spec`); a callable
+    `requires` modules are checked with `find_spec` (no import of the module
+    itself, though a dotted name imports its parent packages); a callable
     `when` is evaluated *live* — never from the cached manifest — so
     `DOCKER_HOST=… fm up` works the moment the environment does. A predicate
     that raises reads as unavailable with the exception named (a broken
-    predicate must not grant availability).
+    predicate must not grant availability); likewise a `requires` parent whose
+    import raises reads as unavailable, never a crash.
     """
     custom = getattr(fn, "_footman_reason", "")
 
