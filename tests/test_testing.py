@@ -35,6 +35,15 @@ def test_recording_is_silent(capsys):
     assert capsys.readouterr().out == ""
 
 
+def test_recording_can_override_quiet(capsys):
+    # F51: dry_run/quiet were positional defaults, so passing either as an
+    # override raised "got multiple values for keyword argument". Overridable now.
+    with recording(quiet=False) as steps:
+        run("echo hi")
+    assert steps[0].command == "echo hi"  # still recorded, not executed
+    assert "$ echo hi" in capsys.readouterr().out  # quiet=False took effect
+
+
 def test_use_context_installs_and_restores():
     ctx = Context(env={"MODE": "test"})
     with use_context(ctx) as installed:
