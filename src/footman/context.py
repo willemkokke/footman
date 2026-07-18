@@ -200,28 +200,79 @@ def _call_for_code(cmd: Callable[..., Any], args: tuple[Any, ...]) -> int:
     return 0
 
 
-def _run_callable(cmd: Callable[..., Any], args: tuple[Any, ...]) -> tuple[int, str]:
-    """Run a callable, capturing its stdout — parallel-safe under the router.
+_state_lock = threading.RLock()
+
+
+@contextlib.contextmanager
+def _process_state(env: dict[str, str], cwd: Path | None) -> Iterator[None]:
+    """Patch `os.environ` / the process cwd around an in-process callable.
+
+    In-process tools must honor the same env overlay and run-from-defining-
+    folder contract the subprocess branch of the *same* call already obeys.
+    `os.chdir` and `os.environ` are process-global, so any change is guarded by a
+    re-entrant lock (a callable may itself call `run()`) and restored on exit —
+    calls that need a patch therefore serialize. The common case (no overlay, no
+    cwd — in-memory Group tasks have no defining dir) takes the lock-free fast
+    path, so barrier-overlap parallelism stays fully concurrent.
+    """
+    if not env and cwd is None:
+        yield
+        return
+    with _state_lock:
+        saved_env = os.environ.copy()
+        saved_cwd = os.getcwd() if cwd is not None else None
+        try:
+            os.environ.update(env)
+            if cwd is not None:
+                os.chdir(cwd)
+            yield
+        finally:
+            if saved_cwd is not None:
+                os.chdir(saved_cwd)
+            os.environ.clear()
+            os.environ.update(saved_env)
+
+
+def _run_callable(
+    cmd: Callable[..., Any],
+    args: tuple[Any, ...],
+    *,
+    capture: bool = True,
+    env: dict[str, str] | None = None,
+    cwd: str | Path | None = None,
+) -> tuple[int, str]:
+    """Run a callable — parallel-safe under the router, honoring env/cwd.
 
     With the router installed, every write this thread makes already
     dispatches through `current().sink`, so capture is a thread-confined
     sink swap — concurrent in-process tools never touch each other's
     output. Outside a routed run (bare calls in scripts/tests) there is no
     router to lean on, so fall back to the classic global redirect.
+
+    `capture=False` skips the buffer entirely (live output, returns `''` like
+    the subprocess branch) — for serve-style tasks that must not buffer
+    unboundedly. The env overlay and cwd are applied process-globally via
+    `_process_state`; the `capture=False` short-circuit runs *inside* it so
+    uncaptured callables keep cwd/env too.
     """
-    buffer = io.StringIO()
-    if _router is not None:
-        ctx = current()
-        saved = ctx.sink
-        ctx.sink = buffer
-        try:
+    ctx = current()
+    overlay = {**ctx.env, **(env or {})}
+    target_cwd = Path(cwd) if cwd is not None else ctx.cwd
+    with _process_state(overlay, target_cwd):
+        if not capture:
+            return _call_for_code(cmd, args), ""
+        buffer = io.StringIO()
+        if _router is not None:
+            saved = ctx.sink
+            ctx.sink = buffer
+            try:
+                code = _call_for_code(cmd, args)
+            finally:
+                ctx.sink = saved
+            return code, buffer.getvalue()
+        with contextlib.redirect_stdout(buffer), contextlib.redirect_stderr(buffer):
             code = _call_for_code(cmd, args)
-        finally:
-            ctx.sink = saved
         return code, buffer.getvalue()
-    with contextlib.redirect_stdout(buffer), contextlib.redirect_stderr(buffer):
-        code = _call_for_code(cmd, args)
-    return code, buffer.getvalue()
 
 
 def _run_subprocess(
@@ -285,7 +336,7 @@ def run(
 
     start = time.perf_counter()
     if callable(cmd):
-        code, output = _run_callable(cmd, args)
+        code, output = _run_callable(cmd, args, capture=capture, env=env, cwd=cwd)
     else:
         if isinstance(cmd, str):
             # POSIX shells split on shlex rules; Windows command lines are a
