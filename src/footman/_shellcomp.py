@@ -87,8 +87,11 @@ Register-ArgumentCompleter -Native -CommandName {prog} -ScriptBlock {{
     param($wordToComplete, $commandAst, $cursorPosition)
     $words = @($commandAst.CommandElements |
         Select-Object -Skip 1 | ForEach-Object {{ $_.ToString() }})
-    if ($wordToComplete -eq '') {{ $words += '' }}
-    & {prog} --complete -- @words 2>$null | ForEach-Object {{
+    # WinPS 5.1 and pwsh 7.0-7.2 silently drop an empty-string arg to a native
+    # command, so a trailing '' partial can't be passed directly. Flag the empty
+    # position instead; the resolver appends the '' itself.
+    $empty = if ($wordToComplete -eq '') {{ '--empty-partial' }} else {{ $null }}
+    & {prog} --complete $empty -- @words 2>$null | ForEach-Object {{
         [System.Management.Automation.CompletionResult]::new(
             $_, $_, 'ParameterValue', $_)
     }}

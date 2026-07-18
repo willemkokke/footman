@@ -230,8 +230,16 @@ def complete_cli(args: list[str]) -> int:
         if len(args) < 2:
             return 0
         manifest, args = args[1], args[2:]
+    # WinPS 5.1 and pwsh 7.0-7.2 drop empty-string args to native commands, so
+    # the hook can't pass the trailing "" partial itself — it flags the empty
+    # position and we append the "" here instead.
+    empty_partial = False
+    if args and args[0] == "--empty-partial":
+        empty_partial, args = True, args[1:]
     if args and args[0] == "--":
         args = args[1:]
+    if empty_partial:
+        args = [*args, ""]
 
     if manifest is None:
         # Only the derive branch needs the package; keep the standalone
