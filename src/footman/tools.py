@@ -32,13 +32,17 @@ the tool's actual CLI generation.
 
 from __future__ import annotations
 
-import re
-import subprocess
-import sys
-import threading
+# Every module import is aliased private so `tools.<name>` never resolves to it:
+# module attribute lookup beats module `__getattr__`, so a public `run`/`sys`
+# would make `tools.run`/`tools.sys` the imported object instead of a Tool —
+# typechecking as Tools (per the stub) but crashing at runtime (F50, F53).
+import re as _re
+import subprocess as _subprocess
+import sys as _sys
+import threading as _threading
 from typing import Any
 
-from footman.context import run
+from footman.context import run as _run
 
 _version_cache: dict[str, tuple[int, ...]] = {}
 
@@ -122,7 +126,7 @@ def _accepts_args(entry: Any) -> bool:
 
 # Only the sys.argv-patching fallback needs serialising; argument-accepting
 # entries (the overwhelming majority) run fully in parallel.
-_argv_lock = threading.Lock()
+_argv_lock = _threading.Lock()
 
 
 class Tool:
@@ -174,7 +178,7 @@ class Tool:
                         f"{self._argv0}: in_process=True, but no installed "
                         f"console_scripts entry point named {self._argv0!r}"
                     )
-                return run([self._argv0, *tail], nofail=nofail)  # prefer → subproc
+                return _run([self._argv0, *tail], nofail=nofail)  # prefer → subproc
 
             def _invoke() -> Any:
                 entry = ep.load()  # the tool's import — deferred to execution,
@@ -182,15 +186,15 @@ class Tool:
                 if _accepts_args(entry):
                     return entry(tail)  # click / main(argv): lock-free, parallel
                 with _argv_lock:  # legacy zero-arg main(): patch argv, serialised
-                    saved = sys.argv
-                    sys.argv = [self._argv0, *tail]
+                    saved = _sys.argv
+                    _sys.argv = [self._argv0, *tail]
                     try:
                         return entry()
                     finally:
-                        sys.argv = saved
+                        _sys.argv = saved
 
-            return run(_invoke, title=" ".join([self._argv0, *tail]), nofail=nofail)
-        return run([self._argv0, *tail], nofail=nofail)
+            return _run(_invoke, title=" ".join([self._argv0, *tail]), nofail=nofail)
+        return _run([self._argv0, *tail], nofail=nofail)
 
     def installed_version(self) -> tuple[int, ...]:
         """The installed binary's version, as a comparable int tuple.
@@ -200,10 +204,18 @@ class Tool:
         tool that spells it differently, fall back to calling it yourself.
         """
         if self._argv0 not in _version_cache:
-            out = subprocess.run(
-                [self._argv0, "--version"], capture_output=True, text=True, timeout=30
+            # Decode as UTF-8 with replacement (F39): a tool that prints a
+            # non-ASCII glyph in its --version must not crash the read on a
+            # locale-encoded pipe (cp1252 on Windows).
+            out = _subprocess.run(
+                [self._argv0, "--version"],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=30,
             )
-            match = re.search(r"(\d+(?:\.\d+)+)", out.stdout or out.stderr)
+            match = _re.search(r"(\d+(?:\.\d+)+)", out.stdout or out.stderr)
             if out.returncode != 0 or match is None:
                 raise ValueError(
                     f"could not read a version from `{self._argv0} --version`"
@@ -240,18 +252,18 @@ def pytest(*args: str, in_process: bool = True, nofail: bool = False) -> int:
             pass
         else:
             title = " ".join(["pytest", *args])
-            return run(_pytest.main, list(args), title=title, nofail=nofail)
-    return run(["pytest", *args], nofail=nofail)
+            return _run(_pytest.main, list(args), title=title, nofail=nofail)
+    return _run(["pytest", *args], nofail=nofail)
 
 
 def python(*args: str, nofail: bool = False) -> int:
     """Run the current interpreter. `python("-m", "build")`."""
-    return run([sys.executable, *args], nofail=nofail)
+    return _run([_sys.executable, *args], nofail=nofail)
 
 
 def sh(command: str, nofail: bool = False) -> int:
     """Run a command line given as a single string."""
-    return run(command, nofail=nofail)
+    return _run(command, nofail=nofail)
 
 
 def __getattr__(name: str) -> Tool:
