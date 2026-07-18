@@ -145,6 +145,10 @@ def peel(ann: Any) -> Peeled:
         key_type = kv[0] if kv else str
         value_type = kv[1] if len(kv) > 1 else str
         value = peel(value_type)  # recurse: value may be scalar / union / list
+        # A marker on the value type — dict[str, Annotated[int, between(1, 5)]]
+        # — applies to each value; an outer marker on the whole dict wins if
+        # both are present. (env stays outer-only; env() on a dict is a
+        # SpecError.)
         return Peeled(
             False,
             value.element,
@@ -153,7 +157,10 @@ def peel(ann: Any) -> Peeled:
             mapping=True,
             key=key_type,
             value_multiple=value.multiple,
-            **markers,
+            path_req=path_req if path_req is not None else value.path_req,
+            bounds=bounds if bounds is not None else value.bounds,
+            env=env_var,
+            checks=(*checks, *value.checks),
         )
 
     if typing.get_origin(ann) is list:  # list[X] / Many[X]

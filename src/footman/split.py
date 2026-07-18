@@ -348,6 +348,7 @@ def _consume_pair(seg: Segment, p: dict, cli: str, pair: str) -> None:
     if "=" not in pair:
         raise ChainError(f"{seg.task}: --{cli} expects KEY=VALUE (got {pair!r})")
     key, value = pair.split("=", 1)
+    bounds = (p.get("min"), p.get("max")) if "min" in p or "max" in p else None
     _check(seg.task, f"--{cli} key", key, types=p.get("key_types"))
     _check(
         seg.task,
@@ -355,6 +356,8 @@ def _consume_pair(seg: Segment, p: dict, cli: str, pair: str) -> None:
         value,
         choices=p.get("value_choices"),
         types=p.get("value_types"),
+        path=p.get("path"),
+        bounds=bounds,
     )
     seg.values.setdefault(cli, []).append((key, value))
 
