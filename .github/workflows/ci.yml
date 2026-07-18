@@ -41,7 +41,12 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        python: ["3.11", "3.12", "3.13"]
+        # `3.14t` is uv's free-threaded (no-GIL) selector. footman runs tasks in
+        # real parallel threads by default, so a scheduler/output-router data
+        # race surfaces here — tested on every OS, since Windows (spawn, not
+        # fork; distinct console model) exercises different concurrency paths
+        # than Linux and would hide OS-specific races otherwise.
+        python: ["3.11", "3.12", "3.13", "3.14", "3.14t"]
     steps:
       - uses: actions/checkout@v7
       - name: Install uv
@@ -54,10 +59,20 @@ jobs:
         run: uv run pytest -q
 
   shells:
-    name: completion · real shells
-    runs-on: ubuntu-latest
+    name: completion · real shells · ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
     env:
       NU_VERSION: "0.114.1"
+      # Every shell this platform can drive is installed below, so the functional
+      # tests must RUN, not skip — test_ci_provisions_every_testable_shell asserts
+      # they are on PATH, turning a broken install into a hard failure instead of
+      # a green skip. Windows drives only nushell + pwsh (the posix shells are
+      # @_posix_shell-gated); macOS and Linux drive all five.
+      FOOTMAN_REQUIRE_SHELLS: "1"
     steps:
       - uses: actions/checkout@v7
       - name: Install uv
@@ -65,15 +80,33 @@ jobs:
         with:
           python-version: "3.13"
           enable-cache: true
-      - name: Install zsh and fish
-        run: sudo apt-get update -q && sudo apt-get install -y -q zsh fish
-      - name: Install nushell (pinned release binary)
+
+      - name: Install shells (Linux — zsh, fish, nushell; pwsh preinstalled)
+        if: runner.os == 'Linux'
         run: |
+          sudo apt-get update -q && sudo apt-get install -y -q zsh fish
           curl -fsSL "https://github.com/nushell/nushell/releases/download/${NU_VERSION}/nu-${NU_VERSION}-x86_64-unknown-linux-gnu.tar.gz" | tar xz
           echo "$PWD/nu-${NU_VERSION}-x86_64-unknown-linux-gnu" >> "$GITHUB_PATH"
+
+      - name: Install shells (macOS — fish, nushell, pwsh; bash + zsh native)
+        if: runner.os == 'macOS'
+        run: |
+          brew install fish nushell
+          brew install --cask powershell
+
+      - name: Install shells (Windows — nushell; pwsh preinstalled)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $url = "https://github.com/nushell/nushell/releases/download/$env:NU_VERSION/nu-$env:NU_VERSION-x86_64-pc-windows-msvc.zip"
+          Invoke-WebRequest -Uri $url -OutFile nu.zip
+          Expand-Archive -Path nu.zip -DestinationPath nu-bin
+          $dir = (Get-ChildItem -Path nu-bin -Recurse -Filter nu.exe | Select-Object -First 1).DirectoryName
+          Add-Content -Path $env:GITHUB_PATH -Value $dir
+
       - run: uv sync --frozen
-      # -rs: report skips — every functional shell test must actually run
-      # here (bash/zsh/fish/nushell installed above; pwsh ships on runners).
+      # -rs reports any skip; the FOOTMAN_REQUIRE_SHELLS guard test fails the run
+      # if a shell this platform should drive is missing.
       - name: Functional completion tests
         run: uv run pytest tests/test_shellcomp.py -q -rs
 
