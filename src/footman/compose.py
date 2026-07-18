@@ -177,17 +177,39 @@ def plugin(name: str) -> Group:
         raise RegistrationError(
             f"plugin {name!r}: claimed by more than one distribution ({dists})"
         )
-    with registry.capture() as captured:
-        loaded = matches[0].load()
+    try:
+        with registry.capture() as captured:
+            loaded = matches[0].load()
+    except RegistrationError:
+        raise  # already a taught message; don't re-wrap
+    except Exception as exc:
+        # A plugin with a missing optional dep (or any import-time failure)
+        # would otherwise dump a raw traceback on *every* invocation, `--help`
+        # included. Teach it; the mount guard reports it at exit 2.
+        raise RegistrationError(
+            f"plugin {name!r}: failed to import ({type(exc).__name__}: {exc})"
+        ) from exc
     if isinstance(loaded, Group):
         return loaded
     if isinstance(loaded, ModuleType):
+        name = loaded.__name__
         if captured.tasks or captured.groups:
             # Memoise under the module name so re-resolving in the same
             # process (or a later include of the same module) reuses the tree.
-            _module_trees[loaded.__name__] = captured
+            _module_trees[name] = captured
             return captured
-        return _import_source(loaded.__name__)
+        # Registered nothing at module level. Reuse a memoised tree if a prior
+        # resolve captured one (the entry point re-`load()`s the cached module,
+        # so decorators no longer fire and `captured` comes back empty);
+        # otherwise adopt the module's single explicit Group. Routing through
+        # _import_source would hit sys.modules — the entry point just loaded the
+        # module — and raise the misleading "already imported outside include()"
+        # error.
+        if name in _module_trees:
+            return _module_trees[name]
+        tree = _adopt_explicit_group(loaded)
+        _module_trees[name] = tree
+        return tree
     raise RegistrationError(
         f"plugin {name!r}: entry point must resolve to a footman Group "
         f"(or a module of tasks), got {type(loaded).__name__}"

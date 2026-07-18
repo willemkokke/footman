@@ -56,6 +56,7 @@ failed task result with the same wording, plus the source:
 | `include('shared_tasks'): the module was already imported outside include(), so its tasks were never captured — ...` | a bare `import` beat your `include()` | `include()` first, or expose an explicit `Group` |
 | `include(): 'shared_tasks' has no task or group named 'lnt' (has: fmt, lint)` | a typo in `only=`/`exclude=` | the message lists what the provider has |
 | `plugin 'mkdocs': no 'footman.tasks' entry point found (installed: none)` | a configured plugin isn't installed | install it, or drop it from `[tool.footman] plugins` |
+| `plugin 'mkdocs': failed to import (ModuleNotFoundError: ...)` | the plugin is installed but its own import failed (a missing optional dep) | install what the plugin needs, or drop it — footman names the cause, never a traceback |
 
 A parameter whose annotation footman can't use (an unresolved name, a
 value) emits a `UserWarning` — values pass through as plain text until you
