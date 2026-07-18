@@ -325,6 +325,70 @@ def test_progress_absent_when_quiet(monkeypatch):
     assert "\r" not in fake.getvalue()
 
 
+def test_progress_absent_under_no_color(monkeypatch):
+    # F41/D6: the live line is absent (like piped output), not rewritten plain.
+    fake = _Tty()
+    monkeypatch.setattr(sys, "stdout", fake)
+
+    def tasks(reg):
+        @reg.task
+        def a(): ...
+
+        @reg.task
+        def b(): ...
+
+    drive(tasks, "a b", ctx_config={"no_color": True})
+    assert "\r" not in fake.getvalue()
+
+
+def test_progress_absent_under_no_color_env(monkeypatch):
+    fake = _Tty()
+    monkeypatch.setattr(sys, "stdout", fake)
+    monkeypatch.setenv("NO_COLOR", "1")
+
+    def tasks(reg):
+        @reg.task
+        def a(): ...
+
+        @reg.task
+        def b(): ...
+
+    drive(tasks, "a b")
+    assert "\r" not in fake.getvalue()
+
+
+def test_progress_absent_under_dumb_term(monkeypatch):
+    fake = _Tty()
+    monkeypatch.setattr(sys, "stdout", fake)
+    monkeypatch.setenv("TERM", "dumb")
+
+    def tasks(reg):
+        @reg.task
+        def a(): ...
+
+        @reg.task
+        def b(): ...
+
+    drive(tasks, "a b")
+    assert "\r" not in fake.getvalue()
+
+
+def test_no_color_suppresses_sequential_live_rewrite(monkeypatch):
+    # The single-task live path (ctx.tty) goes absent too: no \r rewrite, no
+    # escape codes — the same output a pipe gets.
+    fake = _Tty()
+    monkeypatch.setattr(sys, "stdout", fake)
+
+    def tasks(reg):
+        @reg.task
+        def build():
+            run("echo hi")
+
+    drive(tasks, "build", sequential=True, ctx_config={"no_color": True})
+    out = fake.getvalue()
+    assert "\r" not in out and "\x1b[" not in out
+
+
 def test_dependency_cycle_is_a_taught_error():
     def tasks(reg):
         @reg.task

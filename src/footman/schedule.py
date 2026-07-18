@@ -142,6 +142,15 @@ def _toposort(nodes: list[_Node]) -> list[_Node]:
     return result
 
 
+def _plain_output(no_color: bool) -> bool:
+    """No colour at all: the `--no-color` flag, `NO_COLOR`, or a dumb terminal.
+
+    Per D6 this means the live rewrite is *absent*, not rewritten without escape
+    codes — the same output a pipe gets.
+    """
+    return no_color or "NO_COLOR" in os.environ or os.environ.get("TERM") == "dumb"
+
+
 def _make_ctx(
     seg: Segment,
     ctx_config: dict[str, Any] | None,
@@ -152,7 +161,9 @@ def _make_ctx(
 ) -> context.Context:
     ctx = context.Context(**(ctx_config or {}), passthrough=list(seg.passthrough or []))
     ctx.sink = None if (sequential and not capture) else io.StringIO()
-    ctx.tty = sequential and not capture and real.isatty()
+    ctx.tty = (
+        sequential and not capture and real.isatty() and not _plain_output(ctx.no_color)
+    )
     return ctx
 
 
@@ -248,10 +259,17 @@ def _make_progress(
     capture: bool,
 ) -> _Progress | None:
     cfg = ctx_config or {}
-    if capture or cfg.get("quiet") or len(nodes) < 2 or not real.isatty():
+    if (
+        capture
+        or cfg.get("quiet")
+        or len(nodes) < 2
+        or not real.isatty()
+        or _plain_output(bool(cfg.get("no_color")))
+    ):
         return None
-    color = not cfg.get("no_color") and "NO_COLOR" not in os.environ
-    return _Progress(real, nodes, color)
+    # Past the guard the run is colourful by definition (no_color/NO_COLOR/dumb
+    # all bail above), so the live line always renders with escapes.
+    return _Progress(real, nodes, color=True)
 
 
 def _run_parallel(nodes, real, keep_going, capture, ctx_config) -> None:
