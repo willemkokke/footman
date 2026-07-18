@@ -54,7 +54,39 @@ def test_sequential_flag_does_not_run_concurrently():
             barrier.wait()
 
     results = drive(tasks, "a b", sequential=True)
-    assert results[0].ok is False  # a times out at the barrier (b runs after)
+    # Load-independent: true sequential runs a alone (it times out at the
+    # barrier), then skips b — one result. A regressed parallel path would
+    # submit both up front and yield two, however loaded the runner is.
+    assert len(results) == 1
+    assert results[0].ok is False  # a timed out at the barrier by itself
+
+
+def test_duplicate_explicit_segments_each_run():
+    calls = []
+
+    def tasks(reg):
+        @reg.task
+        def build(target: str):
+            calls.append(target)
+
+    results = drive(tasks, "build web build api", sequential=True)
+    assert len(results) == 2
+    assert calls == ["web", "api"]  # both invocations run, in order
+
+
+def test_duplicate_explicit_segments_run_in_parallel_too():
+    calls = []
+    lock = threading.Lock()
+
+    def tasks(reg):
+        @reg.task
+        def build(target: str):
+            with lock:
+                calls.append(target)
+
+    results = drive(tasks, "build web build api")  # default parallel
+    assert len(results) == 2
+    assert set(calls) == {"web", "api"}
 
 
 def test_pre_runs_before_dependent():
