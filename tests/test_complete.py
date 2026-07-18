@@ -68,6 +68,48 @@ def test_split_opt_value_bash(tree):
     assert set(complete(tree, ["lint", "--mode", "=", ""])) == {"strict", "loose"}
 
 
+def test_leading_global_value_not_read_as_task(tree):
+    # F61: `-C docs <TAB>` — `docs` is -C's value, so completion offers the
+    # top-level names, not the `docs` group's tasks.
+    top = set(complete(tree, [""]))
+    assert set(complete(tree, ["-C", "docs", ""])) == top
+    assert set(complete(tree, ["-C", "anydir", ""])) == top
+
+
+def test_install_completion_completes_shells(tree):
+    # F61: --install-completion's optional value is one of the shells.
+    assert set(complete(tree, ["--install-completion", ""])) == {
+        "bash",
+        "zsh",
+        "fish",
+        "pwsh",
+        "nushell",
+    }
+    assert complete(tree, ["--install-completion", "z"]) == ["zsh"]
+
+
+def test_leading_flag_global_then_task(tree):
+    # A leading flag global (-s) is consumed; the walk still completes tasks.
+    assert "check" in complete(tree, ["-s", "che"])
+
+
+def test_completion_globals_mirror_split():
+    # Drift pin: the hot-path arity mirror must match split.GLOBALS exactly, so
+    # renaming or re-typing a global fails CI instead of silently misparsing.
+    from footman import _complete, _shellcomp, split
+
+    flag: set[str] = set()
+    value: set[str] = set()
+    maybe: set[str] = set()
+    buckets = {"flag": flag, "option": value, "option?": maybe}
+    for name, alias, kind, _hint, _help in split.GLOBALS:
+        buckets[kind] |= {name} | ({alias} if alias else set())
+    assert flag == _complete._GLOBAL_FLAG
+    assert value == _complete._GLOBAL_VALUE
+    assert maybe == _complete._GLOBAL_MAYBE
+    assert _complete._GLOBAL_CHOICES["--install-completion"] == tuple(_shellcomp.SHELLS)
+
+
 # --- chain-aware completion -----------------------------------------------------
 
 
