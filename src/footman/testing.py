@@ -68,7 +68,10 @@ def recording(**overrides: Any) -> Iterator[list[StepResult]]:
     to `run()` are skipped too — that is the point, but worth knowing.
     Keyword overrides go to the underlying `Context` (e.g. `env={...}`).
     """
-    ctx = Context(dry_run=True, quiet=True, **overrides)
+    # Build the kwargs dict so `overrides` can win over the dry_run/quiet
+    # defaults — passing them as positional defaults made `recording(quiet=False)`
+    # raise "got multiple values for keyword argument" (F51).
+    ctx = Context(**{"dry_run": True, "quiet": True, **overrides})
     with use_context(ctx):
         yield ctx.steps
 
