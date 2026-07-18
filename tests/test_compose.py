@@ -233,6 +233,20 @@ def test_include_collision_is_loud_unless_override(provider):
         assert captured.tasks["lint"] is not lint  # provider's won
 
 
+def test_include_forks_provider_tree_no_memo_leak(provider):
+    # F38: grafting a provider group hands the project a private copy — a later
+    # mutation (as the cascade overlay/tag does) must not leak into the shared
+    # _module_trees memo and thus into the next in-process invocation.
+    with registry.capture():
+        target = Group("proj")
+        compose.include("shared_tasks", into=target)  # grafts lint/fmt + docs
+
+    target.groups["docs"].tasks["injected"] = lambda: None
+    memo = compose._module_trees["shared_tasks"]
+    assert "injected" not in memo.groups["docs"].tasks  # memo untouched
+    assert target.tasks["lint"] is memo.tasks["lint"]  # fns still shared
+
+
 def test_include_memoises_per_module(provider):
     with registry.capture() as a:
         compose.include("shared_tasks", only=["lint"])
