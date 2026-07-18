@@ -150,5 +150,8 @@ class Runner:
             else:
                 if tasks is not None:
                     argv = ["--tasks-file", str(tasks), *argv]
-                code = _app.run(argv, brand=self.app.brand, collect=collected)
+                # `_run`, not `run`: bypass the CLI's KeyboardInterrupt->130
+                # wrapper so Ctrl-C reaches pytest (the invoke docstring's
+                # contract). The wrapper stays for real CLI entry.
+                code = _app._run(argv, brand=self.app.brand, collect=collected)
         return Result(code, out.getvalue(), err.getvalue(), collected)

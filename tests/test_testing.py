@@ -166,6 +166,21 @@ def test_runner_tasks_path_uses_single_file(tmp_path):
     assert result.results[0].task == "hi"
 
 
+def test_runner_file_path_propagates_keyboard_interrupt(tmp_path):
+    # F52: the invoke docstring promises Ctrl-C passes through — a test runner
+    # must let pytest handle it, not swallow it into a 130 exit code. Group mode
+    # already propagates (run_group); the file path did not until it stopped
+    # going through the CLI's KI wrapper.
+    import pytest
+
+    tasks = tmp_path / "tasks.py"
+    tasks.write_text(
+        "from footman import task\n@task\ndef boom():\n    raise KeyboardInterrupt\n"
+    )
+    with pytest.raises(KeyboardInterrupt):
+        Runner().invoke("boom", tasks=tasks, cwd=tmp_path)
+
+
 def test_runner_discovers_cascade_from_cwd(tmp_path):
     (tmp_path / "pyproject.toml").write_text('[project]\nname="x"\n')
     (tmp_path / "tasks.py").write_text(TASKS)
