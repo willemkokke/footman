@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import enum
+import uuid
 from pathlib import Path
 from typing import Literal
+
+import pytest
 
 from footman import manifest
 from footman.executor import run_chain
 from footman.registry import Group
-from footman.split import split_chain
+from footman.split import ChainError, split_chain
 
 
 class Colour(enum.Enum):
@@ -203,3 +206,78 @@ def test_positional_only_default_hole_is_filled():
     _, results = _run(tasks, "f --b z")
     assert results[0].ok
     assert seen["ab"] == ("x", "z")  # skipped `a` filled from its default
+
+
+# --- mixed unions (choices + types) ------------------------------------------
+
+
+def test_union_literal_and_int_accepts_either():
+    seen = {}
+
+    def tasks(reg):
+        @reg.task
+        def go(x: Literal["fast", "slow"] | int = 1):
+            seen["x"] = x
+
+    _run(tasks, "go --x fast")
+    assert seen["x"] == "fast"
+    _run(tasks, "go --x 7")
+    assert seen["x"] == 7 and type(seen["x"]) is int
+
+
+def test_union_literal_and_int_rejects_neither():
+    def tasks(reg):
+        @reg.task
+        def go(x: Literal["fast", "slow"] | int = 1): ...
+
+    with pytest.raises(ChainError, match=r"one of fast\|slow, or an integer"):
+        _run(tasks, "go --x nope")
+
+
+def test_union_literal_and_int_manifest_carries_both():
+    def tasks(reg):
+        @reg.task
+        def go(x: Literal["fast", "slow"] | int = 1): ...
+
+    reg = Group("root")
+    tasks(reg)
+    spec = manifest.build_manifest(reg)["tree"]["tasks"]["go"]["params"][0]
+    assert spec["choices"] == ["fast", "slow"]
+    assert spec["types"] == ["int"]
+
+
+def test_union_literal_value_coerces_to_int():
+    seen = {}
+
+    def tasks(reg):
+        @reg.task
+        def f(x: Literal[5] | str = "a"):
+            seen["x"] = x
+
+    _run(tasks, "f --x 5")
+    assert seen["x"] == 5 and type(seen["x"]) is int
+
+
+def test_union_enum_member_binds():
+    seen = {}
+
+    def tasks(reg):
+        @reg.task
+        def paint(c: Colour | int = 0):
+            seen["c"] = c
+
+    _run(tasks, "paint --c red")
+    assert seen["c"] is Colour.RED
+
+
+def test_union_custom_type_binds_and_is_not_rejected():
+    identifier = "550e8400-e29b-41d4-a716-446655440000"
+    seen = {}
+
+    def tasks(reg):
+        @reg.task
+        def rec(id: uuid.UUID | int = 0):
+            seen["id"] = id
+
+    _run(tasks, f"rec --id {identifier}")
+    assert seen["id"] == uuid.UUID(identifier)

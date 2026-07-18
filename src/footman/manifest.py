@@ -84,8 +84,12 @@ def param_spec(param: inspect.Parameter) -> dict[str, Any]:
 
     if param.kind is inspect.Parameter.VAR_POSITIONAL:
         spec["kind"] = "variadic"
-        if ann is not empty and (tags := coerce.element_tags(ann)) and tags != ["str"]:
-            spec["types"] = tags
+        if ann is not empty:
+            peeled = coerce.peel(ann)  # unwrap Annotated so markers reach the spec
+            tags = coerce.element_tags(peeled.element)
+            if tags and tags != ["str"]:
+                spec["types"] = tags
+            _marker_keys(spec, peeled, param, has_default=False)
         return spec
 
     has_default = param.default is not empty
@@ -105,10 +109,11 @@ def param_spec(param: inspect.Parameter) -> dict[str, Any]:
             spec["nosplit"] = True
         if (ktags := coerce.element_tags(peeled.key)) and ktags != ["str"]:
             spec["key_types"] = ktags
-        vchoices, _, _ = coerce.element_choices(peeled.element)
+        vchoices = coerce.all_choices(peeled.element)
+        vtags = coerce.element_tags(peeled.element)
         if vchoices is not None:
             spec["value_choices"] = vchoices
-        elif (vtags := coerce.element_tags(peeled.element)) and vtags != ["str"]:
+        if vtags and vtags != ["str"] and coerce.eagerly_checkable(peeled.element):
             spec["value_types"] = vtags
         return spec
 
@@ -132,12 +137,16 @@ def param_spec(param: inspect.Parameter) -> dict[str, Any]:
         spec["_completer"] = peeled.completer
         return spec
 
-    choices, _, _ = coerce.element_choices(element)
+    choices = coerce.all_choices(element)
+    tags = coerce.element_tags(element)
     if choices is not None:
         spec["choices"] = choices
-    elif (tags := coerce.element_tags(element)) and tags != ["str"]:
+    # Emit `types` only when the element is eagerly checkable — a union with a
+    # custom member (`UUID | int`) can't be accept/rejected up front, so leave
+    # it to binding rather than eagerly rejecting valid values.
+    if tags and tags != ["str"] and coerce.eagerly_checkable(element):
         spec["types"] = tags
-    elif not tags and not isinstance(element, type):
+    elif choices is None and not tags and not isinstance(element, type):
         # The annotation resolves to nothing footman can coerce (a string
         # that never resolved, a value, an exotic generic): values will pass
         # through as plain text. Silent degrade is a debugging tax — say so.
