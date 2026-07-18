@@ -17,6 +17,7 @@ import os
 import threading
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from dataclasses import dataclass, field
+from itertools import count
 from typing import Any, TextIO
 
 from footman import context, executor
@@ -39,28 +40,53 @@ def _default_seg(fn: Task) -> Segment:
 
 
 def _build_dag(root: Group, segments: list[Segment]) -> list[_Node]:
-    """Nodes for the chain plus their transitive pre/post deps (deduped)."""
-    nodes: dict[int, _Node] = {}
-    order: list[int] = []
+    """Nodes for the chain plus their transitive pre/post deps.
 
-    def add(fn: Task, seg: Segment, explicit: bool) -> _Node:
-        key = id(fn)
-        if key in nodes:
-            if explicit:
-                nodes[key].seg = seg  # a chain segment's args beat a bare dep
-            return nodes[key]
-        node = _Node(fn, seg, key)
-        nodes[key] = node
-        order.append(key)
-        for dep in getattr(fn, "_footman_pre", []):
-            node.deps.add(add(dep, _default_seg(dep), False).key)
-        for dep in getattr(fn, "_footman_post", []):
-            add(dep, _default_seg(dep), False).deps.add(key)
+    Explicit chain segments each get their own node — repeating a task in the
+    chain (`build web build api`) runs it once per mention. Only shared
+    pre/post prerequisites are deduped, by task identity, so a prerequisite
+    pulled in twice still runs once. Node keys are serial ints; `dep_nodes`
+    maps a task to the node its bare deps resolve to.
+    """
+    nodes: list[_Node] = []
+    dep_nodes: dict[int, _Node] = {}
+    counter = count()
+    seen_explicit: set[int] = set()
+
+    def new_node(fn: Task, seg: Segment) -> _Node:
+        node = _Node(fn, seg, next(counter))
+        nodes.append(node)
         return node
 
+    def add_dep(fn: Task) -> _Node:
+        node = dep_nodes.get(id(fn))
+        if node is None:
+            node = new_node(fn, _default_seg(fn))
+            dep_nodes[id(fn)] = node
+            _link(node)
+        return node
+
+    def _link(node: _Node) -> None:
+        for dep in getattr(node.fn, "_footman_pre", []):
+            node.deps.add(add_dep(dep).key)
+        for dep in getattr(node.fn, "_footman_post", []):
+            add_dep(dep).deps.add(node.key)
+
     for seg in segments:
-        add(executor.resolve(root, seg.path), seg, True)
-    return [nodes[k] for k in order]
+        fn = executor.resolve(root, seg.path)
+        existing = dep_nodes.get(id(fn))
+        if existing is not None and id(fn) not in seen_explicit:
+            # First explicit mention of a task already pulled in as a bare dep:
+            # adopt this segment's args instead of creating a duplicate.
+            existing.seg = seg
+            seen_explicit.add(id(fn))
+            continue
+        node = new_node(fn, seg)
+        if existing is None:
+            dep_nodes[id(fn)] = node
+        seen_explicit.add(id(fn))
+        _link(node)
+    return nodes
 
 
 def _check_cycles(nodes: list[_Node]) -> None:
