@@ -167,6 +167,24 @@ def test_quiet_suppresses_summary(project, capsys):
     assert "ok  hi" not in out  # but the summary line is suppressed
 
 
+def test_help_synthesises_an_example(project, capsys):
+    # 11.3: --help shows a realistic invocation derived from the signature.
+    assert _app.run(["--help", "add"]) == 0
+    assert "Example: fm add <a> <b>" in capsys.readouterr().out
+    assert _app.run(["--help", "flag"]) == 0
+    assert "Example: fm flag --fix" in capsys.readouterr().out  # representative flag
+
+
+def test_help_example_no_arg_task_has_no_junk(project, capsys):
+    assert _app.run(["--help", "crash"]) == 0  # crash() takes no arguments
+    examples = [
+        line
+        for line in capsys.readouterr().out.splitlines()
+        if line.startswith("Example:")
+    ]
+    assert examples == ["Example: fm crash"]
+
+
 def test_binding_refusals_exit_2_end_to_end(tmp_path, monkeypatch):
     # F54: a coercion refusal (custom type) and a bounds refusal both surface as
     # exit 2 through the real CLI path — not a task-failure 1.
