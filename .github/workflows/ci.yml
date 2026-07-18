@@ -92,7 +92,9 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           brew install fish nushell
-          brew install --cask powershell
+          # pwsh ships on the macOS runner; only fetch it if that ever changes.
+          # The plain `powershell` cask was retired, so fall back to @preview.
+          command -v pwsh >/dev/null || brew install --cask powershell@preview
 
       - name: Install shells (Windows — nushell; pwsh preinstalled)
         if: runner.os == 'Windows'
