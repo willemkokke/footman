@@ -121,6 +121,23 @@ def test_requires_check_does_not_import(monkeypatch):
     assert "textwrap" not in sys.modules
 
 
+def test_requires_broken_parent_lists_unavailable_not_crash(tmp_path, monkeypatch):
+    # F29: a dotted `requires` imports parent packages via find_spec; a parent
+    # whose __init__ raises must read as unavailable, never crash fm --list.
+    pkg = tmp_path / "brokenparent"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("raise RuntimeError('parent boom')\n")
+    (pkg / "child.py").write_text("")
+    monkeypatch.syspath_prepend(str(tmp_path))
+
+    def tasks(reg):
+        @reg.task(requires="brokenparent.child")
+        def publish(): ...
+
+    _, tree = _tree(tasks)  # must not raise
+    assert tree["tasks"]["publish"]["disabled"] == "requires brokenparent.child"
+
+
 def test_disabled_prerequisite_fails_the_dependent():
     ran = []
 
