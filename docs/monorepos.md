@@ -42,7 +42,8 @@ The completion manifest is cached **per directory**, so <kbd>Tab</kbd> in
 !!! tip "Load exactly one file"
 
     `-f/--tasks-file PATH` is the escape hatch: it loads a single file, with no
-    cascade.
+    cascade. It never rewrites the directory's cached completion manifest, so a
+    one-off `-f` run leaves <kbd>Tab</kbd> describing the real cascade.
 
 ## Configuration
 

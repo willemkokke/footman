@@ -173,6 +173,25 @@ def test_directory_bad(project, capsys):
     assert "-C" in capsys.readouterr().err
 
 
+def test_tasks_file_does_not_poison_completion_cache(project):
+    # F37: an -f run loads one file; it must not rewrite the cwd's completion
+    # manifest (which describes the real cascade), or TAB breaks until the next
+    # plain run.
+    from pathlib import Path
+
+    assert _app.run(["hi"]) == 0  # plain run writes the cascade's manifest
+    cache = _paths.manifest_path(Path.cwd())
+    before = cache.read_text()
+    assert "hi" in before
+
+    other = project / "other.py"
+    other.write_text("from footman import task\n@task\ndef solo(): ...\n")
+    assert _app.run(["-f", str(other), "solo"]) == 0
+    after = cache.read_text()
+    assert after == before  # cache untouched
+    assert "solo" not in after
+
+
 def test_directory_restores_cwd(project):
     # F36: -C must not permanently move the host process (e.g. a test runner).
     import os
