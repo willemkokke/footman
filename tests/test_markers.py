@@ -106,6 +106,28 @@ def test_between_teaches_out_of_range():
         split_chain(tree, ["test-", "--jobs", "99"])
 
 
+def test_nan_is_rejected_by_bounds():
+    def tasks(reg):
+        @reg.task
+        def mix(ratio: Annotated[float, between(0.0, 1.0)] = 0.5): ...
+
+    _, tree = build_tree(tasks)
+    with pytest.raises(ChainError, match=r"between 0\.0 and 1\.0"):
+        split_chain(tree, ["mix", "--ratio", "nan"])
+    split_chain(tree, ["mix", "--ratio", "0.5"])  # a real value still binds
+
+
+def test_env_nan_is_rejected_by_bounds(monkeypatch):
+    def tasks(reg):
+        @reg.task
+        def mix(ratio: Annotated[float, between(0.0, 1.0), env("RATIO")] = 0.5): ...
+
+    monkeypatch.setenv("RATIO", "nan")
+    results = run(tasks, "mix")
+    assert not results[0].ok
+    assert "between 0.0 and 1.0" in str(results[0].error)
+
+
 def test_bare_range_is_half_open():
     def tasks(reg):
         @reg.task

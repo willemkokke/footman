@@ -164,3 +164,42 @@ def test_raised_exception_is_exit_code_1():
     assert results[0].ok is False
     assert results[0].code == 1  # a raised error carries no code -> flat 1
     assert isinstance(results[0].error, RuntimeError)
+
+
+def test_positional_only_parameter_binds():
+    seen = {}
+
+    def tasks(reg):
+        @reg.task
+        def build(target: str, /):
+            seen["target"] = target
+
+    _, results = _run(tasks, "build web")
+    assert results[0].ok
+    assert seen["target"] == "web"
+
+
+def test_positional_only_mixed_with_regular():
+    seen = {}
+
+    def tasks(reg):
+        @reg.task
+        def f(a: str, /, b: int = 2):
+            seen["ab"] = (a, b)
+
+    _, results = _run(tasks, "f hello --b 5")
+    assert results[0].ok
+    assert seen["ab"] == ("hello", 5)
+
+
+def test_positional_only_default_hole_is_filled():
+    seen = {}
+
+    def tasks(reg):
+        @reg.task
+        def f(a: str = "x", b: str = "y", /):
+            seen["ab"] = (a, b)
+
+    _, results = _run(tasks, "f --b z")
+    assert results[0].ok
+    assert seen["ab"] == ("x", "z")  # skipped `a` filled from its default
