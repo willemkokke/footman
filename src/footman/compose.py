@@ -94,6 +94,23 @@ def _as_group(source: str | ModuleType | Group) -> Group:
     return _import_source(source)
 
 
+def _fork(tree: Group) -> Group:
+    """A structural copy of *tree*: fresh Group objects and dicts, shared fns.
+
+    A memoised provider tree grafted into a project is later mutated by the
+    cascade overlay/tag in place — without a fork, one project's tasks (and
+    DEFINING_DIR stamps) leak into the shared `_module_trees` memo and thus into
+    every later in-process invocation (F38). The task callables stay shared on
+    purpose: DEFINING_DIR is re-stamped on each load, so sharing them is safe
+    and keeps `recording()`/identity checks meaningful.
+    """
+    fork = Group(tree.name, tree.help)
+    fork.tasks.update(tree.tasks)  # share fns, but into a fresh dict
+    for name, sub in tree.groups.items():
+        fork.groups[name] = _fork(sub)  # recurse: fresh subgroup objects
+    return fork
+
+
 def include(
     source: str | ModuleType | Group,
     /,
@@ -119,7 +136,7 @@ def include(
     protection). Included tasks run from *your* file's directory — a shared
     lint task lints this project. Returns the group it grafted into.
     """
-    tree = _as_group(source)
+    tree = _fork(_as_group(source))  # graft a private copy; never the memo
     target = into if into is not None else registry.root
 
     known = set(tree.tasks) | set(tree.groups)
@@ -224,7 +241,7 @@ def mount_plugins(base: Group, names: list[str]) -> None:
     nearest-wins rule.
     """
     for name in names:
-        tree = plugin(str(name))
+        tree = _fork(plugin(str(name)))  # graft a private copy; never the memo
         base.tasks.pop(name, None)
         base.groups[name] = tree if tree.name != "root" else _named(tree, name)
 
