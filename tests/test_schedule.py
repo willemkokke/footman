@@ -202,6 +202,57 @@ def test_parallel_helper_propagates_failure():
     assert results[0].ok is False
 
 
+def test_parallel_fails_on_nonzero_return():
+    # F13: a thunk that *returns* a non-zero code fails the run, same as a raise.
+    def tasks(reg):
+        @reg.task
+        def build():
+            parallel(lambda: 1, lambda: 0)
+
+    results = drive(tasks, "build")
+    assert results[0].ok is False
+
+
+def test_parallel_keep_going_collects_all_codes():
+    # F42: first coverage of the keep_going branch — codes returned, no raise.
+    codes = {}
+
+    def tasks(reg):
+        @reg.task
+        def build():
+            codes["got"] = parallel(lambda: 1, lambda: 0, keep_going=True)
+
+    results = drive(tasks, "build")
+    assert results[0].ok is True
+    assert codes["got"] == [1, 0]  # pool.map preserves call order
+
+
+def test_parallel_failure_exit_code_is_the_thunks_code():
+    # D16: with 1.1 + 6.2 both in, a failing parallel() thunk exits with its own
+    # code (not a flat 1).
+    def tasks(reg):
+        @reg.task
+        def build():
+            parallel(lambda: run([sys.executable, "-c", "import sys; sys.exit(7)"]))
+
+    results = drive(tasks, "build")
+    assert results[0].ok is False
+    assert results[0].code == 7
+
+
+def test_parallel_child_steps_surface_on_parent():
+    # F12: run()s inside parallel() used to vanish from --json/recording; they
+    # now land on the parent task's steps (completion order — assert as a set).
+    def tasks(reg):
+        @reg.task
+        def build():
+            parallel(lambda: run("echo one"), lambda: run("echo two"))
+
+    results = drive(tasks, "build")
+    commands = {s.command for s in results[0].steps}
+    assert commands == {"echo one", "echo two"}
+
+
 def test_parallel_output_is_grouped_not_interleaved(capsys):
     def tasks(reg):
         @reg.task

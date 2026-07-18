@@ -344,6 +344,11 @@ def parallel(*calls: Callable[[], Any], keep_going: bool = False) -> list[int]:
             returned = call()
             code = returned if _is_code(returned) else 0
             error: BaseException | None = None
+            # A thunk that *returns* a non-zero code failed just as surely as one
+            # that raised RunFailed. Synthesize the failure here so the gate below
+            # treats both uniformly; `keep_going` still collects the code.
+            if code != 0:
+                error = RunFailed(StepResult(_label(call, ()), code, "", 0.0))
         except RunFailed as exc:
             code, error = exc.result.code or 1, exc
         except Exception as exc:  # a failed call must not crash the pool
@@ -353,6 +358,9 @@ def parallel(*calls: Callable[[], Any], keep_going: bool = False) -> list[int]:
         with lock:
             dest.write(child.sink.getvalue())  # type: ignore[union-attr]
             dest.flush()
+            # Surface the child's run() steps on the parent, in completion order,
+            # so they appear in `--json` and `recording()` (F12).
+            parent.steps.extend(child.steps)
         return code, error
 
     with ThreadPoolExecutor(max_workers=max(1, len(calls))) as pool:
