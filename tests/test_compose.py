@@ -314,3 +314,76 @@ def test_missing_configured_plugin_is_exit_2(tmp_path):
     result = Runner().invoke("own", cwd=project)
     assert result.exit_code == 2
     assert "ghost" in result.stderr
+
+
+def _advertise(tmp_path, monkeypatch, module, body, entry):
+    """Put a provider *module* on sys.path with dist-info advertising *entry*."""
+    (tmp_path / f"{module}.py").write_text(textwrap.dedent(body))
+    dist = tmp_path / f"{module}-1.0.dist-info"
+    dist.mkdir()
+    (dist / "METADATA").write_text(
+        f"Metadata-Version: 2.1\nName: {module}\nVersion: 1.0\n"
+    )
+    (dist / "entry_points.txt").write_text(f"[footman.tasks]\n{entry}\n")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.setattr(compose, "_module_trees", {})
+    sys.modules.pop(module, None)
+
+
+def test_plugin_import_failure_is_taught(tmp_path, monkeypatch):
+    # F07: a plugin that fails to import teaches instead of dumping a traceback.
+    _advertise(
+        tmp_path,
+        monkeypatch,
+        "broken_plugin",
+        "import totally_missing_dep_xyz  # noqa\n",
+        "broken = broken_plugin",
+    )
+    with pytest.raises(RegistrationError, match="failed to import"):
+        compose.plugin("broken")
+
+
+def test_broken_plugin_config_mount_is_exit_2(tmp_path, monkeypatch):
+    # F07 end-to-end: a broken config-mounted plugin is a clean exit 2, not a
+    # raw traceback on every invocation.
+    _advertise(
+        tmp_path,
+        monkeypatch,
+        "broken2_plugin",
+        "import totally_missing_dep_xyz  # noqa\n",
+        "broken2 = broken2_plugin",
+    )
+    project = tmp_path / "proj_broken"
+    project.mkdir()
+    (project / "pyproject.toml").write_text(
+        '[project]\nname="x"\n[tool.footman]\nplugins = ["broken2"]\n'
+    )
+    (project / "tasks.py").write_text(
+        "from footman import task\n@task\ndef own(): ...\n"
+    )
+    result = Runner().invoke("own", cwd=project)
+    assert result.exit_code == 2
+    assert "failed to import" in result.stderr
+
+
+def test_plugin_explicit_group_module_is_adopted(tmp_path, monkeypatch):
+    # F08: an entry point naming a *module* that registers nothing but exposes
+    # one explicit Group is adopted — the documented provider convention, which
+    # previously hit the misleading "already imported outside include()" error.
+    _advertise(
+        tmp_path,
+        monkeypatch,
+        "explicit_plugin",
+        """
+        from footman.registry import Group
+
+        tasks = Group("explicit", "Explicit provider")
+
+        @tasks.task
+        def ping():
+            print("pong")
+        """,
+        "explicit = explicit_plugin",
+    )
+    tree = compose.plugin("explicit")
+    assert set(tree.tasks) == {"ping"}
