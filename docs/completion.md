@@ -55,7 +55,14 @@ fm format lint --fix <TAB>         # completes within the chain
 ```
 
 Group names, task names, flags, options, and both static and
-[dynamic](typing.md#dynamic-completion) value sets all complete.
+[dynamic](typing.md#dynamic-completion) value sets all complete. Where a shell
+supports a description column (zsh, fish), task and group names carry their
+one-line docstring, so holding <kbd>Tab</kbd> teaches the whole CLI:
+
+```text
+build   — compile and bundle
+deploy  — ship to an environment
+```
 
 ## Installing the shell hook
 

@@ -14,11 +14,16 @@ from footman import _complete
 from footman._complete import complete_cli
 
 
+def _completion_names(out: str) -> set[str]:
+    """Candidate names from resolver output, dropping `\t` description columns."""
+    return {line.split("\t", 1)[0] for line in out.splitlines() if line}
+
+
 def test_complete_cli_reads_explicit_manifest(tree, tmp_path, capsys):
     path = tmp_path / "m.json"
     path.write_text(json.dumps({"tree": tree}))
     assert complete_cli(["--manifest", str(path), "--", "docs", ""]) == 0
-    assert set(capsys.readouterr().out.split()) == {"serve", "build"}
+    assert _completion_names(capsys.readouterr().out) == {"serve", "build"}
 
 
 def test_complete_cli_missing_manifest_is_silent(tmp_path, capsys):
@@ -34,7 +39,7 @@ def test_complete_cli_empty_partial_appends_blank(tree, tmp_path, capsys):
     path.write_text(json.dumps({"tree": tree}))
     args = ["--manifest", str(path), "--empty-partial", "--", "docs"]
     assert complete_cli(args) == 0
-    assert set(capsys.readouterr().out.split()) == {"serve", "build"}
+    assert _completion_names(capsys.readouterr().out) == {"serve", "build"}
 
 
 # --- stale-while-revalidate completion refresh (D18) --------------------------
@@ -169,7 +174,7 @@ def test_main_dispatches_complete(tree, tmp_path, monkeypatch, capsys):
     with pytest.raises(SystemExit) as exc:
         footman.main()
     assert exc.value.code == 0
-    assert capsys.readouterr().out.split() == ["check"]
+    assert _completion_names(capsys.readouterr().out) == {"check"}
 
 
 def test_main_dispatches_version(monkeypatch, capsys):

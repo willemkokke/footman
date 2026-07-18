@@ -75,7 +75,9 @@ def test_append_once_unwritable_is_install_error(tmp_path):
 def test_zsh_install(home):
     _shellcomp.install("zsh", "fm")
     script = home / ".local" / "share" / "fm" / "completion.zsh"
-    assert "compdef _fm_complete fm" in script.read_text()
+    body = script.read_text()
+    assert "compdef _fm_complete fm" in body
+    assert "compadd -d displays -a values" in body  # 11.2: description column
     assert "source" in (home / ".zshrc").read_text()
 
 
@@ -254,7 +256,10 @@ def test_bash_completion_functional(home, fm_project_dir):
         cwd=fm_project_dir,
     )
     assert out.returncode == 0, out.stderr
-    assert "lint" in out.stdout.split()
+    # `lint` has a "Lint." docstring → resolver emits `lint\tLint.`; bash strips
+    # the description column, leaving the bare name as its own line.
+    assert "lint" in out.stdout.splitlines()
+    assert "Lint." not in out.stdout
     assert "--fix" in out.stdout.split()  # the bash-3.2 slice regression case
 
 
@@ -283,6 +288,7 @@ def test_zsh_completion_functional(home, fm_project_dir):
     )
     assert out.returncode == 0, out.stderr
     assert "--fix" in out.stdout.split()  # empty current word survives quoting
+    assert "Lint." in out.stdout  # 11.2: the description column reaches zsh
 
 
 @_posix_shell
@@ -307,6 +313,7 @@ def test_fish_completion_functional(home, fm_project_dir):
     assert out.returncode == 0, out.stderr
     assert "lint" in out.stdout.split()
     assert "--fix" in out.stdout.split()
+    assert "Lint." in out.stdout  # 11.2: fish renders the tab-separated description
 
 
 # --- bare --install-completion: shell auto-detection -----------------------------
