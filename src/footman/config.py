@@ -35,16 +35,19 @@ class ConfigError(Exception):
     """A config TOML file exists but cannot be parsed."""
 
 
-def _read_toml(path: Path) -> dict[str, Any] | None:
+def _read_toml(path: Path, required: bool = False) -> dict[str, Any] | None:
     """Parse *path*; `None` if absent/unreadable, `ConfigError` if malformed.
 
     A missing file is normal (most directories have no config); a file that
     exists but doesn't parse is a user mistake that must not be silently
-    read as "no settings".
+    read as "no settings". When *required* (an explicit `--config`), an
+    unreadable file is loud too, not silently skipped.
     """
     try:
         text = path.read_text("utf-8")
-    except OSError:
+    except OSError as exc:
+        if required:
+            raise ConfigError(f"{path}: {exc.strerror or exc}") from exc
         return None
     try:
         data = tomllib.loads(text)
@@ -53,10 +56,10 @@ def _read_toml(path: Path) -> dict[str, Any] | None:
     return data if isinstance(data, dict) else None
 
 
-def _footman_table(path: Path) -> dict[str, Any]:
+def _footman_table(path: Path, required: bool = False) -> dict[str, Any]:
     """The footman settings in *path* — `[tool.footman]` for a pyproject,
     the whole file for anything else. Empty dict if absent/unreadable."""
-    data = _read_toml(path)
+    data = _read_toml(path, required=required)
     if data is None:
         return {}
     if path.name == PYPROJECT:
@@ -94,12 +97,16 @@ def load_config(
     """Merge config from *ceiling* down to *cwd*; *cli_path* overrides all.
 
     A malformed discovered file warns (via *on_warning*) and is skipped; a
-    malformed explicit *cli_path* raises `ConfigError` — the user named that
-    file on purpose, so it failing quietly is not an option.
+    missing or malformed explicit *cli_path* raises `ConfigError` — the user
+    named that file on purpose, so it failing quietly (a typo silently ignored)
+    is not an option.
     """
     merged: dict[str, Any] = {}
     for directory in _paths.dir_chain(cwd, ceiling):
         merged.update(_dir_config(directory, on_warning))
     if cli_path:
-        merged.update(_footman_table(Path(cli_path).expanduser()))
+        path = Path(cli_path).expanduser()
+        if not path.is_file():
+            raise ConfigError(f"{path}: no such file")
+        merged.update(_footman_table(path, required=True))
     return merged
