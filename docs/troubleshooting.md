@@ -87,8 +87,10 @@ and your cwd must not brick every invocation:
 fm: ignoring malformed config: /repo/footman.toml: Expected '=' after a key in a key/value pair (at line 1, column 5)
 ```
 
-A malformed file you named **explicitly** with `--config` is a hard error
-(exit 2) — you asked for that file on purpose.
+A file you named **explicitly** with `--config` is a hard error (exit 2) when
+it's malformed, unreadable, or missing — you asked for that file on purpose, so
+a typo like `--config prod.tmol` is reported (`--config: prod.tmol: no such
+file`), never silently ignored.
 
 ## Exit codes
 

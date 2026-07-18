@@ -421,6 +421,13 @@ def test_malformed_explicit_config_is_an_error(project, capsys):
     assert "--config" in err and "bad.toml" in err
 
 
+def test_missing_explicit_config_is_an_error(project, capsys):
+    # F15: a typo'd --config (prod.tmol) must be loud, not silently ignored.
+    assert _app.run(["--config", "prod.tmol", "hi"]) == 2
+    err = capsys.readouterr().err
+    assert "--config" in err and "no such file" in err and "prod.tmol" in err
+
+
 # --- Ctrl-C ------------------------------------------------------------------
 
 
