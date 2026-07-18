@@ -152,3 +152,15 @@ def test_int_return_is_exit_code():
     _, results = _run(tasks, "a")
     assert results[0].ok is False
     assert results[0].code == 3
+
+
+def test_raised_exception_is_exit_code_1():
+    def tasks(reg):
+        @reg.task
+        def a():
+            raise RuntimeError("boom")
+
+    _, results = _run(tasks, "a")
+    assert results[0].ok is False
+    assert results[0].code == 1  # a raised error carries no code -> flat 1
+    assert isinstance(results[0].error, RuntimeError)

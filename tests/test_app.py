@@ -103,6 +103,10 @@ def test_failing_task_sets_exit_code(project):
     assert _app.run(["boom"]) == 2
 
 
+def test_crash_task_exits_1(project):
+    assert _app.run(["crash"]) == 1  # a raised exception -> flat 1
+
+
 def test_unknown_task_is_teaching_error(project, capsys):
     assert _app.run(["nope"]) == 2
     assert "expected a task name" in capsys.readouterr().err

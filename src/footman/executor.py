@@ -24,7 +24,13 @@ from pathlib import Path, PurePath
 from typing import Any
 
 from footman import coerce, registry
-from footman.context import Context, StepResult, _current, context_param_name
+from footman.context import (
+    Context,
+    RunFailed,
+    StepResult,
+    _current,
+    context_param_name,
+)
 from footman.discover import defining_dir
 from footman.manifest import resolved_signature
 from footman.registry import Group, Task
@@ -186,6 +192,10 @@ def _call(
     except SystemExit as exc:
         code = exc.code if isinstance(exc.code, int) else (0 if exc.code is None else 1)
         return code, None, None
+    except RunFailed as exc:
+        # A `run()` command failed: propagate its own exit code, not a flat 1,
+        # so `fm` mirrors the command's code (docs/ci.md's "exited N" contract).
+        return (exc.result.code or 1), None, exc
     except Exception as exc:  # a failed task must not crash the runner
         return 1, None, exc
     if isinstance(returned, int) and not isinstance(returned, bool):
@@ -244,7 +254,9 @@ def _result(
     return TaskResult(
         task=seg.task,
         ok=error is None and code == 0,
-        code=code if error is None else 1,
+        # Honor an explicit non-zero code (run_task passes 2 for bind/coercion
+        # refusals); only synthesize 1 when an error carries no code of its own.
+        code=code if code != 0 else (1 if error is not None else 0),
         returned=returned,
         error=error,
         duration=duration,
