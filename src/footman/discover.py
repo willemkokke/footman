@@ -44,13 +44,44 @@ def _import_file(path: Path, index: int) -> Group:
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     parent = str(path.parent)
-    if parent not in sys.path:
-        sys.path.insert(0, parent)  # let tasks import sibling helpers
+    # Search this file's own dir first for sibling helpers (move-to-front, not
+    # insert-if-absent — a shared dir on sys.path must not shadow it), snapshot
+    # sys.path/sys.modules, and evict the direct siblings it imports afterwards.
+    # Otherwise two cascade files each doing `import helpers` share whoever
+    # imported first (F14/D8). Restoring sys.path also stops it accumulating
+    # across the many load_tree calls an in-process runner makes.
+    saved_path = sys.path[:]
+    before = set(sys.modules)
+    if parent in sys.path:
+        sys.path.remove(parent)
+    sys.path.insert(0, parent)
     try:
         spec.loader.exec_module(module)
     except Exception as exc:
         raise TasksImportError(path, exc) from exc
+    finally:
+        sys.path[:] = saved_path
+        _evict_siblings(before, Path(parent))
     return registry.root
+
+
+def _evict_siblings(before: set[str], parent: Path) -> None:
+    """Drop modules a cascade file imported that live directly in its dir.
+
+    A sibling `helpers.py` (`parent/helpers.py`) or a package one level down
+    (`parent/pkg/__init__.py`) — so the next file gets its own copy rather than
+    whoever-imported-first-wins. Deeper imports and editable-installed packages
+    live elsewhere on disk and are deliberately left (D8).
+    """
+    for name in set(sys.modules) - before:
+        file = getattr(sys.modules.get(name), "__file__", None)
+        if file is None:
+            continue
+        f = Path(file)
+        sibling = f.parent == parent
+        package = f.name == "__init__.py" and f.parent.parent == parent
+        if sibling or package:
+            del sys.modules[name]
 
 
 def _tag(group: Group, directory: str) -> None:

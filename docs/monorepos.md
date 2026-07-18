@@ -34,6 +34,14 @@ fm test       # inherited from the root, running in repo/
 
 `run(cwd=…)` still overrides the working directory per command.
 
+## Sibling helpers
+
+Each `tasks.py` may `import helpers` (or any module) from **its own folder** at
+the top of the file — footman searches that folder first and gives each file
+its own copy, so `services/api/helpers.py` and the root `helpers.py` never
+collide. Import at module top; a deferred `import` inside a task body, in a
+project with same-named helpers in several folders, is a known limitation.
+
 ## Completion is per directory
 
 The completion manifest is cached **per directory**, so <kbd>Tab</kbd> in
