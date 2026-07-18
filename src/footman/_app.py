@@ -551,7 +551,13 @@ def _execute(
         return 2
 
     try:
-        tree = manifest.sync_manifest(reg, Path.cwd())["tree"]
+        if g.get("tasks_file"):
+            # -f loads one arbitrary file, not the cwd's cascade — writing its
+            # manifest into the cwd's completion cache would poison TAB there
+            # until the next plain run. Build fresh, touch no cache.
+            tree = manifest.build_manifest(reg)["tree"]
+        else:
+            tree = manifest.sync_manifest(reg, Path.cwd())["tree"]
     except manifest.ManifestError as exc:  # broken completer, bad markers, …
         _error(str(exc))
         return 2
