@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import os
 import sys
 
 import pytest
@@ -89,6 +90,77 @@ def test_run_nofail_returns_code():
     _, _, results = drive(tasks, "build")
     assert results[0].ok is True
     assert out["code"] == 1
+
+
+def test_run_callable_capture_false_is_live_not_buffered(capsys):
+    # F60: capture=False streams the callable's output live instead of buffering
+    # it into the step — serve-style tasks must not buffer unboundedly.
+    def tasks(reg):
+        @reg.task
+        def serve():
+            def tool():
+                print("live-line")
+                return 0
+
+            run(tool, capture=False)
+
+    _, _, results = drive(tasks, "serve")
+    assert "live-line" in capsys.readouterr().out  # went live to stdout
+    assert results[0].steps[0].output == ""  # nothing captured into the step
+
+
+def test_run_callable_honors_cwd(tmp_path):
+    # F17: an in-process callable runs from the given cwd, like the subprocess
+    # branch of the same call already does.
+    seen = {}
+
+    def tasks(reg):
+        @reg.task
+        def go():
+            def tool():
+                seen["cwd"] = os.getcwd()
+                return 0
+
+            run(tool, cwd=tmp_path)
+
+    drive(tasks, "go")
+    assert seen["cwd"] == str(tmp_path.resolve())  # macOS /tmp is a symlink
+
+
+def test_run_callable_honors_env_overlay(monkeypatch):
+    # F17: os.environ is visible plus the call's env overlay, for callables too.
+    monkeypatch.setenv("BASE", "base")
+    seen = {}
+
+    def tasks(reg):
+        @reg.task
+        def go():
+            def tool():
+                seen["env"] = (os.environ.get("BASE"), os.environ.get("EXTRA"))
+                return 0
+
+            run(tool, env={"EXTRA": "extra"})
+
+    drive(tasks, "go")
+    assert seen["env"] == ("base", "extra")
+
+
+def test_run_callable_restores_cwd_and_env(tmp_path, monkeypatch):
+    # The process-global patch is undone on exit — no leak into the next task.
+    monkeypatch.delenv("EXTRA", raising=False)
+    before = os.getcwd()
+
+    def tasks(reg):
+        @reg.task
+        def go():
+            def tool():
+                return 0
+
+            run(tool, cwd=tmp_path, env={"EXTRA": "x"})
+
+    drive(tasks, "go")
+    assert os.getcwd() == before
+    assert "EXTRA" not in os.environ
 
 
 # --- output routing ----------------------------------------------------------

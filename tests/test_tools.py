@@ -217,6 +217,39 @@ def test_in_process_tools_run_concurrently_with_separate_capture(monkeypatch):
     assert "B-OUT" in results["b"].steps[0].output
 
 
+def test_in_process_tool_runs_from_context_cwd(monkeypatch, tmp_path):
+    # F17: an in-process tool honors the task's context cwd, exactly as the
+    # subprocess branch of the same call already does.
+    import os
+
+    from footman import manifest, schedule
+    from footman.registry import Group
+    from footman.split import split_chain
+
+    seen = {}
+
+    def entry(argv=None):
+        seen["cwd"] = os.getcwd()
+        return 0
+
+    monkeypatch.setattr(
+        tools,
+        "_console_entrypoint",
+        lambda name: _FakeEP(entry) if name == "cwd-tool" else None,
+    )
+
+    reg = Group("root")
+
+    @reg.task
+    def go():
+        tools.Tool("cwd-tool", in_process=True)()
+
+    tree = manifest.build_manifest(reg)["tree"]
+    _, segments = split_chain(tree, ["go"])
+    schedule.run_plan(reg, segments, ctx_config={"cwd": tmp_path})
+    assert seen["cwd"] == str(tmp_path.resolve())  # macOS /tmp is a symlink
+
+
 def test_zero_arg_entries_fall_back_to_argv_patching(monkeypatch):
     seen = {}
 

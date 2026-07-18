@@ -19,9 +19,12 @@ def check():
 - Takes a command (string or list) or a Python callable.
 - Raises on a non-zero exit; `nofail=True` returns the code instead.
 - Honours `--dry-run` (prints the command instead of running it).
-- Records a step for `--json` (command, code, duration, captured output).
-- Defaults the working directory to the task's context cwd — in a
-  [cascade](monorepos.md) that is the folder the task was defined in.
+- Records a step for `--json` (command, code, duration, captured output);
+  `capture=False` lets output through unbuffered and records an empty capture —
+  for serve-style tasks that must not buffer.
+- Runs from the task's context cwd — in a [cascade](monorepos.md) the folder
+  the task was defined in — with the context env overlay applied. Subprocess
+  and in-process tools honour this identically.
 
 ## The `tools.*` bridge
 
