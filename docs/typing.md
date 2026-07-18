@@ -28,14 +28,16 @@ union and coerces it by specificity (`int` → `float` → `Path` → `str`, wit
 def scale(factor: int | float): ...
 ```
 
-`Many[T]` accepts either a single value or several, collapsing to a scalar when
-one is given and a list when more are:
+`Many[T]` is exactly `list[T]` — a parameter that accepts one or more values and
+is **always a list**, even for a single value (it reads more intentfully than a
+bare `list[T]` at a positional). Required when positional, so at least one value
+must be given:
 
 ```python
 from footman import Many
 
 @task
-def build(target: Many[str]): ...    # fm build web   -> "web"
+def build(targets: Many[str]): ...   # fm build web     -> ["web"]
                                       # fm build web api -> ["web", "api"]
 ```
 
