@@ -23,6 +23,17 @@ def test_complete_cli_missing_manifest_is_silent(tmp_path, capsys):
     assert capsys.readouterr().out == ""
 
 
+def test_complete_cli_empty_partial_appends_blank(tree, tmp_path, capsys):
+    # F16: pwsh drops the trailing "" arg, so its hook passes --empty-partial and
+    # the resolver appends the "" itself — completing the fresh position, not the
+    # previous word. `--empty-partial` (no trailing "") == "docs" + "".
+    path = tmp_path / "m.json"
+    path.write_text(json.dumps({"tree": tree}))
+    args = ["--manifest", str(path), "--empty-partial", "--", "docs"]
+    assert complete_cli(args) == 0
+    assert set(capsys.readouterr().out.split()) == {"serve", "build"}
+
+
 def test_main_dispatches_complete(tree, tmp_path, monkeypatch, capsys):
     path = tmp_path / "m.json"
     path.write_text(json.dumps({"tree": tree}))

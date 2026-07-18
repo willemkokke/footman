@@ -71,6 +71,15 @@ versions may include breaking changes.
   all of them) are called directly. Only a legacy zero-arg `main()` gets
   the `sys.argv`-patching fallback, and only those serialise.
 
+### Fixed
+
+- **PowerShell completion after a space.** Windows PowerShell 5.1 and pwsh
+  7.0–7.2 silently drop an empty-string argument to a native command, so
+  pressing <kbd>Tab</kbd> after a space re-completed the previous word instead
+  of the fresh position. The hook now flags the empty position with
+  `--empty-partial` and the resolver supplies the `""` itself. **Re-run
+  `fm --install-completion pwsh`** to pick up the new hook.
+
 ## [0.8.0] — 2026-07-17
 
 ### Added

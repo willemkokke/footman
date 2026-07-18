@@ -96,7 +96,8 @@ def test_pwsh_install_writes_script_and_profile_line(home, monkeypatch):
     script = home / ".local" / "share" / "fm" / "completion.ps1"
     body = script.read_text()
     assert "Register-ArgumentCompleter -Native -CommandName fm" in body
-    assert "--complete --" in body
+    assert "--complete $empty --" in body  # F16: --empty-partial via $empty
+    assert "'--empty-partial'" in body
     assert profile.read_text().count("completion.ps1") == 1
 
 
