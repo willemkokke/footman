@@ -56,7 +56,9 @@ def _globals_to_dict(tokens: list[str]) -> dict[str, object]:
     return result
 
 
-def _discover(g: dict[str, object]) -> tuple[list[Path], dict[str, object]] | int:
+def _discover(
+    g: dict[str, object], wants_help: bool
+) -> tuple[list[Path], dict[str, object]] | int:
     """Resolve the task files to load and the merged config for this cwd.
 
     `-f/--tasks-file` is the escape hatch: it loads exactly one file, no
@@ -90,7 +92,14 @@ def _discover(g: dict[str, object]) -> tuple[list[Path], dict[str, object]] | in
         return files, cfg
 
     looked = override or cfg.get("tasks") or _paths.DEFAULT_TASKS_FILE
-    if g.get("help") or g.get("list") or g.get("tree"):
+    if wants_help:
+        # A stuck newcomer asking for help should see the globals (-f/-C are the
+        # way out) — not a bare one-liner. Global help over an empty tree, then
+        # the "where did I look" note.
+        _print_global_help(manifest.build_manifest(registry.Group("root"))["tree"])
+        print(f"\n(no tasks file found — looked for {looked})")
+        return 0
+    if g.get("list") or g.get("tree"):
         print(f"No tasks file found (looked for {looked}).")
         return 0
     _error(
@@ -469,11 +478,14 @@ def _run(
         _error(str(exc))
         return 2
     g = _globals_to_dict(pre_globals)
+    wants_help = _wants_help(argv)
 
-    if g.get("version"):
+    if g.get("version"):  # D7: --version wins even over --help
         print(f"{_brand.name} {_brand.version}")
         return 0
-    if "install_completion" in g:
+    # Asking for help must never touch the filesystem: `--install-completion
+    # fish --help` used to write rc files before printing anything.
+    if "install_completion" in g and not wants_help:
         return _install_completion(g.get("install_completion"))
 
     if g.get("directory"):
@@ -483,12 +495,13 @@ def _run(
             _error(f"-C {g['directory']}: {exc}")
             return 2
 
-    return _execute(argv, g, collect)
+    return _execute(argv, g, wants_help, collect)
 
 
 def _execute(
     argv: list[str],
     g: dict[str, object],
+    wants_help: bool,
     collect: list[executor.TaskResult] | None,
 ) -> int:
     """Discover the cascade, load + sync its manifest, then run the tree.
@@ -496,7 +509,7 @@ def _execute(
     Everything after globals/`--version`/`--install-completion`/`-C`: the
     disk-backed half that `run_group` (in-memory) deliberately skips.
     """
-    found = _discover(g)
+    found = _discover(g, wants_help)
     if isinstance(found, int):
         return found
     files, cfg = found

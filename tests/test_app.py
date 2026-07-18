@@ -133,6 +133,17 @@ def test_missing_tasks_file_with_list_is_soft(tmp_path, monkeypatch, capsys):
     assert "No tasks file found" in capsys.readouterr().out
 
 
+def test_missing_tasks_file_with_help_shows_globals(tmp_path, monkeypatch, capsys):
+    # F63: `fm --help` with no tasks file shows the globals (so a stuck newcomer
+    # learns -f/-C), plus a where-did-I-look note — not a bare one-liner.
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
+    assert _app.run(["--help"]) == 0
+    out = capsys.readouterr().out
+    assert "globals" in out and "-f" in out  # global help rendered
+    assert "no tasks file found" in out  # with the note
+
+
 def test_tree_output(project, capsys):
     assert _app.run(["--tree"]) == 0
     out = capsys.readouterr().out
