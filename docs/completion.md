@@ -27,6 +27,24 @@ your tasks**, dispatching straight to the stdlib-only resolver. A bare
 `import footman` pays for nothing but the entry module. That is why completion is
 ~15× faster than runners that re-import your project on every keystroke.
 
+## Keeping dynamic completions fresh
+
+The manifest bakes in the output of your [dynamic completers](typing.md#dynamic-completion)
+(git branches, file lists, …), refreshed for free on any real `fm` run. Between
+runs those answers can drift — so if the cached manifest for this directory is
+older than `max_age` when you press <kbd>Tab</kbd>, footman returns the cached
+answer instantly and spawns a **detached** rebuild for next time
+(stale-while-revalidate). The <kbd>Tab</kbd> never waits, and concurrent presses
+spawn at most one rebuild.
+
+Tune it with `[tool.footman]`:
+
+```toml
+[tool.footman]
+completion.max_age = "10m"   # default; "30s", "1h", a plain int (seconds)
+# completion.max_age = "off" #   or 0 — disable background refresh entirely
+```
+
 ## Chained and grouped completion
 
 Completion is aware of the whole command line, not just the first word:

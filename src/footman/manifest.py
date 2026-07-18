@@ -266,16 +266,21 @@ def tree_hash(tree: dict[str, Any]) -> str:
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:16]
 
 
-def build_manifest(root: Group) -> dict[str, Any]:
+def build_manifest(
+    root: Group, *, completion_max_age: int | None = None
+) -> dict[str, Any]:
     """Introspect *root* into a serialisable manifest dict.
 
     Dynamic completers run here (once each, deduped) — this is the execution
-    path, so paying to refresh their cached choices is free.
+    path, so paying to refresh their cached choices is free. *completion_max_age*
+    (seconds, or `None` to disable) is baked in so the stdlib-only completion hot
+    path can decide whether to trigger a background refresh without reading config.
     """
     tree = _node(root, {})
     return {
         "schema": SCHEMA_VERSION,
         "hash": tree_hash(tree),
+        "completion_max_age": completion_max_age,
         "tree": tree,
     }
 
@@ -297,17 +302,25 @@ def load_manifest(path: Path) -> dict[str, Any] | None:
     return data if isinstance(data, dict) else None
 
 
-def sync_manifest(root: Group, key_dir: Path) -> dict[str, Any]:
+def sync_manifest(
+    root: Group, key_dir: Path, *, completion_max_age: int | None = None
+) -> dict[str, Any]:
     """Build the fresh manifest and rewrite the cache only on a hash change.
 
     Called on the execution path, which has already paid to import the tree.
     The cache is keyed by *key_dir* (the cwd), since the effective task set is
     the cascade from the repo root down. The hash guard avoids needless disk
-    writes (and mtime churn) when nothing about the command surface changed.
+    writes (and mtime churn) when nothing about the command surface changed — a
+    changed *completion_max_age* also forces a rewrite so a config edit takes
+    effect.
     """
-    fresh = build_manifest(root)
+    fresh = build_manifest(root, completion_max_age=completion_max_age)
     path = _paths.manifest_path(key_dir)
     cached = load_manifest(path)
-    if cached is None or cached.get("hash") != fresh["hash"]:
+    if (
+        cached is None
+        or cached.get("hash") != fresh["hash"]
+        or cached.get("completion_max_age") != completion_max_age
+    ):
         write_manifest(fresh, path)
     return fresh
