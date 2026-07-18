@@ -167,6 +167,27 @@ def test_quiet_suppresses_summary(project, capsys):
     assert "ok  hi" not in out  # but the summary line is suppressed
 
 
+def test_binding_refusals_exit_2_end_to_end(tmp_path, monkeypatch):
+    # F54: a coercion refusal (custom type) and a bounds refusal both surface as
+    # exit 2 through the real CLI path — not a task-failure 1.
+    (tmp_path / "pyproject.toml").write_text('[project]\nname="x"\n')
+    (tmp_path / "tasks.py").write_text(
+        "import uuid\n"
+        "from typing import Annotated\n"
+        "from footman import task\n"
+        "from footman.params import between, env\n"
+        "@task\n"
+        "def ident(id: uuid.UUID): ...\n"
+        "@task\n"
+        "def bounded(n: Annotated[int, between(1, 10), env('N')] = 4): ...\n"
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
+    assert _app.run(["ident", "not-a-uuid"]) == 2  # UUID coercion refusal
+    monkeypatch.setenv("N", "99")
+    assert _app.run(["bounded"]) == 2  # env value out of bounds
+
+
 def test_install_completion_unknown_shell_teaches(project, capsys):
     assert _app.run(["--install-completion", "tcsh"]) == 2
     assert "bash|zsh|fish" in capsys.readouterr().err

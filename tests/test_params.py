@@ -124,6 +124,20 @@ def test_many_positional_requires_at_least_one():
         run(tasks, "build")
 
 
+def test_many_single_token_is_still_a_list():
+    # D14/F04: Many[T] is exactly list[T] — always a list. A single token does
+    # NOT collapse to a scalar (the old doc claim was wrong).
+    seen = {}
+
+    def tasks(reg):
+        @reg.task
+        def build(targets: Many[str]):
+            seen["t"] = targets
+
+    run(tasks, "build web")
+    assert seen["t"] == ["web"]
+
+
 # --- list | scalar unions collapse to a plain list ---------------------------
 
 

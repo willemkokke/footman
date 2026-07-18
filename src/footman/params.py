@@ -10,11 +10,7 @@ object; `footman.coerce.peel` reads them all in one place.
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Annotated, Any
-
-MANY = "footman.many"
-"""Metadata sentinel placed in `Annotated` by `Many` to mark a list parameter
-as "one or more" (variadic when positional)."""
+from typing import Any
 
 
 class suggest:
@@ -37,17 +33,10 @@ class suggest:
         self.strict = strict
 
 
-if TYPE_CHECKING:
-    # Type-checkers see `Many[X]` as `list[X]`; at runtime it expands to an
-    # Annotated list carrying the MANY marker.
-    Many = list
-else:
-
-    class _Many:
-        def __class_getitem__(cls, item: Any) -> Any:
-            return Annotated[list[item], MANY]
-
-    Many = _Many
+# `Many[T]` is exactly `list[T]`: a parameter that is *always* a list — one or
+# more values, variadic when positional. It reads more intentfully than a bare
+# `list[T]` at a call site, but carries no runtime marker of its own.
+Many = list
 
 
 class _NoSplitMarker:
