@@ -115,7 +115,11 @@ def test_unknown_task_is_teaching_error(project, capsys):
 def test_where(project, capsys):
     assert _app.run(["--where", "hi"]) == 0
     out = capsys.readouterr().out.strip()
-    assert out.endswith("tasks.py:5") or ":" in out
+    # A real pin (not the old `or ":" in out` tautology): the tasks file, and
+    # hi's definition line — the decorator (4) on 3.9+, the def (5) on older
+    # runtimes, tolerating co_firstlineno variance.
+    assert out.startswith(str(project / "tasks.py") + ":")
+    assert out.endswith(("tasks.py:4", "tasks.py:5"))
 
 
 def test_missing_tasks_file(tmp_path, monkeypatch, capsys):

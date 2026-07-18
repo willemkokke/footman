@@ -107,7 +107,8 @@ def test_requires_check_does_not_import(monkeypatch):
             calls.append(name)
         return real(name, *a, **k)
 
-    sys.modules.pop("textwrap", None)
+    # monkeypatch.delitem evicts textwrap AND restores it on teardown — a bare
+    # sys.modules.pop here would leak the eviction into the rest of the session.
     monkeypatch.delitem(sys.modules, "textwrap", raising=False)
     monkeypatch.setattr("builtins.__import__", tracking_import)
 
@@ -272,22 +273,28 @@ def test_include_memoises_per_module(provider):
     assert set(a.tasks) == {"lint"} and set(b.tasks) == {"fmt"}
 
 
-def test_included_tasks_run_from_the_includers_dir(provider, tmp_path, monkeypatch):
+def test_included_tasks_run_from_the_includers_dir(tmp_path, monkeypatch):
+    # F58: an included provider task is stamped with the INCLUDER's directory,
+    # not the provider module's. Observe it directly: the task prints ctx.cwd,
+    # which must equal the includer's project dir even though the provider lives
+    # elsewhere on disk.
+    provider_dir = tmp_path / "elsewhere"
+    provider_dir.mkdir()
+    (provider_dir / "prov.py").write_text(
+        "from footman import task\n@task\ndef show(ctx):\n    print(ctx.cwd)\n"
+    )
+    monkeypatch.syspath_prepend(str(provider_dir))
+
     project = tmp_path / "proj"
     project.mkdir()
     (project / "pyproject.toml").write_text('[project]\nname="x"\n')
-    (project / "tasks.py").write_text(
-        "import pathlib\n"
-        "from footman import task, include\n"
-        "include('shared_tasks', only=['lint'])\n"
-        "@task\n"
-        "def where():\n"
-        "    import pathlib\n"
-        "    print(pathlib.Path.cwd())\n"
-    )
-    result = Runner().invoke("lint --fix", cwd=project)
+    (project / "tasks.py").write_text("from footman import include\ninclude('prov')\n")
+
+    result = Runner().invoke("show", cwd=project)
     assert result.ok
-    assert "lint fix=True" in result.stdout
+    printed = [ln.strip() for ln in result.stdout.splitlines()]
+    assert str(project) in printed  # ctx.cwd = the includer's dir
+    assert str(provider_dir) not in result.stdout  # not the provider module's
 
 
 # --- plugin() / entry points -------------------------------------------------------
