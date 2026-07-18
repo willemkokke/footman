@@ -28,6 +28,15 @@ def test_find_repo_root_without_git_falls_back(tmp_path):
     assert _paths.find_repo_root(deep) == tmp_path  # via find_project_root
 
 
+def test_footman_toml_marks_a_project_root(tmp_path):
+    # F43: a footman.toml-only root (e.g. a Docker context with .git ignored) is
+    # a project root, discoverable from a subdirectory.
+    (tmp_path / "footman.toml").write_text("sequential = true\n")
+    deep = tmp_path / "a" / "b"
+    deep.mkdir(parents=True)
+    assert _paths.find_project_root(deep) == tmp_path
+
+
 def test_dir_chain_is_root_first(tmp_path):
     deep = tmp_path / "a" / "b"
     deep.mkdir(parents=True)

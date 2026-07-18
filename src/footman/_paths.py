@@ -14,7 +14,7 @@ from pathlib import Path
 
 # Ancestor markers that identify the project root. The manifest cache is keyed
 # by cwd, but these still bound a lone-file lookup when there is no repo root.
-PROJECT_MARKERS = ("pyproject.toml", ".git", "tasks.py")
+PROJECT_MARKERS = ("pyproject.toml", "footman.toml", ".git", "tasks.py")
 
 # Marks the ceiling of the upward walk — the repo root where the task cascade
 # starts and the config search stops. `.git` is the natural monorepo edge.
