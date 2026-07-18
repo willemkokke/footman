@@ -8,6 +8,7 @@ runs the resulting segments, honouring the global options.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import sys
@@ -488,14 +489,23 @@ def _run(
     if "install_completion" in g and not wants_help:
         return _install_completion(g.get("install_completion"))
 
-    if g.get("directory"):
-        try:
-            os.chdir(str(g["directory"]))
-        except OSError as exc:
-            _error(f"-C {g['directory']}: {exc}")
-            return 2
+    if not g.get("directory"):
+        return _execute(argv, g, wants_help, collect)
 
-    return _execute(argv, g, wants_help, collect)
+    # -C must not permanently move the process (a `Runner.invoke` shares the
+    # host pytest's cwd): chdir, run, then restore in a finally. The original
+    # dir may have vanished mid-run, so the restore is best-effort.
+    saved_cwd = os.getcwd()
+    try:
+        os.chdir(str(g["directory"]))
+    except OSError as exc:
+        _error(f"-C {g['directory']}: {exc}")
+        return 2
+    try:
+        return _execute(argv, g, wants_help, collect)
+    finally:
+        with contextlib.suppress(OSError):
+            os.chdir(saved_cwd)
 
 
 def _execute(
