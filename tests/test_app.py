@@ -173,6 +173,18 @@ def test_directory_bad(project, capsys):
     assert "-C" in capsys.readouterr().err
 
 
+def test_directory_restores_cwd(project):
+    # F36: -C must not permanently move the host process (e.g. a test runner).
+    import os
+
+    sub = project / "sub"
+    sub.mkdir()
+    (sub / "tasks.py").write_text("from footman import task\n@task\ndef t(): ...\n")
+    before = os.getcwd()
+    assert _app.run(["-C", str(sub), "t"]) == 0
+    assert os.getcwd() == before
+
+
 def test_unknown_global(project, capsys):
     assert _app.run(["--nope"]) == 2
     assert "unknown global option" in capsys.readouterr().err
