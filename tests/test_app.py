@@ -239,6 +239,12 @@ def test_passthrough_without_varargs_is_accepted(project, capsys):
     assert "hello world" in capsys.readouterr().out
 
 
+def test_where_unknown_suggests(project, capsys):
+    # 11.1: --where routes its not-found through the same _did_you_mean helper.
+    assert _app.run(["--where", "hii"]) == 2
+    assert "did you mean 'hi'?" in capsys.readouterr().err
+
+
 def test_where_unknown(project, capsys):
     assert _app.run(["--where", "nope"]) == 2
     assert "unknown task" in capsys.readouterr().err

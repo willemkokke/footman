@@ -366,12 +366,13 @@ def _print_help(tree: dict, argv: list[str]) -> int:
     return 0
 
 
-def _where(root: registry.Group, dotted: str) -> int:
+def _where(root: registry.Group, tree: dict, dotted: str) -> int:
     path = dotted.replace(".", " ").split()
     try:
         fn = executor.resolve(root, path)
     except (KeyError, IndexError):
-        _error(f"--where: unknown task {dotted!r}")
+        names = [name.replace(" ", ".") for name, _ in _iter_tasks(tree)]
+        _error(f"--where: unknown task {dotted!r}{split._did_you_mean(dotted, names)}")
         return 2
     code = getattr(fn, "__code__", None)
     if code is None:
@@ -591,7 +592,7 @@ def _run_tree(
         return _print_help(tree, argv)
 
     if g.get("where"):
-        return _where(reg, str(g["where"]))
+        return _where(reg, tree, str(g["where"]))
 
     try:
         globals_, segments = split.split_chain(tree, argv)

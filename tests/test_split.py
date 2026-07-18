@@ -131,6 +131,9 @@ ERROR_CASES = [
     ("--sequential=false lint", "--sequential is a flag and takes no value"),
     ("--json=0 lint", "--json is a flag and takes no value"),
     ("lint --mode -- x", "--mode expects a value, but found '--'"),
+    ("chekc", "did you mean 'check'?"),  # unknown task → nearest name
+    ("lint --fux", "did you mean '--fix'?"),  # unknown option → nearest option
+    ("lint --mode strikt", "did you mean 'strict'?"),  # unknown choice value
 ]
 
 
@@ -139,3 +142,10 @@ def test_teaching_errors(tree, line, message):
     with pytest.raises(ChainError) as excinfo:
         split_chain(tree, line.split())
     assert message in str(excinfo.value)
+
+
+def test_unmatchable_typo_gets_no_suggestion(tree):
+    # No false confidence: a word close to nothing known adds no "did you mean".
+    with pytest.raises(ChainError) as excinfo:
+        split_chain(tree, ["zzzzzzzz"])
+    assert "did you mean" not in str(excinfo.value)
