@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from footman import _app, _paths, config, discover, executor
+from footman import _app, _paths, config, discover, executor, registry
 from footman.context import Context
 from footman.split import Segment
 
@@ -127,6 +127,19 @@ def test_cascade_isolates_sibling_helpers(tmp_path, capsys):
     merged.tasks["b"]()
     out = capsys.readouterr().out
     assert "root" in out and "svc" in out  # each resolved its own sibling
+
+
+def test_failed_cascade_import_resets_registry(tmp_path):
+    # F62: a file that registers a task then raises must not strand ghost tasks
+    # in the global registry for the rest of the process.
+    bad = _write(
+        tmp_path / "tasks.py",
+        "from footman import task\n@task\ndef ghost(): ...\n"
+        "raise RuntimeError('boom')\n",
+    )
+    with pytest.raises(discover.TasksImportError):
+        discover.load_tree([bad])
+    assert "ghost" not in registry.root.tasks
 
 
 def test_cascade_tags_defining_dir(tmp_path):
