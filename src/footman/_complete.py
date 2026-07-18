@@ -23,6 +23,55 @@ from __future__ import annotations
 import json
 import sys
 
+# Hardcoded mirror of split.GLOBALS arity — the hot path can't import split (it
+# would pull the whole package). `test_completion_globals_mirror_split` rebuilds
+# these FROM split.GLOBALS, so renaming or re-typing a global fails CI.
+_GLOBAL_FLAG = frozenset(
+    {
+        "--help", "-h", "--version", "-V", "--list", "-l", "--tree",
+        "--dry-run", "-n", "--keep-going", "-k", "--sequential", "-s",
+        "--quiet", "-q", "--verbose", "-v", "--no-color", "--json", "--timings",
+    }
+)  # fmt: skip
+_GLOBAL_VALUE = frozenset(
+    {"--where", "--directory", "-C", "--tasks-file", "-f", "--config"}
+)  # consume the next word as the value
+_GLOBAL_MAYBE = frozenset({"--install-completion"})  # value optional
+_GLOBAL_CHOICES = {"--install-completion": ("bash", "zsh", "fish", "pwsh", "nushell")}
+
+
+def _consume_globals(prior: list[str]) -> tuple[list[str], str | None]:
+    """Strip leading global options (mirroring `split._parse_globals`).
+
+    Returns the remaining words (the task chain) and, when the partial itself is
+    a value-bearing global's value, that global's name — so `fm -C docs <TAB>`
+    treats `docs` as `-C`'s value instead of descending into a `docs` group.
+    """
+    i = 0
+    while i < len(prior):
+        word = prior[i]
+        name = word.split("=", 1)[0]
+        if name in _GLOBAL_FLAG:
+            i += 1
+        elif name in _GLOBAL_VALUE:
+            i += 1
+            if "=" in word:
+                continue
+            if i >= len(prior):
+                return prior[i:], name  # the value is the partial (no choices)
+            i += 1  # consume the value word
+        elif name in _GLOBAL_MAYBE:
+            i += 1
+            if "=" in word:
+                continue
+            if i >= len(prior):
+                return prior[i:], name  # the partial completes its choices
+            if not prior[i].startswith("-"):
+                i += 1  # optional value present
+        else:
+            break  # first non-global word: the task chain starts here
+    return prior[i:], None
+
 
 class _Segment:
     """Walk state for one chain segment (mirrors the splitter's rules)."""
@@ -65,6 +114,10 @@ def complete(tree: dict, words: list[str]) -> list[str]:
     passthrough, so there is nothing to offer.
     """
     *prior, partial = words or [""]
+
+    # Leading global options bind before the task walk, exactly as the splitter
+    # consumes them — so `-C docs` reads `docs` as the value, not a group.
+    prior, value_global = _consume_globals(prior)
 
     node, seg = tree, _Segment()
     value_opt: dict | None = None  # the option whose value comes next
@@ -111,6 +164,14 @@ def complete(tree: dict, words: list[str]) -> list[str]:
             node = tree["groups"][word]
         elif word in tree["tasks"]:
             seg = _Segment(tree["tasks"][word])
+
+    # A leading global expecting a value (`fm --install-completion <TAB>`):
+    # offer its choices, if any (a PATH-valued global has none — the shell's
+    # default file completion covers it).
+    if value_global is not None:
+        return [
+            c for c in _GLOBAL_CHOICES.get(value_global, ()) if c.startswith(partial)
+        ]
 
     # Value position: the previous word was an option expecting a value. A bash
     # `--opt=<TAB>` can leave the `=` as the partial — strip it.
