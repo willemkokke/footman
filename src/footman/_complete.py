@@ -39,8 +39,9 @@ _GLOBAL_FLAG = frozenset(
 _GLOBAL_VALUE = frozenset(
     {"--where", "--directory", "-C", "--tasks-file", "-f", "--config"}
 )  # consume the next word as the value
-_GLOBAL_MAYBE = frozenset({"--install-completion"})  # value optional
-_GLOBAL_CHOICES = {"--install-completion": ("bash", "zsh", "fish", "pwsh", "nushell")}
+_GLOBAL_MAYBE = frozenset({"--install-completion", "--setup-completion"})  # value opt.
+_SHELLS = ("bash", "zsh", "fish", "pwsh", "nushell")
+_GLOBAL_CHOICES = {"--install-completion": _SHELLS, "--setup-completion": _SHELLS}
 
 
 def _consume_globals(prior: list[str]) -> tuple[list[str], str | None]:
@@ -198,7 +199,15 @@ def complete(tree: dict, words: list[str]) -> list[str]:
 
     if seg.task is None:
         names = list(node["groups"]) + list(node["tasks"])
-        return [_describe(n, node) for n in names if n.startswith(partial)]
+        out = [_describe(n, node) for n in names if n.startswith(partial)]
+        # fm's own global options bind before the first task, so offer them when
+        # a flag is being typed at the root (`not prior` ⇒ nothing but globals
+        # preceded). A bare `<TAB>` still lists only tasks — globals would be
+        # noise there.
+        if not prior and partial.startswith("-"):
+            globals_ = _GLOBAL_FLAG | _GLOBAL_VALUE | _GLOBAL_MAYBE
+            out += [g for g in sorted(globals_) if g.startswith(partial)]
+        return out
 
     # An attached `--opt=value` partial (zsh/fish don't split on `=`): offer the
     # option's choices as full `--opt=choice` tokens.

@@ -56,8 +56,9 @@ fm format lint --fix <TAB>         # completes within the chain
 
 Group names, task names, flags, options, and both static and
 [dynamic](typing.md#dynamic-completion) value sets all complete. Where a shell
-supports a description column (zsh, fish), task and group names carry their
-one-line docstring, so holding <kbd>Tab</kbd> teaches the whole CLI:
+can show them — zsh, fish, and nushell render a description column, pwsh a
+tooltip — task and group names carry their one-line docstring, so holding
+<kbd>Tab</kbd> teaches the whole CLI:
 
 ```text
 build   — compile and bundle
@@ -89,3 +90,20 @@ whatever external completer you already run (carapace, say), answering for
 installer twice changes nothing. A custom-branded CLI installs completion
 for *its* name the same way (`acme --install-completion zsh`), and the
 generated hook calls that brand's `--complete`.
+
+## Enabling completion for one session
+
+`--install-completion` edits an rc file, so completion is on in every future
+shell. To turn it on for the **current** shell only — no rc edit, nothing left
+behind — print the hook to stdout and evaluate it:
+
+```console
+eval "$(fm --setup-completion zsh)"                            # bash and zsh
+fm --setup-completion fish | source                           # fish
+fm --setup-completion pwsh | Out-String | Invoke-Expression   # PowerShell
+```
+
+Like the installer, a bare `fm --setup-completion` detects the shell — the
+detection note goes to stderr, so it never pollutes what `eval` reads. nushell
+is the exception: its hook mutates `$env.config`, which `eval` can't apply, so
+nushell users install with `--install-completion`.

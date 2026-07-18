@@ -107,9 +107,49 @@ def test_install_completion_completes_shells(tree):
     assert complete(tree, ["--install-completion", "z"]) == ["zsh"]
 
 
+def test_setup_completion_completes_shells(tree):
+    # --setup-completion mirrors --install-completion: its value is a shell.
+    assert set(complete(tree, ["--setup-completion", ""])) == {
+        "bash",
+        "zsh",
+        "fish",
+        "pwsh",
+        "nushell",
+    }
+    assert complete(tree, ["--setup-completion", "fi"]) == ["fish"]
+
+
 def test_leading_flag_global_then_task(tree):
     # A leading flag global (-s) is consumed; the walk still completes tasks.
     assert "check" in _names(complete(tree, ["-s", "che"]))
+
+
+def test_root_flag_partial_offers_globals(tree):
+    # A flag-shaped partial at the root offers fm's own globals.
+    dd = complete(tree, ["--"])
+    assert {"--help", "--list", "--install-completion", "--config"} <= set(dd)
+    assert complete(tree, ["--inst"]) == ["--install-completion"]
+    # A single dash reaches the short aliases too.
+    assert {"-C", "-h", "-s"} <= set(complete(tree, ["-"]))
+
+
+def test_root_globals_offered_after_a_leading_global(tree):
+    # `fm -s --<TAB>` — -s is consumed, more globals are still on offer.
+    assert "--json" in complete(tree, ["-s", "--"])
+
+
+def test_bare_tab_omits_globals(tree):
+    # An empty partial lists tasks only — globals there would be noise.
+    out = _names(complete(tree, [""]))
+    assert "check" in out
+    assert not any(c.startswith("-") for c in out)
+
+
+def test_globals_not_offered_past_a_group_or_task(tree):
+    # Globals bind before the first task; a flag partial inside a group or after
+    # a task is not a global position.
+    assert "--help" not in complete(tree, ["docs", "--"])
+    assert "--help" not in complete(tree, ["lint", "--"])
 
 
 def test_completion_globals_mirror_split():
@@ -127,6 +167,7 @@ def test_completion_globals_mirror_split():
     assert value == _complete._GLOBAL_VALUE
     assert maybe == _complete._GLOBAL_MAYBE
     assert _complete._GLOBAL_CHOICES["--install-completion"] == tuple(_shellcomp.SHELLS)
+    assert _complete._GLOBAL_CHOICES["--setup-completion"] == tuple(_shellcomp.SHELLS)
 
 
 # --- chain-aware completion -----------------------------------------------------

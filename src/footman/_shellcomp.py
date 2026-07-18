@@ -129,9 +129,16 @@ let __{fn}_prev = ($env.config.completions?.external?.completer? | default null)
 $env.config.completions.external.enable = true
 $env.config.completions.external.completer = {{|spans|
     if $spans.0 == "{prog}" {{
-        # Drop any `<tab>description` tail — keep the value nushell inserts.
-        ^{prog} --complete -- ...($spans | skip 1) |
-            lines | each {{|l| $l | split row (char tab) | first }}
+        # Split `value<tab>description` into a record so nushell renders the
+        # description column; a tab-less line (option/choice) is a bare value.
+        ^{prog} --complete -- ...($spans | skip 1) | lines | each {{|l|
+            let p = ($l | split row (char tab))
+            if ($p | length) > 1 {{
+                {{value: $p.0, description: $p.1}}
+            }} else {{
+                {{value: $p.0}}
+            }}
+        }}
     }} else if $__{fn}_prev != null {{
         do $__{fn}_prev $spans
     }} else {{

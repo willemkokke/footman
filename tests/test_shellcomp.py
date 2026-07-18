@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import sys
@@ -147,6 +148,45 @@ def test_install_completion_yields_to_help(home, tmp_path, monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "usage:" in out  # help, not an install confirmation
     assert not (home / ".config" / "fish" / "completions" / "fm.fish").exists()
+
+
+# --- --setup-completion: print the hook for `eval`, session-only ----------------
+
+
+def test_setup_completion_prints_hook_and_writes_nothing(home, capsys):
+    assert _app.run(["--setup-completion", "zsh"]) == 0
+    out = capsys.readouterr().out
+    assert "_fm_complete" in out and "compdef" in out  # the sourceable hook
+    assert not (home / ".local" / "share" / "fm" / "completion.zsh").exists()
+    assert not (home / ".zshrc").exists()  # session-only: no rc edit
+
+
+def test_setup_completion_detection_note_stays_off_stdout(home, monkeypatch, capsys):
+    # A bare flag detects the shell, but the note MUST go to stderr — stdout is
+    # eval'd, so a stray "detected shell:" line would be a syntax error.
+    monkeypatch.setattr(_shellcomp, "detect_shell", lambda: "bash")
+    assert _app.run(["--setup-completion"]) == 0
+    cap = capsys.readouterr()
+    assert "_fm_complete" in cap.out and "detected shell" not in cap.out
+    assert "detected shell: bash" in cap.err
+
+
+def test_setup_completion_unknown_shell_teaches(home, capsys):
+    assert _app.run(["--setup-completion", "tcsh"]) == 2
+    err = capsys.readouterr().err
+    assert "--setup-completion expects one of" in err and "tcsh" in err
+
+
+def test_setup_completion_alias_and_yields_to_help(home, tmp_path, monkeypatch, capsys):
+    assert _app.run(["--setup-completion", "nu"]) == 0  # nu → nushell
+    assert "completions.external.completer" in capsys.readouterr().out
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
+    (tmp_path / "tasks.py").write_text(
+        "from footman import task\n@task\ndef t(): ...\n"
+    )
+    monkeypatch.chdir(tmp_path)
+    assert _app.run(["--setup-completion", "zsh", "--help"]) == 0
+    assert "usage:" in capsys.readouterr().out  # help wins, no hook printed
 
 
 # --- pwsh ----------------------------------------------------------------------
@@ -369,6 +409,27 @@ def test_detection_through_a_real_shell(home, tmp_path, monkeypatch):
     assert (home / ".local" / "share" / "fm" / "completion.zsh").exists()
 
 
+@_posix_shell
+@pytest.mark.skipif(shutil.which("zsh") is None, reason="zsh not installed")
+def test_setup_completion_evals_in_real_zsh(tmp_path):
+    """`eval "$(fm --setup-completion zsh)"` defines the completer in-session,
+    with no rc file written — the session-only counterpart to install."""
+    venv_bin = Path(sys.executable).parent
+    out = subprocess.run(
+        [
+            "zsh",
+            "-fc",
+            f'PATH="{venv_bin}:$PATH"; eval "$(fm --setup-completion zsh)"; '
+            "typeset -f _fm_complete >/dev/null && echo DEFINED",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert out.returncode == 0, out.stderr
+    assert "DEFINED" in out.stdout
+
+
 def _fake_ps(tree: dict[int, tuple[int, str]]):
     """A subprocess.run stand-in serving `ps -p PID -o ppid=,comm=` from a dict."""
 
@@ -469,12 +530,20 @@ def test_nushell_completion_functional(home, tmp_path, monkeypatch):
 
     script = home / "completion.nu"
     script.write_text(_shellcomp.script_for("nushell", "fm"), encoding="utf-8")
-    venv_bin = Path(sys.executable).parent
+    # Single-quote both paths and use forward slashes: nushell double quotes
+    # process `\` escapes, which would mangle a Windows path — `as_posix()`
+    # sidesteps that, and nushell accepts `/` on every platform.
+    venv_bin = Path(sys.executable).parent.as_posix()
     nu_script = (
         f"$env.PATH = ($env.PATH | prepend '{venv_bin}')\n"
-        f'source "{script}"\n'
-        "do $env.config.completions.external.completer [fm li] | to text\n"
-        'do $env.config.completions.external.completer [fm lint ""] | to text\n'
+        f"source '{script.as_posix()}'\n"
+        # A task name completes to a {value, description} record; print both
+        # columns (multi-statement `nu -c` only auto-renders the last pipeline)
+        # so the description is proven to reach nushell's menu.
+        "print (do $env.config.completions.external.completer [fm li]"
+        " | each {|r| $'($r.value)=($r.description? | default NONE)'} | to text)\n"
+        'print (do $env.config.completions.external.completer [fm lint ""]'
+        " | get value | to text)\n"
     )
     out = subprocess.run(
         ["nu", "-c", nu_script],
@@ -484,8 +553,8 @@ def test_nushell_completion_functional(home, tmp_path, monkeypatch):
         cwd=tmp_path,
     )
     assert out.returncode == 0, out.stderr
-    assert "lint" in out.stdout.split()
-    assert "--fix" in out.stdout.split()
+    assert "lint=Lint." in out.stdout.split()  # value carries its description
+    assert "--fix" in out.stdout.split()  # a bare option value still completes
 
 
 @pytest.mark.skipif(shutil.which("pwsh") is None, reason="pwsh not installed")
@@ -518,3 +587,32 @@ def test_pwsh_completion_functional(home, tmp_path, monkeypatch):
     )
     assert out.returncode == 0, out.stderr
     assert "lint" in out.stdout.split()
+
+
+# --- CI guard: prove no functional shell test is silently skipping ---------------
+
+
+def _ci_required_shell_exes() -> set[str]:
+    """Executables whose functional tests are expected to run on this platform.
+
+    bash/zsh/fish tests are `@_posix_shell`-gated, so on Windows only the
+    cross-platform pair (nushell + pwsh) is exercised; macOS and Linux drive the
+    whole set. nushell's binary is `nu`.
+    """
+    if sys.platform.startswith("win"):
+        return {"nu", "pwsh"}
+    return {"bash", "zsh", "fish", "nu", "pwsh"}
+
+
+@pytest.mark.skipif(
+    not os.environ.get("FOOTMAN_REQUIRE_SHELLS"),
+    reason="only where CI promises every shell (sets FOOTMAN_REQUIRE_SHELLS)",
+)
+def test_ci_provisions_every_testable_shell():
+    """A `skipif(which(...) is None)` guard makes a broken shell install vanish
+    into a green skip. Where CI sets FOOTMAN_REQUIRE_SHELLS it is promising the
+    platform's shells are all installed — so assert they are actually on PATH,
+    turning a 404 on the nushell tarball or an apt hiccup into a hard failure
+    instead of a functional test that quietly never ran."""
+    missing = sorted(s for s in _ci_required_shell_exes() if shutil.which(s) is None)
+    assert not missing, f"expected shells not on PATH: {missing}"

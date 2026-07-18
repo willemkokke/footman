@@ -62,9 +62,10 @@ GLOBALS: list[tuple[str, str | None, str, str | None, str]] = [
     ("--directory", "-C", "option", "PATH", "run as if launched from PATH"),
     ("--tasks-file", "-f", "option", "PATH", "use exactly one tasks file, no cascade"),
     ("--config", None, "option", "PATH", "override config with a single TOML file"),
-    # "option?": the value is optional — bare `--install-completion` detects
-    # the invoking shell.
+    # "option?": the value is optional — bare `--install-completion` /
+    # `--setup-completion` detect the invoking shell.
     ("--install-completion", None, "option?", "[SHELL]", "install shell completion"),
+    ("--setup-completion", None, "option?", "[SHELL]", "print completion for eval"),
 ]
 _GLOBAL_KIND = {name: kind for name, _, kind, _, _ in GLOBALS}
 _GLOBAL_KIND.update({alias: kind for _, alias, kind, _, _ in GLOBALS if alias})

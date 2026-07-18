@@ -7,6 +7,34 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- **`--setup-completion <shell>` prints the completion hook to stdout**, for
+  enabling completion in the current shell only — no rc file touched:
+  `eval "$(fm --setup-completion zsh)"` (bash/zsh), `fm --setup-completion fish
+  | source`, or `| Out-String | Invoke-Expression` for PowerShell. A bare
+  `--setup-completion` detects the shell, with the note on stderr so stdout
+  stays clean for `eval`.
+- **`fm`'s own global options now complete.** Typing a flag before the first
+  task — `fm --<TAB>`, `fm --inst<TAB>`, `fm -<TAB>` — offers the globals
+  (`--help`, `--list`, `--install-completion`, `-C`, …); a bare `fm <TAB>`
+  still lists tasks only. Resolver-side, so no re-install is needed.
+- **Python 3.14 is tested in CI**, including the free-threaded (no-GIL) build —
+  footman runs tasks in real parallel threads, and the suite passes with the
+  GIL disabled.
+
+### Changed
+
+- **nushell completions now carry descriptions.** The external-completer hook
+  returns `{value, description}` records, so task and group names show their
+  one-line docstring in nushell's menu instead of being stripped to bare names.
+  Re-run `fm --install-completion nushell` to pick it up.
+- **zsh completions now use the native `_describe` builtin.** The rich-
+  description hook right-aligns descriptions into a column and honours your
+  completion styling (`list-colors`, `descriptions` `format`) — the same look
+  `_git` and `_npm` produce — instead of the hand-formatted `name -- desc`.
+  Re-run `fm --install-completion zsh` to pick it up.
+
 ## [0.9.0] — 2026-07-18
 
 ### Changed

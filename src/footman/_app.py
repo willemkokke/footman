@@ -450,28 +450,41 @@ def _print_json(results: list[executor.TaskResult]) -> None:
     print(json.dumps({"schema": 1, "results": payload}, indent=2))
 
 
-def _install_completion(shell: object) -> int:
+def _resolve_shell(shell: object, flag: str) -> str | None:
+    """Resolve *shell* to a supported name for *flag*, or None after `_error`.
+
+    A bare flag (`shell is True`) detects the invoking shell; an explicit value
+    is lowercased and de-aliased (`nu`→`nushell`, `powershell`→`pwsh`).
+    """
     from footman import _shellcomp
 
     supported = "|".join(_shellcomp.SHELLS)
-    if shell is True:  # bare `--install-completion`: detect the invoking shell
-        detected = _shellcomp.detect_shell()
-        if detected is None:
+    if shell is True:
+        name = _shellcomp.detect_shell()
+        if name is None:
             _error(
-                f"--install-completion: could not detect your shell — "
+                f"{flag}: could not detect your shell — "
                 f"name it explicitly: one of {supported}"
             )
-            return 2
-        print(f"detected shell: {detected}")
-        name = detected
+            return None
     else:
         name = str(shell or "").lower()
-        aliases = {"powershell": "pwsh", "nu": "nushell"}  # muscle-memory
-        name = aliases.get(name, name)
+        name = {"powershell": "pwsh", "nu": "nushell"}.get(name, name)  # muscle-memory
     if name not in _shellcomp.SHELLS:
         got = f" (got {name!r})" if name else ""
-        _error(f"--install-completion expects one of {supported}{got}")
+        _error(f"{flag} expects one of {supported}{got}")
+        return None
+    return name
+
+
+def _install_completion(shell: object) -> int:
+    from footman import _shellcomp
+
+    name = _resolve_shell(shell, "--install-completion")
+    if name is None:
         return 2
+    if shell is True:
+        print(f"detected shell: {name}")
     try:
         lines = _shellcomp.install(name, _brand.prog)
     except _shellcomp.InstallError as exc:
@@ -479,6 +492,24 @@ def _install_completion(shell: object) -> int:
         return 2
     for line in lines:
         print(line)
+    return 0
+
+
+def _setup_completion(shell: object) -> int:
+    """Print the completion hook to stdout, for the current session only.
+
+    `eval "$(prog --setup-completion zsh)"` enables completion without touching
+    any rc file. A bare flag detects the shell; the detection note goes to
+    stderr so stdout stays clean for `eval`.
+    """
+    from footman import _shellcomp
+
+    name = _resolve_shell(shell, "--setup-completion")
+    if name is None:
+        return 2
+    if shell is True:
+        print(f"detected shell: {name}", file=sys.stderr)
+    print(_shellcomp.script_for(name, _brand.prog))
     return 0
 
 
@@ -524,6 +555,8 @@ def _run(
     # fish --help` used to write rc files before printing anything.
     if "install_completion" in g and not wants_help:
         return _install_completion(g.get("install_completion"))
+    if "setup_completion" in g and not wants_help:
+        return _setup_completion(g.get("setup_completion"))
 
     if not g.get("directory"):
         return _execute(argv, g, wants_help, collect)
