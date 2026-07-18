@@ -131,6 +131,14 @@ def test_runner_group_list_and_tree_render():
     assert "greet" in tree.stdout
 
 
+def test_empty_tree_reports_no_tasks():
+    # F35: an empty --tree used to print zero bytes and exit 0; now it mirrors
+    # --list's "No tasks defined."
+    result = Runner().invoke("--tree", tasks=Group("root"))
+    assert result.ok
+    assert "No tasks defined." in result.stdout
+
+
 def test_runner_group_json_output():
     result = Runner().invoke("--json greet --name J", tasks=_demo_group())
     assert result.ok
