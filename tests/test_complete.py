@@ -53,6 +53,21 @@ def test_unknown_prefix_completes_to_nothing(tree):
     assert complete(tree, ["zzz"]) == []
 
 
+def test_attached_opt_value_zsh_fish(tree):
+    # F49: shells that don't split on `=` pass one word `--mode=st`; complete it
+    # to full `--mode=…` tokens.
+    assert complete(tree, ["lint", "--mode=st"]) == ["--mode=strict"]
+    assert set(complete(tree, ["lint", "--mode="])) == {"--mode=strict", "--mode=loose"}
+
+
+def test_split_opt_value_bash(tree):
+    # F49: bash splits `--mode=st` into words `--mode`, `=`, `st`. The `=` must
+    # not disarm the pending value, and a leading `=` partial is stripped.
+    assert complete(tree, ["lint", "--mode", "=", "st"]) == ["strict"]
+    assert set(complete(tree, ["lint", "--mode", "="])) == {"strict", "loose"}
+    assert set(complete(tree, ["lint", "--mode", "=", ""])) == {"strict", "loose"}
+
+
 # --- chain-aware completion -----------------------------------------------------
 
 

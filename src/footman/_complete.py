@@ -73,6 +73,8 @@ def complete(tree: dict, words: list[str]) -> list[str]:
         if word == "--":
             return []  # passthrough: the words after this aren't ours
         if value_opt is not None:
+            if word == "=":  # bash splits `--opt=val` into `--opt`, `=`, `val`;
+                continue  # the `=` is a separator — stay armed for the value
             value_opt = None
             continue
         if word == "+":  # explicit segment boundary
@@ -110,13 +112,25 @@ def complete(tree: dict, words: list[str]) -> list[str]:
         elif word in tree["tasks"]:
             seg = _Segment(tree["tasks"][word])
 
-    # Value position: the previous word was an option expecting a value.
+    # Value position: the previous word was an option expecting a value. A bash
+    # `--opt=<TAB>` can leave the `=` as the partial — strip it.
     if value_opt is not None:
+        if partial.startswith("="):
+            partial = partial[1:]
         return [c for c in value_opt.get("choices", []) if c.startswith(partial)]
 
     if seg.task is None:
         names = list(node["groups"]) + list(node["tasks"])
         return [n for n in names if n.startswith(partial)]
+
+    # An attached `--opt=value` partial (zsh/fish don't split on `=`): offer the
+    # option's choices as full `--opt=choice` tokens.
+    if partial.startswith("-") and "=" in partial:
+        optname, _, valpart = partial.partition("=")
+        opt = seg.opts.get(optname)
+        if opt is not None and opt["kind"] == "option":
+            choices = opt.get("choices", [])
+            return [f"{optname}={c}" for c in choices if c.startswith(valpart)]
 
     # Option position: this task's flags/options — minus the ones already
     # given, unless the param legitimately repeats — plus what the next bare
