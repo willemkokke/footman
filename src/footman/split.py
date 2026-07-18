@@ -20,11 +20,22 @@ error messages are product surface here, not diagnostics.
 from __future__ import annotations
 
 import difflib
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from footman import coerce
+
+
+def _did_you_mean(word: str, known: Iterable[str]) -> str:
+    """A ` — did you mean 'x'?` suffix when *word* closely matches a known name.
+
+    Empty when nothing is close, so a genuine typo never gets false-confident
+    advice. The one idiom behind every not-found message (task, option, choice).
+    """
+    close = difflib.get_close_matches(word, list(known), n=1)
+    return f" — did you mean {close[0]!r}?" if close else ""
 
 
 class ChainError(Exception):
@@ -110,8 +121,7 @@ def _check(
         if not (types and coerce.coerce_scalar(value, types)[0]):
             listing = "|".join(choices) if choices else "(none available)"
             extra = f", or {coerce.type_phrase(types)}" if types else ""
-            close = difflib.get_close_matches(value, choices, n=1)
-            hint = f" — did you mean {close[0]!r}?" if close else ""
+            hint = _did_you_mean(value, choices)
             raise ChainError(
                 f"{where}: {label} must be one of {listing}{extra} "
                 f"(got {value!r}){hint}"
@@ -224,9 +234,11 @@ def split_chain(tree: dict, argv: list[str]) -> tuple[list[str], list[Segment]]:
             got = argv[i] if i < len(argv) else "(end of line)"
             scope = " ".join(path)
             where = f"{scope}: " if scope else ""
-            known = ", ".join(list(node["groups"]) + list(node["tasks"]))
+            names = list(node["groups"]) + list(node["tasks"])
+            hint = _did_you_mean(got, names) if i < len(argv) else ""
+            known = ", ".join(names)
             raise ChainError(
-                f"{where}expected a task name, got {got!r} (know: {known})"
+                f"{where}expected a task name, got {got!r}{hint} (know: {known})"
             )
         task = node["tasks"][argv[i]]
         path.append(argv[i])
@@ -317,7 +329,10 @@ def _consume_option(seg: Segment, opts: dict, argv: list[str], i: int) -> int:
         if candidate in opts and opts[candidate]["kind"] == "flag":
             p, negated = opts[candidate], True
     if p is None:
-        hint = (
+        forms = list(opts) + [
+            f"--no-{opts[k]['name']}" for k in opts if opts[k]["kind"] == "flag"
+        ]
+        hint = _did_you_mean(name, forms) or (
             " (task options come right after their task; "
             "globals go before the first task)"
         )
