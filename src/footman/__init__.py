@@ -39,8 +39,12 @@ if TYPE_CHECKING:
     from footman.params import nosplit as nosplit
     from footman.params import suggest as suggest
     from footman.registry import Group as Group
+    from footman.registry import capture as capture
     from footman.registry import group as group
     from footman.registry import task as task
+    from footman.testing import Result as Result
+    from footman.testing import Runner as Runner
+    from footman.testing import recording as recording
 
 __version__ = "0.8.0"
 __all__ = [
@@ -49,9 +53,12 @@ __all__ = [
     "Context",
     "Group",
     "Many",
+    "Result",
     "RunFailed",
+    "Runner",
     "__version__",
     "between",
+    "capture",
     "check",
     "env",
     "exists",
@@ -64,6 +71,7 @@ __all__ = [
     "parallel",
     "passthrough",
     "plugin",
+    "recording",
     "run",
     "suggest",
     "task",
@@ -89,10 +97,14 @@ def main() -> None:
 def __getattr__(name: str) -> object:
     # Lazy re-export: `from footman import task, group` works without paying the
     # registry import on a bare `import footman` (the completion hot path).
-    if name in ("task", "group", "Group"):
+    if name in ("task", "group", "Group", "capture"):
         from footman import registry
 
         return getattr(registry, name)
+    if name in ("Runner", "Result", "recording"):
+        from footman import testing
+
+        return getattr(testing, name)
     if name == "tools":
         import footman.tools
 
