@@ -27,6 +27,7 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 SHELLS = ("bash", "zsh", "fish", "pwsh", "nushell")
@@ -193,6 +194,31 @@ def _manual_hint(rc: Path, line: str, exc: Exception) -> str:
     return f"could not update {rc} ({exc}) — add this line yourself: {line}"
 
 
+def _zsh_rc() -> Path:
+    """The `.zshrc` zsh actually reads — under `$ZDOTDIR` when set (D11)."""
+    zdotdir = os.environ.get("ZDOTDIR")
+    base = Path(zdotdir) if zdotdir else Path.home()
+    return base / ".zshrc"
+
+
+def _bash_rcs() -> list[Path]:
+    """The rc files bash actually reads for completion to activate (D11).
+
+    `.bashrc` covers interactive non-login shells. On macOS, Terminal opens
+    *login* shells, which read a login profile (`.bash_profile`/`.bash_login`/
+    `.profile`) and not `.bashrc` — so append there too, to the first existing
+    one, creating `.bash_profile` only when none exists (never shadowing an
+    existing `.profile`).
+    """
+    home = Path.home()
+    rcs = [home / ".bashrc"]
+    if sys.platform == "darwin":
+        logins = [home / ".bash_profile", home / ".bash_login", home / ".profile"]
+        existing = next((p for p in logins if p.exists()), None)
+        rcs.append(existing or home / ".bash_profile")
+    return rcs
+
+
 _PROC_NAMES = {
     "bash": "bash",
     "zsh": "zsh",
@@ -325,8 +351,10 @@ def install(shell: str, prog: str) -> list[str]:
         hooks = [(rc, f'. "{target}"') for rc in _pwsh_profiles()]
     elif shell == "nushell":
         hooks = [(_nu_config_path(), f'source "{target}"')]
-    else:
-        hooks = [(Path.home() / f".{shell}rc", f"source {target}")]
+    elif shell == "zsh":
+        hooks = [(_zsh_rc(), f"source {target}")]
+    else:  # bash
+        hooks = [(rc, f"source {target}") for rc in _bash_rcs()]
     lines = [f"installed {target}"]
     for rc, line in hooks:
         if _append_once(rc, line):

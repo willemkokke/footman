@@ -18,6 +18,7 @@ def home(tmp_path, monkeypatch):
     monkeypatch.setenv("USERPROFILE", str(tmp_path))  # Path.home() on Windows
     monkeypatch.delenv("XDG_DATA_HOME", raising=False)
     monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
+    monkeypatch.delenv("ZDOTDIR", raising=False)  # don't depend on the dev machine
     return tmp_path
 
 
@@ -76,6 +77,35 @@ def test_zsh_install(home):
     script = home / ".local" / "share" / "fm" / "completion.zsh"
     assert "compdef _fm_complete fm" in script.read_text()
     assert "source" in (home / ".zshrc").read_text()
+
+
+def test_zsh_install_honors_zdotdir(home, monkeypatch):
+    # F48/D11: zsh reads $ZDOTDIR/.zshrc when set — target that, not ~/.zshrc.
+    zdot = home / "zdot"
+    zdot.mkdir()
+    monkeypatch.setenv("ZDOTDIR", str(zdot))
+    _shellcomp.install("zsh", "fm")
+    assert "source" in (zdot / ".zshrc").read_text()
+    assert not (home / ".zshrc").exists()
+
+
+def test_bash_install_targets_login_profile_on_macos(home, monkeypatch):
+    # F48/D11: macOS Terminal opens login shells that read a login profile, not
+    # .bashrc — so completion must land in both. No login profile exists here,
+    # so .bash_profile is created.
+    monkeypatch.setattr(_shellcomp.sys, "platform", "darwin")
+    _shellcomp.install("bash", "fm")
+    assert (home / ".bashrc").read_text().count("completion.bash") == 1
+    assert (home / ".bash_profile").read_text().count("completion.bash") == 1
+
+
+def test_bash_install_respects_existing_login_profile_on_macos(home, monkeypatch):
+    # D11: never create .bash_profile over an existing .profile — use what's there.
+    monkeypatch.setattr(_shellcomp.sys, "platform", "darwin")
+    (home / ".profile").write_text("# existing login profile\n")
+    _shellcomp.install("bash", "fm")
+    assert "completion.bash" in (home / ".profile").read_text()
+    assert not (home / ".bash_profile").exists()
 
 
 def test_fish_install_needs_no_rc_edit(home):
