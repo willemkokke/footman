@@ -71,6 +71,20 @@ def test_cli_install_end_to_end(home, tmp_path, monkeypatch, capsys):
     assert Path(home / ".config" / "fish" / "completions" / "fm.fish").exists()
 
 
+def test_install_completion_yields_to_help(home, tmp_path, monkeypatch, capsys):
+    # F06: --help anywhere must never write rc files — asking for help touches
+    # nothing on disk. `fm --install-completion fish --help` prints help.
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
+    (tmp_path / "tasks.py").write_text(
+        "from footman import task\n@task\ndef t(): ...\n"
+    )
+    monkeypatch.chdir(tmp_path)
+    assert _app.run(["--install-completion", "fish", "--help"]) == 0
+    out = capsys.readouterr().out
+    assert "usage:" in out  # help, not an install confirmation
+    assert not (home / ".config" / "fish" / "completions" / "fm.fish").exists()
+
+
 # --- pwsh ----------------------------------------------------------------------
 
 
