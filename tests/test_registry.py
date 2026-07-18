@@ -4,7 +4,15 @@ from __future__ import annotations
 
 import pytest
 
+from footman import registry
 from footman.registry import Group, RegistrationError
+
+
+def test_sample_fixture_stays_out_of_the_global_registry(root):
+    # F64: the `root` fixture loads the sample tasks under registry.capture(), so
+    # they populate the fixture's group but never leak into the global root.
+    assert "check" in root.tasks  # the fixture really did load the sample tasks
+    assert "check" not in registry.root.tasks  # ...but not into the process global
 
 
 def test_task_name_normalised_to_hyphens():
