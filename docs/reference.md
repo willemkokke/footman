@@ -78,3 +78,4 @@ a file passed to `--config`. See [Monorepos & config](monorepos.md).
 | `tasks`      | Filename to look for in each folder (default `tasks.py`). |
 | `sequential` | Run tasks one at a time by default.                       |
 | `plugins`    | `footman.tasks` entry points to mount as command groups (opt-in). |
+| `completion.max_age` | Age before a background completion refresh (e.g. `"10m"`; `off` to disable). |
