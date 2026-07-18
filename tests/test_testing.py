@@ -6,6 +6,8 @@ footman's own suite consuming its own plugin is the point.
 
 from __future__ import annotations
 
+import json
+
 from footman import Context, run, use_context
 from footman.app import App
 from footman.registry import Group
@@ -89,6 +91,58 @@ def test_runner_group_dry_run_matches_cli_semantics():
     assert result.ok
     assert "greet" in result.stdout
     assert "hello x" not in result.stdout  # planned, not executed
+
+
+# Group mode now shares the real CLI's post-manifest tail (`run_group`), so
+# --help/--version/--list/--tree/--json/--where all behave identically — the
+# old drifted re-implementation executed tasks on --help and emitted nothing
+# for the rest (F18/F36 testing-surface bug).
+
+
+def test_runner_group_help_never_executes():
+    ran: list[str] = []
+    g = Group("root")
+
+    @g.task
+    def greet(name: str = "world"):
+        """Say hello."""
+        ran.append(name)
+
+    result = Runner().invoke("--help greet", tasks=g)
+    assert result.ok
+    assert ran == []  # asking for help must never run the task
+    assert "usage:" in result.stdout and "greet" in result.stdout
+
+
+def test_runner_group_version_uses_brand():
+    app = App(name="Acme", prog="acme", version="9.9.9")
+    result = Runner(app).invoke("--version", tasks=_demo_group())
+    assert result.ok
+    assert result.stdout.strip() == "Acme 9.9.9"
+
+
+def test_runner_group_list_and_tree_render():
+    listing = Runner().invoke("--list", tasks=_demo_group())
+    assert listing.ok
+    assert "greet" in listing.stdout and "Say hello." in listing.stdout
+
+    tree = Runner().invoke("--tree", tasks=_demo_group())
+    assert tree.ok
+    assert "greet" in tree.stdout
+
+
+def test_runner_group_json_output():
+    result = Runner().invoke("--json greet --name J", tasks=_demo_group())
+    assert result.ok
+    payload = json.loads(result.stdout)
+    assert payload["results"][0]["task"] == "greet"
+    assert "hello J" in payload["results"][0]["output"]
+
+
+def test_runner_group_where_locates_source():
+    result = Runner().invoke("--where greet", tasks=_demo_group())
+    assert result.ok
+    assert "test_testing.py:" in result.stdout  # file:line of the task body
 
 
 # --- Runner against a project on disk ------------------------------------------

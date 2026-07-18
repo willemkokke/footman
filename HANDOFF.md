@@ -17,14 +17,14 @@ Implementing the 65-finding whole-repo review fix plan in `PLAN.md` (11 phases).
 | 3c dict value markers | F23 | `f7b2859` | ✅ |
 | 4 required options / Any / bare collections / guards | F02,F03,F45,F00,F25,F32,F33,F30,F44 | `f566b88` | ✅ |
 | 5 scheduler duplicate segments | F09, F59 | `94ec76f` | ✅ |
+| 6 context remainder (parallel steps/fail, callable capture/cwd/env, no-color, env tests) | F12, F13, F42, F60, F17, F41, F40 | `9ca27b7`,`b5e79b0`,`3d974ce`,`9a555e4` | ✅ |
 
-**25/65 findings resolved. Coverage steady ~92.2%.** `git log --oneline main..HEAD` is the ledger.
+**32/65 findings resolved. Coverage steady ~92.3%.** `git log --oneline main..HEAD` is the ledger.
 
 > **\*F39 is only half done.** Phase 2 fixed the `context.py` subprocess decode. The **`tools.py` half** (`Tool.installed_version`'s `subprocess.run` needs `encoding="utf-8", errors="replace"`) is deliberately deferred to **Phase 8.1** (same lines that commit rewrites). Don't forget it.
 
-## Remaining: Phases 6–11 (see PLAN.md for full item specs)
+## Remaining: Phases 7–11 (see PLAN.md for full item specs)
 
-- **6 — context remainder (5):** F12 merge parallel() child steps; F13/F42 fail parallel() on non-zero int + cover keep_going; F60/F17 `_run_callable` gets `capture=`/`env`/`cwd` via a `_process_state` ctx-manager (**one commit**, re-signs the function both items touch); F41 suppress ANSI under `--no-color`/`NO_COLOR`/`TERM=dumb` (D6: line absent, not plain); F40 env/cwd subprocess tests.
 - **7 — app/compose/discovery/config (14), the big one:** do **7.1 first** — the move-only `_app.py` refactor extracting `_execute` + `_run_tree` + `run_group`; then 7.2 (help-first gating), 7.3 (`-C` cwd restore), 7.4 (`-f` no manifest rewrite), 7.6 (empty `--tree`) are small edits *inside* it. 7.5 (Runner KI propagation) needs `run_group`. Then the self-contained compose/discovery/registry/config items (7.7–7.14) can go in any order.
 - **8 — tools surface (2):** 8.1 privatize `tools.py` module imports + declare them in `tools.pyi` + **AST parity test** (land before other tools.py edits) + **fold in the deferred F39 tools.py hunk**; 8.2 `recording()` kwarg overrides.
 - **9 — completion (7):** F49 `--opt=value`; F61 model value-bearing globals (drift-pin against `split.GLOBALS`); F16 pwsh `--empty-partial`; F46 bash `printf %q`; F47 rc-encoding sniff; F48 rc-file targeting; **9.7 = the new SWR completion-refresh feature (D18)**.
@@ -51,4 +51,6 @@ Decisions are ruled in **PLAN.md Phase 0 (D1–D18)** — follow them; don't re-
 
 ## Next action
 
-Start **Phase 6**. Confirm accept-edits is on, then: `git switch fix/review-findings` (should already be there), read `PLAN.md` Phase 6, implement item-by-item with the gate + `--no-gpg-sign` commit loop above.
+Start **Phase 7** (the big one). Read `PLAN.md` Phase 7. Do **7.1 first** — the move-only `_app.py` refactor extracting `_execute` + `_run_tree` + `run_group` — then 7.2/7.3/7.4/7.6 are small edits *inside* it; 7.5 needs `run_group`; 7.7–7.14 are self-contained and can go in any order. Implement item-by-item with the gate + `--no-gpg-sign` commit loop above.
+
+Note: the branch is now **pushed** to `origin/fix/review-findings` (CI only runs on PRs, not branch pushes — no PR open yet).

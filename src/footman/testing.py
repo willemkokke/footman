@@ -43,7 +43,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from footman import _app, manifest, schedule, split
+from footman import _app
 from footman.app import App
 from footman.context import Context, StepResult, use_context
 from footman.executor import TaskResult
@@ -142,46 +142,13 @@ class Runner:
             contextlib.redirect_stderr(err),
         ):
             if isinstance(tasks, Group):
-                code = self._invoke_group(tasks, argv, err, collected)
+                # One shared surface with the real CLI (help/version/list/tree/
+                # json all honoured) — no drifting Group-mode re-implementation.
+                code = _app.run_group(
+                    tasks, argv, brand=self.app.brand, collect=collected
+                )
             else:
                 if tasks is not None:
                     argv = ["--tasks-file", str(tasks), *argv]
                 code = _app.run(argv, brand=self.app.brand, collect=collected)
         return Result(code, out.getvalue(), err.getvalue(), collected)
-
-    def _invoke_group(
-        self,
-        group: Group,
-        argv: list[str],
-        err: io.StringIO,
-        collected: list[TaskResult],
-    ) -> int:
-        """The promoted in-memory drive: manifest → split → run, no files."""
-        tree = manifest.build_manifest(group)["tree"]
-        try:
-            globals_, segments = split.split_chain(tree, argv)
-        except split.ChainError as exc:
-            err.write(f"{self.app.brand.prog}: {exc}\n")
-            return 2
-        g = _app._globals_to_dict(globals_)
-        if g.get("dry_run"):  # same meaning as the real CLI: plan, don't run
-            _app._print_plan(globals_, segments)
-            return 0
-        try:
-            results = schedule.run_plan(
-                group,
-                segments,
-                sequential=bool(g.get("sequential")),
-                keep_going=bool(g.get("keep_going")),
-                capture=bool(g.get("json")),
-                ctx_config={
-                    "quiet": bool(g.get("quiet")),
-                    "verbose": bool(g.get("verbose")),
-                    "no_color": bool(g.get("no_color")),
-                },
-            )
-        except split.ChainError as exc:
-            err.write(f"{self.app.brand.prog}: {exc}\n")
-            return 2
-        collected.extend(results)
-        return next((r.code or 1 for r in results if not r.ok), 0)
