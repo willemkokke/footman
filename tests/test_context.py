@@ -65,6 +65,18 @@ def test_run_failed_raises_and_fails_task():
     assert isinstance(results[0].error, RunFailed)
 
 
+def test_run_failure_propagates_command_code():
+    def tasks(reg):
+        @reg.task
+        def build():
+            run([sys.executable, "-c", "import sys; sys.exit(3)"])
+
+    _, _, results = drive(tasks, "build")
+    assert results[0].ok is False
+    assert results[0].code == 3  # the command's own code, not a flat 1
+    assert isinstance(results[0].error, RunFailed)
+
+
 def test_run_nofail_returns_code():
     out = {}
 
