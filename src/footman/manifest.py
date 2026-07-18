@@ -82,6 +82,12 @@ def param_spec(param: inspect.Parameter) -> dict[str, Any]:
     ann = param.annotation
     empty = inspect.Parameter.empty
 
+    if param.kind is inspect.Parameter.VAR_KEYWORD:
+        raise SpecError(
+            f"**{param.name} is not supported — declare named parameters, or "
+            f"accept KEY=VALUE pairs with a dict[str, str] parameter"
+        )
+
     if param.kind is inspect.Parameter.VAR_POSITIONAL:
         spec["kind"] = "variadic"
         if ann is not empty:
@@ -102,8 +108,12 @@ def param_spec(param: inspect.Parameter) -> dict[str, Any]:
 
     peeled = coerce.peel(ann)
     if peeled.mapping:
-        spec["kind"] = "option" if has_default else "argument"
+        # A dict is always an option (--name KEY=VALUE); when it has no default
+        # it is a *required* option — footman has no positional-mapping syntax.
+        spec["kind"] = "option"
         spec["mapping"] = True
+        if not has_default:
+            spec["required"] = True
         _marker_keys(spec, peeled, param, has_default)
         if peeled.nosplit:
             spec["nosplit"] = True
@@ -122,6 +132,8 @@ def param_spec(param: inspect.Parameter) -> dict[str, Any]:
         # Only a *scalar* bool is a --flag; `list[bool]` stays a repeatable
         # option whose tokens parse as booleans (true/false/1/0/yes/no/on/off).
         spec["kind"] = "flag"
+        if not has_default:  # must be stated explicitly: --x or --no-x
+            spec["required"] = True
         _marker_keys(spec, peeled, param, has_default)
         return spec
 

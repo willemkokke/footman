@@ -5,6 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Literal, Optional
 
+import pytest
+
 from footman import _paths, manifest
 
 
@@ -17,6 +19,27 @@ def test_flag():
     def f(x: bool = False): ...
 
     assert specs(f) == [{"name": "x", "kind": "flag"}]
+
+
+def test_kwargs_is_a_spec_error():
+    def f(**opts): ...
+
+    with pytest.raises(manifest.SpecError, match=r"\*\*opts"):
+        specs(f)
+
+
+def test_no_default_dict_is_a_required_option():
+    def f(vars: dict[str, str]): ...
+
+    assert specs(f) == [
+        {"name": "vars", "kind": "option", "mapping": True, "required": True}
+    ]
+
+
+def test_no_default_bool_is_a_required_flag():
+    def f(prod: bool): ...
+
+    assert specs(f) == [{"name": "prod", "kind": "flag", "required": True}]
 
 
 def test_str_option_and_required_argument():

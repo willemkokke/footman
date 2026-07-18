@@ -35,7 +35,7 @@ class ChainError(Exception):
 # (`--help`/`-h` is the one exception: anywhere before `--`, it wins).
 # (canonical, short alias, kind, value-hint, help)
 GLOBALS: list[tuple[str, str | None, str, str | None, str]] = [
-    ("--help", "-h", "flag", None, "help for fm, or the named group/task"),
+    ("--help", "-h", "flag", None, "help for {prog}, or the named group/task"),
     ("--version", "-V", "flag", None, "print the version and exit"),
     ("--list", "-l", "flag", None, "list tasks (flat)"),
     ("--tree", None, "flag", None, "list tasks grouped by command group"),
@@ -69,6 +69,13 @@ class Segment:
     values: dict[str, Any] = field(default_factory=dict)  # cli-name -> value
     variadic: list[str] = field(default_factory=list)
     passthrough: list[str] | None = None
+
+
+def _required_label(p: dict) -> str:
+    """Label a required option for the missing-option error — a flag teaches
+    both its `--x` and `--no-x` forms."""
+    name = f"--{p['name']}"
+    return f"{name} (or --no-{p['name']})" if p["kind"] == "flag" else name
 
 
 def _suggest_only(choices: list | None, dynamic: dict | None) -> bool:
@@ -182,9 +189,11 @@ def _parse_globals(argv: list[str], i: int) -> tuple[list[str], int]:
                 f"unknown global option {name} "
                 f"(global options go before the first task)"
             )
+        kind = _GLOBAL_KIND[name]
+        if kind == "flag" and "=" in argv[i]:
+            raise ChainError(f"{_CANON.get(name, name)} is a flag and takes no value")
         globals_.append(_CANON.get(name, name) + argv[i][len(name) :])
         i += 1
-        kind = _GLOBAL_KIND[name]
         if kind == "option" and "=" not in globals_[-1]:
             if i >= len(argv):
                 raise ChainError(f"{name} expects a value")
@@ -281,6 +290,18 @@ def split_chain(tree: dict, argv: list[str]) -> tuple[list[str], list[Segment]]:
             raise ChainError(
                 f"{seg.task}: missing required argument(s): {', '.join(missing)}"
             )
+
+        # Required options — a mapping or bool with no default. (Dicts are only
+        # ever options; a bool is a flag, so teach both --x and --no-x forms.)
+        missing_opts = [
+            _required_label(p)
+            for p in task["params"]
+            if p.get("required") and p["name"] not in seg.values
+        ]
+        if missing_opts:
+            raise ChainError(
+                f"{seg.task}: missing required option(s): {', '.join(missing_opts)}"
+            )
         segments.append(seg)
 
     return globals_, segments
@@ -317,6 +338,11 @@ def _consume_option(seg: Segment, opts: dict, argv: list[str], i: int) -> int:
         i += 1
         if i >= len(argv):
             raise ChainError(f"{seg.task}: {name} expects a value")
+        if argv[i] == "--":
+            raise ChainError(
+                f"{seg.task}: {name} expects a value, but found '--' — give "
+                f"{name} a value, or use {name}=-- if the literal is intended"
+            )
         value = argv[i]
         i += 1
     if p.get("mapping"):

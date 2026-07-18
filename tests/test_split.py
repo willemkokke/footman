@@ -128,6 +128,9 @@ ERROR_CASES = [
     ("--json lint --quiet", "lint: unknown option --quiet"),
     ("render only-one", "render: missing required argument(s): <output>"),
     ("--nope check", "unknown global option --nope"),
+    ("--sequential=false lint", "--sequential is a flag and takes no value"),
+    ("--json=0 lint", "--json is a flag and takes no value"),
+    ("lint --mode -- x", "--mode expects a value, but found '--'"),
 ]
 
 

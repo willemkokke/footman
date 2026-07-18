@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import datetime
 import uuid
-from typing import Annotated
+from typing import Annotated, Any
 
 import pytest
 
@@ -413,6 +413,79 @@ def test_soft_positional_accepts_task_name_collision():
 
     run(tasks, "checkout lint")
     assert seen["b"] == "lint"  # a soft completer never hard-rejects a value
+
+
+# --- required options, Any, bare collections ---------------------------------
+
+
+def test_required_dict_option_binds_and_is_enforced():
+    seen = {}
+
+    def tasks(reg):
+        @reg.task
+        def env_(vars: dict[str, int | str]):
+            seen["vars"] = vars
+
+    run(tasks, "env- --vars port=8080 --vars name=web")
+    assert seen["vars"] == {"port": 8080, "name": "web"}
+
+    with pytest.raises(ChainError, match=r"missing required option\(s\): --vars"):
+        run(tasks, "env-")
+
+
+def test_required_bool_must_be_stated():
+    seen = {}
+
+    def tasks(reg):
+        @reg.task
+        def deploy(prod: bool):
+            seen["prod"] = prod
+
+    run(tasks, "deploy --prod")
+    assert seen["prod"] is True
+    run(tasks, "deploy --no-prod")
+    assert seen["prod"] is False
+
+    with pytest.raises(ChainError, match=r"--prod \(or --no-prod\)"):
+        run(tasks, "deploy")
+
+
+def test_any_annotation_passes_through():
+    seen = {}
+
+    def tasks(reg):
+        @reg.task
+        def deploy(payload: Any = ""):
+            seen["p"] = payload
+
+    run(tasks, "deploy --payload hello")
+    assert seen["p"] == "hello"
+
+
+def test_bare_list_is_a_string_list():
+    seen = {}
+
+    def tasks(reg):
+        @reg.task
+        def release(tags: list):
+            seen["tags"] = tags
+
+    run(tasks, "release abc")
+    assert seen["tags"] == ["abc"]  # not exploded into ['a','b','c']
+    run(tasks, "release a b")
+    assert seen["tags"] == ["a", "b"]
+
+
+def test_bare_dict_is_a_required_mapping():
+    seen = {}
+
+    def tasks(reg):
+        @reg.task
+        def envs(vars: dict):
+            seen["vars"] = vars
+
+    run(tasks, "envs --vars A=1")
+    assert seen["vars"] == {"A": "1"}
 
 
 def test_dynamic_did_you_mean():

@@ -140,7 +140,7 @@ def peel(ann: Any) -> Peeled:
         "checks": checks,
     }
 
-    if typing.get_origin(ann) is dict:  # dict[K, V]
+    if ann is dict or typing.get_origin(ann) is dict:  # dict[K, V] or bare dict
         kv = typing.get_args(ann)
         key_type = kv[0] if kv else str
         value_type = kv[1] if len(kv) > 1 else str
@@ -163,13 +163,13 @@ def peel(ann: Any) -> Peeled:
             checks=(*checks, *value.checks),
         )
 
-    if typing.get_origin(ann) is list:  # list[X] / Many[X]
+    if ann is list or typing.get_origin(ann) is list:  # list[X] / Many[X] / bare
         element = (typing.get_args(ann) or (str,))[0]
         return Peeled(True, element, completer, is_nosplit, **markers)
 
     if _is_union(ann):
         members = _strip_none(list(typing.get_args(ann)))
-        lists = [m for m in members if typing.get_origin(m) is list]
+        lists = [m for m in members if m is list or typing.get_origin(m) is list]
         if lists:  # list[X] | scalar... -> a list of the merged element types
             parts: list[Any] = []
             for lm in lists:
@@ -363,7 +363,9 @@ def coerce_custom(value: str, element: Any) -> Any:
     execution time (the splitter only ever sees strings), and raises
     `ValueError` on a bad value so footman can report it cleanly.
     """
-    if not isinstance(element, type):
+    # `Any`/`object` deliberately mean "take the raw string": both are classes
+    # on Python >=3.11, so without this guard `Any("x")` would raise.
+    if element is Any or element is object or not isinstance(element, type):
         return value
     try:
         if issubclass(element, _datetime.datetime):
