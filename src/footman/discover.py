@@ -116,10 +116,15 @@ def load_tree(files: list[Path], base: Group | None = None) -> Group:
     exactly as nearer cascade files win over farther ones.
     """
     merged = base if base is not None else Group("root")
-    for index, path in enumerate(files):
-        tree = _import_file(path, index)
-        _overlay(merged, tree, str(path.parent))
-    registry.reset()  # leave no global state behind
+    try:
+        for index, path in enumerate(files):
+            tree = _import_file(path, index)
+            _overlay(merged, tree, str(path.parent))
+    finally:
+        # Leave no global state behind — even when a file registered some tasks
+        # and then raised, which would otherwise strand ghost tasks in
+        # registry.root for the rest of the process (F62).
+        registry.reset()
     return merged
 
 
