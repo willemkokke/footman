@@ -58,7 +58,7 @@ def _globals_to_dict(tokens: list[str]) -> dict[str, object]:
 
 
 def _discover(
-    g: dict[str, object], wants_help: bool
+    g: dict[str, object], wants_help: bool, bare: bool
 ) -> tuple[list[Path], dict[str, object]] | int:
     """Resolve the task files to load and the merged config for this cwd.
 
@@ -100,7 +100,8 @@ def _discover(
         _print_global_help(manifest.build_manifest(registry.Group("root"))["tree"])
         print(f"\n(no tasks file found — looked for {looked})")
         return 0
-    if g.get("list") or g.get("tree"):
+    if bare or g.get("list") or g.get("tree"):
+        # A bare `fm` (like `--list`) is a warm empty state, not a hard error.
         print(f"No tasks file found (looked for {looked}).")
         return 0
     _error(
@@ -554,7 +555,7 @@ def _execute(
     Everything after globals/`--version`/`--install-completion`/`-C`: the
     disk-backed half that `run_group` (in-memory) deliberately skips.
     """
-    found = _discover(g, wants_help)
+    found = _discover(g, wants_help, bare=not argv)
     if isinstance(found, int):
         return found
     files, cfg = found

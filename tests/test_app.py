@@ -122,6 +122,23 @@ def test_where(project, capsys):
     assert out.endswith(("tasks.py:4", "tasks.py:5"))
 
 
+def test_bare_fm_lists_tasks(project, capsys):
+    # 11.4: bare `fm` falls through to the task list, not an error.
+    assert _app.run([]) == 0
+    out = capsys.readouterr().out
+    assert "Tasks:" in out and "hi" in out
+
+
+def test_bare_fm_no_tasks_file_is_soft(tmp_path, monkeypatch, capsys):
+    # 11.4: even with no tasks file, bare `fm` is a warm empty state (exit 0),
+    # not the hard error a named task gets.
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
+    assert _app.run([]) == 0
+    assert "No tasks file found" in capsys.readouterr().out
+    assert _app.run(["hi"]) == 2  # a named task still errors
+
+
 def test_missing_tasks_file(tmp_path, monkeypatch, capsys):
     (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
     monkeypatch.chdir(tmp_path)
