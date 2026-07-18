@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import io
 import sys
 
 import pytest
@@ -88,6 +89,76 @@ def test_run_nofail_returns_code():
     _, _, results = drive(tasks, "build")
     assert results[0].ok is True
     assert out["code"] == 1
+
+
+# --- output routing ----------------------------------------------------------
+
+
+def test_in_process_stderr_is_captured():
+    def tasks(reg):
+        @reg.task
+        def build():
+            def tool():
+                print("to stdout")
+                print("to stderr", file=sys.stderr)
+                return 0
+
+            run(tool)
+
+    _, _, results = drive(tasks, "build")
+    step = results[0].steps[0]
+    assert "to stdout" in step.output
+    assert "to stderr" in step.output  # stderr now merges into the capture
+
+
+def test_routing_is_reentrant():
+    import footman.context as ctxmod
+
+    with ctxmod.routing():
+        outer = ctxmod._router
+        assert outer is not None
+        with ctxmod.routing():
+            assert ctxmod._router is not None and ctxmod._router is not outer
+        assert ctxmod._router is outer  # nested exit restores, not clears
+        assert sys.stdout is outer
+    assert ctxmod._router is None
+
+
+def test_non_ascii_status_survives_cp1252_stdout(monkeypatch):
+    wrapper = io.TextIOWrapper(io.BytesIO(), encoding="cp1252", errors="strict")
+    monkeypatch.setattr(sys, "stdout", wrapper)
+
+    def tasks(reg):
+        @reg.task
+        def build():
+            run("echo hi")  # run() writes the "→" glyph, absent from cp1252
+
+    _, _, results = drive(tasks, "build")
+    assert results[0].ok  # reconfigure(errors='replace') -> no UnicodeEncodeError
+
+
+def test_subprocess_output_decoded_as_utf8():
+    src = "import sys; sys.stdout.buffer.write('résumé ✓\\n'.encode('utf-8'))"
+
+    def tasks(reg):
+        @reg.task
+        def build():
+            run([sys.executable, "-c", src])
+
+    _, _, results = drive(tasks, "build")
+    assert "résumé ✓" in results[0].steps[0].output
+
+
+def test_subprocess_encoding_override():
+    src = "import sys; sys.stdout.buffer.write(b'caf\\xe9\\n')"  # latin-1 é
+
+    def tasks(reg):
+        @reg.task
+        def build():
+            run([sys.executable, "-c", src], encoding="latin-1")
+
+    _, _, results = drive(tasks, "build")
+    assert "café" in results[0].steps[0].output
 
 
 def test_dry_run_prints_not_executes(capsys):
@@ -216,7 +287,7 @@ def test_windows_string_commands_are_not_shlex_split(monkeypatch):
 
     calls = {}
 
-    def fake_run(argv, env, cwd, capture):
+    def fake_run(argv, env, cwd, capture, encoding="utf-8"):
         calls["argv"] = argv
         return 0, ""
 
