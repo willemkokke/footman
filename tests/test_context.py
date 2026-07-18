@@ -258,6 +258,60 @@ def test_passthrough_accessor():
     assert seen["pt"] == ["-k", "foo", "-x"]
 
 
+# --- env / cwd propagation (subprocess) --------------------------------------
+# F40: the env merge and cwd threading are load-bearing but were completely
+# unasserted — dropping `ctx.env` entirely left the suite green. Observe them
+# through a real subprocess.
+
+_PRINT_CWD = "import os; print(os.getcwd())"
+_PRINT_PREC = "import os; print(os.environ['PREC'])"
+
+
+def test_subprocess_ctx_env_beats_os_environ(monkeypatch):
+    monkeypatch.setenv("PREC", "from-os")
+
+    def tasks(reg):
+        @reg.task
+        def build():
+            run([sys.executable, "-c", _PRINT_PREC])
+
+    _, _, results = drive(tasks, "build", env={"PREC": "from-ctx"})
+    assert results[0].steps[0].output.strip() == "from-ctx"
+
+
+def test_subprocess_call_env_beats_ctx_env(monkeypatch):
+    monkeypatch.setenv("PREC", "from-os")
+
+    def tasks(reg):
+        @reg.task
+        def build():
+            run([sys.executable, "-c", _PRINT_PREC], env={"PREC": "from-kwarg"})
+
+    # kwarg > ctx.env > os.environ, top to bottom.
+    _, _, results = drive(tasks, "build", env={"PREC": "from-ctx"})
+    assert results[0].steps[0].output.strip() == "from-kwarg"
+
+
+def test_subprocess_cwd_via_kwarg(tmp_path):
+    def tasks(reg):
+        @reg.task
+        def build():
+            run([sys.executable, "-c", _PRINT_CWD], cwd=tmp_path)
+
+    _, _, results = drive(tasks, "build")
+    assert results[0].steps[0].output.strip() == str(tmp_path.resolve())
+
+
+def test_subprocess_cwd_via_ctx(tmp_path):
+    def tasks(reg):
+        @reg.task
+        def build():
+            run([sys.executable, "-c", _PRINT_CWD])
+
+    _, _, results = drive(tasks, "build", cwd=tmp_path)
+    assert results[0].steps[0].output.strip() == str(tmp_path.resolve())
+
+
 # --- opt-in ctx injection ----------------------------------------------------
 
 
