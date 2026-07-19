@@ -5,7 +5,8 @@ the same seven-task surface (`lint`, `format`, `typecheck`, `test`, `check`,
 `dist build`, `dist clean`) written five ways. The runnable head-to-head lives in
 the repo's [`comparison/`](https://github.com/willemkokke/footman/tree/main/comparison)
 directory; reproduce the numbers with
-`uv run --group comparison python comparison/bench_compare.py`.
+`uv run --group comparison python comparison/bench_compare.py`. Switching from
+one of these runners? The practical guides live on [Migrating](migrating.md).
 
 Measured on duty 1.9.0, invoke 3.0.3, poethepoet 0.48.0, typer 0.27.0, CPython
 3.13, M-series Mac.
@@ -48,9 +49,6 @@ path: `fm --list` is ~313 ms, right there with the pack. Completion is the one
 moment that has to feel instant, so that's the moment I optimised. poe is quick
 here too, for the honest reason that its tasks are TOML strings with no Python to
 load — which is also the rest of this page.
-
-> **Does this speed matter?** Not really — but I'm a little OCD and needed to
-> know I wasn't embarrassing myself. Turns out I'm not, so we can both move on.
 
 ## The same `check`, composed five ways
 
@@ -104,7 +102,9 @@ where footman is answering from cache. Not a knock on typer; just a different jo
 
 ## Feature matrix
 
-footman on the left, in a column of green ticks. (Yes, I noticed.)
+The list is footman's own feature set, so the left column is green by
+construction — the honest content is in the other columns, and in the one ❌
+footman concedes: duty's tools library.
 
 | capability                                  | footman | typer   | duty          | invoke        | poe      |
 | ------------------------------------------- | :-----: | :-----: | ------------- | ------------- | -------- |
@@ -125,101 +125,3 @@ footman on the left, in a column of green ticks. (Yes, I noticed.)
 | Zero runtime dependencies                   |   ✅    |   ❌    | ❌            | ❌            | ❌       |
 
 \* poe skips the re-import only because its tasks aren't Python functions.
-
-> I've always wanted to make a comparison table that lists my exact feature list
-> so it looks good! (The one row footman *doesn't* tick is duty's tools library —
-> credit where it's due.)
-
-## If you're coming from…
-
-### duty
-
-The gentlest move — it's the family footman grew up in. Drop the `ctx` parameter
-and shell out through `run()`:
-
-```python
-# duty
-@duty
-def lint(ctx, fix: bool = False):
-    ctx.run("ruff check ." + (" --fix" if fix else ""))
-
-# footman
-@task
-def lint(fix: bool = False):
-    run("ruff check ." + (" --fix" if fix else ""))
-```
-
-Chaining (`duty format lint test` → `fm format lint test`) and `--flags` carry
-over. You gain eager choice/type validation (duty happily accepts an invalid
-`Literal`; footman stops it), native nested groups, and instant completion. The
-one thing you'll miss for now is duty's big `tools` library — footman's is small
-and growing. Flag syntax note: duty also takes `lint fix=true`; footman uses
-`--fix`.
-
-### invoke
-
-Drop the `c` parameter and delete the manual `Collection` wiring — in footman a
-module *is* a group and `group()` opens a sub-command:
-
-```python
-# invoke: hand-assembled namespaces
-ns = Collection(); ns.add_task(lint); ns.add_collection(dist)
-
-# footman: nothing to assemble
-dist = group("dist")
-@dist.task
-def build(): ...
-```
-
-`inv dist.build` becomes `fm dist build` (a space, not a dot); `c.run(...)` →
-`run(...)`.
-
-### typer
-
-Your typed signatures port almost verbatim — footman reads the same annotations.
-Delete the app object and the per-parameter `typer.Option`/`Argument` wrappers;
-use plain defaults plus footman's `Annotated` markers (`suggest`, `Many`,
-`nosplit`) where you need them. `typer.Typer()` + `add_typer(sub)` → a module or
-a `group()`. You'll trade typer's polished `--help` for cached completion, zero
-dependencies, and separator-free chaining — a fair swap for a task runner, though
-if you're shipping a CLI to users, typer's help is worth staying for.
-
-### poe
-
-Move each TOML task into a Python function — you swap declarative strings for
-real Python, types, and validation:
-
-```toml
-# poe
-[tool.poe.tasks.lint]
-cmd = "ruff check ."
-args = [{ name = "fix", options = ["--fix"], type = "boolean" }]
-```
-
-```python
-# footman
-@task
-def lint(fix: bool = False):
-    run("ruff check ." + (" --fix" if fix else ""))
-```
-
-You keep parallelism (poe's `[[parallel]]` → footman is parallel by default) and
-pay the project import only on execution, never on completion.
-
-### make / just
-
-Recipes become `@task` functions and shell lines become `run(...)`; you keep
-chaining and gain parallel-by-default execution and typed arguments. What you
-give up is the file-target / up-to-date model — footman runs commands, it isn't a
-build system (see `doit` for that niche).
-
-## Other runners
-
-Not benchmarked here, and why: **taskipy** (pyproject shell aliases, no
-Python-function tasks), **doit** (a proper build system with file-target and
-up-to-date tracking — a different game), **nox** / **tox** (environment and
-test-matrix orchestration), and the non-Python **just** / **go-task** / **mise**
-/ **make** (great UX and completion, no Python dynamism). `uv`'s own task support
-is [in design](https://github.com/astral-sh/uv/issues/5903) and will cover the
-simple-named-command case; footman's patch of ground is typed Python-function
-tasks with real CLI semantics.

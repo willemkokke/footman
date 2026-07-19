@@ -55,10 +55,10 @@ The completion manifest is cached **per directory**, so <kbd>Tab</kbd> in
 
 ## Configuration
 
-Behavioural settings are discovered by the same upward walk. footman reads
-`[tool.footman]` from `pyproject.toml` and a standalone `footman.toml`
-(whole-file), from the repo root down to your cwd — **nearer files win**, so a
-package can override repo-wide defaults:
+footman discovers behavioural settings with the same upward walk it uses for
+tasks files. It reads `[tool.footman]` from `pyproject.toml` and a standalone
+`footman.toml` (whole-file), from the repo root down to your cwd — **nearer
+files win**, so a package can override repo-wide defaults:
 
 ```toml
 # repo/pyproject.toml
@@ -77,11 +77,6 @@ Within one directory, `footman.toml` wins over `pyproject.toml`'s
 everything else. Unknown keys are ignored, so a newer setting never breaks an
 older footman.
 
-### Recognised keys
-
-| Key                  | Meaning                                                          |
-| -------------------- | --------------------------------------------------------------- |
-| `tasks`              | Filename to look for in each folder (default `tasks.py`).       |
-| `sequential`         | Run tasks one at a time by default.                             |
-| `plugins`            | `footman.tasks` entry points to mount as command groups (opt-in). |
-| `completion.max_age` | Age before a background completion refresh (e.g. `"10m"`; `off`). |
+The full key table lives in the
+[CLI reference](reference.md#configuration-keys) — currently `tasks`,
+`sequential`, `plugins`, and `completion.max_age`.

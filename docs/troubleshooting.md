@@ -94,13 +94,9 @@ file`), never silently ignored.
 
 ## Exit codes
 
-| code | meaning |
-| ---- | ------- |
-| 0 | everything ran and succeeded |
-| 1 | a task raised an exception |
-| N | a task returned N / its `run()` command exited N (first failure wins) |
-| 2 | footman refused before or while binding: parse, tasks-file, config, availability |
-| 130 | interrupted (Ctrl-C) |
-
-`--json` consumers: the same story is in the envelope — `ok`, `code`, and
-`error` per task. See [CI & automation](ci.md).
+The two worth remembering here: **2 always means footman refused before or
+while binding** — a parse, tasks-file, config, or availability problem, and
+nothing ran — and any other non-zero code is the first failing task's own.
+The full table is part of the machine contract:
+[JSON output § exit codes](json.md#exit-codes). `--json` consumers get the
+same story per task in the envelope — `ok`, `code`, `error`.

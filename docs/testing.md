@@ -71,7 +71,9 @@ def test_the_check_pipeline(tmp_path):
 
 `Result` carries `exit_code`, `stdout`, `stderr`, the structured
 `results: list[TaskResult]` (one per executed task, dependency order), and an
-`ok` shorthand. Taught errors land in `result.stderr` with exit code 2 —
+`ok` shorthand. Each `TaskResult` exposes the task's return value as
+`.returned` — the same value `--json` publishes — so asserting on a task's
+data needs no JSON parsing at all. Taught errors land in `result.stderr` with exit code 2 —
 assert on them like any other product surface. The completion cache is
 isolated per invocation automatically, so tests never touch your real one.
 
@@ -123,8 +125,8 @@ make about itself.
 ## Golden tests: the `--json` surface
 
 `--json` is the blessed machine surface: `{"schema": 1, "results": [...]}`,
-documented and additive-only after 1.0. Filter the volatile fields and
-snapshot the shape:
+documented in full on [JSON output](json.md) and additive-only after 1.0.
+Filter the volatile fields and snapshot the shape:
 
 ```python
 import json

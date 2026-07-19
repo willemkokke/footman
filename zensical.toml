@@ -12,21 +12,32 @@ Copyright &copy; 2026 Willem Kokke — MIT licensed
 nav = [
   { "Home" = "index.md" },
   { "Getting started" = "getting-started.md" },
-  { "Comparison" = "comparison.md" },
-  { "Typed signatures" = "typing.md" },
-  { "Chaining & parallelism" = "orchestration.md" },
-  { "Monorepos & config" = "monorepos.md" },
-  { "Composing tasks" = "composing.md" },
-  { "Running tools" = "tools.md" },
-  { "Testing your tasks" = "testing.md" },
+  { "Guide" = [
+    { "Typed signatures" = "typing.md" },
+    { "Chaining & parallelism" = "orchestration.md" },
+    { "Running tools" = "tools.md" },
+    { "The tools bridge" = "tools-bridge.md" },
+    { "Monorepos & config" = "monorepos.md" },
+    { "Composing tasks" = "composing.md" },
+    { "Testing your tasks" = "testing.md" },
+    { "Custom CLI" = "custom-cli.md" },
+  ] },
   { "Completion" = "completion.md" },
-  { "Custom CLI" = "custom-cli.md" },
-  { "CI & automation" = "ci.md" },
-  { "Troubleshooting" = "troubleshooting.md" },
-  { "CLI reference" = "reference.md" },
-  { "API reference" = "api.md" },
-  { "Coverage" = "coverage.md" },
-  { "Changelog" = "changelog.md" },
+  { "Machine use" = [
+    { "CI" = "ci.md" },
+    { "JSON output" = "json.md" },
+  ] },
+  { "About" = [
+    { "Comparison" = "comparison.md" },
+    { "Migrating" = "migrating.md" },
+    { "Coverage" = "coverage.md" },
+    { "Changelog" = "changelog.md" },
+  ] },
+  { "Reference" = [
+    { "CLI reference" = "reference.md" },
+    { "API reference" = "api.md" },
+    { "Troubleshooting" = "troubleshooting.md" },
+  ] },
 ]
 
 [project.plugins.mkdocstrings.handlers.python]

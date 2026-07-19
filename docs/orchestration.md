@@ -17,11 +17,12 @@ $ fm --dry-run format lint --fix test
 
 ## Parallel by default
 
-Independent tasks run **in parallel by default**. footman builds a DAG from the
+Independent tasks run **in parallel by default**. footman builds a dependency
+graph (a DAG — no cycles allowed, and a cycle is a taught error) from the
 chain and each task's declared dependencies, then runs everything that isn't
-waiting on something else concurrently. Tasks are almost always I/O-bound (they
-shell out through `run()`, releasing the GIL), so threads give real wall-clock
-speedups without process isolation:
+waiting on something else concurrently. Tasks spend most of their life waiting
+on subprocesses — a `run()` call releases Python's interpreter lock while it
+waits — so threads give real wall-clock speedups without process isolation:
 
 ```sh
 fm a b c            # three 1s tasks -> ~1.0s, not 3.0s
@@ -49,8 +50,8 @@ def deploy(): ...
 
 ## Fan out from inside a task
 
-`parallel()` runs task functions — or thunks, when you need arguments —
-concurrently, waits, and fails if any fail:
+`parallel()` runs task functions — or no-argument lambdas, when you need to
+bind arguments — concurrently, waits, and fails if any fail:
 
 ```python
 from footman import task, parallel
@@ -71,20 +72,8 @@ non-interleaved), and absent entirely under `--no-color`/`NO_COLOR`/`TERM=dumb`,
 
 ## JSON for CI and agents
 
-Pass `--json` and footman prints machine-readable results:
-
-```console
-$ fm --json test
-{
-  "schema": 1,
-  "results": [
-    {"task": "test", "ok": true, "code": 0, "duration_ms": 812.4, "output": "...", "steps": [], "error": null}
-  ]
-}
-```
-
-Task output — including anything a subprocess writes — is captured into the
-payload, so stdout stays pure machine-readable JSON. Every `run()` inside a task
-becomes a structured step (command, code, duration, captured output) in the
-task's entry. The envelope is versioned (`schema`) and changes will only ever
-be additive — this is the surface to build CI and agent integrations on.
+Pass `--json` and stdout becomes exactly one JSON document: per-task results
+(with captured output, structured `run()` steps, and the task's own
+`returned` data), or an error envelope when footman refuses the line. The
+whole contract lives on [JSON output](json.md); the CI recipes on
+[CI & automation](ci.md).
