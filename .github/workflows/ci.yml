@@ -3,7 +3,20 @@ name: CI
 on:
   push:
     branches: [main]
+    # A docs-only push is the Docs workflow's job — don't run the test gate
+    # on it. Anything that can affect code (src, tests, tasks.py, pyproject,
+    # the workflows themselves) still runs everything.
+    paths-ignore:
+      - "docs/**"
+      - "zensical.toml"
+      - "**.md"
+      - ".github/workflows/docs.yml"
   pull_request:
+    paths-ignore:
+      - "docs/**"
+      - "zensical.toml"
+      - "**.md"
+      - ".github/workflows/docs.yml"
   # Lets release.yml require a full CI pass on the tagged commit before it
   # will build and publish.
   workflow_call:
