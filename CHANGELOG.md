@@ -7,6 +7,26 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- **Parameter docs come straight from your docstrings.** Google
+  (`Args:`), NumPy (`Parameters` + underline), and Sphinx (`:param x:`)
+  styles are auto-detected per docstring; entries fill each parameter's
+  help in `fm --help <task>`, in completion menus that show descriptions,
+  and in the `--json --list` catalog — everywhere a `doc("…")` marker
+  reaches, and the marker still wins for the same parameter. The body
+  between the summary and the section becomes the task's **long help**,
+  rendered by `--help` and carried as an additive `long` key. A docstring
+  entry that names no real parameter warns, the same loudness a broken
+  annotation gets.
+- **`footman.docstrings` — the parser behind it, public and standalone.**
+  Stdlib-only with no footman imports (lift the file into any project):
+  `parse(text)` returns a frozen `Docstring` with `summary`, `long`, and
+  `params`, tolerant of tabs, CRLF, uneven indentation, and unusual
+  section orders.
+- **The docs site follows your system's colour scheme by default**, with a
+  three-state auto → light → dark toggle.
+
 ## [0.10.0] — 2026-07-19
 
 ### Added

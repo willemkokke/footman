@@ -129,7 +129,10 @@ $ fm --json --list
 Each parameter always has `name` and `kind` (`flag` | `option` | `argument`
 | `variadic`), plus whichever apply: `required`, `choices`, `types`,
 `multiple`, `mapping`, `nosplit`, `path`, `min`/`max`, `env`, `dynamic`,
-and `doc` (the author's [per-parameter help](typing.md#validation-markers)).
+and `doc` — the author's [per-parameter help](typing.md#validation-markers),
+whether from a `doc("…")` marker or a parsed docstring. A task node carries
+`help` (the docstring's first line) and, when the docstring has a body,
+`long`.
 This is one command's answer to "what can I run here?" — the discovery
 call for agents and tooling.
 

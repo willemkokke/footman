@@ -44,6 +44,22 @@ def test_doc_marker_becomes_option_description():
     assert complete(built, ["lint", "--f"]) == ["--fix\tapply fixes in place"]
 
 
+def test_docstring_doc_becomes_option_description():
+    # No marker needed: a documented docstring parameter reaches the column.
+    with registry.capture() as root:
+
+        @task
+        def sync(force: bool = False):
+            """Sync.
+
+            Args:
+                force: skip the freshness check
+            """
+
+    built = manifest.build_manifest(root)["tree"]
+    assert complete(built, ["sync", "--f"]) == ["--force\tskip the freshness check"]
+
+
 def test_empty_partial_lists_everything(tree):
     out = _names(complete(tree, [""]))
     assert "check" in out

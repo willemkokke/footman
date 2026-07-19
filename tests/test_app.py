@@ -55,7 +55,22 @@ def code3():
 
 @task
 def fix(dry: Annotated[bool, doc("plan only, change nothing")] = False):
-    """Fix things."""
+    """Fix things.
+
+    Args:
+        dry: the docstring text that the marker beats
+    """
+
+@task
+def sync(force: bool = False):
+    """Sync the things.
+
+    Runs the whole pipeline,
+    twice if needed.
+
+    Args:
+        force: skip the freshness check
+    """
 
 tools = group("tools", help="Extra tools")
 
@@ -413,11 +428,21 @@ def test_help_never_runs_the_chain(project, capsys):
 
 
 def test_help_shows_param_doc(project, capsys):
-    # A doc("...") marker leads the option's detail line; mechanics follow.
+    # A doc("...") marker leads the option's detail line; mechanics follow —
+    # and the marker beats the docstring's Args entry for the same param.
     assert _app.run(["--help", "fix"]) == 0
-    assert "plan only, change nothing; flag (--no-dry to disable)" in (
-        capsys.readouterr().out
-    )
+    out = capsys.readouterr().out
+    assert "plan only, change nothing; flag (--no-dry to disable)" in out
+    assert "docstring text" not in out
+
+
+def test_help_shows_long_description_and_docstring_doc(project, capsys):
+    assert _app.run(["--help", "sync"]) == 0
+    out = capsys.readouterr().out
+    assert "Sync the things." in out
+    assert "Runs the whole pipeline," in out and "twice if needed." in out
+    assert "skip the freshness check" in out  # docstring-sourced option line
+    assert "Args:" not in out  # the section header is structure, not prose
 
 
 def test_help_shows_positionals_and_types(project, capsys):

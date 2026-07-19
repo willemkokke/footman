@@ -137,6 +137,63 @@ $ DEPLOY_ENV=prod fm deploy app.toml      # target == "prod"
   The task's own help stays the docstring's first line; `doc` is for the
   parameters.
 
+## Or just write a docstring
+
+footman reads the parameter docs you already write — Google, NumPy, and
+Sphinx styles, auto-detected per docstring. Everything a `doc("…")` marker
+feeds (help lines, completion descriptions, the catalog) fills from the
+docstring instead, the body between the summary and the section renders in
+`fm --help <task>` as the task's long help, and an explicit `doc("…")`
+always wins over a docstring entry for the same parameter:
+
+=== "Google"
+
+    ```python
+    @task
+    def deploy(target: str, fix: bool = False):
+        """Ship a build.
+
+        Checks out, builds, and uploads — see the release runbook.
+
+        Args:
+            target: where to deploy
+            fix: apply fixes first
+        """
+    ```
+
+=== "NumPy"
+
+    ```python
+    @task
+    def deploy(target: str, fix: bool = False):
+        """Ship a build.
+
+        Parameters
+        ----------
+        target : str
+            where to deploy
+        fix : bool
+            apply fixes first
+        """
+    ```
+
+=== "Sphinx"
+
+    ```python
+    @task
+    def deploy(target: str, fix: bool = False):
+        """Ship a build.
+
+        :param target: where to deploy
+        :param fix: apply fixes first
+        """
+    ```
+
+A docstring entry that names no real parameter earns a `UserWarning` — the
+same loudness a broken annotation gets. The parser itself is public and
+standalone (`footman.docstrings.parse`) if you want structured docstrings
+for your own tooling.
+
 One honest asymmetry to know about: path and bounds violations on the command
 line are caught *eagerly* (before anything runs); the same violations in an
 env-supplied value are caught at binding time, because that's when the

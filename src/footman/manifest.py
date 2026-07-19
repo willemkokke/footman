@@ -29,7 +29,7 @@ import warnings
 from pathlib import Path
 from typing import Any
 
-from footman import _paths, coerce, registry
+from footman import _paths, coerce, docstrings, registry
 from footman.context import context_param_name
 from footman.params import suggest
 from footman.registry import Group
@@ -239,14 +239,30 @@ def _finish(spec: dict[str, Any], memo: dict[int, list[str]]) -> dict[str, Any]:
 def _task_node(fn: Any, memo: dict[int, list[str]]) -> dict[str, Any]:
     sig = resolved_signature(fn)
     ctx_name = context_param_name(sig)  # the injected ctx param is not a CLI arg
-    node = {
-        "help": (inspect.getdoc(fn) or "").partition("\n")[0],
-        "params": [
-            _finish(param_spec(p), memo)
-            for p in sig.parameters.values()
-            if p.name != ctx_name
-        ],
-    }
+    parsed = docstrings.parse(inspect.getdoc(fn))
+    params = [
+        _finish(param_spec(p), memo)
+        for p in sig.parameters.values()
+        if p.name != ctx_name
+    ]
+    known: set[str] = set()
+    for spec in params:
+        python_name = str(spec["name"]).replace("-", "_")
+        known.add(python_name)
+        # The docstring fills in; an explicit doc() marker already won.
+        if "doc" not in spec and (text := parsed.params.get(python_name)):
+            spec["doc"] = text
+    if ctx_name:
+        known.add(ctx_name)  # documenting the injected ctx param is fine
+    if unknown := sorted(set(parsed.params) - known):
+        warnings.warn(
+            f"footman: {getattr(fn, '__name__', fn)!s}: docstring documents "
+            f"unknown parameter(s): {', '.join(unknown)}",
+            stacklevel=2,
+        )
+    node: dict[str, Any] = {"help": parsed.summary, "params": params}
+    if parsed.long:
+        node["long"] = parsed.long
     # Additive availability annotation (`when=`): the name stays listed and
     # completable either way — execution re-checks the predicate live.
     if (reason := registry.availability(fn)) is not None:

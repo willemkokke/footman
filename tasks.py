@@ -20,8 +20,12 @@ def lint(fix: Annotated[bool, doc("apply safe fixes in place")] = False):
 
 
 @task
-def format(check: Annotated[bool, doc("report instead of rewriting")] = False):
-    """Format with ruff."""
+def format(check: bool = False):
+    """Format with ruff.
+
+    Args:
+        check: report instead of rewriting
+    """
     tools.ruff_format(*SRC, check=check)
 
 
@@ -139,8 +143,12 @@ def coverage():
 
 
 @docs.task(name="build")
-def docs_build(check: Annotated[bool, doc("build strictly (what CI runs)")] = False):
-    """Build the docs site into ./site (strict on --check); regenerates llms.txt."""
+def docs_build(check: bool = False):
+    """Build the docs site into ./site; regenerates llms.txt first.
+
+    Args:
+        check: build strictly (what CI runs)
+    """
     _write_llms_txt()
     # A conditional flag needs no ternary: strict=check is --strict when
     # check is true, omitted otherwise (strict is off by default in zensical).

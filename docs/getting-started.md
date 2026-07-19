@@ -36,8 +36,10 @@ def serve(port: int = 8000):
 ```
 
 The docstring's **first line** is the task's help text — it shows up in
-`fm --list`, `fm --help <task>`, and your shell's completion menu. One good
-line is the whole convention.
+`fm --list`, `fm --help <task>`, and your shell's completion menu. Document
+parameters there too: an `Args:` section (Google, NumPy, or Sphinx style —
+see [typed signatures](typing.md#or-just-write-a-docstring)) puts help on
+each option in `--help` and in completion.
 
 The command name is the function name with underscores turned into hyphens
 (`add_word` → `add-word`). A module of functions becomes a flat set of commands;

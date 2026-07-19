@@ -62,6 +62,7 @@ __all__ = [
     "capture",
     "check",
     "doc",
+    "docstrings",
     "env",
     "exists",
     "group",
@@ -111,6 +112,10 @@ def __getattr__(name: str) -> object:
         import footman.tools
 
         return footman.tools
+    if name == "docstrings":
+        import footman.docstrings
+
+        return footman.docstrings
     if name in ("include", "plugin"):
         from footman import compose
 

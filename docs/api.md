@@ -58,6 +58,16 @@ straight from the `footman` package (`from footman import task, run, App`).
 
 ::: footman.params.check
 
+::: footman.params.doc
+
+## Docstrings
+
+Standalone (stdlib-only, no footman imports) — reusable outside footman.
+
+::: footman.docstrings.parse
+
+::: footman.docstrings.Docstring
+
 ## Testing
 
 ::: footman.context.use_context

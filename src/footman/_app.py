@@ -355,6 +355,9 @@ def _print_task_help(tree: dict, path: list[str]) -> None:
     print(" ".join([f"usage: {_brand.prog}", *path, *fragments]))
     if task["help"]:
         print(f"\n  {task['help']}")
+    if task.get("long"):  # the docstring's body, structure preserved
+        body = "\n".join(f"  {ln}".rstrip() for ln in task["long"].splitlines())
+        print(f"\n{body}")
     if task.get("disabled"):
         print(f"\n  unavailable here: {task['disabled']}")
     positionals = [p for p in task["params"] if p["kind"] in ("argument", "variadic")]

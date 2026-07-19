@@ -28,6 +28,94 @@ def test_doc_marker_lands_in_spec():
     assert specs(f) == [{"name": "fix", "kind": "flag", "doc": "apply fixes in place"}]
 
 
+def node(fn):
+    """Build one task's manifest node the way the real tree does."""
+    from footman import registry
+
+    with registry.capture() as root:
+        registry.task(fn)
+    return manifest.build_manifest(root)["tree"]["tasks"][fn.__name__.replace("_", "-")]
+
+
+def test_docstring_params_fill_doc():
+    def deploy(target: str, fix: bool = False):
+        """Deploy.
+
+        Args:
+            target: where to deploy
+            fix: apply fixes in place
+        """
+
+    by_name = {p["name"]: p for p in node(deploy)["params"]}
+    assert by_name["target"]["doc"] == "where to deploy"
+    assert by_name["fix"]["doc"] == "apply fixes in place"
+
+
+def test_doc_marker_beats_docstring():
+    def lint(fix: Annotated[bool, doc("the marker text")] = False):
+        """Lint.
+
+        Args:
+            fix: the docstring text
+        """
+
+    (p,) = node(lint)["params"]
+    assert p["doc"] == "the marker text"
+
+
+def test_docstring_long_lands_in_node():
+    def build():
+        """Build.
+
+        The long story,
+        over two lines.
+        """
+
+    n = node(build)
+    assert n["help"] == "Build."
+    assert n["long"] == "The long story,\nover two lines."
+
+
+def test_docstring_long_absent_when_empty():
+    def plain():
+        "Just the one line."
+
+    assert "long" not in node(plain)
+
+
+def test_docstring_unknown_param_warns():
+    def run_it(a: int = 0):
+        """Run.
+
+        Args:
+            a: real
+            ghost: not a parameter
+        """
+
+    with pytest.warns(UserWarning, match="ghost"):
+        node(run_it)
+
+
+def test_numpy_and_sphinx_docstrings_reach_the_spec():
+    def np_style(a: int = 0):
+        """S.
+
+        Parameters
+        ----------
+        a : int
+            From numpy.
+        """
+
+    def sp_style(a: int = 0):
+        """S.
+
+        :param a: from sphinx
+        """
+
+    assert node(np_style)["params"][0]["doc"] == "From numpy."
+    assert node(sp_style)["params"][0]["doc"] == "from sphinx"
+
+
 def test_kwargs_is_a_spec_error():
     def f(**opts): ...
 
