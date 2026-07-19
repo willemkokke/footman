@@ -6,6 +6,7 @@ Chaining works: ``fm format lint --fix test``.
 
 from __future__ import annotations
 
+import functools
 from typing import Annotated
 
 from footman import doc, group, parallel, run, task, tools
@@ -53,7 +54,9 @@ def check():
     Coverage is not enforced here — that's the explicit
     `pytest --cov=footman` invocation documented in CLAUDE.md.
     """
-    parallel(lambda: format(check=True), lint, typecheck, test)
+    # partial, not a lambda: it keeps the callee's name, so the live line
+    # and step column say "format" instead of "…".
+    parallel(functools.partial(format, check=True), lint, typecheck, test)
 
 
 docs = group("docs", help="Documentation site (Zensical)")

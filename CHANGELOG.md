@@ -96,6 +96,14 @@ versions may include breaking changes.
 
 ### Changed
 
+- **Step lines are columns now: mark · task name · command · time.** Every
+  `run()` line carries the task it belongs to, padded so siblings align;
+  on a colour terminal the name is bold, the command dimmed, and the
+  `(time)` cyan and right-aligned to the terminal edge. Anonymous
+  `parallel()` thunks show `…` — pass a named function or a
+  `functools.partial` (its callee's name is used) for a real label.
+  Durations everywhere now humanise past seconds: `4.1s`, `42s`, `1m10s`,
+  `4h35m` — step lines included, which used to print raw seconds forever.
 - **The run summary and live progress line moved to stderr.** One rule now
   governs the streams: *stdout is the answer, stderr is the commentary*.
   Task output — and footman's own answers (listings, help, `--json`

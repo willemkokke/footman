@@ -472,3 +472,20 @@ def test_parallel_honours_the_sequential_request():
     with use_context(Context(jobs=1)):
         parallel(slow, fast)
     assert order == ["slow-start", "slow-end", "fast-start"]
+
+
+def test_step_lines_carry_an_aligned_name_column(capsys):
+    # mark · task name (padded to the widest sibling) · command · (time).
+    def tasks(reg):
+        @reg.task
+        def go():
+            run("echo hi")
+
+        @reg.task
+        def longer():
+            run("echo ho")
+
+    drive(tasks, "go longer")
+    out = capsys.readouterr().out
+    assert "ok   go      echo hi  (0.0s)" in out  # padded to len("longer")
+    assert "ok   longer  echo ho  (0.0s)" in out

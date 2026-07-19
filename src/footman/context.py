@@ -14,6 +14,7 @@ per-task buffer, flushed atomically when the task finishes.
 from __future__ import annotations
 
 import contextlib
+import functools
 import inspect
 import io
 import os
@@ -57,6 +58,10 @@ class Context:
     # The effective parallel width (-j/--jobs, config `jobs`, or the
     # cores-minus-one default) — caps parallel() pools in task bodies.
     jobs: int = 0  # 0: unset (plain calls outside a run) → no cap
+    # Who is running, for the step lines' name column: the scheduler sets
+    # the dotted task name, parallel() its child's name. Empty outside runs.
+    task: str = ""
+    name_width: int = 0  # widest sibling name, so the columns align
     passthrough: list[str] = field(default_factory=list)
     tty: bool = False  # use live rewrite/colour (sequential live only)
     sink: TextIO | None = None  # where output goes; None -> real stdout
@@ -335,6 +340,53 @@ def _run_subprocess(
     return proc.returncode, output
 
 
+def _dim(text: str, color: bool) -> str:
+    return f"\033[2m{text}\033[0m" if color else text
+
+
+def _colored(ctx: Context) -> bool:
+    return ctx.tty and not ctx.no_color and "NO_COLOR" not in os.environ
+
+
+def _name_col(ctx: Context) -> str:
+    """The step line's task-name column, padded so siblings align.
+
+    Bold on colour terminals; empty (no column at all) outside a run, so a
+    plain `run()` call keeps its old shape.
+    """
+    if not ctx.task:
+        return ""
+    padded = f"{ctx.task:<{max(ctx.name_width, len(ctx.task))}}"
+    return (f"\033[1m{padded}\033[0m" if _colored(ctx) else padded) + "  "
+
+
+def _step_line(ctx: Context, ok: bool, label: str, duration: float) -> str:
+    """One completed step: mark · name · dimmed command · right-aligned time."""
+    from footman._progress import fmt_secs
+
+    color = _colored(ctx)
+    time_text = f"({fmt_secs(duration)})"
+    name = _name_col(ctx)
+    name_width = (max(ctx.name_width, len(ctx.task)) + 2) if ctx.task else 0
+
+    if not ctx.tty:
+        return f"{'ok' if ok else 'FAIL':<4} {name}{label}  {time_text}\n"
+
+    if color:
+        mark, mark_width = ("\033[32m✓\033[0m" if ok else "\033[31m✗\033[0m"), 1
+    else:
+        mark = "ok" if ok else "FAIL"
+        mark_width = len(mark)
+    import shutil as _shutil
+
+    cols = _shutil.get_terminal_size((80, 24)).columns
+    pad = cols - 1 - (mark_width + 1 + name_width + len(label)) - len(time_text)
+    if pad < 2:  # keep the command; let a very narrow terminal wrap the time
+        pad = 2
+    shown = f"\033[36m{time_text}\033[0m" if color else time_text
+    return f"{mark} {name}{_dim(label, color)}{' ' * pad}{shown}\n"
+
+
 def run(
     cmd: str | list[str] | Callable[..., Any],
     *args: Any,
@@ -367,7 +419,10 @@ def run(
     show = not silent and not ctx.quiet
     color = ctx.tty and not ctx.no_color and "NO_COLOR" not in os.environ
     if show:
-        out.write(f"→ {label}" if ctx.tty else f"→ {label}\n")
+        if ctx.tty:
+            out.write(f"→ {_name_col(ctx)}{_dim(label, color)}")
+        else:
+            out.write(f"→ {_name_col(ctx)}{label}\n")
         out.flush()
 
     start = time.perf_counter()
@@ -389,15 +444,8 @@ def run(
 
     if show:
         ok = code == 0
-        if ctx.tty:
-            mark = (
-                ("\033[32m✓\033[0m" if ok else "\033[31m✗\033[0m")
-                if color
-                else ("ok" if ok else "FAIL")
-            )
-            out.write(f"\r\033[K{mark} {label}  ({duration:.1f}s)\n")
-        else:
-            out.write(f"{'ok' if ok else 'FAIL'}: {label}  ({duration:.1f}s)\n")
+        prefix = "\r\033[K" if ctx.tty else ""
+        out.write(f"{prefix}{_step_line(ctx, ok, label, duration)}")
         if capture and output and (not ok or ctx.verbose):
             out.write(output if output.endswith("\n") else output + "\n")
         out.flush()
@@ -430,13 +478,22 @@ def parallel(*calls: Callable[[], Any], keep_going: bool = False) -> list[int]:
     if status is not None:
         status.unit_added(len(calls))
 
-    def invoke(call: Callable[[], Any]) -> tuple[int, BaseException | None]:
+    def _call_name(call: Callable[[], Any]) -> str:
+        if isinstance(call, functools.partial):  # partial(fmt, check=True)
+            call = call.func
         name = getattr(call, "__name__", "task")
-        if name == "<lambda>":
-            name = "…"  # an anonymous thunk has no honest name to show
+        return "…" if name == "<lambda>" else name  # anonymous: no honest name
+
+    # Sibling names are known up front, so their step lines can align.
+    width = max((len(_call_name(c)) for c in calls), default=0)
+
+    def invoke(call: Callable[[], Any]) -> tuple[int, BaseException | None]:
+        name = _call_name(call)
         if status is not None:
             status.unit_started(name)
-        child = replace(parent, sink=io.StringIO(), steps=[])
+        child = replace(
+            parent, sink=io.StringIO(), steps=[], task=name, name_width=width
+        )
         token = _current.set(child)
         try:
             returned = call()

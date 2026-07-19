@@ -158,12 +158,15 @@ def _make_ctx(
     sequential: bool,
     capture: bool,
     real: TextIO,
+    name_width: int = 0,
 ) -> context.Context:
     ctx = context.Context(**(ctx_config or {}), passthrough=list(seg.passthrough or []))
     ctx.sink = None if (sequential and not capture) else io.StringIO()
     ctx.tty = (
         sequential and not capture and real.isatty() and not _plain_output(ctx.no_color)
     )
+    ctx.task = seg.task
+    ctx.name_width = name_width
     return ctx
 
 
@@ -216,6 +219,7 @@ def run_plan(
 def _run_sequential(nodes, real, keep_going, capture, ctx_config, status) -> None:
     done: dict[int, bool] = {}
     failed = False
+    width = max((len(n.seg.task) for n in nodes), default=0)
     for node in _toposort(nodes):
         if any(not done.get(d) for d in node.deps) or (failed and not keep_going):
             node.state = "skipped"
@@ -223,7 +227,12 @@ def _run_sequential(nodes, real, keep_going, capture, ctx_config, status) -> Non
                 status.unit_skipped(node.seg.task)
             continue
         ctx = _make_ctx(
-            node.seg, ctx_config, sequential=True, capture=capture, real=real
+            node.seg,
+            ctx_config,
+            sequential=True,
+            capture=capture,
+            real=real,
+            name_width=width,
         )
         if status is not None:
             status.unit_started(node.seg.task)
@@ -268,6 +277,7 @@ def _run_parallel(
     by_key = {n.key: n for n in nodes}
     lock = threading.Lock()
     failed = False
+    width = max((len(n.seg.task) for n in nodes), default=0)
 
     def dep_ok(n: _Node) -> bool:
         return all(
@@ -285,7 +295,14 @@ def _run_parallel(
         return any(lost(by_key[d]) for d in n.deps if d in by_key)
 
     def run_node(n: _Node) -> None:
-        ctx = _make_ctx(n.seg, ctx_config, sequential=False, capture=capture, real=real)
+        ctx = _make_ctx(
+            n.seg,
+            ctx_config,
+            sequential=False,
+            capture=capture,
+            real=real,
+            name_width=width,
+        )
         n.result = executor.run_task(n.fn, n.seg, ctx)
         if not capture:  # flush this task's buffered output as one block
             with lock:

@@ -165,7 +165,9 @@ _PULSE_CELLS = 3
 
 
 def fmt_secs(t: float) -> str:
-    """`4.1s`, `42s`, `1m10s` — as short as honesty allows."""
+    """`4.1s`, `42s`, `1m10s`, `4h35m` — as short as honesty allows."""
+    if t >= 3600:
+        return f"{int(t) // 3600}h{(int(t) % 3600) // 60:02d}m"
     if t >= 60:
         return f"{int(t) // 60}m{int(t) % 60:02d}s"
     return f"{t:.0f}s" if t >= 9.5 else f"{t:.1f}s"
