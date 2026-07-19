@@ -24,9 +24,11 @@ Two flags earn their keep in CI:
 - `-k / --keep-going` — run every independent branch even after a failure,
   so one red step doesn't hide three others. The exit code is still the
   first failure's.
-- `-s / --sequential` — one task at a time, for constrained runners or when
-  you're bisecting an ordering suspicion. (A project can make this the
-  default with `sequential = true` in `[tool.footman]`.)
+- `-s / --sequential` — one thing at a time, for constrained runners or when
+  you're bisecting an ordering suspicion. The request reaches inside task
+  bodies too: `parallel()` calls run one at a time under it, so `-s` means
+  no concurrency anywhere. (A project can make this the default with
+  `sequential = true` in `[tool.footman]`.)
 
 One rule governs the streams: **stdout is the answer, stderr is the
 commentary.** Task output — and footman's own answers: listings, help,

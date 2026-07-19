@@ -54,7 +54,9 @@ def deploy(): ...
 ## Fan out from inside a task
 
 `parallel()` runs task functions — or no-argument lambdas, when you need to
-bind arguments — concurrently, waits, and fails if any fail:
+bind arguments — concurrently, waits, and fails if any fail. Under
+`-s/--sequential` it runs them one at a time instead: the flag means no
+concurrency anywhere, task bodies included.
 
 ```python
 from footman import task, parallel

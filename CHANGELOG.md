@@ -34,6 +34,13 @@ versions may include breaking changes.
 
 ### Fixed
 
+- **`-s/--sequential` now reaches inside task bodies.** It serialised the
+  scheduler's tasks but `parallel()` inside a body still fanned out — so
+  `fm -s check` ran just as parallel as ever. The user's sequential request
+  now rides the task context (`ctx.sequential`) and `parallel()` honours
+  it: `-s` means no concurrency anywhere. Serial runs already kept their
+  own timing history (the flag is part of the chain key), so their
+  estimates stay honest too.
 - **A single-task invocation now streams live, with colour.** The default
   scheduler treated even one task as a parallel plan, so `fm check` — the
   most common shape there is — buffered everything into one uncoloured

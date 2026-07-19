@@ -9,7 +9,7 @@ import sys
 import pytest
 
 from footman import manifest, tools
-from footman.context import Context, RunFailed, passthrough, run
+from footman.context import Context, RunFailed, parallel, passthrough, run, use_context
 from footman.executor import run_chain
 from footman.registry import Group
 from footman.split import split_chain
@@ -440,3 +440,29 @@ def test_dry_run_quiet_is_silent_capture(capsys):
     _, _, results = drive(tasks, "build", dry_run=True, quiet=True)
     assert capsys.readouterr().out == ""
     assert [s.command for s in results[0].steps] == ["echo NOPE"]
+
+
+def test_parallel_honours_the_sequential_request():
+    # -s reaches inside tasks: under a sequential context, parallel() runs
+    # its calls one at a time, in submission order — no overlap at all.
+    import time as _time
+
+    order: list[str] = []
+
+    def slow():
+        order.append("slow-start")
+        _time.sleep(0.05)
+        order.append("slow-end")
+
+    def fast():
+        order.append("fast-start")
+
+    with use_context(Context(sequential=True)):
+        assert parallel(slow, fast) == [0, 0]
+    assert order == ["slow-start", "slow-end", "fast-start"]
+
+    # And without the request, the calls genuinely overlap.
+    order.clear()
+    with use_context(Context()):
+        parallel(slow, fast)
+    assert order.index("fast-start") < order.index("slow-end")

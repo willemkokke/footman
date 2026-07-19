@@ -50,6 +50,10 @@ class Context:
     verbose: bool = False
     no_color: bool = False
     prog: str = "fm"  # the invoking CLI's command name (the brand's prog)
+    # The *user asked* for one-at-a-time (-s or config) — parallel() honours
+    # it too. Deliberately not set by the scheduler's own single-node
+    # routing, which is presentation, not a request to serialise bodies.
+    sequential: bool = False
     passthrough: list[str] = field(default_factory=list)
     tty: bool = False  # use live rewrite/colour (sequential live only)
     sink: TextIO | None = None  # where output goes; None -> real stdout
@@ -461,7 +465,10 @@ def parallel(*calls: Callable[[], Any], keep_going: bool = False) -> list[int]:
             status.unit_finished(name, error is None)
         return code, error
 
-    with ThreadPoolExecutor(max_workers=max(1, len(calls))) as pool:
+    # -s reaches inside tasks: one worker serialises the calls in
+    # submission order, same code path, same semantics otherwise.
+    workers = 1 if parent.sequential else max(1, len(calls))
+    with ThreadPoolExecutor(max_workers=workers) as pool:
         outcomes = list(pool.map(invoke, calls))
 
     if not keep_going:

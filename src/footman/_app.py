@@ -723,6 +723,9 @@ def _run_tree(
         # Tasks can know who invoked them (a branded CLI's prog) — the
         # taskdocs plugin brands its output with this, for one.
         "prog": _brand.prog,
+        # The user's -s/config request, so parallel() in task bodies
+        # serialises too — not the scheduler's single-node routing.
+        "sequential": sequential,
     }
 
     # The timing story: --no-progress (one run) or `progress = false` in
