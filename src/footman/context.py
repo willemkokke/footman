@@ -170,7 +170,9 @@ def routing():
     _router, _err_router = _Router(real_out), _Router(real_err)
     sys.stdout, sys.stderr = _router, _err_router  # type: ignore[assignment]
     try:
-        yield real_out
+        # (real stdout, real stderr): task blocks land on the first, the live
+        # status line on the second — stdout is the answer, stderr commentary.
+        yield real_out, real_err
     finally:
         sys.stdout, sys.stderr = real_out, real_err
         _router, _err_router = prev_out, prev_err

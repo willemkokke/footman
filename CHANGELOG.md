@@ -27,6 +27,18 @@ versions may include breaking changes.
 - **The docs site follows your system's colour scheme by default**, with a
   three-state auto → light → dark toggle.
 
+### Changed
+
+- **The run summary and live progress line moved to stderr.** One rule now
+  governs the streams: *stdout is the answer, stderr is the commentary*.
+  Task output — and footman's own answers (listings, help, `--json`
+  envelopes) — stays on stdout; the `ok`/`FAIL` summary, `--timings`, and
+  the live status line join warnings and errors on stderr. So
+  `fm task > file` captures exactly what the task produced, and piping
+  stdout keeps the live line visible on the terminal. Behavioral: anything
+  that parsed the summary from stdout should read stderr (or use `--json`);
+  wrappers that treat stderr bytes as failure can pass `-q`.
+
 ## [0.10.0] — 2026-07-19
 
 ### Added

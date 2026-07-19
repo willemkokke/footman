@@ -276,9 +276,12 @@ class _Tty(io.StringIO):
         return True
 
 
-def test_parallel_progress_line_on_a_tty(monkeypatch):
-    fake = _Tty()
-    monkeypatch.setattr(sys, "stdout", fake)
+def test_parallel_progress_line_on_stderr_tty(monkeypatch):
+    # Status is commentary: the live line renders on stderr, task blocks land
+    # on stdout — so `fm check > log` keeps the spinner visible.
+    out_fake, err_fake = io.StringIO(), _Tty()
+    monkeypatch.setattr(sys, "stdout", out_fake)
+    monkeypatch.setattr(sys, "stderr", err_fake)
 
     def tasks(reg):
         @reg.task
@@ -290,12 +293,14 @@ def test_parallel_progress_line_on_a_tty(monkeypatch):
             print("B-OUT")
 
     results = drive(tasks, "a b")
-    out = fake.getvalue()
+    err = err_fake.getvalue()
     assert all(r.ok for r in results)
-    assert "\r\x1b[K" in out  # the status line rendered and cleared
-    assert "running:" in out
+    assert "\r\x1b[K" in err  # the status line rendered and cleared
+    assert "running:" in err
+    assert err.endswith("\r\x1b[K")  # the line never outlives the run
+    out = out_fake.getvalue()
     assert "A-OUT" in out and "B-OUT" in out  # task blocks land intact
-    assert out.endswith("\r\x1b[K")  # the line never outlives the run
+    assert "\r" not in out  # stdout carries blocks only — never the spinner
 
 
 def test_progress_absent_without_a_tty(capsys):
@@ -307,12 +312,12 @@ def test_progress_absent_without_a_tty(capsys):
         def b(): ...
 
     drive(tasks, "a b")
-    assert "\r" not in capsys.readouterr().out  # buffers aren't TTYs: no spinner
+    assert "\r" not in capsys.readouterr().err  # buffers aren't TTYs: no spinner
 
 
 def test_progress_absent_when_quiet(monkeypatch):
     fake = _Tty()
-    monkeypatch.setattr(sys, "stdout", fake)
+    monkeypatch.setattr(sys, "stderr", fake)
 
     def tasks(reg):
         @reg.task
@@ -328,7 +333,7 @@ def test_progress_absent_when_quiet(monkeypatch):
 def test_progress_absent_under_no_color(monkeypatch):
     # F41/D6: the live line is absent (like piped output), not rewritten plain.
     fake = _Tty()
-    monkeypatch.setattr(sys, "stdout", fake)
+    monkeypatch.setattr(sys, "stderr", fake)
 
     def tasks(reg):
         @reg.task
@@ -343,7 +348,7 @@ def test_progress_absent_under_no_color(monkeypatch):
 
 def test_progress_absent_under_no_color_env(monkeypatch):
     fake = _Tty()
-    monkeypatch.setattr(sys, "stdout", fake)
+    monkeypatch.setattr(sys, "stderr", fake)
     monkeypatch.setenv("NO_COLOR", "1")
 
     def tasks(reg):

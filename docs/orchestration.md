@@ -32,7 +32,10 @@ fm -s a b c         # -s/--sequential runs them one at a time -> ~3.0s
 !!! note "Output never interleaves"
 
     Each task's stdout is buffered and flushed as one contiguous block when it
-    finishes, so concurrent tasks never scramble each other's lines.
+    finishes, so concurrent tasks never scramble each other's lines. The
+    block guarantee is about stdout — the run summary and the live status
+    line are stderr commentary, so redirecting stdout captures task output
+    alone.
 
 ## Dependencies with `pre` / `post`
 

@@ -28,6 +28,14 @@ Two flags earn their keep in CI:
   you're bisecting an ordering suspicion. (A project can make this the
   default with `sequential = true` in `[tool.footman]`.)
 
+One rule governs the streams: **stdout is the answer, stderr is the
+commentary.** Task output — and footman's own answers: listings, help,
+`--json` envelopes — lands on stdout; the per-task `ok`/`FAIL` summary, the
+live progress line, warnings, and errors are stderr. So `fm build > out.log`
+captures exactly what the tasks produced, and a wrapper that treats stderr
+bytes as failure (cron's mail rule, say) should pass `-q` to silence the
+summary.
+
 ## `--json`: the machine surface
 
 ```console

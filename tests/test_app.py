@@ -213,14 +213,23 @@ def test_tree_output(project, capsys):
 
 def test_timings(project, capsys):
     assert _app.run(["--timings", "hi"]) == 0
-    assert "ms)" in capsys.readouterr().out
+    assert "ms)" in capsys.readouterr().err  # the summary is stderr commentary
 
 
 def test_quiet_suppresses_summary(project, capsys):
     assert _app.run(["--quiet", "hi"]) == 0
-    out = capsys.readouterr().out
-    assert "hello world" in out  # task output still streams
-    assert "ok  hi" not in out  # but the summary line is suppressed
+    captured = capsys.readouterr()
+    assert "hello world" in captured.out  # task output still streams
+    assert "ok  hi" not in captured.err  # but the summary line is suppressed
+
+
+def test_summary_is_commentary_stdout_is_the_answer(project, capsys):
+    # The contract behind `fm task > file`: stdout carries exactly what the
+    # task produced; the ok/FAIL summary is stderr commentary.
+    assert _app.run(["hi"]) == 0
+    captured = capsys.readouterr()
+    assert captured.out == "hello world\n"
+    assert "ok  hi" in captured.err
 
 
 def test_help_synthesises_an_example(project, capsys):

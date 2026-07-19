@@ -504,11 +504,13 @@ def _where(root: registry.Group, tree: dict, dotted: str) -> int:
 
 
 def _print_summary(results: list[executor.TaskResult], *, timings: bool) -> None:
+    # The summary is commentary about the run, not the run's output — it goes
+    # to stderr so `fm task > file` captures exactly what the task produced.
     for result in results:
         mark = "ok" if result.ok else "FAIL"
         timing = f"  ({result.duration * 1000:.0f} ms)" if timings else ""
         line = f"  {mark:>4}  {result.task}{timing}"
-        print(line)
+        print(line, file=sys.stderr)
         if result.error is not None:
             _error(f"{result.task}: {type(result.error).__name__}: {result.error}")
         elif not result.ok:

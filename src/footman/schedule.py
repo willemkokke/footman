@@ -179,11 +179,11 @@ def run_plan(
     """Build and run the DAG; return results in dependency order."""
     nodes = _build_dag(root, segments)
     _check_cycles(nodes)
-    with context.routing() as real:
+    with context.routing() as (real, err):
         if sequential:
             _run_sequential(nodes, real, keep_going, capture, ctx_config)
         else:
-            _run_parallel(nodes, real, keep_going, capture, ctx_config)
+            _run_parallel(nodes, real, err, keep_going, capture, ctx_config)
     return [n.result for n in _toposort(nodes) if n.result is not None]
 
 
@@ -208,14 +208,16 @@ _CLEAR = "\r\033[K"
 
 
 class _Progress:
-    """One live status line for a parallel run, on the *real* stdout.
+    """One live status line for a parallel run, on the real *stderr*.
 
-    Task output is buffered per task and flushed as a block on completion;
-    this line is the only thing that may write between blocks, and it always
-    clears itself before a block lands. Updates are event-driven (task
-    submits and completions) — no background timer thread. Enabled only on a
-    TTY, outside capture mode, and not under --quiet; colour follows
-    --no-color / NO_COLOR.
+    Status is commentary, so it lives on stderr — which also means piping
+    stdout (`fm check > log`) keeps the live line visible on the terminal.
+    Task output is buffered per task and flushed as a block to stdout on
+    completion; this line always clears itself before a block lands, so on a
+    terminal (both streams the same tty, writes in order) nothing collides.
+    Updates are event-driven (task submits and completions) — no background
+    timer thread. Enabled only on a TTY, outside capture mode, and not under
+    --quiet; colour follows --no-color / NO_COLOR.
     """
 
     def __init__(self, real: TextIO, nodes: list[_Node], color: bool) -> None:
@@ -253,7 +255,7 @@ class _Progress:
 
 
 def _make_progress(
-    real: TextIO,
+    err: TextIO,
     nodes: list[_Node],
     ctx_config: dict[str, Any] | None,
     capture: bool,
@@ -263,20 +265,20 @@ def _make_progress(
         capture
         or cfg.get("quiet")
         or len(nodes) < 2
-        or not real.isatty()
+        or not err.isatty()  # the status stream's own tty-ness decides
         or _plain_output(bool(cfg.get("no_color")))
     ):
         return None
     # Past the guard the run is colourful by definition (no_color/NO_COLOR/dumb
     # all bail above), so the live line always renders with escapes.
-    return _Progress(real, nodes, color=True)
+    return _Progress(err, nodes, color=True)
 
 
-def _run_parallel(nodes, real, keep_going, capture, ctx_config) -> None:
+def _run_parallel(nodes, real, err, keep_going, capture, ctx_config) -> None:
     by_key = {n.key: n for n in nodes}
     lock = threading.Lock()
     failed = False
-    progress = _make_progress(real, nodes, ctx_config, capture)
+    progress = _make_progress(err, nodes, ctx_config, capture)
 
     def dep_ok(n: _Node) -> bool:
         return all(

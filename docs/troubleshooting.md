@@ -75,7 +75,8 @@ fix the annotation.
 
 In a chain, a failed task's dependents are skipped; `-k/--keep-going` runs
 every independent branch anyway. Output from parallel tasks never
-interleaves — each task's buffer is flushed as one block.
+interleaves — each task's buffer is flushed as one block to stdout, while
+the `ok`/`FAIL` summary itself is stderr commentary.
 
 ## Config errors
 
