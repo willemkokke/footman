@@ -67,11 +67,26 @@ def check():
 Tasks run stop-on-first-failure by default; `-k/--keep-going` runs every
 independent branch even if one fails.
 
-On a TTY, a parallel run keeps one live status line
-(`/ 2/5  running: lint, test`) between the finished tasks' output blocks.
-It is event-driven, always cleared before a block lands (so output stays
-non-interleaved), and absent entirely under `--no-color`/`NO_COLOR`/`TERM=dumb`,
-`--quiet`, `--json`, or when output is piped.
+On a TTY, every run keeps one live status line on stderr: a **progress
+bar** when footman has seen this exact invocation enough to estimate
+honestly — five recent green runs with a steady spread; the bar fills
+against the history's 90th percentile and labels elapsed vs. typical
+time — and a bouncing pulse with elapsed time when it hasn't. Both
+parallel engines feed the same line, so a chain and a `parallel()` inside
+a task body present identically, with running names appearing the moment
+each unit starts. It always clears itself before any output lands, so
+blocks and live step lines stay clean. Without a TTY, a confident
+estimate prints once as `eta ~5.8s` on stderr instead — the same honesty,
+one line.
+
+Green runs teach: wall totals are stored per invocation shape and
+directory beside the completion manifests (`$FOOTMAN_CACHE_DIR` moves
+every footman cache at once). Three off switches: `--no-progress` for one
+run, `progress = false` in `[tool.footman]` permanently, and
+`@task(progress=False)` for a task whose duration has no rhyme — a run
+containing one never records and only ever pulses. The line is absent
+entirely under `--no-color`/`NO_COLOR`/`TERM=dumb`, `--quiet`, `--json`,
+or when stderr is piped.
 
 ## JSON for CI and agents
 

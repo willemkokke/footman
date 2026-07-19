@@ -9,6 +9,26 @@ versions may include breaking changes.
 
 ### Added
 
+- **A progress bar that earns its confidence.** On a TTY, every run keeps
+  one live status line on stderr: green runs teach footman how long each
+  exact invocation shape takes (last 50 wall totals per chain + values +
+  passthrough + serial/parallel, per directory), and once five recent runs
+  agree closely enough, the line becomes a real bar — filling against the
+  history's 90th percentile, clamped at 98% so it never claims done early,
+  labelled with elapsed vs. typical time. Sparse or erratic history renders
+  an honest bouncing pulse with elapsed time instead. Both parallel engines
+  feed the same line, so a chain and a `parallel()` inside a task body
+  finally present identically, running names appearing the moment each unit
+  starts. Without a TTY, a confident estimate prints once as `eta ~5.8s` on
+  stderr — CI still records, still learns. Off switches at every level:
+  `--no-progress` for a run, `progress = false` in `[tool.footman]` for
+  good, and `@task(progress=False)` for tasks whose duration has no rhyme
+  (runs containing one never record and only pulse). Failed runs are never
+  recorded; a missing, corrupt, or read-only history never fails a run.
+- **`FOOTMAN_CACHE_DIR`** relocates every footman cache — completion
+  manifests and timing history alike — in one variable; the XDG rules stay
+  unchanged beneath it, and the completion hot path honours it with no
+  re-install.
 - **The run summary ends with a `took N.Ns` total**, and the `--json`
   envelope carries it as an additive top-level `total_ms`.
 

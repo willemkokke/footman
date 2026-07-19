@@ -138,7 +138,7 @@ def _write_llms_txt() -> None:
     (Path("docs") / "llms-full.txt").write_text(joined, encoding="utf-8")
 
 
-@docs.task
+@docs.task(progress=False)  # runs until Ctrl-C: no duration to learn from
 def serve():
     """Build and serve the docs with live reload."""
     _write_llms_txt()

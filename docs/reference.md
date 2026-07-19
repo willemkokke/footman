@@ -18,6 +18,7 @@ Global options bind to `fm` itself and go **before** the first task name
 | `-q`, `--quiet`           | suppress the per-task summary                   |
 | `-v`, `--verbose`         | replay captured `run()` output even on success  |
 | `--no-color`              | disable ANSI colour                             |
+| `--no-progress`           | no progress bar, eta line, or timing capture    |
 | `--timings`               | show per-task durations                         |
 | `--json`                  | stdout becomes one JSON document (captures task output) |
 | `-C`, `--directory PATH`  | run as if launched from PATH                    |
@@ -44,6 +45,9 @@ def build(): ...
 
 @task(pre=[fmt], post=[notify])   # dependencies (run before / after)
 def check(): ...
+
+@task(progress=False)       # duration has no pattern: never timed, only pulses
+def repl(): ...
 
 release = group("release", help="Cut a release")
 
@@ -81,4 +85,5 @@ a file passed to `--config`. See [Monorepos & config](monorepos.md).
 | `tasks`      | Filename to look for in each folder (default `tasks.py`). |
 | `sequential` | Run tasks one at a time by default.                       |
 | `plugins`    | `footman.tasks` entry points to mount as command groups (opt-in). |
+| `progress`   | `false` permanently disables the progress bar, eta line, and timing capture. |
 | `completion.max_age` | Age before a background completion refresh (e.g. `"10m"`; `off` to disable). |

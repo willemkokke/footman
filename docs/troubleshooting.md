@@ -93,6 +93,14 @@ it's malformed, unreadable, or missing — you asked for that file on purpose, s
 a typo like `--config prod.tmol` is reported (`--config: prod.tmol: no such
 file`), never silently ignored.
 
+## Timing estimates
+
+The progress bar's estimates come from `*.times.json` files beside the
+completion manifests (`~/.cache/footman/`, or wherever
+`$FOOTMAN_CACHE_DIR` points). Delete them to reset a stale history, or
+turn the whole apparatus off — `--no-progress` for a run,
+`progress = false` in `[tool.footman]` for good.
+
 ## Exit codes
 
 The two worth remembering here: **2 always means footman refused before or

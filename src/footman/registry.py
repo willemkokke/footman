@@ -77,6 +77,7 @@ class Group:
         when: bool | Callable[[], object] = True,
         requires: str | Sequence[str] = (),
         reason: str = "",
+        progress: bool = True,
     ) -> Callable[[Task], Task]: ...
 
     def task(
@@ -89,6 +90,7 @@ class Group:
         when: bool | Callable[[], object] = True,
         requires: str | Sequence[str] = (),
         reason: str = "",
+        progress: bool = True,
     ) -> Task | Callable[[Task], Task]:
         """Register a function as a task.
 
@@ -130,6 +132,11 @@ class Group:
         A callable `when` is re-evaluated live on every run — the cached
         manifest is never trusted for availability. To *hide* a task
         entirely, use plain Python: `if sys.platform == "darwin": @task ...`
+
+        `progress=False` marks a task whose duration has no rhyme or
+        reason (a REPL, a watcher, a network fetch): any run containing it
+        never records timing history and never shows a determinate
+        progress bar — the indeterminate pulse still does.
         """
 
         reqs = (requires,) if isinstance(requires, str) else tuple(requires)
@@ -145,6 +152,8 @@ class Group:
                 fn._footman_when = when  # type: ignore[attr-defined]
             if reason:
                 fn._footman_reason = reason  # type: ignore[attr-defined]
+            if not progress:
+                fn._footman_progress = False  # type: ignore[attr-defined]
             self.tasks[key] = fn
             return fn
 
@@ -187,6 +196,11 @@ def _importable(module: str) -> bool:
         return importlib.util.find_spec(module) is not None
     except Exception:
         return False
+
+
+def wants_progress(fn: Task) -> bool:
+    """Whether *fn* consented to timing: `@task(progress=False)` opts out."""
+    return getattr(fn, "_footman_progress", True) is not False
 
 
 def availability(fn: Task) -> str | None:

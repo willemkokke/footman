@@ -73,6 +73,7 @@ GLOBALS: list[tuple[str, str | None, str, str | None, str]] = [
     ("--quiet", "-q", "flag", None, "suppress the per-task summary"),
     ("--verbose", "-v", "flag", None, "replay captured output even on success"),
     ("--no-color", None, "flag", None, "disable ANSI colour"),
+    ("--no-progress", None, "flag", None, "no progress bar, eta, or timing capture"),
     ("--json", None, "flag", None, "stdout is one JSON document (captures output)"),
     ("--timings", None, "flag", None, "show per-task durations"),
     ("--directory", "-C", "option", "PATH", "run as if launched from PATH"),

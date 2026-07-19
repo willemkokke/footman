@@ -6,7 +6,8 @@ import json
 
 import pytest
 
-from footman import _app, _paths
+from footman import _app, _paths, _progress
+from footman.split import Segment
 
 TASKS = '''
 from typing import Annotated
@@ -603,6 +604,76 @@ def test_keyboard_interrupt_exits_130(tmp_path, monkeypatch, capsys):
     assert "interrupted" in capsys.readouterr().err
     assert _app.run(["--sequential", "stop"]) == 130
     assert "interrupted" in capsys.readouterr().err
+
+
+# --- the timing story: recording, the eta line, the off switches --------------
+
+
+def _hi_key(values: dict | None = None) -> str:
+    seg = Segment(task="hi", path=["hi"], values=values or {})
+    return _progress.chain_key([seg], sequential=False)
+
+
+def test_green_runs_record_history(project):
+    assert _app.run(["hi"]) == 0
+    assert _app.run(["hi"]) == 0
+    assert len(_progress.load_runs(project, _hi_key())) == 2
+
+
+def test_failed_and_dry_runs_record_nothing(project):
+    assert _app.run(["boom"]) == 2
+    assert _app.run(["--dry-run", "hi"]) == 0
+    import json as _json
+
+    times = _paths.times_path(project)
+    assert not times.exists() or _json.loads(times.read_text())["chains"] == {}
+
+
+def test_json_runs_record_too(project, capsys):
+    # CI teaches: capture mode never displays, but green runs still count.
+    assert _app.run(["--json", "hi"]) == 0
+    assert len(_progress.load_runs(project, _hi_key())) == 1
+
+
+def test_eta_line_prints_without_a_tty(project, capsys):
+    for _ in range(5):
+        _progress.record(project, _hi_key(), 4.0)
+    assert _app.run(["hi"]) == 0
+    err = capsys.readouterr().err
+    assert "eta" in err and "~4.0s" in err  # the NO_COLOR version, up front
+
+
+def test_no_progress_flag_turns_it_all_off(project, capsys):
+    for _ in range(5):
+        _progress.record(project, _hi_key(), 4.0)
+    assert _app.run(["--no-progress", "hi"]) == 0
+    assert "eta" not in capsys.readouterr().err
+    assert len(_progress.load_runs(project, _hi_key())) == 5  # not recorded
+
+
+def test_config_progress_false_turns_it_off_permanently(project, capsys):
+    (project / "pyproject.toml").write_text(
+        "[project]\nname='x'\n[tool.footman]\nprogress = false\n"
+    )
+    for _ in range(5):
+        _progress.record(project, _hi_key(), 4.0)
+    assert _app.run(["hi"]) == 0
+    assert "eta" not in capsys.readouterr().err
+    assert len(_progress.load_runs(project, _hi_key())) == 5
+
+
+def test_progress_false_task_opts_the_run_out(tmp_path, monkeypatch):
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
+    (tmp_path / "tasks.py").write_text(
+        "from footman import task\n"
+        "@task(progress=False)\n"
+        "def odd():\n"
+        '    "No rhyme nor reason to its duration."\n'
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
+    assert _app.run(["odd"]) == 0
+    assert not _paths.times_path(tmp_path).exists()  # never recorded
 
 
 # --- the one-envelope contract: --json ⇒ stdout is one JSON document ----------

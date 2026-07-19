@@ -18,6 +18,7 @@ from pathlib import Path
 from footman import (
     _describe,
     _paths,
+    _progress,
     config,
     discover,
     executor,
@@ -723,6 +724,26 @@ def _run_tree(
         # taskdocs plugin brands its output with this, for one.
         "prog": _brand.prog,
     }
+
+    # The timing story: --no-progress (one run) or `progress = false` in
+    # config (permanently) turns the whole apparatus off. A run is
+    # *predictable* when it's on, every task consented, and this is the real
+    # cascade (-f runs pollute no cache, times included) — only then do we
+    # estimate from history and record the outcome.
+    progress_on = not g.get("no_progress") and cfg.get("progress") is not False
+    predictable = (
+        progress_on
+        and not g.get("tasks_file")
+        and schedule.dag_wants_progress(reg, segments)
+    )
+    est = times_key = None
+    if predictable:
+        times_key = _progress.chain_key(segments, sequential=sequential)
+        est = _progress.estimate(_progress.load_runs(Path.cwd(), times_key))
+    if est is not None and not g.get("quiet") and not sys.stderr.isatty():
+        # No TTY (CI, a pipe): the one-line version of the bar, up front.
+        print(f"  {'eta':>4}  ~{_progress.fmt_secs(est.typical)}", file=sys.stderr)
+
     start = time.perf_counter()
     try:
         results = schedule.run_plan(
@@ -732,6 +753,8 @@ def _run_tree(
             keep_going=bool(g.get("keep_going")),
             capture=json_mode,
             ctx_config=ctx_config,
+            estimate=est,
+            progress=progress_on,
         )
     except split.ChainError as exc:  # e.g. passthrough with no *args
         return _refuse(json_mode, str(exc))
@@ -739,6 +762,8 @@ def _run_tree(
 
     if collect is not None:
         collect.extend(results)
+    if predictable and times_key and results and all(r.ok for r in results):
+        _progress.record(Path.cwd(), times_key, total)  # green runs teach
 
     if json_mode:
         _print_json(results, total=total)

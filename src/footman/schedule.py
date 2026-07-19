@@ -21,7 +21,7 @@ from itertools import count
 from typing import Any, TextIO
 
 from footman import _progress, context, executor
-from footman.registry import Group, Task
+from footman.registry import Group, Task, wants_progress
 from footman.split import ChainError, Segment
 
 
@@ -165,6 +165,13 @@ def _make_ctx(
         sequential and not capture and real.isatty() and not _plain_output(ctx.no_color)
     )
     return ctx
+
+
+def dag_wants_progress(root: Group, segments: list[Segment]) -> bool:
+    """Whether every task in the expanded DAG — pre/post deps included —
+    consented to timing. One `@task(progress=False)` opts the run out of
+    recording and of a determinate bar (the pulse still shows)."""
+    return all(wants_progress(n.fn) for n in _build_dag(root, segments))
 
 
 def run_plan(
