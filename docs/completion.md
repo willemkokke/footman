@@ -69,7 +69,7 @@ build   — compile and bundle
 deploy  — ship to an environment
 ```
 
-## Installing the shell hook
+## Your shell
 
 One command — footman detects which shell invoked it (by walking the
 process tree, the way typer's `shellingham` dependency does, minus the
@@ -78,36 +78,21 @@ dependency), or takes the name explicitly:
 ```console
 fm --install-completion         # detected: bash, zsh, fish, pwsh, or nushell
 fm --install-completion zsh     # or name it yourself
+fm --uninstall-completion       # reverses exactly what install did
 ```
 
-bash and zsh get a script under `$XDG_DATA_HOME/fm/` plus a single guarded
-`source` line in your rc file; fish gets
-`~/.config/fish/completions/fm.fish`, which fish auto-loads — no rc edit at
-all. pwsh (PowerShell 7+, or Windows PowerShell via the `powershell` alias)
-gets a `Register-ArgumentCompleter` script dot-sourced from the profile
-PowerShell itself reports — and on a Windows machine with *both* PowerShells
-installed, from both of their profiles, since each keeps its own `$PROFILE`
-and the hook runs on either. nushell (alias `nu`) gets an external-completer
-hook sourced from the config nushell itself reports — and the hook *wraps*
-whatever external completer you already run (carapace, say), answering for
-`fm` and passing every other command through untouched. Running any
-installer twice changes nothing. A custom-branded CLI installs completion
-for *its* name the same way (`acme --install-completion zsh`), and the
-generated hook calls that brand's `--complete`.
+Each shell has its own page — what gets installed where, a session-only
+form, and how to style the completion menu, colours included:
 
-## Enabling completion for one session
+| shell | descriptions shown as | installed via | session-only form |
+| ----- | --------------------- | ------------- | ----------------- |
+| [bash](completion-bash.md) | — (bash has no description column) | script + rc line | `eval "$(fm --setup-completion bash)"` |
+| [zsh](completion-zsh.md) | aligned column (`_describe`) | script + rc line | `eval "$(fm --setup-completion zsh)"` |
+| [fish](completion-fish.md) | aligned column, native | one auto-loaded file | `fm --setup-completion fish \| source` |
+| [PowerShell](completion-pwsh.md) | tooltip (menu completion) | script + `$PROFILE`(s) | `… \| Out-String \| Invoke-Expression` |
+| [nushell](completion-nushell.md) | description column, native | script + config line | — (install only) |
 
-`--install-completion` edits an rc file, so completion is on in every future
-shell. To turn it on for the **current** shell only — no rc edit, nothing left
-behind — print the hook to stdout and evaluate it:
-
-```console
-eval "$(fm --setup-completion zsh)"                            # bash and zsh
-fm --setup-completion fish | source                           # fish
-fm --setup-completion pwsh | Out-String | Invoke-Expression   # PowerShell
-```
-
-Like the installer, a bare `fm --setup-completion` detects the shell — the
-detection note goes to stderr, so it never pollutes what `eval` reads. nushell
-is the exception: its hook mutates `$env.config`, which `eval` can't apply, so
-nushell users install with `--install-completion`.
+Every installer and uninstaller is idempotent — running one twice changes
+nothing. A custom-branded CLI installs completion for *its* name the same
+way (`acme --install-completion zsh`), and the generated hook calls that
+brand's `--complete`.

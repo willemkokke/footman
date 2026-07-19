@@ -25,6 +25,7 @@ Global options bind to `fm` itself and go **before** the first task name
 | `--config PATH`           | override config with a single TOML file         |
 | `--install-completion [SH]` | install the completion hook (detects your shell; or bash/zsh/fish/pwsh/nushell) |
 | `--setup-completion [SH]` | print the hook for `eval` — current session only |
+| `--uninstall-completion [SH]` | remove the hook — script and rc line, reversed exactly |
 
 `--help` is the one global allowed *anywhere* before `--`: `fm deploy --help`
 is a read-only help request, never an execution. `fm --help` documents the

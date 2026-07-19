@@ -30,6 +30,17 @@ versions may include breaking changes.
   `{"schema": 1, "name": …, "version": …}`. The one exception is `--help`,
   which stays human — its machine twin is `fm --json --list`.
 
+- **`--uninstall-completion [shell]` reverses the installer exactly**: the
+  script file goes, the rc/profile line goes (UTF-16 profiles stay UTF-16,
+  one BOM), and both directions are idempotent. When the shell itself has
+  vanished from PATH, the script is still removed and the leftover rc line
+  is printed for hand-removal.
+- **A completion page per shell.** bash, zsh, fish, PowerShell, and nushell
+  each get their own docs page: what installs where, the session-only form,
+  what the completion menu shows, and — new — how to customise its colours
+  and appearance with copy-paste snippets (`zstyle list-colors`,
+  `fish_pager_color_*`, PSReadLine `-Colors`, nushell's `completion_menu`
+  style block), each verified against the real shell.
 - **`--setup-completion <shell>` prints the completion hook to stdout**, for
   enabling completion in the current shell only — no rc file touched:
   `eval "$(fm --setup-completion zsh)"` (bash/zsh), `fm --setup-completion fish
