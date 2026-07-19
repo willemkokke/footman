@@ -39,7 +39,9 @@ jobs:
         with:
           python-version: "3.12"
           enable-cache: true
-      - run: uv sync --frozen
+      # --group shots: rich's types, so basedpyright can resolve the lazy
+      # imports inside the `docs shots` task body.
+      - run: uv sync --frozen --group shots
       - name: Ruff (lint)
         run: uv run ruff check .
       - name: Ruff (format)
