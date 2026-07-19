@@ -70,6 +70,7 @@ __all__ = [
     "isdir",
     "isfile",
     "main",
+    "markdown",
     "nosplit",
     "parallel",
     "passthrough",
@@ -116,6 +117,10 @@ def __getattr__(name: str) -> object:
         import footman.docstrings
 
         return footman.docstrings
+    if name == "markdown":
+        import footman.markdown
+
+        return footman.markdown
     if name in ("include", "plugin"):
         from footman import compose
 
