@@ -9,17 +9,13 @@ runs the resulting segments, honouring the global options.
 from __future__ import annotations
 
 import contextlib
-import dataclasses
-import datetime
-import decimal
-import enum
 import json
 import os
 import sys
-import uuid
-from pathlib import Path, PurePath
+from pathlib import Path
 
 from footman import (
+    _describe,
     _paths,
     config,
     discover,
@@ -198,31 +194,12 @@ def _print_plan(globals_: list[str], segments: list[Segment]) -> None:
         print(_plan_line(seg))
 
 
-def _iter_tasks(node: dict, prefix: str = ""):
-    for name, task in node["tasks"].items():
-        yield f"{prefix}{name}", _task_line(task)
-    for name, sub in node["groups"].items():
-        yield from _iter_tasks(sub, f"{prefix}{name} ")
-
-
-def _iter_group_paths(node: dict, prefix: str = ""):
-    for name, sub in node["groups"].items():
-        yield f"{prefix}{name}"
-        yield from _iter_group_paths(sub, f"{prefix}{name} ")
-
-
 def _print_footer() -> None:
     print(f"\nRun `{_brand.prog} --help <task>` for a task's options.")
 
 
-def _task_line(task: dict) -> str:
-    """A task's one-line description, with its availability if disabled."""
-    note = f"(unavailable: {task['disabled']})" if task.get("disabled") else ""
-    return f"{task['help']}  {note}".strip() if note else task["help"]
-
-
 def _print_list(tree: dict) -> None:
-    rows = list(_iter_tasks(tree))
+    rows = list(_describe.iter_tasks(tree))
     if not rows:
         print("No tasks defined.")
         return
@@ -239,7 +216,7 @@ def _print_tree(node: dict, indent: str = "") -> None:
         print("No tasks defined.")
         return
     for name, task in node["tasks"].items():
-        line = _task_line(task)
+        line = _describe.task_line(task)
         help_text = f"  — {line}" if line else ""
         print(f"{indent}{name}{help_text}")
     for name, sub in node["groups"].items():
@@ -248,110 +225,14 @@ def _print_tree(node: dict, indent: str = "") -> None:
         _print_tree(sub, indent + "  ")
 
 
-_TYPE_WORD = {
-    "bool": "true/false",
-    "int": "an integer",
-    "float": "a number",
-    "path": "a path",
-    "str": "text",
-}
-
-
-def _value_hint(p: dict) -> str:
-    """The value placeholder shown for an option/argument in help output."""
-    if p.get("mapping"):
-        return "KEY=VALUE"
-    choices = p.get("choices")
-    if choices:
-        return "{" + "|".join(choices) + "}"
-    types = p.get("types")
-    if types:
-        return "|".join(t.upper() for t in types)
-    return "VALUE"
-
-
-def _usage_fragment(p: dict) -> str:
-    kind = p["kind"]
-    required = p.get("required")
-    if kind == "flag":
-        return f"--{p['name']}" if required else f"[--{p['name']}]"
-    if kind == "option":
-        core = f"--{p['name']} {_value_hint(p)}"
-        if p.get("multiple") or p.get("mapping"):
-            core += " ..."
-        return core if required else f"[{core}]"
-    if kind == "variadic":
-        return f"[<{p['name']}> ...]"
-    suffix = "..." if p.get("multiple") else ""
-    return f"<{p['name']}>{suffix}"
-
-
-def _param_label(p: dict) -> str:
-    kind = p["kind"]
-    if kind == "flag":
-        return f"--{p['name']}"
-    if kind == "option":
-        return f"--{p['name']} {_value_hint(p)}"
-    suffix = "..." if kind == "variadic" or p.get("multiple") else ""
-    return f"<{p['name']}>{suffix}"
-
-
-def _param_detail(p: dict) -> str:
-    bits: list[str] = []
-    if p.get("doc"):  # the author's own words lead; mechanics follow
-        bits.append(p["doc"])
-    if p["kind"] == "flag":
-        bits.append(f"flag (--no-{p['name']} to disable)")
-    choices = p.get("choices")
-    if choices:
-        bits.append("one of " + "|".join(choices))
-    elif p.get("types"):
-        bits.append(" or ".join(_TYPE_WORD.get(str(t), str(t)) for t in p["types"]))
-    if p.get("mapping"):
-        bits.append("KEY=VALUE pairs (repeat appends)")
-    if p.get("multiple") or p.get("mapping"):
-        bits.append("repeatable" if p.get("nosplit") else "repeatable/comma-split")
-    if p["kind"] == "variadic":
-        bits.append("extra arguments (also receives everything after --)")
-    if p.get("required"):
-        bits.append("required")
-    return "; ".join(bits)
-
-
-def _sample_value(p: dict) -> str:
-    """A realistic value for a param in a synthesised example: its first choice
-    when it has one, else an `<name>` placeholder."""
-    choices = p.get("choices")
-    return choices[0] if choices else f"<{p['name']}>"
-
-
-def _example(path: list[str], task: dict, prog: str) -> str:
-    """A realistic invocation synthesised straight from the signature — required
-    positionals and options with sample values, plus one representative flag.
-
-    Derived, never written, so it can't drift from the task's actual parameters.
-    Optional options are skipped as noise; the shape teaches the invocation.
-    """
-    parts = [prog, *path]
-    flag_shown = False
-    for p in task["params"]:
-        kind = p["kind"]
-        if kind in ("argument", "variadic"):
-            parts.append(_sample_value(p))
-        elif kind == "option" and p.get("required"):
-            parts.append(f"--{p['name']} {_sample_value(p)}")
-        elif kind == "flag" and (p.get("required") or not flag_shown):
-            parts.append(f"--{p['name']}")
-            flag_shown = True
-    return " ".join(parts)
-
-
 def _print_task_help(tree: dict, path: list[str]) -> None:
+    # All phrasing (labels, details, examples) lives in `_describe`, shared
+    # with the markdown exporter so help text and pages can never drift.
     node = tree
     for name in path[:-1]:
         node = node["groups"][name]
     task = node["tasks"][path[-1]]
-    fragments = [f for p in task["params"] if (f := _usage_fragment(p))]
+    fragments = [f for p in task["params"] if (f := _describe.usage_fragment(p))]
     print(" ".join([f"usage: {_brand.prog}", *path, *fragments]))
     if task["help"]:
         print(f"\n  {task['help']}")
@@ -365,12 +246,12 @@ def _print_task_help(tree: dict, path: list[str]) -> None:
     for title, params in (("positionals", positionals), ("options", options)):
         if not params:
             continue
-        rows = [(_param_label(p), _param_detail(p)) for p in params]
+        rows = [(_describe.param_label(p), _describe.param_detail(p)) for p in params]
         width = max(len(label) for label, _ in rows)
         print(f"\n{title}:")
         for label, detail in rows:
             print(f"  {label:<{width}}  {detail}".rstrip())
-    print(f"\nExample: {_example(path, task, _brand.prog)}")
+    print(f"\nExample: {_describe.example(path, task, _brand.prog)}")
 
 
 def _print_group_help(tree: dict, path: list[str]) -> None:
@@ -381,7 +262,7 @@ def _print_group_help(tree: dict, path: list[str]) -> None:
     print(f"usage: {_brand.prog} {scope} <task> [options]")
     if node["help"]:
         print(f"\n  {node['help']}")
-    rows = list(_iter_tasks(node))
+    rows = list(_describe.iter_tasks(node))
     if rows:
         width = max(len(name) for name, _ in rows)
         print("\ntasks:")
@@ -466,8 +347,8 @@ def _print_help(tree: dict, argv: list[str]) -> int:
     targets, strays = _help_targets(tree, argv)
     if not targets:
         if strays:
-            known = [name for name, _ in _iter_tasks(tree)]
-            known += _iter_group_paths(tree)
+            known = [name for name, _ in _describe.iter_tasks(tree)]
+            known += _describe.iter_group_paths(tree)
             # Help's *success* output is the one human-only surface; a refusal
             # still honours the envelope `--json` promised.
             return _refuse(
@@ -492,7 +373,7 @@ def _where(root: registry.Group, tree: dict, dotted: str) -> int:
     try:
         fn = executor.resolve(root, path)
     except (KeyError, IndexError):
-        names = [name.replace(" ", ".") for name, _ in _iter_tasks(tree)]
+        names = [name.replace(" ", ".") for name, _ in _describe.iter_tasks(tree)]
         _error(f"--where: unknown task {dotted!r}{split._did_you_mean(dotted, names)}")
         return 2
     code = getattr(fn, "__code__", None)
@@ -515,28 +396,6 @@ def _print_summary(results: list[executor.TaskResult], *, timings: bool) -> None
             _error(f"{result.task}: {type(result.error).__name__}: {result.error}")
         elif not result.ok:
             _error(f"{result.task}: exited with code {result.code}")
-
-
-def _json_default(value: object) -> object:
-    """JSON forms for the types footman coerces *in* — Path, Enum, datetime,
-    UUID, Decimal, dataclasses, sets — so a task may return what it accepts.
-    Anything else raises TypeError; the caller turns that into a
-    `returned_error` note rather than a broken envelope."""
-    if isinstance(value, PurePath):
-        return str(value)
-    if isinstance(value, enum.Enum):
-        return value.value
-    if isinstance(value, (datetime.datetime, datetime.date, datetime.time)):
-        return value.isoformat()
-    if isinstance(value, uuid.UUID):
-        return str(value)
-    if isinstance(value, decimal.Decimal):
-        return str(value)  # str, not float: Decimal exists to keep precision
-    if dataclasses.is_dataclass(value) and not isinstance(value, type):
-        return dataclasses.asdict(value)
-    if isinstance(value, (set, frozenset)):
-        return sorted(value, key=repr)  # deterministic order for golden tests
-    raise TypeError(f"{type(value).__name__} is not JSON-serialisable")
 
 
 def _print_json(results: list[executor.TaskResult]) -> None:
@@ -566,7 +425,7 @@ def _print_json(results: list[executor.TaskResult]) -> None:
             isinstance(value, int) and not isinstance(value, bool)
         ):
             try:
-                json.dumps(value, default=_json_default)
+                json.dumps(value, default=_describe.json_default)
             except (TypeError, ValueError) as exc:  # ValueError: circular refs
                 entry["returned_error"] = str(exc)
                 _error(f"{r.task}: --json: return value dropped — {exc}")
@@ -576,7 +435,11 @@ def _print_json(results: list[executor.TaskResult]) -> None:
     # The stable machine surface: an envelope so post-1.0 additions (metadata,
     # summaries) never have to break consumers of the results list.
     print(
-        json.dumps({"schema": 1, "results": payload}, indent=2, default=_json_default)
+        json.dumps(
+            {"schema": 1, "results": payload},
+            indent=2,
+            default=_describe.json_default,
+        )
     )
 
 

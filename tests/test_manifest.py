@@ -19,13 +19,15 @@ def specs(fn):
 def test_flag():
     def f(x: bool = False): ...
 
-    assert specs(f) == [{"name": "x", "kind": "flag"}]
+    assert specs(f) == [{"name": "x", "default": False, "kind": "flag"}]
 
 
 def test_doc_marker_lands_in_spec():
     def f(fix: Annotated[bool, doc("apply fixes in place")] = False): ...
 
-    assert specs(f) == [{"name": "fix", "kind": "flag", "doc": "apply fixes in place"}]
+    assert specs(f) == [
+        {"name": "fix", "default": False, "kind": "flag", "doc": "apply fixes in place"}
+    ]
 
 
 def node(fn):
@@ -142,7 +144,7 @@ def test_str_option_and_required_argument():
 
     def h(req): ...
 
-    assert specs(g) == [{"name": "opt", "kind": "option"}]
+    assert specs(g) == [{"name": "opt", "default": "a", "kind": "option"}]
     assert specs(h) == [{"name": "req", "kind": "argument"}]
 
 
@@ -150,8 +152,8 @@ def test_typed_option():
     def f(n: int = 3, ratio: float = 1.0): ...
 
     assert specs(f) == [
-        {"name": "n", "kind": "option", "types": ["int"]},
-        {"name": "ratio", "kind": "option", "types": ["float"]},
+        {"name": "n", "default": 3, "kind": "option", "types": ["int"]},
+        {"name": "ratio", "default": 1.0, "kind": "option", "types": ["float"]},
     ]
 
 
@@ -165,7 +167,13 @@ def test_repeatable_path_option():
     def f(paths: list[Path] | None = None): ...
 
     assert specs(f) == [
-        {"name": "paths", "multiple": True, "kind": "option", "types": ["path"]}
+        {
+            "name": "paths",
+            "default": None,
+            "multiple": True,
+            "kind": "option",
+            "types": ["path"],
+        }
     ]
 
 
@@ -186,8 +194,12 @@ def test_optional_is_unwrapped():
 
     def g(y: int | None = None): ...
 
-    assert specs(f) == [{"name": "x", "kind": "option", "types": ["int"]}]
-    assert specs(g) == [{"name": "y", "kind": "option", "types": ["int"]}]
+    assert specs(f) == [
+        {"name": "x", "default": None, "kind": "option", "types": ["int"]}
+    ]
+    assert specs(g) == [
+        {"name": "y", "default": None, "kind": "option", "types": ["int"]}
+    ]
 
 
 def test_build_manifest_shape(tree):

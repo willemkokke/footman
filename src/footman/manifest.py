@@ -29,7 +29,7 @@ import warnings
 from pathlib import Path
 from typing import Any
 
-from footman import _paths, coerce, docstrings, registry
+from footman import _describe, _paths, coerce, docstrings, registry
 from footman.context import context_param_name
 from footman.params import suggest
 from footman.registry import Group
@@ -99,6 +99,14 @@ def param_spec(param: inspect.Parameter) -> dict[str, Any]:
         return spec
 
     has_default = param.default is not empty
+    if has_default:
+        # Bake the default into the manifest when it survives the JSON
+        # coercion mirror (Path → str, Enum → value, …) — an additive key for
+        # help, the catalog, and the markdown exporter. An exotic default is
+        # simply omitted, never an error.
+        ok_default, encoded = _describe.jsonable(param.default)
+        if ok_default:
+            spec["default"] = encoded
     if ann is empty:
         if isinstance(param.default, bool):
             spec["kind"] = "flag"
