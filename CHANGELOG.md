@@ -7,6 +7,8 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+## [0.11.0] — 2026-07-19
+
 ### Added
 
 - **Parameter docs come straight from your docstrings.** Google
@@ -566,7 +568,8 @@ versions may include breaking changes.
 
 - Placeholder release claiming the `footman` name on PyPI. Not tagged in git.
 
-[Unreleased]: https://github.com/willemkokke/footman/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/willemkokke/footman/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/willemkokke/footman/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/willemkokke/footman/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/willemkokke/footman/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/willemkokke/footman/compare/v0.7.0...v0.8.0
