@@ -114,14 +114,40 @@ def context_param_name(sig: inspect.Signature) -> str | None:
 # --- output routing ----------------------------------------------------------
 
 
+# The run's live status line (duck-typed — a `_progress.StatusLine`),
+# registered by the scheduler for the duration of a run. context stays
+# ignorant of _progress on purpose; outside a run there is none.
+_status: Any = None
+
+
+def set_status(status: Any) -> None:
+    global _status
+    _status = status
+
+
+def active_status() -> Any:
+    return _status
+
+
 class _Router:
     """A `sys.stdout` proxy that sends each write to the current task's sink."""
 
     def __init__(self, real: TextIO) -> None:
         self.real = real
+        try:
+            self._tty = real.isatty()
+        except Exception:
+            self._tty = False
 
     def write(self, s: str) -> int:
-        return (current().sink or self.real).write(s)
+        sink = current().sink
+        if sink is not None:
+            return sink.write(s)
+        # A real-terminal write: the live status line (if any) must clear
+        # itself first and learn whether the cursor now sits at column 0.
+        if self._tty and _status is not None:
+            _status.notify(s)
+        return self.real.write(s)
 
     def flush(self) -> None:
         (current().sink or self.real).flush()
@@ -389,9 +415,20 @@ def parallel(*calls: Callable[[], Any], keep_going: bool = False) -> list[int]:
 
     parent = current()
     dest = parent.sink or real_stdout()
+    dest_is_real = parent.sink is None
     lock = threading.Lock()
+    # parallel() children are units on the live status line, exactly like
+    # scheduler nodes — a chain and a task-body fan-out present identically.
+    status = _status
+    if status is not None:
+        status.unit_added(len(calls))
 
     def invoke(call: Callable[[], Any]) -> tuple[int, BaseException | None]:
+        name = getattr(call, "__name__", "task")
+        if name == "<lambda>":
+            name = "…"  # an anonymous thunk has no honest name to show
+        if status is not None:
+            status.unit_started(name)
         child = replace(parent, sink=io.StringIO(), steps=[])
         token = _current.set(child)
         try:
@@ -410,11 +447,18 @@ def parallel(*calls: Callable[[], Any], keep_going: bool = False) -> list[int]:
         finally:
             _current.reset(token)
         with lock:
-            dest.write(child.sink.getvalue())  # type: ignore[union-attr]
+            blob = child.sink.getvalue()  # type: ignore[union-attr]
+            if status is not None and dest_is_real:
+                # This write bypasses the routers (dest is the raw stream):
+                # tell the status line to get out of the way itself.
+                status.notify(blob)
+            dest.write(blob)
             dest.flush()
             # Surface the child's run() steps on the parent, in completion order,
             # so they appear in `--json` and `recording()` (F12).
             parent.steps.extend(child.steps)
+        if status is not None:
+            status.unit_finished(name, error is None)
         return code, error
 
     with ThreadPoolExecutor(max_workers=max(1, len(calls))) as pool:

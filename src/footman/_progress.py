@@ -17,10 +17,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+import shutil
 import statistics
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TextIO
 
 from footman import _paths
 from footman.split import Segment
@@ -137,3 +140,149 @@ def _load(cwd: Path) -> dict:
     except (OSError, ValueError):
         return {}
     return data if isinstance(data, dict) else {}
+
+
+# --- the status line ---------------------------------------------------------
+
+_CLEAR = "\r\033[K"
+_BAR_CELLS = 15
+_PULSE_CELLS = 3
+
+
+def fmt_secs(t: float) -> str:
+    """`4.1s`, `42s`, `1m10s` — as short as honesty allows."""
+    if t >= 60:
+        return f"{int(t) // 60}m{int(t) % 60:02d}s"
+    return f"{t:.0f}s" if t >= 9.5 else f"{t:.1f}s"
+
+
+class StatusLine:
+    """The one live line for a run, drawn on the real stderr.
+
+    Fed by *both* parallel engines — scheduler nodes and `parallel()`
+    children are the same kind of unit — so a chain and a task-body
+    fan-out present identically. Determinate runs fill a bar against the
+    estimate's p90 (clamped at 98% until the run truly ends); anything
+    else pulses, with elapsed time either way.
+
+    Coexistence contract: the output routers report every real-terminal
+    write via `notify()`, which clears a painted line first and tracks
+    whether the terminal now sits at column 0. The ticker (and every
+    event repaint) paints **only at column 0**, so `run()`'s in-place
+    step rewrites and flushed blocks are never corrupted. The line writes
+    straight to the real stream, never through the routers.
+    """
+
+    def __init__(
+        self, err: TextIO, est: Estimate | None, *, color: bool = True
+    ) -> None:
+        self.err = err
+        self.est = est
+        self.color = color
+        self.lock = threading.RLock()
+        self.started = time.perf_counter()
+        self.total = 0
+        self.done = 0
+        self.failed = 0
+        self.running: list[str] = []  # a list: anonymous thunks may collide
+        self.painted = False
+        self.at_col0 = True
+        self.ticks = 0
+        self._stop = threading.Event()
+        self._ticker: threading.Thread | None = None
+
+    # -- lifecycle
+    def open(self) -> None:
+        """Start the repaint ticker (elapsed must move without events)."""
+        self._ticker = threading.Thread(target=self._run_ticker, daemon=True)
+        self._ticker.start()
+
+    def close(self) -> None:
+        self._stop.set()
+        if self._ticker is not None:
+            self._ticker.join(timeout=1.0)
+        with self.lock:
+            self._clear_locked()
+
+    def _run_ticker(self) -> None:
+        while not self._stop.wait(0.2):
+            self.paint()
+
+    # -- the engine feed (scheduler nodes and parallel() children alike)
+    def unit_added(self, count: int = 1) -> None:
+        with self.lock:
+            self.total += count
+
+    def unit_started(self, name: str) -> None:
+        with self.lock:
+            self.running.append(name)
+        self.paint()
+
+    def unit_finished(self, name: str, ok: bool) -> None:
+        with self.lock:
+            if name in self.running:
+                self.running.remove(name)
+            self.done += 1
+            self.failed += 0 if ok else 1
+        self.paint()
+
+    def unit_skipped(self, name: str) -> None:
+        """A dependent of a failure never ran: done for counting purposes —
+        the failure that caused it already counted itself."""
+        with self.lock:
+            self.done += 1
+        self.paint()
+
+    # -- the router feed
+    def notify(self, s: str) -> None:
+        """A real-terminal write is about to land: get out of its way."""
+        if not s:
+            return
+        with self.lock:
+            self._clear_locked()
+            self.at_col0 = s.endswith("\n")
+
+    # -- painting
+    def paint(self) -> None:
+        with self.lock:
+            if not self.at_col0:
+                return  # someone's mid-line (a live `→ step`): stay away
+            self.ticks += 1
+            self.err.write(f"{_CLEAR}{self._render()}")
+            self.err.flush()
+            self.painted = True
+
+    def _clear_locked(self) -> None:
+        if self.painted:
+            self.err.write(_CLEAR)
+            self.err.flush()
+            self.painted = False
+
+    def _render(self) -> str:
+        elapsed = time.perf_counter() - self.started
+        if self.est is not None:
+            frac = min(elapsed / self.est.scale, 0.98)
+            filled = int(frac * _BAR_CELLS)
+            bar = "█" * filled + "░" * (_BAR_CELLS - filled)
+            label = f" {fmt_secs(elapsed)} ~{fmt_secs(self.est.typical)}"
+        else:  # indeterminate: a bouncing pulse
+            span = _BAR_CELLS - _PULSE_CELLS
+            bounce = self.ticks % (2 * span)
+            pos = bounce if bounce <= span else 2 * span - bounce
+            bar = "░" * pos + "█" * _PULSE_CELLS + "░" * (span - pos)
+            label = f" {fmt_secs(elapsed)}"
+        line = f"[{bar}]{label}"
+        if self.total > 1:
+            line += f"  {self.done}/{self.total}"
+        if self.failed:
+            text = f"{self.failed} failed"
+            if self.color:
+                text = f"\033[31m{text}\033[0m"
+            line += f" ({text})"
+        if self.running:
+            names = ", ".join(list(self.running)[:4])
+            if len(self.running) > 4:
+                names += " ..."
+            line += f"  running: {names}"
+        width = shutil.get_terminal_size((80, 24)).columns - 1
+        return line if len(line) <= width else line[:width]

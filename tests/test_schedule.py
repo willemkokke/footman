@@ -292,6 +292,54 @@ def test_multi_node_still_buffers(capsys):
     assert seen["a"] is not None and seen["b"] is not None
 
 
+def test_both_engines_feed_the_same_status_line(monkeypatch):
+    # A CLI chain and a task-body parallel() are the same kind of run:
+    # units appear on the live line the moment they start, either way.
+    err = _Tty()
+    monkeypatch.setattr(sys, "stderr", err)
+
+    def chain(reg):
+        @reg.task
+        def alpha(): ...
+
+        @reg.task
+        def bravo(): ...
+
+    drive(chain, "alpha bravo")
+    frames = err.getvalue()
+    assert "alpha" in frames and "bravo" in frames
+    assert "/2" in frames  # two scheduler nodes
+
+    err2 = _Tty()
+    monkeypatch.setattr(sys, "stderr", err2)
+
+    def fanout(reg):
+        @reg.task
+        def combo():
+            from footman.context import parallel
+
+            def alpha(): ...
+
+            def bravo(): ...
+
+            parallel(alpha, bravo)
+
+    drive(fanout, "combo")
+    frames = err2.getvalue()
+    assert "alpha" in frames and "bravo" in frames  # children reach the line
+    assert "/3" in frames  # one node + two parallel() children
+
+
+def test_parallel_without_a_run_is_a_noop(capsys):
+    # Plain calls and recording() have no status line to feed — parallel()
+    # must not care.
+    from footman.context import parallel
+
+    def a(): ...
+
+    assert parallel(a) == [0]
+
+
 def test_parallel_output_is_grouped_not_interleaved(capsys):
     def tasks(reg):
         @reg.task

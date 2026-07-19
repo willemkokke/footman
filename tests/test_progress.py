@@ -119,3 +119,72 @@ def test_store_lives_beside_the_manifest(tmp_path, monkeypatch):
     manifest = _paths.manifest_path(Path.cwd())
     assert times.parent == manifest.parent
     assert times.stem.startswith(manifest.stem)
+
+
+# --- the status line ----------------------------------------------------------
+
+import io  # noqa: E402
+
+
+class _Tty(io.StringIO):
+    def isatty(self) -> bool:
+        return True
+
+
+def test_fmt_secs():
+    assert _progress.fmt_secs(4.06) == "4.1s"
+    assert _progress.fmt_secs(42.4) == "42s"
+    assert _progress.fmt_secs(70) == "1m10s"
+
+
+def test_status_line_paints_clears_and_respects_the_column():
+    err = _Tty()
+    st = _progress.StatusLine(err, None, color=False)
+    st.unit_added(2)
+    st.unit_started("alpha")
+    first = err.getvalue()
+    assert "\r\x1b[K[" in first and "alpha" in first  # painted a frame
+
+    st.notify("partial")  # someone is mid-line on the terminal
+    assert err.getvalue().endswith("\x1b[K")  # cleared, out of the way
+    before = err.getvalue()
+    st.paint()
+    assert err.getvalue() == before  # column isn't 0: painting refused
+
+    st.notify("done\n")  # the line completed
+    st.paint()
+    assert "alpha" in err.getvalue()[len(before) :]  # painting resumed
+
+    st.close()
+    assert err.getvalue().endswith("\x1b[K")  # the line never outlives the run
+
+
+def test_status_line_counts_and_failures():
+    err = _Tty()
+    st = _progress.StatusLine(err, None, color=False)
+    st.unit_added(3)
+    st.unit_started("a")
+    st.unit_finished("a", ok=False)
+    st.unit_skipped("b")
+    line = st._render()
+    assert "2/3" in line
+    assert "1 failed" in line
+
+
+def test_determinate_bar_never_fills_while_running():
+    # An "overdue" run clamps at 98% — the bar must not lie about done-ness.
+    est = _progress.Estimate(typical=4.0, scale=0.0001)
+    st = _progress.StatusLine(_Tty(), est, color=False)
+    line = st._render()
+    assert "░" in line  # still some empty cells
+    assert "~4.0s" in line
+
+
+def test_indeterminate_pulse_moves():
+    st = _progress.StatusLine(_Tty(), None, color=False)
+    st.ticks = 1
+    one = st._render()
+    st.ticks = 4
+    two = st._render()
+    assert one != two  # the pulse wanders
+    assert "~" not in one  # no fake estimate

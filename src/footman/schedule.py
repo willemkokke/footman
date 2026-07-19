@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 from itertools import count
 from typing import Any, TextIO
 
-from footman import context, executor
+from footman import _progress, context, executor
 from footman.registry import Group, Task
 from footman.split import ChainError, Segment
 
@@ -175,6 +175,8 @@ def run_plan(
     keep_going: bool = False,
     capture: bool = False,
     ctx_config: dict[str, Any] | None = None,
+    estimate: _progress.Estimate | None = None,
+    progress: bool = True,
 ) -> list[executor.TaskResult]:
     """Build and run the DAG; return results in dependency order."""
     nodes = _build_dag(root, segments)
@@ -184,105 +186,76 @@ def run_plan(
     # (colour, in-place step rewrite) applies. `fm check` is this shape.
     sequential = sequential or len(nodes) == 1
     with context.routing() as (real, err):
-        if sequential:
-            _run_sequential(nodes, real, keep_going, capture, ctx_config)
-        else:
-            _run_parallel(nodes, real, err, keep_going, capture, ctx_config)
+        status = _make_status(err, ctx_config, capture, estimate, progress)
+        if status is not None:
+            status.unit_added(len(nodes))
+            context.set_status(status)  # parallel() and the routers find it
+            status.open()
+        try:
+            if sequential:
+                _run_sequential(nodes, real, keep_going, capture, ctx_config, status)
+            else:
+                _run_parallel(nodes, real, err, keep_going, capture, ctx_config, status)
+        finally:
+            if status is not None:
+                context.set_status(None)
+                status.close()
     return [n.result for n in _toposort(nodes) if n.result is not None]
 
 
-def _run_sequential(nodes, real, keep_going, capture, ctx_config) -> None:
+def _run_sequential(nodes, real, keep_going, capture, ctx_config, status) -> None:
     done: dict[int, bool] = {}
     failed = False
     for node in _toposort(nodes):
         if any(not done.get(d) for d in node.deps) or (failed and not keep_going):
             node.state = "skipped"
+            if status is not None:
+                status.unit_skipped(node.seg.task)
             continue
         ctx = _make_ctx(
             node.seg, ctx_config, sequential=True, capture=capture, real=real
         )
+        if status is not None:
+            status.unit_started(node.seg.task)
         node.result = executor.run_task(node.fn, node.seg, ctx)
         node.state = "done"
+        if status is not None:
+            status.unit_finished(node.seg.task, node.result.ok)
         done[node.key] = node.result.ok
         failed = failed or not node.result.ok
 
 
-_SPINNER = "|/-\\"
-_CLEAR = "\r\033[K"
-
-
-class _Progress:
-    """One live status line for a parallel run, on the real *stderr*.
-
-    Status is commentary, so it lives on stderr — which also means piping
-    stdout (`fm check > log`) keeps the live line visible on the terminal.
-    Task output is buffered per task and flushed as a block to stdout on
-    completion; this line always clears itself before a block lands, so on a
-    terminal (both streams the same tty, writes in order) nothing collides.
-    Updates are event-driven (task submits and completions) — no background
-    timer thread. Enabled only on a TTY, outside capture mode, and not under
-    --quiet; colour follows --no-color / NO_COLOR.
-    """
-
-    def __init__(self, real: TextIO, nodes: list[_Node], color: bool) -> None:
-        self.real = real
-        self.nodes = nodes
-        self.color = color
-        self.live = False
-        self.ticks = 0
-
-    def render(self) -> None:
-        self.ticks += 1
-        running = [n.seg.task for n in self.nodes if n.state == "running"]
-        finished = sum(n.state in ("done", "skipped") for n in self.nodes)
-        failures = sum(
-            n.state == "done" and not (n.result and n.result.ok) for n in self.nodes
-        )
-        line = f"{_SPINNER[self.ticks % 4]} {finished}/{len(self.nodes)}"
-        if failures:
-            text = f"{failures} failed"
-            if self.color:
-                text = f"\033[31m{text}\033[0m"
-            line += f" ({text})"
-        if running:
-            names = ", ".join(running[:4]) + (" ..." if len(running) > 4 else "")
-            line += f"  running: {names}"
-        self.real.write(f"{_CLEAR}{line}")
-        self.real.flush()
-        self.live = True
-
-    def clear(self) -> None:
-        if self.live:
-            self.real.write(_CLEAR)
-            self.real.flush()
-            self.live = False
-
-
-def _make_progress(
+def _make_status(
     err: TextIO,
-    nodes: list[_Node],
     ctx_config: dict[str, Any] | None,
     capture: bool,
-) -> _Progress | None:
+    estimate: _progress.Estimate | None,
+    enabled: bool,
+) -> _progress.StatusLine | None:
+    """The run's live line — bar or pulse — or None when it can't show.
+
+    Status is commentary, so it lives on stderr: piping stdout
+    (`fm check > log`) keeps the line visible on the terminal. Applies to
+    every run shape, single node included — that's `fm check`.
+    """
     cfg = ctx_config or {}
     if (
-        capture
+        not enabled
+        or capture
         or cfg.get("quiet")
-        or len(nodes) < 2
         or not err.isatty()  # the status stream's own tty-ness decides
         or _plain_output(bool(cfg.get("no_color")))
     ):
         return None
     # Past the guard the run is colourful by definition (no_color/NO_COLOR/dumb
     # all bail above), so the live line always renders with escapes.
-    return _Progress(err, nodes, color=True)
+    return _progress.StatusLine(err, estimate, color=True)
 
 
-def _run_parallel(nodes, real, err, keep_going, capture, ctx_config) -> None:
+def _run_parallel(nodes, real, err, keep_going, capture, ctx_config, status) -> None:
     by_key = {n.key: n for n in nodes}
     lock = threading.Lock()
     failed = False
-    progress = _make_progress(err, nodes, ctx_config, capture)
 
     def dep_ok(n: _Node) -> bool:
         return all(
@@ -304,12 +277,13 @@ def _run_parallel(nodes, real, err, keep_going, capture, ctx_config) -> None:
         n.result = executor.run_task(n.fn, n.seg, ctx)
         if not capture:  # flush this task's buffered output as one block
             with lock:
-                if progress is not None:
-                    progress.clear()
-                real.write(ctx.sink.getvalue())  # type: ignore[union-attr]
+                blob = ctx.sink.getvalue()  # type: ignore[union-attr]
+                if status is not None:
+                    # A direct real-stream write (bypasses the routers): the
+                    # status line clears itself and tracks the column.
+                    status.notify(blob)
+                real.write(blob)
                 real.flush()
-                if progress is not None:
-                    progress.render()
 
     with ThreadPoolExecutor() as pool:
         futures: dict[Any, _Node] = {}
@@ -320,15 +294,16 @@ def _run_parallel(nodes, real, err, keep_going, capture, ctx_config) -> None:
                         dep_lost(n) or (failed and not keep_going)
                     ):
                         n.state = "skipped"
+                        if status is not None:
+                            status.unit_skipped(n.seg.task)
                 for n in nodes:
                     if n.state == "pending" and dep_ok(n):
                         n.state = "running"
+                        if status is not None:
+                            status.unit_started(n.seg.task)
                         futures[pool.submit(run_node, n)] = n
                 if not futures:
                     break
-                if progress is not None:
-                    with lock:
-                        progress.render()
                 completed, _ = wait(list(futures), return_when=FIRST_COMPLETED)
                 for fut in completed:
                     node = futures.pop(fut)
@@ -339,19 +314,16 @@ def _run_parallel(nodes, real, err, keep_going, capture, ctx_config) -> None:
                     if exc is not None:
                         raise exc
                     node.state = "done"
-                    if not (node.result and node.result.ok):
+                    ok = bool(node.result and node.result.ok)
+                    if status is not None:
+                        status.unit_finished(node.seg.task, ok)
+                    if not ok:
                         failed = True
         except BaseException:
             # Abort (Ctrl-C, or an internal error surfaced above): drop
             # everything not yet started; the pool's exit joins the in-flight
             # tasks (on Ctrl-C their subprocesses got the terminal's SIGINT
-            # too). The app layer reports "interrupted" and exits 130.
-            if progress is not None:
-                with lock:
-                    progress.clear()
+            # too). The app layer reports "interrupted" and exits 130; the
+            # status line is cleared by run_plan's finally.
             pool.shutdown(wait=False, cancel_futures=True)
             raise
-        finally:
-            if progress is not None:
-                with lock:
-                    progress.clear()
