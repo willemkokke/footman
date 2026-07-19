@@ -9,7 +9,9 @@ import pytest
 from footman import _app, _paths
 
 TASKS = '''
-from footman import task, group
+from typing import Annotated
+
+from footman import doc, task, group
 
 @task
 def hi(name: str = "world"):
@@ -50,6 +52,10 @@ def opaque():
 def code3():
     """Return an int exit code."""
     return 3
+
+@task
+def fix(dry: Annotated[bool, doc("plan only, change nothing")] = False):
+    """Fix things."""
 
 tools = group("tools", help="Extra tools")
 
@@ -131,10 +137,10 @@ def test_where(project, capsys):
     assert _app.run(["--where", "hi"]) == 0
     out = capsys.readouterr().out.strip()
     # A real pin (not the old `or ":" in out` tautology): the tasks file, and
-    # hi's definition line — the decorator (4) on 3.9+, the def (5) on older
+    # hi's definition line — the decorator (6) on 3.9+, the def (7) on older
     # runtimes, tolerating co_firstlineno variance.
     assert out.startswith(str(project / "tasks.py") + ":")
-    assert out.endswith(("tasks.py:4", "tasks.py:5"))
+    assert out.endswith(("tasks.py:6", "tasks.py:7"))
 
 
 def test_bare_fm_lists_tasks(project, capsys):
@@ -404,6 +410,14 @@ def test_help_never_runs_the_chain(project, capsys):
     # `boom` exits 2 when executed; help over it must be a read-only act.
     assert _app.run(["--help", "boom"]) == 0
     assert "Fail on purpose." in capsys.readouterr().out
+
+
+def test_help_shows_param_doc(project, capsys):
+    # A doc("...") marker leads the option's detail line; mechanics follow.
+    assert _app.run(["--help", "fix"]) == 0
+    assert "plan only, change nothing; flag (--no-dry to disable)" in (
+        capsys.readouterr().out
+    )
 
 
 def test_help_shows_positionals_and_types(project, capsys):

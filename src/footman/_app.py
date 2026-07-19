@@ -298,6 +298,8 @@ def _param_label(p: dict) -> str:
 
 def _param_detail(p: dict) -> str:
     bits: list[str] = []
+    if p.get("doc"):  # the author's own words lead; mechanics follow
+        bits.append(p["doc"])
     if p["kind"] == "flag":
         bits.append(f"flag (--no-{p['name']} to disable)")
     choices = p.get("choices")

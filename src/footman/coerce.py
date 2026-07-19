@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from pathlib import Path, PurePath
 from typing import Annotated, Any
 
-from footman.params import _PathRequirement, between, check, env, suggest
+from footman.params import _PathRequirement, between, check, doc, env, suggest
 from footman.params import nosplit as _NOSPLIT
 
 _TAG_ORDER = {"bool": 0, "int": 1, "float": 2, "path": 3, "str": 4}
@@ -91,6 +91,7 @@ class Peeled:
     bounds: tuple[float | None, float | None] | None = None  # inclusive lo/hi
     env: str | None = None  # environment-variable fallback
     checks: tuple[Any, ...] = ()  # post-coercion validators (check(fn))
+    doc: str | None = None  # per-parameter help text (doc("..."))
 
 
 def peel(ann: Any) -> Peeled:
@@ -101,6 +102,7 @@ def peel(ann: Any) -> Peeled:
     bounds: tuple[float | None, float | None] | None = None
     env_var: str | None = None
     checks: tuple[Any, ...] = ()
+    doc_text: str | None = None
 
     # Strip Annotated and Optional wrappers in any order/nesting, e.g. both
     # `Annotated[list[X], nosplit] | None` and `Annotated[list[X] | None, nosplit]`.
@@ -125,6 +127,8 @@ def peel(ann: Any) -> Peeled:
                     env_var = mark.var
                 elif isinstance(mark, check):
                     checks = (*checks, mark.fn)
+                elif isinstance(mark, doc):
+                    doc_text = mark.text
                 elif callable(mark) and not isinstance(mark, type):
                     completer = suggest(mark)  # a bare callable == suggest(fn)
             ann, changed = base, True
@@ -138,6 +142,7 @@ def peel(ann: Any) -> Peeled:
         "bounds": bounds,
         "env": env_var,
         "checks": checks,
+        "doc": doc_text,
     }
 
     if ann is dict or typing.get_origin(ann) is dict:  # dict[K, V] or bare dict
@@ -161,6 +166,7 @@ def peel(ann: Any) -> Peeled:
             bounds=bounds if bounds is not None else value.bounds,
             env=env_var,
             checks=(*checks, *value.checks),
+            doc=doc_text,
         )
 
     if ann is list or typing.get_origin(ann) is list:  # list[X] / Many[X] / bare

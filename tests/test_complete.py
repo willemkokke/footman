@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+from typing import Annotated
+
+from footman import manifest, registry, task
 from footman._complete import complete
+from footman.params import doc
 
 
 def _names(result):
@@ -23,9 +27,21 @@ def test_task_names_carry_descriptions(tree):
 
 
 def test_options_and_choices_have_no_description(tree):
-    # Options and choice values carry no help, so they pass through bare (no tab).
+    # Undocumented options and choice values pass through bare (no tab).
     assert complete(tree, ["lint", "--f"]) == ["--fix"]
     assert "\t" not in "".join(complete(tree, ["lint", "--mode", ""]))
+
+
+def test_doc_marker_becomes_option_description():
+    # An option with a doc("...") marker completes with a description column,
+    # exactly like task names do.
+    with registry.capture() as root:
+
+        @task
+        def lint(fix: Annotated[bool, doc("apply fixes in place")] = False): ...
+
+    built = manifest.build_manifest(root)["tree"]
+    assert complete(built, ["lint", "--f"]) == ["--fix\tapply fixes in place"]
 
 
 def test_empty_partial_lists_everything(tree):

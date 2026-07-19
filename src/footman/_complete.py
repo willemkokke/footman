@@ -243,9 +243,17 @@ def complete(tree: dict, words: list[str]) -> list[str]:
     for c in candidates:
         if c.startswith(partial):
             seen.setdefault(c)
-    # Only the next-segment task/group names carry help; options and choices
-    # aren't in tree's tasks/groups, so _describe leaves them bare.
-    return [_describe(c, tree) for c in seen]
+    # Next-segment task/group names carry their help line; an option carries
+    # its doc("...") text when the task author wrote one; choice values stay
+    # bare. Same tab-separated wire format either way.
+    out = []
+    for c in seen:
+        p = seg.opts.get(c)
+        if p is not None and p.get("doc"):
+            out.append(f"{c}\t{p['doc']}")
+        else:
+            out.append(_describe(c, tree))
+    return out
 
 
 def _load_manifest(path: str) -> dict | None:

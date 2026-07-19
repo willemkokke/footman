@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Literal, Optional
+from typing import Annotated, Literal, Optional
 
 import pytest
 
 from footman import _paths, manifest
+from footman.params import doc
 
 
 def specs(fn):
@@ -19,6 +20,12 @@ def test_flag():
     def f(x: bool = False): ...
 
     assert specs(f) == [{"name": "x", "kind": "flag"}]
+
+
+def test_doc_marker_lands_in_spec():
+    def f(fix: Annotated[bool, doc("apply fixes in place")] = False): ...
+
+    assert specs(f) == [{"name": "fix", "kind": "flag", "doc": "apply fixes in place"}]
 
 
 def test_kwargs_is_a_spec_error():

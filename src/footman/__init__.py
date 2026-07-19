@@ -32,6 +32,7 @@ if TYPE_CHECKING:
     from footman.params import Many as Many
     from footman.params import between as between
     from footman.params import check as check
+    from footman.params import doc as doc
     from footman.params import env as env
     from footman.params import exists as exists
     from footman.params import isdir as isdir
@@ -60,6 +61,7 @@ __all__ = [
     "between",
     "capture",
     "check",
+    "doc",
     "env",
     "exists",
     "group",
@@ -123,6 +125,7 @@ def __getattr__(name: str) -> object:
         "between",
         "env",
         "check",
+        "doc",
     ):
         from footman import params
 

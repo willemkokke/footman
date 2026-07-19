@@ -98,7 +98,7 @@ Eager, taught validation is the whole pitch, so constraints ride in
 ```python
 from pathlib import Path
 from typing import Annotated
-from footman import task, between, check, env, isfile
+from footman import task, between, check, doc, env, isfile
 
 @task
 def deploy(
@@ -106,6 +106,7 @@ def deploy(
     jobs: Annotated[int, between(1, 32)] = 4,              # inclusive bounds
     target: Annotated[str, env("DEPLOY_ENV")] = "staging", # CLI > $DEPLOY_ENV > default
     version: Annotated[str, check(semver)] = "0.0.0",      # your own validator
+    force: Annotated[bool, doc("skip the health check")] = False,  # help text
 ): ...
 ```
 
@@ -129,6 +130,12 @@ $ DEPLOY_ENV=prod fm deploy app.toml      # target == "prod"
   fallback needs somewhere to fall.
 - **Custom validators** — `check(fn)` runs after coercion, per element for
   collections; raise `ValueError` with a message written for the user.
+- **Help text** — `doc("…")` puts one line of your own words on a
+  parameter. It leads the option's line in `fm --help <task>`, becomes the
+  option's description in shells that render one (zsh, fish, nushell,
+  PowerShell tooltips), and rides along in the `fm --json --list` catalog.
+  The task's own help stays the docstring's first line; `doc` is for the
+  parameters.
 
 One honest asymmetry to know about: path and bounds violations on the command
 line are caught *eagerly* (before anything runs); the same violations in an

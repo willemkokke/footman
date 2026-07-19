@@ -2,9 +2,10 @@
 
 Dynamic completion (`suggest`), one-or-more (`Many`), comma-split opt-out
 (`nosplit`), path requirements (`exists`/`isfile`/`isdir`), numeric bounds
-(`between`, or a bare `range`), environment fallbacks (`env`), and custom
-validators (`check`). Each carries no runtime weight beyond a small marker
-object; `footman.coerce.peel` reads them all in one place.
+(`between`, or a bare `range`), environment fallbacks (`env`), custom
+validators (`check`), and per-parameter help (`doc`). Each carries no runtime
+weight beyond a small marker object; `footman.coerce.peel` reads them all in
+one place.
 """
 
 from __future__ import annotations
@@ -146,3 +147,22 @@ class check:
 
     def __init__(self, fn: Callable[[Any], Any]) -> None:
         self.fn = fn
+
+
+class doc:
+    """Help text for one parameter, via `Annotated`:
+
+    ```python
+    def lint(fix: Annotated[bool, doc("apply fixes in place")] = False): ...
+    ```
+
+    One line, written for the person at the prompt. It shows in
+    `fm --help <task>`, as the option's description in shells that render
+    one (zsh, fish, nushell, PowerShell tooltips), and in the
+    `fm --json --list` catalog.
+    """
+
+    __slots__ = ("text",)
+
+    def __init__(self, text: str) -> None:
+        self.text = text

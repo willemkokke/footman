@@ -176,12 +176,14 @@ def _marker_keys(
     param: inspect.Parameter,
     has_default: bool,
 ) -> None:
-    """Additive manifest keys for the `Annotated` markers (path/bounds/env).
+    """Additive manifest keys for the `Annotated` markers (path/bounds/env/doc).
 
     `check(fn)` deliberately never lands in the manifest — functions don't
     serialize (the same reason `_finish` strips `_completer`); it runs at
     binding time instead.
     """
+    if peeled.doc is not None:
+        spec["doc"] = peeled.doc
     if peeled.path_req is not None:
         spec["path"] = peeled.path_req
     if peeled.bounds is not None:
