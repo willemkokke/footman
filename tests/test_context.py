@@ -461,11 +461,19 @@ def test_parallel_honours_the_sequential_request():
         assert parallel(slow, fast) == [0, 0]
     assert order == ["slow-start", "slow-end", "fast-start"]
 
-    # And without the request, the calls genuinely overlap.
-    order.clear()
+    # And without the request, the calls genuinely overlap — proven by
+    # construction, not by racing a sleep against a loaded runner: both
+    # thunks must reach the barrier at once, which single-file execution
+    # never can (a regression trips the timeout instead).
+    import threading
+
+    barrier = threading.Barrier(2, timeout=3)
+
+    def hit():
+        barrier.wait()
+
     with use_context(Context()):
-        parallel(slow, fast)
-    assert order.index("fast-start") < order.index("slow-end")
+        assert parallel(hit, hit) == [0, 0]
 
     # -j caps the pool the same way: width one behaves like sequential.
     order.clear()
