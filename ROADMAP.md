@@ -22,8 +22,6 @@ and a tag cannot publish unless CI and the version checks agree.
 
 What actually remains, in order:
 
-- **The cookbook page** — a recipes catalogue (the one §9 docs item still
-  open).
 - **Help strings that carry the whole truth.** The CLI reference table is now
   generated from the grammar, so the help strings are the single source for
   `--help`, completion menus, and the docs at once. A short pass to make them
@@ -195,7 +193,7 @@ pages, and descriptions in every shell that renders them (0.10.0).
 | CI page, troubleshooting catalogue | 0.8.0 |
 | Benchmark honesty (import cost, completion latency) | 0.7.0 and 0.10.0 — committed scripts behind both |
 | Voice pass over the older pages | 0.10.0 docs cycle — restructure, tabs, one voice |
-| The cookbook | **still open** — first item on the road to 1.0 |
+| The cookbook | landed 2026-07-20, post-0.14.0 — seventeen recipes, agents included |
 
 The audit's other docs worry — the hand-maintained global-options table that
 "*will* drift" — proved right on schedule: it drifted three ways and is now

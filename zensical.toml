@@ -21,6 +21,7 @@ nav = [
     { "Composing tasks" = "composing.md" },
     { "Testing your tasks" = "testing.md" },
     { "Your tasks, documented" = "taskdocs.md" },
+    { "Cookbook" = "cookbook.md" },
     { "Custom CLI" = "custom-cli.md" },
   ] },
   { "Completion" = [

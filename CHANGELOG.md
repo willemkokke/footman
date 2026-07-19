@@ -7,6 +7,15 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Docs
+
+- **The cookbook.** Seventeen recipes across the whole surface — the
+  parallel gate, passthrough, stacking validators, git-branch TAB
+  completion via `suggest()`, build matrices, monorepo overrides,
+  tasks that return data for `jq`, the coding-agent loop, testing
+  recipes, and a branded CLI — closing the last open docs item from
+  the original v0.4.0 audit.
+
 ## [0.14.0] — 2026-07-20
 
 ### Added
