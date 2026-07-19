@@ -287,15 +287,19 @@ def _pty_session(
     start = _time.monotonic()
     chunks: list[tuple[float, bytes]] = []
     queue = list(sends)
-    # The send clock starts at the shell's *first paint*, not at spawn —
-    # keys written before the line editor exists are half-echoed raw and
-    # eaten (a TAB pressed then never completes anything).
+    # Typing begins only after the boot has *settled*: keys written before
+    # the line editor exists are half-echoed raw and eaten (a TAB pressed
+    # then never completes anything), and a slow rc — compinit, the hook's
+    # own `--setup-completion` subprocess — paints in bursts. Every boot
+    # chunk pushes the start out another half second of silence.
+    typing_started = False
     next_at: float | None = None
     deadline = None if queue else start + settle
     try:
         while True:
             now = _time.monotonic()
             if queue and next_at is not None and now >= next_at:
+                typing_started = True
                 _, data = queue.pop(0)
                 if data:
                     os.write(master, data)
@@ -311,8 +315,8 @@ def _pty_session(
                 if not data:
                     break
                 chunks.append((_time.monotonic() - start, data))
-                if next_at is None and queue:  # first paint: typing may begin
-                    next_at = _time.monotonic() + 0.4 + queue[0][0]
+                if not typing_started and queue:
+                    next_at = _time.monotonic() + 0.5 + queue[0][0]
                 if deadline is not None:  # let late repaints settle too
                     deadline = _time.monotonic() + settle
             if deadline is not None and _time.monotonic() >= deadline:
@@ -428,8 +432,14 @@ def _boot_shell(
         "XDG_CONFIG_HOME": str(scratch),
         "FOOTMAN_CACHE_DIR": str(_paths.footman_cache_dir()),
     }
+    # A system rc (/etc/zsh/*, /etc/profile) may rebuild PATH and lose the
+    # venv that owns *prog* \u2014 then the rc's `eval "$(prog \u2026)"` silently
+    # produces nothing and the hook never loads. Pin the interpreter's own
+    # bin dir first, the same lesson the functional shell tests carry.
+    bin_dir = str(Path(sys.executable).parent)
     if shell == "zsh":
         (scratch / ".zshrc").write_text(
+            f"path=({bin_dir!r} $path)\n"
             "PROMPT='%F{green}\u276f%f '\n"
             "autoload -Uz compinit && compinit -u\n"
             f'eval "$({prog} --setup-completion zsh)"\n',
@@ -440,6 +450,7 @@ def _boot_shell(
     if shell == "bash":
         rc = scratch / "bashrc"
         rc.write_text(
+            f'PATH="{bin_dir}:$PATH"\n'
             "PS1='\\[\\e[32m\\]\u276f\\[\\e[0m\\] '\n"
             f'eval "$({prog} --setup-completion bash)"\n',
             encoding="utf-8",
@@ -447,6 +458,7 @@ def _boot_shell(
         return ["bash", "--rcfile", str(rc), "-i"], env
     if shell == "fish":
         boot = (
+            f"fish_add_path --prepend {bin_dir!r}; "
             f"{prog} --setup-completion fish | source; "
             "function fish_prompt; set_color green; echo -n '\u276f '; "
             "set_color normal; end"

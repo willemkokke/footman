@@ -722,7 +722,43 @@ def test_zsh_cast_records_an_animated_completion(home, tmp_path, monkeypatch):
     assert _app.run(line) == 0
     svg = dest.read_text(encoding="utf-8")
     assert svg.count("cast-frame") >= 2  # it animates
-    assert "lint" in svg  # TAB completed the prefix from the cached manifest
+    if "lint" not in svg:  # diagnose with the scratch shell's own answers
+        pytest.fail(_diagnose_zsh_cast(), pytrace=False)
+
+
+def _diagnose_zsh_cast() -> str:
+    """Boot the same scratch zsh and ask it why TAB had nothing to say —
+    the final screen goes into the failure message, so a CI log carries
+    the ground truth (hook registered? resolver answering? PATH sane?)."""
+    import tempfile
+
+    from footman.tasks.docs import _boot_shell, _pty_session, _screens, keystrokes
+
+    with tempfile.TemporaryDirectory() as scratch:
+        argv, env = _boot_shell("zsh", "fm", Path(scratch))
+        chunks = _pty_session(
+            argv,
+            width=110,
+            height=18,
+            sends=keystrokes(
+                (
+                    "print PATH_FM=$(whence -p fm); print COMPS=${_comps[fm]}",
+                    "<ENTER>",
+                    "<WAIT>",
+                    "print RAW; fm --complete -- 'li' 2>&1 | head -4",
+                    "<ENTER>",
+                    "<WAIT:2000>",
+                )
+            ),
+            settle=1.5,
+            env_extra=env,
+        )
+    frames = _screens(chunks, width=110, height=18)
+    if not frames:
+        return "cast produced no completion, and the probe session was silent"
+    lines = ["".join(ch for ch, _ in row).rstrip() for row in frames[-1][1]]
+    screen = "\n".join(line for line in lines if line)
+    return f"TAB completed nothing; the scratch zsh reports:\n{screen}"
 
 
 @pytest.mark.skipif(
