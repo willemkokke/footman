@@ -234,6 +234,94 @@ def test_pwsh_install_single_shell_machines_get_one_profile(home, monkeypatch):
     assert seven.read_text().count("completion.ps1") == 1
 
 
+# --- uninstall -----------------------------------------------------------------
+
+
+def test_bash_uninstall_reverses_install(home):
+    _shellcomp.install("bash", "fm")
+    script = home / ".local" / "share" / "fm" / "completion.bash"
+    assert script.exists()
+    lines = _shellcomp.uninstall("bash", "fm")
+    assert not script.exists()
+    assert "source" not in (home / ".bashrc").read_text()
+    assert any("removed" in line for line in lines)
+    # Idempotent: a second uninstall reports, never fails.
+    lines = _shellcomp.uninstall("bash", "fm")
+    assert any("nothing to remove" in line for line in lines)
+
+
+def test_zsh_uninstall_reverses_install(home):
+    _shellcomp.install("zsh", "fm")
+    _shellcomp.uninstall("zsh", "fm")
+    assert not (home / ".local" / "share" / "fm" / "completion.zsh").exists()
+    assert "completion.zsh" not in (home / ".zshrc").read_text()
+
+
+def test_fish_uninstall_removes_the_dropin(home):
+    _shellcomp.install("fish", "fm")
+    target = home / ".config" / "fish" / "completions" / "fm.fish"
+    assert target.exists()
+    assert any("removed" in line for line in _shellcomp.uninstall("fish", "fm"))
+    assert not target.exists()
+    lines = _shellcomp.uninstall("fish", "fm")
+    assert any("nothing to remove" in line for line in lines)
+
+
+def test_remove_once_keeps_utf16_profile_utf16(tmp_path):
+    # The uninstall mirror of the F47 append test: removing the hook line from
+    # a UTF-16 profile leaves it UTF-16, one BOM, other content intact.
+    rc = tmp_path / "profile.ps1"
+    rc.write_bytes("Set-Alias foo bar\n".encode("utf-16"))
+    _shellcomp._append_once(rc, '. "x"')
+    assert _shellcomp._remove_once(rc, '. "x"') is True
+    text = rc.read_bytes().decode("utf-16")
+    assert "Set-Alias foo bar" in text and '. "x"' not in text
+    assert rc.read_bytes().count(b"\xff\xfe") == 1  # still exactly one BOM
+    assert _shellcomp._remove_once(rc, '. "x"') is False  # idempotent
+
+
+def test_pwsh_uninstall_when_shell_is_gone_still_removes_script(home, monkeypatch):
+    profile = home / "pwsh-profile" / "profile.ps1"
+    monkeypatch.setattr(_shellcomp, "_pwsh_profiles", lambda: [profile])
+    _shellcomp.install("pwsh", "fm")
+    script = home / ".local" / "share" / "fm" / "completion.ps1"
+    assert script.exists()
+
+    # PowerShell was uninstalled since: its profile can't be located any more.
+    def gone():
+        raise _shellcomp.InstallError("pwsh (or powershell) not found on PATH")
+
+    monkeypatch.setattr(_shellcomp, "_pwsh_profiles", gone)
+    lines = _shellcomp.uninstall("pwsh", "fm")
+    assert not script.exists()  # the script goes regardless
+    assert any("remove this line yourself" in line for line in lines)
+    assert "completion.ps1" in profile.read_text()  # named for hand-removal
+
+
+def test_uninstall_via_cli_unknown_shell_teaches(home, tmp_path, monkeypatch, capsys):
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
+    (tmp_path / "tasks.py").write_text(
+        "from footman import task\n@task\ndef t(): ...\n"
+    )
+    monkeypatch.chdir(tmp_path)
+    assert _app.run(["--uninstall-completion", "tcsh"]) == 2
+    assert "bash|zsh|fish" in capsys.readouterr().err
+
+
+def test_uninstall_via_cli(home, tmp_path, monkeypatch, capsys):
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
+    (tmp_path / "tasks.py").write_text(
+        "from footman import task\n@task\ndef t(): ...\n"
+    )
+    monkeypatch.chdir(tmp_path)
+    assert _app.run(["--install-completion", "bash"]) == 0
+    capsys.readouterr()
+    assert _app.run(["--uninstall-completion", "bash"]) == 0
+    out = capsys.readouterr().out
+    assert "removed" in out
+    assert not (home / ".local" / "share" / "fm" / "completion.bash").exists()
+
+
 def test_pwsh_missing_is_a_taught_error(home, tmp_path, monkeypatch, capsys):
     (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
     (tmp_path / "tasks.py").write_text(

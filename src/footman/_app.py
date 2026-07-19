@@ -618,6 +618,24 @@ def _install_completion(shell: object) -> int:
     return 0
 
 
+def _uninstall_completion(shell: object) -> int:
+    from footman import _shellcomp
+
+    name = _resolve_shell(shell, "--uninstall-completion")
+    if name is None:
+        return 2
+    if shell is True:
+        print(f"detected shell: {name}")
+    try:
+        lines = _shellcomp.uninstall(name, _brand.prog)
+    except _shellcomp.InstallError as exc:
+        _error(f"--uninstall-completion {name}: {exc}")
+        return 2
+    for line in lines:
+        print(line)
+    return 0
+
+
 def _setup_completion(shell: object) -> int:
     """Print the completion hook to stdout, for the current session only.
 
@@ -679,6 +697,8 @@ def _run(
         return _install_completion(g.get("install_completion"))
     if "setup_completion" in g and not wants_help:
         return _setup_completion(g.get("setup_completion"))
+    if "uninstall_completion" in g and not wants_help:
+        return _uninstall_completion(g.get("uninstall_completion"))
 
     if not g.get("directory"):
         return _execute(argv, g, wants_help, collect)

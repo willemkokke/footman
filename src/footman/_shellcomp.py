@@ -24,6 +24,7 @@ Install layout (all idempotent — running twice changes nothing):
 
 from __future__ import annotations
 
+import contextlib
 import os
 import shutil
 import subprocess
@@ -219,6 +220,39 @@ def _manual_hint(rc: Path, line: str, exc: Exception) -> str:
     return f"could not update {rc} ({exc}) — add this line yourself: {line}"
 
 
+def _remove_once(rc: Path, line: str) -> bool:
+    """Remove the exact *line* from *rc*; True if the file changed.
+
+    The mirror of `_append_once`, encoding-faithful the same way: the file's
+    own BOM (if any) is kept, the body re-encoded in the matching BOM-free
+    encoding — so uninstalling from a UTF-16 PowerShell profile leaves it
+    UTF-16 with exactly one BOM, and a latin-1 rc round-trips untouched.
+    """
+    try:
+        raw = rc.read_bytes() if rc.exists() else b""
+    except OSError as exc:
+        raise InstallError(
+            f"could not update {rc} ({exc}) — remove this line yourself: {line}"
+        ) from exc
+    if not raw:
+        return False
+    read_enc, write_enc = _sniff_encoding(raw)
+    existing = raw.decode(read_enc, errors="replace")
+    if line not in existing:
+        return False
+    boms = (b"\xef\xbb\xbf", b"\xff\xfe", b"\xfe\xff")
+    bom = next((b for b in boms if raw.startswith(b)), b"")
+    kept = [ln for ln in existing.splitlines() if ln.strip() != line.strip()]
+    body = "\n".join(kept) + ("\n" if kept else "")
+    try:
+        rc.write_bytes(bom + body.encode(write_enc))
+    except OSError as exc:
+        raise InstallError(
+            f"could not update {rc} ({exc}) — remove this line yourself: {line}"
+        ) from exc
+    return True
+
+
 def _zsh_rc() -> Path:
     """The `.zshrc` zsh actually reads — under `$ZDOTDIR` when set (D11)."""
     zdotdir = os.environ.get("ZDOTDIR")
@@ -387,4 +421,58 @@ def install(shell: str, prog: str) -> list[str]:
         else:
             lines.append(f"{rc} already sources it")
     lines.append("restart your shell (or source the rc file) and TAB away.")
+    return lines
+
+
+def uninstall(shell: str, prog: str) -> list[str]:
+    """Remove *shell*'s completion for *prog*: the script file and the rc line.
+
+    The mirror of `install()`, idempotent the same way — uninstalling what was
+    never installed reports what it looked for rather than failing. When the
+    shell itself is gone (its rc/profile can't be located any more), the
+    script file is still removed and the leftover line is named, so finishing
+    by hand is one paste.
+    """
+    if shell == "fish":
+        target = _config_home() / "fish" / "completions" / f"{prog}.fish"
+        if target.exists():
+            target.unlink()
+            return [f"removed {target}"]
+        return [f"nothing to remove ({target} was not installed)"]
+
+    suffix = {"pwsh": "ps1", "nushell": "nu"}.get(shell, shell)
+    target = _data_home() / prog / f"completion.{suffix}"
+    hook = {
+        "pwsh": f'. "{target}"',
+        "nushell": f'source "{target}"',
+    }.get(shell, f"source {target}")
+
+    lines: list[str] = []
+    if target.exists():
+        target.unlink()
+        with contextlib.suppress(OSError):  # only when nothing else lives there
+            target.parent.rmdir()
+        lines.append(f"removed {target}")
+
+    try:
+        if shell == "pwsh":
+            rcs = _pwsh_profiles()
+        elif shell == "nushell":
+            rcs = [_nu_config_path()]
+        elif shell == "zsh":
+            rcs = [_zsh_rc()]
+        else:  # bash
+            rcs = _bash_rcs()
+    except InstallError as exc:
+        lines.append(
+            f"could not locate the rc file ({exc}) — "
+            f"if it still sources the hook, remove this line yourself: {hook}"
+        )
+        return lines
+
+    for rc in rcs:
+        if _remove_once(rc, hook):
+            lines.append(f"removed `{hook}` from {rc}")
+    if not lines:
+        lines.append(f"nothing to remove ({target} was not installed)")
     return lines

@@ -39,9 +39,15 @@ _GLOBAL_FLAG = frozenset(
 _GLOBAL_VALUE = frozenset(
     {"--where", "--directory", "-C", "--tasks-file", "-f", "--config"}
 )  # consume the next word as the value
-_GLOBAL_MAYBE = frozenset({"--install-completion", "--setup-completion"})  # value opt.
+_GLOBAL_MAYBE = frozenset(
+    {"--install-completion", "--setup-completion", "--uninstall-completion"}
+)  # value optional
 _SHELLS = ("bash", "zsh", "fish", "pwsh", "nushell")
-_GLOBAL_CHOICES = {"--install-completion": _SHELLS, "--setup-completion": _SHELLS}
+_GLOBAL_CHOICES = {
+    "--install-completion": _SHELLS,
+    "--setup-completion": _SHELLS,
+    "--uninstall-completion": _SHELLS,
+}
 
 
 def _consume_globals(prior: list[str]) -> tuple[list[str], str | None]:
