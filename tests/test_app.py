@@ -989,6 +989,10 @@ def uv_project(project, monkeypatch):
 
 
 def _capture_exec(monkeypatch):
+    # Forces the POSIX branch so the exec args are observable on every OS —
+    # a real Windows runner would otherwise spawn the fake uv for real. The
+    # Windows waiter has its own test with _WINDOWS forced the other way.
+    monkeypatch.setattr(_app, "_WINDOWS", False)
     calls: list[list[str]] = []
 
     def fake_execvp(file, args):
