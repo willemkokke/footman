@@ -31,7 +31,7 @@ Ships two console scripts: `footman` and the two-letter `fm`.
 
 ## Why
 
-`duty` got a lot right — the `run()` capture model, the tools wrappers, the
+`duty` gets a lot right — the `run()` capture model, the tools wrappers, the
 decorator ergonomics — and footman keeps those ideas. Where it pushes is the
 parts that compound:
 

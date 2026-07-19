@@ -17,7 +17,7 @@ dependencies. Python 3.11+.
 
 ## Why
 
-`duty` got a lot right — the `run()` capture model, the decorator
+`duty` gets a lot right — the `run()` capture model, the decorator
 ergonomics — and footman keeps those ideas. Where it pushes is the parts
 that compound: completion served from a cache instead of re-importing your
 project on every TAB (~15× faster, measured), eager type and choice
