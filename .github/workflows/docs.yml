@@ -40,6 +40,10 @@ jobs:
           python-version: "3.12"
           enable-cache: true
       - run: uv sync --frozen --group dev --group docs
+      # zsh: the docs build records a real interactive completion session
+      # (`fm footman docs cast`) for the zsh completion page.
+      - name: Install zsh (for the completion cast)
+        run: sudo apt-get update -q && sudo apt-get install -y -q zsh
       - name: Coverage report
         run: uv run pytest --cov=footman --cov-report=html:docs/htmlcov -q
       - name: Build site

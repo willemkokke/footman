@@ -166,6 +166,37 @@ def test_reduce_frames_keeps_only_the_final_repaint():
     )
 
 
+def test_keystrokes_compiles_text_and_tokens():
+    from footman.tasks.docs import keystrokes
+
+    sends = keystrokes(("hi", "<TAB>", "<WAIT:500>", "<ENTER>"))
+    assert [data for _, data in sends] == [b"h", b"i", b"\t", b"", b"\r"]
+    assert sends[3][0] == 0.5  # <WAIT:500> is a half-second pause, no bytes
+
+
+def test_compose_animation_windows_and_shell():
+    from footman.tasks.docs import compose_animation
+
+    svgs = ['<svg width="9">A</svg>', '<svg width="9">B</svg>']
+    out = compose_animation(svgs, [0.0, 1.0], hold=1.0)
+    assert out.startswith('<svg width="9">') and out.endswith("</svg>")
+    assert '<g class="cast-frame cf0">A</g>' in out
+    assert '<g class="cast-frame cf1">B</g>' in out
+    assert "@keyframes cf0{0%{opacity:1}50.000%{opacity:0}}" in out
+    assert "step-end infinite" in out
+
+
+def test_cast_lists_unavailable_without_pyte(plugin_project, capsys, monkeypatch):
+    from footman import registry
+
+    real = registry._importable
+    monkeypatch.setattr(
+        registry, "_importable", lambda m: False if m == "pyte" else real(m)
+    )
+    assert _app.run(["--list"]) == 0
+    assert "(unavailable: requires pyte)" in capsys.readouterr().out
+
+
 @pytest.mark.skipif(
     sys.platform == "win32" or importlib.util.find_spec("rich") is None,
     reason="needs a POSIX pty and rich",

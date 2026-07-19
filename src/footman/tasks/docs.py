@@ -10,11 +10,12 @@ from __future__ import annotations
 
 import io
 import os
+import re
 import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from footman import _paths, config, context, discover, markdown, registry
 from footman import manifest as _manifest
@@ -211,6 +212,325 @@ def shots(
     line = " ".join([prog, *argv])
     out.write_text(console.export_svg(title=title or line), encoding="utf-8")
     print(f"wrote {out}")
+    return [str(out)]
+
+
+# --- animated casts -----------------------------------------------------------
+# An interactive session (TAB completion!) can't be a static screenshot or a
+# line-based reduction: shells paint menus with real cursor movement. A cast
+# drives a live shell on the pty with scripted keystrokes, replays the byte
+# stream through a terminal emulator (pyte) into screen states, renders each
+# state with rich, and stacks the frames in one self-contained SVG animated
+# by CSS keyframes with the capture's own timing. No JavaScript; an <img>
+# plays it.
+
+_KEY_TOKENS = {
+    "<TAB>": b"\t",
+    "<ENTER>": b"\r",
+    "<SPACE>": b" ",
+    "<BACKSPACE>": b"\x7f",
+    "<CTRL-C>": b"\x03",
+}
+
+
+def keystrokes(script: tuple[str, ...]) -> list[tuple[float, bytes]]:
+    """Compile a cast script into (delay-before-send, bytes) steps.
+
+    Each script argument is either literal text — typed one character at a
+    time at a human-ish cadence — or a token: `<TAB>`, `<ENTER>`,
+    `<SPACE>`, `<BACKSPACE>`, `<CTRL-C>`, `<WAIT>` (pause 0.8 s), or
+    `<WAIT:ms>`.
+    """
+    sends: list[tuple[float, bytes]] = []
+    for part in script:
+        if part in _KEY_TOKENS:
+            sends.append((0.3, _KEY_TOKENS[part]))
+        elif part == "<WAIT>":
+            sends.append((0.8, b""))
+        elif part.startswith("<WAIT:") and part.endswith(">"):
+            sends.append((int(part[6:-1]) / 1000.0, b""))
+        else:
+            sends.extend((0.07, ch.encode("utf-8")) for ch in part)
+    return sends
+
+
+def _pty_session(
+    argv: list[str],
+    *,
+    width: int,
+    height: int,
+    sends: list[tuple[float, bytes]],
+    settle: float,
+    env_extra: dict[str, str] | None = None,
+) -> list[tuple[float, bytes]]:
+    """Run *argv* on a pty, play the keystroke script, and record
+    (elapsed-seconds, bytes) chunks until output has settled."""
+    import fcntl
+    import pty
+    import select
+    import struct
+    import termios
+    import time as _time
+
+    env = os.environ.copy()
+    env.pop("NO_COLOR", None)
+    env["TERM"] = "xterm-256color"
+    env["COLUMNS"] = str(width)
+    env["LINES"] = str(height)
+    env.update(env_extra or {})
+    master, slave = pty.openpty()
+    fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", height, width, 0, 0))
+    proc = subprocess.Popen(
+        argv, stdin=slave, stdout=slave, stderr=slave, env=env, start_new_session=True
+    )
+    os.close(slave)
+    start = _time.monotonic()
+    chunks: list[tuple[float, bytes]] = []
+    queue = list(sends)
+    # The send clock starts at the shell's *first paint*, not at spawn —
+    # keys written before the line editor exists are half-echoed raw and
+    # eaten (a TAB pressed then never completes anything).
+    next_at: float | None = None
+    deadline = None if queue else start + settle
+    try:
+        while True:
+            now = _time.monotonic()
+            if queue and next_at is not None and now >= next_at:
+                _, data = queue.pop(0)
+                if data:
+                    os.write(master, data)
+                next_at = now + (queue[0][0] if queue else 0.0)
+                if not queue:
+                    deadline = now + settle
+            readable, _, _ = select.select([master], [], [], 0.03)
+            if readable:
+                try:
+                    data = os.read(master, 65536)
+                except OSError:  # EIO: the child hung up
+                    break
+                if not data:
+                    break
+                chunks.append((_time.monotonic() - start, data))
+                if next_at is None and queue:  # first paint: typing may begin
+                    next_at = _time.monotonic() + 0.4 + queue[0][0]
+                if deadline is not None:  # let late repaints settle too
+                    deadline = _time.monotonic() + settle
+            if deadline is not None and _time.monotonic() >= deadline:
+                break
+            if proc.poll() is not None and not readable:
+                break
+    finally:
+        import contextlib as _contextlib
+
+        with _contextlib.suppress(ProcessLookupError):
+            proc.kill()
+        os.close(master)
+        proc.wait()
+    return chunks
+
+
+def _cell_style(char: Any) -> str:
+    """A pyte cell's attributes as a rich style string ('' = default)."""
+    bits: list[str] = []
+    if char.bold:
+        bits.append("bold")
+    if char.italics:
+        bits.append("italic")
+    if char.underscore:
+        bits.append("underline")
+    if char.reverse:
+        bits.append("reverse")
+    for attr, prefix in ((char.fg, ""), (char.bg, "on ")):
+        if attr and attr != "default":
+            # pyte names ansi colours ("red") and spells the rest as bare
+            # 6-digit hex ("87d7ff") — rich wants a `#` on the hex form.
+            longhand = f"#{attr}" if _HEX6.fullmatch(attr) else attr
+            bits.append(f"{prefix}{longhand}")
+    return " ".join(bits)
+
+
+def _screens(
+    chunks: list[tuple[float, bytes]], *, width: int, height: int
+) -> list[tuple[float, list[list[tuple[str, str]]]]]:
+    """Replay timed chunks through a terminal emulator; return the deduped
+    (time, screen) states, each screen a grid of (char, style) cells."""
+    import pyte
+
+    screen = pyte.Screen(width, height)
+    stream = pyte.Stream(screen)
+    frames: list[tuple[float, list[list[tuple[str, str]]]]] = []
+    last: list[list[tuple[str, str]]] | None = None
+    for t, data in chunks:
+        stream.feed(data.decode("utf-8", "replace"))
+        snap = [
+            [
+                (cell.data, _cell_style(cell))
+                for x in range(width)
+                for cell in (screen.buffer[y][x],)
+            ]
+            for y in range(height)
+        ]
+        if snap != last:
+            frames.append((t, snap))
+            last = snap
+    return frames
+
+
+_HEX6 = re.compile(r"[0-9a-fA-F]{6}")
+_SVG_SHELL = re.compile(r"^\s*<svg[^>]*>|</svg>\s*$")
+
+
+def compose_animation(svgs: list[str], times: list[float], *, hold: float = 1.6) -> str:
+    """Stack per-frame SVGs into one, cycled by CSS keyframes.
+
+    Each frame plays over its captured window; the last holds for *hold*
+    seconds before the loop restarts. `step-end` opacity keeps the switch
+    discrete, and every frame carries its own opaque background, so the
+    topmost visible frame is the whole picture.
+    """
+    total = times[-1] + hold
+    head = svgs[0]
+    match = re.search(r"<svg[^>]*>", head)
+    shell_open = match.group(0) if match else "<svg>"
+    css: list[str] = [".cast-frame{opacity:0}"]
+    body: list[str] = []
+    for i, (svg, t) in enumerate(zip(svgs, times, strict=True)):
+        a = 100.0 * t / total
+        b = 100.0 * (times[i + 1] / total) if i + 1 < len(times) else 100.0
+        window = f"{a:.3f}%{{opacity:1}}" if a > 0 else "0%{opacity:1}"
+        off = f"{b:.3f}%{{opacity:0}}" if b < 100.0 else ""
+        pre = "0%{opacity:0}" if a > 0 else ""
+        css.append(f"@keyframes cf{i}{{{pre}{window}{off}}}")
+        css.append(f".cf{i}{{animation:cf{i} {total:.3f}s step-end infinite}}")
+        inner = _SVG_SHELL.sub("", svg.strip())
+        body.append(f'<g class="cast-frame cf{i}">{inner}</g>')
+    style = f"<style>{''.join(css)}</style>"
+    return f"{shell_open}{style}{''.join(body)}</svg>"
+
+
+_CAST_BOOT: dict[str, str] = {"zsh": "zsh", "bash": "bash", "fish": "fish"}
+
+
+def _boot_shell(
+    shell: str, prog: str, scratch: Path
+) -> tuple[list[str], dict[str, str]]:
+    """(argv, extra env) for an interactive *shell* with completion loaded.
+
+    Each shell boots from a scratch config dir — the user's own dotfiles
+    never run — with a minimal green prompt and footman's hook installed
+    via the same `--setup-completion` path users eval. The scratch HOME
+    would also hide the completion cache (TAB answers from cache alone),
+    so the invoker's real cache dir is passed through FOOTMAN_CACHE_DIR —
+    the override doing exactly the job it was built for.
+    """
+    env = {
+        "HOME": str(scratch),
+        "XDG_CONFIG_HOME": str(scratch),
+        "FOOTMAN_CACHE_DIR": str(_paths.footman_cache_dir()),
+    }
+    if shell == "zsh":
+        (scratch / ".zshrc").write_text(
+            "PROMPT='%F{green}\u276f%f '\n"
+            "autoload -Uz compinit && compinit -u\n"
+            f'eval "$({prog} --setup-completion zsh)"\n',
+            encoding="utf-8",
+        )
+        env["ZDOTDIR"] = str(scratch)
+        return ["zsh", "-i"], env
+    if shell == "bash":
+        rc = scratch / "bashrc"
+        rc.write_text(
+            "PS1='\\[\\e[32m\\]\u276f\\[\\e[0m\\] '\n"
+            f'eval "$({prog} --setup-completion bash)"\n',
+            encoding="utf-8",
+        )
+        return ["bash", "--rcfile", str(rc), "-i"], env
+    if shell == "fish":
+        boot = (
+            f"{prog} --setup-completion fish | source; "
+            "function fish_prompt; set_color green; echo -n '\u276f '; "
+            "set_color normal; end"
+        )
+        return ["fish", "-i", "-C", boot], env
+    raise RuntimeError(f"cast drives zsh, bash, or fish (got {shell!r})")
+
+
+@tasks.task(
+    name="cast", requires=["rich", "pyte"], when=lambda: sys.platform != "win32"
+)
+def cast(
+    *keys: str,
+    out: Annotated[Path, doc("the animated SVG file to write")],
+    shell: Annotated[
+        Literal["zsh", "bash", "fish"], doc("interactive shell to drive")
+    ] = "zsh",
+    title: Annotated[str, doc("window title (default: '<shell> · completion')")] = "",
+    width: Annotated[int, between(40, 200), doc("terminal columns")] = 72,
+    height: Annotated[int, between(4, 50), doc("terminal rows")] = 14,
+    prog: Annotated[
+        str, doc("CLI whose completion is installed (default: the invoking CLI)")
+    ] = "",
+    max_frames: Annotated[int, between(2, 120), doc("frame budget")] = 60,
+):
+    """Record an animated SVG of a real interactive shell session.
+
+    Boots the shell from a scratch config with footman completion loaded
+    (via `--setup-completion`), types the script — everything after `--`,
+    where `<TAB>`, `<ENTER>`, `<WAIT>` and friends are keys — and replays
+    the capture through a terminal emulator into an animated, dependency-
+    free SVG with the session's real timing. TAB completion, in motion,
+    regenerated on every docs build so it cannot drift.
+    """
+    if sys.platform == "win32":  # the when= gate already refused; belt
+        raise RuntimeError("docs cast needs a POSIX pseudo-terminal")
+    import tempfile
+
+    prog = prog or context.current().prog
+    if shutil.which(prog) is None:
+        raise RuntimeError(f"{prog!r} is not on PATH")
+    if shutil.which(_CAST_BOOT.get(shell, shell)) is None:
+        raise RuntimeError(f"{shell!r} is not on PATH")
+
+    with tempfile.TemporaryDirectory() as scratch:
+        argv, env_extra = _boot_shell(shell, prog, Path(scratch))
+        chunks = _pty_session(
+            argv,
+            width=width,
+            height=height,
+            sends=keystrokes(keys),
+            settle=1.0,
+            env_extra=env_extra,
+        )
+    frames = _screens(chunks, width=width, height=height)
+    if not frames:
+        raise RuntimeError(f"the {shell} session produced no output")
+    if len(frames) > max_frames:  # keep first/last, thin the middle evenly
+        keep = {0, len(frames) - 1}
+        keep.update(
+            round(i * (len(frames) - 1) / (max_frames - 1)) for i in range(max_frames)
+        )
+        frames = [f for i, f in enumerate(frames) if i in keep]
+
+    from rich.console import Console
+    from rich.text import Text
+
+    label = title or f"{shell} · completion"
+    svgs: list[str] = []
+    for i, (_, grid) in enumerate(frames):
+        console = Console(
+            record=True, width=width, file=io.StringIO(), force_terminal=True
+        )
+        for row in grid:
+            text = Text()
+            for ch, style in row:
+                text.append(ch, style or None)
+            console.print(text)
+        svgs.append(console.export_svg(title=label, unique_id=f"cf{i}"))
+    start = frames[0][0]
+    times = [t - start for t, _ in frames]
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(compose_animation(svgs, times), encoding="utf-8")
+    print(f"wrote {out} ({len(frames)} frames)")
     return [str(out)]
 
 

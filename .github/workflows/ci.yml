@@ -133,7 +133,9 @@ jobs:
           $dir = (Get-ChildItem -Path nu-bin -Recurse -Filter nu.exe | Select-Object -First 1).DirectoryName
           Add-Content -Path $env:GITHUB_PATH -Value $dir
 
-      - run: uv sync --frozen
+      # --group shots: rich + pyte, so the animated-cast test drives a real
+      # zsh here alongside the completion hooks.
+      - run: uv sync --frozen --group shots
       # -rs reports any skip; the FOOTMAN_REQUIRE_SHELLS guard test fails the run
       # if a shell this platform should drive is missing. These runs drive
       # _complete/_shellcomp through real shells — branches the plain suite

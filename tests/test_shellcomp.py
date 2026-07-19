@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import os
 import shutil
 import subprocess
@@ -690,6 +691,36 @@ def _ci_required_shell_exes() -> set[str]:
     if sys.platform.startswith("win"):
         return {"nu", "pwsh"}
     return {"bash", "zsh", "fish", "nu", "pwsh"}
+
+
+@_posix_shell
+@pytest.mark.skipif(shutil.which("zsh") is None, reason="zsh not installed")
+@pytest.mark.skipif(
+    importlib.util.find_spec("rich") is None
+    or importlib.util.find_spec("pyte") is None,
+    reason="rich+pyte (the shots group) not installed",
+)
+def test_zsh_cast_records_an_animated_completion(home, tmp_path, monkeypatch):
+    """End-to-end `docs cast`: a real interactive zsh from a scratch config,
+    the hook loaded via --setup-completion, TAB answered from the warm cache
+    (FOOTMAN_CACHE_DIR carries it past the scratch HOME), and the frames
+    composed into one animated SVG."""
+    (tmp_path / "pyproject.toml").write_text(
+        "[project]\nname='x'\n[tool.footman]\nplugins = ['footman']\n"
+    )
+    (tmp_path / "tasks.py").write_text(
+        'from footman import task\n\n@task\ndef lint(fix: bool = False):\n    "Lint."\n'
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("XDG_CACHE_HOME", str(home / ".cache"))
+    assert _app.run(["--list"]) == 0  # warm the manifest TAB will serve
+    dest = tmp_path / "cast.svg"
+    line = ["footman", "docs", "cast", "--out", str(dest), "--shell", "zsh"]
+    line += ["--width", "70", "--height", "10", "--", "fm li", "<TAB>"]
+    assert _app.run(line) == 0
+    svg = dest.read_text(encoding="utf-8")
+    assert svg.count("cast-frame") >= 2  # it animates
+    assert "lint" in svg  # TAB completed the prefix from the cached manifest
 
 
 @pytest.mark.skipif(

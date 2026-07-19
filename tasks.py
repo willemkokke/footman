@@ -190,6 +190,25 @@ def docs_build(check: bool = False):
     taskdocs_shots("--list", out=shot / "list.svg", width=100)
     taskdocs_shots("--help", out=shot / "help.svg", width=100)
     taskdocs_shots("format", "lint", out=shot / "run.svg", width=72)
+    # The animated one: a real zsh session — TAB menu, prefix-complete,
+    # then `fm check` actually running. Same regeneration rule: the docs
+    # play what the CLI does, because they are recordings of it doing it.
+    from footman.tasks.docs import cast as taskdocs_cast
+
+    taskdocs_cast(
+        "fm ",
+        "<TAB>",
+        "<WAIT>",
+        "che",
+        "<TAB>",
+        "<WAIT:600>",
+        "<ENTER>",
+        "<WAIT:2500>",
+        out=shot / "zsh-cast.svg",
+        shell="zsh",
+        width=80,
+        height=16,
+    )
     _write_llms_txt()
     # A conditional flag needs no ternary: strict=check is --strict when
     # check is true, omitted otherwise (strict is off by default in zensical).

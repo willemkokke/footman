@@ -43,6 +43,19 @@ versions may include breaking changes.
   those blocks now open straight with the completion line. Surfaced by
   the first `docs shots` screenshot, which faithfully photographed the
   redundancy.
+- **`fm footman docs cast` — animated terminal recordings, no JavaScript.**
+  Boots a real interactive shell (zsh, bash, or fish) from a scratch
+  config with footman's completion hook loaded via `--setup-completion`,
+  types a keystroke script (`"fm che"`, `<TAB>`, `<ENTER>`, `<WAIT>`…),
+  and replays the capture through a terminal emulator into one
+  self-contained SVG animated by CSS keyframes with the session's own
+  timing — an `<img>` plays it. The zsh completion page now opens with
+  one: the real `_describe` menu appearing, a prefix completing, and
+  `fm check` running to its receipts, re-recorded from a live shell on
+  every docs build. Needs rich + pyte (the `shots` group), gated with
+  `@task(requires=…)` like its sibling; the scratch HOME hands the
+  invoker's completion cache through `FOOTMAN_CACHE_DIR`, so TAB answers
+  exactly as it would at your prompt.
 - **`fm footman docs globals` — the runner's global options as a markdown
   table.** Rendered straight from the CLI grammar: the same rows, in the
   same order, with the same words `--help` prints, with `{prog}` speaking

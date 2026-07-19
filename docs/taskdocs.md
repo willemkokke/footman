@@ -108,6 +108,28 @@ message — add rich to your docs dependency group and it comes alive.
 footman documenting itself with its own availability machinery is exactly
 the use `requires=` was built for.
 
+## Animated sessions: `fm footman docs cast`
+
+A static frame can't show <kbd>Tab</kbd> completion. `cast` boots a real
+interactive shell (zsh, bash, or fish) from a scratch config with footman's
+hook loaded, types a keystroke script, and replays the captured bytes
+through a terminal emulator into an **animated SVG** — CSS keyframes with
+the session's own timing, no JavaScript, plays anywhere an image does:
+
+```console
+$ fm footman docs cast --out docs/_generated/shots/zsh-cast.svg \
+      --shell zsh -- "fm " "<TAB>" "<WAIT>" "che" "<TAB>" "<ENTER>" "<WAIT:2500>"
+wrote docs/_generated/shots/zsh-cast.svg (55 frames)
+```
+
+Everything after `--` is the script: plain text is typed at a human-ish
+cadence; `<TAB>`, `<ENTER>`, `<SPACE>`, `<BACKSPACE>`, `<CTRL-C>`,
+`<WAIT>`, and `<WAIT:ms>` are keys. The shell really runs what you type —
+the recording on the [zsh completion page](completion-zsh.md) ends with a
+real `fm check`. Needs rich and [pyte](https://github.com/selectel/pyte)
+(the terminal emulator), gated the same way: without them the task lists
+as unavailable and says which package to add.
+
 ## Keep it fresh
 
 Generated pages drift unless a build regenerates them. The tasks are plain

@@ -64,10 +64,12 @@ dev = [
     "ruff>=0.6",
     "basedpyright>=1.18",
 ]
-# rich renders the terminal screenshots `fm footman docs shots` embeds —
-# pure Python, so CI can add it on every matrix job (3.14t included) to
-# cover the shots task. Never a footman runtime dependency.
-shots = ["rich>=13.0"]
+# rich renders the terminal screenshots `fm footman docs shots` embeds;
+# pyte replays interactive captures (completion menus move the cursor —
+# only a real terminal emulator can draw them) for `docs cast`. Both are
+# pure Python, so CI can add them on every matrix job (3.14t included).
+# Never footman runtime dependencies.
+shots = ["rich>=13.0", "pyte>=0.8"]
 # Documentation site (Zensical + mkdocstrings for the API reference).
 # Installed only to build/serve docs. Never a footman runtime dependency.
 docs = [

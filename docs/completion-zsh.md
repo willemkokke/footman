@@ -1,5 +1,12 @@
 # Completion on zsh
 
+This is a recording of a real zsh session — the hook installed the way the
+next section describes, <kbd>Tab</kbd> pressed for the menu, a prefix
+completed, the task run. It is regenerated from a live shell on every docs
+build, so it cannot drift from what your terminal will do:
+
+![Animated: fm TAB shows the task menu with descriptions, che TAB completes to check, and fm check runs to green receipts](_generated/shots/zsh-cast.svg)
+
 ## Install
 
 ```console
