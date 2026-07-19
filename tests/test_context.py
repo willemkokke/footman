@@ -487,5 +487,6 @@ def test_step_lines_carry_an_aligned_name_column(capsys):
 
     drive(tasks, "go longer")
     out = capsys.readouterr().out
-    assert "ok   go      echo hi  (0.0s)" in out  # padded to len("longer")
-    assert "ok   longer  echo ho  (0.0s)" in out
+    # Padded to len("longer"); the duration digit varies with the machine.
+    assert "ok   go      echo hi  (0." in out
+    assert "ok   longer  echo ho  (0." in out
