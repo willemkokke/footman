@@ -11,7 +11,7 @@ title: A typed task runner with instant completion
 A task runner with the soul of [duty](https://pawamoy.github.io/duty/) and the
 UX of [typer](https://typer.tiangolo.com/): typed function signatures become
 real flags and positionals, modules become nested command groups, and shell
-completion answers from a cached manifest in **~19 ms — without importing your
+completion answers from a cached manifest in **~25 ms — without importing your
 code**.
 
 ```sh
@@ -30,23 +30,24 @@ Ships two console scripts: `footman` and the two-letter `fm`.
 
 ## Why
 
-`duty` got a lot right — the `ctx.run` capture model, the tools wrappers, the
+`duty` got a lot right — the `run()` capture model, the tools wrappers, the
 decorator ergonomics — and footman keeps those ideas. Where it pushes is the
 parts that compound:
 
-- **Completion that answers from a cache** instead of re-importing your whole
-  project on every <kbd>Tab</kbd> (~15× faster in practice).
-- **Eager type and choice validation**, including unions and dynamic value sets.
-- **Native command groups** — modules become nested subcommands.
-- **No `ctx` boilerplate** in task signatures.
-- **A DAG scheduler** that runs independent tasks in parallel by default (duty
-  and invoke can't).
-- **A monorepo task cascade** that merges a `tasks.py` per folder from the repo
-  root down to where you stand.
+- Completion answers from a cache instead of re-importing your whole project
+  on every <kbd>Tab</kbd> — ~15× faster, measured.
+- Types and choices validate eagerly, including unions and dynamic value
+  sets, with errors that teach.
+- Modules become nested command groups, and task signatures carry no `ctx`
+  boilerplate.
+- Independent tasks run in parallel by default, scheduled from the chain and
+  each task's `pre`/`post` dependencies — duty and invoke run these serially.
+- A monorepo task cascade merges a `tasks.py` per folder, from the repo root
+  down to where you stand.
 
-A measured head-to-head against duty, invoke, poe, and typer lives in the
-repository's `comparison/` directory — modern duty has real flags and chaining,
-so the gap is validation, ergonomics, and completion latency, not grammar.
+The receipts live in the [comparison](comparison.md) — a measured
+head-to-head against duty, invoke, poe, and typer, every number reproducible
+from the repo's `comparison/` directory.
 
 ## Install
 

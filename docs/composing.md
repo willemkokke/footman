@@ -65,7 +65,7 @@ from footman import group, include
 include("shared_tasks")                          # graft everything at root
 include("shared_tasks", only=["lint", "fmt"])    # cherry-pick by CLI name
 docs = group("docs", help="Docs")
-include("mkdocs_helpers.tasks", into=docs)       # namespace: fm docs …
+include("mkdocs_helpers.tasks", into=docs)       # mounts under: fm docs …
 ```
 
 `include()` imports the provider inside a registry capture, so its decorators

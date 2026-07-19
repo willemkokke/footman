@@ -4,7 +4,7 @@ A task runner with the soul of [duty](https://pawamoy.github.io/duty/) and
 the UX of [typer](https://typer.tiangolo.com/): typed function signatures
 become real flags and positionals, modules become nested command groups,
 independent tasks run in parallel by default, and shell completion answers
-from a cached manifest in ~20 ms — **without importing your code**.
+from a cached manifest in ~25 ms — **without importing your code**.
 
 Ships two console scripts, `footman` and the two-letter `fm`. Zero runtime
 dependencies. Python 3.11+.
@@ -23,7 +23,7 @@ that compound: completion served from a cache instead of re-importing your
 project on every TAB (~15× faster, measured), eager type and choice
 validation with errors that teach, a DAG scheduler that runs independent
 tasks concurrently (the same four-step `check` lands ~4× sooner than duty
-or invoke, measured), a monorepo cascade that merges a `tasks.py` per
+or invoke, measured), a monorepo task cascade that merges a `tasks.py` per
 folder, and a first-party story for testing your tasks. The receipts live
 in the [comparison](https://willemkokke.github.io/footman/comparison/) —
 every number reproducible from [`comparison/`](comparison/).
@@ -62,7 +62,7 @@ $ fm lint test docs serve --port 8001   # one chain; independent tasks run in pa
 $ fm test -- -k grammar -x              # everything after -- goes to pytest
 $ fm deploy produ
 fm: deploy: <target> must be one of dev|staging|prod (got 'produ') — did you mean 'prod'?
-$ fm --install-completion               # detects your shell; TAB answers in ~20 ms
+$ fm --install-completion               # detects your shell; TAB answers in ~25 ms
 ```
 
 ## Learn more

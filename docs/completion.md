@@ -1,24 +1,28 @@
 # Completion
 
-Completion answers from a JSON manifest cached under your XDG cache dir, keyed
-by directory (so each folder of a [monorepo](monorepos.md) caches its own merged
-cascade). The hot path is stdlib-only — it reads one file, parses JSON, and
-walks the tree; it **never imports footman or your tasks**.
+Completion answers from a JSON manifest cached per directory under
+`~/.cache/footman/` (or `$XDG_CACHE_HOME/footman/` where that's set), so each
+folder of a [monorepo](monorepos.md) caches its own merged cascade. The hot
+path is stdlib-only — it reads one file, parses JSON, and walks the tree; it
+**never imports footman or your tasks**.
 
 ## The latency story
 
-Measured cold-process on an M-series Mac:
+Measured cold-process on an M-series Mac — the row that matters is the last
+one, because it's the exact command the installed shell hooks run:
 
-| variant                                   |   mean |
-| ----------------------------------------- | -----: |
-| interpreter startup (floor)               | 14 ms  |
-| standalone resolver (baked-in path)       | 19 ms  |
-| `python -m footman --complete`            | 24 ms  |
+| variant                                    |   mean |
+| ------------------------------------------ | -----: |
+| interpreter startup (floor)                | 17 ms  |
+| standalone resolver (`python -S`)          | 22 ms  |
+| `python -m footman --complete`             | 23 ms  |
+| `fm --complete` (the installed hook path)  | 24 ms  |
 
-The manifest is regenerated for free on any execution-path run (footman is
-importing your code anyway) and rewritten only when the command surface actually
-changed. Run `uv run python scripts/bench_completion.py` in the repository to
-reproduce.
+So the honest headline is **~25 ms per <kbd>Tab</kbd>**, of which ~17 ms is
+Python starting up at all. footman regenerates the manifest for free on any
+execution-path run (it is importing your code anyway) and rewrites it only
+when the command surface actually changed. Reproduce with
+`uv run python scripts/bench_completion.py`.
 
 ## How it stays fast
 

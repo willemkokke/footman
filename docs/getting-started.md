@@ -19,25 +19,29 @@ from footman import task, group
 
 @task
 def lint(fix: bool = False):
-    """Run ruff over the project."""
+    "Run ruff over the project."
     ...
 
 @task
 def test(marker: str = "", *pytest_args):
-    """Run the test suite (extra pytest args after --)."""
+    "Run the test suite (extra pytest args after --)."
     ...
 
 docs = group("docs", help="Documentation")
 
 @docs.task
 def serve(port: int = 8000):
-    """Serve the docs locally."""
+    "Serve the docs locally."
     ...
 ```
 
+The docstring's **first line** is the task's help text — it shows up in
+`fm --list`, `fm --help <task>`, and your shell's completion menu. One good
+line is the whole convention.
+
 The command name is the function name with underscores turned into hyphens
 (`add_word` → `add-word`). A module of functions becomes a flat set of commands;
-each `group()` becomes a subcommand.
+each `group()` opens a nested command group.
 
 ## Run tasks
 
@@ -56,7 +60,9 @@ default becomes a required positional. See
 ## Chain several tasks
 
 List more than one task on a line and footman runs them as a chain — no
-separator needed, the split is driven by the manifest:
+separator needed. The *manifest* (footman's cached description of your task
+tree — the same file that powers completion) tells the parser every task's
+exact shape, which is what makes the split deterministic:
 
 ```sh
 fm format lint --fix test
@@ -85,3 +91,14 @@ $ fm --dry-run format lint --fix test
   -> lint  --fix
   -> test
 ```
+
+## Four words you'll meet everywhere
+
+- **Manifest** — the cached JSON description of your task tree; powers
+  [completion](completion.md) and the chain split.
+- **Cascade** — in a monorepo, the merged set of `tasks.py` files from the
+  repo root down to your directory. See [Monorepos & config](monorepos.md).
+- **Chain** — several tasks on one command line; independent ones run in
+  parallel. See [Chaining & parallelism](orchestration.md).
+- **Context** — the per-task object behind `run()`; you rarely touch it
+  directly. See [Running tools](tools.md).

@@ -5,9 +5,10 @@ time is the honest metric (not in-process timing). We compare, fresh process
 each run:
 
 * interpreter startup — the floor nothing can beat;
-* the standalone resolver invoked directly with ``-S`` (the baked-in path a
-  generated completion script would use);
-* ``python -m footman --complete`` (the portable path through the package).
+* the standalone resolver invoked directly with ``-S``;
+* ``python -m footman --complete`` (the portable path through the package);
+* the ``fm`` console script — the exact command the installed shell hooks
+  run, and therefore the number the docs quote.
 
 All read a cached JSON manifest and never import the framework or your tasks.
 
@@ -68,6 +69,11 @@ def main() -> None:
     package_cmd = [PY, "-m", "footman", "--complete"]
     package_cmd += ["--manifest", str(manifest_path), "--", *words]
     measure("package path (python -m footman --complete)", package_cmd)
+    console = Path(PY).parent / ("fm.exe" if sys.platform == "win32" else "fm")
+    if console.exists():  # the exact command the installed shell hooks run
+        console_cmd = [str(console), "--complete"]
+        console_cmd += ["--manifest", str(manifest_path), "--", *words]
+        measure("console script (fm --complete, the hook path)", console_cmd)
     print("\nHot path: one file read + JSON parse + walk. No framework, no user code.")
 
 

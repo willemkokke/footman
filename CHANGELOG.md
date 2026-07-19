@@ -58,6 +58,12 @@ versions may include breaking changes.
 
 ### Fixed
 
+- **The completion-latency headline is now the number users actually get.**
+  The docs quoted ~19/20/23 ms in different places; the honest figure for the
+  installed hook path (`fm --complete` via the console script) is **~25 ms**,
+  now measured directly by `scripts/bench_completion.py` and quoted
+  consistently everywhere. The ~15× multiplier vs re-importing runners is
+  unchanged.
 - **`fm --help <typo>` now refuses with a suggestion** (exit 2, `unknown task
   or group 'nope' — did you mean …?`) instead of silently printing the global
   help with exit 0. With a real target on the line (`fm --help deploy prod`),

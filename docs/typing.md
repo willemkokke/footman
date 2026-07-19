@@ -14,14 +14,15 @@ parse time, with taught error messages.
 | `count: int = 100`              | typed option, validated at parse time               |
 | `paths: list[Path] = ()`        | repeatable or comma-separated (`--paths a,b`)       |
 | `env: dict[str, int]`           | `--env KEY=VAL` pairs (repeatable or comma-separated)|
-| `template: Path`                | required positional (exact arity)                   |
+| `template: Path`                | required positional (consumed by exact count)       |
 | `*cmd: str`                     | variadic trailing passthrough                       |
 
 ## Unions and one-or-many values
 
 A parameter can accept a union of types; footman validates the value against the
-union and coerces it by specificity (`int` → `float` → `Path` → `str`, with
-`str` as the universal fallback):
+union and coerces it by specificity — the most specific member that accepts the
+value wins (`int` → `float` → `Path` → `str`, with `str` as the universal
+fallback):
 
 ```python
 @task
@@ -119,7 +120,8 @@ $ DEPLOY_ENV=prod fm deploy app.toml      # target == "prod"
 - **Paths** — `exists`, `isfile`, `isdir` require the value to name something
   real on disk; validated at parse time like a bad choice would be.
 - **Bounds** — `between(lo, hi)` is inclusive; either end may be `None`. A
-  bare `range(0, 8)` also works for ints, with Python's half-open semantics.
+  bare `range(0, 8)` also works for ints, with Python's half-open semantics
+  (`0` through `7`; the end is excluded, exactly as in a `for` loop).
 - **Env fallbacks** — `env("VAR")` fills an *absent* option from the
   environment; the value flows through the same coercion, bounds, and checks
   a command-line token would (just at binding time — the parser never sees
