@@ -35,10 +35,13 @@ versions may include breaking changes.
   Two flavors: portable CommonMark, or `material` with anchors and example
   admonitions. Content is phrased by the same code as `--help` — names,
   params, docstring help, defaults, synthesized examples — so pages can't
-  drift from the CLI. The renderer is public (`footman.markdown`), the
-  manifest gains an additive `default` key, and footman's own docs dogfood
-  both modes: the Task reference section and the embedded sample on the
-  "Your tasks, documented" page are regenerated on every docs build.
+  drift from the CLI. Usage lines carry the CLI you invoked — a branded
+  `acme` documents itself with no flag (`ctx.prog`, new on the task
+  context, carries the invoking brand); `--prog` overrides. The renderer
+  is public (`footman.markdown`), the manifest gains an additive `default`
+  key, and footman's own docs dogfood both modes: the Task reference
+  section and the embedded sample on the "Your tasks, documented" page are
+  regenerated on every docs build.
 
 ### Changed
 

@@ -49,6 +49,7 @@ class Context:
     quiet: bool = False
     verbose: bool = False
     no_color: bool = False
+    prog: str = "fm"  # the invoking CLI's command name (the brand's prog)
     passthrough: list[str] = field(default_factory=list)
     tty: bool = False  # use live rewrite/colour (sequential live only)
     sink: TextIO | None = None  # where output goes; None -> real stdout

@@ -95,6 +95,21 @@ def test_site_writes_indexes_and_pages(plugin_project, capsys):
     assert returned == sorted(p.resolve() for p in root.rglob("*.md"))
 
 
+def test_branded_cli_documents_itself(plugin_project):
+    # A branded CLI's pages carry its own name with no flag at all: the
+    # invoking brand rides the task context, and --prog stays the override.
+    from footman import App
+    from footman.testing import Runner
+
+    acme = Runner(App(name="Acme", prog="acme", version="1.0"))
+    result = acme.invoke("footman docs page")
+    assert result.ok
+    assert result.stdout.startswith("# acme tasks\n")
+    assert "acme greet" in result.stdout
+    overridden = acme.invoke("footman docs page --prog other")
+    assert overridden.stdout.startswith("# other tasks\n")
+
+
 def test_page_rides_the_json_envelope(plugin_project, capsys):
     assert _app.run(["--json", "footman", "docs", "page"]) == 0
     payload = json.loads(capsys.readouterr().out)

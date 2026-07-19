@@ -715,6 +715,9 @@ def _run_tree(
         "quiet": bool(g.get("quiet")),
         "verbose": bool(g.get("verbose")),
         "no_color": bool(g.get("no_color")),
+        # Tasks can know who invoked them (a branded CLI's prog) — the
+        # taskdocs plugin brands its output with this, for one.
+        "prog": _brand.prog,
     }
     try:
         results = schedule.run_plan(

@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 from typing import Annotated, Literal
 
-from footman import _paths, config, discover, markdown, registry
+from footman import _paths, config, context, discover, markdown, registry
 from footman import manifest as _manifest
 from footman.params import between, doc
 from footman.registry import Group
@@ -64,7 +64,9 @@ def page(
         doc("plain CommonMark, or material/zensical extras"),
     ] = "plain",
     out: Path | None = None,
-    prog: Annotated[str, doc("command name shown in usage and examples")] = "fm",
+    prog: Annotated[
+        str, doc("command name in usage and examples (default: the invoking CLI)")
+    ] = "",
     all: Annotated[bool, doc("include footman's own mounted tasks")] = False,
 ):
     """Render the task tree (or one group/task) as one markdown page.
@@ -75,6 +77,7 @@ def page(
     drops into zensical/mkdocs via a snippet include.
     """
     tree = _project_tree(all)
+    prog = prog or context.current().prog  # a branded CLI documents itself
     text = markdown.render_page(
         tree, path=_path_of(target), heading=heading, flavor=flavor, prog=prog
     )
@@ -97,7 +100,9 @@ def site(
         Literal["plain", "material"],
         doc("material fits zensical/mkdocs; plain is portable"),
     ] = "material",
-    prog: Annotated[str, doc("command name shown in usage and examples")] = "fm",
+    prog: Annotated[
+        str, doc("command name in usage and examples (default: the invoking CLI)")
+    ] = "",
     all: Annotated[bool, doc("include footman's own mounted tasks")] = False,
 ):
     """Render the task tree as linked pages: index.md per group, one file per task.
@@ -106,6 +111,7 @@ def site(
     to the nav. Regenerate on each docs build so they can't drift.
     """
     tree = _project_tree(all)
+    prog = prog or context.current().prog  # a branded CLI documents itself
     files = markdown.render_site(tree, path=_path_of(target), flavor=flavor, prog=prog)
     written: list[str] = []
     for rel, content in files.items():

@@ -23,18 +23,18 @@ whole group.)
 
 ## One page: `fm footman docs page`
 
-```console
-$ fm footman docs page > TASKS.md          # the whole tree, one document
-$ fm footman docs page --target docs       # just one group…
-$ fm footman docs page --target docs.build # …or one task
-$ fm footman docs page --out TASKS.md      # write the file directly
+```sh
+fm footman docs page > TASKS.md          # the whole tree, one document
+fm footman docs page --target docs       # just one group…
+fm footman docs page --target docs.build # …or one task
+fm footman docs page --out TASKS.md      # write the file directly
 ```
 
 The page goes to stdout (stdout is the answer; footman's summary is stderr
 commentary), so it pipes:
 
-```console
-$ fm footman docs page | pandoc -o tasks.pdf     # or .html, .docx, …
+```sh
+fm footman docs page | pandoc -o tasks.pdf     # or .html, .docx, …
 ```
 
 `--heading 2` (up to 6) makes the headings start deeper, so the output nests
@@ -86,10 +86,11 @@ Add the generated paths to `.gitignore` — they're build output, not source.
 Under [`--json`](json.md), both tasks `return` the list of files they wrote,
 so `returned` carries it for CI to verify.
 
-Two flags to know: `--prog acme` puts a [branded CLI](custom-cli.md)'s name
-in every usage line and example, and `--all` includes the mounted `footman`
-group itself (excluded by default — the documenter doesn't document itself
-unless asked).
+Two flags to know: usage lines and examples carry **the CLI you invoked** —
+a [branded CLI](custom-cli.md) documents itself as `acme` with no flag at
+all, and `--prog` overrides the name when you need to. `--all` includes the
+mounted `footman` group itself (excluded by default — the documenter
+doesn't document itself unless asked).
 
 ## The live sample
 
