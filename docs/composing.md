@@ -36,9 +36,9 @@ def up(detach: bool = True):
 ```console
 $ fm --list
 Tasks:
-  up    Start the dev containers.  (unavailable: requires docker on PATH)
+  up  Start the dev containers.  (unavailable: requires docker on PATH)
 $ fm up
-fm: ... Unavailable: requires docker on PATH
+fm: up: Unavailable: requires docker on PATH
 ```
 
 The name always completes and lists — the manifest stays stable — and the

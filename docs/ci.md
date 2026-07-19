@@ -38,6 +38,12 @@ captures exactly what the tasks produced, and a wrapper that treats stderr
 bytes as failure (cron's mail rule, say) should pass `-q` to silence the
 summary.
 
+Without a TTY there is no progress bar, but timing still works both ways:
+CI runs are recorded into the duration history, and when footman has a
+confident estimate it prints a single `eta ~5.8s` line to stderr at run
+start. `--no-progress` (or `progress = false` in `[tool.footman]`) turns
+the line and the recording off.
+
 ## `--json`: the machine surface
 
 ```console

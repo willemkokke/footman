@@ -31,9 +31,10 @@ it must exit 0.
   `--help` anywhere on the line never executes anything.
 - Validate a command line without running it: `fm --json --dry-run <chain>`.
 - Run for machines: `fm --json <chain>` — stdout is exactly one JSON
-  envelope: {"schema": 1, "results": [{task, ok, code, duration_ms,
-  output, steps, error, returned}]}. A task's return value lands in
-  `returned`; refusals put a taught message in a top-level `error`.
+  envelope: {"schema": 1, "total_ms", "results": [{task, ok, code,
+  duration_ms, output, steps, error, returned}]}. A task's return value
+  lands in `returned`; refusals put a taught message in a top-level
+  `error`.
 - Jump to a task's source: `fm --where <task>` prints file:line.
 
 Grammar: globals (`--json`, `-k`, …) go **before** the first task; a

@@ -126,9 +126,12 @@ a comparable int tuple.
 
 The bridge composes with in-process execution the same way it does with
 flags: no transcription. Every installed Python CLI declares a
-`[console_scripts]` entry point; `in_process` resolves it and calls it with
-`sys.argv` patched — the tool runs inside footman's process, no interpreter
-spawn:
+`[console_scripts]` entry point; `in_process` resolves it and hands it the
+arguments — the tool runs inside footman's process, no interpreter spawn.
+Nearly every entry point accepts arguments directly (click commands like
+mkdocs's and zensical's `cli`, or coverage's `main(argv=None)`) and is
+simply called; only a legacy zero-arg entry falls back to running under a
+patched `sys.argv`, and only those calls serialise.
 
 ```python
 tools.mkdocs.build(strict=True)                    # in-process by default
@@ -136,8 +139,12 @@ tools.Tool("griffe", in_process=True)("dump", "footman")   # opt any tool in
 tools.coverage.html(in_process=False)              # ...or out, per call
 ```
 
-`mkdocs`, `zensical`, and `coverage` default to in-process; `tools.pytest`
-keeps its dedicated `pytest.main` path.
+`mkdocs`, `zensical`, and `coverage` default to in-process. `tools.pytest`
+keeps its dedicated `pytest.main` path for a concrete reason: pytest's
+console entry point takes *no* arguments — the generic path could only
+drive it through the patched-`sys.argv` fallback, serialised — while
+`pytest.main(args)` is pytest's own argument-accepting API. Same
+no-transcription contract, direct call, parallel-safe.
 
 The tool's own module is imported only when the call actually *executes* —
 resolving the entry point is pure metadata, but the `.load()` that imports
