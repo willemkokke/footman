@@ -114,6 +114,9 @@ reportMissingModuleSource = false
 [tool.coverage.run]
 branch = true
 source = ["footman"]
+# Data files from Linux, macOS, and Windows matrix jobs merge into one
+# total in CI — paths must be stored relative for that to line up.
+relative_files = true
 
 [tool.coverage.report]
 show_missing = true
