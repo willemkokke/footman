@@ -125,7 +125,19 @@ ERROR_CASES = [
     ),
     ("lint test --fix", "test: unknown option --fix"),
     ("docs deplo", "docs: expected a task name, got 'deplo'"),
-    ("--json lint --quiet", "lint: unknown option --quiet"),
+    # A misplaced global names the real problem — position — not "unknown".
+    (
+        "--json lint --quiet",
+        "lint: --quiet is a global option — it goes before the first task name",
+    ),
+    (
+        "lint -k",
+        "-k (--keep-going) is a global option — it goes before the first task name",
+    ),
+    (
+        "check + --json",
+        "--json is a global option — it goes before the first task name",
+    ),
     ("render only-one", "render: missing required argument(s): <output>"),
     ("--nope check", "unknown global option --nope"),
     ("--sequential=false lint", "--sequential is a flag and takes no value"),

@@ -38,6 +38,22 @@ def _did_you_mean(word: str, known: Iterable[str]) -> str:
     return f" — did you mean {close[0]!r}?" if close else ""
 
 
+def _misplaced_global(token: str) -> str | None:
+    """The teaching message when *token* is really one of the GLOBALS.
+
+    A global option found after a task name is a position mistake, not an
+    unknown name — so name the real problem and its fix instead of guessing
+    at close matches. Only fires for *unknown* task options: a task param
+    that shares a global's name still wins by position, as it should.
+    """
+    name = token.split("=", 1)[0]
+    if name not in _GLOBAL_KIND:
+        return None
+    canon = _CANON.get(name, name)
+    label = name if name == canon else f"{name} ({canon})"
+    return f"{label} is a global option — it goes before the first task name"
+
+
 class ChainError(Exception):
     """A malformed command line, carrying a teaching message for the user."""
 
@@ -233,6 +249,8 @@ def split_chain(tree: dict, argv: list[str]) -> tuple[list[str], list[Segment]]:
             i += 1
         if i >= len(argv) or argv[i] not in node["tasks"]:
             got = argv[i] if i < len(argv) else "(end of line)"
+            if i < len(argv) and (misplaced := _misplaced_global(got)) is not None:
+                raise ChainError(misplaced)
             scope = " ".join(path)
             where = f"{scope}: " if scope else ""
             names = list(node["groups"]) + list(node["tasks"])
@@ -330,6 +348,8 @@ def _consume_option(seg: Segment, opts: dict, argv: list[str], i: int) -> int:
         if candidate in opts and opts[candidate]["kind"] == "flag":
             p, negated = opts[candidate], True
     if p is None:
+        if (misplaced := _misplaced_global(name)) is not None:
+            raise ChainError(f"{seg.task}: {misplaced}")
         forms = list(opts) + [
             f"--no-{opts[k]['name']}" for k in opts if opts[k]["kind"] == "flag"
         ]
