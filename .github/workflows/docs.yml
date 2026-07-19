@@ -21,6 +21,7 @@ permissions:
   contents: read
   pages: write
   id-token: write
+  actions: read # fetch the merged coverage-html artifact from CI runs
 
 concurrency:
   group: pages
@@ -40,12 +41,32 @@ jobs:
           python-version: "3.12"
           enable-cache: true
       - run: uv sync --frozen --group dev --group docs
-      # zsh: the docs build records a real interactive completion session
-      # (`fm footman docs cast`) for the zsh completion page.
-      - name: Install zsh (for the completion cast)
-        run: sudo apt-get update -q && sudo apt-get install -y -q zsh
-      - name: Coverage report
-        run: uv run pytest --cov=footman --cov-report=html:docs/htmlcov -q
+      # The docs build records completion casts in every shell — install
+      # the ones the runner lacks (bash + pwsh are preinstalled).
+      - name: Install shells (for the completion casts)
+        env:
+          NU_VERSION: "0.114.1"
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y -q zsh fish
+          curl -fsSL "https://github.com/nushell/nushell/releases/download/${NU_VERSION}/nu-${NU_VERSION}-x86_64-unknown-linux-gnu.tar.gz" | tar xz
+          echo "$PWD/nu-${NU_VERSION}-x86_64-unknown-linux-gnu" >> "$GITHUB_PATH"
+      # The coverage page embeds the matrix-merged report CI gates on — a
+      # docs runner can only measure one environment, so it fetches the
+      # newest merged picture instead (coverage only moves on code pushes,
+      # and code pushes always run CI). Local measurement is the fallback
+      # for a fork or a fresh repo with no CI history.
+      - name: Coverage report (merged, from the latest CI run)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          rid=$(gh run list --workflow CI --branch main --status success \
+                --limit 1 --json databaseId --jq '.[0].databaseId' || true)
+          if [ -n "$rid" ] && gh run download "$rid" -n coverage-html -D docs/htmlcov; then
+            echo "merged coverage report from CI run $rid"
+          else
+            echo "no CI artifact reachable — measuring this environment only"
+            uv run pytest --cov=footman --cov-report=html:docs/htmlcov -q
+          fi
       - name: Build site
         # The same task devs run — regenerates llms.txt, then builds strictly.
         run: uv run fm docs build --check

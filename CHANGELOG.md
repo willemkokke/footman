@@ -44,18 +44,25 @@ versions may include breaking changes.
   the first `docs shots` screenshot, which faithfully photographed the
   redundancy.
 - **`fm footman docs cast` — animated terminal recordings, no JavaScript.**
-  Boots a real interactive shell (zsh, bash, or fish) from a scratch
-  config with footman's completion hook loaded via `--setup-completion`,
-  types a keystroke script (`"fm che"`, `<TAB>`, `<ENTER>`, `<WAIT>`…),
-  and replays the capture through a terminal emulator into one
-  self-contained SVG animated by CSS keyframes with the session's own
-  timing — an `<img>` plays it. The zsh completion page now opens with
-  one: the real `_describe` menu appearing, a prefix completing, and
-  `fm check` running to its receipts, re-recorded from a live shell on
-  every docs build. Needs rich + pyte (the `shots` group), gated with
-  `@task(requires=…)` like its sibling; the scratch HOME hands the
-  invoker's completion cache through `FOOTMAN_CACHE_DIR`, so TAB answers
-  exactly as it would at your prompt.
+  Boots a real interactive shell — zsh, bash, fish, pwsh, or nushell —
+  from a scratch config with footman's completion hook loaded via
+  `--setup-completion`, types a keystroke script (`"fm che"`, `<TAB>`,
+  `<ENTER>`, `<WAIT>`…), and replays the capture through a terminal
+  emulator into one self-contained SVG animated by CSS keyframes with
+  the session's own timing — an `<img>` plays it. **Every completion
+  page now opens with its shell's own recording**: zsh's `_describe`
+  menu (and a real `fm check` run to its receipts), fish's pager,
+  PSReadLine's MenuComplete grid with tooltips, nushell's completion
+  menu, bash's candidate list — re-recorded from live shells on every
+  docs build. The session answers terminal interrogations (capability,
+  cursor-position, and colour queries) like a plain xterm, because
+  modern shells refuse to paint a prompt into silence, and it makes the
+  pty its child's controlling terminal, because fish, nushell, and
+  PSReadLine refuse interactive mode without one. Needs rich + pyte
+  (the `shots` group), gated with `@task(requires=…)` like its sibling;
+  the scratch HOME hands the invoker's completion cache through
+  `FOOTMAN_CACHE_DIR`, so TAB answers exactly as it would at your
+  prompt.
 - **`fm footman docs globals` — the runner's global options as a markdown
   table.** Rendered straight from the CLI grammar: the same rows, in the
   same order, with the same words `--help` prints, with `{prog}` speaking
@@ -118,6 +125,17 @@ versions may include breaking changes.
   the last few releases have shown: the surface is settling, the test bed
   is broad, and coverage is enforced. Pre-1.0 minors may still include
   breaking changes, as the header above says.
+
+### Changed
+
+- **The published coverage report is the merged matrix picture.** The
+  docs site's embedded report used to be re-measured on one
+  ubuntu-only run, understating the number CI actually gates on. The
+  merge job now renders the combined HTML — every OS, every Python,
+  the real-shell jobs, and the docs build itself, which runs the whole
+  taskdocs pipeline (five shell casts included) under coverage and
+  merges in like any other job — and both docs builds embed that
+  artifact instead of measuring their own slice.
 
 ### Fixed
 

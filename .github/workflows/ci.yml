@@ -158,7 +158,7 @@ jobs:
     # path) are credited by the jobs that actually execute them, and
     # fail_under (pyproject) gates the whole picture, not one slice.
     name: coverage ≥ fail_under (merged)
-    needs: [test, shells]
+    needs: [test, shells, docs]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -176,6 +176,14 @@ jobs:
         run: |
           uv run coverage combine
           uv run coverage report
+      # The published coverage page shows THIS merged picture, not one
+      # slice: render it here, hand it to the docs builds as an artifact.
+      - name: Render merged HTML report
+        run: uv run coverage html -d htmlcov
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage-html
+          path: htmlcov
 
   docs:
     name: docs build (strict)
@@ -188,15 +196,32 @@ jobs:
           python-version: "3.12"
           enable-cache: true
       - run: uv sync --frozen --group dev --group docs
-      # zsh: the docs build records a real completion session (`docs cast`)
-      # — same step docs.yml uses to deploy.
-      - name: Install zsh (for the completion cast)
-        run: sudo apt-get update -q && sudo apt-get install -y -q zsh
-      # docs/coverage.md embeds the htmlcov report, so the strict build needs
-      # it to exist — same steps docs.yml uses to deploy.
-      - name: Coverage report
-        run: uv run pytest --cov=footman --cov-report=html:docs/htmlcov -q
-      - name: Build site (strict)
-        # Through the task, like docs.yml: it generates the task-reference
-        # pages and llms.txt the nav and snippet includes depend on.
-        run: uv run fm docs build --check
+      # The docs build records completion casts in every shell — install
+      # the ones the runner lacks (bash + pwsh are preinstalled).
+      - name: Install shells (for the completion casts)
+        env:
+          NU_VERSION: "0.114.1"
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y -q zsh fish
+          curl -fsSL "https://github.com/nushell/nushell/releases/download/${NU_VERSION}/nu-${NU_VERSION}-x86_64-unknown-linux-gnu.tar.gz" | tar xz
+          echo "$PWD/nu-${NU_VERSION}-x86_64-unknown-linux-gnu" >> "$GITHUB_PATH"
+      # This job validates that the site *builds*; its output is never
+      # published (the Pages deploy fetches the real merged report), so the
+      # embedded-coverage requirement is satisfied with a placeholder.
+      - name: Placeholder coverage embed
+        run: |
+          mkdir -p docs/htmlcov
+          echo '<html><body>placeholder — the deployed site embeds the merged report</body></html>' > docs/htmlcov/index.html
+      # The build itself is a production-shaped run of the taskdocs pipeline
+      # — page/site/globals rendering, five shell casts, the pty responder —
+      # so it is measured and merged into the coverage gate like any test
+      # job. Child fm processes aren't traced; the suite covers those.
+      - name: Build site (strict, under coverage)
+        run: uv run coverage run -m footman docs build --check
+        env:
+          COVERAGE_FILE: .coverage.docs-build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage-docs-build
+          path: .coverage.*
+          include-hidden-files: true
