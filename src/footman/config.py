@@ -137,12 +137,22 @@ def load_config(
     named that file on purpose, so it failing quietly (a typo silently ignored)
     is not an option.
     """
-    merged: dict[str, Any] = {}
-    for directory in _paths.dir_chain(cwd, ceiling):
-        merged.update(_dir_config(directory, on_warning))
     if cli_path:
+        # The explicit file is total control: it replaces the global file
+        # and the cascade both — the user named exactly what applies.
         path = Path(cli_path).expanduser()
         if not path.is_file():
             raise ConfigError(f"{path}: no such file")
-        merged.update(_footman_table(path, required=True))
+        return _footman_table(path, required=True)
+
+    merged: dict[str, Any] = {}
+    try:
+        # The bottom rung: the user-level file. Whole-file footman settings,
+        # like footman.toml; every project layer cascades over it.
+        merged.update(_footman_table(_paths.footman_config_file()))
+    except ConfigError as exc:
+        if on_warning is not None:
+            on_warning(f"ignoring malformed config: {exc}")
+    for directory in _paths.dir_chain(cwd, ceiling):
+        merged.update(_dir_config(directory, on_warning))
     return merged

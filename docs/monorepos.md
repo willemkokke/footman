@@ -77,6 +77,5 @@ Within one directory, `footman.toml` wins over `pyproject.toml`'s
 everything else. Unknown keys are ignored, so a newer setting never breaks an
 older footman.
 
-The full key table lives in the
-[CLI reference](reference.md#configuration-keys) — currently `tasks`,
-`sequential`, `plugins`, and `completion.max_age`.
+The full key table — and the whole precedence ladder, user-level file
+included — lives on the [Configuration](configuration.md) page.

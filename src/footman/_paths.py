@@ -74,6 +74,28 @@ def cache_home() -> Path:
     return Path(xdg) if xdg else Path.home() / ".cache"
 
 
+def config_home() -> Path:
+    """Base config directory, honouring `XDG_CONFIG_HOME`.
+
+    `~/.config` on every platform — the convention CLI tools (uv, ruff,
+    git's own XDG support) follow on macOS and Windows too, and the
+    symmetric sibling of `cache_home`.
+    """
+    xdg = os.environ.get("XDG_CONFIG_HOME")
+    return Path(xdg) if xdg else Path.home() / ".config"
+
+
+def footman_config_file() -> Path:
+    """The user-level config file: `$FOOTMAN_CONFIG` when set (a file path,
+    since this is one file — unlike `FOOTMAN_CACHE_DIR`'s directory), else
+    `<config home>/footman/config.toml`. The bottom rung of the precedence
+    ladder: project config cascades over it, `--config` replaces it."""
+    override = os.environ.get("FOOTMAN_CONFIG")
+    if override:
+        return Path(override).expanduser()
+    return config_home() / "footman" / "config.toml"
+
+
 def footman_cache_dir() -> Path:
     """footman's own cache directory: `$FOOTMAN_CACHE_DIR` when set, else
     `<cache home>/footman`. One override moves every footman cache —

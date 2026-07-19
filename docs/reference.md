@@ -56,17 +56,8 @@ def wheel(): ...
 | `include`, `plugin`          | adopt tasks from modules/packages — see [Composing](composing.md) |
 | `@task(when=…, reason=…)`    | disable-but-list a task that can't run here          |
 
-## Configuration keys
+## Configuration
 
-Read from `[tool.footman]` in `pyproject.toml`, a standalone `footman.toml`, or
-a file passed to `--config`. See [Monorepos & config](monorepos.md).
-
-| Key          | Meaning                                                   |
-| ------------ | --------------------------------------------------------- |
-| `tasks`      | Filename to look for in each folder (default `tasks.py`). |
-| `sequential` | Run tasks one at a time by default.                       |
-| `jobs`       | Max parallel tasks (default: cores - 1, never below 2).   |
-| `plugins`    | `footman.tasks` entry points to mount as command groups (opt-in). |
-| `progress`   | `false` permanently disables the progress bar, eta line, and timing capture. |
-| `uv`         | `false` disables the uv handoff (a globally-installed `fm` re-running itself via `uv run` when the project's lockfile pins footman). |
-| `completion.max_age` | Age before a background completion refresh (e.g. `"10m"`; `off` to disable). |
+Settings have their own page — the precedence ladder (user-level file,
+the project cascade, `--config`, environment, flags), the files, and
+every key: [Configuration](configuration.md).

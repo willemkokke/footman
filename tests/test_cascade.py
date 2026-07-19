@@ -228,6 +228,51 @@ def test_config_corrupt_toml_is_ignored(tmp_path):
     assert config.load_config(tmp_path, tmp_path) == {}
 
 
+def test_config_global_file_is_the_bottom_rung(tmp_path, monkeypatch):
+    # The user-level file seeds the merge; every project layer beats it.
+    global_file = _write(tmp_path / "global.toml", "uv = false\ntasks = 'g.py'\n")
+    monkeypatch.setenv("FOOTMAN_CONFIG", str(global_file))
+    project = tmp_path / "proj"
+    project.mkdir()
+    cfg = config.load_config(project, project)
+    assert cfg == {"uv": False, "tasks": "g.py"}  # global alone applies
+    _write(project / "footman.toml", "tasks = 'p.py'\n")
+    cfg = config.load_config(project, project)
+    assert cfg["tasks"] == "p.py"  # the cascade wins the contested key
+    assert cfg["uv"] is False  # and the uncontested global key survives
+
+
+def test_config_global_default_location(tmp_path, monkeypatch):
+    # Without FOOTMAN_CONFIG, the file lives under XDG config home.
+    monkeypatch.delenv("FOOTMAN_CONFIG", raising=False)
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
+    spot = tmp_path / "xdg" / "footman" / "config.toml"
+    spot.parent.mkdir(parents=True)
+    _write(spot, "sequential = true\n")
+    project = tmp_path / "proj"
+    project.mkdir()
+    assert config.load_config(project, project)["sequential"] is True
+
+
+def test_config_malformed_global_warns_and_is_skipped(tmp_path, monkeypatch):
+    global_file = _write(tmp_path / "global.toml", "not [[ toml")
+    monkeypatch.setenv("FOOTMAN_CONFIG", str(global_file))
+    warnings: list[str] = []
+    cfg = config.load_config(tmp_path, tmp_path, on_warning=warnings.append)
+    assert cfg == {}
+    assert any("malformed" in w for w in warnings)
+
+
+def test_config_cli_path_replaces_global_and_cascade(tmp_path, monkeypatch):
+    # --config is total control: the named file is exactly what applies.
+    global_file = _write(tmp_path / "global.toml", "uv = false\n")
+    monkeypatch.setenv("FOOTMAN_CONFIG", str(global_file))
+    _write(tmp_path / "footman.toml", "sequential = true\n")
+    override = _write(tmp_path / "custom.toml", "tasks = 'b.py'\n")
+    cfg = config.load_config(tmp_path, tmp_path, str(override))
+    assert cfg == {"tasks": "b.py"}  # no uv, no sequential: replaced, not merged
+
+
 # --- end-to-end through the app ----------------------------------------------
 
 

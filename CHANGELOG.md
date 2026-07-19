@@ -22,6 +22,24 @@ versions may include breaking changes.
   or `FOOTMAN_NO_UV=1` opts out for purists, and `-v` says when a handoff
   happened. uv only for now — poetry/pdm handoffs will be considered
   if there's a want for them.
+- **A user-level config file completes the precedence ladder.**
+  `~/.config/footman/config.toml` (honouring `XDG_CONFIG_HOME`; move it
+  with `FOOTMAN_CONFIG`) now seeds every merge: personal defaults — a
+  purist's `uv = false`, a permanent `progress = false` — that every
+  project layer cascades over. The ladder, weakest to strongest:
+  defaults, the user file, the root-to-cwd cascade (standalone
+  `footman.toml` beating `pyproject.toml` within a folder, as is
+  customary), `--config`, environment, flags. The docs gain a dedicated
+  [Configuration](https://willemkokke.github.io/footman/configuration/)
+  page for all of it.
+
+### Changed
+
+- **`--config` now replaces all discovered configuration** — the global
+  file and the cascade both — instead of overlaying the cascade. With a
+  user-level file in the ladder, "the named file is exactly what
+  applies" is the only rule that stays one sentence; an explicit
+  `--config` is total control by intent.
 
 ## [0.13.0] — 2026-07-19
 

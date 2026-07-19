@@ -13,12 +13,19 @@ FIXTURE = Path(__file__).parent / "fixtures" / "sample_tasks.py"
 
 
 @pytest.fixture(autouse=True)
-def _no_cache_override(monkeypatch):
+def _no_cache_override(monkeypatch, tmp_path_factory):
     """A real FOOTMAN_CACHE_DIR would bypass every cache_home patch — the
-    override is env-first by design, so the suite must clear it. The
+    override is env-first by design, so the suite must clear it. The same
+    goes for the user-level config file: the developer's own
+    ~/.config/footman/config.toml must never leak settings into the suite,
+    so FOOTMAN_CONFIG points at a path that doesn't exist. The
     step-alignment width is a per-run learning global for the same reason:
     reset it, or one test's wide command pads another's lines."""
     monkeypatch.delenv("FOOTMAN_CACHE_DIR", raising=False)
+    monkeypatch.setenv(
+        "FOOTMAN_CONFIG",
+        str(tmp_path_factory.getbasetemp() / "no-global-config.toml"),
+    )
     from footman import context
 
     context.seed_cmd_width(0)

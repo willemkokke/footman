@@ -45,6 +45,7 @@ nav = [
   ] },
   { "Reference" = [
     { "CLI reference" = "reference.md" },
+    { "Configuration" = "configuration.md" },
     { "API reference" = "api.md" },
     { "Task reference (generated)" = "tasks/index.md" },
     { "Troubleshooting" = "troubleshooting.md" },
