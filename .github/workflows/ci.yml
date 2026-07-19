@@ -188,6 +188,10 @@ jobs:
           python-version: "3.12"
           enable-cache: true
       - run: uv sync --frozen --group dev --group docs
+      # zsh: the docs build records a real completion session (`docs cast`)
+      # — same step docs.yml uses to deploy.
+      - name: Install zsh (for the completion cast)
+        run: sudo apt-get update -q && sudo apt-get install -y -q zsh
       # docs/coverage.md embeds the htmlcov report, so the strict build needs
       # it to exist — same steps docs.yml uses to deploy.
       - name: Coverage report
