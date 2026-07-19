@@ -211,6 +211,13 @@ def test_build_manifest_shape(tree):
     assert kinds == {"fix": "flag", "mode": "option", "paths": "option"}
 
 
+def test_footman_cache_dir_overrides_every_cache_path(tmp_path, monkeypatch):
+    monkeypatch.setenv("FOOTMAN_CACHE_DIR", str(tmp_path / "elsewhere"))
+    assert _paths.manifest_path(tmp_path).parent == tmp_path / "elsewhere"
+    assert _paths.times_path(tmp_path).parent == tmp_path / "elsewhere"
+    assert _paths.times_path(tmp_path).name.endswith(".times.json")
+
+
 def test_write_load_roundtrip(root, tmp_path):
     m = manifest.build_manifest(root)
     path = tmp_path / "manifest.json"

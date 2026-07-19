@@ -74,14 +74,32 @@ def cache_home() -> Path:
     return Path(xdg) if xdg else Path.home() / ".cache"
 
 
+def footman_cache_dir() -> Path:
+    """footman's own cache directory: `$FOOTMAN_CACHE_DIR` when set, else
+    `<cache home>/footman`. One override moves every footman cache —
+    completion manifests and timing history alike — and the completion hot
+    path resolves through here too, so TAB follows it with no re-install.
+    """
+    override = os.environ.get("FOOTMAN_CACHE_DIR")
+    return Path(override) if override else cache_home() / "footman"
+
+
+def _dir_key(key_dir: Path) -> str:
+    return hashlib.sha256(str(key_dir.resolve()).encode("utf-8")).hexdigest()[:16]
+
+
 def manifest_path(key_dir: Path) -> Path:
     """Cached-manifest path for *key_dir* (the cwd), keyed by a path hash.
 
     The effective task set depends on where you stand in a monorepo — the
     cascade from the repo root down to the cwd — so the cache is per directory.
     """
-    key = hashlib.sha256(str(key_dir.resolve()).encode("utf-8")).hexdigest()[:16]
-    return cache_home() / "footman" / f"{key}.json"
+    return footman_cache_dir() / f"{_dir_key(key_dir)}.json"
+
+
+def times_path(key_dir: Path) -> Path:
+    """Duration-history path for *key_dir* — beside its manifest, same key."""
+    return footman_cache_dir() / f"{_dir_key(key_dir)}.times.json"
 
 
 def cwd_manifest_path() -> Path:

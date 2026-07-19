@@ -12,6 +12,13 @@ from footman import manifest, registry
 FIXTURE = Path(__file__).parent / "fixtures" / "sample_tasks.py"
 
 
+@pytest.fixture(autouse=True)
+def _no_cache_override(monkeypatch):
+    """A real FOOTMAN_CACHE_DIR would bypass every cache_home patch — the
+    override is env-first by design, so the suite must clear it."""
+    monkeypatch.delenv("FOOTMAN_CACHE_DIR", raising=False)
+
+
 def load_tasks(path: Path) -> registry.Group:
     """Import a tasks file into an isolated registry (no global leak).
 

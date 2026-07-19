@@ -1,8 +1,9 @@
 # Completion
 
 Completion answers from a JSON manifest cached per directory under
-`~/.cache/footman/` (or `$XDG_CACHE_HOME/footman/` where that's set), so each
-folder of a [monorepo](monorepos.md) caches its own merged cascade. The hot
+`~/.cache/footman/` (or `$XDG_CACHE_HOME/footman/` where that's set — and
+`$FOOTMAN_CACHE_DIR` overrides both, moving every footman cache in one go),
+so each folder of a [monorepo](monorepos.md) caches its own merged cascade. The hot
 path is stdlib-only — it reads one file, parses JSON, and walks the tree; it
 **never imports footman or your tasks**.
 
