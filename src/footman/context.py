@@ -440,16 +440,21 @@ def run(
 
     show = not silent and not ctx.quiet
     color = ctx.tty and not ctx.no_color and "NO_COLOR" not in os.environ
+    # `ctx.tty` means "this output dresses for a terminal" (colour, marks);
+    # liveness is `sink is None`. A captured block styles for the terminal
+    # it will replay onto, but in-place rewrites and the announce line stay
+    # live-only: control bytes must never land in a capture buffer.
+    live = ctx.sink is None
     if show:
         # The arrow announces what is *running now* — worth a line only
         # while output is live (a TTY rewrites it in place; a streamed CI
         # log may wait minutes under it). A captured block flushes when
         # the task is already done, where "starting X" directly above
         # "finished X" says nothing — the completion line carries it all.
-        if ctx.tty:
+        if ctx.tty and live:
             out.write(f"→ {_name_col(ctx)}{_dim(label, color)}")
             out.flush()
-        elif ctx.sink is None:
+        elif live:
             out.write(f"→ {_name_col(ctx)}{label}\n")
             out.flush()
 
@@ -472,7 +477,7 @@ def run(
 
     if show:
         ok = code == 0
-        prefix = "\r\033[K" if ctx.tty else ""
+        prefix = "\r\033[K" if ctx.tty and live else ""
         out.write(f"{prefix}{_step_line(ctx, ok, label, duration)}")
         if capture and output and (not ok or ctx.verbose):
             out.write(output if output.endswith("\n") else output + "\n")

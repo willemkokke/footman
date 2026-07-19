@@ -494,3 +494,48 @@ def test_dependency_cycle_is_a_taught_error():
         drive(tasks, "b")
     with pytest.raises(ChainError, match="dependency cycle"):
         drive(tasks, "b", sequential=True)
+
+
+def test_buffered_blocks_dress_for_the_terminal(monkeypatch):
+    # Engine parity: a chain's captured step lines style exactly like
+    # parallel()-in-a-body children — ✓ marks and colour when the replay
+    # destination is a terminal — while in-place rewrites (\r, ESC[K) and
+    # the announce arrow stay out of capture buffers entirely.
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    out_fake = _Tty()
+    monkeypatch.setattr(sys, "stdout", out_fake)
+    monkeypatch.setattr(sys, "stderr", io.StringIO())
+
+    def tasks(reg):
+        @reg.task
+        def a():
+            run("echo one", title="one")
+
+        @reg.task
+        def b():
+            run("echo two", title="two")
+
+    drive(tasks, "a b")
+    text = out_fake.getvalue()
+    assert "\033[32m✓\033[0m" in text  # styled mark, buffered engine
+    assert "\r" not in text and "\033[K" not in text  # no live control bytes
+    assert "→" not in text  # the announce line is live-only
+
+
+def test_buffered_blocks_stay_plain_when_piped(monkeypatch):
+    out_fake = io.StringIO()
+    monkeypatch.setattr(sys, "stdout", out_fake)
+    monkeypatch.setattr(sys, "stderr", io.StringIO())
+
+    def tasks(reg):
+        @reg.task
+        def a():
+            run("echo one", title="one")
+
+        @reg.task
+        def b():
+            run("echo two", title="two")
+
+    drive(tasks, "a b")
+    text = out_fake.getvalue()
+    assert "ok   " in text and "\033" not in text

@@ -162,9 +162,11 @@ def _make_ctx(
 ) -> context.Context:
     ctx = context.Context(**(ctx_config or {}), passthrough=list(seg.passthrough or []))
     ctx.sink = None if (sequential and not capture) else io.StringIO()
-    ctx.tty = (
-        sequential and not capture and real.isatty() and not _plain_output(ctx.no_color)
-    )
+    # Step lines dress for their *destination*: a buffered block replays
+    # onto `real`, so its children style exactly as parallel() children
+    # style for their parent's terminal — both engines, one look. Only
+    # liveness (sink is None, judged in run()) gates in-place rewrites.
+    ctx.tty = not capture and real.isatty() and not _plain_output(ctx.no_color)
     ctx.task = seg.task
     ctx.name_width = name_width
     return ctx

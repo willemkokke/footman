@@ -25,6 +25,15 @@ versions may include breaking changes.
   task is gated with footman's own `@task(requires="rich")` and lists as
   unavailable without it — the availability machinery, dogfooded. The
   docs site now embeds these, regenerated on every build.
+- **Both engines dress step lines identically.** A chain's buffered
+  blocks (`fm lint format`) rendered plain `ok` lines while the same
+  work inside a task-body `parallel()` (`fm check`) rendered the full
+  terminal treatment — ✓ marks, bold names, dim commands, cyan times.
+  Captured children now style for the terminal they replay onto, exactly
+  like `parallel()` children always did; in-place rewrites and the
+  announce line stay live-only, so no control bytes ever land in a
+  capture buffer (or the `--json` envelope). One look, both engines,
+  finishing the 0.12.0 unification.
 - **Captured blocks no longer start with the `→ running` line.** The
   arrow announces what is running *now*, which is only worth a line while
   output is live — a TTY rewrites it in place, a streamed CI log may wait
