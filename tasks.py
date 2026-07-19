@@ -37,13 +37,22 @@ def typecheck():
 
 @task
 def test(*pytest_args: str):
-    """Run the test suite (extra pytest args after --)."""
+    """Run the test suite.
+
+    Args:
+        pytest_args: forwarded to pytest verbatim
+    """
     tools.pytest(*pytest_args, in_process=False)
 
 
 @task
 def check():
-    """Run format --check, lint, typecheck, and test — in parallel."""
+    """Run format --check, lint, typecheck, and test — in parallel.
+
+    The gate: run it before every commit, and CI runs exactly this.
+    Coverage is not enforced here — that's the explicit
+    `pytest --cov=footman` invocation documented in CLAUDE.md.
+    """
     parallel(lambda: format(check=True), lint, typecheck, test)
 
 
