@@ -19,6 +19,7 @@ skipped because its prerequisite failed doesn't appear):
 $ fm --json check
 {
   "schema": 1,
+  "total_ms": 5412.7,
   "results": [
     {
       "task": "lint",
@@ -36,7 +37,9 @@ $ fm --json check
 }
 ```
 
-Per task: `task` (dotted name), `ok`, `code`, `duration_ms`, `output` (all
+Top-level, `total_ms` is wall-clock for the whole run — the human summary's
+`took` line, as a number. Per task: `task` (dotted name), `ok`, `code`,
+`duration_ms`, `output` (all
 captured text), `error` (`null`, or the exception as a string), `steps` —
 one entry per [`run()`/`tools.*`](tools.md) call, each with `command`,
 `code`, `duration_ms`, `output` — and, when the task returns a value,

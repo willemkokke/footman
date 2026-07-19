@@ -12,6 +12,7 @@ import contextlib
 import json
 import os
 import sys
+import time
 from pathlib import Path
 
 from footman import (
@@ -384,7 +385,9 @@ def _where(root: registry.Group, tree: dict, dotted: str) -> int:
     return 0
 
 
-def _print_summary(results: list[executor.TaskResult], *, timings: bool) -> None:
+def _print_summary(
+    results: list[executor.TaskResult], *, timings: bool, total: float
+) -> None:
     # The summary is commentary about the run, not the run's output — it goes
     # to stderr so `fm task > file` captures exactly what the task produced.
     for result in results:
@@ -396,9 +399,10 @@ def _print_summary(results: list[executor.TaskResult], *, timings: bool) -> None
             _error(f"{result.task}: {type(result.error).__name__}: {result.error}")
         elif not result.ok:
             _error(f"{result.task}: exited with code {result.code}")
+    print(f"  {'took':>4}  {total:.1f}s", file=sys.stderr)
 
 
-def _print_json(results: list[executor.TaskResult]) -> None:
+def _print_json(results: list[executor.TaskResult], *, total: float) -> None:
     payload = []
     for r in results:
         entry: dict[str, object] = {
@@ -436,7 +440,7 @@ def _print_json(results: list[executor.TaskResult]) -> None:
     # summaries) never have to break consumers of the results list.
     print(
         json.dumps(
-            {"schema": 1, "results": payload},
+            {"schema": 1, "total_ms": round(total * 1000, 3), "results": payload},
             indent=2,
             default=_describe.json_default,
         )
@@ -719,6 +723,7 @@ def _run_tree(
         # taskdocs plugin brands its output with this, for one.
         "prog": _brand.prog,
     }
+    start = time.perf_counter()
     try:
         results = schedule.run_plan(
             reg,
@@ -730,14 +735,15 @@ def _run_tree(
         )
     except split.ChainError as exc:  # e.g. passthrough with no *args
         return _refuse(json_mode, str(exc))
+    total = time.perf_counter() - start
 
     if collect is not None:
         collect.extend(results)
 
     if json_mode:
-        _print_json(results)
+        _print_json(results, total=total)
     elif not g.get("quiet"):
-        _print_summary(results, timings=bool(g.get("timings")))
+        _print_summary(results, timings=bool(g.get("timings")), total=total)
 
     return next((r.code or 1 for r in results if not r.ok), 0)
 

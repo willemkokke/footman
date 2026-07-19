@@ -179,6 +179,10 @@ def run_plan(
     """Build and run the DAG; return results in dependency order."""
     nodes = _build_dag(root, segments)
     _check_cycles(nodes)
+    # One node has nothing to parallelise — run it on the sequential-live
+    # path instead: output streams as it happens, and run()'s TTY mode
+    # (colour, in-place step rewrite) applies. `fm check` is this shape.
+    sequential = sequential or len(nodes) == 1
     with context.routing() as (real, err):
         if sequential:
             _run_sequential(nodes, real, keep_going, capture, ctx_config)

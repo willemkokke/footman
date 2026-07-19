@@ -133,6 +133,13 @@ def test_json_output(project, capsys):
     assert payload["schema"] == 1
     assert payload["results"][0]["task"] == "hi"
     assert payload["results"][0]["ok"] is True
+    assert payload["total_ms"] >= payload["results"][0]["duration_ms"]
+
+
+def test_summary_ends_with_total(project, capsys):
+    assert _app.run(["hi"]) == 0
+    err = capsys.readouterr().err
+    assert "took" in err and err.rstrip().endswith("s")
 
 
 def test_failing_task_sets_exit_code(project):

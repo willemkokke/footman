@@ -253,6 +253,45 @@ def test_parallel_child_steps_surface_on_parent():
     assert commands == {"echo one", "echo two"}
 
 
+def test_single_node_runs_live(capsys):
+    # One node has nothing to parallelise: it takes the sequential-live path
+    # (sink=None → output streams; run()'s TTY mode can apply). `fm check`
+    # is this shape — buffering it gave one uncoloured block at the end.
+    seen = {}
+
+    def tasks(reg):
+        @reg.task
+        def solo():
+            from footman import context
+
+            seen["sink"] = context.current().sink
+
+    drive(tasks, "solo")
+    assert seen["sink"] is None
+
+
+def test_multi_node_still_buffers(capsys):
+    # Two independent nodes: parallel path, per-task buffers (the
+    # non-interleaving contract) — unchanged.
+    seen = {}
+
+    def tasks(reg):
+        @reg.task
+        def a():
+            from footman import context
+
+            seen["a"] = context.current().sink
+
+        @reg.task
+        def b():
+            from footman import context
+
+            seen["b"] = context.current().sink
+
+    drive(tasks, "a b")
+    assert seen["a"] is not None and seen["b"] is not None
+
+
 def test_parallel_output_is_grouped_not_interleaved(capsys):
     def tasks(reg):
         @reg.task

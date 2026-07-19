@@ -7,6 +7,22 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- **The run summary ends with a `took N.Ns` total**, and the `--json`
+  envelope carries it as an additive top-level `total_ms`.
+
+### Fixed
+
+- **A single-task invocation now streams live, with colour.** The default
+  scheduler treated even one task as a parallel plan, so `fm check` — the
+  most common shape there is — buffered everything into one uncoloured
+  block flushed at the end, and `run()`'s TTY mode (green ✓ / red ✗, the
+  in-place step rewrite) never fired. One node has nothing to parallelise:
+  it now takes the sequential-live path, so steps appear as they happen and
+  the TTY treatment applies. Chains of two or more keep the buffered
+  non-interleaving contract unchanged.
+
 ## [0.11.0] — 2026-07-19
 
 ### Added
