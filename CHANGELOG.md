@@ -99,7 +99,7 @@ versions may include breaking changes.
 - **Step lines are columns now: mark · task name · command · time.** Every
   `run()` line carries the task it belongs to, padded so siblings align;
   on a colour terminal the name is bold, the command dimmed, and the
-  `(time)` cyan and right-aligned to the terminal edge. Anonymous
+  `(time)` cyan, sitting right after the command. Anonymous
   `parallel()` thunks show `…` — pass a named function or a
   `functools.partial` (its callee's name is used) for a real label.
   Durations everywhere now humanise past seconds: `4.1s`, `42s`, `1m10s`,

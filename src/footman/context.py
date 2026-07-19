@@ -367,24 +367,19 @@ def _step_line(ctx: Context, ok: bool, label: str, duration: float) -> str:
     color = _colored(ctx)
     time_text = f"({fmt_secs(duration)})"
     name = _name_col(ctx)
-    name_width = (max(ctx.name_width, len(ctx.task)) + 2) if ctx.task else 0
 
     if not ctx.tty:
         return f"{'ok' if ok else 'FAIL':<4} {name}{label}  {time_text}\n"
 
-    if color:
-        mark, mark_width = ("\033[32m✓\033[0m" if ok else "\033[31m✗\033[0m"), 1
-    else:
-        mark = "ok" if ok else "FAIL"
-        mark_width = len(mark)
-    import shutil as _shutil
-
-    cols = _shutil.get_terminal_size((80, 24)).columns
-    pad = cols - 1 - (mark_width + 1 + name_width + len(label)) - len(time_text)
-    if pad < 2:  # keep the command; let a very narrow terminal wrap the time
-        pad = 2
+    mark = (
+        ("\033[32m✓\033[0m" if ok else "\033[31m✗\033[0m")
+        if color
+        else ("ok" if ok else "FAIL")
+    )
     shown = f"\033[36m{time_text}\033[0m" if color else time_text
-    return f"{mark} {name}{_dim(label, color)}{' ' * pad}{shown}\n"
+    # The time sits right after the command — a right-aligned column reads
+    # absurd on wide terminals, with the time a screen away from its line.
+    return f"{mark} {name}{_dim(label, color)}  {shown}\n"
 
 
 def run(
