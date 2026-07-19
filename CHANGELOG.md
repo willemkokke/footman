@@ -35,8 +35,14 @@ versions may include breaking changes.
   of effectively unbounded — the machine stays responsive while fan-outs
   stay real. The width is part of the timing key, so `-j2` runs build
   their own duration history.
-- **The run summary ends with a `took N.Ns` total**, and the `--json`
-  envelope carries it as an additive top-level `total_ms`.
+- **Receipts are task-shaped: `✓ check  (5.2s)`.** The end-of-run summary
+  speaks the same grid as the step lines — mark, name, time — with the
+  name in bold cyan (same family as the steps, one rank up) and durations
+  humanised. A single task's receipt *is* the total, so the separate
+  `took` line only appears for chains of two or more, dimmed, where the
+  wall total genuinely adds information. `--timings` keeps millisecond
+  precision on the receipts. The `--json` envelope carries the total as
+  an additive top-level `total_ms`.
 
 ### Fixed
 

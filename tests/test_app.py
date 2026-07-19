@@ -137,10 +137,19 @@ def test_json_output(project, capsys):
     assert payload["total_ms"] >= payload["results"][0]["duration_ms"]
 
 
-def test_summary_ends_with_total(project, capsys):
+def test_single_task_receipt_carries_the_time(project, capsys):
+    # The receipt is task-shaped and IS the total — no separate took line.
     assert _app.run(["hi"]) == 0
     err = capsys.readouterr().err
-    assert "took" in err and err.rstrip().endswith("s")
+    assert "ok   hi" in err and "(0." in err
+    assert "took" not in err
+
+
+def test_chain_summary_ends_with_total(project, capsys):
+    assert _app.run(["hi", "data"]) == 0
+    err = capsys.readouterr().err
+    assert "ok   hi" in err and "ok   data" in err
+    assert "took" in err  # two receipts: the wall total adds information
 
 
 def test_failing_task_sets_exit_code(project):
@@ -228,7 +237,7 @@ def test_quiet_suppresses_summary(project, capsys):
     assert _app.run(["--quiet", "hi"]) == 0
     captured = capsys.readouterr()
     assert "hello world" in captured.out  # task output still streams
-    assert "ok  hi" not in captured.err  # but the summary line is suppressed
+    assert "ok   hi" not in captured.err  # but the summary line is suppressed
 
 
 def test_summary_is_commentary_stdout_is_the_answer(project, capsys):
@@ -237,7 +246,7 @@ def test_summary_is_commentary_stdout_is_the_answer(project, capsys):
     assert _app.run(["hi"]) == 0
     captured = capsys.readouterr()
     assert captured.out == "hello world\n"
-    assert "ok  hi" in captured.err
+    assert "ok   hi" in captured.err
 
 
 def test_help_synthesises_an_example(project, capsys):

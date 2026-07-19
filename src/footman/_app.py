@@ -388,20 +388,44 @@ def _where(root: registry.Group, tree: dict, dotted: str) -> int:
 
 
 def _print_summary(
-    results: list[executor.TaskResult], *, timings: bool, total: float
+    results: list[executor.TaskResult],
+    *,
+    timings: bool,
+    total: float,
+    no_color: bool = False,
 ) -> None:
     # The summary is commentary about the run, not the run's output — it goes
     # to stderr so `fm task > file` captures exactly what the task produced.
+    # Each receipt is task-shaped (mark · name · time), the same grid as the
+    # step lines above it, with the name in cyan — same family, one rank up.
+    color = sys.stderr.isatty() and not no_color and "NO_COLOR" not in os.environ
+    width = max((len(r.task) for r in results), default=0)
     for result in results:
-        mark = "ok" if result.ok else "FAIL"
-        timing = f"  ({result.duration * 1000:.0f} ms)" if timings else ""
-        line = f"  {mark:>4}  {result.task}{timing}"
-        print(line, file=sys.stderr)
+        ok = result.ok
+        if color:
+            mark = "\033[32m✓\033[0m" if ok else "\033[31m✗\033[0m"
+            name = f"\033[1;36m{result.task:<{width}}\033[0m"
+        else:
+            mark = f"{'ok' if ok else 'FAIL':<4}".rstrip()
+            mark = f"{mark:<4}"
+            name = f"{result.task:<{width}}"
+        timing = (
+            f"({result.duration * 1000:.0f} ms)"
+            if timings
+            else f"({_progress.fmt_secs(result.duration)})"
+        )
+        if color:
+            timing = f"\033[36m{timing}\033[0m"
+        print(f"{mark} {name}  {timing}", file=sys.stderr)
         if result.error is not None:
             _error(f"{result.task}: {type(result.error).__name__}: {result.error}")
         elif not result.ok:
             _error(f"{result.task}: exited with code {result.code}")
-    print(f"  {'took':>4}  {total:.1f}s", file=sys.stderr)
+    if len(results) > 1:  # one task's receipt already carries the total
+        took = f"took {_progress.fmt_secs(total)}"
+        if color:
+            took = f"\033[2m{took}\033[0m"
+        print(took, file=sys.stderr)
 
 
 def _print_json(results: list[executor.TaskResult], *, total: float) -> None:
@@ -801,7 +825,12 @@ def _run_tree(
     if json_mode:
         _print_json(results, total=total)
     elif not g.get("quiet"):
-        _print_summary(results, timings=bool(g.get("timings")), total=total)
+        _print_summary(
+            results,
+            timings=bool(g.get("timings")),
+            total=total,
+            no_color=bool(g.get("no_color")),
+        )
 
     return next((r.code or 1 for r in results if not r.ok), 0)
 
