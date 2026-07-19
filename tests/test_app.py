@@ -672,12 +672,14 @@ def test_jobs_flag_validates_and_runs(project, capsys):
 
 
 def test_jobs_changes_the_timing_key(project):
-    assert _app.run(["-j", "2", "hi"]) == 0
+    # A 3-core CI runner's default width IS 2 — pick one that can't collide.
+    other = _progress.default_jobs() + 1
+    assert _app.run(["-j", str(other), "hi"]) == 0
     assert _progress.load_runs(project, _hi_key()) == []  # default-width key
-    two = _progress.chain_key(
-        [Segment(task="hi", path=["hi"])], sequential=False, jobs=2
+    keyed = _progress.chain_key(
+        [Segment(task="hi", path=["hi"])], sequential=False, jobs=other
     )
-    assert len(_progress.load_runs(project, two)) == 1
+    assert len(_progress.load_runs(project, keyed)) == 1
 
 
 def test_progress_false_task_opts_the_run_out(tmp_path, monkeypatch):
