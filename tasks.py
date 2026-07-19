@@ -149,10 +149,11 @@ def docs_build(check: bool = False):
     Args:
         check: build strictly (what CI runs)
     """
-    _write_llms_txt()
     # Dogfood the first-party plugin: regenerate the live task-reference
     # pages (site mode) and the single-page example the taskdocs guide
     # embeds (page mode). Plain calls — @task returns plain functions.
+    # Order matters on a fresh checkout: llms.txt walks the nav, and the
+    # nav includes the generated tasks/ pages — generate them first.
     from pathlib import Path
 
     from footman.tasks.docs import page as taskdocs_page
@@ -165,6 +166,7 @@ def docs_build(check: bool = False):
         flavor="material",
         out=Path("docs/_generated/tasks-page.md"),
     )
+    _write_llms_txt()
     # A conditional flag needs no ternary: strict=check is --strict when
     # check is true, omitted otherwise (strict is off by default in zensical).
     tools.zensical.build(clean=True, strict=check, in_process=False)

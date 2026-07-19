@@ -155,4 +155,6 @@ jobs:
       - name: Coverage report
         run: uv run pytest --cov=footman --cov-report=html:docs/htmlcov -q
       - name: Build site (strict)
-        run: uv run zensical build --clean --strict
+        # Through the task, like docs.yml: it generates the task-reference
+        # pages and llms.txt the nav and snippet includes depend on.
+        run: uv run fm docs build --check
