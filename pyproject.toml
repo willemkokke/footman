@@ -64,11 +64,16 @@ dev = [
     "ruff>=0.6",
     "basedpyright>=1.18",
 ]
-# Documentation site (Zensical + mkdocstrings for the API reference). Installed
-# only to build/serve docs. Never a footman runtime dependency.
+# rich renders the terminal screenshots `fm footman docs shots` embeds —
+# pure Python, so CI can add it on every matrix job (3.14t included) to
+# cover the shots task. Never a footman runtime dependency.
+shots = ["rich>=13.0"]
+# Documentation site (Zensical + mkdocstrings for the API reference).
+# Installed only to build/serve docs. Never a footman runtime dependency.
 docs = [
     "zensical>=0.0.50",
     "mkdocstrings-python>=1.11",
+    { include-group = "shots" },
 ]
 # Incumbent task runners, installed only for the head-to-head comparison under
 # comparison/. Never a footman runtime or dev dependency.

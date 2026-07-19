@@ -21,7 +21,12 @@ fm format lint --fix test          # a chain: three tasks, no separator
 fm workspace mount --share <TAB>   # main  scratch  archive
 ```
 
-Ships two console scripts: `footman` and the two-letter `fm`.
+![fm --list in a terminal: bold task names, dim group prefixes, one-line help](_generated/shots/list.svg)
+
+Ships two console scripts: `footman` and the two-letter `fm`. (That
+screenshot is generated from the real CLI on every docs build — like every
+terminal image on this site, it cannot drift from what footman actually
+prints.)
 
 !!! note "Beta"
 

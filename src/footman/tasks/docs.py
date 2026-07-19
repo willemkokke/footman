@@ -8,6 +8,10 @@ can't drift from what `fm --list` shows.
 
 from __future__ import annotations
 
+import io
+import os
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 from typing import Annotated, Literal
@@ -121,6 +125,93 @@ def site(
         written.append(str(dest))
     print(f"wrote {len(written)} pages under {out}")
     return written
+
+
+_CLEAR = "\x1b[K"
+
+
+def reduce_frames(raw: str) -> str:
+    """Collapse a pty capture to the final frame of every line.
+
+    footman's live output repaints a line in place — `\\r` then a full
+    rewrite (step lines, the status bar) — and clears with `ESC[K`; a pty
+    records every intermediate frame. Keeping only the text after the last
+    `\\r` of each physical line, and dropping the clear sequences, leaves
+    what a human saw once the run settled. Colour (SGR) sequences pass
+    through untouched.
+    """
+    text = raw.replace("\r\n", "\n")  # the pty's ONLCR translation, undone
+    lines = [seg.rsplit("\r", 1)[-1].replace(_CLEAR, "") for seg in text.split("\n")]
+    return "\n".join(lines)
+
+
+@tasks.task(name="shots", requires="rich", when=lambda: sys.platform != "win32")
+def shots(
+    *argv: str,
+    out: Annotated[Path, doc("the SVG file to write")],
+    title: Annotated[str, doc("window title (default: the command line)")] = "",
+    width: Annotated[int, between(40, 200), doc("terminal columns")] = 72,
+    cmd: Annotated[str, doc("executable to run (default: the invoking CLI)")] = "",
+):
+    """Run the CLI on a pseudo-terminal and save a framed SVG screenshot.
+
+    Runs `<cmd> <argv…>` on a real pty — colours, receipts, taught errors,
+    exactly as a terminal shows them — collapses live rewrites to their
+    final frame, and renders the capture with rich as an SVG in a
+    macOS-style window. Regenerate on every docs build and a screenshot
+    can never drift from the CLI: it *is* the CLI.
+
+    The command really executes, so don't screenshot tasks whose side
+    effects you don't want. A failing command still renders — a taught
+    error message is a perfectly good screenshot.
+    """
+    if sys.platform == "win32":  # the when= gate already refused; belt
+        raise RuntimeError("docs shots needs a POSIX pseudo-terminal")
+    import fcntl
+    import pty
+    import struct
+    import termios
+
+    prog = cmd or context.current().prog
+    exe = shutil.which(prog)
+    if exe is None:
+        raise RuntimeError(f"{prog!r} is not on PATH")
+
+    env = os.environ.copy()
+    env.pop("NO_COLOR", None)  # the pty asks for colour; let it answer
+    env["TERM"] = "xterm-256color"
+    env["COLUMNS"] = str(width)
+    master, slave = pty.openpty()
+    fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 50, width, 0, 0))
+    proc = subprocess.Popen(
+        [exe, *argv], stdin=slave, stdout=slave, stderr=slave, env=env
+    )
+    os.close(slave)
+    chunks: list[bytes] = []
+    while True:
+        try:
+            data = os.read(master, 65536)
+        except OSError:  # EIO: the child hung up (how Linux spells EOF)
+            break
+        if not data:
+            break
+        chunks.append(data)
+    os.close(master)
+    proc.wait()
+
+    # The blessed lazy import: rich is docs tooling, never a dependency —
+    # requires="rich" lists this task as unavailable when it's absent.
+    from rich.console import Console
+    from rich.text import Text
+
+    capture = reduce_frames(b"".join(chunks).decode("utf-8", "replace"))
+    console = Console(record=True, width=width, file=io.StringIO(), force_terminal=True)
+    console.print(Text.from_ansi(capture.rstrip("\n")))
+    out.parent.mkdir(parents=True, exist_ok=True)
+    line = " ".join([prog, *argv])
+    out.write_text(console.export_svg(title=title or line), encoding="utf-8")
+    print(f"wrote {out}")
+    return [str(out)]
 
 
 @tasks.task(name="globals")

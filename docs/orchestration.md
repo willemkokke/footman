@@ -72,6 +72,11 @@ def check():
 Tasks run stop-on-first-failure by default; `-k/--keep-going` runs every
 independent branch even if one fails.
 
+A finished run reads as a receipt — mark, name, command, time — captured
+from a real terminal:
+
+![fm format lint: green check marks, task names in cyan, dim commands, and a took line](_generated/shots/run.svg)
+
 On a TTY, every run keeps one live status line on stderr: a **progress
 bar** when footman has seen this exact invocation enough to estimate
 honestly — five recent green runs with a steady spread; the bar fills

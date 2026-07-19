@@ -16,6 +16,11 @@ grammar may break without a deprecation cycle.
 
 - **Zero runtime deps.** Nothing under `src/footman/` may import a third-party
   package. Dev/test/docs tooling lives in `uv` groups, never in `dependencies`.
+  One blessed exception: a first-party plugin task may lazily import an
+  optional third-party package *inside its body* when gated with
+  `@task(requires="…")` (e.g. `docs shots` imports rich) — the package is
+  never a declared dependency, never imported at module import time, and the
+  task lists as unavailable without it.
 - **The completion hot path is stdlib-only and import-free of the framework.**
   `_complete.py` (and the detached refresh child it spawns, `_refresh.py`, at
   the moment it decides to spawn) must not import `footman` internals or user

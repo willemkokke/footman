@@ -9,6 +9,22 @@ versions may include breaking changes.
 
 ### Added
 
+- **Keyword-only parameters are options — required options without a
+  default.** Python's `*` already says "must be named": a parameter after
+  `*` (or `*args`) now maps to `--name`, and without a default it is a
+  *required* option — the shape defaultless dicts and flags always had.
+  Previously a defaultless keyword-only parameter was silently treated as
+  a positional, which its own signature then refused at call time.
+- **`fm footman docs shots` — terminal screenshots that cannot lie.** Runs
+  a command on a real pseudo-terminal (colours, receipts, taught errors,
+  exactly as a terminal renders them), collapses live rewrites to their
+  final frame, and saves a macOS-style framed SVG via rich. Everything
+  after `--` is the command line to capture; `--width`, `--title`, and
+  `--cmd` shape the frame (the default executable is the invoking CLI, so
+  branded CLIs screenshot themselves). rich is *not* a dependency: the
+  task is gated with footman's own `@task(requires="rich")` and lists as
+  unavailable without it — the availability machinery, dogfooded. The
+  docs site now embeds these, regenerated on every build.
 - **`fm footman docs globals` — the runner's global options as a markdown
   table.** Rendered straight from the CLI grammar: the same rows, in the
   same order, with the same words `--help` prints, with `{prog}` speaking

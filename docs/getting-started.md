@@ -59,6 +59,11 @@ The signature *is* the CLI: `fix: bool = False` becomes a `--fix` flag,
 default becomes a required positional. See
 [Typed signatures](typing.md) for the full mapping.
 
+`fm --help` documents the runner itself — captured here from a real
+terminal, regenerated on every docs build:
+
+![fm --help: the usage line, the globals table, and the task listing, coloured](_generated/shots/help.svg)
+
 ## Chain several tasks
 
 List more than one task on a line and footman runs them as a chain — no

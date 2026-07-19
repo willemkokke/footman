@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import subprocess
 import sys
@@ -130,3 +131,62 @@ def test_globals_task_writes_out(plugin_project, capsys):
     dest = plugin_project / "docs" / "_generated" / "globals.md"
     assert _app.run(["footman", "docs", "globals", "--out", str(dest)]) == 0
     assert dest.read_text(encoding="utf-8").startswith("| option")
+
+
+# --- docs shots: pty screenshots, and the requires= dogfood -------------------
+
+
+def test_shots_lists_unavailable_without_rich(plugin_project, capsys, monkeypatch):
+    # The requires="rich" gate, dogfooded: with rich unimportable the task
+    # lists with the taught reason and refuses to run — no ImportError ever.
+    from footman import registry
+
+    real = registry._importable
+    monkeypatch.setattr(
+        registry, "_importable", lambda m: False if m == "rich" else real(m)
+    )
+    assert _app.run(["--list"]) == 0
+    out = capsys.readouterr().out
+    assert "footman docs shots" in out
+    assert "(unavailable: requires rich)" in out
+    assert _app.run(["footman", "docs", "shots", "--out", "x.svg"]) != 0
+    assert "requires rich" in capsys.readouterr().err
+
+
+def test_reduce_frames_keeps_only_the_final_repaint():
+    from footman.tasks.docs import reduce_frames
+
+    raw = (
+        "→ lint    ruff check\r\x1b[Kok   lint    ruff check  (0.1s)\r\n"
+        "\r\x1b[K[███░░░] 0.2s  1/2\r\x1b[K\x1b[32m✓\x1b[0m done\r\n"
+        "plain\r\n"
+    )
+    assert reduce_frames(raw) == (
+        "ok   lint    ruff check  (0.1s)\n\x1b[32m✓\x1b[0m done\nplain\n"
+    )
+
+
+@pytest.mark.skipif(
+    sys.platform == "win32" or importlib.util.find_spec("rich") is None,
+    reason="needs a POSIX pty and rich",
+)
+def test_shots_renders_a_real_svg(plugin_project, capsys):
+    dest = plugin_project / "shot.svg"
+    code = _app.run(
+        [
+            "footman",
+            "docs",
+            "shots",
+            "--out",
+            str(dest),
+            "--width",
+            "60",
+            "--",
+            "--list",
+        ]
+    )
+    assert code == 0
+    svg = dest.read_text(encoding="utf-8")
+    assert svg.startswith("<svg")
+    assert "#ff5f57" in svg  # the macOS window chrome
+    assert "greet" in svg  # the real listing, captured from the real CLI

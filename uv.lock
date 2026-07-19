@@ -200,7 +200,11 @@ dev = [
 ]
 docs = [
     { name = "mkdocstrings-python" },
+    { name = "rich" },
     { name = "zensical" },
+]
+shots = [
+    { name = "rich" },
 ]
 
 [package.metadata]
@@ -220,8 +224,10 @@ dev = [
 ]
 docs = [
     { name = "mkdocstrings-python", specifier = ">=1.11" },
+    { name = "rich", specifier = ">=13.0" },
     { name = "zensical", specifier = ">=0.0.50" },
 ]
+shots = [{ name = "rich", specifier = ">=13.0" }]
 
 [[package]]
 name = "ghp-import"

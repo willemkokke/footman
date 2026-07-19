@@ -170,6 +170,7 @@ def docs_build(check: bool = False):
 
     from footman.tasks.docs import globals_ as taskdocs_globals
     from footman.tasks.docs import page as taskdocs_page
+    from footman.tasks.docs import shots as taskdocs_shots
     from footman.tasks.docs import site as taskdocs_site
 
     taskdocs_site(Path("docs/tasks"), all=True)
@@ -182,6 +183,13 @@ def docs_build(check: bool = False):
     # The CLI reference's global-options table, from the grammar itself —
     # reference.md snippet-includes it, so it can't drift from --help.
     taskdocs_globals(out=Path("docs/_generated/globals.md"))
+    # Terminal screenshots, captured from the real CLI on a pty and framed
+    # as SVGs — the pages show footman exactly as a terminal does, and a
+    # rebuild regenerates them, so they cannot drift either.
+    shot = Path("docs/_generated/shots")
+    taskdocs_shots("--list", out=shot / "list.svg", width=100)
+    taskdocs_shots("--help", out=shot / "help.svg", width=100)
+    taskdocs_shots("format", "lint", out=shot / "run.svg", width=72)
     _write_llms_txt()
     # A conditional flag needs no ternary: strict=check is --strict when
     # check is true, omitted otherwise (strict is off by default in zensical).
