@@ -1,421 +1,226 @@
-# The road to 1.0
-
-A critical self-audit of footman at v0.4.0, and the plan that falls out of it.
-Every claim below was checked against the source — file and line — not
-remembered from the README. Where something is broken, it says broken.
-
-**Progress (2026-07-17).** 0.5.0–0.8.0 **released**: all §1 bugs, §3 release
-gates, the testing story §5, typing must-haves §7, composition §6, completion
-installers for all five shells (with detection) + chain-aware completion §8,
-the tools bridge (§2's `tools` gap — bridging instead of transcribing, tool
-plugins considered and rejected), the parallel progress line, the CI &
-automation and troubleshooting pages, real-shell CI coverage, and the README
-front-door rewrite. Still open for 1.0: the cookbook page, the voice pass
-over the older doc pages, and the stability-promise flip — after a bake
-cycle.
-
-> [!NOTE]
-> **The verdict, in three sentences.** The typed core — coercion, chain
-> grammar, manifest, scheduler, cascade — is genuinely solid and better tested
-> than most released tools (~180 tests, 3 OS × 3 Python CI). What stands
-> between here and a 1.0 worth trusting is a dozen small correctness bugs, a
-> release pipeline that would happily publish a broken tag, and two missing
-> stories (testing your tasks, composing tasks from elsewhere) that separate a
-> good task runner from the premier one. None of it is structural; all of it
-> is listed below.
-
-## 1. Bugs
-
-Found by reading, confirmed against the code paths. In rough order of
-severity — the first two can ruin someone's afternoon.
-
-| # | Bug | Where |
-| - | --- | ----- |
-| 1 | `fm --help build` **executes `build`** | `_app.py` (run has no help branch) |
-| 2 | Cyclic `pre`/`post` deps → **silent exit 0**, nothing runs | `schedule.py:162-181` |
-| 3 | `bool` inside collections is always `True` — `--flags x=false` → `True` | `coerce.py:31-40` |
-| 4 | `list[bool]` silently collapses to a single flag | `manifest.py:93-95` |
-| 5 | Malformed config TOML is **silently ignored** → defaults | `config.py:31-36` |
-| 6 | A crashing strict `suggest()` completer **disables validation** | `manifest.py:116-124` → `split.py:90-91` |
-| 7 | Ctrl-C during a run → raw `KeyboardInterrupt` traceback | no signal handling anywhere |
-| 8 | Windows: `run("...")` uses POSIX `shlex.split` — backslash paths mangle | `context.py:199` |
-| 9 | Non-UTF-8 subprocess output → unhandled `UnicodeDecodeError` | `context.py:165` |
-| 10 | Duplicate task name reported as "failed to import … ValueError" | `_app.py:249-254` |
-| 11 | `"²".isdigit()` is true, `int("²")` raises → traceback | `coerce.py:160-176` |
-| 12 | `--dry-run` never records a `StepResult` (prints and returns first) | `context.py:185-187` |
-| 13 | **`py.typed` is missing** — the `Typing :: Typed` classifier currently lies | packaging |
-
-Reading the table: #1 is the worst kind of bug — the universal "don't do
-anything" flag does the thing. #2 means a typo'd dependency graph *looks like
-success* in CI. #3/#4 are silent wrong answers, which is exactly what eager
-validation exists to prevent. #6 deserves a sentence: `strict=True` promises
-validation, a raised completer is swallowed to `[]`, and an empty choice list
-skips the check entirely — the feature quietly turns itself off. #13 is a
-one-file fix with outsized shame potential: a typed task runner whose types
-no downstream checker can see.
-
-Each fix lands with a regression test in the matching test file. The fixes
-for #1 and #2 also decide product surface: `--help <task>` should render real
-per-task help from the manifest (a missing feature, not just a bug), and a
-dependency cycle should be a taught error naming the cycle.
-
-## 2. Half-baked and dead surface
-
-Things that parse, print, or exist without doing their job. Before 1.0 each
-either gets wired or removed — an accepted-but-dead flag is a tiny lie.
-
-- `--refresh-manifest` — parsed, never read. Pure no-op.
-- `--install-completion` — prints "not wired up yet" (`_app.py:209-215`).
-  This is also the biggest missing headline feature; see §8.
-- `-v`/`--verbose` and `--no-color` — README says "not yet wired," but they
-  *are* partially wired (replay-on-success, color suppression). The README is
-  wrong in the pessimistic direction, which is novel, but still wrong.
-- Per-task `--help` — doesn't exist at all (and worse, see bug #1).
-- `manifest.is_stale` + the `sources` block — computed, stored, never
-  consulted by any live path. Either the hot path learns to use it or it goes.
-- `executor.run_chain` — no callers. Legacy shim.
-- `tools` — used in the README, the docs, and footman's own `tasks.py`, yet
-  absent from `__all__` and the lazy `__getattr__`. Load-bearing and
-  undocumented at the same time.
-- `Group` is exported but there's no public way to *run* one; `Context` is
-  exported with no documented construction path; `reset()` is a test-suite
-  helper living on the package.
-- `tools.*` coverage is seven wrappers to duty's dozens — the one ❌ footman's
-  own comparison table concedes, still true.
-
-## 3. Release engineering
-
-The pipeline is modern where it counts — trusted publishing, attestations,
-uv-native build, a genuinely zero-dependency wheel. And then:
-
-- **Any `v*` tag publishes to PyPI with zero verification.** `release.yml`
-  never checks that CI passed on the tagged commit. A broken tag ships.
-- **The version lives in two places** (`pyproject.toml:7`,
-  `__init__.py:36`), synced by hand, checked by nothing. Nothing asserts tag
-  == pyproject == `__version__` == changelog heading. This is the single most
-  likely way a release goes wrong.
-- **Coverage is reported, never enforced.** The README claims ~95%; CI runs
-  `pytest -q` with no `--cov`, and `[tool.coverage.report]` has no
-  `fail_under`. The claim is probably true and definitely unguarded.
-- **Docs only build strictly *after* merge** (`docs.yml` on push to main). A
-  PR that breaks the strict build sails through and fails on main.
-- Small stuff: no `Documentation`/`Changelog` URLs in pyproject; the
-  changelog links tags `v0.0.1`/`v0.0.2` that don't exist; no sdist excludes
-  for `site/`/`docs/htmlcov/` on a dirty checkout; `Development Status :: 3 -
-  Alpha` and three separate alpha warnings all need one coordinated flip at
-  1.0, together with a written stability promise (decorator surface, CLI
-  grammar, `--json` schema, manifest additive-only).
-
-## 4. Test-suite gaps
-
-The suite is broad — every module touched, the grammar and scheduler
-genuinely well covered, and the 3 OS × 3 Python matrix is more than most 1.0s
-run. What's missing is the hostile-world column:
-
-- **Signals.** Not one test (or line of handling) for Ctrl-C. For a tool
-  whose job is running other tools, interrupt behavior *is* product surface.
-- **Windows realities.** CI runs Windows, but nothing exercises backslash
-  paths through `run("...")` — which is how bug #8 survived.
-- **Bytes that aren't UTF-8.** No test feeds a subprocess that emits latin-1.
-- **A manifest that is valid JSON but the wrong shape.** Corrupt-JSON → `None`
-  is covered; garbage-but-parseable reaching the completion hot path is not.
-- **A genuine `SyntaxError` in tasks.py** (the runtime-raise path is tested;
-  the parse-failure path is not).
-- **Deep cascades.** The monorepo tests stop at two levels; override
-  precedence at level four is asserted nowhere.
-- **Unicode task names, very long argument lists, `coerce.py` as a unit**
-  (it's only tested through its callers).
-
-None of these are exotic. They're the inputs real projects produce on a bad
-Tuesday.
-
-## 5. The testing story — tasks are code, so test them like code
-
-Today a user who wants to test their `tasks.py` gets one lucky break and one
-wall. The break: `@task` returns the original function untouched
-(`registry.py:90-96`), so `lint(fix=True)` in a plain pytest already works.
-The wall: any `run()` or `tools.*` call inside that task **really executes**
-— the run context is private (`context._current`), and there is no public
-dry-run or recording mode. typer ships `typer.testing.CliRunner`; footman
-ships nothing.
-
-The design (validated against the internals — footman's own test suite
-already does all of this privately, four times, in slightly different ways):
-
-**Three altitudes of testing:**
-
-1. **Plain calls** — already works. Document it; ship nothing.
-2. **Recording** — assert *which commands would run* without running them:
-
-    ```python
-    from footman.testing import recording
-    from tasks import lint
-
-    def test_lint_fix_passes_the_flag():
-        with recording() as steps:
-            lint(fix=True)
-        assert steps[0].command == "ruff check . --fix"
-    ```
-
-    Built from two small public pieces: `use_context(ctx)` (a context manager
-    over the currently-private contextvar) and a dry-run branch that records
-    `StepResult`s and honors `quiet` — i.e. `dry_run + quiet` *is* silent
-    capture. No new mode, no monkeypatching `subprocess`.
-
-3. **CLI-level** — drive argv → exit code → output → results, in-process:
-
-    ```python
-    result = runner.invoke("--dry-run release 1.2.0 --push")
-    assert result.ok
-    assert result.results[0].task == "release"
-    ```
-
-    `Runner.invoke(args, *, tasks=Path|Group|None, cwd=None) -> Result(
-    exit_code, stdout, stderr, results)`. Cache isolation via
-    `XDG_CACHE_HOME` (already honored), results exposed by a four-line
-    `collect=` keyword on `_app.run`. Deliberately *not* named `CliRunner` —
-    footman has no click lineage to imply.
-
-**A pytest plugin, in-tree.** `[project.entry-points.pytest11]` costs zero
-runtime dependencies — only pytest ever imports the module. Three fixtures,
-each a thin shim over `footman.testing`: `fm` (a Runner for the current
-project), `fm_project(source)` (scaffold an isolated tmp project from a
-tasks-file string — footman's own `project` fixture, productized), and
-`fm_record` (a recording context for the whole test). Then footman's own
-suite migrates onto them — the framework dogfooding its testing story is the
-best test *of* the testing story.
-
-**Golden surfaces.** `--json` becomes the blessed machine surface for 1.0:
-documented schema, additive-only promise. Worth wrapping as
-`{"schema": 1, "results": [...]}` in 0.5.0 while breaking is still free.
-`--dry-run` output stays human-oriented, no cross-version promise.
-
-Plus a `docs/testing.md` page walking the three altitudes, fixtures, golden
-tests, and how to test a branded `App`.
-
-## 6. The composition story — assembling the task surface dynamically
-
-Nothing exists here today: no conditional registration, no way to adopt a
-task from another package, no plugin discovery. The design stance that makes
-all three fall out of one idea: **a task tree is a value** (`Group`), and
-tasks files *assemble* trees. Everything resolves at import/manifest-build
-time, conditions re-check live at execution, and completion keeps serving the
-cached manifest — the same contract `suggest()` already set.
-
-### Hiding vs disabling
-
-Two different intents, two mechanisms:
-
-- **Hidden** — not in the tree, the listing, or completion. This is plain
-  Python, because tasks.py is executed code, and it already works:
-
-    ```python
-    if sys.platform == "darwin":
-        @task
-        def notarize(app: Path): ...
-    ```
-
-    No kwarg will be added for what an `if` statement does better.
-
-- **Disabled but listed** — pytest-skip semantics, for "this task exists but
-  can't run here":
-
-    ```python
-    @task(when=lambda: shutil.which("docker"), reason="requires docker on PATH")
-    def up(detach: bool = True):
-        "Start the dev containers."
-    ```
-
-    The listing shows `up … (unavailable: requires docker on PATH)`; the name
-    still completes (manifest stays stable); running it re-evaluates the
-    predicate *live* — never trusting the cached answer — and refuses with
-    the reason, exit 2. A `pre`/`post` dependency on a disabled task is a
-    hard failure, not a silent skip: silently dropping `lint` from `check` on
-    the wrong machine is how CI learns to lie.
-
-### Adopting tasks from another package
-
-```python
-from footman import include, group
-
-include("shared_tasks")                        # graft all of it at root
-include("shared_tasks", only=["lint", "fmt"])  # cherry-pick
-docs = group("docs")
-include("mkdocs_helpers.tasks", into=docs)     # namespace under `fm docs …`
-```
-
-`include()` imports the provider inside a registry capture (so its decorators
-can't pollute the current tree), grafts the captured tree where you say, and
-is **loud on collisions** by default (`override=True` to intend the
-shadowing). Included tasks run from the *includer's* directory — a shared
-lint task lints *this* project. A bare `from otherpkg.tasks import build`
-remains a documented footgun (import-order- and cache-sensitive);
-`task(name="fmt")(shared.fmt)` is the blessed single-task re-export and
-already works today.
-
-### Packages advertising tasks
-
-A package publishes a module-level `Group` under the `footman.tasks` entry
-point:
-
-```toml
-# the plugin's pyproject.toml
-[project.entry-points."footman.tasks"]
-mkdocs = "footman_mkdocs:tasks"
-```
-
-And a project **opts in** — plugins are never auto-loaded, because
-`pip install` silently growing your command surface is a supply-chain
-surprise nobody asked for:
-
-```toml
-[tool.footman]
-plugins = ["mkdocs"]        # mounts as `fm mkdocs build`, `fm mkdocs deploy`
-```
-
-or, composing with `include()` for filtering and re-mounting:
-
-```python
-include(plugin("mkdocs"), only=["build"])
-```
-
-A configured-but-missing plugin is a crisp exit-2 error naming the installed
-entry points. The `importlib.metadata` scan is stdlib (zero-dep holds), paid
-only on the execution path and only when `plugins` is configured; the
-completion hot path never changes. User names shadow plugin groups silently —
-consistent with the cascade. One rule of thumb ties it together: *config
-mounts a tool; tasks.py adopts a task.*
-
-## 7. Typing parity with typer
-
-Better news than expected: enums, datetime/date, uuid, `Decimal`, and any
-str-constructible class already coerce; unions, `Many[T]`, `dict[K, V]`, and
-the `Annotated` markers are ahead of typer in places. The honest gap list,
-with verdicts:
-
-| Gap | Verdict |
-| --- | ------- |
-| `bool` in collections (bugs #3/#4) | **fix now** — silent wrong answers |
-| Path validation (`exists` / `isfile` / `isdir`) | **must-have** |
-| Numeric bounds (`between(1, 32)`, bare `range` sugar) | **must-have** |
-| Env-var fallback (`env("DEPLOY_ENV")`) | **must-have** — the CI story |
-| Per-param validator (`check(fn)`) | **must-have** — the escape hatch |
-| Silent `str` degrade of unknown annotations | **must-have** (a warning) |
-| Hidden params | post-1.0 |
-| `tuple[X, Y]` fixed arity | post-1.0, comma-form only (`--size 800,600`) |
-| Prompts / confirmation | **never** |
-| Counting flags (`-vvv`) | **never** |
-| Short aliases for task params | **never** |
-
-The must-haves all follow the existing `suggest`/`nosplit` idiom — `Annotated`
-markers, recognized in one loop in `coerce.peel`, additive manifest keys, no
-schema bump:
-
-```python
-@task
-def deploy(
-    config: Annotated[Path, isfile],
-    jobs: Annotated[int, between(1, 32)] = 4,
-    target: Annotated[str, env("DEPLOY_ENV")] = "staging",
-    version: Annotated[str, check(semver)] = "0.0.0",
-): ...
-```
-
-```text
-$ fm deploy missing.toml
-fm: deploy: <config> must be an existing file (got 'missing.toml')
-$ fm deploy app.toml --jobs 99
-fm: deploy: --jobs must be between 1 and 32 (got 99)
-```
-
-Path and bounds checks run eagerly in the splitter (taught errors, like
-choices today); `env()` and `check()` run at binding, and an env-supplied
-value flows through the same coercion, bounds, and checks as a CLI token.
-`env()` on a parameter without a default is a build-time taught error — an
-env fallback *makes* a parameter optional, so it needs somewhere to fall.
-
-The nevers deserve their one line each. Prompts: a chained, parallel,
-CI-first runner is the most hostile environment interactivity has ever met —
-a task body can call `input()` if it truly must. Counting flags: verbosity
-belongs to the runner (`-v` exists), not to task params, and task params have
-no short-flag grammar to hang repetition on. Short aliases: collision-prone
-across cascade merges, and they steal negative-number positionals. Saying
-"never" to these is what keeps the grammar deterministic — the thing that
-makes separator-free chaining possible at all.
-
-## 8. Completion and CLI polish
-
-- **`--install-completion` for bash/zsh/fish** (pwsh/nushell after) — the
-  README promises it, the resolver exists, and it's the single biggest gap
-  between footman's completion story and the one users actually experience.
-  Relatedly: the headline "~19 ms" is the *standalone resolver* number — the
-  path users get today (`fm --complete`) is 23–24 ms. Either ship the
-  standalone path with the installers, or say 23. Verified-not-vibes cuts
-  both ways.
-- **Per-task `--help`** — falls out of fixing bug #1 properly.
-- **Chain-aware completion** — the walk currently stops at the first task.
-- Wire-or-delete: `--refresh-manifest`, `manifest.is_stale`,
-  `executor.run_chain`.
-- Public-surface hygiene: `tools` into `__all__`; `reset()` out of the
-  public namespace; decide the `Group`/`Context` construction story.
-- Grow `tools.*` — duty's one conceded win in the comparison table.
-
-## 9. Docs
-
-- **The README is a 457-line hand-maintained near-superset of the docs site**
-  — the global-options table is byte-identical to `reference.md`. It *will*
-  drift. Either the README becomes a short pitch with pointers, or the shared
-  tables become snippet-includes (`pymdownx.snippets` already proves the
-  pattern with the changelog).
-- **New pages:** `testing.md` (§5), `composing.md` (§6), a cookbook of
-  recipes, a CI-integration page (the `--json`-for-agents story is currently
-  scattered), extending `tools.*`, and a troubleshooting page that catalogs
-  the taught errors — footman markets its error messages; show them off.
-- **Honesty fixes:** the 19 ms headline (above); the `import footman` +4 ms
-  vs `import typer` +24 ms claim has no committed script behind it — write
-  the benchmark or soften the claim; `docs/comparison.md` says to reproduce
-  with `uv run python comparison/bench_compare.py`, which fails without
-  `--group comparison`.
-- **Voice pass:** `comparison.md` is the calibration target — first person,
-  generous before clever, tables followed by the prose that reads them,
-  tradeoffs conceded out loud. `typing.md`, `monorepos.md`, `tools.md`, and
-  `orchestration.md` are currently in neutral documentation voice and read
-  like a different author.
-
-## 10. The release train
-
-Four releases, each one theme, nothing riding on a mega-drop:
-
-| Release | Contents | The gate |
-| ------- | -------- | -------- |
-| **0.5.0** | All §1 bug fixes (with regression tests) + §3 release engineering + the `--json` envelope | A tag can no longer publish unverified; versions can no longer disagree |
-| **0.6.0** | The testing story (§5) + typing must-haves (§7) | footman's own suite runs on `footman.testing`; the typer gap table is all ✅ or "never" |
-| **0.7.0** | The composition story (§6) + completion installers (§8) | `include()`, `when=`, `plugins=` documented and dogfooded; TAB works out of the box in bash/zsh/fish |
-| **1.0.0** | Docs (§9) + stability promise + alpha-flag flip | Everything above has baked for a full cycle; a TestPyPI dry-run precedes the real tag |
-
-## 11. After 1.0 — the premier-task-runner backlog
-
-Not gating anything, in rough order of how much I want them:
+# Roadmap
+
+This file began as a critical self-audit of footman at **v0.4.0** — every
+claim checked against the source, file and line. Eight releases later, almost
+all of it has shipped. The file now does two jobs: the road ahead, and — for
+posterity — the original audit preserved item by item, each with the release
+that closed it. The full stories live in the
+[changelog](https://willemkokke.github.io/footman/changelog/).
+
+**Where footman stands (2026-07-19, v0.12.0, Beta on PyPI).** The typed core
+— coercion, chain grammar, manifest, scheduler, cascade — held up; everything
+since has been built on it without structural change. The runner now has a
+real help story, a testing story, a composition story, completion installed
+and functionally tested on five real shells, a tools bridge with typed stubs,
+one `--json` envelope for machines, docstring-driven parameter docs, markdown
+export of the task surface, a progress bar that earns its confidence from
+duration history, and one colour palette across the whole CLI. Coverage is
+enforced at ≥ 92%, CI runs 3 OS × Python 3.11–3.14 including free-threaded,
+and a tag cannot publish unless CI and the version checks agree.
+
+## The road to 1.0
+
+What actually remains, in order:
+
+- **The cookbook page** — a recipes catalogue (the one §9 docs item still
+  open).
+- **Help strings that carry the whole truth.** The CLI reference table is now
+  generated from the grammar, so the help strings are the single source for
+  `--help`, completion menus, and the docs at once. A short pass to make them
+  worthy of that job (for example, `--jobs` doesn't mention the floor of 2).
+- **The stability promise, written down**: decorator surface, CLI grammar,
+  `--json` schema additive-only, manifest format additive-only. Then a bake
+  cycle with no breaking changes.
+- **The 1.0 flip**: pre-1.0 warnings out, promise in — one coordinated
+  change, with a TestPyPI dry-run before the real tag. (The
+  `Development Status` classifier already moved Alpha → Beta in 0.12.0.)
+
+## New since the audit
+
+Ideas that came out of building the last eight releases, not in the original
+plan:
+
+- **A generated `[tool.footman]` reference.** The same never-drift treatment
+  the global-options table got in `fm footman docs globals`: render the
+  config keys and defaults from the source, snippet-include them in the docs.
+- **Dedup the branch-vs-PR CI runs.** A PR from an in-repo branch triggers
+  the suite twice — once for the push, once for the PR. A concurrency group
+  or a branch filter should make it one.
+
+## After 1.0 — the backlog
+
+Not gating anything, carried forward minus the entries that shipped
+(task-returned JSON payloads landed in 0.10.0, the TTY progress UI grew into
+0.12.0's history-backed bar, PowerShell/nushell completion landed in 0.8.0):
 
 - **Watch mode** — `fm --watch lint`: re-run on file change, debounced.
-- **JSONL event streaming** — `--json` today is a summary; agents and CI
-  dashboards want per-event lines as tasks start/finish.
-- **Task-customizable `--json` payloads** — let a task contribute structured
-  data to its own entry in the envelope (a returned dict, or something like
-  `ctx.json["artifact"] = path`). Deliberately not designed yet: needs
-  thinking about schema stability (the envelope promises additive-only),
-  reserved keys, and how it composes with steps. Parked so it isn't lost.
+- **JSONL event streaming** — `--json` is a summary; agents and CI dashboards
+  want per-event lines as tasks start and finish.
 - **Fingerprint-based skipping** — "inputs unchanged, skip the task"
   (doit/turborepo territory; big, and the DAG is already in place).
 - **Per-task timeout and retry** — `@task(timeout=120, retries=2)`.
-- **A TTY progress UI for the DAG** — parallel runs deserve better than
-  buffered silence, and the non-interleaving contract already exists.
-- `fm --plugins` — list installed `footman.tasks` entry points with
-  dist/version and enabled state.
-- `fm new` — scaffold a tasks.py that demonstrates the good idioms.
-- PowerShell/nushell completion, once bash/zsh/fish are real.
+- **`fm --plugins`** — list installed `footman.tasks` entry points with
+  dist, version, and enabled state.
+- **`fm new`** — scaffold a tasks.py that demonstrates the good idioms.
+- From the typing table's "post-1.0" rows: hidden parameters, and fixed-arity
+  `tuple[X, Y]` in comma form (`--size 800,600`).
+
+The "never" list from the audit is still never, for the same reasons:
+prompts/confirmation (a chained, parallel, CI-first runner is the most
+hostile environment interactivity has ever met), counting flags (`-vvv`
+belongs to the runner, not task params), and short aliases for task
+parameters (collision-prone across cascade merges, and they steal
+negative-number positionals). Saying never here is what keeps the grammar
+deterministic — the thing that makes separator-free chaining possible.
 
 ---
 
-*Generated from a full source audit at v0.4.0 (commit 9328109). File:line
-references are to that revision.*
+## The v0.4.0 audit, for posterity
+
+Everything below is the original audit, condensed to one line per item, with
+the release that closed it. Section numbers match the original.
+
+### §1 Bugs — all thirteen, fixed in 0.5.0
+
+| # | Bug | Landed |
+| - | --- | ------ |
+| 1 | `fm --help build` executed `build` | 0.5.0 — help anywhere before `--` is read-only |
+| 2 | Cyclic `pre`/`post` deps → silent exit 0 | 0.5.0 — taught error naming the cycle |
+| 3 | `bool` inside collections always `True` | 0.5.0 — real bool token type |
+| 4 | `list[bool]` collapsed to a single flag | 0.5.0 |
+| 5 | Malformed config TOML silently ignored | 0.5.0 — discovered config warns; `--config` errors |
+| 6 | Crashing strict `suggest()` disabled validation | 0.5.0 — fails the run |
+| 7 | Ctrl-C → raw traceback | 0.5.0 — cancelled, `interrupted`, exit 130 |
+| 8 | Windows `run("...")` mangled by POSIX `shlex` | 0.5.0 — string goes to `CreateProcess` whole |
+| 9 | Non-UTF-8 subprocess output crashed | 0.5.0 — `errors="replace"` |
+| 10 | Duplicate task name misreported as import crash | 0.5.0 — named user error |
+| 11 | `"²".isdigit()` → `int()` traceback | 0.5.0 — taught type error |
+| 12 | `--dry-run` recorded no `StepResult` | 0.5.0 — records, honours `quiet` |
+| 13 | `py.typed` missing | 0.5.0 — shipped, checked by the release gate |
+
+### §2 Half-baked and dead surface
+
+| Item | Resolution |
+| ---- | ---------- |
+| `--refresh-manifest` no-op | removed, 0.7.0 |
+| `--install-completion` printed "not wired up yet" | wired: bash/zsh/fish 0.7.0, pwsh/nushell + shell detection 0.8.0 |
+| README pessimistic about `-v`/`--no-color` | README rewritten as a front door, 0.8.0 |
+| Per-task `--help` didn't exist | shipped, 0.5.0 |
+| `manifest.is_stale` + `sources` never consulted | removed, 0.7.0 (real freshness arrived as stale-while-revalidate in 0.9.0) |
+| `executor.run_chain` had no callers | kept and wired: it became the binding-test harness the suites drive |
+| `tools` load-bearing but not exported | public (`__all__`, lazy), 0.7.0 |
+| `Group` unrunnable, `Context` unconstructable, `reset()` public | `Runner`/`use_context()` 0.6.0; `reset()` out of the root namespace 0.7.0 |
+| `tools.*` seven wrappers vs duty's dozens | the bridge (any executable, no declaration), 0.8.0; typed stubs 0.9.0 |
+
+### §3 Release engineering
+
+| Item | Landed |
+| ---- | ------ |
+| Any `v*` tag published unverified | 0.5.0 — release runs full CI on the tagged commit |
+| Version in two places, checked by nothing | 0.5.0 — tag = pyproject = `__version__` = changelog, enforced |
+| Coverage reported, never enforced | 0.5.0 — `fail_under = 92` in CI |
+| Docs built strictly only after merge | 0.5.0 — strict build on every PR |
+| Missing URLs, dead changelog links, sdist excludes | 0.5.0–0.8.0 housekeeping |
+| Alpha classifier + warnings, one coordinated flip | Beta in 0.12.0; the written promise is the road to 1.0 above |
+
+### §4 Test-suite gaps
+
+The hostile-world column filled in: signals, Windows backslash paths, and
+non-UTF-8 bytes with the 0.5.0 fixes they guard; the manifest, cascade, and
+coercion suites deepened across 0.5.0–0.9.0 (0.9.0's correctness pass drove
+coercion, scheduler, and tools through their edges); and 0.8.0 added the
+functional column nobody asked for in the audit — every completion hook
+driven against its real shell in CI, which is how the bash 3.2 and
+PowerShell empty-argument bugs were caught for keeps.
+
+### §5 The testing story
+
+Shipped whole in **0.6.0**: `footman.testing` (`Runner.invoke`,
+`recording()`, `use_context()`), three auto-loaded pytest fixtures (`fm`,
+`fm_project`, `fm_record`) at zero runtime dependencies, footman's own suite
+dogfooding them, and the *Testing your tasks* docs page. The `--json`
+envelope (`{"schema": 1, ...}`) landed earlier, in 0.5.0, exactly so
+breaking was still free.
+
+### §6 The composition story
+
+Shipped whole in **0.7.0**: `@task(when=…, reason=…)` disable-but-list,
+`include(source, into=…, only=…, exclude=…, override=…)`, the
+`footman.tasks` entry point with opt-in `[tool.footman] plugins`,
+`registry.capture()` as the public seam, and the *Composing tasks* page.
+`@task(requires=…)` followed in 0.9.0 as the import-free dependency gate,
+reusing the same availability machinery. The "hiding is an `if` statement"
+stance held — no kwarg was ever added.
+
+### §7 Typing parity
+
+| Gap | Landed |
+| --- | ------ |
+| `bool` in collections | 0.5.0 |
+| `exists` / `isfile` / `isdir` | 0.6.0 |
+| `between(lo, hi)` / bare `range` | 0.6.0 |
+| `env("VAR")` fallback | 0.6.0 — CLI > env > default, same coercion path |
+| `check(fn)` validator | 0.6.0 — post-coercion, per element |
+| Silent `str` degrade of unknown annotations | 0.6.0 — warns |
+| Hidden params, `tuple[X, Y]` | still post-1.0 (backlog above) |
+| Prompts, counting flags, short aliases | still never |
+
+### §8 Completion and CLI polish
+
+| Item | Landed |
+| ---- | ------ |
+| `--install-completion` bash/zsh/fish | 0.7.0 |
+| pwsh/nushell installers, shell detection | 0.8.0 |
+| Chain-aware completion | 0.7.0 — the resolver walks segments like the splitter |
+| Latency headline honesty | 0.10.0 — ~25 ms measured by a committed benchmark, quoted everywhere |
+| Wire-or-delete the dead flags | 0.7.0 |
+| Public-surface hygiene | 0.6.0–0.7.0 |
+| Grow `tools.*` | 0.8.0 bridge, 0.9.0 in-process + stubs |
+
+Beyond the audit's asks: functional tests against all five real shells
+(0.8.0), completions that teach and stay fresh (0.9.0), global-flag
+completion, `--setup-completion`, `--uninstall-completion`, per-shell docs
+pages, and descriptions in every shell that renders them (0.10.0).
+
+### §9 Docs
+
+| Item | Landed |
+| ---- | ------ |
+| README as a drifting near-superset of the site | 0.8.0 — a front door with pointers |
+| `testing.md` | 0.6.0 |
+| `composing.md` | 0.7.0 |
+| CI page, troubleshooting catalogue | 0.8.0 |
+| Benchmark honesty (import cost, completion latency) | 0.7.0 and 0.10.0 — committed scripts behind both |
+| Voice pass over the older pages | 0.10.0 docs cycle — restructure, tabs, one voice |
+| The cookbook | **still open** — first item on the road to 1.0 |
+
+The audit's other docs worry — the hand-maintained global-options table that
+"*will* drift" — proved right on schedule: it drifted three ways and is now
+generated from the grammar on every docs build (unreleased, post-0.12.0).
+
+### §10 The release train
+
+Went to plan: 0.5.0 (bugs + release engineering + envelope), 0.6.0
+(testing + typing), 0.7.0 (composition + completion) shipped as the table
+said, in two days rather than four cycles. Reality then added stops the plan didn't
+know about: 0.8.0 (the bridge, all five shells, real-shell CI), 0.9.0 (the
+correctness pass, in-process tools, stubs), 0.10.0 (the one-envelope `--json`
+contract, `doc()`, agents + llms.txt), 0.11.0 (docstring parameter docs, the
+stdout/stderr contract, markdown export), 0.12.0 (the progress bar with
+duration history, `-j/--jobs`, `FOOTMAN_CACHE_DIR`, one colour palette,
+Beta).
+
+### §11 The original backlog
+
+| Item | Status |
+| ---- | ------ |
+| Task-customizable `--json` payloads | shipped, 0.10.0 — `returned`, symmetric with what footman coerces in |
+| A TTY progress UI for the DAG | shipped, 0.12.0 — and it learned to estimate from duration history |
+| PowerShell/nushell completion | shipped, 0.8.0 |
+| Watch mode, JSONL streaming, fingerprint skipping, timeout/retry, `fm --plugins`, `fm new` | open — carried in the backlog above |
+
+---
+
+*The original audit was generated from a full source read at v0.4.0 (commit
+9328109) and is preserved in the git history of this file. This revision
+reflects v0.12.0.*

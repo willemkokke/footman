@@ -41,6 +41,7 @@ nav = [
     { "Migrating" = "migrating.md" },
     { "Coverage" = "coverage.md" },
     { "Changelog" = "changelog.md" },
+    { "Roadmap" = "roadmap.md" },
   ] },
   { "Reference" = [
     { "CLI reference" = "reference.md" },
