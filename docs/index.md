@@ -33,8 +33,12 @@ prints.)
     footman is pre-1.0: the surface is settling, but minor versions may still
     include breaking changes — always called out in the
     [changelog](changelog.md), never in a patch release. Pin the minor
-    (`footman~=0.12.0`) if you build on it. The written stability promise
+    (`footman~=0.13.0`) if you build on it. The written stability promise
     lands with 1.0 — the road there is on the [roadmap](roadmap.md).
+
+--8<-- "docs/_generated/latest-changes.md"
+
+The full history lives in the [changelog](changelog.md).
 
 ## Why
 

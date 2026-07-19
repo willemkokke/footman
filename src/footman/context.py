@@ -35,9 +35,13 @@ class StepResult:
     """The outcome of one `run()` call, recorded on the context."""
 
     command: str
+    """The command line that ran, as one display string."""
     code: int
+    """The exit code (0 is success)."""
     output: str
+    """Captured combined output; empty when the step streamed instead."""
     duration: float
+    """Wall-clock seconds the step took."""
 
 
 @dataclass
@@ -45,27 +49,48 @@ class Context:
     """State for one running task: environment, flags, passthrough, output."""
 
     env: dict[str, str] = field(default_factory=dict)
+    """Extra environment variables overlaid on every `run()` subprocess."""
     cwd: Path | None = None
+    """Where `run()` executes: the folder that defined the task; `None`
+    means the process cwd (plain calls outside a footman run)."""
     dry_run: bool = False
+    """`--dry-run`: `run()` prints and records the command, executes
+    nothing, and reports success."""
     quiet: bool = False
+    """`--quiet`: suppress step lines and the per-task summary."""
     verbose: bool = False
+    """`--verbose`: replay captured `run()` output even on success."""
     no_color: bool = False
-    prog: str = "fm"  # the invoking CLI's command name (the brand's prog)
-    # The *user asked* for one-at-a-time (-s or config) — parallel() honours
-    # it too. Deliberately not set by the scheduler's own single-node
-    # routing, which is presentation, not a request to serialise bodies.
+    """`--no-color` (or `NO_COLOR`): never emit ANSI styling."""
+    prog: str = "fm"
+    """The invoking CLI's command name — a branded CLI's own `prog`, so
+    tasks (the taskdocs plugin, say) can speak the brand's name."""
     sequential: bool = False
-    # The effective parallel width (-j/--jobs, config `jobs`, or the
-    # cores-minus-one default) — caps parallel() pools in task bodies.
-    jobs: int = 0  # 0: unset (plain calls outside a run) → no cap
-    # Who is running, for the step lines' name column: the scheduler sets
-    # the dotted task name, parallel() its child's name. Empty outside runs.
+    """The *user asked* for one-at-a-time (`-s` or config) — `parallel()`
+    honours it too. Deliberately not set by the scheduler's own
+    single-node routing, which is presentation, not a request to
+    serialise task bodies."""
+    jobs: int = 0
+    """The effective parallel width (`-j/--jobs`, config `jobs`, or the
+    cores-minus-one default) — caps `parallel()` pools in task bodies.
+    `0` means unset (plain calls outside a run): no cap."""
     task: str = ""
-    name_width: int = 0  # widest sibling name, so the columns align
+    """Who is running, for the step lines' name column: the scheduler
+    sets the dotted task name, `parallel()` its child's name. Empty
+    outside runs."""
+    name_width: int = 0
+    """The widest sibling task name, so step-line columns align."""
     passthrough: list[str] = field(default_factory=list)
-    tty: bool = False  # use live rewrite/colour (sequential live only)
-    sink: TextIO | None = None  # where output goes; None -> real stdout
+    """Everything after `--` on the command line, verbatim."""
+    tty: bool = False
+    """Output dresses for a terminal (colour, marks). Live in-place
+    rewrites additionally require output to be uncaptured."""
+    sink: TextIO | None = None
+    """Where this task's output goes: a capture buffer in buffered
+    (parallel) mode, `None` for the real stdout (live mode)."""
     steps: list[StepResult] = field(default_factory=list)
+    """Every `run()` this task made, in order — what `recording()` and
+    the `--json` envelope read."""
 
 
 _current: ContextVar[Context | None] = ContextVar("footman_context", default=None)

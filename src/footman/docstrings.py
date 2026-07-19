@@ -38,9 +38,14 @@ class Docstring:
     reusers; absent pieces are empty, never None.
     """
 
-    summary: str = ""  # the first line
-    long: str = ""  # prose between the summary and the first section
-    params: dict[str, str] = field(default_factory=dict)  # python name -> text
+    summary: str = ""
+    """The first line — the one-liner listings and completion menus show."""
+    long: str = ""
+    """Prose between the summary and the first section (`Args:` and
+    friends), structure preserved; empty when there is none."""
+    params: dict[str, str] = field(default_factory=dict)
+    """Per-parameter help, keyed by the Python parameter name (not the
+    CLI spelling): `{"fix": "apply safe fixes in place"}`."""
 
 
 _GOOGLE_HEADER = re.compile(r"^(?:args|arguments|parameters)\s*:\s*$", re.IGNORECASE)

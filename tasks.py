@@ -62,6 +62,37 @@ def check():
 docs = group("docs", help="Documentation site (Zensical)")
 
 
+def _write_latest_changes() -> None:
+    """Extract the newest release's section from CHANGELOG.md into a
+    collapsed admonition the home page includes — version, date, and the
+    entries, straight from the one source of truth. Rolling the changelog
+    for a release updates the home page by construction."""
+    import re
+    from pathlib import Path
+
+    text = Path("CHANGELOG.md").read_text(encoding="utf-8")
+    head = re.search(r"^## \[(\d[^\]]+)\] — (.+?)$", text, re.M)
+    if head is None:  # a fresh fork with only [Unreleased]: skip quietly
+        body_block = ""
+    else:
+        rest = text[head.end() :]
+        nxt = re.search(r"^## \[", rest, re.M)
+        entries = rest[: nxt.start() if nxt else len(rest)].strip()
+        indented = "\n".join(
+            f"    {line}" if line else "" for line in entries.splitlines()
+        )
+        title = f"Latest release: {head.group(1)} — {head.group(2)}"
+        # No links in here: the file is validated as its own page, where
+        # relative targets differ from the including page's. The home page
+        # carries the changelog link itself, right after the include.
+        body_block = f'??? info "{title}"\n\n{indented}\n'
+
+    out = Path("docs/_generated/latest-changes.md")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(body_block, encoding="utf-8")
+    print(f"wrote {out}")
+
+
 def _write_llms_txt() -> None:
     """Generate docs/llms.txt and docs/llms-full.txt from the nav.
 
@@ -183,6 +214,7 @@ def docs_build(check: bool = False):
     # The CLI reference's global-options table, from the grammar itself —
     # reference.md snippet-includes it, so it can't drift from --help.
     taskdocs_globals(out=Path("docs/_generated/globals.md"))
+    _write_latest_changes()
     # Terminal screenshots, captured from the real CLI on a pty and framed
     # as SVGs — the pages show footman exactly as a terminal does, and a
     # rebuild regenerates them, so they cannot drift either.
