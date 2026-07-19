@@ -7,6 +7,8 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+## [0.12.0] — 2026-07-19
+
 ### Added
 
 - **A progress bar that earns its confidence.** On a TTY, every run keeps
@@ -52,6 +54,13 @@ versions may include breaking changes.
   every command line footman prints is lit the same way. Colour is gated
   per stream on its own TTY — piped output, `--json`, `--where`, and
   `NO_COLOR`/`--no-color`/`TERM=dumb` runs stay byte-identical to before.
+
+### Changed
+
+- **Development Status: Alpha → Beta.** The PyPI classifier now says what
+  the last few releases have shown: the surface is settling, the test bed
+  is broad, and coverage is enforced. Pre-1.0 minors may still include
+  breaking changes, as the header above says.
 
 ### Fixed
 
@@ -642,7 +651,8 @@ versions may include breaking changes.
 
 - Placeholder release claiming the `footman` name on PyPI. Not tagged in git.
 
-[Unreleased]: https://github.com/willemkokke/footman/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/willemkokke/footman/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/willemkokke/footman/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/willemkokke/footman/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/willemkokke/footman/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/willemkokke/footman/compare/v0.8.0...v0.9.0
