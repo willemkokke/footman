@@ -6,7 +6,6 @@ title: A typed task runner with instant completion
 
 [![PyPI version](https://img.shields.io/pypi/v/footman?label=PyPI&color=blue)](https://pypi.org/project/footman/)
 [![Python versions](https://img.shields.io/pypi/pyversions/footman)](https://pypi.org/project/footman/)
-[![Free-threaded](https://img.shields.io/badge/free--threaded-3.14t-brightgreen)](https://github.com/willemkokke/footman/actions/workflows/ci.yml)
 [![License](https://img.shields.io/pypi/l/footman)](https://github.com/willemkokke/footman/blob/main/LICENSE)
 [![Docs built with Zensical](https://img.shields.io/badge/docs-Zensical-4051b5)](https://zensical.org)
 
