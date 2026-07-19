@@ -498,7 +498,7 @@ def cast(
             width=width,
             height=height,
             sends=keystrokes(keys),
-            settle=1.0,
+            settle=1.5,
             env_extra=env_extra,
         )
     frames = _screens(chunks, width=width, height=height)

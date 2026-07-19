@@ -716,7 +716,9 @@ def test_zsh_cast_records_an_animated_completion(home, tmp_path, monkeypatch):
     assert _app.run(["--list"]) == 0  # warm the manifest TAB will serve
     dest = tmp_path / "cast.svg"
     line = ["footman", "docs", "cast", "--out", str(dest), "--shell", "zsh"]
-    line += ["--width", "70", "--height", "10", "--", "fm li", "<TAB>"]
+    # The trailing wait gives the hook's `fm --complete` subprocess room on
+    # a cold CI runner — the settle window alone raced its Python startup.
+    line += ["--width", "70", "--height", "10", "--", "fm li", "<TAB>", "<WAIT:2500>"]
     assert _app.run(line) == 0
     svg = dest.read_text(encoding="utf-8")
     assert svg.count("cast-frame") >= 2  # it animates
