@@ -79,6 +79,28 @@ def test_required_positionals():
     assert seen == {"template": Path("a.j2"), "output": Path("out.html")}
 
 
+def test_keyword_only_required_option_binds_by_name():
+    seen = {}
+
+    def tasks(reg):
+        @reg.task
+        def shot(*argv: str, out: Path, width: int = 72):
+            seen.update(argv=argv, out=out, width=width)
+
+    _run(tasks, "shot --out x.svg --width 80 -- --list --tree")
+    assert seen == {"argv": ("--list", "--tree"), "out": Path("x.svg"), "width": 80}
+
+
+def test_keyword_only_required_option_missing_refuses():
+    def tasks(reg):
+        @reg.task
+        def shot(*argv: str, out: Path):
+            del argv, out
+
+    with pytest.raises(ChainError, match=r"required"):
+        _run(tasks, "shot -- --list")
+
+
 def test_variadic_plus_passthrough():
     seen = {}
 

@@ -148,6 +148,28 @@ def test_str_option_and_required_argument():
     assert specs(h) == [{"name": "req", "kind": "argument"}]
 
 
+def test_keyword_only_without_default_is_a_required_option():
+    # Python's `*` already says "must be named" — the grammar honours it,
+    # the same shape defaultless dicts and flags take.
+    def f(*, out: Path): ...
+
+    def g(*args: str, dest: str): ...
+
+    def h(*, plain): ...  # un-annotated keyword-only: same rule
+
+    assert specs(f) == [
+        {"name": "out", "kind": "option", "required": True, "types": ["path"]}
+    ]
+    assert specs(g)[1] == {"name": "dest", "kind": "option", "required": True}
+    assert specs(h) == [{"name": "plain", "kind": "option", "required": True}]
+
+
+def test_keyword_only_with_default_stays_a_plain_option():
+    def f(*args: str, title: str = ""): ...
+
+    assert specs(f)[1] == {"name": "title", "default": "", "kind": "option"}
+
+
 def test_typed_option():
     def f(n: int = 3, ratio: float = 1.0): ...
 

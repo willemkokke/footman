@@ -107,11 +107,20 @@ def param_spec(param: inspect.Parameter) -> dict[str, Any]:
         ok_default, encoded = _describe.jsonable(param.default)
         if ok_default:
             spec["default"] = encoded
+    # A keyword-only parameter (after `*` or `*args`) is an option by
+    # Python's own declaration — defaultless, it is a *required* option,
+    # the same shape defaultless dicts and flags already take.
+    kw_only = param.kind is inspect.Parameter.KEYWORD_ONLY
+
     if ann is empty:
         if isinstance(param.default, bool):
             spec["kind"] = "flag"
+        elif has_default or kw_only:
+            spec["kind"] = "option"
+            if not has_default:
+                spec["required"] = True
         else:
-            spec["kind"] = "option" if has_default else "argument"
+            spec["kind"] = "argument"
         return spec
 
     peeled = coerce.peel(ann)
@@ -145,7 +154,12 @@ def param_spec(param: inspect.Parameter) -> dict[str, Any]:
         _marker_keys(spec, peeled, param, has_default)
         return spec
 
-    spec["kind"] = "option" if has_default else "argument"
+    if has_default or kw_only:
+        spec["kind"] = "option"
+        if not has_default:
+            spec["required"] = True
+    else:
+        spec["kind"] = "argument"
     _marker_keys(spec, peeled, param, has_default)
     if peeled.multiple:
         spec["multiple"] = True
