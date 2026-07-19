@@ -26,6 +26,49 @@ TYPE_WORD = {
 }
 
 
+# --- the palette --------------------------------------------------------------
+# One visual language for the whole CLI: bold for names and headers, dim for
+# mechanics and secondary text, cyan for footman's own numbers and accents,
+# green/red for verdicts. Every helper is a no-op when *on* is False, and
+# every surface gates *on* by its own stream's tty-ness — piped output stays
+# byte-clean.
+
+
+def wants_color(stream: Any, no_color: bool = False) -> bool:
+    try:
+        tty = bool(stream.isatty())
+    except Exception:
+        tty = False
+    import os as _os
+
+    return (
+        tty
+        and not no_color
+        and "NO_COLOR" not in _os.environ
+        and _os.environ.get("TERM") != "dumb"
+    )
+
+
+def bold(text: str, on: bool) -> str:
+    return f"\033[1m{text}\033[0m" if on else text
+
+
+def dim(text: str, on: bool) -> str:
+    return f"\033[2m{text}\033[0m" if on else text
+
+
+def cyan(text: str, on: bool) -> str:
+    return f"\033[36m{text}\033[0m" if on else text
+
+
+def bold_cyan(text: str, on: bool) -> str:
+    return f"\033[1;36m{text}\033[0m" if on else text
+
+
+def red(text: str, on: bool) -> str:
+    return f"\033[31m{text}\033[0m" if on else text
+
+
 def value_hint(p: dict) -> str:
     """The value placeholder shown for an option/argument in help output."""
     if p.get("mapping"):
@@ -66,9 +109,18 @@ def param_label(p: dict) -> str:
 
 
 def param_detail(p: dict) -> str:
+    doc, mechanics = param_detail_parts(p)
+    return "; ".join(bit for bit in (doc, mechanics) if bit)
+
+
+def param_detail_parts(p: dict) -> tuple[str, str]:
+    """(author's doc, the mechanical suffix) — split so help can dim the
+    mechanics under the author's words."""
+    return p.get("doc", ""), _mechanics(p)
+
+
+def _mechanics(p: dict) -> str:
     bits: list[str] = []
-    if p.get("doc"):  # the author's own words lead; mechanics follow
-        bits.append(p["doc"])
     if p["kind"] == "flag":
         bits.append(f"flag (--no-{p['name']} to disable)")
     choices = p.get("choices")
@@ -94,25 +146,69 @@ def sample_value(p: dict) -> str:
     return choices[0] if choices else f"<{p['name']}>"
 
 
-def example(path: list[str], task: dict, prog: str) -> str:
+# CLI lines (usage, examples) are token lists — (kind, text) — so every
+# renderer paints the same structure: `prog` bold, `group` bold cyan (as in
+# the tree), `task` bold, `req`/`value` cyan, `opt` dim, `flag` plain.
+_CLI_PAINT = {
+    "prog": bold,
+    "group": bold_cyan,
+    "task": bold,
+    "req": cyan,
+    "value": cyan,
+    "opt": dim,
+    "flag": lambda text, on: text,
+}
+
+
+def paint_cli(parts: list[tuple[str, str]], on: bool) -> str:
+    """The one way to print a command line, syntax-lit by token kind."""
+    return " ".join(_CLI_PAINT.get(kind, bold)(text, on) for kind, text in parts)
+
+
+def invocation_parts(prog: str, path: list[str]) -> list[tuple[str, str]]:
+    """`prog group… task` as tokens — the head of every usage and example."""
+    parts: list[tuple[str, str]] = [("prog", prog)]
+    parts += [("group", name) for name in path[:-1]]
+    if path:
+        parts.append(("task", path[-1]))
+    return parts
+
+
+def usage_parts(prog: str, path: list[str], task: dict) -> list[tuple[str, str]]:
+    parts = invocation_parts(prog, path)
+    for p in task["params"]:
+        fragment = usage_fragment(p)
+        if fragment:
+            kind = "opt" if fragment.startswith("[") else "req"
+            parts.append((kind, fragment))
+    return parts
+
+
+def example_parts(path: list[str], task: dict, prog: str) -> list[tuple[str, str]]:
     """A realistic invocation synthesised straight from the signature — required
     positionals and options with sample values, plus one representative flag.
 
     Derived, never written, so it can't drift from the task's actual parameters.
     Optional options are skipped as noise; the shape teaches the invocation.
     """
-    parts = [prog, *path]
+    parts = invocation_parts(prog, path)
     flag_shown = False
     for p in task["params"]:
         kind = p["kind"]
         if kind in ("argument", "variadic"):
-            parts.append(sample_value(p))
+            parts.append(("value", sample_value(p)))
         elif kind == "option" and p.get("required"):
-            parts.append(f"--{p['name']} {sample_value(p)}")
+            parts.append(("flag", f"--{p['name']}"))
+            parts.append(("value", sample_value(p)))
         elif kind == "flag" and (p.get("required") or not flag_shown):
-            parts.append(f"--{p['name']}")
+            parts.append(("flag", f"--{p['name']}"))
             flag_shown = True
-    return " ".join(parts)
+    return parts
+
+
+def example(path: list[str], task: dict, prog: str) -> str:
+    """The example invocation as plain text (the markdown exporter's form)."""
+    return " ".join(text for _, text in example_parts(path, task, prog))
 
 
 def task_line(task: dict) -> str:

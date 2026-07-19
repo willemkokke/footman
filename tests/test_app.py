@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import io
 import json
+import sys
 
 import pytest
 
@@ -886,3 +888,82 @@ def test_json_returned_mirrors_coercion_types(tmp_path, monkeypatch, capsys):
     assert returned["price"] == "1.10"  # str, not float: precision kept
     assert returned["tags"] == ["a", "b"]  # sets come out sorted
     assert returned["point"] == {"x": 1, "src": "src"}  # dataclass, nested Path
+
+
+# --- colour: one palette across the CLI ---------------------------------------
+# Help, listings, plans, and errors paint when their own stream is a terminal —
+# and only then. Piped output, NO_COLOR, and --no-color stay byte-clean; these
+# pin both sides so escapes can never leak into captured output.
+
+
+class _Tty(io.StringIO):
+    def isatty(self) -> bool:
+        return True
+
+
+def _tty_streams(monkeypatch):
+    """Colour-eligible stdout/stderr fakes with a clean colour environment.
+
+    Called inside the test body, not from a fixture: pytest's capture
+    re-asserts its own sys.stdout/sys.stderr at the fixture→call phase
+    boundary, so fixture-time stream patches silently vanish.
+    """
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    monkeypatch.setenv("TERM", "xterm-256color")
+    out, err = _Tty(), _Tty()
+    monkeypatch.setattr(sys, "stdout", out)
+    monkeypatch.setattr(sys, "stderr", err)
+    return out, err
+
+
+def test_global_help_paints_on_a_tty(project, monkeypatch):
+    out, _ = _tty_streams(monkeypatch)
+    assert _app.run(["--help"]) == 0
+    text = out.getvalue()
+    assert "usage: \033[1mfm\033[0m" in text  # prog bold
+    assert "\033[36m<task>\033[0m" in text  # required placeholder cyan
+    assert "\033[1mglobals (before the first task):\033[0m" in text
+    assert "\033[1m-l, --list\033[0m" in text  # option labels bold
+
+
+def test_task_help_paints_the_command_line(project, monkeypatch):
+    # The one CLI grammar: prog bold, groups bold cyan, task bold, and the
+    # synthesised example painted with the same brush as the usage line.
+    out, _ = _tty_streams(monkeypatch)
+    assert _app.run(["--help", "tools", "echo"]) == 0
+    text = out.getvalue()
+    assert "\033[1mfm\033[0m \033[1;36mtools\033[0m \033[1mecho\033[0m" in text
+    assert "\033[2mExample:\033[0m" in text
+
+
+def test_list_and_tree_paint_names(project, monkeypatch):
+    out, _ = _tty_streams(monkeypatch)
+    assert _app.run(["--list"]) == 0
+    assert _app.run(["--tree"]) == 0
+    text = out.getvalue()
+    assert "\033[2mtools \033[0m\033[1mecho\033[0m" in text  # dim prefix, bold leaf
+    assert "\033[1;36mtools/\033[0m" in text  # tree group
+
+
+def test_dry_run_plan_paints(project, monkeypatch):
+    out, _ = _tty_streams(monkeypatch)
+    assert _app.run(["-n", "hi"]) == 0
+    assert "\033[2m->\033[0m \033[1mhi\033[0m" in out.getvalue()
+
+
+def test_error_prefix_is_red_on_a_tty(project, monkeypatch):
+    _, err = _tty_streams(monkeypatch)
+    assert _app.run(["nosuchtask"]) == 2
+    assert "\033[31mfm\033[0m:" in err.getvalue()
+
+
+def test_no_color_flag_wins_even_on_a_tty(project, monkeypatch):
+    out, _ = _tty_streams(monkeypatch)
+    assert _app.run(["--no-color", "--list"]) == 0
+    assert "\033" not in out.getvalue()
+
+
+def test_piped_output_stays_plain(project, capsys):
+    for line in (["--help"], ["--list"], ["--tree"], ["-n", "hi"]):
+        assert _app.run(line) == 0
+        assert "\033" not in capsys.readouterr().out

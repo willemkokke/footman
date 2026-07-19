@@ -43,6 +43,15 @@ versions may include breaking changes.
   wall total genuinely adds information. `--timings` keeps millisecond
   precision on the receipts. The `--json` envelope carries the total as
   an additive top-level `total_ms`.
+- **One palette across the whole CLI.** `--help`, `--list`, `--tree`, the
+  `--dry-run` plan, and error messages now speak the same visual language
+  as the step lines and receipts: names and headers bold, groups bold
+  cyan, mechanics and optional syntax dim, required placeholders cyan,
+  the `fm:` error prefix red. Usage lines and synthesised examples are
+  painted from one token grammar (prog/group/task/required/optional), so
+  every command line footman prints is lit the same way. Colour is gated
+  per stream on its own TTY — piped output, `--json`, `--where`, and
+  `NO_COLOR`/`--no-color`/`TERM=dumb` runs stay byte-identical to before.
 
 ### Fixed
 

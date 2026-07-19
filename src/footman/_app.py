@@ -33,12 +33,23 @@ from footman.split import Segment
 
 # The brand (names + version) in effect for the current invocation. Set at the
 # top of `run()`; a CLI is one invocation per process, so a module global is
-# the simplest way to reach it from the error/version helpers.
+# the simplest way to reach it from the error/version helpers. The colour
+# flags follow the same pattern: one per stream, resolved once from the
+# stream's tty-ness, --no-color, NO_COLOR, and TERM.
 _brand: Brand = DEFAULT_BRAND
+_color_out: bool = False
+_color_err: bool = False
+
+
+def _set_colors(no_color: bool) -> None:
+    global _color_out, _color_err
+    _color_out = _describe.wants_color(sys.stdout, no_color)
+    _color_err = _describe.wants_color(sys.stderr, no_color)
 
 
 def _error(message: str) -> None:
-    sys.stderr.write(f"{_brand.prog}: {message}\n")
+    prog = _describe.red(_brand.prog, _color_err)
+    sys.stderr.write(f"{prog}: {message}\n")
 
 
 def _refuse(json_mode: bool, message: str, code: int = 2) -> int:
@@ -184,21 +195,41 @@ def _plan_line(seg: Segment) -> str:
             parts.append(f"{name}={_format_value(value)}")
     if seg.variadic:
         parts.append("*" + " ".join(seg.variadic))
-    line = f"  -> {seg.task}  " + " ".join(parts)
+    arrow = _describe.dim("->", _color_out)
+    task = _describe.bold(seg.task, _color_out)
+    line = f"  {arrow} {task}  " + " ".join(parts)
     if seg.passthrough is not None:
-        line += f"  [-- {' '.join(seg.passthrough)}]"
+        line += _describe.dim(f"  [-- {' '.join(seg.passthrough)}]", _color_out)
     return line.rstrip()
 
 
 def _print_plan(globals_: list[str], segments: list[Segment]) -> None:
     if globals_:
-        print(f"  globals: {' '.join(globals_)}")
+        label = _describe.dim("globals:", _color_out)
+        print(f"  {label} {' '.join(globals_)}")
     for seg in segments:
         print(_plan_line(seg))
 
 
 def _print_footer() -> None:
-    print(f"\nRun `{_brand.prog} --help <task>` for a task's options.")
+    footer = f"Run `{_brand.prog} --help <task>` for a task's options."
+    print(f"\n{_describe.dim(footer, _color_out)}")
+
+
+def _styled_name(name: str, width: int) -> str:
+    """A task name for a listing: dim group prefix, bold leaf, padded."""
+    pad = " " * (width - len(name))
+    prefix, _, leaf = name.rpartition(" ")
+    lead = _describe.dim(f"{prefix} ", _color_out) if prefix else ""
+    return f"{lead}{_describe.bold(leaf, _color_out)}{pad}"
+
+
+def _styled_help(help_text: str) -> str:
+    """A help line for a listing: the `(unavailable: …)` note dimmed."""
+    head, sep, note = help_text.partition("(unavailable:")
+    if not sep:
+        return help_text
+    return f"{head}{_describe.dim(f'(unavailable:{note}', _color_out)}"
 
 
 def _print_list(tree: dict) -> None:
@@ -207,9 +238,10 @@ def _print_list(tree: dict) -> None:
         print("No tasks defined.")
         return
     width = max(len(name) for name, _ in rows)
-    print("Tasks:")
+    print(_describe.bold("Tasks:", _color_out))
     for name, help_text in rows:
-        print(f"  {name:<{width}}  {help_text}".rstrip())
+        line = f"  {_styled_name(name, width)}  {_styled_help(help_text)}"
+        print(line.rstrip())
 
 
 def _print_tree(node: dict, indent: str = "") -> None:
@@ -218,13 +250,14 @@ def _print_tree(node: dict, indent: str = "") -> None:
     if not indent and not node["tasks"] and not node["groups"]:
         print("No tasks defined.")
         return
+    dash = _describe.dim("—", _color_out)
     for name, task in node["tasks"].items():
         line = _describe.task_line(task)
-        help_text = f"  — {line}" if line else ""
-        print(f"{indent}{name}{help_text}")
+        help_text = f"  {dash} {_styled_help(line)}" if line else ""
+        print(f"{indent}{_describe.bold(name, _color_out)}{help_text}")
     for name, sub in node["groups"].items():
-        label = f"  — {sub['help']}" if sub["help"] else ""
-        print(f"{indent}{name}/{label}")
+        label = f"  {dash} {sub['help']}" if sub["help"] else ""
+        print(f"{indent}{_describe.bold_cyan(f'{name}/', _color_out)}{label}")
         _print_tree(sub, indent + "  ")
 
 
@@ -235,48 +268,66 @@ def _print_task_help(tree: dict, path: list[str]) -> None:
     for name in path[:-1]:
         node = node["groups"][name]
     task = node["tasks"][path[-1]]
-    fragments = [f for p in task["params"] if (f := _describe.usage_fragment(p))]
-    print(" ".join([f"usage: {_brand.prog}", *path, *fragments]))
+    on = _color_out
+    usage = _describe.paint_cli(_describe.usage_parts(_brand.prog, path, task), on)
+    print(f"usage: {usage}")
     if task["help"]:
         print(f"\n  {task['help']}")
     if task.get("long"):  # the docstring's body, structure preserved
         body = "\n".join(f"  {ln}".rstrip() for ln in task["long"].splitlines())
         print(f"\n{body}")
     if task.get("disabled"):
-        print(f"\n  unavailable here: {task['disabled']}")
+        print(_describe.dim(f"\n  unavailable here: {task['disabled']}", on))
     positionals = [p for p in task["params"] if p["kind"] in ("argument", "variadic")]
     options = [p for p in task["params"] if p["kind"] in ("flag", "option")]
     for title, params in (("positionals", positionals), ("options", options)):
         if not params:
             continue
-        rows = [(_describe.param_label(p), _describe.param_detail(p)) for p in params]
+        rows = []
+        for p in params:
+            doc, mech = _describe.param_detail_parts(p)
+            # The author's words stay bright; the mechanics dim beneath them.
+            mech = _describe.dim(mech, on) if mech else ""
+            detail = "; ".join(bit for bit in (doc, mech) if bit)
+            rows.append((_describe.param_label(p), detail))
         width = max(len(label) for label, _ in rows)
-        print(f"\n{title}:")
+        print(f"\n{_describe.bold(f'{title}:', on)}")
         for label, detail in rows:
-            print(f"  {label:<{width}}  {detail}".rstrip())
-    print(f"\nExample: {_describe.example(path, task, _brand.prog)}")
+            pad = " " * (width - len(label))
+            print(f"  {_describe.bold(label, on)}{pad}  {detail}".rstrip())
+    example = _describe.paint_cli(_describe.example_parts(path, task, _brand.prog), on)
+    print(f"\n{_describe.dim('Example:', on)} {example}")
 
 
 def _print_group_help(tree: dict, path: list[str]) -> None:
     node = tree
     for name in path:
         node = node["groups"][name]
-    scope = " ".join(path)
-    print(f"usage: {_brand.prog} {scope} <task> [options]")
+    parts = [("prog", _brand.prog), *[("group", name) for name in path]]
+    parts += [("req", "<task>"), ("opt", "[options]")]
+    print(f"usage: {_describe.paint_cli(parts, _color_out)}")
     if node["help"]:
         print(f"\n  {node['help']}")
     rows = list(_describe.iter_tasks(node))
     if rows:
         width = max(len(name) for name, _ in rows)
-        print("\ntasks:")
+        print(f"\n{_describe.bold('tasks:', _color_out)}")
         for name, help_text in rows:
-            print(f"  {name:<{width}}  {help_text}".rstrip())
+            line = f"  {_styled_name(name, width)}  {_styled_help(help_text)}"
+            print(line.rstrip())
 
 
 def _print_global_help(tree: dict) -> None:
     prog = _brand.prog
-    print(f"usage: {prog} [globals] <task> [options] [<task> ...]")
-    print("\nglobals (before the first task):")
+    parts = [
+        ("prog", prog),
+        ("opt", "[globals]"),
+        ("req", "<task>"),
+        ("opt", "[options]"),
+        ("opt", "[<task> ...]"),
+    ]
+    print(f"usage: {_describe.paint_cli(parts, _color_out)}")
+    print(f"\n{_describe.bold('globals (before the first task):', _color_out)}")
     rows = []
     for name, alias, _kind, hint, help_text in split.GLOBALS:
         label = f"{alias}, {name}" if alias else f"    {name}"
@@ -287,7 +338,8 @@ def _print_global_help(tree: dict) -> None:
         rows.append((label, help_text.replace("{prog}", prog)))
     width = max(len(label) for label, _ in rows)
     for label, help_text in rows:
-        print(f"  {label:<{width}}  {help_text}")
+        pad = " " * (width - len(label))
+        print(f"  {_describe.bold(label, _color_out)}{pad}  {help_text}")
     print()
     _print_list(tree)
     _print_footer()
@@ -392,13 +444,12 @@ def _print_summary(
     *,
     timings: bool,
     total: float,
-    no_color: bool = False,
 ) -> None:
     # The summary is commentary about the run, not the run's output — it goes
     # to stderr so `fm task > file` captures exactly what the task produced.
     # Each receipt is task-shaped (mark · name · time), the same grid as the
     # step lines above it, with the name in cyan — same family, one rank up.
-    color = sys.stderr.isatty() and not no_color and "NO_COLOR" not in os.environ
+    color = _color_err
     width = max((len(r.task) for r in results), default=0)
     for result in results:
         ok = result.ok
@@ -587,6 +638,7 @@ def _run(
     except split.ChainError as exc:
         return _refuse(_wants_json(argv), str(exc))
     g = _globals_to_dict(pre_globals)
+    _set_colors(bool(g.get("no_color")))
     wants_help = _wants_help(argv)
 
     if g.get("version"):  # D7: --version wins even over --help
@@ -825,12 +877,7 @@ def _run_tree(
     if json_mode:
         _print_json(results, total=total)
     elif not g.get("quiet"):
-        _print_summary(
-            results,
-            timings=bool(g.get("timings")),
-            total=total,
-            no_color=bool(g.get("no_color")),
-        )
+        _print_summary(results, timings=bool(g.get("timings")), total=total)
 
     return next((r.code or 1 for r in results if not r.ok), 0)
 
@@ -856,6 +903,7 @@ def run_group(
     except split.ChainError as exc:
         return _refuse(_wants_json(argv), str(exc))
     g = _globals_to_dict(pre_globals)
+    _set_colors(bool(g.get("no_color")))
 
     if g.get("version"):
         return _print_version(bool(g.get("json")))
