@@ -40,14 +40,15 @@ def _seg(**kw) -> Segment:
 
 
 def test_chain_key_is_stable_and_shape_sensitive():
-    a = _progress.chain_key([_seg()], sequential=False)
-    assert a == _progress.chain_key([_seg()], sequential=False)  # stable
-    assert a != _progress.chain_key([_seg()], sequential=True)  # -s differs
+    a = _progress.chain_key([_seg()], sequential=False, jobs=4)
+    assert a == _progress.chain_key([_seg()], sequential=False, jobs=4)  # stable
+    assert a != _progress.chain_key([_seg()], sequential=True, jobs=4)  # -s differs
+    assert a != _progress.chain_key([_seg()], sequential=False, jobs=2)  # -j too
     assert a != _progress.chain_key(
-        [_seg(passthrough=["-k", "one"])], sequential=False
+        [_seg(passthrough=["-k", "one"])], sequential=False, jobs=4
     )  # passthrough is part of the shape
     assert a != _progress.chain_key(
-        [_seg(values={"fix": True})], sequential=False
+        [_seg(values={"fix": True})], sequential=False, jobs=4
     )  # values too
 
 

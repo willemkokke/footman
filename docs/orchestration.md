@@ -56,7 +56,10 @@ def deploy(): ...
 `parallel()` runs task functions — or no-argument lambdas, when you need to
 bind arguments — concurrently, waits, and fails if any fail. Under
 `-s/--sequential` it runs them one at a time instead: the flag means no
-concurrency anywhere, task bodies included.
+concurrency anywhere, task bodies included. `-j/--jobs N` (or `jobs = N` in
+`[tool.footman]`) caps the width the same way, in both the scheduler and
+task bodies; unset, footman uses one less than your core count, never
+fewer than two.
 
 ```python
 from footman import task, parallel

@@ -29,6 +29,12 @@ versions may include breaking changes.
   manifests and timing history alike — in one variable; the XDG rules stay
   unchanged beneath it, and the completion hot path honours it with no
   re-install.
+- **`-j/--jobs N` and `jobs = N` in `[tool.footman]` cap the parallel
+  width** — in both engines: the scheduler's pool and `parallel()` inside
+  task bodies. Unset, the default is now cores - 1 (never below 2) instead
+  of effectively unbounded — the machine stays responsive while fan-outs
+  stay real. The width is part of the timing key, so `-j2` runs build
+  their own duration history.
 - **The run summary ends with a `took N.Ns` total**, and the `--json`
   envelope carries it as an additive top-level `total_ms`.
 

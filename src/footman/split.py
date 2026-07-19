@@ -70,6 +70,7 @@ GLOBALS: list[tuple[str, str | None, str, str | None, str]] = [
     ("--dry-run", "-n", "flag", None, "print the parsed plan without running"),
     ("--keep-going", "-k", "flag", None, "run every branch even if one fails"),
     ("--sequential", "-s", "flag", None, "run one at a time (default: parallel)"),
+    ("--jobs", "-j", "option", "N", "max parallel tasks (default: cores - 1)"),
     ("--quiet", "-q", "flag", None, "suppress the per-task summary"),
     ("--verbose", "-v", "flag", None, "replay captured output even on success"),
     ("--no-color", None, "flag", None, "disable ANSI colour"),

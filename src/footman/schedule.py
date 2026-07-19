@@ -184,6 +184,7 @@ def run_plan(
     ctx_config: dict[str, Any] | None = None,
     estimate: _progress.Estimate | None = None,
     progress: bool = True,
+    jobs: int = 0,
 ) -> list[executor.TaskResult]:
     """Build and run the DAG; return results in dependency order."""
     nodes = _build_dag(root, segments)
@@ -202,7 +203,9 @@ def run_plan(
             if sequential:
                 _run_sequential(nodes, real, keep_going, capture, ctx_config, status)
             else:
-                _run_parallel(nodes, real, err, keep_going, capture, ctx_config, status)
+                _run_parallel(
+                    nodes, real, err, keep_going, capture, ctx_config, status, jobs
+                )
         finally:
             if status is not None:
                 context.set_status(None)
@@ -259,7 +262,9 @@ def _make_status(
     return _progress.StatusLine(err, estimate, color=True)
 
 
-def _run_parallel(nodes, real, err, keep_going, capture, ctx_config, status) -> None:
+def _run_parallel(
+    nodes, real, err, keep_going, capture, ctx_config, status, jobs
+) -> None:
     by_key = {n.key: n for n in nodes}
     lock = threading.Lock()
     failed = False
@@ -292,7 +297,7 @@ def _run_parallel(nodes, real, err, keep_going, capture, ctx_config, status) -> 
                 real.write(blob)
                 real.flush()
 
-    with ThreadPoolExecutor() as pool:
+    with ThreadPoolExecutor(max_workers=jobs if jobs > 0 else None) as pool:
         futures: dict[Any, _Node] = {}
         try:
             while True:

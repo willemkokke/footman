@@ -38,7 +38,7 @@ _GLOBAL_FLAG = frozenset(
     }
 )  # fmt: skip
 _GLOBAL_VALUE = frozenset(
-    {"--where", "--directory", "-C", "--tasks-file", "-f", "--config"}
+    {"--where", "--directory", "-C", "--tasks-file", "-f", "--config", "--jobs", "-j"}
 )  # consume the next word as the value
 _GLOBAL_MAYBE = frozenset(
     {"--install-completion", "--setup-completion", "--uninstall-completion"}

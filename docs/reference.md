@@ -14,6 +14,7 @@ Global options bind to `fm` itself and go **before** the first task name
 | `--where TASK`            | print the task's source `file:line`             |
 | `-n`, `--dry-run`         | print the parsed plan without running           |
 | `-s`, `--sequential`      | run tasks one at a time (default is parallel)   |
+| `-j`, `--jobs N`          | max parallel tasks, both engines (default: cores - 1, min 2) |
 | `-k`, `--keep-going`      | run every segment even if one fails             |
 | `-q`, `--quiet`           | suppress the per-task summary                   |
 | `-v`, `--verbose`         | replay captured `run()` output even on success  |
@@ -84,6 +85,7 @@ a file passed to `--config`. See [Monorepos & config](monorepos.md).
 | ------------ | --------------------------------------------------------- |
 | `tasks`      | Filename to look for in each folder (default `tasks.py`). |
 | `sequential` | Run tasks one at a time by default.                       |
+| `jobs`       | Max parallel tasks (default: cores - 1, never below 2).   |
 | `plugins`    | `footman.tasks` entry points to mount as command groups (opt-in). |
 | `progress`   | `false` permanently disables the progress bar, eta line, and timing capture. |
 | `completion.max_age` | Age before a background completion refresh (e.g. `"10m"`; `off` to disable). |

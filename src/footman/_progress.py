@@ -37,12 +37,18 @@ MIN_SAMPLES = 5  # fewer → indeterminate
 TAIL_RATIO = 1.8  # p90 beyond this multiple of p50 → too erratic
 
 
-def chain_key(segments: list[Segment], *, sequential: bool) -> str:
+def default_jobs() -> int:
+    """The parallel width when nobody chose one: cores - 1, never below 2 —
+    the machine stays responsive, the fan-out stays real."""
+    return max(2, (os.cpu_count() or 3) - 1)
+
+
+def chain_key(segments: list[Segment], *, sequential: bool, jobs: int) -> str:
     """A stable hash of the invocation shape.
 
     Values and passthrough are part of the shape on purpose — `fm test --
-    -k one` is not `fm test` — and serial/parallel runs of the same chain
-    keep separate histories (different distributions entirely).
+    -k one` is not `fm test` — and serial/parallel/width variants of the
+    same chain keep separate histories (different distributions entirely).
     """
     shape = [
         {
@@ -54,7 +60,9 @@ def chain_key(segments: list[Segment], *, sequential: bool) -> str:
         for s in segments
     ]
     payload = json.dumps(
-        {"sequential": sequential, "chain": shape}, sort_keys=True, default=str
+        {"sequential": sequential, "jobs": jobs, "chain": shape},
+        sort_keys=True,
+        default=str,
     )
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
 

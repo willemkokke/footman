@@ -716,6 +716,30 @@ def _run_tree(
             _print_plan(globals_, segments)
         return 0
     sequential = bool(g.get("sequential")) or bool(cfg.get("sequential"))
+
+    # The parallel width: -j/--jobs wins, then config `jobs`, then the
+    # cores-minus-one default. Caps both engines (the scheduler's pool and
+    # parallel() in task bodies) and is part of the timing key — a -j2 run
+    # has a genuinely different duration distribution.
+    if g.get("jobs") is not None:
+        try:
+            jobs = int(str(g["jobs"]))
+        except ValueError:
+            jobs = 0
+        if jobs < 1:
+            return _refuse(
+                json_mode,
+                f"--jobs expects a positive integer (got {g['jobs']!r})",
+            )
+    elif (
+        isinstance(cfg_jobs := cfg.get("jobs"), int)
+        and not isinstance(cfg_jobs, bool)
+        and cfg_jobs >= 1
+    ):
+        jobs = cfg_jobs
+    else:
+        jobs = _progress.default_jobs()
+
     ctx_config = {
         "quiet": bool(g.get("quiet")),
         "verbose": bool(g.get("verbose")),
@@ -726,6 +750,7 @@ def _run_tree(
         # The user's -s/config request, so parallel() in task bodies
         # serialises too — not the scheduler's single-node routing.
         "sequential": sequential,
+        "jobs": jobs,
     }
 
     # The timing story: --no-progress (one run) or `progress = false` in
@@ -741,7 +766,7 @@ def _run_tree(
     )
     est = times_key = None
     if predictable:
-        times_key = _progress.chain_key(segments, sequential=sequential)
+        times_key = _progress.chain_key(segments, sequential=sequential, jobs=jobs)
         est = _progress.estimate(_progress.load_runs(Path.cwd(), times_key))
     if est is not None and not g.get("quiet") and not sys.stderr.isatty():
         # No TTY (CI, a pipe): the one-line version of the bar, up front.
@@ -758,6 +783,7 @@ def _run_tree(
             ctx_config=ctx_config,
             estimate=est,
             progress=progress_on,
+            jobs=jobs,
         )
     except split.ChainError as exc:  # e.g. passthrough with no *args
         return _refuse(json_mode, str(exc))

@@ -466,3 +466,9 @@ def test_parallel_honours_the_sequential_request():
     with use_context(Context()):
         parallel(slow, fast)
     assert order.index("fast-start") < order.index("slow-end")
+
+    # -j caps the pool the same way: width one behaves like sequential.
+    order.clear()
+    with use_context(Context(jobs=1)):
+        parallel(slow, fast)
+    assert order == ["slow-start", "slow-end", "fast-start"]

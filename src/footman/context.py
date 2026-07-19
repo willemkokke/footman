@@ -54,6 +54,9 @@ class Context:
     # it too. Deliberately not set by the scheduler's own single-node
     # routing, which is presentation, not a request to serialise bodies.
     sequential: bool = False
+    # The effective parallel width (-j/--jobs, config `jobs`, or the
+    # cores-minus-one default) — caps parallel() pools in task bodies.
+    jobs: int = 0  # 0: unset (plain calls outside a run) → no cap
     passthrough: list[str] = field(default_factory=list)
     tty: bool = False  # use live rewrite/colour (sequential live only)
     sink: TextIO | None = None  # where output goes; None -> real stdout
@@ -465,9 +468,14 @@ def parallel(*calls: Callable[[], Any], keep_going: bool = False) -> list[int]:
             status.unit_finished(name, error is None)
         return code, error
 
-    # -s reaches inside tasks: one worker serialises the calls in
-    # submission order, same code path, same semantics otherwise.
-    workers = 1 if parent.sequential else max(1, len(calls))
+    # -s reaches inside tasks (one worker serialises the calls in
+    # submission order), and -j caps the width; same code path either way.
+    if parent.sequential:
+        workers = 1
+    elif parent.jobs > 0:
+        workers = max(1, min(parent.jobs, len(calls)))
+    else:
+        workers = max(1, len(calls))
     with ThreadPoolExecutor(max_workers=workers) as pool:
         outcomes = list(pool.map(invoke, calls))
 

@@ -611,7 +611,7 @@ def test_keyboard_interrupt_exits_130(tmp_path, monkeypatch, capsys):
 
 def _hi_key(values: dict | None = None) -> str:
     seg = Segment(task="hi", path=["hi"], values=values or {})
-    return _progress.chain_key([seg], sequential=False)
+    return _progress.chain_key([seg], sequential=False, jobs=_progress.default_jobs())
 
 
 def test_green_runs_record_history(project):
@@ -660,6 +660,24 @@ def test_config_progress_false_turns_it_off_permanently(project, capsys):
     assert _app.run(["hi"]) == 0
     assert "eta" not in capsys.readouterr().err
     assert len(_progress.load_runs(project, _hi_key())) == 5
+
+
+def test_jobs_flag_validates_and_runs(project, capsys):
+    assert _app.run(["--jobs", "0", "hi"]) == 2
+    assert "positive integer" in capsys.readouterr().err
+    assert _app.run(["-j", "abc", "hi"]) == 2
+    assert "positive integer" in capsys.readouterr().err
+    assert _app.run(["-j", "2", "hi"]) == 0
+    assert "hello world" in capsys.readouterr().out
+
+
+def test_jobs_changes_the_timing_key(project):
+    assert _app.run(["-j", "2", "hi"]) == 0
+    assert _progress.load_runs(project, _hi_key()) == []  # default-width key
+    two = _progress.chain_key(
+        [Segment(task="hi", path=["hi"])], sequential=False, jobs=2
+    )
+    assert len(_progress.load_runs(project, two)) == 1
 
 
 def test_progress_false_task_opts_the_run_out(tmp_path, monkeypatch):
