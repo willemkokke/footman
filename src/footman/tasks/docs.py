@@ -297,6 +297,7 @@ def _pty_session(
     settle: float,
     env_extra: dict[str, str] | None = None,
     keep_echo: bool = False,
+    cwd: Path | None = None,
 ) -> list[tuple[float, bytes]]:
     """Run *argv* on a pty, play the keystroke script, and record
     (elapsed-seconds, bytes) chunks until output has settled."""
@@ -341,6 +342,7 @@ def _pty_session(
         stdout=slave,
         stderr=slave,
         env=env,
+        cwd=cwd,
         preexec_fn=_own_the_tty,
     )
     os.close(slave)
@@ -599,6 +601,9 @@ def cast(
     prog: Annotated[
         str, doc("CLI whose completion is installed (default: the invoking CLI)")
     ] = "",
+    cwd: Annotated[
+        Path | None, doc("directory the shell starts in (default: here)")
+    ] = None,
     max_frames: Annotated[int, between(2, 120), doc("frame budget")] = 60,
 ):
     """Record an animated SVG of a real interactive shell session.
@@ -634,6 +639,7 @@ def cast(
             # invisibly without it — and bash sends no queries, so
             # nothing can flash. Every other shell self-renders.
             keep_echo=shell == "bash",
+            cwd=cwd,
         )
     frames = _screens(chunks, width=width, height=height)
     if not frames:

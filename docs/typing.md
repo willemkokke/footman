@@ -215,3 +215,10 @@ def shares() -> list[str]:
 @task
 def mount(share: Annotated[str, suggest(shares)]): ...
 ```
+
+That exact example, recorded in PowerShell: the demo project's tasks.py
+is extracted from this page at build time, so the code above and the
+session below cannot disagree. <kbd>Tab</kbd> offers what `shares()`
+returned; <kbd>Tab</kbd> again walks the menu.
+
+![Animated: fm mount TAB offers main, scratch, archive from the suggest completer; TAB again moves the selection](_generated/shots/pwsh-suggest-cast.svg)

@@ -62,6 +62,26 @@ def check():
 docs = group("docs", help="Documentation site (Zensical)")
 
 
+def _scaffold_suggest_demo() -> str:
+    """A scratch project whose tasks.py is typing.md's dynamic-completion
+    example, extracted verbatim from the page — the recording exercises the
+    documented code by construction, so example and cast cannot drift."""
+    import re
+    import tempfile
+    from pathlib import Path
+
+    section = Path("docs/typing.md").read_text(encoding="utf-8")
+    section = section.split("## Dynamic completion", 1)[1]
+    code = re.search(r"```python\n(.*?)```", section, re.S)
+    assert code is not None, "typing.md lost its dynamic-completion example"
+    demo = Path(tempfile.gettempdir()) / "footman-suggest-demo"
+    demo.mkdir(parents=True, exist_ok=True)
+    (demo / "pyproject.toml").write_text("[project]\nname = 'demo'\n", encoding="utf-8")
+    (demo / "tasks.py").write_text(code.group(1), encoding="utf-8")
+    run("fm --list", cwd=str(demo), capture=True)  # warm the manifest TAB serves
+    return str(demo)
+
+
 def _write_latest_changes() -> None:
     """Extract the newest release's section from CHANGELOG.md into a
     collapsed admonition the home page includes — version, date, and the
@@ -260,6 +280,21 @@ def docs_build(check: bool = False):
             width=80,
             height=16,
         )
+    # Dynamic completion, recorded against typing.md's own example (the
+    # demo project's tasks.py is extracted from the page): TAB offers the
+    # values a plain function returned, and TAB again walks the menu.
+    taskdocs_cast(
+        "fm mount ",
+        "<TAB>",
+        "<WAIT>",
+        "<TAB>",
+        "<WAIT:1200>",
+        out=shot / "pwsh-suggest-cast.svg",
+        shell="pwsh",
+        width=80,
+        height=12,
+        cwd=Path(_scaffold_suggest_demo()),
+    )
     _write_llms_txt()
     # A conditional flag needs no ternary: strict=check is --strict when
     # check is true, omitted otherwise (strict is off by default in zensical).
