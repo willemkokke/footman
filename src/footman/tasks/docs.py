@@ -296,6 +296,7 @@ def _pty_session(
     sends: list[tuple[float, bytes]],
     settle: float,
     env_extra: dict[str, str] | None = None,
+    keep_echo: bool = False,
 ) -> list[tuple[float, bytes]]:
     """Run *argv* on a pty, play the keystroke script, and record
     (elapsed-seconds, bytes) chunks until output has settled."""
@@ -319,10 +320,13 @@ def _pty_session(
     # Query replies are written into the pty during boot, before the shell
     # enters raw mode — with kernel ECHO on, the tty prints them back (the
     # digits of a cursor-position reply flashing on screen for a frame).
-    # Line editors render their own input; nothing here needs kernel echo.
-    attrs = termios.tcgetattr(slave)
-    attrs[3] &= ~termios.ECHO
-    termios.tcsetattr(slave, termios.TCSANOW, attrs)
+    # Shells that interrogate the terminal render their own input anyway,
+    # so echo goes off — except where the caller says otherwise: readline
+    # honours the tty's echo flag and falls silent without it.
+    if not keep_echo:
+        attrs = termios.tcgetattr(slave)
+        attrs[3] &= ~termios.ECHO
+        termios.tcsetattr(slave, termios.TCSANOW, attrs)
 
     def _own_the_tty() -> None:  # child, pre-exec: the pty.fork() idiom
         # A new session *and* the slave as controlling terminal — fish,
@@ -626,6 +630,10 @@ def cast(
             sends=keystrokes(keys),
             settle=1.5,
             env_extra=env_extra,
+            # bash: readline honours the tty's echo flag and types
+            # invisibly without it — and bash sends no queries, so
+            # nothing can flash. Every other shell self-renders.
+            keep_echo=shell == "bash",
         )
     frames = _screens(chunks, width=width, height=height)
     if not frames:
