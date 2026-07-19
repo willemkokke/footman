@@ -1,5 +1,5 @@
 [project]
-site_name = "footman"
+site_name = "Footman"
 site_description = "A task runner with typed commands and instant completion — the soul of duty and the UX of typer."
 site_author = "Willem Kokke"
 site_url = "https://willemkokke.github.io/footman/"
