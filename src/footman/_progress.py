@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import shutil
 import statistics
 import threading
@@ -127,9 +128,15 @@ def record(cwd: Path, key: str, seconds: float) -> None:
 
     path = _paths.times_path(cwd)
     try:
+        # Atomic, like the manifest write: concurrent fm runs (a hook's
+        # `fm check` racing yours) may lose each other's *sample* — a
+        # nicety — but a torn file would lose the whole history.
         path.parent.mkdir(parents=True, exist_ok=True)
-        payload = json.dumps({"schema": SCHEMA, "chains": chains})
-        path.write_text(payload, encoding="utf-8")
+        tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+        tmp.write_text(
+            json.dumps({"schema": SCHEMA, "chains": chains}), encoding="utf-8"
+        )
+        os.replace(tmp, path)
     except OSError:
         pass
 
