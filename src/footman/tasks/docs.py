@@ -520,6 +520,10 @@ def _boot_shell(
         # hermetic shell: scratch rc only.
         return ["zsh", "--no-globalrcs", "-i"], env
     if shell == "bash":
+        # macOS prints a "default shell is now zsh" advert into interactive
+        # bash; Apple's own switch silences it — the recording is about
+        # bash, not about Apple's feelings toward it.
+        env["BASH_SILENCE_DEPRECATION_WARNING"] = "1"
         rc = scratch / "bashrc"
         rc.write_text(
             f'PATH="{bin_dir}:$PATH"\n'

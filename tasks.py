@@ -241,13 +241,16 @@ def docs_build(check: bool = False):
         width=80,
         height=16,
     )
-    # The other four shells: menu, then prefix-complete. Same script, each
-    # shell's own real menu — fish's pager, PSReadLine's MenuComplete grid,
-    # nushell's completion menu, bash's candidate list.
+    # The other four shells: menu, then prefix-complete. Each shell's own
+    # real menu — fish's pager, PSReadLine's MenuComplete grid, nushell's
+    # completion menu, bash's candidate list. Vanilla bash reveals the
+    # list on the *second* TAB (the first just rings the bell), and the
+    # recording shows default behaviour, not a tuned readline.
     for sh in ("bash", "fish", "pwsh", "nushell"):
+        first_tab = ("<TAB>", "<TAB>") if sh == "bash" else ("<TAB>",)
         taskdocs_cast(
             "fm ",
-            "<TAB>",
+            *first_tab,
             "<WAIT>",
             "che",
             "<TAB>",

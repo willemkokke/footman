@@ -1,11 +1,18 @@
 # Completion on bash
 
-This is a recording of a real bash session — the hook loaded the way
-the next section describes, <kbd>Tab</kbd> listing the candidates,
-a prefix completing. Regenerated from a live shell on every docs
-build, so it cannot drift from what your terminal will do:
+This is a recording of a real bash session — the hook loaded the way the
+next section describes, <kbd>Tab</kbd> <kbd>Tab</kbd> listing the
+candidates (bash's default reveals the list on the second press; one
+press completes as far as the match reaches), a prefix completing.
+Regenerated from a live shell on every docs build, so it cannot drift
+from what your terminal will do:
 
-![Animated: fm TAB lists the tasks in bash, che TAB completes to check](_generated/shots/bash-cast.svg)
+![Animated: fm TAB TAB lists the tasks in bash, che TAB completes to check](_generated/shots/bash-cast.svg)
+
+bash's list is names only — readline has no description column, so the
+one-line docstrings that zsh, fish, PowerShell, and nushell render next
+to each candidate don't appear here. If you want the list on a single
+press, that's readline's `show-all-if-ambiguous` in your `~/.inputrc`.
 
 ## Install
 
