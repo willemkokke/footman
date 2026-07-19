@@ -23,11 +23,13 @@ fm workspace mount --share <TAB>   # main  scratch  archive
 
 Ships two console scripts: `footman` and the two-letter `fm`.
 
-!!! warning "Very early code"
+!!! note "Beta"
 
-    footman is alpha and moving fast — the public API, the decorator surface,
-    the manifest format, and the CLI grammar can all change without notice or a
-    deprecation cycle. Pin an exact version if you build on it.
+    footman is pre-1.0: the surface is settling, but minor versions may still
+    include breaking changes — always called out in the
+    [changelog](changelog.md), never in a patch release. Pin the minor
+    (`footman~=0.12.0`) if you build on it. The written stability promise
+    lands with 1.0 — the road there is on the [roadmap](roadmap.md).
 
 ## Why
 

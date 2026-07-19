@@ -9,11 +9,12 @@ from a cached manifest in ~25 ms — **without importing your code**.
 Ships two console scripts, `footman` and the two-letter `fm`. Zero runtime
 dependencies. Python 3.11+.
 
-> [!WARNING]
-> **Very early code.** footman is alpha and moving fast — the public API,
-> the decorator surface, the manifest format, and the CLI grammar can all
-> change without notice or a deprecation cycle. Pin an exact version if you
-> build on it.
+> [!NOTE]
+> **Beta.** footman is pre-1.0: the surface is settling, but minor versions
+> may still include breaking changes — always called out in the
+> [changelog](CHANGELOG.md), never in a patch release. Pin the minor
+> (`footman~=0.12.0`) if you build on it. The written stability promise
+> lands with 1.0 — the road there is in [ROADMAP.md](ROADMAP.md).
 
 ## Why
 
