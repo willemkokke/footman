@@ -36,6 +36,21 @@ def crash():
     """Raise a real exception."""
     raise RuntimeError("kaboom")
 
+@task
+def data():
+    """Return structured data."""
+    return {"n": 1, "flags": [True, False]}
+
+@task
+def opaque():
+    """Return an unserialisable object."""
+    return object()
+
+@task
+def code3():
+    """Return an int exit code."""
+    return 3
+
 tools = group("tools", help="Extra tools")
 
 @tools.task
@@ -127,6 +142,9 @@ def test_bare_fm_lists_tasks(project, capsys):
     assert _app.run([]) == 0
     out = capsys.readouterr().out
     assert "Tasks:" in out and "hi" in out
+    # The no-arg path is where a newcomer lands: point at the next step, the
+    # same footer `--help` shows.
+    assert "--help <task>" in out
 
 
 def test_bare_fm_no_tasks_file_is_soft(tmp_path, monkeypatch, capsys):
@@ -360,7 +378,9 @@ def test_empty_task_list(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
     assert _app.run([]) == 0
-    assert "No tasks defined" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "No tasks defined" in out
+    assert "--help <task>" not in out  # no tasks to get help on — no footer
 
 
 # --- --help ------------------------------------------------------------------
@@ -393,9 +413,29 @@ def test_help_shows_positionals_and_types(project, capsys):
     assert "an integer" in out
 
 
-def test_help_with_unparseable_chain_degrades_to_listing(project, capsys):
-    assert _app.run(["--help", "nope"]) == 0
-    assert "hi" in capsys.readouterr().out
+def test_help_unknown_target_refuses(project, capsys):
+    # `--help nonexistnt` used to degrade to the global listing with exit 0 —
+    # the one place the error discipline leaked. Now: a taught refusal.
+    assert _app.run(["--help", "nope"]) == 2
+    err = capsys.readouterr().err
+    assert "unknown task or group 'nope'" in err
+
+
+def test_help_unknown_target_suggests(project, capsys):
+    assert _app.run(["--help", "hii"]) == 2
+    assert "did you mean 'hi'?" in capsys.readouterr().err
+
+
+def test_help_unknown_target_suggests_groups(project, capsys):
+    assert _app.run(["--help", "tols"]) == 2
+    assert "did you mean 'tools'?" in capsys.readouterr().err
+
+
+def test_help_with_target_tolerates_arg_tokens(project, capsys):
+    # A help line carries task arguments; once a real target is found, extra
+    # bare words stay lenient — they are values, not typos.
+    assert _app.run(["--help", "add", "junk", "--flag"]) == 0
+    assert "usage: fm add" in capsys.readouterr().out
 
 
 def test_help_alone_shows_the_global_options(project, capsys):
@@ -508,3 +548,186 @@ def test_keyboard_interrupt_exits_130(tmp_path, monkeypatch, capsys):
     assert "interrupted" in capsys.readouterr().err
     assert _app.run(["--sequential", "stop"]) == 130
     assert "interrupted" in capsys.readouterr().err
+
+
+# --- the one-envelope contract: --json ⇒ stdout is one JSON document ----------
+
+
+def test_json_refusal_envelope(project, capsys):
+    # A pre-run refusal used to leave stdout empty in --json mode; now the
+    # taught error lands in both channels — text for humans, one envelope
+    # for machines.
+    assert _app.run(["--json", "nope"]) == 2
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+    assert payload["schema"] == 1
+    assert payload["error"]["code"] == 2
+    assert "expected a task name" in payload["error"]["message"]
+    assert payload["results"] == []
+    assert "expected a task name" in captured.err  # stderr keeps the human copy
+
+
+def test_json_refusal_on_unknown_global(project, capsys):
+    # The parse fails *at* --nope, but --json already promised an envelope.
+    assert _app.run(["--json", "--nope", "hi"]) == 2
+    payload = json.loads(capsys.readouterr().out)
+    assert "unknown global option" in payload["error"]["message"]
+
+
+def test_json_refusal_on_import_failure(tmp_path, monkeypatch, capsys):
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
+    (tmp_path / "tasks.py").write_text("raise RuntimeError('boom on import')\n")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
+    assert _app.run(["--json", "hi"]) == 2
+    payload = json.loads(capsys.readouterr().out)
+    assert "failed to import" in payload["error"]["message"]
+
+
+def test_json_help_refusal_still_envelopes(project, capsys):
+    # Help's *success* output is the one human-only surface; its refusal is a
+    # refusal like any other and honours the envelope.
+    assert _app.run(["--json", "--help", "nope"]) == 2
+    payload = json.loads(capsys.readouterr().out)
+    assert "unknown task or group 'nope'" in payload["error"]["message"]
+
+
+def test_json_version(project, capsys):
+    from footman import __version__
+
+    assert _app.run(["--json", "--version"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload == {"schema": 1, "name": "footman", "version": __version__}
+
+
+def test_json_list_emits_tree(project, capsys):
+    assert _app.run(["--json", "--list"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["schema"] == 1
+    assert "hi" in payload["tree"]["tasks"]
+    assert "echo" in payload["tree"]["groups"]["tools"]["tasks"]
+    (param,) = payload["tree"]["tasks"]["hi"]["params"]
+    assert param["name"] == "name" and param["kind"] == "option"
+
+
+def test_json_bare_emits_tree(project, capsys):
+    # An agent's first call: bare `fm --json` is the whole catalog.
+    assert _app.run(["--json"]) == 0
+    assert "hi" in json.loads(capsys.readouterr().out)["tree"]["tasks"]
+
+
+def test_json_no_tasks_file(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
+    assert _app.run(["--json"]) == 0  # warm empty state: an honest empty tree
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["tree"]["tasks"] == {} and payload["tree"]["groups"] == {}
+    assert _app.run(["--json", "hi"]) == 2  # a named task still refuses
+    payload = json.loads(capsys.readouterr().out)
+    assert "no tasks file found" in payload["error"]["message"]
+
+
+def test_json_dry_run_emits_plan(project, capsys):
+    line = ["--json", "-n", "hi", "--name", "x", "tools", "echo", "a", "--", "b"]
+    assert _app.run(line) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["schema"] == 1
+    assert payload["globals"] == ["--json", "--dry-run"]
+    assert payload["plan"][0] == {
+        "task": "hi",
+        "values": {"name": "x"},
+        "variadic": [],
+        "passthrough": None,
+    }
+    assert payload["plan"][1]["task"] == "tools.echo"
+    assert payload["plan"][1]["variadic"] == ["a"]
+    assert payload["plan"][1]["passthrough"] == ["b"]
+
+
+def test_json_interrupt_envelope(tmp_path, monkeypatch, capsys):
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
+    (tmp_path / "tasks.py").write_text(
+        "from footman import task\n@task\ndef stop():\n    raise KeyboardInterrupt\n"
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
+    assert _app.run(["--json", "stop"]) == 130
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["error"] == {"code": 130, "message": "interrupted"}
+
+
+# --- returned: a task's return value in the envelope --------------------------
+
+
+def test_json_returned_value(project, capsys):
+    assert _app.run(["--json", "data"]) == 0
+    entry = json.loads(capsys.readouterr().out)["results"][0]
+    assert entry["ok"] is True
+    assert entry["returned"] == {"n": 1, "flags": [True, False]}
+
+
+def test_json_none_return_omits_key(project, capsys):
+    assert _app.run(["--json", "hi"]) == 0
+    entry = json.loads(capsys.readouterr().out)["results"][0]
+    assert "returned" not in entry and "returned_error" not in entry
+
+
+def test_json_int_return_is_exit_code_not_data(project, capsys):
+    # An int return is the exit-code channel (duty's contract); it never
+    # doubles as a returned payload.
+    assert _app.run(["--json", "code3"]) == 3
+    entry = json.loads(capsys.readouterr().out)["results"][0]
+    assert entry["code"] == 3
+    assert "returned" not in entry
+
+
+def test_json_unserialisable_return_teaches(project, capsys):
+    # The task succeeded; the payload alone is refused — machine-visibly in
+    # the entry, human-visibly on stderr, and the exit code stays the task's.
+    assert _app.run(["--json", "opaque"]) == 0
+    captured = capsys.readouterr()
+    entry = json.loads(captured.out)["results"][0]
+    assert entry["ok"] is True
+    assert "returned" not in entry
+    assert "not JSON-serialisable" in entry["returned_error"]
+    assert "not JSON-serialisable" in captured.err
+
+
+def test_json_returned_mirrors_coercion_types(tmp_path, monkeypatch, capsys):
+    # The types footman coerces *in* serialise on the way *out*: Path, Enum,
+    # date, UUID, Decimal, dataclass, set.
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
+    (tmp_path / "tasks.py").write_text(
+        "import dataclasses, datetime, decimal, enum, pathlib, uuid\n"
+        "from footman import task\n"
+        "class Colour(enum.Enum):\n"
+        "    RED = 'red'\n"
+        "@dataclasses.dataclass\n"
+        "class Point:\n"
+        "    x: int\n"
+        "    src: pathlib.Path\n"
+        "@task\n"
+        "def artefacts():\n"
+        "    return {\n"
+        "        'wheel': pathlib.Path('dist') / 'x.whl',\n"
+        "        'colour': Colour.RED,\n"
+        "        'when': datetime.date(2026, 7, 19),\n"
+        "        'id': uuid.UUID('12345678-1234-5678-1234-567812345678'),\n"
+        "        'price': decimal.Decimal('1.10'),\n"
+        "        'tags': {'b', 'a'},\n"
+        "        'point': Point(1, pathlib.Path('src')),\n"
+        "    }\n"
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
+    from pathlib import Path
+
+    assert _app.run(["--json", "artefacts"]) == 0
+    returned = json.loads(capsys.readouterr().out)["results"][0]["returned"]
+    assert returned["wheel"] == str(Path("dist") / "x.whl")  # OS-native separator
+    assert returned["colour"] == "red"
+    assert returned["when"] == "2026-07-19"
+    assert returned["id"] == "12345678-1234-5678-1234-567812345678"
+    assert returned["price"] == "1.10"  # str, not float: precision kept
+    assert returned["tags"] == ["a", "b"]  # sets come out sorted
+    assert returned["point"] == {"x": 1, "src": "src"}  # dataclass, nested Path

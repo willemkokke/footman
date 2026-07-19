@@ -9,10 +9,15 @@ runs the resulting segments, honouring the global options.
 from __future__ import annotations
 
 import contextlib
+import dataclasses
+import datetime
+import decimal
+import enum
 import json
 import os
 import sys
-from pathlib import Path
+import uuid
+from pathlib import Path, PurePath
 
 from footman import (
     _paths,
@@ -35,6 +40,50 @@ _brand: Brand = DEFAULT_BRAND
 
 def _error(message: str) -> None:
     sys.stderr.write(f"{_brand.prog}: {message}\n")
+
+
+def _refuse(json_mode: bool, message: str, code: int = 2) -> int:
+    """Report a refusal on stderr — and when `--json` promised an envelope,
+    keep stdout a single JSON document describing the same refusal, so a
+    machine consumer never has to parse two formats."""
+    _error(message)
+    if json_mode:
+        envelope = {"schema": 1, "error": {"code": code, "message": message}}
+        print(json.dumps({**envelope, "results": []}, indent=2))
+    return code
+
+
+def _wants_json(argv: list[str]) -> bool:
+    """Whether the leading globals include `--json`, tolerant of a malformed
+    line — the refusal for `fm --json --nope` must still honour the envelope
+    `--json` already promised. Mirrors `_parse_globals`' walk, minus raising.
+    """
+    i = 0
+    while i < len(argv) and argv[i].startswith("-") and argv[i] != "--":
+        name = argv[i].split("=", 1)[0]
+        if name == "--json":
+            return True
+        kind = split._GLOBAL_KIND.get(name)
+        i += 1
+        if kind == "option" and "=" not in argv[i - 1] and i < len(argv):
+            i += 1  # skip the option's value
+        elif (
+            kind == "option?"
+            and "=" not in argv[i - 1]
+            and i < len(argv)
+            and not argv[i].startswith("-")
+        ):
+            i += 1
+    return False
+
+
+def _print_version(json_mode: bool) -> int:
+    if json_mode:
+        payload = {"schema": 1, "name": _brand.name, "version": _brand.version}
+        print(json.dumps(payload, indent=2))
+    else:
+        print(f"{_brand.name} {_brand.version}")
+    return 0
 
 
 def _globals_to_dict(tokens: list[str]) -> dict[str, object]:
@@ -77,8 +126,7 @@ def _discover(
             on_warning=_error,
         )
     except config.ConfigError as exc:
-        _error(f"--config: {exc}")
-        return 2
+        return _refuse(bool(g.get("json")), f"--config: {exc}")
 
     override = g.get("tasks_file")
     if override:
@@ -102,13 +150,17 @@ def _discover(
         return 0
     if bare or g.get("list") or g.get("tree"):
         # A bare `fm` (like `--list`) is a warm empty state, not a hard error.
-        print(f"No tasks file found (looked for {looked}).")
+        if g.get("json"):  # the catalog envelope, honestly empty
+            tree = manifest.build_manifest(registry.Group("root"))["tree"]
+            print(json.dumps({"schema": 1, "tree": tree}, indent=2))
+        else:
+            print(f"No tasks file found (looked for {looked}).")
         return 0
-    _error(
+    return _refuse(
+        bool(g.get("json")),
         f"no tasks file found (looked for {looked}); "
-        f"create one or pass -f/--tasks-file."
+        f"create one or pass -f/--tasks-file.",
     )
-    return 2
 
 
 # --- rendering ---------------------------------------------------------------
@@ -151,6 +203,16 @@ def _iter_tasks(node: dict, prefix: str = ""):
         yield f"{prefix}{name}", _task_line(task)
     for name, sub in node["groups"].items():
         yield from _iter_tasks(sub, f"{prefix}{name} ")
+
+
+def _iter_group_paths(node: dict, prefix: str = ""):
+    for name, sub in node["groups"].items():
+        yield f"{prefix}{name}"
+        yield from _iter_group_paths(sub, f"{prefix}{name} ")
+
+
+def _print_footer() -> None:
+    print(f"\nRun `{_brand.prog} --help <task>` for a task's options.")
 
 
 def _task_line(task: dict) -> str:
@@ -339,7 +401,7 @@ def _print_global_help(tree: dict) -> None:
         print(f"  {label:<{width}}  {help_text}")
     print()
     _print_list(tree)
-    print(f"\nRun `{prog} --help <task>` for a task's options.")
+    _print_footer()
 
 
 def _wants_help(argv: list[str]) -> bool:
@@ -354,15 +416,21 @@ def _wants_help(argv: list[str]) -> bool:
     return False
 
 
-def _help_targets(tree: dict, argv: list[str]) -> list[tuple[str, list[str]]]:
-    """Group/task paths mentioned on a `--help` line, resolved leniently.
+def _help_targets(
+    tree: dict, argv: list[str]
+) -> tuple[list[tuple[str, list[str]]], list[str]]:
+    """Group/task paths mentioned on a `--help` line, resolved leniently —
+    plus the bare words that resolved to nothing, so the caller can refuse a
+    `--help typo` instead of shrugging.
 
     The real splitter enforces arity — `--help add` must work even though
     `add` alone would be "missing required argument(s)" — so this walks group
-    and task names only and skips every other token.
+    and task names only and skips every other token (option-shaped tokens and,
+    once a target is found, its argument values).
     """
     _, i = split._parse_globals(argv, 0)
     targets: list[tuple[str, list[str]]] = []
+    strays: list[str] = []
     while i < len(argv):
         if argv[i] == "--":
             break
@@ -376,14 +444,32 @@ def _help_targets(tree: dict, argv: list[str]) -> list[tuple[str, list[str]]]:
         elif path:
             targets.append(("group", path))
             continue  # the walk already consumed the group name(s)
+        elif i < len(argv) and not argv[i].startswith("-"):
+            strays.append(argv[i])
         i += 1
-    return targets
+    return targets, strays
 
 
 def _print_help(tree: dict, argv: list[str]) -> int:
-    """`--help` alone covers fm itself; with names, the named groups/tasks."""
-    targets = _help_targets(tree, argv)
+    """`--help` alone covers fm itself; with names, the named groups/tasks.
+
+    A name that matches nothing is a refusal (exit 2) with a suggestion —
+    silently degrading to the global listing looked like an answer while
+    teaching nothing. With at least one real target found, extra bare words
+    stay lenient: they are argument values, not typos.
+    """
+    targets, strays = _help_targets(tree, argv)
     if not targets:
+        if strays:
+            known = [name for name, _ in _iter_tasks(tree)]
+            known += _iter_group_paths(tree)
+            # Help's *success* output is the one human-only surface; a refusal
+            # still honours the envelope `--json` promised.
+            return _refuse(
+                _wants_json(argv),
+                f"--help: unknown task or group {strays[0]!r}"
+                f"{split._did_you_mean(strays[0], known)}",
+            )
         _print_global_help(tree)
         return 0
     for index, (kind, path) in enumerate(targets):
@@ -424,9 +510,32 @@ def _print_summary(results: list[executor.TaskResult], *, timings: bool) -> None
             _error(f"{result.task}: exited with code {result.code}")
 
 
+def _json_default(value: object) -> object:
+    """JSON forms for the types footman coerces *in* — Path, Enum, datetime,
+    UUID, Decimal, dataclasses, sets — so a task may return what it accepts.
+    Anything else raises TypeError; the caller turns that into a
+    `returned_error` note rather than a broken envelope."""
+    if isinstance(value, PurePath):
+        return str(value)
+    if isinstance(value, enum.Enum):
+        return value.value
+    if isinstance(value, (datetime.datetime, datetime.date, datetime.time)):
+        return value.isoformat()
+    if isinstance(value, uuid.UUID):
+        return str(value)
+    if isinstance(value, decimal.Decimal):
+        return str(value)  # str, not float: Decimal exists to keep precision
+    if dataclasses.is_dataclass(value) and not isinstance(value, type):
+        return dataclasses.asdict(value)
+    if isinstance(value, (set, frozenset)):
+        return sorted(value, key=repr)  # deterministic order for golden tests
+    raise TypeError(f"{type(value).__name__} is not JSON-serialisable")
+
+
 def _print_json(results: list[executor.TaskResult]) -> None:
-    payload = [
-        {
+    payload = []
+    for r in results:
+        entry: dict[str, object] = {
             "task": r.task,
             "ok": r.ok,
             "code": r.code,
@@ -443,11 +552,25 @@ def _print_json(results: list[executor.TaskResult]) -> None:
             ],
             "error": None if r.error is None else str(r.error),
         }
-        for r in results
-    ]
+        value = r.returned
+        # An int return is the exit-code channel (duty's contract), not data;
+        # None is "nothing to say". Everything else — bools included — is data.
+        if value is not None and not (
+            isinstance(value, int) and not isinstance(value, bool)
+        ):
+            try:
+                json.dumps(value, default=_json_default)
+            except (TypeError, ValueError) as exc:  # ValueError: circular refs
+                entry["returned_error"] = str(exc)
+                _error(f"{r.task}: --json: return value dropped — {exc}")
+            else:
+                entry["returned"] = value
+        payload.append(entry)
     # The stable machine surface: an envelope so post-1.0 additions (metadata,
     # summaries) never have to break consumers of the results list.
-    print(json.dumps({"schema": 1, "results": payload}, indent=2))
+    print(
+        json.dumps({"schema": 1, "results": payload}, indent=2, default=_json_default)
+    )
 
 
 def _resolve_shell(shell: object, flag: str) -> str | None:
@@ -529,8 +652,9 @@ def run(
     try:
         return _run(argv, brand, collect)
     except KeyboardInterrupt:
-        _error("interrupted")
-        return 130
+        # In --json mode nothing has reached stdout yet (capture buffers task
+        # output), so the envelope contract still holds at 130.
+        return _refuse(_wants_json(argv), "interrupted", 130)
 
 
 def _run(
@@ -543,14 +667,12 @@ def _run(
     try:
         pre_globals, _ = split._parse_globals(argv, 0)
     except split.ChainError as exc:
-        _error(str(exc))
-        return 2
+        return _refuse(_wants_json(argv), str(exc))
     g = _globals_to_dict(pre_globals)
     wants_help = _wants_help(argv)
 
     if g.get("version"):  # D7: --version wins even over --help
-        print(f"{_brand.name} {_brand.version}")
-        return 0
+        return _print_version(bool(g.get("json")))
     # Asking for help must never touch the filesystem: `--install-completion
     # fish --help` used to write rc files before printing anything.
     if "install_completion" in g and not wants_help:
@@ -568,8 +690,7 @@ def _run(
     try:
         os.chdir(str(g["directory"]))
     except OSError as exc:
-        _error(f"-C {g['directory']}: {exc}")
-        return 2
+        return _refuse(bool(g.get("json")), f"-C {g['directory']}: {exc}")
     try:
         return _execute(argv, g, wants_help, collect)
     finally:
@@ -588,10 +709,14 @@ def _execute(
     Everything after globals/`--version`/`--install-completion`/`-C`: the
     disk-backed half that `run_group` (in-memory) deliberately skips.
     """
-    found = _discover(g, wants_help, bare=not argv)
+    # "Bare" means no chain was asked for — globals-only lines (`fm --json`,
+    # `fm -k`) are listing-shaped, exactly like they are when tasks exist.
+    _, after_globals = split._parse_globals(argv, 0)
+    found = _discover(g, wants_help, bare=after_globals >= len(argv))
     if isinstance(found, int):
         return found
     files, cfg = found
+    json_mode = bool(g.get("json"))
 
     base = registry.Group("root")
     plugins = cfg.get("plugins")
@@ -601,23 +726,24 @@ def _execute(
         try:
             compose.mount_plugins(base, plugins)
         except registry.RegistrationError as exc:
-            _error(str(exc))
-            return 2
+            return _refuse(json_mode, str(exc))
 
     try:
         reg = discover.load_tree(files, base=base)
     except discover.TasksImportError as exc:
         if isinstance(exc.original, registry.RegistrationError):
-            _error(f"{exc.path}: {exc.original}")  # a user mistake, not a crash
-        else:
-            _error(
-                f"failed to import {exc.path}: "
-                f"{type(exc.original).__name__}: {exc.original}"
-            )
-        return 2
+            # a user mistake, not a crash
+            return _refuse(json_mode, f"{exc.path}: {exc.original}")
+        return _refuse(
+            json_mode,
+            f"failed to import {exc.path}: "
+            f"{type(exc.original).__name__}: {exc.original}",
+        )
     except Exception as exc:  # report import failures cleanly, don't crash
-        _error(f"failed to import the task cascade: {type(exc).__name__}: {exc}")
-        return 2
+        return _refuse(
+            json_mode,
+            f"failed to import the task cascade: {type(exc).__name__}: {exc}",
+        )
 
     try:
         if g.get("tasks_file"):
@@ -630,8 +756,7 @@ def _execute(
                 reg, Path.cwd(), completion_max_age=config.completion_max_age(cfg)
             )["tree"]
     except manifest.ManifestError as exc:  # broken completer, bad markers, …
-        _error(str(exc))
-        return 2
+        return _refuse(json_mode, str(exc))
 
     return _run_tree(reg, tree, argv, cfg, collect)
 
@@ -650,31 +775,51 @@ def _run_tree(
     Globals are re-derived from `argv` (already validated upstream).
     """
     g = _globals_to_dict(split._parse_globals(argv, 0)[0])
+    json_mode = bool(g.get("json"))
 
     if _wants_help(argv):
         return _print_help(tree, argv)
 
     if g.get("where"):
+        # Deliberately plain under --json too: `file:line` already is the
+        # machine format.
         return _where(reg, tree, str(g["where"]))
 
     try:
         globals_, segments = split.split_chain(tree, argv)
     except split.ChainError as exc:
-        _error(str(exc))
-        return 2
+        return _refuse(json_mode, str(exc))
 
     if not segments:
+        if json_mode:
+            # The catalog envelope: the manifest tree, params and all — the
+            # machine twin of --list/--tree (and of bare `fm`).
+            print(json.dumps({"schema": 1, "tree": tree}, indent=2))
+            return 0
         if g.get("tree"):
             _print_tree(tree)
         else:
             _print_list(tree)
+        if tree["tasks"] or tree["groups"]:
+            _print_footer()
         return 0
 
     if g.get("dry_run"):
-        _print_plan(globals_, segments)
+        if json_mode:
+            plan = [
+                {
+                    "task": s.task,
+                    "values": s.values,
+                    "variadic": s.variadic,
+                    "passthrough": s.passthrough,
+                }
+                for s in segments
+            ]
+            payload = {"schema": 1, "globals": globals_, "plan": plan}
+            print(json.dumps(payload, indent=2))
+        else:
+            _print_plan(globals_, segments)
         return 0
-
-    json_mode = bool(g.get("json"))
     sequential = bool(g.get("sequential")) or bool(cfg.get("sequential"))
     ctx_config = {
         "quiet": bool(g.get("quiet")),
@@ -691,8 +836,7 @@ def _run_tree(
             ctx_config=ctx_config,
         )
     except split.ChainError as exc:  # e.g. passthrough with no *args
-        _error(str(exc))
-        return 2
+        return _refuse(json_mode, str(exc))
 
     if collect is not None:
         collect.extend(results)
@@ -724,13 +868,11 @@ def run_group(
     try:
         pre_globals, _ = split._parse_globals(argv, 0)
     except split.ChainError as exc:
-        _error(str(exc))
-        return 2
+        return _refuse(_wants_json(argv), str(exc))
     g = _globals_to_dict(pre_globals)
 
     if g.get("version"):
-        print(f"{_brand.name} {_brand.version}")
-        return 0
+        return _print_version(bool(g.get("json")))
 
     tree = manifest.build_manifest(root)["tree"]
     return _run_tree(root, tree, argv, {}, collect)
