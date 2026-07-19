@@ -4,7 +4,7 @@ build-backend = "uv_build"
 
 [project]
 name = "footman"
-version = "0.12.0"
+version = "0.13.0"
 description = "A task runner with typed commands, nested groups, and instant shell completion."
 readme = "README.md"
 license = "MIT"

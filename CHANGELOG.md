@@ -7,6 +7,8 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+## [0.13.0] — 2026-07-19
+
 ### Added
 
 - **Keyword-only parameters are options — required options without a
@@ -726,7 +728,8 @@ versions may include breaking changes.
 
 - Placeholder release claiming the `footman` name on PyPI. Not tagged in git.
 
-[Unreleased]: https://github.com/willemkokke/footman/compare/v0.12.0...HEAD
+[Unreleased]: https://github.com/willemkokke/footman/compare/v0.13.0...HEAD
+[0.13.0]: https://github.com/willemkokke/footman/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/willemkokke/footman/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/willemkokke/footman/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/willemkokke/footman/compare/v0.9.0...v0.10.0
