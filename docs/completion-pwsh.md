@@ -1,5 +1,13 @@
 # Completion on PowerShell
 
+This is a recording of a real pwsh session — the hook loaded the way
+the next section describes, with <kbd>Tab</kbd> bound to
+`MenuComplete`: the grid menu with each task's description as the
+tooltip line. Regenerated from a live shell on every docs build, so
+it cannot drift from what your terminal will do:
+
+![Animated: fm TAB opens PSReadLine's MenuComplete grid with tooltips, che TAB completes to check](_generated/shots/pwsh-cast.svg)
+
 ## Install
 
 ```console

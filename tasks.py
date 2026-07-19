@@ -209,6 +209,22 @@ def docs_build(check: bool = False):
         width=80,
         height=16,
     )
+    # The other four shells: menu, then prefix-complete. Same script, each
+    # shell's own real menu — fish's pager, PSReadLine's MenuComplete grid,
+    # nushell's completion menu, bash's candidate list.
+    for sh in ("bash", "fish", "pwsh", "nushell"):
+        taskdocs_cast(
+            "fm ",
+            "<TAB>",
+            "<WAIT>",
+            "che",
+            "<TAB>",
+            "<WAIT:800>",
+            out=shot / f"{sh}-cast.svg",
+            shell=sh,
+            width=80,
+            height=16,
+        )
     _write_llms_txt()
     # A conditional flag needs no ternary: strict=check is --strict when
     # check is true, omitted otherwise (strict is off by default in zensical).

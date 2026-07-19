@@ -1,5 +1,12 @@
 # Completion on bash
 
+This is a recording of a real bash session — the hook loaded the way
+the next section describes, <kbd>Tab</kbd> listing the candidates,
+a prefix completing. Regenerated from a live shell on every docs
+build, so it cannot drift from what your terminal will do:
+
+![Animated: fm TAB lists the tasks in bash, che TAB completes to check](_generated/shots/bash-cast.svg)
+
 ## Install
 
 ```console

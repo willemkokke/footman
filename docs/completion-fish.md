@@ -1,5 +1,13 @@
 # Completion on fish
 
+This is a recording of a real fish session — the hook loaded the way
+the next section describes, <kbd>Tab</kbd> opening fish's pager with
+each task's description, a prefix completing. Regenerated from a live
+shell on every docs build, so it cannot drift from what your terminal
+will do:
+
+![Animated: fm TAB opens fish's pager with task descriptions, che TAB completes to check](_generated/shots/fish-cast.svg)
+
 ## Install
 
 ```console

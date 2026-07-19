@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
-from footman import _paths, config, context, discover, markdown, registry
+from footman import _paths, _shellcomp, config, context, discover, markdown, registry
 from footman import manifest as _manifest
 from footman.params import between, doc
 from footman.registry import Group
@@ -254,6 +254,40 @@ def keystrokes(script: tuple[str, ...]) -> list[tuple[float, bytes]]:
     return sends
 
 
+# Modern interactive stacks interrogate their terminal before painting a
+# prompt — fish asks for capabilities (XTGETTCAP), PSReadLine and reedline
+# need cursor-position answers (DSR), kitty-keyboard and colour queries
+# round it out — and block or bail when nothing replies. The session
+# answers like a plain xterm; DSR answers come from a live emulator so the
+# reported cursor is the truth.
+_TERM_QUERIES: list[tuple[re.Pattern[bytes], bytes]] = [
+    (re.compile(rb"\x1b\[0?c"), b"\x1b[?62;22c"),  # primary DA
+    (re.compile(rb"\x1b\[>0?c"), b"\x1b[>1;95;0c"),  # secondary DA
+    (re.compile(rb"\x1b\[\?u"), b"\x1b[?0u"),  # kitty keyboard
+    (re.compile(rb"\x1b\[\?2026\$p"), b"\x1b[?2026;0$y"),  # sync output
+    (re.compile(rb"\x1bP\+q[0-9a-fA-F;]*(?:\x1b\\|\x07)"), b"\x1bP0+r\x1b\\"),
+]
+_DSR = re.compile(rb"\x1b\[6n")
+_OSC_COLOUR = re.compile(rb"\x1b\](1[012]);\?(?:\x07|\x1b\\)")
+
+
+def _answer_queries(buf: bytes, new_from: int, cursor_at, reply) -> None:
+    """Answer terminal queries in *buf* that end at or past *new_from* —
+    earlier bytes were answered on a previous read (the buffer overlaps so
+    a sequence split across reads still matches exactly once)."""
+    for m in _DSR.finditer(buf):
+        if m.end() > new_from:
+            row, col = cursor_at()
+            reply(f"\x1b[{row};{col}R".encode())
+    for m in _OSC_COLOUR.finditer(buf):
+        if m.end() > new_from:
+            reply(b"\x1b]" + m.group(1) + b";rgb:2828/2c2c/3434\x07")
+    for pattern, answer in _TERM_QUERIES:
+        for m in pattern.finditer(buf):
+            if m.end() > new_from:
+                reply(answer)
+
+
 def _pty_session(
     argv: list[str],
     *,
@@ -272,6 +306,8 @@ def _pty_session(
     import termios
     import time as _time
 
+    import pyte  # tracks the live cursor for honest DSR answers
+
     env = os.environ.copy()
     env.pop("NO_COLOR", None)
     env["TERM"] = "xterm-256color"
@@ -280,13 +316,29 @@ def _pty_session(
     env.update(env_extra or {})
     master, slave = pty.openpty()
     fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", height, width, 0, 0))
+
+    def _own_the_tty() -> None:  # child, pre-exec: the pty.fork() idiom
+        # A new session *and* the slave as controlling terminal — fish,
+        # nushell, and PSReadLine all refuse interactive mode without one
+        # (zsh and bash merely grumble).
+        os.setsid()
+        fcntl.ioctl(0, termios.TIOCSCTTY, 0)
+
     proc = subprocess.Popen(
-        argv, stdin=slave, stdout=slave, stderr=slave, env=env, start_new_session=True
+        argv,
+        stdin=slave,
+        stdout=slave,
+        stderr=slave,
+        env=env,
+        preexec_fn=_own_the_tty,
     )
     os.close(slave)
     start = _time.monotonic()
     chunks: list[tuple[float, bytes]] = []
     queue = list(sends)
+    tracker = pyte.Screen(width, height)
+    tracker_stream = pyte.Stream(tracker)
+    pending = b""  # tail kept so a query split across reads still matches
     # Typing begins only after the boot has *settled*: keys written before
     # the line editor exists are half-echoed raw and eaten (a TAB pressed
     # then never completes anything), and a slow rc — compinit, the hook's
@@ -315,6 +367,15 @@ def _pty_session(
                 if not data:
                     break
                 chunks.append((_time.monotonic() - start, data))
+                tracker_stream.feed(data.decode("utf-8", "replace"))
+                buf = pending + data
+                _answer_queries(
+                    buf,
+                    len(pending),
+                    lambda: (tracker.cursor.y + 1, tracker.cursor.x + 1),
+                    lambda answer: os.write(master, answer),
+                )
+                pending = buf[-64:]
                 if not typing_started and queue:
                     next_at = _time.monotonic() + 0.5 + queue[0][0]
                 if deadline is not None:  # let late repaints settle too
@@ -412,7 +473,13 @@ def compose_animation(svgs: list[str], times: list[float], *, hold: float = 1.6)
     return f"{shell_open}{style}{''.join(body)}</svg>"
 
 
-_CAST_BOOT: dict[str, str] = {"zsh": "zsh", "bash": "bash", "fish": "fish"}
+_CAST_BOOT: dict[str, str] = {
+    "zsh": "zsh",
+    "bash": "bash",
+    "fish": "fish",
+    "pwsh": "pwsh",
+    "nushell": "nu",
+}
 
 
 def _boot_shell(
@@ -463,13 +530,42 @@ def _boot_shell(
         return ["bash", "--rcfile", str(rc), "-i"], env
     if shell == "fish":
         boot = (
+            "set -g fish_greeting ''; "
             f"fish_add_path --prepend {bin_dir!r}; "
             f"{prog} --setup-completion fish | source; "
             "function fish_prompt; set_color green; echo -n '\u276f '; "
             "set_color normal; end"
         )
         return ["fish", "-i", "-C", boot], env
-    raise RuntimeError(f"cast drives zsh, bash, or fish (got {shell!r})")
+    if shell == "pwsh":
+        # MenuComplete: the grid-with-tooltip menu \u2014 the completion story
+        # worth recording. The hook loads exactly as the docs teach.
+        boot = "$env.PATH = $null; "  # placeholder never reached; see below
+        boot = (
+            f"$env:PATH = '{bin_dir}' + [IO.Path]::PathSeparator + $env:PATH; "
+            'function prompt { "\u276f " }; '
+            "Set-PSReadLineKeyHandler -Key Tab -Function MenuComplete; "
+            f"{prog} --setup-completion pwsh | Out-String | Invoke-Expression"
+        )
+        return ["pwsh", "-NoLogo", "-NoProfile", "-NoExit", "-Command", boot], env
+    if shell == "nushell":
+        hook = scratch / "hook.nu"
+        hook.write_text(_shellcomp.script_for("nushell", prog), encoding="utf-8")
+        env_nu = scratch / "env.nu"
+        env_nu.write_text(
+            f"$env.PATH = ($env.PATH | prepend {str(bin_dir)!r})\n"
+            '$env.PROMPT_COMMAND = {|| "" }\n'
+            '$env.PROMPT_COMMAND_RIGHT = {|| "" }\n'
+            '$env.PROMPT_INDICATOR = {|| $"(ansi green)\u276f (ansi reset)" }\n',
+            encoding="utf-8",
+        )
+        config_nu = scratch / "config.nu"
+        config_nu.write_text(
+            f"$env.config.show_banner = false\nsource {hook}\n",
+            encoding="utf-8",
+        )
+        return ["nu", "--env-config", str(env_nu), "--config", str(config_nu)], env
+    raise RuntimeError(f"cast drives zsh, bash, fish, pwsh, or nushell (got {shell!r})")
 
 
 @tasks.task(
@@ -479,7 +575,8 @@ def cast(
     *keys: str,
     out: Annotated[Path, doc("the animated SVG file to write")],
     shell: Annotated[
-        Literal["zsh", "bash", "fish"], doc("interactive shell to drive")
+        Literal["zsh", "bash", "fish", "pwsh", "nushell"],
+        doc("interactive shell to drive"),
     ] = "zsh",
     title: Annotated[str, doc("window title (default: '<shell> · completion')")] = "",
     width: Annotated[int, between(40, 200), doc("terminal columns")] = 72,
@@ -492,8 +589,9 @@ def cast(
     """Record an animated SVG of a real interactive shell session.
 
     Boots the shell from a scratch config with footman completion loaded
-    (via `--setup-completion`), types the script — everything after `--`,
-    where `<TAB>`, `<ENTER>`, `<WAIT>` and friends are keys — and replays
+    (via `--setup-completion`; nushell sources the generated hook), types
+    the script — everything after `--`, where `<TAB>`, `<ENTER>`,
+    `<WAIT>` and friends are keys — and replays
     the capture through a terminal emulator into an animated, dependency-
     free SVG with the session's real timing. TAB completion, in motion,
     regenerated on every docs build so it cannot drift.

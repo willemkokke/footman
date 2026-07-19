@@ -111,10 +111,13 @@ the use `requires=` was built for.
 ## Animated sessions: `fm footman docs cast`
 
 A static frame can't show <kbd>Tab</kbd> completion. `cast` boots a real
-interactive shell (zsh, bash, or fish) from a scratch config with footman's
-hook loaded, types a keystroke script, and replays the captured bytes
-through a terminal emulator into an **animated SVG** — CSS keyframes with
-the session's own timing, no JavaScript, plays anywhere an image does:
+interactive shell (zsh, bash, fish, pwsh, or nushell) from a scratch config
+with footman's hook loaded, types a keystroke script, and replays the
+captured bytes through a terminal emulator into an **animated SVG** — CSS
+keyframes with the session's own timing, no JavaScript, plays anywhere an
+image does. The session even answers its shell's terminal interrogations
+(capability, cursor, and colour queries) the way a plain xterm would —
+modern shells refuse to paint a prompt into silence:
 
 ```console
 $ fm footman docs cast --out docs/_generated/shots/zsh-cast.svg \

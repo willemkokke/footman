@@ -1,5 +1,13 @@
 # Completion on nushell
 
+This is a recording of a real nushell session — the external
+completer wired the way the next section describes, <kbd>Tab</kbd>
+opening nushell's completion menu with descriptions, a prefix
+completing. Regenerated from a live shell on every docs build, so it
+cannot drift from what your terminal will do:
+
+![Animated: fm TAB opens nushell's completion menu with descriptions, che TAB completes to check](_generated/shots/nushell-cast.svg)
+
 ## Install
 
 ```console
