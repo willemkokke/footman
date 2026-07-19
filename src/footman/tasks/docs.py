@@ -446,7 +446,12 @@ def _boot_shell(
             encoding="utf-8",
         )
         env["ZDOTDIR"] = str(scratch)
-        return ["zsh", "-i"], env
+        # --no-globalrcs: some machine images (GitHub runners among them)
+        # ship an /etc/zsh rc that runs a bare compinit, which stops the
+        # boot at an interactive compaudit question — and the first typed
+        # key of the script gets eaten answering it. A recording wants a
+        # hermetic shell: scratch rc only.
+        return ["zsh", "--no-globalrcs", "-i"], env
     if shell == "bash":
         rc = scratch / "bashrc"
         rc.write_text(
