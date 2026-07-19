@@ -1,0 +1,104 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(uv run *)",
+      "Bash(git log*)",
+      "Bash(git diff*)",
+      "Bash(git status*)",
+      "Bash(git show *)",
+      "Bash(git blame *)",
+      "Bash(git branch*)",
+      "Bash(git tag*)",
+      "Bash(git rev-parse *)",
+      "Bash(git remote*)",
+      "Bash(ls*)",
+      "Bash(cat *)",
+      "Bash(grep *)",
+      "Bash(rg *)",
+      "Bash(head *)",
+      "Bash(tail *)",
+      "Bash(find *)",
+      "Bash(wc *)",
+      "Bash(which *)",
+      "Bash(echo *)",
+      "Bash(type *)",
+      "Bash(file *)",
+      "Bash(./setup/setup.sh run:*)",
+      "Bash(pwsh setup/setup.ps1 run:*)",
+      "Bash(duty typecheck)",
+      "Bash(duty typecheck *)",
+      "Bash(duty lint)",
+      "Bash(duty lint-py)",
+      "Bash(duty lint-md)",
+      "Bash(duty lint-sc)",
+      "Bash(duty lint-dj)",
+      "Bash(duty lint-copier)",
+      "Bash(duty format)",
+      "Bash(duty format-ec)",
+      "Bash(duty format-dj)",
+      "Bash(duty format-py)",
+      "Bash(duty check)",
+      "Bash(duty check-env)",
+      "Bash(duty test)",
+      "Bash(duty build-docs)",
+      "Bash(duty status)",
+      "Bash(duty ci-status)",
+      "Bash(duty ci-status *)",
+      "Bash(duty show-env)",
+      "Bash(duty show-env *)",
+      "Bash(duty --list)",
+      "Bash(duty format *)",
+      "Bash(duty format-ec *)",
+      "Bash(duty format-dj *)",
+      "Bash(duty format-py *)",
+      "Bash(duty lint *)",
+      "Bash(duty lint-py *)",
+      "Bash(duty lint-md *)",
+      "Bash(duty lint-sc *)",
+      "Bash(duty check *)",
+      "Bash(duty test *)",
+      "Bash(duty add-word *)",
+      "Bash(duty add-words *)",
+      "Bash(duty sync)",
+      "Bash(duty sync *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git switch *)",
+      "Bash(git push)",
+      "Bash(git push *)",
+      "Bash(git mv *)",
+      "Bash(mkdir *)",
+      "WebSearch",
+      "WebFetch",
+      "Grep",
+      "Glob",
+      "Read"
+    ],
+    "additionalDirectories": [
+      ".."
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "p=$(jq -r '.tool_input.file_path // empty'); case \"$p\" in *.py) uv run fm format lint 1>&2 || exit 2;; esac"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -e '.stop_hook_active' >/dev/null && exit 0; uv run fm check 1>&2 || exit 2"
+          }
+        ]
+      }
+    ]
+  }
+}
