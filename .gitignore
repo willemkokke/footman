@@ -14,3 +14,5 @@ __pycache__/
 docs/htmlcov/
 docs/llms.txt
 docs/llms-full.txt
+docs/tasks/
+docs/_generated/

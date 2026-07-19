@@ -178,6 +178,12 @@ Design choices you can rely on:
 - Config-mounted plugin tasks run from your invocation directory;
   `include()`-adopted tasks run from the including file's directory.
 
+footman ships one first-party plugin under the entry-point name `footman` —
+mounting it is the two-line demo of this whole mechanism, and what it mounts
+is [your tasks, documented](taskdocs.md) (`fm footman docs page` / `site`).
+A naming symmetry to know: the `footman.tasks` entry-point *group* is served
+by the `footman.tasks` *package* — different namespaces, one product.
+
 ## The caching contract, stated once
 
 All three mechanisms resolve at import/manifest-build time, so what

@@ -68,6 +68,15 @@ Standalone (stdlib-only, no footman imports) — reusable outside footman.
 
 ::: footman.docstrings.Docstring
 
+## Markdown export
+
+Pure functions over manifest tree nodes — see
+[Your tasks, documented](taskdocs.md) for the task-level surface.
+
+::: footman.markdown.render_page
+
+::: footman.markdown.render_site
+
 ## Testing
 
 ::: footman.context.use_context

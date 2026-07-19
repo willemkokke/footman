@@ -144,12 +144,27 @@ def coverage():
 
 @docs.task(name="build")
 def docs_build(check: bool = False):
-    """Build the docs site into ./site; regenerates llms.txt first.
+    """Build the docs site into ./site; regenerates llms.txt and docs/tasks/.
 
     Args:
         check: build strictly (what CI runs)
     """
     _write_llms_txt()
+    # Dogfood the first-party plugin: regenerate the live task-reference
+    # pages (site mode) and the single-page example the taskdocs guide
+    # embeds (page mode). Plain calls — @task returns plain functions.
+    from pathlib import Path
+
+    from footman.tasks.docs import page as taskdocs_page
+    from footman.tasks.docs import site as taskdocs_site
+
+    taskdocs_site(Path("docs/tasks"), all=True)
+    taskdocs_page(
+        target="docs",
+        heading=3,
+        flavor="material",
+        out=Path("docs/_generated/tasks-page.md"),
+    )
     # A conditional flag needs no ternary: strict=check is --strict when
     # check is true, omitted otherwise (strict is off by default in zensical).
     tools.zensical.build(clean=True, strict=check, in_process=False)

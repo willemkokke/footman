@@ -26,6 +26,19 @@ versions may include breaking changes.
   section orders.
 - **The docs site follows your system's colour scheme by default**, with a
   three-state auto → light → dark toggle.
+- **`fm footman docs page` / `site` — your tasks, documented.** A
+  first-party plugin (mount with `[tool.footman] plugins = ["footman"]` —
+  the two-line demo of the plugin system) renders a project's task tree as
+  markdown: one page (scoped to the tree, a group, or a task, headings
+  nestable for snippet includes, pipeable to pandoc) or a linked site
+  (one file per task, an `index.md` per group) for zensical/mkdocs navs.
+  Two flavors: portable CommonMark, or `material` with anchors and example
+  admonitions. Content is phrased by the same code as `--help` — names,
+  params, docstring help, defaults, synthesized examples — so pages can't
+  drift from the CLI. The renderer is public (`footman.markdown`), the
+  manifest gains an additive `default` key, and footman's own docs dogfood
+  both modes: the Task reference section and the embedded sample on the
+  "Your tasks, documented" page are regenerated on every docs build.
 
 ### Changed
 

@@ -20,6 +20,7 @@ nav = [
     { "Monorepos & config" = "monorepos.md" },
     { "Composing tasks" = "composing.md" },
     { "Testing your tasks" = "testing.md" },
+    { "Your tasks, documented" = "taskdocs.md" },
     { "Custom CLI" = "custom-cli.md" },
   ] },
   { "Completion" = [
@@ -44,6 +45,7 @@ nav = [
   { "Reference" = [
     { "CLI reference" = "reference.md" },
     { "API reference" = "api.md" },
+    { "Task reference (generated)" = "tasks/index.md" },
     { "Troubleshooting" = "troubleshooting.md" },
   ] },
 ]
