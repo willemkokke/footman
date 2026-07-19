@@ -63,6 +63,17 @@ def test_record_and_load_roundtrip(tmp_path, monkeypatch):
     assert _progress.load_runs(tmp_path, "other") == []
 
 
+def test_cmd_width_remembered_per_chain(tmp_path, monkeypatch):
+    # The widest step label rides the history, so a warm run's step lines
+    # align from the very first one.
+    monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path)
+    assert _progress.load_cmd_width(tmp_path, "k") == 0
+    _progress.record(tmp_path, "k", 4.0, cmd_width=29)
+    assert _progress.load_cmd_width(tmp_path, "k") == 29
+    _progress.record(tmp_path, "k", 4.1)  # width omitted
+    assert _progress.load_cmd_width(tmp_path, "k") == 29  # remembered
+
+
 def test_window_caps_samples(tmp_path, monkeypatch):
     monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path)
     for i in range(_progress.WINDOW + 7):

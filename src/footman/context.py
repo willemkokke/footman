@@ -131,6 +131,28 @@ def context_param_name(sig: inspect.Signature) -> str | None:
 # ignorant of _progress on purpose; outside a run there is none.
 _status: Any = None
 
+# The widest command label seen, for aligning the step lines' time column.
+# Seeded from the previous run's history (so alignment is right from the
+# first line on a warm run) and grown as a running max on a cold one.
+_cmd_width: int = 0
+
+
+def seed_cmd_width(width: int) -> None:
+    global _cmd_width
+    _cmd_width = max(0, width)
+
+
+def cmd_width() -> int:
+    return _cmd_width
+
+
+def _observe_cmd(label: str) -> int:
+    """Return the padding width for *label*, learning as labels stream by."""
+    global _cmd_width
+    if len(label) > _cmd_width:
+        _cmd_width = len(label)
+    return _cmd_width
+
 
 def set_status(status: Any) -> None:
     global _status
@@ -361,12 +383,17 @@ def _name_col(ctx: Context) -> str:
 
 
 def _step_line(ctx: Context, ok: bool, label: str, duration: float) -> str:
-    """One completed step: mark · name · dimmed command · right-aligned time."""
+    """One completed step: mark · name · dimmed command · aligned time."""
     from footman._progress import fmt_secs
 
     color = _colored(ctx)
     time_text = f"({fmt_secs(duration)})"
     name = _name_col(ctx)
+    # Times align to the widest command — remembered from the previous run
+    # of this chain (a warm run aligns from its first line), learned as a
+    # running max on a cold one. Never the terminal edge: that reads absurd
+    # on wide terminals.
+    label = f"{label:<{_observe_cmd(label)}}"
 
     if not ctx.tty:
         return f"{'ok' if ok else 'FAIL':<4} {name}{label}  {time_text}\n"

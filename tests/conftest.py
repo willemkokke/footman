@@ -15,8 +15,13 @@ FIXTURE = Path(__file__).parent / "fixtures" / "sample_tasks.py"
 @pytest.fixture(autouse=True)
 def _no_cache_override(monkeypatch):
     """A real FOOTMAN_CACHE_DIR would bypass every cache_home patch — the
-    override is env-first by design, so the suite must clear it."""
+    override is env-first by design, so the suite must clear it. The
+    step-alignment width is a per-run learning global for the same reason:
+    reset it, or one test's wide command pads another's lines."""
     monkeypatch.delenv("FOOTMAN_CACHE_DIR", raising=False)
+    from footman import context
+
+    context.seed_cmd_width(0)
 
 
 def load_tasks(path: Path) -> registry.Group:

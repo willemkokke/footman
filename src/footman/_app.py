@@ -20,6 +20,7 @@ from footman import (
     _paths,
     _progress,
     config,
+    context,
     discover,
     executor,
     manifest,
@@ -765,9 +766,11 @@ def _run_tree(
         and schedule.dag_wants_progress(reg, segments)
     )
     est = times_key = None
+    context.seed_cmd_width(0)  # each run learns (or is seeded) afresh
     if predictable:
         times_key = _progress.chain_key(segments, sequential=sequential, jobs=jobs)
         est = _progress.estimate(_progress.load_runs(Path.cwd(), times_key))
+        context.seed_cmd_width(_progress.load_cmd_width(Path.cwd(), times_key))
     if est is not None and not g.get("quiet") and not sys.stderr.isatty():
         # No TTY (CI, a pipe): the one-line version of the bar, up front.
         print(f"  {'eta':>4}  ~{_progress.fmt_secs(est.typical)}", file=sys.stderr)
@@ -792,7 +795,8 @@ def _run_tree(
     if collect is not None:
         collect.extend(results)
     if predictable and times_key and results and all(r.ok for r in results):
-        _progress.record(Path.cwd(), times_key, total)  # green runs teach
+        # Green runs teach: the duration, and the step-alignment width.
+        _progress.record(Path.cwd(), times_key, total, cmd_width=context.cmd_width())
 
     if json_mode:
         _print_json(results, total=total)

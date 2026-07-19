@@ -105,7 +105,15 @@ def load_runs(cwd: Path, key: str) -> list[float]:
     return [float(r) for r in runs if isinstance(r, (int, float))]
 
 
-def record(cwd: Path, key: str, seconds: float) -> None:
+def load_cmd_width(cwd: Path, key: str) -> int:
+    """The widest command label of *key*'s previous run — step-line
+    alignment is right from the first line on a warm run."""
+    entry = _load(cwd).get("chains", {}).get(key)
+    width = entry.get("cmd") if isinstance(entry, dict) else 0
+    return width if isinstance(width, int) and width > 0 else 0
+
+
+def record(cwd: Path, key: str, seconds: float, cmd_width: int = 0) -> None:
     """Append one green run's wall total; prune idle chains, cap sizes.
 
     Best-effort by contract: an unwritable cache directory must never fail
@@ -120,7 +128,13 @@ def record(cwd: Path, key: str, seconds: float) -> None:
     old = entry.get("runs") if isinstance(entry, dict) else None
     runs = [r for r in old if isinstance(r, (int, float))] if old else []
     runs.append(round(float(seconds), 3))
+    old_cmd = entry.get("cmd") if isinstance(entry, dict) else 0
     chains[key] = {"last": now, "runs": runs[-WINDOW:]}
+    # The widest step label, for next run's alignment — a width-less record
+    # keeps what the chain already knew.
+    width = cmd_width if cmd_width > 0 else old_cmd
+    if isinstance(width, int) and width > 0:
+        chains[key]["cmd"] = width
 
     horizon = now - IDLE_DAYS * 86400
     chains = {
