@@ -441,11 +441,17 @@ def run(
     show = not silent and not ctx.quiet
     color = ctx.tty and not ctx.no_color and "NO_COLOR" not in os.environ
     if show:
+        # The arrow announces what is *running now* — worth a line only
+        # while output is live (a TTY rewrites it in place; a streamed CI
+        # log may wait minutes under it). A captured block flushes when
+        # the task is already done, where "starting X" directly above
+        # "finished X" says nothing — the completion line carries it all.
         if ctx.tty:
             out.write(f"→ {_name_col(ctx)}{_dim(label, color)}")
-        else:
+            out.flush()
+        elif ctx.sink is None:
             out.write(f"→ {_name_col(ctx)}{label}\n")
-        out.flush()
+            out.flush()
 
     start = time.perf_counter()
     if callable(cmd):

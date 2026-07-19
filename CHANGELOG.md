@@ -25,6 +25,15 @@ versions may include breaking changes.
   task is gated with footman's own `@task(requires="rich")` and lists as
   unavailable without it — the availability machinery, dogfooded. The
   docs site now embeds these, regenerated on every build.
+- **Captured blocks no longer start with the `→ running` line.** The
+  arrow announces what is running *now*, which is only worth a line while
+  output is live — a TTY rewrites it in place, a streamed CI log may wait
+  minutes under it, and both keep it. A buffered block (chains of two or
+  more, `parallel()` in a task body) flushes when the task is already
+  done, where "starting X" directly above "finished X" said nothing —
+  those blocks now open straight with the completion line. Surfaced by
+  the first `docs shots` screenshot, which faithfully photographed the
+  redundancy.
 - **`fm footman docs globals` — the runner's global options as a markdown
   table.** Rendered straight from the CLI grammar: the same rows, in the
   same order, with the same words `--help` prints, with `{prog}` speaking
