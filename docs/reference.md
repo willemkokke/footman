@@ -68,4 +68,5 @@ a file passed to `--config`. See [Monorepos & config](monorepos.md).
 | `jobs`       | Max parallel tasks (default: cores - 1, never below 2).   |
 | `plugins`    | `footman.tasks` entry points to mount as command groups (opt-in). |
 | `progress`   | `false` permanently disables the progress bar, eta line, and timing capture. |
+| `uv`         | `false` disables the uv handoff (a globally-installed `fm` re-running itself via `uv run` when the project's lockfile pins footman). |
 | `completion.max_age` | Age before a background completion refresh (e.g. `"10m"`; `off` to disable). |

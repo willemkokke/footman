@@ -5,6 +5,7 @@ from __future__ import annotations
 import io
 import json
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -967,3 +968,110 @@ def test_piped_output_stays_plain(project, capsys):
     for line in (["--help"], ["--list"], ["--tree"], ["-n", "hi"]):
         assert _app.run(line) == 0
         assert "\033" not in capsys.readouterr().out
+
+
+# --- the uv handoff -----------------------------------------------------------
+# A globally-installed fm hands the invocation to the project's own footman
+# via `uv run` when the project's uv.lock pins footman and we're outside its
+# environment. These pin the rule's every edge: it fires with exactly the
+# right argv, terminates, and stays out of the way everywhere else.
+
+_UV_LOCK = 'version = 1\n\n[[package]]\nname = "footman"\nversion = "0.13.0"\n'
+
+
+@pytest.fixture
+def uv_project(project, monkeypatch):
+    (project / "uv.lock").write_text(_UV_LOCK, encoding="utf-8")
+    monkeypatch.delenv("FOOTMAN_UV_REEXEC", raising=False)
+    monkeypatch.delenv("FOOTMAN_NO_UV", raising=False)
+    monkeypatch.setattr(_app.shutil, "which", lambda n: "/fake/uv")
+    return project
+
+
+def _capture_exec(monkeypatch):
+    calls: list[list[str]] = []
+
+    def fake_execvp(file, args):
+        calls.append(list(args))
+        raise SystemExit(0)  # execvp never returns; stand in for the child
+
+    monkeypatch.setattr(_app.os, "execvp", fake_execvp)
+    return calls
+
+
+def test_handoff_execs_the_projects_footman(uv_project, monkeypatch):
+    calls = _capture_exec(monkeypatch)
+    with pytest.raises(SystemExit):
+        _app.run(["hi", "--name", "x"])
+    assert calls == [
+        ["/fake/uv", "run", "--project", str(uv_project), "fm", "hi", "--name", "x"]
+    ]
+
+
+def test_handoff_probes_the_dash_c_target_without_moving(
+    uv_project, tmp_path_factory, monkeypatch
+):
+    elsewhere = tmp_path_factory.mktemp("elsewhere")
+    monkeypatch.chdir(elsewhere)
+    calls = _capture_exec(monkeypatch)
+    with pytest.raises(SystemExit):
+        _app.run(["-C", str(uv_project), "hi"])
+    (call,) = calls
+    assert call[2:4] == ["--project", str(uv_project)]
+    assert call[5:] == ["-C", str(uv_project), "hi"]  # original argv, verbatim
+    assert Path.cwd() == elsewhere  # the child repeats -C; we never moved
+
+
+def test_handoff_skips_every_optout(uv_project, monkeypatch, capsys):
+    calls = _capture_exec(monkeypatch)
+    for setup in (
+        lambda: monkeypatch.setenv("FOOTMAN_UV_REEXEC", "1"),
+        lambda: monkeypatch.setenv("FOOTMAN_NO_UV", "1"),
+        lambda: (uv_project / "pyproject.toml").write_text(
+            "[project]\nname='x'\n[tool.footman]\nuv = false\n"
+        ),
+    ):
+        setup()
+        assert _app.run(["hi"]) == 0  # ran here, in this process
+        assert "hello world" in capsys.readouterr().out
+        monkeypatch.delenv("FOOTMAN_UV_REEXEC", raising=False)
+        monkeypatch.delenv("FOOTMAN_NO_UV", raising=False)
+    assert calls == []
+
+
+def test_handoff_needs_footman_in_the_lock(uv_project, monkeypatch, capsys):
+    calls = _capture_exec(monkeypatch)
+    (uv_project / "uv.lock").write_text(
+        'version = 1\n\n[[package]]\nname = "requests"\nversion = "2.0"\n'
+    )
+    assert _app.run(["hi"]) == 0
+    assert "hello world" in capsys.readouterr().out
+    assert calls == []
+
+
+def test_handoff_stays_home_inside_the_projects_venv(uv_project, monkeypatch, capsys):
+    calls = _capture_exec(monkeypatch)
+    (uv_project / ".venv").mkdir()
+    monkeypatch.setattr(_app.sys, "prefix", str(uv_project / ".venv"))
+    assert _app.run(["hi"]) == 0
+    assert "hello world" in capsys.readouterr().out
+    assert calls == []
+
+
+def test_handoff_never_touches_version(uv_project, monkeypatch, capsys):
+    calls = _capture_exec(monkeypatch)
+    assert _app.run(["--version"]) == 0
+    assert "footman" in capsys.readouterr().out
+    assert calls == []
+
+
+def test_handoff_windows_waits_and_carries_the_code(uv_project, monkeypatch):
+    class FakeProc:
+        def wait(self):
+            return 7
+
+    monkeypatch.setattr(_app, "_WINDOWS", True)
+    monkeypatch.setattr(_app.subprocess, "Popen", lambda cmd: FakeProc())
+    with pytest.raises(SystemExit) as excinfo:
+        _app.run(["hi"])
+    assert excinfo.value.code == 7

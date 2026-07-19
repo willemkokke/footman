@@ -7,6 +7,22 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- **Install once, run anywhere: the uv handoff.** A globally-installed
+  `fm` (`uv tool install footman`) now hands the invocation to `uv run`
+  when the project's `uv.lock` pins footman and the running interpreter
+  isn't already inside the project's environment — so plain `fm check`
+  works from any uv project, at the project's pinned footman version,
+  with the project's tools on PATH, no `uv run` prefix. The rule is one
+  sentence: the lockfile declaring footman is what makes it fire. POSIX
+  replaces the process (`execvp`); Windows spawns and waits, because
+  `exec` there lies about exit codes. `--version`, completion management,
+  and the TAB hot path never hand off; `uv = false` in `[tool.footman]`
+  or `FOOTMAN_NO_UV=1` opts out for purists, and `-v` says when a handoff
+  happened. uv only for now — poetry/pdm handoffs will be considered
+  if there's a want for them.
+
 ## [0.13.0] — 2026-07-19
 
 ### Added

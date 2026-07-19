@@ -11,8 +11,11 @@ from __future__ import annotations
 import contextlib
 import json
 import os
+import shutil
+import subprocess
 import sys
 import time
+import tomllib
 from pathlib import Path
 
 from footman import (
@@ -626,6 +629,80 @@ def run(
         return _refuse(_wants_json(argv), "interrupted", 130)
 
 
+_WINDOWS = os.name == "nt"  # decided at import; a constant tests can steer
+
+
+def _uv_handoff(argv: list[str], g: dict[str, object]) -> None:
+    """Hand a globally-installed invocation to the project's own footman.
+
+    The rule, one sentence: when the project's `uv.lock` pins footman and
+    this interpreter is not already inside the project's environment, the
+    invocation belongs to `uv run` — the project has declared what `fm`
+    means there, version and all. Reached only where tasks would be
+    imported: `--version`, completion management, and the TAB hot path
+    never arrive here. Opt out with `uv = false` in `[tool.footman]` or
+    `FOOTMAN_NO_UV=1`. The child carries `FOOTMAN_UV_REEXEC` as a loop
+    belt for projects whose environment lives outside `.venv`.
+
+    On POSIX the process is replaced (`execvp`: tty, signals, and exit
+    code all belong to the child). Windows `exec*` lies — the parent
+    exits while the child runs on — so there it spawns and waits,
+    swallowing its own Ctrl-C (the console already delivered it to the
+    child, which will exit 130 on its own terms).
+    """
+    if os.environ.get("FOOTMAN_UV_REEXEC") or os.environ.get("FOOTMAN_NO_UV"):
+        return
+    try:
+        probe = Path(str(g.get("directory") or Path.cwd())).resolve(strict=True)
+    except OSError:
+        return  # a missing -C target: _run's own error path reports it
+    root = next((p for p in (probe, *probe.parents) if (p / "uv.lock").is_file()), None)
+    if root is None:
+        return
+    venv = root / ".venv"
+    with contextlib.suppress(OSError):
+        if venv.is_dir() and Path(sys.prefix).resolve().is_relative_to(venv.resolve()):
+            return  # already the project's environment
+    uv = shutil.which("uv")
+    if uv is None:
+        return
+    try:
+        with open(root / "uv.lock", "rb") as fh:
+            lock = tomllib.load(fh)
+    except (OSError, tomllib.TOMLDecodeError):
+        return
+    if not any(p.get("name") == "footman" for p in lock.get("package", [])):
+        return
+    try:
+        cfg = config.load_config(
+            probe,
+            _paths.find_repo_root(probe),
+            str(g["config"]) if g.get("config") else None,
+            on_warning=lambda _: None,  # the real run repeats any warning
+        )
+    except config.ConfigError:
+        return  # the real run reports the broken --config properly
+    if cfg.get("uv") is False:
+        return
+    if g.get("verbose"):
+        print(
+            f"{_brand.prog}: handing off to uv run --project {root}",
+            file=sys.stderr,
+        )
+    os.environ["FOOTMAN_UV_REEXEC"] = "1"
+    cmd = [uv, "run", "--project", str(root), _brand.prog, *argv]
+    if _WINDOWS:
+        proc = subprocess.Popen(cmd)
+        while True:
+            try:
+                raise SystemExit(proc.wait())
+            except KeyboardInterrupt:
+                continue
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os.execvp(uv, cmd)
+
+
 def _run(
     argv: list[str],
     brand: Brand,
@@ -651,6 +728,10 @@ def _run(
         return _setup_completion(g.get("setup_completion"))
     if "uninstall_completion" in g and not wants_help:
         return _uninstall_completion(g.get("uninstall_completion"))
+
+    # May replace the process (POSIX) or exit with the child's code
+    # (Windows); returns quietly whenever the handoff doesn't apply.
+    _uv_handoff(argv, g)
 
     if not g.get("directory"):
         return _execute(argv, g, wants_help, collect)

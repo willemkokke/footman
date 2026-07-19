@@ -9,6 +9,17 @@ uv add --dev footman        # or: pip install footman
 footman requires Python 3.11+ and has zero runtime dependencies. Installing it
 puts two console scripts on your `PATH`: `footman` and the two-letter `fm`.
 
+You can also install it once, globally (`uv tool install footman`), and
+still type plain `fm` inside uv projects: when a project's `uv.lock` pins
+footman and you aren't already inside its environment, `fm` hands the
+invocation to `uv run` — the project's own footman runs, at the project's
+pinned version, with the project's tools on PATH. One rule, no magic: the
+lockfile declaring footman is what makes it fire. Purists opt out with
+`uv = false` under `[tool.footman]` (or `FOOTMAN_NO_UV=1`), and TAB
+completion is untouched either way — it never enters an environment at
+all. uv only for now: its lockfile makes the rule unambiguous. If a
+poetry or pdm handoff would serve you, open an issue.
+
 ## Write a tasks file
 
 Tasks are plain functions. A `@task` decorator registers one; a `group()` opens

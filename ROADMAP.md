@@ -1,13 +1,13 @@
 # Roadmap
 
 This file began as a critical self-audit of footman at **v0.4.0** — every
-claim checked against the source, file and line. Eight releases later, almost
+claim checked against the source, file and line. Nine releases later, almost
 all of it has shipped. The file now does two jobs: the road ahead, and — for
 posterity — the original audit preserved item by item, each with the release
 that closed it. The full stories live in the
 [changelog](https://willemkokke.github.io/footman/changelog/).
 
-**Where footman stands (2026-07-19, v0.12.0, Beta on PyPI).** The typed core
+**Where footman stands (2026-07-19, v0.13.0, Beta on PyPI).** The typed core
 — coercion, chain grammar, manifest, scheduler, cascade — held up; everything
 since has been built on it without structural change. The runner now has a
 real help story, a testing story, a composition story, completion installed
@@ -62,6 +62,9 @@ Not gating anything, carried forward minus the entries that shipped
 - **`fm --plugins`** — list installed `footman.tasks` entry points with
   dist, version, and enabled state.
 - **`fm new`** — scaffold a tasks.py that demonstrates the good idioms.
+- **Handoffs for other package managers** (poetry, pdm) — if there's a
+  want. uv shipped first because `uv.lock` makes the fire-rule
+  unambiguous; each manager needs an equally sharp rule of its own.
 - From the typing table's "post-1.0" rows: hidden parameters, and fixed-arity
   `tuple[X, Y]` in comma form (`--size 800,600`).
 
