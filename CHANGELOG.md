@@ -7,6 +7,16 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- **`fm footman docs globals` — the runner's global options as a markdown
+  table.** Rendered straight from the CLI grammar: the same rows, in the
+  same order, with the same words `--help` prints, with `{prog}` speaking
+  a branded CLI's own name. `footman.markdown.globals_table(prog=…)` is
+  the function behind it. This site's CLI reference now regenerates its
+  table on every docs build, so it can never drift from the runner again
+  (it had, three ways, which is how this feature earned its place).
+
 ## [0.12.0] — 2026-07-19
 
 ### Added

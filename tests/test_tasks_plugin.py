@@ -116,3 +116,17 @@ def test_page_rides_the_json_envelope(plugin_project, capsys):
     (entry,) = payload["results"]
     assert entry["task"] == "footman.docs.page"
     assert "# fm tasks" in entry["output"]  # the markdown, captured
+
+
+def test_globals_task_prints_the_grammar(plugin_project, capsys):
+    assert _app.run(["footman", "docs", "globals"]) == 0
+    out = capsys.readouterr().out
+    assert out.startswith("| option")
+    assert "`--json`" in out
+    assert "help for fm" in out  # {prog} filled with the invoking CLI
+
+
+def test_globals_task_writes_out(plugin_project, capsys):
+    dest = plugin_project / "docs" / "_generated" / "globals.md"
+    assert _app.run(["footman", "docs", "globals", "--out", str(dest)]) == 0
+    assert dest.read_text(encoding="utf-8").startswith("| option")

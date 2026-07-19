@@ -121,3 +121,28 @@ def site(
         written.append(str(dest))
     print(f"wrote {len(written)} pages under {out}")
     return written
+
+
+@tasks.task(name="globals")
+def globals_(
+    out: Path | None = None,
+    prog: Annotated[
+        str, doc("command name in the table (default: the invoking CLI)")
+    ] = "",
+):
+    """Render the runner's global options as a markdown table.
+
+    The rows come straight from the CLI grammar — the same table `--help`
+    prints — so a reference page that regenerates this on each docs build
+    can never drift from the runner. Without --out the table is the task's
+    stdout; with --out it is written to the file.
+    """
+    prog = prog or context.current().prog  # a branded CLI documents itself
+    text = markdown.globals_table(prog=prog)
+    if out is None:
+        print(text, end="")
+        return None
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(text, encoding="utf-8")
+    print(f"wrote {out}")
+    return [str(out)]

@@ -107,3 +107,23 @@ def test_site_scoped_to_task_is_one_file(sample_tree):
 def test_render_is_deterministic(sample_tree):
     assert markdown.render_page(sample_tree) == markdown.render_page(sample_tree)
     assert markdown.render_site(sample_tree) == markdown.render_site(sample_tree)
+
+
+def test_globals_table_mirrors_the_grammar():
+    from footman import split
+
+    text = markdown.globals_table()
+    lines = text.splitlines()
+    assert len(lines) == len(split.GLOBALS) + 2  # header + rule + one row each
+    for (name, alias, _kind, hint, _help), line in zip(split.GLOBALS, lines[2:]):
+        assert f"`{name}" in line
+        if alias:
+            assert f"`{alias}`" in line
+        if hint:
+            assert hint in line
+    assert "{prog}" not in text  # placeholders always filled
+
+
+def test_globals_table_speaks_the_brand():
+    assert "help for fm" in markdown.globals_table()
+    assert "help for acme" in markdown.globals_table(prog="acme")

@@ -168,6 +168,7 @@ def docs_build(check: bool = False):
     # nav includes the generated tasks/ pages — generate them first.
     from pathlib import Path
 
+    from footman.tasks.docs import globals_ as taskdocs_globals
     from footman.tasks.docs import page as taskdocs_page
     from footman.tasks.docs import site as taskdocs_site
 
@@ -178,6 +179,9 @@ def docs_build(check: bool = False):
         flavor="material",
         out=Path("docs/_generated/tasks-page.md"),
     )
+    # The CLI reference's global-options table, from the grammar itself —
+    # reference.md snippet-includes it, so it can't drift from --help.
+    taskdocs_globals(out=Path("docs/_generated/globals.md"))
     _write_llms_txt()
     # A conditional flag needs no ternary: strict=check is --strict when
     # check is true, omitted otherwise (strict is off by default in zensical).

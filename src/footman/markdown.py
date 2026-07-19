@@ -25,7 +25,32 @@ from typing import Any
 
 from footman import _describe
 
-__all__ = ["render_page", "render_site"]
+__all__ = ["globals_table", "render_page", "render_site"]
+
+
+def globals_table(*, prog: str = "fm") -> str:
+    """The runner's global options as a markdown pipe table.
+
+    Rendered straight from the CLI grammar (`split.GLOBALS`) — the same
+    rows, in the same order, with the same words `--help` prints — so a
+    docs page that regenerates this on each build can never drift from the
+    runner. *prog* fills the `{prog}` placeholders, so a branded CLI's docs
+    speak its own name.
+    """
+    from footman import split
+
+    rows = []
+    for name, alias, _kind, hint, help_text in split.GLOBALS:
+        main = f"`{name} {hint}`" if hint else f"`{name}`"
+        label = f"`{alias}`, {main}" if alias else main
+        rows.append((label, _cell(help_text.replace("{prog}", prog))))
+    width = max(len(label) for label, _ in rows)
+    lines = [
+        f"| {'option':<{width}} | effect |",
+        f"| {'-' * width} | ------ |",
+    ]
+    lines += [f"| {label:<{width}} | {effect} |" for label, effect in rows]
+    return "\n".join(lines) + "\n"
 
 
 def render_page(

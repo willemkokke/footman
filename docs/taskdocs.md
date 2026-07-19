@@ -56,7 +56,7 @@ invocation.
 
 ```console
 $ fm footman docs site docs/tasks
-wrote 17 pages under docs/tasks
+wrote 18 pages under docs/tasks
 ```
 
 One file per task, an `index.md` per group with relative links, directories
@@ -65,6 +65,20 @@ in your nav. This site's **Task reference** section is exactly that, wired
 into [`zensical.toml`](https://github.com/willemkokke/footman/blob/main/zensical.toml)'s
 nav. `site` defaults to `--flavor material` because a docs site is where it
 lands; pass `--flavor plain` for anything else.
+
+## The runner itself: `fm footman docs globals`
+
+Your tasks aren't the only thing worth documenting — the runner's global
+options deserve a page too. `globals` renders them as a markdown table
+straight from the CLI grammar: the same rows, in the same order, with the
+same words `--help` prints. This site's [CLI reference](reference.md) table
+is exactly that, regenerated on every docs build — it *cannot* drift,
+because it was never written by hand.
+
+```console
+$ fm footman docs globals --out docs/_generated/globals.md
+wrote docs/_generated/globals.md
+```
 
 ## Keep it fresh
 
@@ -75,10 +89,11 @@ functions, so footman's own docs task calls them directly — copy the shape:
 @docs.task(name="build")
 def docs_build(check: bool = False):
     "Build the docs site; regenerates the task reference first."
-    from footman.tasks.docs import page, site
+    from footman.tasks.docs import globals_, page, site
 
     site(Path("docs/tasks"))
     page(target="docs", heading=3, out=Path("docs/_generated/tasks-page.md"))
+    globals_(out=Path("docs/_generated/globals.md"))
     tools.zensical.build(clean=True, strict=check)
 ```
 
