@@ -316,6 +316,13 @@ def _pty_session(
     env.update(env_extra or {})
     master, slave = pty.openpty()
     fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", height, width, 0, 0))
+    # Query replies are written into the pty during boot, before the shell
+    # enters raw mode — with kernel ECHO on, the tty prints them back (the
+    # digits of a cursor-position reply flashing on screen for a frame).
+    # Line editors render their own input; nothing here needs kernel echo.
+    attrs = termios.tcgetattr(slave)
+    attrs[3] &= ~termios.ECHO
+    termios.tcsetattr(slave, termios.TCSANOW, attrs)
 
     def _own_the_tty() -> None:  # child, pre-exec: the pty.fork() idiom
         # A new session *and* the slave as controlling terminal — fish,
