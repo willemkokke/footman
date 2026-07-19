@@ -62,13 +62,27 @@ it to an agent. The envelope is versioned and the contract is simple:
   (`null`, or the exception as a string), and `steps` — one entry per
   `run()`/`tools.*` call, each with `command`, `code`, `duration_ms`,
   `output`.
+- **A task's return value lands in `returned`.** Return a dict (or list,
+  string, bool, …) and it appears in the task's entry; return `None` and the
+  key is absent. An `int` return stays what it always was — the exit code,
+  not data. The types footman coerces *in* (`Path`, `Enum`, `datetime`,
+  `UUID`, `Decimal`, dataclasses, sets) serialise on the way out; anything
+  else is dropped with a `returned_error` note in the entry and a warning on
+  stderr — the run's exit code is never changed by a payload.
+- **Refusals keep the contract.** A line footman refuses — a typo'd task, a
+  bad flag, a broken tasks file — emits one envelope too:
+  `{"schema": 1, "error": {"code": 2, "message": "…"}, "results": []}`, with
+  the same taught message on stderr. With `--json` on the line, stdout is
+  always exactly one JSON document; the one exception is `--help`, whose
+  machine twin is `fm --json --list`.
 - **Post-1.0, changes are additive only.** Parse what you know, ignore what
   you don't, and pin `schema == 1` if you're strict.
 
-A shape-check in CI is two lines of `jq`:
+A shape-check in CI is two lines of `jq` (check `.error` too — an empty
+`results` list on a refusal would otherwise pass an `all(.ok)` vacuously):
 
 ```sh
-fm --json check | jq -e '.schema == 1 and (.results | all(.ok))'
+fm --json check | jq -e '.error == null and (.results | all(.ok))'
 ```
 
 ## Exit codes
@@ -87,11 +101,13 @@ milliseconds with a taught message, not after twenty minutes of setup.
 ## Agents
 
 Everything above is what coding agents want too: one command, structured
-results, captured output, honest exit codes. Two extras help:
+results, captured output, honest exit codes. Three extras help:
 
-- `fm --dry-run <chain>` prints the parsed plan without running — cheap
-  validation of a proposed command line (human-oriented text; parse the
-  `--json` of a real run instead of scraping it).
+- `fm --json --list` (or bare `fm --json`) prints the whole task tree as an
+  envelope — every task and group with its parameters, types, choices, and
+  defaults. One call, full catalog.
+- `fm --json --dry-run <chain>` prints the parsed plan as an envelope — cheap
+  validation of a proposed command line, nothing executed.
 - `fm --help <task>` renders a task's full typed surface from the manifest,
   read-only, wherever `--help` appears on the line.
 

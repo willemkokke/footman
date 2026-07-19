@@ -9,6 +9,27 @@ versions may include breaking changes.
 
 ### Added
 
+- **Tasks can return JSON.** A task's return value now lands in its `--json`
+  entry under `returned`: return a dict (or list, string, bool, …) and a
+  machine consumer gets it verbatim; return `None` and the key is absent. An
+  `int` return keeps its existing meaning — the exit code, never data. The
+  types footman coerces *in* (`Path`, `Enum`, `datetime`, `UUID`, `Decimal`,
+  dataclasses, sets) serialise symmetrically on the way *out*; any other type
+  is dropped loudly — a `returned_error` note in the entry, a warning on
+  stderr, and the run's exit code untouched. The envelope stays `schema: 1`
+  (additive only). `Runner.invoke(...).results[n].returned` already exposed
+  the same value for tests.
+- **`--json` now means: stdout is exactly one JSON document, whatever
+  happened.** New envelopes cover every surface that used to fall back to
+  text: a refusal (typo'd task, bad flag, broken tasks file, `--config`
+  error, Ctrl-C) emits `{"schema": 1, "error": {"code", "message"}, "results":
+  []}` alongside the stderr message; `--list`/`--tree`/bare `fm` emit the full
+  task tree with parameter specs (`{"schema": 1, "tree": …}`) — the machine
+  catalog agents were missing; `--dry-run` emits the parsed plan
+  (`{"schema": 1, "globals": …, "plan": …}`); `--version` emits
+  `{"schema": 1, "name": …, "version": …}`. The one exception is `--help`,
+  which stays human — its machine twin is `fm --json --list`.
+
 - **`--setup-completion <shell>` prints the completion hook to stdout**, for
   enabling completion in the current shell only — no rc file touched:
   `eval "$(fm --setup-completion zsh)"` (bash/zsh), `fm --setup-completion fish
@@ -34,6 +55,20 @@ versions may include breaking changes.
   completion styling (`list-colors`, `descriptions` `format`) — the same look
   `_git` and `_npm` produce — instead of the hand-formatted `name -- desc`.
   Re-run `fm --install-completion zsh` to pick it up.
+
+### Fixed
+
+- **`fm --help <typo>` now refuses with a suggestion** (exit 2, `unknown task
+  or group 'nope' — did you mean …?`) instead of silently printing the global
+  help with exit 0. With a real target on the line (`fm --help deploy prod`),
+  extra words are still tolerated as argument values.
+- **A misplaced global option is taught by position, not treated as unknown.**
+  `fm check --json` now says ``--json is a global option — it goes before the
+  first task name`` instead of `unknown option`; same for short aliases
+  (`fm lint -k` names `--keep-going`). A task parameter that shares a
+  global's name still wins by position, as before.
+- **Bare `fm` now ends with the same `--help <task>` pointer the help screen
+  shows** — the no-argument path is exactly where a newcomer lands.
 
 ## [0.9.0] — 2026-07-18
 

@@ -19,11 +19,12 @@ Global options bind to `fm` itself and go **before** the first task name
 | `-v`, `--verbose`         | replay captured `run()` output even on success  |
 | `--no-color`              | disable ANSI colour                             |
 | `--timings`               | show per-task durations                         |
-| `--json`                  | machine-readable results (captures task output) |
+| `--json`                  | stdout becomes one JSON document (captures task output) |
 | `-C`, `--directory PATH`  | run as if launched from PATH                    |
 | `-f`, `--tasks-file PATH` | use one file, no cascade                        |
 | `--config PATH`           | override config with a single TOML file         |
 | `--install-completion [SH]` | install the completion hook (detects your shell; or bash/zsh/fish/pwsh/nushell) |
+| `--setup-completion [SH]` | print the hook for `eval` — current session only |
 
 `--help` is the one global allowed *anywhere* before `--`: `fm deploy --help`
 is a read-only help request, never an execution. `fm --help` documents the
