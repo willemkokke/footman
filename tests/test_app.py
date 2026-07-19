@@ -1069,6 +1069,16 @@ def test_handoff_never_touches_version(uv_project, monkeypatch, capsys):
     assert calls == []
 
 
+def test_user_level_key_in_project_config_notes_under_verbose(project, capsys):
+    (project / "pyproject.toml").write_text(
+        "[project]\nname='x'\n[tool.footman]\ngc = false\n"
+    )
+    assert _app.run(["hi"]) == 0
+    assert "user-level" not in capsys.readouterr().err  # quiet by default
+    assert _app.run(["-v", "hi"]) == 0
+    assert "user-level" in capsys.readouterr().err  # -v teaches the move
+
+
 def test_handoff_windows_waits_and_carries_the_code(uv_project, monkeypatch):
     class FakeProc:
         def wait(self):

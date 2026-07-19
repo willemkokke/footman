@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Annotated, Literal, Optional
 
@@ -277,3 +278,23 @@ def test_sync_rewrites_only_on_hash_change(root, tmp_path, monkeypatch):
 
     manifest.sync_manifest(root, project)
     assert len(writes) == 2
+
+
+def test_sync_bakes_the_cwd_and_upgrades_manifests_without_it(
+    root, tmp_path, monkeypatch
+):
+    # The collector's gone-directory rule reads it; pre-existing manifests
+    # lacking the key are rewritten once so they gain it.
+    monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path)
+    project = tmp_path / "proj"
+    project.mkdir()
+    manifest.sync_manifest(root, project)
+    path = _paths.manifest_path(project)
+    data = json.loads(path.read_text(encoding="utf-8"))
+    assert data["cwd"] == str(project)
+
+    del data["cwd"]  # simulate a manifest from before the key existed
+    path.write_text(json.dumps(data), encoding="utf-8")
+    manifest.sync_manifest(root, project)  # same tree, but cwd-less: rewrite
+    fresh = json.loads(path.read_text(encoding="utf-8"))
+    assert fresh["cwd"] == str(project)

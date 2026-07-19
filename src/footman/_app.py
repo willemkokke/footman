@@ -137,6 +137,7 @@ def _discover(
             ceiling,
             g.get("config"),  # type: ignore[arg-type]
             on_warning=_error,
+            on_note=_error if g.get("verbose") else None,
         )
     except config.ConfigError as exc:
         return _refuse(bool(g.get("json")), f"--config: {exc}")
@@ -632,6 +633,62 @@ def run(
 _WINDOWS = os.name == "nt"  # decided at import; a constant tests can steer
 
 
+GC_INTERVAL_S = 24 * 3600
+
+
+def _maybe_collect(cfg: dict[str, object]) -> None:
+    """At most daily, and never on a fresh cache, spawn the collector.
+
+    A missing stamp is *planted*, not acted on — the first run a cache ever
+    sees schedules collection for tomorrow, so short-lived caches (a test
+    suite's tmp dirs) never spawn anything. An aged stamp is re-touched
+    *before* spawning, the refresh idiom: concurrent runs elect one
+    collector, and a crashed child costs a day, not correctness.
+    """
+    if cfg.get("gc") is False or os.environ.get("FOOTMAN_NO_GC"):
+        return
+    cache = _paths.footman_cache_dir()
+    stamp = cache / "gc.stamp"
+    try:
+        age = time.time() - stamp.stat().st_mtime
+    except OSError:
+        with contextlib.suppress(OSError):
+            cache.mkdir(parents=True, exist_ok=True)
+            stamp.touch()
+        return
+    if age < GC_INTERVAL_S:
+        return
+    with contextlib.suppress(OSError):
+        stamp.touch()
+    _spawn_gc(cache, _paths.manifest_path(Path.cwd()).stem)
+
+
+def _spawn_gc(cache: Path, skip_stem: str) -> None:
+    """Detach the collector child — `_complete`'s refresh spawn, verbatim."""
+    cmd = [
+        sys.executable,
+        "-c",
+        "from footman import _gc; _gc.main()",
+        str(cache),
+        skip_stem,
+    ]
+    null = subprocess.DEVNULL
+    try:
+        if _WINDOWS:
+            flags = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(
+                subprocess, "CREATE_NEW_PROCESS_GROUP", 0
+            )
+            subprocess.Popen(
+                cmd, stdin=null, stdout=null, stderr=null, creationflags=flags
+            )
+        else:
+            subprocess.Popen(
+                cmd, stdin=null, stdout=null, stderr=null, start_new_session=True
+            )
+    except OSError:
+        return  # a background collector must never break a run
+
+
 def _uv_handoff(argv: list[str], g: dict[str, object]) -> None:
     """Hand a globally-installed invocation to the project's own footman.
 
@@ -811,7 +868,12 @@ def _execute(
     except manifest.ManifestError as exc:  # broken completer, bad markers, …
         return _refuse(json_mode, str(exc))
 
-    return _run_tree(reg, tree, argv, cfg, collect)
+    code = _run_tree(reg, tree, argv, cfg, collect)
+    # After the run, so it never adds latency before the user's command —
+    # and after the uv handoff by construction (the handoff replaced this
+    # process back in _run), so a pinned project's own footman collects.
+    _maybe_collect(cfg)
+    return code
 
 
 def _run_tree(

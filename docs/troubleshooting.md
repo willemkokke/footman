@@ -97,7 +97,11 @@ file`), never silently ignored.
 
 The progress bar's estimates come from `*.times.json` files beside the
 completion manifests (`~/.cache/footman/`, or wherever
-`$FOOTMAN_CACHE_DIR` points). Delete them to reset a stale history, or
+`$FOOTMAN_CACHE_DIR` points). The cache also tends itself: at most once
+a day, a detached collector removes pairs whose directory no longer
+exists and pairs idle for 90 days — everything in the cache rebuilds on
+the next run, so collection can never lose anything that matters.
+Delete files by hand to reset a stale history, or
 turn the whole apparatus off — `--no-progress` for a run,
 `progress = false` in `[tool.footman]` for good.
 

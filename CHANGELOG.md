@@ -32,6 +32,18 @@ versions may include breaking changes.
   customary), `--config`, environment, flags. The docs gain a dedicated
   [Configuration](https://willemkokke.github.io/footman/configuration/)
   page for all of it.
+- **The cache cleans up after itself.** At most once a day, a run
+  spawns a detached collector that removes cache pairs whose project
+  directory no longer exists (manifests now bake in the `cwd` they
+  describe — additive) and pairs idle for 90 days. A fresh cache only
+  plants tomorrow's stamp, so short-lived caches — a test suite's tmp
+  dirs — never spawn anything; the invoking directory's own files are
+  never touched; and every deletion is safe by construction, because
+  the cache is derived state that rebuilds on the next run. It runs
+  after the uv handoff, so a pinned project's own footman collects.
+  `gc = false` disables it — from the user-level config file only,
+  since per-project switches for a shared cache would lie (a `-v` run
+  notes and ignores them); `FOOTMAN_NO_GC=1` is the blunt override.
 
 ### Changed
 

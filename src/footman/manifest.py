@@ -355,12 +355,17 @@ def sync_manifest(
     effect.
     """
     fresh = build_manifest(root, completion_max_age=completion_max_age)
+    # The directory this manifest describes, baked in (additive) so the
+    # cache collector can tell a deleted project's leftovers from a living
+    # one's without guessing from hashes.
+    fresh["cwd"] = str(key_dir)
     path = _paths.manifest_path(key_dir)
     cached = load_manifest(path)
     if (
         cached is None
         or cached.get("hash") != fresh["hash"]
         or cached.get("completion_max_age") != completion_max_age
+        or cached.get("cwd") != fresh["cwd"]
     ):
         write_manifest(fresh, path)
     return fresh

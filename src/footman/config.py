@@ -30,6 +30,13 @@ from footman import _paths
 PYPROJECT = "pyproject.toml"
 FOOTMAN_TOML = "footman.toml"
 
+# Keys that only make sense in the user-level file: they govern shared,
+# machine-wide behaviour (the cache collector sweeps one cache for every
+# project), so a per-project value would be a lie waiting to confuse
+# someone. Stripped from cascade files, with a note under -v; an explicit
+# `--config` file keeps them — the user named that file on purpose.
+USER_LEVEL_KEYS = frozenset({"gc"})
+
 
 class ConfigError(Exception):
     """A config TOML file exists but cannot be parsed."""
@@ -70,13 +77,17 @@ def _footman_table(path: Path, required: bool = False) -> dict[str, Any]:
 
 
 def _dir_config(
-    directory: Path, on_warning: Callable[[str], None] | None
+    directory: Path,
+    on_warning: Callable[[str], None] | None,
+    on_note: Callable[[str], None] | None = None,
 ) -> dict[str, Any]:
     """Merged footman settings for one directory (footman.toml wins).
 
     A malformed file in the discovered cascade is warned about and skipped —
     one broken pyproject.toml between the repo root and the cwd should not
-    brick every `fm` invocation.
+    brick every `fm` invocation. User-level-only keys are stripped here,
+    with an advisory through *on_note* (verbose runs wire it; quiet ones
+    don't) pointing at where the key belongs.
     """
     merged: dict[str, Any] = {}
     for name in (PYPROJECT, FOOTMAN_TOML):
@@ -85,6 +96,13 @@ def _dir_config(
         except ConfigError as exc:
             if on_warning is not None:
                 on_warning(f"ignoring malformed config: {exc}")
+    for key in USER_LEVEL_KEYS & merged.keys():
+        del merged[key]
+        if on_note is not None:
+            on_note(
+                f"`{key}` is a user-level setting — it belongs in "
+                f"{_paths.footman_config_file()}; ignoring it in {directory}"
+            )
     return merged
 
 
@@ -129,13 +147,15 @@ def load_config(
     ceiling: Path,
     cli_path: str | None = None,
     on_warning: Callable[[str], None] | None = None,
+    on_note: Callable[[str], None] | None = None,
 ) -> dict[str, Any]:
     """Merge config from *ceiling* down to *cwd*; *cli_path* overrides all.
 
     A malformed discovered file warns (via *on_warning*) and is skipped; a
     missing or malformed explicit *cli_path* raises `ConfigError` — the user
     named that file on purpose, so it failing quietly (a typo silently ignored)
-    is not an option.
+    is not an option. *on_note* carries advisories (a user-level key found in
+    a project file) — verbose runs wire it, others leave it `None`.
     """
     if cli_path:
         # The explicit file is total control: it replaces the global file
@@ -154,5 +174,5 @@ def load_config(
         if on_warning is not None:
             on_warning(f"ignoring malformed config: {exc}")
     for directory in _paths.dir_chain(cwd, ceiling):
-        merged.update(_dir_config(directory, on_warning))
+        merged.update(_dir_config(directory, on_warning, on_note))
     return merged

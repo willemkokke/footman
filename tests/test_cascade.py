@@ -263,6 +263,21 @@ def test_config_malformed_global_warns_and_is_skipped(tmp_path, monkeypatch):
     assert any("malformed" in w for w in warnings)
 
 
+def test_config_user_level_keys_stripped_from_the_cascade(tmp_path, monkeypatch):
+    # `gc` governs the shared cache: a per-project value would lie. It only
+    # counts from the user-level file; cascade files get a note (verbose runs
+    # wire on_note; others pass None and the strip is silent).
+    global_file = _write(tmp_path / "global.toml", "gc = false\n")
+    monkeypatch.setenv("FOOTMAN_CONFIG", str(global_file))
+    _write(tmp_path / "footman.toml", "gc = true\ntasks = 'x.py'\n")
+    notes: list[str] = []
+    cfg = config.load_config(tmp_path, tmp_path, on_note=notes.append)
+    assert cfg["gc"] is False  # the global value, not the project's
+    assert cfg["tasks"] == "x.py"  # ordinary keys cascade as ever
+    assert any("user-level" in n for n in notes)
+    assert config.load_config(tmp_path, tmp_path)["gc"] is False  # silent too
+
+
 def test_config_cli_path_replaces_global_and_cascade(tmp_path, monkeypatch):
     # --config is total control: the named file is exactly what applies.
     global_file = _write(tmp_path / "global.toml", "uv = false\n")
@@ -315,15 +330,27 @@ def test_app_inherited_task_runs_from_subdir(mono, monkeypatch, capsys):
     assert "root-test" in capsys.readouterr().out
 
 
-def test_ceiling_excludes_files_above_git(mono, monkeypatch, capsys):
-    # a tasks.py ABOVE the .git root must not enter the cascade
+def test_ceiling_excludes_files_above_git(tmp_path, monkeypatch, capsys):
+    # A tasks.py ABOVE the .git root must not enter the cascade. The repo
+    # nests inside this test's own tmp_path — writing to the *shared*
+    # pytest basetemp (a fixture's parent) once poisoned every later test
+    # whose ceiling walk reached it, invisibly in alphabetical runs.
     _write(
-        mono.parent / "tasks.py",
+        tmp_path / "tasks.py",
         "from footman import task\n@task\ndef outside():...\n",
     )
-    monkeypatch.chdir(mono / "svc" / "api")
+    repo = tmp_path / "repo"
+    (repo / ".git").mkdir(parents=True)
+    _write(
+        repo / "svc" / "api" / "tasks.py",
+        "from footman import task\n@task\ndef serve():...\n",
+    )
+    monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
+    monkeypatch.chdir(repo / "svc" / "api")
     assert _app.run(["-l"]) == 0
-    assert "outside" not in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "serve" in out  # the repo's own cascade is intact
+    assert "outside" not in out
 
 
 def test_per_cwd_manifest_files_differ(mono, monkeypatch):

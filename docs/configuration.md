@@ -69,6 +69,7 @@ older footman.
 | `progress`   | `false` permanently disables the progress bar, eta line, and timing capture. |
 | `uv`         | `false` disables the uv handoff (a globally-installed `fm` re-running itself via `uv run` when the project's lockfile pins footman). |
 | `completion.max_age` | Age before a background completion refresh (e.g. `"10m"`; `off` to disable). |
+| `gc`         | `false` disables the daily cache collector. **User-level only**: honoured from the global file; in a project config it is ignored, with a note under `-v`. |
 
 ## Environment variables
 
@@ -77,6 +78,7 @@ older footman.
 | `FOOTMAN_CONFIG`    | Path of the user-level config file.                 |
 | `FOOTMAN_CACHE_DIR` | Moves every footman cache (completion manifests, timing history). |
 | `FOOTMAN_NO_UV`     | Disables the uv handoff, regardless of any config.  |
+| `FOOTMAN_NO_GC`     | Disables the cache collector, regardless of any config. |
 | `NO_COLOR` / `TERM=dumb` | Disable ANSI styling, as everywhere.           |
 
 See also [Monorepos & config](monorepos.md) for how the tasks cascade
