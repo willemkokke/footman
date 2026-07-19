@@ -9,6 +9,21 @@ versions may include breaking changes.
 
 ### Added
 
+- **`doc("…")` — per-parameter help, in the established `Annotated` marker
+  idiom.** One line of the author's words per parameter, and it pays three
+  times: it leads the option's line in `fm --help <task>`, it becomes the
+  option's completion description in shells that render one (zsh, fish,
+  nushell, PowerShell tooltips — options used to complete bare), and it
+  rides in the `--json --list` catalog as an additive `doc` key. Inert at
+  run time, like every marker.
+- **An AI agents page and a generated `llms.txt`.** docs/agents.md ships a
+  paste-ready CLAUDE.md/AGENTS.md snippet (the discovery loop, grammar,
+  envelope, exit codes) plus edit-time and stop-gate hook recipes for
+  Claude Code and Cursor. The docs build now generates `llms.txt` and
+  `llms-full.txt` from the nav — an agent-readable index and full text of
+  the site — and the Pages workflow builds through `fm docs build --check`,
+  the same task devs run.
+
 - **Tasks can return JSON.** A task's return value now lands in its `--json`
   entry under `returned`: return a dict (or list, string, bool, …) and a
   machine consumer gets it verbatim; return `None` and the key is absent. An

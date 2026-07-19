@@ -68,7 +68,9 @@ milliseconds with a taught message, not after twenty minutes of setup.
 ## Agents
 
 Everything above is what coding agents want too: one command, structured
-results, captured output, honest exit codes. Three extras help:
+results, captured output, honest exit codes. A paste-ready instructions
+snippet and edit/stop hook recipes live on [AI agents](agents.md). Three
+commands to know:
 
 - `fm --json --list` (or bare `fm --json`) prints the whole task tree as an
   envelope — every task and group with its parameters, types, choices, and

@@ -9,3 +9,5 @@ __pycache__/
 .DS_Store
 .claude/
 docs/htmlcov/
+docs/llms.txt
+docs/llms-full.txt

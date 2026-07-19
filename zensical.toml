@@ -33,6 +33,7 @@ nav = [
   { "Machine use" = [
     { "CI" = "ci.md" },
     { "JSON output" = "json.md" },
+    { "AI agents" = "agents.md" },
   ] },
   { "About" = [
     { "Comparison" = "comparison.md" },

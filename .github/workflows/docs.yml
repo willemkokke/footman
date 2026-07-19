@@ -42,7 +42,8 @@ jobs:
       - name: Coverage report
         run: uv run pytest --cov=footman --cov-report=html:docs/htmlcov -q
       - name: Build site
-        run: uv run zensical build --clean --strict
+        # The same task devs run — regenerates llms.txt, then builds strictly.
+        run: uv run fm docs build --check
       - uses: actions/upload-pages-artifact@v5
         with:
           path: site
