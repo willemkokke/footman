@@ -130,6 +130,14 @@ printf '%s' "$out" | jq '{followup_message:
    ([.results[] | select(.ok | not) | "\(.task): exit \(.code)\n\(.output)"] | join("\n")))}'
 ```
 
+!!! warning "Cursor's hooks are beta"
+
+    The event names and the `followup_message` shape above match
+    [Cursor's hooks reference](https://cursor.com/docs/hooks) at the time
+    of writing, but the feature is marked beta and may move. If a hook
+    stops firing after a Cursor update, check that page first — the
+    footman side (`fm --json check` and its envelope) is the stable half.
+
 ## Everyone else
 
 The snippet is the portable layer — `AGENTS.md` reaches most agents. For
