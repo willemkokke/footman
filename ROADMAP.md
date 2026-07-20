@@ -1,13 +1,13 @@
 # Roadmap
 
 This file began as a critical self-audit of footman at **v0.4.0** — every
-claim checked against the source, file and line. Nine releases later, almost
+claim checked against the source, file and line. Ten releases later, almost
 all of it has shipped. The file now does two jobs: the road ahead, and — for
 posterity — the original audit preserved item by item, each with the release
 that closed it. The full stories live in the
 [changelog](https://willemkokke.github.io/footman/changelog/).
 
-**Where footman stands (2026-07-19, v0.13.0, Beta on PyPI).** The typed core
+**Where footman stands (2026-07-20, v0.15.0, Beta on PyPI).** The typed core
 — coercion, chain grammar, manifest, scheduler, cascade — held up; everything
 since has been built on it without structural change. The runner now has a
 real help story, a testing story, a composition story, completion installed
@@ -26,6 +26,17 @@ What actually remains, in order:
   generated from the grammar, so the help strings are the single source for
   `--help`, completion menus, and the docs at once. A short pass to make them
   worthy of that job (for example, `--jobs` doesn't mention the floor of 2).
+- **The tools surface, properly** — the 1.0 headline, and the last
+  known wart. Stubs generated from each tool's own metadata (click
+  exposes `opts`, `secondary_opts`, defaults, and help as data;
+  argparse and `--help` drivers behind the same interface), a
+  reference page per tool, and a `tools audit` task that diffs the
+  committed stubs against the installed tools so drift fails a check
+  instead of lying. It also fixes `off`: the negation is per-flag data
+  only the tool knows — `mkdocs build --no-clean` is rejected, the real
+  flag is `--dirty`, and 5 of mkdocs' 8 negatable flags disagree with
+  the `--no-<name>` assumption. Waits for the work migration, which
+  will say which tools matter most.
 - **The stability promise, written down**: decorator surface, CLI grammar,
   `--json` schema additive-only, manifest format additive-only. Then a bake
   cycle with no breaking changes.
