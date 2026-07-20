@@ -11,7 +11,7 @@ from footman.tools import Tool, _Flag, _Value
 class _Mkdocs(Tool):
     def build(
         self,
-        *args: str,
+        *,
         clean: _Flag = ...,
         config_file: _Value = ...,
         quiet: _Flag = ...,
@@ -45,7 +45,7 @@ class _Mkdocs(Tool):
         ...
     def gh_deploy(
         self,
-        *args: str,
+        *,
         clean: _Flag = ...,
         config_file: _Value = ...,
         force: _Flag = ...,
@@ -98,6 +98,8 @@ class _Mkdocs(Tool):
         ...
     def new(
         self,
+        project_directory: str,
+        /,
         *args: str,
         quiet: _Flag = ...,
         verbose: _Flag = ...,
@@ -114,7 +116,7 @@ class _Mkdocs(Tool):
         ...
     def serve(
         self,
-        *args: str,
+        *,
         clean: _Flag = ...,
         config_file: _Value = ...,
         dev_addr: _Value = ...,

@@ -84,7 +84,7 @@ class _Coverage(Tool):
         ...
     def erase(
         self,
-        *args: str,
+        *,
         data_file: _Value = ...,
         debug: _Value = ...,
         rcfile: _Value = ...,
@@ -263,6 +263,8 @@ class _Coverage(Tool):
         ...
     def run(
         self,
+        pyfile: str,
+        /,
         *args: str,
         append: _Flag = ...,
         branch: _Flag = ...,

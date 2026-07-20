@@ -114,7 +114,7 @@ def _method(verb: Verb, key: str) -> str:
     override = "  # type: ignore[override]" if name == "__call__" else ""
     lines = [f"    def {name}({override}"] if override else [f"    def {name}("]
     lines.append("        self,")
-    lines.append("        *args: str,")
+    lines.extend(_positional_lines(verb))
     seen: set[str] = set()
     for option in _unique(verb.options):
         seen.add(option.name)
@@ -128,6 +128,27 @@ def _method(verb: Verb, key: str) -> str:
         lines.append(doc)
     lines.append("        ...")
     return "\n".join(lines)
+
+
+def _positional_lines(verb: Verb) -> list[str]:
+    """The positional part of a verb's signature, from its usage shape.
+
+    `"none"` → keyword-only (`*,`), so a stray positional is a type error;
+    `"required"` → a positional-only leading argument, so passing it by
+    keyword is one too; `"any"` → `*args`, the conservative default that
+    forbids nothing.
+    """
+    if verb.positional == "none":
+        return ["        *,"]
+    if verb.positional == "required":
+        lead = _safe(verb.lead) if verb.lead else "arg"
+        # If the leading positional's name also names an option, the two
+        # would collide into one parameter. Can't spell both, so don't
+        # constrain: fall back to `*args`.
+        if lead in {_safe(o.name) for o in verb.options}:
+            return ["        *args: str,"]
+        return [f"        {lead}: str,", "        /,", "        *args: str,"]
+    return ["        *args: str,"]
 
 
 def _unique(options: tuple[Option, ...]) -> list[Option]:

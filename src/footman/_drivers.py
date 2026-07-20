@@ -49,6 +49,11 @@ class Driver:
     """`auto` prefers structure (click) and falls back to `--help`."""
     url: str = ""
     """The tool's home, for the reference page's table."""
+    usage_shape: bool = True
+    """Whether to trust the `--help` usage line for positional shape. git's
+    `-h` prints several alternative forms per verb in an idiosyncratic
+    grammar (`git branch` lists *and* creates), so its shapes are unreliable
+    — better to accept any positionals than to forbid a valid call."""
 
     @property
     def key(self) -> str:
@@ -101,6 +106,7 @@ DRIVERS: tuple[Driver, ...] = (
         "git",
         url="https://git-scm.com/docs",
         help_flag="-h",
+        usage_shape=False,
         verbs=(
             "add",
             "commit",
@@ -238,7 +244,17 @@ def extract(driver: Driver) -> ToolSpec:
             in_process=in_process_capable(driver.name),
             flag=driver.help_flag,
         )
+    if not driver.usage_shape:
+        spec = _no_shapes(spec)
     return _rebase(spec, driver.base) if driver.base else spec
+
+
+def _no_shapes(spec: ToolSpec) -> ToolSpec:
+    """Drop positional shapes for a tool whose usage line can't be trusted."""
+    from dataclasses import replace
+
+    verbs = tuple(replace(v, positional="any", lead="") for v in spec.verbs)
+    return replace(spec, verbs=verbs)
 
 
 def _rebase(spec: ToolSpec, base: tuple[str, ...]) -> ToolSpec:

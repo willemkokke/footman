@@ -61,6 +61,20 @@ class Verb:
     name: str
     help: str = ""
     options: tuple[Option, ...] = ()
+    positional: str = "any"
+    """What positionals the verb takes, read from its usage line — the stub
+    renders this with `/` and `*`:
+
+    * `"any"` — zero or more (`ruff check [FILES]...`), or unknown. The
+      conservative default: `*args`, forbids nothing.
+    * `"none"` — the tool declares only options (`mkdocs build [OPTIONS]`),
+      so the stub is keyword-only and a stray positional is a type error.
+    * `"required"` — a required leading positional (`docker run IMAGE …`),
+      named by `lead`; the stub makes it positional-only.
+    """
+    lead: str = ""
+    """The name of the required leading positional, when `positional` is
+    `"required"` — `image` for `docker run`, `repo` for `git clone`."""
 
 
 @dataclass(frozen=True)
@@ -139,9 +153,13 @@ def from_click(command: Any, *, name: str = "", version: str = "") -> ToolSpec:
 
 def _verb_from_click(name: str, command: Any) -> Verb:
     options = []
+    arguments = []
     for param in getattr(command, "params", ()):
+        if getattr(param, "param_type_name", "") == "argument":
+            arguments.append(param)  # a positional, for the shape below
+            continue
         if getattr(param, "param_type_name", "") != "option":
-            continue  # positionals arrive as *args, not keywords
+            continue
         secondary = tuple(getattr(param, "secondary_opts", ()) or ())
         options.append(
             Option(
@@ -157,11 +175,29 @@ def _verb_from_click(name: str, command: Any) -> Verb:
     unique: dict[str, Option] = {}
     for option in options:
         unique.setdefault(option.name, option)
+    positional, lead = _click_positional(arguments)
     return Verb(
         name=name.replace("-", "_"),
         help=_first_line(getattr(command, "help", "") or ""),
         options=tuple(sorted(unique.values(), key=lambda o: o.name)),
+        positional=positional,
+        lead=lead,
     )
+
+
+def _click_positional(arguments: list[Any]) -> tuple[str, str]:
+    """The positional shape from click's declared arguments.
+
+    click hands these over as data, so the shape is exact: no arguments
+    means keyword-only, a required first argument means positional-only.
+    """
+    if not arguments:
+        return "none", ""
+    first = arguments[0]
+    variadic = getattr(first, "nargs", 1) == -1
+    if getattr(first, "required", False) and not variadic:
+        return "required", str(getattr(first, "name", "") or "arg")
+    return "any", ""
 
 
 def _click_choices(param: Any) -> tuple[str, ...]:

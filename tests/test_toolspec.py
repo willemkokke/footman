@@ -749,3 +749,99 @@ def test_in_process_mode_is_detected_not_listed():
     )
     assert tools_tasks._mode(_drivers.Driver("x"), capable) == "available"
     assert tools_tasks._mode(_drivers.Driver("x"), plain) == "no"
+
+
+# --- positional shape from the usage line ---------------------------------
+#
+# A wrong shape *forbids a valid call*, so these pin the exact boundary
+# between the confident answers (none / required) and the permissive default.
+
+
+def shape(usage: str) -> tuple[str, str]:
+    return _toolhelp._usage_shape(f"Usage: tool {usage}\n\nDo a thing.\n")
+
+
+def test_shape_none_only_when_the_grammar_is_options_only():
+    assert shape("[OPTIONS]") == ("none", "")
+    assert shape("[options]") == ("none", "")
+    # A positional anywhere means not-none, even alongside options.
+    assert shape("[OPTIONS] NAME[:TAG|@DIGEST]") == ("required", "name")
+
+
+def test_shape_required_for_a_clean_leading_metavar():
+    assert shape("[OPTIONS] IMAGE [COMMAND] [ARG...]") == ("required", "image")
+    assert shape("[<options>] [--] <repo> [<dir>]") == ("required", "repo")
+    assert shape("[options] <pyfile> [program options]") == ("required", "pyfile")
+
+
+def test_shape_stays_any_where_a_wrong_guess_would_forbid_a_call():
+    # An option woven into an alternation — packages OR --requirements.
+    assert shape("[OPTIONS] <PACKAGES|--requirements <REQS>>") == ("any", "")
+    # A bracketed-optional or variadic leading argument.
+    assert shape("[OPTIONS] [COMMAND]") == ("any", "")
+    assert shape("[options] [FILES]...") == ("any", "")
+    # A numbered metavar is a list written long-hand, not one required arg.
+    assert shape("[options] <path1> <path2> ... <pathN>") == ("any", "")
+
+
+def test_shape_ignores_option_values_scattered_by_whitespace():
+    # `<git-dir>` is the value of `--separate-git-dir`, not a positional —
+    # depth tracking keeps it out.
+    usage = "[-q | --quiet] [--separate-git-dir <git-dir>] [<directory>]"
+    assert shape(usage) == ("any", "")  # only [<directory>], which is optional
+
+
+def test_shape_reads_only_the_first_of_gits_or_forms():
+    text = (
+        "usage: git branch [<options>] [--list] [<pattern>...]\n"
+        "   or: git branch [<options>] [-f] <branchname> [<start-point>]\n"
+    )
+    # The first form is all-optional; the `or:` create-form is not stitched in.
+    assert _toolhelp._usage_shape(text) == ("any", "")
+
+
+def test_click_arguments_give_the_shape_exactly():
+    # click hands arguments over as data — no usage parsing needed.
+    none = SimpleNamespace(help="Build.", name="build", params=[])
+    assert _toolspec._verb_from_click("build", none).positional == "none"
+
+    arg = SimpleNamespace(
+        param_type_name="argument", name="image", required=True, nargs=1
+    )
+    one = SimpleNamespace(help="Run.", name="run", params=[arg])
+    verb = _toolspec._verb_from_click("run", one)
+    assert (verb.positional, verb.lead) == ("required", "image")
+
+    variadic = SimpleNamespace(
+        param_type_name="argument", name="paths", required=True, nargs=-1
+    )
+    many = SimpleNamespace(help="Add.", name="add", params=[variadic])
+    assert _toolspec._verb_from_click("add", many).positional == "any"
+
+
+def test_stub_renders_positional_only_and_keyword_only():
+    none = ToolSpec(name="x", verbs=(Verb(name="build", positional="none"),))
+    text = _stubgen.render(none)
+    ast.parse(text)
+    assert "*,\n" in text and "*args" not in text  # keyword-only
+
+    req = ToolSpec(
+        name="x", verbs=(Verb(name="run", positional="required", lead="image"),)
+    )
+    text = _stubgen.render(req)
+    ast.parse(text)
+    assert "image: str,\n" in text and "/,\n" in text
+
+
+def test_stub_falls_back_when_the_lead_collides_with_an_option():
+    from footman._toolspec import Option
+
+    verb = Verb(
+        name="pip_install",
+        positional="required",
+        lead="group",
+        options=(Option("group", ("--group",), type_name="str"),),
+    )
+    text = _stubgen.render(ToolSpec(name="uv", verbs=(verb,)))
+    ast.parse(text)  # a duplicate `group` parameter would be a syntax error
+    assert "*args: str," in text

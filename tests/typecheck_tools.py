@@ -144,3 +144,22 @@ def _flags_are_declared_and_typed() -> None:
     tools.cspell.lint(quiet="yes")  # pyright: ignore[reportArgumentType]
     tools.prek.run(all_files="yes")  # pyright: ignore[reportArgumentType]
     tools.markdownlint(fix="yes")  # pyright: ignore[reportArgumentType]
+
+
+def _positional_shape_is_enforced() -> None:
+    """The usage line's positional shape, as type errors.
+
+    `mkdocs build` declares only options, so a positional is wrong;
+    `docker run` requires IMAGE positionally, so passing it by keyword — or
+    omitting it — is wrong. Each MUST fail, so the shape can't silently
+    decay to `*args` without this file noticing.
+    """
+    tools.mkdocs.build("site")  # pyright: ignore[reportCallIssue]
+    tools.uv.sync("extra")  # pyright: ignore[reportCallIssue]
+    tools.docker.run(image="alpine")  # pyright: ignore[reportCallIssue]
+    tools.docker.run()  # pyright: ignore[reportCallIssue]
+
+    # ...and the shapes that DO take positionals still accept them.
+    tools.docker.run("alpine", "echo", "hi", detach=True)
+    tools.ruff.check("src", "tests")
+    tools.git.clone("https://example.invalid/x.git")

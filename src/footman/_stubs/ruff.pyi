@@ -231,7 +231,7 @@ class _Ruff(Tool):
         ...
     def clean(
         self,
-        *args: str,
+        *,
         color: Literal["auto", "always", "never"]
         | Sequence[Literal["auto", "always", "never"]]
         | None = ...,

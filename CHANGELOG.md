@@ -45,6 +45,13 @@ versions may include breaking changes.
   stubs) and `audit` (fail when a stub and its tool disagree). Tools that
   are not installed are skipped *and named*, so a check can't quietly
   cover three of thirteen.
+- **The stubs know each verb's positional shape.** Read from the tool's
+  own usage line (or click's declared arguments): `mkdocs build` takes only
+  options, so a stray positional is now a type error; `docker run` requires
+  an image positionally, so `docker.run(image="x")` is caught. The parser
+  is deliberately conservative — anything ambiguous stays permissive, so it
+  never forbids a call the tool would accept, and git's idiosyncratic
+  multi-form `-h` grammar is trusted for nothing.
 - **A reference page per tool**, in a new **Tools** section of the docs.
   mkdocstrings renders each one straight from that tool's stub, so every
   flag arrives with the tool's own help text, its accepted values as a

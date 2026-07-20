@@ -859,7 +859,7 @@ class _UvPip(Tool):
         ...
     def list(
         self,
-        *args: str,
+        *,
         allow_insecure_host: _Value = ...,
         cache_dir: _Value = ...,
         color: Literal["auto", "always", "never"]
@@ -1339,6 +1339,8 @@ class _UvPip(Tool):
 class _UvTool(Tool):
     def install(
         self,
+        package: str,
+        /,
         *args: str,
         allow_insecure_host: _Value = ...,
         build_constraints: _Value = ...,
@@ -2834,7 +2836,7 @@ class _Uv(Tool):
         ...
     def export(
         self,
-        *args: str,
+        *,
         all_extras: _Flag = ...,
         all_groups: _Flag = ...,
         all_packages: _Flag = ...,
@@ -3051,7 +3053,7 @@ class _Uv(Tool):
         ...
     def lock(
         self,
-        *args: str,
+        *,
         allow_insecure_host: _Value = ...,
         cache_dir: _Value = ...,
         check: _Flag = ...,
@@ -3798,7 +3800,7 @@ class _Uv(Tool):
         ...
     def sync(
         self,
-        *args: str,
+        *,
         active: _Flag = ...,
         all_extras: _Flag = ...,
         all_groups: _Flag = ...,
@@ -4118,7 +4120,7 @@ class _Uv(Tool):
         ...
     def tree(
         self,
-        *args: str,
+        *,
         all_groups: _Flag = ...,
         allow_insecure_host: _Value = ...,
         cache_dir: _Value = ...,

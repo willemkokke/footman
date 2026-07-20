@@ -78,6 +78,8 @@ class _DockerCompose(Tool):
         ...
     def exec(
         self,
+        service: str,
+        /,
         *args: str,
         detach: _Flag = ...,
         dry_run: _Flag = ...,
@@ -180,6 +182,8 @@ class _DockerCompose(Tool):
         ...
     def run(
         self,
+        service: str,
+        /,
         *args: str,
         build: _Flag = ...,
         cap_add: _Flag = ...,
@@ -383,6 +387,8 @@ class _Docker(Tool):
         ...
     def build(
         self,
+        path: str,
+        /,
         *args: str,
         add_host: _Value = ...,
         allow: _Value = ...,
@@ -490,6 +496,8 @@ class _Docker(Tool):
         ...
     def exec(
         self,
+        container: str,
+        /,
         *args: str,
         detach: _Flag = ...,
         detach_keys: _Value = ...,
@@ -551,6 +559,8 @@ class _Docker(Tool):
         ...
     def logs(
         self,
+        container: str,
+        /,
         *args: str,
         details: _Flag = ...,
         follow: _Flag = ...,
@@ -578,7 +588,7 @@ class _Docker(Tool):
         ...
     def ps(
         self,
-        *args: str,
+        *,
         all: _Flag = ...,
         filter: _Flag = ...,
         format: _Value = ...,
@@ -612,6 +622,8 @@ class _Docker(Tool):
         ...
     def pull(
         self,
+        name: str,
+        /,
         *args: str,
         all_tags: _Flag = ...,
         platform: _Value = ...,
@@ -630,6 +642,8 @@ class _Docker(Tool):
         ...
     def push(
         self,
+        name: str,
+        /,
         *args: str,
         all_tags: _Flag = ...,
         platform: _Value = ...,
@@ -651,6 +665,8 @@ class _Docker(Tool):
         ...
     def run(
         self,
+        image: str,
+        /,
         *args: str,
         add_host: _Flag = ...,
         annotation: _Flag = ...,

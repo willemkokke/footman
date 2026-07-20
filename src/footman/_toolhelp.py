@@ -37,6 +37,7 @@ import re
 import shutil
 import subprocess
 from collections.abc import Sequence
+from dataclasses import replace
 
 from footman._toolspec import Option, ToolSpec, Verb
 
@@ -334,11 +335,113 @@ def parse_help(text: str, *, name: str = "") -> Verb:
             ):
                 seen.add(option.name)
                 options.append(option)
+    positional, lead = _usage_shape(text)
     return Verb(
         name=name,
         help=_summary(text),
         options=tuple(sorted(_pair_negations(options), key=lambda o: o.name)),
+        positional=positional,
+        lead=lead,
     )
+
+
+# The base of a positional metavar, before any `[:TAG]` / `<...>` suffix:
+# `IMAGE`, `NAME` from `NAME[:TAG|@DIGEST]`, `repo` from `<repo>`.
+_METAVAR = re.compile(r"^<?[A-Za-z][A-Za-z0-9_-]*>?$")
+
+
+def _is_option_token(token: str) -> bool:
+    """A usage token that is an option, a separator, or the `[OPTIONS]` slot
+    — not a positional argument."""
+    bare = token.strip("[]<>").lower()
+    return not bare or bare in {"--", "|", "options", "flags"} or bare.startswith("-")
+
+
+def _top_level_positionals(usage: str) -> list[str]:
+    """The positional tokens at bracket depth 0.
+
+    A usage grammar nests option groups in brackets — `[--reason <string>]`,
+    `[--separate-git-dir <git-dir>]` — and whitespace-splitting scatters
+    their *values* into loose tokens (`<string>]`) that look like bare
+    positionals. Tracking depth keeps those out: only a token that starts
+    while no bracket is open can be a real argument.
+    """
+    positional: list[str] = []
+    depth = 0
+    for token in usage.split():
+        if depth == 0 and not _is_option_token(token):
+            positional.append(token)
+        depth = max(0, depth + token.count("[") - token.count("]"))
+    return positional
+
+
+def _usage_shape(text: str) -> tuple[str, str]:
+    """`(positional, lead)` from a verb's `usage:` line.
+
+    Two confident answers, everything else `"any"`:
+
+    * `"none"` when the argument section is *only* options — mkdocs build's
+      `[OPTIONS]`. A positional there is a type error.
+    * `"required"` when a single clean metavar leads — `docker run IMAGE …`,
+      `git clone <repo> …`. The stub makes it positional-only.
+
+    Ambiguity stays `"any"`, because a wrong answer *forbids a valid call*.
+    An option woven into an alternation (`<PACKAGES|--requirements …>`), a
+    bracketed-optional or variadic first argument, an unfamiliar token — all
+    fall through, so a real command is never rejected.
+    """
+    usage = _usage_line(text)
+    if not usage:
+        return "any", ""
+    positional = _top_level_positionals(usage)
+    if not positional:
+        return "none", ""
+    first = positional[0]
+    if any("--" in token for token in positional):
+        return "any", ""  # a `<X|--flag>` alternation — packages OR a flag
+    if first.startswith("[") or "..." in first:
+        return "any", ""  # optional or variadic leading argument
+    base = re.split(r"[\[:]", first.strip("[]<>"))[0]
+    if not base or base[-1:].isdigit() or not _METAVAR.match(base):
+        return "any", ""  # numbered (`path1`) or unrecognised — don't constrain
+    return "required", base.replace("-", "_").lower()
+
+
+def _usage_line(text: str) -> str:
+    """The `usage:` line, minus the program name, joined if it wraps.
+
+    A wrapped usage (git's spans several indented lines) is stitched back
+    together; the program name and any leading subcommands are dropped so
+    only the argument grammar remains.
+    """
+    lines = text.splitlines()
+    for i, line in enumerate(lines):
+        if not line.lower().lstrip().startswith("usage"):
+            continue
+        collected = [line]
+        for cont in lines[i + 1 :]:
+            if not cont.strip() or not cont[:1].isspace():
+                break
+            # git prints alternative forms as `   or: git branch …`. Only
+            # the first form is parsed — stitching the alternatives together
+            # would merge incompatible grammars into nonsense.
+            if cont.lstrip().lower().startswith("or:"):
+                break
+            collected.append(cont)
+        joined = " ".join(part.strip() for part in collected)
+        after = re.sub(r"(?i)^usage:?\s*", "", joined)
+        # Drop the program + verbs: everything up to the first bracket or
+        # metavar-looking token is the command path, not an argument.
+        tokens = after.split()
+        rest = []
+        seen_arg = False
+        for token in tokens:
+            if not seen_arg and (token.startswith(("[", "<")) or token.isupper()):
+                seen_arg = True
+            if seen_arg:
+                rest.append(token)
+        return " ".join(rest)
+    return ""
 
 
 def _summary(text: str) -> str:
@@ -421,7 +524,14 @@ def from_help(
     root = run_help([name], flag=flag)
     if not root:
         return ToolSpec(name=name, version=version)
-    parsed = [parse_help(root, name="")]
+    root_verb = parse_help(root, name="")
+    if verbs:
+        # A multi-command tool's bare usage line (`docker [OPTIONS] COMMAND`)
+        # describes the subcommand slot, not arguments to `docker` itself —
+        # so `tools.docker(...)` must not be constrained by it. Only a
+        # single-command tool's root verb carries a real positional shape.
+        root_verb = replace(root_verb, positional="any", lead="")
+    parsed = [root_verb]
     for verb in verbs:
         text = run_help([name, *verb.split(".")], flag=flag)
         if text:

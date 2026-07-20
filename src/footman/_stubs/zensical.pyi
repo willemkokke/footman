@@ -10,7 +10,7 @@ from footman.tools import Tool, _Flag, _Value
 class _Zensical(Tool):
     def build(
         self,
-        *args: str,
+        *,
         clean: _Flag = ...,
         config_file: _Value = ...,
         strict: _Flag = ...,
@@ -37,7 +37,7 @@ class _Zensical(Tool):
         ...
     def serve(
         self,
-        *args: str,
+        *,
         config_file: _Value = ...,
         dev_addr: _Value = ...,
         open: _Flag = ...,
