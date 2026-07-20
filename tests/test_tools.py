@@ -512,10 +512,10 @@ def test_show_parts_tag_each_token_with_its_role():
     )
 
 
-def test_the_shown_form_is_separated_the_executed_form_is_flags():
-    # `_emit` is the single source both draw from; `_flags` is the executed
-    # spelling. Today they agree; the always-attach change moves only `_flags`.
-    from footman.tools import _emit, _flags
+def test_the_shown_form_is_separated_the_executed_form_is_attached():
+    # `_emit` is the single source both draw from. `_flags` (executed)
+    # attaches long values; `_show_parts` (shown) keeps them separated.
+    from footman.tools import _emit, _flags, _show_parts
 
     kwargs = {"select": ["E", "F"], "fix": True}
     assert list(_emit(kwargs, "ruff")) == [
@@ -523,17 +523,41 @@ def test_the_shown_form_is_separated_the_executed_form_is_flags():
         ("--select", "F"),
         ("--fix", None),
     ]
-    assert _flags(kwargs, "ruff") == ["--select", "E", "--select", "F", "--fix"]
+    assert _flags(kwargs, "ruff") == ["--select=E", "--select=F", "--fix"]
+    shown = " ".join(t for _, t in _show_parts("ruff", ["check"], (), kwargs))
+    assert shown == "ruff check --select E --select F --fix"
+
+
+def test_execution_attaches_only_where_a_space_would_break():
+    from footman.tools import _flags, _show_parts
+
+    def shown(**kw):
+        return " ".join(t for _, t in _show_parts("git", ["log"], (), kw))
+
+    # A dash-leading value would be read as the next option if separated, so
+    # both forms attach — the shown line has to stay a valid paste.
+    assert _flags({"format": "-%h"}, "git") == ["--format=-%h"]
+    assert shown(format="-%h") == "git log --format=-%h"
+
+    # An optional-value option (git spells `--abbrev[=<n>]`) can't tell its
+    # value from a positional across a space; execution attaches, the shown
+    # line reads it plainly.
+    assert _flags({"abbrev": 4}, "git") == ["--abbrev=4"]
+    assert shown(abbrev=4) == "git log --abbrev 4"
+
+    # A short option keeps the space unless the value leads with a dash.
+    assert _flags({"k": "expr"}, "git") == ["-k", "expr"]
+    assert _flags({"k": "-x"}, "git") == ["-k-x"]
 
 
 def test_step_result_carries_both_the_shown_and_the_raw_command():
-    # `.command` reads well; `.raw` is the exact executed line. They agree
-    # until the always-attach change makes `.raw` spell `--flag=value`.
+    # `.command` reads well (separated); `.raw` is the exact executed line
+    # (attached). Both are valid, copy-pasteable commands.
     with recording() as steps:
         tools.git.commit(message="a b c", signoff=True)
     step = steps[0]
     assert step.command == "git commit --message 'a b c' --signoff"
-    assert step.raw == "git commit --message 'a b c' --signoff"
+    assert step.raw == "git commit '--message=a b c' --signoff"
 
 
 def test_raw_of_a_plain_run_shell_quotes_a_list():

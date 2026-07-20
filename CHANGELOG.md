@@ -9,6 +9,28 @@ versions may include breaking changes.
 
 ### Added
 
+- **The command line footman shows is now separate from the one it runs.**
+  `run()` renders a normalised, syntax-highlighted invocation — options in
+  their readable separated form, values shell-quoted, coloured by role the
+  way `--help` colours a usage line — while execution takes whatever
+  spelling the tool needs. `StepResult` carries both: `.command` (what
+  `recording()` asserts and the terminal shows) and `.raw` (the exact
+  executed bytes, what `--verbose` prints). One translation feeds both, so
+  they can never disagree about what a call means.
+
+### Changed
+
+- **Valued long options are executed attached** (`select="E"` →
+  `--select=E`). This is invisible in what footman shows you — the shown
+  line stays separated and readable — but it fixes two silent failures:
+  an optional-value option whose value was read as a positional
+  (`--abbrev 4` → `--abbrev=4`), and a dash-leading value read as another
+  option (`--format -%h` → `--format=-%h`). The rule covers every tool,
+  including undeclared ones. `recording()` assertions on `.command` are
+  unaffected; assert on `.raw` for the exact spelling.
+
+### Added
+
 - **The `tools.*` stubs are generated from the installed tools.** The
   bridge never went stale, because it transcribes nothing — but its stub
   could, because a stub describes a tool at a version. Now it is read

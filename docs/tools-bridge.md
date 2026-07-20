@@ -24,6 +24,29 @@ list repeats the flag (an empty one is omitted, so a task parameter's
 default flows straight through); a single-letter key is a short flag
 (`k="expr"` → `-k expr`); positional strings pass through untouched.
 
+A valued long option is executed **attached** — `select="E"` runs
+`--select=E`, not `--select E`. The two are equivalent for a plain value,
+but attaching is the only spelling that always works: an optional-value
+option can't tell its value from the next word across a space
+(`--abbrev 4` is ambiguous to git, `--abbrev=4` is not), and a value that
+starts with a dash would be read as another option (`--format -%h` fails,
+`--format=-%h` works). You never have to think about it — the same rule
+covers every tool, including ones footman has never heard of.
+
+What footman *shows* you is spelled for reading, not for the parser: the
+`--dry-run` line, the live progress line, and `recording()`'s
+`step.command` all use the separated form (`--select E`), quoted so it
+still pastes. The exact executed bytes are on `step.raw`, and `--verbose`
+prints them. So a `recording()` assertion reads naturally and doesn't
+change when the executed spelling does:
+
+```python
+with recording() as steps:
+    tools.ruff.check("src", select=["E", "F"])
+assert steps[0].command == "ruff check src --select E --select F"  # reads plainly
+assert steps[0].raw == "ruff check src --select=E --select=F"      # the real argv
+```
+
 ## Disabling a flag that defaults on
 
 `False` and `None` mean *omit* — that's what lets a task parameter's default

@@ -114,13 +114,46 @@ def _emit(kwargs: dict[str, Any], tool: str = "") -> Iterator[tuple[str, str | N
             yield flag, str(item)
 
 
+def _spell(flag: str, value: str | None, *, attach_long: bool) -> list[str]:
+    """One option as argv tokens — the shared placement rule.
+
+    A long option and its value can be one token (`--select=E`) or two
+    (`--select E`). Two reads better, but three cases force *one*:
+
+    * a value that starts with a dash would be read as the next option —
+      `--format -%h` fails, `--format=-%h` works;
+    * an optional-value option can't tell its value from the next
+      positional across a space — `--abbrev 4` is ambiguous, `--abbrev=4`
+      is not;
+    * a short option's value, when it starts with a dash, must be
+      concatenated (`-k-expr`), never `-k=expr`, which most tools reject.
+
+    Execution attaches every long option (`attach_long=True`) so the second
+    case is covered for tools footman can't inspect; the shown line only
+    attaches where a space would actually break it, staying readable.
+    """
+    if value is None:
+        return [flag]
+    long = flag.startswith("--")
+    dash = value.startswith("-")
+    if long and (attach_long or dash):
+        return [f"{flag}={value}"]
+    if not long and dash:
+        return [f"{flag}{value}"]
+    return [flag, value]
+
+
 def _flags(kwargs: dict[str, Any], tool: str = "") -> list[str]:
-    """Translate keyword arguments into CLI flags, for execution."""
+    """Translate keyword arguments into CLI flags, for execution.
+
+    Long options attach their value (`--select=E`) so an optional-value or
+    dash-leading value can never be misread; short options stay separated
+    unless the value forces concatenation. The shown line (`_show_parts`)
+    spells the same call more readably; only the tokens differ.
+    """
     argv: list[str] = []
     for flag, value in _emit(kwargs, tool):
-        argv.append(flag)
-        if value is not None:
-            argv.append(value)
+        argv += _spell(flag, value, attach_long=True)
     return argv
 
 
@@ -130,19 +163,28 @@ def _show_parts(
     """The invocation as role-tagged tokens, for a readable, painted line.
 
     The same call the runtime executes, spelled for a human: options in
-    their separated form (`--select E`, never `--select=E`), values shell-
-    quoted so the line stays copy-pasteable, and every token tagged with
-    its role so `_describe.paint_cli` can colour it the way `--help` colours
-    a usage line. Execution can tokenise differently (attached, in-process);
-    this is what footman *says* it ran.
+    their separated form (`--select E`, not `--select=E`) where a space is
+    safe, attached only where separating would break the paste; values
+    shell-quoted; every token tagged with its role so `_describe.paint_cli`
+    can colour it the way `--help` colours a usage line.
     """
     parts: list[tuple[str, str]] = [("prog", argv0)]
     parts += [("group", verb) for verb in base]
     parts += [("req", _quote(str(a))) for a in args]
     for flag, value in _emit(kwargs, argv0):
-        parts.append(("opt", flag))
-        if value is not None:
-            parts.append(("value", _quote(value)))
+        if value is None:
+            parts.append(("opt", flag))
+            continue
+        # Decide placement on the raw value (a dash leads), quote for the
+        # shown text. Readable where a space is safe; attached only where
+        # separating would produce a line that doesn't run.
+        quoted = _quote(value)
+        if value.startswith("-"):
+            glue = "=" if flag.startswith("--") else ""
+            parts.append(("opt", f"{flag}{glue}{quoted}"))
+        else:
+            parts.append(("opt", flag))
+            parts.append(("value", quoted))
     return tuple(parts)
 
 
