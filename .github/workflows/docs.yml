@@ -50,17 +50,33 @@ jobs:
           sudo apt-get update -q && sudo apt-get install -y -q zsh fish
           curl -fsSL "https://github.com/nushell/nushell/releases/download/${NU_VERSION}/nu-${NU_VERSION}-x86_64-unknown-linux-gnu.tar.gz" | tar xz
           echo "$PWD/nu-${NU_VERSION}-x86_64-unknown-linux-gnu" >> "$GITHUB_PATH"
-      # The coverage page embeds the matrix-merged report CI gates on — a
-      # docs runner can only measure one environment, so it fetches the
-      # newest merged picture instead (coverage only moves on code pushes,
-      # and code pushes always run CI). Local measurement is the fallback
-      # for a fork or a fresh repo with no CI history.
-      - name: Coverage report (merged, from the latest CI run)
+      # The coverage page embeds the matrix-merged report CI gates on. It
+      # must be THIS commit's run: "newest successful run" is the previous
+      # commit's while ours is still going, which once published a 54% page
+      # for a module the same commit had taken to 100%. A docs-only push
+      # runs no CI at all (paths-ignore), so that case falls back to the
+      # newest run — coverage cannot have changed — and a fork with no CI
+      # history measures locally.
+      - name: Coverage report (merged, from this commit's CI run)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          rid=$(gh run list --workflow CI --branch main --status success \
-                --limit 1 --json databaseId --jq '.[0].databaseId' || true)
+          rid=""
+          for _ in $(seq 1 60); do
+            rid=$(gh run list --workflow CI --commit "$GITHUB_SHA" --status success \
+                  --limit 1 --json databaseId --jq '.[0].databaseId' 2>/dev/null || true)
+            [ -n "$rid" ] && break
+            pending=$(gh run list --workflow CI --commit "$GITHUB_SHA" --json status \
+                      --jq '[.[] | select(.status != "completed")] | length' 2>/dev/null || echo 0)
+            [ "$pending" = "0" ] && break
+            echo "waiting for this commit's CI run to finish…"
+            sleep 15
+          done
+          if [ -z "$rid" ]; then
+            rid=$(gh run list --workflow CI --branch main --status success --limit 1 \
+                  --json databaseId --jq '.[0].databaseId' 2>/dev/null || true)
+            [ -n "$rid" ] && echo "no CI run for this commit — using $rid"
+          fi
           if [ -n "$rid" ] && gh run download "$rid" -n coverage-html -D docs/htmlcov; then
             echo "merged coverage report from CI run $rid"
           else
