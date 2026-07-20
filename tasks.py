@@ -234,6 +234,12 @@ def docs_build(check: bool = False):
     # The CLI reference's global-options table, from the grammar itself —
     # reference.md snippet-includes it, so it can't drift from --help.
     taskdocs_globals(out=Path("docs/_generated/globals.md"))
+    # One reference page per curated tool, rendered by mkdocstrings from
+    # the checked-in stubs — so the pages say what actually ships, and the
+    # build needs no tool on PATH.
+    from footman.tasks.tools import pages as toolpages
+
+    toolpages(Path("docs/_generated/tools"))
     _write_latest_changes()
     # Terminal screenshots, captured from the real CLI on a pty and framed
     # as SVGs — the pages show footman exactly as a terminal does, and a

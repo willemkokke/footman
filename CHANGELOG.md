@@ -23,6 +23,13 @@ versions may include breaking changes.
   stubs) and `audit` (fail when a stub and its tool disagree). Tools that
   are not installed are skipped *and named*, so a check can't quietly
   cover three of thirteen.
+- **A reference page per tool**, in a new **Tools** section of the docs.
+  mkdocstrings renders each one straight from that tool's stub, so every
+  flag arrives with the tool's own help text, its accepted values as a
+  `Literal`, and the `off` spelling where one applies. The index table
+  states the version each stub was read from and whether the tool can run
+  in footman's process — built from the checked-in stubs, so the docs
+  build needs nothing on PATH.
 - **A type-level test for the stubs** (`tests/typecheck_tools.py`): a file
   of tool calls that is never executed and never collected, only
   type-checked. Its negative cases are the real assertions — since

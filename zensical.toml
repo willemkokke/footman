@@ -51,6 +51,22 @@ nav = [
     { "Task reference (generated)" = "tasks/index.md" },
     { "Troubleshooting" = "troubleshooting.md" },
   ] },
+  { "Tools" = [
+    { "The curated tools" = "_generated/tools/index.md" },
+    { "ruff" = "_generated/tools/ruff.md" },
+    { "ruff_format" = "_generated/tools/ruff_format.md" },
+    { "basedpyright" = "_generated/tools/basedpyright.md" },
+    { "uv" = "_generated/tools/uv.md" },
+    { "git" = "_generated/tools/git.md" },
+    { "docker" = "_generated/tools/docker.md" },
+    { "bun" = "_generated/tools/bun.md" },
+    { "mkdocs" = "_generated/tools/mkdocs.md" },
+    { "zensical" = "_generated/tools/zensical.md" },
+    { "coverage" = "_generated/tools/coverage.md" },
+    { "cspell" = "_generated/tools/cspell.md" },
+    { "prek" = "_generated/tools/prek.md" },
+    { "markdownlint" = "_generated/tools/markdownlint.md" },
+  ] },
 ]
 
 [project.plugins.mkdocstrings.handlers.python]
