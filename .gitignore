@@ -17,3 +17,4 @@ docs/llms-full.txt
 docs/tasks/
 docs/_generated/
 launch/
+.coverage.*

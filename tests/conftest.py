@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 from pathlib import Path
 
 import pytest
@@ -10,6 +11,23 @@ import pytest
 from footman import manifest, registry
 
 FIXTURE = Path(__file__).parent / "fixtures" / "sample_tasks.py"
+PYPROJECT = Path(__file__).resolve().parent.parent / "pyproject.toml"
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    """Measure the children too, but only when the parent is measuring.
+
+    footman's most interesting code runs in processes it spawns: the
+    completion hot path every shell hook invokes, the detached manifest
+    refresh, the cache collector, the uv handoff, the `fm` inside a docs
+    cast. `COVERAGE_PROCESS_START` makes coverage's installed `.pth` arm
+    itself in each child; setting it unconditionally would start a
+    coverage session in every subprocess of every plain test run, so it
+    is set only when a `--cov` run is actually in progress.
+    """
+    plugin = config.pluginmanager.get_plugin("_cov")
+    if plugin is not None and getattr(plugin, "cov_controller", None) is not None:
+        os.environ["COVERAGE_PROCESS_START"] = str(PYPROJECT)
 
 
 @pytest.fixture(autouse=True)

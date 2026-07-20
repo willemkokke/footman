@@ -220,6 +220,10 @@ jobs:
         run: uv run coverage run -m footman docs build --check
         env:
           COVERAGE_FILE: .coverage.docs-build
+          # The casts spawn real shells which spawn `fm --complete`; this
+          # arms coverage in those children so the completion hot path is
+          # measured as the shells actually invoke it.
+          COVERAGE_PROCESS_START: pyproject.toml
       - uses: actions/upload-artifact@v4
         with:
           name: coverage-docs-build

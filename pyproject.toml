@@ -120,6 +120,13 @@ reportMissingModuleSource = false
 [tool.coverage.run]
 branch = true
 source = ["footman"]
+# Subprocess measurement: footman spawns real children — the completion
+# hot path every shell hook invokes, the detached refresh and cache
+# collector, the uv handoff, the `fm` inside every docs cast. They run
+# real code and were invisible; conftest arms COVERAGE_PROCESS_START when
+# the parent is measuring, and parallel mode lets each child write its own
+# data file for the combine.
+parallel = true
 # Data files from Linux, macOS, and Windows matrix jobs merge into one
 # total in CI — paths must be stored relative for that to line up.
 relative_files = true
