@@ -477,7 +477,9 @@ def test_where_lists_the_shadow_chain(tmp_path, monkeypatch, capsys):
     assert _app.run(["--where", "check"]) == 0
     lines = capsys.readouterr().out.strip().splitlines()
     assert len(lines) == 3  # leaf, mid, root
-    assert lines[0].endswith("api/tasks.py:2") and "(shadowed)" not in lines[0]
+    # os.sep, not "/": --where prints native paths so editors can open them.
+    leaf = str(Path("api") / "tasks.py") + ":2"
+    assert lines[0].endswith(leaf) and "(shadowed)" not in lines[0]
     assert all("(shadowed)" in line for line in lines[1:])
 
 
