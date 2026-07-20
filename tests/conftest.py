@@ -28,6 +28,13 @@ def pytest_configure(config: pytest.Config) -> None:
     plugin = config.pluginmanager.get_plugin("_cov")
     if plugin is not None and getattr(plugin, "cov_controller", None) is not None:
         os.environ["COVERAGE_PROCESS_START"] = str(PYPROJECT)
+        # Absolute, or the data is lost: a child resolves a relative
+        # COVERAGE_FILE against *its own* cwd, and footman's most
+        # interesting children run somewhere else entirely — the shell
+        # hooks and casts all invoke `fm` from a temp project. Their data
+        # files landed in those temp dirs and vanished with them.
+        data_file = Path(os.environ.get("COVERAGE_FILE", ".coverage"))
+        os.environ["COVERAGE_FILE"] = str(data_file.resolve())
 
 
 @pytest.fixture(autouse=True)

@@ -809,3 +809,61 @@ def test_ci_provisions_every_testable_shell():
     instead of a functional test that quietly never ran."""
     missing = sorted(s for s in _ci_required_shell_exes() if shutil.which(s) is None)
     assert not missing, f"expected shells not on PATH: {missing}"
+
+
+# --- detect_shell: the dispatcher, on both platforms ---------------------------
+
+
+def test_detect_shell_windows_reads_the_powershell_tell(monkeypatch):
+    """Windows has no `ps`, so PowerShell's exported PSModulePath is the
+    tell. Platform-independent by design — the branch is unreachable on a
+    POSIX runner, and a Windows-only test would leave it dark everywhere
+    else."""
+    monkeypatch.setattr(_shellcomp.os, "name", "nt")
+    monkeypatch.setenv("PSModulePath", r"C:\Program Files\PowerShell\Modules")
+    assert _shellcomp.detect_shell() == "pwsh"
+
+
+def test_detect_shell_windows_without_the_tell_gives_up(monkeypatch):
+    monkeypatch.setattr(_shellcomp.os, "name", "nt")
+    monkeypatch.delenv("PSModulePath", raising=False)
+    assert _shellcomp.detect_shell() is None
+
+
+def test_detect_shell_posix_delegates_to_the_process_walk(monkeypatch):
+    monkeypatch.setattr(_shellcomp.os, "name", "posix")
+    monkeypatch.setattr(_shellcomp, "_detect_posix", lambda: "fish")
+    assert _shellcomp.detect_shell() == "fish"
+
+
+# Every shell footman installs for, driving the *real* detector from inside
+# a *real* shell — the process-tree walk (or, on Windows, the PSModulePath
+# tell) as users actually meet it. `_detect_posix` is unit-tested against a
+# faked `ps` above; this is the other half. Each shell needs its own
+# spelling: nushell calls externals through `^`, PowerShell through `&`,
+# and a POSIX shell exec-replaces itself for a lone command (a trailing
+# `true` keeps it in the process tree, where the walk can find it).
+_PROBE = "from footman._shellcomp import detect_shell; print(detect_shell())"
+_DETECT_CASES = [
+    ("bash", ["bash", "-c"], "\"{py}\" -c '{code}'; true", "bash"),
+    ("zsh", ["zsh", "-c"], "\"{py}\" -c '{code}'; true", "zsh"),
+    ("fish", ["fish", "-c"], "\"{py}\" -c '{code}'; true", "fish"),
+    ("nu", ["nu", "-c"], "^\"{py}\" -c '{code}'", "nushell"),
+    ("pwsh", ["pwsh", "-NoProfile", "-Command"], "& \"{py}\" -c '{code}'", "pwsh"),
+]
+
+
+@pytest.mark.parametrize(("exe", "argv", "template", "expected"), _DETECT_CASES)
+def test_detection_from_inside_every_real_shell(
+    exe, argv, template, expected, monkeypatch
+):
+    if shutil.which(exe) is None:
+        pytest.skip(f"{exe} is not installed")
+    monkeypatch.setenv("SHELL", "/bin/false")  # $SHELL must not be the answer
+    command = template.format(py=sys.executable, code=_PROBE)
+    out = subprocess.run([*argv, command], capture_output=True, text=True, timeout=60)
+    assert out.returncode == 0, out.stderr
+    # Windows has no process walk: PowerShell's machine-level PSModulePath
+    # answers "pwsh" whatever shell is asking — the documented over-claim.
+    want = "pwsh" if os.name == "nt" else expected
+    assert out.stdout.strip() == want

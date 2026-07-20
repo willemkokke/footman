@@ -126,3 +126,30 @@ def test_trigger_off_switches(tmp_path, monkeypatch):
     monkeypatch.setattr(_paths, "footman_cache_dir", lambda: cache)
     _app._maybe_collect({})
     assert not cache.exists()  # fully off: not even a stamp
+
+
+def test_collector_runs_for_real_as_a_detached_child(tmp_path, monkeypatch):
+    """The collector end to end: the actual child `_maybe_collect` spawns,
+    doing the actual deleting. Everything above this drives `collect()` in
+    process or fakes the spawn — this is the only test that proves the
+    spawned command line, `_gc.main()`'s argv handling, and the deletion
+    all agree, and it is the reason CI ever executes the collector at all.
+    """
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    _pair(cache, "dead", str(tmp_path / "no-such-project"))
+    _pair(cache, "keep", str(tmp_path))  # a living project: must survive
+    monkeypatch.setattr(_paths, "footman_cache_dir", lambda: cache)
+    stamp = cache / _gc.STAMP
+    stamp.touch()
+    then = time.time() - 2 * 86400  # yesterday's stamp: due for collection
+    os.utime(stamp, (then, then))
+
+    _app._maybe_collect({})  # spawns the real detached child
+
+    deadline = time.time() + 30
+    while (cache / "dead.json").exists() and time.time() < deadline:
+        time.sleep(0.1)
+    assert not (cache / "dead.json").exists()  # the child really collected
+    assert not (cache / "dead.times.json").exists()
+    assert (cache / "keep.json").exists()  # and left the living project alone
