@@ -857,6 +857,12 @@ _DETECT_CASES = [
 def test_detection_from_inside_every_real_shell(
     exe, argv, template, expected, monkeypatch
 ):
+    if os.name == "nt" and exe in ("bash", "zsh", "fish"):
+        # Same scope as every other POSIX-shell test here: git-bash and
+        # friends on Windows differ in paths and process semantics, and
+        # pwsh is the Windows completion story. nu and pwsh still run,
+        # which is what exercises the PSModulePath branch for real.
+        pytest.skip("POSIX shells on Windows are out of scope")
     if shutil.which(exe) is None:
         pytest.skip(f"{exe} is not installed")
     monkeypatch.setenv("SHELL", "/bin/false")  # $SHELL must not be the answer
