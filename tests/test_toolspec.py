@@ -978,3 +978,40 @@ def test_reserved_flag_name_falls_through_to_the_catchall():
     assert "quiet: _Flag" in text
     assert "flags: _Flag" not in text  # the `--flags` option isn't a typed param
     assert "**flags: Any" in text  # it falls through to the catch-all
+
+
+def test_arg_help_escapes_a_markdown_header_at_a_wrapped_line_start():
+    # git's merge-stage notation (`#2 (ours)`) would render as an H1 in the
+    # reference page if a wrap dropped it to the start of a docstring line.
+    from footman._toolspec import Option
+
+    option = Option(
+        "ours",
+        ("--ours",),
+        type_name="bool",
+        help=(
+            "When restoring files in the working tree from the index, use stage "
+            "#2 (ours) or #3 (theirs) for unmerged paths"
+        ),
+    )
+    lines = _stubgen._arg_lines(option)
+    for line in lines:
+        assert not line.lstrip().startswith("#"), line  # never a bare header
+    # The escape is a *double* backslash: this is docstring source, where a
+    # lone `\#` is an invalid Python escape sequence.
+    assert any("\\\\#" in line for line in lines)
+    # And the whole thing still parses as Python without a SyntaxWarning.
+    import warnings
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", SyntaxWarning)
+        ast.parse('def f():\n    """\n' + "\n".join(lines) + '\n    """\n')
+
+
+def test_md_safe_touches_only_leading_header_and_quote():
+    safe = _stubgen._md_safe(
+        ["            #2 heading", "            > quote", "            mid # hash"]
+    )
+    assert safe[0].endswith("\\\\#2 heading")
+    assert safe[1].endswith("\\\\> quote")
+    assert safe[2].endswith("mid # hash")  # a mid-line hash is not a block

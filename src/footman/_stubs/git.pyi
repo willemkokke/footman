@@ -1694,7 +1694,7 @@ class _Git(Tool):
             merge: When restoring files on the working tree from the index, recreate
                 the conflicted merge in the unmerged paths.
             ours: When restoring files in the working tree from the index, use stage
-                #2 (ours) or #3 (theirs) for unmerged paths.
+                \\#2 (ours) or #3 (theirs) for unmerged paths.
             overlay: In overlay mode, never remove files when restoring.
             patch: Interactively select hunks in the difference between the restore
                 source and the restore location.

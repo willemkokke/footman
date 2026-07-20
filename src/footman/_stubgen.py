@@ -20,6 +20,7 @@ installed tool degrades a hint and never a run.
 
 from __future__ import annotations
 
+import re
 import textwrap
 from collections.abc import Iterable
 
@@ -58,8 +59,6 @@ def render(
 
 def _imports(body: str) -> str:
     """Just the imports the body uses — an unused one fails the lint gate."""
-    import re
-
     typing = ["Any"] + (["Literal"] if "Literal[" in body else [])
     aliases = ("_Flag", "_Value", "_ValuedFlag")
     names = ["Tool"] + [n for n in aliases if re.search(rf"\b{n}\b", body)]
@@ -237,6 +236,7 @@ def _docstring(verb: Verb) -> str:
         break_long_words=False,
         break_on_hyphens=False,
     ) or [" " * 8 + "Run this verb."]
+    summary = _md_safe(summary)
     summary[0] = '        """' + summary[0].lstrip()
     lines = list(summary)
     if documented:
@@ -246,6 +246,28 @@ def _docstring(verb: Verb) -> str:
             lines.extend(_arg_lines(option))
     lines.append('        """')
     return "\n".join(lines)
+
+
+# A wrapped docstring line whose first non-space character opens a Markdown
+# block renders as that block in the reference page (griffe reads these).
+# Python-Markdown is lenient: `#2` (git's merge-stage notation) is a header
+# and `>x` a blockquote, no space required. Both escape as `\#` / `\>`.
+_LEADING_MD = re.compile(r"^(#|>)")
+
+
+def _md_safe(lines: list[str]) -> list[str]:
+    """Escape a Markdown block marker a wrap left at a line's start.
+
+    The backslash is doubled: this text becomes a docstring in the
+    generated `.pyi`, where a lone `\\#` would be an invalid escape
+    sequence — `\\\\#` is the literal `\\#` that Markdown renders as `#`.
+    """
+    out: list[str] = []
+    for line in lines:
+        indent = line[: len(line) - len(line.lstrip())]
+        content = line[len(indent) :]
+        out.append(f"{indent}\\\\{content}" if _LEADING_MD.match(content) else line)
+    return out
 
 
 def _arg_lines(option: Option) -> list[str]:
@@ -269,4 +291,4 @@ def _arg_lines(option: Option) -> list[str]:
         break_long_words=False,
         break_on_hyphens=False,
     )
-    return wrapped or [f"{' ' * 12}{_safe(option.name)}: ."]
+    return _md_safe(wrapped) or [f"{' ' * 12}{_safe(option.name)}: ."]
