@@ -67,6 +67,10 @@ _GO_TYPES = (
 )
 _SPELLING = re.compile(
     r"(?P<flag>--?(?:\[no-\])?[A-Za-z0-9][A-Za-z0-9._-]*)"
+    # git glues an optional-value placeholder to the flag with no space:
+    # `--gpg-sign[=<key-id>]`, `--untracked-files[=<mode>]`. Read as one
+    # attached token so the option isn't mistaken for a bare switch.
+    r"(?P<attached>\[=[^\]]*\])?"
     r"(?:[= ](?P<meta>\[?<[^>]+>(?:\.\.\.)?\]?|\[[^\]]+\]|[A-Z][A-Z0-9_.,|]*(?:\.\.\.)?"
     rf"|{_GO_TYPES}))?"
 )
@@ -164,14 +168,17 @@ def _blocks(lines: Sequence[str]) -> list[tuple[str, str]]:
     return blocks
 
 
-def _spellings(head: str) -> tuple[list[str], str]:
-    """The flags in an option's left column, plus its value placeholder."""
+def _spellings(head: str) -> tuple[list[str], str, bool]:
+    """The flags in an option's left column, its placeholder, and whether
+    the value is optional (a `[=…]` glued to the flag)."""
     flags: list[str] = []
     meta = ""
+    optional = False
     for match in _SPELLING.finditer(head):
         flags.append(match["flag"])
         meta = meta or (match["meta"] or "")
-    return flags, meta
+        optional = optional or bool(match["attached"])
+    return flags, meta, optional
 
 
 def _clean(text: str) -> str:
@@ -193,7 +200,7 @@ def _parse_default(text: str) -> str:
 
 def _option(head: str, help_text: str) -> Option | None:
     """One `Option` from one parsed block, or None if it isn't one."""
-    flags, meta = _spellings(head)
+    flags, meta, optional = _spellings(head)
     longs = [f for f in flags if f.startswith("--")]
     if not longs:
         return None  # a short-only option has no keyword spelling
@@ -202,7 +209,9 @@ def _option(head: str, help_text: str) -> Option | None:
     name = stem.replace("-", "_").replace(".", "_")
     default = _parse_default(help_text)
     choices = _choices(help_text)
-    is_flag = not meta
+    # An optional-value option (`--gpg-sign[=<key-id>]`) is neither a plain
+    # switch nor a required-value option: it works bare *and* with a value.
+    is_flag = not meta and not optional
     repeatable = bool(
         meta.endswith(("...", "...]", "Array", "Slice", "ToString"))
         or _REPEATABLE.search(help_text)
@@ -216,7 +225,7 @@ def _option(head: str, help_text: str) -> Option | None:
         flags=tuple(sorted((_spell(f, stem) for f in flags), key=len, reverse=True)),
         negation=negation,
         help=_clean(help_text),
-        type_name=_kind(is_flag, repeatable, choices),
+        type_name=_kind(is_flag, repeatable, choices, optional),
         default=_coerce_default(default, is_flag),
         choices=choices,
     )
@@ -248,9 +257,13 @@ def _values(text: str) -> tuple[str, ...]:
     return tuple(v.strip() for v in text.split(",") if v.strip())
 
 
-def _kind(is_flag: bool, repeatable: bool, choices: tuple[str, ...]) -> str:
+def _kind(
+    is_flag: bool, repeatable: bool, choices: tuple[str, ...], optional: bool = False
+) -> str:
     if is_flag:
         return "bool"
+    if optional:
+        return "optvalue"  # a switch that also accepts a value
     if choices:
         return "choice[]" if repeatable else "choice"
     return "list[str]" if repeatable else "str"

@@ -201,6 +201,35 @@ def test_git_states_both_spellings_inline():
     assert got["signoff"].help == "add a Signed-off-by trailer"
 
 
+def test_optional_value_option_is_neither_switch_nor_required_value():
+    # git glues an optional-value placeholder to the flag with no space.
+    # Read as a switch, `--gpg-sign[=<key-id>]` would reject a key; read as
+    # a required value, it would reject the bare flag. It is both.
+    text = (
+        "    -S, --[no-]gpg-sign[=<key-id>]\n"
+        "                          GPG-sign the commit\n"
+        "    -u, --[no-]untracked-files[=<mode>]\n"
+        "                          show untracked files\n"
+        "    -m, --[no-]message <message>\n"
+        "                          commit message\n"
+    )
+    got = flags(_toolhelp.parse_help(text, name="commit"))
+    assert got["gpg_sign"].type_name == "optvalue"
+    assert got["gpg_sign"].negation == "--no-gpg-sign"
+    assert got["untracked_files"].type_name == "optvalue"
+    # A required value (no brackets) stays a plain value, not optvalue.
+    assert got["message"].type_name == "str"
+
+
+def test_optvalue_stub_type_accepts_bare_and_valued():
+    from footman._toolspec import Option
+
+    assert (
+        _stubgen._annotation(Option("gpg_sign", type_name="optvalue")) == "_ValuedFlag"
+    )
+    assert _stubgen._annotation(Option("m", type_name="str")) == "_Value"
+
+
 def test_commander_and_summary_skips_usage():
     verb = _toolhelp.parse_help(COMMANDER)
     got = flags(verb)

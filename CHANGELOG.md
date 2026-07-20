@@ -60,6 +60,13 @@ versions may include breaking changes.
 
 ### Fixed
 
+- **Optional-value options are no longer mistyped as switches.** A tool
+  that glues its placeholder to the flag — git's `--gpg-sign[=<key-id>]`,
+  `--untracked-files[=<mode>]`, ruff's `--add-noqa[=<REASON>]` — was read
+  as taking no value, so the stub rejected `gpg_sign="KEY"`, which is
+  valid. These now type as `_ValuedFlag`: usable bare (`gpg_sign=True`,
+  sign with the default key) *or* with a value, both spelling a valid
+  command.
 - **`off` now speaks each tool's own dialect.** It assumed the negation
   of a default-on flag is `--no-<name>`, which is wrong often enough to
   break real commands: `mkdocs build --no-clean` is rejected outright —

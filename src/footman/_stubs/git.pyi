@@ -5,7 +5,7 @@
 # accepts, and can never forbid what the bridge would happily pass.
 from typing import Any
 
-from footman.tools import Tool, _Flag, _Value
+from footman.tools import Tool, _Flag, _Value, _ValuedFlag
 
 class _Git(Tool):
     def __call__(  # type: ignore[override]
@@ -68,7 +68,7 @@ class _Git(Tool):
         quiet: _Flag = ...,
         remotes: _Flag = ...,
         set_upstream_to: _Value = ...,
-        track: _Flag = ...,
+        track: _ValuedFlag = ...,
         verbose: _Flag = ...,
         nofail: bool = False,
         in_process: bool | None = None,
@@ -95,8 +95,8 @@ class _Git(Tool):
             remotes: act on remote-tracking branches.
             set_upstream_to: change the upstream info. `set_upstream_to=off` emits
                 `--no-set-upstream-to`.
-            track: set branch tracking configuration. `track=off` emits
-                `--no-track`.
+            track: set branch tracking configuration. Value optional: `True` for the
+                bare flag, or pass one. `track=off` emits `--no-track`.
             verbose: show hash and subject, give twice for upstream branch.
                 `verbose=off` emits `--no-verbose`.
         """
@@ -111,7 +111,7 @@ class _Git(Tool):
         patch: _Flag = ...,
         quiet: _Flag = ...,
         theirs: _Flag = ...,
-        track: _Flag = ...,
+        track: _ValuedFlag = ...,
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
@@ -128,8 +128,8 @@ class _Git(Tool):
             patch: select hunks interactively. `patch=off` emits `--no-patch`.
             quiet: suppress progress reporting. `quiet=off` emits `--no-quiet`.
             theirs: checkout their version for unmerged files.
-            track: set branch tracking configuration. `track=off` emits
-                `--no-track`.
+            track: set branch tracking configuration. Value optional: `True` for the
+                bare flag, or pass one. `track=off` emits `--no-track`.
         """
         ...
     def clone(
@@ -183,7 +183,7 @@ class _Git(Tool):
         all: _Flag = ...,
         edit: _Flag = ...,
         file: _Value = ...,
-        gpg_sign: _Flag = ...,
+        gpg_sign: _ValuedFlag = ...,
         include: _Flag = ...,
         message: _Value = ...,
         null: _Flag = ...,
@@ -196,7 +196,7 @@ class _Git(Tool):
         signoff: _Flag = ...,
         template: _Value = ...,
         trailer: _Value = ...,
-        untracked_files: _Flag = ...,
+        untracked_files: _ValuedFlag = ...,
         verbose: _Flag = ...,
         verify: _Flag = ...,
         nofail: bool = False,
@@ -210,7 +210,8 @@ class _Git(Tool):
             all: commit all changed files. `all=off` emits `--no-all`.
             edit: force edit of commit. `edit=off` emits `--no-edit`.
             file: read message from file. `file=off` emits `--no-file`.
-            gpg_sign: GPG sign commit. `gpg_sign=off` emits `--no-gpg-sign`.
+            gpg_sign: GPG sign commit. Value optional: `True` for the bare flag, or
+                pass one. `gpg_sign=off` emits `--no-gpg-sign`.
             include: add specified files to index for commit. `include=off` emits
                 `--no-include`.
             message: commit message. `message=off` emits `--no-message`.
@@ -231,6 +232,7 @@ class _Git(Tool):
                 `--no-template`.
             trailer: add custom trailer(s).
             untracked_files: show untracked files, optional modes: all, normal, no.
+                Value optional: `True` for the bare flag, or pass one.
                 `untracked_files=off` emits `--no-untracked-files`.
             verbose: show diff in commit message template. `verbose=off` emits
                 `--no-verbose`.
@@ -338,7 +340,7 @@ class _Git(Tool):
         *args: str,
         initial_branch: _Value = ...,
         quiet: _Flag = ...,
-        shared: _Flag = ...,
+        shared: _ValuedFlag = ...,
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
@@ -350,7 +352,7 @@ class _Git(Tool):
                 `initial_branch=off` emits `--no-initial-branch`.
             quiet: be quiet. `quiet=off` emits `--no-quiet`.
             shared: specify that the git repository is to be shared amongst several
-                users.
+                users. Value optional: `True` for the bare flag, or pass one.
         """
         ...
     def log(
@@ -375,14 +377,14 @@ class _Git(Tool):
         append: _Flag = ...,
         ff_only: _Flag = ...,
         force: _Flag = ...,
-        gpg_sign: _Flag = ...,
+        gpg_sign: _ValuedFlag = ...,
         ipv4: _Flag = ...,
         ipv6: _Flag = ...,
-        jobs: _Flag = ...,
+        jobs: _ValuedFlag = ...,
         keep: _Flag = ...,
         prune: _Flag = ...,
         quiet: _Flag = ...,
-        rebase: _Flag = ...,
+        rebase: _ValuedFlag = ...,
         refmap: _Value = ...,
         server_option: _Value = ...,
         strategy: _Value = ...,
@@ -401,16 +403,19 @@ class _Git(Tool):
                 emits `--no-append`.
             ff_only: abort if fast-forward is not possible.
             force: force overwrite of local branch. `force=off` emits `--no-force`.
-            gpg_sign: GPG sign commit. `gpg_sign=off` emits `--no-gpg-sign`.
+            gpg_sign: GPG sign commit. Value optional: `True` for the bare flag, or
+                pass one. `gpg_sign=off` emits `--no-gpg-sign`.
             ipv4: use IPv4 addresses only. `ipv4=off` emits `--no-ipv4`.
             ipv6: use IPv6 addresses only. `ipv6=off` emits `--no-ipv6`.
-            jobs: . `jobs=off` emits `--no-jobs`.
+            jobs: . Value optional: `True` for the bare flag, or pass one.
+                `jobs=off` emits `--no-jobs`.
             keep: keep downloaded pack. `keep=off` emits `--no-keep`.
             prune: prune remote-tracking branches no longer on remote. `prune=off`
                 emits `--no-prune`.
             quiet: be more quiet. `quiet=off` emits `--no-quiet`.
-            rebase: incorporate changes by rebasing rather than merging.
-                `rebase=off` emits `--no-rebase`.
+            rebase: incorporate changes by rebasing rather than merging. Value
+                optional: `True` for the bare flag, or pass one. `rebase=off` emits
+                `--no-rebase`.
             refmap: specify fetch refmap.
             server_option: option to transmit. `server_option=off` emits
                 `--no-server-option`.
@@ -512,11 +517,11 @@ class _Git(Tool):
         self,
         *args: str,
         branch: _Flag = ...,
-        find_renames: _Flag = ...,
+        find_renames: _ValuedFlag = ...,
         null: _Flag = ...,
         renames: _Flag = ...,
         short: _Flag = ...,
-        untracked_files: _Flag = ...,
+        untracked_files: _ValuedFlag = ...,
         verbose: _Flag = ...,
         nofail: bool = False,
         in_process: bool | None = None,
@@ -526,11 +531,13 @@ class _Git(Tool):
 
         Args:
             branch: show branch information. `branch=off` emits `--no-branch`.
-            find_renames: detect renames, optionally set similarity index.
+            find_renames: detect renames, optionally set similarity index. Value
+                optional: `True` for the bare flag, or pass one.
             null: terminate entries with NUL. `null=off` emits `--no-null`.
             renames: opposite of --no-renames. `renames=off` emits `--no-renames`.
             short: show status concisely. `short=off` emits `--no-short`.
             untracked_files: show untracked files, optional modes: all, normal, no.
+                Value optional: `True` for the bare flag, or pass one.
                 `untracked_files=off` emits `--no-untracked-files`.
             verbose: be verbose. `verbose=off` emits `--no-verbose`.
         """
@@ -544,7 +551,7 @@ class _Git(Tool):
         force_create: _Value = ...,
         merge: _Flag = ...,
         quiet: _Flag = ...,
-        track: _Flag = ...,
+        track: _ValuedFlag = ...,
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
@@ -562,8 +569,8 @@ class _Git(Tool):
             merge: perform a 3-way merge with the new branch. `merge=off` emits
                 `--no-merge`.
             quiet: suppress progress reporting. `quiet=off` emits `--no-quiet`.
-            track: set branch tracking configuration. `track=off` emits
-                `--no-track`.
+            track: set branch tracking configuration. Value optional: `True` for the
+                bare flag, or pass one. `track=off` emits `--no-track`.
         """
         ...
     def tag(

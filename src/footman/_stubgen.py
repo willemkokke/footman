@@ -61,7 +61,8 @@ def _imports(body: str) -> str:
     import re
 
     typing = ["Any"] + (["Literal"] if "Literal[" in body else [])
-    names = ["Tool"] + [n for n in ("_Flag", "_Value") if re.search(rf"\b{n}\b", body)]
+    aliases = ("_Flag", "_Value", "_ValuedFlag")
+    names = ["Tool"] + [n for n in aliases if re.search(rf"\b{n}\b", body)]
     lines = []
     if "Sequence[" in body:
         lines.append("from collections.abc import Sequence")
@@ -159,6 +160,8 @@ def _annotation(option: Option) -> str:
     """
     if option.type_name == "bool":
         return "_Flag"
+    if option.type_name == "optvalue":
+        return "_ValuedFlag"  # usable bare or with a value — `--gpg-sign[=<key>]`
     if option.choices:
         literal = "Literal[" + ", ".join(repr(c) for c in option.choices) + "]"
         return f"{literal} | Sequence[{literal}] | None"
@@ -200,6 +203,8 @@ def _arg_lines(option: Option) -> list[str]:
     text = option.help.rstrip(".")
     if option.type_name.startswith("list[") or option.type_name.endswith("[]"):
         text = f"{text}. May be repeated: a list emits the flag once per item"
+    if option.type_name == "optvalue":
+        text = f"{text}. Value optional: `True` for the bare flag, or pass one"
     if option.negation:
         default_on = option.default is True
         lead = "Defaults on — " if default_on else ""

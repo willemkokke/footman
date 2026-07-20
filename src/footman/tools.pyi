@@ -62,6 +62,11 @@ _Flag = bool | _Off | None
 # whatever it is handed and repeats the flag for each item of a sequence,
 # so a narrower type would reject calls that demonstrably work.
 _Value = str | int | float | Sequence[str] | _Off | None
+# An option whose value is *optional* — usable bare (`gpg_sign=True`, sign
+# with the default key) or with a value (`gpg_sign="KEY"`). Both spell a
+# valid command; the tool prints its placeholder attached to the flag,
+# `--gpg-sign[=<key-id>]`, which is how footman tells the two apart.
+_ValuedFlag = bool | _Value
 
 _NEGATIONS: dict[str, dict[str, str]]
 

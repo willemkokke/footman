@@ -6,7 +6,7 @@
 from collections.abc import Sequence
 from typing import Any, Literal
 
-from footman.tools import Tool, _Flag, _Value
+from footman.tools import Tool, _Flag, _Value, _ValuedFlag
 
 class _Ruff(Tool):
     def __call__(  # type: ignore[override]
@@ -46,8 +46,8 @@ class _Ruff(Tool):
     def check(
         self,
         *args: str,
-        add_ignore: _Flag = ...,
-        add_noqa: _Flag = ...,
+        add_ignore: _ValuedFlag = ...,
+        add_noqa: _ValuedFlag = ...,
         cache_dir: _Value = ...,
         color: Literal["auto", "always", "never"]
         | Sequence[Literal["auto", "always", "never"]]
@@ -143,9 +143,11 @@ class _Ruff(Tool):
         Args:
             add_ignore: Enable automatic additions of `ruff:ignore` comments to
                 failing lines. Optionally provide a reason to append after the rule
-                names. Requires preview mode.
+                names. Requires preview mode. Value optional: `True` for the bare
+                flag, or pass one.
             add_noqa: Enable automatic additions of `noqa` directives to failing
-                lines. Optionally provide a reason to append after the codes.
+                lines. Optionally provide a reason to append after the codes. Value
+                optional: `True` for the bare flag, or pass one.
             cache_dir: Path to the cache directory.
             color: Control when colored output is used.
             config: Either a path to a TOML configuration file (`pyproject.toml` or

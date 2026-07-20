@@ -59,6 +59,16 @@ def _git() -> None:
     tools.git.status(short=True, branch=True)
     tools.git.switch("main", create=False)
     tools.git.clone("https://example.invalid/x.git", depth=1, quiet=True)
+    # An optional-value option works both ways: bare (sign with the default
+    # key) and with a value (a specific key). Both must type-check — a stub
+    # that typed it bool-only would reject the second, one that typed it
+    # value-only would reject the first.
+    tools.git.commit(message="signed", gpg_sign=True)
+    tools.git.commit(message="signed", gpg_sign="ABCD1234")
+    tools.git.status(untracked_files=True)
+    tools.git.status(untracked_files="all")
+    tools.ruff.check("src", add_noqa=True)
+    tools.ruff.check("src", add_noqa="suppressed for release")
 
 
 def _docker() -> None:
