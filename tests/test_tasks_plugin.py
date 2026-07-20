@@ -153,6 +153,28 @@ def test_shots_lists_unavailable_without_rich(plugin_project, capsys, monkeypatc
     assert "requires rich" in capsys.readouterr().err
 
 
+def test_cell_style_translates_pytes_bright_colours():
+    """pyte says "brightblack"; rich says "bright_black" and silently
+    ignores what it cannot parse — so dim text rendered in the normal
+    foreground, and fish's grey autosuggestion read as characters typed
+    into the prompt. (`f77` on a Linux runner, where the Fortran `f77`
+    command exists for fish to suggest.)"""
+    from footman.tasks.docs import _cell_style
+
+    class Cell:
+        bold = italics = underscore = reverse = False
+        bg = "default"
+
+        def __init__(self, fg):
+            self.fg = fg
+
+    assert _cell_style(Cell("brightblack")) == "bright_black"
+    assert _cell_style(Cell("brightred")) == "bright_red"
+    assert _cell_style(Cell("red")) == "red"  # plain names pass through
+    assert _cell_style(Cell("87d7ff")) == "#87d7ff"  # pyte's bare hex gains its #
+    assert _cell_style(Cell("default")) == ""
+
+
 def test_reduce_frames_keeps_only_the_final_repaint():
     from footman.tasks.docs import reduce_frames
 

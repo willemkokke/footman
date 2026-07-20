@@ -438,7 +438,9 @@ def _cell_style(char: Any) -> str:
         if attr and attr != "default":
             # pyte names ansi colours ("red") and spells the rest as bare
             # 6-digit hex ("87d7ff") — rich wants a `#` on the hex form.
-            longhand = f"#{attr}" if _HEX6.fullmatch(attr) else attr
+            longhand = (
+                f"#{attr}" if _HEX6.fullmatch(attr) else _BRIGHT.sub(r"bright_\1", attr)
+            )
             bits.append(f"{prefix}{longhand}")
     return " ".join(bits)
 
@@ -474,6 +476,11 @@ def _screens(
 
 
 _HEX6 = re.compile(r"[0-9a-fA-F]{6}")
+# pyte spells the bright ANSI colours "brightblack"; rich spells them
+# "bright_black" and silently ignores anything it cannot parse — which
+# renders dim text in the normal foreground. That is how fish's grey
+# autosuggestion came to look like characters typed into the prompt.
+_BRIGHT = re.compile(r"^bright([a-z]+)$")
 _SVG_SHELL = re.compile(r"^\s*<svg[^>]*>|</svg>\s*$")
 
 

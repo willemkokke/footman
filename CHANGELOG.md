@@ -90,6 +90,14 @@ versions may include breaking changes.
   string of escapes that silently sources nothing. Install and uninstall
   build that line through the same helper, so uninstall can't strand it.
   The Windows CI job now drives the real git-bash to prove detection.
+- **Casts render dim text as dim.** pyte spells the bright ANSI
+  colours `brightblack`; rich spells them `bright_black` and silently
+  ignores a style it cannot parse — so anything dim was drawn in the
+  normal foreground. That is the whole story behind the stray "77" in
+  the fish recording: it was fish's own autosuggestion (`f77`, a real
+  Fortran command on the Linux build machine; `factor` on macOS) drawn
+  in white instead of grey, so it read as characters typed into the
+  prompt rather than a suggestion.
 - **Casts no longer type the terminal's own answers into the prompt.**
   The recorder answers cursor-position queries because PSReadLine and
   reedline paint nothing without one — but fish asks *mid-session* and
