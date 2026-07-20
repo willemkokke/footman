@@ -405,3 +405,55 @@ def test_in_process_preference_survives_subcommand_chaining():
     assert tools.Tool("coverage", in_process=True).report._prefer_in_process is True
     assert tools.Tool("mkdocs", in_process=True).build._prefer_in_process is True
     assert tools.Tool("git").status._prefer_in_process is False
+
+
+# --- how a tool spells "off" ---------------------------------------------------
+
+
+def test_off_uses_the_tools_own_negation():
+    """`off` assumed `--no-<name>`, which is wrong often enough to break
+    real commands: `mkdocs build --no-clean` is rejected outright — the
+    flag is `--dirty`. The exceptions are extracted from the tools, not
+    guessed."""
+    from footman.tools import _flags, off
+
+    assert _flags({"clean": off}, "mkdocs") == ["--dirty"]
+    assert _flags({"use_directory_urls": off}, "mkdocs") == ["--no-directory-urls"]
+    assert _flags({"strict": off}, "mkdocs") == ["--no-strict"]  # convention holds
+    assert _flags({"fix": off}, "ruff") == ["--no-fix"]  # other tools unaffected
+    assert _flags({"clean": off}) == ["--no-clean"]  # no tool named: the default
+
+
+def test_click_extraction_reads_the_real_negations():
+    """click states a negatable flag as opts + secondary_opts — the fact
+    `off` needs and cannot infer. This is the extractor that fills the
+    table, run against the real mkdocs."""
+    pytest.importorskip("mkdocs")
+    import mkdocs.__main__ as entry
+
+    from footman._toolspec import from_click
+
+    spec = from_click(entry.cli, name="mkdocs")
+    assert spec.name == "mkdocs" and spec.in_process is True
+    assert {"build", "serve", "gh_deploy"} <= {v.name for v in spec.verbs}
+    assert spec.negations() == {
+        "clean": "--dirty",
+        "use_directory_urls": "--no-directory-urls",
+    }
+    build = next(v for v in spec.verbs if v.name == "build")
+    clean = next(o for o in build.options if o.name == "clean")
+    assert clean.type_name == "bool" and clean.negation == "--dirty"
+    assert clean.help  # the tool's own words, for the stub's docstring
+
+
+def test_negation_table_matches_what_the_tools_say():
+    """The committed table is a cache of what the tools state; if a tool
+    changes its spelling, this fails rather than emitting a flag the tool
+    will reject."""
+    pytest.importorskip("mkdocs")
+    import mkdocs.__main__ as entry
+
+    from footman._toolspec import from_click
+    from footman.tools import _NEGATIONS
+
+    assert from_click(entry.cli, name="mkdocs").negations() == _NEGATIONS["mkdocs"]

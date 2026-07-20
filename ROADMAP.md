@@ -35,8 +35,9 @@ What actually remains, in order:
   instead of lying. It also fixes `off`: the negation is per-flag data
   only the tool knows — `mkdocs build --no-clean` is rejected, the real
   flag is `--dirty`, and 5 of mkdocs' 8 negatable flags disagree with
-  the `--no-<name>` assumption. Waits for the work migration, which
-  will say which tools matter most.
+  the `--no-<name>` assumption. Built next, then pressure-tested
+  through the work migration alongside the rest of the runner — 1.0
+  ships the tools tested, not merely written.
 - **The stability promise, written down**: decorator surface, CLI grammar,
   `--json` schema additive-only, manifest format additive-only. Then a bake
   cycle with no breaking changes.

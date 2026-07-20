@@ -1,0 +1,174 @@
+"""What a command-line tool says about itself — extracted, not transcribed.
+
+The `tools.*` bridge translates keyword arguments mechanically, which is
+what keeps it from going stale the way hand-written wrappers do. But two
+things about a tool cannot be derived from the call: what its options
+*mean*, and how it spells a negation.
+
+The second one is a bug, not a nicety. `off` emits `--no-<name>`, which
+is right for most tools and wrong for enough to matter: `mkdocs build
+--no-clean` is rejected outright — the flag is `--dirty` — and five of
+mkdocs' eight negatable options disagree with the convention. Only the
+tool knows, so footman asks it.
+
+Extraction, richest first:
+
+* **click** — `Command.params` carries `opts`, `secondary_opts` (the true
+  negation), the default, the help text, and the type, as data. No
+  parsing, no guessing.
+* **argparse / optparse** — walk the parser's actions (to come).
+* **`--help` text** — for the Rust and Go tools, whose output is regular
+  and which often spell the negation in prose (clap: "Use
+  `--no-unsafe-fixes` to disable"). To come.
+
+Nothing here runs on the completion hot path, and nothing here is
+imported by `tools.py` at call time: the extracted facts are baked into
+a table and a stub, and the extractor only runs when regenerating them.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Any
+
+
+@dataclass(frozen=True)
+class Option:
+    """One option of one tool verb, as the tool describes it."""
+
+    name: str
+    """The Python keyword a task writes: `use_directory_urls`."""
+    flags: tuple[str, ...] = ()
+    """What the tool accepts, longest first: `("--use-directory-urls",)`."""
+    negation: str = ""
+    """How this tool spells "off" — `--dirty`, not always `--no-<name>`.
+    Empty when the option is not a negatable flag."""
+    help: str = ""
+    """The tool's own one-line description, for the stub's docstring."""
+    type_name: str = "str"
+    """The Python type the stub declares: bool, str, int, list[str]."""
+    default: Any = None
+    """The tool's default, when it states one."""
+
+
+@dataclass(frozen=True)
+class Verb:
+    """A subcommand: `mkdocs build`, `ruff check`."""
+
+    name: str
+    help: str = ""
+    options: tuple[Option, ...] = ()
+
+
+@dataclass(frozen=True)
+class ToolSpec:
+    """Everything footman knows about one tool, from the tool itself."""
+
+    name: str
+    help: str = ""
+    version: str = ""
+    """The version this was extracted from — what an audit compares."""
+    verbs: tuple[Verb, ...] = field(default_factory=tuple)
+    in_process: bool = False
+    """Whether the tool can run inside footman's process (it publishes a
+    `[console_scripts]` entry point)."""
+
+    def negations(self) -> dict[str, str]:
+        """`{option: negation}` for every option whose negation is *not*
+        the `--no-<name>` default — the table `off` consults.
+
+        Only the exceptions: a table of things that already work would be
+        noise, and would have to be regenerated far more often.
+        """
+        exceptions: dict[str, str] = {}
+        for verb in self.verbs:
+            for option in verb.options:
+                if not option.negation:
+                    continue
+                default = "--no-" + option.name.replace("_", "-")
+                if option.negation != default:
+                    exceptions[option.name] = option.negation
+        return exceptions
+
+
+def _type_name(param: Any) -> str:
+    """The stub's declared type for a click parameter."""
+    if getattr(param, "is_flag", False):
+        return "bool"
+    kind = getattr(getattr(param, "type", None), "name", "") or ""
+    scalar = {
+        "integer": "int",
+        "float": "float",
+        "boolean": "bool",
+        "path": "str",
+        "filename": "str",
+        "directory": "str",
+        "text": "str",
+        "choice": "str",
+    }.get(kind, "str")
+    return f"list[{scalar}]" if getattr(param, "multiple", False) else scalar
+
+
+def from_click(command: Any, *, name: str = "", version: str = "") -> ToolSpec:
+    """A `ToolSpec` from a click `Group` or `Command`.
+
+    click models a negatable flag as one parameter with `opts` and
+    `secondary_opts` — `--clean` / `--dirty` — which is exactly the fact
+    `off` needs and cannot infer.
+    """
+    tool = name or getattr(command, "name", "") or ""
+    commands = getattr(command, "commands", None)
+    if commands:
+        verbs = tuple(
+            _verb_from_click(verb_name, sub)
+            for verb_name, sub in sorted(commands.items())
+        )
+    else:  # a single-command tool: its options hang off the root
+        verbs = (_verb_from_click("", command),)
+    return ToolSpec(
+        name=tool,
+        help=_first_line(getattr(command, "help", "") or ""),
+        version=version,
+        verbs=verbs,
+        in_process=True,  # a click tool always has a console_scripts entry
+    )
+
+
+def _verb_from_click(name: str, command: Any) -> Verb:
+    options = []
+    for param in getattr(command, "params", ()):
+        if getattr(param, "param_type_name", "") != "option":
+            continue  # positionals arrive as *args, not keywords
+        secondary = tuple(getattr(param, "secondary_opts", ()) or ())
+        options.append(
+            Option(
+                name=param.name,
+                flags=tuple(sorted(param.opts, key=len, reverse=True)),
+                negation=secondary[0] if secondary else "",
+                help=_first_line(getattr(param, "help", "") or ""),
+                type_name=_type_name(param),
+                default=_plain_default(param),
+            )
+        )
+    return Verb(
+        name=name.replace("-", "_"),
+        help=_first_line(getattr(command, "help", "") or ""),
+        options=tuple(sorted(options, key=lambda o: o.name)),
+    )
+
+
+def _plain_default(param: Any) -> Any:
+    """The default, when it is a plain value worth showing in a stub."""
+    default = getattr(param, "default", None)
+    if isinstance(default, (bool, int, float, str)) or default is None:
+        return default
+    return None  # click sentinels and callables say nothing useful here
+
+
+def _first_line(text: str) -> str:
+    """The tool's own summary: its help's first sentence-ish line."""
+    for line in text.strip().splitlines():
+        stripped = line.strip()
+        if stripped:
+            return stripped
+    return ""

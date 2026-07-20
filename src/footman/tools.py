@@ -66,7 +66,28 @@ class _Off:
 off = _Off()
 
 
-def _flags(kwargs: dict[str, Any]) -> list[str]:
+# How a tool spells "off" when it is *not* `--no-<name>`. Only the
+# exceptions live here, extracted from the tools themselves (click states
+# it as `secondary_opts`) rather than assumed: `mkdocs build --no-clean`
+# is rejected outright — the flag is `--dirty`. Regenerate with
+# `fm footman tools negations`.
+_NEGATIONS: dict[str, dict[str, str]] = {
+    "mkdocs": {
+        "clean": "--dirty",
+        "use_directory_urls": "--no-directory-urls",
+    },
+}
+
+
+def _negation(tool: str, key: str) -> str:
+    """The flag that turns *key* off for *tool*."""
+    known = _NEGATIONS.get(tool, {})
+    if key in known:
+        return known[key]
+    return "--no-" + key.rstrip("_").replace("_", "-")
+
+
+def _flags(kwargs: dict[str, Any], tool: str = "") -> list[str]:
     """Translate keyword arguments into CLI flags, mechanically."""
     argv: list[str] = []
     for key, value in kwargs.items():
@@ -74,7 +95,7 @@ def _flags(kwargs: dict[str, Any]) -> list[str]:
             continue
         name = key.rstrip("_").replace("_", "-")
         if value is off:
-            argv.append(f"--no-{name}")
+            argv.append(_negation(tool, key))
             continue
         flag = f"-{name}" if len(name) == 1 else f"--{name}"
         if value is True:
@@ -168,7 +189,7 @@ class Tool:
         in_process: bool | None = None,
         **kwargs: Any,
     ) -> int:
-        tail = [*self._base, *map(str, args), *_flags(kwargs)]
+        tail = [*self._base, *map(str, args), *_flags(kwargs, self._argv0)]
         wanted = self._prefer_in_process if in_process is None else in_process
         if wanted:
             ep = _console_entrypoint(self._argv0)  # metadata only — no import
