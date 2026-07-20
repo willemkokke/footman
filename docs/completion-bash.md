@@ -34,6 +34,15 @@ For the **current session only** — no rc file touched:
 eval "$(fm --setup-completion bash)"
 ```
 
+## Windows (git-bash)
+
+git-bash is a first-class target: `fm --install-completion` with no
+argument detects it (via the `MSYSTEM` variable it exports — PowerShell's
+`PSModulePath` is machine-level and set inside git-bash too, so it can't
+be the tell), and the `source` line written into `~/.bashrc` uses the
+MSYS spelling `/c/Users/…` rather than a backslashed Windows path, which
+bash would read as escapes and silently source nothing.
+
 ## What you get
 
 Task names, group names, flags, and choice values all complete, chain-aware:

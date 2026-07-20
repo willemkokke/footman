@@ -299,11 +299,16 @@ def detect_shell() -> str | None:
     confidently recognised.
     """
     if os.name == "nt":
-        # PSModulePath is machine-level environment on modern Windows, so
-        # this over-claims from cmd.exe — acceptable, because cmd has no
-        # completion mechanism and a PowerShell install is the most useful
-        # answer on that box. (Real spelling kept; Windows env lookup is
-        # case-insensitive anyway.)
+        # git-bash (and MSYS2) export MSYSTEM — checked first, because
+        # PowerShell's PSModulePath is machine-level environment and is set
+        # inside git-bash too. Without this a git-bash user is told "pwsh",
+        # which is a small lie that installs the wrong hook.
+        if os.environ.get("MSYSTEM"):
+            return "bash"
+        # PSModulePath still over-claims from cmd.exe — acceptable, because
+        # cmd has no completion mechanism and a PowerShell install is the
+        # most useful answer on that box. (Real spelling kept; Windows env
+        # lookup is case-insensitive anyway.)
         return "pwsh" if os.environ.get("PSModulePath") else None  # noqa: SIM112
     return _detect_posix()
 
@@ -382,6 +387,31 @@ def _nu_config_path() -> Path:
     return Path(path)
 
 
+def _bash_path(path: Path | str, *, windows: bool | None = None) -> str:
+    """*path* as the bash on this platform can read it.
+
+    A Windows path is unusable inside a bash rc: backslashes are escapes,
+    so `source C:\\Users\\me\\...` silently sources nothing. git-bash
+    understands the MSYS spelling — `/c/Users/me/...` — which is what this
+    produces; elsewhere the path is already right.
+
+    *windows* is explicit so the translation can be tested from any
+    platform: string surgery only, because building a Windows `Path` on a
+    POSIX box is impossible and monkeypatching `os.name` to pretend
+    otherwise breaks pathlib for everything else in the process.
+    """
+    if windows is None:
+        windows = os.name == "nt"
+    text = str(path)
+    if not windows:
+        return text
+    text = text.replace("\\", "/")
+    drive, colon, rest = text.partition(":")
+    if colon and len(drive) == 1:
+        return f"/{drive.lower()}{rest}"
+    return text
+
+
 def install(shell: str, prog: str) -> list[str]:
     """Install completion for *shell*; return the lines to tell the user.
 
@@ -411,9 +441,9 @@ def install(shell: str, prog: str) -> list[str]:
     elif shell == "nushell":
         hooks = [(_nu_config_path(), f'source "{target}"')]
     elif shell == "zsh":
-        hooks = [(_zsh_rc(), f"source {target}")]
-    else:  # bash
-        hooks = [(rc, f"source {target}") for rc in _bash_rcs()]
+        hooks = [(_zsh_rc(), f"source {_bash_path(target)}")]
+    else:  # bash — git-bash included, hence the MSYS-spelled path
+        hooks = [(rc, f"source {_bash_path(target)}") for rc in _bash_rcs()]
     lines = [f"installed {target}"]
     for rc, line in hooks:
         if _append_once(rc, line):
@@ -442,10 +472,12 @@ def uninstall(shell: str, prog: str) -> list[str]:
 
     suffix = {"pwsh": "ps1", "nushell": "nu"}.get(shell, shell)
     target = _data_home() / prog / f"completion.{suffix}"
+    # bash/zsh must match install()'s spelling exactly, or uninstall would
+    # remove the script and leave its rc line behind, sourcing nothing.
     hook = {
         "pwsh": f'. "{target}"',
         "nushell": f'source "{target}"',
-    }.get(shell, f"source {target}")
+    }.get(shell, f"source {_bash_path(target)}")
 
     lines: list[str] = []
     if target.exists():

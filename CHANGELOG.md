@@ -73,6 +73,16 @@ versions may include breaking changes.
 
 ### Fixed
 
+- **git-bash on Windows is detected and installed correctly.** A bare
+  `fm --install-completion` inside git-bash used to answer "pwsh",
+  because PowerShell's `PSModulePath` is machine-level environment and
+  is set there too — so the user got a hook their shell would never
+  read. Detection now checks the `MSYSTEM` variable git-bash exports
+  first, and the `source` line written into `~/.bashrc` uses the MSYS
+  spelling (`/c/Users/…`); a backslashed Windows path in a bash rc is a
+  string of escapes that silently sources nothing. Install and uninstall
+  build that line through the same helper, so uninstall can't strand it.
+  The Windows CI job now drives the real git-bash to prove detection.
 - **Casts no longer flash the shell's terminal queries.** pyte doesn't
   consume DCS sequences, so fish's XTGETTCAP capability probe rendered
   its hex payload as screen text for one frame before the prompt

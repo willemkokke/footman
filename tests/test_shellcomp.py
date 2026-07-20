@@ -857,19 +857,64 @@ _DETECT_CASES = [
 def test_detection_from_inside_every_real_shell(
     exe, argv, template, expected, monkeypatch
 ):
-    if os.name == "nt" and exe in ("bash", "zsh", "fish"):
-        # Same scope as every other POSIX-shell test here: git-bash and
-        # friends on Windows differ in paths and process semantics, and
-        # pwsh is the Windows completion story. nu and pwsh still run,
-        # which is what exercises the PSModulePath branch for real.
-        pytest.skip("POSIX shells on Windows are out of scope")
+    if os.name == "nt" and exe in ("zsh", "fish"):
+        # zsh and fish have no Windows story; git-bash does, and is driven
+        # below — MSYSTEM is how footman recognises it.
+        pytest.skip("zsh/fish on Windows are out of scope")
     if shutil.which(exe) is None:
         pytest.skip(f"{exe} is not installed")
     monkeypatch.setenv("SHELL", "/bin/false")  # $SHELL must not be the answer
-    command = template.format(py=sys.executable, code=_PROBE)
+    # git-bash cannot read a backslashed Windows path in its command line
+    # any more than in an rc file.
+    py = _shellcomp._bash_path(sys.executable) if exe == "bash" else sys.executable
+    command = template.format(py=py, code=_PROBE)
     out = subprocess.run([*argv, command], capture_output=True, text=True, timeout=60)
     assert out.returncode == 0, out.stderr
-    # Windows has no process walk: PowerShell's machine-level PSModulePath
-    # answers "pwsh" whatever shell is asking — the documented over-claim.
-    want = "pwsh" if os.name == "nt" else expected
+    # On Windows there is no process walk: git-bash is recognised by the
+    # MSYSTEM it exports, and everything else falls to PowerShell's
+    # machine-level PSModulePath — the documented over-claim.
+    want = expected
+    if os.name == "nt":
+        want = "bash" if exe == "bash" else "pwsh"
     assert out.stdout.strip() == want
+
+
+# --- git-bash on Windows -------------------------------------------------------
+
+
+def test_detect_shell_windows_prefers_git_bash_over_the_powershell_tell(monkeypatch):
+    """PSModulePath is machine-level and set inside git-bash too, so the
+    MSYSTEM tell has to win — otherwise a git-bash user is told "pwsh" and
+    installs a hook their shell will never read."""
+    monkeypatch.setattr(_shellcomp.os, "name", "nt")
+    monkeypatch.setenv("PSModulePath", r"C:\Program Files\PowerShell\Modules")
+    monkeypatch.setenv("MSYSTEM", "MINGW64")
+    assert _shellcomp.detect_shell() == "bash"
+
+
+def test_bash_path_speaks_msys_on_windows():
+    """A Windows path is unusable in a bash rc — backslashes are escapes,
+    so the source line would silently source nothing."""
+    windows_path = r"C:\Users\me\.local\share\fm\completion.bash"
+    assert (
+        _shellcomp._bash_path(windows_path, windows=True)
+        == "/c/Users/me/.local/share/fm/completion.bash"
+    )
+
+
+def test_bash_path_is_a_noop_off_windows():
+    assert (
+        _shellcomp._bash_path(Path("/home/me/x.bash"), windows=False)
+        == "/home/me/x.bash"
+    )
+
+
+def test_bash_install_and_uninstall_agree_on_the_rc_line(home):
+    """Both sides build the source line independently; if they ever
+    disagree, uninstall removes the script and leaves an rc line pointing
+    at nothing. (The Windows spelling has its own unit test above; this
+    pins the parity that makes it safe.)"""
+    _shellcomp.install("bash", "fm")
+    assert "source" in (home / ".bashrc").read_text()
+    _shellcomp.uninstall("bash", "fm")
+    assert "source" not in (home / ".bashrc").read_text()
