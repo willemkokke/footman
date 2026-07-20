@@ -429,7 +429,10 @@ def test_click_extraction_reads_the_real_negations():
     `off` needs and cannot infer. This is the extractor that fills the
     table, run against the real mkdocs."""
     pytest.importorskip("mkdocs")
-    import mkdocs.__main__ as entry
+    # An optional tool: importorskip above guards the run, and the
+    # type-check job installs the shots group, not every tool footman
+    # can drive.
+    import mkdocs.__main__ as entry  # type: ignore[import-not-found]
 
     from footman._toolspec import from_click
 
@@ -451,7 +454,10 @@ def test_negation_table_matches_what_the_tools_say():
     changes its spelling, this fails rather than emitting a flag the tool
     will reject."""
     pytest.importorskip("mkdocs")
-    import mkdocs.__main__ as entry
+    # An optional tool: importorskip above guards the run, and the
+    # type-check job installs the shots group, not every tool footman
+    # can drive.
+    import mkdocs.__main__ as entry  # type: ignore[import-not-found]
 
     from footman._toolspec import from_click
     from footman.tools import _NEGATIONS
