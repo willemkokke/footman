@@ -90,6 +90,12 @@ versions may include breaking changes.
   string of escapes that silently sources nothing. Install and uninstall
   build that line through the same helper, so uninstall can't strand it.
   The Windows CI job now drives the real git-bash to prove detection.
+- **Recordings no longer depend on what's installed beside footman.**
+  fish's autosuggestion drew on the build machine's PATH, so the same
+  script recorded `factor` on macOS and `f77` — the Fortran compiler —
+  on the Linux runner, which read as stray characters at the prompt.
+  Autosuggestions are off in the recording's scratch config now: a cast
+  should show footman's completion, not the host's toolchain.
 - **Casts render dim text as dim.** pyte spells the bright ANSI
   colours `brightblack`; rich spells them `bright_black` and silently
   ignores a style it cannot parse — so anything dim was drawn in the

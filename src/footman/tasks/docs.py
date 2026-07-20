@@ -574,6 +574,12 @@ def _boot_shell(
     if shell == "fish":
         boot = (
             "set -g fish_greeting ''; "
+            # Autosuggestions draw on whatever is installed beside footman:
+            # the build machine offered `factor` on macOS and `f77` (the
+            # Fortran compiler) on Linux, so the same script recorded
+            # differently per box. A recording should show footman's
+            # completion, not the host's PATH.
+            "set -g fish_autosuggestion_enabled 0; "
             f"fish_add_path --prepend {bin_dir!r}; "
             f"{prog} --setup-completion fish | source; "
             "function fish_prompt; set_color green; echo -n '\u276f '; "
