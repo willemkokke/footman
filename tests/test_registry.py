@@ -72,3 +72,22 @@ def test_collision_is_a_registration_error():
 
     with pytest.raises(RegistrationError, match="already has a task"):
         g.task(name="build")(lambda: None)
+
+
+def test_infinite_implies_no_progress():
+    from footman.registry import Group, is_infinite, wants_progress
+
+    g = Group("root")
+
+    @g.task(infinite=True)
+    def serve(): ...
+
+    @g.task
+    def plain(): ...
+
+    @g.task(progress=False)
+    def repl(): ...
+
+    assert is_infinite(serve) and not wants_progress(serve)  # the implication
+    assert not is_infinite(plain) and wants_progress(plain)
+    assert not is_infinite(repl) and not wants_progress(repl)  # timing-only opt-out

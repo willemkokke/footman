@@ -148,13 +148,13 @@ def _discover(
         files = [one] if one.is_file() else []
     else:
         filename = cfg.get("tasks")
-        name = filename if isinstance(filename, str) else _paths.DEFAULT_TASKS_FILE
+        name = filename if isinstance(filename, str) else _brand.tasks_file
         files = _paths.task_files(cwd, ceiling, name)
 
     if files:
         return files, cfg
 
-    looked = override or cfg.get("tasks") or _paths.DEFAULT_TASKS_FILE
+    looked = override or cfg.get("tasks") or _brand.tasks_file
     if wants_help:
         # A stuck newcomer asking for help should see the globals (-f/-C are the
         # way out) — not a bare one-liner. Global help over an empty tree, then
@@ -229,11 +229,12 @@ def _styled_name(name: str, width: int) -> str:
 
 
 def _styled_help(help_text: str) -> str:
-    """A help line for a listing: the `(unavailable: …)` note dimmed."""
-    head, sep, note = help_text.partition("(unavailable:")
-    if not sep:
-        return help_text
-    return f"{head}{_describe.dim(f'(unavailable:{note}', _color_out)}"
+    """A help line for a listing: trailing status notes dimmed."""
+    for marker in ("(runs until", "(unavailable:"):
+        head, sep, note = help_text.partition(marker)
+        if sep:
+            return f"{head}{_describe.dim(f'{marker}{note}', _color_out)}"
+    return help_text
 
 
 def _print_list(tree: dict) -> None:
@@ -280,6 +281,8 @@ def _print_task_help(tree: dict, path: list[str]) -> None:
     if task.get("long"):  # the docstring's body, structure preserved
         body = "\n".join(f"  {ln}".rstrip() for ln in task["long"].splitlines())
         print(f"\n{body}")
+    if task.get("infinite"):
+        print(_describe.dim("\n  runs until you stop it — Ctrl-C", on))
     if task.get("disabled"):
         print(_describe.dim(f"\n  unavailable here: {task['disabled']}", on))
     positionals = [p for p in task["params"] if p["kind"] in ("argument", "variadic")]
@@ -862,8 +865,14 @@ def _execute(
             # until the next plain run. Build fresh, touch no cache.
             tree = manifest.build_manifest(reg)["tree"]
         else:
+            cfg_tasks = cfg.get("tasks")
             tree = manifest.sync_manifest(
-                reg, Path.cwd(), completion_max_age=config.completion_max_age(cfg)
+                reg,
+                Path.cwd(),
+                completion_max_age=config.completion_max_age(cfg),
+                tasks_file=cfg_tasks
+                if isinstance(cfg_tasks, str)
+                else _brand.tasks_file,
             )["tree"]
     except manifest.ManifestError as exc:  # broken completer, bad markers, …
         return _refuse(json_mode, str(exc))

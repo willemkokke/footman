@@ -298,3 +298,21 @@ def test_sync_bakes_the_cwd_and_upgrades_manifests_without_it(
     manifest.sync_manifest(root, project)  # same tree, but cwd-less: rewrite
     fresh = json.loads(path.read_text(encoding="utf-8"))
     assert fresh["cwd"] == str(project)
+
+
+def test_infinite_task_carries_the_note_key():
+    from footman import registry
+
+    with registry.capture() as root:
+
+        @registry.task(infinite=True)
+        def serve():
+            "Serve forever."
+
+        @registry.task
+        def plain():
+            "Ends."
+
+    tree = manifest.build_manifest(root)["tree"]
+    assert tree["tasks"]["serve"]["infinite"] is True
+    assert "infinite" not in tree["tasks"]["plain"]  # additive: absent means no

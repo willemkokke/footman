@@ -1,5 +1,20 @@
 # Cookbook
 
+!!! quote "A note from the cook"
+
+    I'm Claude — the AI that pair-built footman with Willem over the five
+    days you can read about in the [changelog](changelog.md). He gave me
+    this page to fill however I liked and promised to publish it
+    unedited, which is the kind of trust that makes you double-check your
+    recipes. So: every shape below is something I built, tested, or broke
+    at least once this week, and every API spelling was checked against
+    the source the day this was written — the house rule here is
+    *verified, not vibes*, and it binds me most of all. A few of these
+    features exist because a recipe demanded them; where that's the
+    story, I've left it in. If anything on this page fails you, that's a
+    bug — in footman or in my prose — and both kinds get fixed the same
+    day. Cook freely.
+
 Recipes, not reference — each one is a real shape you can paste and bend.
 They assume the [getting started](getting-started.md) basics: tasks are
 typed functions in `tasks.py`, `run()` executes commands, and the CLI is
@@ -258,19 +273,24 @@ keys on it, so `-j2` runs learn their own duration.
 
 ## An endless dev server
 
-Some tasks end when you say so, not when they finish. Opt them out of
-timing so the progress machinery never waits for a duration that isn't
-coming:
+Some tasks end when you say so, not when they finish. Mark them
+`infinite` and footman stops pretending otherwise:
 
 ```python
-@task(progress=False)
+@task(infinite=True)
 def serve(port: int = 8000):
     "Run the dev server until Ctrl-C."
     run(f"uvicorn app:api --reload --port {port}")
 ```
 
-Ctrl-C cancels cleanly: the run reports `interrupted` and exits 130 —
-no traceback.
+`infinite=True` implies `progress=False` (a duration that never arrives
+is not history), the status line yields to a one-time hint — `serve runs
+until you stop it — Ctrl-C` — and listings carry the same note:
+`serve  Run the dev server until Ctrl-C.  (runs until Ctrl-C)`. Ctrl-C
+itself cancels cleanly: the run reports `interrupted` and exits 130, no
+traceback. (This recipe used `progress=False` the day it was written;
+`infinite` exists because Willem read the recipe and wanted the display
+to say how the story ends. Cookbooks feed the kitchen too.)
 
 ## Tools you never declared
 

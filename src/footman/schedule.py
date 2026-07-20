@@ -20,8 +20,8 @@ from dataclasses import dataclass, field
 from itertools import count
 from typing import Any, TextIO
 
-from footman import _progress, context, executor
-from footman.registry import Group, Task, wants_progress
+from footman import _describe, _progress, context, executor
+from footman.registry import Group, Task, is_infinite, wants_progress
 from footman.split import ChainError, Segment
 
 
@@ -198,15 +198,33 @@ def run_plan(
     # path instead: output streams as it happens, and run()'s TTY mode
     # (colour, in-place step rewrite) applies. `fm check` is this shape.
     sequential = sequential or len(nodes) == 1
+    # A run containing an infinite task has no progress to show — its
+    # duration isn't late, it's intentional. The status line yields to a
+    # one-time hint (printed at the node's start) saying how this ends.
+    endless = any(is_infinite(n.fn) for n in nodes)
     with context.routing() as (real, err):
-        status = _make_status(err, ctx_config, capture, estimate, progress)
+        status = _make_status(
+            err, ctx_config, capture, estimate, progress and not endless
+        )
         if status is not None:
             status.unit_added(len(nodes))
             context.set_status(status)  # parallel() and the routers find it
             status.open()
         try:
             if sequential:
-                _run_sequential(nodes, real, keep_going, capture, ctx_config, status)
+                cfg = ctx_config or {}
+                hint_err = (
+                    err
+                    if endless
+                    and not capture
+                    and not cfg.get("quiet")
+                    and err.isatty()
+                    and not _plain_output(bool(cfg.get("no_color")))
+                    else None
+                )
+                _run_sequential(
+                    nodes, real, keep_going, capture, ctx_config, status, hint_err
+                )
             else:
                 _run_parallel(
                     nodes, real, err, keep_going, capture, ctx_config, status, jobs
@@ -218,7 +236,9 @@ def run_plan(
     return [n.result for n in _toposort(nodes) if n.result is not None]
 
 
-def _run_sequential(nodes, real, keep_going, capture, ctx_config, status) -> None:
+def _run_sequential(
+    nodes, real, keep_going, capture, ctx_config, status, err=None
+) -> None:
     done: dict[int, bool] = {}
     failed = False
     width = max((len(n.seg.task) for n in nodes), default=0)
@@ -238,6 +258,10 @@ def _run_sequential(nodes, real, keep_going, capture, ctx_config, status) -> Non
         )
         if status is not None:
             status.unit_started(node.seg.task)
+        if err is not None and is_infinite(node.fn):
+            hint = f"{node.seg.task} runs until you stop it — Ctrl-C"
+            err.write(_describe.dim(hint, True) + "\n")
+            err.flush()
         node.result = executor.run_task(node.fn, node.seg, ctx)
         node.state = "done"
         if status is not None:

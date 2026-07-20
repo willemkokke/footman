@@ -539,3 +539,33 @@ def test_buffered_blocks_stay_plain_when_piped(monkeypatch):
     drive(tasks, "a b")
     text = out_fake.getvalue()
     assert "ok   " in text and "\033" not in text
+
+
+def test_infinite_task_hints_and_suppresses_the_status_line(monkeypatch):
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    err_fake = _Tty()
+    monkeypatch.setattr(sys, "stderr", err_fake)
+    monkeypatch.setattr(sys, "stdout", io.StringIO())
+
+    def tasks(reg):
+        @reg.task(infinite=True)
+        def serve():
+            run("echo up", title="up")
+
+    drive(tasks, "serve")
+    err = err_fake.getvalue()
+    assert "serve runs until you stop it — Ctrl-C" in err
+    assert "\r" not in err  # no status-line repaints: nothing is "in progress"
+
+
+def test_infinite_hint_respects_quiet(monkeypatch):
+    err_fake = _Tty()
+    monkeypatch.setattr(sys, "stderr", err_fake)
+    monkeypatch.setattr(sys, "stdout", io.StringIO())
+
+    def tasks(reg):
+        @reg.task(infinite=True)
+        def serve(): ...
+
+    drive(tasks, "serve", ctx_config={"quiet": True})
+    assert "Ctrl-C" not in err_fake.getvalue()

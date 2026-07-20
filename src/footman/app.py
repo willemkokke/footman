@@ -43,12 +43,14 @@ class Brand:
 
     `name` is the long / display name (the `--version` banner); `prog` is
     the short command name (the error prefix and hints); `version` is *your*
-    version string.
+    version string; `tasks_file` is the filename your users write tasks in
+    (config `tasks` still overrides it per project).
     """
 
     name: str = "footman"
     prog: str = "fm"
     version: str = __version__
+    tasks_file: str = "tasks.py"
 
 
 DEFAULT_BRAND = Brand()
@@ -62,8 +64,14 @@ class App:
         name: str = "footman",
         prog: str = "fm",
         version: str | None = None,
+        tasks_file: str = "tasks.py",
     ) -> None:
-        self.brand = Brand(name=name, prog=prog, version=version or __version__)
+        self.brand = Brand(
+            name=name,
+            prog=prog,
+            version=version or __version__,
+            tasks_file=tasks_file,
+        )
 
     def run(self, argv: list[str] | None = None) -> int:
         """Resolve and run the CLI, returning the process exit code.

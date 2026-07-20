@@ -78,6 +78,7 @@ class Group:
         requires: str | Sequence[str] = (),
         reason: str = "",
         progress: bool = True,
+        infinite: bool = False,
     ) -> Callable[[Task], Task]: ...
 
     def task(
@@ -91,6 +92,7 @@ class Group:
         requires: str | Sequence[str] = (),
         reason: str = "",
         progress: bool = True,
+        infinite: bool = False,
     ) -> Task | Callable[[Task], Task]:
         """Register a function as a task.
 
@@ -137,6 +139,11 @@ class Group:
         reason (a REPL, a watcher, a network fetch): any run containing it
         never records timing history and never shows a determinate
         progress bar — the indeterminate pulse still does.
+
+        `infinite=True` marks a task that runs until *stopped* — a dev
+        server, a follow-mode tail. It implies `progress=False`, and the
+        run swaps the status line for a one-time hint that Ctrl-C is how
+        this ends. Listings and help carry the same note.
         """
 
         reqs = (requires,) if isinstance(requires, str) else tuple(requires)
@@ -154,6 +161,8 @@ class Group:
                 fn._footman_reason = reason  # type: ignore[attr-defined]
             if not progress:
                 fn._footman_progress = False  # type: ignore[attr-defined]
+            if infinite:
+                fn._footman_infinite = True  # type: ignore[attr-defined]
             self.tasks[key] = fn
             return fn
 
@@ -199,8 +208,17 @@ def _importable(module: str) -> bool:
 
 
 def wants_progress(fn: Task) -> bool:
-    """Whether *fn* consented to timing: `@task(progress=False)` opts out."""
+    """Whether *fn* consented to timing: `@task(progress=False)` opts out,
+    and `infinite=True` implies it — a duration that never arrives is not
+    history."""
+    if getattr(fn, "_footman_infinite", False):
+        return False
     return getattr(fn, "_footman_progress", True) is not False
+
+
+def is_infinite(fn: Task) -> bool:
+    """Whether *fn* runs until stopped: `@task(infinite=True)`."""
+    return getattr(fn, "_footman_infinite", False) is True
 
 
 def availability(fn: Task) -> str | None:

@@ -24,6 +24,11 @@ def main() -> None:
     raise SystemExit(app.run())
 ```
 
+A brand can also rename the tasks file its users write:
+`App(..., tasks_file="acmetasks.py")`. Per-project config (`tasks` in
+`[tool.footman]`) still overrides it, and background completion
+refreshes honour it — the filename rides inside the cached manifest.
+
 Register it as a console script in your package:
 
 ```toml

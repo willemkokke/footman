@@ -30,6 +30,9 @@ def check(): ...
 @task(progress=False)       # duration has no pattern: never timed, only pulses
 def repl(): ...
 
+@task(infinite=True)        # runs until Ctrl-C: hinted at start, never timed
+def serve(): ...
+
 release = group("release", help="Cut a release")
 
 @release.task

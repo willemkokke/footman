@@ -29,7 +29,13 @@ def _rebuild() -> None:
     ceiling = _paths.find_repo_root(cwd)
     cfg = config.load_config(cwd, ceiling)
     filename = cfg.get("tasks")
-    name = filename if isinstance(filename, str) else _paths.DEFAULT_TASKS_FILE
+    if not isinstance(filename, str):
+        # A branded CLI's default filename isn't knowable here — but the
+        # manifest this child refreshes baked it in.
+        cached = manifest.load_manifest(_paths.manifest_path(cwd))
+        baked = cached.get("tasks_file") if isinstance(cached, dict) else None
+        filename = baked if isinstance(baked, str) else _paths.DEFAULT_TASKS_FILE
+    name = filename
     files = _paths.task_files(cwd, ceiling, name)
     if not files:
         return
@@ -44,4 +50,6 @@ def _rebuild() -> None:
             compose.mount_plugins(base, plugins)
 
     reg = discover.load_tree(files, base=base)
-    manifest.sync_manifest(reg, cwd, completion_max_age=config.completion_max_age(cfg))
+    manifest.sync_manifest(
+        reg, cwd, completion_max_age=config.completion_max_age(cfg), tasks_file=name
+    )

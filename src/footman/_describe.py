@@ -212,9 +212,16 @@ def example(path: list[str], task: dict, prog: str) -> str:
 
 
 def task_line(task: dict) -> str:
-    """A task's one-line description, with its availability if disabled."""
-    note = f"(unavailable: {task['disabled']})" if task.get("disabled") else ""
-    return f"{task['help']}  {note}".strip() if note else task["help"]
+    """A task's one-line description, plus how it ends when that's notable:
+    availability if disabled, the Ctrl-C note if it runs until stopped."""
+    notes = []
+    if task.get("infinite"):
+        notes.append("(runs until Ctrl-C)")
+    if task.get("disabled"):
+        notes.append(f"(unavailable: {task['disabled']})")
+    if not notes:
+        return task["help"]
+    return f"{task['help']}  {' '.join(notes)}".strip()
 
 
 def iter_tasks(node: dict, prefix: str = ""):

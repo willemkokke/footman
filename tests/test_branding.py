@@ -74,3 +74,44 @@ def test_help_globals_row_uses_brand(tmp_path):
     result = acme.invoke("--help", cwd=tmp_path)
     assert "help for acme" in result.stdout
     assert "help for fm" not in result.stdout
+
+
+def test_brand_renames_the_default_tasks_file(tmp_path, monkeypatch):
+    """A brand's `tasks_file` sets the filename its users write, and the
+    cascade honours it without any per-project config."""
+    from footman import App, _paths
+    from footman.testing import Runner
+
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
+    (tmp_path / "acmetasks.py").write_text(
+        'from footman import task\n\n@task\ndef ship():\n    "Ship it."\n'
+    )
+    (tmp_path / "tasks.py").write_text(
+        'from footman import task\n\n@task\ndef wrong():\n    "Not this one."\n'
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
+    acme = Runner(
+        App(name="Acme", prog="acme", version="1.0", tasks_file="acmetasks.py")
+    )
+    out = acme.invoke("--list").stdout
+    assert "ship" in out and "wrong" not in out
+
+
+def test_brand_tasks_file_rides_in_the_manifest(tmp_path, monkeypatch):
+    """The background refresh child can't know the brand — so the filename
+    is baked into the manifest it rebuilds from."""
+    import json
+
+    from footman import App, _paths
+    from footman.testing import Runner
+
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
+    (tmp_path / "acmetasks.py").write_text(
+        'from footman import task\n\n@task\ndef ship():\n    "Ship it."\n'
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
+    Runner(App(prog="acme", tasks_file="acmetasks.py")).invoke("--list")
+    baked = json.loads(_paths.manifest_path(tmp_path).read_text(encoding="utf-8"))
+    assert baked["tasks_file"] == "acmetasks.py"

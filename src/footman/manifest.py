@@ -260,6 +260,7 @@ def _finish(spec: dict[str, Any], memo: dict[int, list[str]]) -> dict[str, Any]:
 
 def _task_node(fn: Any, memo: dict[int, list[str]]) -> dict[str, Any]:
     sig = resolved_signature(fn)
+    infinite = registry.is_infinite(fn)
     ctx_name = context_param_name(sig)  # the injected ctx param is not a CLI arg
     parsed = docstrings.parse(inspect.getdoc(fn))
     params = [
@@ -283,6 +284,8 @@ def _task_node(fn: Any, memo: dict[int, list[str]]) -> dict[str, Any]:
             stacklevel=2,
         )
     node: dict[str, Any] = {"help": parsed.summary, "params": params}
+    if infinite:
+        node["infinite"] = True  # additive: listings and help say how it ends
     if parsed.long:
         node["long"] = parsed.long
     # Additive availability annotation (`when=`): the name stays listed and
@@ -343,7 +346,11 @@ def load_manifest(path: Path) -> dict[str, Any] | None:
 
 
 def sync_manifest(
-    root: Group, key_dir: Path, *, completion_max_age: int | None = None
+    root: Group,
+    key_dir: Path,
+    *,
+    completion_max_age: int | None = None,
+    tasks_file: str | None = None,
 ) -> dict[str, Any]:
     """Build the fresh manifest and rewrite the cache only on a hash change.
 
@@ -359,6 +366,10 @@ def sync_manifest(
     # cache collector can tell a deleted project's leftovers from a living
     # one's without guessing from hashes.
     fresh["cwd"] = str(key_dir)
+    if tasks_file:
+        # Additive, like `cwd`: the background refresh reads it back, so a
+        # branded CLI's custom filename survives a refresh it can't attend.
+        fresh["tasks_file"] = tasks_file
     path = _paths.manifest_path(key_dir)
     cached = load_manifest(path)
     if (
@@ -366,6 +377,7 @@ def sync_manifest(
         or cached.get("hash") != fresh["hash"]
         or cached.get("completion_max_age") != completion_max_age
         or cached.get("cwd") != fresh["cwd"]
+        or cached.get("tasks_file") != fresh.get("tasks_file")
     ):
         write_manifest(fresh, path)
     return fresh

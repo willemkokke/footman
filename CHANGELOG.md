@@ -7,6 +7,22 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- **`@task(infinite=True)` — tasks that run until you stop them.** A dev
+  server or follow-mode tail isn't late, it's intentional: `infinite`
+  implies `progress=False`, the status line yields to a one-time dim
+  hint (`serve runs until you stop it — Ctrl-C`), and listings and
+  `--help` carry a `(runs until Ctrl-C)` note (additive `infinite` key
+  in the manifest). Distinguishing "don't time this" from "this never
+  ends" came out of reading the cookbook's dev-server recipe.
+- **Brands can rename the tasks file.** `App(..., tasks_file="acme.py")`
+  sets the default filename a branded CLI looks for; per-project config
+  (`tasks`) still overrides it, and the filename is baked into the
+  cached manifest (additive) so the background completion refresh — a
+  child that cannot know the brand — reads it back and rebuilds with
+  the right file.
+
 ### Docs
 
 - **The cookbook.** Seventeen recipes across the whole surface — the
