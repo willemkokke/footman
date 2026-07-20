@@ -35,13 +35,20 @@ class StepResult:
     """The outcome of one `run()` call, recorded on the context."""
 
     command: str
-    """The command line that ran, as one display string."""
+    """The command line that ran, normalised for reading — options in
+    separated form, values shell-quoted. What `recording()` asserts against,
+    and what the terminal shows."""
     code: int
     """The exit code (0 is success)."""
     output: str
     """Captured combined output; empty when the step streamed instead."""
     duration: float
     """Wall-clock seconds the step took."""
+    raw: str = ""
+    """The exact command line executed, shell-quoted — the bytes footman
+    handed the tool, which may spell an option `--flag=value` where
+    `command` shows `--flag value`. What `--verbose` prints. Equal to
+    `command` when there is nothing to normalise."""
 
 
 @dataclass
@@ -402,6 +409,56 @@ def _is_code(value: Any) -> bool:
     return isinstance(value, int) and not isinstance(value, bool)
 
 
+@dataclass(frozen=True)
+class Invocation:
+    """What a `run()` call *is*, apart from how it's spelled to execute.
+
+    The `tools.*` bridge builds one of these so `run()` can show a readable,
+    syntax-highlighted command line — options in separated form, tagged by
+    role — while executing whatever the tool actually needs (attached flags,
+    or an in-process callable). `parts` is the normalised, human form;
+    `exact` is the literal argv, shown under `--verbose` and always
+    copy-pasteable. Passing it is how the two are kept from drifting: both
+    come from one translation of one call.
+    """
+
+    parts: tuple[tuple[str, str], ...]
+    exact: tuple[str, ...]
+
+    def text(self, *, exact: bool) -> str:
+        """The plain command line — the width-measured, non-colour form."""
+        if exact:
+            return " ".join(_shell_quote(a) for a in self.exact)
+        return " ".join(text for _, text in self.parts)
+
+    def painted(self, *, color: bool, exact: bool) -> str:
+        """The shown command line, role-coloured when the stream wants it."""
+        if exact or not color:
+            return self.text(exact=exact)
+        from footman._describe import paint_cli
+
+        return paint_cli(list(self.parts), color)
+
+
+def _shell_quote(text: str) -> str:
+    import shlex
+
+    return shlex.quote(text)
+
+
+def _exact(cmd: Any, args: tuple[Any, ...]) -> str:
+    """The exact executed command line for a direct (non-bridge) `run()`.
+
+    A string is already a command line; a list is shell-quoted so it pastes;
+    a callable has no command line, so its label stands in.
+    """
+    if callable(cmd):
+        return _label(cmd, args)
+    if isinstance(cmd, str):
+        return cmd
+    return " ".join(_shell_quote(str(a)) for a in cmd)
+
+
 def _label(cmd: Any, args: tuple[Any, ...]) -> str:
     if callable(cmd):
         name = getattr(cmd, "__qualname__", getattr(cmd, "__name__", repr(cmd)))
@@ -575,27 +632,47 @@ def run(
     env: dict[str, str] | None = None,
     cwd: str | Path | None = None,
     encoding: str | None = "utf-8",
+    _show: Invocation | None = None,
 ) -> int:
     """Run a command or a Python callable in the current task's context.
 
     Subprocess output is decoded as UTF-8 by default; pass `encoding=` for a
     tool that speaks another code page, or `encoding=None` for the locale
     default. Ignored for callables (in-process, no bytes boundary).
+
+    `_show` is an internal channel from the `tools.*` bridge: a structured
+    view of the call, so the shown command line can be normalised and
+    role-coloured while execution runs whatever the tool needs. An explicit
+    `title` still wins; a direct `run([...])` is unaffected.
     """
     ctx = current()
     out = sys.stdout
-    label = title or _label(cmd, args)
+    color = ctx.tty and not ctx.no_color and "NO_COLOR" not in os.environ
+    if _show is not None and title is None:
+        # `label` (recorded as .command, and the step-line receipt) is always
+        # the normalised form, so a recording() assertion never depends on
+        # --verbose. Only the live "about to / now running" line switches to
+        # the exact spelling under --verbose; .raw always carries it.
+        label = _show.text(exact=False)
+        raw = _show.text(exact=True)
+        shown = _show.painted(color=color, exact=ctx.verbose)
+        shown_plain = _show.text(exact=ctx.verbose)
+    else:
+        label = title or _label(cmd, args)
+        raw = _exact(cmd, args)
+        shown = _dim(label, color)
+        shown_plain = label
 
     if ctx.dry_run:
         # Record the step even when not executing: `dry_run` + `quiet` is the
-        # silent-capture mode `footman.testing` builds on.
-        ctx.steps.append(StepResult(label, 0, "", 0.0))
+        # silent-capture mode `footman.testing` builds on. The recorded label
+        # is normalised; only the shown line colours or (under -v) goes exact.
+        ctx.steps.append(StepResult(label, 0, "", 0.0, raw=raw))
         if not ctx.quiet:
-            out.write(f"$ {label}\n")
+            out.write(f"$ {shown if color else shown_plain}\n")
         return 0
 
     show = not silent and not ctx.quiet
-    color = ctx.tty and not ctx.no_color and "NO_COLOR" not in os.environ
     # `ctx.tty` means "this output dresses for a terminal" (colour, marks);
     # liveness is `sink is None`. A captured block styles for the terminal
     # it will replay onto, but in-place rewrites and the announce line stay
@@ -608,10 +685,10 @@ def run(
         # the task is already done, where "starting X" directly above
         # "finished X" says nothing — the completion line carries it all.
         if ctx.tty and live:
-            out.write(f"→ {_name_col(ctx)}{_dim(label, color)}")
+            out.write(f"→ {_name_col(ctx)}{shown}")
             out.flush()
         elif live:
-            out.write(f"→ {_name_col(ctx)}{label}\n")
+            out.write(f"→ {_name_col(ctx)}{shown_plain}\n")
             out.flush()
 
     start = time.perf_counter()
@@ -629,7 +706,7 @@ def run(
         cwd_path = Path(cwd) if cwd is not None else ctx.cwd
         code, output = _run_subprocess(argv, run_env, cwd_path, capture, encoding)
     duration = time.perf_counter() - start
-    ctx.steps.append(StepResult(label, code, output, duration))
+    ctx.steps.append(StepResult(label, code, output, duration, raw=raw))
 
     if show:
         ok = code == 0
@@ -692,7 +769,8 @@ def parallel(*calls: Callable[[], Any], keep_going: bool = False) -> list[int]:
             # that raised RunFailed. Synthesize the failure here so the gate below
             # treats both uniformly; `keep_going` still collects the code.
             if code != 0:
-                error = RunFailed(StepResult(_label(call, ()), code, "", 0.0))
+                thunk = _label(call, ())
+                error = RunFailed(StepResult(thunk, code, "", 0.0, raw=thunk))
         except RunFailed as exc:
             code, error = exc.result.code or 1, exc
         except Exception as exc:  # a failed call must not crash the pool

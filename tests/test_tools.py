@@ -463,3 +463,86 @@ def test_negation_table_matches_what_the_tools_say():
     from footman.tools import _NEGATIONS
 
     assert from_click(entry.cli, name="mkdocs").negations() == _NEGATIONS["mkdocs"]
+
+
+# --- structured invocation rendering -----------------------------------------
+#
+# The command line footman *shows* is built from the same translation it
+# *executes*, but spelled for a human: separated flags, shell-quoted values,
+# role-tagged for colour. `recording()` sees that shown form (via
+# StepResult.command), which is why these assertions read naturally and stay
+# stable even when execution tokenises differently.
+
+
+def test_shown_values_are_shell_quoted_so_the_line_pastes():
+    cmd = _one(lambda: tools.git.commit(message="release: cut it now", signoff=True))
+    assert cmd == "git commit --message 'release: cut it now' --signoff"
+
+
+def test_shown_line_uses_the_off_negation_not_the_keyword():
+    cmd = _one(lambda: tools.mkdocs.build(strict=True, clean=tools.off))
+    assert cmd == "mkdocs build --strict --dirty"
+
+
+def test_in_process_call_shows_the_command_not_the_flattened_title():
+    # The in-process path used to display `" ".join(argv)`; it now shows the
+    # same normalised line as any other call.
+    import io
+    from contextlib import redirect_stdout
+
+    from footman.context import Context, use_context
+
+    buf = io.StringIO()
+    with redirect_stdout(buf), use_context(Context(dry_run=True)):
+        tools.coverage.html(directory="htmlcov", skip_covered=True)
+    assert "$ coverage html --directory htmlcov --skip-covered" in buf.getvalue()
+
+
+def test_show_parts_tag_each_token_with_its_role():
+    from footman.tools import _show_parts
+
+    parts = _show_parts("ruff", ["check"], ("src",), {"fix": True, "select": ["E"]})
+    assert parts == (
+        ("prog", "ruff"),
+        ("group", "check"),
+        ("req", "src"),
+        ("opt", "--fix"),
+        ("opt", "--select"),
+        ("value", "E"),
+    )
+
+
+def test_the_shown_form_is_separated_the_executed_form_is_flags():
+    # `_emit` is the single source both draw from; `_flags` is the executed
+    # spelling. Today they agree; the always-attach change moves only `_flags`.
+    from footman.tools import _emit, _flags
+
+    kwargs = {"select": ["E", "F"], "fix": True}
+    assert list(_emit(kwargs, "ruff")) == [
+        ("--select", "E"),
+        ("--select", "F"),
+        ("--fix", None),
+    ]
+    assert _flags(kwargs, "ruff") == ["--select", "E", "--select", "F", "--fix"]
+
+
+def test_step_result_carries_both_the_shown_and_the_raw_command():
+    # `.command` reads well; `.raw` is the exact executed line. They agree
+    # until the always-attach change makes `.raw` spell `--flag=value`.
+    with recording() as steps:
+        tools.git.commit(message="a b c", signoff=True)
+    step = steps[0]
+    assert step.command == "git commit --message 'a b c' --signoff"
+    assert step.raw == "git commit --message 'a b c' --signoff"
+
+
+def test_raw_of_a_plain_run_shell_quotes_a_list():
+    # A direct `run([...])` (not through the bridge) still gets a raw form:
+    # the list, shell-quoted so it pastes, while `.command` reads plainly.
+    from footman.context import Context, run, use_context
+
+    ctx = Context(dry_run=True)
+    with use_context(ctx):
+        run(["echo", "a b"])
+    assert ctx.steps[-1].raw == "echo 'a b'"
+    assert ctx.steps[-1].command == "echo a b"

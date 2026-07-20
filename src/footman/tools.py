@@ -40,8 +40,10 @@ import re as _re
 import subprocess as _subprocess
 import sys as _sys
 import threading as _threading
+from collections.abc import Iterator
 from typing import Any
 
+from footman.context import Invocation as _Invocation
 from footman.context import run as _run
 
 _version_cache: dict[str, tuple[int, ...]] = {}
@@ -87,24 +89,68 @@ def _negation(tool: str, key: str) -> str:
     return "--no-" + key.rstrip("_").replace("_", "-")
 
 
-def _flags(kwargs: dict[str, Any], tool: str = "") -> list[str]:
-    """Translate keyword arguments into CLI flags, mechanically."""
-    argv: list[str] = []
+def _emit(kwargs: dict[str, Any], tool: str = "") -> Iterator[tuple[str, str | None]]:
+    """The one translation: keyword arguments → `(flag, value)` tokens.
+
+    `value` is None for a switch (`--fix`) or a negation (`--dirty`); a
+    string for a valued option; and the pair repeats for each item of a
+    list. Both the executed argv (`_flags`) and the shown command line
+    (`_show_parts`) are built from this, so they can never disagree about
+    what a call means — only about how to spell it.
+    """
     for key, value in kwargs.items():
         if value is None or value is False:
             continue
         name = key.rstrip("_").replace("_", "-")
         if value is off:
-            argv.append(_negation(tool, key))
+            yield _negation(tool, key), None
             continue
         flag = f"-{name}" if len(name) == 1 else f"--{name}"
         if value is True:
-            argv.append(flag)
+            yield flag, None
             continue
         values = value if isinstance(value, (list, tuple)) else [value]
         for item in values:
-            argv += [flag, str(item)]
+            yield flag, str(item)
+
+
+def _flags(kwargs: dict[str, Any], tool: str = "") -> list[str]:
+    """Translate keyword arguments into CLI flags, for execution."""
+    argv: list[str] = []
+    for flag, value in _emit(kwargs, tool):
+        argv.append(flag)
+        if value is not None:
+            argv.append(value)
     return argv
+
+
+def _show_parts(
+    argv0: str, base: list[str], args: tuple[Any, ...], kwargs: dict[str, Any]
+) -> tuple[tuple[str, str], ...]:
+    """The invocation as role-tagged tokens, for a readable, painted line.
+
+    The same call the runtime executes, spelled for a human: options in
+    their separated form (`--select E`, never `--select=E`), values shell-
+    quoted so the line stays copy-pasteable, and every token tagged with
+    its role so `_describe.paint_cli` can colour it the way `--help` colours
+    a usage line. Execution can tokenise differently (attached, in-process);
+    this is what footman *says* it ran.
+    """
+    parts: list[tuple[str, str]] = [("prog", argv0)]
+    parts += [("group", verb) for verb in base]
+    parts += [("req", _quote(str(a))) for a in args]
+    for flag, value in _emit(kwargs, argv0):
+        parts.append(("opt", flag))
+        if value is not None:
+            parts.append(("value", _quote(value)))
+    return tuple(parts)
+
+
+def _quote(text: str) -> str:
+    """Shell-quote a token so the shown line round-trips through a paste."""
+    import shlex
+
+    return shlex.quote(text)
 
 
 def _console_entrypoint(name: str) -> Any | None:
@@ -190,6 +236,12 @@ class Tool:
         **kwargs: Any,
     ) -> int:
         tail = [*self._base, *map(str, args), *_flags(kwargs, self._argv0)]
+        argv = [self._argv0, *tail]
+        # One structured view of the call, so the shown line reads well
+        # (separated flags, role-coloured) no matter how it executes.
+        show = _Invocation(
+            _show_parts(self._argv0, self._base, args, kwargs), tuple(argv)
+        )
         wanted = self._prefer_in_process if in_process is None else in_process
         if wanted:
             ep = _console_entrypoint(self._argv0)  # metadata only — no import
@@ -199,7 +251,7 @@ class Tool:
                         f"{self._argv0}: in_process=True, but no installed "
                         f"console_scripts entry point named {self._argv0!r}"
                     )
-                return _run([self._argv0, *tail], nofail=nofail)  # prefer → subproc
+                return _run(argv, nofail=nofail, _show=show)  # prefer → subproc
 
             def _invoke() -> Any:
                 entry = ep.load()  # the tool's import — deferred to execution,
@@ -208,14 +260,14 @@ class Tool:
                     return entry(tail)  # click / main(argv): lock-free, parallel
                 with _argv_lock:  # legacy zero-arg main(): patch argv, serialised
                     saved = _sys.argv
-                    _sys.argv = [self._argv0, *tail]
+                    _sys.argv = argv
                     try:
                         return entry()
                     finally:
                         _sys.argv = saved
 
-            return _run(_invoke, title=" ".join([self._argv0, *tail]), nofail=nofail)
-        return _run([self._argv0, *tail], nofail=nofail)
+            return _run(_invoke, nofail=nofail, _show=show)
+        return _run(argv, nofail=nofail, _show=show)
 
     def installed_version(self) -> tuple[int, ...]:
         """The installed binary's version, as a comparable int tuple.

@@ -24,7 +24,7 @@ import re as _re  # noqa: F401
 import subprocess as _subprocess  # noqa: F401
 import sys as _sys  # noqa: F401
 import threading as _threading
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from typing import Any
 
 # One generated file per tool — `fm footman tools sync` writes them from
@@ -43,6 +43,7 @@ from footman._stubs.ruff import _Ruff as _Ruff
 from footman._stubs.ruff_format import _RuffFormat as _RuffFormat
 from footman._stubs.uv import _Uv as _Uv
 from footman._stubs.zensical import _Zensical as _Zensical
+from footman.context import Invocation as _Invocation  # noqa: F401
 from footman.context import run as _run  # noqa: F401
 
 _argv_lock: _threading.Lock
@@ -65,7 +66,14 @@ _Value = str | int | float | Sequence[str] | _Off | None
 _NEGATIONS: dict[str, dict[str, str]]
 
 def _negation(tool: str, key: str) -> str: ...
+def _emit(
+    kwargs: dict[str, Any], tool: str = ...
+) -> Iterator[tuple[str, str | None]]: ...
 def _flags(kwargs: dict[str, Any], tool: str = ...) -> list[str]: ...
+def _show_parts(
+    argv0: str, base: list[str], args: tuple[Any, ...], kwargs: dict[str, Any]
+) -> tuple[tuple[str, str], ...]: ...
+def _quote(text: str) -> str: ...
 def _console_entrypoint(name: str) -> Any | None: ...
 def _accepts_args(entry: Any) -> bool: ...
 

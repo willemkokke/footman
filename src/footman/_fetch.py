@@ -236,7 +236,7 @@ def fetch(
     destination = Path(into) if into is not None else body
 
     if ctx.dry_run:
-        ctx.steps.append(context.StepResult(label, 0, "", 0.0))
+        ctx.steps.append(context.StepResult(label, 0, "", 0.0, raw=label))
         if not ctx.quiet:
             print(f"$ {label}")
         return destination
@@ -281,4 +281,6 @@ def _deliver(body: Path, destination: Path, sha256: str, url: str) -> Path:
 def _record(ctx: context.Context, label: str, started: float, *, cached: bool) -> None:
     """A fetch is a step: same grid, same --json entry, same recording()."""
     note = "cached" if cached else ""
-    ctx.steps.append(context.StepResult(label, 0, note, time.perf_counter() - started))
+    ctx.steps.append(
+        context.StepResult(label, 0, note, time.perf_counter() - started, raw=label)
+    )
