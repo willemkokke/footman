@@ -196,16 +196,22 @@ def audit(
             stale.append(driver.key)
             if fix:
                 path.write_text(fresh, encoding="utf-8")
-        # The negation table is the one extracted fact the *runtime* reads:
-        # `off` consults it to spell a flag the convention gets wrong.
+        # Two extracted facts the *runtime* reads: the negation table `off`
+        # consults, and the wrapper set that decides flag ordering. Both
+        # must match the installed tool, or a task emits the wrong command.
+        if driver.base:
+            continue
         found = spec.negations()
-        if not driver.base and found != _bridge._NEGATIONS.get(driver.name, {}):
-            wrong.append(f"{driver.name}: {found}")
+        if found != _bridge._NEGATIONS.get(driver.name, {}):
+            wrong.append(f"_NEGATIONS[{driver.name!r}] should be {found}")
+        wraps = spec.wrappers()
+        if wraps != _bridge._WRAPPERS.get(driver.name, frozenset()):
+            wrong.append(f"_WRAPPERS[{driver.name!r}] should be {set(wraps)}")
     if skipped:
         print(f"skipped (not installed): {', '.join(skipped)}")
     if wrong:
         raise SystemExit(
-            "tools._NEGATIONS disagrees with the installed tool(s):\n  "
+            "tools.py runtime tables disagree with the installed tool(s):\n  "
             + "\n  ".join(wrong)
         )
     if not stale:

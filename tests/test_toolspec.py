@@ -539,6 +539,7 @@ def stubs(tmp_path, monkeypatch):
 needs_ruff = pytest.mark.skipif(
     shutil.which("ruff") is None, reason="ruff is not on PATH"
 )
+needs_uv = pytest.mark.skipif(shutil.which("uv") is None, reason="uv is not on PATH")
 
 
 def test_list_names_every_curated_tool(capsys):
@@ -610,13 +611,23 @@ def test_audit_fails_when_a_stub_drifts(stubs, capsys):
 
 
 @needs_ruff
-def test_audit_reports_a_negation_table_that_disagrees(stubs, monkeypatch):
+def test_audit_reports_a_runtime_table_that_disagrees(stubs, monkeypatch):
     from footman import tools as bridge
     from footman.tasks import tools as tools_tasks
 
     monkeypatch.setitem(bridge._NEGATIONS, "ruff", {"fix": "--never-fix"})
-    with pytest.raises(SystemExit, match=r"_NEGATIONS disagrees"):
+    with pytest.raises(SystemExit, match=r"_NEGATIONS\['ruff'\]"):
         tools_tasks.audit(only="ruff")
+
+
+@needs_uv
+def test_audit_reports_a_wrappers_table_that_disagrees(stubs, monkeypatch):
+    from footman import tools as bridge
+    from footman.tasks import tools as tools_tasks
+
+    monkeypatch.setitem(bridge._WRAPPERS, "uv", frozenset({"run"}))  # missing tool.run
+    with pytest.raises(SystemExit, match=r"_WRAPPERS\['uv'\]"):
+        tools_tasks.audit(only="uv")
 
 
 def test_sync_skips_and_names_the_tools_it_cannot_ask(stubs, capsys):
@@ -845,3 +856,31 @@ def test_stub_falls_back_when_the_lead_collides_with_an_option():
     text = _stubgen.render(ToolSpec(name="uv", verbs=(verb,)))
     ast.parse(text)  # a duplicate `group` parameter would be a syntax error
     assert "*args: str," in text
+
+
+def test_wraps_detected_from_a_trailing_command_metavar():
+    run = _toolhelp.parse_help(
+        "Usage: uv run [OPTIONS] [COMMAND]\n\nRun.\n", name="run"
+    )
+    assert run.wraps is True
+    cov = _toolhelp.parse_help(
+        "Usage: coverage run [options] <pyfile> [program options]\n\nRun.\n", name="run"
+    )
+    assert cov.wraps is True
+    # A verb that merely takes files is not a wrapper.
+    check = _toolhelp.parse_help(
+        "Usage: ruff check [OPTIONS] [FILES]...\n\nCheck.\n", name="check"
+    )
+    assert check.wraps is False
+
+
+def test_spec_wrappers_lists_the_dotted_wrapper_paths():
+    spec = ToolSpec(
+        name="docker",
+        verbs=(
+            Verb(name="run", wraps=True),
+            Verb(name="build", wraps=False),
+            Verb(name="compose.run", wraps=True),
+        ),
+    )
+    assert spec.wrappers() == frozenset({"run", "compose.run"})

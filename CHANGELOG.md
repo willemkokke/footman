@@ -74,6 +74,14 @@ versions may include breaking changes.
 
 ### Fixed
 
+- **A wrapper verb's flags no longer leak into the wrapped command.**
+  `tools.uv.run("pytest", "-q", frozen=True)` emitted
+  `uv run pytest -q --frozen` — and uv never saw `--frozen`, because
+  everything after `run`'s arguments belongs to pytest. The bridge now
+  knows which verbs wrap a command (`uv run`, `uv tool run`, `coverage
+  run`, `docker run`/`exec`, `docker compose run`/`exec`) and places their
+  flags first: `uv run --frozen pytest -q`. The wrapper set is read from
+  each verb's usage line and checked by `fm footman tools audit`.
 - **Optional-value options are no longer mistyped as switches.** A tool
   that glues its placeholder to the flag — git's `--gpg-sign[=<key-id>]`,
   `--untracked-files[=<mode>]`, ruff's `--add-noqa[=<REASON>]` — was read

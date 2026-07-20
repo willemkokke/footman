@@ -89,6 +89,24 @@ def _negation(tool: str, key: str) -> str:
     return "--no-" + key.rstrip("_").replace("_", "-")
 
 
+# Verbs that run *another* command: a wrapper's flags belong before the
+# child's argv, or they leak past the tool into the child — `uv run
+# --frozen pytest`, not `uv run pytest --frozen` (which hands `--frozen`
+# to pytest). Dotted for nesting; extracted from each verb's usage line
+# and checked by `fm footman tools audit`.
+_WRAPPERS: dict[str, frozenset[str]] = {
+    "uv": frozenset({"run", "tool.run"}),
+    "coverage": frozenset({"run"}),
+    "docker": frozenset({"run", "exec", "compose.run", "compose.exec"}),
+}
+
+
+def _is_wrapper(argv0: str, base: list[str]) -> bool:
+    """Whether the verb reached by *base* forwards to a wrapped command."""
+    verbs = ".".join(token for token in base if not token.startswith("-"))
+    return verbs in _WRAPPERS.get(argv0, frozenset())
+
+
 def _emit(kwargs: dict[str, Any], tool: str = "") -> Iterator[tuple[str, str | None]]:
     """The one translation: keyword arguments → `(flag, value)` tokens.
 
@@ -181,10 +199,11 @@ def _show_parts(
             parts.append(("opt", token))
         else:
             parts.append(("group", token))
-    parts += [("req", _quote(str(a))) for a in args]
+    arg_parts = [("req", _quote(str(a))) for a in args]
+    flag_parts: list[tuple[str, str]] = []
     for flag, value in _emit(kwargs, argv0):
         if value is None:
-            parts.append(("opt", flag))
+            flag_parts.append(("opt", flag))
             continue
         # Decide placement on the raw value (a dash leads), quote for the
         # shown text. Readable where a space is safe; attached only where
@@ -192,10 +211,15 @@ def _show_parts(
         quoted = _quote(value)
         if value.startswith("-"):
             glue = "=" if flag.startswith("--") else ""
-            parts.append(("opt", f"{flag}{glue}{quoted}"))
+            flag_parts.append(("opt", f"{flag}{glue}{quoted}"))
         else:
-            parts.append(("opt", flag))
-            parts.append(("value", quoted))
+            flag_parts.append(("opt", flag))
+            flag_parts.append(("value", quoted))
+    # A wrapper's flags come before the wrapped argv, mirroring execution.
+    if _is_wrapper(argv0, base):
+        parts += flag_parts + arg_parts
+    else:
+        parts += arg_parts + flag_parts
     return tuple(parts)
 
 
@@ -306,7 +330,15 @@ class Tool:
         in_process: bool | None = None,
         **kwargs: Any,
     ) -> int:
-        tail = [*self._base, *map(str, args), *_flags(kwargs, self._argv0)]
+        flags = _flags(kwargs, self._argv0)
+        positionals = list(map(str, args))
+        # A wrapper verb (`uv run`, `docker exec`) forwards everything after
+        # its own arguments to a child, so this call's flags must precede the
+        # positionals — otherwise `--frozen` lands on `pytest`, not `uv`.
+        if _is_wrapper(self._argv0, self._base):
+            tail = [*self._base, *flags, *positionals]
+        else:
+            tail = [*self._base, *positionals, *flags]
         argv = [self._argv0, *tail]
         # One structured view of the call, so the shown line reads well
         # (separated flags, role-coloured) no matter how it executes.

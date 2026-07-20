@@ -342,7 +342,29 @@ def parse_help(text: str, *, name: str = "") -> Verb:
         options=tuple(sorted(_pair_negations(options), key=lambda o: o.name)),
         positional=positional,
         lead=lead,
+        wraps=_wraps(text),
     )
+
+
+# A metavar that stands for a *wrapped* command's argv: `uv run [COMMAND]`,
+# `docker exec … COMMAND [ARG...]`.
+_WRAP_METAVAR = frozenset({"command", "cmd", "args", "arg", "argv"})
+
+
+def _wraps(text: str) -> bool:
+    """Whether the verb forwards everything after its own args to a child.
+
+    Signalled by a trailing command/argv metavar or coverage's literal
+    "program options" — the mark of `uv run`, `docker exec`, `coverage run`.
+    """
+    usage = _usage_line(text)
+    if "program option" in usage.lower():
+        return True
+    for token in _top_level_positionals(usage):
+        base = re.split(r"[\[:]", token.strip("[]<>"))[0].lower()
+        if base in _WRAP_METAVAR:
+            return True
+    return False
 
 
 # The base of a positional metavar, before any `[:TAG]` / `<...>` suffix:
@@ -530,7 +552,7 @@ def from_help(
         # describes the subcommand slot, not arguments to `docker` itself —
         # so `tools.docker(...)` must not be constrained by it. Only a
         # single-command tool's root verb carries a real positional shape.
-        root_verb = replace(root_verb, positional="any", lead="")
+        root_verb = replace(root_verb, positional="any", lead="", wraps=False)
     parsed = [root_verb]
     for verb in verbs:
         text = run_help([name, *verb.split(".")], flag=flag)

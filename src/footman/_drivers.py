@@ -253,7 +253,9 @@ def _no_shapes(spec: ToolSpec) -> ToolSpec:
     """Drop positional shapes for a tool whose usage line can't be trusted."""
     from dataclasses import replace
 
-    verbs = tuple(replace(v, positional="any", lead="") for v in spec.verbs)
+    verbs = tuple(
+        replace(v, positional="any", lead="", wraps=False) for v in spec.verbs
+    )
     return replace(spec, verbs=verbs)
 
 

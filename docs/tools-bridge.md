@@ -33,6 +33,28 @@ starts with a dash would be read as another option (`--format -%h` fails,
 `--format=-%h` works). You never have to think about it — the same rule
 covers every tool, including ones footman has never heard of.
 
+A **wrapper verb** — one that runs another command, like `uv run`,
+`coverage run`, or `docker exec` — takes its flags *before* the wrapped
+command, or they would land on the child instead of the tool:
+
+```python
+tools.uv.run("pytest", "-q", frozen=True)   # → uv run --frozen pytest -q
+```
+
+footman knows which verbs wrap (it reads each verb's usage line), so
+`--frozen` reaches uv while `pytest -q` passes through untouched. And a
+tool's own **global** options — the ones that must precede the subcommand —
+go through `opts()`:
+
+```python
+tools.docker.opts(host="tcp://x").compose.up(detach=True)
+# → docker --host=tcp://x compose up --detach
+```
+
+`docker --host … ps` works and `docker ps --host …` does not, so `opts()`
+places a global where the tool expects it and returns the tool, keeping the
+chain typed.
+
 What footman *shows* you is spelled for reading, not for the parser: the
 `--dry-run` line, the live progress line, and `recording()`'s
 `step.command` all use the separated form (`--select E`), quoted so it

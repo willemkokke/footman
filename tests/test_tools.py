@@ -598,3 +598,54 @@ def test_opts_keeps_the_in_process_preference():
     # A tool built in-process stays in-process through .opts().
     tool = tools.Tool("mkdocs", in_process=True)
     assert tool.opts(v=True)._prefer_in_process is True
+
+
+# --- wrapper-verb flag ordering ----------------------------------------------
+
+
+def test_wrapper_verb_puts_flags_before_the_wrapped_command():
+    # The silent bug: `--frozen` must reach uv, not pytest.
+    assert _one(lambda: tools.uv.run("pytest", "-q", frozen=True)) == (
+        "uv run --frozen pytest -q"
+    )
+    assert (
+        _one(lambda: tools.coverage.run("-m", "pytest", source=["footman"]))
+        == "coverage run --source footman -m pytest"
+    )
+
+
+def test_wrapper_ordering_reaches_nested_verbs():
+    assert (
+        _one(lambda: tools.docker.compose.run("web", "pytest", no_deps=True))
+        == "docker compose run --no-deps web pytest"
+    )
+    assert _one(lambda: tools.docker.exec("box", "sh", interactive=True)) == (
+        "docker exec --interactive box sh"
+    )
+
+
+def test_non_wrapper_verb_keeps_flags_last():
+    # Ordinary verbs are unchanged — flags after positionals.
+    assert _one(lambda: tools.docker.build(".", tag="x")) == "docker build . --tag x"
+    assert _one(lambda: tools.uv.sync(frozen=True)) == "uv sync --frozen"
+
+
+def test_wrapper_raw_and_shown_agree_on_order():
+    with recording() as steps:
+        tools.uv.run("pytest", frozen=True)
+    # both forms put --frozen before pytest; they differ only in attachment.
+    assert steps[0].command == "uv run --frozen pytest"
+    assert steps[0].raw == "uv run --frozen pytest"
+
+
+def test_wrappers_table_matches_what_the_tools_declare():
+    # The runtime table is hand-written; this is the unit-level mirror of
+    # `fm footman tools audit`, so drift fails fast in the normal gate too.
+    from footman import _drivers
+    from footman.tools import _WRAPPERS
+
+    for driver in _drivers.DRIVERS:
+        if driver.base or not _drivers.installed(driver):
+            continue
+        declared = _drivers.extract(driver).wrappers()
+        assert declared == _WRAPPERS.get(driver.name, frozenset()), driver.name

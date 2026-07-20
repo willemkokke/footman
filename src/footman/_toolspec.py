@@ -61,6 +61,12 @@ class Verb:
     name: str
     help: str = ""
     options: tuple[Option, ...] = ()
+    wraps: bool = False
+    """Whether the verb runs *another* command — `uv run`, `docker exec`,
+    `coverage run`. Its usage trails a `[COMMAND] [ARG...]` (or "program
+    options"), and everything after the verb's own arguments belongs to the
+    wrapped program. The bridge must place this call's flags *before* those
+    arguments, or they leak past the tool into the child."""
     positional: str = "any"
     """What positionals the verb takes, read from its usage line — the stub
     renders this with `/` and `*`:
@@ -106,6 +112,12 @@ class ToolSpec:
                 if option.negation != default:
                     exceptions[option.name] = option.negation
         return exceptions
+
+    def wrappers(self) -> frozenset[str]:
+        """The dotted verb paths that wrap a command — what `_WRAPPERS`
+        holds, so the bridge places a wrapper's flags before the child's
+        argv rather than leaking them into the child."""
+        return frozenset(verb.name for verb in self.verbs if verb.wraps)
 
 
 def _type_name(param: Any) -> str:
