@@ -78,6 +78,9 @@ class Context:
     """Who is running, for the step lines' name column: the scheduler
     sets the dotted task name, `parallel()` its child's name. Empty
     outside runs."""
+    fn: Any = None
+    """The running task's own function — what `inherited()` reads to find
+    the task this one shadows. `None` outside a run."""
     name_width: int = 0
     """The widest sibling task name, so step-line columns align."""
     passthrough: list[str] = field(default_factory=list)
@@ -127,6 +130,65 @@ def use_context(ctx: Context | None = None) -> Iterator[Context]:
 def passthrough() -> list[str]:
     """Arguments after `--` on the command line, for the running task."""
     return list(current().passthrough)
+
+
+def inherited() -> Any:
+    """The task this one shadows in the cascade — footman's `super()`.
+
+    A nearer `tasks.py` overriding a task by name usually wants to *extend*
+    it, not replace it. Call this inside the overriding task's body to get
+    the task it shadows, then call that like the plain function it is:
+
+    ```python
+    # svc/api/tasks.py — the root also defines `check`
+    @task
+    def check(fix: bool = False, contracts: bool = True):
+        inherited()(fix=fix)          # arguments are forwarded explicitly
+        if contracts:
+            run("./verify-contracts.sh")
+    ```
+
+    Forwarding is deliberately manual: the two signatures are independent
+    (a leaf usually adds a parameter), so automatic forwarding could only
+    drop arguments silently or fail at run time for a mismatch you can see
+    while writing. Being an ordinary call, it also runs to completion
+    before the next statement — and composes with `parallel(inherited(),
+    extra)` when you want otherwise.
+
+    `fm --where <task>` lists the whole shadow chain; `fm --help <task>`
+    shows the inherited task's options, so you can read the forwarding
+    call straight off it.
+    """
+    from footman import discover
+
+    fn = current().fn
+    if fn is None:
+        raise RuntimeError(
+            "inherited() works inside a running task — footman resolves the "
+            "task being shadowed from the one currently running"
+        )
+    previous = discover.shadowed(fn)
+    if previous is None:
+        name = current().task or getattr(fn, "__name__", "this task")
+        raise RuntimeError(
+            f"{name} does not shadow an inherited task — nothing above it in "
+            f"the cascade defines that name (fm --where {name} lists the chain)"
+        )
+
+    @functools.wraps(previous)
+    def call_inherited(*args: Any, **kwargs: Any) -> Any:
+        # Point the context at the task being called, so an `inherited()`
+        # inside *it* walks one level further up instead of resolving to
+        # itself — a three-deep cascade would otherwise recurse forever.
+        ctx = current()
+        saved = ctx.fn
+        ctx.fn = previous
+        try:
+            return previous(*args, **kwargs)
+        finally:
+            ctx.fn = saved
+
+    return call_inherited
 
 
 class RunFailed(Exception):

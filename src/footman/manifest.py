@@ -29,7 +29,7 @@ import warnings
 from pathlib import Path
 from typing import Any
 
-from footman import _describe, _paths, coerce, docstrings, registry
+from footman import _describe, _paths, coerce, discover, docstrings, registry
 from footman.context import context_param_name
 from footman.params import suggest
 from footman.registry import Group
@@ -258,6 +258,20 @@ def _finish(spec: dict[str, Any], memo: dict[int, list[str]]) -> dict[str, Any]:
     return spec
 
 
+def _cli_params(fn: Any):
+    """The parameters that form a task's CLI (the injected ctx is not one)."""
+    sig = resolved_signature(fn)
+    ctx_name = context_param_name(sig)
+    return [p for p in sig.parameters.values() if p.name != ctx_name]
+
+
+def _source_of(fn: Any) -> str:
+    code = getattr(fn, "__code__", None)
+    if code is None:
+        return ""
+    return f"{code.co_filename}:{code.co_firstlineno}"
+
+
 def _task_node(fn: Any, memo: dict[int, list[str]]) -> dict[str, Any]:
     sig = resolved_signature(fn)
     infinite = registry.is_infinite(fn)
@@ -284,6 +298,14 @@ def _task_node(fn: Any, memo: dict[int, list[str]]) -> dict[str, Any]:
             stacklevel=2,
         )
     node: dict[str, Any] = {"help": parsed.summary, "params": params}
+    if (previous := discover.shadowed(fn)) is not None:
+        # Additive, and only for the rare overridden task: the options of
+        # the task this one shadows, so `--help` can show the call
+        # `inherited()` will make.
+        node["shadows"] = {
+            "params": [_finish(param_spec(p), memo) for p in _cli_params(previous)],
+            "where": _source_of(previous),
+        }
     if infinite:
         node["infinite"] = True  # additive: listings and help say how it ends
     if parsed.long:

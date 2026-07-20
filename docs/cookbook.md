@@ -340,6 +340,53 @@ root's. A deep folder can adjust behaviour with a two-line
 `footman.toml` — the [configuration ladder](configuration.md) reaches
 everywhere the cascade does.
 
+## Extend an inherited task instead of replacing it
+
+Overriding by name usually means *and also*, not *instead of*.
+`inherited()` is footman's `super()`: inside an overriding task it hands
+you the task you shadow, as the plain function it is.
+
+```python
+# svc/api/tasks.py — the repo root also defines `check`
+from footman import inherited, run, task
+
+@task
+def check(fix: bool = False, contracts: bool = True):
+    "The shared gate, plus this service's contracts."
+    inherited()(fix=fix)            # the root's check, arguments forwarded
+    if contracts:
+        run("./verify-contracts.sh")
+```
+
+Forwarding is deliberately manual. The two signatures are independent —
+this leaf added `--contracts`, which the root has never heard of — so
+automatic forwarding could only drop arguments silently or fail at run
+time for a mismatch you can see while writing. Being explicit also lets
+you *change* them: `inherited()(fix=False)` runs the root's gate without
+letting it rewrite files. And being an ordinary call, it finishes before
+your next line — `parallel(inherited(), extra_checks)` when you'd rather
+it didn't.
+
+It chains all the way up: a mid-level `check` that calls `inherited()`
+reaches the root's, and the leaf's call reaches the mid's. Two commands
+answer "what am I overriding, and what does it take?":
+
+```console
+$ fm --where check
+/repo/svc/api/tasks.py:6
+/repo/svc/tasks.py:4     (shadowed)
+/repo/tasks.py:9         (shadowed)
+
+$ fm --help check
+...
+shadows /repo/svc/tasks.py:4 — inherited() calls it
+  fm check [--fix]
+```
+
+That last line is the forwarding call, spelled out. Calling
+`inherited()` in a task that shadows nothing is a taught error, not a
+`None` to trip over.
+
 ## Tasks that return data
 
 Return a dict and `--json` carries it verbatim under `returned` — your

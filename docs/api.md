@@ -20,6 +20,8 @@ straight from the `footman` package (`from footman import task, run, App`).
 
 ::: footman.context.passthrough
 
+::: footman.context.inherited
+
 ::: footman.context.Context
 
 ::: footman.context.RunFailed

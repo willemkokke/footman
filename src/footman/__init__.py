@@ -25,6 +25,7 @@ if TYPE_CHECKING:
     from footman.compose import plugin as plugin
     from footman.context import Context as Context
     from footman.context import RunFailed as RunFailed
+    from footman.context import inherited as inherited
     from footman.context import parallel as parallel
     from footman.context import passthrough as passthrough
     from footman.context import run as run
@@ -67,6 +68,7 @@ __all__ = [
     "exists",
     "group",
     "include",
+    "inherited",
     "isdir",
     "isfile",
     "main",
@@ -144,6 +146,7 @@ def __getattr__(name: str) -> object:
         "run",
         "parallel",
         "Context",
+        "inherited",
         "passthrough",
         "RunFailed",
         "use_context",

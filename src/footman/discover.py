@@ -24,6 +24,7 @@ from footman.registry import Group, Task
 # Attribute stamped on every task fn: the directory of the file that defined
 # it. The scheduler uses it as the task's working directory.
 DEFINING_DIR = "_footman_dir"
+SHADOWED = "_footman_shadowed"
 
 
 class TasksImportError(Exception):
@@ -96,6 +97,12 @@ def _overlay(base: Group, overlay: Group, directory: str) -> None:
     """Merge *overlay* onto *base* in place: local (overlay) wins by name."""
     for name, fn in overlay.tasks.items():
         setattr(fn, DEFINING_DIR, directory)
+        # Keep the task this one shadows reachable: `inherited()` calls it,
+        # `--where` lists it, `--help` shows its options. Without this the
+        # parent's function is simply dropped and a leaf can only
+        # *replace* the root's task, never extend it.
+        if (previous := base.tasks.get(name)) is not None and previous is not fn:
+            setattr(fn, SHADOWED, previous)
         base.groups.pop(name, None)  # a local task shadows an inherited group
         base.tasks[name] = fn
     for name, sub in overlay.groups.items():
@@ -136,3 +143,16 @@ def load_single(path: Path) -> Group:
 def defining_dir(fn: Task) -> str | None:
     """The folder the task was defined in, if the cascade tagged it."""
     return getattr(fn, DEFINING_DIR, None)
+
+
+def shadowed(fn: Task) -> Task | None:
+    """The task *fn* overrides — the same name, one cascade level up."""
+    return getattr(fn, SHADOWED, None)
+
+
+def shadow_chain(fn: Task) -> list[Task]:
+    """*fn* and every task it shadows, nearest first."""
+    chain = [fn]
+    while (previous := shadowed(chain[-1])) is not None:
+        chain.append(previous)
+    return chain

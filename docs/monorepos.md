@@ -79,3 +79,7 @@ older footman.
 
 The full key table — and the whole precedence ladder, user-level file
 included — lives on the [Configuration](configuration.md) page.
+
+A local task that overrides an inherited one can still *call* it:
+`inherited()` is footman's `super()` — see the
+[cookbook recipe](cookbook.md#extend-an-inherited-task-instead-of-replacing-it).

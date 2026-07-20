@@ -382,3 +382,108 @@ def test_config_tasks_filename_in_cascade(mono, monkeypatch, capsys):
     monkeypatch.chdir(mono)
     assert _app.run(["custom"]) == 0
     assert "via-jobs" in capsys.readouterr().out
+
+
+# --- inherited(): extending an overridden task --------------------------------
+
+
+def _inherit_repo(tmp_path, monkeypatch, leaf_body: str):
+    """A three-level cascade whose leaf overrides `check`."""
+    (tmp_path / ".git").mkdir()
+    _write(
+        tmp_path / "tasks.py",
+        "from footman import task, run\n"
+        "@task\ndef check(fix: bool = False):\n"
+        '    """Root gate."""\n'
+        '    run(f"echo root fix={fix}")\n',
+    )
+    _write(
+        tmp_path / "svc" / "tasks.py",
+        "from footman import inherited, task, run\n"
+        "@task\ndef check(fix: bool = False):\n"
+        '    """Mid gate."""\n'
+        "    inherited()(fix=fix)\n"
+        '    run("echo mid")\n',
+    )
+    _write(tmp_path / "svc" / "api" / "tasks.py", leaf_body)
+    monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
+    monkeypatch.chdir(tmp_path / "svc" / "api")
+    return tmp_path
+
+
+LEAF = (
+    "from footman import inherited, task, run\n"
+    "@task\ndef check(fix: bool = False, contracts: bool = True):\n"
+    '    """Leaf gate."""\n'
+    "    inherited()(fix=fix)\n"
+    '    if contracts:\n        run("echo leaf")\n'
+)
+
+
+def test_inherited_walks_the_whole_cascade(tmp_path, monkeypatch, capsys):
+    # Three levels deep: the leaf calls the mid, which calls the root —
+    # each extending the last, in order.
+    _inherit_repo(tmp_path, monkeypatch, LEAF)
+    assert _app.run(["check", "--fix"]) == 0
+    out = capsys.readouterr().out
+    assert out.index("root fix=True") < out.index("mid") < out.index("leaf")
+
+
+def test_inherited_names_the_task_it_calls(tmp_path, monkeypatch, capsys):
+    # functools.wraps keeps the name, so `parallel(inherited(), extra)`
+    # labels its live line honestly instead of showing an anonymous call.
+    _inherit_repo(tmp_path, monkeypatch, LEAF)
+    from footman import Context, discover, inherited, use_context
+
+    files = _paths.task_files(Path.cwd(), tmp_path)
+    tree = discover.load_tree(files)
+    with use_context(Context(fn=tree.tasks["check"])):
+        assert inherited().__name__ == "check"
+
+
+def test_inherited_forwarding_is_explicit(tmp_path, monkeypatch, capsys):
+    # The leaf chooses what to pass: the root never sees --contracts, and
+    # can be given a different value entirely.
+    leaf = (
+        "from footman import inherited, task, run\n"
+        "@task\ndef check(fix: bool = False, contracts: bool = True):\n"
+        '    """Leaf gate."""\n'
+        "    inherited()(fix=False)\n"
+    )
+    _inherit_repo(tmp_path, monkeypatch, leaf)
+    assert _app.run(["check", "--fix"]) == 0
+    assert "root fix=False" in capsys.readouterr().out
+
+
+def test_inherited_without_a_shadow_is_taught(tmp_path, monkeypatch, capsys):
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
+    _write(
+        tmp_path / "tasks.py",
+        "from footman import inherited, task\n"
+        "@task\ndef solo():\n"
+        '    """No parent."""\n'
+        "    inherited()\n",
+    )
+    monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
+    monkeypatch.chdir(tmp_path)
+    assert _app.run(["solo"]) != 0
+    err = capsys.readouterr().err
+    assert "does not shadow an inherited task" in err
+    assert "--where solo" in err  # the message names the discovery command
+
+
+def test_where_lists_the_shadow_chain(tmp_path, monkeypatch, capsys):
+    _inherit_repo(tmp_path, monkeypatch, LEAF)
+    assert _app.run(["--where", "check"]) == 0
+    lines = capsys.readouterr().out.strip().splitlines()
+    assert len(lines) == 3  # leaf, mid, root
+    assert lines[0].endswith("api/tasks.py:2") and "(shadowed)" not in lines[0]
+    assert all("(shadowed)" in line for line in lines[1:])
+
+
+def test_help_shows_the_inherited_options(tmp_path, monkeypatch, capsys):
+    _inherit_repo(tmp_path, monkeypatch, LEAF)
+    assert _app.run(["--help", "check"]) == 0
+    out = capsys.readouterr().out
+    assert "shadows" in out and "inherited() calls it" in out
+    assert "fm check [--fix]" in out  # the parent's options, not the leaf's

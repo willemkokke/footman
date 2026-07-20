@@ -272,6 +272,7 @@ def run_task(fn: Task, seg: Segment, ctx: Context) -> TaskResult:
     if context_param_name(resolved_signature(fn)):
         args = [ctx, *args]  # ctx is the first positional parameter
 
+    ctx.fn = fn  # what inherited() reads to find the shadowed task
     if ctx.cwd is None and (home := defining_dir(fn)) is not None:
         ctx.cwd = Path(home)  # run from the folder that defined the task
 

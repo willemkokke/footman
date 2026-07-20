@@ -9,6 +9,21 @@ versions may include breaking changes.
 
 ### Added
 
+- **`inherited()` — extend an overridden task instead of replacing it.**
+  A nearer `tasks.py` overriding a task by name usually means *and
+  also*, not *instead of*. Inside the overriding task, `inherited()`
+  hands you the task you shadow as the plain function it is:
+  `inherited()(fix=fix)`. Forwarding is deliberately manual — the two
+  signatures are independent, so automatic forwarding could only drop
+  arguments silently or fail at run time for a mismatch you can see
+  while writing — and it chains through a cascade of any depth. Two
+  discovery surfaces come with it: `fm --where <task>` now lists the
+  whole shadow chain (winner first, each shadowed definition after),
+  and `fm --help <task>` shows the inherited task's usage line, so the
+  forwarding call can be read straight off it (additive `shadows` key
+  in the manifest, present only when something is shadowed). Calling it
+  where nothing is shadowed is a taught error naming `--where`.
+
 - **`@task(infinite=True)` — tasks that run until you stop them.** A dev
   server or follow-mode tail isn't late, it's intentional: `infinite`
   implies `progress=False`, the status line yields to a one-time dim

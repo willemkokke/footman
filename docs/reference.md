@@ -57,6 +57,7 @@ def wheel(): ...
 | `tools.*`                    | typed wrappers for ruff, basedpyright, pytest, uv, … |
 | `footman.testing`            | `Runner`/`Result` + `recording()` — see [Testing](testing.md) |
 | `include`, `plugin`          | adopt tasks from modules/packages — see [Composing](composing.md) |
+| `inherited()`                | the task this one shadows in the cascade — call it to extend it |
 | `@task(when=…, reason=…)`    | disable-but-list a task that can't run here          |
 
 ## Configuration

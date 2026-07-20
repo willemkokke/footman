@@ -304,6 +304,15 @@ def _print_task_help(tree: dict, path: list[str]) -> None:
             print(f"  {_describe.bold(label, on)}{pad}  {detail}".rstrip())
     example = _describe.paint_cli(_describe.example_parts(path, task, _brand.prog), on)
     print(f"\n{_describe.dim('Example:', on)} {example}")
+    if (shadows := task.get("shadows")) is not None:
+        # This task overrides one further up the cascade — show the call
+        # `inherited()` makes, so the forwarding line can be read off it.
+        where = shadows.get("where") or "the cascade"
+        print(_describe.dim(f"\nshadows {where} — inherited() calls it", on))
+        usage = _describe.paint_cli(
+            _describe.usage_parts(_brand.prog, path, shadows), on
+        )
+        print(f"  {usage}")
 
 
 def _print_group_help(tree: dict, path: list[str]) -> None:
@@ -438,11 +447,20 @@ def _where(root: registry.Group, tree: dict, dotted: str) -> int:
         names = [name.replace(" ", ".") for name, _ in _describe.iter_tasks(tree)]
         _error(f"--where: unknown task {dotted!r}{split._did_you_mean(dotted, names)}")
         return 2
-    code = getattr(fn, "__code__", None)
-    if code is None:
+    chain = discover.shadow_chain(fn)
+    lines = []
+    for index, member in enumerate(chain):
+        code = getattr(member, "__code__", None)
+        if code is None:
+            continue
+        where = f"{code.co_filename}:{code.co_firstlineno}"
+        # The winner first; anything it shadows follows, marked — so
+        # "am I overriding something, and where is it?" is one command.
+        lines.append(where if index == 0 else f"{where}   (shadowed)")
+    if not lines:
         _error(f"--where: cannot locate source for {dotted!r}")
         return 2
-    print(f"{code.co_filename}:{code.co_firstlineno}")
+    print("\n".join(lines))
     return 0
 
 
