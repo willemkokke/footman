@@ -19,7 +19,7 @@ def ship():
 ```
 
 The rules, all of them: `snake_case` → `--kebab-case`; `True` → bare flag;
-`False`/`None` → omitted; `off` → the negation `--no-flag` (see below); a
+`False`/`None` → omitted; `off` → that tool's own negation (see below); a
 list repeats the flag (an empty one is omitted, so a task parameter's
 default flows straight through); a single-letter key is a short flag
 (`k="expr"` → `-k expr`); positional strings pass through untouched.
