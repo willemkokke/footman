@@ -268,6 +268,10 @@ _TERM_QUERIES: list[tuple[re.Pattern[bytes], bytes]] = [
     (re.compile(rb"\x1bP\+q[0-9a-fA-F;]*(?:\x1b\\|\x07)"), b"\x1bP0+r\x1b\\"),
 ]
 _DSR = re.compile(rb"\x1b\[6n")
+# Device Control Strings — terminal protocol, never screen content. pyte
+# doesn't consume them, so their payload (fish's XTGETTCAP capability
+# names, hex-encoded) would render as stray text for one frame.
+_DCS = re.compile(r"\x1bP.*?(?:\x1b\\|\x07)", re.S)
 _OSC_COLOUR = re.compile(rb"\x1b\](1[012]);\?(?:\x07|\x1b\\)")
 
 
@@ -380,7 +384,7 @@ def _pty_session(
                 if not data:
                     break
                 chunks.append((_time.monotonic() - start, data))
-                tracker_stream.feed(data.decode("utf-8", "replace"))
+                tracker_stream.feed(_DCS.sub("", data.decode("utf-8", "replace")))
                 buf = pending + data
                 _answer_queries(
                     buf,
@@ -439,7 +443,7 @@ def _screens(
     frames: list[tuple[float, list[list[tuple[str, str]]]]] = []
     last: list[list[tuple[str, str]]] | None = None
     for t, data in chunks:
-        stream.feed(data.decode("utf-8", "replace"))
+        stream.feed(_DCS.sub("", data.decode("utf-8", "replace")))
         snap = [
             [
                 (cell.data, _cell_style(cell))
@@ -449,7 +453,10 @@ def _screens(
             for y in range(height)
         ]
         if snap != last:
-            frames.append((t, snap))
+            # Skip the blank screens before the shell first paints: a
+            # recording should open on the prompt, not on an empty frame.
+            if frames or any(cell[0].strip() for row in snap for cell in row):
+                frames.append((t, snap))
             last = snap
     return frames
 

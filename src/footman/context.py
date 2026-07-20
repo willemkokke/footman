@@ -150,8 +150,9 @@ def inherited() -> Any:
 
     Forwarding is deliberately manual: the two signatures are independent
     (a leaf usually adds a parameter), so automatic forwarding could only
-    drop arguments silently or fail at run time for a mismatch you can see
-    while writing. Being an ordinary call, it also runs to completion
+    drop arguments silently or fail at run time — where spelling the call
+    out shows you the mismatch as you type it. Being an ordinary call,
+    it also runs to completion
     before the next statement — and composes with `parallel(inherited(),
     extra)` when you want otherwise.
 

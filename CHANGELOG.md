@@ -15,8 +15,9 @@ versions may include breaking changes.
   hands you the task you shadow as the plain function it is:
   `inherited()(fix=fix)`. Forwarding is deliberately manual — the two
   signatures are independent, so automatic forwarding could only drop
-  arguments silently or fail at run time for a mismatch you can see
-  while writing — and it chains through a cascade of any depth. Two
+  arguments silently or fail at run time, where spelling the call out
+  shows the mismatch as you type it — and it chains through a cascade
+  of any depth. Two
   discovery surfaces come with it: `fm --where <task>` now lists the
   whole shadow chain (winner first, each shadowed definition after),
   and `fm --help <task>` shows the inherited task's usage line, so the
@@ -38,8 +39,23 @@ versions may include breaking changes.
   child that cannot know the brand — reads it back and rebuilds with
   the right file.
 
+### Fixed
+
+- **Casts no longer flash the shell's terminal queries.** pyte doesn't
+  consume DCS sequences, so fish's XTGETTCAP capability probe rendered
+  its hex payload as screen text for one frame before the prompt
+  painted. Those sequences are terminal protocol, not screen content,
+  and are now stripped before the emulator sees them; recordings also
+  skip any blank frames before the first paint, so they open on the
+  prompt.
+- **The 0.12.0 changelog entry had a second `Changed` section** holding
+  the merged-coverage note, which shipped in 0.13.0 — it now sits under
+  the release that carried it.
+
 ### Docs
 
+- **The `serve` examples use `@task(infinite=True)`** on the home page,
+  the README, and getting-started, matching what the runner now offers.
 - **The cookbook.** Seventeen recipes across the whole surface — the
   parallel gate, passthrough, stacking validators, git-branch TAB
   completion via `suggest()`, build matrices, monorepo overrides,
@@ -161,6 +177,17 @@ versions may include breaking changes.
   table on every docs build, so it can never drift from the runner again
   (it had, three ways, which is how this feature earned its place).
 
+### Changed
+
+- **The published coverage report is the merged matrix picture.** The
+  docs site's embedded report used to be re-measured on one
+  ubuntu-only run, understating the number CI actually gates on. The
+  merge job now renders the combined HTML — every OS, every Python,
+  the real-shell jobs, and the docs build itself, which runs the whole
+  taskdocs pipeline (five shell casts included) under coverage and
+  merges in like any other job — and both docs builds embed that
+  artifact instead of measuring their own slice.
+
 ## [0.12.0] — 2026-07-19
 
 ### Added
@@ -215,17 +242,6 @@ versions may include breaking changes.
   the last few releases have shown: the surface is settling, the test bed
   is broad, and coverage is enforced. Pre-1.0 minors may still include
   breaking changes, as the header above says.
-
-### Changed
-
-- **The published coverage report is the merged matrix picture.** The
-  docs site's embedded report used to be re-measured on one
-  ubuntu-only run, understating the number CI actually gates on. The
-  merge job now renders the combined HTML — every OS, every Python,
-  the real-shell jobs, and the docs build itself, which runs the whole
-  taskdocs pipeline (five shell casts included) under coverage and
-  merges in like any other job — and both docs builds embed that
-  artifact instead of measuring their own slice.
 
 ### Fixed
 

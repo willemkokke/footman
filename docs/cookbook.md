@@ -361,7 +361,8 @@ def check(fix: bool = False, contracts: bool = True):
 Forwarding is deliberately manual. The two signatures are independent —
 this leaf added `--contracts`, which the root has never heard of — so
 automatic forwarding could only drop arguments silently or fail at run
-time for a mismatch you can see while writing. Being explicit also lets
+time — where spelling the call out shows you the mismatch as you type
+it. Being explicit also lets
 you *change* them: `inherited()(fix=False)` runs the root's gate without
 letting it rewrite files. And being an ordinary call, it finishes before
 your next line — `parallel(inherited(), extra_checks)` when you'd rather

@@ -40,7 +40,7 @@ def test(marker: str = "", *pytest_args):
 
 docs = group("docs", help="Documentation")
 
-@docs.task
+@docs.task(infinite=True)
 def serve(port: int = 8000):
     "Serve the docs locally."
     ...
