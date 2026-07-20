@@ -22,6 +22,16 @@ straight from the `footman` package (`from footman import task, run, App`).
 
 ::: footman.context.inherited
 
+::: footman.context.progress
+
+::: footman.context.track
+
+## Fetching
+
+::: footman._fetch.fetch
+
+::: footman._fetch.FetchError
+
 ::: footman.context.Context
 
 ::: footman.context.RunFailed

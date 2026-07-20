@@ -146,6 +146,11 @@ class Group:
         this ends. Listings and help carry the same note.
         """
 
+        if infinite and not progress:
+            # Not an error worth raising — infinite already implies it —
+            # but the pair is redundant, and saying so keeps the two
+            # concepts distinct: "never times" vs "never ends".
+            pass
         reqs = (requires,) if isinstance(requires, str) else tuple(requires)
 
         def register(fn: Task) -> Task:

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from footman import _paths, _progress
 from footman.split import Segment
 
@@ -200,3 +202,54 @@ def test_indeterminate_pulse_moves():
     two = st._render()
     assert one != two  # the pulse wanders
     assert "~" not in one  # no fake estimate
+
+
+# --- counted progress ---------------------------------------------------------
+
+
+def test_counted_fraction_outranks_the_estimate():
+    # A task reporting 23/150 is better evidence than any history: the bar
+    # fills from the report, and one reporter shows its own counts.
+    line = _progress.StatusLine(_Tty(), _progress.Estimate(typical=10, scale=20))
+    line.unit_added(2)
+    line.unit_started("migrate")
+    line.unit_counted("migrate", 23, 150)
+    counted = line._counted_fraction()
+    assert counted is not None
+    fraction, label = counted
+    assert fraction == pytest.approx((0 + 23 / 150) / 2)
+    assert label == " 23/150"
+    assert "23/150" in line._render()
+
+
+def test_counted_units_are_fractional():
+    # Three of four done and the fourth 50% through is 3.5/4 — smooth,
+    # not stepwise.
+    line = _progress.StatusLine(_Tty(), None)
+    line.unit_added(4)
+    for _ in range(3):
+        line.unit_finished("done", True)
+    line.unit_started("slow")
+    line.unit_counted("slow", 50, 100)
+    counted = line._counted_fraction()
+    assert counted is not None
+    fraction, label = counted
+    assert fraction == pytest.approx(3.5 / 4)
+    assert label == " 50/100"
+
+
+def test_counted_report_clears_when_the_task_finishes():
+    line = _progress.StatusLine(_Tty(), None)
+    line.unit_added(1)
+    line.unit_started("x")
+    line.unit_counted("x", 1, 4)
+    assert line._counted_fraction() is not None
+    line.unit_finished("x", True)
+    assert line._counted_fraction() is None  # no stale report behind it
+
+
+def test_no_reports_falls_back_to_the_estimate():
+    line = _progress.StatusLine(_Tty(), _progress.Estimate(typical=4, scale=8))
+    line.unit_added(1)
+    assert line._counted_fraction() is None
+    assert "~4" in line._render()  # the estimator's label, unchanged

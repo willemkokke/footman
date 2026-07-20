@@ -19,6 +19,8 @@ if TYPE_CHECKING:
     # at runtime these are served by `__getattr__` without importing registry
     # on a bare `import footman` (the completion hot path).
     from footman import tools as tools
+    from footman._fetch import FetchError as FetchError
+    from footman._fetch import fetch as fetch
     from footman.app import App as App
     from footman.app import Brand as Brand
     from footman.compose import include as include
@@ -28,7 +30,9 @@ if TYPE_CHECKING:
     from footman.context import inherited as inherited
     from footman.context import parallel as parallel
     from footman.context import passthrough as passthrough
+    from footman.context import progress as progress
     from footman.context import run as run
+    from footman.context import track as track
     from footman.context import use_context as use_context
     from footman.params import Many as Many
     from footman.params import between as between
@@ -53,6 +57,7 @@ __all__ = [
     "App",
     "Brand",
     "Context",
+    "FetchError",
     "Group",
     "Many",
     "Result",
@@ -66,6 +71,7 @@ __all__ = [
     "docstrings",
     "env",
     "exists",
+    "fetch",
     "group",
     "include",
     "inherited",
@@ -77,11 +83,13 @@ __all__ = [
     "parallel",
     "passthrough",
     "plugin",
+    "progress",
     "recording",
     "run",
     "suggest",
     "task",
     "tools",
+    "track",
     "use_context",
 ]
 
@@ -123,6 +131,10 @@ def __getattr__(name: str) -> object:
         import footman.markdown
 
         return footman.markdown
+    if name in ("fetch", "FetchError"):
+        from footman import _fetch
+
+        return getattr(_fetch, name)
     if name in ("include", "plugin"):
         from footman import compose
 
@@ -148,6 +160,8 @@ def __getattr__(name: str) -> object:
         "Context",
         "inherited",
         "passthrough",
+        "progress",
+        "track",
         "RunFailed",
         "use_context",
     ):

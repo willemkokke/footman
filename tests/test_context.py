@@ -498,3 +498,41 @@ def test_step_lines_carry_an_aligned_name_column(capsys):
     # Padded to len("longer"); the duration digit varies with the machine.
     assert "ok   go      echo hi  (0." in out
     assert "ok   longer  echo ho  (0." in out
+
+
+def test_progress_and_track_report_to_the_status_line():
+    from footman import progress, track
+    from footman.context import Context, set_status, use_context
+
+    class FakeStatus:
+        def __init__(self):
+            self.reports = []
+            self.counted = {}
+
+        def unit_counted(self, name, done, total):
+            self.reports.append((name, done, total))
+            self.counted[name] = (done, total)
+
+        def paint(self):
+            pass
+
+    status = FakeStatus()
+    set_status(status)
+    try:
+        with use_context(Context(task="migrate")):
+            progress(3, 10)
+            assert status.reports[-1] == ("migrate", 3, 10)
+            assert list(track(["a", "b"])) == ["a", "b"]
+    finally:
+        set_status(None)
+    # track() reported each step, then cleared on the way out
+    assert ("migrate", 1, 2) in status.reports
+    assert ("migrate", 2, 2) in status.reports
+    assert status.counted == {}
+
+
+def test_progress_outside_a_run_is_a_noop():
+    from footman import progress, track
+
+    progress(1, 2)  # no status line: costs nothing, raises nothing
+    assert list(track([1, 2, 3])) == [1, 2, 3]

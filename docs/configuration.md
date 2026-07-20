@@ -69,6 +69,7 @@ older footman.
 | `progress`   | `false` permanently disables the progress bar, eta line, and timing capture. |
 | `uv`         | `false` disables the uv handoff (a globally-installed `fm` re-running itself via `uv run` when the project's lockfile pins footman). |
 | `completion.max_age` | Age before a background completion refresh (e.g. `"10m"`; `off` to disable). |
+| `fetch.backend` | Download engine for `fetch()`: `urllib` (default), `curl`, `httpx`, `requests`, or `auto`. |
 | `gc`         | `false` disables the daily cache collector. **User-level only**: honoured from the global file; in a project config it is ignored, with a note under `-v`. |
 
 ## Environment variables

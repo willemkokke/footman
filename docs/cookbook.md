@@ -388,6 +388,84 @@ That last line is the forwarding call, spelled out. Calling
 `inherited()` in a task that shadows nothing is a taught error, not a
 `None` to trip over.
 
+## A bar that knows exactly where it is
+
+Some work knows its own progress — 23 of 150 migrations, bytes of a
+download — and that beats any duration history. Report it and the live
+bar fills from the truth:
+
+```python
+from footman import task, track, progress
+
+@task
+def migrate():
+    "Apply pending migrations."
+    for record in track(load_records()):     # total from len()
+        apply(record)
+
+@task
+def index(path: Path):
+    "Rebuild the search index."
+    for done, total in build_index(path):
+        progress(done, total)                # the explicit form
+```
+
+Counted beats estimated, so a reporting task is honest on its *first*
+run, where the estimator would still be gathering samples. A reporter
+contributes a fractional unit to the run's bar — three tasks done and a
+fourth halfway is 3.5/4 — so a chain of reporters fills smoothly and a
+mixed chain is smooth where it can be. `track()` takes the total from
+`len()`, accepts `total=` for generators, and clears the report if you
+break out early. Outside a run, both are no-ops.
+
+## Fetch and cache a toolchain
+
+`fetch()` downloads into footman's own cache: the same directory
+`FOOTMAN_CACHE_DIR` moves and the daily collector tends, so vendored
+artifacts for deleted projects clean themselves up.
+
+```python
+import functools
+from footman import fetch, parallel, task, tools
+
+TOOLCHAIN = {
+    "protoc": ("https://example.com/protoc-27.tar.gz", "9f86d081884c…"),
+    "buf": ("https://example.com/buf-1.34.tar.gz", "2c26b46b68ff…"),
+}
+
+@task
+def vendor():
+    "Fetch the pinned toolchain, in parallel."
+    parallel(*(
+        functools.partial(fetch, url, sha256=digest, into=Path("vendor") / name)
+        for name, (url, digest) in TOOLCHAIN.items()
+    ))
+```
+
+A second run revalidates with the server (ETag / `If-None-Match`)
+instead of re-downloading; a `304` costs one round trip and keeps
+"cached" honest. `sha256=` refuses anything that arrived wrong, which is
+what makes the build reproducible. And a fetch *is a step*: `--dry-run`
+prints it without touching the network, `recording()` asserts on it in
+tests, `--json` carries it, and it appears in the step lines beside your
+`run()` calls. Byte counts feed the progress bar for free.
+
+The default backend is stdlib `urllib` — zero dependencies, and the only
+one that can report bytes as they arrive. Behind a corporate proxy whose
+TLS store Python can't see, name the system curl once and every project
+follows:
+
+```toml
+# ~/.config/footman/config.toml
+[fetch]
+backend = "curl"
+```
+
+`httpx` and `requests` are available when named; `auto` picks the best
+importable one if you'd rather. It isn't the default on purpose — a
+download that silently changes engine when an unrelated dependency
+appears would change its TLS and proxy behaviour with it.
+
 ## Tasks that return data
 
 Return a dict and `--json` carries it verbatim under `returned` — your

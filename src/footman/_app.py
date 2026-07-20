@@ -987,7 +987,10 @@ def _run_tree(
     else:
         jobs = _progress.default_jobs()
 
+    fetch_cfg = cfg.get("fetch")
+    backend = fetch_cfg.get("backend") if isinstance(fetch_cfg, dict) else None
     ctx_config = {
+        "fetch_backend": str(backend) if isinstance(backend, str) else "",
         "quiet": bool(g.get("quiet")),
         "verbose": bool(g.get("verbose")),
         "no_color": bool(g.get("no_color")),

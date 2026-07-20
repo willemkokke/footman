@@ -70,6 +70,9 @@ class Context:
     honours it too. Deliberately not set by the scheduler's own
     single-node routing, which is presentation, not a request to
     serialise task bodies."""
+    fetch_backend: str = ""
+    """`[fetch] backend` from the config ladder — which engine `fetch()`
+    downloads with. Empty means the default (stdlib urllib)."""
     jobs: int = 0
     """The effective parallel width (`-j/--jobs`, config `jobs`, or the
     cores-minus-one default) — caps `parallel()` pools in task bodies.
@@ -130,6 +133,71 @@ def use_context(ctx: Context | None = None) -> Iterator[Context]:
 def passthrough() -> list[str]:
     """Arguments after `--` on the command line, for the running task."""
     return list(current().passthrough)
+
+
+def progress(done: int, total: int = 0) -> None:
+    """Report this task's own progress: *done* of *total* units.
+
+    Some work knows exactly how far along it is — 23 of 150 migrations,
+    bytes of a download — and that is better evidence than any duration
+    history. A reporting task's counts drive the live bar directly
+    (counted beats estimated), so the bar is honest on the very first
+    run, where the estimator would still be guessing.
+
+    ```python
+    @task
+    def migrate():
+        for i, record in enumerate(records, 1):
+            apply(record)
+            progress(i, len(records))
+    ```
+
+    A `total` of 0 (or less) clears the report, returning the run to its
+    estimate. Outside a run, or with no live status line, this is a
+    no-op — plain calls and captured runs cost nothing.
+    """
+    status = active_status()
+    if status is None:
+        return
+    ctx = current()
+    name = ctx.task or "task"
+    if total > 0:
+        status.unit_counted(name, max(done, 0), total)
+    else:  # a cleared report: back to the estimate
+        with contextlib.suppress(Exception):
+            status.counted.pop(name, None)
+
+
+def track(iterable: Any, total: int | None = None) -> Any:
+    """Iterate *iterable*, reporting progress as it goes.
+
+    The ergonomic form of `progress()`: the total comes from `len()` when
+    the iterable has one, or from *total* when you know it for a
+    generator. Without either, iteration still works — the run simply
+    keeps whatever progress it had.
+
+    ```python
+    @task
+    def migrate():
+        for record in track(load_records()):
+            apply(record)
+    ```
+    """
+    if total is None:
+        try:
+            total = len(iterable)
+        except TypeError:
+            total = 0
+    done = 0
+    try:
+        for item in iterable:
+            yield item
+            done += 1
+            if total:
+                progress(done, total)
+    finally:
+        if total:  # leaving early (a break, an exception) resets the report
+            progress(0, 0)
 
 
 def inherited() -> Any:

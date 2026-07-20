@@ -58,6 +58,8 @@ def wheel(): ...
 | `footman.testing`            | `Runner`/`Result` + `recording()` — see [Testing](testing.md) |
 | `include`, `plugin`          | adopt tasks from modules/packages — see [Composing](composing.md) |
 | `inherited()`                | the task this one shadows in the cascade — call it to extend it |
+| `progress(done, total)`, `track(iterable)` | report a task's own progress; the bar fills from it |
+| `fetch(url, …)`              | download into footman's cache — revalidating, verifying, recorded as a step |
 | `@task(when=…, reason=…)`    | disable-but-list a task that can't run here          |
 
 ## Configuration

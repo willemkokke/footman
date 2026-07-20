@@ -9,6 +9,38 @@ versions may include breaking changes.
 
 ### Added
 
+- **Counted progress: `progress(done, total)` and `track(iterable)`.**
+  Work that knows how far along it is — 23 of 150 migrations, bytes of
+  a download — is better evidence than any duration history, so a
+  reported count now drives the live bar directly and outranks the
+  estimator. That makes the bar honest on a task's *first* run, where
+  the estimator is still gathering samples. A reporting task
+  contributes a fractional unit to the run (three done and a fourth
+  halfway is 3.5/4), so a chain of reporters fills smoothly and a mixed
+  chain is smooth where it can be. `track()` is the ergonomic form —
+  total from `len()`, `total=` for generators, report cleared if you
+  break out early. Both are no-ops outside a run.
+- **`fetch(url)` — download into footman's cache.** Cached by URL under
+  `footman_cache_dir()` (so `FOOTMAN_CACHE_DIR` relocates it and the
+  daily collector tends it), revalidated with ETag / `If-Modified-Since`
+  rather than re-downloaded, optionally verified with `sha256=`, and
+  copied anywhere with `into=`. A fetch is a **step**: `--dry-run`
+  prints it without touching the network, `recording()` asserts on it,
+  `--json` carries it, and it lands in the step lines beside `run()`.
+  Byte counts feed the new progress bar. A cached copy survives a
+  failed refresh, so a warm cache still builds offline.
+  **Backends**: stdlib `urllib` by default — zero dependencies,
+  deterministic, and the only one that can report bytes as they arrive
+  — with `curl` (in Windows' System32 since build 17063, and on every
+  POSIX box), `httpx`, and `requests` available when named, plus an
+  explicit `auto`. Choose per call or set `[fetch] backend` anywhere on
+  the config ladder: a machine behind a corporate proxy names curl once
+  in `~/.config/footman/config.toml` and every project follows.
+  Deliberately never automatic — a download that silently changed
+  engine when an unrelated dependency appeared would change its TLS
+  trust store and proxy semantics with it; a urllib failure instead
+  raises a taught error naming that exact config line.
+
 - **`inherited()` — extend an overridden task instead of replacing it.**
   A nearer `tasks.py` overriding a task by name usually means *and
   also*, not *instead of*. Inside the overriding task, `inherited()`

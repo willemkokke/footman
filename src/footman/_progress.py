@@ -216,6 +216,11 @@ class StatusLine:
         self.done = 0
         self.failed = 0
         self.running: list[str] = []  # a list: anonymous thunks may collide
+        # Counted progress: what running tasks have *reported* about their
+        # own work (name -> fraction). Counted beats estimated — a task
+        # that knows it is 23/150 through is better evidence than any
+        # history — so a reported fraction outranks the time-based fill.
+        self.counted: dict[str, tuple[int, int]] = {}
         self.painted = False
         self.at_col0 = True
         self.ticks = 0
@@ -249,10 +254,17 @@ class StatusLine:
             self.running.append(name)
         self.paint()
 
+    def unit_counted(self, name: str, done: int, total: int) -> None:
+        """A running task reporting its own progress: `done` of `total`."""
+        with self.lock:
+            self.counted[name] = (done, total)
+        self.paint()
+
     def unit_finished(self, name: str, ok: bool) -> None:
         with self.lock:
             if name in self.running:
                 self.running.remove(name)
+            self.counted.pop(name, None)
             self.done += 1
             self.failed += 0 if ok else 1
         self.paint()
@@ -289,9 +301,34 @@ class StatusLine:
             self.err.flush()
             self.painted = False
 
+    def _counted_fraction(self) -> tuple[float, str] | None:
+        """The run's progress from *reported* work, if any task reported.
+
+        A reporting task contributes a fractional unit — three tasks done
+        and a fourth 23/150 through is 3.15/4, not 3/4 — so a run of
+        reporters fills smoothly and a mixed run is smooth where it can
+        be. Returns `(fraction, label)`, or `None` when nobody reported.
+        """
+        if not self.counted or self.total <= 0:
+            return None
+        partial = 0.0
+        for done, total in self.counted.values():
+            if total > 0:
+                partial += min(done / total, 1.0)
+        fraction = min((self.done + partial) / self.total, 1.0)
+        if len(self.counted) == 1:  # one reporter: show its own counts
+            done, total = next(iter(self.counted.values()))
+            return fraction, f" {done}/{total}"
+        return fraction, f" {fraction * 100:.0f}%"
+
     def _render(self) -> str:
         elapsed = time.perf_counter() - self.started
-        if self.est is not None:
+        if (counted := self._counted_fraction()) is not None:
+            fraction, counts = counted
+            filled = int(fraction * _BAR_CELLS)
+            bar = "█" * filled + "░" * (_BAR_CELLS - filled)
+            label = f" {fmt_secs(elapsed)}{counts}"
+        elif self.est is not None:
             frac = min(elapsed / self.est.scale, 0.98)
             filled = int(frac * _BAR_CELLS)
             bar = "█" * filled + "░" * (_BAR_CELLS - filled)
