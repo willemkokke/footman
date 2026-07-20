@@ -570,3 +570,31 @@ def test_raw_of_a_plain_run_shell_quotes_a_list():
         run(["echo", "a b"])
     assert ctx.steps[-1].raw == "echo 'a b'"
     assert ctx.steps[-1].command == "echo a b"
+
+
+# --- tool-level globals via .opts() ------------------------------------------
+
+
+def test_opts_places_globals_before_the_verb():
+    # cobra tools need their globals ahead of the subcommand.
+    assert _one(lambda: tools.docker.opts(host="tcp://x").ps(all=True)) == (
+        "docker --host tcp://x ps --all"
+    )
+
+
+def test_opts_composes_through_a_nested_verb():
+    cmd = _one(lambda: tools.docker.opts(host="tcp://x").compose.up(detach=True))
+    assert cmd == "docker --host tcp://x compose up --detach"
+
+
+def test_opts_raw_is_the_attached_executed_form():
+    with recording() as steps:
+        tools.docker.opts(host="tcp://x").run("alpine")
+    assert steps[0].command == "docker --host tcp://x run alpine"
+    assert steps[0].raw == "docker --host=tcp://x run alpine"
+
+
+def test_opts_keeps_the_in_process_preference():
+    # A tool built in-process stays in-process through .opts().
+    tool = tools.Tool("mkdocs", in_process=True)
+    assert tool.opts(v=True)._prefer_in_process is True

@@ -169,7 +169,18 @@ def _show_parts(
     can colour it the way `--help` colours a usage line.
     """
     parts: list[tuple[str, str]] = [("prog", argv0)]
-    parts += [("group", verb) for verb in base]
+    for token in base:
+        # `base` holds the verb path, and — from `.opts()` — global flags
+        # bound before a verb. A flag reads back in separated form so the
+        # shown line stays readable (`--host tcp://x`, not `--host=tcp://x`).
+        if token.startswith("--") and "=" in token:
+            flag, _, value = token.partition("=")
+            parts.append(("opt", flag))
+            parts.append(("value", _quote(value)))
+        elif token.startswith("-"):
+            parts.append(("opt", token))
+        else:
+            parts.append(("group", token))
     parts += [("req", _quote(str(a))) for a in args]
     for flag, value in _emit(kwargs, argv0):
         if value is None:
@@ -267,6 +278,24 @@ class Tool:
         if verb.startswith("_"):
             raise AttributeError(verb)
         sub = Tool(self._argv0, *self._base, verb.replace("_", "-"))
+        sub._prefer_in_process = self._prefer_in_process
+        return sub
+
+    def opts(self, **kwargs: Any) -> Tool:
+        """Bind options *before* the next subcommand — a tool's globals.
+
+        Some options belong to the tool, not the verb, and must precede it:
+        `docker --host tcp://x ps` works, `docker ps --host tcp://x` does
+        not. `opts` places them at the current point in the chain, so they
+        land ahead of whatever verb follows and ahead of its arguments:
+
+            tools.docker.opts(host="tcp://x").ps(all=True)
+            #  -> docker --host=tcp://x ps --all
+
+        The flags are translated by the same rules as any call, and the
+        returned tool keeps chaining, so `.opts(...)` composes mid-stream.
+        """
+        sub = Tool(self._argv0, *self._base, *_flags(kwargs, self._argv0))
         sub._prefer_in_process = self._prefer_in_process
         return sub
 

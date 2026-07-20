@@ -104,8 +104,28 @@ def _classes(tree: dict[str, object], name: str) -> list[str]:
         node = tree[key]
         if isinstance(node, Verb):
             body.append(_method(node, key))
+            # A multi-command tool's root options are *globals*: `.opts()`
+            # binds them before the subcommand, typed and chainable.
+            if key == "" and len(tree) > 1 and node.options:
+                body.append(_opts_method(node, name))
     out.append(f"class {name}(Tool):\n" + ("\n".join(body) or "    ..."))
     return out
+
+
+def _opts_method(verb: Verb, class_name: str) -> str:
+    """The typed `opts()` for a tool's global options — returns the tool,
+    so `tools.docker.opts(host=…).compose.up(…)` stays checked."""
+    lines = ["    def opts(", "        self,", "        *,"]
+    for option in _unique(verb.options):
+        lines.append(f"        {_safe(option.name)}: {_annotation(option)} = ...,")
+    lines.append("        **flags: Any,")
+    lines.append(f"    ) -> {class_name}:")
+    lines.append('        """Bind tool-level global options before the subcommand.')
+    lines.append("")
+    lines.append("        `tools.docker.opts(host=...)` puts a tool's own")
+    lines.append('        options ahead of the verb, where they belong."""')
+    lines.append("        ...")
+    return "\n".join(lines)
 
 
 def _method(verb: Verb, key: str) -> str:

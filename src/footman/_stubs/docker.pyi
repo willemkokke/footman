@@ -385,6 +385,26 @@ class _Docker(Tool):
             tlsverify: Use TLS and verify the remote.
         """
         ...
+    def opts(
+        self,
+        *,
+        config: _Value = ...,
+        context: _Value = ...,
+        debug: _Flag = ...,
+        host: _Value = ...,
+        log_level: _Value = ...,
+        tls: _Flag = ...,
+        tlscacert: _Value = ...,
+        tlscert: _Value = ...,
+        tlskey: _Value = ...,
+        tlsverify: _Flag = ...,
+        **flags: Any,
+    ) -> _Docker:
+        """Bind tool-level global options before the subcommand.
+
+        `tools.docker.opts(host=...)` puts a tool's own
+        options ahead of the verb, where they belong."""
+        ...
     def build(
         self,
         path: str,

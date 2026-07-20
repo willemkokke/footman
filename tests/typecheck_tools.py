@@ -104,6 +104,17 @@ def _node_and_rust() -> None:
     tools.markdownlint("**/*.md", fix=True)
 
 
+def _tool_globals_via_opts() -> None:
+    """`.opts()` binds a tool's global options before the verb, stays typed,
+    and returns the tool so the chain keeps checking."""
+    tools.docker.opts(host="tcp://x").compose.up(detach=True)
+    tools.docker.opts(host="tcp://x", debug=True).ps(all=True)
+    tools.docker.opts(context="remote").run("alpine")
+    tools.uv.opts(directory="sub", offline=True).sync(frozen=True)
+    # A generic tool still has the untyped `.opts()` from the base class.
+    tools.terraform.opts(chdir="infra")("plan")
+
+
 def _undeclared_and_reserved() -> None:
     """A tool footman has never heard of still works, and so do the two
     reserved keywords."""
@@ -144,6 +155,7 @@ def _flags_are_declared_and_typed() -> None:
     tools.cspell.lint(quiet="yes")  # pyright: ignore[reportArgumentType]
     tools.prek.run(all_files="yes")  # pyright: ignore[reportArgumentType]
     tools.markdownlint(fix="yes")  # pyright: ignore[reportArgumentType]
+    tools.docker.opts(debug="yes")  # pyright: ignore[reportArgumentType]
 
 
 def _positional_shape_is_enforced() -> None:

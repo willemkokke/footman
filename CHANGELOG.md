@@ -45,6 +45,13 @@ versions may include breaking changes.
   stubs) and `audit` (fail when a stub and its tool disagree). Tools that
   are not installed are skipped *and named*, so a check can't quietly
   cover three of thirteen.
+- **`tools.<tool>.opts(...)` binds a tool's global options before the
+  subcommand** — `tools.docker.opts(host="tcp://x").compose.up(detach=True)`
+  runs `docker --host=tcp://x compose up --detach`. Some options belong to
+  the tool, not the verb, and must precede it (cobra tools like docker
+  reject a global after the subcommand); `opts` places them correctly and
+  keeps chaining, typed per tool and returning the tool so the rest of the
+  chain stays checked. A generic untyped `opts()` is available on any tool.
 - **The stubs know each verb's positional shape.** Read from the tool's
   own usage line (or click's declared arguments): `mkdocs build` takes only
   options, so a stray positional is now a type error; `docker run` requires

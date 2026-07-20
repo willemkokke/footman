@@ -43,6 +43,24 @@ class _Ruff(Tool):
             verbose: Enable verbose logging.
         """
         ...
+    def opts(
+        self,
+        *,
+        color: Literal["auto", "always", "never"]
+        | Sequence[Literal["auto", "always", "never"]]
+        | None = ...,
+        config: _Value = ...,
+        isolated: _Flag = ...,
+        quiet: _Flag = ...,
+        silent: _Flag = ...,
+        verbose: _Flag = ...,
+        **flags: Any,
+    ) -> _Ruff:
+        """Bind tool-level global options before the subcommand.
+
+        `tools.docker.opts(host=...)` puts a tool's own
+        options ahead of the verb, where they belong."""
+        ...
     def check(
         self,
         *args: str,
