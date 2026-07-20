@@ -38,8 +38,25 @@ tools.mkdocs.build(strict=off)              # → mkdocs build --no-strict
 tools.mkdocs.build(no_strict=True)          # exactly the same, by name
 ```
 
+`off` emits **the spelling that tool actually uses**, which is not always
+`--no-<name>`. `mkdocs build --no-clean` is rejected outright — the flag is
+`--dirty` — and five of mkdocs' eight negatable options disagree with the
+convention:
+
+```python
+tools.mkdocs.build(clean=off)               # → mkdocs build --dirty
+tools.mkdocs.build(use_directory_urls=off)  # → --no-directory-urls
+tools.mkdocs.build(strict=off)              # → --no-strict, convention holds
+```
+
+Only the tool knows, so footman asks it: the spellings are extracted from
+each tool's own description of itself (click states a negatable flag as
+`secondary_opts`) and the exceptions are cached. A test compares that cache
+against the installed tools, so one that changes its mind fails a check
+rather than quietly producing a command it refuses.
+
 `off` shines when a variable drives it, because it completes the boolean
-story — `True` → `--flag`, `off` → `--no-flag`:
+story — `True` → `--flag`, `off` → the tool's negation:
 
 ```python
 @task

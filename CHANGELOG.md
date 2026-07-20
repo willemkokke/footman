@@ -7,6 +7,21 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Fixed
+
+- **`off` now speaks each tool's own dialect.** It assumed the negation
+  of a default-on flag is `--no-<name>`, which is wrong often enough to
+  break real commands: `mkdocs build --no-clean` is rejected outright —
+  the flag is `--dirty` — and five of mkdocs' eight negatable options
+  disagree with the convention. The spelling is per-flag data only the
+  tool knows, so footman asks: the new `footman._toolspec` reads click's
+  `secondary_opts` (with defaults, types, and help text for the stubs
+  and reference pages to come), and the exceptions ride in a table `off`
+  consults. `clean=off` emits `--dirty`; `strict=off` still emits
+  `--no-strict`; other tools are untouched. A test diffs the table
+  against the installed tools, so a tool that changes its spelling fails
+  a check instead of quietly producing a command it refuses.
+
 ## [0.15.0] — 2026-07-20
 
 ### Added
