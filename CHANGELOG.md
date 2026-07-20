@@ -90,6 +90,13 @@ versions may include breaking changes.
   string of escapes that silently sources nothing. Install and uninstall
   build that line through the same helper, so uninstall can't strand it.
   The Windows CI job now drives the real git-bash to prove detection.
+- **Casts no longer type the terminal's own answers into the prompt.**
+  The recorder answers cursor-position queries because PSReadLine and
+  reedline paint nothing without one — but fish asks *mid-session* and
+  then inserts the reply at the cursor, so `fm che` recorded as
+  `fm ch77e`. Cursor replies are now sent only to the shells that need
+  them (pwsh, nushell); bash and zsh never cared, and fish is visibly
+  happier without. Verified by re-recording all five.
 - **Casts no longer flash the shell's terminal queries.** pyte doesn't
   consume DCS sequences, so fish's XTGETTCAP capability probe rendered
   its hex payload as screen text for one frame before the prompt

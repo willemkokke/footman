@@ -275,11 +275,21 @@ _DCS = re.compile(r"\x1bP.*?(?:\x1b\\|\x07)", re.S)
 _OSC_COLOUR = re.compile(rb"\x1b\](1[012]);\?(?:\x07|\x1b\\)")
 
 
-def _answer_queries(buf: bytes, new_from: int, cursor_at, reply) -> None:
+# Which line editors need a cursor-position answer to paint at all.
+# PSReadLine and reedline hang without one — with DSR unanswered, pwsh
+# and nushell produce no output whatever. fish is the opposite: it asks
+# mid-session and then *types the answer into the command line*, so an
+# `fm che` becomes `fm ch77e`. bash and zsh don't care either way.
+_NEEDS_CURSOR_REPLY = frozenset({"pwsh", "nushell"})
+
+
+def _answer_queries(
+    buf: bytes, new_from: int, cursor_at, reply, *, cursor: bool = True
+) -> None:
     """Answer terminal queries in *buf* that end at or past *new_from* —
     earlier bytes were answered on a previous read (the buffer overlaps so
     a sequence split across reads still matches exactly once)."""
-    for m in _DSR.finditer(buf):
+    for m in _DSR.finditer(buf) if cursor else ():
         if m.end() > new_from:
             row, col = cursor_at()
             reply(f"\x1b[{row};{col}R".encode())
@@ -302,6 +312,7 @@ def _pty_session(
     env_extra: dict[str, str] | None = None,
     keep_echo: bool = False,
     cwd: Path | None = None,
+    answer_cursor: bool = True,
 ) -> list[tuple[float, bytes]]:
     """Run *argv* on a pty, play the keystroke script, and record
     (elapsed-seconds, bytes) chunks until output has settled."""
@@ -391,6 +402,7 @@ def _pty_session(
                     len(pending),
                     lambda: (tracker.cursor.y + 1, tracker.cursor.x + 1),
                     lambda answer: os.write(master, answer),
+                    cursor=answer_cursor,
                 )
                 pending = buf[-64:]
                 if not typing_started and queue:
@@ -647,6 +659,7 @@ def cast(
             # nothing can flash. Every other shell self-renders.
             keep_echo=shell == "bash",
             cwd=cwd,
+            answer_cursor=shell in _NEEDS_CURSOR_REPLY,
         )
     frames = _screens(chunks, width=width, height=height)
     if not frames:
