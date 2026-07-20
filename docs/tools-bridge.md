@@ -51,9 +51,18 @@ tools.mkdocs.build(strict=off)              # → --no-strict, convention holds
 
 Only the tool knows, so footman asks it: the spellings are extracted from
 each tool's own description of itself (click states a negatable flag as
-`secondary_opts`) and the exceptions are cached. A test compares that cache
+`secondary_opts`; git prints `--[no-]verify`; clap says so in prose) and
+the exceptions are cached. `fm footman tools audit` compares that cache
 against the installed tools, so one that changes its mind fails a check
 rather than quietly producing a command it refuses.
+
+The generated stubs carry the same fact where you'll actually see it — in
+the flag's own documentation:
+
+```python
+clean: Remove old files from the site_dir before building (the default).
+    Defaults on — `clean=off` emits `--dirty`.
+```
 
 `off` shines when a variable drives it, because it completes the boolean
 story — `True` → `--flag`, `off` → the tool's negation:
@@ -92,11 +101,12 @@ validated eagerly either).
 
 ## Autocomplete without the import bill
 
-The bridge does ship duty-style autocompletion after all — as a **stub
-file** (`tools.pyi`), which type checkers and IDEs read but the runtime
-never imports. `tools.ruff.check(` completes `fix=`, `select=`,
-`output_format=` and friends; `fix="yes"` is a type error before you run
-anything. Two rules keep the stub subordinate to the bridge:
+The bridge does ship duty-style autocompletion after all — as **stub
+files**, which type checkers and IDEs read but the runtime never imports.
+`tools.ruff.check(` completes `fix=`, `select=`, `output_format=` and
+friends, each with that tool's own help text on hover; `fix="yes"` is a
+type error before you run anything. Two rules keep the stub subordinate to
+the bridge:
 
 - every stubbed verb ends in `**flags: Any`, so the stub *suggests* flags
   but can never forbid one — when a tool grows a flag, the bridge already
@@ -105,9 +115,38 @@ anything. Two rules keep the stub subordinate to the bridge:
   ever a type error.
 
 Which means stub drift — the thing that breaks duty's wrappers at run
-time — here degrades a *hint* at worst, and fixing it is editing one line
-of a `.pyi`. The flag lists were read from the installed tools' `--help`,
-not from memory.
+time — here degrades a *hint* at worst.
+
+And the stubs are not written by hand. `fm footman tools sync` reads the
+tools installed on your machine and writes one file per tool, so what your
+editor suggests is what your binary accepts:
+
+```console
+$ fm footman tools sync
+wrote 9 stub(s): ruff, ruff_format, basedpyright, uv, git, docker, mkdocs, zensical, coverage
+skipped (not installed): bun, cspell, prek, markdownlint
+```
+
+Reading a tool means reading whatever it offers. click and argparse hand
+over their parameters as data — including the negation, which click states
+as `secondary_opts`. Everyone else gets their `--help` parsed, and the
+five families footman meets are more alike than they look: an option is a
+line starting with a dash, and its help is either past a run of spaces or
+on the lines below. The dialects are small — `[default: 3]` (clap),
+`(default true)` (cobra), `--file string` (cobra's Go types), "Use
+`--no-fix` to disable" (clap's prose), and git's `--[no-]quiet`, which
+states both spellings at once.
+
+`fm footman tools audit` regenerates and compares, so a tool that moves
+fails a check rather than quietly leaving your editor a version behind. A
+tool that isn't installed is skipped *and named* — a check that quietly
+covered nine of thirteen would be worse than no check at all:
+
+```console
+$ fm footman tools audit
+skipped (not installed): bun, cspell, prek, markdownlint
+9 stub(s) match their installed tool
+```
 
 The flip side of "never forbid" is that the stub can't reject a flag name
 it doesn't know — `**flags: Any` accepts anything. So a mistyped flag isn't

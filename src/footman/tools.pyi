@@ -11,8 +11,10 @@
 #   it and the stub merely hasn't heard of it yet;
 # - unknown verbs fall through to `Tool` via `__getattr__`, so nothing the
 #   runtime accepts is a type error.
-# Flag lists were read from the installed tools' --help, not from memory.
-# Stub drift therefore degrades a hint, never a run.
+# Flag lists are *generated* from the installed tools — `fm footman tools
+# sync` writes one file per tool under `_stubs/`, and `fm footman tools
+# audit` fails when a checked-in stub and its tool disagree. Stub drift
+# therefore degrades a hint, never a run.
 
 # The private aliases (`_re`, `_run`, …) mirror tools.py: they keep those names
 # out of the public namespace so `tools.run`/`tools.sys`/… resolve to Tools via
@@ -25,6 +27,22 @@ import threading as _threading
 from collections.abc import Sequence
 from typing import Any
 
+# One generated file per tool — `fm footman tools sync` writes them from
+# the installed binaries, and `audit` fails when they drift. They import
+# `Tool` and the aliases from here, which a stub may do circularly.
+from footman._stubs.basedpyright import _Basedpyright as _Basedpyright
+from footman._stubs.bun import _Bun as _Bun
+from footman._stubs.coverage import _Coverage as _Coverage
+from footman._stubs.cspell import _Cspell as _Cspell
+from footman._stubs.docker import _Docker as _Docker
+from footman._stubs.git import _Git as _Git
+from footman._stubs.markdownlint import _Markdownlint as _Markdownlint
+from footman._stubs.mkdocs import _Mkdocs as _Mkdocs
+from footman._stubs.prek import _Prek as _Prek
+from footman._stubs.ruff import _Ruff as _Ruff
+from footman._stubs.ruff_format import _RuffFormat as _RuffFormat
+from footman._stubs.uv import _Uv as _Uv
+from footman._stubs.zensical import _Zensical as _Zensical
 from footman.context import run as _run  # noqa: F401
 
 _argv_lock: _threading.Lock
@@ -35,8 +53,14 @@ class _Off: ...
 
 off: _Off
 
-# A boolean flag: True → --flag, off → --no-flag, False/None → omitted.
+# A boolean flag: True → --flag, off → the tool's own negation,
+# False/None → omitted (which is what lets a task parameter's default flow
+# straight through).
 _Flag = bool | _Off | None
+# An option that takes a value. Wide on purpose: the bridge stringifies
+# whatever it is handed and repeats the flag for each item of a sequence,
+# so a narrower type would reject calls that demonstrably work.
+_Value = str | int | float | Sequence[str] | _Off | None
 
 _NEGATIONS: dict[str, dict[str, str]]
 
@@ -59,279 +83,6 @@ class Tool:
         **flags: Any,
     ) -> int: ...
     def installed_version(self) -> tuple[int, ...]: ...
-
-class _RuffFormat(Tool):
-    def __call__(  # type: ignore[override]
-        self,
-        *paths: str,
-        check: _Flag = ...,
-        diff: _Flag = ...,
-        preview: _Flag = ...,
-        target_version: str | None = ...,
-        no_cache: _Flag = ...,
-        config: str | None = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
-        **flags: Any,
-    ) -> int: ...
-
-class _Ruff(Tool):
-    format: _RuffFormat
-    def check(
-        self,
-        *paths: str,
-        fix: _Flag = ...,
-        unsafe_fixes: _Flag = ...,
-        show_fixes: _Flag = ...,
-        diff: _Flag = ...,
-        watch: _Flag = ...,
-        fix_only: _Flag = ...,
-        output_format: str | None = ...,
-        output_file: str | None = ...,
-        target_version: str | None = ...,
-        preview: _Flag = ...,
-        statistics: _Flag = ...,
-        select: Sequence[str] | None = ...,
-        ignore: Sequence[str] | None = ...,
-        extend_select: Sequence[str] | None = ...,
-        exit_zero: _Flag = ...,
-        exit_non_zero_on_fix: _Flag = ...,
-        quiet: _Flag = ...,
-        silent: _Flag = ...,
-        verbose: _Flag = ...,
-        isolated: _Flag = ...,
-        no_cache: _Flag = ...,
-        cache_dir: str | None = ...,
-        config: str | None = ...,
-        nofail: bool = False,
-        **flags: Any,
-    ) -> int: ...
-
-class _Uv(Tool):
-    def sync(
-        self,
-        *,
-        frozen: _Flag = ...,
-        locked: _Flag = ...,
-        group: Sequence[str] | None = ...,
-        all_groups: _Flag = ...,
-        no_dev: _Flag = ...,
-        upgrade: _Flag = ...,
-        nofail: bool = False,
-        **flags: Any,
-    ) -> int: ...
-    def build(
-        self,
-        *,
-        sdist: _Flag = ...,
-        wheel: _Flag = ...,
-        out_dir: str | None = ...,
-        nofail: bool = False,
-        **flags: Any,
-    ) -> int: ...
-    def add(
-        self,
-        *packages: str,
-        dev: _Flag = ...,
-        group: str | None = ...,
-        nofail: bool = False,
-        **flags: Any,
-    ) -> int: ...
-    def lock(
-        self, *, upgrade: _Flag = ..., nofail: bool = False, **flags: Any
-    ) -> int: ...
-    def run(self, *args: str, nofail: bool = False, **flags: Any) -> int: ...
-
-class _Git(Tool):
-    def status(self, *, s: _Flag = ..., nofail: bool = False, **flags: Any) -> int: ...
-    def add(self, *paths: str, nofail: bool = False, **flags: Any) -> int: ...
-    def commit(
-        self,
-        *,
-        message: str | None = ...,
-        all: _Flag = ...,
-        amend: _Flag = ...,
-        no_verify: _Flag = ...,
-        nofail: bool = False,
-        **flags: Any,
-    ) -> int: ...
-    def push(
-        self,
-        *refs: str,
-        force_with_lease: _Flag = ...,
-        tags: _Flag = ...,
-        nofail: bool = False,
-        **flags: Any,
-    ) -> int: ...
-    def tag(self, *args: str, nofail: bool = False, **flags: Any) -> int: ...
-    def diff(
-        self,
-        *paths: str,
-        staged: _Flag = ...,
-        quiet: _Flag = ...,
-        nofail: bool = False,
-        **flags: Any,
-    ) -> int: ...
-
-class _DockerCompose(Tool):
-    def up(
-        self,
-        *services: str,
-        detach: _Flag = ...,
-        build: _Flag = ...,
-        wait: _Flag = ...,
-        pull: str | None = ...,
-        nofail: bool = False,
-        **flags: Any,
-    ) -> int: ...
-    def down(
-        self,
-        *,
-        volumes: _Flag = ...,
-        remove_orphans: _Flag = ...,
-        nofail: bool = False,
-        **flags: Any,
-    ) -> int: ...
-    def logs(
-        self,
-        *services: str,
-        follow: _Flag = ...,
-        tail: int | None = ...,
-        nofail: bool = False,
-        **flags: Any,
-    ) -> int: ...
-    def build(self, *services: str, nofail: bool = False, **flags: Any) -> int: ...
-
-class _Docker(Tool):
-    compose: _DockerCompose
-    def build(
-        self,
-        path: str | None = ...,
-        *,
-        tag: str | None = ...,
-        file: str | None = ...,
-        platform: str | None = ...,
-        push: _Flag = ...,
-        nofail: bool = False,
-        **flags: Any,
-    ) -> int: ...
-    def run(self, *args: Any, nofail: bool = False, **flags: Any) -> int: ...
-
-class _Bun(Tool):
-    def add(
-        self,
-        *packages: str,
-        dev: _Flag = ...,
-        global_: _Flag = ...,
-        nofail: bool = False,
-        **flags: Any,
-    ) -> int: ...
-    def install(
-        self, *, frozen_lockfile: _Flag = ..., nofail: bool = False, **flags: Any
-    ) -> int: ...
-    def run(
-        self, script: str, *args: str, nofail: bool = False, **flags: Any
-    ) -> int: ...
-    def build(self, *entrypoints: str, nofail: bool = False, **flags: Any) -> int: ...
-
-class _Mkdocs(Tool):
-    def build(
-        self,
-        *,
-        strict: _Flag = ...,
-        clean: _Flag = ...,
-        site_dir: str | None = ...,
-        config_file: str | None = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
-        **flags: Any,
-    ) -> int: ...
-    def serve(
-        self,
-        *,
-        dev_addr: str | None = ...,
-        strict: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
-        **flags: Any,
-    ) -> int: ...
-
-class _Zensical(Tool):
-    def build(
-        self,
-        *,
-        strict: _Flag = ...,
-        clean: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
-        **flags: Any,
-    ) -> int: ...
-    def serve(
-        self, *, nofail: bool = False, in_process: bool | None = None, **flags: Any
-    ) -> int: ...
-
-class _Coverage(Tool):
-    def run(self, *args: str, nofail: bool = False, **flags: Any) -> int: ...
-    def report(
-        self,
-        *,
-        fail_under: float | None = ...,
-        show_missing: _Flag = ...,
-        nofail: bool = False,
-        **flags: Any,
-    ) -> int: ...
-    def html(
-        self, *, directory: str | None = ..., nofail: bool = False, **flags: Any
-    ) -> int: ...
-    def xml(
-        self, *, o: str | None = ..., nofail: bool = False, **flags: Any
-    ) -> int: ...
-    def combine(self, *paths: str, nofail: bool = False, **flags: Any) -> int: ...
-    def erase(self, *, nofail: bool = False, **flags: Any) -> int: ...
-
-class _Cspell(Tool):
-    def lint(
-        self,
-        *globs: str,
-        config: str | None = ...,
-        words_only: _Flag = ...,
-        quiet: _Flag = ...,
-        gitignore: _Flag = ...,
-        nofail: bool = False,
-        **flags: Any,
-    ) -> int: ...
-
-class _Prek(Tool):
-    def run(
-        self,
-        *hooks: str,
-        all_files: _Flag = ...,
-        files: Sequence[str] | None = ...,
-        nofail: bool = False,
-        **flags: Any,
-    ) -> int: ...
-    def install(self, *, nofail: bool = False, **flags: Any) -> int: ...
-
-class _Markdownlint(Tool):
-    def __call__(  # type: ignore[override]
-        self,
-        *globs: str,
-        fix: _Flag = ...,
-        config: str | None = ...,
-        nofail: bool = False,
-        **flags: Any,
-    ) -> int: ...
-
-class _Basedpyright(Tool):
-    def __call__(  # type: ignore[override]
-        self,
-        *paths: str,
-        watch: _Flag = ...,
-        outputjson: _Flag = ...,
-        project: str | None = ...,
-        nofail: bool = False,
-        **flags: Any,
-    ) -> int: ...
 
 ruff: _Ruff
 ruff_format: _RuffFormat

@@ -7,6 +7,28 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- **The `tools.*` stubs are generated from the installed tools.** The
+  bridge never went stale, because it transcribes nothing — but its stub
+  could, because a stub describes a tool at a version. Now it is read
+  from the tool: one file per tool under `footman/_stubs/`, carrying each
+  flag's own help text as a docstring, the values it accepts as a
+  `Literal`, and the one fact a bridge can never infer — how that tool
+  spells "off" (`clean=off` → `mkdocs build --dirty`). Five help dialects
+  are understood: click and argparse structurally, plus clap, cobra,
+  commander and git's own `--[no-]flag` notation read from `--help`.
+- **`fm footman tools …`** — `list` (what is curated and installed),
+  `spec` (what a tool says about itself right now), `sync` (rewrite the
+  stubs) and `audit` (fail when a stub and its tool disagree). Tools that
+  are not installed are skipped *and named*, so a check can't quietly
+  cover three of thirteen.
+- **A type-level test for the stubs** (`tests/typecheck_tools.py`): a file
+  of tool calls that is never executed and never collected, only
+  type-checked. Its negative cases are the real assertions — since
+  `**flags: Any` swallows an unknown keyword, a call that is *required to
+  fail* is what proves a flag is declared and typed.
+
 ### Fixed
 
 - **`off` now speaks each tool's own dialect.** It assumed the negation

@@ -15,8 +15,10 @@ from __future__ import annotations
 
 from footman.registry import Group
 from footman.tasks import docs as _docs
+from footman.tasks import tools as _tools
 
 tasks = Group("footman", help="footman's own tasks")
 tasks.groups["docs"] = _docs.tasks
+tasks.groups["tools"] = _tools.tasks
 
 __all__ = ["tasks"]

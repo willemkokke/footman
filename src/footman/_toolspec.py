@@ -49,6 +49,9 @@ class Option:
     """The Python type the stub declares: bool, str, int, list[str]."""
     default: Any = None
     """The tool's default, when it states one."""
+    choices: tuple[str, ...] = ()
+    """The closed set of values the tool accepts, when it names one — the
+    stub declares these as a `Literal`, so an IDE offers them."""
 
 
 @dataclass(frozen=True)
@@ -142,19 +145,49 @@ def _verb_from_click(name: str, command: Any) -> Verb:
         secondary = tuple(getattr(param, "secondary_opts", ()) or ())
         options.append(
             Option(
-                name=param.name,
+                name=_keyword(param),
                 flags=tuple(sorted(param.opts, key=len, reverse=True)),
                 negation=secondary[0] if secondary else "",
                 help=_first_line(getattr(param, "help", "") or ""),
                 type_name=_type_name(param),
                 default=_plain_default(param),
+                choices=_click_choices(param),
             )
         )
+    unique: dict[str, Option] = {}
+    for option in options:
+        unique.setdefault(option.name, option)
     return Verb(
         name=name.replace("-", "_"),
         help=_first_line(getattr(command, "help", "") or ""),
-        options=tuple(sorted(options, key=lambda o: o.name)),
+        options=tuple(sorted(unique.values(), key=lambda o: o.name)),
     )
+
+
+def _click_choices(param: Any) -> tuple[str, ...]:
+    """The closed set, when click declares the parameter a `Choice`."""
+    choices = getattr(getattr(param, "type", None), "choices", None)
+    if not choices:
+        return ()
+    return tuple(str(c) for c in choices)
+
+
+def _keyword(param: Any) -> str:
+    """The keyword a task writes for this parameter.
+
+    Not `param.name`: click names a group of mutually exclusive flags after
+    one internal variable, so mkdocs' `--dirty`, `--clean` and
+    `--dirtyreload` are all `build_type` — three parameters with one name.
+    The bridge translates a *keyword* into a *flag*, so the flag's own
+    spelling is the only name that round-trips.
+    """
+    longest = max(
+        (o for o in getattr(param, "opts", ()) if o.startswith("--")),
+        key=len,
+        default="",
+    )
+    stem = longest.removeprefix("--") if longest else str(param.name)
+    return stem.replace("-", "_")
 
 
 def _plain_default(param: Any) -> Any:
