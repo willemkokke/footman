@@ -884,3 +884,97 @@ def test_spec_wrappers_lists_the_dotted_wrapper_paths():
         ),
     )
     assert spec.wrappers() == frozenset({"run", "compose.run"})
+
+
+# --- git via its manual (`git help <verb>`) ----------------------------------
+
+GIT_MAN = """\
+GIT-CLONE(1)                      Git Manual                      GIT-CLONE(1)
+
+NAME
+       git-clone - Clone a repository into a new directory
+
+SYNOPSIS
+       git clone [--template=<template-directory>] [-l] [-s] [--no-hardlinks]
+                 [-q] [-n] [--bare] [-o <name>] [--depth <depth>]
+                 [--filter=<filter-spec>] [--] <repository> [<directory>]
+
+DESCRIPTION
+       Clones a repository into a newly created directory.
+
+OPTIONS
+       -l, --local
+           When the repository to clone from is on a local machine, this
+           flag bypasses the normal "Git aware" transport mechanism. Don't
+           use it unless you know what you're doing.
+
+       --bare
+           Make a bare Git repository. That is, instead of creating
+           <directory> and placing the administrative files in
+           <directory>/.git, make the <directory> itself the $GIT_DIR.
+
+       --depth <depth>
+           Create a shallow clone with a history truncated to the specified
+           number of commits.
+"""
+
+
+def test_git_manual_options_and_single_form_synopsis():
+    verb = _toolhelp.parse_help(GIT_MAN, name="clone", man=True)
+    got = flags(verb)
+    assert {"local", "bare", "depth"} <= set(got)
+    assert got["depth"].type_name == "str"  # `--depth <depth>` takes a value
+    # A single-form SYNOPSIS with a required trailing metavar → required.
+    assert (verb.positional, verb.lead) == ("required", "repository")
+
+
+def test_git_manual_help_is_the_first_sentence_ascii_folded():
+    verb = _toolhelp.parse_help(GIT_MAN, name="clone", man=True)
+    got = flags(verb)
+    # The manual's paragraph is cut to one sentence, curly quotes folded.
+    assert got["local"].help == (
+        "When the repository to clone from is on a local machine, this flag "
+        'bypasses the normal "Git aware" transport mechanism'
+    )
+    assert got["local"].help.isascii()  # curly quotes were folded
+
+
+def test_multi_form_synopsis_stays_any():
+    text = (
+        "SYNOPSIS\n"
+        "       git checkout [<options>] <branch>\n"
+        "       git checkout [<options>] [--] <pathspec>...\n"
+        "\nDESCRIPTION\n       x.\n\n"
+        "OPTIONS\n       -q, --quiet\n           Be quiet.\n"
+    )
+    verb = _toolhelp.parse_help(text, name="checkout", man=True)
+    assert verb.positional == "any"  # two forms → no single shape
+
+
+def test_first_sentence_skips_abbreviations():
+    assert _toolhelp._first_sentence("Use e.g. a value. Then stop.") == (
+        "Use e.g. a value"
+    )
+    assert _toolhelp._first_sentence("No period here") == "No period here"
+
+
+def test_reserved_flag_name_falls_through_to_the_catchall():
+    # git rev-parse has a `--flags` option; it can't be a typed parameter
+    # (it would duplicate `**flags`), so it is dropped to the catch-all.
+    spec = ToolSpec(
+        name="git",
+        verbs=(
+            Verb(
+                name="rev_parse",
+                options=(
+                    Option("flags", ("--flags",), type_name="bool"),
+                    Option("quiet", ("--quiet",), type_name="bool"),
+                ),
+            ),
+        ),
+    )
+    text = _stubgen.render(spec)
+    ast.parse(text)  # a duplicate `flags` parameter would be a syntax error
+    assert "quiet: _Flag" in text
+    assert "flags: _Flag" not in text  # the `--flags` option isn't a typed param
+    assert "**flags: Any" in text  # it falls through to the catch-all

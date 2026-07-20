@@ -45,6 +45,15 @@ versions may include breaking changes.
   stubs) and `audit` (fail when a stub and its tool disagree). Tools that
   are not installed are skipped *and named*, so a check can't quietly
   cover three of thirteen.
+- **git's stubs are read from its manual, not its terse `-h`.** `git
+  commit -h` lists 19 flags; the manual lists 37, and git is exactly the
+  tool where autocomplete earns its keep. footman now reads `git help
+  <verb>` for each git verb — twice the options, each with its own help,
+  and a clean per-form `SYNOPSIS` that gives `git clone` its required
+  `repository` while multi-form verbs (`git branch` lists *and* creates)
+  stay permissive. The manual is read only when regenerating stubs, so it
+  never becomes a runtime dependency; the extraction folds the manual's
+  typographic punctuation to ASCII and keeps one sentence per flag.
 - **`tools.<tool>.opts(...)` binds a tool's global options before the
   subcommand** — `tools.docker.opts(host="tcp://x").compose.up(detach=True)`
   runs `docker --host=tcp://x compose up --detach`. Some options belong to

@@ -388,8 +388,6 @@ class _UvPip(Tool):
                 explicitly listed on the command line to the resulting requirements
                 file.
             no_emit_package: Specify a package to omit from the output resolution.
-                Its dependencies will still be included in the resolution.
-                Equivalent to pip-compile's `--unsafe-package` option.
             no_header: Exclude the comment header at the top of the generated output
                 file.
             no_index: Ignore the registry index (e.g., PyPI), instead relying on
@@ -397,9 +395,7 @@ class _UvPip(Tool):
             no_progress: Hide all progress outputs.
             no_python_downloads: Disable automatic downloads of Python.
             no_sources: Ignore the `tool.uv.sources` table when resolving
-                dependencies. Used to lock against the standards-compliant,
-                publishable package metadata, as opposed to using any workspace,
-                Git, URL, or local path sources.
+                dependencies.
             no_sources_package: Don't use sources from the `tool.uv.sources` table
                 for the specified packages.
             no_strip_extras: Include extras in the output file.
@@ -429,9 +425,9 @@ class _UvPip(Tool):
                 single `requirements.txt` output file that is compatible with all
                 operating systems, architectures, and Python implementations.
             upgrade: Allow package upgrades, ignoring pinned versions in any
-                existing output file. Implies `--refresh`.
+                existing output file.
             upgrade_package: Allow upgrades for a specific package, ignoring pinned
-                versions in any existing output file. Implies `--refresh-package`.
+                versions in any existing output file.
             verbose___: Use verbose output.
         """
         ...
@@ -808,9 +804,7 @@ class _UvPip(Tool):
             no_progress: Hide all progress outputs.
             no_python_downloads: Disable automatic downloads of Python.
             no_sources: Ignore the `tool.uv.sources` table when resolving
-                dependencies. Used to lock against the standards-compliant,
-                publishable package metadata, as opposed to using any workspace,
-                Git, URL, or local path sources.
+                dependencies.
             no_sources_package: Don't use sources from the `tool.uv.sources` table
                 for the specified packages.
             no_verify_hashes: Disable validation of hashes in the requirements file.
@@ -832,9 +826,9 @@ class _UvPip(Tool):
             refresh: Refresh all cached data.
             refresh_package: Refresh cached data for a specific package.
             reinstall: Reinstall all packages, regardless of whether they're already
-                installed. Implies `--refresh`.
+                installed.
             reinstall_package: Reinstall a specific package, regardless of whether
-                it's already installed. Implies `--refresh-package`.
+                it's already installed.
             require_hashes: Require a matching hash for each requirement.
             requirements: Install the packages listed in the given files.
             resolution: The strategy to use when selecting between the different
@@ -846,14 +840,13 @@ class _UvPip(Tool):
             system_certs: Whether to load TLS certificates from the platform's
                 native certificate store.
             target: Install packages into the specified directory, rather than into
-                the virtual or system Python environment. The packages will be
-                installed at the top-level of the directory.
+                the virtual or system Python environment.
             torch_backend: The backend to use when fetching packages in the PyTorch
                 ecosystem (e.g., `cpu`, `cu126`, or `auto`).
             upgrade: Allow package upgrades, ignoring pinned versions in any
-                existing output file. Implies `--refresh`.
+                existing output file.
             upgrade_package: Allow upgrades for a specific package, ignoring pinned
-                versions in any existing output file. Implies `--refresh-package`.
+                versions in any existing output file.
             verbose___: Use verbose output.
         """
         ...
@@ -1295,9 +1288,7 @@ class _UvPip(Tool):
             no_progress: Hide all progress outputs.
             no_python_downloads: Disable automatic downloads of Python.
             no_sources: Ignore the `tool.uv.sources` table when resolving
-                dependencies. Used to lock against the standards-compliant,
-                publishable package metadata, as opposed to using any workspace,
-                Git, URL, or local path sources.
+                dependencies.
             no_sources_package: Don't use sources from the `tool.uv.sources` table
                 for the specified packages.
             no_verify_hashes: Disable validation of hashes in the requirements file.
@@ -1317,9 +1308,9 @@ class _UvPip(Tool):
             refresh: Refresh all cached data.
             refresh_package: Refresh cached data for a specific package.
             reinstall: Reinstall all packages, regardless of whether they're already
-                installed. Implies `--refresh`.
+                installed.
             reinstall_package: Reinstall a specific package, regardless of whether
-                it's already installed. Implies `--refresh-package`.
+                it's already installed.
             require_hashes: Require a matching hash for each requirement.
             strict: Validate the Python environment after completing the
                 installation, to detect packages with missing dependencies or other
@@ -1328,8 +1319,7 @@ class _UvPip(Tool):
             system_certs: Whether to load TLS certificates from the platform's
                 native certificate store.
             target: Install packages into the specified directory, rather than into
-                the virtual or system Python environment. The packages will be
-                installed at the top-level of the directory.
+                the virtual or system Python environment.
             torch_backend: The backend to use when fetching packages in the PyTorch
                 ecosystem (e.g., `cpu`, `cu126`, or `auto`).
             verbose___: Use verbose output.
@@ -1696,9 +1686,7 @@ class _UvTool(Tool):
             no_progress: Hide all progress outputs.
             no_python_downloads: Disable automatic downloads of Python.
             no_sources: Ignore the `tool.uv.sources` table when resolving
-                dependencies. Used to lock against the standards-compliant,
-                publishable package metadata, as opposed to using any workspace,
-                Git, URL, or local path sources.
+                dependencies.
             no_sources_package: Don't use sources from the `tool.uv.sources` table
                 for the specified packages.
             offline: Disable network access.
@@ -1712,9 +1700,9 @@ class _UvTool(Tool):
             refresh: Refresh all cached data.
             refresh_package: Refresh cached data for a specific package.
             reinstall: Reinstall all packages, regardless of whether they're already
-                installed. Implies `--refresh`.
+                installed.
             reinstall_package: Reinstall a specific package, regardless of whether
-                it's already installed. Implies `--refresh-package`.
+                it's already installed.
             resolution: The strategy to use when selecting between the different
                 compatible versions for a given package requirement.
             system_certs: Whether to load TLS certificates from the platform's
@@ -1722,9 +1710,9 @@ class _UvTool(Tool):
             torch_backend: The backend to use when fetching packages in the PyTorch
                 ecosystem (e.g., `cpu`, `cu126`, or `auto`).
             upgrade: Allow package upgrades, ignoring pinned versions in any
-                existing output file. Implies `--refresh`.
+                existing output file.
             upgrade_package: Allow upgrades for a specific package, ignoring pinned
-                versions in any existing output file. Implies `--refresh-package`.
+                versions in any existing output file.
             verbose___: Use verbose output.
             with_: Include the following additional requirements.
             with_editable: Include the given packages in editable mode.
@@ -2088,9 +2076,7 @@ class _UvTool(Tool):
             no_progress: Hide all progress outputs.
             no_python_downloads: Disable automatic downloads of Python.
             no_sources: Ignore the `tool.uv.sources` table when resolving
-                dependencies. Used to lock against the standards-compliant,
-                publishable package metadata, as opposed to using any workspace,
-                Git, URL, or local path sources.
+                dependencies.
             no_sources_package: Don't use sources from the `tool.uv.sources` table
                 for the specified packages.
             offline: Disable network access.
@@ -2104,9 +2090,9 @@ class _UvTool(Tool):
             refresh: Refresh all cached data.
             refresh_package: Refresh cached data for a specific package.
             reinstall: Reinstall all packages, regardless of whether they're already
-                installed. Implies `--refresh`.
+                installed.
             reinstall_package: Reinstall a specific package, regardless of whether
-                it's already installed. Implies `--refresh-package`.
+                it's already installed.
             resolution: The strategy to use when selecting between the different
                 compatible versions for a given package requirement.
             system_certs: Whether to load TLS certificates from the platform's
@@ -2114,9 +2100,9 @@ class _UvTool(Tool):
             torch_backend: The backend to use when fetching packages in the PyTorch
                 ecosystem (e.g., `cpu`, `cu126`, or `auto`).
             upgrade: Allow package upgrades, ignoring pinned versions in any
-                existing output file. Implies `--refresh`.
+                existing output file.
             upgrade_package: Allow upgrades for a specific package, ignoring pinned
-                versions in any existing output file. Implies `--refresh-package`.
+                versions in any existing output file.
             verbose___: Use verbose output.
             with_: Run with the given packages installed.
             with_editable: Run with the given packages installed in editable mode.
@@ -2354,24 +2340,21 @@ class _UvTool(Tool):
             no_progress: Hide all progress outputs.
             no_python_downloads: Disable automatic downloads of Python.
             no_sources: Ignore the `tool.uv.sources` table when resolving
-                dependencies. Used to lock against the standards-compliant,
-                publishable package metadata, as opposed to using any workspace,
-                Git, URL, or local path sources.
+                dependencies.
             no_sources_package: Don't use sources from the `tool.uv.sources` table
                 for the specified packages.
             offline: Disable network access.
             prerelease: The strategy to use when considering pre-release versions.
             project: Discover a project in the given directory.
             python: Upgrade a tool, and specify it to use the given Python
-                interpreter to build its environment. Use with `--all` to apply to
-                all tools.
+                interpreter to build its environment.
             python_platform: The platform for which requirements should be
                 installed.
             quiet___: Use quiet output.
             reinstall: Reinstall all packages, regardless of whether they're already
-                installed. Implies `--refresh`.
+                installed.
             reinstall_package: Reinstall a specific package, regardless of whether
-                it's already installed. Implies `--refresh-package`.
+                it's already installed.
             resolution: The strategy to use when selecting between the different
                 compatible versions for a given package requirement.
             system_certs: Whether to load TLS certificates from the platform's
@@ -2639,9 +2622,7 @@ class _Uv(Tool):
             no_progress: Hide all progress outputs.
             no_python_downloads: Disable automatic downloads of Python.
             no_sources: Ignore the `tool.uv.sources` table when resolving
-                dependencies. Used to lock against the standards-compliant,
-                publishable package metadata, as opposed to using any workspace,
-                Git, URL, or local path sources.
+                dependencies.
             no_sources_package: Don't use sources from the `tool.uv.sources` table
                 for the specified packages.
             no_sync: Avoid syncing the virtual environment.
@@ -2657,9 +2638,9 @@ class _Uv(Tool):
             refresh: Refresh all cached data.
             refresh_package: Refresh cached data for a specific package.
             reinstall: Reinstall all packages, regardless of whether they're already
-                installed. Implies `--refresh`.
+                installed.
             reinstall_package: Reinstall a specific package, regardless of whether
-                it's already installed. Implies `--refresh-package`.
+                it's already installed.
             requirements: Add the packages listed in the given files.
             resolution: The strategy to use when selecting between the different
                 compatible versions for a given package requirement.
@@ -2670,9 +2651,9 @@ class _Uv(Tool):
                 native certificate store.
             tag: Tag to use when adding a dependency from Git.
             upgrade: Allow package upgrades, ignoring pinned versions in any
-                existing output file. Implies `--refresh`.
+                existing output file.
             upgrade_package: Allow upgrades for a specific package, ignoring pinned
-                versions in any existing output file. Implies `--refresh-package`.
+                versions in any existing output file.
             verbose___: Use verbose output.
             workspace: Add the dependency as a workspace member. `workspace=off`
                 emits `--no-workspace`.
@@ -2832,9 +2813,7 @@ class _Uv(Tool):
             no_progress: Hide all progress outputs.
             no_python_downloads: Disable automatic downloads of Python.
             no_sources: Ignore the `tool.uv.sources` table when resolving
-                dependencies. Used to lock against the standards-compliant,
-                publishable package metadata, as opposed to using any workspace,
-                Git, URL, or local path sources.
+                dependencies.
             no_sources_package: Don't use sources from the `tool.uv.sources` table
                 for the specified packages.
             no_verify_hashes: Disable validation of hashes in the requirements file.
@@ -2854,9 +2833,9 @@ class _Uv(Tool):
             system_certs: Whether to load TLS certificates from the platform's
                 native certificate store.
             upgrade: Allow package upgrades, ignoring pinned versions in any
-                existing output file. Implies `--refresh`.
+                existing output file.
             upgrade_package: Allow upgrades for a specific package, ignoring pinned
-                versions in any existing output file. Implies `--refresh-package`.
+                versions in any existing output file.
             verbose___: Use verbose output.
             wheel: Build a binary distribution ("wheel") from the given directory.
         """
@@ -3047,9 +3026,7 @@ class _Uv(Tool):
             no_progress: Hide all progress outputs.
             no_python_downloads: Disable automatic downloads of Python.
             no_sources: Ignore the `tool.uv.sources` table when resolving
-                dependencies. Used to lock against the standards-compliant,
-                publishable package metadata, as opposed to using any workspace,
-                Git, URL, or local path sources.
+                dependencies.
             no_sources_package: Don't use sources from the `tool.uv.sources` table
                 for the specified packages.
             offline: Disable network access.
@@ -3072,9 +3049,9 @@ class _Uv(Tool):
             system_certs: Whether to load TLS certificates from the platform's
                 native certificate store.
             upgrade: Allow package upgrades, ignoring pinned versions in any
-                existing output file. Implies `--refresh`.
+                existing output file.
             upgrade_package: Allow upgrades for a specific package, ignoring pinned
-                versions in any existing output file. Implies `--refresh-package`.
+                versions in any existing output file.
             verbose___: Use verbose output.
         """
         ...
@@ -3218,9 +3195,7 @@ class _Uv(Tool):
             no_progress: Hide all progress outputs.
             no_python_downloads: Disable automatic downloads of Python.
             no_sources: Ignore the `tool.uv.sources` table when resolving
-                dependencies. Used to lock against the standards-compliant,
-                publishable package metadata, as opposed to using any workspace,
-                Git, URL, or local path sources.
+                dependencies.
             no_sources_package: Don't use sources from the `tool.uv.sources` table
                 for the specified packages.
             offline: Disable network access.
@@ -3237,9 +3212,9 @@ class _Uv(Tool):
             system_certs: Whether to load TLS certificates from the platform's
                 native certificate store.
             upgrade: Allow package upgrades, ignoring pinned versions in any
-                existing output file. Implies `--refresh`.
+                existing output file.
             upgrade_package: Allow upgrades for a specific package, ignoring pinned
-                versions in any existing output file. Implies `--refresh-package`.
+                versions in any existing output file.
             verbose___: Use verbose output.
         """
         ...
@@ -3468,9 +3443,7 @@ class _Uv(Tool):
             no_progress: Hide all progress outputs.
             no_python_downloads: Disable automatic downloads of Python.
             no_sources: Ignore the `tool.uv.sources` table when resolving
-                dependencies. Used to lock against the standards-compliant,
-                publishable package metadata, as opposed to using any workspace,
-                Git, URL, or local path sources.
+                dependencies.
             no_sources_package: Don't use sources from the `tool.uv.sources` table
                 for the specified packages.
             no_sync: Avoid syncing the virtual environment after re-locking the
@@ -3487,9 +3460,9 @@ class _Uv(Tool):
             refresh: Refresh all cached data.
             refresh_package: Refresh cached data for a specific package.
             reinstall: Reinstall all packages, regardless of whether they're already
-                installed. Implies `--refresh`.
+                installed.
             reinstall_package: Reinstall a specific package, regardless of whether
-                it's already installed. Implies `--refresh-package`.
+                it's already installed.
             resolution: The strategy to use when selecting between the different
                 compatible versions for a given package requirement.
             script: Remove the dependency from the specified Python script, rather
@@ -3497,9 +3470,9 @@ class _Uv(Tool):
             system_certs: Whether to load TLS certificates from the platform's
                 native certificate store.
             upgrade: Allow package upgrades, ignoring pinned versions in any
-                existing output file. Implies `--refresh`.
+                existing output file.
             upgrade_package: Allow upgrades for a specific package, ignoring pinned
-                versions in any existing output file. Implies `--refresh-package`.
+                versions in any existing output file.
             verbose___: Use verbose output.
         """
         ...
@@ -3787,9 +3760,7 @@ class _Uv(Tool):
             no_project: Avoid discovering the project or workspace.
             no_python_downloads: Disable automatic downloads of Python.
             no_sources: Ignore the `tool.uv.sources` table when resolving
-                dependencies. Used to lock against the standards-compliant,
-                publishable package metadata, as opposed to using any workspace,
-                Git, URL, or local path sources.
+                dependencies.
             no_sources_package: Don't use sources from the `tool.uv.sources` table
                 for the specified packages.
             no_sync: Avoid syncing the virtual environment.
@@ -3807,18 +3778,18 @@ class _Uv(Tool):
             refresh: Refresh all cached data.
             refresh_package: Refresh cached data for a specific package.
             reinstall: Reinstall all packages, regardless of whether they're already
-                installed. Implies `--refresh`.
+                installed.
             reinstall_package: Reinstall a specific package, regardless of whether
-                it's already installed. Implies `--refresh-package`.
+                it's already installed.
             resolution: The strategy to use when selecting between the different
                 compatible versions for a given package requirement.
             script: Run the given path as a Python script.
             system_certs: Whether to load TLS certificates from the platform's
                 native certificate store.
             upgrade: Allow package upgrades, ignoring pinned versions in any
-                existing output file. Implies `--refresh`.
+                existing output file.
             upgrade_package: Allow upgrades for a specific package, ignoring pinned
-                versions in any existing output file. Implies `--refresh-package`.
+                versions in any existing output file.
             verbose___: Use verbose output.
             with_: Run with the given packages installed.
             with_editable: Run with the given packages installed in editable mode.
@@ -4109,9 +4080,7 @@ class _Uv(Tool):
             no_progress: Hide all progress outputs.
             no_python_downloads: Disable automatic downloads of Python.
             no_sources: Ignore the `tool.uv.sources` table when resolving
-                dependencies. Used to lock against the standards-compliant,
-                publishable package metadata, as opposed to using any workspace,
-                Git, URL, or local path sources.
+                dependencies.
             no_sources_package: Don't use sources from the `tool.uv.sources` table
                 for the specified packages.
             offline: Disable network access.
@@ -4129,9 +4098,9 @@ class _Uv(Tool):
             refresh: Refresh all cached data.
             refresh_package: Refresh cached data for a specific package.
             reinstall: Reinstall all packages, regardless of whether they're already
-                installed. Implies `--refresh`.
+                installed.
             reinstall_package: Reinstall a specific package, regardless of whether
-                it's already installed. Implies `--refresh-package`.
+                it's already installed.
             resolution: The strategy to use when selecting between the different
                 compatible versions for a given package requirement.
             script: Sync the environment for a Python script, rather than the
@@ -4139,9 +4108,9 @@ class _Uv(Tool):
             system_certs: Whether to load TLS certificates from the platform's
                 native certificate store.
             upgrade: Allow package upgrades, ignoring pinned versions in any
-                existing output file. Implies `--refresh`.
+                existing output file.
             upgrade_package: Allow upgrades for a specific package, ignoring pinned
-                versions in any existing output file. Implies `--refresh-package`.
+                versions in any existing output file.
             verbose___: Use verbose output.
         """
         ...
@@ -4370,9 +4339,7 @@ class _Uv(Tool):
                 index URLs.
             index_url: (Deprecated: use `--default-index` instead) The URL of the
                 Python package index (by default: <https://pypi.org/simple>).
-            invert: Show the reverse dependencies for the given package. This flag
-                will invert the tree and display the packages that depend on the
-                given package.
+            invert: Show the reverse dependencies for the given package.
             keyring_provider: Attempt to use `keyring` for authentication for index
                 URLs.
             link_mode: The method to use when installing packages from the global
@@ -4394,11 +4361,7 @@ class _Uv(Tool):
                 temporary directory for the duration of the operation.
             no_config: Avoid discovering configuration files (`pyproject.toml`,
                 `uv.toml`).
-            no_dedupe: Do not de-duplicate repeated dependencies. Usually, when a
-                package has already displayed its dependencies, further occurrences
-                will not re-display its dependencies, and will include a (*) to
-                indicate it has already been shown. This flag will cause those
-                duplicates to be repeated.
+            no_dedupe: Do not de-duplicate repeated dependencies.
             no_default_groups: Ignore the default dependency groups.
             no_dev: Disable the development dependency group.
             no_group: Disable the specified dependency group.
@@ -4407,9 +4370,7 @@ class _Uv(Tool):
             no_progress: Hide all progress outputs.
             no_python_downloads: Disable automatic downloads of Python.
             no_sources: Ignore the `tool.uv.sources` table when resolving
-                dependencies. Used to lock against the standards-compliant,
-                publishable package metadata, as opposed to using any workspace,
-                Git, URL, or local path sources.
+                dependencies.
             no_sources_package: Don't use sources from the `tool.uv.sources` table
                 for the specified packages.
             offline: Disable network access.
@@ -4434,9 +4395,9 @@ class _Uv(Tool):
                 native certificate store.
             universal: Show a platform-independent dependency tree.
             upgrade: Allow package upgrades, ignoring pinned versions in any
-                existing output file. Implies `--refresh`.
+                existing output file.
             upgrade_package: Allow upgrades for a specific package, ignoring pinned
-                versions in any existing output file. Implies `--refresh-package`.
+                versions in any existing output file.
             verbose___: Use verbose output.
         """
         ...
@@ -4722,9 +4683,7 @@ class _Uv(Tool):
             no_progress: Hide all progress outputs.
             no_python_downloads: Disable automatic downloads of Python.
             no_sources: Ignore the `tool.uv.sources` table when resolving
-                dependencies. Used to lock against the standards-compliant,
-                publishable package metadata, as opposed to using any workspace,
-                Git, URL, or local path sources.
+                dependencies.
             no_sources_package: Don't use sources from the `tool.uv.sources` table
                 for the specified packages.
             no_sync: Avoid syncing the virtual environment after re-locking the
@@ -4739,18 +4698,18 @@ class _Uv(Tool):
             refresh: Refresh all cached data.
             refresh_package: Refresh cached data for a specific package.
             reinstall: Reinstall all packages, regardless of whether they're already
-                installed. Implies `--refresh`.
+                installed.
             reinstall_package: Reinstall a specific package, regardless of whether
-                it's already installed. Implies `--refresh-package`.
+                it's already installed.
             resolution: The strategy to use when selecting between the different
                 compatible versions for a given package requirement.
             short: Only show the version.
             system_certs: Whether to load TLS certificates from the platform's
                 native certificate store.
             upgrade: Allow package upgrades, ignoring pinned versions in any
-                existing output file. Implies `--refresh`.
+                existing output file.
             upgrade_package: Allow upgrades for a specific package, ignoring pinned
-                versions in any existing output file. Implies `--refresh-package`.
+                versions in any existing output file.
             verbose___: Use verbose output.
         """
         ...

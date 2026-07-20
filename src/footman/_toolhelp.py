@@ -182,13 +182,45 @@ def _spellings(head: str) -> tuple[list[str], str, bool]:
     return flags, meta, optional
 
 
+# A manual's prose is Unicode-typeset (curly quotes, dashes, ellipsis).
+# The stub is source that must stay ASCII-clean (ruff RUF002), so fold them.
+_TYPOGRAPHY = str.maketrans(
+    {
+        "\u2019": "'",  # right single quote
+        "\u2018": "'",  # left single quote
+        "\u201c": '"',  # left double quote
+        "\u201d": '"',  # right double quote
+        "\u2013": "-",  # en dash
+        "\u2014": "-",  # em dash
+        "\u2026": "...",  # ellipsis
+        "\u00a0": " ",  # no-break space
+    }
+)  # fmt: skip
+# Abbreviations whose period does not end a sentence.
+_ABBREV = (" e.g", " i.e", " etc", " vs", " cf", " al", " no")
+
+
 def _clean(text: str) -> str:
-    """The tool's prose, minus the machine-readable tails it appends."""
+    """The tool's prose, as one clean first sentence.
+
+    A `--help` line is already a sentence; a manual entry is paragraphs, so
+    keep only the first — the summary a completion popup can show — folding
+    the manual's typographic punctuation to ASCII on the way.
+    """
     text = _DEFAULT.sub("", text)
     text = _CHOICES.sub("", text)
     text = _POSSIBLE.sub("", text)
     text = re.sub(r"\[env: [^\]]*\]", "", text)
-    text = re.sub(r"\s+", " ", text).strip(" .")
+    text = re.sub(r"\s+", " ", text).translate(_TYPOGRAPHY).strip(" .")
+    return _first_sentence(text)
+
+
+def _first_sentence(text: str) -> str:
+    """Up to the first sentence-ending period, skipping `e.g.`/`i.e.`."""
+    for match in re.finditer(r"\. ", text):
+        head = text[: match.start()]
+        if not head.endswith(_ABBREV):
+            return head
     return text
 
 
@@ -318,8 +350,14 @@ def _with_negation(option: Option, negation: str) -> Option:
     )
 
 
-def parse_help(text: str, *, name: str = "") -> Verb:
-    """One verb's options, from that verb's own `--help` output."""
+def parse_help(text: str, *, name: str = "", man: bool = False) -> Verb:
+    """One verb's options, from its `--help` output or (with `man`) manual.
+
+    The option grammar is the same either way — the man page states a flag
+    and its help exactly as `--help` does. Only the positional shape reads
+    from a different place: a `usage:` line normally, the `SYNOPSIS` forms
+    for a manual.
+    """
     sections = _sections(text)
     options: list[Option] = []
     seen: set[str] = set()
@@ -335,7 +373,7 @@ def parse_help(text: str, *, name: str = "") -> Verb:
             ):
                 seen.add(option.name)
                 options.append(option)
-    positional, lead = _usage_shape(text)
+    positional, lead = _synopsis_shape(text, name) if man else _usage_shape(text)
     return Verb(
         name=name,
         help=_summary(text),
@@ -412,10 +450,14 @@ def _usage_shape(text: str) -> tuple[str, str]:
     bracketed-optional or variadic first argument, an unfamiliar token — all
     fall through, so a real command is never rejected.
     """
-    usage = _usage_line(text)
-    if not usage:
+    return _grammar_shape(_usage_line(text))
+
+
+def _grammar_shape(grammar: str) -> tuple[str, str]:
+    """`(positional, lead)` from one argument grammar (no program name)."""
+    if not grammar:
         return "any", ""
-    positional = _top_level_positionals(usage)
+    positional = _top_level_positionals(grammar)
     if not positional:
         return "none", ""
     first = positional[0]
@@ -427,6 +469,30 @@ def _usage_shape(text: str) -> tuple[str, str]:
     if not base or base[-1:].isdigit() or not _METAVAR.match(base):
         return "any", ""  # numbered (`path1`) or unrecognised — don't constrain
     return "required", base.replace("-", "_").lower()
+
+
+def _synopsis_shape(text: str, verb: str) -> tuple[str, str]:
+    """`(positional, lead)` from a man page's `SYNOPSIS`.
+
+    git's manual states each verb as one or more complete forms. A verb
+    with a *single* form has one grammar to read (`git clone … <repository>
+    [<directory>]` → required); a verb with several — `git checkout` lists,
+    detaches, creates, restores — has no single shape, so it stays `"any"`.
+    Counting the forms is just counting the lines that restate `git <verb>`;
+    the wrapped continuations don't.
+    """
+    match = re.search(
+        r"(?ms)^SYNOPSIS[ \t]*\n(?P<body>.*?)\n(?:[A-Z][A-Z ]+\n|\Z)", text
+    )
+    if not match:
+        return "any", ""
+    body = match["body"]
+    prog = f"git {verb}"
+    forms = re.findall(rf"(?m)^[ \t]*{re.escape(prog)}\b", body)
+    if len(forms) != 1:
+        return "any", ""  # multi-form (or unrecognised) — don't constrain
+    grammar = " ".join(body.split()).split(prog, 1)[1]
+    return _grammar_shape(grammar)
 
 
 def _usage_line(text: str) -> str:
@@ -497,14 +563,23 @@ def subcommands(text: str) -> dict[str, str]:
     return found
 
 
-def run_help(argv: list[str], *, flag: str = "--help", timeout: float = 30.0) -> str:
+def run_help(
+    argv: list[str], *, flag: str = "--help", man: bool = False, timeout: float = 30.0
+) -> str:
     """`<tool> ... --help`, as text. Empty when the tool isn't installed.
 
     Help goes to stdout for every tool footman curates, but a few print
     usage to stderr on older versions, so both are read.
+
+    `man` reads the manual instead — `git help <verb>` — for a tool whose
+    terse `-h` omits most of its flags (git's `-h` shows about half). It
+    runs only at stub-generation time, never at task time, so its heavier
+    footprint (a rendered man page) costs a user nothing.
     """
     if shutil.which(argv[0]) is None:
         return ""
+    if man:
+        return _run_man(argv, timeout)
     try:
         done = subprocess.run(
             [*argv, flag],
@@ -516,6 +591,36 @@ def run_help(argv: list[str], *, flag: str = "--help", timeout: float = 30.0) ->
     except (OSError, subprocess.SubprocessError):
         return ""
     return done.stdout if len(done.stdout) > len(done.stderr) else done.stderr
+
+
+# Man renders bold/underline as `c\x08c` / `_\x08c` overstrike; dropping the
+# char-then-backspace pair leaves clean text, no `col` binary needed.
+_OVERSTRIKE = re.compile(r".\x08")
+
+
+def _run_man(argv: list[str], timeout: float) -> str:
+    """`<tool> help <verb>`, de-overstruck — the manual as plain text."""
+    import os
+
+    env = {
+        **os.environ,
+        "GIT_PAGER": "cat",
+        "PAGER": "cat",
+        "MANPAGER": "cat",
+        "MAN_KEEP_FORMATTING": "",
+        "COLUMNS": "200",
+    }
+    try:
+        done = subprocess.run(
+            [argv[0], "help", *argv[1:]],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            env=env,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    return _OVERSTRIKE.sub("", done.stdout)
 
 
 def _wide_env() -> dict[str, str]:
@@ -537,11 +642,14 @@ def from_help(
     version: str = "",
     in_process: bool = False,
     flag: str = "--help",
+    man: bool = False,
 ) -> ToolSpec:
     """A `ToolSpec` for *name* by asking the installed binary.
 
-    Each verb costs one `<tool> <verb> --help`; the root call supplies the
-    tool's summary and its global options (verb `""`).
+    Each verb costs one `<tool> <verb> --help` (or `<tool> help <verb>`
+    with `man`); the root call supplies the tool's summary and its global
+    options (verb `""`). With `man`, per-verb manuals are read but the root
+    stays on `--help`, which is where a tool prints its verb list.
     """
     root = run_help([name], flag=flag)
     if not root:
@@ -555,11 +663,11 @@ def from_help(
         root_verb = replace(root_verb, positional="any", lead="", wraps=False)
     parsed = [root_verb]
     for verb in verbs:
-        text = run_help([name, *verb.split(".")], flag=flag)
+        text = run_help([name, *verb.split(".")], flag=flag, man=man)
         if text:
             # `git rev-parse` is spelled `tools.git.rev_parse(...)`: the
             # bridge turns the underscore back into a dash when it calls.
-            parsed.append(parse_help(text, name=verb.replace("-", "_")))
+            parsed.append(parse_help(text, name=verb.replace("-", "_"), man=man))
     return ToolSpec(
         name=name,
         help=_summary(root),

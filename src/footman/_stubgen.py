@@ -171,11 +171,20 @@ def _positional_lines(verb: Verb) -> list[str]:
     return ["        *args: str,"]
 
 
+# The method's own parameters. An option named the same (git rev-parse has
+# `--flags`) would be a duplicate parameter — it still works, swallowed by
+# `**flags` at type-check and `**kwargs` at run time, just not typed.
+_RESERVED = frozenset({"self", "args", "flags", "nofail", "in_process"})
+
+
 def _unique(options: tuple[Option, ...]) -> list[Option]:
-    """One parameter per keyword — a repeat would be a syntax error."""
+    """One parameter per keyword — a repeat would be a syntax error, and a
+    name that clashes with a fixed parameter is dropped to the catch-all."""
     seen: dict[str, Option] = {}
     for option in options:
-        seen.setdefault(_safe(option.name), option)
+        safe = _safe(option.name)
+        if safe not in _RESERVED:
+            seen.setdefault(safe, option)
     return list(seen.values())
 
 

@@ -98,10 +98,7 @@ class _RuffFormat(Tool):
                 `ruff.toml`), or a TOML `<KEY> = <VALUE>` pair (such as you might
                 find in a `ruff.toml` configuration file) overriding a specific
                 configuration option (e.g., `--config "lint.line-length = 100"` or
-                `--config "format.quote-style = 'single'"`). Overrides of individual
-                settings using this option always take precedence over all
-                configuration files, including configuration files that were also
-                specified using `--config`.
+                `--config "format.quote-style = 'single'"`).
             diff: Avoid writing any formatted files back; instead, exit with a
                 non-zero status code and the difference between the current file and
                 how the formatted file would look like.
@@ -113,38 +110,23 @@ class _RuffFormat(Tool):
             extend_exclude: Like --exclude, but adds additional files and
                 directories on top of those already excluded.
             extension: List of mappings from file extension to language (one of
-                `python`, `ipynb`, `pyi`). For example, to treat `.ipy` files as
-                IPython notebooks, use `--extension ipy:ipynb`.
+                `python`, `ipynb`, `pyi`).
             force_exclude: Enforce exclusions, even for paths passed to Ruff
-                directly on the command-line. Use `--no-force-exclude` to disable.
-                `force_exclude=off` emits `--no-force-exclude`.
+                directly on the command-line. `force_exclude=off` emits
+                `--no-force-exclude`.
             isolated: Ignore all configuration files.
             line_length: Set the line-length.
             no_cache: Disable cache reads.
             output_format: Output serialization format for violations, when used
-                with `--check`. The default serialization format is "full". Note
-                that this option is currently only respected in preview mode. A
-                warning will be emitted if this flag is used on stable.
-            preview: Enable preview mode; enables unstable formatting. Use
-                `--no-preview` to disable. `preview=off` emits `--no-preview`.
+                with `--check`.
+            preview: Enable preview mode; enables unstable formatting. `preview=off`
+                emits `--no-preview`.
             quiet: Print diagnostics, but nothing else.
             range: When specified, Ruff will try to only format the code in the
-                given range. It might be necessary to extend the start backwards or
-                the end forwards, to fully enclose a logical line. The `<RANGE>`
-                uses the format
-                `<start_line>:<start_column>-<end_line>:<end_column>`. - The line
-                and column numbers are 1 based. - The column specifies the
-                nth-unicode codepoint on that line. - The end offset is exclusive. -
-                The column numbers are optional. You can write `--range=1-2` instead
-                of `--range=1:1-2:1`. - The end position is optional. You can write
-                `--range=2` to format the entire document starting from the second
-                line. - The start position is optional. You can write `--range=-3`
-                to format the first three lines of the document. The option can only
-                be used when formatting a single file. Range formatting of notebooks
-                is unsupported.
+                given range.
             respect_gitignore: Respect file exclusions via `.gitignore` and other
-                standard ignore files. Use `--no-respect-gitignore` to disable.
-                `respect_gitignore=off` emits `--no-respect-gitignore`.
+                standard ignore files. `respect_gitignore=off` emits
+                `--no-respect-gitignore`.
             silent: Disable all logging (but still exit with status code "1" upon
                 detecting diagnostics).
             stdin_filename: The name of the file when passing it through stdin.

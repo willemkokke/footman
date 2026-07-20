@@ -37,20 +37,16 @@ class _Coverage(Tool):
 
         Args:
             data_file: Read coverage data for report generation from this file.
-                Defaults to '.coverage'.
             debug: Debug options, separated by commas.
             directory: Write the output files to DIR.
             ignore_errors: Ignore errors while reading source files.
-            include: Include only files whose paths match one of these patterns.
-                Accepts shell-style wildcards, which must be quoted. May be
-                repeated: a list emits the flag once per item.
+            include: Include only files whose paths match one of these patterns. May
+                be repeated: a list emits the flag once per item.
             keep_combined: Keep original coverage files, otherwise they are deleted
                 after combining.
-            omit: Omit files whose paths match one of these patterns. Accepts
-                shell-style wildcards, which must be quoted. May be repeated: a list
-                emits the flag once per item.
-            rcfile: Specify configuration file. By default '.coveragerc',
-                'setup.cfg', 'tox.ini', and 'pyproject.toml' are tried.
+            omit: Omit files whose paths match one of these patterns. May be
+                repeated: a list emits the flag once per item.
+            rcfile: Specify configuration file.
         """
         ...
     def combine(
@@ -71,15 +67,12 @@ class _Coverage(Tool):
         arguments are data files or directories containing
 
         Args:
-            append: Append data to the data file. Otherwise it starts clean each
-                time.
-            data_file: Base name of the data files to operate on. Defaults to
-                '.coverage'.
+            append: Append data to the data file.
+            data_file: Base name of the data files to operate on.
             debug: Debug options, separated by commas.
             keep: Keep original coverage files, otherwise they are deleted.
             quiet: Don't print messages about what is happening.
-            rcfile: Specify configuration file. By default '.coveragerc',
-                'setup.cfg', 'tox.ini', and 'pyproject.toml' are tried.
+            rcfile: Specify configuration file.
         """
         ...
     def erase(
@@ -95,11 +88,9 @@ class _Coverage(Tool):
         """Erase previously collected coverage data.
 
         Args:
-            data_file: Base name of the data files to operate on. Defaults to
-                '.coverage'.
+            data_file: Base name of the data files to operate on.
             debug: Debug options, separated by commas.
-            rcfile: Specify configuration file. By default '.coveragerc',
-                'setup.cfg', 'tox.ini', and 'pyproject.toml' are tried.
+            rcfile: Specify configuration file.
         """
         ...
     def html(
@@ -130,28 +121,23 @@ class _Coverage(Tool):
 
         Args:
             contexts: Only display data from lines covered in the given contexts.
-                Accepts Python regexes, which must be quoted. May be repeated: a
-                list emits the flag once per item.
+                May be repeated: a list emits the flag once per item.
             data_file: Read coverage data for report generation from this file.
-                Defaults to '.coverage'.
             debug: Debug options, separated by commas.
             directory: Write the output files to DIR.
             fail_under: Exit with a status of 2 if the total coverage is less than
                 MIN.
             ignore_errors: Ignore errors while reading source files.
-            include: Include only files whose paths match one of these patterns.
-                Accepts shell-style wildcards, which must be quoted. May be
-                repeated: a list emits the flag once per item.
+            include: Include only files whose paths match one of these patterns. May
+                be repeated: a list emits the flag once per item.
             keep_combined: Keep original coverage files, otherwise they are deleted
                 after combining.
-            omit: Omit files whose paths match one of these patterns. Accepts
-                shell-style wildcards, which must be quoted. May be repeated: a list
-                emits the flag once per item.
+            omit: Omit files whose paths match one of these patterns. May be
+                repeated: a list emits the flag once per item.
             precision: Number of digits after the decimal point to display for
                 reported coverage percentages.
             quiet: Don't print messages about what is happening.
-            rcfile: Specify configuration file. By default '.coveragerc',
-                'setup.cfg', 'tox.ini', and 'pyproject.toml' are tried.
+            rcfile: Specify configuration file.
             show_contexts: Show contexts for covered lines.
             skip_covered: Skip files with 100% coverage. `skip_covered=off` emits
                 `--no-skip-covered`.
@@ -182,26 +168,21 @@ class _Coverage(Tool):
 
         Args:
             contexts: Only display data from lines covered in the given contexts.
-                Accepts Python regexes, which must be quoted. May be repeated: a
-                list emits the flag once per item.
+                May be repeated: a list emits the flag once per item.
             data_file: Read coverage data for report generation from this file.
-                Defaults to '.coverage'.
             debug: Debug options, separated by commas.
             fail_under: Exit with a status of 2 if the total coverage is less than
                 MIN.
             ignore_errors: Ignore errors while reading source files.
-            include: Include only files whose paths match one of these patterns.
-                Accepts shell-style wildcards, which must be quoted. May be
-                repeated: a list emits the flag once per item.
+            include: Include only files whose paths match one of these patterns. May
+                be repeated: a list emits the flag once per item.
             keep_combined: Keep original coverage files, otherwise they are deleted
                 after combining.
-            omit: Omit files whose paths match one of these patterns. Accepts
-                shell-style wildcards, which must be quoted. May be repeated: a list
-                emits the flag once per item.
+            omit: Omit files whose paths match one of these patterns. May be
+                repeated: a list emits the flag once per item.
             pretty_print: Format the JSON for human readers.
             quiet: Don't print messages about what is happening.
-            rcfile: Specify configuration file. By default '.coveragerc',
-                'setup.cfg', 'tox.ini', and 'pyproject.toml' are tried.
+            rcfile: Specify configuration file.
             show_contexts: Show contexts for covered lines.
         """
         ...
@@ -231,34 +212,29 @@ class _Coverage(Tool):
 
         Args:
             contexts: Only display data from lines covered in the given contexts.
-                Accepts Python regexes, which must be quoted. May be repeated: a
-                list emits the flag once per item.
+                May be repeated: a list emits the flag once per item.
             data_file: Read coverage data for report generation from this file.
-                Defaults to '.coverage'.
             debug: Debug options, separated by commas.
             fail_under: Exit with a status of 2 if the total coverage is less than
                 MIN.
             format: Output format, either text (default), markdown, or total.
             ignore_errors: Ignore errors while reading source files.
-            include: Include only files whose paths match one of these patterns.
-                Accepts shell-style wildcards, which must be quoted. May be
-                repeated: a list emits the flag once per item.
+            include: Include only files whose paths match one of these patterns. May
+                be repeated: a list emits the flag once per item.
             keep_combined: Keep original coverage files, otherwise they are deleted
                 after combining.
-            omit: Omit files whose paths match one of these patterns. Accepts
-                shell-style wildcards, which must be quoted. May be repeated: a list
-                emits the flag once per item.
+            omit: Omit files whose paths match one of these patterns. May be
+                repeated: a list emits the flag once per item.
             precision: Number of digits after the decimal point to display for
                 reported coverage percentages.
-            rcfile: Specify configuration file. By default '.coveragerc',
-                'setup.cfg', 'tox.ini', and 'pyproject.toml' are tried.
+            rcfile: Specify configuration file.
             show_missing: Show line numbers of statements in each module that
                 weren't executed.
             skip_covered: Skip files with 100% coverage. `skip_covered=off` emits
                 `--no-skip-covered`.
             skip_empty: Skip files with no code.
             sort: Sort the report by the named column: name, stmts, miss, branch,
-                brpart, or cover. Default is name.
+                brpart, or cover.
         """
         ...
     def run(
@@ -288,33 +264,25 @@ class _Coverage(Tool):
         """Run a Python program, measuring code execution.
 
         Args:
-            append: Append data to the data file. Otherwise it starts clean each
-                time.
+            append: Append data to the data file.
             branch: Measure branch coverage in addition to statement coverage.
-            concurrency: Properly measure code using a concurrency library. Valid
-                values are: eventlet, gevent, greenlet, multiprocessing, thread, or
-                a comma-list of them.
+            concurrency: Properly measure code using a concurrency library.
             context: The context label to record for this coverage run.
-            data_file: Write the recorded coverage data to this file. Defaults to
-                '.coverage'.
+            data_file: Write the recorded coverage data to this file.
             debug: Debug options, separated by commas.
-            include: Include only files whose paths match one of these patterns.
-                Accepts shell-style wildcards, which must be quoted. May be
-                repeated: a list emits the flag once per item.
+            include: Include only files whose paths match one of these patterns. May
+                be repeated: a list emits the flag once per item.
             module: <pyfile> is an importable Python module, not a script path, to
                 be run as 'python -m' would run it.
-            omit: Omit files whose paths match one of these patterns. Accepts
-                shell-style wildcards, which must be quoted. May be repeated: a list
-                emits the flag once per item.
+            omit: Omit files whose paths match one of these patterns. May be
+                repeated: a list emits the flag once per item.
             parallel_mode: Append a unique suffix to the data file name to collect
                 separate data from multiple processes.
             pylib: Measure coverage even inside the Python installed library, which
                 isn't done by default.
-            rcfile: Specify configuration file. By default '.coveragerc',
-                'setup.cfg', 'tox.ini', and 'pyproject.toml' are tried.
+            rcfile: Specify configuration file.
             save_signal: Specify a signal that will trigger coverage to write its
-                collected data. Supported values are: USR1, USR2. Not available on
-                Windows.
+                collected data.
             source: A list of directories or importable names of code to measure.
                 May be repeated: a list emits the flag once per item.
             timid: Use the slower Python trace function core.
@@ -341,22 +309,18 @@ class _Coverage(Tool):
 
         Args:
             data_file: Read coverage data for report generation from this file.
-                Defaults to '.coverage'.
             debug: Debug options, separated by commas.
             fail_under: Exit with a status of 2 if the total coverage is less than
                 MIN.
             ignore_errors: Ignore errors while reading source files.
-            include: Include only files whose paths match one of these patterns.
-                Accepts shell-style wildcards, which must be quoted. May be
-                repeated: a list emits the flag once per item.
+            include: Include only files whose paths match one of these patterns. May
+                be repeated: a list emits the flag once per item.
             keep_combined: Keep original coverage files, otherwise they are deleted
                 after combining.
-            omit: Omit files whose paths match one of these patterns. Accepts
-                shell-style wildcards, which must be quoted. May be repeated: a list
-                emits the flag once per item.
+            omit: Omit files whose paths match one of these patterns. May be
+                repeated: a list emits the flag once per item.
             quiet: Don't print messages about what is happening.
-            rcfile: Specify configuration file. By default '.coveragerc',
-                'setup.cfg', 'tox.ini', and 'pyproject.toml' are tried.
+            rcfile: Specify configuration file.
             skip_empty: Skip files with no code.
         """
         ...

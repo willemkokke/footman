@@ -21,179 +21,389 @@ class _Git(Tool):
         self,
         *args: str,
         all: _Flag = ...,
+        chmod: _Flag = ...,
         dry_run: _Flag = ...,
         edit: _Flag = ...,
         force: _Flag = ...,
+        ignore_errors: _Flag = ...,
+        ignore_missing: _Flag = ...,
         intent_to_add: _Flag = ...,
         interactive: _Flag = ...,
+        no_warn_embedded_repo: _Flag = ...,
         patch: _Flag = ...,
+        pathspec_file_nul: _Flag = ...,
+        pathspec_from_file: _Value = ...,
+        refresh: _Flag = ...,
+        renormalize: _Flag = ...,
+        sparse: _Flag = ...,
         update: _Flag = ...,
         verbose: _Flag = ...,
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
     ) -> int:
-        """interactive picking
+        """GIT-ADD(1)                        Git Manual
+        GIT-ADD(1)
 
         Args:
-            all: add changes from all tracked and untracked files. `all=off` emits
-                `--no-all`.
-            dry_run: dry run. `dry_run=off` emits `--no-dry-run`.
-            edit: edit current diff and apply. `edit=off` emits `--no-edit`.
-            force: allow adding otherwise ignored files. `force=off` emits
-                `--no-force`.
-            intent_to_add: record only the fact that the path will be added later.
-                `intent_to_add=off` emits `--no-intent-to-add`.
-            interactive: interactive picking. `interactive=off` emits
-                `--no-interactive`.
-            patch: select hunks interactively. `patch=off` emits `--no-patch`.
-            update: update tracked files. `update=off` emits `--no-update`.
-            verbose: be verbose. `verbose=off` emits `--no-verbose`.
+            all: Update the index not only where the working tree has a file
+                matching <pathspec> but also where the index already has an entry.
+                `all=off` emits `--ignore-removal`.
+            chmod: Override the executable bit of the added files.
+            dry_run: Don't actually add the file(s), just show if they exist and/or
+                will be ignored.
+            edit: Open the diff vs. the index in an editor and let the user edit it.
+            force: Allow adding otherwise ignored files.
+            ignore_errors: If some files could not be added because of errors
+                indexing them, do not abort the operation, but continue adding the
+                others.
+            ignore_missing: This option can only be used together with --dry-run.
+            intent_to_add: Record only the fact that the path will be added later.
+            interactive: Add modified contents in the working tree interactively to
+                the index.
+            no_warn_embedded_repo: By default, git add will warn when adding an
+                embedded repository to the index without using git submodule add to
+                create an entry in .gitmodules.
+            patch: Interactively choose hunks of patch between the index and the
+                work tree and add them to the index.
+            pathspec_file_nul: Only meaningful with --pathspec-from-file.
+            pathspec_from_file: Pathspec is passed in <file> instead of commandline
+                args.
+            refresh: Don't add the file(s), but only refresh their stat()
+                information in the index.
+            renormalize: Apply the "clean" process freshly to all tracked files to
+                forcibly add them again to the index.
+            sparse: Allow updating index entries outside of the sparse-checkout
+                cone.
+            update: Update the index just where it already has an entry matching
+                <pathspec>.
+            verbose: Be verbose.
         """
         ...
     def branch(
         self,
         *args: str,
+        abbrev: _Value = ...,
         all: _Flag = ...,
+        color: _ValuedFlag = ...,
+        column: _ValuedFlag = ...,
         contains: _Value = ...,
         copy: _Flag = ...,
+        create_reflog: _Flag = ...,
         delete: _Flag = ...,
+        edit_description: _Flag = ...,
+        edit_description_: _Value = ...,
         force: _Flag = ...,
+        format: _Value = ...,
         ignore_case: _Flag = ...,
         list: _Flag = ...,
         merged: _Value = ...,
         move: _Flag = ...,
+        no_abbrev: _Flag = ...,
+        no_color: _Flag = ...,
         no_contains: _Value = ...,
         no_merged: _Value = ...,
+        no_track: _Flag = ...,
+        omit_empty: _Flag = ...,
+        points_at: _Value = ...,
         quiet: _Flag = ...,
+        recurse_submodules: _Flag = ...,
         remotes: _Flag = ...,
+        set_upstream: _Flag = ...,
         set_upstream_to: _Value = ...,
+        show_current: _Flag = ...,
+        sort: _Value = ...,
         track: _ValuedFlag = ...,
+        unset_upstream: _Flag = ...,
         verbose: _Flag = ...,
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
     ) -> int:
-        """or: git branch [<options>] [-f] [--recurse-submodules] <branch-name>
-        [<start-point>]
+        """GIT-BRANCH(1)                     Git Manual
+        GIT-BRANCH(1)
 
         Args:
-            all: list both remote-tracking and local branches.
-            contains: print only branches that contain the commit.
-            copy: copy a branch and its reflog. `copy=off` emits `--no-copy`.
-            delete: delete fully merged branch. `delete=off` emits `--no-delete`.
-            force: force creation, move/rename, deletion. `force=off` emits
-                `--no-force`.
-            ignore_case: sorting and filtering are case insensitive.
-                `ignore_case=off` emits `--no-ignore-case`.
-            list: list branch names. `list=off` emits `--no-list`.
-            merged: print only branches that are merged.
-            move: move/rename a branch and its reflog. `move=off` emits `--no-move`.
-            no_contains: print only branches that don't contain the commit.
-            no_merged: print only branches that are not merged.
-            quiet: suppress informational messages. `quiet=off` emits `--no-quiet`.
-            remotes: act on remote-tracking branches.
-            set_upstream_to: change the upstream info. `set_upstream_to=off` emits
-                `--no-set-upstream-to`.
-            track: set branch tracking configuration. Value optional: `True` for the
-                bare flag, or pass one. `track=off` emits `--no-track`.
-            verbose: show hash and subject, give twice for upstream branch.
-                `verbose=off` emits `--no-verbose`.
+            abbrev: In the verbose listing that show the commit object name, show
+                the shortest prefix that is at least <n> hexdigits long that
+                uniquely refers the object.
+            all: List both remote-tracking branches and local branches.
+            color: Color branches to highlight current, local, and remote-tracking
+                branches. Value optional: `True` for the bare flag, or pass one.
+            column: Display branch listing in columns. Value optional: `True` for
+                the bare flag, or pass one.
+            contains: Only list branches which contain <commit> (HEAD if not
+                specified).
+            copy: Copy a branch, together with its config and reflog.
+            create_reflog: Create the branch's reflog.
+            delete: Delete a branch.
+            edit_description: Open an editor and edit the text to explain what the
+                branch is for, to be used by various other commands (e.g.
+            force: Reset <branch-name> to <start-point>, even if <branch-name>
+                exists already.
+            format: A string that interpolates %(fieldname) from a branch ref being
+                shown and the object it points at.
+            ignore_case: Sorting and filtering branches are case insensitive.
+            list: List branches.
+            merged: Only list branches whose tips are reachable from <commit> (HEAD
+                if not specified).
+            move: Move/rename a branch, together with its config and reflog.
+            no_abbrev: Display the full sha1s in the output listing rather than
+                abbreviating them.
+            no_color: Turn off branch colors, even when the configuration file gives
+                the default to color output.
+            no_contains: Only list branches which don't contain <commit> (HEAD if
+                not specified).
+            no_merged: Only list branches whose tips are not reachable from <commit>
+                (HEAD if not specified).
+            no_track: Do not set up "upstream" configuration, even if the
+                branch.autoSetupMerge configuration variable is set.
+            omit_empty: Do not print a newline after formatted refs where the format
+                expands to the empty string.
+            points_at: Only list branches of <object>.
+            quiet: Be more quiet when creating or deleting a branch, suppressing
+                non-error messages.
+            recurse_submodules: THIS OPTION IS EXPERIMENTAL! Cause the current
+                command to recurse into submodules if submodule.propagateBranches is
+                enabled.
+            remotes: List or delete (if used with -d) the remote-tracking branches.
+            set_upstream: As this option had confusing syntax, it is no longer
+                supported.
+            set_upstream_to: Set up <branch-name>'s tracking information so
+                <upstream> is considered <branch-name>'s upstream branch.
+            show_current: Print the name of the current branch.
+            sort: Sort based on <key>.
+            track: When creating a new branch, set up branch.<name>.remote and
+                branch.<name>.merge configuration entries to set "upstream" tracking
+                configuration for the new branch. Value optional: `True` for the
+                bare flag, or pass one.
+            unset_upstream: Remove the upstream information for <branch-name>.
+            verbose: When in list mode, show sha1 and commit subject line for each
+                head, along with relationship to upstream branch (if any).
         """
         ...
     def checkout(
         self,
         *args: str,
+        conflict: _Value = ...,
         detach: _Flag = ...,
         force: _Flag = ...,
+        guess: _Flag = ...,
+        ignore_other_worktrees: _Flag = ...,
+        ignore_skip_worktree_bits: _Flag = ...,
         merge: _Flag = ...,
+        orphan: _Value = ...,
         ours: _Flag = ...,
+        overlay: _Flag = ...,
+        overwrite_ignore: _Flag = ...,
         patch: _Flag = ...,
+        pathspec_file_nul: _Flag = ...,
+        pathspec_from_file: _Value = ...,
+        progress: _Flag = ...,
         quiet: _Flag = ...,
-        theirs: _Flag = ...,
-        track: _ValuedFlag = ...,
+        recurse_submodules: _Flag = ...,
+        track: _Flag = ...,
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
     ) -> int:
-        """or: git checkout [<options>] [<branch>] -- <file>...
+        """GIT-CHECKOUT(1)                   Git Manual
+        GIT-CHECKOUT(1)
 
         Args:
-            detach: detach HEAD at named commit. `detach=off` emits `--no-detach`.
-            force: force checkout (throw away local modifications). `force=off`
-                emits `--no-force`.
-            merge: perform a 3-way merge with the new branch. `merge=off` emits
-                `--no-merge`.
-            ours: checkout our version for unmerged files.
-            patch: select hunks interactively. `patch=off` emits `--no-patch`.
-            quiet: suppress progress reporting. `quiet=off` emits `--no-quiet`.
-            theirs: checkout their version for unmerged files.
-            track: set branch tracking configuration. Value optional: `True` for the
-                bare flag, or pass one. `track=off` emits `--no-track`.
+            conflict: The same as --merge option above, but changes the way the
+                conflicting hunks are presented, overriding the merge.conflictStyle
+                configuration variable.
+            detach: Rather than checking out a branch to work on it, check out a
+                commit for inspection and discardable experiments.
+            force: When switching branches, proceed even if the index or the working
+                tree differs from HEAD, and even if there are untracked files in the
+                way.
+            guess: If <branch> is not found but there does exist a tracking branch
+                in exactly one remote (call it <remote>) with a matching name, treat
+                as equivalent to $ git checkout -b <branch> --track
+                <remote>/<branch> If the branch exists in multiple remotes and one
+                of them is named by the checkout.defaultRemote configuration
+                variable, we'll use that one for the purposes of disambiguation,
+                even if the <branch> isn't unique across all remotes. `guess=off`
+                emits `--no-guess`.
+            ignore_other_worktrees: git checkout refuses when the wanted branch is
+                already checked out or otherwise in use by another worktree.
+            ignore_skip_worktree_bits: In sparse checkout mode, git checkout --
+                <path>.
+            merge: When switching branches, if you have local modifications to one
+                or more files that are different between the current branch and the
+                branch to which you are switching, the command refuses to switch
+                branches in order to preserve your modifications in context.
+            orphan: Create a new unborn branch, named <new-branch>, started from
+                <start-point> and switch to it.
+            ours: When checking out paths from the index, check out stage #2 (ours)
+                or #3 (theirs) for unmerged paths.
+            overlay: In the default overlay mode, git checkout never removes files
+                from the index or the working tree.
+            overwrite_ignore: Silently overwrite ignored files when switching
+                branches.
+            pathspec_file_nul: Only meaningful with --pathspec-from-file.
+            pathspec_from_file: Overwrite the contents of the files that match the
+                pathspec.
+            progress: Progress status is reported on the standard error stream by
+                default when it is attached to a terminal, unless --quiet is
+                specified.
+            quiet: Quiet, suppress feedback messages.
+            recurse_submodules: Using --recurse-submodules will update the content
+                of all active submodules according to the commit recorded in the
+                superproject.
+            track: . `track=off` emits `--no-track`.
         """
         ...
     def clone(
         self,
+        repository: str,
+        /,
         *args: str,
+        also_filter_submodules: _Flag = ...,
+        bare: _Flag = ...,
         branch: _Value = ...,
-        checkout: _Flag = ...,
+        bundle_uri: _Value = ...,
         config: _Value = ...,
-        hardlinks: _Flag = ...,
-        ipv4: _Flag = ...,
-        ipv6: _Flag = ...,
+        depth: _Value = ...,
+        dissociate: _Flag = ...,
+        filter: _Value = ...,
         jobs: _Value = ...,
         local: _Flag = ...,
+        mirror: _Flag = ...,
+        no_checkout: _Flag = ...,
+        no_hardlinks: _Flag = ...,
         origin: _Value = ...,
+        progress: _Flag = ...,
         quiet: _Flag = ...,
+        recurse_submodules: _ValuedFlag = ...,
+        ref_format: _Value = ...,
+        reference: _Flag = ...,
+        remote: _Flag = ...,
+        revision: _Value = ...,
+        separate_git_dir: _Value = ...,
+        server_option: _Value = ...,
+        shallow_exclude: _Value = ...,
+        shallow_since: _Value = ...,
         shared: _Flag = ...,
+        sparse: _Flag = ...,
+        template: _Value = ...,
         upload_pack: _Value = ...,
         verbose: _Flag = ...,
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
     ) -> int:
-        """initialize submodules in the clone
+        """GIT-CLONE(1)                      Git Manual
+        GIT-CLONE(1)
 
         Args:
-            branch: checkout <branch> instead of the remote's HEAD. `branch=off`
-                emits `--no-branch`.
-            checkout: opposite of --no-checkout. `checkout=off` emits
-                `--no-checkout`.
-            config: set config inside the new repository. `config=off` emits
-                `--no-config`.
-            hardlinks: opposite of --no-hardlinks. `hardlinks=off` emits
-                `--no-hardlinks`.
-            ipv4: use IPv4 addresses only.
-            ipv6: use IPv6 addresses only.
-            jobs: number of submodules cloned in parallel. `jobs=off` emits
-                `--no-jobs`.
-            local: to clone from a local repository. `local=off` emits `--no-local`.
-            origin: use <name> instead of 'origin' to track upstream. `origin=off`
-                emits `--no-origin`.
-            quiet: be more quiet. `quiet=off` emits `--no-quiet`.
-            shared: setup as shared repository. `shared=off` emits `--no-shared`.
-            upload_pack: path to git-upload-pack on the remote. `upload_pack=off`
-                emits `--no-upload-pack`.
-            verbose: be more verbose. `verbose=off` emits `--no-verbose`.
+            also_filter_submodules: Also apply the partial clone filter to any
+                submodules in the repository.
+            bare: Make a bare Git repository.
+            branch: Instead of pointing the newly created HEAD to the branch pointed
+                to by the cloned repository's HEAD, point to <name> branch instead.
+            bundle_uri: Before fetching from the remote, fetch a bundle from the
+                given <uri> and unbundle the data into the local repository.
+            config: Set a configuration variable in the newly-created repository;
+                this takes effect immediately after the repository is initialized,
+                but before the remote history is fetched or any files checked out.
+            depth: Create a shallow clone with a history truncated to the specified
+                number of commits.
+            dissociate: Borrow the objects from reference repositories specified
+                with the --reference options only to reduce network transfer, and
+                stop borrowing from them after a clone is made by making necessary
+                local copies of borrowed objects.
+            filter: Use the partial clone feature and request that the server sends
+                a subset of reachable objects according to a given object filter.
+            jobs: The number of submodules fetched at the same time.
+            local: When the repository to clone from is on a local machine, this
+                flag bypasses the normal "Git aware" transport mechanism and clones
+                the repository by making a copy of HEAD and everything under objects
+                and refs directories.
+            mirror: Set up a mirror of the source repository.
+            no_checkout: No checkout of HEAD is performed after the clone is
+                complete.
+            no_hardlinks: Force the cloning process from a repository on a local
+                filesystem to copy the files under the .git/objects directory
+                instead of using hardlinks.
+            origin: Instead of using the remote name origin to keep track of the
+                upstream repository, use <name>.
+            progress: Progress status is reported on the standard error stream by
+                default when it is attached to a terminal, unless --quiet is
+                specified.
+            quiet: Operate quietly.
+            recurse_submodules: After the clone is created, initialize and clone
+                submodules within based on the provided <pathspec>. Value optional:
+                `True` for the bare flag, or pass one.
+            ref_format: Specify the given ref storage format for the repository.
+            reference: If the reference <repository> is on the local machine,
+                automatically setup .git/objects/info/alternates to obtain objects
+                from the reference <repository>.
+            revision: Create a new repository, and fetch the history leading to the
+                given revision <rev> (and nothing else), without making any
+                remote-tracking branch, and without making any local branch, and
+                detach HEAD to <rev>.
+            separate_git_dir: Instead of placing the cloned repository where it is
+                supposed to be, place the cloned repository at the specified
+                directory, then make a filesystem-agnostic Git symbolic link to
+                there.
+            server_option: Transmit the given string to the server when
+                communicating using protocol version 2.
+            shallow_exclude: Create a shallow clone with a history, excluding
+                commits reachable from a specified remote branch or tag. May be
+                repeated: a list emits the flag once per item.
+            shallow_since: Create a shallow clone with a history after the specified
+                time.
+            shared: When the repository to clone is on the local machine, instead of
+                using hard links, automatically setup .git/objects/info/alternates
+                to share the objects with the source repository.
+            sparse: Employ a sparse-checkout, with only files in the toplevel
+                directory initially being present.
+            template: Specify the directory from which templates will be used; (See
+                the "TEMPLATE DIRECTORY" section of git-init(1).).
+            upload_pack: When given, and the repository to clone from is accessed
+                via ssh, this specifies a non-default path for the command run on
+                the other end.
+            verbose: Run verbosely.
         """
         ...
     def commit(
         self,
         *args: str,
         all: _Flag = ...,
+        allow_empty: _Flag = ...,
+        allow_empty_message: _Flag = ...,
+        amend: _Flag = ...,
+        author: _Value = ...,
+        branch: _Flag = ...,
+        cleanup: _Value = ...,
+        date: _Value = ...,
+        dry_run: _Flag = ...,
         edit: _Flag = ...,
         file: _Value = ...,
+        fixup: _Value = ...,
         gpg_sign: _ValuedFlag = ...,
         include: _Flag = ...,
+        interactive: _Flag = ...,
+        long: _Flag = ...,
         message: _Value = ...,
+        no_post_rewrite: _Flag = ...,
         null: _Flag = ...,
         only: _Flag = ...,
         patch: _Flag = ...,
-        post_rewrite: _Flag = ...,
+        pathspec_file_nul: _Flag = ...,
+        pathspec_from_file: _Value = ...,
+        porcelain: _Flag = ...,
         quiet: _Flag = ...,
         reedit_message: _Value = ...,
+        reset_author: _Flag = ...,
         reuse_message: _Value = ...,
+        short: _Flag = ...,
         signoff: _Flag = ...,
+        squash: _Value = ...,
+        status: _Flag = ...,
         template: _Value = ...,
         trailer: _Value = ...,
         untracked_files: _ValuedFlag = ...,
@@ -203,385 +413,1618 @@ class _Git(Tool):
         in_process: bool | None = None,
         **flags: Any,
     ) -> int:
-        """[--dry-run] [(-c | -C | --squash) <commit> | --fixup
-        [(amend|reword):]<commit>]
+        """GIT-COMMIT(1)                     Git Manual
+        GIT-COMMIT(1)
 
         Args:
-            all: commit all changed files. `all=off` emits `--no-all`.
-            edit: force edit of commit. `edit=off` emits `--no-edit`.
-            file: read message from file. `file=off` emits `--no-file`.
-            gpg_sign: GPG sign commit. Value optional: `True` for the bare flag, or
-                pass one. `gpg_sign=off` emits `--no-gpg-sign`.
-            include: add specified files to index for commit. `include=off` emits
-                `--no-include`.
-            message: commit message. `message=off` emits `--no-message`.
-            null: terminate entries with NUL. `null=off` emits `--no-null`.
-            only: commit only specified files. `only=off` emits `--no-only`.
-            patch: interactively add changes. `patch=off` emits `--no-patch`.
-            post_rewrite: opposite of --no-post-rewrite. `post_rewrite=off` emits
-                `--no-post-rewrite`.
-            quiet: suppress summary after successful commit. `quiet=off` emits
-                `--no-quiet`.
-            reedit_message: reuse and edit message from specified commit.
-                `reedit_message=off` emits `--no-reedit-message`.
-            reuse_message: reuse message from specified commit. `reuse_message=off`
-                emits `--no-reuse-message`.
-            signoff: add a Signed-off-by trailer. `signoff=off` emits
-                `--no-signoff`.
-            template: use specified template file. `template=off` emits
-                `--no-template`.
-            trailer: add custom trailer(s).
-            untracked_files: show untracked files, optional modes: all, normal, no.
-                Value optional: `True` for the bare flag, or pass one.
-                `untracked_files=off` emits `--no-untracked-files`.
-            verbose: show diff in commit message template. `verbose=off` emits
-                `--no-verbose`.
-            verify: opposite of --no-verify. `verify=off` emits `--no-verify`.
+            all: Automatically stage files that have been modified and deleted, but
+                new files you have not told Git about are not affected.
+            allow_empty: Usually recording a commit that has the exact same tree as
+                its sole parent commit is a mistake, and the command prevents you
+                from making such a commit.
+            allow_empty_message: Create a commit with an empty commit message
+                without using plumbing commands like git-commit-tree(1).
+            amend: Replace the tip of the current branch by creating a new commit.
+            author: Override the commit author.
+            branch: Show the branch and tracking info even in short-format.
+            cleanup: Determine how the supplied commit message should be cleaned up
+                before committing.
+            date: Override the author date used in the commit.
+            dry_run: Do not create a commit, but show a list of paths that are to be
+                committed, paths with local changes that will be left uncommitted
+                and paths that are untracked.
+            edit: Let the user further edit the message taken from <file> with -F
+                <file>, command line with -m <message>, and from <commit> with -C
+                <commit>. `edit=off` emits `--no-edit`.
+            file: Take the commit message from <file>.
+            fixup: Create a new commit which "fixes up" <commit> when applied with
+                git rebase --autosquash. May be repeated: a list emits the flag once
+                per item.
+            gpg_sign: GPG-sign commits. Value optional: `True` for the bare flag, or
+                pass one.
+            include: Before making a commit out of staged contents so far, stage the
+                contents of paths given on the command line as well.
+            long: When doing a dry-run, give the output in the long-format.
+            message: Use <msg> as the commit message.
+            no_post_rewrite: Bypass the post-rewrite hook.
+            null: When showing short or porcelain status output, print the filename
+                verbatim and terminate the entries with NUL, instead of LF.
+            only: Make a commit by taking the updated working tree contents of the
+                paths specified on the command line, disregarding any contents that
+                have been staged for other paths.
+            patch: Use the interactive patch selection interface to choose which
+                changes to commit.
+            pathspec_file_nul: Only meaningful with --pathspec-from-file.
+            pathspec_from_file: Pass pathspec in <file> instead of commandline args.
+            porcelain: When doing a dry-run, give the output in a porcelain-ready
+                format.
+            quiet: Suppress commit summary message.
+            reedit_message: Like -C, but with -c the editor is invoked, so that the
+                user can further edit the commit message.
+            reset_author: When used with -C/-c/--amend options, or when committing
+                after a conflicting cherry-pick, declare that the authorship of the
+                resulting commit now belongs to the committer.
+            reuse_message: Take an existing <commit> object, and reuse the log
+                message and the authorship information (including the timestamp)
+                when creating the commit.
+            short: When doing a dry-run, give the output in the short-format.
+            signoff: Add a Signed-off-by trailer by the committer at the end of the
+                commit log message.
+            squash: Construct a commit message for use with git rebase --autosquash.
+                May be repeated: a list emits the flag once per item.
+            status: Include the output of git-status(1) in the commit message
+                template when using an editor to prepare the commit message.
+                `status=off` emits `--no-status`.
+            template: When editing the commit message, start the editor with the
+                contents in <file>. May be repeated: a list emits the flag once per
+                item.
+            trailer: Specify a (<token>, <value>) pair that should be applied as a
+                trailer. May be repeated: a list emits the flag once per item.
+            untracked_files: Show untracked files. Value optional: `True` for the
+                bare flag, or pass one.
+            verbose: Show unified diff between the HEAD commit and what would be
+                committed at the bottom of the commit message template to help the
+                user describe the commit by reminding what changes the commit has.
+            verify: Bypass the pre-commit and commit-msg hooks. `verify=off` emits
+                `--no-verify`.
         """
         ...
     def describe(
         self,
         *args: str,
+        abbrev: _Value = ...,
+        all: _Flag = ...,
+        always: _Flag = ...,
+        candidates: _Value = ...,
+        contains: _Flag = ...,
+        debug: _Flag = ...,
+        dirty: _ValuedFlag = ...,
+        exact_match: _Flag = ...,
+        exclude: _Value = ...,
+        first_parent: _Flag = ...,
+        long: _Flag = ...,
+        match: _Value = ...,
+        tags: _Flag = ...,
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
     ) -> int:
-        """or: git describe [--all] [--tags] [--contains] [--abbrev=<n>]
-        --dirty[=<mark>]
+        """GIT-DESCRIBE(1)                   Git Manual
+        GIT-DESCRIBE(1)
+
+        Args:
+            abbrev: Instead of using the default number of hexadecimal digits (which
+                will vary according to the number of objects in the repository with
+                a default of 7) of the abbreviated object name, use <n> digits, or
+                as many digits as needed to form a unique object name.
+            all: Instead of using only the annotated tags, use any ref found in
+                refs/ namespace.
+            always: Show uniquely abbreviated commit object as fallback.
+            candidates: Instead of considering only the 10 most recent tags as
+                candidates to describe the input commit-ish consider up to <n>
+                candidates.
+            contains: Instead of finding the tag that predates the commit, find the
+                tag that comes after the commit, and thus contains it.
+            debug: Verbosely display information about the searching strategy being
+                employed to standard error.
+            dirty: Describe the state of the working tree. Value optional: `True`
+                for the bare flag, or pass one.
+            exact_match: Only output exact matches (a tag directly references the
+                supplied commit).
+            exclude: Do not consider tags matching the given glob(7) pattern,
+                excluding the "refs/tags/" prefix.
+            first_parent: Follow only the first parent commit upon seeing a merge
+                commit.
+            long: Always output the long format (the tag, the number of commits and
+                the abbreviated commit name) even when it matches a tag.
+            match: Only consider tags matching the given glob(7) pattern, excluding
+                the "refs/tags/" prefix.
+            tags: Instead of using only the annotated tags, use any tag found in
+                refs/tags namespace.
         """
         ...
     def diff(
         self,
         *args: str,
-        abbrev: _Value = ...,
+        abbrev: _ValuedFlag = ...,
+        anchored: _Value = ...,
+        base: _Flag = ...,
+        binary: _Flag = ...,
+        break_rewrites: _ValuedFlag = ...,
+        check: _Flag = ...,
+        color: _ValuedFlag = ...,
+        color_moved: _ValuedFlag = ...,
+        color_moved_: _Value = ...,
+        color_moved_ws: _Value = ...,
+        color_words: _ValuedFlag = ...,
+        compact_summary: _Flag = ...,
+        cumulative: _Flag = ...,
+        default_prefix: _Flag = ...,
+        diff_algorithm: _Flag = ...,
+        diff_filter: _Value = ...,
+        dirstat: _ValuedFlag = ...,
+        dirstat_by_file: _ValuedFlag = ...,
+        dst_prefix: _Value = ...,
+        exit_code: _Flag = ...,
+        ext_diff: _Flag = ...,
+        find_copies: _ValuedFlag = ...,
         find_copies_harder: _Flag = ...,
+        find_object: _Value = ...,
+        find_renames: _ValuedFlag = ...,
         full_index: _Flag = ...,
+        function_context: _Flag = ...,
+        histogram: _Flag = ...,
+        ignore_all_space: _Flag = ...,
+        ignore_blank_lines: _Flag = ...,
+        ignore_cr_at_eol: _Flag = ...,
+        ignore_matching_lines: _Value = ...,
+        ignore_space_at_eol: _Flag = ...,
+        ignore_space_change: _Flag = ...,
+        ignore_submodules: _ValuedFlag = ...,
+        indent_heuristic: _Flag = ...,
+        inter_hunk_context: _Value = ...,
+        irreversible_delete: _Flag = ...,
+        ita_invisible_in_index: _Flag = ...,
+        line_prefix: _Value = ...,
+        merge_base: _Flag = ...,
+        minimal: _Flag = ...,
         name_only: _Flag = ...,
         name_status: _Flag = ...,
+        no_color: _Flag = ...,
+        no_color_moved: _Flag = ...,
+        no_color_moved_ws: _Flag = ...,
+        no_prefix: _Flag = ...,
+        no_renames: _Flag = ...,
         numstat: _Flag = ...,
+        output: _Value = ...,
+        output_indicator_context: _Value = ...,
+        output_indicator_new: _Value = ...,
+        patch: _Flag = ...,
         patch_with_raw: _Flag = ...,
         patch_with_stat: _Flag = ...,
+        patience: _Flag = ...,
         pickaxe_all: _Flag = ...,
-        stat: _Flag = ...,
+        pickaxe_regex: _Flag = ...,
+        quiet: _Flag = ...,
+        raw: _Flag = ...,
+        relative: _ValuedFlag = ...,
+        shortstat: _Flag = ...,
+        skip_to: _Value = ...,
+        src_prefix: _Value = ...,
+        stat: _ValuedFlag = ...,
+        submodule: _ValuedFlag = ...,
+        summary: _Flag = ...,
+        text: _Flag = ...,
+        textconv: _Flag = ...,
+        unified: _Value = ...,
+        word_diff: _ValuedFlag = ...,
+        word_diff_regex: _Value = ...,
+        ws_error_highlight: _Value = ...,
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
     ) -> int:
-        """or: git diff [<options>] --cached [--merge-base] [<commit>] [--] [<path>...]
+        """GIT-DIFF(1)                       Git Manual
+        GIT-DIFF(1)
 
         Args:
-            abbrev: abbreviate object names in diff-tree header and diff-raw.
-            find_copies_harder: try unchanged files as candidate for copy detection.
-            full_index: show full object name on index lines.
-            name_only: show only names of changed files.
-            numstat: show numeric diffstat instead of patch.
-            patch_with_raw: output both a patch and the diff-raw format.
-            patch_with_stat: output a patch and prepend its diffstat.
-            pickaxe_all: show all files diff when -S is used and hit is found.
-            stat: show diffstat instead of patch.
+            abbrev: Instead of showing the full 40-byte hexadecimal object name in
+                diff-raw format output and diff-tree header lines, show the shortest
+                prefix that is at least <n> hexdigits long that uniquely refers the
+                object. Value optional: `True` for the bare flag, or pass one.
+            anchored: Generate a diff using the "anchored diff" algorithm. May be
+                repeated: a list emits the flag once per item.
+            base: Compare the working tree with • the "base" version (stage #1) when
+                using -1 or --base, • "our branch" (stage #2) when using -2 or
+                --ours, or • "their branch" (stage #3) when using -3 or --theirs.
+            binary: In addition to --full-index, output a binary diff that can be
+                applied with git-apply.
+            break_rewrites: Break complete rewrite changes into pairs of delete and
+                create. Value optional: `True` for the bare flag, or pass one.
+            check: Warn if changes introduce conflict markers or whitespace errors.
+            color: Show colored diff. Value optional: `True` for the bare flag, or
+                pass one.
+            color_moved: Moved lines of code are colored differently. Value
+                optional: `True` for the bare flag, or pass one.
+            color_moved_ws: This configures how whitespace is ignored when
+                performing the move detection for --color-moved. May be repeated: a
+                list emits the flag once per item.
+            color_words: Equivalent to --word-diff=color plus (if a regex was
+                specified) --word-diff-regex=<regex>. Value optional: `True` for the
+                bare flag, or pass one.
+            compact_summary: Output a condensed summary of extended header
+                information such as file creations or deletions ("new" or "gone",
+                optionally +l if it's a symlink) and mode changes (+x or -x for
+                adding or removing executable bit respectively) in diffstat.
+            cumulative: Synonym for --dirstat=cumulative.
+            default_prefix: Use the default source and destination prefixes ("a/"
+                and "b/").
+            diff_algorithm: Choose a diff algorithm.
+            diff_filter: Select only files that are Added (A), Copied (C), Deleted
+                (D), Modified (M), Renamed (R), have their type (i.e. May be
+                repeated: a list emits the flag once per item.
+            dirstat: Output the distribution of relative amount of changes for each
+                sub-directory. Value optional: `True` for the bare flag, or pass
+                one.
+            dirstat_by_file: Synonym for --dirstat=files,<param>,. Value optional:
+                `True` for the bare flag, or pass one.
+            dst_prefix: Show the given destination <prefix> instead of "b/".
+            exit_code: Make the program exit with codes similar to diff(1).
+            ext_diff: Allow an external diff helper to be executed. `ext_diff=off`
+                emits `--no-ext-diff`.
+            find_copies: Detect copies as well as renames. Value optional: `True`
+                for the bare flag, or pass one.
+            find_copies_harder: For performance reasons, by default, -C option finds
+                copies only if the original file of the copy was modified in the
+                same changeset.
+            find_object: Look for differences that change the number of occurrences
+                of the specified object.
+            find_renames: Detect renames. Value optional: `True` for the bare flag,
+                or pass one.
+            full_index: Instead of the first handful of characters, show the full
+                pre- and post-image blob object names on the "index" line when
+                generating patch format output.
+            function_context: Show whole function as context lines for each change.
+            histogram: Generate a diff using the "histogram diff" algorithm.
+            ignore_all_space: Ignore whitespace when comparing lines.
+            ignore_blank_lines: Ignore changes whose lines are all blank.
+            ignore_cr_at_eol: Ignore carriage-return at the end of line when doing a
+                comparison.
+            ignore_matching_lines: Ignore changes whose all lines match <regex>. May
+                be repeated: a list emits the flag once per item.
+            ignore_space_at_eol: Ignore changes in whitespace at EOL.
+            ignore_space_change: Ignore changes in amount of whitespace.
+            ignore_submodules: Ignore changes to submodules in the diff generation.
+                Value optional: `True` for the bare flag, or pass one.
+            indent_heuristic: Enable the heuristic that shifts diff hunk boundaries
+                to make patches easier to read. `indent_heuristic=off` emits
+                `--no-indent-heuristic`.
+            inter_hunk_context: Show the context between diff hunks, up to the
+                specified <number> of lines, thereby fusing hunks that are close to
+                each other.
+            irreversible_delete: Omit the preimage for deletes, i.e. print only the
+                header but not the diff between the preimage and /dev/null.
+            ita_invisible_in_index: By default entries added by git add -N appear as
+                an existing empty file in git diff and a new file in git diff
+                --cached.
+            line_prefix: Prepend an additional <prefix> to every line of output.
+            minimal: Spend extra time to make sure the smallest possible diff is
+                produced.
+            name_only: Show only the name of each changed file in the post-image
+                tree.
+            name_status: Show only the name(s) and status of each changed file.
+            no_color: Turn off colored diff.
+            no_color_moved: Turn off move detection.
+            no_color_moved_ws: Do not ignore whitespace when performing move
+                detection.
+            no_prefix: Do not show any source or destination prefix.
+            no_renames: Turn off rename detection, even when the configuration file
+                gives the default to do so.
+            numstat: Similar to --stat, but shows number of added and deleted lines
+                in decimal notation and pathname without abbreviation, to make it
+                more machine friendly.
+            output: Output to a specific file instead of stdout.
+            output_indicator_context: Specify the character used to indicate new,
+                old or context lines in the generated patch.
+            patch: Generate patch (see the section called "GENERATING PATCH TEXT
+                WITH -P"). `patch=off` emits `--no-patch`.
+            patch_with_raw: Synonym for -p --raw.
+            patch_with_stat: Synonym for -p --stat.
+            patience: Generate a diff using the "patience diff" algorithm.
+            pickaxe_all: When -S or -G finds a change, show all the changes in that
+                changeset, not just the files that contain the change in <string>.
+            pickaxe_regex: Treat the <string> given to -S as an extended POSIX
+                regular expression to match.
+            quiet: Disable all output of the program.
+            raw: Generate the diff in raw format.
+            relative: When run from a subdirectory of the project, it can be told to
+                exclude changes outside the directory and show pathnames relative to
+                it with this option. Value optional: `True` for the bare flag, or
+                pass one.
+            shortstat: Output only the last line of the --stat format containing
+                total number of modified files, as well as number of added and
+                deleted lines.
+            skip_to: Discard the files before the named <file> from the output (i.e.
+            src_prefix: Show the given source <prefix> instead of "a/".
+            stat: Generate a diffstat. Value optional: `True` for the bare flag, or
+                pass one.
+            submodule: Specify how differences in submodules are shown. Value
+                optional: `True` for the bare flag, or pass one.
+            summary: Output a condensed summary of extended header information such
+                as creations, renames and mode changes.
+            text: Treat all files as text.
+            textconv: Allow (or disallow) external text conversion filters to be run
+                when comparing binary files.
+            unified: Generate diffs with <n> lines of context instead of the usual
+                three.
+            word_diff: By default, words are delimited by whitespace; see
+                --word-diff-regex below. Value optional: `True` for the bare flag,
+                or pass one.
+            word_diff_regex: Use <regex> to decide what a word is, instead of
+                considering runs of non-whitespace to be a word.
+            ws_error_highlight: Highlight whitespace errors in the context, old or
+                new lines of the diff.
         """
         ...
     def fetch(
         self,
         *args: str,
         append: _Flag = ...,
+        atomic: _Flag = ...,
+        deepen: _Value = ...,
+        depth: _Value = ...,
+        dry_run: _Flag = ...,
         force: _Flag = ...,
         ipv4: _Flag = ...,
         ipv6: _Flag = ...,
         jobs: _Value = ...,
         keep: _Flag = ...,
         multiple: _Flag = ...,
+        negotiate_only: _Flag = ...,
+        negotiation_tip: _Value = ...,
+        no_recurse_submodules: _Flag = ...,
+        no_write_fetch_head: _Flag = ...,
+        porcelain: _Flag = ...,
+        prefetch: _Flag = ...,
+        progress: _Flag = ...,
         prune: _Flag = ...,
         prune_tags: _Flag = ...,
         quiet: _Flag = ...,
+        recurse_submodules: _ValuedFlag = ...,
+        recurse_submodules_default: _Value = ...,
         refetch: _Flag = ...,
         refmap: _Value = ...,
         server_option: _Value = ...,
+        set_upstream: _Flag = ...,
+        shallow_exclude: _Value = ...,
+        shallow_since: _Value = ...,
+        show_forced_updates: _Flag = ...,
+        stdin: _Flag = ...,
+        submodule_prefix: _Value = ...,
         tags: _Flag = ...,
         unshallow: _Flag = ...,
         update_head_ok: _Flag = ...,
+        update_shallow: _Flag = ...,
+        upload_pack: _Value = ...,
         verbose: _Flag = ...,
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
     ) -> int:
-        """or: git fetch [<options>] <group>
+        """GIT-FETCH(1)                      Git Manual
+        GIT-FETCH(1)
 
         Args:
-            append: append to .git/FETCH_HEAD instead of overwriting. `append=off`
-                emits `--no-append`.
-            force: force overwrite of local reference. `force=off` emits
-                `--no-force`.
-            ipv4: use IPv4 addresses only.
-            ipv6: use IPv6 addresses only.
-            jobs: number of submodules fetched in parallel. `jobs=off` emits
-                `--no-jobs`.
-            keep: keep downloaded pack. `keep=off` emits `--no-keep`.
-            multiple: fetch from multiple remotes. `multiple=off` emits
-                `--no-multiple`.
-            prune: prune remote-tracking branches no longer on remote. `prune=off`
-                emits `--no-prune`.
-            prune_tags: . `prune_tags=off` emits `--no-prune-tags`.
-            quiet: be more quiet. `quiet=off` emits `--no-quiet`.
-            refetch: re-fetch without negotiating common commits.
-            refmap: specify fetch refmap.
-            server_option: option to transmit. `server_option=off` emits
-                `--no-server-option`.
-            tags: fetch all tags and associated objects. `tags=off` emits
+            append: Append ref names and object names of fetched refs to the
+                existing contents of .git/FETCH_HEAD.
+            atomic: Use an atomic transaction to update local refs.
+            deepen: Similar to --depth, except it specifies the number of commits
+                from the current shallow boundary instead of from the tip of each
+                remote branch history.
+            depth: Limit fetching to the specified number of commits from the tip of
+                each remote branch history.
+            dry_run: Show what would be done, without making any changes.
+            force: When git fetch is used with <src>:<dst> refspec, it may refuse to
+                update the local branch as discussed in the <refspec> part below.
+            ipv4: Use IPv4 addresses only, ignoring IPv6 addresses.
+            ipv6: Use IPv6 addresses only, ignoring IPv4 addresses.
+            jobs: Number of parallel children to be used for all forms of fetching.
+            keep: Keep downloaded pack.
+            multiple: Allow several <repository> and <group> arguments to be
+                specified.
+            negotiate_only: Do not fetch anything from the server, and instead print
+                the ancestors of the provided --negotiation-tip=* arguments, which
+                we have in common with the server.
+            negotiation_tip: By default, Git will report, to the server, commits
+                reachable from all local refs to find common commits in an attempt
+                to reduce the size of the to-be-received packfile. May be repeated:
+                a list emits the flag once per item.
+            no_recurse_submodules: Disable recursive fetching of submodules (this
+                has the same effect as using the --recurse-submodules=no option).
+            porcelain: Print the output to standard output in an easy-to-parse
+                format for scripts.
+            prefetch: Modify the configured refspec to place all refs into the
+                refs/prefetch/ namespace.
+            progress: Progress status is reported on the standard error stream by
+                default when it is attached to a terminal, unless -q is specified.
+            prune: Before fetching, remove any remote-tracking references that no
+                longer exist on the remote.
+            prune_tags: Before fetching, remove any local tags that no longer exist
+                on the remote if --prune is enabled.
+            quiet: Pass --quiet to git-fetch-pack and silence any other internally
+                used git commands.
+            recurse_submodules: This option controls if and under what conditions
+                new commits of submodules should be fetched too. Value optional:
+                `True` for the bare flag, or pass one.
+            recurse_submodules_default: This option is used internally to
+                temporarily provide a non-negative default value for the
+                --recurse-submodules option.
+            refetch: Instead of negotiating with the server to avoid transferring
+                commits and associated objects that are already present locally,
+                this option fetches all objects as a fresh clone would.
+            refmap: When fetching refs listed on the command line, use the specified
+                refspec (can be given more than once) to map the refs to
+                remote-tracking branches, instead of the values of remote.*.fetch
+                configuration variables for the remote repository. May be repeated:
+                a list emits the flag once per item.
+            server_option: Transmit the given string to the server when
+                communicating using protocol version 2.
+            set_upstream: If the remote is fetched successfully, add upstream
+                (tracking) reference, used by argument-less git-pull(1) and other
+                commands.
+            shallow_exclude: Deepen or shorten the history of a shallow repository
+                to exclude commits reachable from a specified remote branch or tag.
+                May be repeated: a list emits the flag once per item.
+            shallow_since: Deepen or shorten the history of a shallow repository to
+                include all reachable commits after <date>.
+            show_forced_updates: By default, git checks if a branch is force-updated
+                during fetch. `show_forced_updates=off` emits
+                `--no-show-forced-updates`.
+            stdin: Read refspecs, one per line, from stdin in addition to those
+                provided as arguments.
+            submodule_prefix: Prepend <path> to paths printed in informative
+                messages such as "Fetching submodule foo".
+            tags: Fetch all tags from the remote (i.e., fetch remote tags
+                refs/tags/* into local tags with the same name), in addition to
+                whatever else would otherwise be fetched. `tags=off` emits
                 `--no-tags`.
-            unshallow: convert to a complete repository.
-            update_head_ok: allow updating of HEAD ref. `update_head_ok=off` emits
-                `--no-update-head-ok`.
-            verbose: be more verbose. `verbose=off` emits `--no-verbose`.
+            unshallow: If the source repository is complete, convert a shallow
+                repository to a complete one, removing all the limitations imposed
+                by shallow repositories.
+            update_head_ok: By default git fetch refuses to update the head which
+                corresponds to the current branch.
+            update_shallow: By default when fetching from a shallow repository, git
+                fetch refuses refs that require updating .git/shallow.
+            upload_pack: When given, and the repository to fetch from is handled by
+                git fetch-pack, --exec=<upload-pack> is passed to the command to
+                specify non-default path for the command run on the other end.
+            verbose: Be verbose.
         """
         ...
     def init(
         self,
         *args: str,
+        bare: _Flag = ...,
         initial_branch: _Value = ...,
+        object_format: _Value = ...,
         quiet: _Flag = ...,
+        ref_format: _Value = ...,
+        separate_git_dir: _Value = ...,
         shared: _ValuedFlag = ...,
+        template: _Value = ...,
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
     ) -> int:
-        """[--separate-git-dir <git-dir>] [--object-format=<format>]
+        """GIT-INIT(1)                       Git Manual
+        GIT-INIT(1)
 
         Args:
-            initial_branch: override the name of the initial branch.
-                `initial_branch=off` emits `--no-initial-branch`.
-            quiet: be quiet. `quiet=off` emits `--no-quiet`.
-            shared: specify that the git repository is to be shared amongst several
+            bare: Create a bare repository.
+            initial_branch: Use <branch-name> for the initial branch in the newly
+                created repository.
+            object_format: Specify the given object <format> (hash algorithm) for
+                the repository.
+            quiet: Only print error and warning messages; all other output will be
+                suppressed.
+            ref_format: Specify the given ref storage <format> for the repository.
+            separate_git_dir: Instead of initializing the repository as a directory
+                to either $GIT_DIR or ./.git/, create a text file there containing
+                the path to the actual repository.
+            shared: Specify that the Git repository is to be shared amongst several
                 users. Value optional: `True` for the bare flag, or pass one.
+            template: Specify the directory from which templates will be used.
         """
         ...
     def log(
         self,
         *args: str,
+        abbrev: _ValuedFlag = ...,
+        abbrev_commit: _Flag = ...,
+        all: _Flag = ...,
+        all_match: _Flag = ...,
+        alternate_refs: _Flag = ...,
+        ancestry_path: _ValuedFlag = ...,
+        anchored: _Value = ...,
+        author: _Value = ...,
+        author_date_order: _Flag = ...,
+        basic_regexp: _Flag = ...,
+        binary: _Flag = ...,
+        bisect: _Flag = ...,
+        boundary: _Flag = ...,
+        branches: _ValuedFlag = ...,
+        break_rewrites: _ValuedFlag = ...,
+        cc: _Flag = ...,
+        check: _Flag = ...,
+        cherry: _Flag = ...,
+        cherry_mark: _Flag = ...,
+        cherry_pick: _Flag = ...,
+        children: _Flag = ...,
         clear_decorations: _Flag = ...,
-        quiet: _Flag = ...,
+        color: _ValuedFlag = ...,
+        color_moved: _ValuedFlag = ...,
+        color_moved_ws: _Value = ...,
+        color_words: _ValuedFlag = ...,
+        combined_all_paths: _Flag = ...,
+        compact_summary: _Flag = ...,
+        cumulative: _Flag = ...,
+        date: _Value = ...,
+        date_order: _Flag = ...,
+        dd: _Flag = ...,
+        decorate_refs: _Value = ...,
+        default_prefix: _Flag = ...,
+        dense: _Flag = ...,
+        diff_algorithm: _Flag = ...,
+        diff_filter: _Value = ...,
+        diff_merges: _Value = ...,
+        dirstat: _ValuedFlag = ...,
+        dirstat_by_file: _ValuedFlag = ...,
+        do_walk: _Flag = ...,
+        dst_prefix: _Value = ...,
+        encoding: _Value = ...,
+        exclude: _Value = ...,
+        exclude_first_parent_only: _Flag = ...,
+        exclude_hidden: _Flag = ...,
+        expand_tabs: _Value = ...,
+        ext_diff: _Flag = ...,
+        extended_regexp: _Flag = ...,
+        find_copies: _ValuedFlag = ...,
+        find_copies_harder: _Flag = ...,
+        find_object: _Value = ...,
+        find_renames: _ValuedFlag = ...,
+        first_parent: _Flag = ...,
+        fixed_strings: _Flag = ...,
+        follow: _Flag = ...,
+        full_diff: _Flag = ...,
+        full_history: _Flag = ...,
+        full_index: _Flag = ...,
+        function_context: _Flag = ...,
+        glob: _Value = ...,
+        graph: _Flag = ...,
+        grep: _Value = ...,
+        grep_reflog: _Value = ...,
+        histogram: _Flag = ...,
+        ignore_all_space: _Flag = ...,
+        ignore_blank_lines: _Flag = ...,
+        ignore_cr_at_eol: _Flag = ...,
+        ignore_matching_lines: _Value = ...,
+        ignore_missing: _Flag = ...,
+        ignore_space_at_eol: _Flag = ...,
+        ignore_space_change: _Flag = ...,
+        ignore_submodules: _ValuedFlag = ...,
+        indent_heuristic: _Flag = ...,
+        inter_hunk_context: _Value = ...,
+        invert_grep: _Flag = ...,
+        irreversible_delete: _Flag = ...,
+        ita_invisible_in_index: _Flag = ...,
+        left_only: _Flag = ...,
+        left_right: _Flag = ...,
+        line_prefix: _Value = ...,
+        log_size: _Flag = ...,
+        merge: _Flag = ...,
+        merges: _Flag = ...,
+        min_parents: _Value = ...,
+        minimal: _Flag = ...,
+        name_only: _Flag = ...,
+        name_status: _Flag = ...,
+        no_abbrev_commit_: _Flag = ...,
+        no_color: _Flag = ...,
+        no_color_moved: _Flag = ...,
+        no_color_moved_ws: _Flag = ...,
+        no_decorate: _ValuedFlag = ...,
+        no_diff_merges: _Flag = ...,
+        no_max_parents: _Flag = ...,
+        no_notes: _Flag = ...,
+        no_prefix: _Flag = ...,
+        no_renames: _Flag = ...,
+        no_walk: _ValuedFlag = ...,
+        not_: _Flag = ...,
+        notes: _ValuedFlag = ...,
+        numstat: _Flag = ...,
+        oneline: _Flag = ...,
+        output: _Value = ...,
+        output_indicator_context: _Value = ...,
+        output_indicator_new: _Value = ...,
+        parents: _Flag = ...,
+        patch: _Flag = ...,
+        patch_with_raw: _Flag = ...,
+        patch_with_stat: _Flag = ...,
+        patience: _Flag = ...,
+        perl_regexp: _Flag = ...,
+        pickaxe_all: _Flag = ...,
+        pickaxe_regex: _Flag = ...,
+        pretty: _ValuedFlag = ...,
+        raw: _Flag = ...,
+        reflog: _Flag = ...,
+        regexp_ignore_case: _Flag = ...,
+        relative: _ValuedFlag = ...,
+        relative_date: _Flag = ...,
+        remerge_diff: _Flag = ...,
+        remotes: _ValuedFlag = ...,
+        remove_empty: _Flag = ...,
+        reverse: _Flag = ...,
+        shortstat: _Flag = ...,
+        show_linear_break: _ValuedFlag = ...,
+        show_notes: _ValuedFlag = ...,
+        show_notes_by_default: _Flag = ...,
+        show_pulls: _Flag = ...,
+        show_signature: _Flag = ...,
+        simplify_by_decoration: _Flag = ...,
+        simplify_merges: _Flag = ...,
+        since: _Value = ...,
+        since_as_filter: _Value = ...,
+        single_worktree: _Flag = ...,
+        skip: _Value = ...,
+        skip_to: _Value = ...,
+        source: _Flag = ...,
+        sparse: _Flag = ...,
+        src_prefix: _Value = ...,
+        stat: _ValuedFlag = ...,
+        stdin: _Flag = ...,
+        submodule: _ValuedFlag = ...,
+        summary: _Flag = ...,
+        tags: _ValuedFlag = ...,
+        text: _Flag = ...,
+        textconv: _Flag = ...,
+        topo_order: _Flag = ...,
+        unfold: _Flag = ...,
+        unified: _Value = ...,
+        until: _Value = ...,
+        walk_reflogs: _Flag = ...,
+        word_diff: _ValuedFlag = ...,
+        word_diff_regex: _Value = ...,
+        ws_error_highlight: _Value = ...,
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
     ) -> int:
-        """or: git show [<options>] <object>...
+        """GIT-LOG(1)                        Git Manual
+        GIT-LOG(1)
 
         Args:
-            clear_decorations: clear all previously-defined decoration filters.
-            quiet: suppress diff output. `quiet=off` emits `--no-quiet`.
+            abbrev: Instead of showing the full 40-byte hexadecimal object name in
+                diff-raw format output and diff-tree header lines, show the shortest
+                prefix that is at least <n> hexdigits long that uniquely refers the
+                object. Value optional: `True` for the bare flag, or pass one.
+            abbrev_commit: Instead of showing the full 40-byte hexadecimal commit
+                object name, show a prefix that names the object uniquely.
+                `abbrev_commit=off` emits `--no-abbrev-commit`.
+            all: Pretend as if all the refs in refs/, along with HEAD, are listed on
+                the command line as <commit>.
+            all_match: Limit the commits output to ones that match all given --grep,
+                instead of ones that match at least one.
+            alternate_refs: Pretend as if all objects mentioned as ref tips of
+                alternate repositories were listed on the command line.
+            ancestry_path: When given a range of commits to display (e.g. Value
+                optional: `True` for the bare flag, or pass one.
+            anchored: Generate a diff using the "anchored diff" algorithm. May be
+                repeated: a list emits the flag once per item.
+            author: Limit the commits output to ones with author/committer header
+                lines that match the <pattern> regular expression.
+            author_date_order: Show no parents before all of its children are shown,
+                but otherwise show commits in the author timestamp order.
+            basic_regexp: Consider the limiting patterns to be basic regular
+                expressions; this is the default.
+            binary: In addition to --full-index, output a binary diff that can be
+                applied with git-apply.
+            bisect: Pretend as if the bad bisection ref refs/bisect/bad was listed
+                and as if it was followed by --not and the good bisection refs
+                refs/bisect/good-* on the command line.
+            boundary: Output excluded boundary commits.
+            branches: Pretend as if all the refs in refs/heads are listed on the
+                command line as <commit>. Value optional: `True` for the bare flag,
+                or pass one.
+            break_rewrites: Break complete rewrite changes into pairs of delete and
+                create. Value optional: `True` for the bare flag, or pass one.
+            check: Warn if changes introduce conflict markers or whitespace errors.
+            cherry: A synonym for --right-only --cherry-mark --no-merges; useful to
+                limit the output to the commits on our side and mark those that have
+                been applied to the other side of a forked history with git log
+                --cherry upstream...mybranch, similar to git cherry upstream
+                mybranch.
+            cherry_mark: Like --cherry-pick (see below) but mark equivalent commits
+                with = rather than omitting them, and inequivalent ones with +.
+            cherry_pick: Omit any commit that introduces the same change as another
+                commit on the "other side" when the set of commits are limited with
+                symmetric difference.
+            children: Print also the children of the commit (in the form "commit
+                child...").
+            clear_decorations: When specified, this option clears all previous
+                --decorate-refs or --decorate-refs-exclude options and relaxes the
+                default decoration filter to include all references.
+            color: Show colored diff. Value optional: `True` for the bare flag, or
+                pass one.
+            color_moved: Moved lines of code are colored differently. Value
+                optional: `True` for the bare flag, or pass one.
+            color_moved_ws: This configures how whitespace is ignored when
+                performing the move detection for --color-moved. May be repeated: a
+                list emits the flag once per item.
+            color_words: Equivalent to --word-diff=color plus (if a regex was
+                specified) --word-diff-regex=<regex>. Value optional: `True` for the
+                bare flag, or pass one.
+            combined_all_paths: Cause combined diffs (used for merge commits) to
+                list the name of the file from all parents.
+            compact_summary: Output a condensed summary of extended header
+                information such as file creations or deletions ("new" or "gone",
+                optionally +l if it's a symlink) and mode changes (+x or -x for
+                adding or removing executable bit respectively) in diffstat.
+            cumulative: Synonym for --dirstat=cumulative.
+            date: Only takes effect for dates shown in human-readable format, such
+                as when using --pretty.
+            date_order: Show no parents before all of its children are shown, but
+                otherwise show commits in the commit timestamp order.
+            dd: Produce diff with respect to first parent for both merge and regular
+                commits.
+            decorate_refs: For each candidate reference, do not use it for
+                decoration if it matches any of the <pattern> parameters given to
+                --decorate-refs-exclude or if it doesn't match any of the <pattern>
+                parameters given to --decorate-refs.
+            default_prefix: Use the default source and destination prefixes ("a/"
+                and "b/").
+            dense: Only the selected commits are shown, plus some to have a
+                meaningful history.
+            diff_algorithm: Choose a diff algorithm.
+            diff_filter: Select only files that are Added (A), Copied (C), Deleted
+                (D), Modified (M), Renamed (R), have their type (i.e. May be
+                repeated: a list emits the flag once per item.
+            diff_merges: Specify diff format to be used for merge commits.
+            dirstat: Output the distribution of relative amount of changes for each
+                sub-directory. Value optional: `True` for the bare flag, or pass
+                one.
+            dirstat_by_file: Synonym for --dirstat=files,<param>,. Value optional:
+                `True` for the bare flag, or pass one.
+            do_walk: Overrides a previous --no-walk.
+            dst_prefix: Show the given destination <prefix> instead of "b/".
+            encoding: Commit objects record the character encoding used for the log
+                message in their encoding header; this option can be used to tell
+                the command to re-code the commit log message in the encoding
+                preferred by the user. May be repeated: a list emits the flag once
+                per item.
+            exclude: Do not include refs matching <glob-pattern> that the next
+                --all, --branches, --tags, --remotes, or --glob would otherwise
+                consider.
+            exclude_first_parent_only: When finding commits to exclude (with a ^),
+                follow only the first parent commit upon seeing a merge commit.
+            exclude_hidden: Do not include refs that would be hidden by git-fetch,
+                git-receive-pack or git-upload-pack by consulting the appropriate
+                fetch.hideRefs, receive.hideRefs or uploadpack.hideRefs
+                configuration along with transfer.hideRefs (see git-config(1)).
+            expand_tabs: Perform a tab expansion (replace each tab with enough
+                spaces to fill to the next display column that is a multiple of <n>)
+                in the log message before showing it in the output.
+            ext_diff: Allow an external diff helper to be executed. `ext_diff=off`
+                emits `--no-ext-diff`.
+            extended_regexp: Consider the limiting patterns to be extended regular
+                expressions instead of the default basic regular expressions.
+            find_copies: Detect copies as well as renames. Value optional: `True`
+                for the bare flag, or pass one.
+            find_copies_harder: For performance reasons, by default, -C option finds
+                copies only if the original file of the copy was modified in the
+                same changeset.
+            find_object: Look for differences that change the number of occurrences
+                of the specified object.
+            find_renames: If generating diffs, detect and report renames for each
+                commit. Value optional: `True` for the bare flag, or pass one.
+            first_parent: When finding commits to include, follow only the first
+                parent commit upon seeing a merge commit.
+            fixed_strings: Consider the limiting patterns to be fixed strings (don't
+                interpret pattern as a regular expression).
+            follow: Continue listing the history of a file beyond renames (works
+                only for a single file).
+            full_diff: Without this flag, git log -p <path>.
+            full_history: Same as the default mode, but does not prune some history.
+            full_index: Instead of the first handful of characters, show the full
+                pre- and post-image blob object names on the "index" line when
+                generating patch format output.
+            function_context: Show whole function as context lines for each change.
+            glob: Pretend as if all the refs matching shell glob <glob-pattern> are
+                listed on the command line as <commit>.
+            graph: Draw a text-based graphical representation of the commit history
+                on the left hand side of the output.
+            grep_reflog: Limit the commits output to ones with reflog entries that
+                match the <pattern> regular expression.
+            histogram: Generate a diff using the "histogram diff" algorithm.
+            ignore_all_space: Ignore whitespace when comparing lines.
+            ignore_blank_lines: Ignore changes whose lines are all blank.
+            ignore_cr_at_eol: Ignore carriage-return at the end of line when doing a
+                comparison.
+            ignore_matching_lines: Ignore changes whose all lines match <regex>. May
+                be repeated: a list emits the flag once per item.
+            ignore_missing: Upon seeing an invalid object name in the input, pretend
+                as if the bad input was not given.
+            ignore_space_at_eol: Ignore changes in whitespace at EOL.
+            ignore_space_change: Ignore changes in amount of whitespace.
+            ignore_submodules: Ignore changes to submodules in the diff generation.
+                Value optional: `True` for the bare flag, or pass one.
+            indent_heuristic: Enable the heuristic that shifts diff hunk boundaries
+                to make patches easier to read. `indent_heuristic=off` emits
+                `--no-indent-heuristic`.
+            inter_hunk_context: Show the context between diff hunks, up to the
+                specified <number> of lines, thereby fusing hunks that are close to
+                each other.
+            invert_grep: Limit the commits output to ones with a log message that do
+                not match the <pattern> specified with --grep=<pattern>.
+            irreversible_delete: Omit the preimage for deletes, i.e. print only the
+                header but not the diff between the preimage and /dev/null.
+            ita_invisible_in_index: By default entries added by git add -N appear as
+                an existing empty file in git diff and a new file in git diff
+                --cached.
+            left_only: List only commits on the respective side of a symmetric
+                difference, i.e. only those which would be marked < resp.
+            left_right: Mark which side of a symmetric difference a commit is
+                reachable from.
+            line_prefix: Prepend an additional <prefix> to every line of output.
+            log_size: Include a line log size <number> in the output for each
+                commit, where <number> is the length of that commit's message in
+                bytes.
+            merge: Show commits touching conflicted paths in the range
+                HEAD...<other>, where <other> is the first existing pseudoref in
+                MERGE_HEAD, CHERRY_PICK_HEAD, REVERT_HEAD or REBASE_HEAD.
+            merges: Print only merge commits. `merges=off` emits `--no-merges`.
+            minimal: Spend extra time to make sure the smallest possible diff is
+                produced.
+            name_only: Show only the name of each changed file in the post-image
+                tree.
+            name_status: Show only the name(s) and status of each changed file.
+            no_color: Turn off colored diff.
+            no_color_moved: Turn off move detection.
+            no_color_moved_ws: Do not ignore whitespace when performing move
+                detection.
+            no_decorate: Print out the ref names of any commits that are shown.
+                Value optional: `True` for the bare flag, or pass one.
+            no_diff_merges: Synonym for --diff-merges=off.
+            no_max_parents: Show only commits which have at least (or at most) that
+                many parent commits.
+            no_notes: Do not show notes.
+            no_prefix: Do not show any source or destination prefix.
+            no_renames: Turn off rename detection, even when the configuration file
+                gives the default to do so.
+            no_walk: Only show the given commits, but do not traverse their
+                ancestors. Value optional: `True` for the bare flag, or pass one.
+            not_: Reverses the meaning of the ^ prefix (or lack thereof) for all
+                following revision specifiers, up to the next --not.
+            notes: Show the notes (see git-notes(1)) that annotate the commit, when
+                showing the commit log message. Value optional: `True` for the bare
+                flag, or pass one.
+            numstat: Similar to --stat, but shows number of added and deleted lines
+                in decimal notation and pathname without abbreviation, to make it
+                more machine friendly.
+            oneline: This is a shorthand for --pretty=oneline --abbrev-commit used
+                together.
+            output: Output to a specific file instead of stdout.
+            output_indicator_context: Specify the character used to indicate new,
+                old or context lines in the generated patch.
+            patch: Generate patch (see the section called "GENERATING PATCH TEXT
+                WITH -P"). `patch=off` emits `--no-patch`.
+            patch_with_raw: Synonym for -p --raw.
+            patch_with_stat: Synonym for -p --stat.
+            patience: Generate a diff using the "patience diff" algorithm.
+            perl_regexp: Consider the limiting patterns to be Perl-compatible
+                regular expressions.
+            pickaxe_all: When -S or -G finds a change, show all the changes in that
+                changeset, not just the files that contain the change in <string>.
+            pickaxe_regex: Treat the <string> given to -S as an extended POSIX
+                regular expression to match.
+            pretty: Pretty-print the contents of the commit logs in a given format,
+                where <format> can be one of oneline, short, medium, full, fuller,
+                reference, email, raw, format:<string> and tformat:<string>. Value
+                optional: `True` for the bare flag, or pass one.
+            raw: For each commit, show a summary of changes using the raw diff
+                format.
+            reflog: Pretend as if all objects mentioned by reflogs are listed on the
+                command line as <commit>.
+            regexp_ignore_case: Match the regular expression limiting patterns
+                without regard to letter case.
+            relative: When run from a subdirectory of the project, it can be told to
+                exclude changes outside the directory and show pathnames relative to
+                it with this option. Value optional: `True` for the bare flag, or
+                pass one.
+            relative_date: Synonym for --date=relative.
+            remerge_diff: Produce remerge-diff output for merge commits.
+            remotes: Pretend as if all the refs in refs/remotes are listed on the
+                command line as <commit>. Value optional: `True` for the bare flag,
+                or pass one.
+            remove_empty: Stop when a given path disappears from the tree.
+            reverse: Output the commits chosen to be shown (see Commit Limiting
+                section above) in reverse order.
+            shortstat: Output only the last line of the --stat format containing
+                total number of modified files, as well as number of added and
+                deleted lines.
+            show_linear_break: When --graph is not used, all history branches are
+                flattened which can make it hard to see that the two consecutive
+                commits do not belong to a linear branch. Value optional: `True` for
+                the bare flag, or pass one.
+            show_notes: These options are deprecated. Value optional: `True` for the
+                bare flag, or pass one.
+            show_notes_by_default: Show the default notes unless options for
+                displaying specific notes are given.
+            show_pulls: Include all commits from the default mode, but also any
+                merge commits that are not TREESAME to the first parent but are
+                TREESAME to a later parent.
+            show_signature: Check the validity of a signed commit object by passing
+                the signature to gpg --verify and show the output.
+            simplify_by_decoration: Commits that are referred by some branch or tag
+                are selected.
+            simplify_merges: Additional option to --full-history to remove some
+                needless merges from the resulting history, as there are no selected
+                commits contributing to this merge.
+            since_as_filter: Show all commits more recent than <date>.
+            single_worktree: By default, all working trees will be examined by the
+                following options when there are more than one (see
+                git-worktree(1)): --all, --reflog and --indexed-objects.
+            skip: Skip <number> commits before starting to show the commit output.
+            skip_to: Discard the files before the named <file> from the output (i.e.
+            source: Print out the ref name given on the command line by which each
+                commit was reached.
+            sparse: All commits in the simplified history are shown.
+            src_prefix: Show the given source <prefix> instead of "a/".
+            stat: Generate a diffstat. Value optional: `True` for the bare flag, or
+                pass one.
+            stdin: In addition to getting arguments from the command line, read them
+                from standard input as well.
+            submodule: Specify how differences in submodules are shown. Value
+                optional: `True` for the bare flag, or pass one.
+            summary: Output a condensed summary of extended header information such
+                as creations, renames and mode changes.
+            tags: Pretend as if all the refs in refs/tags are listed on the command
+                line as <commit>. Value optional: `True` for the bare flag, or pass
+                one.
+            text: Treat all files as text.
+            textconv: Allow (or disallow) external text conversion filters to be run
+                when comparing binary files.
+            topo_order: Show no parents before all of its children are shown, and
+                avoid showing commits on multiple lines of history intermixed.
+            unified: Generate diffs with <n> lines of context instead of the usual
+                three.
+            until: Show commits older than <date>.
+            walk_reflogs: Instead of walking the commit ancestry chain, walk reflog
+                entries from the most recent one to older ones.
+            word_diff: By default, words are delimited by whitespace; see
+                --word-diff-regex below. Value optional: `True` for the bare flag,
+                or pass one.
+            word_diff_regex: Use <regex> to decide what a word is, instead of
+                considering runs of non-whitespace to be a word.
+            ws_error_highlight: Highlight whitespace errors in the context, old or
+                new lines of the diff.
         """
         ...
     def pull(
         self,
         *args: str,
+        allow_unrelated_histories: _Flag = ...,
         append: _Flag = ...,
+        atomic: _Flag = ...,
+        autostash: _Flag = ...,
+        cleanup: _Value = ...,
+        commit: _Flag = ...,
+        compact_summary: _Flag = ...,
+        deepen: _Value = ...,
+        depth: _Value = ...,
+        diff_algorithm_: _Value = ...,
+        dry_run: _Flag = ...,
+        edit: _Flag = ...,
+        ff: _Flag = ...,
         ff_only: _Flag = ...,
+        find_renames_: _Flag = ...,
         force: _Flag = ...,
         gpg_sign: _ValuedFlag = ...,
+        ignore_cr_at_eol_: _Flag = ...,
         ipv4: _Flag = ...,
         ipv6: _Flag = ...,
-        jobs: _ValuedFlag = ...,
+        jobs: _Value = ...,
         keep: _Flag = ...,
+        log: _ValuedFlag = ...,
+        merge_: _Value = ...,
+        negotiate_only: _Flag = ...,
+        negotiation_tip: _Value = ...,
+        no_rebase: _Flag = ...,
+        no_verify: _Flag = ...,
+        porcelain: _Flag = ...,
+        prefetch: _Flag = ...,
+        progress: _Flag = ...,
         prune: _Flag = ...,
         quiet: _Flag = ...,
         rebase: _ValuedFlag = ...,
         refmap: _Value = ...,
         server_option: _Value = ...,
+        set_upstream: _Flag = ...,
+        shallow_exclude: _Value = ...,
+        shallow_since: _Value = ...,
+        show_forced_updates: _Flag = ...,
+        signoff: _Flag = ...,
+        squash: _Flag = ...,
+        stat: _Flag = ...,
         strategy: _Value = ...,
         strategy_option: _Value = ...,
+        summary: _Flag = ...,
         tags: _Flag = ...,
         unshallow: _Flag = ...,
+        update_shallow: _Flag = ...,
+        upload_pack: _Value = ...,
         verbose: _Flag = ...,
+        verify_signatures: _Flag = ...,
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
     ) -> int:
-        """control for recursive fetching of submodules
+        """GIT-PULL(1)                       Git Manual
+        GIT-PULL(1)
 
         Args:
-            append: append to .git/FETCH_HEAD instead of overwriting. `append=off`
-                emits `--no-append`.
-            ff_only: abort if fast-forward is not possible.
-            force: force overwrite of local branch. `force=off` emits `--no-force`.
-            gpg_sign: GPG sign commit. Value optional: `True` for the bare flag, or
-                pass one. `gpg_sign=off` emits `--no-gpg-sign`.
-            ipv4: use IPv4 addresses only. `ipv4=off` emits `--no-ipv4`.
-            ipv6: use IPv6 addresses only. `ipv6=off` emits `--no-ipv6`.
-            jobs: . Value optional: `True` for the bare flag, or pass one.
-                `jobs=off` emits `--no-jobs`.
-            keep: keep downloaded pack. `keep=off` emits `--no-keep`.
-            prune: prune remote-tracking branches no longer on remote. `prune=off`
-                emits `--no-prune`.
-            quiet: be more quiet. `quiet=off` emits `--no-quiet`.
-            rebase: incorporate changes by rebasing rather than merging. Value
-                optional: `True` for the bare flag, or pass one. `rebase=off` emits
-                `--no-rebase`.
-            refmap: specify fetch refmap.
-            server_option: option to transmit. `server_option=off` emits
-                `--no-server-option`.
-            strategy: merge strategy to use. `strategy=off` emits `--no-strategy`.
-            strategy_option: option for selected merge strategy.
-                `strategy_option=off` emits `--no-strategy-option`.
-            tags: fetch all tags and associated objects. `tags=off` emits
+            allow_unrelated_histories: By default, git merge command refuses to
+                merge histories that do not share a common ancestor.
+            append: Append ref names and object names of fetched refs to the
+                existing contents of .git/FETCH_HEAD.
+            atomic: Use an atomic transaction to update local refs.
+            autostash: Automatically create a temporary stash entry before the
+                operation begins, record it in the ref MERGE_AUTOSTASH and apply it
+                after the operation ends.
+            cleanup: This option determines how the merge message will be cleaned up
+                before committing.
+            commit: Perform the merge and commit the result.
+            compact_summary: Show a compact-summary at the end of the merge.
+            deepen: Similar to --depth, except it specifies the number of commits
+                from the current shallow boundary instead of from the tip of each
+                remote branch history.
+            depth: Limit fetching to the specified number of commits from the tip of
+                each remote branch history.
+            dry_run: Show what would be done, without making any changes.
+            edit: Invoke an editor before committing successful mechanical merge to
+                further edit the auto-generated merge message, so that the user can
+                explain and justify the merge.
+            ff: When merging rather than rebasing, specifies how a merge is handled
+                when the merged-in history is already a descendant of the current
+                history.
+            ff_only: Only update to the new history if there is no divergent local
+                history.
+            force: When git fetch is used with <src>:<dst> refspec, it may refuse to
+                update the local branch as discussed in the <refspec> part of the
+                git-fetch(1) documentation.
+            gpg_sign: GPG-sign the resulting merge commit. Value optional: `True`
+                for the bare flag, or pass one.
+            ipv4: Use IPv4 addresses only, ignoring IPv6 addresses.
+            ipv6: Use IPv6 addresses only, ignoring IPv4 addresses.
+            jobs: Number of parallel children to be used for all forms of fetching.
+            keep: Keep downloaded pack.
+            log: In addition to branch names, populate the log message with one-line
+                descriptions from at most <n> actual commits that are being merged.
+                Value optional: `True` for the bare flag, or pass one.
+            negotiate_only: Do not fetch anything from the server, and instead print
+                the ancestors of the provided --negotiation-tip=* arguments, which
+                we have in common with the server.
+            negotiation_tip: By default, Git will report, to the server, commits
+                reachable from all local refs to find common commits in an attempt
+                to reduce the size of the to-be-received packfile. May be repeated:
+                a list emits the flag once per item.
+            no_rebase: This is shorthand for --rebase=false.
+            porcelain: Print the output to standard output in an easy-to-parse
+                format for scripts.
+            prefetch: Modify the configured refspec to place all refs into the
+                refs/prefetch/ namespace.
+            progress: Progress status is reported on the standard error stream by
+                default when it is attached to a terminal, unless -q is specified.
+            prune: Before fetching, remove any remote-tracking references that no
+                longer exist on the remote.
+            quiet: This is passed to both underlying git-fetch to squelch reporting
+                of during transfer, and underlying git-merge to squelch output
+                during merging.
+            rebase: When true, rebase the current branch on top of the upstream
+                branch after fetching. Value optional: `True` for the bare flag, or
+                pass one.
+            refmap: When fetching refs listed on the command line, use the specified
+                refspec (can be given more than once) to map the refs to
+                remote-tracking branches, instead of the values of remote.*.fetch
+                configuration variables for the remote repository. May be repeated:
+                a list emits the flag once per item.
+            server_option: Transmit the given string to the server when
+                communicating using protocol version 2.
+            set_upstream: If the remote is fetched successfully, add upstream
+                (tracking) reference, used by argument-less git-pull(1) and other
+                commands.
+            shallow_exclude: Deepen or shorten the history of a shallow repository
+                to exclude commits reachable from a specified remote branch or tag.
+                May be repeated: a list emits the flag once per item.
+            shallow_since: Deepen or shorten the history of a shallow repository to
+                include all reachable commits after <date>.
+            show_forced_updates: By default, git checks if a branch is force-updated
+                during fetch. `show_forced_updates=off` emits
+                `--no-show-forced-updates`.
+            signoff: Add a Signed-off-by trailer by the committer at the end of the
+                commit log message.
+            squash: Produce the working tree and index state as if a real merge
+                happened (except for the merge information), but do not actually
+                make a commit, move the HEAD, or record $GIT_DIR/MERGE_HEAD (to
+                cause the next git commit command to create a merge commit).
+            stat: Show a diffstat at the end of the merge.
+            strategy: Use the given merge strategy; can be supplied more than once
+                to specify them in the order they should be tried.
+            strategy_option: Pass merge strategy specific option through to the
+                merge strategy.
+            summary: Synonyms to --stat and --no-stat; these are deprecated and will
+                be removed in the future.
+            tags: Fetch all tags from the remote (i.e., fetch remote tags
+                refs/tags/* into local tags with the same name), in addition to
+                whatever else would otherwise be fetched. `tags=off` emits
                 `--no-tags`.
-            unshallow: convert to a complete repository.
-            verbose: be more verbose. `verbose=off` emits `--no-verbose`.
+            unshallow: If the source repository is complete, convert a shallow
+                repository to a complete one, removing all the limitations imposed
+                by shallow repositories.
+            update_shallow: By default when fetching from a shallow repository, git
+                fetch refuses refs that require updating .git/shallow.
+            upload_pack: When given, and the repository to fetch from is handled by
+                git fetch-pack, --exec=<upload-pack> is passed to the command to
+                specify non-default path for the command run on the other end.
+            verbose: Pass --verbose to git-fetch and git-merge.
+            verify_signatures: Verify that the tip commit of the side branch being
+                merged is signed with a valid key, i.e. a key that has a valid uid:
+                in the default trust model, this means the signing key has been
+                signed by a trusted key.
         """
         ...
     def push(
         self,
         *args: str,
+        all: _Flag = ...,
         delete: _Flag = ...,
         dry_run: _Flag = ...,
+        follow_tags: _Flag = ...,
         force: _Flag = ...,
+        force_if_includes: _Flag = ...,
+        force_with_lease: _Value = ...,
         ipv4: _Flag = ...,
         ipv6: _Flag = ...,
+        mirror: _Flag = ...,
+        no_follow_tags_: _Flag = ...,
+        no_recurse_submodules: _Flag = ...,
+        no_signed: _Flag = ...,
+        porcelain: _Flag = ...,
+        progress: _Flag = ...,
+        prune: _Flag = ...,
         push_option: _Value = ...,
         quiet: _Flag = ...,
+        receive_pack: _Value = ...,
+        repo: _Value = ...,
         set_upstream: _Flag = ...,
+        tags: _Flag = ...,
+        thin_: _Flag = ...,
         verbose: _Flag = ...,
         verify: _Flag = ...,
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
     ) -> int:
-        """repository
+        """GIT-PUSH(1)                       Git Manual
+        GIT-PUSH(1)
 
         Args:
-            delete: delete refs. `delete=off` emits `--no-delete`.
-            dry_run: dry run. `dry_run=off` emits `--no-dry-run`.
-            force: force updates. `force=off` emits `--no-force`.
-            ipv4: use IPv4 addresses only.
-            ipv6: use IPv6 addresses only.
-            push_option: option to transmit. `push_option=off` emits
-                `--no-push-option`.
-            quiet: be more quiet. `quiet=off` emits `--no-quiet`.
-            set_upstream: set upstream for git pull/status. `set_upstream=off` emits
-                `--no-set-upstream`.
-            verbose: be more verbose. `verbose=off` emits `--no-verbose`.
-            verify: opposite of --no-verify. `verify=off` emits `--no-verify`.
+            all: Push all branches (i.e.
+            delete: All listed refs are deleted from the remote repository.
+            dry_run: Do everything except actually send the updates.
+            follow_tags: Push all the refs that would be pushed without this option,
+                and also push annotated tags in refs/tags that are missing from the
+                remote but are pointing at commit-ish that are reachable from the
+                refs being pushed.
+            force: Usually, the command refuses to update a remote ref that is not
+                an ancestor of the local ref used to overwrite it.
+            force_with_lease: Usually, "git push" refuses to update a remote ref
+                that is not an ancestor of the local ref used to overwrite it.
+            ipv4: Use IPv4 addresses only, ignoring IPv6 addresses.
+            ipv6: Use IPv6 addresses only, ignoring IPv4 addresses.
+            mirror: Instead of naming each ref to push, specifies that all refs
+                under refs/ (which includes but is not limited to refs/heads/,
+                refs/remotes/, and refs/tags/) be mirrored to the remote repository.
+            no_recurse_submodules: May be used to make sure all submodule commits
+                used by the revisions to be pushed are available on a
+                remote-tracking branch.
+            porcelain: Produce machine-readable output.
+            progress: Progress status is reported on the standard error stream by
+                default when it is attached to a terminal, unless -q is specified.
+            prune: Remove remote branches that don't have a local counterpart.
+            push_option: Transmit the given string to the server, which passes them
+                to the pre-receive as well as the post-receive hook.
+            quiet: Suppress all output, including the listing of updated refs,
+                unless an error occurs.
+            receive_pack: Path to the git-receive-pack program on the remote end.
+            repo: This option is equivalent to the <repository> argument.
+            set_upstream: For every branch that is up to date or successfully
+                pushed, add upstream (tracking) reference, used by argument-less
+                git-pull(1) and other commands.
+            tags: All refs under refs/tags are pushed, in addition to refspecs
+                explicitly listed on the command line.
+            verbose: Run verbosely.
+            verify: . `verify=off` emits `--no-verify`.
         """
         ...
     def restore(
         self,
         *args: str,
+        conflict: _Value = ...,
+        ignore_skip_worktree_bits: _Flag = ...,
+        ignore_unmerged: _Flag = ...,
         merge: _Flag = ...,
         ours: _Flag = ...,
+        overlay: _Flag = ...,
         patch: _Flag = ...,
+        pathspec_file_nul: _Flag = ...,
+        pathspec_from_file: _Value = ...,
+        progress: _Flag = ...,
         quiet: _Flag = ...,
+        recurse_submodules: _Flag = ...,
         source: _Value = ...,
         staged: _Flag = ...,
-        theirs: _Flag = ...,
         worktree: _Flag = ...,
+        worktree_: _Flag = ...,
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
     ) -> int:
-        """which tree-ish to checkout from
+        """GIT-RESTORE(1)                    Git Manual
+        GIT-RESTORE(1)
 
         Args:
-            merge: perform a 3-way merge with the new branch. `merge=off` emits
-                `--no-merge`.
-            ours: checkout our version for unmerged files.
-            patch: select hunks interactively. `patch=off` emits `--no-patch`.
-            quiet: suppress progress reporting. `quiet=off` emits `--no-quiet`.
-            source: which tree-ish to checkout from. `source=off` emits
-                `--no-source`.
-            staged: restore the index. `staged=off` emits `--no-staged`.
-            theirs: checkout their version for unmerged files.
-            worktree: restore the working tree (default). `worktree=off` emits
-                `--no-worktree`.
+            conflict: The same as --merge option above, but changes the way the
+                conflicting hunks are presented, overriding the merge.conflictStyle
+                configuration variable.
+            ignore_skip_worktree_bits: In sparse checkout mode, the default is to
+                only update entries matched by <pathspec> and sparse patterns in
+                $GIT_DIR/info/sparse-checkout.
+            ignore_unmerged: When restoring files on the working tree from the
+                index, do not abort the operation if there are unmerged entries and
+                neither --ours, --theirs, --merge or --conflict is specified.
+            merge: When restoring files on the working tree from the index, recreate
+                the conflicted merge in the unmerged paths.
+            ours: When restoring files in the working tree from the index, use stage
+                #2 (ours) or #3 (theirs) for unmerged paths.
+            overlay: In overlay mode, never remove files when restoring.
+            patch: Interactively select hunks in the difference between the restore
+                source and the restore location.
+            pathspec_file_nul: Only meaningful with --pathspec-from-file.
+            pathspec_from_file: Pathspec is passed in <file> instead of commandline
+                args.
+            progress: Progress status is reported on the standard error stream by
+                default when it is attached to a terminal, unless --quiet is
+                specified.
+            quiet: Quiet, suppress feedback messages.
+            recurse_submodules: If <pathspec> names an active submodule and the
+                restore location includes the working tree, the submodule will only
+                be updated if this option is given, in which case its working tree
+                will be restored to the commit recorded in the superproject, and any
+                local modifications overwritten.
+            source: Restore the working tree files with the content from the given
+                tree.
+            worktree: Specify the restore location.
         """
         ...
     def rev_parse(
         self,
         *args: str,
+        abbrev_ref: _ValuedFlag = ...,
+        absolute_git_dir: _Flag = ...,
+        all: _Flag = ...,
+        branches: _ValuedFlag = ...,
+        default: _Value = ...,
+        disambiguate: _Value = ...,
+        exclude: _Value = ...,
+        exclude_hidden: _Flag = ...,
+        git_common_dir: _Flag = ...,
+        git_dir: _Flag = ...,
+        git_path: _Value = ...,
+        glob: _Value = ...,
+        is_bare_repository: _Flag = ...,
+        is_inside_git_dir: _Flag = ...,
+        is_inside_work_tree: _Flag = ...,
+        is_shallow_repository: _Flag = ...,
+        keep_dashdash: _Flag = ...,
+        local_env_vars: _Flag = ...,
+        no_revs: _Flag = ...,
+        not_: _Flag = ...,
+        output_object_format: _Flag = ...,
+        parseopt: _Flag = ...,
+        path_format: _Flag = ...,
+        prefix: _Value = ...,
+        quiet: _Flag = ...,
+        resolve_git_dir: _Value = ...,
+        revs_only: _Flag = ...,
+        shared_index_path: _Flag = ...,
+        short: _ValuedFlag = ...,
+        show_cdup: _Flag = ...,
+        show_object_format: _ValuedFlag = ...,
+        show_prefix: _Flag = ...,
+        show_ref_format: _Flag = ...,
+        show_superproject_working_tree: _Flag = ...,
+        show_toplevel: _Flag = ...,
+        since: _Value = ...,
+        sq: _Flag = ...,
+        sq_quote: _Flag = ...,
+        stop_at_non_option: _Flag = ...,
+        stuck_long: _Flag = ...,
+        symbolic: _Flag = ...,
+        symbolic_full_name: _Flag = ...,
+        until: _Value = ...,
+        verify: _Flag = ...,
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
     ) -> int:
-        """or: git rev-parse --sq-quote [<arg>...]"""
+        """GIT-REV-PARSE(1)                  Git Manual
+        GIT-REV-PARSE(1)
+
+        Args:
+            abbrev_ref: A non-ambiguous short name of the objects name. Value
+                optional: `True` for the bare flag, or pass one.
+            absolute_git_dir: Like --git-dir, but its output is always the
+                canonicalized absolute path.
+            all: Show all refs found in refs/.
+            branches: Show all branches, tags, or remote-tracking branches,
+                respectively (i.e., refs found in refs/heads, refs/tags, or
+                refs/remotes, respectively). Value optional: `True` for the bare
+                flag, or pass one.
+            default: If there is no parameter given by the user, use <arg> instead.
+            disambiguate: Show every object whose name begins with the given prefix.
+            exclude: Do not include refs matching <glob-pattern> that the next
+                --all, --branches, --tags, --remotes, or --glob would otherwise
+                consider.
+            exclude_hidden: Do not include refs that would be hidden by git-fetch,
+                git-receive-pack or git-upload-pack by consulting the appropriate
+                fetch.hideRefs, receive.hideRefs or uploadpack.hideRefs
+                configuration along with transfer.hideRefs (see git-config(1)).
+            git_common_dir: Show $GIT_COMMON_DIR if defined, else $GIT_DIR.
+            git_dir: Show $GIT_DIR if defined.
+            git_path: Resolve "$GIT_DIR/<path>" and takes other path relocation
+                variables such as $GIT_OBJECT_DIRECTORY, $GIT_INDEX_FILE.
+            glob: Show all refs matching the shell glob pattern pattern.
+            is_bare_repository: When the repository is bare print "true", otherwise
+                "false".
+            is_inside_git_dir: When the current working directory is below the
+                repository directory print "true", otherwise "false".
+            is_inside_work_tree: When the current working directory is inside the
+                work tree of the repository print "true", otherwise "false".
+            is_shallow_repository: When the repository is shallow print "true",
+                otherwise "false".
+            keep_dashdash: Only meaningful in --parseopt mode.
+            local_env_vars: List the GIT_* environment variables that are local to
+                the repository (e.g.
+            no_revs: Do not output flags and parameters meant for git rev-list
+                command.
+            not_: When showing object names, prefix them with ^ and strip ^ prefix
+                from the object names that already have one.
+            output_object_format: Allow oids to be input from any object format that
+                the current repository supports.
+            parseopt: Use git rev-parse in option parsing mode (see PARSEOPT section
+                below).
+            path_format: Controls the behavior of certain other options.
+            prefix: Behave as if git rev-parse was invoked from the <arg>
+                subdirectory of the working tree. May be repeated: a list emits the
+                flag once per item.
+            quiet: Only meaningful in --verify mode.
+            resolve_git_dir: Check if <path> is a valid repository or a gitfile that
+                points at a valid repository, and print the location of the
+                repository.
+            revs_only: Do not output flags and parameters not meant for git rev-list
+                command.
+            shared_index_path: Show the path to the shared index file in split index
+                mode, or empty if not in split-index mode.
+            short: Same as --verify but shortens the object name to a unique prefix
+                with at least length characters. Value optional: `True` for the bare
+                flag, or pass one.
+            show_cdup: When the command is invoked from a subdirectory, show the
+                path of the top-level directory relative to the current directory
+                (typically a sequence of "../", or an empty string).
+            show_object_format: Show the object format (hash algorithm) used for the
+                repository for storage inside the .git directory, input, or output.
+                Value optional: `True` for the bare flag, or pass one.
+            show_prefix: When the command is invoked from a subdirectory, show the
+                path of the current directory relative to the top-level directory.
+            show_ref_format: Show the reference storage format used for the
+                repository.
+            show_superproject_working_tree: Show the absolute path of the root of
+                the superproject's working tree (if exists) that uses the current
+                repository as its submodule.
+            show_toplevel: Show the (by default, absolute) path of the top-level
+                directory of the working tree.
+            since: Parse the date string, and output the corresponding --max-age=
+                parameter for git rev-list.
+            sq: Usually the output is made one line per flag and parameter.
+            sq_quote: Use git rev-parse in shell quoting mode (see SQ-QUOTE section
+                below).
+            stop_at_non_option: Only meaningful in --parseopt mode.
+            stuck_long: Only meaningful in --parseopt mode.
+            symbolic: Usually the object names are output in SHA-1 form (with
+                possible ^ prefix); this option makes them output in a form as close
+                to the original input as possible.
+            symbolic_full_name: This is similar to --symbolic, but it omits input
+                that are not refs (i.e.
+            until: Parse the date string, and output the corresponding --min-age=
+                parameter for git rev-list.
+            verify: Verify that exactly one parameter is provided, and that it can
+                be turned into a raw 20-byte SHA-1 that can be used to access the
+                object database.
+        """
         ...
     def stash(
         self,
         *args: str,
+        all: _Flag = ...,
+        include_untracked: _Flag = ...,
+        index: _Flag = ...,
+        keep_index: _Flag = ...,
+        only_untracked: _Flag = ...,
+        patch: _Flag = ...,
+        pathspec_file_nul: _Flag = ...,
+        pathspec_from_file: _Value = ...,
+        print: _Flag = ...,
+        quiet: _Flag = ...,
+        staged: _Flag = ...,
+        to_ref: _Flag = ...,
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
     ) -> int:
-        """or: git stash show [-u | --include-untracked | --only-untracked]
-        [<diff-options>] [<stash>]
+        """GIT-STASH(1)                      Git Manual
+        GIT-STASH(1)
+
+        Args:
+            all: This option is only valid for push and save commands.
+            include_untracked: When used with the push and save commands, all
+                untracked files are also stashed and then cleaned up with git clean.
+            index: This option is only valid for pop and apply commands.
+            keep_index: This option is only valid for push and save commands.
+            only_untracked: This option is only valid for the show command.
+            patch: This option is only valid for push and save commands.
+            pathspec_file_nul: This option is only valid for push command.
+            pathspec_from_file: This option is only valid for push command.
+            print: This option is only valid for the export command.
+            quiet: This option is only valid for apply, drop, pop, push, save, store
+                commands.
+            staged: This option is only valid for push and save commands.
+            to_ref: This option is only valid for the export command.
         """
         ...
     def status(
         self,
         *args: str,
+        ahead_behind: _Flag = ...,
         branch: _Flag = ...,
+        column: _ValuedFlag = ...,
         find_renames: _ValuedFlag = ...,
-        null: _Flag = ...,
+        ignore_submodules: _ValuedFlag = ...,
+        ignored: _ValuedFlag = ...,
+        long: _Flag = ...,
+        merge: _Flag = ...,
+        porcelain: _ValuedFlag = ...,
         renames: _Flag = ...,
         short: _Flag = ...,
+        show_stash: _Flag = ...,
         untracked_files: _ValuedFlag = ...,
         verbose: _Flag = ...,
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
     ) -> int:
-        """machine-readable output
+        """GIT-STATUS(1)                     Git Manual
+        GIT-STATUS(1)
 
         Args:
-            branch: show branch information. `branch=off` emits `--no-branch`.
-            find_renames: detect renames, optionally set similarity index. Value
+            ahead_behind: Display or do not display detailed ahead/behind counts for
+                the branch relative to its upstream branch.
+            branch: Show the branch and tracking info even in short-format.
+            column: Display untracked files in columns. Value optional: `True` for
+                the bare flag, or pass one.
+            find_renames: Turn on rename detection, optionally setting the
+                similarity threshold. Value optional: `True` for the bare flag, or
+                pass one.
+            ignore_submodules: Ignore changes to submodules when looking for
+                changes. Value optional: `True` for the bare flag, or pass one.
+            ignored: Show ignored files as well. Value optional: `True` for the bare
+                flag, or pass one.
+            long: Give the output in the long-format.
+            porcelain: Give the output in an easy-to-parse format for scripts. Value
                 optional: `True` for the bare flag, or pass one.
-            null: terminate entries with NUL. `null=off` emits `--no-null`.
-            renames: opposite of --no-renames. `renames=off` emits `--no-renames`.
-            short: show status concisely. `short=off` emits `--no-short`.
-            untracked_files: show untracked files, optional modes: all, normal, no.
-                Value optional: `True` for the bare flag, or pass one.
-                `untracked_files=off` emits `--no-untracked-files`.
-            verbose: be verbose. `verbose=off` emits `--no-verbose`.
+            renames: Turn on/off rename detection regardless of user configuration.
+            short: Give the output in the short-format.
+            show_stash: Show the number of entries currently stashed away.
+            untracked_files: Show untracked files. Value optional: `True` for the
+                bare flag, or pass one.
+            verbose: In addition to the names of files that have been changed, also
+                show the textual changes that are staged to be committed (i.e., like
+                the output of git diff --cached).
         """
         ...
     def switch(
         self,
         *args: str,
+        conflict: _Value = ...,
         create: _Value = ...,
         detach: _Flag = ...,
+        discard_changes: _Flag = ...,
         force: _Flag = ...,
         force_create: _Value = ...,
+        guess: _Flag = ...,
+        ignore_other_worktrees: _Flag = ...,
         merge: _Flag = ...,
+        orphan: _Value = ...,
+        progress: _Flag = ...,
         quiet: _Flag = ...,
-        track: _ValuedFlag = ...,
+        recurse_submodules: _Flag = ...,
+        track: _Flag = ...,
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
     ) -> int:
-        """create and switch to a new branch
+        """GIT-SWITCH(1)                     Git Manual
+        GIT-SWITCH(1)
 
         Args:
-            create: create and switch to a new branch. `create=off` emits
-                `--no-create`.
-            detach: detach HEAD at named commit. `detach=off` emits `--no-detach`.
-            force: force checkout (throw away local modifications). `force=off`
-                emits `--no-force`.
-            force_create: create/reset and switch to a branch. `force_create=off`
-                emits `--no-force-create`.
-            merge: perform a 3-way merge with the new branch. `merge=off` emits
-                `--no-merge`.
-            quiet: suppress progress reporting. `quiet=off` emits `--no-quiet`.
-            track: set branch tracking configuration. Value optional: `True` for the
-                bare flag, or pass one. `track=off` emits `--no-track`.
+            conflict: The same as --merge option above, but changes the way the
+                conflicting hunks are presented, overriding the merge.conflictStyle
+                configuration variable.
+            create: Create a new branch named <new-branch> starting at <start-point>
+                before switching to the branch.
+            detach: Switch to a commit for inspection and discardable experiments.
+            discard_changes: Proceed even if the index or the working tree differs
+                from HEAD.
+            force: An alias for --discard-changes.
+            force_create: Similar to --create except that if <new-branch> already
+                exists, it will be reset to <start-point>.
+            guess: If <branch> is not found but there does exist a tracking branch
+                in exactly one remote (call it <remote>) with a matching name, treat
+                as equivalent to $ git switch -c <branch> --track <remote>/<branch>
+                If the branch exists in multiple remotes and one of them is named by
+                the checkout.defaultRemote configuration variable, we'll use that
+                one for the purposes of disambiguation, even if the <branch> isn't
+                unique across all remotes. `guess=off` emits `--no-guess`.
+            ignore_other_worktrees: git switch refuses when the wanted ref is
+                already checked out by another worktree.
+            merge: If you have local modifications to one or more files that are
+                different between the current branch and the branch to which you are
+                switching, the command refuses to switch branches in order to
+                preserve your modifications in context.
+            orphan: Create a new unborn branch, named <new-branch>.
+            progress: Progress status is reported on the standard error stream by
+                default when it is attached to a terminal, unless --quiet is
+                specified.
+            quiet: Quiet, suppress feedback messages.
+            recurse_submodules: Using --recurse-submodules will update the content
+                of all active submodules according to the commit recorded in the
+                superproject.
+            track: When creating a new branch, set up "upstream" configuration.
+                `track=off` emits `--no-track`.
         """
         ...
     def tag(
         self,
         *args: str,
         annotate: _Flag = ...,
+        cleanup: _Value = ...,
+        color: _ValuedFlag = ...,
+        column: _ValuedFlag = ...,
         contains: _Value = ...,
+        create_reflog: _Flag = ...,
         delete: _Flag = ...,
         edit: _Flag = ...,
         file: _Value = ...,
         force: _Flag = ...,
+        format: _Value = ...,
         ignore_case: _Flag = ...,
         list: _Flag = ...,
         local_user: _Value = ...,
@@ -589,43 +2032,93 @@ class _Git(Tool):
         message: _Value = ...,
         no_contains: _Value = ...,
         no_merged: _Value = ...,
+        omit_empty: _Flag = ...,
+        points_at: _Value = ...,
         sign: _Flag = ...,
+        sort: _Value = ...,
         trailer: _Value = ...,
         verify: _Flag = ...,
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
     ) -> int:
-        """[(--trailer <token>[(=|:)<value>])...]
+        """GIT-TAG(1)                        Git Manual
+        GIT-TAG(1)
 
         Args:
-            annotate: annotated tag, needs a message. `annotate=off` emits
-                `--no-annotate`.
-            contains: print only tags that contain the commit.
-            delete: delete tags.
-            edit: force edit of tag message. `edit=off` emits `--no-edit`.
-            file: read message from file. `file=off` emits `--no-file`.
-            force: replace the tag if exists. `force=off` emits `--no-force`.
-            ignore_case: sorting and filtering are case insensitive.
-                `ignore_case=off` emits `--no-ignore-case`.
-            list: list tag names.
-            local_user: use another key to sign the tag. `local_user=off` emits
-                `--no-local-user`.
-            merged: print only tags that are merged.
-            message: tag message.
-            no_contains: print only tags that don't contain the commit.
-            no_merged: print only tags that are not merged.
-            sign: annotated and GPG-signed tag. `sign=off` emits `--no-sign`.
-            trailer: add custom trailer(s).
-            verify: verify tags.
+            annotate: Make an unsigned, annotated tag object.
+            cleanup: This option sets how the tag message is cleaned up.
+            color: Respect any colors specified in the --format option. Value
+                optional: `True` for the bare flag, or pass one.
+            column: Display tag listing in columns. Value optional: `True` for the
+                bare flag, or pass one.
+            contains: Only list tags which contain the specified commit (HEAD if not
+                specified).
+            create_reflog: Create a reflog for the tag.
+            delete: Delete existing tags with the given names.
+            edit: The message taken from file with -F and command line with -m are
+                usually used as the tag message unmodified.
+            file: Take the tag message from the given file.
+            force: Replace an existing tag with the given name (instead of failing).
+            format: A string that interpolates %(fieldname) from a tag ref being
+                shown and the object it points at.
+            ignore_case: Sorting and filtering tags are case insensitive.
+            list: List tags.
+            local_user: Make a GPG-signed tag, using the given key.
+            merged: Only list tags whose commits are reachable from the specified
+                commit (HEAD if not specified).
+            message: Use the given tag message (instead of prompting).
+            no_contains: Only list tags which don't contain the specified commit
+                (HEAD if not specified).
+            no_merged: Only list tags whose commits are not reachable from the
+                specified commit (HEAD if not specified).
+            omit_empty: Do not print a newline after formatted refs where the format
+                expands to the empty string.
+            points_at: Only list tags of the given object (HEAD if not specified).
+            sign: Make a GPG-signed tag, using the default e-mail address's key.
+                `sign=off` emits `--no-sign`.
+            sort: Sort based on the key given.
+            trailer: Specify a (<token>, <value>) pair that should be applied as a
+                trailer. May be repeated: a list emits the flag once per item.
+            verify: Verify the GPG signature of the given tag names.
         """
         ...
     def worktree(
         self,
         *args: str,
+        detach: _Flag = ...,
+        dry_run: _Flag = ...,
+        expire: _Value = ...,
+        force: _Flag = ...,
+        lock: _Flag = ...,
+        orphan: _Flag = ...,
+        porcelain: _Flag = ...,
+        quiet: _Flag = ...,
+        reason: _Value = ...,
+        verbose: _Flag = ...,
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
     ) -> int:
-        """[--orphan] [(-b | -B) <new-branch>] <path> [<commit-ish>]"""
+        """GIT-WORKTREE(1)                   Git Manual
+        GIT-WORKTREE(1)
+
+        Args:
+            detach: With add, detach HEAD in the new worktree.
+            dry_run: With prune, do not remove anything; just report what it would
+                remove.
+            expire: With prune, only expire unused worktrees older than <time>.
+            force: By default, add refuses to create a new worktree when
+                <commit-ish> is a branch name and is already checked out by another
+                worktree, or if <path> is already assigned to some worktree but is
+                missing (for instance, if <path> was deleted manually).
+            lock: Keep the worktree locked after creation.
+            orphan: With add, make the new worktree and index empty, associating the
+                worktree with a new unborn branch named <new-branch>.
+            porcelain: With list, output in an easy-to-parse format for scripts.
+            quiet: With add, suppress feedback messages.
+            reason: With lock or with add --lock, an explanation why the worktree is
+                locked.
+            verbose: With prune, report all removals.
+        """
         ...

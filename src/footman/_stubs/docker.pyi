@@ -37,8 +37,7 @@ class _DockerCompose(Tool):
             builder: Set builder to use.
             check: Check build configuration.
             dry_run: Execute command in dry run mode.
-            memory: Set memory limit for the build container. Not supported by
-                BuildKit.
+            memory: Set memory limit for the build container.
             no_cache: Do not use cache when building the image.
             print: Print equivalent bake file.
             provenance: Add a provenance attestation.
@@ -46,8 +45,7 @@ class _DockerCompose(Tool):
             push: Push service images.
             quiet: Suppress the build output.
             sbom: Add a SBOM attestation.
-            ssh: Set SSH authentications used when building service images. (use
-                'default' for using your default SSH Agent).
+            ssh: Set SSH authentications used when building service images.
             with_dependencies: Also build dependencies (transitively).
         """
         ...
@@ -69,8 +67,7 @@ class _DockerCompose(Tool):
             dry_run: Execute command in dry run mode.
             remove_orphans: Remove containers for services not defined in the
                 Compose file.
-            rmi: Remove images used by services. "local" remove only images that
-                don't have a custom tag ("local"|"all").
+            rmi: Remove images used by services.
             timeout: Specify a shutdown timeout in seconds.
             volumes: Remove named volumes declared in the "volumes" section of the
                 Compose file and anonymous volumes attached to containers.
@@ -101,8 +98,7 @@ class _DockerCompose(Tool):
             env: Set environment variables. May be repeated: a list emits the flag
                 once per item.
             index: Index of the container if service has multiple replicas.
-            no_tty: Disable pseudo-TTY allocation. By default 'docker compose exec'
-                allocates a TTY. Defaults to `True`.
+            no_tty: Disable pseudo-TTY allocation. Defaults to `True`.
             privileged: Give extended privileges to the process.
             user: Run the command as this user.
             workdir: Path to workdir directory for this command.
@@ -132,13 +128,11 @@ class _DockerCompose(Tool):
             index: index of the container if service has multiple replicas.
             no_color: Produce monochrome output.
             no_log_prefix: Don't print prefix in logs.
-            since: Show logs since timestamp (e.g. 2013-01-02T13:23:37Z) or relative
-                (e.g. 42m for 42 minutes).
+            since: Show logs since timestamp (e.g.
             tail: Number of lines to show from the end of the logs for each
                 container. Defaults to `all`.
             timestamps: Show timestamps.
-            until: Show logs before a timestamp (e.g. 2013-01-02T13:23:37Z) or
-                relative (e.g. 42m for 42 minutes).
+            until: Show logs before a timestamp (e.g.
         """
         ...
     def ps(
@@ -168,16 +162,14 @@ class _DockerCompose(Tool):
                 table format with column headers (default) 'table TEMPLATE': Print
                 output in table format using the given Go template 'json': Print in
                 JSON format 'TEMPLATE': Print output using the given Go template.
-                Refer to https://docs.docker.com/go/formatting/ for more information
-                about formatting output with templates. Defaults to `table`.
+                Defaults to `table`.
             no_trunc: Don't truncate output.
             orphans: Include orphaned services (not declared by project). Defaults
                 to `True`.
             quiet: Only display IDs.
             services: Display services.
-            status: Filter services by status. Values: [paused | restarting |
-                removing | running | dead | created | exited]. May be repeated: a
-                list emits the flag once per item.
+            status: Filter services by status. May be repeated: a list emits the
+                flag once per item.
         """
         ...
     def run(
@@ -293,14 +285,12 @@ class _DockerCompose(Tool):
 
         Args:
             abort_on_container_exit: Stops all containers if any container was
-                stopped. Incompatible with -d.
+                stopped.
             abort_on_container_failure: Stops all containers if any container exited
-                with failure. Incompatible with -d.
-            always_recreate_deps: Recreate dependent containers. Incompatible with
-                --no-recreate.
-            attach: Restrict attaching to the specified services. Incompatible with
-                --attach-dependencies. May be repeated: a list emits the flag once
-                per item.
+                with failure.
+            always_recreate_deps: Recreate dependent containers.
+            attach: Restrict attaching to the specified services. May be repeated: a
+                list emits the flag once per item.
             attach_dependencies: Automatically attach to log output of dependent
                 services.
             build: Build images before starting containers. `build=off` emits
@@ -308,19 +298,15 @@ class _DockerCompose(Tool):
             detach: Detached mode: Run containers in the background.
             dry_run: Execute command in dry run mode.
             exit_code_from: Return the exit code of the selected service container.
-                Implies --abort-on-container-exit.
             force_recreate: Recreate containers even if their configuration and
                 image haven't changed.
-            menu: Enable interactive shortcuts when running attached. Incompatible
-                with --detach. Can also be enable/disable by setting COMPOSE_MENU
-                environment var.
+            menu: Enable interactive shortcuts when running attached.
             no_attach: Do not attach (stream logs) to the specified services. May be
                 repeated: a list emits the flag once per item.
             no_color: Produce monochrome output.
             no_deps: Don't start linked services.
             no_log_prefix: Don't print prefix in logs.
             no_recreate: If containers already exist, don't recreate them.
-                Incompatible with --force-recreate.
             no_start: Don't start the services after creating them.
             pull: Pull image before running ("always"|"missing"|"never"). Defaults
                 to `policy`.
@@ -330,12 +316,11 @@ class _DockerCompose(Tool):
                 Compose file.
             renew_anon_volumes: Recreate anonymous volumes instead of retrieving
                 data from the previous containers.
-            scale: Scale SERVICE to NUM instances. Overrides the scale setting in
-                the Compose file if present.
+            scale: Scale SERVICE to NUM instances.
             timeout: Use this timeout in seconds for container shutdown when
                 attached or when containers are already running.
             timestamps: Show timestamps.
-            wait: Wait for services to be running|healthy. Implies detached mode.
+            wait: Wait for services to be running|healthy.
             wait_timeout: Maximum duration in seconds to wait for the project to be
                 running|healthy.
             watch: Watch source code and rebuild/refresh containers when files are
@@ -494,8 +479,7 @@ class _Docker(Tool):
             platform: Set target platform for build. May be repeated: a list emits
                 the flag once per item.
             progress: Set type of progress output ("auto", "none", "plain", "quiet",
-                "rawjson", "tty"). Use plain to show container output. Defaults to
-                `auto`.
+                "rawjson", "tty"). Defaults to `auto`.
             provenance: Shorthand for "--attest=type=provenance".
             pull: Always attempt to pull all referenced images.
             push: Shorthand for "--output=type=registry".
@@ -570,8 +554,6 @@ class _Docker(Tool):
                 table format with column headers (default) 'table TEMPLATE': Print
                 output in table format using the given Go template 'json': Print in
                 JSON format 'TEMPLATE': Print output using the given Go template.
-                Refer to https://docs.docker.com/go/formatting/ for more information
-                about formatting output with templates.
             no_trunc: Don't truncate output.
             quiet: Only show image IDs.
             tree: List multi-platform images as a tree (EXPERIMENTAL).
@@ -597,13 +579,11 @@ class _Docker(Tool):
         Args:
             details: Show extra details provided to logs.
             follow: Follow log output.
-            since: Show logs since timestamp (e.g. "2013-01-02T13:23:37Z") or
-                relative (e.g. "42m" for 42 minutes).
+            since: Show logs since timestamp (e.g.
             tail: Number of lines to show from the end of the logs. Defaults to
                 `all`.
             timestamps: Show timestamps.
-            until: Show logs before a timestamp (e.g. "2013-01-02T13:23:37Z") or
-                relative (e.g. "42m" for 42 minutes).
+            until: Show logs before a timestamp (e.g.
         """
         ...
     def ps(
@@ -630,8 +610,6 @@ class _Docker(Tool):
                 table format with column headers (default) 'table TEMPLATE': Print
                 output in table format using the given Go template 'json': Print in
                 JSON format 'TEMPLATE': Print output using the given Go template.
-                Refer to https://docs.docker.com/go/formatting/ for more information
-                about formatting output with templates.
             last: Show n last created containers (includes all states). Defaults to
                 `-1`.
             latest: Show the latest created container (includes all states).
@@ -677,9 +655,7 @@ class _Docker(Tool):
         Args:
             all_tags: Push all tags of an image to the repository.
             platform: Push a platform-specific manifest as a single-platform image
-                to the registry. Image index won't be pushed, meaning that other
-                manifests, including attestations won't be preserved.
-                'os[/arch[/variant]]': Explicit platform (eg. linux/amd64).
+                to the registry.
             quiet: Suppress verbose output.
         """
         ...

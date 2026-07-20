@@ -32,10 +32,7 @@ class _Ruff(Tool):
                 `ruff.toml`), or a TOML `<KEY> = <VALUE>` pair (such as you might
                 find in a `ruff.toml` configuration file) overriding a specific
                 configuration option (e.g., `--config "lint.line-length = 100"` or
-                `--config "format.quote-style = 'single'"`). Overrides of individual
-                settings using this option always take precedence over all
-                configuration files, including configuration files that were also
-                specified using `--config`.
+                `--config "format.quote-style = 'single'"`).
             isolated: Ignore all configuration files.
             quiet: Print diagnostics, but nothing else.
             silent: Disable all logging (but still exit with status code "1" upon
@@ -160,25 +157,19 @@ class _Ruff(Tool):
 
         Args:
             add_ignore: Enable automatic additions of `ruff:ignore` comments to
-                failing lines. Optionally provide a reason to append after the rule
-                names. Requires preview mode. Value optional: `True` for the bare
-                flag, or pass one.
+                failing lines. Value optional: `True` for the bare flag, or pass
+                one.
             add_noqa: Enable automatic additions of `noqa` directives to failing
-                lines. Optionally provide a reason to append after the codes. Value
-                optional: `True` for the bare flag, or pass one.
+                lines. Value optional: `True` for the bare flag, or pass one.
             cache_dir: Path to the cache directory.
             color: Control when colored output is used.
             config: Either a path to a TOML configuration file (`pyproject.toml` or
                 `ruff.toml`), or a TOML `<KEY> = <VALUE>` pair (such as you might
                 find in a `ruff.toml` configuration file) overriding a specific
                 configuration option (e.g., `--config "lint.line-length = 100"` or
-                `--config "format.quote-style = 'single'"`). Overrides of individual
-                settings using this option always take precedence over all
-                configuration files, including configuration files that were also
-                specified using `--config`.
+                `--config "format.quote-style = 'single'"`).
             diff: Avoid writing any fixed files back; instead, output a diff for
                 each changed file to stdout, and exit 0 if there are no diffs.
-                Implies `--fix-only`.
             exclude: List of paths, used to omit files and/or directories from
                 analysis.
             exit_non_zero_on_fix: Exit with a non-zero status code if any files were
@@ -194,43 +185,35 @@ class _Ruff(Tool):
             extend_select: Like --select, but adds additional rule codes on top of
                 those already specified.
             extension: List of mappings from file extension to language (one of
-                `python`, `ipynb`, `pyi`). For example, to treat `.ipy` files as
-                IPython notebooks, use `--extension ipy:ipynb`.
-            fix: Apply fixes to resolve lint violations. Use `--no-fix` to disable
-                or `--unsafe-fixes` to include unsafe fixes. `fix=off` emits
-                `--no-fix`.
+                `python`, `ipynb`, `pyi`).
+            fix: Apply fixes to resolve lint violations. `fix=off` emits `--no-fix`.
             fix_only: Apply fixes to resolve lint violations, but don't report on,
-                or exit non-zero for, leftover violations. Implies `--fix`. Use
-                `--no-fix-only` to disable or `--unsafe-fixes` to include unsafe
-                fixes. `fix_only=off` emits `--no-fix-only`.
-            fixable: List of rule codes to treat as eligible for fix. Only
-                applicable when fix itself is enabled (e.g., via `--fix`).
+                or exit non-zero for, leftover violations. `fix_only=off` emits
+                `--no-fix-only`.
+            fixable: List of rule codes to treat as eligible for fix.
             force_exclude: Enforce exclusions, even for paths passed to Ruff
-                directly on the command-line. Use `--no-force-exclude` to disable.
-                `force_exclude=off` emits `--no-force-exclude`.
+                directly on the command-line. `force_exclude=off` emits
+                `--no-force-exclude`.
             ignore: Comma-separated list of rule codes to disable.
             ignore_noqa: Ignore any `# noqa` comments.
             isolated: Ignore all configuration files.
             no_cache: Disable cache reads.
             output_file: Specify file to write the linter output to. Defaults to
                 `stdout`.
-            output_format: Output serialization format for violations. The default
-                serialization format is "full".
+            output_format: Output serialization format for violations.
             per_file_ignores: List of mappings from file pattern to code to exclude.
             preview: Enable preview mode; checks will include unstable rules and
-                fixes. Use `--no-preview` to disable. `preview=off` emits
-                `--no-preview`.
+                fixes. `preview=off` emits `--no-preview`.
             quiet: Print diagnostics, but nothing else.
             respect_gitignore: Respect file exclusions via `.gitignore` and other
-                standard ignore files. Use `--no-respect-gitignore` to disable.
-                `respect_gitignore=off` emits `--no-respect-gitignore`.
+                standard ignore files. `respect_gitignore=off` emits
+                `--no-respect-gitignore`.
             select: Comma-separated list of rule codes to enable (or ALL, to enable
                 all rules).
             show_files: See the files Ruff will be run against with the current
                 settings.
-            show_fixes: Show an enumeration of all fixed lint violations. Use
-                `--no-show-fixes` to disable. `show_fixes=off` emits
-                `--no-show-fixes`.
+            show_fixes: Show an enumeration of all fixed lint violations.
+                `show_fixes=off` emits `--no-show-fixes`.
             show_settings: See the settings Ruff will use to lint a given Python
                 file.
             silent: Disable all logging (but still exit with status code "1" upon
@@ -238,11 +221,9 @@ class _Ruff(Tool):
             statistics: Show counts for every rule with at least one violation.
             stdin_filename: The name of the file when passing it through stdin.
             target_version: The minimum Python version that should be supported.
-            unfixable: List of rule codes to treat as ineligible for fix. Only
-                applicable when fix itself is enabled (e.g., via `--fix`).
+            unfixable: List of rule codes to treat as ineligible for fix.
             unsafe_fixes: Include fixes that may not retain the original intent of
-                the code. Use `--no-unsafe-fixes` to disable. `unsafe_fixes=off`
-                emits `--no-unsafe-fixes`.
+                the code. `unsafe_fixes=off` emits `--no-unsafe-fixes`.
             verbose: Enable verbose logging.
             watch: Run in watch mode by re-running whenever files change.
         """
@@ -270,10 +251,7 @@ class _Ruff(Tool):
                 `ruff.toml`), or a TOML `<KEY> = <VALUE>` pair (such as you might
                 find in a `ruff.toml` configuration file) overriding a specific
                 configuration option (e.g., `--config "lint.line-length = 100"` or
-                `--config "format.quote-style = 'single'"`). Overrides of individual
-                settings using this option always take precedence over all
-                configuration files, including configuration files that were also
-                specified using `--config`.
+                `--config "format.quote-style = 'single'"`).
             isolated: Ignore all configuration files.
             quiet: Print diagnostics, but nothing else.
             silent: Disable all logging (but still exit with status code "1" upon
@@ -370,10 +348,7 @@ class _Ruff(Tool):
                 `ruff.toml`), or a TOML `<KEY> = <VALUE>` pair (such as you might
                 find in a `ruff.toml` configuration file) overriding a specific
                 configuration option (e.g., `--config "lint.line-length = 100"` or
-                `--config "format.quote-style = 'single'"`). Overrides of individual
-                settings using this option always take precedence over all
-                configuration files, including configuration files that were also
-                specified using `--config`.
+                `--config "format.quote-style = 'single'"`).
             diff: Avoid writing any formatted files back; instead, exit with a
                 non-zero status code and the difference between the current file and
                 how the formatted file would look like.
@@ -385,38 +360,23 @@ class _Ruff(Tool):
             extend_exclude: Like --exclude, but adds additional files and
                 directories on top of those already excluded.
             extension: List of mappings from file extension to language (one of
-                `python`, `ipynb`, `pyi`). For example, to treat `.ipy` files as
-                IPython notebooks, use `--extension ipy:ipynb`.
+                `python`, `ipynb`, `pyi`).
             force_exclude: Enforce exclusions, even for paths passed to Ruff
-                directly on the command-line. Use `--no-force-exclude` to disable.
-                `force_exclude=off` emits `--no-force-exclude`.
+                directly on the command-line. `force_exclude=off` emits
+                `--no-force-exclude`.
             isolated: Ignore all configuration files.
             line_length: Set the line-length.
             no_cache: Disable cache reads.
             output_format: Output serialization format for violations, when used
-                with `--check`. The default serialization format is "full". Note
-                that this option is currently only respected in preview mode. A
-                warning will be emitted if this flag is used on stable.
-            preview: Enable preview mode; enables unstable formatting. Use
-                `--no-preview` to disable. `preview=off` emits `--no-preview`.
+                with `--check`.
+            preview: Enable preview mode; enables unstable formatting. `preview=off`
+                emits `--no-preview`.
             quiet: Print diagnostics, but nothing else.
             range: When specified, Ruff will try to only format the code in the
-                given range. It might be necessary to extend the start backwards or
-                the end forwards, to fully enclose a logical line. The `<RANGE>`
-                uses the format
-                `<start_line>:<start_column>-<end_line>:<end_column>`. - The line
-                and column numbers are 1 based. - The column specifies the
-                nth-unicode codepoint on that line. - The end offset is exclusive. -
-                The column numbers are optional. You can write `--range=1-2` instead
-                of `--range=1:1-2:1`. - The end position is optional. You can write
-                `--range=2` to format the entire document starting from the second
-                line. - The start position is optional. You can write `--range=-3`
-                to format the first three lines of the document. The option can only
-                be used when formatting a single file. Range formatting of notebooks
-                is unsupported.
+                given range.
             respect_gitignore: Respect file exclusions via `.gitignore` and other
-                standard ignore files. Use `--no-respect-gitignore` to disable.
-                `respect_gitignore=off` emits `--no-respect-gitignore`.
+                standard ignore files. `respect_gitignore=off` emits
+                `--no-respect-gitignore`.
             silent: Disable all logging (but still exit with status code "1" upon
                 detecting diagnostics).
             stdin_filename: The name of the file when passing it through stdin.

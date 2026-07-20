@@ -78,6 +78,10 @@ _NEGATIONS: dict[str, dict[str, str]] = {
         "clean": "--dirty",
         "use_directory_urls": "--no-directory-urls",
     },
+    # git add --all turns off as --ignore-removal (aka --no-all).
+    "git": {
+        "all": "--ignore-removal",
+    },
 }
 
 
