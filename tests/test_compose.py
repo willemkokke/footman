@@ -425,3 +425,103 @@ def test_plugin_explicit_group_module_is_adopted(tmp_path, monkeypatch):
     )
     tree = compose.plugin("explicit")
     assert set(tree.tasks) == {"ping"}
+
+
+# --- include()/plugin() taught errors -----------------------------------------
+# footman markets its error messages; the ones nobody had exercised are
+# exactly the ones that can rot. Each of these asserts the *teaching*, not
+# just the raising.
+
+
+def test_include_of_a_pre_imported_module_teaches(tmp_path, monkeypatch):
+    """A module already imported outside include() never had its tasks
+    captured — re-executing it would double every side effect, so footman
+    refuses with guidance instead of guessing."""
+    (tmp_path / "early_tasks.py").write_text(
+        "from footman import task\n\n@task\ndef early():\n    'Early.'\n"
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.delitem(sys.modules, "early_tasks", raising=False)
+    import early_tasks  # type: ignore[import-not-found]  # the wrong way, on purpose
+
+    with pytest.raises(RegistrationError, match="already imported outside"):
+        compose.include(early_tasks)
+
+
+def test_include_of_a_module_with_no_tasks_teaches(tmp_path, monkeypatch):
+    """Nothing to adopt: the message says what to define, and counts what
+    it did find."""
+    (tmp_path / "empty_tasks.py").write_text("VALUE = 1\n")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.delitem(sys.modules, "empty_tasks", raising=False)
+    with pytest.raises(RegistrationError, match="no module-level Group"):
+        compose.include("empty_tasks")
+
+
+def test_include_of_a_module_with_two_groups_teaches(tmp_path, monkeypatch):
+    """Ambiguous: two Groups and no tasks means footman cannot know which
+    one you meant — it says so, with the count."""
+    # Group(...) constructs without registering; group(...) would register
+    # and the module would no longer be "no tasks at all".
+    (tmp_path / "two_groups.py").write_text(
+        "from footman.registry import Group\n\na = Group('a')\nb = Group('b')\n"
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.delitem(sys.modules, "two_groups", raising=False)
+    with pytest.raises(RegistrationError, match="2 Groups"):
+        compose.include("two_groups")
+
+
+def test_include_accepts_a_group_directly(tmp_path):
+    """The simplest source of all: a Group object you already hold."""
+    donor = Group("donor")
+
+    @donor.task
+    def ship():
+        "Ship."
+
+    root = Group("root")
+    compose.include(donor, into=root)
+    assert "ship" in root.tasks
+
+
+def test_plugin_claimed_by_two_distributions_teaches(monkeypatch):
+    """Two dists advertising the same plugin name is ambiguous — the error
+    names both so the user can uninstall one."""
+
+    class FakeEP:
+        def __init__(self, dist):
+            self.name = "twice"
+            self.dist = dist
+            self.group = compose.ENTRY_POINT_GROUP
+
+    import importlib.metadata
+
+    monkeypatch.setattr(
+        importlib.metadata,
+        "entry_points",
+        lambda **kw: [FakeEP("alpha 1.0"), FakeEP("beta 2.0")],
+    )
+    monkeypatch.setattr(compose, "_module_trees", {})
+    with pytest.raises(RegistrationError, match=r"more than one distribution"):
+        compose.plugin("twice")
+
+
+def test_plugin_entry_point_of_the_wrong_type_teaches(monkeypatch):
+    """An entry point resolving to something that isn't a Group (or a
+    module of tasks) names the type it got."""
+
+    class FakeEP:
+        name = "wrong"
+        dist = "wrong 1.0"
+        group = compose.ENTRY_POINT_GROUP
+
+        def load(self):
+            return 42
+
+    import importlib.metadata
+
+    monkeypatch.setattr(importlib.metadata, "entry_points", lambda **kw: [FakeEP()])
+    monkeypatch.setattr(compose, "_module_trees", {})
+    with pytest.raises(RegistrationError, match="got int"):
+        compose.plugin("wrong")

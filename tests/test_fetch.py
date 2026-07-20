@@ -28,6 +28,11 @@ class _Handler(http.server.BaseHTTPRequestHandler):
             self.send_response(304)
             self.end_headers()
             return
+        if self.path.endswith("missing.bin"):
+            self.send_response(404)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
         self.send_response(200)
         self.send_header("Content-Length", str(len(BODY)))
         self.send_header("ETag", type(self).etag)
@@ -48,6 +53,49 @@ def server(tmp_path, monkeypatch):
     thread.start()
     yield f"http://127.0.0.1:{httpd.server_port}/file.bin"
     httpd.shutdown()
+
+
+BACKENDS = ["urllib", "curl", "httpx", "requests"]
+
+
+def _skip_unless_available(backend: str) -> None:
+    if not _fetch._available(backend):
+        pytest.skip(f"{backend} is not available here")
+
+
+@pytest.mark.parametrize("backend", BACKENDS)
+def test_every_backend_downloads(server, backend):
+    """Each backend, driven against a real server — the adapter code and
+    the library's actual call signature, not a stand-in for either."""
+    _skip_unless_available(backend)
+    path = _fetch.fetch(server, backend=backend)
+    assert path.read_bytes() == BODY
+
+
+@pytest.mark.parametrize("backend", BACKENDS)
+def test_every_backend_verifies_the_checksum(server, backend):
+    _skip_unless_available(backend)
+    with pytest.raises(_fetch.FetchError, match="sha256 mismatch"):
+        _fetch.fetch(server, backend=backend, sha256=SHA)
+
+
+@pytest.mark.parametrize("backend", BACKENDS)
+def test_every_backend_refuses_a_404(server, backend):
+    """A missing file is a taught FetchError, whatever fetched it — not a
+    library-specific exception leaking through."""
+    _skip_unless_available(backend)
+    with pytest.raises(_fetch.FetchError, match="fetch: "):
+        _fetch.fetch(server.replace("file.bin", "missing.bin"), backend=backend)
+
+
+@pytest.mark.parametrize("backend", ["urllib", "httpx", "requests"])
+def test_library_backends_revalidate_with_the_etag(server, backend):
+    """curl aside (it re-fetches by design), a warm cache revalidates: the
+    second call carries If-None-Match and the server answers 304."""
+    _skip_unless_available(backend)
+    _fetch.fetch(server, backend=backend)
+    assert _fetch.fetch(server, backend=backend).read_bytes() == BODY
+    assert _Handler.hits == ["unconditional", '"v1"']
 
 
 def test_fetch_downloads_and_caches(server):

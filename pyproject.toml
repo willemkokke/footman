@@ -63,6 +63,10 @@ dev = [
     "pytest-cov>=5.0",
     "ruff>=0.6",
     "basedpyright>=1.18",
+    # The optional fetch backends, so every one of them is driven against a
+    # real server in the suite — footman never imports them itself.
+    "httpx>=0.27",
+    "requests>=2.31",
 ]
 # rich renders the terminal screenshots `fm footman docs shots` embeds;
 # pyte replays interactive captures (completion menus move the cursor —
