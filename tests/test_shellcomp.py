@@ -365,14 +365,37 @@ _posix_shell = pytest.mark.skipif(
 )
 
 
-@_posix_shell
-@pytest.mark.skipif(shutil.which("bash") is None, reason="bash not installed")
+def _bash_exe() -> str | None:
+    """The bash footman supports here: git-bash on Windows, bash elsewhere.
+
+    `shutil.which("bash")` on a Windows runner finds System32's WSL
+    launcher — a different kernel with a different filesystem, which is
+    why it answered a `/d/a/...` path with the Store-Python stub. git-bash
+    is the supported target, so name it explicitly.
+    """
+    if os.name != "nt":
+        return shutil.which("bash")
+    for candidate in (
+        r"C:\Program Files\Git\bin\bash.exe",
+        r"C:\Program Files (x86)\Git\bin\bash.exe",
+    ):
+        if Path(candidate).exists():
+            return candidate
+    return None
+
+
 def test_bash_completion_functional(home, fm_project_dir):
+    """The hook driven through real bash — git-bash on Windows included,
+    which is why every path is MSYS-spelled: inside bash a Windows path
+    is a string of escapes, and a `;`-separated PATH is one useless
+    entry."""
+    if (bash := _bash_exe()) is None:
+        pytest.skip("bash (git-bash on Windows) is not installed")
     script = home / "completion.bash"
     script.write_text(_shellcomp.script_for("bash", "fm"), encoding="utf-8")
     body = (
-        f'PATH="{VENV_BIN}:$PATH"\n'
-        f'source "{script}"\n'
+        f'PATH="{_shellcomp._bash_path(VENV_BIN)}:$PATH"\n'
+        f'source "{_shellcomp._bash_path(script)}"\n'
         "COMP_WORDS=(fm li); COMP_CWORD=1\n"
         "_fm_complete\n"
         'printf "%s\\n" "${COMPREPLY[@]}"\n'
@@ -381,7 +404,7 @@ def test_bash_completion_functional(home, fm_project_dir):
         'printf "%s\\n" "${COMPREPLY[@]}"\n'
     )
     out = subprocess.run(
-        ["bash", "-c", body],
+        [bash, "-c", body],
         capture_output=True,
         text=True,
         timeout=60,
@@ -864,8 +887,10 @@ def test_detection_from_inside_every_real_shell(
         # zsh and fish have no Windows story; git-bash does, and is driven
         # below — MSYSTEM is how footman recognises it.
         pytest.skip("zsh/fish on Windows are out of scope")
-    if shutil.which(exe) is None:
+    exe_path = _bash_exe() if exe == "bash" else shutil.which(exe)
+    if exe_path is None:
         pytest.skip(f"{exe} is not installed")
+    argv = [exe_path, *argv[1:]]
     monkeypatch.setenv("SHELL", "/bin/false")  # $SHELL must not be the answer
     # git-bash cannot read a backslashed Windows path in its command line
     # any more than in an rc file; nushell would eat the backslashes as
