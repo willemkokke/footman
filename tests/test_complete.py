@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Annotated
 
 from footman import manifest, registry, task
-from footman._complete import complete
+from footman._complete import complete, complete_cli
 from footman.params import doc
 
 
@@ -258,3 +258,23 @@ def test_used_options_reset_per_segment(tree):
     # --fix bound to the first lint segment; a second task starts fresh.
     out = complete(tree, ["lint", "--fix", "check", "lint", ""])
     assert "--fix" in out
+
+
+def test_completion_output_is_lf_only(tree, tmp_path, monkeypatch, capsysbinary):
+    """The completion protocol is LF, on every platform.
+
+    Windows text-mode stdout would translate to CRLF, and a shell that
+    reads lines literally (git-bash's `read`) keeps the carriage return
+    and completes `--fix\r` — a stray CR at the user's cursor. Found by
+    driving the real git-bash on a Windows runner, pinned here so no
+    platform can reintroduce it.
+    """
+    import json
+
+    manifest = tmp_path / "m.json"
+    manifest.write_text(json.dumps({"schema": 1, "tree": tree}), encoding="utf-8")
+    complete_cli(["--manifest", str(manifest), "--", ""])
+    out = capsysbinary.readouterr().out
+    assert out, "the fixture tree should complete to something"
+    assert b"\r" not in out
+    assert out.endswith(b"\n")

@@ -337,7 +337,20 @@ def complete_cli(args: list[str]) -> int:
         return 0  # nothing cached yet — stay silent and fast
     out = complete(data["tree"], args)
     if out:
-        sys.stdout.write("\n".join(out) + "\n")
+        # LF, always. The completion protocol is footman's own, and on
+        # Windows text-mode stdout translates every "\n" to "\r\n": a
+        # shell that reads lines literally (git-bash's `read`) keeps the
+        # carriage return and completes `--fix\r`, planting a stray CR at
+        # the user's cursor. Writing bytes to the underlying buffer skips
+        # the translation entirely — and pins UTF-8 while we're here.
+        # Captured stdout (tests, some wrappers) has no buffer: fall back.
+        payload = "\n".join(out) + "\n"
+        buffer = getattr(sys.stdout, "buffer", None)
+        if buffer is None:
+            sys.stdout.write(payload)
+        else:
+            buffer.write(payload.encode("utf-8"))
+            buffer.flush()
     _maybe_refresh(manifest, data)  # SWR: keep dynamic completers from going stale
     return 0
 

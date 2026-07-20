@@ -73,6 +73,13 @@ versions may include breaking changes.
 
 ### Fixed
 
+- **Completion output is LF on every platform.** Windows text-mode
+  stdout translated the resolver's newlines to CRLF, so a shell reading
+  lines literally — git-bash's `read` — kept the carriage return and
+  completed `--fix\r`, planting a stray CR at the cursor. The resolver
+  now writes bytes straight to the underlying buffer, which skips the
+  translation and pins UTF-8 besides. Found by driving the real
+  git-bash on a Windows runner, not by reading the code.
 - **git-bash on Windows is detected and installed correctly.** A bare
   `fm --install-completion` inside git-bash used to answer "pwsh",
   because PowerShell's `PSModulePath` is machine-level environment and
