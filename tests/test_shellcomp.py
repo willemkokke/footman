@@ -34,7 +34,10 @@ def test_bash_install_writes_script_and_rc_line(home):
     assert "COMPREPLY=($(" not in body
     assert "printf -v line '%q'" in body
     rc = (home / ".bashrc").read_text()
-    assert f"source {script}" in rc
+    # The spelling bash can actually read: identical to the path on POSIX,
+    # MSYS-form (/c/Users/...) under git-bash, where a backslashed Windows
+    # path would be a string of escapes sourcing nothing.
+    assert f"source {_shellcomp._bash_path(script)}" in rc
     assert any("installed" in line for line in lines)
 
 
