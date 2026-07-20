@@ -43,6 +43,13 @@ be the tell), and the `source` line written into `~/.bashrc` uses the
 MSYS spelling `/c/Users/…` rather than a backslashed Windows path, which
 bash would read as escapes and silently source nothing.
 
+Detection works from a git-bash *session*, which is where you'd be
+typing: the launcher exports `MSYSTEM`, and that's the tell. A bare
+`bash.exe` spawned by some other Windows program doesn't have it and is
+indistinguishable from any other process, so footman falls back to the
+PowerShell answer there — name the shell explicitly
+(`fm --install-completion bash`) if you're in that unusual spot.
+
 ## What you get
 
 Task names, group names, flags, and choice values all complete, chain-aware:

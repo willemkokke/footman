@@ -868,10 +868,25 @@ def test_detection_from_inside_every_real_shell(
         pytest.skip(f"{exe} is not installed")
     monkeypatch.setenv("SHELL", "/bin/false")  # $SHELL must not be the answer
     # git-bash cannot read a backslashed Windows path in its command line
-    # any more than in an rc file.
-    py = _shellcomp._bash_path(sys.executable) if exe == "bash" else sys.executable
+    # any more than in an rc file; nushell would eat the backslashes as
+    # escapes. Both want forward slashes.
+    py = sys.executable
+    if exe == "bash":
+        py = _shellcomp._bash_path(py)
+    elif exe == "nu":
+        py = Path(py).as_posix()
     command = template.format(py=py, code=_PROBE)
-    out = subprocess.run([*argv, command], capture_output=True, text=True, timeout=60)
+    env = dict(os.environ)
+    if os.name == "nt" and exe == "bash":
+        # A git-bash *session* exports MSYSTEM — that is the launcher's
+        # doing, not bash's, so a bare `bash.exe -c` spawned from a Windows
+        # process does not have it and is genuinely indistinguishable from
+        # any other Windows process. Provide it the way the launcher would,
+        # which is the environment a user actually types in.
+        env["MSYSTEM"] = "MINGW64"
+    out = subprocess.run(
+        [*argv, command], capture_output=True, text=True, timeout=60, env=env
+    )
     assert out.returncode == 0, out.stderr
     # On Windows there is no process walk: git-bash is recognised by the
     # MSYSTEM it exports, and everything else falls to PowerShell's
@@ -906,10 +921,10 @@ def test_bash_path_speaks_msys_on_windows():
 
 
 def test_bash_path_is_a_noop_off_windows():
-    assert (
-        _shellcomp._bash_path(Path("/home/me/x.bash"), windows=False)
-        == "/home/me/x.bash"
-    )
+    # A plain string, not a Path: `Path("/home/me/x")` on Windows is a
+    # WindowsPath that stringifies with backslashes, which would be
+    # testing pathlib's flavour rather than this translation.
+    assert _shellcomp._bash_path("/home/me/x.bash", windows=False) == "/home/me/x.bash"
 
 
 def test_bash_install_and_uninstall_agree_on_the_rc_line(home):
