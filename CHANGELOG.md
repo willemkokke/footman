@@ -17,6 +17,12 @@ versions may include breaking changes.
   answer. A slow or failing completer degrades to no candidates, never the old
   values; task names, options, and `Literal` choices still answer instantly from
   the cache.
+- **The first <kbd>Tab</kbd> in a fresh directory builds the manifest instead of
+  answering empty.** A cold completion cache used to stay blank until your first
+  real `fm` run; now the first <kbd>Tab</kbd> builds it once (bounded, and out of
+  the import-free hot path) and answers accurately. A slow `tasks.py` degrades to
+  empty with the build finishing in the background, so the next <kbd>Tab</kbd> is
+  warm — never a hung keystroke.
 - **<kbd>Tab</kbd> completes file paths for path-valued arguments.** The
   path-valued globals (`-f`/`--tasks-file`, `-C`/`--directory`, `--config`) and
   any task option annotated `Path` now hand off to your shell's own file

@@ -51,6 +51,7 @@ _FILES = "\x00files"  # internal sentinel: complete() -> complete_cli()
 _EXIT_FILES = 100  # complete_cli exit code the hooks read as "complete files"
 _DYNAMIC = "\x00dynamic"  # internal sentinel: a dynamic completer, recompute fresh
 _DYNAMIC_TIMEOUT = 2.0  # seconds to wait for a fresh dynamic completer subprocess
+_COLD_TIMEOUT = 3.0  # seconds to wait for a first-time cwd manifest build
 _SHELLS = ("bash", "zsh", "fish", "pwsh", "nushell")
 _GLOBAL_CHOICES = {
     "--install-completion": _SHELLS,
@@ -337,6 +338,26 @@ def _spawn_refresh() -> None:
         return  # a background refresh must never break completion
 
 
+def _cold_build(manifest: str) -> dict | None:
+    """Build the cwd manifest once for a cold cache, then load it.
+
+    The first <kbd>Tab</kbd> in a fresh directory has nothing cached. Rather than
+    answer empty, spawn the same builder a real run uses and wait — bounded — for
+    it to land, then serve it (now cached for next time). Import-free: the hot
+    path spawns rather than imports. A slow `tasks.py` degrades to empty, and
+    because the build was detached it still finishes for the next TAB, so no
+    keystroke ever hangs on it.
+    """
+    _spawn_refresh()
+    deadline = time.monotonic() + _COLD_TIMEOUT
+    while time.monotonic() < deadline:
+        time.sleep(0.03)
+        data = _load_manifest(manifest)
+        if isinstance(data, dict) and isinstance(data.get("tree"), dict):
+            return data
+    return None
+
+
 def _leading_global_value(args: list[str], names: tuple[str, ...]) -> str | None:
     """The value of the first of *names* among the leading globals, or None.
 
@@ -430,6 +451,8 @@ def complete_cli(args: list[str]) -> int:
     if empty_partial:
         args = [*args, ""]
 
+    derived = manifest is None
+    override: str | None = None
     if manifest is None:
         # Only the derive branch needs the package; keep the standalone
         # --manifest path free of any `footman` import. The cache is keyed by
@@ -453,7 +476,12 @@ def complete_cli(args: list[str]) -> int:
 
     data = _load_manifest(manifest)
     if data is None or not isinstance(data.get("tree"), dict):
-        return 0  # nothing cached yet — stay silent and fast
+        # Cold cache: rather than answer empty, build the cwd manifest once
+        # (bounded) and serve it, so the first TAB in a fresh directory is
+        # accurate. An -f cold cache waits for its first real run.
+        data = _cold_build(manifest) if derived and override is None else None
+        if not isinstance(data, dict) or not isinstance(data.get("tree"), dict):
+            return 0  # cold and couldn't build in time — stay silent and fast
     out = complete(data["tree"], args)
     if out == [_FILES]:
         # A path value: print nothing, and signal the hook to complete files.

@@ -472,6 +472,47 @@ def test_fresh_dynamic_passes_context_and_falls_back(monkeypatch):
     assert _complete._fresh_dynamic("target", ["deploy"], ["a", ""]) is None
 
 
+# --- cold cache: build once, don't answer empty ------------------------------
+
+
+def test_cold_cache_builds_and_serves(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("FOOTMAN_CACHE_DIR", str(tmp_path / "cache"))
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    (proj / "pyproject.toml").write_text("[project]\nname='x'\nversion='0'\n")
+    (proj / "tasks.py").write_text(
+        "from footman import task\n\n@task\ndef lint(): ...\n@task\ndef check(): ...\n"
+    )
+    monkeypatch.chdir(proj)
+    # nothing cached: the first completion builds the manifest and serves it,
+    # rather than answering empty until the first real run
+    complete_cli(["--", ""])
+    out = capsys.readouterr().out.split()
+    assert "lint" in out and "check" in out
+
+
+def test_cold_f_cache_waits_for_first_run(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("FOOTMAN_CACHE_DIR", str(tmp_path / "cache"))
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    (proj / "pyproject.toml").write_text("[project]\nname='x'\nversion='0'\n")
+    (proj / "other.py").write_text(
+        "from footman import task\n\n@task\ndef ship(): ...\n"
+    )
+    monkeypatch.chdir(proj)
+    # an -f cold cache is not built on completion — it lands on the first -f run
+    complete_cli(["--", "-f", "other.py", ""])
+    assert capsys.readouterr().out == ""
+
+
+def test_cold_build_times_out_to_none(tmp_path, monkeypatch):
+    from footman import _complete
+
+    monkeypatch.setattr(_complete, "_spawn_refresh", lambda: None)  # no build lands
+    monkeypatch.setattr(_complete, "_COLD_TIMEOUT", 0.1)
+    assert _complete._cold_build(str(tmp_path / "never.json")) is None
+
+
 # --- chain-aware completion -----------------------------------------------------
 
 

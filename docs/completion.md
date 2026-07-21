@@ -49,11 +49,12 @@ to your tasks file.
 ## Keeping the cache current
 
 The cached manifest is structural — the shape of your CLI — and rebuilds for free
-on any real `fm` run. Between runs it can drift (you added a task), so if it is
-older than `max_age` when you press <kbd>Tab</kbd>, footman serves the cached
-answer instantly and spawns a **detached** rebuild for next time
-(stale-while-revalidate). The <kbd>Tab</kbd> never waits, and concurrent presses
-spawn at most one rebuild.
+on any real `fm` run. The very first <kbd>Tab</kbd> in a fresh directory, with
+nothing cached, builds it once (a beat slower) and answers accurately rather than
+staying blank until that first run. From then on the cache answers instantly; if
+it drifts (you added a task) past `max_age`, footman serves the cached answer and
+spawns a **detached** rebuild for next time (stale-while-revalidate) — a warm
+<kbd>Tab</kbd> never waits on it, and concurrent presses spawn at most one rebuild.
 
 Tune it with `[tool.footman]`:
 
