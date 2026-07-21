@@ -75,11 +75,13 @@ deploy  — ship to an environment
 A value that takes a filesystem path completes files — footman hands off to
 your shell's own path completion rather than reading the disk from its cached
 manifest. This covers the path-valued globals (`-f`/`--tasks-file`,
-`-C`/`--directory`, `--config`) and any task option annotated `Path`:
+`-C`/`--directory`, `--config`) and any task parameter annotated `Path`,
+whether an option, a positional, or a variadic:
 
 ```sh
-fm -f tasks/<TAB>          # your shell's own file completion
-fm build --out dist/<TAB>  # a Path-typed option, the same way
+fm -f tasks/<TAB>            # your shell's own file completion
+fm build --out dist/<TAB>    # a Path option
+fm deploy dist/<TAB>         # a Path positional (options stay one `-` away)
 ```
 
 A plain `str` or `int` value has no such handoff: it completes nothing, rather

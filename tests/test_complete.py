@@ -331,6 +331,31 @@ def test_path_typed_option_value_signals_file_completion():
     assert complete(built2, ["greet", "--name", ""]) == []
 
 
+def test_path_positional_signals_file_completion():
+    from footman._complete import _FILES
+
+    with registry.capture() as root:
+
+        @task
+        def deploy(target: Path, *extra: Path):
+            "Deploy."
+
+    built = manifest.build_manifest(root)["tree"]
+    assert complete(built, ["deploy", ""]) == [_FILES]  # the Path positional
+    assert complete(built, ["deploy", "a", ""]) == [_FILES]  # the Path variadic
+    assert complete(built, ["deploy", "-"]) != [_FILES]  # a dash reaches options
+
+    # a plain str positional is not a file
+    with registry.capture() as root2:
+
+        @task
+        def greet(name: str):
+            "Greet."
+
+    built2 = manifest.build_manifest(root2)["tree"]
+    assert complete(built2, ["greet", ""]) != [_FILES]
+
+
 # --- chain-aware completion -----------------------------------------------------
 
 

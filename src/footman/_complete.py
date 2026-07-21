@@ -235,6 +235,15 @@ def complete(tree: dict, words: list[str]) -> list[str]:
             choices = opt.get("choices", [])
             return [f"{optname}={c}" for c in choices if c.startswith(valpart)]
 
+    # A path-typed positional (or trailing consumer): once the partial is a
+    # value being typed rather than an option, hand it to native file
+    # completion — the same handoff a Path-typed option value gets above.
+    # `-` still reaches the options below, so they stay one keystroke away.
+    if not partial.startswith("-"):
+        pending = seg.fixed[seg.filled] if seg.filled < len(seg.fixed) else seg.rest
+        if pending is not None and "path" in pending.get("types", []):
+            return [_FILES]
+
     # Option position: this task's flags/options — minus the ones already
     # given, unless the param legitimately repeats — plus what the next bare
     # word could be: the pending positional's choices, the trailing
