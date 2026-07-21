@@ -33,6 +33,7 @@ _GLOBAL_FLAG = frozenset(
     {
         "--help", "-h", "--version", "-V", "--list", "-l", "--tree",
         "--dry-run", "-n", "--keep-going", "-k", "--sequential", "-s",
+        "--yes", "-y", "--no-input",
         "--quiet", "-q", "--verbose", "-v", "--no-color", "--no-progress",
         "--json", "--timings",
     }

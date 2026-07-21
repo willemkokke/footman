@@ -79,6 +79,8 @@ class Group:
         reason: str = "",
         progress: bool = True,
         infinite: bool = False,
+        confirm: str = "",
+        interactive: bool = False,
     ) -> Callable[[Task], Task]: ...
 
     def task(
@@ -93,6 +95,8 @@ class Group:
         reason: str = "",
         progress: bool = True,
         infinite: bool = False,
+        confirm: str = "",
+        interactive: bool = False,
     ) -> Task | Callable[[Task], Task]:
         """Register a function as a task.
 
@@ -144,6 +148,13 @@ class Group:
         server, a follow-mode tail. It implies `progress=False`, and the
         run swaps the status line for a one-time hint that Ctrl-C is how
         this ends. Listings and help carry the same note.
+
+        `confirm="…"` gates the task on a yes/no answer asked *before* the
+        task and its prerequisites run — deny and the task (and its
+        subtree) is skipped; `--yes` auto-answers it. `interactive=True`
+        hands the task the real terminal — no output capture, sole stdio —
+        so its body can prompt or run a REPL; an interactive task can't run
+        under `--json` or in parallel.
         """
 
         if infinite and not progress:
@@ -168,6 +179,10 @@ class Group:
                 fn._footman_progress = False  # type: ignore[attr-defined]
             if infinite:
                 fn._footman_infinite = True  # type: ignore[attr-defined]
+            if confirm:
+                fn._footman_confirm = confirm  # type: ignore[attr-defined]
+            if interactive:
+                fn._footman_interactive = True  # type: ignore[attr-defined]
             self.tasks[key] = fn
             return fn
 
@@ -214,9 +229,11 @@ def _importable(module: str) -> bool:
 
 def wants_progress(fn: Task) -> bool:
     """Whether *fn* consented to timing: `@task(progress=False)` opts out,
-    and `infinite=True` implies it — a duration that never arrives is not
-    history."""
+    and `infinite=True`/`interactive=True` imply it — a duration that never
+    arrives, or one spent waiting on a human, is not history."""
     if getattr(fn, "_footman_infinite", False):
+        return False
+    if getattr(fn, "_footman_interactive", False):
         return False
     return getattr(fn, "_footman_progress", True) is not False
 
@@ -224,6 +241,17 @@ def wants_progress(fn: Task) -> bool:
 def is_infinite(fn: Task) -> bool:
     """Whether *fn* runs until stopped: `@task(infinite=True)`."""
     return getattr(fn, "_footman_infinite", False) is True
+
+
+def is_interactive(fn: Task) -> bool:
+    """Whether *fn* owns the real terminal: `@task(interactive=True)` — no
+    output capture, sole stdio, so its body may prompt or run a REPL."""
+    return getattr(fn, "_footman_interactive", False) is True
+
+
+def task_confirm(fn: Task) -> str:
+    """The `@task(confirm="…")` prompt gating this task, or `""` if none."""
+    return getattr(fn, "_footman_confirm", "")
 
 
 def availability(fn: Task) -> str | None:
