@@ -71,6 +71,8 @@ The safety is the point: off a terminal, under `--no-input`, or in `--json`,
 `ask()` **errors naming the flag** instead of hanging — an unattended run fails
 loudly, and CI passes the value as a flag like any other.
 
+![Animated: fm release prompts version, the typed answer runs through coercion, and the release runs](_generated/shots/ask-cast.svg)
+
 ### Gate a task: `@task(confirm=…)`
 
 A yes/no question asked *before* the task and its prerequisites run:
@@ -83,6 +85,8 @@ def deploy(): ...
 Deny it and the task is skipped and the run exits non-zero. `--yes` auto-answers
 it (for CI and scripts), and off a terminal without `--yes` the answer is no —
 footman never proceeds unasked.
+
+![Animated: fm deploy asks Deploy to production, answered yes, then deploys](_generated/shots/confirm-cast.svg)
 
 ### Own the terminal: `@task(interactive=True)`
 
@@ -106,6 +110,8 @@ def scaffold():
 at run time, the case a flag can't cover. Two globals cover the rest: `--yes`
 auto-answers every confirm, and `--no-input` refuses to prompt (a required
 prompt errors instead).
+
+![Animated: fm scaffold prompts for a project name, then a numbered what-kind menu picked by number](_generated/shots/interactive-cast.svg)
 
 ## Dependencies with `pre` / `post`
 
