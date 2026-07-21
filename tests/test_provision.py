@@ -8,6 +8,7 @@ unpacking are exercised without installing anything or hitting the network.
 from __future__ import annotations
 
 import io
+import sys
 import tarfile
 import zipfile
 from pathlib import Path
@@ -130,7 +131,8 @@ def test_extract_binary_from_tar_gz(tmp_path):
     _tar_gz(archive, "eclint-0.6/eclint", b"ELF-ish")
     placed = _provision._extract_binary(archive, "eclint", tmp_path / "bin")
     assert placed.read_bytes() == b"ELF-ish"
-    assert placed.stat().st_mode & 0o111  # executable
+    if sys.platform != "win32":
+        assert placed.stat().st_mode & 0o111  # +x — Windows has no exec bit
 
 
 def test_extract_binary_from_zip(tmp_path):
