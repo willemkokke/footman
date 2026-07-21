@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 from pathlib import Path, PurePath
 from typing import Any
 
-from footman import coerce, registry
+from footman import coerce, context, registry
 from footman.context import (
     Context,
     RunFailed,
@@ -139,7 +139,40 @@ def _env_value(param: inspect.Parameter, peeled: coerce.Peeled) -> Any:
     return one(raw)
 
 
-def bind(seg: Segment, fn: Task) -> tuple[list[Any], dict[str, Any]]:
+def _prompt_param(cli: str, peeled: coerce.Peeled, ctx: Context | None) -> Any:
+    """Resolve a defaultless `ask()` parameter by prompting, coercing the answer
+    through the same pipeline as a CLI token and re-asking on a bad value. Off a
+    terminal or under `--no-input`/`--json` it raises instead — the value must
+    then be supplied on the command line."""
+    marker = peeled.ask
+    assert marker is not None  # bind only calls this when ask() is present
+    if (ctx is not None and ctx.no_input) or not context._stdin_is_tty():
+        raise ValueError(
+            f"--{cli} is required and nothing supplied it — pass --{cli} "
+            f"(a terminal is needed to prompt; --no-input and --json never ask)."
+        )
+    choices = coerce.all_choices(peeled.element)
+    hint = f" ({'/'.join(choices)})" if choices else ""
+    text = marker.prompt or f"{cli}{hint}: "
+    while True:
+        raw = context._prompt_core(text, secret=marker.secret)
+        if choices is not None and raw not in choices:
+            out = context.real_stderr()
+            out.write(f"  choose one of {', '.join(choices)}\n")
+            out.flush()
+            continue
+        try:
+            value = coerce.coerce_token(raw, peeled.element)
+            return _run_checks(value, peeled, f"--{cli}")
+        except ValueError as exc:
+            out = context.real_stderr()
+            out.write(f"  {exc}\n")
+            out.flush()
+
+
+def bind(
+    seg: Segment, fn: Task, ctx: Context | None = None
+) -> tuple[list[Any], dict[str, Any]]:
     """Turn a segment's string values into `(*args, **kwargs)` for *fn*.
 
     Coercion (union member selection, list handling, one-or-many collapse) goes
@@ -171,6 +204,12 @@ def bind(seg: Segment, fn: Task) -> tuple[list[Any], dict[str, Any]]:
                     value = _env_value(param, peeled)
                     if value is not _MISSING:
                         kwargs[param.name] = value
+                        continue
+                # ask(): prompt for a required (defaultless) param the CLI and
+                # env didn't fill — CLI > env > default > prompt, so a default
+                # short-circuits it and the prompt is the last resort.
+                if peeled.ask is not None and param.default is empty:
+                    kwargs[param.name] = _prompt_param(cli, peeled, ctx)
             continue
         raw = seg.values[cli]
         if isinstance(raw, bool):  # a flag, already resolved by the splitter
@@ -263,7 +302,7 @@ def run_task(fn: Task, seg: Segment, ctx: Context) -> TaskResult:
     if (reason := registry.availability(fn)) is not None:
         return TaskResult(task=seg.task, ok=False, code=2, error=Unavailable(reason))
     try:
-        args, kwargs = bind(seg, fn)
+        args, kwargs = bind(seg, fn, ctx)
     except ChainError:
         raise  # e.g. passthrough with no *args — reported by the app layer
     except Exception as exc:  # a coercion failure (e.g. a custom-type constructor)

@@ -5,12 +5,14 @@ from __future__ import annotations
 import io
 import os
 import sys
+from typing import Annotated, Literal
 
 import pytest
 
 from footman import manifest, tools
 from footman.context import Context, RunFailed, parallel, passthrough, run, use_context
 from footman.executor import run_chain
+from footman.params import ask
 from footman.registry import Group
 from footman.split import split_chain
 
@@ -728,3 +730,121 @@ def test_interactive_task_may_prompt(monkeypatch):
     _, _, results = drive(build, "wizard")
     assert results[0].ok
     assert captured["name"] == "Ada"
+
+
+# --- ask(): typed parameters that prompt -------------------------------------
+
+
+def test_ask_prompts_a_required_param(monkeypatch):
+    from footman import context
+
+    monkeypatch.setattr(context, "_stdin_is_tty", lambda: True)
+    monkeypatch.setattr(sys, "stdin", io.StringIO("1.2.3\n"))
+    monkeypatch.setattr(context, "real_stderr", io.StringIO)
+
+    got = {}
+
+    def build(reg):
+        @reg.task
+        def release(version: Annotated[str, ask()]):
+            got["v"] = version
+
+    _, _, results = drive(build, "release")
+    assert results[0].ok
+    assert got["v"] == "1.2.3"
+
+
+def test_ask_cli_value_wins_over_the_prompt(monkeypatch):
+    from footman import context
+
+    # A value on the line means no prompt — the (wrong) stdin is never read.
+    monkeypatch.setattr(context, "_stdin_is_tty", lambda: True)
+    monkeypatch.setattr(sys, "stdin", io.StringIO("WRONG\n"))
+    monkeypatch.setattr(context, "real_stderr", io.StringIO)
+
+    got = {}
+
+    def build(reg):
+        @reg.task
+        def release(version: Annotated[str, ask()]):
+            got["v"] = version
+
+    _, _, results = drive(build, "release --version 9.9.9")
+    assert results[0].ok
+    assert got["v"] == "9.9.9"
+
+
+def test_ask_default_short_circuits_the_prompt(monkeypatch):
+    from footman import context
+
+    # A default is the answer (CLI > env > default > prompt): no prompt fires.
+    monkeypatch.setattr(context, "_stdin_is_tty", lambda: True)
+    monkeypatch.setattr(sys, "stdin", io.StringIO("WRONG\n"))
+    monkeypatch.setattr(context, "real_stderr", io.StringIO)
+
+    got = {}
+
+    def build(reg):
+        @reg.task
+        def release(version: Annotated[str, ask()] = "patch"):
+            got["v"] = version
+
+    _, _, results = drive(build, "release")
+    assert results[0].ok
+    assert got["v"] == "patch"
+
+
+def test_ask_re_asks_on_a_bad_value(monkeypatch):
+    from footman import context
+
+    # A typed param re-asks until the answer coerces — "abc" then "5".
+    monkeypatch.setattr(context, "_stdin_is_tty", lambda: True)
+    monkeypatch.setattr(sys, "stdin", io.StringIO("abc\n5\n"))
+    monkeypatch.setattr(context, "real_stderr", io.StringIO)
+
+    got = {}
+
+    def build(reg):
+        @reg.task
+        def scale(replicas: Annotated[int, ask()]):
+            got["n"] = replicas
+
+    _, _, results = drive(build, "scale")
+    assert results[0].ok
+    assert got["n"] == 5
+
+
+def test_ask_validates_a_literal_choice(monkeypatch):
+    from footman import context
+
+    # A Literal is a typed choice: "dev" is rejected, "prod" accepted.
+    monkeypatch.setattr(context, "_stdin_is_tty", lambda: True)
+    monkeypatch.setattr(sys, "stdin", io.StringIO("dev\nprod\n"))
+    monkeypatch.setattr(context, "real_stderr", io.StringIO)
+
+    got = {}
+
+    def build(reg):
+        @reg.task
+        def deploy(env: Annotated[Literal["staging", "prod"], ask()]):
+            got["e"] = env
+
+    _, _, results = drive(build, "deploy")
+    assert results[0].ok
+    assert got["e"] == "prod"
+
+
+def test_ask_off_a_terminal_fails_loudly(monkeypatch):
+    from footman import context
+
+    # No tty, no default: the required value can't be prompted, so the task
+    # fails naming the flag rather than hanging.
+    monkeypatch.setattr(context, "_stdin_is_tty", lambda: False)
+
+    def build(reg):
+        @reg.task
+        def release(version: Annotated[str, ask()]): ...
+
+    _, _, results = drive(build, "release")
+    assert not results[0].ok
+    assert "--version is required" in str(results[0].error)

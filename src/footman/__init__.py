@@ -38,6 +38,7 @@ if TYPE_CHECKING:
     from footman.context import track as track
     from footman.context import use_context as use_context
     from footman.params import Many as Many
+    from footman.params import ask as ask
     from footman.params import between as between
     from footman.params import check as check
     from footman.params import doc as doc
@@ -67,6 +68,7 @@ __all__ = [
     "RunFailed",
     "Runner",
     "__version__",
+    "ask",
     "between",
     "capture",
     "check",
@@ -156,6 +158,7 @@ def __getattr__(name: str) -> object:
         "env",
         "check",
         "doc",
+        "ask",
     ):
         from footman import params
 
