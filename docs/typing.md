@@ -201,9 +201,15 @@ environment is read.
 
 ## Dynamic completion
 
-`suggest` attaches a completer that runs on the execution path (its results are
-cached into the manifest), so <kbd>Tab</kbd> stays instant while still offering
-live values:
+`suggest` attaches a completer — a function that returns live values (git
+branches, deploy targets, the shares below). footman runs it **fresh** each time
+you complete that value, in a short-lived subprocess, rather than serving a copy
+baked into the manifest: a value you <kbd>Tab</kbd> to answer a build-critical
+question must be current, not a snapshot from your last run. The recompute is
+bounded and isolated, so a slow or failing completer degrades to no candidates —
+never the old values, never a hung keystroke. This holds for *every* completer,
+whether or not the task owns the terminal (`interactive=True`); a real run
+validates the value you pass against the same live call.
 
 ```python
 from typing import Annotated
@@ -216,9 +222,25 @@ def shares() -> list[str]:
 def mount(share: Annotated[str, suggest(shares)]): ...
 ```
 
-That exact example, recorded in PowerShell: the demo project's tasks.py
-is extracted from this page at build time, so the code above and the
-session below cannot disagree. <kbd>Tab</kbd> offers what `shares()`
-returned; <kbd>Tab</kbd> again walks the menu.
+Keep a completer's imports **inside its body**, the way footman keeps optional
+dependencies out of a task's import path. Loading your tasks file stays cheap —
+the completer's cost (a subprocess, a network round-trip) is paid only when it
+runs, not every time the file is imported:
+
+```python
+def branches() -> list[str]:
+    import subprocess  # here, not at module top
+
+    out = subprocess.run(
+        ["git", "branch", "--format=%(refname:short)"],
+        capture_output=True, text=True,
+    )
+    return out.stdout.split()
+```
+
+The first example, recorded in PowerShell: the demo project's tasks.py is
+extracted from this page at build time, so the code above and the session below
+cannot disagree. <kbd>Tab</kbd> offers what `shares()` returned; <kbd>Tab</kbd>
+again walks the menu.
 
 ![Animated: fm mount TAB offers main, scratch, archive from the suggest completer; TAB again moves the selection](_generated/shots/pwsh-suggest-cast.svg)

@@ -19,10 +19,13 @@ one, because it's the exact command the installed shell hooks run:
 | `python -m footman --complete`             | 23 ms  |
 | `fm --complete` (the installed hook path)  | 24 ms  |
 
-So the honest headline is **~25 ms per <kbd>Tab</kbd>**, of which ~17 ms is
-Python starting up at all. footman regenerates the manifest for free on any
-execution-path run (it is importing your code anyway) and rewrites it only
-when the command surface actually changed. Reproduce with
+So the honest headline is **~25 ms per <kbd>Tab</kbd>** for a structural answer
+— task names, options, `Literal` choices — of which ~17 ms is Python starting up
+at all. A [dynamic completer](#dynamic-completions-are-recomputed-fresh) or the
+[first build in a fresh directory](#keeping-the-cache-current) costs more, by
+design and bounded. footman regenerates the manifest for free on any
+execution-path run (it is importing your code anyway) and rewrites it only when
+the command surface actually changed. Reproduce with
 `uv run python scripts/bench_completion.py`.
 
 ## How it stays fast
@@ -30,7 +33,11 @@ when the command surface actually changed. Reproduce with
 footman's `main()` checks for `--complete` **before importing the framework or
 your tasks**, dispatching straight to the stdlib-only resolver. A bare
 `import footman` pays for nothing but the entry module. That is why completion is
-~15× faster than runners that re-import your project on every keystroke.
+~15× faster than runners that re-import your project on every keystroke. When a
+live value is genuinely needed — a dynamic completer, or the first build in a
+fresh directory — footman *spawns* a subprocess for it rather than importing on
+the hot path, so even then the keystroke stays stdlib-only and can't hang on
+your code.
 
 ## Dynamic completions are recomputed fresh
 
