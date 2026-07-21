@@ -78,8 +78,8 @@ GLOBALS: list[tuple[str, str | None, str, str | None, str]] = [
     ("--json", None, "flag", None, "stdout is one JSON document (captures output)"),
     ("--timings", None, "flag", None, "show per-task durations"),
     ("--directory", "-C", "option", "PATH", "run as if launched from PATH"),
-    ("--tasks-file", "-f", "option", "PATH", "use exactly one tasks file, no cascade"),
-    ("--config", None, "option", "PATH", "override config with a single TOML file"),
+    ("--tasks-file", "-f", "option", "PATH", "only this tasks file, no tasks cascade"),
+    ("--config", None, "option", "PATH", "only this config file, no config cascade"),
     # "option?": the value is optional — bare `--install-completion` /
     # `--setup-completion` detect the invoking shell.
     ("--install-completion", None, "option?", "[SHELL]", "install shell completion"),
