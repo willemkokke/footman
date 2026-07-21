@@ -696,3 +696,35 @@ def test_select_rejects_bad_input_and_degrades(monkeypatch):
     assert context.select("p", ["a", "b"], default="a") == "a"
     with pytest.raises(RuntimeError, match=r"no terminal|no-input"):
         context.select("p", ["a", "b"])
+
+
+def test_prompt_guard_fires_in_a_real_run():
+    from footman import context
+
+    def build(reg):
+        @reg.task
+        def asks():
+            context.prompt("name? ")  # illegal: not an interactive task
+
+    _, _, results = drive(build, "asks")
+    assert not results[0].ok
+    assert "interactive" in str(results[0].error)
+
+
+def test_interactive_task_may_prompt(monkeypatch):
+    from footman import context
+
+    monkeypatch.setattr(context, "_stdin_is_tty", lambda: True)
+    monkeypatch.setattr(sys, "stdin", io.StringIO("Ada\n"))
+    monkeypatch.setattr(context, "real_stderr", io.StringIO)
+
+    captured = {}
+
+    def build(reg):
+        @reg.task(interactive=True)
+        def wizard():
+            captured["name"] = context.prompt("name? ")
+
+    _, _, results = drive(build, "wizard")
+    assert results[0].ok
+    assert captured["name"] == "Ada"

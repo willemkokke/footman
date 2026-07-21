@@ -21,7 +21,7 @@ from itertools import count
 from typing import Any, TextIO
 
 from footman import _describe, _progress, context, executor
-from footman.registry import Group, Task, is_infinite, wants_progress
+from footman.registry import Group, Task, is_infinite, is_interactive, wants_progress
 from footman.split import ChainError, Segment
 
 
@@ -196,8 +196,12 @@ def run_plan(
     _check_cycles(nodes)
     # One node has nothing to parallelise — run it on the sequential-live
     # path instead: output streams as it happens, and run()'s TTY mode
-    # (colour, in-place step rewrite) applies. `fm check` is this shape.
-    sequential = sequential or len(nodes) == 1
+    # (colour, in-place step rewrite) applies. `fm check` is this shape. An
+    # interactive task also forces sequential: it owns the terminal, so it
+    # can't share with parallel siblings (a human-wait is the bottleneck).
+    sequential = (
+        sequential or len(nodes) == 1 or any(is_interactive(n.fn) for n in nodes)
+    )
     # A run containing an infinite task has no progress to show — its
     # duration isn't late, it's intentional. The status line yields to a
     # one-time hint (printed at the node's start) saying how this ends.

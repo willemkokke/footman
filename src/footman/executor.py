@@ -273,10 +273,12 @@ def run_task(fn: Task, seg: Segment, ctx: Context) -> TaskResult:
         args = [ctx, *args]  # ctx is the first positional parameter
 
     ctx.fn = fn  # what inherited() reads to find the shadowed task
+    ctx.interactive = registry.is_interactive(fn)  # arms the prompt guard
     if ctx.cwd is None and (home := defining_dir(fn)) is not None:
         ctx.cwd = Path(home)  # run from the folder that defined the task
 
     token = _current.set(ctx)
+    ctx.in_task = True  # a mid-body prompt()/confirm()/select() is now guarded
     start = time.perf_counter()
     try:
         code, returned, error = _call(fn, args, kwargs)
