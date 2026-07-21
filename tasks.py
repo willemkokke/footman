@@ -82,6 +82,38 @@ def _scaffold_suggest_demo() -> str:
     return str(demo)
 
 
+def _scaffold_interactive_demo() -> str:
+    """A scratch project with one task per interactive shape — an `ask()`
+    parameter, a `confirm=` gate, and an `interactive=True` wizard — so
+    orchestration.md's interactive-input casts play the documented shapes."""
+    import tempfile
+    from pathlib import Path
+
+    demo = Path(tempfile.gettempdir()) / "footman-interactive-demo"
+    demo.mkdir(parents=True, exist_ok=True)
+    (demo / "pyproject.toml").write_text("[project]\nname = 'demo'\n", encoding="utf-8")
+    (demo / "tasks.py").write_text(
+        "from typing import Annotated\n"
+        "from footman import ask, prompt, select, task\n\n"
+        "@task\n"
+        "def release(version: Annotated[str, ask()]):\n"
+        '    "Cut a release."\n'
+        '    print(f"Releasing {version}")\n\n'
+        '@task(confirm="Deploy to production?")\n'
+        "def deploy():\n"
+        '    "Ship it."\n'
+        '    print("Deploying to production")\n\n'
+        "@task(interactive=True)\n"
+        "def scaffold():\n"
+        '    "Start a project."\n'
+        '    name = prompt("project name? ")\n'
+        '    kind = select("what kind?", ["library", "app", "plugin"])\n'
+        '    print(f"Scaffolding {name} ({kind})")\n',
+        encoding="utf-8",
+    )
+    return str(demo)
+
+
 def _write_latest_changes() -> None:
     """Extract the newest release's section from CHANGELOG.md into a
     collapsed admonition the home page includes — version, date, and the
@@ -300,6 +332,53 @@ def docs_build(check: bool = False):
         width=80,
         height=12,
         cwd=Path(_scaffold_suggest_demo()),
+    )
+    # Interactive input, one cast per shape (orchestration.md), against a demo
+    # project with an ask() parameter, a confirm= gate, and an interactive wizard.
+    # Generous waits: the prompt must persist a beat so a frame lands on it before
+    # the scripted answer arrives.
+    interactive_demo = Path(_scaffold_interactive_demo())
+    taskdocs_cast(
+        "fm release",
+        "<ENTER>",
+        "<WAIT:3500>",
+        "1.4.0",
+        "<ENTER>",
+        "<WAIT:2000>",
+        out=shot / "ask-cast.svg",
+        shell="zsh",
+        width=64,
+        height=10,
+        cwd=interactive_demo,
+    )
+    taskdocs_cast(
+        "fm deploy",
+        "<ENTER>",
+        "<WAIT:3500>",
+        "y",
+        "<ENTER>",
+        "<WAIT:2000>",
+        out=shot / "confirm-cast.svg",
+        shell="zsh",
+        width=64,
+        height=10,
+        cwd=interactive_demo,
+    )
+    taskdocs_cast(
+        "fm scaffold",
+        "<ENTER>",
+        "<WAIT:3500>",
+        "myapp",
+        "<ENTER>",
+        "<WAIT:1800>",
+        "2",
+        "<ENTER>",
+        "<WAIT:2000>",
+        out=shot / "interactive-cast.svg",
+        shell="zsh",
+        width=64,
+        height=12,
+        cwd=interactive_demo,
     )
     _write_llms_txt()
     # A conditional flag needs no ternary: strict=check is --strict when
