@@ -29,6 +29,36 @@ from footman._toolspec import ToolSpec, Verb
 
 
 @dataclass(frozen=True)
+class Provision:
+    """How `fm footman tools provision` fetches this tool's *latest* binary.
+
+    Data, like everything else a driver carries. The extractor reads the
+    installed tool; this says how to *get* the latest one into a throwaway
+    prefix, without touching the machine's own environment.
+    """
+
+    kind: str = "uv"
+    """`uv` — a PyPI console script, `uv tool install --upgrade`d into an
+    isolated prefix (covers the Rust and C++ tools too: ruff, prek, cmake and
+    ninja all ship binary wheels). `node` — a package `bun install`s. `bun` —
+    bun's own GitHub release, provisioned first because the node tier runs
+    through it. `github` / `gitlab` — a prebuilt release asset. `system` —
+    already on PATH (git, docker, the uv running this); never provisioned.
+    `deferred` — parked, `note` saying why (tea, until > 0.14.2)."""
+    package: str = ""
+    """The PyPI or npm package, when it differs from the driver's binary name
+    (`markdownlint-cli2`); otherwise the binary name is used."""
+    repo: str = ""
+    """`owner/repo` for a `github` / `gitlab` release download."""
+    note: str = ""
+    """Why a `deferred` source is parked — shown by `provision`."""
+
+    def target(self, name: str) -> str:
+        """What to fetch: the explicit `package`/`repo`, else the tool *name*."""
+        return self.package or self.repo or name
+
+
+@dataclass(frozen=True)
 class Driver:
     """One curated tool: what to run, and which verbs to read."""
 
@@ -55,6 +85,8 @@ class Driver:
     multi-form usage; the manual is complete and states one SYNOPSIS per
     form, so both options and positional shape come out right. Runs only at
     stub-generation time, so the man-page dependency never reaches a user."""
+    provision: Provision = field(default_factory=Provision)
+    """How to fetch the latest binary — the default is a PyPI `uv` install."""
 
     @property
     def key(self) -> str:
@@ -81,6 +113,7 @@ DRIVERS: tuple[Driver, ...] = (
     Driver("basedpyright", url="https://docs.basedpyright.com/"),
     Driver(
         "uv",
+        provision=Provision(kind="system"),  # the uv running provision itself
         url="https://docs.astral.sh/uv/",
         verbs=(
             "sync",
@@ -105,6 +138,7 @@ DRIVERS: tuple[Driver, ...] = (
     ),
     Driver(
         "git",
+        provision=Provision(kind="system"),
         url="https://git-scm.com/docs",
         help_flag="-h",
         man=True,
@@ -132,6 +166,7 @@ DRIVERS: tuple[Driver, ...] = (
     ),
     Driver(
         "docker",
+        provision=Provision(kind="system"),
         url="https://docs.docker.com/reference/cli/docker/",
         verbs=(
             "build",
@@ -153,6 +188,7 @@ DRIVERS: tuple[Driver, ...] = (
     ),
     Driver(
         "bun",
+        provision=Provision(kind="bun", repo="oven-sh/bun"),
         verbs=("install", "add", "remove", "run", "build", "test", "x"),
         url="https://bun.sh/docs/cli/install",
     ),
@@ -176,6 +212,7 @@ DRIVERS: tuple[Driver, ...] = (
     ),
     Driver(
         "cspell",
+        provision=Provision(kind="node"),
         verbs=("lint", "trace", "check", "suggest"),
         url="https://cspell.org/",
     ),
@@ -187,6 +224,7 @@ DRIVERS: tuple[Driver, ...] = (
     Driver(
         "markdownlint-cli2",
         attr="markdownlint",
+        provision=Provision(kind="node"),
         url="https://github.com/DavidAnson/markdownlint-cli2",
     ),
 )

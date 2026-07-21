@@ -226,6 +226,72 @@ def audit(
     )
 
 
+@tasks.task
+def provision(
+    only: Annotated[str, doc("provision just this tool")] = "",
+    prefix: Annotated[Path, doc("directory to materialise the binaries into")] = Path(
+        ".tools-latest"
+    ),
+    sync_: Annotated[
+        bool, doc("run `tools sync` against the prefix afterwards")
+    ] = False,
+    clean: Annotated[bool, doc("remove the prefix when done")] = False,
+):
+    """Fetch the latest curated tools into an isolated prefix — no pollution.
+
+    The stubs are read from installed binaries, so syncing against the newest
+    release means having it on PATH. This gathers the latest of every curated
+    tool under one throwaway prefix — `uv tool install` for the PyPI wheels
+    (the Rust and C++ tools included), bun's own release then `bun add` for the
+    node CLIs, a release asset for the Go ones — touching nothing outside it.
+    `--sync` then rewrites the stubs against that prefix; `--clean` deletes it.
+    Deleting the prefix is the whole undo.
+    """
+    from footman import _provision
+
+    # Absolute: bun errors `ReadOnlyFileSystem` on a relative BUN_INSTALL, and
+    # an absolute prefix keeps every tier's launchers and env vars unambiguous.
+    prefix = Path(prefix).expanduser().resolve()
+    outcomes = _provision.provision(_drivers.DRIVERS, prefix, only=only)
+    _print_outcomes(outcomes)
+    if sync_:
+        _sync_against(prefix, only)
+    else:
+        print(
+            f'\nput them on PATH:\n  export PATH="{_provision.bin_dir(prefix)}:$PATH"'
+        )
+    if clean:
+        import shutil
+
+        shutil.rmtree(prefix, ignore_errors=True)
+        print(f"removed {prefix}")
+
+
+_MARK = {"ok": "ok", "fail": "FAIL", "skip": "—", "deferred": "parked"}
+
+
+def _print_outcomes(outcomes: list) -> None:
+    """The provisioning result, one aligned line per tool."""
+    width = max((len(o.key) for o in outcomes), default=4)
+    for out in outcomes:
+        mark = _MARK.get(out.status, out.status)
+        print(f"{mark:<6} {out.key.ljust(width)}  {out.kind:<8} {out.detail}")
+
+
+def _sync_against(prefix: Path, only: str) -> None:
+    """Run `sync` with the prefix on PATH, so it reads the fresh binaries."""
+    import os
+
+    from footman import _provision
+
+    saved = os.environ.get("PATH", "")
+    os.environ["PATH"] = f"{_provision.bin_dir(prefix)}{os.pathsep}{saved}"
+    try:
+        sync(only=only)
+    finally:
+        os.environ["PATH"] = saved
+
+
 _READ_FROM = _re.compile(
     r"Read from (?P<tool>\S+) (?P<version>\S+) on (?P<platform>\w+)\."
     r"(?: In-process: (?P<mode>\w+)\.)?"
