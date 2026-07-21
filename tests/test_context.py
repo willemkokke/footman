@@ -536,3 +536,163 @@ def test_progress_outside_a_run_is_a_noop():
 
     progress(1, 2)  # no status line: costs nothing, raises nothing
     assert list(track([1, 2, 3])) == [1, 2, 3]
+
+
+# --- interactive prompts (prompt / confirm / select) -------------------------
+
+
+def test_prompt_off_a_terminal_uses_default_then_raises(monkeypatch):
+    from footman import context
+
+    monkeypatch.setattr(context, "_stdin_is_tty", lambda: False)
+    # A default makes an unattended run deterministic instead of hung.
+    assert context.prompt("name? ", default="Ada") == "Ada"
+    # No default: fail loudly rather than block on input that never comes.
+    with pytest.raises(RuntimeError, match=r"no terminal is attached"):
+        context.prompt("name? ")
+
+
+def test_prompt_reads_stdin_and_writes_the_prompt_to_stderr(monkeypatch):
+    from footman import context
+
+    monkeypatch.setattr(context, "_stdin_is_tty", lambda: True)
+    monkeypatch.setattr(sys, "stdin", io.StringIO("Ada\n"))
+    err = io.StringIO()
+    monkeypatch.setattr(context, "real_stderr", lambda: err)
+    out = io.StringIO()
+    monkeypatch.setattr(context, "real_stdout", lambda: out)
+
+    assert context.prompt("your name? ") == "Ada"
+    # The prompt is commentary: it lands on stderr, never on captured stdout.
+    assert err.getvalue() == "your name? "
+    assert out.getvalue() == ""
+
+
+def test_prompt_bypasses_the_capture_sink(monkeypatch):
+    # Even when a task's stdout is captured (parallel/JSON), the prompt goes
+    # to the real terminal, not into the buffer.
+    from footman import context
+
+    monkeypatch.setattr(context, "_stdin_is_tty", lambda: True)
+    monkeypatch.setattr(sys, "stdin", io.StringIO("blue\n"))
+    err = io.StringIO()
+    monkeypatch.setattr(context, "real_stderr", lambda: err)
+
+    sink = io.StringIO()
+    with use_context(Context(sink=sink)):
+        answer = context.prompt("colour? ")
+    assert answer == "blue"
+    assert sink.getvalue() == ""  # nothing leaked into the captured buffer
+    assert "colour? " in err.getvalue()
+
+
+def test_prompt_empty_line_falls_back_to_default(monkeypatch):
+    from footman import context
+
+    monkeypatch.setattr(context, "_stdin_is_tty", lambda: True)
+    monkeypatch.setattr(sys, "stdin", io.StringIO("\n"))  # just Enter
+    monkeypatch.setattr(context, "real_stderr", io.StringIO)
+    assert context.prompt("branch? ", default="main") == "main"
+
+
+def test_confirm_yes_no_and_default(monkeypatch):
+    from footman import context
+
+    monkeypatch.setattr(context, "_stdin_is_tty", lambda: True)
+    monkeypatch.setattr(context, "real_stderr", io.StringIO)
+
+    def answer(text):
+        monkeypatch.setattr(sys, "stdin", io.StringIO(text))
+        return context.confirm("proceed?", default=False)
+
+    assert answer("y\n") is True
+    assert answer("yes\n") is True
+    assert answer("n\n") is False
+    assert answer("\n") is False  # Enter takes the default
+
+    monkeypatch.setattr(context, "_stdin_is_tty", lambda: False)
+    assert context.confirm("proceed?", default=True) is True  # unattended → default
+
+
+def test_interactive_primitives_are_guarded_in_a_plain_task():
+    from footman import context
+
+    # Inside a non-interactive task body the prompt would be swallowed by the
+    # capture buffer — so it is a loud, taught error naming both fixes. (No
+    # stdin/tty mocking needed: the guard raises before any input is read.)
+    with use_context(Context(task="deploy", in_task=True, interactive=False)):
+        with pytest.raises(RuntimeError, match=r"@task\(interactive=True\)"):
+            context.prompt("x? ")
+        with pytest.raises(RuntimeError, match=r"not interactive"):
+            context.confirm("x?")
+        with pytest.raises(RuntimeError, match=r"not interactive"):
+            context.select("x?", ["a", "b"])
+
+
+def test_interactive_primitives_allowed_in_an_interactive_task(monkeypatch):
+    from footman import context
+
+    monkeypatch.setattr(context, "_stdin_is_tty", lambda: True)
+    monkeypatch.setattr(sys, "stdin", io.StringIO("Ada\n"))
+    monkeypatch.setattr(context, "real_stderr", io.StringIO)
+    # A task that owns the terminal may prompt mid-body.
+    with use_context(Context(task="wizard", in_task=True, interactive=True)):
+        assert context.prompt("name? ") == "Ada"
+
+
+def test_no_input_refuses_to_prompt(monkeypatch):
+    from footman import context
+
+    monkeypatch.setattr(context, "_stdin_is_tty", lambda: True)  # even on a tty
+    with use_context(Context(no_input=True)):
+        assert context.prompt("x? ", default="d") == "d"  # a default still works
+        with pytest.raises(RuntimeError, match=r"no-input"):
+            context.prompt("x? ")
+        assert context.confirm("ok?", default=True) is True  # answer is the default
+
+
+def test_assume_yes_auto_confirms():
+    from footman import context
+
+    # --yes answers every confirm without reading stdin (none is provided).
+    with use_context(Context(assume_yes=True)):
+        assert context.confirm("ship it?", default=False) is True
+
+
+def test_select_single_multiple_and_pairs(monkeypatch):
+    from footman import context
+
+    monkeypatch.setattr(context, "_stdin_is_tty", lambda: True)
+    monkeypatch.setattr(context, "real_stderr", io.StringIO)
+
+    def pick(line, **kw):
+        monkeypatch.setattr(sys, "stdin", io.StringIO(line))
+        return context.select("pick", ["core", "cli", "docs"], **kw)
+
+    assert pick("2\n") == "cli"  # single-select, 1-indexed
+    assert pick("1,3\n", multiple=True) == ["core", "docs"]
+    assert pick("all\n", multiple=True) == ["core", "cli", "docs"]
+    assert pick("none\n", multiple=True) == []
+    # (label, value) pairs show the label and return the value:
+    monkeypatch.setattr(sys, "stdin", io.StringIO("1\n"))
+    assert context.select("p", [("Core pkg", "core"), ("CLI", "cli")]) == "core"
+
+
+def test_select_rejects_bad_input_and_degrades(monkeypatch):
+    from footman import context
+
+    monkeypatch.setattr(context, "real_stderr", io.StringIO)
+    monkeypatch.setattr(context, "_stdin_is_tty", lambda: True)
+
+    monkeypatch.setattr(sys, "stdin", io.StringIO("x\n"))
+    with pytest.raises(RuntimeError, match=r"not a number"):
+        context.select("p", ["a", "b"])
+    monkeypatch.setattr(sys, "stdin", io.StringIO("9\n"))
+    with pytest.raises(RuntimeError, match=r"out of range"):
+        context.select("p", ["a", "b"])
+
+    # Off a terminal: default, or a loud error.
+    monkeypatch.setattr(context, "_stdin_is_tty", lambda: False)
+    assert context.select("p", ["a", "b"], default="a") == "a"
+    with pytest.raises(RuntimeError, match=r"no terminal|no-input"):
+        context.select("p", ["a", "b"])
