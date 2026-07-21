@@ -381,6 +381,56 @@ def test_plugin_import_failure_is_taught(tmp_path, monkeypatch):
         compose.plugin("broken")
 
 
+def test_dotted_plugin_name_nests_and_shares_namespace(tmp_path, monkeypatch):
+    # A plugin's name is its command path: two dotted names sharing a prefix
+    # mount under one auto-created `suite` group, neither owning it.
+    _advertise(
+        tmp_path,
+        monkeypatch,
+        "nest_alpha",
+        """
+        from footman import group
+
+        tasks = group("alpha", help="Alpha tasks")
+
+        @tasks.task
+        def go():
+            "Go alpha."
+            print("alpha-go!")
+        """,
+        "suite.alpha = nest_alpha:tasks",
+    )
+    _advertise(
+        tmp_path,
+        monkeypatch,
+        "nest_beta",
+        """
+        from footman import group
+
+        tasks = group("beta", help="Beta tasks")
+
+        @tasks.task
+        def go():
+            "Go beta."
+        """,
+        "suite.beta = nest_beta:tasks",
+    )
+    project = tmp_path / "proj_nest"
+    project.mkdir()
+    (project / "pyproject.toml").write_text(
+        '[project]\nname="x"\n[tool.footman]\nplugins = ["suite.alpha", "suite.beta"]\n'
+    )
+    (project / "tasks.py").write_text(
+        "from footman import task\n@task\ndef own(): ...\n"
+    )
+    listing = Runner().invoke("--list", cwd=project)
+    assert listing.ok
+    # Both leaves live under the one shared `suite` namespace group.
+    assert "suite alpha go" in listing.stdout and "suite beta go" in listing.stdout
+    ran = Runner().invoke("suite alpha go", cwd=project)
+    assert ran.ok and "alpha-go!" in ran.stdout
+
+
 def test_broken_plugin_config_mount_is_exit_2(tmp_path, monkeypatch):
     # F07 end-to-end: a broken config-mounted plugin is a clean exit 2, not a
     # raw traceback on every invocation.

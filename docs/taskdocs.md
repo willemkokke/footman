@@ -13,13 +13,15 @@ The plugin mounts like any other — two lines of config, no tasks-file edit:
 ```toml
 # pyproject.toml (or footman.toml)
 [tool.footman]
-plugins = ["footman"]
+plugins = ["footman.docs"]
 ```
 
-That's also the two-line demo of the [plugin system](composing.md): after it,
-`fm --list` shows `footman docs page` and `footman docs site`. (Cherry-pick
-or remount with `include(plugin("footman"), …)` if you'd rather not take the
-whole group.)
+That's also the two-line demo of the [plugin system](composing.md): a plugin's
+name is its command path, so `footman.docs` mounts under `footman`, and after
+it `fm --list` shows `footman docs page` and `footman docs site`. (Cherry-pick
+or remount with `include(plugin("footman.docs"), …)` if you'd rather not take
+the whole group. The maintainer-facing stub toolkit is a separate plugin,
+`footman.tools`.)
 
 ## One page: `fm footman docs page`
 

@@ -146,7 +146,6 @@ class Git(Tool):
         create_reflog: _Flag = ...,
         delete: _Flag = ...,
         edit_description: _Flag = ...,
-        edit_description_: _Value = ...,
         force: _Flag = ...,
         format: _Value = ...,
         ignore_case: _Flag = ...,
@@ -558,6 +557,7 @@ class Git(Tool):
         first_parent: _Flag = ...,
         long: _Flag = ...,
         match: _Value = ...,
+        tag: _Flag = ...,
         tags: _Flag = ...,
         nofail: bool = False,
         in_process: bool | None = None,
@@ -608,7 +608,6 @@ class Git(Tool):
         check: _Flag = ...,
         color: _ValuedFlag = ...,
         color_moved: _ValuedFlag = ...,
-        color_moved_: _Value = ...,
         color_moved_ws: _Value = ...,
         color_words: _ValuedFlag = ...,
         compact_summary: _Flag = ...,
@@ -666,6 +665,7 @@ class Git(Tool):
         skip_to: _Value = ...,
         src_prefix: _Value = ...,
         stat: _ValuedFlag = ...,
+        static: _Flag = ...,
         submodule: _ValuedFlag = ...,
         summary: _Flag = ...,
         text: _Flag = ...,
@@ -1081,7 +1081,6 @@ class Git(Tool):
         minimal: _Flag = ...,
         name_only: _Flag = ...,
         name_status: _Flag = ...,
-        no_abbrev_commit_: _Flag = ...,
         no_color: _Flag = ...,
         no_color_moved: _Flag = ...,
         no_color_moved_ws: _Flag = ...,
@@ -1134,6 +1133,7 @@ class Git(Tool):
         sparse: _Flag = ...,
         src_prefix: _Value = ...,
         stat: _ValuedFlag = ...,
+        static: _Flag = ...,
         stdin: _Flag = ...,
         submodule: _ValuedFlag = ...,
         summary: _Flag = ...,
@@ -1474,21 +1474,21 @@ class Git(Tool):
         compact_summary: _Flag = ...,
         deepen: _Value = ...,
         depth: _Value = ...,
-        diff_algorithm_: _Value = ...,
+        diff_algorithm: _Flag = ...,
         dry_run: _Flag = ...,
         edit: _Flag = ...,
         ff: _Flag = ...,
         ff_only: _Flag = ...,
-        find_renames_: _Flag = ...,
+        find_renames: _Flag = ...,
         force: _Flag = ...,
         gpg_sign: _ValuedFlag = ...,
-        ignore_cr_at_eol_: _Flag = ...,
+        ignore_cr_at_eol: _Flag = ...,
         ipv4: _Flag = ...,
         ipv6: _Flag = ...,
         jobs: _Value = ...,
         keep: _Flag = ...,
         log: _ValuedFlag = ...,
-        merge_: _Value = ...,
+        merge: _Flag = ...,
         negotiate_only: _Flag = ...,
         negotiation_tip: _Value = ...,
         no_rebase: _Flag = ...,
@@ -1648,7 +1648,6 @@ class Git(Tool):
         ipv4: _Flag = ...,
         ipv6: _Flag = ...,
         mirror: _Flag = ...,
-        no_follow_tags_: _Flag = ...,
         no_recurse_submodules: _Flag = ...,
         no_signed: _Flag = ...,
         porcelain: _Flag = ...,
@@ -1660,7 +1659,7 @@ class Git(Tool):
         repo: _Value = ...,
         set_upstream: _Flag = ...,
         tags: _Flag = ...,
-        thin_: _Flag = ...,
+        thin: _Flag = ...,
         verbose: _Flag = ...,
         verify: _Flag = ...,
         nofail: bool = False,
@@ -1677,7 +1676,7 @@ class Git(Tool):
             follow_tags: Push all the refs that would be pushed without this option,
                 and also push annotated tags in refs/tags that are missing from the
                 remote but are pointing at commit-ish that are reachable from the
-                refs being pushed.
+                refs being pushed. `follow_tags=off` emits `--no-follow-tags`.
             force: Usually, the command refuses to update a remote ref that is not
                 an ancestor of the local ref used to overwrite it.
             force_with_lease: Usually, "git push" refuses to update a remote ref
@@ -1727,7 +1726,6 @@ class Git(Tool):
         source: _Value = ...,
         staged: _Flag = ...,
         worktree: _Flag = ...,
-        worktree_: _Flag = ...,
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
@@ -1766,7 +1764,6 @@ class Git(Tool):
                 local modifications overwritten.
             source: Restore the working tree files with the content from the given
                 tree.
-            worktree: Specify the restore location.
         """
         ...
     def rev_parse(

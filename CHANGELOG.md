@@ -34,6 +34,43 @@ versions may include breaking changes.
   file with the cwd, separate from (and never overwriting) the plain-cwd cache.
   `-f` and `--config` are documented as orthogonal: each disables only its own
   cascade.
+- **`fm footman tools provision`** — fetch the latest of every curated tool
+  into one throwaway prefix, without polluting the machine. Almost every tool
+  ships an installable PyPI wheel (the Rust and C++ ones included), so
+  `uv tool install` into an isolated `UV_TOOL_DIR`/`UV_TOOL_BIN_DIR` covers
+  most of them; bun comes from its own GitHub release (first, since the node
+  tier runs through it), the node CLIs via `bun add`, and the Go CLIs (gh,
+  eclint) from a release asset matched off the release's own asset list.
+  `--sync` then rewrites the stubs against the prefix; `--clean` deletes it,
+  and deleting the prefix is the whole undo.
+- **Ten more curated tools, with generated stubs:** `gh`, `eclint`, `mypy`,
+  `ty`, `twine`, `git-changelog`, `git-cliff`, `build`, `cmake`, `ninja`.
+- **A sixth help dialect — Go's stdlib `flag`** — single-dash long options
+  (`-color`) under `Usage of <prog>:` with descriptions on the next line, so
+  a Go tool like `eclint` reads as fully as a clap or cobra one.
+
+### Changed
+
+- **footman's first-party tasks are now two plugins, `footman.docs` and
+  `footman.tools`**, each opt-in on its own — a project can mount the
+  end-user-facing doc generator without the maintainer-facing stub toolkit.
+  A plugin's name is its command path, so a dotted name nests one group per
+  segment (`["footman.docs"]` → `fm footman docs …`), and plugins that share
+  a prefix meet under one namespace group without either owning it.
+
+### Fixed
+
+- **The `--help` parser no longer swallows a flag's trailing punctuation** —
+  clap's repeatable `--verbose...` and a manual's `--merge.` ending a sentence
+  had become the keywords `verbose___` / `merge_`; a dot is now read only
+  inside a name.
+- **Bare lowercase value placeholders are read** (gh's `--assignee login`,
+  docker's `--memory bytes`) from `--help`, while a man page's prose reference
+  (`the --patch option.`) is left as the switch it is.
+- **Bulleted option lists are read** — markdownlint-cli2 prints its options as
+  `- --fix  …`, and the leading bullet no longer hides the flag.
+- **A backslash in a tool's help** (mypy's `--exclude '\.py$'`) is escaped in
+  the generated docstring instead of becoming an invalid escape sequence.
 
 ## [0.16.0] — 2026-07-21
 

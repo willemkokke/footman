@@ -421,6 +421,16 @@ coverage = Tool("coverage", in_process=True)
 cspell = Tool("cspell")
 prek = Tool("prek")
 markdownlint = Tool("markdownlint-cli2")
+gh = Tool("gh")
+eclint = Tool("eclint")
+mypy = Tool("mypy")
+ty = Tool("ty")
+twine = Tool("twine")
+git_changelog = Tool("git-changelog")
+git_cliff = Tool("git-cliff")
+build = Tool("pyproject-build")  # the `build` package's console script
+cmake = Tool("cmake")
+ninja = Tool("ninja")
 
 
 def pytest(*args: str, in_process: bool = True, nofail: bool = False) -> int:

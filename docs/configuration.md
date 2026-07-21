@@ -45,14 +45,14 @@ In a `pyproject.toml`, settings live under the tool table:
 
 ```toml
 [tool.footman]
-plugins = ["footman"]
+plugins = ["footman.docs"]
 sequential = false
 ```
 
 A standalone `footman.toml` is the same keys, top-level:
 
 ```toml
-plugins = ["footman"]
+plugins = ["footman.docs"]
 sequential = false
 ```
 

@@ -46,16 +46,21 @@ fm = "footman:main"
 [project.entry-points.pytest11]
 footman = "footman.pytest_plugin"
 
-# footman's own first-party tasks, mounted the way any plugin is: opt in with
-# `[tool.footman] plugins = ["footman"]` and they appear as `fm footman …`.
-# Metadata only — the package imports when mounted, never on a bare import.
+# footman's own first-party tasks, mounted the way any plugin is. A plugin's
+# name is its command path, so the dotted names nest: `footman.docs` and
+# `footman.tools` appear as `fm footman docs …` / `fm footman tools …`, each
+# opt-in on its own. Metadata only — a family imports when mounted, never on a
+# bare `import footman`.
 [project.entry-points."footman.tasks"]
-footman = "footman.tasks:tasks"
+"footman.docs" = "footman.tasks.docs:tasks"
+"footman.tools" = "footman.tasks.tools:tasks"
 
-# Dogfood: this repo mounts its own first-party plugin, exactly as a user
-# would — `fm footman docs page`, and the docs build regenerates docs/tasks/.
+# Dogfood: this repo mounts its own first-party plugins, exactly as a user
+# would. `docs` is the end-user-facing family (task-doc generation); `tools`
+# is the maintainer-facing stub toolkit. The docs build regenerates
+# docs/_generated/ from both.
 [tool.footman]
-plugins = ["footman"]
+plugins = ["footman.docs", "footman.tools"]
 
 [dependency-groups]
 dev = [

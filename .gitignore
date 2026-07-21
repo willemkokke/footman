@@ -19,3 +19,6 @@ docs/_generated/
 launch/
 notes/
 .coverage.*
+
+# `fm footman tools provision` throwaway prefix
+.tools-latest/

@@ -15,7 +15,7 @@ class DockerCompose(Tool):
         builder: _Value = ...,
         check: _Flag = ...,
         dry_run: _Flag = ...,
-        memory: _Flag = ...,
+        memory: _Value = ...,
         no_cache: _Flag = ...,
         print: _Flag = ...,
         provenance: _Value = ...,
@@ -178,8 +178,8 @@ class DockerCompose(Tool):
         /,
         *args: str,
         build: _Flag = ...,
-        cap_add: _Flag = ...,
-        cap_drop: _Flag = ...,
+        cap_add: _Value = ...,
+        cap_drop: _Value = ...,
         detach: _Flag = ...,
         dry_run: _Flag = ...,
         entrypoint: _Value = ...,
@@ -270,7 +270,7 @@ class DockerCompose(Tool):
         quiet_pull: _Flag = ...,
         remove_orphans: _Flag = ...,
         renew_anon_volumes: _Flag = ...,
-        scale: _Flag = ...,
+        scale: _Value = ...,
         timeout: _Value = ...,
         timestamps: _Flag = ...,
         wait: _Flag = ...,
@@ -414,11 +414,11 @@ class Docker(Tool):
         quiet: _Flag = ...,
         sbom: _Value = ...,
         secret: _Value = ...,
-        shm_size: _Flag = ...,
+        shm_size: _Value = ...,
         ssh: _Value = ...,
         tag: _Value = ...,
         target: _Value = ...,
-        ulimit: _Flag = ...,
+        ulimit: _Value = ...,
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
@@ -484,7 +484,7 @@ class Docker(Tool):
             tag: Image identifier (format: "[registry/]repository[:tag]"). May be
                 repeated: a list emits the flag once per item.
             target: Set the target build stage to build.
-            ulimit: Ulimit options.
+            ulimit: Ulimit options. Defaults to `[]`.
         """
         ...
     def exec(
@@ -494,8 +494,8 @@ class Docker(Tool):
         *args: str,
         detach: _Flag = ...,
         detach_keys: _Value = ...,
-        env: _Flag = ...,
-        env_file: _Flag = ...,
+        env: _Value = ...,
+        env_file: _Value = ...,
         interactive: _Flag = ...,
         privileged: _Flag = ...,
         tty: _Flag = ...,
@@ -524,7 +524,7 @@ class Docker(Tool):
         *args: str,
         all: _Flag = ...,
         digests: _Flag = ...,
-        filter: _Flag = ...,
+        filter: _Value = ...,
         format: _Value = ...,
         no_trunc: _Flag = ...,
         quiet: _Flag = ...,
@@ -579,7 +579,7 @@ class Docker(Tool):
         self,
         *,
         all: _Flag = ...,
-        filter: _Flag = ...,
+        filter: _Value = ...,
         format: _Value = ...,
         last: _Value = ...,
         latest: _Flag = ...,
@@ -653,13 +653,13 @@ class Docker(Tool):
         image: str,
         /,
         *args: str,
-        add_host: _Flag = ...,
-        annotation: _Flag = ...,
-        attach: _Flag = ...,
+        add_host: _Value = ...,
+        annotation: _Value = ...,
+        attach: _Value = ...,
         blkio_weight: _Value = ...,
-        blkio_weight_device: _Flag = ...,
-        cap_add: _Flag = ...,
-        cap_drop: _Flag = ...,
+        blkio_weight_device: _Value = ...,
+        cap_add: _Value = ...,
+        cap_drop: _Value = ...,
         cgroup_parent: _Value = ...,
         cgroupns: _Value = ...,
         cidfile: _Value = ...,
@@ -668,27 +668,27 @@ class Docker(Tool):
         cpu_rt_period: _Value = ...,
         cpu_rt_runtime: _Value = ...,
         cpu_shares: _Value = ...,
-        cpus: _Flag = ...,
+        cpus: _Value = ...,
         cpuset_cpus: _Value = ...,
         cpuset_mems: _Value = ...,
         detach: _Flag = ...,
         detach_keys: _Value = ...,
-        device: _Flag = ...,
-        device_cgroup_rule: _Flag = ...,
-        device_read_bps: _Flag = ...,
-        device_read_iops: _Flag = ...,
-        device_write_bps: _Flag = ...,
-        device_write_iops: _Flag = ...,
-        dns: _Flag = ...,
-        dns_option: _Flag = ...,
-        dns_search: _Flag = ...,
+        device: _Value = ...,
+        device_cgroup_rule: _Value = ...,
+        device_read_bps: _Value = ...,
+        device_read_iops: _Value = ...,
+        device_write_bps: _Value = ...,
+        device_write_iops: _Value = ...,
+        dns: _Value = ...,
+        dns_option: _Value = ...,
+        dns_search: _Value = ...,
         domainname: _Value = ...,
         entrypoint: _Value = ...,
-        env: _Flag = ...,
-        env_file: _Flag = ...,
-        expose: _Flag = ...,
-        gpus: _Flag = ...,
-        group_add: _Flag = ...,
+        env: _Value = ...,
+        env_file: _Value = ...,
+        expose: _Value = ...,
+        gpus: _Value = ...,
+        group_add: _Value = ...,
         health_cmd: _Value = ...,
         health_interval: _Value = ...,
         health_retries: _Value = ...,
@@ -702,21 +702,21 @@ class Docker(Tool):
         ip6: _Value = ...,
         ipc: _Value = ...,
         isolation: _Value = ...,
-        label: _Flag = ...,
-        label_file: _Flag = ...,
-        link: _Flag = ...,
-        link_local_ip: _Flag = ...,
+        label: _Value = ...,
+        label_file: _Value = ...,
+        link: _Value = ...,
+        link_local_ip: _Value = ...,
         log_driver: _Value = ...,
-        log_opt: _Flag = ...,
+        log_opt: _Value = ...,
         mac_address: _Value = ...,
-        memory: _Flag = ...,
-        memory_reservation: _Flag = ...,
-        memory_swap: _Flag = ...,
+        memory: _Value = ...,
+        memory_reservation: _Value = ...,
+        memory_swap: _Value = ...,
         memory_swappiness: _Value = ...,
-        mount: _Flag = ...,
+        mount: _Value = ...,
         name: _Value = ...,
-        network: _Flag = ...,
-        network_alias: _Flag = ...,
+        network: _Value = ...,
+        network_alias: _Value = ...,
         no_healthcheck: _Flag = ...,
         oom_kill_disable: _Flag = ...,
         oom_score_adj: _Value = ...,
@@ -724,7 +724,7 @@ class Docker(Tool):
         pids_limit: _Value = ...,
         platform: _Value = ...,
         privileged: _Flag = ...,
-        publish: _Flag = ...,
+        publish: _Value = ...,
         publish_all: _Flag = ...,
         pull: _Value = ...,
         quiet: _Flag = ...,
@@ -732,23 +732,23 @@ class Docker(Tool):
         restart: _Value = ...,
         rm: _Flag = ...,
         runtime: _Value = ...,
-        security_opt: _Flag = ...,
-        shm_size: _Flag = ...,
+        security_opt: _Value = ...,
+        shm_size: _Value = ...,
         sig_proxy: _Flag = ...,
         stop_signal: _Value = ...,
         stop_timeout: _Value = ...,
-        storage_opt: _Flag = ...,
-        sysctl: _Flag = ...,
-        tmpfs: _Flag = ...,
+        storage_opt: _Value = ...,
+        sysctl: _Value = ...,
+        tmpfs: _Value = ...,
         tty: _Flag = ...,
-        ulimit: _Flag = ...,
+        ulimit: _Value = ...,
         use_api_socket: _Flag = ...,
         user: _Value = ...,
         userns: _Value = ...,
         uts: _Value = ...,
-        volume: _Flag = ...,
+        volume: _Value = ...,
         volume_driver: _Value = ...,
-        volumes_from: _Flag = ...,
+        volumes_from: _Value = ...,
         workdir: _Value = ...,
         nofail: bool = False,
         in_process: bool | None = None,
@@ -759,11 +759,12 @@ class Docker(Tool):
         Args:
             add_host: Add a custom host-to-IP mapping (host:ip).
             annotation: Add an annotation to the container (passed through to the
-                OCI runtime).
+                OCI runtime). Defaults to `map[]`.
             attach: Attach to STDIN, STDOUT or STDERR.
             blkio_weight: Block IO (relative weight), between 10 and 1000, or 0 to
                 disable. Defaults to `0`.
-            blkio_weight_device: Block IO weight (relative device weight).
+            blkio_weight_device: Block IO weight (relative device weight). Defaults
+                to `[]`.
             cap_add: Add Linux capabilities.
             cap_drop: Drop Linux capabilities.
             cgroup_parent: Optional parent cgroup for the container.
@@ -786,9 +787,13 @@ class Docker(Tool):
             device: Add a host device to the container.
             device_cgroup_rule: Add a rule to the cgroup allowed devices list.
             device_read_bps: Limit read rate (bytes per second) from a device.
+                Defaults to `[]`.
             device_read_iops: Limit read rate (IO per second) from a device.
+                Defaults to `[]`.
             device_write_bps: Limit write rate (bytes per second) to a device.
+                Defaults to `[]`.
             device_write_iops: Limit write rate (IO per second) to a device.
+                Defaults to `[]`.
             dns: Set custom DNS servers.
             dns_option: Set DNS options.
             dns_search: Set custom DNS search domains.
@@ -858,10 +863,10 @@ class Docker(Tool):
             stop_signal: Signal to stop the container.
             stop_timeout: Timeout (in seconds) to stop a container.
             storage_opt: Storage driver options for the container.
-            sysctl: Sysctl options.
+            sysctl: Sysctl options. Defaults to `map[]`.
             tmpfs: Mount a tmpfs directory.
             tty: Allocate a pseudo-TTY.
-            ulimit: Ulimit options.
+            ulimit: Ulimit options. Defaults to `[]`.
             use_api_socket: Bind mount Docker API socket and required auth.
             user: Username or UID (format: <name|uid>[:<group|gid>]).
             userns: User namespace to use.

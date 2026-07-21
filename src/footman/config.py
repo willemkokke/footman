@@ -10,7 +10,9 @@ directory. Nearer files win, so a package can override repo-wide defaults; a
 * `sequential` — run tasks one at a time by default (`fm` still overrides
   with `-s` / a parallel default).
 * `plugins` — `footman.tasks` entry points to mount as command groups
-  (opt-in; installing a package never adds tasks by itself).
+  (opt-in; installing a package never adds tasks by itself). A plugin's
+  name is its command path: `["footman.tools"]` mounts as `fm footman
+  tools …`, nesting one group per dotted segment.
 
 Unknown keys are kept but ignored, so newer settings never break an older
 footman.

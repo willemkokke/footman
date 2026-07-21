@@ -210,6 +210,13 @@ def _safe(name: str) -> str:
     return f"{name}_" if keyword.iskeyword(name) else name
 
 
+def _esc(text: str) -> str:
+    r"""Double every backslash: a help string like mypy's `--exclude '\.py$'`
+    must land as a literal in the generated docstring, not an invalid `\.`
+    escape sequence that a compiler warns on."""
+    return text.replace("\\", "\\\\")
+
+
 def _annotation(option: Option) -> str:
     """The stub's declared type for one option.
 
@@ -245,7 +252,7 @@ def _docstring(verb: Verb) -> str:
     if not verb.help and not documented:
         return ""
     summary = textwrap.wrap(
-        verb.help or "Run this verb.",
+        _esc(verb.help) or "Run this verb.",
         width=84,
         initial_indent=" " * 8,
         subsequent_indent=" " * 8,
@@ -288,7 +295,7 @@ def _md_safe(lines: list[str]) -> list[str]:
 
 def _arg_lines(option: Option) -> list[str]:
     """One `Args:` entry, wrapped, with the `off` spelling when it matters."""
-    text = option.help.rstrip(".")
+    text = _esc(option.help).rstrip(".")
     if option.type_name.startswith("list[") or option.type_name.endswith("[]"):
         text = f"{text}. May be repeated: a list emits the flag once per item"
     if option.type_name == "optvalue":
