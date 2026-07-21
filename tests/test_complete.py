@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Annotated
 
 from footman import manifest, registry, task
-from footman._complete import complete, complete_cli
-from footman.params import doc
+from footman._complete import _tasks_file_from, complete, complete_cli
+from footman.params import doc, suggest
 
 
 def _names(result):
@@ -200,6 +201,316 @@ def test_completion_globals_mirror_split():
     assert maybe == _complete._GLOBAL_MAYBE
     assert _complete._GLOBAL_CHOICES["--install-completion"] == tuple(_shellcomp.SHELLS)
     assert _complete._GLOBAL_CHOICES["--setup-completion"] == tuple(_shellcomp.SHELLS)
+
+
+# --- -f/--tasks-file completion (keyed by cwd + file) -------------------------
+
+
+def test_tasks_file_from_leading_globals():
+    assert _tasks_file_from(["-f", "x.py", ""]) == "x.py"
+    assert _tasks_file_from(["--tasks-file", "x.py", "build"]) == "x.py"
+    assert _tasks_file_from(["--tasks-file=x.py"]) == "x.py"
+    assert _tasks_file_from(["-C", "sub", "-f", "x.py"]) == "x.py"  # skip -C + value
+    assert _tasks_file_from(["-k", "-f", "x.py"]) == "x.py"  # skip a flag
+    assert _tasks_file_from(["build", "-f", "x.py"]) is None  # after a task: not global
+    assert _tasks_file_from(["build"]) is None
+    assert _tasks_file_from([""]) is None
+
+
+def test_source_manifest_path_keys_by_cwd_and_file():
+    from pathlib import Path
+
+    from footman import _paths
+
+    cwd = Path("/proj/a")
+    a = _paths.source_manifest_path(cwd, Path("x.py"))
+    assert a == _paths.source_manifest_path(cwd, Path("x.py"))  # stable
+    assert a != _paths.source_manifest_path(cwd, Path("y.py"))  # the file matters
+    assert a != _paths.source_manifest_path(
+        Path("/proj/b"), Path("x.py")
+    )  # cwd matters
+    assert a != _paths.manifest_path(cwd)  # distinct from the plain-cwd cache
+
+
+def test_f_completion_reads_the_source_key(tmp_path, monkeypatch, capsys):
+    from pathlib import Path
+
+    from footman import _paths
+
+    monkeypatch.setenv("FOOTMAN_CACHE_DIR", str(tmp_path / "cache"))
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    monkeypatch.chdir(proj)
+    tf = proj / "custom.py"
+
+    g = registry.Group("root")
+
+    @g.task
+    def alpha(): ...
+
+    @g.task
+    def beta(): ...
+
+    # Cache the manifest under the (cwd, file) key, exactly as a `-f` run does.
+    manifest.sync_manifest(
+        g,
+        Path.cwd(),
+        completion_max_age=0,
+        tasks_file=str(tf),
+        path=_paths.source_manifest_path(Path.cwd(), tf),
+    )
+    complete_cli(["--", "-f", str(tf), ""])
+    out = capsys.readouterr().out.split()
+    assert "alpha" in out and "beta" in out
+
+
+def test_f_partial_value_defers_to_file_completion(tmp_path, monkeypatch, capsys):
+    from footman._complete import _EXIT_FILES
+
+    monkeypatch.setenv("FOOTMAN_CACHE_DIR", str(tmp_path / "cache"))
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    monkeypatch.chdir(proj)
+
+    g = registry.Group("root")
+
+    @g.task
+    def alpha(): ...
+
+    # `-f cust` here is a *partial* being typed, not a finished override, so
+    # completion must land on the cwd tree and signal files (exit 100) rather
+    # than hunt for a "(cwd, 'cust')" manifest that never existed.
+    manifest.sync_manifest(g, Path.cwd(), completion_max_age=0)
+    assert complete_cli(["--", "-f", "cust"]) == _EXIT_FILES
+    assert capsys.readouterr().out == ""
+
+
+# --- file-path completion for Path values ------------------------------------
+
+
+def test_path_value_globals_signal_file_completion(tree):
+    from footman._complete import _FILES, _GLOBAL_FILES, _GLOBAL_VALUE
+
+    assert _GLOBAL_FILES <= _GLOBAL_VALUE  # every file-global consumes its value
+    assert complete(tree, ["-f", ""]) == [_FILES]
+    assert complete(tree, ["--config", ""]) == [_FILES]
+    assert complete(tree, ["-C", ""]) == [_FILES]
+    assert complete(tree, ["--where", ""]) != [_FILES]  # --where takes a task
+
+
+def test_complete_cli_exits_files_for_a_path_value(tmp_path, capsys):
+    from footman._complete import _EXIT_FILES
+
+    m = tmp_path / "m.json"
+    m.write_text('{"tree": {"tasks": {}, "groups": {}}}')
+    rc = complete_cli(["--manifest", str(m), "--", "-f", ""])
+    assert rc == _EXIT_FILES
+    assert capsys.readouterr().out == ""
+
+
+def test_path_typed_option_value_signals_file_completion():
+    from footman._complete import _FILES
+
+    with registry.capture() as root:
+
+        @task
+        def fetch(out: Path = Path(".")):
+            "Fetch."
+
+    built = manifest.build_manifest(root)["tree"]
+    assert complete(built, ["fetch", "--out", ""]) == [_FILES]
+    # a plain str option value has no such signal — it stays empty, so the
+    # shell never bluntly offers files where a name was wanted.
+    with registry.capture() as root2:
+
+        @task
+        def greet(name: str = "world"):
+            "Greet."
+
+    built2 = manifest.build_manifest(root2)["tree"]
+    assert complete(built2, ["greet", "--name", ""]) == []
+
+
+def test_path_positional_signals_file_completion():
+    from footman._complete import _FILES
+
+    with registry.capture() as root:
+
+        @task
+        def deploy(target: Path, *extra: Path):
+            "Deploy."
+
+    built = manifest.build_manifest(root)["tree"]
+    assert complete(built, ["deploy", ""]) == [_FILES]  # the Path positional
+    assert complete(built, ["deploy", "a", ""]) == [_FILES]  # the Path variadic
+    assert complete(built, ["deploy", "-"]) != [_FILES]  # a dash reaches options
+
+    # a plain str positional is not a file
+    with registry.capture() as root2:
+
+        @task
+        def greet(name: str):
+            "Greet."
+
+    built2 = manifest.build_manifest(root2)["tree"]
+    assert complete(built2, ["greet", ""]) != [_FILES]
+
+
+# --- dynamic completers: recomputed fresh, never the baked snapshot -----------
+
+
+def _demo_suggest():
+    return ["alpha", "beta"]
+
+
+def test_dynamic_option_signals_recompute():
+    from footman._complete import _DYNAMIC
+
+    with registry.capture() as root:
+
+        @task
+        def deploy(target: Annotated[str, suggest(_demo_suggest)] = ""):
+            "Deploy."
+
+    built = manifest.build_manifest(root)["tree"]
+    # the value is dynamic → defer to a fresh recompute, carrying the partial,
+    # the param name, and the task path
+    assert complete(built, ["deploy", "--target", ""]) == [
+        _DYNAMIC,
+        "",
+        "target",
+        "deploy",
+    ]
+
+
+def _dynamic_project(tmp_path):
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    (proj / "pyproject.toml").write_text("[project]\nname='x'\nversion='0'\n")
+    (proj / "tasks.py").write_text(
+        "from pathlib import Path\n"
+        "from typing import Annotated\n"
+        "from footman import task\n"
+        "from footman.params import suggest\n\n"
+        "def _targets():\n"
+        "    return Path('targets.txt').read_text().split()\n\n"
+        "@task\n"
+        "def deploy(target: Annotated[str, suggest(_targets)] = ''):\n"
+        "    'Deploy.'\n"
+    )
+    return proj
+
+
+def test_suggest_values_runs_the_completer_fresh(tmp_path, monkeypatch):
+    from footman import _suggest
+
+    proj = _dynamic_project(tmp_path)
+    monkeypatch.chdir(proj)
+    (proj / "targets.txt").write_text("gamma\ndelta\n")
+    assert _suggest._values("target", ["deploy"], {}) == ["gamma", "delta"]
+    # a miss — unknown param or task — is empty, never an error
+    assert _suggest._values("nope", ["deploy"], {}) == []
+    assert _suggest._values("target", ["ghost"], {}) == []
+
+
+def test_suggest_main_swallows_a_failing_completer(tmp_path, monkeypatch, capsys):
+    from footman import _suggest
+
+    proj = _dynamic_project(tmp_path)
+    monkeypatch.chdir(proj)
+    # no targets.txt → the completer raises → no candidates, exit 0
+    assert _suggest.main(["--param", "target", "--path", "deploy"]) == 0
+    assert capsys.readouterr().out == ""
+
+
+def test_dynamic_completion_is_fresh_not_baked(tmp_path, monkeypatch, capsys):
+    from footman import _app
+
+    monkeypatch.setenv("FOOTMAN_CACHE_DIR", str(tmp_path / "cache"))
+    proj = _dynamic_project(tmp_path)
+    monkeypatch.chdir(proj)
+
+    (proj / "targets.txt").write_text("alpha\nbeta\n")
+    assert _app.run(["--list"]) == 0  # bake the manifest with alpha/beta
+    capsys.readouterr()
+
+    (proj / "targets.txt").write_text("gamma\ndelta\n")  # the world moved on
+    complete_cli(["--", "deploy", "--target", ""])
+    assert capsys.readouterr().out.split() == ["gamma", "delta"]  # fresh, not baked
+
+
+def test_fresh_dynamic_passes_context_and_falls_back(monkeypatch):
+    import subprocess
+
+    from footman import _complete
+
+    captured: dict[str, list[str]] = {}
+
+    def ok(cmd, **k):
+        captured["cmd"] = cmd
+        return subprocess.CompletedProcess(cmd, 0, "gamma\ndelta\n", "")
+
+    monkeypatch.setattr(_complete.subprocess, "run", ok)
+    args = ["-f", "x.py", "--config", "c.toml", "deploy", "--target", ""]
+    assert _complete._fresh_dynamic("target", ["deploy"], args) == ["gamma", "delta"]
+    cmd = captured["cmd"]  # the subprocess carries the target and the context
+    assert cmd[cmd.index("--param") + 1] == "target"
+    assert cmd[cmd.index("--path") + 1] == "deploy"
+    assert cmd[cmd.index("--tasks-file") + 1] == "x.py"
+    assert cmd[cmd.index("--config") + 1] == "c.toml"
+
+    def timeout(*a, **k):
+        raise subprocess.TimeoutExpired(cmd="x", timeout=2)
+
+    monkeypatch.setattr(_complete.subprocess, "run", timeout)
+    assert _complete._fresh_dynamic("target", ["deploy"], ["a", ""]) is None
+
+    def nonzero(*a, **k):
+        return subprocess.CompletedProcess("x", 1, "", "")
+
+    monkeypatch.setattr(_complete.subprocess, "run", nonzero)
+    assert _complete._fresh_dynamic("target", ["deploy"], ["a", ""]) is None
+
+
+# --- cold cache: build once, don't answer empty ------------------------------
+
+
+def test_cold_cache_builds_and_serves(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("FOOTMAN_CACHE_DIR", str(tmp_path / "cache"))
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    (proj / "pyproject.toml").write_text("[project]\nname='x'\nversion='0'\n")
+    (proj / "tasks.py").write_text(
+        "from footman import task\n\n@task\ndef lint(): ...\n@task\ndef check(): ...\n"
+    )
+    monkeypatch.chdir(proj)
+    # nothing cached: the first completion builds the manifest and serves it,
+    # rather than answering empty until the first real run
+    complete_cli(["--", ""])
+    out = capsys.readouterr().out.split()
+    assert "lint" in out and "check" in out
+
+
+def test_cold_f_cache_waits_for_first_run(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("FOOTMAN_CACHE_DIR", str(tmp_path / "cache"))
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    (proj / "pyproject.toml").write_text("[project]\nname='x'\nversion='0'\n")
+    (proj / "other.py").write_text(
+        "from footman import task\n\n@task\ndef ship(): ...\n"
+    )
+    monkeypatch.chdir(proj)
+    # an -f cold cache is not built on completion — it lands on the first -f run
+    complete_cli(["--", "-f", "other.py", ""])
+    assert capsys.readouterr().out == ""
+
+
+def test_cold_build_times_out_to_none(tmp_path, monkeypatch):
+    from footman import _complete
+
+    monkeypatch.setattr(_complete, "_spawn_refresh", lambda: None)  # no build lands
+    monkeypatch.setattr(_complete, "_COLD_TIMEOUT", 0.1)
+    assert _complete._cold_build(str(tmp_path / "never.json")) is None
 
 
 # --- chain-aware completion -----------------------------------------------------

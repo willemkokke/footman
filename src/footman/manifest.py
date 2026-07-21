@@ -373,6 +373,7 @@ def sync_manifest(
     *,
     completion_max_age: int | None = None,
     tasks_file: str | None = None,
+    path: Path | None = None,
 ) -> dict[str, Any]:
     """Build the fresh manifest and rewrite the cache only on a hash change.
 
@@ -392,7 +393,10 @@ def sync_manifest(
         # Additive, like `cwd`: the background refresh reads it back, so a
         # branded CLI's custom filename survives a refresh it can't attend.
         fresh["tasks_file"] = tasks_file
-    path = _paths.manifest_path(key_dir)
+    # `path` lets a caller key the cache file separately from the baked
+    # `key_dir` — a `-f` run caches by (cwd, file) yet still bakes the cwd, so
+    # the collector prunes it with the project like any other.
+    path = path or _paths.manifest_path(key_dir)
     cached = load_manifest(path)
     if (
         cached is None

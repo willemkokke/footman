@@ -7,6 +7,34 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- **Dynamic completions are recomputed fresh at <kbd>Tab</kbd>, not served
+  stale.** A `suggest(fn)` completer queries live state (git branches, release
+  candidates, deploy targets), so footman now runs it fresh in a bounded,
+  isolated subprocess when you complete its value — rather than serving the
+  snapshot baked into the manifest, which is exactly wrong for a build-critical
+  answer. A slow or failing completer degrades to no candidates, never the old
+  values; task names, options, and `Literal` choices still answer instantly from
+  the cache.
+- **The first <kbd>Tab</kbd> in a fresh directory builds the manifest instead of
+  answering empty.** A cold completion cache used to stay blank until your first
+  real `fm` run; now the first <kbd>Tab</kbd> builds it once (bounded, and out of
+  the import-free hot path) and answers accurately. A slow `tasks.py` degrades to
+  empty with the build finishing in the background, so the next <kbd>Tab</kbd> is
+  warm — never a hung keystroke.
+- **<kbd>Tab</kbd> completes file paths for path-valued arguments.** The
+  path-valued globals (`-f`/`--tasks-file`, `-C`/`--directory`, `--config`) and
+  any task option annotated `Path` now hand off to your shell's own file
+  completion — `_files` in zsh, readline's filename completion in bash, and the
+  fish/pwsh/nushell equivalents. A plain `str`/`int` value still completes
+  nothing, so files are offered only where a path is actually wanted.
+- **`fm -f <file> <TAB>` completes that file's tasks.** A one-file run reads
+  its own tasks, so its completion now does too — cached under a key pairing the
+  file with the cwd, separate from (and never overwriting) the plain-cwd cache.
+  `-f` and `--config` are documented as orthogonal: each disables only its own
+  cascade.
+
 ## [0.16.0] — 2026-07-21
 
 ### Added

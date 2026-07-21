@@ -16,6 +16,7 @@ import subprocess
 import sys
 import time
 import tomllib
+from collections.abc import Callable
 from pathlib import Path
 
 from footman import (
@@ -119,6 +120,41 @@ def _globals_to_dict(tokens: list[str]) -> dict[str, object]:
     return result
 
 
+def resolve_task_files(
+    g: dict[str, object],
+    *,
+    on_warning: Callable[[str], None] | None = None,
+    on_note: Callable[[str], None] | None = None,
+) -> tuple[list[Path], dict[str, object]]:
+    """The task files and merged config for the cwd + globals — the pure core of
+    `_discover`, shared with the completion subprocess (`_suggest`) so both
+    discover exactly the same tasks.
+
+    `-f/--tasks-file` loads exactly one file, no cascade; otherwise every
+    `tasks.py` from the repo root down to the cwd. Raises `config.ConfigError`
+    on a bad `--config`; an empty file list means nothing matched. The caller
+    owns how either outcome is surfaced.
+    """
+    cwd = Path.cwd()
+    ceiling = _paths.find_repo_root(cwd)
+    cfg = config.load_config(
+        cwd,
+        ceiling,
+        g.get("config"),  # type: ignore[arg-type]
+        on_warning=on_warning,
+        on_note=on_note,
+    )
+    override = g.get("tasks_file")
+    if override:
+        one = Path(str(override)).expanduser()
+        files = [one] if one.is_file() else []
+    else:
+        filename = cfg.get("tasks")
+        name = filename if isinstance(filename, str) else _brand.tasks_file
+        files = _paths.task_files(cwd, ceiling, name)
+    return files, cfg
+
+
 def _discover(
     g: dict[str, object], wants_help: bool, bare: bool
 ) -> tuple[list[Path], dict[str, object]] | int:
@@ -129,32 +165,19 @@ def _discover(
     (the `.git` ceiling) down to the cwd. Returns `(files, config)` or, when
     nothing was found, the exit code to return (0 for a listing, 2 otherwise).
     """
-    cwd = Path.cwd()
-    ceiling = _paths.find_repo_root(cwd)
     try:
-        cfg = config.load_config(
-            cwd,
-            ceiling,
-            g.get("config"),  # type: ignore[arg-type]
+        files, cfg = resolve_task_files(
+            g,
             on_warning=_error,
             on_note=_error if g.get("verbose") else None,
         )
     except config.ConfigError as exc:
         return _refuse(bool(g.get("json")), f"--config: {exc}")
 
-    override = g.get("tasks_file")
-    if override:
-        one = Path(str(override)).expanduser()
-        files = [one] if one.is_file() else []
-    else:
-        filename = cfg.get("tasks")
-        name = filename if isinstance(filename, str) else _brand.tasks_file
-        files = _paths.task_files(cwd, ceiling, name)
-
     if files:
         return files, cfg
 
-    looked = override or cfg.get("tasks") or _brand.tasks_file
+    looked = g.get("tasks_file") or cfg.get("tasks") or _brand.tasks_file
     if wants_help:
         # A stuck newcomer asking for help should see the globals (-f/-C are the
         # way out) — not a bare one-liner. Global help over an empty tree, then
@@ -878,10 +901,19 @@ def _execute(
 
     try:
         if g.get("tasks_file"):
-            # -f loads one arbitrary file, not the cwd's cascade — writing its
-            # manifest into the cwd's completion cache would poison TAB there
-            # until the next plain run. Build fresh, touch no cache.
-            tree = manifest.build_manifest(reg)["tree"]
+            # -f loads one arbitrary file, not the cwd's cascade. Cache its
+            # manifest under a (cwd, file) key — separate from the cwd's, so it
+            # never poisons plain TAB there — so `fm -f <file> <TAB>` completes
+            # that file's tasks. max_age=0: no background refresh (rebuilt on the
+            # next -f run); a live refresh is a fast-follow.
+            override = str(g.get("tasks_file"))
+            tree = manifest.sync_manifest(
+                reg,
+                Path.cwd(),
+                completion_max_age=0,
+                tasks_file=override,
+                path=_paths.source_manifest_path(Path.cwd(), Path(override)),
+            )["tree"]
         else:
             cfg_tasks = cfg.get("tasks")
             tree = manifest.sync_manifest(

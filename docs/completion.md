@@ -32,15 +32,29 @@ your tasks**, dispatching straight to the stdlib-only resolver. A bare
 `import footman` pays for nothing but the entry module. That is why completion is
 ~15× faster than runners that re-import your project on every keystroke.
 
-## Keeping dynamic completions fresh
+## Dynamic completions are recomputed fresh
 
-The manifest bakes in the output of your [dynamic completers](typing.md#dynamic-completion)
-(git branches, file lists, …), refreshed for free on any real `fm` run. Between
-runs those answers can drift — so if the cached manifest for this directory is
-older than `max_age` when you press <kbd>Tab</kbd>, footman returns the cached
-answer instantly and spawns a **detached** rebuild for next time
-(stale-while-revalidate). The <kbd>Tab</kbd> never waits, and concurrent presses
-spawn at most one rebuild.
+A [dynamic completer](typing.md#dynamic-completion) (`suggest(fn)`) queries live
+state — git branches, release candidates, deploy targets. When <kbd>Tab</kbd>
+lands on one, footman runs that completer **fresh** in a short-lived subprocess
+rather than serving the value baked into the manifest: answering a build-critical
+question from a stale snapshot is a bug, not a speed-up. The recompute is bounded
+(a couple of seconds) and isolated, so a slow or failing completer degrades to
+*no* candidates — never a hung keystroke, and never the old values.
+
+Only the dynamic value pays that cost. Task names, options, and `Literal` choices
+still answer instantly from the cache, because those can't change without an edit
+to your tasks file.
+
+## Keeping the cache current
+
+The cached manifest is structural — the shape of your CLI — and rebuilds for free
+on any real `fm` run. The very first <kbd>Tab</kbd> in a fresh directory, with
+nothing cached, builds it once (a beat slower) and answers accurately rather than
+staying blank until that first run. From then on the cache answers instantly; if
+it drifts (you added a task) past `max_age`, footman serves the cached answer and
+spawns a **detached** rebuild for next time (stale-while-revalidate) — a warm
+<kbd>Tab</kbd> never waits on it, and concurrent presses spawn at most one rebuild.
 
 Tune it with `[tool.footman]`:
 
@@ -69,6 +83,23 @@ tooltip — task and group names carry their one-line docstring, so holding
 build   — compile and bundle
 deploy  — ship to an environment
 ```
+
+## File paths
+
+A value that takes a filesystem path completes files — footman hands off to
+your shell's own path completion rather than reading the disk from its cached
+manifest. This covers the path-valued globals (`-f`/`--tasks-file`,
+`-C`/`--directory`, `--config`) and any task parameter annotated `Path`,
+whether an option, a positional, or a variadic:
+
+```sh
+fm -f tasks/<TAB>            # your shell's own file completion
+fm build --out dist/<TAB>    # a Path option
+fm deploy dist/<TAB>         # a Path positional (options stay one `-` away)
+```
+
+A plain `str` or `int` value has no such handoff: it completes nothing, rather
+than bluntly offering files where a name was wanted.
 
 ## Your shell
 
