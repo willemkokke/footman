@@ -848,3 +848,75 @@ def test_ask_off_a_terminal_fails_loudly(monkeypatch):
     _, _, results = drive(build, "release")
     assert not results[0].ok
     assert "--version is required" in str(results[0].error)
+
+
+# --- @task(confirm=) gate -----------------------------------------------------
+
+
+def test_confirm_gate_runs_when_confirmed(monkeypatch):
+    from footman import context
+
+    monkeypatch.setattr(context, "_stdin_is_tty", lambda: True)
+    monkeypatch.setattr(sys, "stdin", io.StringIO("y\n"))
+    monkeypatch.setattr(context, "real_stderr", io.StringIO)
+
+    ran = {}
+
+    def build(reg):
+        @reg.task(confirm="deploy to prod?")
+        def deploy():
+            ran["it"] = True
+
+    _, _, results = drive(build, "deploy")
+    assert results[0].ok
+    assert ran.get("it")
+
+
+def test_confirm_gate_denied_skips_the_task(monkeypatch):
+    from footman import context
+
+    monkeypatch.setattr(context, "_stdin_is_tty", lambda: True)
+    monkeypatch.setattr(sys, "stdin", io.StringIO("n\n"))
+    monkeypatch.setattr(context, "real_stderr", io.StringIO)
+
+    ran = {}
+
+    def build(reg):
+        @reg.task(confirm="deploy to prod?")
+        def deploy():
+            ran["it"] = True
+
+    _, _, results = drive(build, "deploy")
+    assert not results[0].ok
+    assert "not confirmed" in str(results[0].error)
+    assert not ran.get("it")  # the body never ran
+
+
+def test_confirm_gate_yes_bypasses():
+    ran = {}
+
+    def build(reg):
+        @reg.task(confirm="sure?")
+        def deploy():
+            ran["it"] = True
+
+    _, _, results = drive(build, "deploy", assume_yes=True)  # --yes
+    assert results[0].ok
+    assert ran.get("it")
+
+
+def test_confirm_gate_off_a_terminal_denies(monkeypatch):
+    from footman import context
+
+    monkeypatch.setattr(context, "_stdin_is_tty", lambda: False)
+
+    ran = {}
+
+    def build(reg):
+        @reg.task(confirm="sure?")
+        def deploy():
+            ran["it"] = True
+
+    _, _, results = drive(build, "deploy")  # no --yes, no terminal → denied
+    assert not results[0].ok
+    assert not ran.get("it")
