@@ -42,8 +42,11 @@ from dataclasses import replace
 from footman._toolspec import Option, ToolSpec, Verb
 
 # An option block opens with a dash at the start of the line's content. The
-# indent is captured because it decides what counts as a continuation line.
-_OPTION = re.compile(r"^(?P<indent> *)(?P<body>-{1,2}[A-Za-z0-9?].*)$")
+# indent is captured because it decides what counts as a continuation line;
+# it also absorbs a leading `- ` bullet — markdownlint-cli2 (and other
+# minimist/meow tools) print options as a bulleted list, `- --fix  updates …`,
+# where the flag itself is what follows the bullet.
+_OPTION = re.compile(r"^(?P<indent> *(?:- )?)(?P<body>-{1,2}[A-Za-z0-9?].*)$")
 
 # `Options:`, `OPTIONS`, `Flags:`, `Rule selection:` — every family prints
 # some variant. The colon (or the shouting) is what makes it a heading: a
@@ -67,7 +70,10 @@ _GO_TYPES = (
     r"|string|int|uint|bool|ip)"
 )
 _SPELLING = re.compile(
-    r"(?P<flag>--?(?:\[no-\])?[A-Za-z0-9][A-Za-z0-9._-]*)"
+    # A dot is allowed only *inside* the name (`--foo.bar`), never trailing:
+    # clap prints a repeatable flag as `--verbose...`, and a greedy `.` would
+    # swallow the ellipsis into the name (`verbose...` → keyword `verbose___`).
+    r"(?P<flag>--?(?:\[no-\])?[A-Za-z0-9](?:[A-Za-z0-9_-]|\.(?=[A-Za-z0-9]))*)"
     # git glues an optional-value placeholder to the flag with no space:
     # `--gpg-sign[=<key-id>]`, `--untracked-files[=<mode>]`. Read as one
     # attached token so the option isn't mistaken for a bare switch.

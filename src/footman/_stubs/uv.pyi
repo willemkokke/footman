@@ -194,7 +194,7 @@ class UvPip(Tool):
         ]
         | None = ...,
         python_version: _Value = ...,
-        quiet___: _Flag = ...,
+        quiet: _Flag = ...,
         refresh: _Flag = ...,
         refresh_package: _Value = ...,
         resolution: Literal["highest", "lowest", "lowest-direct"]
@@ -308,7 +308,7 @@ class UvPip(Tool):
         universal: _Flag = ...,
         upgrade: _Flag = ...,
         upgrade_package: _Value = ...,
-        verbose___: _Flag = ...,
+        verbose: _Flag = ...,
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
@@ -411,7 +411,7 @@ class UvPip(Tool):
             python: The Python interpreter to use during resolution.
             python_platform: The platform for which requirements should be resolved.
             python_version: The Python version to use for resolution.
-            quiet___: Use quiet output.
+            quiet: Use quiet output.
             refresh: Refresh all cached data.
             refresh_package: Refresh cached data for a specific package.
             resolution: The strategy to use when selecting between the different
@@ -428,7 +428,7 @@ class UvPip(Tool):
                 existing output file.
             upgrade_package: Allow upgrades for a specific package, ignoring pinned
                 versions in any existing output file.
-            verbose___: Use verbose output.
+            verbose: Use verbose output.
         """
         ...
     def install(
@@ -606,7 +606,7 @@ class UvPip(Tool):
         ]
         | None = ...,
         python_version: _Value = ...,
-        quiet___: _Flag = ...,
+        quiet: _Flag = ...,
         refresh: _Flag = ...,
         refresh_package: _Value = ...,
         reinstall: _Flag = ...,
@@ -726,7 +726,7 @@ class UvPip(Tool):
         upgrade: _Flag = ...,
         upgrade_package: _Value = ...,
         user: _Flag = ...,
-        verbose___: _Flag = ...,
+        verbose: _Flag = ...,
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
@@ -822,7 +822,7 @@ class UvPip(Tool):
                 installed.
             python_version: The minimum Python version that should be supported by
                 the requirements (e.g., `3.7` or `3.7.9`).
-            quiet___: Use quiet output.
+            quiet: Use quiet output.
             refresh: Refresh all cached data.
             refresh_package: Refresh cached data for a specific package.
             reinstall: Reinstall all packages, regardless of whether they're already
@@ -847,7 +847,7 @@ class UvPip(Tool):
                 existing output file.
             upgrade_package: Allow upgrades for a specific package, ignoring pinned
                 versions in any existing output file.
-            verbose___: Use verbose output.
+            verbose: Use verbose output.
         """
         ...
     def list(
@@ -891,12 +891,12 @@ class UvPip(Tool):
         prefix: _Value = ...,
         project: _Value = ...,
         python: _Value = ...,
-        quiet___: _Flag = ...,
+        quiet: _Flag = ...,
         strict: _Flag = ...,
         system: _Flag = ...,
         system_certs: _Flag = ...,
         target: _Value = ...,
-        verbose___: _Flag = ...,
+        verbose: _Flag = ...,
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
@@ -944,14 +944,14 @@ class UvPip(Tool):
             prefix: List packages from the specified `--prefix` directory.
             project: Discover a project in the given directory.
             python: The Python interpreter for which packages should be listed.
-            quiet___: Use quiet output.
+            quiet: Use quiet output.
             strict: Validate the Python environment, to detect packages with missing
                 dependencies and other issues.
             system: List packages in the system Python environment.
             system_certs: Whether to load TLS certificates from the platform's
                 native certificate store.
             target: List packages from the specified `--target` directory.
-            verbose___: Use verbose output.
+            verbose: Use verbose output.
         """
         ...
     def sync(
@@ -1107,7 +1107,7 @@ class UvPip(Tool):
         ]
         | None = ...,
         python_version: _Value = ...,
-        quiet___: _Flag = ...,
+        quiet: _Flag = ...,
         refresh: _Flag = ...,
         refresh_package: _Value = ...,
         reinstall: _Flag = ...,
@@ -1220,7 +1220,7 @@ class UvPip(Tool):
             ]
         ]
         | None = ...,
-        verbose___: _Flag = ...,
+        verbose: _Flag = ...,
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
@@ -1304,7 +1304,7 @@ class UvPip(Tool):
                 installed.
             python_version: The minimum Python version that should be supported by
                 the requirements (e.g., `3.7` or `3.7.9`).
-            quiet___: Use quiet output.
+            quiet: Use quiet output.
             refresh: Refresh all cached data.
             refresh_package: Refresh cached data for a specific package.
             reinstall: Reinstall all packages, regardless of whether they're already
@@ -1322,7 +1322,7 @@ class UvPip(Tool):
                 the virtual or system Python environment.
             torch_backend: The backend to use when fetching packages in the PyTorch
                 ecosystem (e.g., `cpu`, `cu126`, or `auto`).
-            verbose___: Use verbose output.
+            verbose: Use verbose output.
         """
         ...
     def opts(
@@ -1506,7 +1506,7 @@ class UvTool(Tool):
             ]
         ]
         | None = ...,
-        quiet___: _Flag = ...,
+        quiet: _Flag = ...,
         refresh: _Flag = ...,
         refresh_package: _Value = ...,
         reinstall: _Flag = ...,
@@ -1620,7 +1620,7 @@ class UvTool(Tool):
         | None = ...,
         upgrade: _Flag = ...,
         upgrade_package: _Value = ...,
-        verbose___: _Flag = ...,
+        verbose: _Flag = ...,
         with_: _Value = ...,
         with_editable: _Value = ...,
         with_executables_from: _Value = ...,
@@ -1705,7 +1705,7 @@ class UvTool(Tool):
             python: The Python interpreter to use to build the tool environment.
             python_platform: The platform for which requirements should be
                 installed.
-            quiet___: Use quiet output.
+            quiet: Use quiet output.
             refresh: Refresh all cached data.
             refresh_package: Refresh cached data for a specific package.
             reinstall: Reinstall all packages, regardless of whether they're already
@@ -1722,7 +1722,7 @@ class UvTool(Tool):
                 existing output file.
             upgrade_package: Allow upgrades for a specific package, ignoring pinned
                 versions in any existing output file.
-            verbose___: Use verbose output.
+            verbose: Use verbose output.
             with_: Include the following additional requirements.
             with_editable: Include the given packages in editable mode.
             with_executables_from: Install executables from the following packages.
@@ -1898,7 +1898,7 @@ class UvTool(Tool):
             ]
         ]
         | None = ...,
-        quiet___: _Flag = ...,
+        quiet: _Flag = ...,
         refresh: _Flag = ...,
         refresh_package: _Value = ...,
         reinstall: _Flag = ...,
@@ -2012,7 +2012,7 @@ class UvTool(Tool):
         | None = ...,
         upgrade: _Flag = ...,
         upgrade_package: _Value = ...,
-        verbose___: _Flag = ...,
+        verbose: _Flag = ...,
         with_: _Value = ...,
         with_editable: _Value = ...,
         with_requirements: _Value = ...,
@@ -2095,7 +2095,7 @@ class UvTool(Tool):
             python: The Python interpreter to use to build the run environment.
             python_platform: The platform for which requirements should be
                 installed.
-            quiet___: Use quiet output.
+            quiet: Use quiet output.
             refresh: Refresh all cached data.
             refresh_package: Refresh cached data for a specific package.
             reinstall: Reinstall all packages, regardless of whether they're already
@@ -2112,7 +2112,7 @@ class UvTool(Tool):
                 existing output file.
             upgrade_package: Allow upgrades for a specific package, ignoring pinned
                 versions in any existing output file.
-            verbose___: Use verbose output.
+            verbose: Use verbose output.
             with_: Run with the given packages installed.
             with_editable: Run with the given packages installed in editable mode.
             with_requirements: Run with the packages listed in the given files.
@@ -2280,14 +2280,14 @@ class UvTool(Tool):
             ]
         ]
         | None = ...,
-        quiet___: _Flag = ...,
+        quiet: _Flag = ...,
         reinstall: _Flag = ...,
         reinstall_package: _Value = ...,
         resolution: Literal["highest", "lowest", "lowest-direct"]
         | Sequence[Literal["highest", "lowest", "lowest-direct"]]
         | None = ...,
         system_certs: _Flag = ...,
-        verbose___: _Flag = ...,
+        verbose: _Flag = ...,
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
@@ -2359,7 +2359,7 @@ class UvTool(Tool):
                 interpreter to build its environment.
             python_platform: The platform for which requirements should be
                 installed.
-            quiet___: Use quiet output.
+            quiet: Use quiet output.
             reinstall: Reinstall all packages, regardless of whether they're already
                 installed.
             reinstall_package: Reinstall a specific package, regardless of whether
@@ -2368,7 +2368,7 @@ class UvTool(Tool):
                 compatible versions for a given package requirement.
             system_certs: Whether to load TLS certificates from the platform's
                 native certificate store.
-            verbose___: Use verbose output.
+            verbose: Use verbose output.
         """
         ...
     def opts(
@@ -2401,9 +2401,9 @@ class Uv(Tool):
         no_python_downloads: _Flag = ...,
         offline: _Flag = ...,
         project: _Value = ...,
-        quiet___: _Flag = ...,
+        quiet: _Flag = ...,
         system_certs: _Flag = ...,
-        verbose___: _Flag = ...,
+        verbose: _Flag = ...,
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
@@ -2426,10 +2426,10 @@ class Uv(Tool):
             no_python_downloads: Disable automatic downloads of Python.
             offline: Disable network access.
             project: Discover a project in the given directory.
-            quiet___: Use quiet output.
+            quiet: Use quiet output.
             system_certs: Whether to load TLS certificates from the platform's
                 native certificate store.
-            verbose___: Use verbose output.
+            verbose: Use verbose output.
         """
         ...
     def add(
@@ -2517,7 +2517,7 @@ class Uv(Tool):
         | None = ...,
         project: _Value = ...,
         python: _Value = ...,
-        quiet___: _Flag = ...,
+        quiet: _Flag = ...,
         raw: _Flag = ...,
         refresh: _Flag = ...,
         refresh_package: _Value = ...,
@@ -2533,7 +2533,7 @@ class Uv(Tool):
         tag: _Value = ...,
         upgrade: _Flag = ...,
         upgrade_package: _Value = ...,
-        verbose___: _Flag = ...,
+        verbose: _Flag = ...,
         workspace: _Flag = ...,
         nofail: bool = False,
         in_process: bool | None = None,
@@ -2624,7 +2624,7 @@ class Uv(Tool):
             prerelease: The strategy to use when considering pre-release versions.
             project: Discover a project in the given directory.
             python: The Python interpreter to use for resolving and syncing.
-            quiet___: Use quiet output.
+            quiet: Use quiet output.
             raw: Add a dependency as provided.
             refresh: Refresh all cached data.
             refresh_package: Refresh cached data for a specific package.
@@ -2645,7 +2645,7 @@ class Uv(Tool):
                 existing output file.
             upgrade_package: Allow upgrades for a specific package, ignoring pinned
                 versions in any existing output file.
-            verbose___: Use verbose output.
+            verbose: Use verbose output.
             workspace: Add the dependency as a workspace member. `workspace=off`
                 emits `--no-workspace`.
         """
@@ -2722,7 +2722,7 @@ class Uv(Tool):
         | None = ...,
         project: _Value = ...,
         python: _Value = ...,
-        quiet___: _Flag = ...,
+        quiet: _Flag = ...,
         refresh: _Flag = ...,
         refresh_package: _Value = ...,
         require_hashes: _Flag = ...,
@@ -2733,7 +2733,7 @@ class Uv(Tool):
         system_certs: _Flag = ...,
         upgrade: _Flag = ...,
         upgrade_package: _Value = ...,
-        verbose___: _Flag = ...,
+        verbose: _Flag = ...,
         wheel: _Flag = ...,
         nofail: bool = False,
         in_process: bool | None = None,
@@ -2814,7 +2814,7 @@ class Uv(Tool):
             prerelease: The strategy to use when considering pre-release versions.
             project: Discover a project in the given directory.
             python: The Python interpreter to use for the build environment.
-            quiet___: Use quiet output.
+            quiet: Use quiet output.
             refresh: Refresh all cached data.
             refresh_package: Refresh cached data for a specific package.
             require_hashes: Require a matching hash for each requirement.
@@ -2827,7 +2827,7 @@ class Uv(Tool):
                 existing output file.
             upgrade_package: Allow upgrades for a specific package, ignoring pinned
                 versions in any existing output file.
-            verbose___: Use verbose output.
+            verbose: Use verbose output.
             wheel: Build a binary distribution ("wheel") from the given directory.
         """
         ...
@@ -2921,7 +2921,7 @@ class Uv(Tool):
         project: _Value = ...,
         prune: _Value = ...,
         python: _Value = ...,
-        quiet___: _Flag = ...,
+        quiet: _Flag = ...,
         refresh: _Flag = ...,
         refresh_package: _Value = ...,
         resolution: Literal["highest", "lowest", "lowest-direct"]
@@ -2931,7 +2931,7 @@ class Uv(Tool):
         system_certs: _Flag = ...,
         upgrade: _Flag = ...,
         upgrade_package: _Value = ...,
-        verbose___: _Flag = ...,
+        verbose: _Flag = ...,
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
@@ -3030,7 +3030,7 @@ class Uv(Tool):
             project: Discover a project in the given directory.
             prune: Prune the given package from the dependency tree.
             python: The Python interpreter to use during resolution.
-            quiet___: Use quiet output.
+            quiet: Use quiet output.
             refresh: Refresh all cached data.
             refresh_package: Refresh cached data for a specific package.
             resolution: The strategy to use when selecting between the different
@@ -3043,7 +3043,7 @@ class Uv(Tool):
                 existing output file.
             upgrade_package: Allow upgrades for a specific package, ignoring pinned
                 versions in any existing output file.
-            verbose___: Use verbose output.
+            verbose: Use verbose output.
         """
         ...
     def lock(
@@ -3112,7 +3112,7 @@ class Uv(Tool):
         | None = ...,
         project: _Value = ...,
         python: _Value = ...,
-        quiet___: _Flag = ...,
+        quiet: _Flag = ...,
         refresh: _Flag = ...,
         refresh_package: _Value = ...,
         resolution: Literal["highest", "lowest", "lowest-direct"]
@@ -3122,7 +3122,7 @@ class Uv(Tool):
         system_certs: _Flag = ...,
         upgrade: _Flag = ...,
         upgrade_package: _Value = ...,
-        verbose___: _Flag = ...,
+        verbose: _Flag = ...,
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
@@ -3193,7 +3193,7 @@ class Uv(Tool):
             prerelease: The strategy to use when considering pre-release versions.
             project: Discover a project in the given directory.
             python: The Python interpreter to use during resolution.
-            quiet___: Use quiet output.
+            quiet: Use quiet output.
             refresh: Refresh all cached data.
             refresh_package: Refresh cached data for a specific package.
             resolution: The strategy to use when selecting between the different
@@ -3206,7 +3206,7 @@ class Uv(Tool):
                 existing output file.
             upgrade_package: Allow upgrades for a specific package, ignoring pinned
                 versions in any existing output file.
-            verbose___: Use verbose output.
+            verbose: Use verbose output.
         """
         ...
     def publish(
@@ -3235,14 +3235,14 @@ class Uv(Tool):
         password: _Value = ...,
         project: _Value = ...,
         publish_url: _Value = ...,
-        quiet___: _Flag = ...,
+        quiet: _Flag = ...,
         system_certs: _Flag = ...,
         token: _Value = ...,
         trusted_publishing: Literal["automatic", "always", "never"]
         | Sequence[Literal["automatic", "always", "never"]]
         | None = ...,
         username: _Value = ...,
-        verbose___: _Flag = ...,
+        verbose: _Flag = ...,
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
@@ -3274,13 +3274,13 @@ class Uv(Tool):
             password: The password for the upload.
             project: Discover a project in the given directory.
             publish_url: The URL of the upload endpoint (not the index URL).
-            quiet___: Use quiet output.
+            quiet: Use quiet output.
             system_certs: Whether to load TLS certificates from the platform's
                 native certificate store.
             token: The token for the upload.
             trusted_publishing: Configure trusted publishing.
             username: The username for the upload.
-            verbose___: Use verbose output.
+            verbose: Use verbose output.
         """
         ...
     def remove(
@@ -3355,7 +3355,7 @@ class Uv(Tool):
         | None = ...,
         project: _Value = ...,
         python: _Value = ...,
-        quiet___: _Flag = ...,
+        quiet: _Flag = ...,
         refresh: _Flag = ...,
         refresh_package: _Value = ...,
         reinstall: _Flag = ...,
@@ -3367,7 +3367,7 @@ class Uv(Tool):
         system_certs: _Flag = ...,
         upgrade: _Flag = ...,
         upgrade_package: _Value = ...,
-        verbose___: _Flag = ...,
+        verbose: _Flag = ...,
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
@@ -3447,7 +3447,7 @@ class Uv(Tool):
             prerelease: The strategy to use when considering pre-release versions.
             project: Discover a project in the given directory.
             python: The Python interpreter to use for resolving and syncing.
-            quiet___: Use quiet output.
+            quiet: Use quiet output.
             refresh: Refresh all cached data.
             refresh_package: Refresh cached data for a specific package.
             reinstall: Reinstall all packages, regardless of whether they're already
@@ -3464,7 +3464,7 @@ class Uv(Tool):
                 existing output file.
             upgrade_package: Allow upgrades for a specific package, ignoring pinned
                 versions in any existing output file.
-            verbose___: Use verbose output.
+            verbose: Use verbose output.
         """
         ...
     def run(
@@ -3652,7 +3652,7 @@ class Uv(Tool):
             ]
         ]
         | None = ...,
-        quiet___: _Flag = ...,
+        quiet: _Flag = ...,
         refresh: _Flag = ...,
         refresh_package: _Value = ...,
         reinstall: _Flag = ...,
@@ -3664,7 +3664,7 @@ class Uv(Tool):
         system_certs: _Flag = ...,
         upgrade: _Flag = ...,
         upgrade_package: _Value = ...,
-        verbose___: _Flag = ...,
+        verbose: _Flag = ...,
         with_: _Value = ...,
         with_editable: _Value = ...,
         with_requirements: _Value = ...,
@@ -3765,7 +3765,7 @@ class Uv(Tool):
             python: The Python interpreter to use for the run environment.
             python_platform: The platform for which requirements should be
                 installed.
-            quiet___: Use quiet output.
+            quiet: Use quiet output.
             refresh: Refresh all cached data.
             refresh_package: Refresh cached data for a specific package.
             reinstall: Reinstall all packages, regardless of whether they're already
@@ -3781,7 +3781,7 @@ class Uv(Tool):
                 existing output file.
             upgrade_package: Allow upgrades for a specific package, ignoring pinned
                 versions in any existing output file.
-            verbose___: Use verbose output.
+            verbose: Use verbose output.
             with_: Run with the given packages installed.
             with_editable: Run with the given packages installed in editable mode.
             with_requirements: Run with the packages listed in the given files.
@@ -3974,7 +3974,7 @@ class Uv(Tool):
             ]
         ]
         | None = ...,
-        quiet___: _Flag = ...,
+        quiet: _Flag = ...,
         refresh: _Flag = ...,
         refresh_package: _Value = ...,
         reinstall: _Flag = ...,
@@ -3986,7 +3986,7 @@ class Uv(Tool):
         system_certs: _Flag = ...,
         upgrade: _Flag = ...,
         upgrade_package: _Value = ...,
-        verbose___: _Flag = ...,
+        verbose: _Flag = ...,
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
@@ -4085,7 +4085,7 @@ class Uv(Tool):
             python: The Python interpreter to use for the project environment.
             python_platform: The platform for which requirements should be
                 installed.
-            quiet___: Use quiet output.
+            quiet: Use quiet output.
             refresh: Refresh all cached data.
             refresh_package: Refresh cached data for a specific package.
             reinstall: Reinstall all packages, regardless of whether they're already
@@ -4102,7 +4102,7 @@ class Uv(Tool):
                 existing output file.
             upgrade_package: Allow upgrades for a specific package, ignoring pinned
                 versions in any existing output file.
-            verbose___: Use verbose output.
+            verbose: Use verbose output.
         """
         ...
     def tree(
@@ -4281,7 +4281,7 @@ class Uv(Tool):
         ]
         | None = ...,
         python_version: _Value = ...,
-        quiet___: _Flag = ...,
+        quiet: _Flag = ...,
         resolution: Literal["highest", "lowest", "lowest-direct"]
         | Sequence[Literal["highest", "lowest", "lowest-direct"]]
         | None = ...,
@@ -4291,7 +4291,7 @@ class Uv(Tool):
         universal: _Flag = ...,
         upgrade: _Flag = ...,
         upgrade_package: _Value = ...,
-        verbose___: _Flag = ...,
+        verbose: _Flag = ...,
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
@@ -4376,7 +4376,7 @@ class Uv(Tool):
             python: The Python interpreter to use for locking and filtering.
             python_platform: The platform to use when filtering the tree.
             python_version: The Python version to use when filtering the tree.
-            quiet___: Use quiet output.
+            quiet: Use quiet output.
             resolution: The strategy to use when selecting between the different
                 compatible versions for a given package requirement.
             script: Show the dependency tree the specified PEP 723 Python script,
@@ -4389,7 +4389,7 @@ class Uv(Tool):
                 existing output file.
             upgrade_package: Allow upgrades for a specific package, ignoring pinned
                 versions in any existing output file.
-            verbose___: Use verbose output.
+            verbose: Use verbose output.
         """
         ...
     def venv(
@@ -4433,14 +4433,14 @@ class Uv(Tool):
         project: _Value = ...,
         prompt: _Value = ...,
         python: _Value = ...,
-        quiet___: _Flag = ...,
+        quiet: _Flag = ...,
         refresh: _Flag = ...,
         refresh_package: _Value = ...,
         relocatable: _Flag = ...,
         seed: _Flag = ...,
         system_certs: _Flag = ...,
         system_site_packages: _Flag = ...,
-        verbose___: _Flag = ...,
+        verbose: _Flag = ...,
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
@@ -4492,7 +4492,7 @@ class Uv(Tool):
             prompt: Provide an alternative prompt prefix for the virtual
                 environment.
             python: The Python interpreter to use for the virtual environment.
-            quiet___: Use quiet output.
+            quiet: Use quiet output.
             refresh: Refresh all cached data.
             refresh_package: Refresh cached data for a specific package.
             relocatable: Make the virtual environment relocatable.
@@ -4502,7 +4502,7 @@ class Uv(Tool):
                 native certificate store.
             system_site_packages: Give the virtual environment access to the system
                 site packages directory.
-            verbose___: Use verbose output.
+            verbose: Use verbose output.
         """
         ...
     def version(
@@ -4595,7 +4595,7 @@ class Uv(Tool):
         | None = ...,
         project: _Value = ...,
         python: _Value = ...,
-        quiet___: _Flag = ...,
+        quiet: _Flag = ...,
         refresh: _Flag = ...,
         refresh_package: _Value = ...,
         reinstall: _Flag = ...,
@@ -4607,7 +4607,7 @@ class Uv(Tool):
         system_certs: _Flag = ...,
         upgrade: _Flag = ...,
         upgrade_package: _Value = ...,
-        verbose___: _Flag = ...,
+        verbose: _Flag = ...,
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
@@ -4685,7 +4685,7 @@ class Uv(Tool):
             prerelease: The strategy to use when considering pre-release versions.
             project: Discover a project in the given directory.
             python: The Python interpreter to use for resolving and syncing.
-            quiet___: Use quiet output.
+            quiet: Use quiet output.
             refresh: Refresh all cached data.
             refresh_package: Refresh cached data for a specific package.
             reinstall: Reinstall all packages, regardless of whether they're already
@@ -4701,7 +4701,7 @@ class Uv(Tool):
                 existing output file.
             upgrade_package: Allow upgrades for a specific package, ignoring pinned
                 versions in any existing output file.
-            verbose___: Use verbose output.
+            verbose: Use verbose output.
         """
         ...
     def opts(
@@ -4721,9 +4721,9 @@ class Uv(Tool):
         no_python_downloads: _Flag = ...,
         offline: _Flag = ...,
         project: _Value = ...,
-        quiet___: _Flag = ...,
+        quiet: _Flag = ...,
         system_certs: _Flag = ...,
-        verbose___: _Flag = ...,
+        verbose: _Flag = ...,
         **flags: Any,
     ) -> Uv:
         """Bind tool-level global options before the subcommand.
