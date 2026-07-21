@@ -45,12 +45,13 @@ you see the whole ~0.25 s; answer from a cache and you see roughly nothing.
 
 duty and invoke reload your whole project on every TAB — their completion
 scripts call the tool, which imports your tasks before it can answer. footman
-reads a cached JSON manifest instead and never imports a thing, so it lands about
-15× faster. It pays the same import cost as everyone else, just on the execution
-path: `fm --list` is ~313 ms, right there with the pack. Completion is the one
-moment that has to feel instant, so that's the moment I optimised. poe is quick
-here too, for the honest reason that its tasks are TOML strings with no Python to
-load — which is also the rest of this page.
+reads a cached JSON manifest instead, so the hot path imports nothing (a dynamic
+completer or the first build in a fresh directory spawns a bounded subprocess),
+and it lands about 15× faster. It pays the same import cost as everyone else,
+just on the execution path: `fm --list` is ~313 ms, right there with the pack.
+Completion is the one moment that has to feel instant, so that's the moment I
+optimised. poe is quick here too, for the honest reason that its tasks are TOML
+strings with no Python to load — which is also the rest of this page.
 
 ## The same `check`, composed five ways
 

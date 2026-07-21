@@ -146,17 +146,18 @@ the prompt); `workers` is bounds-checked; and `target` falls back to
 
 ## TAB completes your git branches
 
-`suggest()` attaches a completer that runs on the execution path — its
-results are cached into the manifest, so <kbd>Tab</kbd> stays instant
-while offering live values:
+`suggest()` attaches a completer — footman runs it **fresh** when you complete
+the value (in a bounded subprocess), so <kbd>Tab</kbd> offers current branches,
+never a stale snapshot:
 
 ```python
-import subprocess
 from typing import Annotated
 from footman import task, run
 from footman.params import suggest
 
 def branches() -> list[str]:
+    import subprocess  # inside the body — importing tasks.py stays cheap
+
     out = subprocess.run(
         ["git", "branch", "--format=%(refname:short)"],
         capture_output=True, text=True,
