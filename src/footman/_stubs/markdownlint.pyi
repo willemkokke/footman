@@ -6,7 +6,7 @@ from typing import Any
 
 from footman.tools import Tool, _Flag
 
-class _Markdownlint(Tool):
+class Markdownlint(Tool):
     def __call__(  # type: ignore[override]
         self,
         *globs: str,

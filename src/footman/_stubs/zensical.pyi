@@ -7,7 +7,7 @@ from typing import Any
 
 from footman.tools import Tool, _Flag, _Value
 
-class _Zensical(Tool):
+class Zensical(Tool):
     def build(
         self,
         *,
@@ -58,7 +58,7 @@ class _Zensical(Tool):
     def opts(
         self,
         **flags: Any,
-    ) -> _Zensical:
+    ) -> Zensical:
         """Bind tool-level global options before the subcommand.
 
         `tools.docker.opts(host=...)` puts a tool's own

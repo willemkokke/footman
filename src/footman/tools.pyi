@@ -30,19 +30,19 @@ from typing import Any
 # One generated file per tool — `fm footman tools sync` writes them from
 # the installed binaries, and `audit` fails when they drift. They import
 # `Tool` and the aliases from here, which a stub may do circularly.
-from footman._stubs.basedpyright import _Basedpyright as _Basedpyright
-from footman._stubs.bun import _Bun as _Bun
-from footman._stubs.coverage import _Coverage as _Coverage
-from footman._stubs.cspell import _Cspell as _Cspell
-from footman._stubs.docker import _Docker as _Docker
-from footman._stubs.git import _Git as _Git
-from footman._stubs.markdownlint import _Markdownlint as _Markdownlint
-from footman._stubs.mkdocs import _Mkdocs as _Mkdocs
-from footman._stubs.prek import _Prek as _Prek
-from footman._stubs.ruff import _Ruff as _Ruff
-from footman._stubs.ruff_format import _RuffFormat as _RuffFormat
-from footman._stubs.uv import _Uv as _Uv
-from footman._stubs.zensical import _Zensical as _Zensical
+from footman._stubs.basedpyright import Basedpyright as Basedpyright
+from footman._stubs.bun import Bun as Bun
+from footman._stubs.coverage import Coverage as Coverage
+from footman._stubs.cspell import Cspell as Cspell
+from footman._stubs.docker import Docker as Docker
+from footman._stubs.git import Git as Git
+from footman._stubs.markdownlint import Markdownlint as Markdownlint
+from footman._stubs.mkdocs import Mkdocs as Mkdocs
+from footman._stubs.prek import Prek as Prek
+from footman._stubs.ruff import Ruff as Ruff
+from footman._stubs.ruff_format import RuffFormat as RuffFormat
+from footman._stubs.uv import Uv as Uv
+from footman._stubs.zensical import Zensical as Zensical
 from footman.context import Invocation as _Invocation  # noqa: F401
 from footman.context import run as _run  # noqa: F401
 
@@ -101,19 +101,19 @@ class Tool:
     ) -> int: ...
     def installed_version(self) -> tuple[int, ...]: ...
 
-ruff: _Ruff
-ruff_format: _RuffFormat
-basedpyright: _Basedpyright
-uv: _Uv
-git: _Git
-docker: _Docker
-bun: _Bun
-mkdocs: _Mkdocs
-zensical: _Zensical
-coverage: _Coverage
-cspell: _Cspell
-prek: _Prek
-markdownlint: _Markdownlint
+ruff: Ruff
+ruff_format: RuffFormat
+basedpyright: Basedpyright
+uv: Uv
+git: Git
+docker: Docker
+bun: Bun
+mkdocs: Mkdocs
+zensical: Zensical
+coverage: Coverage
+cspell: Cspell
+prek: Prek
+markdownlint: Markdownlint
 
 def pytest(*args: str, in_process: bool = True, nofail: bool = False) -> int: ...
 def python(*args: str, nofail: bool = False) -> int: ...

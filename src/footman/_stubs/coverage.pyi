@@ -7,7 +7,7 @@ from typing import Any
 
 from footman.tools import Tool, _Flag, _Value
 
-class _Coverage(Tool):
+class Coverage(Tool):
     def __call__(  # type: ignore[override]
         self,
         *args: str,
@@ -327,7 +327,7 @@ class _Coverage(Tool):
     def opts(
         self,
         **flags: Any,
-    ) -> _Coverage:
+    ) -> Coverage:
         """Bind tool-level global options before the subcommand.
 
         `tools.docker.opts(host=...)` puts a tool's own

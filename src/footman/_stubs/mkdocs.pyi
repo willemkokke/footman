@@ -8,7 +8,7 @@ from typing import Any, Literal
 
 from footman.tools import Tool, _Flag, _Value
 
-class _Mkdocs(Tool):
+class Mkdocs(Tool):
     def build(
         self,
         *,
@@ -168,7 +168,7 @@ class _Mkdocs(Tool):
     def opts(
         self,
         **flags: Any,
-    ) -> _Mkdocs:
+    ) -> Mkdocs:
         """Bind tool-level global options before the subcommand.
 
         `tools.docker.opts(host=...)` puts a tool's own

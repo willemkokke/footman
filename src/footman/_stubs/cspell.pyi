@@ -6,7 +6,7 @@ from typing import Any
 
 from footman.tools import Tool, _Flag
 
-class _Cspell(Tool):
+class Cspell(Tool):
     def lint(
         self,
         *globs: str,

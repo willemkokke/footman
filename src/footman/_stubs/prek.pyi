@@ -7,7 +7,7 @@ from typing import Any
 
 from footman.tools import Tool, _Flag
 
-class _Prek(Tool):
+class Prek(Tool):
     def run(
         self,
         *hooks: str,

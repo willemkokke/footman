@@ -8,7 +8,7 @@ from typing import Any, Literal
 
 from footman.tools import Tool, _Flag, _Value
 
-class _UvPip(Tool):
+class UvPip(Tool):
     def compile(
         self,
         *args: str,
@@ -1328,14 +1328,14 @@ class _UvPip(Tool):
     def opts(
         self,
         **flags: Any,
-    ) -> _UvPip:
+    ) -> UvPip:
         """Bind tool-level global options before the subcommand.
 
         `tools.docker.opts(host=...)` puts a tool's own
         options ahead of the verb, where they belong."""
         ...
 
-class _UvTool(Tool):
+class UvTool(Tool):
     def install(
         self,
         package: str,
@@ -2374,16 +2374,16 @@ class _UvTool(Tool):
     def opts(
         self,
         **flags: Any,
-    ) -> _UvTool:
+    ) -> UvTool:
         """Bind tool-level global options before the subcommand.
 
         `tools.docker.opts(host=...)` puts a tool's own
         options ahead of the verb, where they belong."""
         ...
 
-class _Uv(Tool):
-    pip: _UvPip
-    tool: _UvTool
+class Uv(Tool):
+    pip: UvPip
+    tool: UvTool
     def __call__(  # type: ignore[override]
         self,
         *args: str,
@@ -4725,7 +4725,7 @@ class _Uv(Tool):
         system_certs: _Flag = ...,
         verbose___: _Flag = ...,
         **flags: Any,
-    ) -> _Uv:
+    ) -> Uv:
         """Bind tool-level global options before the subcommand.
 
         `tools.docker.opts(host=...)` puts a tool's own

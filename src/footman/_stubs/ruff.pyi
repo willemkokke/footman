@@ -8,7 +8,7 @@ from typing import Any, Literal
 
 from footman.tools import Tool, _Flag, _Value, _ValuedFlag
 
-class _Ruff(Tool):
+class Ruff(Tool):
     def __call__(  # type: ignore[override]
         self,
         *args: str,
@@ -378,7 +378,7 @@ class _Ruff(Tool):
         silent: _Flag = ...,
         verbose: _Flag = ...,
         **flags: Any,
-    ) -> _Ruff:
+    ) -> Ruff:
         """Bind tool-level global options before the subcommand.
 
         `tools.docker.opts(host=...)` puts a tool's own

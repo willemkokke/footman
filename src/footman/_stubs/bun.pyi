@@ -6,7 +6,7 @@ from typing import Any
 
 from footman.tools import Tool, _Flag
 
-class _Bun(Tool):
+class Bun(Tool):
     def add(
         self,
         *packages: str,

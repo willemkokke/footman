@@ -7,7 +7,7 @@ from typing import Any
 
 from footman.tools import Tool, _Flag, _Value
 
-class _DockerCompose(Tool):
+class DockerCompose(Tool):
     def build(
         self,
         *args: str,
@@ -331,15 +331,15 @@ class _DockerCompose(Tool):
     def opts(
         self,
         **flags: Any,
-    ) -> _DockerCompose:
+    ) -> DockerCompose:
         """Bind tool-level global options before the subcommand.
 
         `tools.docker.opts(host=...)` puts a tool's own
         options ahead of the verb, where they belong."""
         ...
 
-class _Docker(Tool):
-    compose: _DockerCompose
+class Docker(Tool):
+    compose: DockerCompose
     def __call__(  # type: ignore[override]
         self,
         *args: str,
@@ -886,7 +886,7 @@ class _Docker(Tool):
         tlskey: _Value = ...,
         tlsverify: _Flag = ...,
         **flags: Any,
-    ) -> _Docker:
+    ) -> Docker:
         """Bind tool-level global options before the subcommand.
 
         `tools.docker.opts(host=...)` puts a tool's own

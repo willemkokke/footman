@@ -358,7 +358,7 @@ def test_rendered_stub_is_valid_python():
     )
     text = _stubgen.render(spec, platform="Linux")
     ast.parse(text)  # a stub that doesn't parse is worse than no stub
-    assert "class _Demo(Tool):" in text
+    assert "class Demo(Tool):" in text
     assert "def build(" in text
     assert "**flags: Any" in text, "the stub must never be able to forbid"
 
@@ -441,8 +441,8 @@ def test_nested_verbs_become_nested_classes():
     )
     text = _stubgen.render(spec)
     ast.parse(text)
-    assert "class _DockerCompose(Tool):" in text
-    assert "compose: _DockerCompose" in text
+    assert "class DockerCompose(Tool):" in text
+    assert "compose: DockerCompose" in text
 
 
 def test_keyword_named_flags_take_the_trailing_underscore():
@@ -587,7 +587,7 @@ def test_sync_writes_a_stub_and_audit_then_agrees(stubs, capsys):
     written = stubs / "ruff.pyi"
     assert written.exists()
     ast.parse(written.read_text())
-    assert "class _Ruff(Tool):" in written.read_text()
+    assert "class Ruff(Tool):" in written.read_text()
     capsys.readouterr()
 
     tools_tasks.audit(only="ruff")
@@ -599,7 +599,7 @@ def test_audit_fails_when_a_stub_drifts(stubs, capsys):
     from footman.tasks import tools as tools_tasks
 
     tools_tasks.sync(only="ruff")
-    (stubs / "ruff.pyi").write_text("class _Ruff(Tool): ...\n")
+    (stubs / "ruff.pyi").write_text("class Ruff(Tool): ...\n")
     capsys.readouterr()
     with pytest.raises(SystemExit, match="differ from the installed tool"):
         tools_tasks.audit(only="ruff")
@@ -607,7 +607,7 @@ def test_audit_fails_when_a_stub_drifts(stubs, capsys):
     # ...and --fix writes the difference instead of complaining.
     tools_tasks.audit(only="ruff", fix=True)
     assert "updated 1 stub" in capsys.readouterr().out
-    assert "class _Ruff(Tool):\n    def __call__(" in (stubs / "ruff.pyi").read_text()
+    assert "class Ruff(Tool):\n    def __call__(" in (stubs / "ruff.pyi").read_text()
 
 
 @needs_ruff

@@ -69,7 +69,7 @@ def _mode(driver: _drivers.Driver, spec: _toolspec.ToolSpec) -> str:
 
 
 def _class_name(key: str) -> str:
-    return "_" + "".join(part.title() for part in key.split("_"))
+    return "".join(part.title() for part in key.split("_"))
 
 
 def _formatted(text: str) -> str:

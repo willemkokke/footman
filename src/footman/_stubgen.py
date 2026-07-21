@@ -72,8 +72,10 @@ def _imports(body: str) -> str:
 
 
 def _class_name(name: str) -> str:
-    """`markdownlint-cli2` → `_MarkdownlintCli2`."""
-    return "_" + "".join(part.title() for part in name.replace("-", "_").split("_"))
+    """`markdownlint-cli2` → `Markdownlint`. Public: these classes are the
+    typed surface of `tools.<name>`, used (only in type position — they are
+    stub-only, never imported at run time) as if they were public."""
+    return "".join(part.title() for part in name.replace("-", "_").split("_"))
 
 
 def _tree(verbs: Iterable[Verb]) -> dict[str, object]:

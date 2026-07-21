@@ -7,7 +7,7 @@ from typing import Any
 
 from footman.tools import Tool, _Flag, _Value
 
-class _Basedpyright(Tool):
+class Basedpyright(Tool):
     def __call__(  # type: ignore[override]
         self,
         *args: str,

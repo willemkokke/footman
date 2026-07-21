@@ -7,7 +7,7 @@ from typing import Any
 
 from footman.tools import Tool, _Flag, _Value, _ValuedFlag
 
-class _Git(Tool):
+class Git(Tool):
     def __call__(  # type: ignore[override]
         self,
         *args: str,
@@ -2201,7 +2201,7 @@ class _Git(Tool):
         paginate: _Flag = ...,
         work_tree: _Value = ...,
         **flags: Any,
-    ) -> _Git:
+    ) -> Git:
         """Bind tool-level global options before the subcommand.
 
         `tools.docker.opts(host=...)` puts a tool's own

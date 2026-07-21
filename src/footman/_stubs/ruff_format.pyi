@@ -8,7 +8,7 @@ from typing import Any, Literal
 
 from footman.tools import Tool, _Flag, _Value
 
-class _RuffFormat(Tool):
+class RuffFormat(Tool):
     def __call__(  # type: ignore[override]
         self,
         *args: str,
