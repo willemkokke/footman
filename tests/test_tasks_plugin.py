@@ -191,11 +191,12 @@ def test_reduce_frames_keeps_only_the_final_repaint():
 
 
 def test_keystrokes_compiles_text_and_tokens():
-    from footman.tasks.docs import keystrokes
+    from footman.tasks.docs import _SETTLE, keystrokes
 
-    sends = keystrokes(("hi", "<TAB>", "<WAIT:500>", "<ENTER>"))
-    assert [data for _, data in sends] == [b"h", b"i", b"\t", b"", b"\r"]
+    sends = keystrokes(("hi", "<TAB>", "<WAIT:500>", "<SETTLE>", "<ENTER>"))
+    assert [data for _, data in sends] == [b"h", b"i", b"\t", b"", b"", b"\r"]
     assert sends[3][0] == 0.5  # <WAIT:500> is a half-second pause, no bytes
+    assert sends[4][0] == _SETTLE  # <SETTLE> waits for output to quiet, no bytes
 
 
 def test_compose_animation_windows_and_shell():

@@ -7,9 +7,12 @@ Chaining works: ``fm format lint --fix test``.
 from __future__ import annotations
 
 import functools
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
 from footman import doc, group, parallel, run, task, tools
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 SRC = ("src", "tests")
 
@@ -112,6 +115,21 @@ def _scaffold_interactive_demo() -> str:
         encoding="utf-8",
     )
     return str(demo)
+
+
+def _assert_cast_captured(svg: Path, needles: list[str]) -> None:
+    """A cast whose answer landed too early (a timing regression) still renders
+    a valid SVG — just without the interaction. Strip the markup and fail the
+    build loudly if a prompt, its answer, or the result went missing, rather
+    than shipping a mute recording no test would catch."""
+    import re
+
+    text = re.sub(
+        r"&#160;", "", re.sub(r"<[^>]+>", "", svg.read_text(encoding="utf-8"))
+    )
+    missing = [n for n in needles if n not in text]
+    if missing:
+        raise RuntimeError(f"{svg.name} dropped {missing} — cast timing regressed?")
 
 
 def _write_latest_changes() -> None:
@@ -335,13 +353,14 @@ def docs_build(check: bool = False):
     )
     # Interactive input, one cast per shape (orchestration.md), against a demo
     # project with an ask() parameter, a confirm= gate, and an interactive wizard.
-    # Generous waits: the prompt must persist a beat so a frame lands on it before
-    # the scripted answer arrives.
+    # <SETTLE> holds each answer until the prompt has finished rendering (output
+    # goes quiet), so a frame always lands on the prompt and a slow boot can't
+    # race the script — timing-independent, unlike a fixed wait.
     interactive_demo = Path(_scaffold_interactive_demo())
     taskdocs_cast(
         "fm release",
         "<ENTER>",
-        "<WAIT:3500>",
+        "<SETTLE>",
         "1.4.0",
         "<ENTER>",
         "<WAIT:2000>",
@@ -354,7 +373,7 @@ def docs_build(check: bool = False):
     taskdocs_cast(
         "fm deploy",
         "<ENTER>",
-        "<WAIT:3500>",
+        "<SETTLE>",
         "y",
         "<ENTER>",
         "<WAIT:2000>",
@@ -367,10 +386,10 @@ def docs_build(check: bool = False):
     taskdocs_cast(
         "fm scaffold",
         "<ENTER>",
-        "<WAIT:3500>",
+        "<SETTLE>",
         "myapp",
         "<ENTER>",
-        "<WAIT:1800>",
+        "<SETTLE>",
         "2",
         "<ENTER>",
         "<WAIT:2000>",
@@ -379,6 +398,17 @@ def docs_build(check: bool = False):
         width=64,
         height=12,
         cwd=interactive_demo,
+    )
+    # Each interactive cast must show its whole interaction — the <SETTLE>
+    # timing exists to guarantee it, so verify the SVGs actually captured the
+    # prompt, the typed answer, and the result before shipping them.
+    _assert_cast_captured(shot / "ask-cast.svg", ["version", "1.4.0", "Releasing"])
+    _assert_cast_captured(shot / "confirm-cast.svg", ["production", "Deploying"])
+    _assert_cast_captured(
+        shot / "interactive-cast.svg",
+        # single tokens: the SVG drops inter-word spaces (&#160;), so "what
+        # kind?" would collapse — "kind" alone still proves the select rendered.
+        ["project", "kind", "library", "plugin", "Scaffolding", "myapp"],
     )
     _write_llms_txt()
     # A conditional flag needs no ternary: strict=check is --strict when

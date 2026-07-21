@@ -233,18 +233,29 @@ _KEY_TOKENS = {
 }
 
 
+# A negative "delay" marks a <SETTLE> step: instead of waiting a fixed time, the
+# pty loop holds the next key until output has gone quiet (see _pty_session) — so
+# a prompt whose render time you can't predict is waited on, not guessed at.
+_SETTLE = -1.0
+_SETTLE_GAP = 0.5  # seconds of silence that count as "settled"
+_SETTLE_MAX = 10.0  # hard cap: fire anyway, so a never-quiet stream can't hang
+
+
 def keystrokes(script: tuple[str, ...]) -> list[tuple[float, bytes]]:
     """Compile a cast script into (delay-before-send, bytes) steps.
 
     Each script argument is either literal text — typed one character at a
-    time at a human-ish cadence — or a token: `<TAB>`, `<ENTER>`,
-    `<SPACE>`, `<BACKSPACE>`, `<CTRL-C>`, `<WAIT>` (pause 0.8 s), or
-    `<WAIT:ms>`.
+    time at a human-ish cadence — or a token: `<TAB>`, `<ENTER>`, `<SPACE>`,
+    `<BACKSPACE>`, `<CTRL-C>`, `<WAIT>` (pause 0.8 s), `<WAIT:ms>`, or
+    `<SETTLE>` (wait until output stops changing — timing-independent, for a
+    prompt whose render time you can't predict).
     """
     sends: list[tuple[float, bytes]] = []
     for part in script:
         if part in _KEY_TOKENS:
             sends.append((0.3, _KEY_TOKENS[part]))
+        elif part == "<SETTLE>":
+            sends.append((_SETTLE, b""))
         elif part == "<WAIT>":
             sends.append((0.8, b""))
         elif part.startswith("<WAIT:") and part.endswith(">"):
@@ -374,18 +385,37 @@ def _pty_session(
     # chunk pushes the start out another half second of silence.
     typing_started = False
     next_at: float | None = None
+    last_output = start  # for <SETTLE>: when the pty last emitted anything
     deadline = None if queue else start + settle
     try:
         while True:
             now = _time.monotonic()
-            if queue and next_at is not None and now >= next_at:
-                typing_started = True
-                _, data = queue.pop(0)
-                if data:
-                    os.write(master, data)
-                next_at = now + (queue[0][0] if queue else 0.0)
-                if not queue:
-                    deadline = now + settle
+            if queue and next_at is not None:
+                if queue[0][0] < 0:
+                    # A <SETTLE> step (negative delay) waits for a prompt to
+                    # finish rendering: output quiet for _SETTLE_GAP *and* the
+                    # cursor sitting past column 0 — a prompt on the line, not
+                    # the col-0 lull of a program still starting up (Python
+                    # boot, task discovery), which is silent but not ready.
+                    # Capped at _SETTLE_MAX so a prompt that never lands — or
+                    # one that ends at column 0 — can't hang the cast; next_at
+                    # holds when the step became due, so the cap counts there.
+                    ready = (
+                        now - last_output >= _SETTLE_GAP and tracker.cursor.x > 0
+                    ) or now - next_at >= _SETTLE_MAX
+                else:
+                    ready = now >= next_at
+                if ready:
+                    typing_started = True
+                    _, data = queue.pop(0)
+                    if data:
+                        os.write(master, data)
+                    if queue:
+                        nd = queue[0][0]
+                        next_at = now if nd < 0 else now + nd
+                    else:
+                        next_at = now
+                        deadline = now + settle
             readable, _, _ = select.select([master], [], [], 0.03)
             if readable:
                 try:
@@ -394,7 +424,8 @@ def _pty_session(
                     break
                 if not data:
                     break
-                chunks.append((_time.monotonic() - start, data))
+                last_output = _time.monotonic()
+                chunks.append((last_output - start, data))
                 tracker_stream.feed(_DCS.sub("", data.decode("utf-8", "replace")))
                 buf = pending + data
                 _answer_queries(
@@ -406,9 +437,10 @@ def _pty_session(
                 )
                 pending = buf[-64:]
                 if not typing_started and queue:
-                    next_at = _time.monotonic() + 0.5 + queue[0][0]
+                    nd = queue[0][0]
+                    next_at = last_output if nd < 0 else last_output + 0.5 + nd
                 if deadline is not None:  # let late repaints settle too
-                    deadline = _time.monotonic() + settle
+                    deadline = last_output + settle
             if deadline is not None and _time.monotonic() >= deadline:
                 break
             if proc.poll() is not None and not readable:
