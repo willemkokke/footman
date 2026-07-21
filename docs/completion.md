@@ -32,12 +32,25 @@ your tasks**, dispatching straight to the stdlib-only resolver. A bare
 `import footman` pays for nothing but the entry module. That is why completion is
 ~15× faster than runners that re-import your project on every keystroke.
 
-## Keeping dynamic completions fresh
+## Dynamic completions are recomputed fresh
 
-The manifest bakes in the output of your [dynamic completers](typing.md#dynamic-completion)
-(git branches, file lists, …), refreshed for free on any real `fm` run. Between
-runs those answers can drift — so if the cached manifest for this directory is
-older than `max_age` when you press <kbd>Tab</kbd>, footman returns the cached
+A [dynamic completer](typing.md#dynamic-completion) (`suggest(fn)`) queries live
+state — git branches, release candidates, deploy targets. When <kbd>Tab</kbd>
+lands on one, footman runs that completer **fresh** in a short-lived subprocess
+rather than serving the value baked into the manifest: answering a build-critical
+question from a stale snapshot is a bug, not a speed-up. The recompute is bounded
+(a couple of seconds) and isolated, so a slow or failing completer degrades to
+*no* candidates — never a hung keystroke, and never the old values.
+
+Only the dynamic value pays that cost. Task names, options, and `Literal` choices
+still answer instantly from the cache, because those can't change without an edit
+to your tasks file.
+
+## Keeping the cache current
+
+The cached manifest is structural — the shape of your CLI — and rebuilds for free
+on any real `fm` run. Between runs it can drift (you added a task), so if it is
+older than `max_age` when you press <kbd>Tab</kbd>, footman serves the cached
 answer instantly and spawns a **detached** rebuild for next time
 (stale-while-revalidate). The <kbd>Tab</kbd> never waits, and concurrent presses
 spawn at most one rebuild.

@@ -49,6 +49,8 @@ _GLOBAL_MAYBE = frozenset(
 _GLOBAL_FILES = frozenset({"--directory", "-C", "--tasks-file", "-f", "--config"})
 _FILES = "\x00files"  # internal sentinel: complete() -> complete_cli()
 _EXIT_FILES = 100  # complete_cli exit code the hooks read as "complete files"
+_DYNAMIC = "\x00dynamic"  # internal sentinel: a dynamic completer, recompute fresh
+_DYNAMIC_TIMEOUT = 2.0  # seconds to wait for a fresh dynamic completer subprocess
 _SHELLS = ("bash", "zsh", "fish", "pwsh", "nushell")
 _GLOBAL_CHOICES = {
     "--install-completion": _SHELLS,
@@ -150,6 +152,7 @@ def complete(tree: dict, words: list[str]) -> list[str]:
     prior, value_global = _consume_globals(prior)
 
     node, seg = tree, _Segment()
+    path: list[str] = []  # the group/task names of the current segment
     value_opt: dict | None = None  # the option whose value comes next
 
     for word in prior:
@@ -161,13 +164,15 @@ def complete(tree: dict, words: list[str]) -> list[str]:
             value_opt = None
             continue
         if word == "+":  # explicit segment boundary
-            node, seg = tree, _Segment()
+            node, seg, path = tree, _Segment(), []
             continue
         if seg.task is None:
             if word in node["groups"]:
                 node = node["groups"][word]
+                path.append(word)
             elif word in node["tasks"]:
                 seg = _Segment(node["tasks"][word])
+                path.append(word)
             continue
         # Inside a task's tail: options and their values first.
         name = word.split("=", 1)[0]
@@ -189,11 +194,13 @@ def complete(tree: dict, words: list[str]) -> list[str]:
             continue
         if seg.rest is not None:
             continue
-        node, seg = tree, _Segment()
+        node, seg, path = tree, _Segment(), []
         if word in tree["groups"]:
             node = tree["groups"][word]
+            path.append(word)
         elif word in tree["tasks"]:
             seg = _Segment(tree["tasks"][word])
+            path.append(word)
 
     # A leading global expecting a value (`fm --install-completion <TAB>`):
     # offer its choices, if any (a PATH-valued global has none — the shell's
@@ -208,10 +215,12 @@ def complete(tree: dict, words: list[str]) -> list[str]:
     # Value position: the previous word was an option expecting a value. A bash
     # `--opt=<TAB>` can leave the `=` as the partial — strip it.
     if value_opt is not None:
+        if partial.startswith("="):  # bash `--opt=<TAB>` leaves `=` as the partial
+            partial = partial[1:]
         if "path" in value_opt.get("types", []):
             return [_FILES]  # a Path-typed option value — files
-        if partial.startswith("="):
-            partial = partial[1:]
+        if value_opt.get("dynamic"):  # recompute fresh, never the baked snapshot
+            return [_DYNAMIC, partial, value_opt["name"], *path]
         return [c for c in value_opt.get("choices", []) if c.startswith(partial)]
 
     if seg.task is None:
@@ -241,8 +250,11 @@ def complete(tree: dict, words: list[str]) -> list[str]:
     # `-` still reaches the options below, so they stay one keystroke away.
     if not partial.startswith("-"):
         pending = seg.fixed[seg.filled] if seg.filled < len(seg.fixed) else seg.rest
-        if pending is not None and "path" in pending.get("types", []):
-            return [_FILES]
+        if pending is not None:
+            if "path" in pending.get("types", []):
+                return [_FILES]
+            if pending.get("dynamic"):  # recompute fresh, never the baked snapshot
+                return [_DYNAMIC, partial, pending["name"], *path]
 
     # Option position: this task's flags/options — minus the ones already
     # given, unless the param legitimately repeats — plus what the next bare
@@ -325,8 +337,8 @@ def _spawn_refresh() -> None:
         return  # a background refresh must never break completion
 
 
-def _tasks_file_from(args: list[str]) -> str | None:
-    """The `-f`/`--tasks-file` value among the leading globals, or None.
+def _leading_global_value(args: list[str], names: tuple[str, ...]) -> str | None:
+    """The value of the first of *names* among the leading globals, or None.
 
     Walks only the leading globals — stopping at the first task name — skipping
     other flags and value-options by the same arity mirror the resolver uses.
@@ -334,9 +346,9 @@ def _tasks_file_from(args: list[str]) -> str | None:
     i = 0
     while i < len(args):
         tok = args[i]
-        if tok in ("-f", "--tasks-file"):
+        if tok in names:
             return args[i + 1] if i + 1 < len(args) else None
-        if tok.startswith("--tasks-file="):
+        if any(tok.startswith(n + "=") for n in names):
             return tok.split("=", 1)[1]
         name = tok.split("=", 1)[0]
         if "=" not in tok and name in _GLOBAL_VALUE:
@@ -346,6 +358,58 @@ def _tasks_file_from(args: list[str]) -> str | None:
         else:
             break  # the first non-global — a task name (or its partial)
     return None
+
+
+def _tasks_file_from(args: list[str]) -> str | None:
+    """The `-f`/`--tasks-file` value among the leading globals, or None."""
+    return _leading_global_value(args, ("-f", "--tasks-file"))
+
+
+def _emit(lines: list[str]) -> None:
+    """Write completion candidates, one per line, LF-terminated.
+
+    LF, always. The completion protocol is footman's own, and on Windows
+    text-mode stdout translates every "\\n" to "\\r\\n": a shell that reads lines
+    literally (git-bash's `read`) keeps the carriage return and completes
+    `--fix\\r`, planting a stray CR at the cursor. Writing bytes to the
+    underlying buffer skips the translation and pins UTF-8; captured stdout
+    (tests, some wrappers) has no buffer, so fall back.
+    """
+    if not lines:
+        return
+    payload = "\n".join(lines) + "\n"
+    buffer = getattr(sys.stdout, "buffer", None)
+    if buffer is None:
+        sys.stdout.write(payload)
+    else:
+        buffer.write(payload.encode("utf-8"))
+        buffer.flush()
+
+
+def _fresh_dynamic(param: str, path: list[str], args: list[str]) -> list[str] | None:
+    """Run *param*'s completer fresh in a subprocess; None on timeout/failure.
+
+    Isolated on purpose: the subprocess imports the framework and the user's
+    code, which the hot path must never do. A timeout or non-zero exit returns
+    None, and the caller shows nothing rather than a stale snapshot.
+    """
+    cmd = [sys.executable, "-m", "footman._suggest", "--param", param]
+    for name in path:
+        cmd += ["--path", name]
+    prior = args[:-1]
+    if (tf := _leading_global_value(prior, ("-f", "--tasks-file"))) is not None:
+        cmd += ["--tasks-file", tf]
+    if (cf := _leading_global_value(prior, ("--config",))) is not None:
+        cmd += ["--config", cf]
+    try:
+        proc = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=_DYNAMIC_TIMEOUT
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if proc.returncode != 0:
+        return None
+    return [v for v in proc.stdout.splitlines() if v]
 
 
 def complete_cli(args: list[str]) -> int:
@@ -395,22 +459,18 @@ def complete_cli(args: list[str]) -> int:
         # A path value: print nothing, and signal the hook to complete files.
         _maybe_refresh(manifest, data)
         return _EXIT_FILES
-    if out:
-        # LF, always. The completion protocol is footman's own, and on
-        # Windows text-mode stdout translates every "\n" to "\r\n": a
-        # shell that reads lines literally (git-bash's `read`) keeps the
-        # carriage return and completes `--fix\r`, planting a stray CR at
-        # the user's cursor. Writing bytes to the underlying buffer skips
-        # the translation entirely — and pins UTF-8 while we're here.
-        # Captured stdout (tests, some wrappers) has no buffer: fall back.
-        payload = "\n".join(out) + "\n"
-        buffer = getattr(sys.stdout, "buffer", None)
-        if buffer is None:
-            sys.stdout.write(payload)
-        else:
-            buffer.write(payload.encode("utf-8"))
-            buffer.flush()
-    _maybe_refresh(manifest, data)  # SWR: keep dynamic completers from going stale
+    if out and out[0] == _DYNAMIC:
+        # A dynamic completer: recompute it fresh in a subprocess rather than
+        # serve the manifest's baked snapshot — a build-critical answer must not
+        # be stale. Empty on timeout or failure, never the old values.
+        partial, param, seg_path = out[1], out[2], out[3:]
+        fresh = _fresh_dynamic(param, seg_path, args)
+        if fresh is not None:
+            _emit([c for c in fresh if c.startswith(partial)])
+        _maybe_refresh(manifest, data)
+        return 0
+    _emit(out)
+    _maybe_refresh(manifest, data)  # SWR: refresh the baked fallback + structural set
     return 0
 
 

@@ -7,7 +7,7 @@ from typing import Annotated
 
 from footman import manifest, registry, task
 from footman._complete import _tasks_file_from, complete, complete_cli
-from footman.params import doc
+from footman.params import doc, suggest
 
 
 def _names(result):
@@ -354,6 +354,122 @@ def test_path_positional_signals_file_completion():
 
     built2 = manifest.build_manifest(root2)["tree"]
     assert complete(built2, ["greet", ""]) != [_FILES]
+
+
+# --- dynamic completers: recomputed fresh, never the baked snapshot -----------
+
+
+def _demo_suggest():
+    return ["alpha", "beta"]
+
+
+def test_dynamic_option_signals_recompute():
+    from footman._complete import _DYNAMIC
+
+    with registry.capture() as root:
+
+        @task
+        def deploy(target: Annotated[str, suggest(_demo_suggest)] = ""):
+            "Deploy."
+
+    built = manifest.build_manifest(root)["tree"]
+    # the value is dynamic → defer to a fresh recompute, carrying the partial,
+    # the param name, and the task path
+    assert complete(built, ["deploy", "--target", ""]) == [
+        _DYNAMIC,
+        "",
+        "target",
+        "deploy",
+    ]
+
+
+def _dynamic_project(tmp_path):
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    (proj / "pyproject.toml").write_text("[project]\nname='x'\nversion='0'\n")
+    (proj / "tasks.py").write_text(
+        "from pathlib import Path\n"
+        "from typing import Annotated\n"
+        "from footman import task\n"
+        "from footman.params import suggest\n\n"
+        "def _targets():\n"
+        "    return Path('targets.txt').read_text().split()\n\n"
+        "@task\n"
+        "def deploy(target: Annotated[str, suggest(_targets)] = ''):\n"
+        "    'Deploy.'\n"
+    )
+    return proj
+
+
+def test_suggest_values_runs_the_completer_fresh(tmp_path, monkeypatch):
+    from footman import _suggest
+
+    proj = _dynamic_project(tmp_path)
+    monkeypatch.chdir(proj)
+    (proj / "targets.txt").write_text("gamma\ndelta\n")
+    assert _suggest._values("target", ["deploy"], {}) == ["gamma", "delta"]
+    # a miss — unknown param or task — is empty, never an error
+    assert _suggest._values("nope", ["deploy"], {}) == []
+    assert _suggest._values("target", ["ghost"], {}) == []
+
+
+def test_suggest_main_swallows_a_failing_completer(tmp_path, monkeypatch, capsys):
+    from footman import _suggest
+
+    proj = _dynamic_project(tmp_path)
+    monkeypatch.chdir(proj)
+    # no targets.txt → the completer raises → no candidates, exit 0
+    assert _suggest.main(["--param", "target", "--path", "deploy"]) == 0
+    assert capsys.readouterr().out == ""
+
+
+def test_dynamic_completion_is_fresh_not_baked(tmp_path, monkeypatch, capsys):
+    from footman import _app
+
+    monkeypatch.setenv("FOOTMAN_CACHE_DIR", str(tmp_path / "cache"))
+    proj = _dynamic_project(tmp_path)
+    monkeypatch.chdir(proj)
+
+    (proj / "targets.txt").write_text("alpha\nbeta\n")
+    assert _app.run(["--list"]) == 0  # bake the manifest with alpha/beta
+    capsys.readouterr()
+
+    (proj / "targets.txt").write_text("gamma\ndelta\n")  # the world moved on
+    complete_cli(["--", "deploy", "--target", ""])
+    assert capsys.readouterr().out.split() == ["gamma", "delta"]  # fresh, not baked
+
+
+def test_fresh_dynamic_passes_context_and_falls_back(monkeypatch):
+    import subprocess
+
+    from footman import _complete
+
+    captured: dict[str, list[str]] = {}
+
+    def ok(cmd, **k):
+        captured["cmd"] = cmd
+        return subprocess.CompletedProcess(cmd, 0, "gamma\ndelta\n", "")
+
+    monkeypatch.setattr(_complete.subprocess, "run", ok)
+    args = ["-f", "x.py", "--config", "c.toml", "deploy", "--target", ""]
+    assert _complete._fresh_dynamic("target", ["deploy"], args) == ["gamma", "delta"]
+    cmd = captured["cmd"]  # the subprocess carries the target and the context
+    assert cmd[cmd.index("--param") + 1] == "target"
+    assert cmd[cmd.index("--path") + 1] == "deploy"
+    assert cmd[cmd.index("--tasks-file") + 1] == "x.py"
+    assert cmd[cmd.index("--config") + 1] == "c.toml"
+
+    def timeout(*a, **k):
+        raise subprocess.TimeoutExpired(cmd="x", timeout=2)
+
+    monkeypatch.setattr(_complete.subprocess, "run", timeout)
+    assert _complete._fresh_dynamic("target", ["deploy"], ["a", ""]) is None
+
+    def nonzero(*a, **k):
+        return subprocess.CompletedProcess("x", 1, "", "")
+
+    monkeypatch.setattr(_complete.subprocess, "run", nonzero)
+    assert _complete._fresh_dynamic("target", ["deploy"], ["a", ""]) is None
 
 
 # --- chain-aware completion -----------------------------------------------------

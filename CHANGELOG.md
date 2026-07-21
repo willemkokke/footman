@@ -9,6 +9,14 @@ versions may include breaking changes.
 
 ### Added
 
+- **Dynamic completions are recomputed fresh at <kbd>Tab</kbd>, not served
+  stale.** A `suggest(fn)` completer queries live state (git branches, release
+  candidates, deploy targets), so footman now runs it fresh in a bounded,
+  isolated subprocess when you complete its value — rather than serving the
+  snapshot baked into the manifest, which is exactly wrong for a build-critical
+  answer. A slow or failing completer degrades to no candidates, never the old
+  values; task names, options, and `Literal` choices still answer instantly from
+  the cache.
 - **<kbd>Tab</kbd> completes file paths for path-valued arguments.** The
   path-valued globals (`-f`/`--tasks-file`, `-C`/`--directory`, `--config`) and
   any task option annotated `Path` now hand off to your shell's own file

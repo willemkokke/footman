@@ -378,17 +378,22 @@ def test_invalid_custom_value_fails_cleanly():
 # --- dynamic completion (suggest) --------------------------------------------
 
 
-def test_dynamic_choices_filled_and_completed():
+def test_dynamic_choices_baked_but_completion_defers():
+    from footman._complete import _DYNAMIC
+
     def tasks(reg):
         @reg.task
         def build(project: Annotated[str, suggest(lambda: ["alpha", "beta"])]): ...
 
     _, tree = build_tree(tasks)
     spec = tree["tasks"]["build"]["params"][0]
-    assert spec["choices"] == ["alpha", "beta"]
+    assert spec["choices"] == ["alpha", "beta"]  # baked as the fallback snapshot
     assert spec["dynamic"] == {"strict": True}
-    assert set(complete(tree, ["build", ""])) == {"alpha", "beta"}
-    assert complete(tree, ["build", "al"]) == ["alpha"]
+    # Completion no longer serves the baked snapshot: it defers to a fresh
+    # recompute (a subprocess, exercised end to end in test_complete), returning
+    # a sentinel carrying the partial, the param name, and the task path.
+    assert complete(tree, ["build", ""]) == [_DYNAMIC, "", "project", "build"]
+    assert complete(tree, ["build", "al"]) == [_DYNAMIC, "al", "project", "build"]
 
 
 def test_dynamic_strict_validation_rejects_unknown():
