@@ -7,6 +7,20 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- **<kbd>Tab</kbd> completes file paths for path-valued arguments.** The
+  path-valued globals (`-f`/`--tasks-file`, `-C`/`--directory`, `--config`) and
+  any task option annotated `Path` now hand off to your shell's own file
+  completion — `_files` in zsh, readline's filename completion in bash, and the
+  fish/pwsh/nushell equivalents. A plain `str`/`int` value still completes
+  nothing, so files are offered only where a path is actually wanted.
+- **`fm -f <file> <TAB>` completes that file's tasks.** A one-file run reads
+  its own tasks, so its completion now does too — cached under a key pairing the
+  file with the cwd, separate from (and never overwriting) the plain-cwd cache.
+  `-f` and `--config` are documented as orthogonal: each disables only its own
+  cascade.
+
 ## [0.16.0] — 2026-07-21
 
 ### Added

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Annotated
 
 from footman import manifest, registry, task
@@ -261,6 +262,73 @@ def test_f_completion_reads_the_source_key(tmp_path, monkeypatch, capsys):
     complete_cli(["--", "-f", str(tf), ""])
     out = capsys.readouterr().out.split()
     assert "alpha" in out and "beta" in out
+
+
+def test_f_partial_value_defers_to_file_completion(tmp_path, monkeypatch, capsys):
+    from footman._complete import _EXIT_FILES
+
+    monkeypatch.setenv("FOOTMAN_CACHE_DIR", str(tmp_path / "cache"))
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    monkeypatch.chdir(proj)
+
+    g = registry.Group("root")
+
+    @g.task
+    def alpha(): ...
+
+    # `-f cust` here is a *partial* being typed, not a finished override, so
+    # completion must land on the cwd tree and signal files (exit 100) rather
+    # than hunt for a "(cwd, 'cust')" manifest that never existed.
+    manifest.sync_manifest(g, Path.cwd(), completion_max_age=0)
+    assert complete_cli(["--", "-f", "cust"]) == _EXIT_FILES
+    assert capsys.readouterr().out == ""
+
+
+# --- file-path completion for Path values ------------------------------------
+
+
+def test_path_value_globals_signal_file_completion(tree):
+    from footman._complete import _FILES, _GLOBAL_FILES, _GLOBAL_VALUE
+
+    assert _GLOBAL_FILES <= _GLOBAL_VALUE  # every file-global consumes its value
+    assert complete(tree, ["-f", ""]) == [_FILES]
+    assert complete(tree, ["--config", ""]) == [_FILES]
+    assert complete(tree, ["-C", ""]) == [_FILES]
+    assert complete(tree, ["--where", ""]) != [_FILES]  # --where takes a task
+
+
+def test_complete_cli_exits_files_for_a_path_value(tmp_path, capsys):
+    from footman._complete import _EXIT_FILES
+
+    m = tmp_path / "m.json"
+    m.write_text('{"tree": {"tasks": {}, "groups": {}}}')
+    rc = complete_cli(["--manifest", str(m), "--", "-f", ""])
+    assert rc == _EXIT_FILES
+    assert capsys.readouterr().out == ""
+
+
+def test_path_typed_option_value_signals_file_completion():
+    from footman._complete import _FILES
+
+    with registry.capture() as root:
+
+        @task
+        def fetch(out: Path = Path(".")):
+            "Fetch."
+
+    built = manifest.build_manifest(root)["tree"]
+    assert complete(built, ["fetch", "--out", ""]) == [_FILES]
+    # a plain str option value has no such signal — it stays empty, so the
+    # shell never bluntly offers files where a name was wanted.
+    with registry.capture() as root2:
+
+        @task
+        def greet(name: str = "world"):
+            "Greet."
+
+    built2 = manifest.build_manifest(root2)["tree"]
+    assert complete(built2, ["greet", "--name", ""]) == []
 
 
 # --- chain-aware completion -----------------------------------------------------

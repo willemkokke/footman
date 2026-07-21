@@ -43,6 +43,12 @@ _GLOBAL_VALUE = frozenset(
 _GLOBAL_MAYBE = frozenset(
     {"--install-completion", "--setup-completion", "--uninstall-completion"}
 )  # value optional
+# Value positions that are file paths. footman can't know the filesystem from a
+# cached manifest (and shouldn't try), so the resolver signals these and the
+# shell hooks defer to native file completion.
+_GLOBAL_FILES = frozenset({"--directory", "-C", "--tasks-file", "-f", "--config"})
+_FILES = "\x00files"  # internal sentinel: complete() -> complete_cli()
+_EXIT_FILES = 100  # complete_cli exit code the hooks read as "complete files"
 _SHELLS = ("bash", "zsh", "fish", "pwsh", "nushell")
 _GLOBAL_CHOICES = {
     "--install-completion": _SHELLS,
@@ -193,6 +199,8 @@ def complete(tree: dict, words: list[str]) -> list[str]:
     # offer its choices, if any (a PATH-valued global has none — the shell's
     # default file completion covers it).
     if value_global is not None:
+        if value_global in _GLOBAL_FILES:
+            return [_FILES]  # a path value — hand off to the shell's file completion
         return [
             c for c in _GLOBAL_CHOICES.get(value_global, ()) if c.startswith(partial)
         ]
@@ -200,6 +208,8 @@ def complete(tree: dict, words: list[str]) -> list[str]:
     # Value position: the previous word was an option expecting a value. A bash
     # `--opt=<TAB>` can leave the `=` as the partial — strip it.
     if value_opt is not None:
+        if "path" in value_opt.get("types", []):
+            return [_FILES]  # a Path-typed option value — files
         if partial.startswith("="):
             partial = partial[1:]
         return [c for c in value_opt.get("choices", []) if c.startswith(partial)]
@@ -356,7 +366,12 @@ def complete_cli(args: list[str]) -> int:
 
         from footman import _paths
 
-        override = _tasks_file_from(args)
+        # The last word is the partial being completed: `fm -f <TAB>` is a file
+        # being typed, not a finished override — so read the override from the
+        # prior words only, leaving `-f`'s own value to native file completion
+        # (the resolver signals it below). A finished `-f file <TAB>` still keys
+        # by the pair.
+        override = _tasks_file_from(args[:-1])
         manifest = str(
             _paths.source_manifest_path(Path.cwd(), Path(override))
             if override
@@ -367,6 +382,10 @@ def complete_cli(args: list[str]) -> int:
     if data is None or not isinstance(data.get("tree"), dict):
         return 0  # nothing cached yet — stay silent and fast
     out = complete(data["tree"], args)
+    if out == [_FILES]:
+        # A path value: print nothing, and signal the hook to complete files.
+        _maybe_refresh(manifest, data)
+        return _EXIT_FILES
     if out:
         # LF, always. The completion protocol is footman's own, and on
         # Windows text-mode stdout translates every "\n" to "\r\n": a

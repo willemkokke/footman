@@ -70,6 +70,21 @@ build   — compile and bundle
 deploy  — ship to an environment
 ```
 
+## File paths
+
+A value that takes a filesystem path completes files — footman hands off to
+your shell's own path completion rather than reading the disk from its cached
+manifest. This covers the path-valued globals (`-f`/`--tasks-file`,
+`-C`/`--directory`, `--config`) and any task option annotated `Path`:
+
+```sh
+fm -f tasks/<TAB>          # your shell's own file completion
+fm build --out dist/<TAB>  # a Path-typed option, the same way
+```
+
+A plain `str` or `int` value has no such handoff: it completes nothing, rather
+than bluntly offering files where a name was wanted.
+
 ## Your shell
 
 One command — footman detects which shell invoked it (by walking the

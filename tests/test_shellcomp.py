@@ -128,6 +128,24 @@ def test_branded_prog_threads_through(home):
     assert "_acme_tool_complete" in body  # function names sanitised
 
 
+# The resolver exits 100 at a path value (`-f <TAB>`, a Path-typed option); each
+# hook reads that and hands off to the shell's own file completion.
+_FILE_HANDOFF = {
+    "bash": "compopt",
+    "zsh": "_files",
+    "fish": "__fish_complete_path",
+    "pwsh": "CompleteFilename",
+    "nushell": "exit_code == 100",
+}
+
+
+@pytest.mark.parametrize("shell", _shellcomp.SHELLS)
+def test_hook_hands_path_values_to_native_file_completion(shell):
+    body = _shellcomp.script_for(shell, "fm")
+    assert "100" in body  # the resolver's "this is a path value" exit code
+    assert _FILE_HANDOFF[shell] in body  # the shell's file-completion primitive
+
+
 def test_cli_install_end_to_end(home, tmp_path, monkeypatch, capsys):
     (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
     (tmp_path / "tasks.py").write_text(
@@ -469,6 +487,29 @@ def test_fish_completion_functional(home, fm_project_dir):
     assert "lint" in out.stdout.split()
     assert "--fix" in out.stdout.split()
     assert "Lint." in out.stdout  # 11.2: fish renders the tab-separated description
+
+
+@_posix_shell
+@pytest.mark.skipif(shutil.which("fish") is None, reason="fish not installed")
+def test_fish_completes_files_after_a_path_flag(home, fm_project_dir):
+    """`-f` takes a file path: the resolver exits 100 and the hook defers to
+    fish's own path completion, so a real file in the project dir completes."""
+    script = home / "completion.fish"
+    script.write_text(_shellcomp.script_for("fish", "fm"), encoding="utf-8")
+    body = (
+        f"set -gx PATH {VENV_BIN} $PATH\n"
+        f'source "{script}"\n'
+        'complete -C "fm -f t"\n'  # tasks.py is the only t* in the project dir
+    )
+    out = subprocess.run(
+        ["fish", "-c", body],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        cwd=fm_project_dir,
+    )
+    assert out.returncode == 0, out.stderr
+    assert "tasks.py" in out.stdout
 
 
 # --- bare --install-completion: shell auto-detection -----------------------------
