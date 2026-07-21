@@ -155,6 +155,14 @@ And a project **opts in** through config:
 plugins = ["mkdocs"]        # mounts as `fm mkdocs build`, `fm mkdocs deploy`
 ```
 
+A plugin's **name is its command path**, so a dotted name nests — one group
+per segment — and plugins that share a prefix meet under one namespace group
+without either owning it:
+
+```toml
+plugins = ["footman.docs", "footman.tools"]   # `fm footman docs …`, `fm footman tools …`
+```
+
 or adopts pieces of it from a tasks file, composing with `include()`:
 
 ```python

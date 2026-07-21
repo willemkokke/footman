@@ -234,16 +234,46 @@ def plugin(name: str) -> Group:
 
 
 def mount_plugins(base: Group, names: list[str]) -> None:
-    """Mount config-listed plugins as root groups named by entry point.
+    """Mount config-listed plugins at the command path each name spells.
+
+    A plugin's name *is* its command path. A bare name mounts at the root
+    (`plugins = ["acme"]` → `fm acme …`); a dotted name nests, one group per
+    segment (`plugins = ["footman.tools"]` → `fm footman tools …`). The last
+    segment names the entry point to resolve; the leading segments are
+    namespace groups, created on demand and shared by every plugin that
+    spells the same prefix — so `footman.docs` and `footman.tools` meet under
+    one `footman` group without either owning it.
 
     Called by the app layer *before* the cascade overlays, so user-defined
     names shadow plugin groups silently — consistent with the cascade's own
     nearest-wins rule.
     """
-    for name in names:
-        tree = _fork(plugin(str(name)))  # graft a private copy; never the memo
-        base.tasks.pop(name, None)
-        base.groups[name] = tree if tree.name != "root" else _named(tree, name)
+    for raw in names:
+        dotted = str(raw)
+        tree = _fork(plugin(dotted))  # graft a private copy; never the memo
+        *parents, leaf = dotted.split(".")
+        target = base
+        for segment in parents:
+            target = _namespace(target, segment)
+        target.tasks.pop(leaf, None)
+        target.groups[leaf] = tree if tree.name == leaf else _named(tree, leaf)
+
+
+def _namespace(parent: Group, name: str) -> Group:
+    """The subgroup *name* of *parent*, reused if present or created if not.
+
+    Each leading segment of a dotted plugin name is a namespace group; two
+    plugins that share a prefix (`footman.docs`, `footman.tools`) share the
+    group rather than fight over it. A task of the same name yields — a group
+    has to sit there for anything to nest beneath it.
+    """
+    existing = parent.groups.get(name)
+    if isinstance(existing, Group):
+        return existing
+    parent.tasks.pop(name, None)
+    created = Group(name)
+    parent.groups[name] = created
+    return created
 
 
 def _named(tree: Group, name: str) -> Group:

@@ -773,7 +773,7 @@ def test_zsh_cast_records_an_animated_completion(home, tmp_path, monkeypatch):
     (FOOTMAN_CACHE_DIR carries it past the scratch HOME), and the frames
     composed into one animated SVG."""
     (tmp_path / "pyproject.toml").write_text(
-        "[project]\nname='x'\n[tool.footman]\nplugins = ['footman']\n"
+        "[project]\nname='x'\n[tool.footman]\nplugins = ['footman.docs']\n"
     )
     (tmp_path / "tasks.py").write_text(
         'from footman import task\n\n@task\ndef lint(fix: bool = False):\n    "Lint."\n'
@@ -846,7 +846,7 @@ def test_cast_completes_in_every_posix_shell(shell: str, home, tmp_path, monkeyp
     if shutil.which(exe) is None:
         pytest.skip(f"{exe} not installed")
     (tmp_path / "pyproject.toml").write_text(
-        "[project]\nname='x'\n[tool.footman]\nplugins = ['footman']\n"
+        "[project]\nname='x'\n[tool.footman]\nplugins = ['footman.docs']\n"
     )
     (tmp_path / "tasks.py").write_text(
         'from footman import task\n\n@task\ndef lint(fix: bool = False):\n    "Lint."\n'

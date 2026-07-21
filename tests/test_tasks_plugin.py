@@ -1,4 +1,5 @@
-"""The first-party `footman` plugin: mounting, page/site tasks, hot path."""
+"""The first-party `footman.docs`/`footman.tools` plugins: nested mounting,
+page/site tasks, hot path."""
 
 from __future__ import annotations
 
@@ -16,7 +17,8 @@ from footman import _app, _paths
 @pytest.fixture
 def plugin_project(tmp_path, monkeypatch):
     (tmp_path / "pyproject.toml").write_text(
-        "[project]\nname='x'\n[tool.footman]\nplugins = ['footman']\n"
+        "[project]\nname='x'\n[tool.footman]\n"
+        "plugins = ['footman.docs', 'footman.tools']\n"
     )
     (tmp_path / "tasks.py").write_text(
         "from footman import task, group\n"
