@@ -54,6 +54,12 @@ def test_leading_globals(tree):
     ]
 
 
+def test_interactivity_globals(tree):
+    # --yes / --no-input parse as leading globals; -y canonicalises to --yes.
+    assert globs(tree, "-y --no-input format") == ["--yes", "--no-input"]
+    assert [s.task for s in segs(tree, "-y --no-input format")] == ["format"]
+
+
 def test_group_descent_and_typed_option(tree):
     (seg,) = segs(tree, "docs serve --port 8001")
     assert seg.task == "docs.serve"

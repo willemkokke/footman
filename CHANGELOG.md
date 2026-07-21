@@ -9,6 +9,19 @@ versions may include breaking changes.
 
 ### Added
 
+- **Interactive input, typed and CI-safe.** A parameter marked
+  `Annotated[T, ask()]` prompts for its value when the CLI and env don't
+  supply it, coercing the answer through the same pipeline as a flag — a
+  `Literal` is a typed choice, a bad value re-asks — with precedence
+  CLI > env > default > prompt. Off a terminal, under `--no-input`, or in
+  `--json` it errors naming the flag rather than hanging. `prompt()`,
+  `confirm()`, and `select()` are public primitives for asking mid-run, but
+  **guarded**: called inside an ordinary task they raise a taught error,
+  because the prompt would be swallowed by the capture buffer or race a
+  parallel sibling — a task that genuinely owns the terminal declares
+  `@task(interactive=True)` (it runs sequentially, uncaptured, with sole
+  stdio). New globals: `--yes` (auto-answer confirms) and `--no-input`
+  (never prompt).
 - **Dynamic completions are recomputed fresh at <kbd>Tab</kbd>, not served
   stale.** A `suggest(fn)` completer queries live state (git branches, release
   candidates, deploy targets), so footman now runs it fresh in a bounded,

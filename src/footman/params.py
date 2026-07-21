@@ -166,3 +166,27 @@ class doc:
 
     def __init__(self, text: str) -> None:
         self.text = text
+
+
+class ask:
+    """Prompt for a parameter's value when it isn't supplied, via `Annotated`:
+
+    ```python
+    def release(version: Annotated[str, ask()]): ...
+    ```
+
+    A *required* (defaultless) parameter marked `ask()` is prompted for when it
+    is not given on the command line and no `env` fills it — the answer runs
+    through the same coercion and validation as a CLI token, re-asking on a bad
+    value. Precedence stays CLI > env > default > prompt, so `ask()` only
+    prompts a parameter with **no default** (a default is the answer). Off a
+    terminal, under `--no-input`, or in `--json` it errors naming the flag
+    rather than hanging. `secret=True` hides the input (getpass); `prompt="…"`
+    overrides the question text.
+    """
+
+    __slots__ = ("prompt", "secret")
+
+    def __init__(self, *, secret: bool = False, prompt: str | None = None) -> None:
+        self.secret = secret
+        self.prompt = prompt

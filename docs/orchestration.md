@@ -37,6 +37,76 @@ fm -s a b c         # -s/--sequential runs them one at a time -> ~3.0s
     line are stderr commentary, so redirecting stdout captures task output
     alone.
 
+## Interactive input
+
+A bare `input()` doesn't work in a task: its prompt goes to stdout, which
+footman buffers so parallel output can't interleave — so the prompt is
+swallowed and the task looks hung. There are two better shapes, and both are
+CI-safe by construction.
+
+### Ask for a value: `ask()`
+
+Mark a typed parameter `ask()` and footman prompts for it when the command line
+and its `env()` don't supply one, coercing the answer through the same pipeline
+as a flag:
+
+```python
+from typing import Annotated, Literal
+from footman import ask, task
+
+@task
+def release(version: Annotated[str, ask()]): ...
+
+@task
+def deploy(env: Annotated[Literal["staging", "prod"], ask()]): ...
+```
+
+`fm release --version 1.2.3` uses the flag; `fm release` asks `version:` and
+runs the answer through coercion — a `Literal` is a typed choice, a bad value
+re-asks. The precedence is **CLI > `env` > default > prompt**: a default *is*
+the answer, so `ask()` only prompts a parameter that has none. (An `ask()`
+parameter is a CLI-optional option, so it never becomes a required positional.)
+
+The safety is the point: off a terminal, under `--no-input`, or in `--json`,
+`ask()` **errors naming the flag** instead of hanging — an unattended run fails
+loudly, and CI passes the value as a flag like any other.
+
+### Gate a task: `@task(confirm=…)`
+
+A yes/no question asked *before* the task and its prerequisites run:
+
+```python
+@task(confirm="Deploy to production?")
+def deploy(): ...
+```
+
+Deny it and the task is skipped and the run exits non-zero. `--yes` auto-answers
+it (for CI and scripts), and off a terminal without `--yes` the answer is no —
+footman never proceeds unasked.
+
+### Own the terminal: `@task(interactive=True)`
+
+`prompt()`, `confirm()`, and `select()` ask mid-task, but they are **guarded**:
+called inside an ordinary task they raise a taught error, because the prompt
+would be swallowed by the capture buffer or race a parallel sibling. A task that
+genuinely runs a wizard or a REPL declares itself interactive — it then owns the
+real terminal (uncaptured, sole stdio, run one at a time):
+
+```python
+from footman import prompt, select, task
+
+@task(interactive=True)
+def scaffold():
+    name = prompt("project name? ")
+    kind = select("what kind?", ["library", "app", "plugin"])
+    ...
+```
+
+`select()` picks one — or `multiple=True` picks several — from a list computed
+at run time, the case a flag can't cover. Two globals cover the rest: `--yes`
+auto-answers every confirm, and `--no-input` refuses to prompt (a required
+prompt errors instead).
+
 ## Dependencies with `pre` / `post`
 
 Declare prerequisites and follow-ups on the task; footman schedules them

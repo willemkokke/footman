@@ -26,6 +26,14 @@ straight from the `footman` package (`from footman import task, run, App`).
 
 ::: footman.context.track
 
+## Asking the person running it
+
+::: footman.context.prompt
+
+::: footman.context.confirm
+
+::: footman.context.select
+
 ## Fetching
 
 ::: footman._fetch.fetch
@@ -71,6 +79,8 @@ straight from the `footman` package (`from footman import task, run, App`).
 ::: footman.params.check
 
 ::: footman.params.doc
+
+::: footman.params.ask
 
 ## Docstrings
 

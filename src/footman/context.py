@@ -23,7 +23,7 @@ import subprocess
 import sys
 import threading
 import time
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Sequence
 from contextvars import ContextVar
 from dataclasses import dataclass, field, replace
 from pathlib import Path
@@ -77,6 +77,11 @@ class Context:
     honours it too. Deliberately not set by the scheduler's own
     single-node routing, which is presentation, not a request to
     serialise task bodies."""
+    assume_yes: bool = False
+    """`--yes`: every `confirm()` gate auto-answers yes, for CI and scripts."""
+    no_input: bool = False
+    """`--no-input`: never prompt — a required prompt errors instead of
+    asking, so an unattended run fails loudly rather than hanging."""
     fetch_backend: str = ""
     """`[fetch] backend` from the config ladder — which engine `fetch()`
     downloads with. Empty means the default (stdlib urllib)."""
@@ -101,6 +106,14 @@ class Context:
     sink: TextIO | None = None
     """Where this task's output goes: a capture buffer in buffered
     (parallel) mode, `None` for the real stdout (live mode)."""
+    interactive: bool = False
+    """`@task(interactive=True)`: the task owns the real terminal — output is
+    not captured and it holds sole stdio, so its body may prompt or run a
+    REPL. Mid-body `prompt()`/`confirm()`/`select()` are allowed only here."""
+    in_task: bool = False
+    """True while a task *body* runs (the scheduler sets it around the call),
+    so the interactive primitives tell a guarded mid-body call from the
+    framework's own up-front `ask()` resolution."""
     steps: list[StepResult] = field(default_factory=list)
     """Every `run()` this task made, in order — what `recording()` and
     the `--json` envelope read."""
@@ -368,6 +381,192 @@ def real_stdout() -> TextIO:
 def real_stderr() -> TextIO:
     """The underlying stderr, bypassing the routing proxy."""
     return _err_router.real if _err_router is not None else sys.stderr
+
+
+_UNSET: Any = object()  # "no default given" — None is a valid default/value
+
+_prompt_lock = threading.Lock()
+
+
+def _stdin_is_tty() -> bool:
+    try:
+        return sys.stdin is not None and sys.stdin.isatty()
+    except Exception:
+        return False
+
+
+def _scrub(text: str) -> str:
+    """Drop control characters (ESC included) from text echoed to the terminal,
+    so an untrusted `select()` label or message can't inject ANSI escapes — the
+    terminal-injection class that has bitten other CLIs."""
+    return "".join(c for c in text if c.isprintable() or c == "\t")
+
+
+def _prompt_core(
+    message: str = "", *, default: str | None = None, secret: bool = False
+) -> str:
+    """The prompt mechanics, unguarded. Writes to the real terminal on stderr
+    (never captured, never in `--json` stdout), serialises on `_prompt_lock`,
+    clears the live status line, and degrades off a tty (returns `default`, or
+    raises). The framework's `ask()` resolution calls this directly; user code
+    goes through the guarded `prompt()`."""
+    if not _stdin_is_tty():
+        if default is not None:
+            return default
+        raise RuntimeError(
+            "no terminal is attached, so there is no one to ask. Pass a "
+            "default for unattended runs, or take the value as a task "
+            "parameter (a CLI flag) instead."
+        )
+    err = real_stderr()
+    status = active_status()
+    with _prompt_lock:
+        if status is not None:
+            status.notify(message or " ")  # clear the live status line
+        if secret:
+            import getpass
+
+            value = getpass.getpass(message, stream=err).rstrip("\n")
+        else:
+            err.write(message)
+            err.flush()
+            value = sys.stdin.readline().rstrip("\n")
+        if status is not None:
+            status.notify("\n")  # Enter returned the cursor to column 0
+    return default if value == "" and default is not None else value
+
+
+def _guard_interactive(what: str) -> Context:
+    """Refuse a mid-body interactive call in a non-interactive task.
+
+    Inside an ordinary (captured, possibly parallel) task body the prompt
+    would be swallowed by the capture buffer or race a sibling for the
+    terminal, so it is a loud, taught error rather than a silent hang. The
+    framework's own up-front `ask()` resolution runs with `in_task` unset and
+    is never caught here. Returns the active context (for `--no-input`/`--yes`)."""
+    ctx = current()
+    if ctx.in_task and not ctx.interactive:
+        raise RuntimeError(
+            f"{what} was called inside task {ctx.task or '?'!r}, which is not "
+            f"interactive. Either mark it `@task(interactive=True)` so it owns "
+            f"the terminal, or declare the value as a parameter with `ask()` so "
+            f"footman asks before the task runs."
+        )
+    return ctx
+
+
+def prompt(
+    message: str = "", *, default: str | None = None, secret: bool = False
+) -> str:
+    """Ask the person running the task for a line of input.
+
+    A bare `input()` doesn't work in a task: its prompt goes to stdout, which
+    footman buffers per task so parallel output never interleaves (and `--json`
+    stays one envelope), so the prompt is swallowed and the task looks hung.
+    `prompt()` writes to the real terminal on stderr instead — never captured —
+    and serialises concurrent prompts.
+
+    Usable only inside an `@task(interactive=True)` task; called in an ordinary
+    task body it raises a taught error naming the two fixes. Off a terminal,
+    under `--no-input`, or when it would otherwise block, it returns `default`
+    if given, else raises — an unattended run fails loudly. For a value a
+    script must supply, take it as a task parameter (a CLI flag) instead.
+    """
+    ctx = _guard_interactive("prompt()")
+    if ctx.no_input:
+        if default is not None:
+            return default
+        raise RuntimeError(
+            "prompt(): --no-input is set, so nothing can be asked. Pass a "
+            "default, or supply the value as a task parameter (a CLI flag)."
+        )
+    return _prompt_core(message, default=default, secret=secret)
+
+
+def confirm(message: str, *, default: bool = False) -> bool:
+    """Ask a yes/no question. `--yes` auto-answers yes; Enter alone takes
+    `default`; off a terminal or under `--no-input` the answer is `default`.
+    Guarded like `prompt()` — interactive tasks only."""
+    ctx = _guard_interactive("confirm()")
+    if ctx.assume_yes:
+        return True
+    if ctx.no_input:
+        return default
+    reply = _prompt_core(
+        f"{message} {'[Y/n]' if default else '[y/N]'} ",
+        default="y" if default else "n",
+    )
+    return reply.strip().lower() in ("y", "yes")
+
+
+def select(
+    message: str,
+    options: Sequence[Any],
+    *,
+    multiple: bool = False,
+    default: Any = _UNSET,
+) -> Any:
+    """Let the person pick from a runtime-computed list — the one interactive
+    case a flag can't cover, because the options aren't known until the task
+    runs (which changed packages to release, which stale branches to delete).
+
+    `options` are strings, or `(label, value)` pairs to show one thing and
+    return another. `multiple=True` returns the chosen subset as a list;
+    otherwise one value is returned. Guarded like `prompt()` (interactive tasks
+    only), and off a terminal or under `--no-input` it returns `default`, or
+    raises if none was given.
+    """
+    ctx = _guard_interactive("select()")
+    opts = list(options)
+    if not opts:
+        raise ValueError("select(): no options to choose from")
+    labels = [o[0] if isinstance(o, tuple) and len(o) == 2 else str(o) for o in opts]
+    values = [o[1] if isinstance(o, tuple) and len(o) == 2 else o for o in opts]
+    if ctx.no_input or not _stdin_is_tty():
+        if default is not _UNSET:
+            return default
+        raise RuntimeError(
+            "select(): nothing can be asked (no terminal, or --no-input). Pass "
+            "default=…, or take the choice as a task parameter."
+        )
+    err = real_stderr()
+    status = active_status()
+    with _prompt_lock:
+        if status is not None:
+            status.notify(" ")
+        err.write(_scrub(message.rstrip()) + "\n")
+        for i, label in enumerate(labels, 1):
+            err.write(f"  {i}) {_scrub(label)}\n")
+        hint = "numbers, comma-separated; 'all'; 'none'" if multiple else "a number"
+        err.write(f"select ({hint}): ")
+        err.flush()
+        line = sys.stdin.readline().strip()
+        if status is not None:
+            status.notify("\n")
+    if line == "" and default is not _UNSET:
+        return default
+    if multiple:
+        return [values[i] for i in _parse_multi(line, len(values))]
+    return values[_parse_one(line, len(values))]
+
+
+def _parse_one(line: str, n: int) -> int:
+    try:
+        i = int(line)
+    except ValueError:
+        raise RuntimeError(f"select(): {line!r} is not a number 1-{n}.") from None
+    if not 1 <= i <= n:
+        raise RuntimeError(f"select(): {i} is out of range 1-{n}.")
+    return i - 1
+
+
+def _parse_multi(line: str, n: int) -> list[int]:
+    low = line.lower()
+    if low in ("all", "*"):
+        return list(range(n))
+    if low == "none":
+        return []
+    return sorted({_parse_one(tok, n) for tok in line.replace(",", " ").split()})
 
 
 @contextlib.contextmanager

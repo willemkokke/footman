@@ -1033,6 +1033,10 @@ def _run_tree(
         # serialises too — not the scheduler's single-node routing.
         "sequential": sequential,
         "jobs": jobs,
+        # Interactivity globals: --yes auto-answers confirm() gates, --no-input
+        # refuses to prompt (a required prompt errors instead of hanging).
+        "assume_yes": bool(g.get("yes")),
+        "no_input": bool(g.get("no_input")),
     }
 
     # The timing story: --no-progress (one run) or `progress = false` in

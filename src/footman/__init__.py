@@ -27,14 +27,18 @@ if TYPE_CHECKING:
     from footman.compose import plugin as plugin
     from footman.context import Context as Context
     from footman.context import RunFailed as RunFailed
+    from footman.context import confirm as confirm
     from footman.context import inherited as inherited
     from footman.context import parallel as parallel
     from footman.context import passthrough as passthrough
     from footman.context import progress as progress
+    from footman.context import prompt as prompt
     from footman.context import run as run
+    from footman.context import select as select
     from footman.context import track as track
     from footman.context import use_context as use_context
     from footman.params import Many as Many
+    from footman.params import ask as ask
     from footman.params import between as between
     from footman.params import check as check
     from footman.params import doc as doc
@@ -64,9 +68,11 @@ __all__ = [
     "RunFailed",
     "Runner",
     "__version__",
+    "ask",
     "between",
     "capture",
     "check",
+    "confirm",
     "doc",
     "docstrings",
     "env",
@@ -84,8 +90,10 @@ __all__ = [
     "passthrough",
     "plugin",
     "progress",
+    "prompt",
     "recording",
     "run",
+    "select",
     "suggest",
     "task",
     "tools",
@@ -150,6 +158,7 @@ def __getattr__(name: str) -> object:
         "env",
         "check",
         "doc",
+        "ask",
     ):
         from footman import params
 
@@ -161,6 +170,9 @@ def __getattr__(name: str) -> object:
         "inherited",
         "passthrough",
         "progress",
+        "prompt",
+        "confirm",
+        "select",
         "track",
         "RunFailed",
         "use_context",

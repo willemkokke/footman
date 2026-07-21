@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from pathlib import Path, PurePath
 from typing import Annotated, Any
 
-from footman.params import _PathRequirement, between, check, doc, env, suggest
+from footman.params import _PathRequirement, ask, between, check, doc, env, suggest
 from footman.params import nosplit as _NOSPLIT
 
 _TAG_ORDER = {"bool": 0, "int": 1, "float": 2, "path": 3, "str": 4}
@@ -92,6 +92,7 @@ class Peeled:
     env: str | None = None  # environment-variable fallback
     checks: tuple[Any, ...] = ()  # post-coercion validators (check(fn))
     doc: str | None = None  # per-parameter help text (doc("..."))
+    ask: ask | None = None  # prompt-if-missing marker (ask())
 
 
 def peel(ann: Any) -> Peeled:
@@ -103,6 +104,7 @@ def peel(ann: Any) -> Peeled:
     env_var: str | None = None
     checks: tuple[Any, ...] = ()
     doc_text: str | None = None
+    ask_marker: ask | None = None
 
     # Strip Annotated and Optional wrappers in any order/nesting, e.g. both
     # `Annotated[list[X], nosplit] | None` and `Annotated[list[X] | None, nosplit]`.
@@ -129,6 +131,8 @@ def peel(ann: Any) -> Peeled:
                     checks = (*checks, mark.fn)
                 elif isinstance(mark, doc):
                     doc_text = mark.text
+                elif isinstance(mark, ask):
+                    ask_marker = mark
                 elif callable(mark) and not isinstance(mark, type):
                     completer = suggest(mark)  # a bare callable == suggest(fn)
             ann, changed = base, True
@@ -143,6 +147,7 @@ def peel(ann: Any) -> Peeled:
         "env": env_var,
         "checks": checks,
         "doc": doc_text,
+        "ask": ask_marker,
     }
 
     if ann is dict or typing.get_origin(ann) is dict:  # dict[K, V] or bare dict

@@ -21,7 +21,14 @@ from itertools import count
 from typing import Any, TextIO
 
 from footman import _describe, _progress, context, executor
-from footman.registry import Group, Task, is_infinite, wants_progress
+from footman.registry import (
+    Group,
+    Task,
+    is_infinite,
+    is_interactive,
+    task_confirm,
+    wants_progress,
+)
 from footman.split import ChainError, Segment
 
 
@@ -179,6 +186,49 @@ def dag_wants_progress(root: Group, segments: list[Segment]) -> bool:
     return all(wants_progress(n.fn) for n in _build_dag(root, segments))
 
 
+class NotConfirmed(Exception):
+    """A `@task(confirm=…)` gate was declined (or unanswerable off a terminal)."""
+
+    def __init__(self, task: str) -> None:
+        super().__init__(f"{task}: not confirmed")
+
+
+def _ask_confirm(message: str, *, no_input: bool) -> bool:
+    """The `@task(confirm=)` gate. Off a terminal or under `--no-input` the
+    answer is no — like just and go-task, a confirm fails without `--yes`
+    rather than proceeding unasked. Asked on stderr before output routing."""
+    if no_input or not context._stdin_is_tty():
+        return False
+    reply = context._prompt_core(f"{message} [y/N] ", default="n")
+    return reply.strip().lower() in ("y", "yes")
+
+
+def _gate_confirms(
+    root: Group, segments: list[Segment], ctx_config: dict[str, Any] | None
+) -> tuple[list[Segment], list[executor.TaskResult]]:
+    """Resolve each invoked task's `@task(confirm=)` before the DAG is built —
+    asked in invocation order, before any prerequisite runs. A confirmed task
+    is kept; a denied one is dropped (so its exclusive pre-deps are pruned with
+    it) and reported as a failed 'not confirmed' result, so the run exits
+    non-zero. `--yes` auto-confirms every gate."""
+    cfg = ctx_config or {}
+    assume_yes = bool(cfg.get("assume_yes"))
+    no_input = bool(cfg.get("no_input"))
+    kept: list[Segment] = []
+    denied: list[executor.TaskResult] = []
+    for seg in segments:
+        message = task_confirm(executor.resolve(root, seg.path))
+        if not message or assume_yes or _ask_confirm(message, no_input=no_input):
+            kept.append(seg)
+        else:
+            denied.append(
+                executor.TaskResult(
+                    task=seg.task, ok=False, code=1, error=NotConfirmed(seg.task)
+                )
+            )
+    return kept, denied
+
+
 def run_plan(
     root: Group,
     segments: list[Segment],
@@ -192,19 +242,30 @@ def run_plan(
     jobs: int = 0,
 ) -> list[executor.TaskResult]:
     """Build and run the DAG; return results in dependency order."""
+    segments, denied = _gate_confirms(root, segments, ctx_config)
     nodes = _build_dag(root, segments)
     _check_cycles(nodes)
     # One node has nothing to parallelise — run it on the sequential-live
     # path instead: output streams as it happens, and run()'s TTY mode
-    # (colour, in-place step rewrite) applies. `fm check` is this shape.
-    sequential = sequential or len(nodes) == 1
+    # (colour, in-place step rewrite) applies. `fm check` is this shape. An
+    # interactive task also forces sequential: it owns the terminal, so it
+    # can't share with parallel siblings (a human-wait is the bottleneck).
+    # An interactive task owns the real terminal: it forces sequential (it can't
+    # share with parallel siblings) and suppresses the status line, whose
+    # clear-line repaints would otherwise erase its prompt.
+    interactive = any(is_interactive(n.fn) for n in nodes)
+    sequential = sequential or len(nodes) == 1 or interactive
     # A run containing an infinite task has no progress to show — its
     # duration isn't late, it's intentional. The status line yields to a
     # one-time hint (printed at the node's start) saying how this ends.
     endless = any(is_infinite(n.fn) for n in nodes)
     with context.routing() as (real, err):
         status = _make_status(
-            err, ctx_config, capture, estimate, progress and not endless
+            err,
+            ctx_config,
+            capture,
+            estimate,
+            progress and not endless and not interactive,
         )
         if status is not None:
             status.unit_added(len(nodes))
@@ -233,7 +294,7 @@ def run_plan(
             if status is not None:
                 context.set_status(None)
                 status.close()
-    return [n.result for n in _toposort(nodes) if n.result is not None]
+    return denied + [n.result for n in _toposort(nodes) if n.result is not None]
 
 
 def _run_sequential(

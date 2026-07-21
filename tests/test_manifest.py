@@ -316,3 +316,23 @@ def test_infinite_task_carries_the_note_key():
     tree = manifest.build_manifest(root)["tree"]
     assert tree["tasks"]["serve"]["infinite"] is True
     assert "infinite" not in tree["tasks"]["plain"]  # additive: absent means no
+
+
+def test_confirm_and_interactive_carry_note_keys():
+    from footman import registry
+
+    with registry.capture() as root:
+
+        @registry.task(confirm="to prod?", interactive=True)
+        def deploy():
+            "Deploy."
+
+        @registry.task
+        def plain():
+            "Plain."
+
+    tree = manifest.build_manifest(root)["tree"]
+    assert tree["tasks"]["deploy"]["interactive"] is True
+    assert tree["tasks"]["deploy"]["confirm"] == "to prod?"
+    assert "interactive" not in tree["tasks"]["plain"]
+    assert "confirm" not in tree["tasks"]["plain"]
