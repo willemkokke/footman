@@ -324,3 +324,12 @@ class _Coverage(Tool):
             skip_empty: Skip files with no code.
         """
         ...
+    def opts(
+        self,
+        **flags: Any,
+    ) -> _Coverage:
+        """Bind tool-level global options before the subcommand.
+
+        `tools.docker.opts(host=...)` puts a tool's own
+        options ahead of the verb, where they belong."""
+        ...

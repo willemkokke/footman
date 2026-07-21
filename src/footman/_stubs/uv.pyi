@@ -1325,6 +1325,15 @@ class _UvPip(Tool):
             verbose___: Use verbose output.
         """
         ...
+    def opts(
+        self,
+        **flags: Any,
+    ) -> _UvPip:
+        """Bind tool-level global options before the subcommand.
+
+        `tools.docker.opts(host=...)` puts a tool's own
+        options ahead of the verb, where they belong."""
+        ...
 
 class _UvTool(Tool):
     def install(
@@ -2362,6 +2371,15 @@ class _UvTool(Tool):
             verbose___: Use verbose output.
         """
         ...
+    def opts(
+        self,
+        **flags: Any,
+    ) -> _UvTool:
+        """Bind tool-level global options before the subcommand.
+
+        `tools.docker.opts(host=...)` puts a tool's own
+        options ahead of the verb, where they belong."""
+        ...
 
 class _Uv(Tool):
     pip: _UvPip
@@ -2413,33 +2431,6 @@ class _Uv(Tool):
                 native certificate store.
             verbose___: Use verbose output.
         """
-        ...
-    def opts(
-        self,
-        *,
-        allow_insecure_host: _Value = ...,
-        cache_dir: _Value = ...,
-        color: Literal["auto", "always", "never"]
-        | Sequence[Literal["auto", "always", "never"]]
-        | None = ...,
-        config_file: _Value = ...,
-        directory: _Value = ...,
-        managed_python: _Flag = ...,
-        no_cache: _Flag = ...,
-        no_config: _Flag = ...,
-        no_progress: _Flag = ...,
-        no_python_downloads: _Flag = ...,
-        offline: _Flag = ...,
-        project: _Value = ...,
-        quiet___: _Flag = ...,
-        system_certs: _Flag = ...,
-        verbose___: _Flag = ...,
-        **flags: Any,
-    ) -> _Uv:
-        """Bind tool-level global options before the subcommand.
-
-        `tools.docker.opts(host=...)` puts a tool's own
-        options ahead of the verb, where they belong."""
         ...
     def add(
         self,
@@ -4712,4 +4703,31 @@ class _Uv(Tool):
                 versions in any existing output file.
             verbose___: Use verbose output.
         """
+        ...
+    def opts(
+        self,
+        *,
+        allow_insecure_host: _Value = ...,
+        cache_dir: _Value = ...,
+        color: Literal["auto", "always", "never"]
+        | Sequence[Literal["auto", "always", "never"]]
+        | None = ...,
+        config_file: _Value = ...,
+        directory: _Value = ...,
+        managed_python: _Flag = ...,
+        no_cache: _Flag = ...,
+        no_config: _Flag = ...,
+        no_progress: _Flag = ...,
+        no_python_downloads: _Flag = ...,
+        offline: _Flag = ...,
+        project: _Value = ...,
+        quiet___: _Flag = ...,
+        system_certs: _Flag = ...,
+        verbose___: _Flag = ...,
+        **flags: Any,
+    ) -> _Uv:
+        """Bind tool-level global options before the subcommand.
+
+        `tools.docker.opts(host=...)` puts a tool's own
+        options ahead of the verb, where they belong."""
         ...

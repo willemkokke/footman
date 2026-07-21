@@ -661,6 +661,13 @@ def from_help(
         # so `tools.docker(...)` must not be constrained by it. Only a
         # single-command tool's root verb carries a real positional shape.
         root_verb = replace(root_verb, positional="any", lead="", wraps=False)
+    if man:
+        # The terse root help (`git -h`) lists subcommands, not globals; the
+        # tool's own manual (`git help git`) lists the options that must
+        # precede the verb — what `.opts()` binds. Read them from there.
+        manual = run_help([name, name], man=True)
+        if manual:
+            root_verb = replace(root_verb, options=parse_help(manual, man=True).options)
     parsed = [root_verb]
     for verb in verbs:
         text = run_help([name, *verb.split(".")], flag=flag, man=man)

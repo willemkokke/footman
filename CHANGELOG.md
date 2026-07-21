@@ -54,6 +54,14 @@ versions may include breaking changes.
   stay permissive. The manual is read only when regenerating stubs, so it
   never becomes a runtime dependency; the extraction folds the manual's
   typographic punctuation to ASCII and keeps one sentence per flag.
+- **git's globals reach `.opts()`, and every multi-command tool's
+  `.opts()` keeps the chain typed.** `tools.git.opts(git_dir="…",
+  work_tree="…").commit(…)` now completes git's global options — read from
+  the `git help git` manual — and places them before the verb, where git
+  requires them (`git -C x commit` runs in x; `git commit -C x` reuses a
+  commit). Every tool with subcommands declares a self-returning `opts()`,
+  so the chain after it stays typed even for a tool footman found no
+  globals for.
 - **`tools.<tool>.opts(...)` binds a tool's global options before the
   subcommand** — `tools.docker.opts(host="tcp://x").compose.up(detach=True)`
   runs `docker --host=tcp://x compose up --detach`. Some options belong to

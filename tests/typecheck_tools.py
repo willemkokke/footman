@@ -111,6 +111,13 @@ def _tool_globals_via_opts() -> None:
     tools.docker.opts(host="tcp://x", debug=True).ps(all=True)
     tools.docker.opts(context="remote").run("alpine")
     tools.uv.opts(directory="sub", offline=True).sync(frozen=True)
+    # git's globals — `git -C x commit` runs in x; `git commit -C x` reuses a
+    # commit — so placement changes meaning, and the chain stays _Git-typed.
+    tools.git.opts(git_dir="/r/.git", work_tree="/r").commit(message="x")
+    tools.git.opts(no_pager=True).log(n=1, oneline=True)
+    # A tool with no extracted globals still returns its own class, so the
+    # chain after `.opts()` keeps completing.
+    tools.coverage.opts().report(fail_under=90)
     # A generic tool still has the untyped `.opts()` from the base class.
     tools.terraform.opts(chdir="infra")("plan")
 

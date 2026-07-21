@@ -328,6 +328,15 @@ class _DockerCompose(Tool):
             yes: Assume "yes" as answer to all prompts and run non-interactively.
         """
         ...
+    def opts(
+        self,
+        **flags: Any,
+    ) -> _DockerCompose:
+        """Bind tool-level global options before the subcommand.
+
+        `tools.docker.opts(host=...)` puts a tool's own
+        options ahead of the verb, where they belong."""
+        ...
 
 class _Docker(Tool):
     compose: _DockerCompose
@@ -369,26 +378,6 @@ class _Docker(Tool):
                 `/Users/willem/.docker/key.pem`.
             tlsverify: Use TLS and verify the remote.
         """
-        ...
-    def opts(
-        self,
-        *,
-        config: _Value = ...,
-        context: _Value = ...,
-        debug: _Flag = ...,
-        host: _Value = ...,
-        log_level: _Value = ...,
-        tls: _Flag = ...,
-        tlscacert: _Value = ...,
-        tlscert: _Value = ...,
-        tlskey: _Value = ...,
-        tlsverify: _Flag = ...,
-        **flags: Any,
-    ) -> _Docker:
-        """Bind tool-level global options before the subcommand.
-
-        `tools.docker.opts(host=...)` puts a tool's own
-        options ahead of the verb, where they belong."""
         ...
     def build(
         self,
@@ -882,4 +871,24 @@ class _Docker(Tool):
             volumes_from: Mount volumes from the specified container(s).
             workdir: Working directory inside the container.
         """
+        ...
+    def opts(
+        self,
+        *,
+        config: _Value = ...,
+        context: _Value = ...,
+        debug: _Flag = ...,
+        host: _Value = ...,
+        log_level: _Value = ...,
+        tls: _Flag = ...,
+        tlscacert: _Value = ...,
+        tlscert: _Value = ...,
+        tlskey: _Value = ...,
+        tlsverify: _Flag = ...,
+        **flags: Any,
+    ) -> _Docker:
+        """Bind tool-level global options before the subcommand.
+
+        `tools.docker.opts(host=...)` puts a tool's own
+        options ahead of the verb, where they belong."""
         ...

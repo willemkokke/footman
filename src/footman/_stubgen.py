@@ -103,20 +103,34 @@ def _classes(tree: dict[str, object], name: str) -> list[str]:
         node = tree[key]
         if isinstance(node, Verb):
             body.append(_method(node, key))
-            # A multi-command tool's root options are *globals*: `.opts()`
-            # binds them before the subcommand, typed and chainable.
-            if key == "" and len(tree) > 1 and node.options:
-                body.append(_opts_method(node, name))
+    # A tool with subcommands gets a typed `.opts()` returning its own class,
+    # so a globals-before-verb chain stays checked. The root verb's options
+    # are the typed globals (git's `--git-dir`, docker's `--host`); a tool
+    # with none still gets the self-returning override, for the chaining.
+    if _has_subcommands(tree):
+        root = tree.get("")
+        globals_ = root.options if isinstance(root, Verb) else ()
+        body.append(_opts_method(globals_, name))
     out.append(f"class {name}(Tool):\n" + ("\n".join(body) or "    ..."))
     return out
 
 
-def _opts_method(verb: Verb, class_name: str) -> str:
+def _has_subcommands(tree: dict[str, object]) -> bool:
+    """Whether this class has verbs to precede — the only case `.opts()`
+    means anything (a global belongs *before* a subcommand)."""
+    return any(key != "" for key in tree)
+
+
+def _opts_method(options: tuple[Option, ...], class_name: str) -> str:
     """The typed `opts()` for a tool's global options — returns the tool,
-    so `tools.docker.opts(host=…).compose.up(…)` stays checked."""
-    lines = ["    def opts(", "        self,", "        *,"]
-    for option in _unique(verb.options):
-        lines.append(f"        {_safe(option.name)}: {_annotation(option)} = ...,")
+    so `tools.docker.opts(host=…).compose.up(…)` stays checked. With no
+    globals it is still declared, so the return type carries the chain."""
+    lines = ["    def opts(", "        self,"]
+    typed = _unique(options)
+    if typed:  # a `*` separator with only `**flags` after it is a syntax error
+        lines.append("        *,")
+        for option in typed:
+            lines.append(f"        {_safe(option.name)}: {_annotation(option)} = ...,")
     lines.append("        **flags: Any,")
     lines.append(f"    ) -> {class_name}:")
     lines.append('        """Bind tool-level global options before the subcommand.')

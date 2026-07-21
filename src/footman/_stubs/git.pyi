@@ -11,11 +11,65 @@ class _Git(Tool):
     def __call__(  # type: ignore[override]
         self,
         *args: str,
+        attr_source: _Value = ...,
+        bare: _Flag = ...,
+        config_env: _Value = ...,
+        exec_path: _ValuedFlag = ...,
+        git_dir: _Value = ...,
+        glob_pathspecs: _Flag = ...,
+        html_path: _Flag = ...,
+        icase_pathspecs: _Flag = ...,
+        info_path: _Flag = ...,
+        list_cmds: _Value = ...,
+        literal_pathspecs: _Flag = ...,
+        man_path: _Flag = ...,
+        namespace: _Value = ...,
+        no_advice: _Flag = ...,
+        no_lazy_fetch: _Flag = ...,
+        no_optional_locks: _Flag = ...,
+        no_pager: _Flag = ...,
+        no_replace_objects: _Flag = ...,
+        noglob_pathspecs: _Flag = ...,
+        paginate: _Flag = ...,
+        work_tree: _Value = ...,
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
     ) -> int:
-        """[--exec-path[=<path>]] [--html-path] [--man-path] [--info-path]"""
+        """[--exec-path[=<path>]] [--html-path] [--man-path] [--info-path]
+
+        Args:
+            attr_source: Read gitattributes from <tree-ish> instead of the worktree.
+            bare: Treat the repository as a bare repository.
+            config_env: Like -c <name>=<value>, give configuration variable <name> a
+                value, where <envvar> is the name of an environment variable from
+                which to retrieve the value.
+            exec_path: Path to wherever your core Git programs are installed. Value
+                optional: `True` for the bare flag, or pass one.
+            git_dir: Set the path to the repository (".git" directory).
+            glob_pathspecs: Add "glob" magic to all pathspec.
+            html_path: Print the path, without trailing slash, where Git's HTML
+                documentation is installed and exit.
+            icase_pathspecs: Add "icase" magic to all pathspec.
+            info_path: Print the path where the Info files documenting this version
+                of Git are installed and exit.
+            list_cmds: List commands by group.
+            literal_pathspecs: Treat pathspecs literally (i.e.
+            man_path: Print the manpath (see man(1)) for the man pages for this
+                version of Git and exit.
+            namespace: Set the Git namespace.
+            no_advice: Disable all advice hints from being printed.
+            no_lazy_fetch: Do not fetch missing objects from the promisor remote on
+                demand.
+            no_optional_locks: Do not perform optional operations that require
+                locks.
+            no_pager: Do not pipe Git output into a pager.
+            no_replace_objects: Do not use replacement refs to replace Git objects.
+            noglob_pathspecs: Add "literal" magic to all pathspec.
+            paginate: Pipe all output into less (or if set, $PAGER) if standard
+                output is a terminal.
+            work_tree: Set the path to the working tree.
+        """
         ...
     def add(
         self,
@@ -2121,4 +2175,35 @@ class _Git(Tool):
                 locked.
             verbose: With prune, report all removals.
         """
+        ...
+    def opts(
+        self,
+        *,
+        attr_source: _Value = ...,
+        bare: _Flag = ...,
+        config_env: _Value = ...,
+        exec_path: _ValuedFlag = ...,
+        git_dir: _Value = ...,
+        glob_pathspecs: _Flag = ...,
+        html_path: _Flag = ...,
+        icase_pathspecs: _Flag = ...,
+        info_path: _Flag = ...,
+        list_cmds: _Value = ...,
+        literal_pathspecs: _Flag = ...,
+        man_path: _Flag = ...,
+        namespace: _Value = ...,
+        no_advice: _Flag = ...,
+        no_lazy_fetch: _Flag = ...,
+        no_optional_locks: _Flag = ...,
+        no_pager: _Flag = ...,
+        no_replace_objects: _Flag = ...,
+        noglob_pathspecs: _Flag = ...,
+        paginate: _Flag = ...,
+        work_tree: _Value = ...,
+        **flags: Any,
+    ) -> _Git:
+        """Bind tool-level global options before the subcommand.
+
+        `tools.docker.opts(host=...)` puts a tool's own
+        options ahead of the verb, where they belong."""
         ...

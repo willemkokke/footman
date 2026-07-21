@@ -55,3 +55,12 @@ class _Zensical(Tool):
             strict: Strict mode (currently unsupported).
         """
         ...
+    def opts(
+        self,
+        **flags: Any,
+    ) -> _Zensical:
+        """Bind tool-level global options before the subcommand.
+
+        `tools.docker.opts(host=...)` puts a tool's own
+        options ahead of the verb, where they belong."""
+        ...

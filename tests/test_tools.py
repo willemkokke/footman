@@ -649,3 +649,18 @@ def test_wrappers_table_matches_what_the_tools_declare():
             continue
         declared = _drivers.extract(driver).wrappers()
         assert declared == _WRAPPERS.get(driver.name, frozenset()), driver.name
+
+
+def test_git_globals_via_opts_precede_the_verb():
+    # git's globals belong before the subcommand; the man page supplies them.
+    assert (
+        _one(
+            lambda: tools.git.opts(git_dir="/r/.git", work_tree="/r").commit(
+                message="x"
+            )
+        )
+        == "git --git-dir /r/.git --work-tree /r commit --message x"
+    )
+    assert _one(lambda: tools.git.opts(no_pager=True).log(n=1)) == (
+        "git --no-pager log -n 1"
+    )
