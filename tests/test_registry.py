@@ -91,3 +91,25 @@ def test_infinite_implies_no_progress():
     assert is_infinite(serve) and not wants_progress(serve)  # the implication
     assert not is_infinite(plain) and wants_progress(plain)
     assert not is_infinite(repl) and not wants_progress(repl)  # timing-only opt-out
+
+
+def test_confirm_and_interactive_stamp_and_read():
+    from footman.registry import (
+        Group,
+        is_interactive,
+        task_confirm,
+        wants_progress,
+    )
+
+    g = Group("root")
+
+    @g.task(confirm="ship it?", interactive=True)
+    def deploy(): ...
+
+    @g.task
+    def plain(): ...
+
+    assert task_confirm(deploy) == "ship it?"
+    assert is_interactive(deploy) and not wants_progress(deploy)  # human-wait
+    assert task_confirm(plain) == "" and not is_interactive(plain)
+    assert wants_progress(plain)

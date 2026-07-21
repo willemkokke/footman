@@ -275,6 +275,8 @@ def _source_of(fn: Any) -> str:
 def _task_node(fn: Any, memo: dict[int, list[str]]) -> dict[str, Any]:
     sig = resolved_signature(fn)
     infinite = registry.is_infinite(fn)
+    interactive = registry.is_interactive(fn)
+    confirm = registry.task_confirm(fn)
     ctx_name = context_param_name(sig)  # the injected ctx param is not a CLI arg
     parsed = docstrings.parse(inspect.getdoc(fn))
     params = [
@@ -308,6 +310,10 @@ def _task_node(fn: Any, memo: dict[int, list[str]]) -> dict[str, Any]:
         }
     if infinite:
         node["infinite"] = True  # additive: listings and help say how it ends
+    if interactive:
+        node["interactive"] = True  # additive: this task owns the terminal
+    if confirm:
+        node["confirm"] = confirm  # additive: the yes/no gate before it runs
     if parsed.long:
         node["long"] = parsed.long
     # Additive availability annotation (`when=`): the name stays listed and
