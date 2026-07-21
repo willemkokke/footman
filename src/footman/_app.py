@@ -878,10 +878,19 @@ def _execute(
 
     try:
         if g.get("tasks_file"):
-            # -f loads one arbitrary file, not the cwd's cascade — writing its
-            # manifest into the cwd's completion cache would poison TAB there
-            # until the next plain run. Build fresh, touch no cache.
-            tree = manifest.build_manifest(reg)["tree"]
+            # -f loads one arbitrary file, not the cwd's cascade. Cache its
+            # manifest under a (cwd, file) key — separate from the cwd's, so it
+            # never poisons plain TAB there — so `fm -f <file> <TAB>` completes
+            # that file's tasks. max_age=0: no background refresh (rebuilt on the
+            # next -f run); a live refresh is a fast-follow.
+            override = str(g.get("tasks_file"))
+            tree = manifest.sync_manifest(
+                reg,
+                Path.cwd(),
+                completion_max_age=0,
+                tasks_file=override,
+                path=_paths.source_manifest_path(Path.cwd(), Path(override)),
+            )["tree"]
         else:
             cfg_tasks = cfg.get("tasks")
             tree = manifest.sync_manifest(

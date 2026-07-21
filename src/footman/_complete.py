@@ -306,6 +306,29 @@ def _spawn_refresh() -> None:
         return  # a background refresh must never break completion
 
 
+def _tasks_file_from(args: list[str]) -> str | None:
+    """The `-f`/`--tasks-file` value among the leading globals, or None.
+
+    Walks only the leading globals — stopping at the first task name — skipping
+    other flags and value-options by the same arity mirror the resolver uses.
+    """
+    i = 0
+    while i < len(args):
+        tok = args[i]
+        if tok in ("-f", "--tasks-file"):
+            return args[i + 1] if i + 1 < len(args) else None
+        if tok.startswith("--tasks-file="):
+            return tok.split("=", 1)[1]
+        name = tok.split("=", 1)[0]
+        if "=" not in tok and name in _GLOBAL_VALUE:
+            i += 2  # a value-option consumes the next word
+        elif name in _GLOBAL_FLAG or name in _GLOBAL_MAYBE or "=" in tok:
+            i += 1  # a flag, an option?, or --opt=value
+        else:
+            break  # the first non-global — a task name (or its partial)
+    return None
+
+
 def complete_cli(args: list[str]) -> int:
     """Entry for `footman --complete` and the standalone resolver."""
     manifest = None
@@ -327,10 +350,18 @@ def complete_cli(args: list[str]) -> int:
     if manifest is None:
         # Only the derive branch needs the package; keep the standalone
         # --manifest path free of any `footman` import. The cache is keyed by
-        # cwd — the effective task set is the cascade from the repo root down.
+        # cwd — the effective task set is the cascade from the repo root down —
+        # unless `-f <file>` names one file, which has its own (cwd, file) key.
+        from pathlib import Path
+
         from footman import _paths
 
-        manifest = str(_paths.cwd_manifest_path())
+        override = _tasks_file_from(args)
+        manifest = str(
+            _paths.source_manifest_path(Path.cwd(), Path(override))
+            if override
+            else _paths.cwd_manifest_path()
+        )
 
     data = _load_manifest(manifest)
     if data is None or not isinstance(data.get("tree"), dict):

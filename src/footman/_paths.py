@@ -124,6 +124,19 @@ def times_path(key_dir: Path) -> Path:
     return footman_cache_dir() / f"{_dir_key(key_dir)}.times.json"
 
 
+def source_manifest_path(cwd: Path, tasks_file: Path) -> Path:
+    """Cache path for a `-f <file>` run, keyed by *both* the cwd and the file.
+
+    A `-f` invocation loads that file's tasks *and* the cwd's config plugins,
+    so the task set depends on the pair — the same file opened from two projects
+    is two caches. A separate key from `manifest_path`, so a `-f` run never
+    poisons the plain-cwd completion cache.
+    """
+    joined = f"{cwd.resolve()}\0{tasks_file.resolve()}"
+    key = hashlib.sha256(joined.encode("utf-8")).hexdigest()[:16]
+    return footman_cache_dir() / f"{key}.json"
+
+
 def cwd_manifest_path() -> Path:
     """Manifest path for the current directory (both hot and cold paths agree)."""
     return manifest_path(Path.cwd())

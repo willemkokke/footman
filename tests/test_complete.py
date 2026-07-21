@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Annotated
 
 from footman import manifest, registry, task
-from footman._complete import complete, complete_cli
+from footman._complete import _tasks_file_from, complete, complete_cli
 from footman.params import doc
 
 
@@ -200,6 +200,67 @@ def test_completion_globals_mirror_split():
     assert maybe == _complete._GLOBAL_MAYBE
     assert _complete._GLOBAL_CHOICES["--install-completion"] == tuple(_shellcomp.SHELLS)
     assert _complete._GLOBAL_CHOICES["--setup-completion"] == tuple(_shellcomp.SHELLS)
+
+
+# --- -f/--tasks-file completion (keyed by cwd + file) -------------------------
+
+
+def test_tasks_file_from_leading_globals():
+    assert _tasks_file_from(["-f", "x.py", ""]) == "x.py"
+    assert _tasks_file_from(["--tasks-file", "x.py", "build"]) == "x.py"
+    assert _tasks_file_from(["--tasks-file=x.py"]) == "x.py"
+    assert _tasks_file_from(["-C", "sub", "-f", "x.py"]) == "x.py"  # skip -C + value
+    assert _tasks_file_from(["-k", "-f", "x.py"]) == "x.py"  # skip a flag
+    assert _tasks_file_from(["build", "-f", "x.py"]) is None  # after a task: not global
+    assert _tasks_file_from(["build"]) is None
+    assert _tasks_file_from([""]) is None
+
+
+def test_source_manifest_path_keys_by_cwd_and_file():
+    from pathlib import Path
+
+    from footman import _paths
+
+    cwd = Path("/proj/a")
+    a = _paths.source_manifest_path(cwd, Path("x.py"))
+    assert a == _paths.source_manifest_path(cwd, Path("x.py"))  # stable
+    assert a != _paths.source_manifest_path(cwd, Path("y.py"))  # the file matters
+    assert a != _paths.source_manifest_path(
+        Path("/proj/b"), Path("x.py")
+    )  # cwd matters
+    assert a != _paths.manifest_path(cwd)  # distinct from the plain-cwd cache
+
+
+def test_f_completion_reads_the_source_key(tmp_path, monkeypatch, capsys):
+    from pathlib import Path
+
+    from footman import _paths
+
+    monkeypatch.setenv("FOOTMAN_CACHE_DIR", str(tmp_path / "cache"))
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    monkeypatch.chdir(proj)
+    tf = proj / "custom.py"
+
+    g = registry.Group("root")
+
+    @g.task
+    def alpha(): ...
+
+    @g.task
+    def beta(): ...
+
+    # Cache the manifest under the (cwd, file) key, exactly as a `-f` run does.
+    manifest.sync_manifest(
+        g,
+        Path.cwd(),
+        completion_max_age=0,
+        tasks_file=str(tf),
+        path=_paths.source_manifest_path(Path.cwd(), tf),
+    )
+    complete_cli(["--", "-f", str(tf), ""])
+    out = capsys.readouterr().out.split()
+    assert "alpha" in out and "beta" in out
 
 
 # --- chain-aware completion -----------------------------------------------------
