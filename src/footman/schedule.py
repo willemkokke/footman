@@ -250,16 +250,22 @@ def run_plan(
     # (colour, in-place step rewrite) applies. `fm check` is this shape. An
     # interactive task also forces sequential: it owns the terminal, so it
     # can't share with parallel siblings (a human-wait is the bottleneck).
-    sequential = (
-        sequential or len(nodes) == 1 or any(is_interactive(n.fn) for n in nodes)
-    )
+    # An interactive task owns the real terminal: it forces sequential (it can't
+    # share with parallel siblings) and suppresses the status line, whose
+    # clear-line repaints would otherwise erase its prompt.
+    interactive = any(is_interactive(n.fn) for n in nodes)
+    sequential = sequential or len(nodes) == 1 or interactive
     # A run containing an infinite task has no progress to show — its
     # duration isn't late, it's intentional. The status line yields to a
     # one-time hint (printed at the node's start) saying how this ends.
     endless = any(is_infinite(n.fn) for n in nodes)
     with context.routing() as (real, err):
         status = _make_status(
-            err, ctx_config, capture, estimate, progress and not endless
+            err,
+            ctx_config,
+            capture,
+            estimate,
+            progress and not endless and not interactive,
         )
         if status is not None:
             status.unit_added(len(nodes))
