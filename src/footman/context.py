@@ -395,6 +395,13 @@ def _stdin_is_tty() -> bool:
         return False
 
 
+def _scrub(text: str) -> str:
+    """Drop control characters (ESC included) from text echoed to the terminal,
+    so an untrusted `select()` label or message can't inject ANSI escapes — the
+    terminal-injection class that has bitten other CLIs."""
+    return "".join(c for c in text if c.isprintable() or c == "\t")
+
+
 def _prompt_core(
     message: str = "", *, default: str | None = None, secret: bool = False
 ) -> str:
@@ -527,9 +534,9 @@ def select(
     with _prompt_lock:
         if status is not None:
             status.notify(" ")
-        err.write(message.rstrip() + "\n")
+        err.write(_scrub(message.rstrip()) + "\n")
         for i, label in enumerate(labels, 1):
-            err.write(f"  {i}) {label}\n")
+            err.write(f"  {i}) {_scrub(label)}\n")
         hint = "numbers, comma-separated; 'all'; 'none'" if multiple else "a number"
         err.write(f"select ({hint}): ")
         err.flush()

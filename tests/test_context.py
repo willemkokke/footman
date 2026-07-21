@@ -920,3 +920,17 @@ def test_confirm_gate_off_a_terminal_denies(monkeypatch):
     _, _, results = drive(build, "deploy")  # no --yes, no terminal → denied
     assert not results[0].ok
     assert not ran.get("it")
+
+
+def test_select_scrubs_control_characters_in_labels(monkeypatch):
+    from footman import context
+
+    monkeypatch.setattr(context, "_stdin_is_tty", lambda: True)
+    monkeypatch.setattr(sys, "stdin", io.StringIO("1\n"))
+    err = io.StringIO()
+    monkeypatch.setattr(context, "real_stderr", lambda: err)
+
+    # A label carrying an ANSI escape is neutralised before it reaches the tty.
+    context.select("pick", ["\x1b[31mred\x1b[0m", "green"])
+    assert "\x1b" not in err.getvalue()
+    assert "red" in err.getvalue()  # the visible text survives
