@@ -165,6 +165,38 @@ def test_refresh_cwd_rebuilds_the_manifest(tmp_path, monkeypatch):
     assert data["completion_max_age"] == 600  # baked from the default
 
 
+def test_refresh_source_rebuilds_the_manifest(tmp_path, monkeypatch):
+    # The cold-build child rebuilds one -f file's (cwd, file) manifest — keyed
+    # apart from the cwd cascade, with no background refresh (max_age 0).
+    from pathlib import Path
+
+    from footman import _paths, _refresh
+
+    (tmp_path / "pyproject.toml").write_text('[project]\nname="x"\n')
+    (tmp_path / "other.py").write_text(
+        "from footman import task\n@task\ndef ship(): ...\n"
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
+    _refresh.refresh_source("other.py")
+    data = json.loads(
+        _paths.source_manifest_path(tmp_path, Path("other.py")).read_text()
+    )
+    assert "ship" in data["tree"]["tasks"]
+    assert data["completion_max_age"] == 0  # -f: rebuilt on demand, not in the bg
+    assert data["tasks_file"] == "other.py"  # baked, keyed apart from the cascade
+
+
+def test_refresh_source_missing_file_builds_nothing(tmp_path, monkeypatch):
+    from footman import _refresh, manifest
+
+    monkeypatch.chdir(tmp_path)
+    built: list[int] = []
+    monkeypatch.setattr(manifest, "sync_manifest", lambda *a, **k: built.append(1))
+    _refresh.refresh_source("nope.py")  # the -f value names no file — nothing built
+    assert built == []
+
+
 def test_main_dispatches_complete(tree, tmp_path, monkeypatch, capsys):
     path = tmp_path / "m.json"
     path.write_text(json.dumps({"tree": tree}))

@@ -491,7 +491,7 @@ def test_cold_cache_builds_and_serves(tmp_path, monkeypatch, capsys):
     assert "lint" in out and "check" in out
 
 
-def test_cold_f_cache_waits_for_first_run(tmp_path, monkeypatch, capsys):
+def test_cold_f_cache_builds_and_serves(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("FOOTMAN_CACHE_DIR", str(tmp_path / "cache"))
     proj = tmp_path / "proj"
     proj.mkdir()
@@ -500,17 +500,34 @@ def test_cold_f_cache_waits_for_first_run(tmp_path, monkeypatch, capsys):
         "from footman import task\n\n@task\ndef ship(): ...\n"
     )
     monkeypatch.chdir(proj)
-    # an -f cold cache is not built on completion — it lands on the first -f run
+    # a finished `-f <file>` with a cold cache builds that file's (cwd, file)
+    # manifest and serves it, the same as a plain cold TAB — not empty
     complete_cli(["--", "-f", "other.py", ""])
-    assert capsys.readouterr().out == ""
+    assert "ship" in capsys.readouterr().out.split()
 
 
 def test_cold_build_times_out_to_none(tmp_path, monkeypatch):
     from footman import _complete
 
-    monkeypatch.setattr(_complete, "_spawn_refresh", lambda: None)  # no build lands
+    # accept the override arg; still no build ever lands
+    monkeypatch.setattr(_complete, "_spawn_refresh", lambda override=None: None)
     monkeypatch.setattr(_complete, "_COLD_TIMEOUT", 0.1)
-    assert _complete._cold_build(str(tmp_path / "never.json")) is None
+    assert _complete._cold_build(str(tmp_path / "never.json"), None) is None
+
+
+def test_cold_build_skips_missing_f_file(tmp_path, monkeypatch):
+    from footman import _complete
+
+    # a still-being-typed or missing -f value has no file to build: return None
+    # at once, never spawning a builder that would only stall for the timeout
+    spawned: list[str | None] = []
+
+    def _spawn(override: str | None = None) -> None:
+        spawned.append(override)
+
+    monkeypatch.setattr(_complete, "_spawn_refresh", _spawn)
+    got = _complete._cold_build(str(tmp_path / "m.json"), str(tmp_path / "missing.py"))
+    assert got is None and spawned == []
 
 
 # --- chain-aware completion -----------------------------------------------------
