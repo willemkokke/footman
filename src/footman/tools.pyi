@@ -31,16 +31,26 @@ from typing import Any
 # the installed binaries, and `audit` fails when they drift. They import
 # `Tool` and the aliases from here, which a stub may do circularly.
 from footman._stubs.basedpyright import Basedpyright as Basedpyright
+from footman._stubs.build import Build as Build
 from footman._stubs.bun import Bun as Bun
+from footman._stubs.cmake import Cmake as Cmake
 from footman._stubs.coverage import Coverage as Coverage
 from footman._stubs.cspell import Cspell as Cspell
 from footman._stubs.docker import Docker as Docker
+from footman._stubs.eclint import Eclint as Eclint
+from footman._stubs.gh import Gh as Gh
 from footman._stubs.git import Git as Git
+from footman._stubs.git_changelog import GitChangelog as GitChangelog
+from footman._stubs.git_cliff import GitCliff as GitCliff
 from footman._stubs.markdownlint import Markdownlint as Markdownlint
 from footman._stubs.mkdocs import Mkdocs as Mkdocs
+from footman._stubs.mypy import Mypy as Mypy
+from footman._stubs.ninja import Ninja as Ninja
 from footman._stubs.prek import Prek as Prek
 from footman._stubs.ruff import Ruff as Ruff
 from footman._stubs.ruff_format import RuffFormat as RuffFormat
+from footman._stubs.twine import Twine as Twine
+from footman._stubs.ty import Ty as Ty
 from footman._stubs.uv import Uv as Uv
 from footman._stubs.zensical import Zensical as Zensical
 from footman.context import Invocation as _Invocation  # noqa: F401
@@ -114,6 +124,16 @@ coverage: Coverage
 cspell: Cspell
 prek: Prek
 markdownlint: Markdownlint
+gh: Gh
+eclint: Eclint
+mypy: Mypy
+ty: Ty
+twine: Twine
+git_changelog: GitChangelog
+git_cliff: GitCliff
+build: Build
+cmake: Cmake
+ninja: Ninja
 
 def pytest(*args: str, in_process: bool = True, nofail: bool = False) -> int: ...
 def python(*args: str, nofail: bool = False) -> int: ...

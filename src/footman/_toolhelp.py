@@ -56,11 +56,11 @@ _SECTION = re.compile(r"^(?P<title>[A-Za-z][A-Za-z /-]*):$|^(?P<caps>[A-Z][A-Z /
 _NOT_OPTIONS = re.compile(r"command|example|usage|argument|see also|environment")
 
 # One spelling inside a flag block: `--select <RULE>`, `--directory=DIR`,
-# `-j N`, `--fix`. Stops before the two-space gap that starts the prose.
-# cobra names the value's *type* where the others print a placeholder:
-# `--file string`, `--tail string`, `--label stringArray`. Spelled out
-# rather than matched as "any lowercase word", so a help line that puts its
-# prose one space after the flag can't be mistaken for a value.
+# `-j N`, `--fix`. It runs on the flag column only — `_blocks` has already
+# split the prose off at the two-space gap — so the compound go-types are
+# named explicitly (`stringArray` repeats where `string` does not), and a
+# bare lowercase word left in the column is read as a value placeholder
+# (gh's `--assignee login`), not as the first word of the description.
 # Compound names first: alternation is ordered, so a leading `string`
 # would match `stringArray` and stop, losing the fact that it repeats.
 _GO_TYPES = (
@@ -69,7 +69,8 @@ _GO_TYPES = (
     r"|int8|int16|int32|int64|uint8|uint16|uint32|uint64"
     r"|string|int|uint|bool|ip)"
 )
-_SPELLING = re.compile(
+# The flag and any attached optional-value placeholder, shared by both forms.
+_FLAG = (
     # A dot is allowed only *inside* the name (`--foo.bar`), never trailing:
     # clap prints a repeatable flag as `--verbose...`, and a greedy `.` would
     # swallow the ellipsis into the name (`verbose...` → keyword `verbose___`).
@@ -78,9 +79,21 @@ _SPELLING = re.compile(
     # `--gpg-sign[=<key-id>]`, `--untracked-files[=<mode>]`. Read as one
     # attached token so the option isn't mistaken for a bare switch.
     r"(?P<attached>\[=[^\]]*\])?"
-    r"(?:[= ](?P<meta>\[?<[^>]+>(?:\.\.\.)?\]?|\[[^\]]+\]|[A-Z][A-Z0-9_.,|]*(?:\.\.\.)?"
-    rf"|{_GO_TYPES}))?"
 )
+# The value placeholder every dialect agrees on: `<x>`, `[x]`, an UPPERCASE
+# metavar, or a cobra go-type (`stringArray`).
+_META = (
+    r"\[?<[^>]+>(?:\.\.\.)?\]?|\[[^\]]+\]|[A-Z][A-Z0-9_.,|]*(?:\.\.\.)?"
+    rf"|{_GO_TYPES}"
+)
+# cobra and gh also name a value with a bare lowercase word — `--assignee
+# login`, `--base branch`, `--memory bytes`. Only trusted in `--help` text,
+# where `_blocks` has split the prose off at the two-space gap: a man page's
+# description is a paragraph, and "the `--patch` option." there would read
+# "option" as `--patch`'s value.
+_META_BARE = r"|[a-z][A-Za-z0-9._-]*"
+_SPELLING = re.compile(_FLAG + rf"(?:[= ](?P<meta>{_META}{_META_BARE}))?")
+_SPELLING_STRICT = re.compile(_FLAG + rf"(?:[= ](?P<meta>{_META}))?")
 
 # The dialects of "this is the default".
 _DEFAULT = re.compile(
@@ -175,13 +188,19 @@ def _blocks(lines: Sequence[str]) -> list[tuple[str, str]]:
     return blocks
 
 
-def _spellings(head: str) -> tuple[list[str], str, bool]:
+def _spellings(head: str, *, strict: bool = False) -> tuple[list[str], str, bool]:
     """The flags in an option's left column, its placeholder, and whether
-    the value is optional (a `[=…]` glued to the flag)."""
+    the value is optional (a `[=…]` glued to the flag).
+
+    *strict* drops the bare-lowercase metavar, for a man page whose prose
+    refers to flags mid-sentence: `--patch` there must not read the next
+    word as its value.
+    """
     flags: list[str] = []
     meta = ""
     optional = False
-    for match in _SPELLING.finditer(head):
+    pattern = _SPELLING_STRICT if strict else _SPELLING
+    for match in pattern.finditer(head):
         flags.append(match["flag"])
         meta = meta or (match["meta"] or "")
         optional = optional or bool(match["attached"])
@@ -237,14 +256,19 @@ def _parse_default(text: str) -> str:
     return (match["clap"] or match["other"] or "").strip().strip("\"'")
 
 
-def _option(head: str, help_text: str) -> Option | None:
+def _option(head: str, help_text: str, *, strict: bool = False) -> Option | None:
     """One `Option` from one parsed block, or None if it isn't one."""
-    flags, meta, optional = _spellings(head)
+    flags, meta, optional = _spellings(head, strict=strict)
     longs = [f for f in flags if f.startswith("--")]
+    if not longs:
+        # Go's stdlib `flag` spells even long options with one dash (`-color`,
+        # `-no_gitignore`); read a multi-char single-dash flag as the keyword
+        # when there's no `--` form. A real short (`-v`) still has none.
+        longs = [f for f in flags if len(f) > 2 and not f.startswith("--")]
     if not longs:
         return None  # a short-only option has no keyword spelling
     inline = _INLINE_NEGATION.match(longs[0])
-    stem = inline["name"] if inline else longs[0].removeprefix("--")
+    stem = inline["name"] if inline else longs[0].lstrip("-")
     name = stem.replace("-", "_").replace(".", "_")
     default = _parse_default(help_text)
     choices = _choices(help_text)
@@ -371,7 +395,7 @@ def parse_help(text: str, *, name: str = "", man: bool = False) -> Verb:
         if _NOT_OPTIONS.search(title):
             continue  # `Commands:`, `Examples:` — dashes there aren't flags
         for head, help_text in _blocks(lines):
-            option = _option(head, help_text)
+            option = _option(head, help_text, strict=man)
             if (
                 option is not None
                 and option.name not in _NOISE
@@ -379,6 +403,18 @@ def parse_help(text: str, *, name: str = "", man: bool = False) -> Verb:
             ):
                 seen.add(option.name)
                 options.append(option)
+    if not options:
+        # Go's `flag` prints its options under `Usage of <prog>:` — a section
+        # `_NOT_OPTIONS` skips. Nothing parsed anywhere else, so scan every
+        # section, including that one. Guarded on emptiness, so a tool that
+        # parses normally never reaches here and can't regress.
+        for _title, lines in sections.items():
+            for head, help_text in _blocks(lines):
+                option = _option(head, help_text, strict=man)
+                if option is not None and option.name not in _NOISE:
+                    seen.add(option.name)
+                    options.append(option)
+        options = list({o.name: o for o in options}.values())
     positional, lead = _synopsis_shape(text, name) if man else _usage_shape(text)
     return Verb(
         name=name,
@@ -540,6 +576,8 @@ def _usage_line(text: str) -> str:
 
 def _summary(text: str) -> str:
     """A tool's one-line self-description: its help's first prose line."""
+    if re.match(r"^Usage of \S", text):
+        return ""  # Go's `flag` opens with `Usage of <prog>:` and has no summary
     for line in text.splitlines():
         stripped = line.strip()
         if not stripped:

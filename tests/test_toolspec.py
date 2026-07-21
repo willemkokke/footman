@@ -238,6 +238,60 @@ def test_commander_and_summary_skips_usage():
     assert _toolhelp._summary(COMMANDER) == ""
 
 
+# --- dialect refinements --------------------------------------------------
+
+
+def test_repeatable_flag_does_not_absorb_its_trailing_ellipsis():
+    # clap prints a repeatable flag as `--verbose...`; the dots are not part
+    # of the keyword (a greedy `.` once produced `verbose___`).
+    text = "Options:\n  -v, --verbose...  Use verbose output\n"
+    got = flags(_toolhelp.parse_help(text))
+    assert "verbose" in got and "verbose___" not in got
+
+
+def test_bare_lowercase_metavar_is_a_value_in_help_but_not_a_man_page():
+    # gh names a value with a bare lowercase word (`--assignee login`); a man
+    # page's prose (`the --patch option.`) must not read one the same way.
+    loose = _toolhelp._option("--assignee login", "")
+    strict = _toolhelp._option("--assignee login", "", strict=True)
+    assert loose is not None and strict is not None
+    assert loose.type_name == "str"  # help mode: bare word is the value
+    assert strict.type_name == "bool"  # man mode: prose word ignored
+
+
+def test_bulleted_options_are_read():
+    # markdownlint-cli2 prints options as a bulleted list, `- --fix  …`.
+    text = (
+        "Optional parameters:\n"
+        "- --config       specifies the path to a configuration file\n"
+        "- --fix          updates files to resolve fixable issues\n"
+    )
+    assert {"config", "fix"} <= set(flags(_toolhelp.parse_help(text)))
+
+
+def test_go_stdlib_flag_format_is_read():
+    # Go's `flag`: single-dash long options under `Usage of <prog>:`, each
+    # description on the next indented line, and no summary of its own.
+    text = (
+        "Usage of eclint:\n"
+        "  -color string\n"
+        '    \tuse color when printing (default "auto")\n'
+        "  -fix\n"
+        "    \tenable fixing instead of error reporting\n"
+    )
+    verb = _toolhelp.parse_help(text)
+    got = flags(verb)
+    assert got["color"].type_name == "str"  # single-dash long, valued
+    assert got["fix"].type_name == "bool"
+    assert verb.help == ""  # Go flag prints no summary line
+
+
+def test_stub_escapes_backslashes_in_help_text():
+    # mypy's `--exclude '/setup\.py$'` must land as a literal in the docstring,
+    # not an invalid `\.` escape a compiler warns on.
+    assert _stubgen._esc(r"a \.py$ b") == r"a \\.py$ b"
+
+
 def test_subcommands_are_read_from_their_own_section():
     found = _toolhelp.subcommands(SUBCOMMANDS)
     assert found["build"] == "Build the MkDocs documentation"

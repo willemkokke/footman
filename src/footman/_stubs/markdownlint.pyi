@@ -5,14 +5,14 @@
 # accepts, and can never forbid what the bridge would happily pass.
 from typing import Any
 
-from footman.tools import Tool, _Flag
+from footman.tools import Tool, _Flag, _Value
 
 class Markdownlint(Tool):
     def __call__(  # type: ignore[override]
         self,
         *args: str,
         config: _Flag = ...,
-        configPointer: _Flag = ...,
+        configPointer: _Value = ...,
         fix: _Flag = ...,
         format: _Flag = ...,
         no_globs: _Flag = ...,
