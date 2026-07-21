@@ -77,6 +77,11 @@ class Context:
     honours it too. Deliberately not set by the scheduler's own
     single-node routing, which is presentation, not a request to
     serialise task bodies."""
+    assume_yes: bool = False
+    """`--yes`: every `confirm()` gate auto-answers yes, for CI and scripts."""
+    no_input: bool = False
+    """`--no-input`: never prompt — a required prompt errors instead of
+    asking, so an unattended run fails loudly rather than hanging."""
     fetch_backend: str = ""
     """`[fetch] backend` from the config ladder — which engine `fetch()`
     downloads with. Empty means the default (stdlib urllib)."""

@@ -71,6 +71,8 @@ GLOBALS: list[tuple[str, str | None, str, str | None, str]] = [
     ("--keep-going", "-k", "flag", None, "run every branch even if one fails"),
     ("--sequential", "-s", "flag", None, "run one at a time (default: parallel)"),
     ("--jobs", "-j", "option", "N", "max parallel tasks (default: cores - 1)"),
+    ("--yes", "-y", "flag", None, "assume yes to every confirm() gate"),
+    ("--no-input", None, "flag", None, "never prompt; error if input is required"),
     ("--quiet", "-q", "flag", None, "suppress the per-task summary"),
     ("--verbose", "-v", "flag", None, "replay captured output even on success"),
     ("--no-color", None, "flag", None, "disable ANSI colour"),
