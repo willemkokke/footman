@@ -7,6 +7,8 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+## [0.16.0] — 2026-07-21
+
 ### Added
 
 - **The command line footman shows is now separate from the one it runs.**
@@ -17,19 +19,6 @@ versions may include breaking changes.
   `recording()` asserts and the terminal shows) and `.raw` (the exact
   executed bytes, what `--verbose` prints). One translation feeds both, so
   they can never disagree about what a call means.
-
-### Changed
-
-- **Valued long options are executed attached** (`select="E"` →
-  `--select=E`). This is invisible in what footman shows you — the shown
-  line stays separated and readable — but it fixes two silent failures:
-  an optional-value option whose value was read as a positional
-  (`--abbrev 4` → `--abbrev=4`), and a dash-leading value read as another
-  option (`--format -%h` → `--format=-%h`). The rule covers every tool,
-  including undeclared ones. `recording()` assertions on `.command` are
-  unaffected; assert on `.raw` for the exact spelling.
-
-### Added
 
 - **The `tools.*` stubs are generated from the installed tools.** The
   bridge never went stale, because it transcribes nothing — but its stub
@@ -88,6 +77,17 @@ versions may include breaking changes.
   type-checked. Its negative cases are the real assertions — since
   `**flags: Any` swallows an unknown keyword, a call that is *required to
   fail* is what proves a flag is declared and typed.
+
+### Changed
+
+- **Valued long options are executed attached** (`select="E"` →
+  `--select=E`). This is invisible in what footman shows you — the shown
+  line stays separated and readable — but it fixes two silent failures:
+  an optional-value option whose value was read as a positional
+  (`--abbrev 4` → `--abbrev=4`), and a dash-leading value read as another
+  option (`--format -%h` → `--format=-%h`). The rule covers every tool,
+  including undeclared ones. `recording()` assertions on `.command` are
+  unaffected; assert on `.raw` for the exact spelling.
 
 ### Fixed
 
@@ -1016,7 +1016,8 @@ versions may include breaking changes.
 
 - Placeholder release claiming the `footman` name on PyPI. Not tagged in git.
 
-[Unreleased]: https://github.com/willemkokke/footman/compare/v0.15.0...HEAD
+[Unreleased]: https://github.com/willemkokke/footman/compare/v0.16.0...HEAD
+[0.16.0]: https://github.com/willemkokke/footman/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/willemkokke/footman/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/willemkokke/footman/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/willemkokke/footman/compare/v0.12.0...v0.13.0
