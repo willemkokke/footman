@@ -15,11 +15,16 @@ versions may include breaking changes.
   "unspecified" means *the code decides*, not a silent default. The new
   `--fail-fast` global forces fail-fast when a task declares keep-going, the
   mirror of `--keep-going`. And fail-fast now actually *is* fast: on the first
-  failure it stops launching new work **and terminates the sibling subprocesses
-  still running**, so a doomed parallel run dies at once instead of waiting out
-  a long task. `@task(atomic=True)` opts a task's subprocesses out of the kill —
-  they run to completion, so a mid-write can't be truncated. In-process runs are
-  never killed (there's no child to signal).
+  failure it stops launching new work **and terminates the subprocess trees
+  still running** — each child *and its own children*, so a tool's workers
+  (pytest-xdist, `make -j`, a script's background jobs) die with it instead of
+  orphaning — escalating SIGTERM to SIGKILL for anything that ignores the first
+  signal. A task cut off this way reports as *cancelled*, kept distinct from a
+  genuine failure; the run's exit code follows the real failure. `Ctrl-C` reaps
+  in-flight trees the same way. `@task(atomic=True)` opts a task's subprocesses
+  out of the kill — they run to completion, so a mid-write can't be truncated —
+  and an `interactive` task's child stays attached to the terminal it owns.
+  In-process runs are never killed (there's no child to signal).
 - **Parameter forwarding.** A parameter marked `Annotated[T, forward]` (or the
   shorthand `Forward[T]`, like `Many[T]`) passes its value to every task this
   one dispatches — its `pre`/`post` prerequisites and a runnable group's

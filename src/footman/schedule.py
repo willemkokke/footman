@@ -359,9 +359,16 @@ def run_plan(
                     and not _plain_output(bool(cfg.get("no_color")))
                     else None
                 )
-                _run_sequential(
-                    nodes, real, keep_going, capture, ctx_config, status, hint_err
-                )
+                try:
+                    _run_sequential(
+                        nodes, real, keep_going, capture, ctx_config, status, hint_err
+                    )
+                except BaseException:
+                    # Ctrl-C mid-task: the running child is group-isolated, so it
+                    # missed the terminal's SIGINT — reap its tree by hand before
+                    # the interrupt propagates. (Parallel does this itself.)
+                    context.terminate_live_children()
+                    raise
             else:
                 _run_parallel(
                     nodes, real, err, keep_going, capture, ctx_config, status, jobs
@@ -519,9 +526,13 @@ def _run_parallel(
                             context.terminate_live_children()
         except BaseException:
             # Abort (Ctrl-C, or an internal error surfaced above): drop
-            # everything not yet started; the pool's exit joins the in-flight
-            # tasks (on Ctrl-C their subprocesses got the terminal's SIGINT
-            # too). The app layer reports "interrupted" and exits 130; the
-            # status line is cleared by run_plan's finally.
+            # everything not yet started, then kill in-flight subprocess trees.
+            # This must happen *before* the pool's `with` exit joins the worker
+            # threads: each is blocked in communicate() on a group-isolated child
+            # that no longer receives the terminal's SIGINT, so without an
+            # explicit kill the join — and the whole Ctrl-C — would hang. The app
+            # layer reports "interrupted" and exits 130; run_plan's finally
+            # clears the status line.
+            context.terminate_live_children()
             pool.shutdown(wait=False, cancel_futures=True)
             raise
