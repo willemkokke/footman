@@ -32,6 +32,8 @@ from collections.abc import Callable, Iterator, Sequence
 from typing import Any, overload
 
 Task = Callable[..., Any]
+Finalizer = Callable[["Tasks"], object]
+"""A `@finalize` hook: edits the merged command tree in place at discovery."""
 
 
 class RegistrationError(ValueError):
@@ -88,6 +90,7 @@ class Group:
         self.tasks: dict[str, Task] = {}
         self.groups: dict[str, Group] = {}
         self.default_task: Task | None = None  # runs on a bare `fm <group>`
+        self.finalizers: list[Finalizer] = []  # @finalize hooks (root registry only)
 
     def _claim(self, key: str) -> None:
         where = f"group {self.name!r}" if self.name != "root" else "the root"
@@ -237,6 +240,30 @@ class Group:
         self.groups[key] = sub
         return sub
 
+    def finalize(self, fn: Finalizer) -> Finalizer:
+        """Register a hook that edits the discovered command tree in place.
+
+        Every `@finalize` function runs once, after the whole `tasks.py` cascade
+        is assembled but before dispatch, handed a `Tasks` view of the merged
+        tree. Its edits are part of the plan, never a runtime surprise: an added
+        `pre` runs and shows in `--dry-run`, a disabled task drops from listings
+        and completion. It is footman's `collection_modifyitems`.
+
+        Finalizers run in cascade order — root's first, the folder nearest your
+        cwd last, each seeing the previous ones' edits — the same "local overrides
+        global" precedence the task cascade itself uses. Read and edit each task
+        through the `TaskView` surface, never the private `_footman_*` attributes.
+
+            @footman.finalize
+            def gate_deploys(tasks):
+                audit = tasks["audit"]
+                for t in tasks:
+                    if t.name.startswith("deploy"):
+                        t.add_pre(audit)
+        """
+        self.finalizers.append(fn)
+        return fn
+
     def default(self, fn: Task) -> Task:
         """Register *fn* as this group's default action — what a bare
         `fm <group>` runs, and what the group returns when called.
@@ -280,12 +307,14 @@ class Group:
 root = Group("root")
 task = root.task
 group = root.group
+finalize = root.finalize
 
 
 def reset() -> None:
     """Clear the global `root` registry (used by the test-suite)."""
     root.tasks.clear()
     root.groups.clear()
+    root.finalizers.clear()
 
 
 def _importable(module: str) -> bool:
@@ -373,6 +402,88 @@ def availability(fn: Task) -> str | None:
     return None if when else reason
 
 
+def _as_fn(t: TaskView | Task) -> Task:
+    """Unwrap a `TaskView` to its function; pass a raw function through."""
+    return t.fn if isinstance(t, TaskView) else t
+
+
+class TaskView:
+    """A finalizer's handle on one task: read its wiring and edit it here,
+    never through the private `_footman_*` attributes."""
+
+    def __init__(self, fn: Task, name: str) -> None:
+        self.fn = fn
+        """The task function itself — the escape hatch past the view."""
+        self.name = name
+        """The task's command-line name, e.g. `deploy-web`."""
+
+    @property
+    def pre(self) -> tuple[Task, ...]:
+        """The prerequisites that run before this task."""
+        return tuple(getattr(self.fn, "_footman_pre", ()))
+
+    @property
+    def post(self) -> tuple[Task, ...]:
+        """The tasks that run after this one."""
+        return tuple(getattr(self.fn, "_footman_post", ()))
+
+    @property
+    def disabled(self) -> str | None:
+        """Why the task is unavailable here, or `None` if it can run."""
+        return availability(self.fn)
+
+    def add_pre(self, *tasks: TaskView | Task) -> None:
+        """Prepend prerequisites (views or functions), skipping any already set."""
+        have = list(getattr(self.fn, "_footman_pre", []))
+        self.fn._footman_pre = [  # type: ignore[attr-defined]
+            *(f for t in tasks if (f := _as_fn(t)) not in have),
+            *have,
+        ]
+
+    def add_post(self, *tasks: TaskView | Task) -> None:
+        """Append post-tasks (views or functions), skipping any already set."""
+        have = list(getattr(self.fn, "_footman_post", []))
+        self.fn._footman_post = [  # type: ignore[attr-defined]
+            *have,
+            *(f for t in tasks if (f := _as_fn(t)) not in have),
+        ]
+
+    def disable(self, reason: str) -> None:
+        """Mark the task unavailable — listed with *reason*, refused if run."""
+        self.fn._footman_when = lambda: False  # type: ignore[attr-defined]
+        self.fn._footman_reason = reason  # type: ignore[attr-defined]
+
+
+class Tasks:
+    """A finalizer's view of the merged command tree: iterate every task, or
+    look one up by its command-line name, each as a `TaskView`."""
+
+    def __init__(self, root: Group) -> None:
+        self._root = root
+
+    def __iter__(self) -> Iterator[TaskView]:
+        yield from _task_views(self._root)
+
+    def get(self, name: str) -> TaskView | None:
+        """The task named *name* (command-line spelling), or `None`."""
+        return next((v for v in self if v.name == name), None)
+
+    def __getitem__(self, name: str) -> TaskView:
+        if (view := self.get(name)) is None:
+            raise KeyError(name)
+        return view
+
+    def __contains__(self, name: object) -> bool:
+        return isinstance(name, str) and self.get(name) is not None
+
+
+def _task_views(g: Group) -> Iterator[TaskView]:
+    for name, fn in g.tasks.items():
+        yield TaskView(fn, name)
+    for sub in g.groups.values():
+        yield from _task_views(sub)
+
+
 @contextlib.contextmanager
 def capture() -> Iterator[Group]:
     """Redirect module-level `@task`/`group` registration into a fresh tree.
@@ -384,8 +495,11 @@ def capture() -> Iterator[Group]:
     """
     captured = Group("root")
     saved_tasks, saved_groups = root.tasks, root.groups
+    saved_finalizers = root.finalizers
     root.tasks, root.groups = captured.tasks, captured.groups
+    root.finalizers = captured.finalizers
     try:
         yield captured
     finally:
         root.tasks, root.groups = saved_tasks, saved_groups
+        root.finalizers = saved_finalizers

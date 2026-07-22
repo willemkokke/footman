@@ -16,7 +16,7 @@ runner and its globals, `fm --help docs` a group, `fm --help deploy` a task.
 ## Decorator surface
 
 ```python
-from footman import task, group
+from footman import task, group, finalize
 
 @task                       # bare
 def build(): ...
@@ -37,6 +37,11 @@ release = group("release", help="Cut a release")
 
 @release.task
 def wheel(): ...
+
+@finalize                   # edit the merged task tree at discovery
+def gate(tasks):            # (see Monorepos & config)
+    for t in tasks:
+        t.add_pre(tasks["audit"])
 ```
 
 ## Runtime helpers
