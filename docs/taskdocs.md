@@ -145,11 +145,12 @@ functions, so footman's own docs task calls them directly — copy the shape:
 def docs_build(check: bool = False):
     "Build the docs site; regenerates the task reference first."
     from footman.tasks.docs import globals_, page, site
+    from footman.tools import zensical
 
     site(Path("docs/tasks"))
     page(target="docs", heading=3, out=Path("docs/_generated/tasks-page.md"))
     globals_(out=Path("docs/_generated/globals.md"))
-    tools.zensical.build(clean=True, strict=check)
+    zensical.build(clean=True, strict=check)
 ```
 
 Add the generated paths to `.gitignore` — they're build output, not source.

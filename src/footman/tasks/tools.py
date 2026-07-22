@@ -304,7 +304,8 @@ _READ_FROM = _re.compile(
 _INDEX = """\
 # Tools
 
-`tools.<name>` needs no declaration — [the bridge](../../tools-bridge.md)
+Import a tool by name — `from footman.tools import git` — and call it,
+`git.commit(…)`. No declaration needed: [the bridge](../../tools-bridge.md)
 translates keyword arguments into flags mechanically, and every tool on
 your PATH already works. These pages document the **stubs**: what each
 curated tool accepted at the version footman last read it from, with that

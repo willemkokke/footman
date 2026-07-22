@@ -27,22 +27,23 @@ independent checks to `parallel()` and let the machine use its cores:
 
 ```python
 import functools
-from footman import task, parallel, tools
+from footman import task, parallel
+from footman.tools import basedpyright, pytest, ruff
 
 @task
 def lint(fix: bool = False):
     "Lint with ruff."
-    tools.ruff.check("src", "tests", fix=fix)
+    ruff.check("src", "tests", fix=fix)
 
 @task
 def typecheck():
     "Type-check with basedpyright."
-    tools.basedpyright()
+    basedpyright()
 
 @task
 def test(*pytest_args: str):
     "Run the test suite."
-    tools.pytest(*pytest_args)
+    pytest(*pytest_args)
 
 @task
 def check():
@@ -66,7 +67,7 @@ quoting gymnastics, no flag collisions with footman's own:
 @task
 def test(*pytest_args: str):
     "Run the test suite."
-    tools.pytest(*pytest_args)
+    pytest(*pytest_args)
 ```
 
 ```console
@@ -154,6 +155,7 @@ never a stale snapshot:
 from typing import Annotated
 from footman import task, run
 from footman.params import suggest
+from footman.tools import docker
 
 def branches() -> list[str]:
     import subprocess  # inside the body — importing tasks.py stays cheap
@@ -184,7 +186,7 @@ with taught errors for malformed pairs:
 @task
 def image(tag: str, build_args: dict[str, str] | None = None):
     "Build the container image."
-    tools.docker.build(".", tag=tag, build_arg=[
+    docker.build(".", tag=tag, build_arg=[
         f"{k}={v}" for k, v in (build_args or {}).items()
     ])
 ```
@@ -300,25 +302,27 @@ subcommands; keyword arguments translate mechanically (`detach=True` →
 `--detach`, lists repeat, trailing `_` escapes Python keywords):
 
 ```python
+from footman.tools import docker, mkdocs, terraform
+
 @task
 def up(detach: bool = True):
     "Start the stack."
-    tools.docker.compose.up(detach=detach)
+    docker.compose.up(detach=detach)
 
 @task
 def plan(out: str = "tf.plan"):
     "Terraform plan, saved."
-    tools.terraform.plan(out=out, input_=False)
+    terraform.plan(out=out, input_=False)
 
 @task
 def site():
     "Build the docs."
-    tools.mkdocs.build(strict=True)   # in-process: no interpreter spawn
+    mkdocs.build(strict=True)   # in-process: no interpreter spawn
 ```
 
-Two extras worth knowing: `tools.<name>.installed_version()` for the
+Two extras worth knowing: any tool's `installed_version()` for the
 rare version-dependent branch, and the `off` sentinel
-(`strict=tools.off` → `--no-strict`) for negating a flag a tool turns on
+(`strict=off` → `--no-strict`) for negating a flag a tool turns on
 by default. And on macOS, in-process is sometimes the only *correct*
 option — SIP strips `DYLD_*` from subprocesses, so a tool needing
 Homebrew's native libraries only works inside the process.
@@ -427,7 +431,7 @@ artifacts for deleted projects clean themselves up.
 
 ```python
 import functools
-from footman import fetch, parallel, task, tools
+from footman import fetch, parallel, task
 
 TOOLCHAIN = {
     "protoc": ("https://example.com/protoc-27.tar.gz", "9f86d081884c…"),
