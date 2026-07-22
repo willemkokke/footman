@@ -9,7 +9,8 @@ from __future__ import annotations
 import functools
 from typing import TYPE_CHECKING, Annotated
 
-from footman import doc, group, parallel, run, task, tools
+from footman import doc, group, parallel, run, task
+from footman.tools import basedpyright, pytest, ruff, ruff_format, uv, zensical
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -20,7 +21,7 @@ SRC = ("src", "tests")
 @task
 def lint(fix: Annotated[bool, doc("apply safe fixes in place")] = False):
     """Lint with ruff."""
-    tools.ruff.check(*SRC, fix=fix)
+    ruff.check(*SRC, fix=fix)
 
 
 @task
@@ -30,13 +31,13 @@ def format(check: bool = False):
     Args:
         check: report instead of rewriting
     """
-    tools.ruff_format(*SRC, check=check)
+    ruff_format(*SRC, check=check)
 
 
 @task
 def typecheck():
     """Type-check with basedpyright."""
-    tools.basedpyright()
+    basedpyright()
 
 
 @task
@@ -46,7 +47,7 @@ def test(*pytest_args: str):
     Args:
         pytest_args: forwarded to pytest verbatim
     """
-    tools.pytest(*pytest_args, in_process=False)
+    pytest(*pytest_args, in_process=False)
 
 
 @task
@@ -413,7 +414,7 @@ def docs_build(check: bool = False):
     _write_llms_txt()
     # A conditional flag needs no ternary: strict=check is --strict when
     # check is true, omitted otherwise (strict is off by default in zensical).
-    tools.zensical.build(clean=True, strict=check, in_process=False)
+    zensical.build(clean=True, strict=check, in_process=False)
 
 
 dist = group("dist", help="Build and publish")
@@ -422,7 +423,7 @@ dist = group("dist", help="Build and publish")
 @dist.task
 def build():
     """Build the sdist and wheel."""
-    tools.uv("build")
+    uv("build")
 
 
 @dist.task
