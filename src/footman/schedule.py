@@ -40,6 +40,7 @@ class _Node:
     deps: set[int] = field(default_factory=set)
     state: str = "pending"  # pending / running / done / skipped
     result: executor.TaskResult | None = None
+    forwarded: dict[str, Any] = field(default_factory=dict)  # `forward`ed values in
 
 
 def _default_seg(fn: Task) -> Segment:
@@ -73,11 +74,35 @@ def _build_dag(root: Group, segments: list[Segment]) -> list[_Node]:
             _link(node)
         return node
 
+    def _thread(dep: _Node, fmap: dict[str, Any], source: str) -> None:
+        # A forwarded value reaches only a dispatched task that *declares* the
+        # parameter (partial reach); two dispatchers sending different values to
+        # a shared prerequisite is a taught error, not a silent last-wins.
+        if not fmap:
+            return
+        declared = {
+            p.name for p in executor.resolved_signature(dep.fn).parameters.values()
+        }
+        for name, value in fmap.items():
+            if name not in declared:
+                continue
+            if name in dep.forwarded and dep.forwarded[name] != value:
+                raise ChainError(
+                    f"{dep.seg.task}: {name!r} is forwarded with conflicting values "
+                    f"(one from {source!r}); run the forwarding tasks separately"
+                )
+            dep.forwarded[name] = value
+
     def _link(node: _Node) -> None:
+        fmap = executor.forward_map(node.fn, node.seg)
         for dep in getattr(node.fn, "_footman_pre", []):
-            node.deps.add(add_dep(dep).key)
+            d = add_dep(dep)
+            node.deps.add(d.key)
+            _thread(d, fmap, node.seg.task)
         for dep in getattr(node.fn, "_footman_post", []):
-            add_dep(dep).deps.add(node.key)
+            d = add_dep(dep)
+            d.deps.add(node.key)
+            _thread(d, fmap, node.seg.task)
 
     for seg in segments:
         fn = executor.resolve(root, seg.path)
@@ -323,7 +348,7 @@ def _run_sequential(
             hint = f"{node.seg.task} runs until you stop it — Ctrl-C"
             err.write(_describe.dim(hint, True) + "\n")
             err.flush()
-        node.result = executor.run_task(node.fn, node.seg, ctx)
+        node.result = executor.run_task(node.fn, node.seg, ctx, node.forwarded)
         node.state = "done"
         if status is not None:
             status.unit_finished(node.seg.task, node.result.ok)
@@ -390,7 +415,7 @@ def _run_parallel(
             real=real,
             name_width=width,
         )
-        n.result = executor.run_task(n.fn, n.seg, ctx)
+        n.result = executor.run_task(n.fn, n.seg, ctx, n.forwarded)
         if not capture:  # flush this task's buffered output as one block
             with lock:
                 blob = ctx.sink.getvalue()  # type: ignore[union-attr]
