@@ -37,13 +37,19 @@ if TYPE_CHECKING:
     from footman.context import select as select
     from footman.context import track as track
     from footman.context import use_context as use_context
+    from footman.params import Exists as Exists
+    from footman.params import Forward as Forward
+    from footman.params import IsDir as IsDir
+    from footman.params import IsFile as IsFile
     from footman.params import Many as Many
+    from footman.params import NoSplit as NoSplit
     from footman.params import ask as ask
     from footman.params import between as between
     from footman.params import check as check
     from footman.params import doc as doc
     from footman.params import env as env
     from footman.params import exists as exists
+    from footman.params import forward as forward
     from footman.params import isdir as isdir
     from footman.params import isfile as isfile
     from footman.params import nosplit as nosplit
@@ -61,9 +67,14 @@ __all__ = [
     "App",
     "Brand",
     "Context",
+    "Exists",
     "FetchError",
+    "Forward",
     "Group",
+    "IsDir",
+    "IsFile",
     "Many",
+    "NoSplit",
     "Result",
     "RunFailed",
     "Runner",
@@ -78,6 +89,7 @@ __all__ = [
     "env",
     "exists",
     "fetch",
+    "forward",
     "group",
     "include",
     "inherited",
@@ -159,6 +171,12 @@ def __getattr__(name: str) -> object:
         "check",
         "doc",
         "ask",
+        "forward",
+        "Forward",
+        "NoSplit",
+        "Exists",
+        "IsFile",
+        "IsDir",
     ):
         from footman import params
 

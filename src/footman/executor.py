@@ -53,11 +53,21 @@ class TaskResult:
 
 
 def resolve(root: Group, path: list[str]) -> Task:
-    """Walk *path* (`["docs", "build"]`) to its task function."""
+    """Walk *path* (`["docs", "build"]`) to its task function.
+
+    A path that lands on a runnable group (`["lint"]`) resolves to that group's
+    default action — the function `@group.default` registered.
+    """
     node = root
     for name in path[:-1]:
         node = node.groups[name]
-    return node.tasks[path[-1]]
+    last = path[-1]
+    if last in node.tasks:
+        return node.tasks[last]
+    group = node.groups[last]
+    if group.default_task is None:
+        raise KeyError(last)  # a non-runnable group is never a segment target
+    return group.default_task
 
 
 _MISSING = object()
@@ -232,7 +242,10 @@ def _left_siblings(
 
 
 def bind(
-    seg: Segment, fn: Task, ctx: Context | None = None
+    seg: Segment,
+    fn: Task,
+    ctx: Context | None = None,
+    forwarded: dict[str, Any] | None = None,
 ) -> tuple[list[Any], dict[str, Any]]:
     """Turn a segment's string values into `(*args, **kwargs)` for *fn*.
 
@@ -240,6 +253,11 @@ def bind(
     through `footman.coerce`, the same module the manifest and splitter use.
     `check(fn)` validators run here on the coerced values, and absent options
     fall back to their `env()` variable before their default.
+
+    *forwarded* carries values a dispatching task passed down via the `forward`
+    marker. Precedence is CLI value > forwarded > env > default: a forwarded
+    value overrides only a parameter that *has* a default (it never rescues a
+    required one — a prerequisite must still be independently runnable).
     """
     sig = resolved_signature(fn)
     empty = inspect.Parameter.empty
@@ -262,6 +280,15 @@ def bind(
 
         cli = param.name.replace("_", "-")
         if cli not in seg.values:
+            # A forwarded value overrides a defaulted parameter (never a
+            # required one — the guard on `param.default`), ahead of env/default.
+            if (
+                forwarded is not None
+                and param.name in forwarded
+                and param.default is not empty
+            ):
+                kwargs[param.name] = forwarded[param.name]
+                continue
             if param.annotation is not empty:
                 peeled = coerce.peel(param.annotation)
                 if peeled.env is not None:
@@ -335,6 +362,45 @@ def bind(
     return [*pos, *var_args], kwargs
 
 
+def forward_map(
+    fn: Task, seg: Segment, received: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    """The `forward`-marked parameter values *fn* passes to what it dispatches.
+
+    Read from the segment's CLI value or the parameter's default — never by
+    prompting, so building the map is side-effect free. Only defaulted
+    parameters contribute; a required one is never forwarded (matching `bind`).
+
+    A value *fn* itself *received* via forwarding wins over its segment/default,
+    so a forwarded value chains through a callee that re-declares the marker.
+    """
+    sig = resolved_signature(fn)
+    empty = inspect.Parameter.empty
+    out: dict[str, Any] = {}
+    for param in sig.parameters.values():
+        if param.annotation is empty or param.default is empty:
+            continue
+        peeled = coerce.peel(param.annotation)
+        if not peeled.forward:
+            continue
+        if received is not None and param.name in received:
+            out[param.name] = received[param.name]
+            continue
+        cli = param.name.replace("_", "-")
+        if cli not in seg.values:
+            out[param.name] = param.default
+            continue
+        raw = seg.values[cli]
+        if isinstance(raw, bool):
+            out[param.name] = raw
+        elif peeled.multiple:
+            items = raw if isinstance(raw, list) else [raw]
+            out[param.name] = [coerce.coerce_one(v, peeled.element) for v in items]
+        else:
+            out[param.name] = coerce.coerce_one(raw, peeled.element)
+    return out
+
+
 def _call(
     fn: Task, args: list[Any], kwargs: dict[str, Any]
 ) -> tuple[int, Any, BaseException | None]:
@@ -358,19 +424,22 @@ class Unavailable(Exception):
     """A `when=`-disabled task was asked to run; the message is the reason."""
 
 
-def run_task(fn: Task, seg: Segment, ctx: Context) -> TaskResult:
+def run_task(
+    fn: Task, seg: Segment, ctx: Context, forwarded: dict[str, Any] | None = None
+) -> TaskResult:
     """Bind *seg* to *fn* and run it within *ctx* (contextvar set for run()).
 
     `ctx` is injected as the first argument if the task declares a `ctx`
     parameter. Output routing (per-task buffering for parallel/`--json`) is the
     caller's job via `ctx.sink`; here we just capture its final value.
+    *forwarded* carries `forward`-marked values from a dispatching task.
     """
     # `when=` availability is re-checked live at the moment of execution —
     # the manifest's cached answer is only ever a listing annotation.
     if (reason := registry.availability(fn)) is not None:
         return TaskResult(task=seg.task, ok=False, code=2, error=Unavailable(reason))
     try:
-        args, kwargs = bind(seg, fn, ctx)
+        args, kwargs = bind(seg, fn, ctx, forwarded)
     except ChainError:
         raise  # e.g. passthrough with no *args — reported by the app layer
     except Exception as exc:  # a coercion failure (e.g. a custom-type constructor)

@@ -48,6 +48,37 @@ def _cli_name(name: str) -> str:
     return name.replace("_", "-")
 
 
+def _empty_body(fn: object) -> bool:
+    """True when *fn*'s body is only a docstring and/or `pass`.
+
+    This is the signal that a `@group.default` fans out the group's own tasks
+    rather than running a body of its own. Source that can't be read (a C
+    function, a REPL definition) reads as *not* empty — a body we can't see is
+    treated as one we must run.
+    """
+    import ast
+    import inspect
+    import textwrap
+
+    try:
+        src = textwrap.dedent(inspect.getsource(fn))  # type: ignore[arg-type]
+        mod = ast.parse(src)
+    except (OSError, TypeError, SyntaxError):
+        return False
+    func = mod.body[0] if mod.body else None
+    if not isinstance(func, ast.FunctionDef | ast.AsyncFunctionDef):
+        return False
+    stmts = func.body
+    if (
+        stmts
+        and isinstance(stmts[0], ast.Expr)
+        and isinstance(stmts[0].value, ast.Constant)
+        and isinstance(stmts[0].value.value, str)
+    ):
+        stmts = stmts[1:]  # drop the docstring
+    return all(isinstance(s, ast.Pass) for s in stmts)
+
+
 class Group:
     """A node in the command tree: named tasks and nested sub-groups."""
 
@@ -56,6 +87,7 @@ class Group:
         self.help = help
         self.tasks: dict[str, Task] = {}
         self.groups: dict[str, Group] = {}
+        self.default_task: Task | None = None  # runs on a bare `fm <group>`
 
     def _claim(self, key: str) -> None:
         where = f"group {self.name!r}" if self.name != "root" else "the root"
@@ -196,6 +228,42 @@ class Group:
         sub = Group(key, help)
         self.groups[key] = sub
         return sub
+
+    def default(self, fn: Task) -> Task:
+        """Register *fn* as this group's default action — what a bare
+        `fm <group>` runs, and what the group returns when called.
+
+        The function's signature *is* the group's option surface, so it takes
+        flags/options only: a positional parameter is rejected at load time,
+        because a bare word after a group names a child, not a value. Model a
+        positional action as a task, or take free arguments via `--` passthrough.
+        """
+        # Lazy: manifest imports registry, so importing it at module load would
+        # cycle. By call time (a tasks file being imported) it resolves fine.
+        from footman.context import context_param_name
+        from footman.manifest import param_spec, resolved_signature
+
+        sig = resolved_signature(fn)
+        ctx_name = context_param_name(sig)
+        for param in sig.parameters.values():
+            if param.name == ctx_name:
+                continue
+            if param_spec(param).get("kind") in ("argument", "variadic"):
+                where = self.name if self.name != "root" else "the root group"
+                raise RegistrationError(
+                    f"{where}'s default {fn.__name__!r} takes a positional "
+                    f"parameter ({param.name!r}); a group default takes "
+                    f"flags/options only — a bare word after a group names a "
+                    f"child. Model a positional action as a task, or take free "
+                    f"arguments via `--` passthrough."
+                )
+        # A back-reference plus the empty-body flag: an empty-body default fans
+        # out the group's own tasks (they become its implicit prerequisites at
+        # DAG-build time); a custom body is the escape hatch and runs as written.
+        fn._footman_default_group = self  # type: ignore[attr-defined]
+        fn._footman_default_fanout = _empty_body(fn)  # type: ignore[attr-defined]
+        self.default_task = fn
+        return fn
 
 
 # The implicit root registry populated by the module-level `task`/`group`

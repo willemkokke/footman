@@ -7,6 +7,29 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- **Parameter forwarding.** A parameter marked `Annotated[T, forward]` (or the
+  shorthand `Forward[T]`, like `Many[T]`) passes its value to every task this
+  one dispatches — its `pre`/`post` prerequisites and a runnable group's
+  surfaces — that declares a parameter of the same name; the rest run on their
+  own defaults. So `@task(pre=[format, lint]) def check(fix: Forward[bool])`
+  reaches `--fix` into the tasks that support it and lets the ones that don't
+  just run, and the value chains through a callee that re-declares the marker.
+  Precedence is CLI > forwarded > default, and a forwarded value overrides a
+  default without rescuing a required parameter (a prerequisite stays runnable
+  on its own). Two dispatchers sending different values to a shared
+  prerequisite is a taught error, not a silent last-wins. `NoSplit[T]`,
+  `Exists`, `IsFile`, and `IsDir` join `Many`/`Forward` as terse aliases for
+  the bare markers.
+- **Runnable groups.** A group gains a default action with `@group.default` —
+  a typed function whose signature is the group's own options — so `fm lint`
+  runs it while `fm lint markdown` still runs one surface. An empty-body default
+  fans out the group's own tasks (`fm lint --fix` fixes what's fixable and lints
+  the rest); a custom body is the escape hatch. A positional parameter on a
+  default is a load-time error, because a bare word after a group names a child.
+  The group tab-completes and self-documents like a first-class command.
+
 ## [0.17.0] — 2026-07-22
 
 ### Added

@@ -40,10 +40,24 @@ class _Node:
     deps: set[int] = field(default_factory=set)
     state: str = "pending"  # pending / running / done / skipped
     result: executor.TaskResult | None = None
+    forwarded: dict[str, Any] = field(default_factory=dict)  # `forward`ed values in
+    forward_targets: list[_Node] = field(default_factory=list)  # …and out
 
 
 def _default_seg(fn: Task) -> Segment:
     return Segment(task=fn.__name__, path=[fn.__name__])
+
+
+def _as_task(dep: Task | Group) -> Task:
+    """A `pre`/`post` dependency may name a runnable group; resolve it to the
+    group's default action so it runs (and fans out) like any other task."""
+    if isinstance(dep, Group):
+        if dep.default_task is None:
+            raise ChainError(
+                f"group {dep.name!r} is a prerequisite but has no @group.default"
+            )
+        return dep.default_task
+    return dep
 
 
 def _build_dag(root: Group, segments: list[Segment]) -> list[_Node]:
@@ -73,11 +87,41 @@ def _build_dag(root: Group, segments: list[Segment]) -> list[_Node]:
             _link(node)
         return node
 
+    def _thread(dep: _Node, fmap: dict[str, Any], source: str) -> None:
+        # A forwarded value reaches only a dispatched task that *declares* the
+        # parameter (partial reach); two dispatchers sending different values to
+        # a shared prerequisite is a taught error, not a silent last-wins.
+        if not fmap:
+            return
+        declared = {
+            p.name for p in executor.resolved_signature(dep.fn).parameters.values()
+        }
+        for name, value in fmap.items():
+            if name not in declared:
+                continue
+            if name in dep.forwarded and dep.forwarded[name] != value:
+                raise ChainError(
+                    f"{dep.seg.task}: {name!r} is forwarded with conflicting values "
+                    f"(one from {source!r}); run the forwarding tasks separately"
+                )
+            dep.forwarded[name] = value
+
     def _link(node: _Node) -> None:
-        for dep in getattr(node.fn, "_footman_pre", []):
-            node.deps.add(add_dep(dep).key)
+        pre = list(getattr(node.fn, "_footman_pre", []))
+        # An empty-body group default fans out the group's own tasks: they become
+        # implicit prerequisites, so the scheduler runs them (in parallel) and the
+        # default's forward-marked values thread into the ones that declare them.
+        group = getattr(node.fn, "_footman_default_group", None)
+        if group is not None and getattr(node.fn, "_footman_default_fanout", False):
+            pre = [*group.tasks.values(), *pre]
+        for dep in pre:
+            d = add_dep(_as_task(dep))
+            node.deps.add(d.key)
+            node.forward_targets.append(d)  # forwarding threaded in a later pass
         for dep in getattr(node.fn, "_footman_post", []):
-            add_dep(dep).deps.add(node.key)
+            d = add_dep(_as_task(dep))
+            d.deps.add(node.key)
+            node.forward_targets.append(d)
 
     for seg in segments:
         fn = executor.resolve(root, seg.path)
@@ -93,6 +137,16 @@ def _build_dag(root: Group, segments: list[Segment]) -> list[_Node]:
             dep_nodes[id(fn)] = node
         seen_explicit.add(id(fn))
         _link(node)
+
+    # Thread forwarded values in a second pass, dependents before their deps (the
+    # reverse of the run order), so a node's *received* values are complete before
+    # it forwards on — this is what makes forwarding chain through a group default
+    # into its surfaces. It runs after segment adoption above, so each node's seg
+    # (hence its forward map) is final.
+    for node in reversed(_toposort(nodes)):
+        fmap = executor.forward_map(node.fn, node.seg, node.forwarded)
+        for target in node.forward_targets:
+            _thread(target, fmap, node.seg.task)
     return nodes
 
 
@@ -323,7 +377,7 @@ def _run_sequential(
             hint = f"{node.seg.task} runs until you stop it — Ctrl-C"
             err.write(_describe.dim(hint, True) + "\n")
             err.flush()
-        node.result = executor.run_task(node.fn, node.seg, ctx)
+        node.result = executor.run_task(node.fn, node.seg, ctx, node.forwarded)
         node.state = "done"
         if status is not None:
             status.unit_finished(node.seg.task, node.result.ok)
@@ -390,7 +444,7 @@ def _run_parallel(
             real=real,
             name_width=width,
         )
-        n.result = executor.run_task(n.fn, n.seg, ctx)
+        n.result = executor.run_task(n.fn, n.seg, ctx, n.forwarded)
         if not capture:  # flush this task's buffered output as one block
             with lock:
                 blob = ctx.sink.getvalue()  # type: ignore[union-attr]

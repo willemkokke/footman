@@ -342,18 +342,39 @@ def _print_group_help(tree: dict, path: list[str]) -> None:
     node = tree
     for name in path:
         node = node["groups"][name]
+    on = _color_out
+    default = node.get("default")
     parts = [("prog", _brand.prog), *[("group", name) for name in path]]
-    parts += [("req", "<task>"), ("opt", "[options]")]
-    print(f"usage: {_describe.paint_cli(parts, _color_out)}")
+    # A runnable group (one with `@group.default`) can run bare — its default —
+    # so the task becomes optional.
+    parts += [("opt", "[<task>]")] if default else [("req", "<task>")]
+    parts += [("opt", "[options]")]
+    print(f"usage: {_describe.paint_cli(parts, on)}")
     if node["help"]:
         print(f"\n  {node['help']}")
+    if default:
+        print(_describe.dim("\n  runs its default when no task is named", on))
     rows = list(_describe.iter_tasks(node))
     if rows:
         width = max(len(name) for name, _ in rows)
-        print(f"\n{_describe.bold('tasks:', _color_out)}")
+        print(f"\n{_describe.bold('tasks:', on)}")
         for name, help_text in rows:
             line = f"  {_styled_name(name, width)}  {_styled_help(help_text)}"
             print(line.rstrip())
+    params = default["params"] if default else []
+    options = [p for p in params if p["kind"] in ("flag", "option")]
+    if options:
+        rows2 = []
+        for p in options:
+            doc, mech = _describe.param_detail_parts(p)
+            mech = _describe.dim(mech, on) if mech else ""
+            detail = "; ".join(bit for bit in (doc, mech) if bit)
+            rows2.append((_describe.param_label(p), detail))
+        width2 = max(len(label) for label, _ in rows2)
+        print(f"\n{_describe.bold('options:', on)}")
+        for label, detail in rows2:
+            pad = " " * (width2 - len(label))
+            print(f"  {_describe.bold(label, on)}{pad}  {detail}".rstrip())
 
 
 def _print_global_help(tree: dict) -> None:
