@@ -9,6 +9,17 @@ versions may include breaking changes.
 
 ### Added
 
+- **Tri-state failure policy and true fail-fast.** Keep-going is now three-state:
+  an explicit command-line choice wins, otherwise a task can declare its own
+  (`@task(keep_going=True/False)`), otherwise the built-in fail-fast — so
+  "unspecified" means *the code decides*, not a silent default. The new
+  `--fail-fast` global forces fail-fast when a task declares keep-going, the
+  mirror of `--keep-going`. And fail-fast now actually *is* fast: on the first
+  failure it stops launching new work **and terminates the sibling subprocesses
+  still running**, so a doomed parallel run dies at once instead of waiting out
+  a long task. `@task(atomic=True)` opts a task's subprocesses out of the kill —
+  they run to completion, so a mid-write can't be truncated. In-process runs are
+  never killed (there's no child to signal).
 - **Parameter forwarding.** A parameter marked `Annotated[T, forward]` (or the
   shorthand `Forward[T]`, like `Many[T]`) passes its value to every task this
   one dispatches — its `pre`/`post` prerequisites and a runnable group's
