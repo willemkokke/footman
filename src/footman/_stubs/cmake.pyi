@@ -11,7 +11,20 @@ class Cmake(Tool):
     def __call__(  # type: ignore[override]
         self,
         *args: str,
+        A: _Value = ...,
+        B: _Value = ...,
+        C: _Value = ...,
+        D: _Value = ...,
+        E: _Flag = ...,
+        G: _Value = ...,
+        L: _Flag = ...,
         LR: _Flag = ...,
+        N: _Flag = ...,
+        P: _Value = ...,
+        S: _Value = ...,
+        T: _Value = ...,
+        U: _Value = ...,
+        W: _Flag = ...,
         Werror: _Value = ...,
         Wno_: _Flag = ...,
         Wno_error: _Value = ...,
@@ -75,7 +88,20 @@ class Cmake(Tool):
         """cmake [options] <path-to-source>
 
         Args:
+            A: = Specify platform name if supported by generator.
+            B: = Explicitly specify a build directory.
+            C: = Pre-load a script to populate the cache.
+            D: = Create or update a cmake cache entry.
+            E: = CMake command mode.
+            G: = Specify a build system generator.
+            L: = List non-advanced cached variables.
             LR: = Show cached variables that match the regex.
+            N: = View mode only.
+            P: = Process script mode.
+            S: = Explicitly specify a source directory.
+            T: = Specify toolset name if supported by generator.
+            U: = Remove matching entries from CMake cache.
+            W: = Enable the specified category of warnings.
             Werror: = Make the specified category of warnings errors.
             Wno_: = Suppress the specified category of warnings.
             Wno_error: = Make the specified category of warnings not errors.

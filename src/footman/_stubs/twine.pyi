@@ -16,7 +16,7 @@ class Twine(Tool):
         in_process: bool | None = None,
         **flags: Any,
     ) -> int:
-        """{check,register,upload}
+        """Run this verb.
 
         Args:
             no_color: disable colored output.
@@ -32,7 +32,7 @@ class Twine(Tool):
         in_process: bool | None = None,
         **flags: Any,
     ) -> int:
-        """dist        The distribution files to check, usually dist/*
+        """Run this verb.
 
         Args:
             strict: Fail on warnings.

@@ -37,6 +37,7 @@ class Bun(Tool):
         heap_prof_md: _Flag = ...,
         heap_prof_name: _Value = ...,
         hot: _Flag = ...,
+        i: _Flag = ...,
         if_present: _Flag = ...,
         import_: _Value = ...,
         inspect: _Value = ...,
@@ -116,6 +117,7 @@ class Bun(Tool):
             heap_prof_md: Generate markdown heap profile on exit (for CLI analysis).
             heap_prof_name: Specify the name of the heap profile file.
             hot: Enable auto reload in the Bun runtime, test runner, or bundler.
+            i: Auto-install dependencies during execution.
             if_present: Exit without an error if the entrypoint does not exist.
             import_: Alias of --preload, for Node.js compatibility.
             inspect: Activate Bun's debugger.
@@ -634,6 +636,7 @@ class Bun(Tool):
         heap_prof_md: _Flag = ...,
         heap_prof_name: _Value = ...,
         hot: _Flag = ...,
+        i: _Flag = ...,
         if_present: _Flag = ...,
         ignore_dce_annotations: _Flag = ...,
         import_: _Value = ...,
@@ -687,7 +690,7 @@ class Bun(Tool):
         in_process: bool | None = None,
         **flags: Any,
     ) -> int:
-        """Run a JavaScript or TypeScript file
+        """Run this verb.
 
         Args:
             bun: Force a script or package to use Bun's runtime instead of Node.js
@@ -730,6 +733,7 @@ class Bun(Tool):
             heap_prof_md: Generate markdown heap profile on exit (for CLI analysis).
             heap_prof_name: Specify the name of the heap profile file.
             hot: Enable auto reload in the Bun runtime, test runner, or bundler.
+            i: Auto-install dependencies during execution.
             if_present: Exit without an error if the entrypoint does not exist.
             ignore_dce_annotations: Ignore tree-shaking annotations such as
                 @__PURE__.
@@ -929,6 +933,7 @@ class Bun(Tool):
         heap_prof_md: _Flag = ...,
         heap_prof_name: _Value = ...,
         hot: _Flag = ...,
+        i: _Flag = ...,
         if_present: _Flag = ...,
         import_: _Value = ...,
         inspect: _Value = ...,
