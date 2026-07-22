@@ -10,8 +10,9 @@ import pytest
 
 from footman import manifest
 from footman._complete import complete
+from footman.coerce import peel
 from footman.executor import run_chain
-from footman.params import Many, nosplit, suggest
+from footman.params import Forward, Many, forward, nosplit, suggest
 from footman.registry import Group
 from footman.split import ChainError, split_chain
 
@@ -218,6 +219,24 @@ def test_nosplit_keeps_comma_literal():
 
     run(tasks, "build --names a,b --names c")
     assert seen["names"] == ["a,b", "c"]  # nosplit: only the repeated flag adds items
+
+
+# --- forward marker ----------------------------------------------------------
+
+
+def test_forward_marker_is_peeled():
+    # Both spellings mark the parameter for forwarding; peel surfaces it.
+    assert peel(Annotated[bool, forward]).forward is True
+    assert peel(Forward[bool]).forward is True
+    assert peel(bool).forward is False  # unmarked
+
+
+def test_forward_alias_expands_to_annotated():
+    # `Forward[T]` is exactly `Annotated[T, forward]`, like `Many[T]` is a list.
+    assert Forward[bool] == Annotated[bool, forward]
+    # A marker rides alongside the type without disturbing the peel of that type.
+    peeled = peel(Forward[list[str]])
+    assert peeled.multiple is True and peeled.forward is True
 
 
 # --- dict[K, V] mappings -----------------------------------------------------

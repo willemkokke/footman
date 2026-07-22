@@ -11,7 +11,9 @@ one place.
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any
+from typing import Annotated, Any, TypeVar
+
+_T = TypeVar("_T")
 
 
 class suggest:
@@ -61,6 +63,44 @@ By default a collection parameter splits a single token on commas
 (`--tag a --tag b`). Mark it `nosplit` when a value may itself contain a comma:
 then only the repeated flag adds items and `--name "a,b"` stays the literal
 `"a,b"`."""
+
+
+class _ForwardMarker:
+    """Marker for `forward`."""
+
+    __slots__ = ()
+
+    def __repr__(self) -> str:
+        return "forward"
+
+
+forward = _ForwardMarker()
+"""Forward this parameter to the tasks this task dispatches, via `Annotated`:
+
+```python
+@task(pre=[build, lint])
+def check(fix: Annotated[bool, forward] = False): ...
+```
+
+A `forward`-marked parameter's value is passed to every task this one
+dispatches — its `pre`/`post` prerequisites, and a runnable group's fan-out —
+that declares a parameter of the same name; tasks that don't declare it run on
+their own defaults. The forwarded value overrides the callee's default, and it
+chains through callees that re-declare the marker. Forwarding supplies a
+*value*, never runnability: a prerequisite must still be independently runnable
+(every parameter defaulted)."""
+
+
+Forward = Annotated[_T, forward]
+"""Shorthand for `Annotated[T, forward]`, like `Many[T]` is for a list:
+
+```python
+@task(pre=[build, lint])
+def check(fix: Forward[bool] = False): ...
+```
+
+`Forward[bool]` expands to `Annotated[bool, forward]` — the same marker, less
+noise on a signature full of forwarded parameters. See `forward`."""
 
 
 class _PathRequirement:
