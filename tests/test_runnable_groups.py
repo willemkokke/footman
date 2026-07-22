@@ -92,3 +92,66 @@ def test_a_group_without_a_default_is_still_a_taught_error():
 
     with pytest.raises(ChainError, match=r"expected a task name"):
         drive(tasks, "plain")
+
+
+# --- empty-body fan-out + forward threading ----------------------------------
+
+
+def _surfaces(reg):
+    seen = {}
+    lint = reg.group("lint")
+
+    @lint.task
+    def python(fix: bool = False):
+        seen["python"] = fix
+
+    @lint.task
+    def markdown(fix: bool = False):
+        seen["markdown"] = fix
+
+    @lint.task
+    def spelling():  # no fix parameter
+        seen["spelling"] = "ran"
+
+    @lint.default
+    def lint_all(fix: Forward[bool] = False):  # empty body -> fan out
+        """Lint everything."""
+
+    return seen
+
+
+def test_empty_body_default_fans_out_the_groups_tasks():
+    reg = Group("root")
+    seen = _surfaces(reg)
+    tree = manifest.build_manifest(reg)["tree"]
+    _, segs = split_chain(tree, ["lint"])
+    run_chain(reg, segs)
+    assert seen == {"python": False, "markdown": False, "spelling": "ran"}
+
+
+def test_fan_out_threads_the_flag_only_to_surfaces_that_declare_it():
+    reg = Group("root")
+    seen = _surfaces(reg)
+    tree = manifest.build_manifest(reg)["tree"]
+    _, segs = split_chain(tree, ["lint", "--fix"])
+    run_chain(reg, segs)
+    # fix reaches python/markdown; spelling has no such parameter and just runs.
+    assert seen == {"python": True, "markdown": True, "spelling": "ran"}
+
+
+def test_a_custom_body_default_does_not_auto_fan_out():
+    ran = []
+
+    def tasks(reg):
+        lint = reg.group("lint")
+
+        @lint.task
+        def python(fix: bool = False):
+            ran.append("python")
+
+        @lint.default
+        def lint_all(fix: Forward[bool] = False):
+            ran.append("custom")  # a real body is the escape hatch
+
+    drive(tasks, "lint")
+    assert ran == ["custom"]  # the surfaces did not run implicitly

@@ -48,6 +48,37 @@ def _cli_name(name: str) -> str:
     return name.replace("_", "-")
 
 
+def _empty_body(fn: object) -> bool:
+    """True when *fn*'s body is only a docstring and/or `pass`.
+
+    This is the signal that a `@group.default` fans out the group's own tasks
+    rather than running a body of its own. Source that can't be read (a C
+    function, a REPL definition) reads as *not* empty — a body we can't see is
+    treated as one we must run.
+    """
+    import ast
+    import inspect
+    import textwrap
+
+    try:
+        src = textwrap.dedent(inspect.getsource(fn))  # type: ignore[arg-type]
+        mod = ast.parse(src)
+    except (OSError, TypeError, SyntaxError):
+        return False
+    func = mod.body[0] if mod.body else None
+    if not isinstance(func, ast.FunctionDef | ast.AsyncFunctionDef):
+        return False
+    stmts = func.body
+    if (
+        stmts
+        and isinstance(stmts[0], ast.Expr)
+        and isinstance(stmts[0].value, ast.Constant)
+        and isinstance(stmts[0].value.value, str)
+    ):
+        stmts = stmts[1:]  # drop the docstring
+    return all(isinstance(s, ast.Pass) for s in stmts)
+
+
 class Group:
     """A node in the command tree: named tasks and nested sub-groups."""
 
@@ -226,6 +257,11 @@ class Group:
                     f"child. Model a positional action as a task, or take free "
                     f"arguments via `--` passthrough."
                 )
+        # A back-reference plus the empty-body flag: an empty-body default fans
+        # out the group's own tasks (they become its implicit prerequisites at
+        # DAG-build time); a custom body is the escape hatch and runs as written.
+        fn._footman_default_group = self  # type: ignore[attr-defined]
+        fn._footman_default_fanout = _empty_body(fn)  # type: ignore[attr-defined]
         self.default_task = fn
         return fn
 

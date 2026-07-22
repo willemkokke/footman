@@ -95,7 +95,14 @@ def _build_dag(root: Group, segments: list[Segment]) -> list[_Node]:
 
     def _link(node: _Node) -> None:
         fmap = executor.forward_map(node.fn, node.seg)
-        for dep in getattr(node.fn, "_footman_pre", []):
+        pre = list(getattr(node.fn, "_footman_pre", []))
+        # An empty-body group default fans out the group's own tasks: they become
+        # implicit prerequisites, so the scheduler runs them (in parallel) and the
+        # default's forward-marked values thread into the ones that declare them.
+        group = getattr(node.fn, "_footman_default_group", None)
+        if group is not None and getattr(node.fn, "_footman_default_fanout", False):
+            pre = [*group.tasks.values(), *pre]
+        for dep in pre:
             d = add_dep(dep)
             node.deps.add(d.key)
             _thread(d, fmap, node.seg.task)
