@@ -153,8 +153,9 @@ class Group:
         task and its prerequisites run — deny and the task (and its
         subtree) is skipped; `--yes` auto-answers it. `interactive=True`
         hands the task the real terminal — no output capture, sole stdio —
-        so its body can prompt or run a REPL; an interactive task can't run
-        under `--json` or in parallel.
+        so its body can prompt or run a REPL; it can't run under `--json`, and
+        because it owns the terminal, a run that contains an interactive task
+        goes fully sequential — that task and everything else, one at a time.
         """
 
         if infinite and not progress:
