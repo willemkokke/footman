@@ -56,6 +56,7 @@ class Group:
         self.help = help
         self.tasks: dict[str, Task] = {}
         self.groups: dict[str, Group] = {}
+        self.default_task: Task | None = None  # runs on a bare `fm <group>`
 
     def _claim(self, key: str) -> None:
         where = f"group {self.name!r}" if self.name != "root" else "the root"
@@ -196,6 +197,37 @@ class Group:
         sub = Group(key, help)
         self.groups[key] = sub
         return sub
+
+    def default(self, fn: Task) -> Task:
+        """Register *fn* as this group's default action — what a bare
+        `fm <group>` runs, and what the group returns when called.
+
+        The function's signature *is* the group's option surface, so it takes
+        flags/options only: a positional parameter is rejected at load time,
+        because a bare word after a group names a child, not a value. Model a
+        positional action as a task, or take free arguments via `--` passthrough.
+        """
+        # Lazy: manifest imports registry, so importing it at module load would
+        # cycle. By call time (a tasks file being imported) it resolves fine.
+        from footman.context import context_param_name
+        from footman.manifest import param_spec, resolved_signature
+
+        sig = resolved_signature(fn)
+        ctx_name = context_param_name(sig)
+        for param in sig.parameters.values():
+            if param.name == ctx_name:
+                continue
+            if param_spec(param).get("kind") in ("argument", "variadic"):
+                where = self.name if self.name != "root" else "the root group"
+                raise RegistrationError(
+                    f"{where}'s default {fn.__name__!r} takes a positional "
+                    f"parameter ({param.name!r}); a group default takes "
+                    f"flags/options only — a bare word after a group names a "
+                    f"child. Model a positional action as a task, or take free "
+                    f"arguments via `--` passthrough."
+                )
+        self.default_task = fn
+        return fn
 
 
 # The implicit root registry populated by the module-level `task`/`group`

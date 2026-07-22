@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from footman import registry
+from footman import Context, registry
+from footman.params import Forward
 from footman.registry import Group, RegistrationError
 
 
@@ -113,3 +114,36 @@ def test_confirm_and_interactive_stamp_and_read():
     assert is_interactive(deploy) and not wants_progress(deploy)  # human-wait
     assert task_confirm(plain) == "" and not is_interactive(plain)
     assert wants_progress(plain)
+
+
+# --- @group.default ----------------------------------------------------------
+
+
+def test_group_default_registers_a_flags_only_action():
+    reg = Group("root")
+    lint = reg.group("lint")
+
+    @lint.default
+    def lint_all(fix: Forward[bool] = False): ...
+
+    assert lint.default_task is lint_all
+
+
+def test_group_default_rejects_a_positional_parameter():
+    reg = Group("root")
+    deploy = reg.group("deploy")
+
+    with pytest.raises(RegistrationError, match=r"positional parameter"):
+
+        @deploy.default
+        def deploy_all(target: str): ...
+
+
+def test_group_default_allows_the_injected_ctx_param():
+    reg = Group("root")
+    build = reg.group("build")
+
+    @build.default
+    def build_all(ctx: Context, fix: Forward[bool] = False): ...
+
+    assert build.default_task is build_all
