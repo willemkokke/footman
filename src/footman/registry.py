@@ -113,6 +113,8 @@ class Group:
         infinite: bool = False,
         confirm: str = "",
         interactive: bool = False,
+        keep_going: bool | None = None,
+        atomic: bool = False,
     ) -> Callable[[Task], Task]: ...
 
     def task(
@@ -129,6 +131,8 @@ class Group:
         infinite: bool = False,
         confirm: str = "",
         interactive: bool = False,
+        keep_going: bool | None = None,
+        atomic: bool = False,
     ) -> Task | Callable[[Task], Task]:
         """Register a function as a task.
 
@@ -216,6 +220,10 @@ class Group:
                 fn._footman_confirm = confirm  # type: ignore[attr-defined]
             if interactive:
                 fn._footman_interactive = True  # type: ignore[attr-defined]
+            if keep_going is not None:
+                fn._footman_keep_going = keep_going  # type: ignore[attr-defined]
+            if atomic:
+                fn._footman_atomic = True  # type: ignore[attr-defined]
             self.tasks[key] = fn
             return fn
 
@@ -316,6 +324,18 @@ def is_interactive(fn: Task) -> bool:
     """Whether *fn* owns the real terminal: `@task(interactive=True)` — no
     output capture, sole stdio, so its body may prompt or run a REPL."""
     return getattr(fn, "_footman_interactive", False) is True
+
+
+def keeps_going(fn: Task) -> bool | None:
+    """*fn*'s declared failure policy: `@task(keep_going=True/False)`, or `None`
+    when it left the choice to the command line / the built-in default."""
+    return getattr(fn, "_footman_keep_going", None)
+
+
+def is_atomic(fn: Task) -> bool:
+    """Whether *fn*'s subprocesses opt out of fail-fast's kill:
+    `@task(atomic=True)` — they run to completion rather than be cut off."""
+    return getattr(fn, "_footman_atomic", False) is True
 
 
 def task_confirm(fn: Task) -> str:

@@ -450,6 +450,7 @@ def run_task(
 
     ctx.fn = fn  # what inherited() reads to find the shadowed task
     ctx.interactive = registry.is_interactive(fn)  # arms the prompt guard
+    ctx.atomic = registry.is_atomic(fn)  # its subprocesses opt out of the kill
     if ctx.cwd is None and (home := defining_dir(fn)) is not None:
         ctx.cwd = Path(home)  # run from the folder that defined the task
 

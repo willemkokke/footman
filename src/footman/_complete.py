@@ -32,7 +32,7 @@ import time
 _GLOBAL_FLAG = frozenset(
     {
         "--help", "-h", "--version", "-V", "--list", "-l", "--tree",
-        "--dry-run", "-n", "--keep-going", "-k", "--sequential", "-s",
+        "--dry-run", "-n", "--keep-going", "-k", "--fail-fast", "--sequential", "-s",
         "--yes", "-y", "--no-input",
         "--quiet", "-q", "--verbose", "-v", "--no-color", "--no-progress",
         "--json", "--timings",

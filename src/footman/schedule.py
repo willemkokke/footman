@@ -26,6 +26,7 @@ from footman.registry import (
     Task,
     is_infinite,
     is_interactive,
+    keeps_going,
     task_confirm,
     wants_progress,
 )
@@ -233,6 +234,26 @@ def _make_ctx(
     return ctx
 
 
+def resolve_keep_going(root: Group, segments: list[Segment], cli: bool | None) -> bool:
+    """Tri-state failure policy: an explicit command-line choice (`-k` /
+    `--fail-fast`) wins; unspecified, a task the run invokes may declare its own
+    (`@task(keep_going=True)`); otherwise the built-in fail-fast.
+
+    Run-wide for now: if any invoked task asks to keep going, the run does. A
+    per-subtree policy (so a mixed chain honours each side) is a later step.
+    """
+    if cli is not None:
+        return cli
+    for seg in segments:
+        try:
+            fn = executor.resolve(root, seg.path)
+        except (KeyError, IndexError):
+            continue
+        if keeps_going(fn) is True:
+            return True
+    return False
+
+
 def dag_wants_progress(root: Group, segments: list[Segment]) -> bool:
     """Whether every task in the expanded DAG — pre/post deps included —
     consented to timing. One `@task(progress=False)` opts the run out of
@@ -296,6 +317,7 @@ def run_plan(
     jobs: int = 0,
 ) -> list[executor.TaskResult]:
     """Build and run the DAG; return results in dependency order."""
+    context.reset_abort()  # clear any latched fail-fast from a previous run
     segments, denied = _gate_confirms(root, segments, ctx_config)
     nodes = _build_dag(root, segments)
     _check_cycles(nodes)
@@ -489,6 +511,12 @@ def _run_parallel(
                         status.unit_finished(node.seg.task, ok)
                     if not ok:
                         failed = True
+                        if not keep_going:
+                            # True fail-fast: stop launching new nodes (the skip
+                            # pass above) *and* terminate the siblings already in
+                            # flight, so a doomed run dies now instead of waiting
+                            # out a five-minute test suite.
+                            context.terminate_live_children()
         except BaseException:
             # Abort (Ctrl-C, or an internal error surfaced above): drop
             # everything not yet started; the pool's exit joins the in-flight

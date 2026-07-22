@@ -69,6 +69,7 @@ GLOBALS: list[tuple[str, str | None, str, str | None, str]] = [
     ("--where", None, "option", "TASK", "print the task's source file:line"),
     ("--dry-run", "-n", "flag", None, "print the parsed plan without running"),
     ("--keep-going", "-k", "flag", None, "run every branch even if one fails"),
+    ("--fail-fast", None, "flag", None, "stop at the first failure"),
     ("--sequential", "-s", "flag", None, "run one at a time (default: parallel)"),
     ("--jobs", "-j", "option", "N", "max parallel tasks (default: cores - 1)"),
     ("--yes", "-y", "flag", None, "assume yes to every confirm() gate"),
