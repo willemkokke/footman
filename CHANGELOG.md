@@ -64,6 +64,16 @@ versions may include breaking changes.
 
 ### Changed
 
+- **python, pytest, and the shells are first-class tools.** `tools.python`
+  and `tools.pytest` are `Tool` instances with generated stubs, not bespoke
+  functions — `Tool` gained `path=` (so `tools.python` targets
+  `sys.executable`) and `entry=` (so `tools.pytest` runs the arg-accepting
+  `pytest.main` and stays parallel). The shells footman completes for —
+  `tools.bash`/`zsh`/`fish`/`pwsh`/`nu` — run a command string through a real
+  shell (`bash -c "…"`). `sh` is removed: it never used a shell, so `run("…")`
+  is the honest spelling. A per-tool short-option policy (`none`/`only`/`all`,
+  default `only`) controls whether a stub keys on a short flag, so python's
+  `-m`/`-c` are complete without cluttering other tools.
 - **footman's first-party tasks are now two plugins, `footman.docs` and
   `footman.tools`**, each opt-in on its own — a project can mount the
   end-user-facing doc generator without the maintainer-facing stub toolkit.
@@ -73,6 +83,10 @@ versions may include breaking changes.
 
 ### Fixed
 
+- **The tools reference sidebar is generated from the drivers, not
+  hand-maintained** — `fm footman tools pages` regenerates the docs nav
+  (alphabetically, between markers) and a test fails when a tool is added
+  without it, so the stale "13 tools" sidebar can't recur.
 - **The `--help` parser no longer swallows a flag's trailing punctuation** —
   clap's repeatable `--verbose...` and a manual's `--merge.` ending a sentence
   had become the keywords `verbose___` / `merge_`; a dot is now read only

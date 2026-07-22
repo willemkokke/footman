@@ -289,7 +289,7 @@ def docs_build(check: bool = False):
     # build needs no tool on PATH.
     from footman.tasks.tools import pages as toolpages
 
-    toolpages(Path("docs/_generated/tools"))
+    toolpages(Path("docs/_generated/tools"), nav=Path("zensical.toml"))
     _write_latest_changes()
     # Terminal screenshots, captured from the real CLI on a pty and framed
     # as SVGs — the pages show footman exactly as a terminal does, and a

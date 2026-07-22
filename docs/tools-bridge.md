@@ -281,8 +281,34 @@ nearly all of them — are called directly, no `sys.argv` in sight. Only a
 legacy zero-argument `main()` that insists on reading `sys.argv` gets the
 patched-and-serialised fallback.
 
-`tools.python(...)` targets the current interpreter; `tools.sh("...")`
-takes a whole command line as one string.
+`tools.python(...)` targets the current interpreter, whatever is (or isn't)
+on your PATH. There is no `tools.sh`: a command as one string is `run("…")`
+(footman splits and runs it — no shell), and for a real shell you invoke one,
+`tools.bash("echo $X | grep y")` → `bash -c "…"`.
+
+## Parallelism
+
+Independent tasks run **concurrently as threads** (a `ThreadPoolExecutor`),
+not as separate processes — a task runner mostly waits on subprocesses and
+I/O, where the GIL doesn't bite, and threads share the already-loaded manifest
+and imports. That one choice explains the rest:
+
+- A tool call is usually a **subprocess** — its own process, its own
+  `sys.argv`, trivially parallel.
+- An **in-process** tool runs in the calling thread. footman calls its entry
+  point *directly* when the entry accepts an argument list (`cli(argv)`,
+  `main(argv=None)`, `pytest.main(args)`), so it stays parallel. The *only*
+  thing that serialises is a legacy zero-argument `main()` that reads
+  `sys.argv` — because `sys.argv` is process-global, those calls take a lock.
+- Concurrent output can't interleave: each task writes through a **per-task
+  stdout router** (thread-confined, no global redirect), so two tools running
+  at once keep their lines apart.
+
+So the defaults line up rather than fight: the tools marked `default`
+in-process — mkdocs, zensical, coverage — all take an argument list and run in
+parallel, and `pytest` is a function calling the arg-accepting `pytest.main`
+for exactly this reason. The single serialised case, a zero-arg `main()`, is
+rare and clearly bounded.
 
 ## Sharing tools between projects
 
