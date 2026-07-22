@@ -50,6 +50,7 @@ class TaskResult:
     duration: float = 0.0
     output: str = ""
     steps: list[StepResult] = field(default_factory=list)
+    cancelled: bool = False  # failed only because fail-fast killed it mid-run
 
 
 def resolve(root: Group, path: list[str]) -> Task:
@@ -463,7 +464,12 @@ def run_task(
         _current.reset(token)
     duration = time.perf_counter() - start
     output = ctx.sink.getvalue() if isinstance(ctx.sink, io.StringIO) else ""
-    return _result(seg, code, returned, error, duration, output, ctx.steps)
+    result = _result(seg, code, returned, error, duration, output, ctx.steps)
+    # A task that failed while fail-fast was already aborting the run wasn't a
+    # genuine failure — it was cut off. Report that honestly, not as "failed".
+    if not result.ok and context._aborting.is_set():
+        result.cancelled = True
+    return result
 
 
 def _result(
