@@ -44,6 +44,7 @@ class _Node:
     result: executor.TaskResult | None = None
     forwarded: dict[str, Any] = field(default_factory=dict)  # `forward`ed values in
     forward_targets: list[_Node] = field(default_factory=list)  # …and out
+    keep_going: bool = False  # resolved failure policy for THIS node (per-subtree)
 
 
 def _default_seg(fn: Task) -> Segment:
@@ -241,8 +242,10 @@ def _make_ctx(
     capture: bool,
     real: TextIO,
     name_width: int = 0,
+    keep_going: bool = False,
 ) -> context.Context:
     ctx = context.Context(**(ctx_config or {}), passthrough=list(seg.passthrough or []))
+    ctx.keep_going = keep_going  # per-subtree policy; tags this task's subprocesses
     ctx.sink = None if (sequential and not capture) else io.StringIO()
     # Step lines dress for their *destination*: a buffered block replays
     # onto `real`, so its children style exactly as parallel() children
@@ -255,16 +258,13 @@ def _make_ctx(
 
 
 def resolve_keep_going(root: Group, segments: list[Segment], cli: bool | None) -> bool:
-    """Tri-state failure policy: an explicit command-line choice (`-k` /
-    `--fail-fast`) wins; unspecified, a task the run invokes may declare its own
-    (`@task(keep_going=True)`); otherwise the built-in fail-fast.
+    """A run-wide *summary* of the failure policy: does anything keep going?
 
-    Run-wide for now: if any invoked task asks to keep going, the run does. A
-    per-subtree policy (so a mixed chain honours each side) is a later step.
-
-    "Invoked" spans the whole DAG — chain tasks and their `pre`/`post`
-    prerequisites — so a declared `keep_going` on a prerequisite counts, and a
-    `.opts(keep_going=…)` on any reference overrides its declared default.
+    An explicit command-line choice (`-k` / `--fail-fast`) wins; unspecified,
+    true if any invoked task — a chain task or a `pre`/`post` prerequisite —
+    declares (or `.opts()`-overrides) `keep_going=True`. The scheduler resolves
+    the actual *per-node* policy with `_scope_keep_going`; this summary is for
+    callers that just want the one-bit answer.
     """
     if cli is not None:
         return cli
@@ -273,6 +273,30 @@ def resolve_keep_going(root: Group, segments: list[Segment], cli: bool | None) -
     except (KeyError, IndexError, ChainError):
         return False  # a malformed chain surfaces its real error in run_plan
     return any(keeps_going(n.fn) is True for n in nodes)
+
+
+def _scope_keep_going(nodes: list[_Node], cli: bool | None) -> None:
+    """Assign each node its failure policy — the per-subtree scoping.
+
+    A command-line `-k`/`--fail-fast` wins run-wide. Otherwise each node takes
+    its own declared (or `.opts()`-overridden) `keep_going`, and a keep-going
+    node propagates that down its own subtree — its `pre`/`post` prerequisites
+    keep going with it — so a mixed chain honours each side: a keep-going gate
+    surfaces all of its own failures while an independent fail-fast task still
+    bails on the first. A node's own policy always wins over an inherited one, so
+    an explicit fail-fast prerequisite stays a fail-fast boundary. Unspecified
+    everywhere is the built-in fail-fast.
+    """
+    if cli is not None:
+        for node in nodes:
+            node.keep_going = cli
+        return
+    inherited: set[int] = set()  # keys a keep-going dependent has reached
+    for node in reversed(_toposort(nodes)):  # dependents resolve before their deps
+        own = keeps_going(node.fn)  # True / False / None (reads declared + opted)
+        node.keep_going = own if own is not None else node.key in inherited
+        if node.keep_going:
+            inherited.update(node.deps)  # keep this subtree's prerequisites going
 
 
 def dag_wants_progress(root: Group, segments: list[Segment]) -> bool:
@@ -330,7 +354,7 @@ def run_plan(
     segments: list[Segment],
     *,
     sequential: bool = False,
-    keep_going: bool = False,
+    keep_going: bool | None = None,
     capture: bool = False,
     ctx_config: dict[str, Any] | None = None,
     estimate: _progress.Estimate | None = None,
@@ -342,6 +366,7 @@ def run_plan(
     segments, denied = _gate_confirms(root, segments, ctx_config)
     nodes = _build_dag(root, segments)
     _check_cycles(nodes)
+    _scope_keep_going(nodes, keep_going)  # per-node failure policy (tri-state + scope)
     # One node has nothing to parallelise — run it on the sequential-live
     # path instead: output streams as it happens, and run()'s TTY mode
     # (colour, in-place step rewrite) applies. `fm check` is this shape. An
@@ -381,9 +406,7 @@ def run_plan(
                     else None
                 )
                 try:
-                    _run_sequential(
-                        nodes, real, keep_going, capture, ctx_config, status, hint_err
-                    )
+                    _run_sequential(nodes, real, capture, ctx_config, status, hint_err)
                 except BaseException:
                     # Ctrl-C mid-task: the running child is group-isolated, so it
                     # missed the terminal's SIGINT — reap its tree by hand before
@@ -391,9 +414,7 @@ def run_plan(
                     context.terminate_live_children()
                     raise
             else:
-                _run_parallel(
-                    nodes, real, err, keep_going, capture, ctx_config, status, jobs
-                )
+                _run_parallel(nodes, real, err, capture, ctx_config, status, jobs)
         finally:
             if status is not None:
                 context.set_status(None)
@@ -401,14 +422,12 @@ def run_plan(
     return denied + [n.result for n in _toposort(nodes) if n.result is not None]
 
 
-def _run_sequential(
-    nodes, real, keep_going, capture, ctx_config, status, err=None
-) -> None:
+def _run_sequential(nodes, real, capture, ctx_config, status, err=None) -> None:
     done: dict[int, bool] = {}
     failed = False
     width = max((len(n.seg.task) for n in nodes), default=0)
     for node in _toposort(nodes):
-        if any(not done.get(d) for d in node.deps) or (failed and not keep_going):
+        if any(not done.get(d) for d in node.deps) or (failed and not node.keep_going):
             node.state = "skipped"
             if status is not None:
                 status.unit_skipped(node.seg.task)
@@ -420,6 +439,7 @@ def _run_sequential(
             capture=capture,
             real=real,
             name_width=width,
+            keep_going=node.keep_going,
         )
         if status is not None:
             status.unit_started(node.seg.task)
@@ -462,9 +482,7 @@ def _make_status(
     return _progress.StatusLine(err, estimate, color=True)
 
 
-def _run_parallel(
-    nodes, real, err, keep_going, capture, ctx_config, status, jobs
-) -> None:
+def _run_parallel(nodes, real, err, capture, ctx_config, status, jobs) -> None:
     by_key = {n.key: n for n in nodes}
     lock = threading.Lock()
     failed = False
@@ -493,6 +511,7 @@ def _run_parallel(
             capture=capture,
             real=real,
             name_width=width,
+            keep_going=n.keep_going,
         )
         n.result = executor.run_task(n.fn, n.seg, ctx, n.forwarded)
         if not capture:  # flush this task's buffered output as one block
@@ -511,7 +530,7 @@ def _run_parallel(
             while True:
                 for n in nodes:
                     if n.state == "pending" and (
-                        dep_lost(n) or (failed and not keep_going)
+                        dep_lost(n) or (failed and not n.keep_going)
                     ):
                         n.state = "skipped"
                         if status is not None:
@@ -539,12 +558,12 @@ def _run_parallel(
                         status.unit_finished(node.seg.task, ok)
                     if not ok:
                         failed = True
-                        if not keep_going:
-                            # True fail-fast: stop launching new nodes (the skip
-                            # pass above) *and* terminate the siblings already in
-                            # flight, so a doomed run dies now instead of waiting
-                            # out a five-minute test suite.
-                            context.terminate_live_children()
+                        # True fail-fast: stop launching new nodes (the skip pass
+                        # above) *and* reap the FAIL-FAST siblings already in
+                        # flight, so a doomed branch dies now instead of waiting
+                        # out a five-minute test suite. `failfast_only` spares a
+                        # keep-going task in a mixed run — it isn't doomed.
+                        context.terminate_live_children(failfast_only=True)
         except BaseException:
             # Abort (Ctrl-C, or an internal error surfaced above): drop
             # everything not yet started, then kill in-flight subprocess trees.
