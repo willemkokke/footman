@@ -9,6 +9,12 @@ versions may include breaking changes.
 
 ### Added
 
+- **`check()` validators can read the other inputs.** A `check` callable that
+  declares a second parameter receives the parameters to its left at their
+  effective values (a provided value, else the default), read-only — so a version
+  can be validated against the current release of the package named in an earlier
+  argument, or an end-date against a start-date, without hardcoding a bound that
+  drifts out of sync with the signature.
 - **Interactive input, typed and CI-safe.** A parameter marked
   `Annotated[T, ask()]` prompts for its value when the CLI and env don't
   supply it, coercing the answer through the same pipeline as a flag — a

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 import pytest
 
@@ -372,6 +372,117 @@ def test_check_applies_to_env_values(monkeypatch):
     results = run(tasks, "tag")
     assert not results[0].ok
     assert "VERSION" in str(results[0].error)
+
+
+# --- check() sees its left-hand siblings ------------------------------------------
+
+
+def _newer_than_floor(v: str, params: dict[str, Any]) -> None:
+    if int(v) <= int(params["floor"]):
+        raise ValueError(f"must exceed floor {params['floor']}")
+
+
+def _first_sees_nothing(v: str, params: dict[str, Any]) -> None:
+    if params:
+        raise ValueError(f"first should see no siblings, got {sorted(params)}")
+
+
+def _second_sees_first(v: str, params: dict[str, Any]) -> None:
+    if list(params) != ["a"]:
+        raise ValueError(f"expected only 'a' to the left, got {sorted(params)}")
+
+
+def _reject_mutation(v: str, params: dict[str, Any]) -> None:
+    try:
+        params["_probe"] = 1  # a read-only view refuses this
+    except TypeError:
+        return
+    raise ValueError("the sibling view was mutable")
+
+
+def test_check_context_sees_left_sibling():
+    def tasks(reg):
+        @reg.task
+        def release(floor: int, version: Annotated[str, check(_newer_than_floor)]): ...
+
+    assert run(tasks, "release 5 7")[0].ok
+    results = run(tasks, "release 5 3")
+    assert not results[0].ok
+    assert "must exceed floor 5" in str(results[0].error)
+
+
+def test_check_context_positional_order_and_empty_first():
+    # the first parameter's check sees {}; the second sees the first, coerced
+    def tasks(reg):
+        @reg.task
+        def t(
+            a: Annotated[str, check(_first_sees_nothing)],
+            b: Annotated[str, check(_second_sees_first)],
+        ): ...
+
+    assert run(tasks, "t x y")[0].ok
+
+
+def test_check_context_is_read_only():
+    def tasks(reg):
+        @reg.task
+        def t(a: str, b: Annotated[str, check(_reject_mutation)]): ...
+
+    assert run(tasks, "t x y")[0].ok
+
+
+def test_check_context_reaches_env_values(monkeypatch):
+    def tasks(reg):
+        @reg.task
+        def release(
+            floor: int,
+            version: Annotated[str, check(_newer_than_floor), env("FLOORVER")] = "9",
+        ): ...
+
+    monkeypatch.setenv("FLOORVER", "3")
+    results = run(tasks, "release 5")
+    assert not results[0].ok
+    assert "must exceed floor 5" in str(results[0].error)
+
+
+def _echo_channel(v: str, params: dict[str, Any]) -> None:
+    raise ValueError(f"channel is {params['channel']}")
+
+
+def test_check_context_includes_a_defaulted_sibling():
+    def tasks(reg):
+        @reg.task
+        def deploy(
+            channel: str = "stable",
+            target: Annotated[str, check(_echo_channel)] = "prod",
+        ): ...
+
+    # channel unset -> the view carries its default, not a KeyError
+    unset = run(tasks, "deploy --target prod")
+    assert not unset[0].ok and "channel is stable" in str(unset[0].error)
+    # a provided value overrides that default in the view
+    given = run(tasks, "deploy --channel beta --target prod")
+    assert not given[0].ok and "channel is beta" in str(given[0].error)
+
+
+def test_wants_context_detects_arity():
+    from footman.executor import _wants_context
+
+    assert not _wants_context(lambda v: None)  # one positional -> plain check
+    assert _wants_context(lambda v, p: None)  # two positional -> contextual
+    assert _wants_context(lambda v, *rest: None)  # *args accepts a second
+
+
+def test_wants_context_handles_a_signatureless_callable(monkeypatch):
+    import inspect
+
+    from footman.executor import _wants_context
+
+    def _no_signature(_fn):
+        raise ValueError("no signature")
+
+    monkeypatch.setattr(inspect, "signature", _no_signature)
+    assert not _wants_context(lambda v, p: None)  # can't inspect -> plain one-arg
 
 
 # --- manifest spec keys are additive ----------------------------------------------

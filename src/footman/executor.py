@@ -21,6 +21,7 @@ import os
 import time
 from dataclasses import dataclass, field
 from pathlib import Path, PurePath
+from types import MappingProxyType
 from typing import Any
 
 from footman import coerce, context, registry
@@ -62,11 +63,42 @@ def resolve(root: Group, path: list[str]) -> Task:
 _MISSING = object()
 
 
-def _run_checks(value: Any, peeled: coerce.Peeled, label: str) -> Any:
-    """Apply `check(fn)` validators to one coerced value (element-level)."""
+def _wants_context(fn: Any) -> bool:
+    """True when a validator accepts a second positional argument — the sibling
+    parameters coerced so far. Decided by *inspecting* the signature, never by
+    catching a `TypeError` from the call, so a real arity error raised inside the
+    validator is not mistaken for the one-argument form."""
+    try:
+        params = inspect.signature(fn).parameters.values()
+    except (TypeError, ValueError):
+        return False  # a builtin/C callable with no signature — treat as one-arg
+    positional = 0
+    for p in params:
+        if p.kind is p.VAR_POSITIONAL:
+            return True
+        if p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD):
+            positional += 1
+    return positional >= 2
+
+
+def _run_checks(
+    value: Any, peeled: coerce.Peeled, label: str, params: dict[str, Any] | None = None
+) -> Any:
+    """Apply `check(fn)` validators to one coerced value (element-level).
+
+    A validator declaring a second argument receives the sibling parameters
+    already coerced (those to its left in the signature), read-only — so it can
+    validate against another input, e.g. a version against the current release of
+    the package named in an earlier parameter."""
+    view: MappingProxyType[str, Any] | None = None
     for fn in peeled.checks:
         try:
-            fn(value)
+            if _wants_context(fn):
+                if view is None:
+                    view = MappingProxyType(dict(params) if params else {})
+                fn(value, view)
+            else:
+                fn(value)
         except ValueError as exc:
             raise ValueError(f"{label}: {exc}") from exc
     return value
@@ -107,7 +139,9 @@ def _validate_value(value: Any, peeled: coerce.Peeled, label: str) -> Any:
     return value
 
 
-def _coerce_extra(token: str, peeled: coerce.Peeled, label: str) -> Any:
+def _coerce_extra(
+    token: str, peeled: coerce.Peeled, label: str, params: dict[str, Any] | None = None
+) -> Any:
     """Coerce + validate one token the splitter never validated (an env
     fallback or a `--` passthrough value): strict coercion, then the same
     choices / bounds / path / check(fn) checks a CLI token gets."""
@@ -115,10 +149,14 @@ def _coerce_extra(token: str, peeled: coerce.Peeled, label: str) -> Any:
         value = coerce.coerce_token(token, peeled.element)
     except ValueError as exc:
         raise ValueError(f"{label} {exc}") from exc
-    return _run_checks(_validate_value(value, peeled, label), peeled, label)
+    return _run_checks(_validate_value(value, peeled, label), peeled, label, params)
 
 
-def _env_value(param: inspect.Parameter, peeled: coerce.Peeled) -> Any:
+def _env_value(
+    param: inspect.Parameter,
+    peeled: coerce.Peeled,
+    params: dict[str, Any] | None = None,
+) -> Any:
     """The env-fallback path for an absent option: CLI beats env beats default.
 
     The env string flows through the same coercion, bounds, choices, and
@@ -131,7 +169,7 @@ def _env_value(param: inspect.Parameter, peeled: coerce.Peeled) -> Any:
     label = f"--{param.name.replace('_', '-')} (from ${peeled.env})"
 
     def one(token: str) -> Any:
-        return _coerce_extra(token, peeled, label)
+        return _coerce_extra(token, peeled, label, params)
 
     if peeled.multiple:
         parts = [raw] if peeled.nosplit else [p for p in raw.split(",") if p] or [raw]
@@ -139,7 +177,12 @@ def _env_value(param: inspect.Parameter, peeled: coerce.Peeled) -> Any:
     return one(raw)
 
 
-def _prompt_param(cli: str, peeled: coerce.Peeled, ctx: Context | None) -> Any:
+def _prompt_param(
+    cli: str,
+    peeled: coerce.Peeled,
+    ctx: Context | None,
+    params: dict[str, Any] | None = None,
+) -> Any:
     """Resolve a defaultless `ask()` parameter by prompting, coercing the answer
     through the same pipeline as a CLI token and re-asking on a bad value. Off a
     terminal or under `--no-input`/`--json` it raises instead — the value must
@@ -163,11 +206,29 @@ def _prompt_param(cli: str, peeled: coerce.Peeled, ctx: Context | None) -> Any:
             continue
         try:
             value = coerce.coerce_token(raw, peeled.element)
-            return _run_checks(value, peeled, f"--{cli}")
+            return _run_checks(value, peeled, f"--{cli}", params)
         except ValueError as exc:
             out = context.real_stderr()
             out.write(f"  {exc}\n")
             out.flush()
+
+
+def _left_siblings(
+    sig: inspect.Signature, current: inspect.Parameter, kwargs: dict[str, Any]
+) -> dict[str, Any]:
+    """The effective values of the parameters to *current*'s left — a provided
+    value where one was resolved, else the parameter's own default — so a
+    contextual `check` reads what the body will actually receive, never a copy of
+    the default that can drift out of sync."""
+    view: dict[str, Any] = {}
+    for p in sig.parameters.values():
+        if p.name == current.name:
+            break
+        if p.name in kwargs:
+            view[p.name] = kwargs[p.name]
+        elif p.default is not inspect.Parameter.empty:
+            view[p.name] = p.default
+    return view
 
 
 def bind(
@@ -186,6 +247,9 @@ def bind(
     kwargs: dict[str, Any] = {}
 
     for param in sig.parameters.values():
+        # The parameters bound to this one's left, at their effective values,
+        # for a contextual check(fn, params).
+        siblings = _left_siblings(sig, param, kwargs)
         if param.kind is inspect.Parameter.VAR_POSITIONAL:
             extra = [*seg.variadic, *(seg.passthrough or [])]
             if param.annotation is empty:
@@ -193,7 +257,7 @@ def bind(
             else:
                 peeled = coerce.peel(param.annotation)
                 label = f"<{param.name}>"
-                var_args = [_coerce_extra(v, peeled, label) for v in extra]
+                var_args = [_coerce_extra(v, peeled, label, siblings) for v in extra]
             continue
 
         cli = param.name.replace("_", "-")
@@ -201,7 +265,7 @@ def bind(
             if param.annotation is not empty:
                 peeled = coerce.peel(param.annotation)
                 if peeled.env is not None:
-                    value = _env_value(param, peeled)
+                    value = _env_value(param, peeled, siblings)
                     if value is not _MISSING:
                         kwargs[param.name] = value
                         continue
@@ -209,7 +273,7 @@ def bind(
                 # env didn't fill — CLI > env > default > prompt, so a default
                 # short-circuits it and the prompt is the last resort.
                 if peeled.ask is not None and param.default is empty:
-                    kwargs[param.name] = _prompt_param(cli, peeled, ctx)
+                    kwargs[param.name] = _prompt_param(cli, peeled, ctx, siblings)
             continue
         raw = seg.values[cli]
         if isinstance(raw, bool):  # a flag, already resolved by the splitter
@@ -225,7 +289,9 @@ def bind(
             result: dict[Any, Any] = {}
             for key, value in raw:
                 k = coerce.coerce_one(key, peeled.key)
-                v = _run_checks(coerce.coerce_one(value, peeled.element), peeled, label)
+                v = _run_checks(
+                    coerce.coerce_one(value, peeled.element), peeled, label, siblings
+                )
                 if peeled.value_multiple:
                     result.setdefault(k, []).append(v)
                 else:
@@ -234,12 +300,14 @@ def bind(
         elif peeled.multiple:
             items = raw if isinstance(raw, list) else [raw]
             kwargs[param.name] = [
-                _run_checks(coerce.coerce_one(v, peeled.element), peeled, label)
+                _run_checks(
+                    coerce.coerce_one(v, peeled.element), peeled, label, siblings
+                )
                 for v in items
             ]
         else:
             kwargs[param.name] = _run_checks(
-                coerce.coerce_one(raw, peeled.element), peeled, label
+                coerce.coerce_one(raw, peeled.element), peeled, label, siblings
             )
 
     # Positional-only params (`def build(target, /)`) cannot be passed by
