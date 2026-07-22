@@ -317,6 +317,7 @@ def run_plan(
     jobs: int = 0,
 ) -> list[executor.TaskResult]:
     """Build and run the DAG; return results in dependency order."""
+    context.reset_abort()  # clear any latched fail-fast from a previous run
     segments, denied = _gate_confirms(root, segments, ctx_config)
     nodes = _build_dag(root, segments)
     _check_cycles(nodes)
@@ -510,6 +511,12 @@ def _run_parallel(
                         status.unit_finished(node.seg.task, ok)
                     if not ok:
                         failed = True
+                        if not keep_going:
+                            # True fail-fast: stop launching new nodes (the skip
+                            # pass above) *and* terminate the siblings already in
+                            # flight, so a doomed run dies now instead of waiting
+                            # out a five-minute test suite.
+                            context.terminate_live_children()
         except BaseException:
             # Abort (Ctrl-C, or an internal error surfaced above): drop
             # everything not yet started; the pool's exit joins the in-flight

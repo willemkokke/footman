@@ -750,6 +750,54 @@ def _run_callable(
         return code, buffer.getvalue()
 
 
+# Live subprocesses footman has spawned, so fail-fast can terminate the ones
+# still running when a sibling fails. A run in-process (a `tools` entry point,
+# a callable) registers nothing — there is no child to kill, and it finishes.
+_live_children: set[subprocess.Popen[str]] = set()
+_children_lock = threading.Lock()
+_aborting = threading.Event()  # set once fail-fast has fired for this run
+
+
+def _register_child(proc: subprocess.Popen[str]) -> None:
+    # Under the one lock: adding to the set and reading the abort flag can't
+    # interleave with `terminate_live_children` setting it and snapshotting — so
+    # a child is killed either by that sweep or by this check, never missed.
+    with _children_lock:
+        _live_children.add(proc)
+        aborting = _aborting.is_set()
+    if aborting:
+        with contextlib.suppress(ProcessLookupError, OSError):
+            proc.terminate()  # spawned after fail-fast fired → stop it at once
+
+
+def _forget_child(proc: subprocess.Popen[str]) -> None:
+    with _children_lock:
+        _live_children.discard(proc)
+
+
+def reset_abort() -> None:
+    """Clear the fail-fast abort flag at the start of a run."""
+    _aborting.clear()
+
+
+def terminate_live_children() -> None:
+    """Terminate every still-running spawned subprocess — fail-fast's teeth.
+
+    `terminate()` sends SIGTERM (POSIX) / TerminateProcess (Windows); the
+    `communicate()` blocking each task's thread then returns and the task
+    unwinds. The abort flag is *latched*, so a subprocess a still-running task
+    spawns *after* this fires self-terminates on registration (the doomed run
+    can't outrun the kill). In-process runs register nothing, so they finish on
+    their own — un-killable for free, which is the intended behaviour.
+    """
+    with _children_lock:
+        _aborting.set()
+        procs = list(_live_children)
+    for proc in procs:
+        with contextlib.suppress(ProcessLookupError, OSError):
+            proc.terminate()  # already exited between the snapshot and here → ignore
+
+
 def _run_subprocess(
     argv: list[str] | str,
     env: dict[str, str],
@@ -761,16 +809,25 @@ def _run_subprocess(
     # page, so decode as UTF-8 by default rather than the locale encoding
     # (cp1252 on Windows would mojibake the capture). `encoding=None` restores
     # locale behavior. `errors="replace"` is the never-crash net either way.
-    proc = subprocess.run(
+    #
+    # Popen + a live registry (not subprocess.run) so a concurrent fail-fast can
+    # terminate this child while its thread is blocked in communicate().
+    proc = subprocess.Popen(
         argv,
         env=env,
         cwd=cwd,
-        capture_output=capture,
+        stdout=subprocess.PIPE if capture else None,
+        stderr=subprocess.PIPE if capture else None,
         text=True,
         encoding=encoding,
         errors="replace",
     )
-    output = "" if not capture else (proc.stdout or "") + (proc.stderr or "")
+    _register_child(proc)
+    try:
+        out, err = proc.communicate()
+    finally:
+        _forget_child(proc)
+    output = "" if not capture else (out or "") + (err or "")
     return proc.returncode, output
 
 
