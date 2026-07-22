@@ -20,6 +20,7 @@ class Eclint(Tool):
         show_all_errors: _Flag = ...,
         show_error_quantity: _Value = ...,
         summary: _Flag = ...,
+        v: _Value = ...,
         vmodule: _Value = ...,
         nofail: bool = False,
         in_process: bool | None = None,
@@ -40,6 +41,7 @@ class Eclint(Tool):
             show_error_quantity: display only the first n errors (0 means all).
                 Defaults to `10`.
             summary: enable the summary view.
+            v: number for the log level verbosity of the testing logger.
             vmodule: comma-separated list of pattern=N log level settings for files
                 matching the patterns.
         """

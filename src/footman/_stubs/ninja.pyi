@@ -5,14 +5,23 @@
 # accepts, and can never forbid what the bridge would happily pass.
 from typing import Any
 
-from footman.tools import Tool, _Flag
+from footman.tools import Tool, _Flag, _Value
 
 class Ninja(Tool):
     def __call__(  # type: ignore[override]
         self,
         *args: str,
+        C: _Value = ...,
+        d: _Value = ...,
+        f: _Value = ...,
+        j: _Value = ...,
+        k: _Value = ...,
+        l: _Value = ...,
+        n: _Flag = ...,
         quiet: _Flag = ...,
+        t: _Value = ...,
         verbose: _Flag = ...,
+        w: _Value = ...,
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
@@ -20,7 +29,18 @@ class Ninja(Tool):
         """if targets are unspecified, builds the 'default' target (see manual).
 
         Args:
+            C: change to DIR before doing anything else.
+            d: enable debugging (use '-d list' to list modes).
+            f: specify input build file [default=build.ninja].
+            j: run N jobs in parallel (0 means infinity) [default=16 on this
+                system].
+            k: keep going until N jobs fail (0 means infinity) [default=1].
+            l: do not start new jobs if the load average is greater than N.
+            n: dry run (don't run commands but act like they succeeded).
             quiet: don't show progress status, just command output.
+            t: run a subtool (use '-t list' to list subtools) terminates toplevel
+                options; further flags are passed to the tool.
             verbose: show all command lines while building.
+            w: adjust warnings (use '-w list' to list warnings).
         """
         ...

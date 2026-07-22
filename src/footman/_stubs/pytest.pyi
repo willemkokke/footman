@@ -54,6 +54,7 @@ class Pytest(Tool):
         import_mode: _Flag = ...,
         junitprefix: _Value = ...,
         junitxml: _Value = ...,
+        k: _Value = ...,
         keep_duplicates: _Flag = ...,
         lf: _Flag = ...,
         lfnf: _Flag = ...,
@@ -70,6 +71,7 @@ class Pytest(Tool):
         log_file_mode: _Flag = ...,
         log_format: _Value = ...,
         log_level: _Value = ...,
+        m: _Value = ...,
         markers: _Flag = ...,
         max_warnings: _Value = ...,
         maxfail: _Value = ...,
@@ -81,6 +83,7 @@ class Pytest(Tool):
         no_summary: _Flag = ...,
         noconftest: _Flag = ...,
         override_ini: _Value = ...,
+        p: _Value = ...,
         pastebin: _Value = ...,
         pdb: _Flag = ...,
         pdbcls: _Value = ...,
@@ -90,6 +93,7 @@ class Pytest(Tool):
         report_chars: _Value = ...,
         rootdir: _Value = ...,
         runxfail: _Flag = ...,
+        s: _Flag = ...,
         setup_only: _Flag = ...,
         setup_plan: _Flag = ...,
         setup_show: _Flag = ...,
@@ -111,7 +115,7 @@ class Pytest(Tool):
         in_process: bool | None = None,
         **flags: Any,
     ) -> int:
-        """file_or_dir
+        """Run this verb.
 
         Args:
             assert_: Control assertion debugging tools.
@@ -171,6 +175,7 @@ class Pytest(Tool):
                 conftest files.
             junitprefix: Prepend prefix to classnames in junit-xml output.
             junitxml: Create junit-xml style report file at given path.
+            k: Only run tests which match the given substring expression.
             keep_duplicates: Keep duplicate tests.
             lf: Rerun only the tests that failed at the last run (or all if none
                 failed).
@@ -192,6 +197,7 @@ class Pytest(Tool):
             log_file_mode: Log file open mode.
             log_format: Log format used by the logging module.
             log_level: Level of messages to catch/display.
+            m: Only run tests matching given mark expression.
             markers: show markers (builtin, plugin and per-project ones).
             max_warnings: Exit with error if all tests pass but the number of
                 warnings exceeds this threshold.
@@ -206,6 +212,7 @@ class Pytest(Tool):
             noconftest: Don't load any conftest.py files.
             override_ini: Override configuration option with "option=value" style,
                 e.g. `-o strict_xfail=True -o cache_dir=cache`.
+            p: Early-load given plugin module name or entry point (multi-allowed).
             pastebin: Send failed|all info to bpaste.net pastebin service.
             pdb: Start the interactive Python debugger on errors or
                 KeyboardInterrupt.
@@ -221,6 +228,7 @@ class Pytest(Tool):
                 repeated: a list emits the flag once per item. Defaults to `fE`.
             rootdir: Define root directory for tests.
             runxfail: Report the results of xfail tests as if they were not marked.
+            s: Shortcut for --capture=no.
             setup_only: Only setup fixtures, do not execute tests.
             setup_plan: Show what fixtures and tests would be executed but don't
                 execute anything.

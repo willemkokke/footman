@@ -27,7 +27,7 @@ class Build(Tool):
         in_process: bool | None = None,
         **flags: Any,
     ) -> int:
-        """[srcdir]
+        """Run this verb.
 
         Args:
             config_json: settings to pass to the backend as a JSON object.

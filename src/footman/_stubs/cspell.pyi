@@ -89,7 +89,7 @@ class Cspell(Tool):
         in_process: bool | None = None,
         **flags: Any,
     ) -> int:
-        """cspell .                        Recursively check all files.
+        """Run this verb.
 
         Args:
             cache: Use cache to only check changed files. `cache=off` emits

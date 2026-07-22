@@ -155,6 +155,7 @@ class Coverage(Tool):
         ignore_errors: _Flag = ...,
         include: _Value = ...,
         keep_combined: _Flag = ...,
+        o: _Value = ...,
         omit: _Value = ...,
         pretty_print: _Flag = ...,
         quiet: _Flag = ...,
@@ -178,6 +179,7 @@ class Coverage(Tool):
                 be repeated: a list emits the flag once per item.
             keep_combined: Keep original coverage files, otherwise they are deleted
                 after combining.
+            o: Write the JSON report to this file.
             omit: Omit files whose paths match one of these patterns. May be
                 repeated: a list emits the flag once per item.
             pretty_print: Format the JSON for human readers.
@@ -297,6 +299,7 @@ class Coverage(Tool):
         ignore_errors: _Flag = ...,
         include: _Value = ...,
         keep_combined: _Flag = ...,
+        o: _Value = ...,
         omit: _Value = ...,
         quiet: _Flag = ...,
         rcfile: _Value = ...,
@@ -317,6 +320,7 @@ class Coverage(Tool):
                 be repeated: a list emits the flag once per item.
             keep_combined: Keep original coverage files, otherwise they are deleted
                 after combining.
+            o: Write the XML report to this file.
             omit: Omit files whose paths match one of these patterns. May be
                 repeated: a list emits the flag once per item.
             quiet: Don't print messages about what is happening.
