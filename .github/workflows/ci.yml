@@ -1,22 +1,15 @@
 name: CI
 
 on:
+  # The workflow always triggers; the `changes` job below decides whether the
+  # heavy jobs run. A workflow-level `paths-ignore` can't be used: these jobs
+  # are *required* status checks, and a workflow skipped by a path filter never
+  # reports them — a docs-only PR would wait forever on checks that never run.
+  # A job skipped by an `if:` still reports (as "skipped", which counts as
+  # passing), so docs-only changes clear the gate while code changes run it all.
   push:
     branches: [main]
-    # A docs-only push is the Docs workflow's job — don't run the test gate
-    # on it. Anything that can affect code (src, tests, tasks.py, pyproject,
-    # the workflows themselves) still runs everything.
-    paths-ignore:
-      - "docs/**"
-      - "zensical.toml"
-      - "**.md"
-      - ".github/workflows/docs.yml"
   pull_request:
-    paths-ignore:
-      - "docs/**"
-      - "zensical.toml"
-      - "**.md"
-      - ".github/workflows/docs.yml"
   # Lets release.yml require a full CI pass on the tagged commit before it
   # will build and publish.
   workflow_call:
@@ -29,8 +22,62 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Which part of the tree changed? A docs-only change (docs/, *.md,
+  # zensical.toml, docs.yml) skips the heavy jobs below: they report "skipped",
+  # which satisfies the required status checks without running the full matrix.
+  # Anything that can affect behaviour flips `code` true and runs everything.
+  changes:
+    name: changes
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      code: ${{ steps.detect.outputs.code }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - id: detect
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          case "${{ github.event_name }}" in
+            pull_request)
+              files="$(gh pr view "${{ github.event.pull_request.number }}" \
+                --repo "${{ github.repository }}" --json files -q '.files[].path')" ;;
+            push)
+              # A tag push is a release: release.yml calls this workflow on the
+              # tag (inheriting event_name 'push') and it must run the whole
+              # gate. Branch pushes (main) diff against the parent commit.
+              if [ "${{ github.ref_type }}" = "tag" ]; then
+                echo "code=true" >> "$GITHUB_OUTPUT"; exit 0
+              fi
+              files="$(git diff --name-only \
+                "${{ github.event.before }}" "${{ github.sha }}")" ;;
+            *)
+              # Any other trigger: run the full gate.
+              echo "code=true" >> "$GITHUB_OUTPUT"; exit 0 ;;
+          esac
+          echo "Changed files:"; printf '%s\n' "$files"
+          # `code` is true when any changed path falls outside the docs-only
+          # set (kept in step with the Docs workflow's own filter). Count with
+          # grep -c, never -q: -q exits on the first match, and under GitHub's
+          # `-o pipefail` shell that SIGPIPEs the upstream printf and fails the
+          # pipeline, which would mis-report a code change as docs-only.
+          docs_re='^docs/|^zensical\.toml$|\.md$|^\.github/workflows/docs\.yml$'
+          non_docs="$(printf '%s\n' "$files" | grep -cvE "$docs_re" || true)"
+          if [ "${non_docs:-0}" -gt 0 ]; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "code=false" >> "$GITHUB_OUTPUT"
+          fi
+
   quality:
     name: lint · format · types
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -51,6 +98,8 @@ jobs:
 
   test:
     name: py${{ matrix.python }} · ${{ matrix.os }}
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -87,6 +136,8 @@ jobs:
 
   shells:
     name: completion · real shells · ${{ matrix.os }}
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -187,6 +238,8 @@ jobs:
 
   docs:
     name: docs build (strict)
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
