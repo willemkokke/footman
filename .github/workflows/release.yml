@@ -13,6 +13,10 @@ on:
 
 permissions:
   contents: read
+  # The reusable ci.yml `changes` job requests pull-requests: read; a called
+  # workflow's job cannot exceed the caller's grant, so it must be declared
+  # here or the whole release run fails at startup.
+  pull-requests: read
 
 jobs:
   checks:
