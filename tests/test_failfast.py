@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import sys
+
+import pytest
+
 from footman import manifest
 from footman.registry import Group
 from footman.schedule import resolve_keep_going
@@ -123,3 +127,36 @@ def test_atomic_task_is_not_killed_by_fail_fast(tmp_path):
     segs = _segs(tree, "protected boom")
     run_plan(reg, segs, sequential=False)  # fail-fast, but `protected` is atomic
     assert marker.exists()  # ran to completion despite the failing sibling
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="SIGTERM is unignorable on Windows")
+def test_fail_fast_escalates_to_sigkill_when_sigterm_is_ignored(tmp_path):
+    import signal
+    import subprocess
+    import time
+
+    from footman import context as ctx
+
+    ready = tmp_path / "ready"
+    src = (
+        "import signal, time; "
+        "signal.signal(signal.SIGTERM, signal.SIG_IGN); "
+        f"open({str(ready)!r}, 'w').close(); "
+        "time.sleep(30)"
+    )
+    proc = subprocess.Popen([sys.executable, "-c", src], text=True)  # Popen[str]
+    ctx.reset_abort()
+    try:
+        for _ in range(200):  # wait until the child has installed its SIG_IGN
+            if ready.exists():
+                break
+            time.sleep(0.02)
+        ctx._register_child(proc)
+        ctx.terminate_live_children(grace=0.2)  # SIGTERM ignored → SIGKILL follows
+        proc.wait(timeout=5)
+        assert proc.returncode == -signal.SIGKILL  # forced, not the ignored SIGTERM
+    finally:
+        ctx._forget_child(proc)
+        ctx.reset_abort()
+        if proc.poll() is None:
+            proc.kill()

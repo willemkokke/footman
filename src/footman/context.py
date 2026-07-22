@@ -783,15 +783,17 @@ def reset_abort() -> None:
     _aborting.clear()
 
 
-def terminate_live_children() -> None:
+def terminate_live_children(grace: float = 2.0) -> None:
     """Terminate every still-running spawned subprocess — fail-fast's teeth.
 
     `terminate()` sends SIGTERM (POSIX) / TerminateProcess (Windows); the
     `communicate()` blocking each task's thread then returns and the task
     unwinds. The abort flag is *latched*, so a subprocess a still-running task
     spawns *after* this fires self-terminates on registration (the doomed run
-    can't outrun the kill). In-process runs register nothing, so they finish on
-    their own — un-killable for free, which is the intended behaviour.
+    can't outrun the kill). A child that ignores SIGTERM is SIGKILLed after
+    *grace* seconds by a daemon watcher — a hung tool can't wedge the run.
+    In-process runs register nothing, so they finish on their own — un-killable
+    for free, which is the intended behaviour.
     """
     with _children_lock:
         _aborting.set()
@@ -799,6 +801,17 @@ def terminate_live_children() -> None:
     for proc in procs:
         with contextlib.suppress(ProcessLookupError, OSError):
             proc.terminate()  # already exited between the snapshot and here → ignore
+    if not procs:
+        return
+
+    def _escalate() -> None:
+        time.sleep(grace)
+        for proc in procs:
+            if proc.poll() is None:  # still alive → it ignored SIGTERM, force it
+                with contextlib.suppress(ProcessLookupError, OSError):
+                    proc.kill()
+
+    threading.Thread(target=_escalate, daemon=True, name="fm-fail-fast-kill").start()
 
 
 def _run_subprocess(
