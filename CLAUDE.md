@@ -122,14 +122,24 @@ tasks.py          footman's own tasks — the gate is `fm check`
 ## Releasing
 
 The version lives in **two** places that must match: `pyproject.toml` `version`
-and `src/footman/__init__.py` `__version__` (the release workflow's
-`verify-version` job checks the tag against them).
+and `src/footman/__init__.py` `__version__` — the release workflow's
+`verify-version` job checks the tag against both **and** the CHANGELOG entry.
 
-1. Bump both to `X.Y.Z`.
-2. Move CHANGELOG `[Unreleased]` → `[X.Y.Z]` with today's date; add the
-   `[X.Y.Z]: …/compare/vPREV...vX.Y.Z` link.
-3. Commit `chore(release): vX.Y.Z — <summary>`.
-4. Tag `vX.Y.Z` and push the commit **and** the tag.
+**`main` is protected**: every CI check is required, so the `chore(release)`
+commit cannot be pushed to `main` directly (`git push origin main` is refused —
+the required checks are only satisfiable through a PR). The bump lands through a
+PR, and only the merged commit is tagged. Don't tag before the bump is on
+`main`, or the tag points at a commit that never reached the branch.
+
+1. Branch `release/vX.Y.Z` off an up-to-date `main`.
+2. Bump both version files to `X.Y.Z`.
+3. Move CHANGELOG `[Unreleased]` → `[X.Y.Z]` with today's date; add the
+   `[X.Y.Z]: …/compare/vPREV...vX.Y.Z` link and repoint `[Unreleased]` to
+   `…/compare/vX.Y.Z...HEAD`.
+4. Commit `chore(release): vX.Y.Z — <summary>`, push the branch, open a PR.
+5. When its checks are green, **merge it by hand** (repo auto-merge is off).
+6. Fast-forward local `main` (`git fetch` then `git merge --ff-only`), then tag
+   that merged commit `vX.Y.Z` and push **only the tag**.
 
 Pushing a `v*` tag triggers `.github/workflows/release.yml`: it runs full CI,
 verifies the version, builds the sdist + wheel, and publishes to PyPI
