@@ -1,4 +1,4 @@
-"""Composition: when=/disabled tasks, include(), plugin entry points."""
+"""Composition: @requires availability gates, include(), plugin entry points."""
 
 from __future__ import annotations
 
@@ -8,10 +8,17 @@ import textwrap
 import pytest
 
 from footman import compose, manifest, registry
-from footman.registry import Group, RegistrationError
+from footman.registry import (
+    Group,
+    RegistrationError,
+    requires,
+    requires_dep,
+    requires_env,
+    requires_tool,
+)
 from footman.testing import Runner
 
-# --- when= / disabled tasks -----------------------------------------------------
+# --- @requires availability gates -----------------------------------------------
 
 
 def _tree(build):
@@ -20,20 +27,22 @@ def _tree(build):
     return reg, manifest.build_manifest(reg)["tree"]
 
 
-def test_when_false_is_listed_but_disabled():
+def test_requires_false_predicate_is_listed_but_disabled():
     def tasks(reg):
-        @reg.task(when=False, reason="CI only")
+        @reg.task(name="release")
+        @requires(lambda: False, reason="CI only")
         def release(): ...
 
     _, tree = _tree(tasks)
     assert tree["tasks"]["release"]["disabled"] == "CI only"
 
 
-def test_when_callable_is_reevaluated_live():
+def test_requires_predicate_is_reevaluated_live():
     gate = {"open": False}
 
     def tasks(reg):
-        @reg.task(when=lambda: gate["open"], reason="gate closed")
+        @reg.task(name="guarded")
+        @requires(lambda: gate["open"], reason="gate closed")
         def guarded():
             print("ran")
 
@@ -50,30 +59,33 @@ def test_when_callable_is_reevaluated_live():
     assert "ran" in result.stdout
 
 
-def test_when_raising_predicate_reads_as_unavailable():
+def test_requires_raising_predicate_reads_as_unavailable():
     def tasks(reg):
-        @reg.task(when=lambda: 1 / 0, reason="broken gate")
+        @reg.task(name="guarded")
+        @requires(lambda: 1 / 0, reason="broken gate")
         def guarded(): ...
 
     _, tree = _tree(tasks)
-    assert "when() raised ZeroDivisionError" in tree["tasks"]["guarded"]["disabled"]
+    assert "broken gate (ZeroDivisionError" in tree["tasks"]["guarded"]["disabled"]
     reg, _ = _tree(tasks)
     result = Runner().invoke("guarded", tasks=reg)
     assert result.exit_code == 2
 
 
-def test_requires_present_is_available():
+def test_requires_dep_present_is_available():
     def tasks(reg):
-        @reg.task(requires="io")  # a stdlib module: always importable
+        @reg.task(name="publish")
+        @requires_dep("io")  # a stdlib module: always importable
         def publish(): ...
 
     _, tree = _tree(tasks)
     assert "disabled" not in tree["tasks"]["publish"]
 
 
-def test_requires_missing_is_listed_but_disabled():
+def test_requires_dep_missing_is_listed_but_disabled():
     def tasks(reg):
-        @reg.task(requires=["stripe_nope", "google_nope"])
+        @reg.task(name="publish")
+        @requires_dep("stripe_nope", "google_nope")
         def publish(): ...
 
     _, tree = _tree(tasks)
@@ -85,16 +97,17 @@ def test_requires_missing_is_listed_but_disabled():
     assert "requires stripe_nope" in str(result.results[0].error)
 
 
-def test_requires_custom_reason():
+def test_requires_dep_custom_reason():
     def tasks(reg):
-        @reg.task(requires="stripe_nope", reason="pip install devkit[release]")
+        @reg.task(name="publish")
+        @requires_dep("stripe_nope", reason="pip install devkit[release]")
         def publish(): ...
 
     _, tree = _tree(tasks)
     assert tree["tasks"]["publish"]["disabled"] == "pip install devkit[release]"
 
 
-def test_requires_check_does_not_import(monkeypatch):
+def test_requires_dep_does_not_import(monkeypatch):
     # Availability is find_spec-only: building the manifest for a task that
     # requires a module must never import that module.
     import sys
@@ -113,7 +126,8 @@ def test_requires_check_does_not_import(monkeypatch):
     monkeypatch.setattr("builtins.__import__", tracking_import)
 
     def tasks(reg):
-        @reg.task(requires="textwrap")  # importable, but must stay unimported
+        @reg.task(name="publish")
+        @requires_dep("textwrap")  # importable, but must stay unimported
         def publish(): ...
 
     _, tree = _tree(tasks)
@@ -122,9 +136,9 @@ def test_requires_check_does_not_import(monkeypatch):
     assert "textwrap" not in sys.modules
 
 
-def test_requires_broken_parent_lists_unavailable_not_crash(tmp_path, monkeypatch):
-    # F29: a dotted `requires` imports parent packages via find_spec; a parent
-    # whose __init__ raises must read as unavailable, never crash fm --list.
+def test_requires_dep_broken_parent_lists_unavailable_not_crash(tmp_path, monkeypatch):
+    # A dotted dep imports parent packages via find_spec; a parent whose
+    # __init__ raises must read as unavailable, never crash fm --list.
     pkg = tmp_path / "brokenparent"
     pkg.mkdir()
     (pkg / "__init__.py").write_text("raise RuntimeError('parent boom')\n")
@@ -132,18 +146,75 @@ def test_requires_broken_parent_lists_unavailable_not_crash(tmp_path, monkeypatc
     monkeypatch.syspath_prepend(str(tmp_path))
 
     def tasks(reg):
-        @reg.task(requires="brokenparent.child")
+        @reg.task(name="publish")
+        @requires_dep("brokenparent.child")
         def publish(): ...
 
     _, tree = _tree(tasks)  # must not raise
     assert tree["tasks"]["publish"]["disabled"] == "requires brokenparent.child"
 
 
+def test_requires_env_gates_on_the_environment(monkeypatch):
+    monkeypatch.delenv("FM_GATE_VAR", raising=False)
+
+    def tasks(reg):
+        @reg.task(name="publish")
+        @requires_env("FM_GATE_VAR")
+        def publish(): ...
+
+    _, tree = _tree(tasks)
+    assert tree["tasks"]["publish"]["disabled"] == "set FM_GATE_VAR"
+
+    monkeypatch.setenv("FM_GATE_VAR", "1")  # live: set it and it clears
+    _, tree = _tree(tasks)
+    assert "disabled" not in tree["tasks"]["publish"]
+
+
+def test_requires_tool_gates_on_path():
+    def tasks(reg):
+        @reg.task(name="up")
+        @requires_tool("no_such_tool_xyz")
+        def up(): ...
+
+    _, tree = _tree(tasks)
+    assert tree["tasks"]["up"]["disabled"] == "requires no_such_tool_xyz on PATH"
+
+
+def test_requires_tool_present_is_available(monkeypatch):
+    monkeypatch.setattr("shutil.which", lambda cmd: f"/usr/bin/{cmd}")
+
+    def tasks(reg):
+        @reg.task(name="up")
+        @requires_tool("docker")
+        def up(): ...
+
+    _, tree = _tree(tasks)
+    assert "disabled" not in tree["tasks"]["up"]
+
+
+def test_requires_collects_all_failures(monkeypatch):
+    # No short-circuit: a task gated on a missing dep AND a missing var reports
+    # both, each in its own words.
+    monkeypatch.delenv("FM_GATE_VAR", raising=False)
+
+    def tasks(reg):
+        @reg.task(name="publish")
+        @requires_dep("stripe_nope")
+        @requires_env("FM_GATE_VAR")
+        def publish(): ...
+
+    _, tree = _tree(tasks)
+    disabled = tree["tasks"]["publish"]["disabled"]
+    assert "requires stripe_nope" in disabled
+    assert "set FM_GATE_VAR" in disabled
+
+
 def test_disabled_prerequisite_fails_the_dependent():
     ran = []
 
     def tasks(reg):
-        @reg.task(when=False, reason="requires docker")
+        @reg.task(name="up")
+        @requires(lambda: False, reason="requires docker")
         def up(): ...
 
         @reg.task(pre=[up])
@@ -159,9 +230,10 @@ def test_disabled_prerequisite_fails_the_dependent():
 def test_disabled_annotation_in_listing(fm_project):
     fm = fm_project(
         """
-        from footman import task
+        from footman import task, requires
 
-        @task(when=False, reason="requires docker on PATH")
+        @task
+        @requires(lambda: False, reason="requires docker on PATH")
         def up():
             "Start the containers."
         """

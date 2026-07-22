@@ -12,6 +12,19 @@ straight from the `footman` package (`from footman import task, run, App`).
 
 ::: footman.registry.Group
 
+## Availability gates
+
+Stack these above `@task` to list a task as unavailable (with a reason) where
+it can't run. Every gate is evaluated live, and all failures are collected.
+
+::: footman.registry.requires
+
+::: footman.registry.requires_dep
+
+::: footman.registry.requires_tool
+
+::: footman.registry.requires_env
+
 ## Running commands
 
 ::: footman.context.run

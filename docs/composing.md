@@ -25,10 +25,10 @@ if sys.platform == "darwin":
 can't run *here*":
 
 ```python
-import shutil
-from footman import task
+from footman import task, requires_tool
 
-@task(when=lambda: shutil.which("docker"), reason="requires docker on PATH")
+@task
+@requires_tool("docker")
 def up(detach: bool = True):
     "Start the dev containers."
 ```
@@ -41,11 +41,15 @@ $ fm up
 fm: up: Unavailable: requires docker on PATH
 ```
 
-The name always completes and lists — the manifest stays stable — and the
-predicate is re-evaluated **live** on every run, so the moment docker appears
-on PATH, `fm up` works, whatever the cached manifest thought. A predicate
-that raises reads as unavailable (a broken gate must not swing open). `when=`
-also takes a plain bool for import-time conditions (`when="CI" in os.environ`).
+The name always completes and lists — the manifest stays stable — and every
+gate is re-evaluated **live** on every run, so the moment docker appears on
+PATH, `fm up` works, whatever the cached manifest thought. `@requires_tool`,
+`@requires_dep`, and `@requires_env` are the common gates — a tool on `PATH`, a
+Python module importable, a variable set — and `@requires(predicate, reason=…)`
+is the generic they build on. Stack as many as apply: **every** failure is
+reported, each in its own words, so a task needing both a tool and a variable
+says both. A predicate that raises reads as unavailable (a broken gate must not
+swing open).
 
 A `pre`/`post` dependency on a disabled task is a **hard failure**, not a
 silent skip — silently dropping `lint` from `check` on the wrong machine is
@@ -97,9 +101,10 @@ where the heavy `import` lives:
 
 ```python
 # devkit/tasks.py
-from footman import task
+from footman import task, requires_dep
 
-@task(requires="stripe", reason="pip install devkit[release]")
+@task
+@requires_dep("stripe", reason="pip install devkit[release]")
 def publish(version: str):
     "Cut and publish a release."
     import stripe          # imported only when publish actually runs
@@ -113,7 +118,7 @@ manifest, listing, and completion — it never runs a body. So a body-level
 cheap — `version: str`, `dry_run: bool` — for the same reason; an exotic
 annotation is the one thing signature introspection might try to resolve.)
 
-`requires=` closes the last gap: the *optional* dependency. It names modules
+`@requires_dep` closes the last gap: the *optional* dependency. It names modules
 the task needs, checked with `importlib.util.find_spec` — which locates them
 **without importing** — so a missing package makes the task list as
 `(unavailable: pip install devkit[release])` and refuse to run with that
@@ -135,15 +140,15 @@ mkdocs = "footman_mkdocs:tasks"
 
 ```python
 # footman_mkdocs/__init__.py
-import shutil
-from footman import Group
+from footman import Group, requires_tool
 
 tasks = Group("mkdocs", help="MkDocs site tasks")
 
 @tasks.task
 def build(strict: bool = True): ...
 
-@tasks.task(when=lambda: shutil.which("mike"), reason="requires mike")
+@tasks.task
+@requires_tool("mike")
 def deploy(version: str): ...
 ```
 
@@ -196,5 +201,5 @@ by the `footman.tasks` *package* — different namespaces, one product.
 
 All three mechanisms resolve at import/manifest-build time, so what
 completion offers reflects the *last real run* — the same contract dynamic
-`suggest()` choices have always had. Availability (`when=`) is the one thing
+`suggest()` choices have always had. Availability (`@requires`) is the one thing
 never trusted from the cache: it re-checks live at the moment of execution.

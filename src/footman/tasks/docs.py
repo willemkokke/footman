@@ -20,7 +20,7 @@ from typing import Annotated, Any, Literal
 from footman import _paths, _shellcomp, config, context, discover, markdown, registry
 from footman import manifest as _manifest
 from footman.params import between, doc
-from footman.registry import Group
+from footman.registry import Group, requires, requires_dep
 
 tasks = Group("docs", help="Generate markdown docs for this project's tasks")
 
@@ -146,7 +146,9 @@ def reduce_frames(raw: str) -> str:
     return "\n".join(lines)
 
 
-@tasks.task(name="shots", requires="rich", when=lambda: sys.platform != "win32")
+@tasks.task(name="shots")
+@requires_dep("rich")
+@requires(lambda: sys.platform != "win32", reason="needs a POSIX pseudo-terminal")
 def shots(
     *argv: str,
     out: Annotated[Path, doc("the SVG file to write")],
@@ -166,7 +168,7 @@ def shots(
     effects you don't want. A failing command still renders — a taught
     error message is a perfectly good screenshot.
     """
-    if sys.platform == "win32":  # the when= gate already refused; belt
+    if sys.platform == "win32":  # the @requires gate already refused; belt
         raise RuntimeError("docs shots needs a POSIX pseudo-terminal")
     import fcntl
     import pty
@@ -201,7 +203,7 @@ def shots(
     proc.wait()
 
     # The blessed lazy import: rich is docs tooling, never a dependency —
-    # requires="rich" lists this task as unavailable when it's absent.
+    # @requires_dep("rich") lists this task as unavailable when it's absent.
     from rich.console import Console
     from rich.text import Text
 
@@ -649,9 +651,9 @@ def _boot_shell(
     raise RuntimeError(f"cast drives zsh, bash, fish, pwsh, or nushell (got {shell!r})")
 
 
-@tasks.task(
-    name="cast", requires=["rich", "pyte"], when=lambda: sys.platform != "win32"
-)
+@tasks.task(name="cast")
+@requires_dep("rich", "pyte")
+@requires(lambda: sys.platform != "win32", reason="needs a POSIX pseudo-terminal")
 def cast(
     *keys: str,
     out: Annotated[Path, doc("the animated SVG file to write")],
@@ -680,7 +682,7 @@ def cast(
     free SVG with the session's real timing. TAB completion, in motion,
     regenerated on every docs build so it cannot drift.
     """
-    if sys.platform == "win32":  # the when= gate already refused; belt
+    if sys.platform == "win32":  # the @requires gate already refused; belt
         raise RuntimeError("docs cast needs a POSIX pseudo-terminal")
     import tempfile
 

@@ -135,11 +135,11 @@ def test_globals_task_writes_out(plugin_project, capsys):
     assert dest.read_text(encoding="utf-8").startswith("| option")
 
 
-# --- docs shots: pty screenshots, and the requires= dogfood -------------------
+# --- docs shots: pty screenshots, and the @requires_dep dogfood ---------------
 
 
 def test_shots_lists_unavailable_without_rich(plugin_project, capsys, monkeypatch):
-    # The requires="rich" gate, dogfooded: with rich unimportable the task
+    # The @requires_dep("rich") gate, dogfooded: with rich unimportable the task
     # lists with the taught reason and refuses to run — no ImportError ever.
     from footman import registry
 
@@ -150,7 +150,9 @@ def test_shots_lists_unavailable_without_rich(plugin_project, capsys, monkeypatc
     assert _app.run(["--list"]) == 0
     out = capsys.readouterr().out
     assert "footman docs shots" in out
-    assert "(unavailable: requires rich)" in out
+    # Substring, not the exact `(unavailable: requires rich)`: on Windows the
+    # POSIX-pty gate also fails, so collect-all lists both reasons.
+    assert "requires rich" in out
     assert _app.run(["footman", "docs", "shots", "--out", "x.svg"]) != 0
     assert "requires rich" in capsys.readouterr().err
 
@@ -219,7 +221,8 @@ def test_cast_lists_unavailable_without_pyte(plugin_project, capsys, monkeypatch
         registry, "_importable", lambda m: False if m == "pyte" else real(m)
     )
     assert _app.run(["--list"]) == 0
-    assert "(unavailable: requires pyte)" in capsys.readouterr().out
+    # Substring (see the shots test): Windows adds the POSIX-pty reason too.
+    assert "requires pyte" in capsys.readouterr().out
 
 
 @pytest.mark.skipif(
