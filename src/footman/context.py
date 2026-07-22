@@ -19,6 +19,7 @@ import inspect
 import io
 import os
 import shlex
+import signal
 import subprocess
 import sys
 import threading
@@ -761,6 +762,39 @@ _children_lock = threading.Lock()
 _aborting = threading.Event()  # set once fail-fast has fired for this run
 
 
+def _kill_tree(proc: subprocess.Popen[str], *, force: bool) -> None:
+    """Signal a spawned child *and its descendants*, not just the child itself.
+
+    A killable child leads its own process group (POSIX) / group (Windows), and
+    its grandchildren inherit it — so a group-wide signal reaps the workers a
+    bare `terminate()` would orphan: pytest-xdist, `make -j`, a shell script's
+    background jobs. POSIX sends SIGTERM, or SIGKILL once *force*. Windows has no
+    SIGTERM/SIGKILL split, so `taskkill /T` (walk the tree by PID) `/F` (force)
+    is one forceful shot for both — the escalation below is then a harmless
+    re-run against a tree that is already gone.
+    """
+    with contextlib.suppress(ProcessLookupError, OSError):
+        if sys.platform == "win32":
+            subprocess.run(
+                ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+            )
+            return
+        sig = signal.SIGKILL if force else signal.SIGTERM
+        # Kill the whole group only when this child actually *leads* one (spawned
+        # with start_new_session, so pgid == pid) — that is how the group reaches
+        # its grandchildren. A child that shares footman's group — an interactive
+        # task's child, or one a caller spawned without isolation — is signalled
+        # alone: never killpg a group we don't own, or fail-fast could take out
+        # the runner itself.
+        if os.getpgid(proc.pid) == proc.pid:
+            os.killpg(proc.pid, sig)
+        else:
+            os.kill(proc.pid, sig)
+
+
 def _register_child(proc: subprocess.Popen[str]) -> None:
     # Under the one lock: adding to the set and reading the abort flag can't
     # interleave with `terminate_live_children` setting it and snapshotting — so
@@ -769,8 +803,7 @@ def _register_child(proc: subprocess.Popen[str]) -> None:
         _live_children.add(proc)
         aborting = _aborting.is_set()
     if aborting:
-        with contextlib.suppress(ProcessLookupError, OSError):
-            proc.terminate()  # spawned after fail-fast fired → stop it at once
+        _kill_tree(proc, force=False)  # spawned after abort fired → stop it at once
 
 
 def _forget_child(proc: subprocess.Popen[str]) -> None:
@@ -784,23 +817,25 @@ def reset_abort() -> None:
 
 
 def terminate_live_children(grace: float = 2.0) -> None:
-    """Terminate every still-running spawned subprocess — fail-fast's teeth.
+    """Terminate every still-running spawned subprocess *tree* — fail-fast's teeth.
 
-    `terminate()` sends SIGTERM (POSIX) / TerminateProcess (Windows); the
+    Each killable child was spawned in its own process group, so the SIGTERM
+    (POSIX) / `taskkill /T` (Windows) here reaches its grandchildren too; the
     `communicate()` blocking each task's thread then returns and the task
     unwinds. The abort flag is *latched*, so a subprocess a still-running task
     spawns *after* this fires self-terminates on registration (the doomed run
-    can't outrun the kill). A child that ignores SIGTERM is SIGKILLed after
+    can't outrun the kill). A group that ignores SIGTERM is SIGKILLed after
     *grace* seconds by a daemon watcher — a hung tool can't wedge the run.
     In-process runs register nothing, so they finish on their own — un-killable
-    for free, which is the intended behaviour.
+    for free, which is the intended behaviour. This is also the Ctrl-C reaper:
+    a group-isolated child no longer receives the terminal's SIGINT, so the
+    abort paths call this to kill in-flight work by hand.
     """
     with _children_lock:
         _aborting.set()
         procs = list(_live_children)
     for proc in procs:
-        with contextlib.suppress(ProcessLookupError, OSError):
-            proc.terminate()  # already exited between the snapshot and here → ignore
+        _kill_tree(proc, force=False)
     if not procs:
         return
 
@@ -808,8 +843,7 @@ def terminate_live_children(grace: float = 2.0) -> None:
         time.sleep(grace)
         for proc in procs:
             if proc.poll() is None:  # still alive → it ignored SIGTERM, force it
-                with contextlib.suppress(ProcessLookupError, OSError):
-                    proc.kill()
+                _kill_tree(proc, force=True)
 
     threading.Thread(target=_escalate, daemon=True, name="fm-fail-fast-kill").start()
 
@@ -821,6 +855,7 @@ def _run_subprocess(
     capture: bool,
     encoding: str | None = "utf-8",
     killable: bool = True,
+    isolate: bool = True,
 ) -> tuple[int, str]:
     # Dev tools (pytest, ruff, git, uv) emit UTF-8 regardless of the OS code
     # page, so decode as UTF-8 by default rather than the locale encoding
@@ -829,6 +864,22 @@ def _run_subprocess(
     #
     # Popen + a live registry (not subprocess.run) so a concurrent fail-fast can
     # terminate this child while its thread is blocked in communicate().
+    #
+    # An isolated child leads its own process group (POSIX session / Windows
+    # group) so `terminate_live_children` can kill the whole tree, not just the
+    # child — a tool's own workers (pytest-xdist, `make -j`) die with it. The
+    # cost: it no longer receives the terminal's Ctrl-C, so the scheduler's abort
+    # paths reap it by hand. Two children opt out and stay in footman's group:
+    # `atomic` (fail-fast never kills it, so in-group keeps its Ctrl-C behaviour
+    # unchanged) and `interactive` (it owns the real terminal — setsid would strip
+    # its controlling tty and a full-screen program would misbehave). The kill
+    # guard signals such an in-group child alone, never the shared group.
+    group: dict[str, Any] = {}
+    if isolate:
+        if sys.platform == "win32":
+            group["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
+        else:
+            group["start_new_session"] = True
     proc = subprocess.Popen(
         argv,
         env=env,
@@ -838,6 +889,7 @@ def _run_subprocess(
         text=True,
         encoding=encoding,
         errors="replace",
+        **group,
     )
     # An `@task(atomic=True)` opts its child out of the registry: fail-fast
     # never kills it, so a mid-write (a formatter rewriting a file) can't be
@@ -983,7 +1035,15 @@ def run(
         run_env = {**os.environ, **ctx.env, **(env or {})}
         cwd_path = Path(cwd) if cwd is not None else ctx.cwd
         code, output = _run_subprocess(
-            argv, run_env, cwd_path, capture, encoding, killable=not ctx.atomic
+            argv,
+            run_env,
+            cwd_path,
+            capture,
+            encoding,
+            killable=not ctx.atomic,
+            # An interactive task owns the real terminal: keep its child in
+            # footman's group so it keeps its controlling tty (and its Ctrl-C).
+            isolate=not ctx.atomic and not ctx.interactive,
         )
     duration = time.perf_counter() - start
     ctx.steps.append(StepResult(label, code, output, duration, raw=raw))

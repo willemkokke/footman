@@ -57,11 +57,14 @@ if one fails, and a task whose prerequisite failed is skipped.
 ## When a task fails: fail-fast & keep-going
 
 A run is **fail-fast** by default: the first failure stops it. New tasks don't
-start, *and* the sibling subprocesses still running are terminated — so a doomed
-run dies at once instead of waiting out a long test suite. The kill is SIGTERM,
-escalating to SIGKILL after a short grace if a tool ignores it. A task cut off
-this way reports as **cancelled**, not failed, and the exit code is the genuine
-failure's, never a kill signal.
+start, *and* the sibling subprocesses still running are terminated — the whole
+tree, each child *and its own children*, so a tool's workers (pytest-xdist,
+`make -j`, a script's background jobs) die with it rather than orphaning. So a
+doomed run dies at once instead of waiting out a long test suite. The kill is
+SIGTERM, escalating to SIGKILL after a short grace if a tool ignores it. A task
+cut off this way reports as **cancelled**, not failed, and the exit code is the
+genuine failure's, never a kill signal. `Ctrl-C` reaps in-flight trees the same
+way.
 
 `--keep-going`/`-k` runs every independent branch regardless, so you see every
 failure in one pass. `--fail-fast` forces the default back when a task declares
@@ -76,10 +79,13 @@ def check(): ...
 - `fm --fail-fast check` overrides it for this run.
 - A task that declares nothing gets the built-in fail-fast.
 
-Two escape hatches for the kill:
+Three escape hatches for the kill:
 
 - `@task(atomic=True)` opts a task's subprocesses out — they run to completion,
   so a formatter rewriting a file can't be truncated mid-write.
+- An `@task(interactive=True)` task owns the real terminal, so its subprocess
+  stays attached to it and isn't group-isolated — it keeps its controlling tty
+  and its own `Ctrl-C`.
 - An **in-process** `run()` (a `tools.*` entry point, a plain callable) has no
   subprocess to signal, so it always finishes on its own.
 

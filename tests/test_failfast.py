@@ -149,6 +149,105 @@ def test_a_killed_task_reports_cancelled_not_failed():
     assert results["slow"].cancelled is True  # cut off by fail-fast, not a failure
 
 
+@pytest.mark.skipif(
+    sys.platform == "win32", reason="POSIX process groups; Windows uses taskkill /T"
+)
+def test_fail_fast_kills_grandchildren_not_just_the_direct_child(tmp_path):
+    # A task's subprocess spawns its OWN child (a tool's worker: pytest-xdist,
+    # `make -j`). fail-fast must reap the whole tree, not orphan the grandchild.
+    # The direct child leads its own process group and the group-wide SIGTERM
+    # reaches the grandchild too. (Windows gets the same via taskkill /T, which
+    # the non-skipped sibling-kill test already drives on that platform.)
+    import os
+    import signal
+    import time
+
+    from footman.context import run
+    from footman.schedule import run_plan
+
+    pidfile = tmp_path / "grandchild.pid"
+    grandchild = tmp_path / "grandchild.py"
+    grandchild.write_text(
+        "import os, sys, time\n"
+        "open(sys.argv[1], 'w').write(str(os.getpid()))\n"
+        "time.sleep(30)\n"  # long: outlives the run unless the group kill reaps it
+    )
+    child = tmp_path / "child.py"
+    child.write_text(
+        "import subprocess, sys\n"
+        "subprocess.Popen([sys.executable, sys.argv[1], sys.argv[2]]).wait()\n"
+    )
+
+    def tasks(reg):
+        @reg.task
+        def slow():
+            run([sys.executable, str(child), str(grandchild), str(pidfile)])
+
+        @reg.task
+        def boom():
+            for _ in range(200):  # let slow's grandchild come fully up first,
+                if pidfile.exists():  # so the kill targets an established tree
+                    break
+                time.sleep(0.02)
+            raise SystemExit(1)  # then fail fast → slow's whole tree is killed
+
+    reg, tree = _tree(tasks)
+    segs = _segs(tree, "slow boom")
+    run_plan(reg, segs, sequential=False)
+
+    for _ in range(200):  # the grandchild records its pid as it starts
+        if pidfile.exists():
+            break
+        time.sleep(0.02)
+    assert pidfile.exists(), "grandchild never started — the test isn't exercising it"
+    gc_pid = int(pidfile.read_text())
+
+    def alive() -> bool:
+        try:
+            os.kill(gc_pid, 0)  # signal 0 just probes; ESRCH once it's gone
+            return True
+        except ProcessLookupError:
+            return False
+
+    for _ in range(200):  # let the group signal propagate to the grandchild
+        if not alive():
+            break
+        time.sleep(0.02)
+    leaked = alive()
+    if leaked:  # don't strand a 30s sleeper if the assertion is about to fail
+        os.kill(gc_pid, signal.SIGKILL)
+    assert not leaked, "grandchild survived fail-fast — the group kill missed it"
+
+
+@pytest.mark.skipif(
+    sys.platform == "win32", reason="POSIX process-group ownership guard"
+)
+def test_kill_signals_a_shared_group_child_alone_never_the_group():
+    # A child that shares footman's process group (spawned WITHOUT its own
+    # session) must be signalled individually — a killpg here would take out the
+    # runner. That this test's own process survives to make its assertion is the
+    # proof the group was spared; the child dies from a plain, individual SIGTERM.
+    import signal
+    import subprocess
+
+    from footman import context as ctx
+
+    proc = subprocess.Popen(  # no start_new_session → shares pytest's group
+        [sys.executable, "-c", "import time; time.sleep(30)"], text=True
+    )
+    ctx.reset_abort()
+    try:
+        ctx._register_child(proc)
+        ctx.terminate_live_children(grace=5)  # individual SIGTERM, not group-wide
+        proc.wait(timeout=5)
+        assert proc.returncode == -signal.SIGTERM  # the child alone, not the group
+    finally:
+        ctx._forget_child(proc)
+        ctx.reset_abort()
+        if proc.poll() is None:
+            proc.kill()
+
+
 @pytest.mark.skipif(sys.platform == "win32", reason="SIGTERM is unignorable on Windows")
 def test_fail_fast_escalates_to_sigkill_when_sigterm_is_ignored(tmp_path):
     import signal
@@ -164,7 +263,12 @@ def test_fail_fast_escalates_to_sigkill_when_sigterm_is_ignored(tmp_path):
         f"open({str(ready)!r}, 'w').close(); "
         "time.sleep(30)"
     )
-    proc = subprocess.Popen([sys.executable, "-c", src], text=True)  # Popen[str]
+    # start_new_session so it leads its own group, exactly like a real killable
+    # child — the group SIGTERM/SIGKILL escalation is what's under test, and it
+    # keeps the kill off pytest's own process group.
+    proc = subprocess.Popen(
+        [sys.executable, "-c", src], text=True, start_new_session=True
+    )  # Popen[str]
     ctx.reset_abort()
     try:
         for _ in range(200):  # wait until the child has installed its SIG_IGN
