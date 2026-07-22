@@ -60,6 +60,10 @@ if TYPE_CHECKING:
     from footman.registry import capture as capture
     from footman.registry import finalize as finalize
     from footman.registry import group as group
+    from footman.registry import requires as requires
+    from footman.registry import requires_dep as requires_dep
+    from footman.registry import requires_env as requires_env
+    from footman.registry import requires_tool as requires_tool
     from footman.registry import task as task
     from footman.testing import Result as Result
     from footman.testing import Runner as Runner
@@ -110,6 +114,10 @@ __all__ = [
     "progress",
     "prompt",
     "recording",
+    "requires",
+    "requires_dep",
+    "requires_env",
+    "requires_tool",
     "run",
     "select",
     "suggest",
@@ -137,7 +145,19 @@ def main() -> None:
 def __getattr__(name: str) -> object:
     # Lazy re-export: `from footman import task, group` works without paying the
     # registry import on a bare `import footman` (the completion hot path).
-    if name in ("task", "group", "Group", "capture", "finalize", "Tasks", "TaskView"):
+    if name in (
+        "task",
+        "group",
+        "Group",
+        "capture",
+        "finalize",
+        "Tasks",
+        "TaskView",
+        "requires",
+        "requires_dep",
+        "requires_env",
+        "requires_tool",
+    ):
         from footman import registry
 
         return getattr(registry, name)

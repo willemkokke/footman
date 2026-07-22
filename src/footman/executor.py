@@ -422,7 +422,7 @@ def _call(
 
 
 class Unavailable(Exception):
-    """A `when=`-disabled task was asked to run; the message is the reason."""
+    """A `@requires`-gated task was asked to run; the message is the reason."""
 
 
 def run_task(
@@ -435,7 +435,7 @@ def run_task(
     caller's job via `ctx.sink`; here we just capture its final value.
     *forwarded* carries `forward`-marked values from a dispatching task.
     """
-    # `when=` availability is re-checked live at the moment of execution —
+    # `@requires` availability is re-checked live at the moment of execution —
     # the manifest's cached answer is only ever a listing annotation.
     if (reason := registry.availability(fn)) is not None:
         return TaskResult(task=seg.task, ok=False, code=2, error=Unavailable(reason))

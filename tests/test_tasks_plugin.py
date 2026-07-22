@@ -135,11 +135,11 @@ def test_globals_task_writes_out(plugin_project, capsys):
     assert dest.read_text(encoding="utf-8").startswith("| option")
 
 
-# --- docs shots: pty screenshots, and the requires= dogfood -------------------
+# --- docs shots: pty screenshots, and the @requires_dep dogfood ---------------
 
 
 def test_shots_lists_unavailable_without_rich(plugin_project, capsys, monkeypatch):
-    # The requires="rich" gate, dogfooded: with rich unimportable the task
+    # The @requires_dep("rich") gate, dogfooded: with rich unimportable the task
     # lists with the taught reason and refuses to run — no ImportError ever.
     from footman import registry
 

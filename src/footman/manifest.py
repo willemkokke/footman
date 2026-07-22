@@ -321,7 +321,7 @@ def _task_node(fn: Any, memo: dict[int, list[str]]) -> dict[str, Any]:
         node["confirm"] = confirm  # additive: the yes/no gate before it runs
     if parsed.long:
         node["long"] = parsed.long
-    # Additive availability annotation (`when=`): the name stays listed and
+    # Additive availability annotation (`@requires`): the name stays listed and
     # completable either way — execution re-checks the predicate live.
     if (reason := registry.availability(fn)) is not None:
         node["disabled"] = reason

@@ -28,6 +28,8 @@ completion hot path never imports either.
 from __future__ import annotations
 
 import contextlib
+import os
+import shutil
 from collections.abc import Callable, Iterator, Sequence
 from typing import Any, overload
 
@@ -109,9 +111,6 @@ class Group:
         name: str = "",
         pre: Sequence[Task] = (),
         post: Sequence[Task] = (),
-        when: bool | Callable[[], object] = True,
-        requires: str | Sequence[str] = (),
-        reason: str = "",
         progress: bool = True,
         infinite: bool = False,
         confirm: str = "",
@@ -127,9 +126,6 @@ class Group:
         name: str = "",
         pre: Sequence[Task] = (),
         post: Sequence[Task] = (),
-        when: bool | Callable[[], object] = True,
-        requires: str | Sequence[str] = (),
-        reason: str = "",
         progress: bool = True,
         infinite: bool = False,
         confirm: str = "",
@@ -149,34 +145,11 @@ class Group:
         def check(): ...
         ```
 
-        `when` disables a task that can't run *here* while keeping it listed
-        (pytest-skip semantics — the listing shows the `reason`, running it
-        refuses with the reason, and completion stays stable):
-
-        ```python
-        @task(when=lambda: shutil.which("docker"), reason="requires docker")
-        def up(): ...
-        ```
-
-        `requires` names Python modules the task needs — checked with
-        `importlib.util.find_spec`, which does not import the module itself (a
-        dotted name imports its parent packages to locate it). The task
-        is listed as unavailable (with a taught reason) when a module is
-        absent, so a shared library can carry tasks with heavy optional
-        dependencies: keep the actual `import` in the body, so the cost is
-        paid only when the task runs, and mark the requirement here so a
-        missing dependency reads as a clean message, not an import crash:
-
-        ```python
-        @task(requires="stripe", reason="pip install devkit[release]")
-        def publish(version: str):
-            import stripe  # only imported when publish actually runs
-            ...
-        ```
-
-        A callable `when` is re-evaluated live on every run — the cached
-        manifest is never trusted for availability. To *hide* a task
-        entirely, use plain Python: `if sys.platform == "darwin": @task ...`
+        Availability gating lives in the `@requires` decorators — stack
+        `@requires`, `@requires_dep`, `@requires_tool`, or `@requires_env`
+        above `@task` to list a task as unavailable (with a reason) where it
+        can't run, rather than hide it. To hide a task entirely, use plain
+        Python: `if sys.platform == "darwin": @task ...`
 
         `progress=False` marks a task whose duration has no rhyme or
         reason (a REPL, a watcher, a network fetch): any run containing it
@@ -202,19 +175,12 @@ class Group:
             # but the pair is redundant, and saying so keeps the two
             # concepts distinct: "never times" vs "never ends".
             pass
-        reqs = (requires,) if isinstance(requires, str) else tuple(requires)
 
         def register(fn: Task) -> Task:
             key = _cli_name(name or fn.__name__)
             self._claim(key)
             fn._footman_pre = list(pre)  # type: ignore[attr-defined]
             fn._footman_post = list(post)  # type: ignore[attr-defined]
-            if reqs:
-                fn._footman_requires = reqs  # type: ignore[attr-defined]
-            if when is not True:
-                fn._footman_when = when  # type: ignore[attr-defined]
-            if reason:
-                fn._footman_reason = reason  # type: ignore[attr-defined]
             if not progress:
                 fn._footman_progress = False  # type: ignore[attr-defined]
             if infinite:
@@ -403,34 +369,103 @@ def task_confirm(fn: Task) -> str:
     return getattr(fn, "_footman_confirm", "")
 
 
-def availability(fn: Task) -> str | None:
-    """The reason a task is unavailable here, or `None` if it can run.
+Check = Callable[[], str | None]
+"""One availability gate: the reason it fails, or `None` when it passes."""
 
-    `requires` modules are checked with `find_spec` (no import of the module
-    itself, though a dotted name imports its parent packages); a callable
-    `when` is evaluated *live* — never from the cached manifest — so
-    `DOCKER_HOST=… fm up` works the moment the environment does. A predicate
-    that raises reads as unavailable with the exception named (a broken
-    predicate must not grant availability); likewise a `requires` parent whose
-    import raises reads as unavailable, never a crash.
+
+def _gate(check: Check) -> Callable[[Task], Task]:
+    """Stack *check* onto a task's availability gates, read live by `availability`."""
+
+    def decorate(fn: Task) -> Task:
+        fn._footman_checks = [  # type: ignore[attr-defined]
+            *getattr(fn, "_footman_checks", ()),
+            check,
+        ]
+        return fn
+
+    return decorate
+
+
+def requires(
+    predicate: Callable[[], object], *, reason: str = ""
+) -> Callable[[Task], Task]:
+    """Gate a task on a live *predicate* — available only while it is truthy.
+
+    The generic gate the three specialisations build on. A predicate that
+    raises reads as unavailable, the exception named:
+
+    ```python
+    @task
+    @requires(lambda: Path("config.toml").exists(), reason="needs config.toml")
+    def publish(): ...
+    ```
     """
-    custom = getattr(fn, "_footman_reason", "")
 
-    missing = [m for m in getattr(fn, "_footman_requires", ()) if not _importable(m)]
-    if missing:
-        return custom or f"requires {', '.join(missing)}"
-
-    when = getattr(fn, "_footman_when", True)
-    if when is True:
-        return None
-    reason = custom or "condition not met"
-    if callable(when):
+    def check() -> str | None:
         try:
-            ok = bool(when())
+            ok = predicate()
         except Exception as exc:
-            return f"{reason} (when() raised {type(exc).__name__}: {exc})"
-        return None if ok else reason
-    return None if when else reason
+            detail = f"{type(exc).__name__}: {exc}"
+            return f"{reason} ({detail})" if reason else detail
+        return None if ok else (reason or "unavailable here")
+
+    return _gate(check)
+
+
+def requires_dep(*modules: str, reason: str = "") -> Callable[[Task], Task]:
+    """Gate a task on Python *modules* being importable (`find_spec`, no import).
+
+    Keep the real `import` in the body; this only checks availability, so a
+    missing optional dependency lists as a clean reason, never an import crash.
+    """
+
+    def check() -> str | None:
+        missing = [m for m in modules if not _importable(m)]
+        if not missing:
+            return None
+        return reason or f"requires {', '.join(missing)}"
+
+    return _gate(check)
+
+
+def requires_tool(*commands: str, reason: str = "") -> Callable[[Task], Task]:
+    """Gate a task on command-line tools being on `PATH` (`shutil.which`)."""
+
+    def check() -> str | None:
+        missing = [c for c in commands if shutil.which(c) is None]
+        if not missing:
+            return None
+        return reason or f"requires {', '.join(missing)} on PATH"
+
+    return _gate(check)
+
+
+def requires_env(*names: str, reason: str = "") -> Callable[[Task], Task]:
+    """Gate a task on environment variables being set (`in os.environ`)."""
+
+    def check() -> str | None:
+        missing = [v for v in names if v not in os.environ]
+        if not missing:
+            return None
+        return reason or f"set {', '.join(missing)}"
+
+    return _gate(check)
+
+
+def availability(fn: Task) -> str | None:
+    """The reason(s) a task is unavailable here, or `None` if it can run.
+
+    Every `@requires` gate on the task is evaluated **live** — never from the
+    cached manifest, so `DOCKER_HOST=… fm up` works the moment the environment
+    does — and **all** failures are collected, each in its own words, so a task
+    gated on both a missing tool and a missing variable says both. A gate whose
+    predicate raises reads as unavailable with the exception named, scoped to
+    that one gate.
+    """
+    reasons = [
+        r for check in getattr(fn, "_footman_checks", ()) if (r := check()) is not None
+    ]
+    return "; ".join(reasons) if reasons else None
 
 
 def _as_fn(t: TaskView | Task) -> Task:
@@ -481,8 +516,7 @@ class TaskView:
 
     def disable(self, reason: str) -> None:
         """Mark the task unavailable — listed with *reason*, refused if run."""
-        self.fn._footman_when = lambda: False  # type: ignore[attr-defined]
-        self.fn._footman_reason = reason  # type: ignore[attr-defined]
+        _gate(lambda: reason)(self.fn)
 
 
 class Tasks:

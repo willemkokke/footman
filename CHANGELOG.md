@@ -59,6 +59,17 @@ versions may include breaking changes.
   edits (`add_pre`, `add_post`, `disable`) each task through a defined interface,
   never footman's private attributes. Hooks run in cascade order — root's first,
   the folder nearest your cwd last, each seeing the previous edits.
+- **Availability by `@requires` decorators.** Task availability moved from
+  `@task(when=/requires=/reason=)` to stacked decorators: `@requires_dep` (a
+  Python module importable), `@requires_tool` (a command on `PATH`),
+  `@requires_env` (an environment variable set), and the generic `@requires`
+  (a live predicate) they build on. Each carries its own `reason=`, so a task
+  gated on both a missing package and a missing variable can say *both* — and
+  `availability()` now collects **every** failing gate instead of stopping at
+  the first, each in its own words. Gates are still re-checked live on every
+  run, and a failing one lists the task with its reason rather than hiding it.
+  **Breaking (pre-1.0):** `@task`'s `when=`, `requires=`, and `reason=` are
+  removed; stack the decorators above `@task` instead.
 
 ## [0.17.0] — 2026-07-22
 
