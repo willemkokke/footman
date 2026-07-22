@@ -36,6 +36,15 @@ class TasksImportError(Exception):
         super().__init__(f"{path}: {type(original).__name__}: {original}")
 
 
+class FinalizeError(Exception):
+    """A `@finalize` hook raised while editing the discovered tree."""
+
+    def __init__(self, name: str, original: BaseException) -> None:
+        self.name = name
+        self.original = original
+        super().__init__(f"@finalize {name!r}: {type(original).__name__}: {original}")
+
+
 def _import_file(path: Path, index: int) -> Group:
     """Import *path* into a fresh registry and return the populated tree."""
     registry.reset()
@@ -123,15 +132,28 @@ def load_tree(files: list[Path], base: Group | None = None) -> Group:
     exactly as nearer cascade files win over farther ones.
     """
     merged = base if base is not None else Group("root")
+    finalizers: list[registry.Finalizer] = []
     try:
         for index, path in enumerate(files):
             tree = _import_file(path, index)
             _overlay(merged, tree, str(path.parent))
+            # Collect each file's @finalize hooks in cascade order, before the
+            # next _import_file resets the registry.
+            finalizers.extend(tree.finalizers)
     finally:
         # Leave no global state behind — even when a file registered some tasks
         # and then raised, which would otherwise strand ghost tasks in
         # registry.root for the rest of the process (F62).
         registry.reset()
+    # Run the hooks on the fully-merged tree, cascade order (root first, the
+    # folder nearest cwd last), each seeing the previous edits — so a subfolder
+    # refines what root did. Discovery-time, so the edits reach the manifest.
+    view = registry.Tasks(merged)
+    for run in finalizers:
+        try:
+            run(view)
+        except Exception as exc:  # a bad hook names itself, never a bare traceback
+            raise FinalizeError(getattr(run, "__name__", repr(run)), exc) from exc
     return merged
 
 

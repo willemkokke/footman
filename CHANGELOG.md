@@ -40,6 +40,18 @@ versions may include breaking changes.
   the rest); a custom body is the escape hatch. A positional parameter on a
   default is a load-time error, because a bare word after a group names a child.
   The group tab-completes and self-documents like a first-class command.
+- **Discovery hooks (`@finalize`).** A function decorated `@footman.finalize`
+  runs once on the fully-merged task tree, after the whole `tasks.py` cascade is
+  assembled but before dispatch — footman's `pytest_collection_modifyitems`. Use
+  it to edit the tree in bulk: add a `pre` to every task whose name matches a
+  pattern, switch a set of tasks off by policy, and so on. Because it runs at
+  discovery the edits are part of the plan — an added `pre` runs and shows in
+  `--dry-run`, a disabled task drops from listings — not a runtime surprise. The
+  hook is handed a `Tasks` view of the tree; iterate it or index it by
+  command-line name for a `TaskView` that reads (`pre`, `post`, `disabled`) and
+  edits (`add_pre`, `add_post`, `disable`) each task through a defined interface,
+  never footman's private attributes. Hooks run in cascade order — root's first,
+  the folder nearest your cwd last, each seeing the previous edits.
 
 ## [0.17.0] — 2026-07-22
 

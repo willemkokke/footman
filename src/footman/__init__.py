@@ -55,7 +55,10 @@ if TYPE_CHECKING:
     from footman.params import nosplit as nosplit
     from footman.params import suggest as suggest
     from footman.registry import Group as Group
+    from footman.registry import Tasks as Tasks
+    from footman.registry import TaskView as TaskView
     from footman.registry import capture as capture
+    from footman.registry import finalize as finalize
     from footman.registry import group as group
     from footman.registry import task as task
     from footman.testing import Result as Result
@@ -78,6 +81,8 @@ __all__ = [
     "Result",
     "RunFailed",
     "Runner",
+    "TaskView",
+    "Tasks",
     "__version__",
     "ask",
     "between",
@@ -89,6 +94,7 @@ __all__ = [
     "env",
     "exists",
     "fetch",
+    "finalize",
     "forward",
     "group",
     "include",
@@ -131,7 +137,7 @@ def main() -> None:
 def __getattr__(name: str) -> object:
     # Lazy re-export: `from footman import task, group` works without paying the
     # registry import on a bare `import footman` (the completion hot path).
-    if name in ("task", "group", "Group", "capture"):
+    if name in ("task", "group", "Group", "capture", "finalize", "Tasks", "TaskView"):
         from footman import registry
 
         return getattr(registry, name)
