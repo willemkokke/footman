@@ -320,8 +320,19 @@ def _maybe_refresh(path: str, data: dict) -> None:
     _spawn_refresh()
 
 
-def _spawn_refresh() -> None:
-    cmd = [sys.executable, "-c", "from footman import _refresh; _refresh.refresh_cwd()"]
+def _spawn_refresh(override: str | None = None) -> None:
+    # override set → rebuild that one -f file's (cwd, file) manifest; else the
+    # cwd cascade. The path rides as an argv word (not baked into the -c script),
+    # so a path with spaces or quotes needs no escaping.
+    if override:
+        script = (
+            "import sys; from footman import _refresh; "
+            "_refresh.refresh_source(sys.argv[1])"
+        )
+        cmd = [sys.executable, "-c", script, override]
+    else:
+        script = "from footman import _refresh; _refresh.refresh_cwd()"
+        cmd = [sys.executable, "-c", script]
     null = subprocess.DEVNULL
     try:
         if os.name == "nt":
@@ -339,17 +350,23 @@ def _spawn_refresh() -> None:
         return  # a background refresh must never break completion
 
 
-def _cold_build(manifest: str) -> dict | None:
-    """Build the cwd manifest once for a cold cache, then load it.
+def _cold_build(manifest: str, override: str | None) -> dict | None:
+    """Build a cold-cache manifest once, then load it.
 
     The first <kbd>Tab</kbd> in a fresh directory has nothing cached. Rather than
     answer empty, spawn the same builder a real run uses and wait — bounded — for
-    it to land, then serve it (now cached for next time). Import-free: the hot
-    path spawns rather than imports. A slow `tasks.py` degrades to empty, and
-    because the build was detached it still finishes for the next TAB, so no
-    keystroke ever hangs on it.
+    it to land, then serve it (now cached for next time). *override* picks the
+    tree: a finished `-f <file>` builds that file's (cwd, file) manifest, else the
+    cwd cascade. Import-free on the hot path: it spawns rather than imports. A
+    slow `tasks.py` degrades to empty, and because the build was detached it still
+    finishes for the next TAB, so no keystroke ever hangs on it.
     """
-    _spawn_refresh()
+    if override is not None:
+        from pathlib import Path
+
+        if not Path(override).expanduser().is_file():
+            return None  # a still-being-typed or missing -f value: nothing to build
+    _spawn_refresh(override)
     deadline = time.monotonic() + _COLD_TIMEOUT
     while time.monotonic() < deadline:
         time.sleep(0.03)
@@ -477,10 +494,10 @@ def complete_cli(args: list[str]) -> int:
 
     data = _load_manifest(manifest)
     if data is None or not isinstance(data.get("tree"), dict):
-        # Cold cache: rather than answer empty, build the cwd manifest once
-        # (bounded) and serve it, so the first TAB in a fresh directory is
-        # accurate. An -f cold cache waits for its first real run.
-        data = _cold_build(manifest) if derived and override is None else None
+        # Cold cache: rather than answer empty, build the manifest once (bounded)
+        # and serve it, so the first TAB in a fresh directory is accurate — for
+        # the cwd cascade and for a finished `-f <file>` alike.
+        data = _cold_build(manifest, override) if derived else None
         if not isinstance(data, dict) or not isinstance(data.get("tree"), dict):
             return 0  # cold and couldn't build in time — stay silent and fast
     out = complete(data["tree"], args)
