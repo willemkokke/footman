@@ -497,6 +497,17 @@ ninja = Tool("ninja")
 pytest = Tool("pytest", in_process=True, entry="pytest:main")
 python = Tool("python", path=_sys.executable)
 
+# The shells footman autocompletes for, invoked to run a command *string*:
+# `tools.bash("echo $X | grep y")` runs `bash -c "…"`, so pipes, redirects,
+# globbing and `$VAR` all work — the deliberate "I want a shell" escape hatch,
+# where `run(...)` stays shell-free. `-c` is the run-a-string flag for every
+# one of them (pwsh takes it as an alias for -Command).
+bash = Tool("bash", "-c")
+zsh = Tool("zsh", "-c")
+fish = Tool("fish", "-c")
+pwsh = Tool("pwsh", "-c")
+nu = Tool("nu", "-c")
+
 
 def __getattr__(name: str) -> Tool:
     # Any executable is a tool: `tools.terraform("plan")` needs no declaration.

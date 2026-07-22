@@ -65,6 +65,20 @@ def test_single_letter_kwargs_are_short_flags():
     assert cmd == "pytest-bin -q -k markers"
 
 
+def test_shell_tools_run_a_command_string_through_the_shell():
+    # `tools.bash("cmd")` runs `bash -c cmd` — a real shell, so pipes work.
+    assert _one(lambda: tools.bash("echo hi | cat")) == "bash -c 'echo hi | cat'"
+    assert _one(lambda: tools.nu("ls | length")) == "nu -c 'ls | length'"
+
+
+def test_manual_source_driver_is_never_extracted():
+    from footman import _drivers
+
+    bash = _drivers.find("bash")
+    assert bash is not None and bash.source == "manual"
+    assert _drivers.extract(bash).verbs == ()  # hand-written stub, never read
+
+
 def test_trailing_underscore_escapes_keywords():
     assert _one(lambda: tools.bun.add("left-pad", global_=True)) == (
         "bun add left-pad --global"

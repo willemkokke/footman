@@ -155,6 +155,8 @@ def sync(
     for driver in _drivers.DRIVERS:
         if only and driver.key != only:
             continue
+        if driver.source == "manual":
+            continue  # hand-written stub — never extracted or overwritten
         if not _drivers.installed(driver):
             skipped.append(driver.key)
             continue
@@ -185,6 +187,8 @@ def audit(
     for driver in _drivers.DRIVERS:
         if only and driver.key != only:
             continue
+        if driver.source == "manual":
+            continue  # hand-written stub — nothing to compare against
         if not _drivers.installed(driver):
             skipped.append(driver.key)
             continue

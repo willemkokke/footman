@@ -287,6 +287,15 @@ DRIVERS: tuple[Driver, ...] = (
         provision=Provision(kind="python", package="3.13"),
         url="https://docs.python.org/3/using/cmdline.html",
     ),
+    # The shells footman autocompletes for. Their stubs are hand-written (a
+    # `source="manual"` driver is listed and paged but never extracted or
+    # re-synced): what matters is `<shell>("command")` -> `<shell> -c command`,
+    # not the shell binary's own hundred flags.
+    Driver("bash", source="manual", url="https://www.gnu.org/software/bash/"),
+    Driver("zsh", source="manual", url="https://www.zsh.org/"),
+    Driver("fish", source="manual", url="https://fishshell.com/"),
+    Driver("pwsh", source="manual", url="https://learn.microsoft.com/powershell/"),
+    Driver("nu", source="manual", url="https://www.nushell.sh/"),
 )
 
 _VERSION = re.compile(r"\b(\d+\.\d+(?:\.\d+)?(?:[-.][A-Za-z0-9]+)*)\b")
