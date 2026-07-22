@@ -79,6 +79,16 @@ def check(): ...
 - `fm --fail-fast check` overrides it for this run.
 - A task that declares nothing gets the built-in fail-fast.
 
+The policy is **scoped per subtree**, not run-wide. A keep-going gate keeps its
+own prerequisites going with it, while an independent task in the same run keeps
+its own policy — so `fm check deploy`, with `check` keep-going and `deploy`
+fail-fast, surfaces every `check` failure *and* still bails `deploy` on the first
+one. A command-line `-k`/`--fail-fast` overrides every scope at once; a task's
+own (or `.opts()`-set) policy always wins over one inherited from a gate above
+it, so an explicit fail-fast prerequisite stays a fail-fast boundary. The kill is
+scoped too: a failure reaps the fail-fast subprocess trees still in flight but
+leaves a keep-going task's child running.
+
 Three escape hatches for the kill:
 
 - `@task(atomic=True)` opts a task's subprocesses out — they run to completion,
@@ -109,9 +119,8 @@ It takes **policy, not parameters**. A task's own arguments go in the call; the
 options ride beside it — `deploy.opts(atomic=True)("prod")` — the same split
 `tools.*` draw with their `.opts()`. Passing a task parameter to `.opts()` is a
 taught error. A runnable group has `.opts()` too, riding its default action:
-`pre=[lint.opts(keep_going=True)]`. Keep-going resolves across the whole
-dependency graph, so an opted (or declared) `keep_going` on a prerequisite
-counts, not only on a task named in the chain.
+`pre=[lint.opts(keep_going=True)]` scopes keep-going to that prerequisite's
+subtree (see per-subtree scoping above).
 
 An opted reference with a *different* policy is a distinct prerequisite from a
 bare one — a different policy is a different run, so both appear in the graph —

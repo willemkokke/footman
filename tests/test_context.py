@@ -420,7 +420,14 @@ def test_windows_string_commands_are_not_shlex_split(monkeypatch):
     calls = {}
 
     def fake_run(
-        argv, env, cwd, capture, encoding="utf-8", killable=True, isolate=True
+        argv,
+        env,
+        cwd,
+        capture,
+        encoding="utf-8",
+        killable=True,
+        isolate=True,
+        keep_going=False,
     ):
         calls["argv"] = argv
         return 0, ""

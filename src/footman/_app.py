@@ -1102,7 +1102,7 @@ def _run_tree(
             reg,
             segments,
             sequential=sequential,
-            keep_going=schedule.resolve_keep_going(reg, segments, cli_keep_going),
+            keep_going=cli_keep_going,  # None = unspecified; run_plan scopes per node
             capture=json_mode,
             ctx_config=ctx_config,
             estimate=est,

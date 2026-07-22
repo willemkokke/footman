@@ -9,6 +9,17 @@ versions may include breaking changes.
 
 ### Added
 
+- **Per-subtree keep-going scoping.** The failure policy is now resolved *per
+  node*, not run-wide: a keep-going gate keeps its own prerequisites going with
+  it, while an independent task in the same run keeps its own policy. So
+  `fm check deploy` — `check` keep-going, `deploy` fail-fast — surfaces every
+  `check` failure *and* still bails `deploy` on the first, where before one
+  task's `keep_going=True` forced the whole run to keep going. A command-line
+  `-k`/`--fail-fast` still overrides every scope at once, and a task's own (or
+  `.opts()`-set) policy wins over one inherited from a gate above it. True
+  fail-fast reaps only the *fail-fast* subprocess trees still in flight on a
+  failure, so a keep-going task's long-running child keeps going while a doomed
+  fail-fast branch dies at once.
 - **Per-use option overrides — `.opts()`.** A task or runnable group carries an
   `.opts(...)` that overrides its orchestration options *for one use* without
   touching the registered task: `pre=[fmt.opts(atomic=True)]`,

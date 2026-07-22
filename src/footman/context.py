@@ -114,6 +114,10 @@ class Context:
     atomic: bool = False
     """`@task(atomic=True)`: this task's subprocesses opt out of fail-fast's
     kill — they run to completion so a mid-write can't be truncated."""
+    keep_going: bool = False
+    """This task's resolved (per-subtree) failure policy, tagged onto the
+    subprocesses it spawns so a fail-fast failure elsewhere reaps only the
+    fail-fast trees in a mixed run, sparing a keep-going task's."""
     in_task: bool = False
     """True while a task *body* runs (the scheduler sets it around the call),
     so the interactive primitives tell a guarded mid-body call from the
@@ -757,9 +761,12 @@ def _run_callable(
 # Live subprocesses footman has spawned, so fail-fast can terminate the ones
 # still running when a sibling fails. A run in-process (a `tools` entry point,
 # a callable) registers nothing — there is no child to kill, and it finishes.
-_live_children: set[subprocess.Popen[str]] = set()
+# Each child records its task's keep-going policy, so a fail-fast failure can
+# reap the fail-fast trees in a mixed run while a keep-going tree runs on.
+_live_children: dict[subprocess.Popen[str], bool] = {}  # proc -> keep_going
 _children_lock = threading.Lock()
-_aborting = threading.Event()  # set once fail-fast has fired for this run
+_aborting = threading.Event()  # set once *any* termination (fail-fast/Ctrl-C) fired
+_abort_full = threading.Event()  # set when the abort spares nothing (Ctrl-C, error)
 
 
 def _kill_tree(proc: subprocess.Popen[str], *, force: bool) -> None:
@@ -795,45 +802,56 @@ def _kill_tree(proc: subprocess.Popen[str], *, force: bool) -> None:
             os.kill(proc.pid, sig)
 
 
-def _register_child(proc: subprocess.Popen[str]) -> None:
-    # Under the one lock: adding to the set and reading the abort flag can't
-    # interleave with `terminate_live_children` setting it and snapshotting — so
+def _register_child(proc: subprocess.Popen[str], keep_going: bool = False) -> None:
+    # Under the one lock: recording the child and reading the abort flags can't
+    # interleave with `terminate_live_children` setting them and snapshotting — so
     # a child is killed either by that sweep or by this check, never missed.
     with _children_lock:
-        _live_children.add(proc)
+        _live_children[proc] = keep_going
         aborting = _aborting.is_set()
-    if aborting:
-        _kill_tree(proc, force=False)  # spawned after abort fired → stop it at once
+        full = _abort_full.is_set()
+    # A child spawned after an abort fired self-terminates, so the doomed run
+    # can't outrun the kill — but a keep-going child spawned after a *fail-fast*
+    # abort (not a full Ctrl-C) is spared, matching the per-subtree policy.
+    if aborting and (full or not keep_going):
+        _kill_tree(proc, force=False)
 
 
 def _forget_child(proc: subprocess.Popen[str]) -> None:
     with _children_lock:
-        _live_children.discard(proc)
+        _live_children.pop(proc, None)
 
 
 def reset_abort() -> None:
-    """Clear the fail-fast abort flag at the start of a run."""
+    """Clear the abort flags at the start of a run."""
     _aborting.clear()
+    _abort_full.clear()
 
 
-def terminate_live_children(grace: float = 2.0) -> None:
-    """Terminate every still-running spawned subprocess *tree* — fail-fast's teeth.
+def terminate_live_children(grace: float = 2.0, *, failfast_only: bool = False) -> None:
+    """Terminate still-running spawned subprocess *trees* — fail-fast's teeth.
+
+    With *failfast_only* (a per-node fail-fast failure) only fail-fast children
+    are reaped, so a keep-going task in a mixed run keeps running; the default
+    (a full abort — Ctrl-C, an internal error) reaps everything.
 
     Each killable child was spawned in its own process group, so the SIGTERM
     (POSIX) / `taskkill /T` (Windows) here reaches its grandchildren too; the
     `communicate()` blocking each task's thread then returns and the task
-    unwinds. The abort flag is *latched*, so a subprocess a still-running task
-    spawns *after* this fires self-terminates on registration (the doomed run
-    can't outrun the kill). A group that ignores SIGTERM is SIGKILLed after
-    *grace* seconds by a daemon watcher — a hung tool can't wedge the run.
-    In-process runs register nothing, so they finish on their own — un-killable
-    for free, which is the intended behaviour. This is also the Ctrl-C reaper:
-    a group-isolated child no longer receives the terminal's SIGINT, so the
-    abort paths call this to kill in-flight work by hand.
+    unwinds. The abort is *latched*, so a subprocess a still-running task spawns
+    *after* this fires self-terminates on registration (the doomed run can't
+    outrun the kill; `_register_child` applies the same failfast_only sparing). A
+    group that ignores SIGTERM is SIGKILLed after *grace* seconds by a daemon
+    watcher — a hung tool can't wedge the run. In-process runs register nothing,
+    so they finish on their own — un-killable for free, which is the intended
+    behaviour. This is also the Ctrl-C reaper: a group-isolated child no longer
+    receives the terminal's SIGINT, so the abort paths call this by hand.
     """
     with _children_lock:
         _aborting.set()
-        procs = list(_live_children)
+        if not failfast_only:
+            _abort_full.set()
+        procs = [p for p, kg in _live_children.items() if not (failfast_only and kg)]
     for proc in procs:
         _kill_tree(proc, force=False)
     if not procs:
@@ -856,6 +874,7 @@ def _run_subprocess(
     encoding: str | None = "utf-8",
     killable: bool = True,
     isolate: bool = True,
+    keep_going: bool = False,
 ) -> tuple[int, str]:
     # Dev tools (pytest, ruff, git, uv) emit UTF-8 regardless of the OS code
     # page, so decode as UTF-8 by default rather than the locale encoding
@@ -895,7 +914,7 @@ def _run_subprocess(
     # never kills it, so a mid-write (a formatter rewriting a file) can't be
     # truncated. It runs to completion; the run waits for it.
     if killable:
-        _register_child(proc)
+        _register_child(proc, keep_going)
     try:
         out, err = proc.communicate()
     finally:
@@ -1044,6 +1063,9 @@ def run(
             # An interactive task owns the real terminal: keep its child in
             # footman's group so it keeps its controlling tty (and its Ctrl-C).
             isolate=not ctx.atomic and not ctx.interactive,
+            # Tag the child with its task's policy: a fail-fast failure elsewhere
+            # reaps this tree only if the task is fail-fast, not keep-going.
+            keep_going=ctx.keep_going,
         )
     duration = time.perf_counter() - start
     ctx.steps.append(StepResult(label, code, output, duration, raw=raw))

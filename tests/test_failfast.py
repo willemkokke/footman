@@ -51,6 +51,127 @@ def test_fail_fast_is_a_recognised_global():
     assert globals_ == ["--fail-fast"] and i == 1
 
 
+# --- per-subtree scoping ------------------------------------------------------
+
+
+def _mixed(reg):
+    """A keep-going gate (`check`) and an independent fail-fast task (`deploy`)."""
+
+    @reg.task
+    def lint(): ...
+
+    @reg.task
+    def unit(): ...
+
+    @reg.task(keep_going=True, pre=[lint, unit])
+    def check(): ...
+
+    @reg.task
+    def build(): ...
+
+    @reg.task(pre=[build])  # declares nothing -> built-in fail-fast
+    def deploy(): ...
+
+
+def test_scope_keep_going_isolates_a_gate_from_a_fail_fast_task():
+    from footman.schedule import _build_dag, _scope_keep_going
+
+    reg, tree = _tree(_mixed)
+    nodes = _build_dag(reg, _segs(tree, "check deploy"))
+    _scope_keep_going(nodes, None)  # no CLI override -> per-node
+    kg = {n.seg.task: n.keep_going for n in nodes}
+    # The gate and its whole subtree keep going...
+    assert kg["check"] and kg["lint"] and kg["unit"]
+    # ...while the independent fail-fast task and its subtree do not.
+    assert not kg["deploy"] and not kg["build"]
+
+
+def test_cli_choice_forces_the_policy_run_wide_over_scope():
+    from footman.schedule import _build_dag, _scope_keep_going
+
+    reg, tree = _tree(_mixed)
+    segs = _segs(tree, "check deploy")
+
+    nodes = _build_dag(reg, segs)
+    _scope_keep_going(nodes, False)  # --fail-fast: even the keep-going gate bails
+    assert not any(n.keep_going for n in nodes)
+
+    nodes = _build_dag(reg, segs)
+    _scope_keep_going(nodes, True)  # -k: everything keeps going
+    assert all(n.keep_going for n in nodes)
+
+
+def test_mixed_chain_gate_surfaces_siblings_while_fail_fast_task_bails():
+    import time
+
+    from footman.schedule import run_plan
+
+    ran = []
+    reg = Group("root")
+
+    @reg.task
+    def lint():
+        ran.append("lint")
+        raise SystemExit(1)  # fails immediately
+
+    @reg.task
+    def unit():
+        ran.append("unit")  # check's other prerequisite
+
+    @reg.task(keep_going=True, pre=[lint, unit])
+    def check(): ...
+
+    @reg.task
+    def build():
+        time.sleep(0.2)  # slow, so deploy can't start before lint has failed
+        ran.append("build")
+
+    @reg.task(pre=[build])  # fail-fast
+    def deploy():
+        ran.append("deploy")
+
+    tree = manifest.build_manifest(reg)["tree"]
+    segs = split_chain(tree, ["check", "deploy"])[1]
+    run_plan(reg, segs, sequential=False)
+    assert "unit" in ran  # the keep-going gate surfaced its sibling despite lint
+    assert "deploy" not in ran  # the fail-fast task bailed on the failure
+
+
+def test_fail_fast_reaps_only_the_fail_fast_in_flight_tree_in_a_mixed_run(tmp_path):
+    import time
+
+    from footman.context import run
+    from footman.schedule import run_plan
+
+    kept = tmp_path / "kept"
+    killed = tmp_path / "killed"
+    sleep = [sys.executable, "-c", "import time; time.sleep(0.6)"]
+
+    reg = Group("root")
+
+    @reg.task(keep_going=True)
+    def keeper():
+        run(sleep)
+        kept.write_text("done")  # keep-going: its subprocess is spared
+
+    @reg.task
+    def victim():
+        run(sleep)
+        killed.write_text("done")  # fail-fast: reaped when boom fails
+
+    @reg.task
+    def boom():
+        raise SystemExit(1)
+
+    tree = manifest.build_manifest(reg)["tree"]
+    segs = split_chain(tree, ["keeper", "victim", "boom"])[1]
+    started = time.perf_counter()
+    run_plan(reg, segs, sequential=False)
+    assert kept.exists()  # the keep-going tree ran to completion
+    assert not killed.exists()  # the fail-fast tree was reaped on the failure
+    assert time.perf_counter() - started < 4  # keeper's 0.6s, not anything long
+
+
 def test_fail_fast_kills_an_in_flight_sibling_subprocess(tmp_path):
     import sys
     import time
