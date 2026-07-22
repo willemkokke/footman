@@ -52,6 +52,19 @@ straight from the `footman` package (`from footman import task, run, App`).
 
 ::: footman.registry.capture
 
+## Editing the discovered tree
+
+`@finalize` runs a hook over the fully-merged cascade at discovery — see
+[Monorepos & config](monorepos.md#editing-the-discovered-tree). The hook is
+handed a `Tasks` view; iterating or indexing it yields a `TaskView` that reads
+and edits one task.
+
+::: footman.registry.finalize
+
+::: footman.registry.Tasks
+
+::: footman.registry.TaskView
+
 ## Custom CLI
 
 ::: footman.app.App
