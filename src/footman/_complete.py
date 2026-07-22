@@ -228,6 +228,15 @@ def complete(tree: dict, words: list[str]) -> list[str]:
     if seg.task is None:
         names = list(node["groups"]) + list(node["tasks"])
         out = [_describe(n, node) for n in names if n.startswith(partial)]
+        # A runnable group also offers its default action's flags/options, so
+        # `fm lint <TAB>` proposes `--fix` alongside the child names.
+        if "default" in node:
+            out += [
+                "--" + p["name"]
+                for p in node["default"]["params"]
+                if p["kind"] in ("flag", "option")
+                and ("--" + p["name"]).startswith(partial)
+            ]
         # fm's own global options bind before the first task, so offer them when
         # a flag is being typed at the root (`not prior` ⇒ nothing but globals
         # preceded). A bare `<TAB>` still lists only tasks — globals would be

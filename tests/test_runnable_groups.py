@@ -187,3 +187,15 @@ def test_forward_chains_through_a_group_used_as_a_prerequisite():
 
     drive(tasks, "check --fix")
     assert seen == {"python": True, "spelling": "ran", "test": "ran"}
+
+
+def test_completion_offers_the_default_flags_alongside_children():
+    from footman._complete import complete
+
+    reg = Group("root")
+    _surfaces(reg)  # lint with python/markdown/spelling + a fix default
+    tree = manifest.build_manifest(reg)["tree"]
+    offered = {c.split("\t")[0] for c in complete(tree, ["lint", ""])}
+    assert "--fix" in offered  # the default's flag
+    assert {"python", "markdown", "spelling"} <= offered  # and the children
+    assert complete(tree, ["lint", "--f"]) == ["--fix"]
