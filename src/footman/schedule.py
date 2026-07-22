@@ -24,6 +24,7 @@ from footman import _describe, _progress, context, executor
 from footman.registry import (
     Group,
     Task,
+    _Opted,
     is_infinite,
     is_interactive,
     keeps_going,
@@ -49,9 +50,27 @@ def _default_seg(fn: Task) -> Segment:
     return Segment(task=fn.__name__, path=[fn.__name__])
 
 
-def _as_task(dep: Task | Group) -> Task:
+def _dep_key(fn: Task) -> tuple[int, frozenset[tuple[str, Any]]]:
+    """The deduplication identity of a DAG dependency: its base task plus its
+    frozen option overrides. A bare task is simply "base with no overrides", so
+    it shares one uniform key shape with an `.opts()` reference — and an empty
+    `.opts()` (no override at all) collapses onto the bare task by construction,
+    with no int-vs-tuple asymmetry. Identical policies share a node (a shared
+    prerequisite still runs once); a genuinely different policy is a distinct
+    node. The override identity itself lives in `_Opted._dedup_key`."""
+    return fn._dedup_key() if isinstance(fn, _Opted) else (id(fn), frozenset())
+
+
+def _as_task(dep: Task | Group | _Opted) -> Task:
     """A `pre`/`post` dependency may name a runnable group; resolve it to the
-    group's default action so it runs (and fans out) like any other task."""
+    group's default action so it runs (and fans out) like any other task. An
+    `.opts()`-wrapped group resolves the same way, carrying its overrides onto
+    the default task."""
+    if isinstance(dep, _Opted):
+        base = dep._opted_base
+        if isinstance(base, Group):
+            return _Opted(_as_task(base), dep._opted_overrides)
+        return dep  # opts on a task is already a valid task reference
     if isinstance(dep, Group):
         if dep.default_task is None:
             raise ChainError(
@@ -71,9 +90,9 @@ def _build_dag(root: Group, segments: list[Segment]) -> list[_Node]:
     maps a task to the node its bare deps resolve to.
     """
     nodes: list[_Node] = []
-    dep_nodes: dict[int, _Node] = {}
+    dep_nodes: dict[object, _Node] = {}
     counter = count()
-    seen_explicit: set[int] = set()
+    seen_explicit: set[object] = set()
 
     def new_node(fn: Task, seg: Segment) -> _Node:
         node = _Node(fn, seg, next(counter))
@@ -81,10 +100,10 @@ def _build_dag(root: Group, segments: list[Segment]) -> list[_Node]:
         return node
 
     def add_dep(fn: Task) -> _Node:
-        node = dep_nodes.get(id(fn))
+        node = dep_nodes.get(_dep_key(fn))
         if node is None:
             node = new_node(fn, _default_seg(fn))
-            dep_nodes[id(fn)] = node
+            dep_nodes[_dep_key(fn)] = node
             _link(node)
         return node
 
@@ -126,17 +145,18 @@ def _build_dag(root: Group, segments: list[Segment]) -> list[_Node]:
 
     for seg in segments:
         fn = executor.resolve(root, seg.path)
-        existing = dep_nodes.get(id(fn))
-        if existing is not None and id(fn) not in seen_explicit:
+        key = _dep_key(fn)
+        existing = dep_nodes.get(key)
+        if existing is not None and key not in seen_explicit:
             # First explicit mention of a task already pulled in as a bare dep:
             # adopt this segment's args instead of creating a duplicate.
             existing.seg = seg
-            seen_explicit.add(id(fn))
+            seen_explicit.add(key)
             continue
         node = new_node(fn, seg)
         if existing is None:
-            dep_nodes[id(fn)] = node
-        seen_explicit.add(id(fn))
+            dep_nodes[key] = node
+        seen_explicit.add(key)
         _link(node)
 
     # Thread forwarded values in a second pass, dependents before their deps (the
@@ -241,17 +261,18 @@ def resolve_keep_going(root: Group, segments: list[Segment], cli: bool | None) -
 
     Run-wide for now: if any invoked task asks to keep going, the run does. A
     per-subtree policy (so a mixed chain honours each side) is a later step.
+
+    "Invoked" spans the whole DAG — chain tasks and their `pre`/`post`
+    prerequisites — so a declared `keep_going` on a prerequisite counts, and a
+    `.opts(keep_going=…)` on any reference overrides its declared default.
     """
     if cli is not None:
         return cli
-    for seg in segments:
-        try:
-            fn = executor.resolve(root, seg.path)
-        except (KeyError, IndexError):
-            continue
-        if keeps_going(fn) is True:
-            return True
-    return False
+    try:
+        nodes = _build_dag(root, segments)
+    except (KeyError, IndexError, ChainError):
+        return False  # a malformed chain surfaces its real error in run_plan
+    return any(keeps_going(n.fn) is True for n in nodes)
 
 
 def dag_wants_progress(root: Group, segments: list[Segment]) -> bool:
