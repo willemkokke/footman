@@ -1,5 +1,10 @@
 # Chaining & parallelism
 
+footman's **execution model** in one page: how a command line becomes a plan,
+what runs concurrently versus one at a time, and how you steer it. Independent
+tasks run in parallel by default; `-s`, `-j`, and `-k` control the concurrency,
+and a few rules decide when footman falls back to sequential.
+
 ## Chaining
 
 `fm format lint --fix test` runs three tasks from one line — duty's muscle
@@ -17,17 +22,29 @@ $ fm --dry-run format lint --fix test
 
 ## Parallel by default
 
-Independent tasks run **in parallel by default**. footman builds a dependency
-graph (a DAG — no cycles allowed, and a cycle is a taught error) from the
-chain and each task's declared dependencies, then runs everything that isn't
-waiting on something else concurrently. Tasks spend most of their life waiting
-on subprocesses — a `run()` call releases Python's interpreter lock while it
-waits — so threads give real wall-clock speedups without process isolation:
+Independent tasks run **in parallel by default** — that is the concurrency
+model. footman builds a dependency graph (a DAG — no cycles allowed, and a
+cycle is a taught error) from the chain and each task's declared dependencies,
+then runs everything that isn't waiting on something else concurrently. Tasks
+spend most of their life waiting on subprocesses — a `run()` call releases
+Python's interpreter lock while it waits — so threads give real wall-clock
+speedups without process isolation:
 
 ```sh
 fm a b c            # three 1s tasks -> ~1.0s, not 3.0s
 fm -s a b c         # -s/--sequential runs them one at a time -> ~3.0s
 ```
+
+Two flags size the concurrency, and they reach **both** engines — the scheduler
+and a `parallel()` inside a task body:
+
+- `-s/--sequential` runs one task at a time — no concurrency anywhere.
+- `-j/--jobs N` caps the width; unset, footman uses one less than your core
+  count, never below two.
+
+Set either permanently as `sequential` or `jobs` in `[tool.footman]`. A run
+stops on the first failure; `-k/--keep-going` runs every independent branch even
+if one fails, and a task whose prerequisite failed is skipped.
 
 !!! note "Output never interleaves"
 
@@ -94,7 +111,7 @@ footman never proceeds unasked.
 called inside an ordinary task they raise a taught error, because the prompt
 would be swallowed by the capture buffer or race a parallel sibling. A task that
 genuinely runs a wizard or a REPL declares itself interactive — it then owns the
-real terminal (uncaptured, sole stdio, run one at a time):
+real terminal, uncaptured, with sole stdio:
 
 ```python
 from footman import prompt, select, task
@@ -110,6 +127,11 @@ def scaffold():
 at run time, the case a flag can't cover. Two globals cover the rest: `--yes`
 auto-answers every confirm, and `--no-input` refuses to prompt (a required
 prompt errors instead).
+
+Because it owns the terminal, an interactive task can't share it with parallel
+siblings: **a run that contains one goes fully sequential** — every task, one at
+a time — and the live status line steps aside so its repaints can't scribble
+over a prompt. (It also can't run under `--json`.)
 
 ![Animated: fm scaffold prompts for a project name, then a numbered what-kind menu picked by number](_generated/shots/interactive-cast.svg)
 
@@ -127,15 +149,20 @@ def check(): ...
 def deploy(): ...
 ```
 
+This is the **declared** graph: static, so `--dry-run` and completion show it
+without running anything, and deduped by identity — a cycle in it is a taught
+error naming the loop. A dep is named by reference, so it runs with its
+**defaults**: a task used as a prerequisite needs every parameter defaulted (a
+required one errors with `missing required argument(s)`). To run a prerequisite
+with specific arguments, name it in the chain — `fm build --release deploy` runs
+`build --release` once, and `deploy`'s `pre=[build]` waits on that same run.
+
 ## Fan out from inside a task
 
 `parallel()` runs task functions — or no-argument lambdas, when you need to
-bind arguments — concurrently, waits, and fails if any fail. Under
-`-s/--sequential` it runs them one at a time instead: the flag means no
-concurrency anywhere, task bodies included. `-j/--jobs N` (or `jobs = N` in
-`[tool.footman]`) caps the width the same way, in both the scheduler and
-task bodies; unset, footman uses one less than your core count, never
-fewer than two.
+bind arguments — concurrently, waits, and fails if any fail. It honours the same
+`-s` and `-j` as the scheduler (one worker under `-s`), so concurrency stays
+controlled in one place:
 
 ```python
 from footman import task, parallel
@@ -145,8 +172,23 @@ def check():
     parallel(lambda: format(check=True), lint, typecheck, test)
 ```
 
-Tasks run stop-on-first-failure by default; `-k/--keep-going` runs every
-independent branch even if one fails.
+Unlike `pre`/`post`, a `parallel()` fan-out is **in-body** — footman can't see
+it without running the task. That is the trade: declared deps are static and
+show up in `--dry-run`; an in-body fan-out is dynamic — its shape can depend on
+a `run()`'s output — but opaque to the planner, which stops at the task body.
+Reach for declared deps when you want the plan to *see* the work, and
+`parallel()` when the fan-out has to be computed at run time.
+
+!!! note "Passing data between tasks"
+
+    Result data flows *within* a task — `run()` hands back its output, a called
+    function its return — and out of a `parallel()` fan-out through a shared
+    closure the thunks write to (they run in-process, so a captured list just
+    works). `parallel()` itself returns exit *codes*, not values, and the
+    declared graph carries no data between tasks: `pre`/`post` are ordering, not
+    a pipe.
+
+## Progress & the live status line
 
 A finished run reads as a receipt — mark, name, command, time — captured
 from a real terminal:
