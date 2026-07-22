@@ -77,6 +77,11 @@ class Driver:
     """A pre-bound verb: `tools.ruff_format` is `Tool("ruff", "format")`."""
     source: str = "auto"
     """`auto` prefers structure (click) and falls back to `--help`."""
+    shorts: str = "only"
+    """Short-option policy for the stub: `"none"` never keys on a short,
+    `"only"` (default) keys on one *when it is the option's sole spelling*
+    (python's `-m`, git's `-C`), and `"all"` also keys on a short that has a
+    long form. Read only from `--help`, never a man page (its prose is noisy)."""
     url: str = ""
     """The tool's home, for the reference page's table."""
     man: bool = False
@@ -338,6 +343,7 @@ def extract(driver: Driver) -> ToolSpec:
             in_process=in_process_capable(driver.name),
             flag=driver.help_flag,
             man=driver.man,
+            shorts=driver.shorts,
         )
     return _rebase(spec, driver.base) if driver.base else spec
 

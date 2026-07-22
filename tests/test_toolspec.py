@@ -292,6 +292,24 @@ def test_stub_escapes_backslashes_in_help_text():
     assert _stubgen._esc(r"a \.py$ b") == r"a \\.py$ b"
 
 
+def test_short_option_policy_modes():
+    text = (
+        "Options:\n"
+        "  -m, --message <msg>  the message\n"
+        "  -C <commit>          short-only, reuse the commit\n"
+    )
+    # "only" (default): a short-only `-C` keys on `C`; `-m, --message` on the
+    # long, `message` — not `m`.
+    only = flags(_toolhelp.parse_help(text))
+    assert "C" in only and "message" in only and "m" not in only
+    # "none": no short keyword at all — `-C` (no long) is dropped.
+    none = flags(_toolhelp.parse_help(text, shorts="none"))
+    assert "message" in none and "C" not in none and "m" not in none
+    # "all": also key on the short of a long-having option — `m` appears too.
+    every = flags(_toolhelp.parse_help(text, shorts="all"))
+    assert {"C", "message", "m"} <= set(every)
+
+
 def test_subcommands_are_read_from_their_own_section():
     found = _toolhelp.subcommands(SUBCOMMANDS)
     assert found["build"] == "Build the MkDocs documentation"
