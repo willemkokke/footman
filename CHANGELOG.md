@@ -7,6 +7,8 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+## [0.18.0] — 2026-07-22
+
 ### Added
 
 - **Tri-state failure policy and true fail-fast.** Keep-going is now three-state:
@@ -1180,7 +1182,8 @@ versions may include breaking changes.
 
 - Placeholder release claiming the `footman` name on PyPI. Not tagged in git.
 
-[Unreleased]: https://github.com/willemkokke/footman/compare/v0.17.0...HEAD
+[Unreleased]: https://github.com/willemkokke/footman/compare/v0.18.0...HEAD
+[0.18.0]: https://github.com/willemkokke/footman/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/willemkokke/footman/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/willemkokke/footman/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/willemkokke/footman/compare/v0.14.0...v0.15.0
