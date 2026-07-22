@@ -395,15 +395,19 @@ def check(fix: bool = False, contracts: bool = True):
         run("./verify-contracts.sh")
 ```
 
-Forwarding is deliberately manual. The two signatures are independent —
-this leaf added `--contracts`, which the root has never heard of — so
-automatic forwarding could only drop arguments silently or fail at run
-time — where spelling the call out shows you the mismatch as you type
-it. Being explicit also lets
-you *change* them: `inherited()(fix=False)` runs the root's gate without
-letting it rewrite files. And being an ordinary call, it finishes before
-your next line — `parallel(inherited(), extra_checks)` when you'd rather
-it didn't.
+Here the forwarding is spelled out on purpose. `inherited()` calls a task you
+*shadow*, and the two signatures are genuinely independent — this leaf added
+`--contracts`, which the root has never heard of — so you pass what you mean and
+can *change* it on the way through: `inherited()(fix=False)` runs the root's gate
+without letting it rewrite files. And being an ordinary call, it finishes before
+your next line — `parallel(inherited(), extra_checks)` when you'd rather it
+didn't.
+
+(For the other direction — threading a value *down* to a task's `pre`/`post`
+prerequisites or a runnable group's surfaces — the
+[`forward` marker](orchestration.md#forward-a-value-to-what-a-task-dispatches)
+does it declaratively. `inherited()` stays the explicit form for the case it's
+built for: calling the specific task you shadow, and choosing what it gets.)
 
 It chains all the way up: a mid-level `check` that calls `inherited()`
 reaches the root's, and the leaf's call reaches the mid's. Two commands

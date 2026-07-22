@@ -137,6 +137,27 @@ $ DEPLOY_ENV=prod fm deploy app.toml      # target == "prod"
   The task's own help stays the docstring's first line; `doc` is for the
   parameters.
 
+## Terse aliases, and forwarding
+
+A **bare** marker — one that takes no arguments — has a `Name[T]` shorthand, the
+way `Many[T]` reads better than `list[T]`:
+
+- `NoSplit[list[str]]` ≡ `Annotated[list[str], nosplit]`.
+- `Exists`, `IsFile`, `IsDir` ≡ `Annotated[Path, exists/isfile/isdir]` — bare,
+  no subscript, since the type is always `Path`: `def rm(target: Exists)`.
+- `Forward[T]` ≡ `Annotated[T, forward]`.
+
+Arg-taking markers (`suggest`, `between`, `env`, `check`, `doc`, `ask`) keep the
+full `Annotated[...]` form — their value can't ride in a type subscript.
+
+The `forward` marker threads a parameter's value to the tasks a task dispatches —
+its `pre`/`post` prerequisites and a runnable group's surfaces. It's an
+orchestration tool, covered in
+[Chaining & parallelism](orchestration.md#forward-a-value-to-what-a-task-dispatches).
+Markers compose by listing them: `Annotated[bool, ask("Fix?"), forward]` both
+prompts for the value and forwards it — one prompt at the top, the answer
+flowing down.
+
 ## Or just write a docstring
 
 footman reads the parameter docs you already write — Google, NumPy, and

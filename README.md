@@ -24,8 +24,11 @@ that compound: completion served from a cache instead of re-importing your
 project on every TAB (~15× faster, measured), eager type and choice
 validation with errors that teach, a DAG scheduler that runs independent
 tasks concurrently (the same four-step `check` lands ~4× sooner than duty
-or invoke, measured), a monorepo task cascade that merges a `tasks.py` per
-folder, and a first-party story for testing your tasks. The receipts live
+or invoke, measured) with true fail-fast that kills in-flight work on the
+first failure, runnable command groups and parameter forwarding that make
+composite commands like `fm lint` and `check` first-class, a monorepo task
+cascade that merges a `tasks.py` per folder, and a first-party story for
+testing your tasks. The receipts live
 in the [comparison](https://willemkokke.github.io/footman/comparison/) —
 every number reproducible from [`comparison/`](comparison/).
 
