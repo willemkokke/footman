@@ -20,6 +20,7 @@ class Python(Tool):
         S: _Flag = ...,
         V: _Flag = ...,
         W: _Value = ...,
+        X: _Value = ...,
         b: _Flag = ...,
         c: _Value = ...,
         check_hash_based_pycs: _Value = ...,
@@ -32,7 +33,6 @@ class Python(Tool):
         m: _Value = ...,
         q: _Flag = ...,
         s: _Flag = ...,
-        specific: _Value = ...,
         u: _Flag = ...,
         v: _Flag = ...,
         x: _Flag = ...,
@@ -43,34 +43,38 @@ class Python(Tool):
         """Run this verb.
 
         Args:
-            B: : don't write .pyc files on import; also PYTHONDONTWRITEBYTECODE=x.
-            E: : ignore PYTHON* environment variables (such as PYTHONPATH).
-            I: : isolate Python from the user's environment (implies -E and -s).
-            O: : remove assert and __debug__-dependent statements; add .opt-1 before
+            B: don't write .pyc files on import; also PYTHONDONTWRITEBYTECODE=x.
+            E: ignore PYTHON* environment variables (such as PYTHONPATH).
+            I: isolate Python from the user's environment (implies -E and -s).
+            O: remove assert and __debug__-dependent statements; add .opt-1 before
                 .pyc extension; also PYTHONOPTIMIZE=x.
-            OO: : do -O changes and also discard docstrings; add .opt-2 before .pyc
+            OO: do -O changes and also discard docstrings; add .opt-2 before .pyc
                 extension.
-            P: : don't prepend a potentially unsafe path to sys.path; also
+            P: don't prepend a potentially unsafe path to sys.path; also
                 PYTHONSAFEPATH.
-            S: : don't imply 'import site' on initialization.
-            V: : print the Python version number and exit (also --version) when
-                given twice, print more information about the build.
-            W: also PYTHONWARNINGS=arg.
-            b: : issue warnings about converting bytes/bytearray to str and
-                comparing bytes/bytearray with str or bytes with int.
+            S: don't imply 'import site' on initialization.
+            V: print the Python version number and exit (also --version) when given
+                twice, print more information about the build.
+            W: warning control; arg is action:message:category:module:lineno also
+                PYTHONWARNINGS=arg.
+            X: set implementation-specific option.
+            b: issue warnings about converting bytes/bytearray to str and comparing
+                bytes/bytearray with str or bytes with int.
+            c: program passed in as string (terminates option list).
             check_hash_based_pycs: control how Python invalidates hash-based .pyc
                 files.
-            d: : turn on parser debugging output (for experts only, only works on
+            d: turn on parser debugging output (for experts only, only works on
                 debug builds); also PYTHONDEBUG=x.
-            h: : print this help message and exit (also -? or --help).
-            i: : inspect interactively after running script; forces a prompt even if
+            h: print this help message and exit (also -? or --help).
+            i: inspect interactively after running script; forces a prompt even if
                 stdin does not appear to be a terminal; also PYTHONINSPECT=x.
-            q: : don't print version and copyright messages on interactive startup.
-            s: : don't add user site directory to sys.path; also PYTHONNOUSERSITE=x.
-            u: : force the stdout and stderr streams to be unbuffered; this option
-                has no effect on stdin; also PYTHONUNBUFFERED=x.
-            v: : verbose (trace import statements); also PYTHONVERBOSE=x can be
+            m: run library module as a script (terminates option list).
+            q: don't print version and copyright messages on interactive startup.
+            s: don't add user site directory to sys.path; also PYTHONNOUSERSITE=x.
+            u: force the stdout and stderr streams to be unbuffered; this option has
+                no effect on stdin; also PYTHONUNBUFFERED=x.
+            v: verbose (trace import statements); also PYTHONVERBOSE=x can be
                 supplied multiple times to increase verbosity.
-            x: : skip first line of source, allowing use of non-Unix forms of #!cmd.
+            x: skip first line of source, allowing use of non-Unix forms of #!cmd.
         """
         ...

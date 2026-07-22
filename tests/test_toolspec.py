@@ -249,6 +249,28 @@ def test_repeatable_flag_does_not_absorb_its_trailing_ellipsis():
     assert "verbose" in got and "verbose___" not in got
 
 
+def test_python_colon_gutter_is_neither_help_text_nor_lost():
+    # CPython's `--help` separates the flag column from the description with a
+    # ` : ` gutter, not the double-space gutter every other dialect uses. The
+    # colon must not leak into the help (`-b     : issue warnings` once became
+    # `: issue warnings`), and when the columns touch (`-c cmd : program …`)
+    # there is no double space at all — the metavar and description must still
+    # survive rather than being dropped.
+    text = (
+        "options:\n"
+        "-b     : issue warnings about bytes/str comparisons\n"
+        "-c cmd : program passed in as string (terminates option list)\n"
+        "-W arg : warning control; arg is action:message:category\n"
+    )
+    got = flags(_toolhelp.parse_help(text, name="python"))
+    assert got["b"].type_name == "bool"
+    assert got["b"].help == "issue warnings about bytes/str comparisons"
+    assert got["c"].type_name == "str", "`-c cmd` takes a value"
+    assert got["c"].help == "program passed in as string (terminates option list)"
+    assert got["W"].type_name == "str"
+    assert got["W"].help.startswith("warning control")
+
+
 def test_bare_lowercase_metavar_is_a_value_in_help_but_not_a_man_page():
     # gh names a value with a bare lowercase word (`--assignee login`); a man
     # page's prose (`the --patch option.`) must not read one the same way.
