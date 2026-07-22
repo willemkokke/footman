@@ -12,7 +12,17 @@ from footman import manifest
 from footman._complete import complete
 from footman.coerce import peel
 from footman.executor import run_chain
-from footman.params import Forward, Many, forward, nosplit, suggest
+from footman.params import (
+    Exists,
+    Forward,
+    IsDir,
+    IsFile,
+    Many,
+    NoSplit,
+    forward,
+    nosplit,
+    suggest,
+)
 from footman.registry import Group
 from footman.split import ChainError, split_chain
 
@@ -237,6 +247,15 @@ def test_forward_alias_expands_to_annotated():
     # A marker rides alongside the type without disturbing the peel of that type.
     peeled = peel(Forward[list[str]])
     assert peeled.multiple is True and peeled.forward is True
+
+
+def test_bare_marker_aliases_peel_like_their_markers():
+    # Terse aliases for the bare markers: generic `NoSplit[T]`, and the
+    # Path-fixed `Exists`/`IsFile`/`IsDir` (no subscript needed).
+    assert peel(NoSplit[list[str]]).nosplit is True
+    assert peel(Exists).path_req == "exists"
+    assert peel(IsFile).path_req == "file"
+    assert peel(IsDir).path_req == "dir"
 
 
 # --- dict[K, V] mappings -----------------------------------------------------

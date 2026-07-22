@@ -11,6 +11,7 @@ one place.
 from __future__ import annotations
 
 from collections.abc import Callable
+from pathlib import Path
 from typing import Annotated, Any, TypeVar
 
 _T = TypeVar("_T")
@@ -63,6 +64,11 @@ By default a collection parameter splits a single token on commas
 (`--tag a --tag b`). Mark it `nosplit` when a value may itself contain a comma:
 then only the repeated flag adds items and `--name "a,b"` stays the literal
 `"a,b"`."""
+
+
+NoSplit = Annotated[_T, nosplit]
+"""Shorthand for `Annotated[T, nosplit]`: `NoSplit[list[str]]` opts a collection
+out of comma-splitting (see `nosplit`)."""
 
 
 class _ForwardMarker:
@@ -131,6 +137,17 @@ isfile = _PathRequirement("file", "isfile")
 
 isdir = _PathRequirement("dir", "isdir")
 """Require a `Path` parameter to name an existing *directory* (see `exists`)."""
+
+
+Exists = Annotated[Path, exists]
+"""Shorthand for `Annotated[Path, exists]` — `target: Exists` requires the path
+to exist. Type-fixed to `Path`; use `Annotated` directly for a `list[Path]`."""
+
+IsFile = Annotated[Path, isfile]
+"""Shorthand for `Annotated[Path, isfile]`: require an existing *file*."""
+
+IsDir = Annotated[Path, isdir]
+"""Shorthand for `Annotated[Path, isdir]`: require an existing *directory*."""
 
 
 class between:
