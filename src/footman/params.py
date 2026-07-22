@@ -141,11 +141,25 @@ class check:
 
     The callable receives the coerced value (each element, for collections).
     Its `ValueError` message is shown to the user, so write it for them.
+
+    Declare a second parameter to also receive the **siblings** — the parameters
+    to this one's left at their *effective* values (a provided value, else the
+    parameter's own default), coerced and read-only (empty for the first
+    parameter) — so a check can validate against another input:
+
+    ```python
+    def newer(v, params):
+        current = current_version(params["name"])   # the package named earlier
+        if Version(v) <= current:
+            raise ValueError(f"must be newer than {current}")
+
+    def release(name: str, version: Annotated[str, check(newer)]): ...
+    ```
     """
 
     __slots__ = ("fn",)
 
-    def __init__(self, fn: Callable[[Any], Any]) -> None:
+    def __init__(self, fn: Callable[..., Any]) -> None:
         self.fn = fn
 
 

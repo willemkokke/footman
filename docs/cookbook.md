@@ -144,6 +144,38 @@ the prompt); `workers` is bounds-checked; and `target` falls back to
 `$DEPLOY_ENV` before its default — CI sets the variable, humans say
 `--target prod`, and both flow through the same validation.
 
+## Validate one input against another
+
+A `check` validator that declares a *second* parameter also receives the
+**siblings** — the parameters to its left at their effective values (provided,
+or their default), coerced and read-only. That turns a static bound into a
+dynamic, cross-field one: a new version checked against the *current* release of
+the package named in an earlier argument, looked up at run time.
+
+```python
+from typing import Annotated
+from footman import task
+from footman.params import check
+
+def newer_than_current(version, params):
+    current = current_version(params["name"])   # your lookup (pyproject, git…)
+    if not newer(version, current):             # your comparison — none bundled
+        raise ValueError(f"{version} is not newer than {current}")
+
+@task
+def release(name: str, version: Annotated[str, check(newer_than_current)]):
+    "Cut a release, but only forward."
+    ...
+```
+
+`fm release core 1.4.0` binds `name` before validating `version`, so the bound
+is *dynamic* — what a hard-coded `> 1.0.0` can't express. Reaching for the
+current version keeps footman zero-dependency: you bring the lookup and the
+comparison, footman turns your `ValueError` into a taught error. The first
+parameter's check sees an empty dict; a sibling left at its default shows that
+default (so your check never re-hardcodes it); a plain one-argument `check` is
+unchanged.
+
 ## TAB completes your git branches
 
 `suggest()` attaches a completer — footman runs it **fresh** when you complete
