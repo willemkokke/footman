@@ -276,6 +276,12 @@ DRIVERS: tuple[Driver, ...] = (
     ),
     Driver("cmake", url="https://cmake.org/documentation/"),
     Driver("ninja", url="https://ninja-build.org/"),
+    Driver("pytest", url="https://docs.pytest.org/"),
+    Driver(
+        "python",
+        provision=Provision(kind="python", package="3.13"),
+        url="https://docs.python.org/3/using/cmdline.html",
+    ),
 )
 
 _VERSION = re.compile(r"\b(\d+\.\d+(?:\.\d+)?(?:[-.][A-Za-z0-9]+)*)\b")

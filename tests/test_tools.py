@@ -201,7 +201,7 @@ def test_in_process_never_spawns(monkeypatch):
 
 
 def test_in_process_demand_without_entry_is_taught():
-    with pytest.raises(ValueError, match="no installed console_scripts entry"):
+    with pytest.raises(ValueError, match="no importable in-process entry"):
         tools.Tool("no-such-python-tool")("--version", in_process=True)
 
 

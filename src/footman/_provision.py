@@ -94,6 +94,7 @@ def provision(
             Outcome(driver.key, "deferred", "deferred", driver.provision.note)
         )
     outcomes += _uv_tier(prefix, by_kind.get("uv", []))
+    outcomes += _python_tier(prefix, by_kind.get("python", []))
     for driver in by_kind.get("bun", []):  # before node: node runs through bun
         outcomes.append(_release(prefix, driver, host="github"))
     outcomes += _node_tier(prefix, by_kind.get("node", []))
@@ -127,6 +128,49 @@ def _uv_tier(prefix: Path, drivers: list[Driver]) -> list[Outcome]:
             )
         ok = installed[package]
         outcomes.append(Outcome(driver.key, "uv", "ok" if ok else "fail", package))
+    return outcomes
+
+
+# --- python tier (an interpreter to read `--help` from) ----------------------
+
+
+def _python_tier(prefix: Path, drivers: list[Driver]) -> list[Outcome]:
+    """`uv python install` each requested interpreter, linked into the prefix.
+
+    python is provisioned like any other tool — an interpreter whose `--help`
+    is read for the stub. The *runtime* `tools.python` always targets
+    `sys.executable`; provisioning only supplies versions to extract from, so
+    the stub reflects real pythons rather than whatever `python`/`python3` a
+    machine happens to have on PATH.
+    """
+    outcomes: list[Outcome] = []
+    for driver in drivers:
+        version = driver.provision.package or "3"
+        if not _run(["uv", "python", "install", version], env=dict(os.environ)):
+            outcomes.append(
+                Outcome(driver.key, "python", "fail", f"uv python install {version}")
+            )
+            continue
+        try:
+            found = subprocess.run(
+                ["uv", "python", "find", version],
+                capture_output=True,
+                text=True,
+                timeout=60,
+                env=dict(os.environ),
+            )
+            path = Path(found.stdout.strip())
+        except (OSError, subprocess.SubprocessError):
+            path = Path()
+        if not path.name or not path.exists():
+            outcomes.append(
+                Outcome(driver.key, "python", "fail", f"no python {version} found")
+            )
+            continue
+        link = bin_dir(prefix) / "python"
+        link.unlink(missing_ok=True)
+        link.symlink_to(path)
+        outcomes.append(Outcome(driver.key, "python", "ok", f"{version} ({path})"))
     return outcomes
 
 

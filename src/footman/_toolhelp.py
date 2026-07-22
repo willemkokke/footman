@@ -263,10 +263,17 @@ def _option(head: str, help_text: str, *, strict: bool = False) -> Option | None
     if not longs:
         # Go's stdlib `flag` spells even long options with one dash (`-color`,
         # `-no_gitignore`); read a multi-char single-dash flag as the keyword
-        # when there's no `--` form. A real short (`-v`) still has none.
+        # when there's no `--` form.
         longs = [f for f in flags if len(f) > 2 and not f.startswith("--")]
+    if not longs and not strict:
+        # A short-only option (python's `-m`, `-c`, `-O`): the single char is
+        # the keyword — the bridge turns `m="build"` into `-m build`. Help text
+        # only (a man page's prose is too noisy to trust), and only a letter
+        # that forms a valid keyword (`-0` can't). A `-m, --message` pair still
+        # keys on `message` (the `--` branch above wins).
+        longs = [f for f in flags if len(f) == 2 and f[1:].isidentifier()][:1]
     if not longs:
-        return None  # a short-only option has no keyword spelling
+        return None  # nothing spellable
     inline = _INLINE_NEGATION.match(longs[0])
     stem = inline["name"] if inline else longs[0].lstrip("-")
     name = stem.replace("-", "_").replace(".", "_")
@@ -582,10 +589,16 @@ def _summary(text: str) -> str:
         stripped = line.strip()
         if not stripped:
             continue
-        if stripped.lower().startswith("usage") or stripped.startswith("-"):
+        if stripped.lower().startswith("usage"):
             continue
-        if _SECTION.match(stripped):
-            continue
+        if (
+            stripped.startswith("-")
+            or _SECTION.match(stripped)
+            or stripped.endswith(":")
+        ):
+            # Reached the options/sections with no summary in between — a tool
+            # like python opens straight into `Options …:`, so it has none.
+            return ""
         return stripped
     return ""
 

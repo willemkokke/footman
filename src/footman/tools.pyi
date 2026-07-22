@@ -47,6 +47,8 @@ from footman._stubs.mkdocs import Mkdocs as Mkdocs
 from footman._stubs.mypy import Mypy as Mypy
 from footman._stubs.ninja import Ninja as Ninja
 from footman._stubs.prek import Prek as Prek
+from footman._stubs.pytest import Pytest as Pytest
+from footman._stubs.python import Python as Python
 from footman._stubs.ruff import Ruff as Ruff
 from footman._stubs.ruff_format import RuffFormat as RuffFormat
 from footman._stubs.twine import Twine as Twine
@@ -99,7 +101,14 @@ class Tool:
     _argv0: str
     _base: list[str]
     _prefer_in_process: bool
-    def __init__(self, name: str, *base: str, in_process: bool = False) -> None: ...
+    def __init__(
+        self,
+        name: str,
+        *base: str,
+        in_process: bool = False,
+        path: str = ...,
+        entry: str = ...,
+    ) -> None: ...
     def __getattr__(self, verb: str) -> Tool: ...
     def opts(self, **flags: Any) -> Tool: ...
     def __call__(
@@ -134,8 +143,7 @@ git_cliff: GitCliff
 build: Build
 cmake: Cmake
 ninja: Ninja
+pytest: Pytest
+python: Python
 
-def pytest(*args: str, in_process: bool = True, nofail: bool = False) -> int: ...
-def python(*args: str, nofail: bool = False) -> int: ...
-def sh(command: str, nofail: bool = False) -> int: ...
 def __getattr__(name: str) -> Tool: ...

@@ -127,7 +127,6 @@ def _undeclared_and_reserved() -> None:
     reserved keywords."""
     tools.terraform("plan", out="tf.plan")
     tools.helm.upgrade("app", "./chart", install=True)
-    tools.sh("echo hello")
     tools.python("-c", "print(1)")
     tools.pytest("-q", in_process=True)
     tools.mkdocs.build(in_process=False, nofail=True)
