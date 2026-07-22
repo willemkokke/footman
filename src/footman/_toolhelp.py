@@ -162,7 +162,18 @@ def _blocks(lines: Sequence[str]) -> list[tuple[str, str]]:
             if pending is not None:
                 blocks.append((pending[0], " ".join(pending[1]).strip()))
             flag_indent = indent
-            head, _, tail = match["body"].partition("  ")
+            body = match["body"]
+            head, _, tail = body.partition("  ")
+            # Python's `--help` separates the flag column from the description
+            # with a ` : ` gutter (`-b     : issue warnings`, `-c cmd : program
+            # passed in`), not the double-space gutter every other dialect
+            # uses. Re-split on it so the colon doesn't leak into the help text,
+            # and — when the columns touch and the double-space split found
+            # nothing — so the metavar and description aren't lost outright.
+            if not tail.strip() and " : " in head:
+                head, _, tail = body.partition(" : ")
+            elif tail.lstrip().startswith(":"):
+                tail = tail.lstrip()[1:]
             # Learn the help column from same-line help too, not only from a
             # continuation: cobra prints `-d, --detach` at one indent and
             # `      --tail string` at a deeper one, and without the column
