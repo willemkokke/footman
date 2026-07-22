@@ -199,3 +199,66 @@ def test_completion_offers_the_default_flags_alongside_children():
     assert "--fix" in offered  # the default's flag
     assert {"python", "markdown", "spelling"} <= offered  # and the children
     assert complete(tree, ["lint", "--f"]) == ["--fix"]
+
+
+# --- body-callability: a runnable group is callable from a task body ----------
+
+
+def test_empty_body_group_is_callable_from_a_body_and_fans_out():
+    reg = Group("root")
+    seen = _surfaces(reg)  # lint: python/markdown (fix) + spelling (no fix)
+    reg.groups["lint"](fix=True)  # the imperative echo of `fm lint --fix`
+    # Partial reach, by name: fix reaches the surfaces that declare it; spelling
+    # runs bare. Same result as the CLI fan-out, driven from a body.
+    assert seen == {"python": True, "markdown": True, "spelling": "ran"}
+
+
+def test_custom_body_group_call_runs_the_body_only():
+    reg = Group("root")
+    seen = {}
+    lint = reg.group("lint")
+
+    @lint.task
+    def markdown(fix: bool = False):
+        seen["markdown"] = fix
+
+    @lint.default
+    def lint_all(fix: Forward[bool] = False):
+        seen["default"] = fix  # a real body is the escape hatch
+
+    lint(fix=True)
+    assert seen == {"default": True}  # the body ran; the surface stayed untouched
+
+
+def test_calling_a_group_without_a_default_is_a_taught_error():
+    reg = Group("root")
+    docs = reg.group("docs")
+
+    @docs.task
+    def build(): ...
+
+    with pytest.raises(TypeError, match=r"not runnable"):
+        docs()
+
+
+def test_a_task_body_runs_a_group_and_forwards_through_the_runner():
+    # End-to-end: `check --fix` runs through the scheduler, and check's body
+    # calls the lint group, which fans out with the forwarded flag.
+    reg = Group("root")
+    seen = _surfaces(reg)
+    lint = reg.groups["lint"]
+
+    @reg.task
+    def check(fix: bool = False):
+        lint(fix=fix)
+        seen["check"] = fix
+
+    tree = manifest.build_manifest(reg)["tree"]
+    _, segs = split_chain(tree, ["check", "--fix"])
+    run_chain(reg, segs)
+    assert seen == {
+        "python": True,
+        "markdown": True,
+        "spelling": "ran",
+        "check": True,
+    }

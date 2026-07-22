@@ -300,6 +300,37 @@ class Group:
         self.default_task = fn
         return fn
 
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        """Run this group's default action — the imperative mirror of a bare
+        `fm <group>` and of `pre=[group]`.
+
+        A runnable group (one with an `@group.default`) is callable from a task
+        body the way a task is: a `check` task can call `lint(fix=fix)`. It runs
+        the default's action synchronously and in order — a custom body as
+        written, or, for an empty-body default, the group's own tasks, each
+        handed the arguments it declares (partial reach, by name). Like every
+        body call it forwards arguments explicitly and runs to completion before
+        the next statement; prerequisites and parallelism stay the scheduler's
+        job — reach for a real chain, `pre=`, or `parallel()` for those.
+        """
+        if self.default_task is None:
+            raise TypeError(
+                f"group {self.name!r} is not runnable: it has no "
+                f"@{self.name}.default, so there is no action to call. Add a "
+                f"default action, or call a task inside the group directly."
+            )
+        if not getattr(self.default_task, "_footman_default_fanout", False):
+            return self.default_task(*args, **kwargs)  # custom body: as written
+        # Empty-body default: fan out the group's own tasks, handing each only
+        # the arguments it declares — the imperative echo of `fm <group>`.
+        # Sequential, like any body call; wrap the call in parallel() to overlap.
+        from footman.manifest import resolved_signature
+
+        for child in self.tasks.values():
+            accepts = set(resolved_signature(child).parameters)
+            child(**{k: v for k, v in kwargs.items() if k in accepts})
+        return None
+
 
 # The implicit root registry populated by the module-level `task`/`group`
 # aliases (re-exported from `footman`). Constructing an explicit `Group` is
