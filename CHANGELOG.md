@@ -44,7 +44,9 @@ versions may include breaking changes.
   fans out the group's own tasks (`fm lint --fix` fixes what's fixable and lints
   the rest); a custom body is the escape hatch. A positional parameter on a
   default is a load-time error, because a bare word after a group names a child.
-  The group tab-completes and self-documents like a first-class command.
+  The group tab-completes and self-documents like a first-class command, and is
+  **callable from a task body** — `check` can call `lint(fix=fix)` the way it
+  calls any task, running the default's action (or fanning out) in order.
 - **Discovery hooks (`@finalize`).** A function decorated `@footman.finalize`
   runs once on the fully-merged task tree, after the whole `tasks.py` cascade is
   assembled but before dispatch — footman's `pytest_collection_modifyitems`. Use

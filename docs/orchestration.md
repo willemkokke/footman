@@ -301,6 +301,24 @@ and `fm --help lint` renders it as a first-class command. And it composes: a
 `@task(pre=[format, lint, test]) def check(fix: Forward[bool])`, and
 `fm check --fix` threads all the way down.
 
+A runnable group is also **callable from a task body**, the way a task is:
+
+```python
+@task
+def check(fix: bool = False):
+    lint(fix=fix)      # runs lint's default — fans out, or runs its body
+    if fix:
+        run("./stamp-version.sh")
+```
+
+`lint(fix=fix)` runs the default's action synchronously and in order — its body
+as written, or, for an empty-body default, the group's own tasks, each handed
+the arguments it declares. Like every body call it forwards arguments explicitly
+and runs to completion before the next statement; reach for `pre=`, a chain, or
+`parallel()` when you want prerequisites or concurrency. The declarative
+`pre=[lint]` form above is usually cleaner — a body call is for when you need
+real control flow.
+
 ## Progress & the live status line
 
 A finished run reads as a receipt — mark, name, command, time — captured
