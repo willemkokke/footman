@@ -69,7 +69,7 @@ fix the annotation.
 | ``test: RunFailed: `pytest -q` exited with code 1`` (plus the replayed output) | a `run()` command failed; its captured output is shown only now |
 | `release: ValueError: 'nope' is not MAJOR.MINOR.PATCH` | the task (or a `check(fn)` validator) raised; type and message, no traceback |
 | `build: exited with code 3` | the task returned a non-zero int |
-| `up: Unavailable: requires docker on PATH` | a `when=`-disabled task was asked to run; the reason is live, not cached |
+| `up: Unavailable: requires docker on PATH` | a `@requires`-gated task was asked to run; the reason is live, not cached |
 | `dependency cycle: b -> a -> b (check the pre/post declarations of these tasks)` | your `pre`/`post` graph loops |
 | `interrupted` (exit 130) | Ctrl-C — pending tasks were cancelled |
 

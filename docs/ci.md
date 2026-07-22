@@ -98,11 +98,12 @@ commands to know:
 
 ## Conditional tasks in CI
 
-`when=` availability re-checks live on every run, so gating a task on the
+`@requires_env` re-checks live on every run, so gating a task on the
 environment works naturally:
 
 ```python
-@task(when="CI" in os.environ, reason="CI only")
+@task
+@requires_env("CI")
 def publish_coverage(): ...
 ```
 
