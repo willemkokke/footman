@@ -362,12 +362,17 @@ def bind(
     return [*pos, *var_args], kwargs
 
 
-def forward_map(fn: Task, seg: Segment) -> dict[str, Any]:
+def forward_map(
+    fn: Task, seg: Segment, received: dict[str, Any] | None = None
+) -> dict[str, Any]:
     """The `forward`-marked parameter values *fn* passes to what it dispatches.
 
     Read from the segment's CLI value or the parameter's default — never by
     prompting, so building the map is side-effect free. Only defaulted
     parameters contribute; a required one is never forwarded (matching `bind`).
+
+    A value *fn* itself *received* via forwarding wins over its segment/default,
+    so a forwarded value chains through a callee that re-declares the marker.
     """
     sig = resolved_signature(fn)
     empty = inspect.Parameter.empty
@@ -377,6 +382,9 @@ def forward_map(fn: Task, seg: Segment) -> dict[str, Any]:
             continue
         peeled = coerce.peel(param.annotation)
         if not peeled.forward:
+            continue
+        if received is not None and param.name in received:
+            out[param.name] = received[param.name]
             continue
         cli = param.name.replace("_", "-")
         if cli not in seg.values:

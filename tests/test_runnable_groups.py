@@ -155,3 +155,35 @@ def test_a_custom_body_default_does_not_auto_fan_out():
 
     drive(tasks, "lint")
     assert ran == ["custom"]  # the surfaces did not run implicitly
+
+
+def test_forward_chains_through_a_group_used_as_a_prerequisite():
+    # `check` forwards --fix into the `lint` group (a pre= target); lint's
+    # default re-forwards it to the surfaces that declare it. Declarative check.
+    seen = {}
+
+    def tasks(reg):
+        lint = reg.group("lint")
+
+        @lint.task
+        def python(fix: bool = False):
+            seen["python"] = fix
+
+        @lint.task
+        def spelling():
+            seen["spelling"] = "ran"
+
+        @lint.default
+        def lint_all(fix: Forward[bool] = False):
+            """Lint everything."""
+
+        @reg.task
+        def test():
+            seen["test"] = "ran"
+
+        @reg.task(pre=[lint, test])
+        def check(fix: Forward[bool] = False):
+            """Format, lint, test."""
+
+    drive(tasks, "check --fix")
+    assert seen == {"python": True, "spelling": "ran", "test": "ran"}

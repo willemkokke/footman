@@ -41,10 +41,23 @@ class _Node:
     state: str = "pending"  # pending / running / done / skipped
     result: executor.TaskResult | None = None
     forwarded: dict[str, Any] = field(default_factory=dict)  # `forward`ed values in
+    forward_targets: list[_Node] = field(default_factory=list)  # …and out
 
 
 def _default_seg(fn: Task) -> Segment:
     return Segment(task=fn.__name__, path=[fn.__name__])
+
+
+def _as_task(dep: Task | Group) -> Task:
+    """A `pre`/`post` dependency may name a runnable group; resolve it to the
+    group's default action so it runs (and fans out) like any other task."""
+    if isinstance(dep, Group):
+        if dep.default_task is None:
+            raise ChainError(
+                f"group {dep.name!r} is a prerequisite but has no @group.default"
+            )
+        return dep.default_task
+    return dep
 
 
 def _build_dag(root: Group, segments: list[Segment]) -> list[_Node]:
@@ -94,7 +107,6 @@ def _build_dag(root: Group, segments: list[Segment]) -> list[_Node]:
             dep.forwarded[name] = value
 
     def _link(node: _Node) -> None:
-        fmap = executor.forward_map(node.fn, node.seg)
         pre = list(getattr(node.fn, "_footman_pre", []))
         # An empty-body group default fans out the group's own tasks: they become
         # implicit prerequisites, so the scheduler runs them (in parallel) and the
@@ -103,13 +115,13 @@ def _build_dag(root: Group, segments: list[Segment]) -> list[_Node]:
         if group is not None and getattr(node.fn, "_footman_default_fanout", False):
             pre = [*group.tasks.values(), *pre]
         for dep in pre:
-            d = add_dep(dep)
+            d = add_dep(_as_task(dep))
             node.deps.add(d.key)
-            _thread(d, fmap, node.seg.task)
+            node.forward_targets.append(d)  # forwarding threaded in a later pass
         for dep in getattr(node.fn, "_footman_post", []):
-            d = add_dep(dep)
+            d = add_dep(_as_task(dep))
             d.deps.add(node.key)
-            _thread(d, fmap, node.seg.task)
+            node.forward_targets.append(d)
 
     for seg in segments:
         fn = executor.resolve(root, seg.path)
@@ -125,6 +137,16 @@ def _build_dag(root: Group, segments: list[Segment]) -> list[_Node]:
             dep_nodes[id(fn)] = node
         seen_explicit.add(id(fn))
         _link(node)
+
+    # Thread forwarded values in a second pass, dependents before their deps (the
+    # reverse of the run order), so a node's *received* values are complete before
+    # it forwards on — this is what makes forwarding chain through a group default
+    # into its surfaces. It runs after segment adoption above, so each node's seg
+    # (hence its forward map) is final.
+    for node in reversed(_toposort(nodes)):
+        fmap = executor.forward_map(node.fn, node.seg, node.forwarded)
+        for target in node.forward_targets:
+            _thread(target, fmap, node.seg.task)
     return nodes
 
 
