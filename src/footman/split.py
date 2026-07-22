@@ -258,7 +258,19 @@ def split_chain(tree: dict, argv: list[str]) -> tuple[list[str], list[Segment]]:
             path.append(argv[i])
             node = node["groups"][argv[i]]
             i += 1
-        if i >= len(argv) or argv[i] not in node["tasks"]:
+        if i < len(argv) and argv[i] in node["tasks"]:
+            task = node["tasks"][argv[i]]
+            path.append(argv[i])
+            i += 1
+        elif "default" in node:
+            # A runnable group (one with `@group.default`) resolves to its
+            # default action: `fm lint` / `fm lint --fix` run it. `path` stays
+            # the group's; `i` is not advanced, so the flag loop below parses
+            # the default's options. A default takes no positionals, so a
+            # trailing non-flag token (`fm lint test`) ends the segment and
+            # opens a fresh target on the next pass.
+            task = node["default"]
+        else:
             got = argv[i] if i < len(argv) else "(end of line)"
             if i < len(argv) and (misplaced := _misplaced_global(got)) is not None:
                 raise ChainError(misplaced)
@@ -270,9 +282,6 @@ def split_chain(tree: dict, argv: list[str]) -> tuple[list[str], list[Segment]]:
             raise ChainError(
                 f"{where}expected a task name, got {got!r}{hint} (know: {known})"
             )
-        task = node["tasks"][argv[i]]
-        path.append(argv[i])
-        i += 1
 
         opts = {
             "--" + p["name"]: p

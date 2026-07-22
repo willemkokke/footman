@@ -53,11 +53,21 @@ class TaskResult:
 
 
 def resolve(root: Group, path: list[str]) -> Task:
-    """Walk *path* (`["docs", "build"]`) to its task function."""
+    """Walk *path* (`["docs", "build"]`) to its task function.
+
+    A path that lands on a runnable group (`["lint"]`) resolves to that group's
+    default action — the function `@group.default` registered.
+    """
     node = root
     for name in path[:-1]:
         node = node.groups[name]
-    return node.tasks[path[-1]]
+    last = path[-1]
+    if last in node.tasks:
+        return node.tasks[last]
+    group = node.groups[last]
+    if group.default_task is None:
+        raise KeyError(last)  # a non-runnable group is never a segment target
+    return group.default_task
 
 
 _MISSING = object()

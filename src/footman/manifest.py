@@ -329,11 +329,17 @@ def _task_node(fn: Any, memo: dict[int, list[str]]) -> dict[str, Any]:
 
 
 def _node(g: Group, memo: dict[int, list[str]]) -> dict[str, Any]:
-    return {
+    node: dict[str, Any] = {
         "help": g.help,
         "tasks": {name: _task_node(fn, memo) for name, fn in g.tasks.items()},
         "groups": {name: _node(sub, memo) for name, sub in g.groups.items()},
     }
+    # A runnable group (one with `@group.default`) carries the default's option
+    # surface — the same `{help, params}` shape a task node has — so the splitter
+    # parses a bare `fm <group> [flags]` against it and completion/help render it.
+    if g.default_task is not None:
+        node["default"] = _task_node(g.default_task, memo)
+    return node
 
 
 def tree_hash(tree: dict[str, Any]) -> str:
