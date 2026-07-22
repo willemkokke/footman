@@ -282,3 +282,28 @@ jobs:
           name: coverage-docs-build
           path: .coverage.*
           include-hidden-files: true
+
+  # The single required status check. It passes when every job succeeded or
+  # was skipped (a docs-only change) and fails if any failed or was cancelled.
+  # Branch protection requires only this: a matrix job's `result` is its
+  # overall result, so `gate` sidesteps the "a skipped matrix job doesn't
+  # expand its per-combo checks" problem that leaves the individual `py… · …`
+  # names unsatisfiable on a docs-only PR.
+  gate:
+    name: gate
+    needs: [changes, quality, test, shells, coverage, docs]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every job passed or was skipped
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "job results: $RESULTS"
+          for r in $RESULTS; do
+            case "$r" in
+              success | skipped) ;;
+              *) echo "::error::a required job did not pass: $r"; exit 1 ;;
+            esac
+          done
+          echo "all required jobs passed or were skipped"
