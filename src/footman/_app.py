@@ -522,12 +522,18 @@ def _print_summary(
     width = max((len(r.task) for r in results), default=0)
     for result in results:
         ok = result.ok
+        cancelled = result.cancelled
         if color:
-            mark = "\033[32m✓\033[0m" if ok else "\033[31m✗\033[0m"
+            if ok:
+                mark = "\033[32m✓\033[0m"
+            elif cancelled:
+                mark = "\033[33m○\033[0m"  # cut off by fail-fast, not a failure
+            else:
+                mark = "\033[31m✗\033[0m"
             name = f"\033[1;36m{result.task:<{width}}\033[0m"
         else:
-            mark = f"{'ok' if ok else 'FAIL':<4}".rstrip()
-            mark = f"{mark:<4}"
+            word = "ok" if ok else ("cut" if cancelled else "FAIL")
+            mark = f"{word:<4}"
             name = f"{result.task:<{width}}"
         timing = (
             f"({result.duration * 1000:.0f} ms)"
@@ -537,7 +543,9 @@ def _print_summary(
         if color:
             timing = f"\033[36m{timing}\033[0m"
         print(f"{mark} {name}  {timing}", file=sys.stderr)
-        if result.error is not None:
+        if cancelled:
+            _error(f"{result.task}: cancelled — fail-fast stopped the run")
+        elif result.error is not None:
             _error(f"{result.task}: {type(result.error).__name__}: {result.error}")
         elif not result.ok:
             _error(f"{result.task}: exited with code {result.code}")
@@ -554,6 +562,7 @@ def _print_json(results: list[executor.TaskResult], *, total: float) -> None:
         entry: dict[str, object] = {
             "task": r.task,
             "ok": r.ok,
+            "cancelled": r.cancelled,
             "code": r.code,
             "duration_ms": round(r.duration * 1000, 3),
             "output": r.output,
@@ -1115,7 +1124,13 @@ def _run_tree(
     elif not g.get("quiet"):
         _print_summary(results, timings=bool(g.get("timings")), total=total)
 
-    return next((r.code or 1 for r in results if not r.ok), 0)
+    # The exit code is the first genuine failure's — a cancelled task carries
+    # only a kill signal, so it's the fallback, not the headline.
+    failed = [r for r in results if not r.ok]
+    genuine = next((r.code or 1 for r in failed if not r.cancelled), None)
+    if genuine is not None:
+        return genuine
+    return next((r.code or 1 for r in failed), 0)
 
 
 def run_group(

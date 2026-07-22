@@ -129,6 +129,26 @@ def test_atomic_task_is_not_killed_by_fail_fast(tmp_path):
     assert marker.exists()  # ran to completion despite the failing sibling
 
 
+def test_a_killed_task_reports_cancelled_not_failed():
+    from footman.context import run
+    from footman.schedule import run_plan
+
+    def tasks(reg):
+        @reg.task
+        def slow():
+            run([sys.executable, "-c", "import time; time.sleep(30)"])
+
+        @reg.task
+        def boom():
+            raise SystemExit(7)  # a genuine failure, code 7
+
+    reg, tree = _tree(tasks)
+    segs = _segs(tree, "slow boom")
+    results = {r.task: r for r in run_plan(reg, segs, sequential=False)}
+    assert results["boom"].cancelled is False and results["boom"].code == 7
+    assert results["slow"].cancelled is True  # cut off by fail-fast, not a failure
+
+
 @pytest.mark.skipif(sys.platform == "win32", reason="SIGTERM is unignorable on Windows")
 def test_fail_fast_escalates_to_sigkill_when_sigterm_is_ignored(tmp_path):
     import signal
