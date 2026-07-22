@@ -54,6 +54,35 @@ if one fails, and a task whose prerequisite failed is skipped.
     line are stderr commentary, so redirecting stdout captures task output
     alone.
 
+## When a task fails: fail-fast & keep-going
+
+A run is **fail-fast** by default: the first failure stops it. New tasks don't
+start, *and* the sibling subprocesses still running are terminated — so a doomed
+run dies at once instead of waiting out a long test suite. The kill is SIGTERM,
+escalating to SIGKILL after a short grace if a tool ignores it. A task cut off
+this way reports as **cancelled**, not failed, and the exit code is the genuine
+failure's, never a kill signal.
+
+`--keep-going`/`-k` runs every independent branch regardless, so you see every
+failure in one pass. `--fail-fast` forces the default back when a task declares
+otherwise. Which wins is **three-state — command line > declared > built-in**:
+
+```python
+@task(keep_going=True)      # this gate wants to surface every problem at once
+def check(): ...
+```
+
+- `fm check` keeps going — its own declaration.
+- `fm --fail-fast check` overrides it for this run.
+- A task that declares nothing gets the built-in fail-fast.
+
+Two escape hatches for the kill:
+
+- `@task(atomic=True)` opts a task's subprocesses out — they run to completion,
+  so a formatter rewriting a file can't be truncated mid-write.
+- An **in-process** `run()` (a `tools.*` entry point, a plain callable) has no
+  subprocess to signal, so it always finishes on its own.
+
 ## Interactive input
 
 A bare `input()` doesn't work in a task: its prompt goes to stdout, which
@@ -157,6 +186,43 @@ required one errors with `missing required argument(s)`). To run a prerequisite
 with specific arguments, name it in the chain — `fm build --release deploy` runs
 `build --release` once, and `deploy`'s `pre=[build]` waits on that same run.
 
+### Forward a value to what a task dispatches
+
+Running defaulted is a *floor*, not a ceiling. Mark a parameter `forward` and
+its value threads to every task this one dispatches — its `pre`/`post`
+prerequisites and a [runnable group](#runnable-groups)'s surfaces — that declares
+a parameter of the same name:
+
+```python
+from typing import Annotated
+from footman import task
+from footman.params import forward
+
+@task(pre=[format, lint, test])
+def check(fix: Annotated[bool, forward] = False):
+    "fm check --fix reaches format & lint; test (no `fix`) runs defaulted."
+```
+
+`Forward[bool]` is the shorthand (`Forward[T]` ≡ `Annotated[T, forward]`, like
+`Many[T]`). The rules:
+
+- **Partial reach.** Only tasks that declare the parameter receive it; the rest
+  run on their own defaults — `check --fix` fixes what's fixable and lints the
+  rest.
+- **It chains.** A callee that re-declares `forward` passes the value on, so it
+  reaches a group's surfaces through the group's default.
+- **Overrides a default, never rescues a required one.** A prerequisite stays
+  runnable on its own; forwarding only changes a value that already has a
+  default.
+- **Conflicts are taught, not guessed.** Two tasks forwarding different values to
+  one shared prerequisite is an error, not a silent last-wins.
+
+Forwarding threads *values*, not graph structure, so `--dry-run` and completion
+are unchanged. The explicit hand-forwarding of
+[`inherited()`](cookbook.md#extend-an-inherited-task-instead-of-replacing-it)
+stays for the override case — calling a task you *shadow* and changing what it
+gets.
+
 ## Fan out from inside a task
 
 `parallel()` runs task functions — or no-argument lambdas, when you need to
@@ -187,6 +253,47 @@ Reach for declared deps when you want the plan to *see* the work, and
     works). `parallel()` itself returns exit *codes*, not values, and the
     declared graph carries no data between tasks: `pre`/`post` are ordering, not
     a pipe.
+
+## Runnable groups
+
+A group is a namespace: `fm lint markdown` runs a task under `lint`, but bare
+`fm lint` is an error. Give the group a **default action** with `@group.default`
+and the bare form runs — while the surfaces stay addressable:
+
+```python
+from footman import group, run
+from footman.params import Forward
+from footman.tools import ruff, markdownlint, cspell
+
+lint = group("lint")
+
+@lint.task
+def python(fix: bool = False):   ruff("check", "src", fix=fix)
+@lint.task
+def markdown(fix: bool = False): markdownlint("**/*.md", fix=fix)
+@lint.task
+def spelling():                  cspell("lint", "**/*")      # no --fix
+
+@lint.default
+def lint_all(fix: Forward[bool] = False):
+    "Lint everything; --fix reaches the surfaces that support it."
+```
+
+- `fm lint` fans out every surface; `fm lint --fix` fixes what's fixable and
+  lints the rest (the `forward` marker carries `--fix` to the surfaces that take
+  it — see [above](#forward-a-value-to-what-a-task-dispatches)).
+- `fm lint markdown` / `fm lint markdown --fix` runs one surface.
+- The default's **signature is the group's options**, so it takes flags/options
+  only. A positional is a load-time error, because a bare word after a group
+  names a child, not a value — model a positional action as a task instead.
+- An **empty body** fans out the group's own tasks; a non-empty body is the
+  escape hatch where you write the fan-out yourself.
+
+The group tab-completes (`fm lint <Tab>` offers `--fix` and the surface names)
+and `fm --help lint` renders it as a first-class command. And it composes: a
+`check` gate reaches its surfaces through the group with one forwarded flag —
+`@task(pre=[format, lint, test]) def check(fix: Forward[bool])`, and
+`fm check --fix` threads all the way down.
 
 ## Progress & the live status line
 
