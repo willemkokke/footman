@@ -77,6 +77,11 @@ class Driver:
     """A pre-bound verb: `tools.ruff_format` is `Tool("ruff", "format")`."""
     source: str = "auto"
     """`auto` prefers structure (click) and falls back to `--help`."""
+    shorts: str = "only"
+    """Short-option policy for the stub: `"none"` never keys on a short,
+    `"only"` (default) keys on one *when it is the option's sole spelling*
+    (python's `-m`, git's `-C`), and `"all"` also keys on a short that has a
+    long form. Read only from `--help`, never a man page (its prose is noisy)."""
     url: str = ""
     """The tool's home, for the reference page's table."""
     man: bool = False
@@ -276,6 +281,21 @@ DRIVERS: tuple[Driver, ...] = (
     ),
     Driver("cmake", url="https://cmake.org/documentation/"),
     Driver("ninja", url="https://ninja-build.org/"),
+    Driver("pytest", url="https://docs.pytest.org/"),
+    Driver(
+        "python",
+        provision=Provision(kind="python", package="3.13"),
+        url="https://docs.python.org/3/using/cmdline.html",
+    ),
+    # The shells footman autocompletes for. Their stubs are hand-written (a
+    # `source="manual"` driver is listed and paged but never extracted or
+    # re-synced): what matters is `<shell>("command")` -> `<shell> -c command`,
+    # not the shell binary's own hundred flags.
+    Driver("bash", source="manual", url="https://www.gnu.org/software/bash/"),
+    Driver("zsh", source="manual", url="https://www.zsh.org/"),
+    Driver("fish", source="manual", url="https://fishshell.com/"),
+    Driver("pwsh", source="manual", url="https://learn.microsoft.com/powershell/"),
+    Driver("nu", source="manual", url="https://www.nushell.sh/"),
 )
 
 _VERSION = re.compile(r"\b(\d+\.\d+(?:\.\d+)?(?:[-.][A-Za-z0-9]+)*)\b")
@@ -332,6 +352,7 @@ def extract(driver: Driver) -> ToolSpec:
             in_process=in_process_capable(driver.name),
             flag=driver.help_flag,
             man=driver.man,
+            shorts=driver.shorts,
         )
     return _rebase(spec, driver.base) if driver.base else spec
 

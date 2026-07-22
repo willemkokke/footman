@@ -39,7 +39,7 @@ def test_release_tags_and_pushes():
     ]
 ```
 
-This works for `tools.*` too — every wrapper funnels through `run()`. One
+This works for the tool wrappers too — every one funnels through `run()`. One
 caveat, stated out loud: a Python *callable* passed to `run(fn)` is also
 skipped under recording — that is the point, but remember it when a task
 mixes subprocesses with in-process work.

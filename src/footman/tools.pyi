@@ -27,10 +27,12 @@ import threading as _threading
 from collections.abc import Iterator, Sequence
 from typing import Any
 
+from footman._stubs.basedpyright import Basedpyright as Basedpyright
+
 # One generated file per tool — `fm footman tools sync` writes them from
 # the installed binaries, and `audit` fails when they drift. They import
 # `Tool` and the aliases from here, which a stub may do circularly.
-from footman._stubs.basedpyright import Basedpyright as Basedpyright
+from footman._stubs.bash import Bash as Bash
 from footman._stubs.build import Build as Build
 from footman._stubs.bun import Bun as Bun
 from footman._stubs.cmake import Cmake as Cmake
@@ -38,6 +40,7 @@ from footman._stubs.coverage import Coverage as Coverage
 from footman._stubs.cspell import Cspell as Cspell
 from footman._stubs.docker import Docker as Docker
 from footman._stubs.eclint import Eclint as Eclint
+from footman._stubs.fish import Fish as Fish
 from footman._stubs.gh import Gh as Gh
 from footman._stubs.git import Git as Git
 from footman._stubs.git_changelog import GitChangelog as GitChangelog
@@ -46,13 +49,18 @@ from footman._stubs.markdownlint import Markdownlint as Markdownlint
 from footman._stubs.mkdocs import Mkdocs as Mkdocs
 from footman._stubs.mypy import Mypy as Mypy
 from footman._stubs.ninja import Ninja as Ninja
+from footman._stubs.nu import Nu as Nu
 from footman._stubs.prek import Prek as Prek
+from footman._stubs.pwsh import Pwsh as Pwsh
+from footman._stubs.pytest import Pytest as Pytest
+from footman._stubs.python import Python as Python
 from footman._stubs.ruff import Ruff as Ruff
 from footman._stubs.ruff_format import RuffFormat as RuffFormat
 from footman._stubs.twine import Twine as Twine
 from footman._stubs.ty import Ty as Ty
 from footman._stubs.uv import Uv as Uv
 from footman._stubs.zensical import Zensical as Zensical
+from footman._stubs.zsh import Zsh as Zsh
 from footman.context import Invocation as _Invocation  # noqa: F401
 from footman.context import run as _run  # noqa: F401
 
@@ -99,7 +107,14 @@ class Tool:
     _argv0: str
     _base: list[str]
     _prefer_in_process: bool
-    def __init__(self, name: str, *base: str, in_process: bool = False) -> None: ...
+    def __init__(
+        self,
+        name: str,
+        *base: str,
+        in_process: bool = False,
+        path: str = ...,
+        entry: str = ...,
+    ) -> None: ...
     def __getattr__(self, verb: str) -> Tool: ...
     def opts(self, **flags: Any) -> Tool: ...
     def __call__(
@@ -134,8 +149,12 @@ git_cliff: GitCliff
 build: Build
 cmake: Cmake
 ninja: Ninja
+pytest: Pytest
+python: Python
+bash: Bash
+zsh: Zsh
+fish: Fish
+pwsh: Pwsh
+nu: Nu
 
-def pytest(*args: str, in_process: bool = True, nofail: bool = False) -> int: ...
-def python(*args: str, nofail: bool = False) -> int: ...
-def sh(command: str, nofail: bool = False) -> int: ...
 def __getattr__(name: str) -> Tool: ...

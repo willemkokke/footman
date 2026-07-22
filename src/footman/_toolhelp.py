@@ -256,17 +256,31 @@ def _parse_default(text: str) -> str:
     return (match["clap"] or match["other"] or "").strip().strip("\"'")
 
 
-def _option(head: str, help_text: str, *, strict: bool = False) -> Option | None:
-    """One `Option` from one parsed block, or None if it isn't one."""
+def _option(
+    head: str, help_text: str, *, strict: bool = False, shorts: str = "only"
+) -> Option | None:
+    """One `Option` from one parsed block, or None if it isn't one.
+
+    *shorts* is the short-option policy: `"none"` never keys on a short,
+    `"only"` (default) keys on a short *when it is the option's only spelling*
+    (python's `-m`, git's `-C`), and `"all"` also keys on a short that has a
+    long — `_short_alias` adds the extra keyword for that mode.
+    """
     flags, meta, optional = _spellings(head, strict=strict)
     longs = [f for f in flags if f.startswith("--")]
     if not longs:
         # Go's stdlib `flag` spells even long options with one dash (`-color`,
         # `-no_gitignore`); read a multi-char single-dash flag as the keyword
-        # when there's no `--` form. A real short (`-v`) still has none.
+        # when there's no `--` form.
         longs = [f for f in flags if len(f) > 2 and not f.startswith("--")]
+    if not longs and shorts != "none" and not strict:
+        # A short-only option (python's `-m`, `-c`, `-O`): the single char is
+        # the keyword — the bridge turns `m="build"` into `-m build`. Help text
+        # only (a man page's prose is too noisy to trust), and only a letter
+        # that forms a valid keyword (`-0` can't).
+        longs = [f for f in flags if len(f) == 2 and f[1:].isidentifier()][:1]
     if not longs:
-        return None  # a short-only option has no keyword spelling
+        return None  # nothing spellable
     inline = _INLINE_NEGATION.match(longs[0])
     stem = inline["name"] if inline else longs[0].lstrip("-")
     name = stem.replace("-", "_").replace(".", "_")
@@ -380,7 +394,9 @@ def _with_negation(option: Option, negation: str) -> Option:
     )
 
 
-def parse_help(text: str, *, name: str = "", man: bool = False) -> Verb:
+def parse_help(
+    text: str, *, name: str = "", man: bool = False, shorts: str = "only"
+) -> Verb:
     """One verb's options, from its `--help` output or (with `man`) manual.
 
     The option grammar is the same either way — the man page states a flag
@@ -395,7 +411,7 @@ def parse_help(text: str, *, name: str = "", man: bool = False) -> Verb:
         if _NOT_OPTIONS.search(title):
             continue  # `Commands:`, `Examples:` — dashes there aren't flags
         for head, help_text in _blocks(lines):
-            option = _option(head, help_text, strict=man)
+            option = _option(head, help_text, strict=man, shorts=shorts)
             if (
                 option is not None
                 and option.name not in _NOISE
@@ -410,11 +426,13 @@ def parse_help(text: str, *, name: str = "", man: bool = False) -> Verb:
         # parses normally never reaches here and can't regress.
         for _title, lines in sections.items():
             for head, help_text in _blocks(lines):
-                option = _option(head, help_text, strict=man)
+                option = _option(head, help_text, strict=man, shorts=shorts)
                 if option is not None and option.name not in _NOISE:
                     seen.add(option.name)
                     options.append(option)
         options = list({o.name: o for o in options}.values())
+    if shorts == "all":
+        options = _with_short_aliases(options)
     positional, lead = _synopsis_shape(text, name) if man else _usage_shape(text)
     return Verb(
         name=name,
@@ -424,6 +442,21 @@ def parse_help(text: str, *, name: str = "", man: bool = False) -> Verb:
         lead=lead,
         wraps=_wraps(text),
     )
+
+
+def _with_short_aliases(options: list[Option]) -> list[Option]:
+    """For `shorts="all"`: add a keyword for a short that *also* has a long,
+    so `-m, --message` answers to both `message` and `m`. The long-keyed
+    option stays; the alias is an extra entry keyed on the single char."""
+    out = list(options)
+    seen = {o.name for o in options}
+    for option in options:
+        for flag in option.flags:
+            char = flag[1:]
+            if len(flag) == 2 and char.isidentifier() and char not in seen:
+                seen.add(char)
+                out.append(replace(option, name=char))
+    return out
 
 
 # A metavar that stands for a *wrapped* command's argv: `uv run [COMMAND]`,
@@ -582,10 +615,16 @@ def _summary(text: str) -> str:
         stripped = line.strip()
         if not stripped:
             continue
-        if stripped.lower().startswith("usage") or stripped.startswith("-"):
+        if stripped.lower().startswith("usage"):
             continue
-        if _SECTION.match(stripped):
-            continue
+        if (
+            stripped.startswith("-")
+            or _SECTION.match(stripped)
+            or stripped.endswith(":")
+        ):
+            # Reached the options/sections with no summary in between — a tool
+            # like python opens straight into `Options …:`, so it has none.
+            return ""
         return stripped
     return ""
 
@@ -687,6 +726,7 @@ def from_help(
     in_process: bool = False,
     flag: str = "--help",
     man: bool = False,
+    shorts: str = "only",
 ) -> ToolSpec:
     """A `ToolSpec` for *name* by asking the installed binary.
 
@@ -698,7 +738,7 @@ def from_help(
     root = run_help([name], flag=flag)
     if not root:
         return ToolSpec(name=name, version=version)
-    root_verb = parse_help(root, name="")
+    root_verb = parse_help(root, name="", shorts=shorts)
     if verbs:
         # A multi-command tool's bare usage line (`docker [OPTIONS] COMMAND`)
         # describes the subcommand slot, not arguments to `docker` itself —
@@ -711,14 +751,18 @@ def from_help(
         # precede the verb — what `.opts()` binds. Read them from there.
         manual = run_help([name, name], man=True)
         if manual:
-            root_verb = replace(root_verb, options=parse_help(manual, man=True).options)
+            root_verb = replace(
+                root_verb, options=parse_help(manual, man=True, shorts=shorts).options
+            )
     parsed = [root_verb]
     for verb in verbs:
         text = run_help([name, *verb.split(".")], flag=flag, man=man)
         if text:
             # `git rev-parse` is spelled `tools.git.rev_parse(...)`: the
             # bridge turns the underscore back into a dash when it calls.
-            parsed.append(parse_help(text, name=verb.replace("-", "_"), man=man))
+            parsed.append(
+                parse_help(text, name=verb.replace("-", "_"), man=man, shorts=shorts)
+            )
     return ToolSpec(
         name=name,
         help=_summary(root),

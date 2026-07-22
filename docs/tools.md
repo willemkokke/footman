@@ -1,23 +1,27 @@
 # Running tools
 
-Task bodies run tools through `run()` and the typed `tools.*` wrappers. `run()`
-captures output and stays quiet on success, **replaying it only on failure** —
-so a green run is calm and a red one shows exactly what broke:
+Task bodies run tools through `run()` and the typed wrappers imported from
+`footman.tools`. `run()` captures output and stays quiet on success,
+**replaying it only on failure** — so a green run is calm and a red one shows
+exactly what broke:
 
 ```python
-from footman import task, run, tools
+from footman import task, run
+from footman.tools import pytest, ruff
 
 @task
 def check():
-    tools.ruff("check", "src", fix=False)   # subprocess (ruff is a binary)
-    tools.pytest("-x")                        # in-process via pytest.main
-    run("mkdocs build --strict")              # any command; a callable also works
+    ruff("check", "src", fix=False)   # subprocess (ruff is a binary)
+    pytest("-x")                       # in-process via pytest.main
+    run("mkdocs build --strict")       # any command; a callable also works
 ```
 
-This page covers `run()` and the task context. The `tools.*` wrappers — how
-the flag translation works, disabling flags, in-process execution, and why
-nothing is transcribed per tool — have their own page:
-[The tools bridge](tools-bridge.md).
+Each tool is imported by name — `from footman.tools import git` gives you a
+typed `git` you call as `git.commit(…)`; a tool footman has never heard of
+imports just the same and runs as a subprocess. This page covers `run()` and
+the task context. The tool wrappers — how the flag translation works,
+disabling flags, in-process execution, and why nothing is transcribed per
+tool — have their own page: [The tools bridge](tools-bridge.md).
 
 ## `run()`
 
@@ -38,11 +42,12 @@ task body stays boilerplate-free. Declare a first `ctx: Context` parameter only
 if you want the object — footman keeps it out of the CLI mapping:
 
 ```python
-from footman import Context, task, tools
+from footman import Context, task
+from footman.tools import pytest
 
 @task
 def test(ctx: Context):
-    tools.pytest(*ctx.passthrough)          # fm test -- -k mytest -x
+    pytest(*ctx.passthrough)                # fm test -- -k mytest -x
 ```
 
 `passthrough()` and `ctx.passthrough` are the same list two ways — the free

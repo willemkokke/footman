@@ -41,7 +41,7 @@ Top-level, `total_ms` is wall-clock for the whole run — the human summary's
 `took` line, as a number. Per task: `task` (dotted name), `ok`, `code`,
 `duration_ms`, `output` (all
 captured text), `error` (`null`, or the exception as a string), `steps` —
-one entry per [`run()`/`tools.*`](tools.md) call, each with `command`,
+one entry per [`run()` or tool](tools.md) call, each with `command`,
 `code`, `duration_ms`, `output` — and, when the task returns a value,
 `returned`.
 

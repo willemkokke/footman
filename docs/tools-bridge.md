@@ -1,21 +1,22 @@
 # The tools bridge
 
-Every tool on your PATH is already wrapped — `tools.<name>` needs no
-declaration, attribute access chains subcommands, and keyword arguments
-translate into flags *mechanically*:
+Every tool on your PATH is already there — import it by name from
+`footman.tools`, no declaration needed; attribute access chains subcommands,
+and keyword arguments translate into flags *mechanically*:
 
 ```python
-from footman import task, tools
+from footman import task
+from footman.tools import bun, docker, ruff, terraform
 
 @task
 def ship():
-    tools.ruff.check("src", fix=True, select=["E", "F"])
+    ruff.check("src", fix=True, select=["E", "F"])
     #  -> ruff check src --fix --select E --select F
-    tools.docker.compose.up(detach=True)
+    docker.compose.up(detach=True)
     #  -> docker compose up --detach
-    tools.bun.add("left-pad", global_=True)   # trailing _ escapes keywords
+    bun.add("left-pad", global_=True)   # trailing _ escapes keywords
     #  -> bun add left-pad --global
-    tools.terraform("plan", out="tf.plan")    # never declared anywhere; works
+    terraform("plan", out="tf.plan")    # never declared anywhere; works
 ```
 
 The rules, all of them: `snake_case` → `--kebab-case`; `True` → bare flag;
@@ -38,7 +39,7 @@ A **wrapper verb** — one that runs another command, like `uv run`,
 command, or they would land on the child instead of the tool:
 
 ```python
-tools.uv.run("pytest", "-q", frozen=True)   # → uv run --frozen pytest -q
+uv.run("pytest", "-q", frozen=True)   # → uv run --frozen pytest -q
 ```
 
 footman knows which verbs wrap (it reads each verb's usage line), so
@@ -47,7 +48,7 @@ tool's own **global** options — the ones that must precede the subcommand —
 go through `opts()`:
 
 ```python
-tools.docker.opts(host="tcp://x").compose.up(detach=True)
+docker.opts(host="tcp://x").compose.up(detach=True)
 # → docker --host=tcp://x compose up --detach
 ```
 
@@ -64,7 +65,7 @@ change when the executed spelling does:
 
 ```python
 with recording() as steps:
-    tools.ruff.check("src", select=["E", "F"])
+    ruff.check("src", select=["E", "F"])
 assert steps[0].command == "ruff check src --select E --select F"  # reads plainly
 assert steps[0].raw == "ruff check src --select=E --select=F"      # the real argv
 ```
@@ -79,8 +80,8 @@ the `off` sentinel, or name the negation directly:
 ```python
 from footman.tools import off
 
-tools.mkdocs.build(strict=off)              # → mkdocs build --no-strict
-tools.mkdocs.build(no_strict=True)          # exactly the same, by name
+mkdocs.build(strict=off)              # → mkdocs build --no-strict
+mkdocs.build(no_strict=True)          # exactly the same, by name
 ```
 
 `off` emits **the spelling that tool actually uses**, which is not always
@@ -89,9 +90,9 @@ tools.mkdocs.build(no_strict=True)          # exactly the same, by name
 convention:
 
 ```python
-tools.mkdocs.build(clean=off)               # → mkdocs build --dirty
-tools.mkdocs.build(use_directory_urls=off)  # → --no-directory-urls
-tools.mkdocs.build(strict=off)              # → --no-strict, convention holds
+mkdocs.build(clean=off)               # → mkdocs build --dirty
+mkdocs.build(use_directory_urls=off)  # → --no-directory-urls
+mkdocs.build(strict=off)              # → --no-strict, convention holds
 ```
 
 Only the tool knows, so footman asks it: the spellings are extracted from
@@ -115,7 +116,7 @@ story — `True` → `--flag`, `off` → the tool's negation:
 ```python
 @task
 def build(pretty_urls: bool = True):
-    tools.mkdocs.build(directory_urls=pretty_urls or off)
+    mkdocs.build(directory_urls=pretty_urls or off)
     # pretty_urls=True  → --directory-urls
     # pretty_urls=False → --no-directory-urls
 ```
@@ -124,7 +125,7 @@ And a *conditional* flag often needs no negation at all — when the flag is
 off by default, `flag=condition` already does the right thing:
 
 ```python
-tools.zensical.build(clean=True, strict=check)   # --strict only when check
+zensical.build(clean=True, strict=check)   # --strict only when check
 ```
 
 ## Why no per-flag Python parameters?
@@ -148,7 +149,7 @@ validated eagerly either).
 
 The bridge does ship duty-style autocompletion after all — as **stub
 files**, which type checkers and IDEs read but the runtime never imports.
-`tools.ruff.check(` completes `fix=`, `select=`, `output_format=` and
+`ruff.check(` completes `fix=`, `select=`, `output_format=` and
 friends, each with that tool's own help text on hover; `fix="yes"` is a
 type error before you run anything. Two rules keep the stub subordinate to
 the bridge:
@@ -209,14 +210,14 @@ here), or side-step the whole question by passing the literal flag as a
 positional — always unambiguous, never translated:
 
 ```python
-tools.ruff.check(*paths, "--exit-zero")
+ruff.check(*paths, "--exit-zero")
 ```
 
 For the rare task that must branch on a tool's CLI generation:
 
 ```python
-if tools.ruff.installed_version() >= (0, 9):
-    tools.ruff.check("src", output_format="github")
+if ruff.installed_version() >= (0, 9):
+    ruff.check("src", output_format="github")
 ```
 
 `installed_version()` runs `<tool> --version` once per process (outside the
@@ -235,12 +236,12 @@ simply called; only a legacy zero-arg entry falls back to running under a
 patched `sys.argv`, and only those calls serialise.
 
 ```python
-tools.mkdocs.build(strict=True)                    # in-process by default
-tools.Tool("griffe", in_process=True)("dump", "footman")   # opt any tool in
-tools.coverage.html(in_process=False)              # ...or out, per call
+mkdocs.build(strict=True)                    # in-process by default
+Tool("griffe", in_process=True)("dump", "footman")   # opt any tool in
+coverage.html(in_process=False)              # ...or out, per call
 ```
 
-`mkdocs`, `zensical`, and `coverage` default to in-process. `tools.pytest`
+`mkdocs`, `zensical`, and `coverage` default to in-process. `pytest`
 keeps its dedicated `pytest.main` path for a concrete reason: pytest's
 console entry point takes *no* arguments — the generic path could only
 drive it through the patched-`sys.argv` fallback, serialised — while
@@ -271,7 +272,7 @@ def docs():
         os.environ.setdefault(              # in-process, this survives
             "DYLD_FALLBACK_LIBRARY_PATH", "/opt/homebrew/lib"
         )
-    tools.mkdocs.build(strict=True)
+    mkdocs.build(strict=True)
 ```
 
 And in-process keeps footman's parallelism: capture routes through the
@@ -281,8 +282,34 @@ nearly all of them — are called directly, no `sys.argv` in sight. Only a
 legacy zero-argument `main()` that insists on reading `sys.argv` gets the
 patched-and-serialised fallback.
 
-`tools.python(...)` targets the current interpreter; `tools.sh("...")`
-takes a whole command line as one string.
+`python(...)` targets the current interpreter, whatever is (or isn't)
+on your PATH. There is no `sh`: a command as one string is `run("…")`
+(footman splits and runs it — no shell), and for a real shell you invoke one,
+`bash("echo $X | grep y")` → `bash -c "…"`.
+
+## Parallelism
+
+Independent tasks run **concurrently as threads** (a `ThreadPoolExecutor`),
+not as separate processes — a task runner mostly waits on subprocesses and
+I/O, where the GIL doesn't bite, and threads share the already-loaded manifest
+and imports. That one choice explains the rest:
+
+- A tool call is usually a **subprocess** — its own process, its own
+  `sys.argv`, trivially parallel.
+- An **in-process** tool runs in the calling thread. footman calls its entry
+  point *directly* when the entry accepts an argument list (`cli(argv)`,
+  `main(argv=None)`, `pytest.main(args)`), so it stays parallel. The *only*
+  thing that serialises is a legacy zero-argument `main()` that reads
+  `sys.argv` — because `sys.argv` is process-global, those calls take a lock.
+- Concurrent output can't interleave: each task writes through a **per-task
+  stdout router** (thread-confined, no global redirect), so two tools running
+  at once keep their lines apart.
+
+So the defaults line up rather than fight: the tools marked `default`
+in-process — mkdocs, zensical, coverage — all take an argument list and run in
+parallel, and `pytest` is a function calling the arg-accepting `pytest.main`
+for exactly this reason. The single serialised case, a zero-arg `main()`, is
+rare and clearly bounded.
 
 ## Sharing tools between projects
 

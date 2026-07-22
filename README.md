@@ -37,17 +37,18 @@ uv add --dev footman        # or: pip install footman
 
 ```python
 # tasks.py
-from footman import task, group, run, tools
+from footman import task, group, run
+from footman.tools import pytest, ruff
 
 @task
 def lint(fix: bool = False):
     "Run ruff over the project."
-    tools.ruff.check("src", fix=fix)
+    ruff.check("src", fix=fix)
 
 @task(pre=[lint])
 def test(*pytest_args):
     "Run the test suite (extra args after --)."
-    tools.pytest(*pytest_args)
+    pytest(*pytest_args)
 
 docs = group("docs", help="Documentation")
 

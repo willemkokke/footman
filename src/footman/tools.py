@@ -102,6 +102,9 @@ _WRAPPERS: dict[str, frozenset[str]] = {
     "uv": frozenset({"run", "tool.run"}),
     "coverage": frozenset({"run"}),
     "docker": frozenset({"run", "exec", "compose.run", "compose.exec"}),
+    # python's own root is a wrapper: `python -v script.py` puts the
+    # interpreter's options before the script, whose own args follow it.
+    "python": frozenset({""}),
 }
 
 
@@ -297,17 +300,41 @@ class Tool:
     only those serialise.
     """
 
-    def __init__(self, name: str, *base: str, in_process: bool = False) -> None:
-        self._argv0 = name
+    def __init__(
+        self,
+        name: str,
+        *base: str,
+        in_process: bool = False,
+        path: str = "",
+        entry: str = "",
+    ) -> None:
+        self._argv0 = name  # the name shown, and the console script looked up
         self._base = list(base)
         self._prefer_in_process = in_process
+        # The executable actually run, when it isn't the name: `tools.python`
+        # runs `sys.executable`, not whatever `python` is on PATH.
+        self._path = path or name
+        # An in-process callable to prefer over the console script, spelled
+        # `module:attr`. pytest's console entry is a zero-arg `_console_main`
+        # (serialised), but `pytest.main` takes the argument list and stays
+        # parallel — so it is recorded here.
+        self._entry = entry
+
+    def _sub(self, *tail: str) -> Tool:
+        """A chained tool sharing this one's executable, entry, and mode."""
+        return Tool(
+            self._argv0,
+            *self._base,
+            *tail,
+            in_process=self._prefer_in_process,
+            path=self._path,
+            entry=self._entry,
+        )
 
     def __getattr__(self, verb: str) -> Tool:
         if verb.startswith("_"):
             raise AttributeError(verb)
-        sub = Tool(self._argv0, *self._base, verb.replace("_", "-"))
-        sub._prefer_in_process = self._prefer_in_process
-        return sub
+        return self._sub(verb.replace("_", "-"))
 
     def opts(self, **kwargs: Any) -> Tool:
         """Bind options *before* the next subcommand — a tool's globals.
@@ -323,9 +350,7 @@ class Tool:
         The flags are translated by the same rules as any call, and the
         returned tool keeps chaining, so `.opts(...)` composes mid-stream.
         """
-        sub = Tool(self._argv0, *self._base, *_flags(kwargs, self._argv0))
-        sub._prefer_in_process = self._prefer_in_process
-        return sub
+        return self._sub(*_flags(kwargs, self._argv0))
 
     def __call__(
         self,
@@ -343,25 +368,25 @@ class Tool:
             tail = [*self._base, *flags, *positionals]
         else:
             tail = [*self._base, *positionals, *flags]
-        argv = [self._argv0, *tail]
-        # One structured view of the call, so the shown line reads well
-        # (separated flags, role-coloured) no matter how it executes.
+        # Execution runs the real executable (`python` → sys.executable); the
+        # shown line keeps the name, so the painted command reads `python …`.
+        argv = [self._path, *tail]
         show = _Invocation(
             _show_parts(self._argv0, self._base, args, kwargs), tuple(argv)
         )
         wanted = self._prefer_in_process if in_process is None else in_process
         if wanted:
-            ep = _console_entrypoint(self._argv0)  # metadata only — no import
-            if ep is None:
+            loader = self._inprocess_loader()  # metadata only — no import
+            if loader is None:
                 if in_process is True:  # a demand can't be met — fail fast
                     raise ValueError(
-                        f"{self._argv0}: in_process=True, but no installed "
-                        f"console_scripts entry point named {self._argv0!r}"
+                        f"{self._argv0}: in_process=True, but no importable "
+                        f"in-process entry ({self._entry or self._argv0!r})"
                     )
                 return _run(argv, nofail=nofail, _show=show)  # prefer → subproc
 
             def _invoke() -> Any:
-                entry = ep.load()  # the tool's import — deferred to execution,
+                entry = loader()  # the tool's import — deferred to execution,
                 # so a dry-run of this call imports nothing.
                 if _accepts_args(entry):
                     return entry(tail)  # click / main(argv): lock-free, parallel
@@ -375,6 +400,36 @@ class Tool:
 
             return _run(_invoke, nofail=nofail, _show=show)
         return _run(argv, nofail=nofail, _show=show)
+
+    def _inprocess_loader(self) -> Any | None:
+        """A callable that imports and returns the in-process target — or None
+        when there is nothing to run in-process (so the call spawns instead).
+
+        A recorded `entry` override wins over the console script: pytest's
+        console entry is the zero-arg `_console_main`, but `pytest.main` takes
+        the argument list, so it is recorded as `pytest:main` and stays
+        parallel. Availability is checked without importing (a dry-run of the
+        call must import nothing); the import itself is deferred to the loader.
+        """
+        if self._entry:
+            import importlib.util
+
+            module = self._entry.partition(":")[0]
+            try:
+                if importlib.util.find_spec(module) is None:
+                    return None
+            except (ImportError, ValueError):
+                return None
+
+            def load() -> Any:
+                import importlib
+
+                mod, _, attr = self._entry.partition(":")
+                return getattr(importlib.import_module(mod), attr)
+
+            return load
+        ep = _console_entrypoint(self._argv0)
+        return ep.load if ep is not None else None
 
     def installed_version(self) -> tuple[int, ...]:
         """The installed binary's version, as a comparable int tuple.
@@ -433,27 +488,25 @@ cmake = Tool("cmake")
 ninja = Tool("ninja")
 
 
-def pytest(*args: str, in_process: bool = True, nofail: bool = False) -> int:
-    """Run pytest — in-process via `pytest.main` when available (no subprocess)."""
-    if in_process:
-        try:
-            import pytest as _pytest
-        except ImportError:
-            pass
-        else:
-            title = " ".join(["pytest", *args])
-            return _run(_pytest.main, list(args), title=title, nofail=nofail)
-    return _run(["pytest", *args], nofail=nofail)
+# pytest runs in-process through the arg-accepting `pytest.main` (parallel),
+# not its zero-arg `_console_main` console script. python always targets the
+# running interpreter, whatever `python`/`python3` is (or isn't) on PATH; its
+# stub is read from provisioned interpreters. There is no `sh`: a command as a
+# single string is `run("…")` — footman splits and runs it (no shell). For a
+# real shell, invoke one: `tools.bash("-c", "…")`.
+pytest = Tool("pytest", in_process=True, entry="pytest:main")
+python = Tool("python", path=_sys.executable)
 
-
-def python(*args: str, nofail: bool = False) -> int:
-    """Run the current interpreter. `python("-m", "build")`."""
-    return _run([_sys.executable, *args], nofail=nofail)
-
-
-def sh(command: str, nofail: bool = False) -> int:
-    """Run a command line given as a single string."""
-    return _run(command, nofail=nofail)
+# The shells footman autocompletes for, invoked to run a command *string*:
+# `tools.bash("echo $X | grep y")` runs `bash -c "…"`, so pipes, redirects,
+# globbing and `$VAR` all work — the deliberate "I want a shell" escape hatch,
+# where `run(...)` stays shell-free. `-c` is the run-a-string flag for every
+# one of them (pwsh takes it as an alias for -Command).
+bash = Tool("bash", "-c")
+zsh = Tool("zsh", "-c")
+fish = Tool("fish", "-c")
+pwsh = Tool("pwsh", "-c")
+nu = Tool("nu", "-c")
 
 
 def __getattr__(name: str) -> Tool:

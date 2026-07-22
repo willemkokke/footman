@@ -348,11 +348,13 @@ def test_ctx_by_bare_name():
 # --- tools -------------------------------------------------------------------
 
 
-def test_tools_sh_runs():
+def test_run_string_command():
+    # A command as a single string is `run(...)` (footman splits and runs it,
+    # no shell) — there is no `tools.sh`.
     def tasks(reg):
         @reg.task
         def go():
-            tools.sh("echo tool-ran")
+            run("echo tool-ran")
 
     _, _, results = drive(tasks, "go")
     assert results[0].steps[0].output.strip() == "tool-ran"
@@ -379,15 +381,17 @@ def test_tools_build_commands(make, expected, capsys):
     assert expected in capsys.readouterr().out
 
 
-def test_tools_python_uses_interpreter(capsys):
+def test_tools_python_uses_interpreter():
+    # `tools.python` shows the clean name `python` but runs `sys.executable`.
     def tasks(reg):
         @reg.task
         def go():
             tools.python("-V")
 
-    drive(tasks, "go", dry_run=True)
-    out = capsys.readouterr().out
-    assert "-V" in out and sys.executable in out
+    _, _, results = drive(tasks, "go", dry_run=True)
+    step = results[0].steps[0]
+    assert step.command == "python -V"  # the name is what's shown
+    assert sys.executable in step.raw  # sys.executable is what actually runs
 
 
 # --- robustness edges ---------------------------------------------------------
