@@ -31,7 +31,7 @@ import contextlib
 import os
 import shutil
 from collections.abc import Callable, Iterator, Sequence
-from typing import Any, overload
+from typing import Any, ParamSpec, Protocol, TypeVar, cast, overload
 
 Task = Callable[..., Any]
 Finalizer = Callable[["Tasks"], object]
@@ -83,6 +83,111 @@ def _empty_body(fn: object) -> bool:
     return all(isinstance(s, ast.Pass) for s in stmts)
 
 
+# The orchestration options `.opts()` can override, mapped to their task
+# attribute. These are *policy* (how a task runs), kept separate from the task's
+# own parameters (the *work*) — which is why they ride in `.opts()` rather than
+# the call, mirroring tools' `.opts()`.
+_OPTS_ATTRS = {
+    "keep_going": "_footman_keep_going",
+    "atomic": "_footman_atomic",
+    "interactive": "_footman_interactive",
+    "progress": "_footman_progress",
+    "confirm": "_footman_confirm",
+    "infinite": "_footman_infinite",
+}
+
+
+def _opts_overrides(kwargs: dict[str, Any]) -> dict[str, Any]:
+    """Validate `.opts()` kwargs and map them to their task attributes."""
+    unknown = sorted(set(kwargs) - set(_OPTS_ATTRS))
+    if unknown:
+        valid = ", ".join(sorted(_OPTS_ATTRS))
+        raise TypeError(
+            f".opts() got unknown option(s) {unknown}; valid options are {valid}. "
+            f"A task's own parameters go in the call — `t.opts(atomic=True)(x=1)` — "
+            f"not in .opts()."
+        )
+    for name, value in kwargs.items():
+        # Override values key the DAG's dedup identity, so they must be hashable.
+        # Every real policy value is (bool / str / None); this turns a stray
+        # unhashable one into a clear error here, not a cryptic crash at DAG build.
+        try:
+            hash(value)
+        except TypeError:
+            raise TypeError(
+                f".opts({name}=…) needs a hashable value — options key the run's "
+                f"deduplication — but got an unhashable {type(value).__name__}"
+            ) from None
+    return {_OPTS_ATTRS[k]: v for k, v in kwargs.items()}
+
+
+class _Opted:
+    """A task (or runnable group) reference carrying per-use option overrides.
+
+    `lint.opts(atomic=True)` reads as a task everywhere a bare task does — a
+    `pre=`/`post=` target, a body call — but reports the overridden `_footman_*`
+    options *for this use*, leaving the registered task untouched. It proxies the
+    base transparently: same signature (via `__wrapped__`), same name, same call;
+    only the overridden options differ. This is footman's policy-vs-work split —
+    the options ride beside the call, not inside its argument list — mirroring
+    the `.opts()` on `tools.*`.
+    """
+
+    _opted_base: Task | Group
+    _opted_overrides: dict[str, Any]
+
+    def __init__(self, base: Task | Group, overrides: dict[str, Any]) -> None:
+        object.__setattr__(self, "_opted_base", base)
+        object.__setattr__(self, "_opted_overrides", overrides)
+        object.__setattr__(self, "__wrapped__", base)  # inspect.signature follows
+
+    def __getattr__(self, name: str) -> Any:
+        overrides = object.__getattribute__(self, "_opted_overrides")
+        if name in overrides:
+            return overrides[name]
+        return getattr(object.__getattribute__(self, "_opted_base"), name)
+
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        return object.__getattribute__(self, "_opted_base")(*args, **kwargs)
+
+    def opts(self, **overrides: Any) -> _Opted:
+        base = object.__getattribute__(self, "_opted_base")
+        merged = dict(object.__getattribute__(self, "_opted_overrides"))
+        merged.update(_opts_overrides(overrides))  # a later .opts() wins
+        return _Opted(base, merged)
+
+    def _dedup_key(self) -> tuple[int, frozenset[tuple[str, Any]]]:
+        """This override's identity for DAG deduplication: the base task plus its
+        frozen overrides — the same `(id, frozenset)` shape a bare task uses, so
+        an empty `.opts()` collapses onto the bare task and identical overrides
+        share a node (a shared prerequisite still runs once). A different policy
+        is a distinct node, a genuinely different run. Values are hashable by
+        construction — `_opts_overrides` rejects an unhashable one at call time.
+        The proxy's internals stay behind this method, so the scheduler never
+        reaches into them for identity. (`.opts()` never nests — it merges onto
+        the base — so `_opted_base` is always the ultimate task, never `_Opted`.)"""
+        base = object.__getattribute__(self, "_opted_base")
+        overrides = object.__getattribute__(self, "_opted_overrides")
+        return (id(base), frozenset(overrides.items()))
+
+
+_P = ParamSpec("_P")
+_R_co = TypeVar("_R_co", covariant=True)
+
+
+class TaskFn(Protocol[_P, _R_co]):
+    """The static type of a `@task`-decorated function: callable with the task's
+    *own* signature (parameters and return type forwarded through the `ParamSpec`),
+    plus `.opts()` for per-use option overrides. The `_footman_*` markers ride as
+    dynamic attributes (read through `getattr`), so they need no declaration here.
+    """
+
+    __name__: str
+
+    def __call__(self, *args: _P.args, **kwargs: _P.kwargs) -> _R_co: ...
+    def opts(self, **overrides: Any) -> _Opted: ...
+
+
 class Group:
     """A node in the command tree: named tasks and nested sub-groups."""
 
@@ -102,7 +207,7 @@ class Group:
             raise RegistrationError(f"{where} already has a group named {key!r}")
 
     @overload
-    def task(self, fn: Task) -> Task: ...
+    def task(self, fn: Callable[_P, _R_co]) -> TaskFn[_P, _R_co]: ...
     @overload
     def task(
         self,
@@ -117,7 +222,7 @@ class Group:
         interactive: bool = False,
         keep_going: bool | None = None,
         atomic: bool = False,
-    ) -> Callable[[Task], Task]: ...
+    ) -> Callable[[Callable[_P, _R_co]], TaskFn[_P, _R_co]]: ...
 
     def task(
         self,
@@ -176,7 +281,7 @@ class Group:
             # concepts distinct: "never times" vs "never ends".
             pass
 
-        def register(fn: Task) -> Task:
+        def register(fn: Callable[_P, _R_co]) -> TaskFn[_P, _R_co]:
             key = _cli_name(name or fn.__name__)
             self._claim(key)
             fn._footman_pre = list(pre)  # type: ignore[attr-defined]
@@ -193,8 +298,9 @@ class Group:
                 fn._footman_keep_going = keep_going  # type: ignore[attr-defined]
             if atomic:
                 fn._footman_atomic = True  # type: ignore[attr-defined]
+            fn.opts = lambda **o: _Opted(fn, _opts_overrides(o))  # type: ignore[attr-defined]
             self.tasks[key] = fn
-            return fn
+            return cast("TaskFn[_P, _R_co]", fn)
 
         return register(fn) if fn is not None else register
 
@@ -230,7 +336,7 @@ class Group:
         self.finalizers.append(fn)
         return fn
 
-    def default(self, fn: Task) -> Task:
+    def default(self, fn: Callable[_P, _R_co]) -> TaskFn[_P, _R_co]:
         """Register *fn* as this group's default action — what a bare
         `fm <group>` runs, and what the group returns when called.
 
@@ -264,7 +370,13 @@ class Group:
         fn._footman_default_group = self  # type: ignore[attr-defined]
         fn._footman_default_fanout = _empty_body(fn)  # type: ignore[attr-defined]
         self.default_task = fn
-        return fn
+        return cast("TaskFn[_P, _R_co]", fn)
+
+    def opts(self, **overrides: Any) -> _Opted:
+        """Per-use option overrides for this group's default action, the same
+        `.opts()` a task has — `pre=[lint.opts(keep_going=True)]`. Overrides ride
+        the group's default when it runs (bare, as a `pre=`, or called)."""
+        return _Opted(self, _opts_overrides(overrides))
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         """Run this group's default action — the imperative mirror of a bare

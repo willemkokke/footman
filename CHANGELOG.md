@@ -7,6 +7,23 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- **Per-use option overrides — `.opts()`.** A task or runnable group carries an
+  `.opts(...)` that overrides its orchestration options *for one use* without
+  touching the registered task: `pre=[fmt.opts(atomic=True)]`,
+  `pre=[lint.opts(keep_going=True)]`, or a body call
+  `deploy.opts(atomic=True)("prod")`. It takes the policy options — `keep_going`,
+  `atomic`, `interactive`, `progress`, `confirm`, `infinite` — and rejects a
+  task parameter with a taught error, because work goes in the call and policy
+  rides beside it, the same split `tools.*` draw with their `.opts()`.
+  Keep-going resolution now spans the whole dependency graph, so a declared or
+  opted `keep_going` on a `pre`/`post` prerequisite counts, not only a task
+  named in the chain. As a side benefit, `@task` now **forwards the wrapped
+  function's signature** in the type system (parameters and return type), where
+  a decorated task used to be typed `Callable[..., Any]` — so a body call with a
+  wrong or missing argument is now a type error, not silently `Any`.
+
 ## [0.18.0] — 2026-07-22
 
 ### Added

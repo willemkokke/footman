@@ -89,6 +89,36 @@ Three escape hatches for the kill:
 - An **in-process** `run()` (a `tools.*` entry point, a plain callable) has no
   subprocess to signal, so it always finishes on its own.
 
+### Override a task's options per use: `.opts()`
+
+`keep_going`, `atomic`, and the rest are set on the `@task` decorator, once. When
+one *use* wants a different policy, `.opts()` overrides it there — without
+touching the registered task:
+
+```python
+@task(pre=[fmt.opts(atomic=True), lint])   # protect fmt's writes here, not everywhere
+def check(fix: Forward[bool] = False): ...
+```
+
+`.opts()` returns the same task with the options overridden for that use only — a
+`pre=`/`post=` target, or a body call — and reads everywhere a bare task does:
+same name, same signature, same call. It takes the policy options `keep_going`,
+`atomic`, `interactive`, `progress`, `confirm`, and `infinite`.
+
+It takes **policy, not parameters**. A task's own arguments go in the call; the
+options ride beside it — `deploy.opts(atomic=True)("prod")` — the same split
+`tools.*` draw with their `.opts()`. Passing a task parameter to `.opts()` is a
+taught error. A runnable group has `.opts()` too, riding its default action:
+`pre=[lint.opts(keep_going=True)]`. Keep-going resolves across the whole
+dependency graph, so an opted (or declared) `keep_going` on a prerequisite
+counts, not only on a task named in the chain.
+
+An opted reference with a *different* policy is a distinct prerequisite from a
+bare one — a different policy is a different run, so both appear in the graph —
+while identical policies deduplicate to one node, exactly as a shared bare
+prerequisite runs once. Deduplication keys on `(task, options)`, so an empty
+`.opts()` is just the bare task, and options must be hashable values.
+
 ## Interactive input
 
 A bare `input()` doesn't work in a task: its prompt goes to stdout, which
