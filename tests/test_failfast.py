@@ -98,3 +98,28 @@ def test_keep_going_lets_an_in_flight_sibling_finish(tmp_path):
     segs = _segs(tree, "slow boom")
     run_plan(reg, segs, sequential=False, keep_going=True)
     assert marker.exists()  # keep-going: the sibling ran to completion, not killed
+
+
+def test_atomic_task_is_not_killed_by_fail_fast(tmp_path):
+    import sys
+
+    from footman.context import run
+    from footman.schedule import run_plan
+
+    marker = tmp_path / "finished"
+    sleep = [sys.executable, "-c", "import time; time.sleep(0.4)"]
+
+    def tasks(reg):
+        @reg.task(atomic=True)
+        def protected():
+            run(sleep)
+            marker.write_text("done")  # its subprocess must not be cut off
+
+        @reg.task
+        def boom():
+            raise SystemExit(1)
+
+    reg, tree = _tree(tasks)
+    segs = _segs(tree, "protected boom")
+    run_plan(reg, segs, sequential=False)  # fail-fast, but `protected` is atomic
+    assert marker.exists()  # ran to completion despite the failing sibling

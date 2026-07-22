@@ -110,6 +110,9 @@ class Context:
     """`@task(interactive=True)`: the task owns the real terminal — output is
     not captured and it holds sole stdio, so its body may prompt or run a
     REPL. Mid-body `prompt()`/`confirm()`/`select()` are allowed only here."""
+    atomic: bool = False
+    """`@task(atomic=True)`: this task's subprocesses opt out of fail-fast's
+    kill — they run to completion so a mid-write can't be truncated."""
     in_task: bool = False
     """True while a task *body* runs (the scheduler sets it around the call),
     so the interactive primitives tell a guarded mid-body call from the
@@ -804,6 +807,7 @@ def _run_subprocess(
     cwd: Path | None,
     capture: bool,
     encoding: str | None = "utf-8",
+    killable: bool = True,
 ) -> tuple[int, str]:
     # Dev tools (pytest, ruff, git, uv) emit UTF-8 regardless of the OS code
     # page, so decode as UTF-8 by default rather than the locale encoding
@@ -822,11 +826,16 @@ def _run_subprocess(
         encoding=encoding,
         errors="replace",
     )
-    _register_child(proc)
+    # An `@task(atomic=True)` opts its child out of the registry: fail-fast
+    # never kills it, so a mid-write (a formatter rewriting a file) can't be
+    # truncated. It runs to completion; the run waits for it.
+    if killable:
+        _register_child(proc)
     try:
         out, err = proc.communicate()
     finally:
-        _forget_child(proc)
+        if killable:
+            _forget_child(proc)
     output = "" if not capture else (out or "") + (err or "")
     return proc.returncode, output
 
@@ -960,7 +969,9 @@ def run(
             argv = [str(a) for a in cmd]
         run_env = {**os.environ, **ctx.env, **(env or {})}
         cwd_path = Path(cwd) if cwd is not None else ctx.cwd
-        code, output = _run_subprocess(argv, run_env, cwd_path, capture, encoding)
+        code, output = _run_subprocess(
+            argv, run_env, cwd_path, capture, encoding, killable=not ctx.atomic
+        )
     duration = time.perf_counter() - start
     ctx.steps.append(StepResult(label, code, output, duration, raw=raw))
 
