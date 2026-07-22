@@ -26,6 +26,7 @@ from footman.registry import (
     Task,
     is_infinite,
     is_interactive,
+    keeps_going,
     task_confirm,
     wants_progress,
 )
@@ -231,6 +232,26 @@ def _make_ctx(
     ctx.task = seg.task
     ctx.name_width = name_width
     return ctx
+
+
+def resolve_keep_going(root: Group, segments: list[Segment], cli: bool | None) -> bool:
+    """Tri-state failure policy: an explicit command-line choice (`-k` /
+    `--fail-fast`) wins; unspecified, a task the run invokes may declare its own
+    (`@task(keep_going=True)`); otherwise the built-in fail-fast.
+
+    Run-wide for now: if any invoked task asks to keep going, the run does. A
+    per-subtree policy (so a mixed chain honours each side) is a later step.
+    """
+    if cli is not None:
+        return cli
+    for seg in segments:
+        try:
+            fn = executor.resolve(root, seg.path)
+        except (KeyError, IndexError):
+            continue
+        if keeps_going(fn) is True:
+            return True
+    return False
 
 
 def dag_wants_progress(root: Group, segments: list[Segment]) -> bool:

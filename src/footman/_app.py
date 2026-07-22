@@ -1081,13 +1081,19 @@ def _run_tree(
         # No TTY (CI, a pipe): the one-line version of the bar, up front.
         print(f"  {'eta':>4}  ~{_progress.fmt_secs(est.typical)}", file=sys.stderr)
 
+    # Tri-state on the command line: `-k` forces keep-going, `--fail-fast` forces
+    # fail-fast, neither leaves it to the invoked task's declared policy.
+    cli_keep_going = True if g.get("keep_going") else None
+    if g.get("fail_fast"):
+        cli_keep_going = False
+
     start = time.perf_counter()
     try:
         results = schedule.run_plan(
             reg,
             segments,
             sequential=sequential,
-            keep_going=bool(g.get("keep_going")),
+            keep_going=schedule.resolve_keep_going(reg, segments, cli_keep_going),
             capture=json_mode,
             ctx_config=ctx_config,
             estimate=est,
