@@ -33,9 +33,11 @@ against what is checked in.
 
 from __future__ import annotations
 
+import os
 import re
 import shutil
 import subprocess
+import sys
 from collections.abc import Sequence
 from dataclasses import replace
 
@@ -657,6 +659,43 @@ def subcommands(text: str) -> dict[str, str]:
     return found
 
 
+def _brew_prefixes() -> tuple[str, ...]:
+    """Homebrew's prefixes, most-authoritative first: an explicit
+    `HOMEBREW_PREFIX`, then the Apple-silicon and Intel defaults."""
+    prefixes: list[str] = []
+    if "HOMEBREW_PREFIX" in os.environ:
+        prefixes.append(os.environ["HOMEBREW_PREFIX"])
+    for default in ("/opt/homebrew", "/usr/local"):
+        if default not in prefixes:
+            prefixes.append(default)
+    return tuple(prefixes)
+
+
+def which(name: str) -> str | None:
+    """Resolve *name*'s executable, preferring Homebrew on macOS.
+
+    On macOS the Homebrew build of a tool is almost always the newest and the
+    easiest to keep current, so it wins over whatever the general `PATH`
+    resolves — an older system copy (Apple's `/usr/bin/git`), or a keg that was
+    `brew unlink`ed off `PATH` on purpose. The keg (`opt/<name>/bin`) is checked
+    before the linked `bin`, so an unlinked-but-installed tool is still found.
+    Everywhere else — and as the fallback when Homebrew hasn't got it — this is
+    plain `shutil.which`.
+
+    Only stub generation calls this (`<tool> --help`/`--version`); running a
+    `tools.*` task still resolves the tool on `PATH` as usual.
+    """
+    if sys.platform == "darwin":
+        for prefix in _brew_prefixes():
+            for path in (
+                os.path.join(prefix, "opt", name, "bin", name),  # keg, survives unlink
+                os.path.join(prefix, "bin", name),  # the linked symlink
+            ):
+                if os.access(path, os.X_OK) and not os.path.isdir(path):
+                    return path
+    return shutil.which(name)
+
+
 def run_help(
     argv: list[str], *, flag: str = "--help", man: bool = False, timeout: float = 30.0
 ) -> str:
@@ -669,9 +708,14 @@ def run_help(
     terse `-h` omits most of its flags (git's `-h` shows about half). It
     runs only at stub-generation time, never at task time, so its heavier
     footprint (a rendered man page) costs a user nothing.
+
+    The binary is resolved with `which` (Homebrew-first on macOS), so the stub
+    describes the newest installed build rather than an older `PATH` copy.
     """
-    if shutil.which(argv[0]) is None:
+    binary = which(argv[0])
+    if binary is None:
         return ""
+    argv = [binary, *argv[1:]]
     if man:
         return _run_man(argv, timeout)
     try:

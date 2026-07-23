@@ -20,7 +20,6 @@ from the installed tool, every time the stubs are regenerated.
 from __future__ import annotations
 
 import re
-import shutil
 import subprocess
 from dataclasses import dataclass, field
 
@@ -310,17 +309,18 @@ _VERSION = re.compile(r"\b(\d+\.\d+(?:\.\d+)?(?:[-.][A-Za-z0-9]+)*)\b")
 
 
 def installed(driver: Driver) -> bool:
-    """Whether this machine has the tool to ask."""
-    return shutil.which(driver.name) is not None
+    """Whether this machine has the tool to ask (Homebrew-first on macOS)."""
+    return _toolhelp.which(driver.name) is not None
 
 
 def version(name: str) -> str:
     """`<tool> --version`, reduced to the version itself."""
-    if shutil.which(name) is None:
+    binary = _toolhelp.which(name)
+    if binary is None:
         return ""
     try:
         done = subprocess.run(
-            [name, "--version"], capture_output=True, text=True, timeout=30
+            [binary, "--version"], capture_output=True, text=True, timeout=30
         )
     except (OSError, subprocess.SubprocessError):
         return ""
