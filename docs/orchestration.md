@@ -130,84 +130,13 @@ prerequisite runs once. Deduplication keys on `(task, options)`, so an empty
 
 ## Interactive input
 
-A bare `input()` doesn't work in a task: its prompt goes to stdout, which
-footman buffers so parallel output can't interleave — so the prompt is
-swallowed and the task looks hung. There are two better shapes, and both are
-CI-safe by construction.
-
-### Ask for a value: `ask()`
-
-Mark a typed parameter `ask()` and footman prompts for it when the command line
-and its `env()` don't supply one, coercing the answer through the same pipeline
-as a flag:
-
-```python
-from typing import Annotated, Literal
-from footman import ask, task
-
-@task
-def release(version: Annotated[str, ask()]): ...
-
-@task
-def deploy(env: Annotated[Literal["staging", "prod"], ask()]): ...
-```
-
-`fm release --version 1.2.3` uses the flag; `fm release` asks `version:` and
-runs the answer through coercion — a `Literal` is a typed choice, a bad value
-re-asks. The precedence is **CLI > `env` > default > prompt**: a default *is*
-the answer, so `ask()` only prompts a parameter that has none. (An `ask()`
-parameter is a CLI-optional option, so it never becomes a required positional.)
-
-The safety is the point: off a terminal, under `--no-input`, or in `--json`,
-`ask()` **errors naming the flag** instead of hanging — an unattended run fails
-loudly, and CI passes the value as a flag like any other.
-
-![Animated: fm release prompts version, the typed answer runs through coercion, and the release runs](_generated/shots/ask-cast.svg)
-
-### Gate a task: `@task(confirm=…)`
-
-A yes/no question asked *before* the task and its prerequisites run:
-
-```python
-@task(confirm="Deploy to production?")
-def deploy(): ...
-```
-
-Deny it and the task is skipped and the run exits non-zero. `--yes` auto-answers
-it (for CI and scripts), and off a terminal without `--yes` the answer is no —
-footman never proceeds unasked.
-
-![Animated: fm deploy asks Deploy to production, answered yes, then deploys](_generated/shots/confirm-cast.svg)
-
-### Own the terminal: `@task(interactive=True)`
-
-`prompt()`, `confirm()`, and `select()` ask mid-task, but they are **guarded**:
-called inside an ordinary task they raise a taught error, because the prompt
-would be swallowed by the capture buffer or race a parallel sibling. A task that
-genuinely runs a wizard or a REPL declares itself interactive — it then owns the
-real terminal, uncaptured, with sole stdio:
-
-```python
-from footman import prompt, select, task
-
-@task(interactive=True)
-def scaffold():
-    name = prompt("project name? ")
-    kind = select("what kind?", ["library", "app", "plugin"])
-    ...
-```
-
-`select()` picks one — or `multiple=True` picks several — from a list computed
-at run time, the case a flag can't cover. Two globals cover the rest: `--yes`
-auto-answers every confirm, and `--no-input` refuses to prompt (a required
-prompt errors instead).
-
-Because it owns the terminal, an interactive task can't share it with parallel
-siblings: **a run that contains one goes fully sequential** — every task, one at
-a time — and the live status line steps aside so its repaints can't scribble
-over a prompt. (It also can't run under `--json`.)
-
-![Animated: fm scaffold prompts for a project name, then a numbered what-kind menu picked by number](_generated/shots/interactive-cast.svg)
+One parallelism consequence belongs here: a run that contains an
+`@task(interactive=True)` task goes **fully sequential** — that task owns the
+real terminal, so it can't share it with parallel siblings, and the live status
+line steps aside so its repaints can't scribble over a prompt. The three ways to
+ask the person at the keyboard — `ask()` for a value, `@task(confirm=…)` for a
+gate, and `interactive=True` for a mid-task wizard, all CI-safe by construction —
+have their own page: [Asking for input](input.md).
 
 ## Dependencies with `pre` / `post`
 
@@ -360,31 +289,13 @@ real control flow.
 
 ## Progress & the live status line
 
-A finished run reads as a receipt — mark, name, command, time — captured
-from a real terminal:
-
-![fm format lint: green check marks, task names in cyan, dim commands, and a took line](_generated/shots/run.svg)
-
-On a TTY, every run keeps one live status line on stderr: a **progress
-bar** when footman has seen this exact invocation enough to estimate
-honestly — five recent green runs with a steady spread; the bar fills
-against the history's 90th percentile and labels elapsed vs. typical
-time — and a bouncing pulse with elapsed time when it hasn't. Both
-parallel engines feed the same line, so a chain and a `parallel()` inside
-a task body present identically, with running names appearing the moment
-each unit starts. It always clears itself before any output lands, so
-blocks and live step lines stay clean. Without a TTY, a confident
-estimate prints once as `eta ~5.8s` on stderr instead — the same honesty,
-one line.
-
-Green runs teach: wall totals are stored per invocation shape and
-directory beside the completion manifests (`$FOOTMAN_CACHE_DIR` moves
-every footman cache at once). Three off switches: `--no-progress` for one
-run, `progress = false` in `[tool.footman]` permanently, and
-`@task(progress=False)` for a task whose duration has no rhyme — a run
-containing one never records and only ever pulses. The line is absent
-entirely under `--no-color`/`NO_COLOR`/`TERM=dumb`, `--quiet`, `--json`,
-or when stderr is piped.
+Both parallel engines — the scheduler and a `parallel()` inside a task body —
+feed one live status line, so a chain and an in-body fan-out present
+identically: a real progress bar once footman has learned the run's timing, a
+bouncing pulse until then. A task can also report its own progress
+(`track()` / `progress()`) and the bar fills from that instead of an estimate.
+The whole story — the status line, the timing history, and the off switches —
+is on [Progress & timing](progress.md).
 
 ## JSON for CI and agents
 

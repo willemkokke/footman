@@ -201,9 +201,74 @@ two-line demo of this whole mechanism, and what it mounts is
 entry-point *group* is served by the `footman.tasks` *package* — different
 namespaces, one product.
 
+## Editing the discovered tree
+
+Sometimes a policy spans many tasks — every `deploy-*` task gets an `audit`
+step first, a handful of tasks are switched off in this checkout — and editing
+each `@task` by hand is the wrong tool. `@finalize` registers a hook that runs
+once on the **fully-merged** tree, at discovery, before anything dispatches.
+It is footman's `pytest_collection_modifyitems`.
+
+```python
+# repo/tasks.py
+import footman
+from footman import task
+
+@task
+def audit(): ...
+
+@footman.finalize
+def gate_deploys(tasks):
+    for t in tasks:
+        if t.name.startswith("deploy") and "audit" in tasks:
+            t.add_pre(tasks["audit"])
+```
+
+The hook is handed a `Tasks` view of the merged tree — iterate it for every
+task, or index it by command-line name (`tasks["deploy-web"]`). Each task comes
+back as a `TaskView`:
+
+- **wiring** — `t.name`, `t.group` (the owning group, or `None` at top level),
+  `t.pre`, `t.post`, `t.disabled`;
+- **policy flags** — `t.keep_going`, `t.atomic`, `t.infinite`, `t.interactive`,
+  `t.timed`, `t.confirm`;
+- **cascade provenance** — `t.defining_dir` (the folder it was defined in),
+  `t.shadowed` (the task it overrides one level up), `t.shadow_chain`, and
+  `t.source_file`;
+- **edits** — `t.add_pre(…)`, `t.add_post(…)`, `t.disable("reason")`, and
+  `t.set_opts(…)` (permanent, tree-wide policy — the finalize-time counterpart
+  to a per-use `.opts()`).
+
+`t.fn` is the underlying function if you need to reach past the view — which
+deliberately keeps footman's private task attributes out of your hooks.
+
+Provenance lets a finalizer decide by *where* a task came from. To gate every
+task defined under an `infra/` folder, regardless of its name:
+
+```python
+@footman.finalize
+def gate_infra(tasks):
+    for t in tasks:
+        if (t.defining_dir or "").endswith("infra"):
+            t.add_pre(tasks["audit"])
+```
+
+Because a finalizer runs **at discovery**, its edits are part of the plan, not
+a runtime surprise: an added `pre` runs and shows in `fm <task> --dry-run`, and
+a disabled task drops from `--list`, `--help`, and <kbd>Tab</kbd> completion —
+exactly as if you had written it into the task.
+
+In a [monorepo](monorepos.md), a **root** `tasks.py` can finalize a subfolder's
+tasks, because the hook sees the whole merged tree. When several files in the
+cascade each register a finalizer, they run in **cascade order** — root first,
+the folder nearest your cwd last, each seeing the previous edits — the same
+"local overrides global" precedence the cascade itself uses, so a subfolder
+refines what root did.
+
 ## The caching contract, stated once
 
-All three mechanisms resolve at import/manifest-build time, so what
-completion offers reflects the *last real run* — the same contract dynamic
-`suggest()` choices have always had. Availability (`@requires`) is the one thing
-never trusted from the cache: it re-checks live at the moment of execution.
+Hiding, `include()`, `plugin()`, and `@finalize` all resolve at
+import/manifest-build time, so what completion offers reflects the *last real
+run* — the same contract dynamic `suggest()` choices have always had.
+Availability (`@requires`) is the one thing never trusted from the cache: it
+re-checks live at the moment of execution.

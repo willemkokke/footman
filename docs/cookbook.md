@@ -20,7 +20,9 @@ They assume the [getting started](getting-started.md) basics: tasks are
 typed functions in `tasks.py`, `run()` executes commands, and the CLI is
 derived from the signatures.
 
-## The gate
+## Everyday shapes
+
+### The gate
 
 Every repo deserves one command that answers "is this fine?". Give the
 independent checks to `parallel()` and let the machine use its cores:
@@ -58,7 +60,7 @@ uninterleaved block, and — once it has seen a few runs — shows a progress
 bar that actually knows how long your gate takes. Wire it into CI as-is:
 the same command, the same exit codes.
 
-## Hand a tool its own flags
+### Hand a tool its own flags
 
 A `*args` parameter receives everything after `--`, verbatim — no
 quoting gymnastics, no flag collisions with footman's own:
@@ -78,7 +80,7 @@ Anything before `--` still belongs to footman (`fm -q test -- -x`), so
 both grammars stay whole. A task can also read the raw list itself with
 `footman.passthrough()`.
 
-## One chain, each task with its own flags
+### One chain, each task with its own flags
 
 Options bind to the task named just before them — chains need no
 separators:
@@ -92,7 +94,7 @@ chain run in parallel by default; `-s` serialises the whole run (and
 reaches `parallel()` calls inside task bodies too), `-k` keeps going past
 failures, `-j 2` caps the width.
 
-## Choices that teach
+### Choices that teach
 
 A `Literal` is a validated choice list, a completion menu, and a
 did-you-mean in one annotation:
@@ -112,7 +114,9 @@ fm: deploy: <target> must be one of dev|staging|prod (got 'produ') — did you m
 
 Exit code 2, nothing executed, and the fix is in the message.
 
-## The belt-and-braces deploy
+## Typed inputs & validation
+
+### The belt-and-braces deploy
 
 Markers stack. Each one validates eagerly — before anything runs — and
 each failure is a taught error, not a traceback:
@@ -145,7 +149,7 @@ the prompt); `workers` is bounds-checked; and `target` falls back to
 `$DEPLOY_ENV` before its default — CI sets the variable, humans say
 `--target prod`, and both flow through the same validation.
 
-## Validate one input against another
+### Validate one input against another
 
 A `check` validator that declares a *second* parameter also receives the
 **siblings** — the parameters to its left at their effective values (provided,
@@ -177,7 +181,7 @@ parameter's check sees an empty dict; a sibling left at its default shows that
 default (so your check never re-hardcodes it); a plain one-argument `check` is
 unchanged.
 
-## TAB completes your git branches
+### TAB completes your git branches
 
 `suggest()` attaches a completer — footman runs it **fresh** when you complete
 the value (in a bounded subprocess), so <kbd>Tab</kbd> offers current branches,
@@ -209,7 +213,7 @@ def review(branch: Annotated[str, suggest(branches)]):
 a typo'd branch is refused against a *fresh* call — pass
 `suggest(branches, strict=False)` when the values are hints, not law.
 
-## KEY=VALUE options
+### KEY=VALUE options
 
 A `dict` parameter speaks the `--name KEY=VALUE` dialect, repeatable,
 with taught errors for malformed pairs:
@@ -227,7 +231,7 @@ def image(tag: str, build_args: dict[str, str] | None = None):
 $ fm image v3 --build-args PYTHON=3.13 --build-args DEBIAN=trixie
 ```
 
-## Variadic in front, required option behind
+### Variadic in front, required option behind
 
 A keyword-only parameter (after `*`) is an option — and without a
 default, a *required* one. So a task can take an open list of inputs
@@ -248,7 +252,9 @@ $ fm bundle web
 fm: bundle: missing required option --out
 ```
 
-## Dependencies that dedup
+## Orchestration & tools
+
+### Dependencies that dedup
 
 `pre` and `post` build a DAG; a dependency shared by several tasks runs
 once per invocation:
@@ -279,7 +285,7 @@ parallel. A failed dependency skips its dependents loudly — never
 silently, because a `check` that quietly dropped `lint` is how CI learns
 to lie.
 
-## A build matrix
+### A build matrix
 
 Thunks let you fan the same task over arguments; `keep_going` collects
 every failure instead of stopping at the first:
@@ -306,7 +312,7 @@ def matrix():
 `-j` caps the fan-out's width from the command line; the timing history
 keys on it, so `-j2` runs learn their own duration.
 
-## An endless dev server
+### An endless dev server
 
 Some tasks end when you say so, not when they finish. Mark them
 `infinite` and footman stops pretending otherwise:
@@ -327,7 +333,7 @@ traceback. (This recipe used `progress=False` the day it was written;
 `infinite` exists because Willem read the recipe and wanted the display
 to say how the story ends. Cookbooks feed the kitchen too.)
 
-## Tools you never declared
+### Tools you never declared
 
 Every executable on PATH is already a tool. Attribute access chains
 subcommands; keyword arguments translate mechanically (`detach=True` →
@@ -359,7 +365,9 @@ by default. And on macOS, in-process is sometimes the only *correct*
 option — SIP strips `DYLD_*` from subprocesses, so a tool needing
 Homebrew's native libraries only works inside the process.
 
-## Monorepo: root gate, leaf overrides
+## Monorepos
+
+### Monorepo: root gate, leaf overrides
 
 `tasks.py` files cascade from the repo root down to wherever you stand;
 nearer definitions win, and every task runs from the folder that defined
@@ -377,7 +385,7 @@ root's. A deep folder can adjust behaviour with a two-line
 `footman.toml` — the [configuration ladder](configuration.md) reaches
 everywhere the cascade does.
 
-## Extend an inherited task instead of replacing it
+### Extend an inherited task instead of replacing it
 
 Overriding by name usually means *and also*, not *instead of*.
 `inherited()` is footman's `super()`: inside an overriding task it hands
@@ -429,7 +437,9 @@ That last line is the forwarding call, spelled out. Calling
 `inherited()` in a task that shadows nothing is a taught error, not a
 `None` to trip over.
 
-## A bar that knows exactly where it is
+## Progress, data & fetching
+
+### A bar that knows exactly where it is
 
 Some work knows its own progress — 23 of 150 migrations, bytes of a
 download — and that beats any duration history. Report it and the live
@@ -457,9 +467,11 @@ contributes a fractional unit to the run's bar — three tasks done and a
 fourth halfway is 3.5/4 — so a chain of reporters fills smoothly and a
 mixed chain is smooth where it can be. `track()` takes the total from
 `len()`, accepts `total=` for generators, and clears the report if you
-break out early. Outside a run, both are no-ops.
+break out early. Outside a run, both are no-ops. The full story — the live
+status line, the timing history, the off switches — is on
+[Progress & timing](progress.md).
 
-## Fetch and cache a toolchain
+### Fetch and cache a toolchain
 
 `fetch()` downloads into footman's own cache: the same directory
 `FOOTMAN_CACHE_DIR` moves and the daily collector tends, so vendored
@@ -507,7 +519,7 @@ importable one if you'd rather. It isn't the default on purpose — a
 download that silently changes engine when an unrelated dependency
 appears would change its TLS and proxy behaviour with it.
 
-## Tasks that return data
+### Tasks that return data
 
 Return a dict and `--json` carries it verbatim under `returned` — your
 task's own machine surface, no printing-and-parsing:
@@ -533,7 +545,9 @@ $ fm --json coverage | jq -e '.results[0].returned.percent >= 90' > /dev/null \
 serialise symmetrically with what footman coerces in; an `int` return
 stays what it always was — an exit code.
 
-## The coding-agent loop
+## Machine use, testing & branding
+
+### The coding-agent loop
 
 footman treats agents as first-class users, and the loop is the same one
 you'd teach a new colleague — discover, validate, run, read the receipt:
@@ -553,7 +567,7 @@ stop-gate refusing to let the session end until `fm check` passes. The
 paste-ready versions live on the [AI agents](agents.md) page, next to
 the `CLAUDE.md` snippet that teaches the grammar in six lines.
 
-## Test your tasks like code
+### Test your tasks like code
 
 Tasks are plain functions, so plain calls already work. `recording()`
 asserts *which commands would run* without running them, and the pytest
@@ -591,7 +605,7 @@ The `fm`, `fm_project`, and `fm_record` fixtures auto-load — pytest is
 never a footman dependency; only pytest itself imports the plugin. The
 whole story: [Testing your tasks](testing.md).
 
-## Ship your own CLI
+### Ship your own CLI
 
 A branded tool is footman with your name on it — same grammar, same
 completion, same docs machinery, answering as itself:
