@@ -480,14 +480,32 @@ def test_required_dict_option_binds_and_is_enforced():
 
     def tasks(reg):
         @reg.task
-        def env_(vars: dict[str, int | str]):
+        def env_(vars: dict[str, int | str]):  # trailing _ escapes the env marker
             seen["vars"] = vars
 
-    run(tasks, "env- --vars port=8080 --vars name=web")
+    # The escape underscore is stripped: `env_` is the `env` command, not `env-`.
+    run(tasks, "env --vars port=8080 --vars name=web")
     assert seen["vars"] == {"port": 8080, "name": "web"}
 
     with pytest.raises(ChainError, match=r"missing required option\(s\): --vars"):
-        run(tasks, "env-")
+        run(tasks, "env")
+
+
+def test_trailing_underscore_param_is_stripped_to_a_clean_flag():
+    # `sync_` (escaping a name collision, like the provision task's own param)
+    # renders as `--sync`/`--no-sync`, not `--sync-`, and binds back — matching
+    # the tools bridge, which already strips the escape underscore.
+    seen = {}
+
+    def tasks(reg):
+        @reg.task
+        def go(sync_: bool = False):
+            seen["sync"] = sync_
+
+    run(tasks, "go --sync")
+    assert seen["sync"] is True
+    run(tasks, "go --no-sync")
+    assert seen["sync"] is False
 
 
 def test_required_bool_must_be_stated():

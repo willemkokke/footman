@@ -78,7 +78,7 @@ def param_spec(param: inspect.Parameter) -> dict[str, Any]:
     Dynamic-completer params get a transient `_completer` key that
     `_finish` replaces with the completer's (cached) choices.
     """
-    spec: dict[str, Any] = {"name": param.name.replace("_", "-")}
+    spec: dict[str, Any] = {"name": registry.cli_name(param.name)}
     ann = param.annotation
     empty = inspect.Parameter.empty
 

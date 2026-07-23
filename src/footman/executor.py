@@ -279,7 +279,7 @@ def bind(
                 var_args = [_coerce_extra(v, peeled, label, siblings) for v in extra]
             continue
 
-        cli = param.name.replace("_", "-")
+        cli = registry.cli_name(param.name)
         if cli not in seg.values:
             # A forwarded value overrides a defaulted parameter (never a
             # required one — the guard on `param.default`), ahead of env/default.
@@ -387,7 +387,7 @@ def forward_map(
         if received is not None and param.name in received:
             out[param.name] = received[param.name]
             continue
-        cli = param.name.replace("_", "-")
+        cli = registry.cli_name(param.name)
         if cli not in seg.values:
             out[param.name] = param.default
             continue

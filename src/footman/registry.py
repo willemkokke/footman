@@ -62,9 +62,17 @@ class RegistrationError(ValueError):
     """
 
 
-def _cli_name(name: str) -> str:
-    """Normalise a Python identifier to its command-line spelling."""
-    return name.replace("_", "-")
+def cli_name(name: str) -> str:
+    """Normalise a Python identifier to its command-line spelling.
+
+    A *trailing* underscore is Python's keyword/name-escape idiom (`sync_` to
+    avoid shadowing `sync`, `import_`, `class_`); it is stripped, so the flag
+    reads `--sync`, not `--sync-`. This is the one place identifiers become CLI
+    tokens for task names, group names, *and* parameter flags — the `tools.*`
+    bridge already strips the same way, and routing every mapping through here
+    keeps the two from drifting apart again.
+    """
+    return name.rstrip("_").replace("_", "-")
 
 
 def _empty_body(fn: object) -> bool:
@@ -297,7 +305,7 @@ class Group:
             pass
 
         def register(fn: Callable[_P, _R_co]) -> TaskFn[_P, _R_co]:
-            key = _cli_name(name or fn.__name__)
+            key = cli_name(name or fn.__name__)
             self._claim(key)
             setattr(fn, _PRE, list(pre))
             setattr(fn, _POST, list(post))
@@ -321,7 +329,7 @@ class Group:
 
     def group(self, name: str, help: str = "") -> Group:
         """Create and register a nested command group, returning it."""
-        key = _cli_name(name)
+        key = cli_name(name)
         self._claim(key)
         sub = Group(key, help)
         self.groups[key] = sub
