@@ -107,6 +107,7 @@ class Tool:
     _argv0: str
     _base: list[str]
     _prefer_in_process: bool
+    _single_dash: bool
     def __init__(
         self,
         name: str,
@@ -114,6 +115,7 @@ class Tool:
         in_process: bool = False,
         path: str = ...,
         entry: str = ...,
+        single_dash: bool = False,
     ) -> None: ...
     def __getattr__(self, verb: str) -> Tool: ...
     def opts(self, **flags: Any) -> Tool: ...
