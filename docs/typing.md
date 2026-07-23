@@ -17,6 +17,20 @@ parse time, with taught error messages.
 | `template: Path`                | required positional (consumed by exact count)       |
 | `*cmd: str`                     | variadic trailing passthrough                       |
 
+!!! note "One reserved parameter name: `help`"
+
+    A parameter named `help` is the one name the signature can't turn into a
+    working option. It would map to `--help` — but `--help` (and `-h`) is
+    intercepted **anywhere before `--`** and turns the whole line into a help
+    request that never executes anything, so the flag is *shown*, never bound to
+    your parameter. Every other global name is free to reuse: the rest
+    (`--json`, `--version`, `-s`, `-j`, …) must come before the first task, so
+    `fm deploy --json` binds `--json` to `deploy`, not to footman — only
+    `--help`/`-h` win wherever they land on the line. It's the single reserved
+    name, and the collision is the harmless kind (help prints instead of the
+    task running); rename the parameter — `show_help`, `explain` — to get a real
+    flag.
+
 ## Unions and one-or-many values
 
 A parameter can accept a union of types; footman validates the value against the

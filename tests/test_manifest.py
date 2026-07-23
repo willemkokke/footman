@@ -126,6 +126,30 @@ def test_kwargs_is_a_spec_error():
         specs(f)
 
 
+def test_help_option_is_a_reserved_name():
+    # A flag or option named `help` would map to --help, which footman
+    # intercepts anywhere on the line — so it can never bind. Reject it loudly
+    # at load time rather than silently shadowing the parameter.
+    def with_flag(help: bool = False): ...
+
+    def with_option(help: str = ""): ...
+
+    for fn in (with_flag, with_option):
+        with pytest.raises(manifest.SpecError, match=r"'help' is a reserved"):
+            node(fn)
+
+
+def test_help_is_allowed_when_it_is_not_an_option():
+    # A required positional <help> and a variadic *help never produce --help,
+    # so they stay legal — the reservation is precise, not a blanket ban.
+    def positional(help: str): ...
+
+    def variadic(*help: str): ...
+
+    assert node(positional)["params"][0]["kind"] == "argument"
+    assert node(variadic)["params"][0]["kind"] == "variadic"
+
+
 def test_no_default_dict_is_a_required_option():
     def f(vars: dict[str, str]): ...
 
