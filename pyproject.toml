@@ -95,6 +95,14 @@ comparison = [
     "typer>=0.12",
 ]
 
+[tool.uv]
+# Sync the groups the gate needs by default, so a plain `uv sync` yields a green
+# `fm check`: `shots` (rich/pyte — driven in the suite, imported by `docs shots`/
+# `cast`) and `docs` (the strict site build + its mkdocs-driver tests). `dev` is
+# uv's built-in default; it must be named here to stay in the set. `comparison`
+# stays opt-in — heavy, only for comparison/.
+default-groups = ["dev", "shots", "docs"]
+
 [tool.ruff]
 line-length = 88
 target-version = "py311"
