@@ -63,6 +63,18 @@ def check():
     parallel(functools.partial(format, check=True), lint, typecheck, test)
 
 
+@task
+def sync():
+    """Sync the environment to the lockfile (uv sync).
+
+    Runs through the project's own uv (a dev dependency, resolved by the
+    lockfile), so the same uv version writes uv.lock on every laptop and in CI.
+    A mismatched system uv silently rewriting the lock is the source of the
+    one-line churn this avoids.
+    """
+    uv.sync()
+
+
 docs = group("docs", help="Documentation site (Zensical)")
 
 
