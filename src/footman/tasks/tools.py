@@ -9,6 +9,7 @@ tools and by failing a check when the two disagree.
     fm footman tools spec ruff     what one tool says about itself, right now
     fm footman tools sync          rewrite the stubs from the installed tools
     fm footman tools audit         fail if a stub and its tool disagree
+    fm footman tools color         how footman forces colour, per tool
 
 `audit` is the one worth running anywhere: it answers "does the version I
 have still match what my editor is telling me?" without changing a file.
@@ -228,6 +229,68 @@ def audit(
         f"{len(stale)} stub(s) differ from the installed tool: "
         f"{', '.join(stale)}\nrun `fm footman tools sync` to update"
     )
+
+
+def _colour_mechanism(curated: dict | None, detected: dict) -> tuple[str, str]:
+    """`(mechanism, detail)` for one tool's colour forcing — the report's row.
+
+    `curated` is the tool's `_COLOR` entry (or None); `detected` is what
+    `spec.color_flags()` found. A curated entry is the answer; otherwise a
+    detected `--color` is a *candidate* (add it only if the tool ignores the
+    environment); otherwise the tool is assumed to obey `FORCE_COLOR`/`NO_COLOR`.
+    """
+    if curated:
+        parts = []
+        for verb, flag in curated.items():
+            where = "pre-verb" if flag.pre_verb else (verb or "call")
+            on = " ".join(flag.on) or "—"
+            off = " ".join(flag.off) or "—"
+            parts.append(f"{where}: on={on} off={off}")
+        return "curated", "; ".join(parts)
+    if detected:
+        verbs = ", ".join(v or "(root)" for v in sorted(detected))
+        return "flag?", f"has --color ({verbs}) — candidate"
+    return "env", "assumed FORCE_COLOR/NO_COLOR"
+
+
+@tasks.task
+def color(
+    only: Annotated[str, doc("report just this tool")] = "",
+):
+    """How footman forces colour for each curated tool — env, flag, or none.
+
+    footman spawns over pipes (no PTY), so it pushes `FORCE_COLOR`/`NO_COLOR`
+    into every child; the modern set obeys them. A tool that ignores the
+    environment needs its own switch, curated in `tools.py`'s `_COLOR`. This
+    reports each installed tool's mechanism: `env` (obeys the variables),
+    `curated` (a forced switch, with its tokens), or `flag?` (has a `--color`
+    that footman does *not* yet force — a candidate to curate only if the tool
+    proves to ignore the environment). A tool that can force neither direction
+    would be named here, not left a silent monochrome surprise — hopefully there
+    are none.
+    """
+    from footman import tools as _bridge
+
+    on = wants_color(sys.stdout)
+    rows: list[tuple[str, str, str]] = []
+    for driver in _drivers.DRIVERS:
+        if only and driver.key != only:
+            continue
+        if driver.source == "manual" or driver.base:
+            continue
+        if not _drivers.installed(driver):
+            rows.append((driver.key, "—", "not installed"))
+            continue
+        curated = _bridge._COLOR.get(driver.name)
+        # A curated tool's row reads off the table; only an un-curated one needs
+        # the (slower) extraction to look for a candidate `--color`.
+        detected = {} if curated else _drivers.extract(driver).color_flags()
+        mech, detail = _colour_mechanism(curated, detected)
+        rows.append((driver.key, mech, detail))
+    width = max((len(r[0]) for r in rows), default=4)
+    print(bold(f"{'tool'.ljust(width)}  mechanism  detail", on))
+    for key, mech, detail in rows:
+        print(f"{key.ljust(width)}  {mech:<9}  {detail}")
 
 
 @tasks.task
