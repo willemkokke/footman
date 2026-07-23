@@ -47,6 +47,17 @@ versions may include breaking changes.
   options and rejecting a task parameter the same way. A command-line
   `-k`/`--fail-fast` still wins over a set `keep_going`.
 
+### Changed
+
+- **Homebrew-first tool resolution on macOS (stub generation only).** When
+  regenerating a tool's stub, footman now resolves the binary from Homebrew
+  first — the keg (`opt/<name>/bin`, which survives `brew unlink`) then the
+  linked `bin` — and only falls back to general `PATH` if Homebrew hasn't got
+  it. On macOS the Homebrew build is almost always the newest and the easiest
+  to keep current, so the stub describes it rather than an older system copy
+  (e.g. Apple's `/usr/bin/git`). Only `<tool> --help`/`--version` parsing is
+  affected; running a `tools.*` task still resolves the tool on `PATH`.
+
 ### Fixed
 
 - **`fm footman tools provision --sync` no longer strips plugin flags.** A

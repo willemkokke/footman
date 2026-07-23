@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import ast
 import shutil
+import sys
 from types import SimpleNamespace
 
 import pytest
@@ -1144,3 +1145,41 @@ def test_md_safe_touches_only_leading_header_and_quote():
     assert safe[0].endswith("\\\\#2 heading")
     assert safe[1].endswith("\\\\> quote")
     assert safe[2].endswith("mid # hash")  # a mid-line hash is not a block
+
+
+def test_which_prefers_homebrew_bin_on_macos(tmp_path, monkeypatch):
+    monkeypatch.setattr(sys, "platform", "darwin")
+    brew = tmp_path / "brew"
+    (brew / "bin").mkdir(parents=True)
+    tool = brew / "bin" / "faketool"
+    tool.write_text("#!/bin/sh\n")
+    tool.chmod(0o755)
+    monkeypatch.setenv("HOMEBREW_PREFIX", str(brew))
+    assert _toolhelp.which("faketool") == str(tool)
+
+
+def test_which_finds_unlinked_keg_on_macos(tmp_path, monkeypatch):
+    # The keg survives `brew unlink`, so an installed-but-off-PATH tool is still
+    # found — the keg path is checked before the linked bin.
+    monkeypatch.setattr(sys, "platform", "darwin")
+    keg = tmp_path / "opt" / "faketool" / "bin"
+    keg.mkdir(parents=True)
+    tool = keg / "faketool"
+    tool.write_text("#!/bin/sh\n")
+    tool.chmod(0o755)
+    monkeypatch.setenv("HOMEBREW_PREFIX", str(tmp_path))
+    assert _toolhelp.which("faketool") == str(tool)
+
+
+def test_which_falls_back_to_path_off_homebrew(monkeypatch):
+    # macOS, but the tool is not a Homebrew formula -> plain PATH resolution.
+    monkeypatch.setattr(sys, "platform", "darwin")
+    monkeypatch.setenv("HOMEBREW_PREFIX", "/nonexistent-brew")
+    monkeypatch.setattr(_toolhelp.shutil, "which", lambda n: f"/usr/bin/{n}")
+    assert _toolhelp.which("faketool") == "/usr/bin/faketool"
+
+
+def test_which_ignores_homebrew_off_macos(monkeypatch):
+    monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.setattr(_toolhelp.shutil, "which", lambda n: f"/usr/bin/{n}")
+    assert _toolhelp.which("git") == "/usr/bin/git"
