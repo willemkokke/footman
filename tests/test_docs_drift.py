@@ -31,7 +31,7 @@ def test_every_public_symbol_is_documented():
     """Every name re-exported from `footman` appears somewhere in the
     hand-written docs. Catches a new public export that shipped undocumented —
     the drift the reference cheatsheet hit with .opts()/forward/ask."""
-    blob = "\n".join(p.read_text() for p in _handwritten_docs())
+    blob = "\n".join(p.read_text(encoding="utf-8") for p in _handwritten_docs())
     exported = [n for n in footman.__all__ if not n.startswith("__")]
     missing = [n for n in exported if not re.search(rf"\b{re.escape(n)}\b", blob)]
     assert not missing, f"public symbols undocumented in docs/: {missing}"
@@ -46,12 +46,12 @@ def _current_minor_pin() -> str:
 def test_minor_pin_example_tracks_the_release(rel):
     """The `pin the minor` example (README + docs home) tracks __version__,
     so it can't sit several minors stale after a bump."""
-    text = (DOCS / rel).resolve().read_text()
+    text = (DOCS / rel).resolve().read_text(encoding="utf-8")
     pin = _current_minor_pin()
     assert pin in text, f"{rel}: expected the pin example {pin!r} to be current"
 
 
 def test_json_version_example_is_current():
     """The --version JSON example on the JSON page tracks __version__."""
-    text = (DOCS / "json.md").read_text()
+    text = (DOCS / "json.md").read_text(encoding="utf-8")
     assert f'"version": "{footman.__version__}"' in text
