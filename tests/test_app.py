@@ -964,6 +964,55 @@ def test_no_color_flag_wins_even_on_a_tty(project, monkeypatch):
     assert "\033" not in out.getvalue()
 
 
+def test_resolve_color_precedence(monkeypatch):
+    # CLI > --no-color > config > env(NO_COLOR/FORCE_COLOR) > auto.
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    monkeypatch.delenv("FORCE_COLOR", raising=False)
+    assert _app._resolve_color({"color": "always"}, {"color": "never"}) == "always"
+    assert _app._resolve_color({"no_color": True}, {"color": "always"}) == "never"
+    assert _app._resolve_color({}, {"color": "never"}) == "never"
+    assert _app._resolve_color({}, None) == "auto"
+    monkeypatch.setenv("NO_COLOR", "1")
+    assert _app._resolve_color({}, None) == "never"  # env below config, above auto
+    assert _app._resolve_color({"color": "always"}, None) == "always"  # cli still wins
+    monkeypatch.delenv("NO_COLOR")
+    monkeypatch.setenv("FORCE_COLOR", "1")
+    assert _app._resolve_color({}, None) == "always"
+    monkeypatch.setenv("FORCE_COLOR", "0")  # 0 disables — falls through to auto
+    assert _app._resolve_color({}, None) == "auto"
+
+
+def test_color_always_paints_when_piped(project, capsys):
+    # The whole point of `always`: colour even though stdout is not a terminal
+    # (a pipe into `less -R`). capsys' stdout fails isatty, yet the plan paints.
+    assert _app.run(["--color=always", "-n", "hi"]) == 0
+    assert "\033[2m->\033[0m \033[1mhi\033[0m" in capsys.readouterr().out
+
+
+def test_color_never_is_byte_clean_on_a_tty(project, monkeypatch):
+    # `never` is the `--no-color` twin: no escapes even on a colour-eligible tty.
+    out, _ = _tty_streams(monkeypatch)
+    assert _app.run(["--color=never", "--list"]) == 0
+    assert "\033" not in out.getvalue()
+
+
+def test_color_rejects_an_unknown_value(project, capsys):
+    assert _app.run(["--color=technicolor", "--list"]) == 2
+    assert "--color expects one of auto|always|never" in capsys.readouterr().err
+
+
+def test_force_color_env_paints_when_piped(project, monkeypatch, capsys):
+    # FORCE_COLOR is the environment rung of `always`; NO_COLOR (higher, and the
+    # never rung) still wins over it.
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    monkeypatch.setenv("FORCE_COLOR", "1")
+    assert _app.run(["-n", "hi"]) == 0
+    assert "\033[1mhi\033[0m" in capsys.readouterr().out
+    monkeypatch.setenv("NO_COLOR", "1")
+    assert _app.run(["-n", "hi"]) == 0
+    assert "\033" not in capsys.readouterr().out
+
+
 def test_piped_output_stays_plain(project, capsys):
     for line in (["--help"], ["--list"], ["--tree"], ["-n", "hi"]):
         assert _app.run(line) == 0

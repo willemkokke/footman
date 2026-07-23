@@ -259,6 +259,10 @@ def _make_ctx(
     # style for their parent's terminal — both engines, one look. Only
     # liveness (sink is None, judged in run()) gates in-place rewrites.
     ctx.tty = not capture and real.isatty() and not _plain_output(ctx.no_color)
+    # `--color=always` forces colour even off a terminal, but not into a captured
+    # envelope: ANSI in `--json` stdout would corrupt it, so capture wins here
+    # exactly as it does for `tty` above.
+    ctx.force_color = ctx.force_color and not capture
     ctx.task = seg.task
     ctx.name_width = name_width
     return ctx

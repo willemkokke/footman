@@ -45,10 +45,39 @@ _color_out: bool = False
 _color_err: bool = False
 
 
-def _set_colors(no_color: bool) -> None:
+_COLOR_MODES = ("auto", "always", "never")
+
+
+def _resolve_color(g: dict[str, object], cfg: dict[str, object] | None = None) -> str:
+    """The run-wide colour mode: `auto` | `always` | `never`.
+
+    Precedence, highest first: an explicit `--color=…` / `--no-color` on the
+    command line, then `[tool.footman] color`, then the environment
+    (`NO_COLOR` → never, `FORCE_COLOR` → always), else `auto`. An unrecognised
+    value is ignored at that rung (validated loudly on the run path); `cfg` is
+    absent for the pre-run colouring of `--version`/errors, present for the run.
+    """
+    cli = g.get("color")
+    if isinstance(cli, str) and cli in _COLOR_MODES:
+        return cli
+    if g.get("no_color"):
+        return "never"
+    if cfg is not None:
+        cfg_color = cfg.get("color")
+        if isinstance(cfg_color, str) and cfg_color in _COLOR_MODES:
+            return cfg_color
+    if "NO_COLOR" in os.environ:
+        return "never"
+    forced = os.environ.get("FORCE_COLOR")
+    if forced not in (None, "", "0"):
+        return "always"
+    return "auto"
+
+
+def _set_colors(mode: str) -> None:
     global _color_out, _color_err
-    _color_out = _describe.wants_color(sys.stdout, no_color)
-    _color_err = _describe.wants_color(sys.stderr, no_color)
+    _color_out = _describe.wants_color(sys.stdout, mode)
+    _color_err = _describe.wants_color(sys.stderr, mode)
 
 
 def _error(message: str) -> None:
@@ -847,7 +876,7 @@ def _run(
     except split.ChainError as exc:
         return _refuse(_wants_json(argv), str(exc))
     g = _globals_to_dict(pre_globals)
-    _set_colors(bool(g.get("no_color")))
+    _set_colors(_resolve_color(g))
     wants_help = _wants_help(argv)
 
     if g.get("version"):  # D7: --version wins even over --help
@@ -982,6 +1011,17 @@ def _run_tree(
     g = _globals_to_dict(split._parse_globals(argv, 0)[0])
     json_mode = bool(g.get("json"))
 
+    cli_color = g.get("color")
+    if isinstance(cli_color, str) and cli_color not in _COLOR_MODES:
+        return _refuse(
+            json_mode,
+            f"--color expects one of {'|'.join(_COLOR_MODES)} (got {cli_color!r})",
+        )
+    # Config can set the mode too, so re-resolve now that cfg is in hand and
+    # repaint footman's own chrome to match (the pre-run call saw CLI+env only).
+    color_mode = _resolve_color(g, cfg)
+    _set_colors(color_mode)
+
     if _wants_help(argv):
         return _print_help(tree, argv)
 
@@ -1059,7 +1099,11 @@ def _run_tree(
         "shell_default": str(shell_default) if isinstance(shell_default, str) else "",
         "quiet": bool(g.get("quiet")),
         "verbose": bool(g.get("verbose")),
-        "no_color": bool(g.get("no_color")),
+        # The resolved tri-state, split into the two Context bits: `never` stops
+        # all colour, `always` forces it past a non-terminal (the scheduler still
+        # gates that off under capture). `auto` leaves both false — tty decides.
+        "no_color": color_mode == "never",
+        "force_color": color_mode == "always",
         # Tasks can know who invoked them (a branded CLI's prog) — the
         # taskdocs plugin brands its output with this, for one.
         "prog": _brand.prog,
@@ -1158,7 +1202,7 @@ def run_group(
     except split.ChainError as exc:
         return _refuse(_wants_json(argv), str(exc))
     g = _globals_to_dict(pre_globals)
-    _set_colors(bool(g.get("no_color")))
+    _set_colors(_resolve_color(g))
 
     if g.get("version"):
         return _print_version(bool(g.get("json")))

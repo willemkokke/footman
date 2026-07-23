@@ -25,6 +25,25 @@ def drive(build, line, **cfg):
     return reg, tree, run_chain(reg, segments, ctx_config=cfg)
 
 
+# --- the colour predicate -----------------------------------------------------
+
+
+def test_colored_predicate(monkeypatch):
+    from footman.context import _colored
+
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    # never wins over everything; always forces on even off a terminal;
+    # otherwise tty decides.
+    assert _colored(Context(no_color=True, force_color=True, tty=True)) is False
+    assert _colored(Context(force_color=True, tty=False)) is True
+    assert _colored(Context(tty=True)) is True
+    assert _colored(Context(tty=False)) is False
+    # NO_COLOR in the environment bows out the auto path, but not a forced one.
+    monkeypatch.setenv("NO_COLOR", "1")
+    assert _colored(Context(tty=True)) is False
+    assert _colored(Context(force_color=True, tty=False)) is True
+
+
 # --- run() -------------------------------------------------------------------
 
 

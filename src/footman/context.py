@@ -113,7 +113,13 @@ class Context:
     verbose: bool = False
     """`--verbose`: replay captured `run()` output even on success."""
     no_color: bool = False
-    """`--no-color` (or `NO_COLOR`): never emit ANSI styling."""
+    """`--no-color` / `--color=never` (or `NO_COLOR`): never emit ANSI styling."""
+    force_color: bool = False
+    """`--color=always` (or `FORCE_COLOR`): colour even when output is not a
+    terminal — so `run()` forces the tools it spawns to colour and the shown
+    command line paints, for a pipe into `less -R`. Gated off under capture
+    (`--json`), where ANSI would corrupt the envelope. Never sets the live
+    cursor affordances `tty` governs — those still need a real terminal."""
     prog: str = "fm"
     """The invoking CLI's command name — a branded CLI's own `prog`, so
     tasks (the taskdocs plugin, say) can speak the brand's name."""
@@ -1012,7 +1018,17 @@ def _dim(text: str, color: bool) -> str:
 
 
 def _colored(ctx: Context) -> bool:
-    return ctx.tty and not ctx.no_color and "NO_COLOR" not in os.environ
+    """The one colour predicate: does footman dress this run's output — its own
+    chrome and the tools it spawns — for colour?
+
+    `never` (`no_color`) always wins; `always` (`force_color`) forces colour on
+    even off a terminal (a pipe into `less -R`); otherwise `auto` follows the
+    run's tty-ness (`NO_COLOR` in the environment still bows out)."""
+    if ctx.no_color:
+        return False
+    if ctx.force_color:
+        return True
+    return ctx.tty and "NO_COLOR" not in os.environ
 
 
 def _name_col(ctx: Context) -> str:
@@ -1261,7 +1277,7 @@ def run(
             f"run. Pass shell=True (or a shell name), or drop {which}."
         )
     out = sys.stdout
-    color = ctx.tty and not ctx.no_color and "NO_COLOR" not in os.environ
+    color = _colored(ctx)
     if _show is not None and title is None:
         # `label` (recorded as .command, and the step-line receipt) is always
         # the normalised form, so a recording() assertion never depends on

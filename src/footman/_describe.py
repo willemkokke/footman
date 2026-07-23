@@ -34,19 +34,24 @@ TYPE_WORD = {
 # byte-clean.
 
 
-def wants_color(stream: Any, no_color: bool = False) -> bool:
+def wants_color(stream: Any, mode: str = "auto") -> bool:
+    """Whether to paint output for *stream* under a resolved colour *mode*.
+
+    `"always"`/`"never"` are the explicit tri-state answers (`--color=…`, config,
+    `FORCE_COLOR`/`NO_COLOR`); `"auto"` (the default) falls back to the stream's
+    own tty-ness, honouring `NO_COLOR` and a dumb terminal.
+    """
+    if mode == "never":
+        return False
+    if mode == "always":
+        return True
     try:
         tty = bool(stream.isatty())
     except Exception:
         tty = False
     import os as _os
 
-    return (
-        tty
-        and not no_color
-        and "NO_COLOR" not in _os.environ
-        and _os.environ.get("TERM") != "dumb"
-    )
+    return tty and "NO_COLOR" not in _os.environ and _os.environ.get("TERM") != "dumb"
 
 
 def bold(text: str, on: bool) -> str:
