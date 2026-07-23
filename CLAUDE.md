@@ -17,8 +17,8 @@ grammar may break without a deprecation cycle.
 - **Zero runtime deps.** Nothing under `src/footman/` may import a third-party
   package. Dev/test/docs tooling lives in `uv` groups, never in `dependencies`.
   One blessed exception: a first-party plugin task may lazily import an
-  optional third-party package *inside its body* when gated with
-  `@task(requires="…")` (e.g. `docs shots` imports rich) — the package is
+  optional third-party package *inside its body* when gated with a stacked
+  `@requires_dep("…")` (e.g. `docs shots` imports rich) — the package is
   never a declared dependency, never imported at module import time, and the
   task lists as unavailable without it.
 - **The completion hot path is stdlib-only and import-free of the framework.**

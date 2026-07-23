@@ -12,6 +12,9 @@ Global options bind to `fm` itself and go **before** the first task name
 `--help` is the one global allowed *anywhere* before `--`: `fm deploy --help`
 is a read-only help request, never an execution. `fm --help` documents the
 runner and its globals, `fm --help docs` a group, `fm --help deploy` a task.
+Because it wins wherever it lands, `help` is also the one parameter name a task
+can't use — it would map to `--help`, which is always intercepted (see
+[Typed signatures](typing.md#the-core-mapping)).
 
 ## Decorator surface
 
@@ -27,11 +30,25 @@ def build(): ...
 @task(pre=[fmt], post=[notify])   # dependencies (run before / after)
 def check(): ...
 
+@task(keep_going=True)      # surface every failure in the subtree, don't stop at the first
+def check(): ...
+
+@task(atomic=True)          # never kill this task's subprocesses mid-flight on a sibling failure
+def format(): ...
+
+@task(confirm="Deploy to prod?")  # a yes/no gate before the task and its prereqs run
+def deploy(): ...
+
+@task(interactive=True)     # owns the real terminal; the run goes fully sequential
+def scaffold(): ...
+
 @task(progress=False)       # duration has no pattern: never timed, only pulses
 def repl(): ...
 
 @task(infinite=True)        # runs until Ctrl-C: hinted at start, never timed
 def serve(): ...
+
+fmt.opts(atomic=True)       # override a task's policy for one use (pre=/post=/body call)
 
 release = group("release", help="Cut a release")
 
@@ -53,6 +70,10 @@ def gate(tasks):            # (see Monorepos & config)
 | `passthrough()`              | arguments after `--` on the command line             |
 | `Context`, `use_context`     | the task context; install one from your own code     |
 | `Many[T]`, `nosplit`         | one-or-many; opt a collection out of comma-splitting |
+| `forward`, `Forward[T]`      | thread a value to the tasks/groups this task dispatches — see [Chaining & parallelism](orchestration.md#forward-a-value-to-what-a-task-dispatches) |
+| `ask("prompt")`              | prompt for a missing value (CLI > env > default > prompt); CI-safe |
+| `prompt()`, `confirm()`, `select()` | mid-task questions — only inside an `interactive=True` task |
+| `.opts(**policy)`            | per-use policy override (`keep_going`, `atomic`, …) on a task or group |
 | `Annotated[T, suggest(fn)]`  | dynamic completion for a parameter                   |
 | `exists`, `isfile`, `isdir`  | require a `Path` value to exist on disk              |
 | `between(lo, hi)`            | inclusive numeric bounds (a bare `range` works too)  |
