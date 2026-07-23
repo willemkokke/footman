@@ -447,7 +447,7 @@ def test_run_string_with_shell_operator_is_taught():
     _, _, results = drive(tasks, "deploy")
     assert results[0].ok is False
     assert "shell operator" in str(results[0].error)
-    assert "tools.bash" in str(results[0].error)
+    assert "shell=True" in str(results[0].error)  # points at the explicit shell
 
 
 def test_shell_operator_detection_is_precise():
@@ -528,6 +528,141 @@ def test_non_utf8_subprocess_output_does_not_crash():
     _, _, results = drive(tasks, "emit")
     assert results[0].ok
     assert "ok" in results[0].steps[0].output  # decoded with replacement, not a crash
+
+
+def test_resolve_shell_kinds_and_strategies(monkeypatch):
+    from footman.context import _resolve_shell
+
+    monkeypatch.setattr("footman.context.os.path.isfile", lambda p: False)  # no hints
+    monkeypatch.setattr("footman.context.shutil.which", lambda n: f"/usr/bin/{n}")
+    monkeypatch.setattr(sys, "platform", "linux")
+    assert _resolve_shell(True) == ["/usr/bin/bash", "-c"]  # posix policy → bash
+    assert _resolve_shell("posix") == ["/usr/bin/bash", "-c"]
+    assert _resolve_shell("zsh") == ["/usr/bin/zsh", "-c"]
+    assert _resolve_shell("pwsh") == ["/usr/bin/pwsh", "-Command"]  # pwsh's flag
+    assert _resolve_shell("native") == ["/bin/sh", "-c"]  # POSIX native
+    with pytest.raises(ValueError, match="not a known shell"):
+        _resolve_shell("nonsense")
+    with pytest.raises(ValueError, match="Windows-only"):
+        _resolve_shell("cmd")
+
+
+def test_resolve_shell_posix_falls_back_to_sh_then_teaches(monkeypatch):
+    from footman.context import _resolve_shell
+
+    monkeypatch.setattr("footman.context.os.path.isfile", lambda p: False)
+    # No bash, but sh exists → sh.
+    monkeypatch.setattr(
+        "footman.context.shutil.which", lambda n: "/bin/sh" if n == "sh" else None
+    )
+    assert _resolve_shell(True) == ["/bin/sh", "-c"]
+    # Nothing at all → a taught error, never a silent wrong shell.
+    monkeypatch.setattr("footman.context.shutil.which", lambda n: None)
+    with pytest.raises(ValueError, match="needs a POSIX shell"):
+        _resolve_shell(True)
+
+
+def test_run_shell_true_actually_pipes():
+    def tasks(reg):
+        @reg.task
+        def go():
+            out = run("echo hi | tr a-z A-Z", shell=True)
+            assert out.stdout.strip() == "HI"  # the pipe ran
+
+    _, _, results = drive(tasks, "go")
+    assert results[0].ok, results[0].error
+
+
+def test_run_shell_true_reads_the_configured_policy(monkeypatch):
+    # `[shell] default` flows into ctx.shell_default; run(shell=True) resolves it.
+    monkeypatch.setattr("footman.context.os.path.isfile", lambda p: False)
+    monkeypatch.setattr("footman.context.shutil.which", lambda n: f"/bin/{n}")
+    captured = {}
+
+    def fake(argv, *a, **k):
+        captured["argv"] = argv
+        return 0, "", ""
+
+    monkeypatch.setattr("footman.context._run_subprocess", fake)
+    with use_context(Context(shell_default="pwsh")):
+        run("echo hi", shell=True)
+    assert captured["argv"][:2] == ["/bin/pwsh", "-Command"]  # policy honoured
+
+
+def test_shell_strict_and_clean_prep_per_interpreter():
+    from footman.context import _shell_prep
+
+    # strict: bash/zsh get pipefail; sh degrades to errexit-only.
+    assert _shell_prep("bash", "x", strict=True, clean=False) == (
+        [],
+        "set -eo pipefail\nx",
+    )
+    assert _shell_prep("sh", "x", strict=True, clean=False)[1] == "set -e\nx"
+    # clean: the interpreter's no-startup-file flags.
+    assert _shell_prep("bash", "x", strict=False, clean=True)[0] == [
+        "--norc",
+        "--noprofile",
+    ]
+    assert _shell_prep("pwsh", "x", strict=False, clean=True)[0] == ["-NoProfile"]
+    # strict is a taught error where there is no errexit/pipefail.
+    with pytest.raises(ValueError, match="errexit"):
+        _shell_prep("fish", "x", strict=True, clean=False)
+
+
+def test_shell_strict_stops_on_error_and_masked_pipe():
+    def tasks(reg):
+        @reg.task
+        def go():
+            # errexit: `false` stops the script before `echo after`.
+            r = run("false; echo after", shell="bash", strict=True, nofail=True)
+            assert r.code != 0 and "after" not in r.stdout
+            # pipefail: a failing pipe stage fails the whole pipeline.
+            assert run("false | true", shell="bash", strict=True, nofail=True).code != 0
+            # without strict, both run to completion.
+            r2 = run("false; echo after", shell="bash", nofail=True)
+            assert r2.code == 0 and "after" in r2.stdout
+
+    _, _, results = drive(tasks, "go")
+    assert results[0].ok, results[0].error
+
+
+def test_strict_or_clean_without_shell_is_a_taught_error():
+    # strict/clean harden a shell run — silently ignoring them shell-free would
+    # be a surprise, so it's a taught error.
+    def tasks(reg):
+        @reg.task
+        def go():
+            run("echo hi", strict=True)
+
+    _, _, results = drive(tasks, "go")
+    assert results[0].ok is False
+    assert "only applies with a shell" in str(results[0].error)
+
+
+def test_run_list_with_shell_is_a_taught_error():
+    def tasks(reg):
+        @reg.task
+        def go():
+            run(["echo", "hi"], shell=True)
+
+    _, _, results = drive(tasks, "go")
+    assert results[0].ok is False
+    assert "command *string*" in str(results[0].error)
+
+
+def test_shown_line_quotes_the_windows_way(monkeypatch):
+    from footman.context import _shell_quote
+
+    # POSIX quoting (pin the platform — this runs on Windows CI too).
+    monkeypatch.setattr(sys, "platform", "linux")
+    assert _shell_quote("a b") == "'a b'"
+    # On Windows, list2cmdline (not POSIX single-quotes), so `.raw`/`--verbose`
+    # pastes into cmd/PowerShell; a plain token stays bare, a spaced one gets
+    # double quotes, backslash paths are preserved.
+    monkeypatch.setattr(sys, "platform", "win32")
+    assert _shell_quote("abc") == "abc"
+    assert _shell_quote("a b") == '"a b"'
+    assert _shell_quote(r"C:\tools\a b") == r'"C:\tools\a b"'
 
 
 def test_windows_string_commands_are_not_shlex_split(monkeypatch):

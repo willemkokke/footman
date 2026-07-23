@@ -19,6 +19,7 @@ import inspect
 import io
 import os
 import shlex
+import shutil
 import signal
 import subprocess
 import sys
@@ -129,6 +130,9 @@ class Context:
     fetch_backend: str = ""
     """`[fetch] backend` from the config ladder — which engine `fetch()`
     downloads with. Empty means the default (stdlib urllib)."""
+    shell_default: str = ""
+    """`[shell] default` from the config ladder — what `run(shell=True)` resolves
+    to. Empty means `posix` (a POSIX shell everywhere: bash, then sh)."""
     jobs: int = 0
     """The effective parallel width (`-j/--jobs`, config `jobs`, or the
     cores-minus-one default) — caps `parallel()` pools in task bodies.
@@ -704,8 +708,16 @@ class Invocation:
 
 
 def _shell_quote(text: str) -> str:
-    import shlex
+    """Quote one token so the shown command line pastes back into a real shell.
 
+    Per-platform, so a Windows `.raw`/`--verbose` line actually round-trips:
+    POSIX uses `shlex.quote`; Windows uses stdlib `subprocess.list2cmdline` (the
+    exact inverse of the parsing `CreateProcess` does), never `shlex` — which
+    emits POSIX single-quotes that cmd/PowerShell can't read. `list2cmdline`
+    handles spaces/quotes/backslashes, not cmd metacharacters (`& | ^`), which
+    is fine for a display line that already ran."""
+    if sys.platform == "win32":
+        return subprocess.list2cmdline([text])
     return shlex.quote(text)
 
 
@@ -1076,10 +1088,141 @@ def _shell_operator(cmd: str) -> str | None:
     quotes) defer to the exec path, which surfaces them.
     """
     try:
-        tokens = shlex.split(cmd)
+        # posix=False on Windows: keep backslash paths intact (they'd otherwise
+        # be eaten), so a real path token never looks like an operator.
+        tokens = shlex.split(cmd, posix=(os.name != "nt"))
     except ValueError:
         return None
     return next((t for t in tokens if t in _SHELL_OPERATORS), None)
+
+
+# A modern bash where PATH alone might miss it (a GUI/cron launch, or Windows,
+# where git's bash is not on PATH). Checked before `shutil.which("bash")`.
+_BASH_HINTS = (
+    "/opt/homebrew/bin/bash",  # macOS Apple Silicon Homebrew
+    "/usr/local/bin/bash",  # macOS Intel Homebrew
+    r"C:\Program Files\Git\bin\bash.exe",  # Windows git bash
+    r"C:\Program Files\Git\usr\bin\bash.exe",
+)
+
+
+def _find_exe(name: str, hints: tuple[str, ...] = ()) -> str | None:
+    """A concrete path for *name*: a known *hints* location first, then PATH."""
+    for hint in hints:
+        if os.path.isfile(hint):
+            return hint
+    return shutil.which(name)
+
+
+def _resolve_shell(kind: bool | str, policy: str = "posix") -> list[str]:
+    """The interpreter argv prefix — `[executable, run-a-string-flag]` — for a
+    `run(shell=…)` request.
+
+    `True` follows *policy* (POSIX-everywhere by default: bash, then plain sh,
+    with git bash on Windows). A string is a concrete shell (`bash`/`zsh`/`sh`/
+    `fish`/`nu`/`pwsh`/`cmd`) or a strategy (`posix`/`native`). Raises a taught
+    `ValueError` when the shell can't be found or does not fit the platform —
+    never a silent wrong-shell.
+    """
+    strat = policy if kind is True else str(kind)
+    win = sys.platform == "win32"
+    if strat == "posix":
+        # bash first (pipefail + POSIX word-splitting, and everywhere incl. git
+        # bash on Windows), then plain sh. zsh is excluded — its default word
+        # splitting is not POSIX, so ask for it by name if you want it.
+        exe = _find_exe("bash", _BASH_HINTS) or _find_exe("sh")
+        if exe is None:
+            raise ValueError(
+                "shell=True needs a POSIX shell and none was found. Install one "
+                "(git bash on Windows), or use shell='pwsh' / shell='cmd'."
+            )
+        return [exe, "-c"]
+    if strat == "native":
+        return (
+            [os.environ.get("COMSPEC", "cmd.exe"), "/c"] if win else ["/bin/sh", "-c"]
+        )
+    if strat == "cmd":
+        if not win:
+            raise ValueError("shell='cmd' is Windows-only; use 'bash' or 'pwsh'.")
+        return [os.environ.get("COMSPEC", "cmd.exe"), "/c"]
+    if strat in ("bash", "sh", "zsh", "fish", "nu"):
+        exe = _find_exe(strat, _BASH_HINTS if strat == "bash" else ())
+        if exe is None:
+            raise ValueError(f"shell={strat!r}: {strat!r} was not found on PATH.")
+        return [exe, "-c"]
+    if strat in ("pwsh", "powershell"):
+        exe = _find_exe(strat)
+        if exe is None:
+            raise ValueError(f"shell={strat!r}: {strat!r} was not found on PATH.")
+        return [exe, "-Command"]  # pwsh's own run-a-string flag (accepts -c too)
+    raise ValueError(
+        f"shell={kind!r} is not a known shell. Use True (the policy), a strategy "
+        f"('posix' / 'native'), or a shell name "
+        f"('bash', 'zsh', 'sh', 'fish', 'nu', 'pwsh', 'cmd')."
+    )
+
+
+# `clean=True`: run the interpreter without the user's startup files, so a task's
+# shell behaves the same on every machine. For `-c` most POSIX shells already
+# skip their rc, but pwsh/cmd load a profile and bash honours $BASH_ENV — so it
+# is both these flags and (POSIX) dropping BASH_ENV/ENV from the child env.
+_CLEAN_FLAGS = {
+    "bash": ("--norc", "--noprofile"),
+    "zsh": ("-f",),
+    "fish": ("--no-config",),
+    "nu": ("-n",),
+    "pwsh": ("-NoProfile",),
+    "powershell": ("-NoProfile",),
+    "cmd": ("/d",),
+}
+
+# `strict=True`: fail on the first error and on a failing pipe stage. Well-defined
+# only for POSIX shells and PowerShell — bash/zsh get pipefail, plain sh cannot
+# (dash has none) so it degrades to errexit-only with a one-time note; fish/nu/
+# cmd have no errexit at all, so strict there is a taught error, not a silent no-op.
+_STRICT_PROLOGUE = {
+    "bash": "set -eo pipefail\n",
+    "zsh": "set -eo pipefail\n",
+    "sh": "set -e\n",
+    "pwsh": (
+        "$ErrorActionPreference = 'Stop'\n"
+        "$PSNativeCommandUseErrorActionPreference = $true\n"
+    ),
+    "powershell": "$ErrorActionPreference = 'Stop'\n",
+}
+
+_strict_sh_noted = False
+
+
+def _shell_kind_of(exe: str) -> str:
+    """The shell family from its executable path — `/usr/bin/bash` → `bash`."""
+    return os.path.basename(exe).lower().removesuffix(".exe")
+
+
+def _shell_prep(
+    kind: str, script: str, *, strict: bool, clean: bool
+) -> tuple[list[str], str]:
+    """Interpreter flags (from *clean*) and the script (from *strict*) for a shell
+    run. Raises a taught error when *strict* can't be honoured (fish/nu/cmd have
+    no errexit/pipefail)."""
+    flags = list(_CLEAN_FLAGS.get(kind, ())) if clean else []
+    if strict:
+        prologue = _STRICT_PROLOGUE.get(kind)
+        if prologue is None:
+            raise ValueError(
+                f"strict=True is not supported for the {kind!r} shell — it has no "
+                f"errexit/pipefail. Use bash, zsh, sh, or pwsh, or drop strict."
+            )
+        if kind == "sh":
+            global _strict_sh_noted
+            if not _strict_sh_noted:
+                _strict_sh_noted = True
+                real_stderr().write(
+                    "note: strict under sh has no pipefail; using `set -e` only "
+                    "(install bash for errexit + pipefail).\n"
+                )
+        script = prologue + script
+    return flags, script
 
 
 def run(
@@ -1092,6 +1235,9 @@ def run(
     env: dict[str, str] | None = None,
     cwd: str | Path | None = None,
     encoding: str | None = "utf-8",
+    shell: bool | str = False,
+    strict: bool = False,
+    clean: bool = False,
     _show: Invocation | None = None,
 ) -> Result:
     """Run a command or a Python callable in the current task's context.
@@ -1106,6 +1252,14 @@ def run(
     `title` still wins; a direct `run([...])` is unaffected.
     """
     ctx = current()
+    if (strict or clean) and not shell:
+        # strict/clean harden a *shell* run — they mean nothing shell-free, and a
+        # silent no-op would be exactly the surprise footman avoids elsewhere.
+        which = "strict" if strict else "clean"
+        raise ValueError(
+            f"run({which}=True) only applies with a shell — it hardens a shell "
+            f"run. Pass shell=True (or a shell name), or drop {which}."
+        )
     out = sys.stdout
     color = ctx.tty and not ctx.no_color and "NO_COLOR" not in os.environ
     if _show is not None and title is None:
@@ -1156,23 +1310,44 @@ def run(
     if callable(cmd):
         code, out_s, err_s = _run_callable(cmd, args, capture=capture, env=env, cwd=cwd)
     else:
-        if isinstance(cmd, str):
+        argv: list[str] | str
+        shell_kind = ""
+        if shell:
+            # An explicit shell: run the whole string through the resolved
+            # interpreter — `[bash, -c, "<cmd>"]` — so pipes/redirects/globs
+            # work. A list is the shell-free form; it can't be a shell script.
+            if not isinstance(cmd, str):
+                raise ValueError(
+                    "run(shell=…) runs a command *string* through a shell; pass a "
+                    "str, not a list (a list is the shell-free form)."
+                )
+            exe, run_flag = _resolve_shell(shell, ctx.shell_default or "posix")
+            shell_kind = _shell_kind_of(exe)
+            clean_flags, script = _shell_prep(
+                shell_kind, cmd, strict=strict, clean=clean
+            )
+            argv = [exe, *clean_flags, run_flag, script]
+        elif isinstance(cmd, str):
             if (op := _shell_operator(cmd)) is not None:
                 raise ValueError(
-                    f"run({cmd!r}): {op!r} is a shell operator, but run() does "
-                    f"not use a shell, so it would be passed as a literal "
-                    f"argument (the pipeline/redirect would silently not "
-                    f"happen). Invoke a shell explicitly — tools.bash('-c', "
-                    f"{cmd!r}) — split it into separate run() steps, or pass a "
-                    f"list to run [...] to use {op!r} as a literal argument."
+                    f"run({cmd!r}): {op!r} is a shell operator, but run() does not "
+                    f"use a shell, so it would be passed as a literal argument (the "
+                    f"pipeline/redirect would silently not happen). Ask for a shell "
+                    f"— run(..., shell=True) or shell='bash' — split into separate "
+                    f"run() steps, or pass a list to use {op!r} as a literal argument."
                 )
             # POSIX shells split on shlex rules; Windows command lines are a
             # single string (CreateProcess) and shlex would mangle backslash
             # paths — hand the string straight to subprocess there.
-            argv: list[str] | str = cmd if sys.platform == "win32" else shlex.split(cmd)
+            argv = cmd if sys.platform == "win32" else shlex.split(cmd)
         else:
             argv = [str(a) for a in cmd]
         run_env = {**os.environ, **ctx.env, **(env or {})}
+        # A clean POSIX shell means no startup files: `--norc`/`--noprofile`
+        # cover interactive/login rc, but bash/sh also source $BASH_ENV/$ENV for
+        # a non-interactive `-c`, so drop those from the child env too.
+        if clean and shell_kind in ("bash", "sh", "zsh"):
+            run_env = {k: v for k, v in run_env.items() if k not in ("BASH_ENV", "ENV")}
         cwd_path = Path(cwd) if cwd is not None else ctx.cwd
         code, out_s, err_s = _run_subprocess(
             argv,

@@ -307,6 +307,11 @@ DRIVERS: tuple[Driver, ...] = (
     Driver("fish", source="manual", url="https://fishshell.com/"),
     Driver("pwsh", source="manual", url="https://learn.microsoft.com/powershell/"),
     Driver("nu", source="manual", url="https://www.nushell.sh/"),
+    Driver(
+        "cmd",
+        source="manual",
+        url="https://learn.microsoft.com/windows-server/administration/windows-commands/cmd",
+    ),
 )
 
 # A negative lookbehind, not `\b`: a version glued to a `v` prefix (`v0.23.1`)

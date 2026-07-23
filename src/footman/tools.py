@@ -253,7 +253,11 @@ def _show_parts(
 
 
 def _quote(text: str) -> str:
-    """Shell-quote a token so the shown line round-trips through a paste."""
+    """Quote a token so the shown line round-trips through a paste — POSIX via
+    `shlex.quote`, Windows via stdlib `subprocess.list2cmdline` (which cmd and
+    PowerShell can read, unlike shlex's POSIX single-quotes)."""
+    if _sys.platform == "win32":
+        return _subprocess.list2cmdline([text])
     import shlex
 
     return shlex.quote(text)
@@ -575,21 +579,24 @@ ninja = Tool("ninja")
 # not its zero-arg `_console_main` console script. python always targets the
 # running interpreter, whatever `python`/`python3` is (or isn't) on PATH; its
 # stub is read from provisioned interpreters. There is no `sh`: a command as a
-# single string is `run("…")` — footman splits and runs it (no shell). For a
-# real shell, invoke one: `tools.bash("-c", "…")`.
+# single string is `run("…")` — footman splits and runs it (no shell). When you
+# want a shell, `run(..., shell=True)` is the front door (it resolves the
+# interpreter per policy); these tools are the low-level primitive it builds on.
 pytest = Tool("pytest", in_process=True, entry="pytest:main")
 python = Tool("python", path=_sys.executable)
 
-# The shells footman autocompletes for, invoked to run a command *string*:
-# `tools.bash("echo $X | grep y")` runs `bash -c "…"`, so pipes, redirects,
-# globbing and `$VAR` all work — the deliberate "I want a shell" escape hatch,
-# where `run(...)` stays shell-free. `-c` is the run-a-string flag for every
-# one of them (pwsh takes it as an alias for -Command).
+# The shells, invoked to run a command *string*: `tools.bash("echo $X | grep y")`
+# runs `bash -c "…"`, so pipes, redirects, globbing and `$VAR` all work — the
+# low-level "I want *this* shell" primitive (`run(..., shell="bash")` is the
+# ergonomic front door). `-c` is the run-a-string flag for every one of them
+# (pwsh takes it as an alias for -Command); Windows `cmd` uses `/c` and is
+# Windows-only. footman autocompletes for all but cmd (cmd has no completion).
 bash = Tool("bash", "-c")
 zsh = Tool("zsh", "-c")
 fish = Tool("fish", "-c")
 pwsh = Tool("pwsh", "-c")
 nu = Tool("nu", "-c")
+cmd = Tool("cmd", "/c")
 
 
 def __getattr__(name: str) -> Tool:
