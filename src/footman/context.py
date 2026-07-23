@@ -824,7 +824,17 @@ def _run_callable(
     uncaptured callables keep cwd/env too.
     """
     ctx = current()
-    overlay = {**ctx.env, **(env or {})}
+    # An in-process tool reads the router's `isatty()` (footman's real stdout),
+    # so `auto` already colours correctly on a terminal and stays quiet piped —
+    # no env needed, and the lock-free fast path in `_process_state` is kept. Only
+    # the explicit overrides need a patched environment: `always` (colour past a
+    # non-terminal) and `never` (silence a tool that ignores isatty). `auto` never
+    # coexists with an inherited FORCE_COLOR/NO_COLOR — those resolve the mode away
+    # from auto up front — so there is nothing to neutralise here.
+    cenv = (
+        color_env(True) if ctx.force_color else color_env(False) if ctx.no_color else {}
+    )
+    overlay = {**cenv, **ctx.env, **(env or {})}
     target_cwd = Path(cwd) if cwd is not None else ctx.cwd
     with _process_state(overlay, target_cwd):
         if not capture:
@@ -1029,6 +1039,21 @@ def _colored(ctx: Context) -> bool:
     if ctx.force_color:
         return True
     return ctx.tty and "NO_COLOR" not in os.environ
+
+
+def color_env(on: bool) -> dict[str, str]:
+    """The environment that tells a spawned tool whether to emit colour.
+
+    Without a PTY a child's stdout is a pipe, so `isatty()` is false and a
+    well-behaved tool auto-disables colour — footman captures the bytes and
+    replays them onto its own terminal, so it wants the colour back. `on` forces
+    it (`FORCE_COLOR`/`CLICOLOR_FORCE`, honoured by the modern set); off pushes
+    footman's own monochrome decision down (`NO_COLOR`, plus `FORCE_COLOR=0` to
+    override a force inherited from the parent environment). Overlaid at lowest
+    precedence, so a task's `env=` or `ctx.env` still wins."""
+    if on:
+        return {"FORCE_COLOR": "1", "CLICOLOR_FORCE": "1", "CLICOLOR": "1"}
+    return {"NO_COLOR": "1", "FORCE_COLOR": "0"}
 
 
 def _name_col(ctx: Context) -> str:
@@ -1358,7 +1383,15 @@ def run(
             argv = cmd if sys.platform == "win32" else shlex.split(cmd)
         else:
             argv = [str(a) for a in cmd]
-        run_env = {**os.environ, **ctx.env, **(env or {})}
+        # Force colour on (or push footman's monochrome down) for the child:
+        # its stdout is a pipe, so it would otherwise auto-disable. Lowest
+        # precedence — a task's `ctx.env`/`env=` still wins.
+        run_env = {
+            **os.environ,
+            **color_env(_colored(ctx)),
+            **ctx.env,
+            **(env or {}),
+        }
         # A clean POSIX shell means no startup files: `--norc`/`--noprofile`
         # cover interactive/login rc, but bash/sh also source $BASH_ENV/$ENV for
         # a non-interactive `-c`, so drop those from the child env too.
@@ -1473,6 +1506,12 @@ def parallel(*calls: Callable[[], Any], keep_going: bool = False) -> list[int]:
             _current.reset(token)
         with lock:
             blob = child.sink.getvalue()  # type: ignore[union-attr]
+            # A child that ended mid-colour (a crash, an unterminated SGR) must
+            # not bleed into the next child's block when they interleave: cap a
+            # colourful run's block with a reset. Only when colour is on, so a
+            # byte-clean run stays byte-clean.
+            if blob and _colored(parent):
+                blob += "\033[0m"
             if status is not None and dest_is_real:
                 # This write bypasses the routers (dest is the raw stream):
                 # tell the status line to get out of the way itself.

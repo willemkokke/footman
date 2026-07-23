@@ -44,6 +44,80 @@ def test_colored_predicate(monkeypatch):
     assert _colored(Context(force_color=True, tty=False)) is True
 
 
+def test_color_env_helper():
+    from footman.context import color_env
+
+    assert color_env(True) == {
+        "FORCE_COLOR": "1",
+        "CLICOLOR_FORCE": "1",
+        "CLICOLOR": "1",
+    }
+    assert color_env(False) == {"NO_COLOR": "1", "FORCE_COLOR": "0"}
+
+
+_READ_ENV = (
+    "import os;"
+    "print('FC=' + str(os.environ.get('FORCE_COLOR')),"
+    "'NC=' + str(os.environ.get('NO_COLOR')))"
+)
+
+
+def _child_env(line, **cfg):
+    def tasks(reg):
+        @reg.task
+        def show():
+            print(run([sys.executable, "-c", _READ_ENV]).stdout.strip())
+
+    _, _, results = drive(tasks, line, **cfg)
+    return results[0].steps[0].stdout.strip()
+
+
+def test_run_forces_color_env_for_a_child(monkeypatch):
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    monkeypatch.delenv("FORCE_COLOR", raising=False)
+    # always -> force it on; never (and auto-when-piped) -> push monochrome down.
+    assert _child_env("show", force_color=True) == "FC=1 NC=None"
+    assert _child_env("show", no_color=True) == "FC=0 NC=1"
+    assert _child_env("show") == "FC=0 NC=1"  # auto, no tty
+
+
+def test_task_env_overrides_the_color_overlay(monkeypatch):
+    # The overlay is lowest precedence: a task's own env= still wins.
+    monkeypatch.delenv("FORCE_COLOR", raising=False)
+
+    def tasks(reg):
+        @reg.task
+        def show():
+            out = run([sys.executable, "-c", _READ_ENV], env={"FORCE_COLOR": "3"})
+            print(out.stdout.strip())
+
+    _, _, results = drive(tasks, "show", force_color=True)
+    assert "FC=3" in results[0].steps[0].stdout
+
+
+def test_in_process_auto_leaves_environment_untouched(monkeypatch):
+    # auto reads the router's isatty(), so it needs no env patch — the lock-free
+    # fast path in _process_state stays intact and os.environ is not touched.
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    monkeypatch.delenv("FORCE_COLOR", raising=False)
+    seen = {}
+
+    def tasks(reg):
+        @reg.task
+        def probe():
+            def inproc():
+                seen["fc"] = os.environ.get("FORCE_COLOR")
+                seen["nc"] = os.environ.get("NO_COLOR")
+
+            run(inproc)
+
+    drive(tasks, "probe")  # auto
+    assert seen == {"fc": None, "nc": None}
+    seen.clear()
+    drive(tasks, "probe", force_color=True)  # always -> patched in-process
+    assert seen["fc"] == "1"
+
+
 # --- run() -------------------------------------------------------------------
 
 
@@ -187,6 +261,32 @@ def test_parallel_in_process_separates_streams_under_routing():
     steps = results[0].steps
     assert {s.stdout.strip() for s in steps} == {"x-out", "y-out"}
     assert {s.stderr.strip() for s in steps} == {"x-err", "y-err"}
+
+
+def test_parallel_flush_caps_colour_bleed(capsys, monkeypatch):
+    # A child ending mid-colour gets a reset appended so it can't bleed into a
+    # sibling's interleaved block — but only when colour is on for the run.
+    monkeypatch.delenv("NO_COLOR", raising=False)
+
+    def tasks(reg):
+        @reg.task
+        def go():
+            parallel(lambda: print("\033[31mred"), lambda: print("plain"))
+
+    drive(tasks, "go", force_color=True)
+    out = capsys.readouterr().out
+    assert "\033[31mred" in out
+    assert out.count("\033[0m") >= 2  # each child's block capped
+
+
+def test_parallel_flush_no_reset_when_monochrome(capsys):
+    def tasks(reg):
+        @reg.task
+        def go():
+            parallel(lambda: print("plain-a"), lambda: print("plain-b"))
+
+    drive(tasks, "go")  # auto, no tty -> byte-clean, no injected reset
+    assert "\033" not in capsys.readouterr().out
 
 
 def test_run_callable_capture_false_is_live_not_buffered(capsys):
