@@ -68,6 +68,20 @@ pytest.opts(capture=False)("-s")    # stream this run live
 Because it is a fixed set, `capture` here is unambiguously footman's — a tool's
 own `--capture` (pytest's) still goes in the call, `pytest(capture="no")`.
 
+!!! note "Captured output and colour (no pty)"
+
+    footman captures a subprocess through a plain pipe, not a pseudo-terminal.
+    A tool that only colourises when it sees a terminal (`isatty()`) therefore
+    prints plain text when its output is *captured* in a parallel run — footman
+    does not allocate a pty to fake a terminal, deliberately: a cross-platform
+    pty needs a Unix-only stdlib module, ctypes ConPTY on Windows, or a
+    third-party dependency, and footman is zero-dependency and cross-platform.
+
+    Two escape hatches, both of which hand the tool the *real* terminal (so
+    `isatty()` is genuinely true): `.opts(capture=False)` streams a run live,
+    and `@task(interactive=True)` gives a task sole stdio. Otherwise, ask the
+    tool to colour unconditionally — most have a flag, `ruff(color="always")`.
+
 What footman *shows* you is spelled for reading, not for the parser: the
 `--dry-run` line, the live progress line, and `recording()`'s
 `step.command` all use the separated form (`--select E`), quoted so it
@@ -295,10 +309,23 @@ nearly all of them — are called directly, no `sys.argv` in sight. Only a
 legacy zero-argument `main()` that insists on reading `sys.argv` gets the
 patched-and-serialised fallback.
 
-`python(...)` targets the current interpreter, whatever is (or isn't)
-on your PATH. There is no `sh`: a command as one string is `run("…")`
-(footman splits and runs it — no shell), and for a real shell you invoke one,
-`bash("echo $X | grep y")` → `bash -c "…"`.
+`python(...)` targets the current interpreter, whatever is (or isn't) on your
+PATH. There is no `sh`: a command as one string is `run("…")` — footman splits
+and runs it with **no shell**, so `|`, `>`, `&&`, `$VAR` are literal, not
+interpreted. When you *want* a shell, ask for one explicitly:
+
+```python
+run("tar cf - . | ssh host tar xf -", shell=True)   # a real pipe
+run("echo $HOME/logs/*.gz", shell="bash")           # a specific interpreter
+```
+
+`shell=True` follows the project's shell policy (`[shell] default`, POSIX
+everywhere by default — bash, then plain sh, git bash on Windows); a string
+names a concrete shell (`bash`/`zsh`/`sh`/`fish`/`nu`/`pwsh`/`cmd`) or a
+strategy (`posix`/`native`). A missing shell or a wrong-platform one (`cmd` off
+Windows) is a taught error, never a silent wrong shell. And a shell-free
+`run("a | b")` doesn't misfire quietly — footman spots the operator and points
+you at `shell=`.
 
 ## Parallelism
 
