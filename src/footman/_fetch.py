@@ -7,7 +7,7 @@ means it composes with everything already built:
 
 - the cached copy lives under `footman_cache_dir()`, so
   `FOOTMAN_CACHE_DIR` relocates it and the cache collector tends it;
-- every fetch records a `StepResult`, so `--dry-run` prints without
+- every fetch records a `Result`, so `--dry-run` prints without
   downloading, `recording()` asserts on it in tests, `--json` carries
   it, and the step lines show it in the same aligned grid as `run()`;
 - byte counts feed `progress()`, so a download drives the live bar.
@@ -236,7 +236,7 @@ def fetch(
     destination = Path(into) if into is not None else body
 
     if ctx.dry_run:
-        ctx.steps.append(context.StepResult(label, 0, "", 0.0, raw=label))
+        ctx.steps.append(context.Result(0, command=label, raw=label))
         if not ctx.quiet:
             print(f"$ {label}")
         return destination
@@ -282,5 +282,11 @@ def _record(ctx: context.Context, label: str, started: float, *, cached: bool) -
     """A fetch is a step: same grid, same --json entry, same recording()."""
     note = "cached" if cached else ""
     ctx.steps.append(
-        context.StepResult(label, 0, note, time.perf_counter() - started, raw=label)
+        context.Result(
+            0,
+            command=label,
+            stdout=note,
+            duration=time.perf_counter() - started,
+            raw=label,
+        )
     )

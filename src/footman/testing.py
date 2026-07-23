@@ -45,14 +45,14 @@ from typing import Any
 
 from footman import _app
 from footman.app import App
-from footman.context import Context, StepResult, use_context
+from footman.context import Context, Result, use_context
 from footman.executor import TaskResult
 from footman.registry import Group
 
 __all__ = [
+    "InvokeResult",
     "Result",
     "Runner",
-    "StepResult",
     "TaskResult",
     "recording",
     "use_context",
@@ -60,13 +60,13 @@ __all__ = [
 
 
 @contextlib.contextmanager
-def recording(**overrides: Any) -> Iterator[list[StepResult]]:
+def recording(**overrides: Any) -> Iterator[list[Result]]:
     """Capture the commands a block would `run()` — silently, not executing.
 
     Yields the live step list; each `run()`/`tools.*` call inside the block
-    appends a `StepResult` instead of executing. In-process callables passed
-    to `run()` are skipped too — that is the point, but worth knowing.
-    Keyword overrides go to the underlying `Context` (e.g. `env={...}`).
+    appends a `Result` instead of executing. In-process callables passed to
+    `run()` are skipped too — that is the point, but worth knowing. Keyword
+    overrides go to the underlying `Context` (e.g. `env={...}`).
     """
     # Build the kwargs dict so `overrides` can win over the dry_run/quiet
     # defaults — passing them as positional defaults made `recording(quiet=False)`
@@ -77,8 +77,12 @@ def recording(**overrides: Any) -> Iterator[list[StepResult]]:
 
 
 @dataclass
-class Result:
-    """Everything one `Runner.invoke` produced."""
+class InvokeResult:
+    """Everything one `Runner.invoke` produced.
+
+    Named apart from the run-step `Result` (`footman.Result`, what `run()`
+    returns): this is the outcome of a whole CLI invocation — its exit code,
+    captured streams, and per-task `TaskResult`s."""
 
     exit_code: int
     stdout: str
@@ -126,7 +130,7 @@ class Runner:
         *,
         tasks: Path | Group | None = None,
         cwd: Path | None = None,
-    ) -> Result:
+    ) -> InvokeResult:
         """Run one command line and return everything it produced.
 
         `args` is a string (shlex-split) or an argv list. `tasks` overrides
@@ -157,4 +161,4 @@ class Runner:
                 # wrapper so Ctrl-C reaches pytest (the invoke docstring's
                 # contract). The wrapper stays for real CLI entry.
                 code = _app._run(argv, brand=self.app.brand, collect=collected)
-        return Result(code, out.getvalue(), err.getvalue(), collected)
+        return InvokeResult(code, out.getvalue(), err.getvalue(), collected)

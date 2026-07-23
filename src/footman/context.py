@@ -31,25 +31,68 @@ from pathlib import Path
 from typing import Any, TextIO
 
 
-@dataclass
-class StepResult:
-    """The outcome of one `run()` call, recorded on the context."""
+class Result(int):
+    """The outcome of one `run()` call — and the value `run()` returns.
+
+    A `Result` *is* the exit code: it subclasses `int`, so `code = run(...)`,
+    `if run(...)`, and `run(...) == 0` all keep working. It also carries the
+    captured output, split by stream, and the command that produced it — so
+    `run("git rev-parse HEAD").stdout.strip()` reads the hash without the
+    stderr noise glued on. `stdout`/`stderr` are separated for both subprocess
+    and in-process runs; a streamed run (`capture=False`) leaves them empty.
+    """
 
     command: str
     """The command line that ran, normalised for reading — options in
     separated form, values shell-quoted. What `recording()` asserts against,
     and what the terminal shows."""
-    code: int
-    """The exit code (0 is success)."""
-    output: str
-    """Captured combined output; empty when the step streamed instead."""
+    stdout: str
+    """Captured standard output; empty when the step streamed instead."""
+    stderr: str
+    """Captured standard error; empty when the step streamed instead."""
     duration: float
     """Wall-clock seconds the step took."""
-    raw: str = ""
+    raw: str
     """The exact command line executed, shell-quoted — the bytes footman
     handed the tool, which may spell an option `--flag=value` where
     `command` shows `--flag value`. What `--verbose` prints. Equal to
     `command` when there is nothing to normalise."""
+
+    def __new__(
+        cls,
+        code: int,
+        *,
+        command: str = "",
+        stdout: str = "",
+        stderr: str = "",
+        duration: float = 0.0,
+        raw: str = "",
+    ) -> Result:
+        self = super().__new__(cls, code)
+        self.command = command
+        self.stdout = stdout
+        self.stderr = stderr
+        self.duration = duration
+        self.raw = raw or command
+        return self
+
+    @property
+    def code(self) -> int:
+        """The exit code (0 is success) — the same value the `Result` itself is."""
+        return int(self)
+
+    @property
+    def ok(self) -> bool:
+        """Whether the command succeeded (exit code 0)."""
+        return self == 0
+
+    @property
+    def output(self) -> str:
+        """`stdout` then `stderr`, concatenated — a convenience for "show me
+        everything". NOT interleaved in real time (each stream is captured
+        whole); when the order *across* the two streams matters, read `stdout`
+        and `stderr` separately."""
+        return self.stdout + self.stderr
 
 
 @dataclass
@@ -105,8 +148,13 @@ class Context:
     """Output dresses for a terminal (colour, marks). Live in-place
     rewrites additionally require output to be uncaptured."""
     sink: TextIO | None = None
-    """Where this task's output goes: a capture buffer in buffered
+    """Where this task's stdout goes: a capture buffer in buffered
     (parallel) mode, `None` for the real stdout (live mode)."""
+    err_sink: TextIO | None = None
+    """Where this task's stderr goes. At task level it is the *same* buffer as
+    `sink` (so the atomic parallel flush keeps stdout/stderr in order); a
+    `run()` capturing an in-process callable temporarily points the two at
+    separate buffers to split the step's streams for its `Result`."""
     interactive: bool = False
     """`@task(interactive=True)`: the task owns the real terminal — output is
     not captured and it holds sole stdio, so its body may prompt or run a
@@ -122,7 +170,7 @@ class Context:
     """True while a task *body* runs (the scheduler sets it around the call),
     so the interactive primitives tell a guarded mid-body call from the
     framework's own up-front `ask()` resolution."""
-    steps: list[StepResult] = field(default_factory=list)
+    steps: list[Result] = field(default_factory=list)
     """Every `run()` this task made, in order — what `recording()` and
     the `--json` envelope read."""
 
@@ -291,7 +339,7 @@ def inherited() -> Any:
 class RunFailed(Exception):
     """A `run()` command exited non-zero (and `nofail` was not set)."""
 
-    def __init__(self, result: StepResult) -> None:
+    def __init__(self, result: Result) -> None:
         self.result = result
         super().__init__(f"`{result.command}` exited with code {result.code}")
 
@@ -348,17 +396,25 @@ def active_status() -> Any:
 
 
 class _Router:
-    """A `sys.stdout` proxy that sends each write to the current task's sink."""
+    """A `sys.stdout`/`sys.stderr` proxy that sends each write to the current
+    task's sink — `err_sink` for the stderr router, `sink` for stdout. At task
+    level the two point at one buffer (combined, order-preserving); a `run()`
+    capturing an in-process callable splits them to record the step's streams."""
 
-    def __init__(self, real: TextIO) -> None:
+    def __init__(self, real: TextIO, *, err: bool = False) -> None:
         self.real = real
+        self._err = err
         try:
             self._tty = real.isatty()
         except Exception:
             self._tty = False
 
+    def _sink(self) -> TextIO | None:
+        ctx = current()
+        return ctx.err_sink if self._err else ctx.sink
+
     def write(self, s: str) -> int:
-        sink = current().sink
+        sink = self._sink()
         if sink is not None:
             return sink.write(s)
         # A real-terminal write: the live status line (if any) must clear
@@ -368,7 +424,7 @@ class _Router:
         return self.real.write(s)
 
     def flush(self) -> None:
-        (current().sink or self.real).flush()
+        (self._sink() or self.real).flush()
 
     def isatty(self) -> bool:
         return self.real.isatty()
@@ -598,7 +654,7 @@ def routing():
         with contextlib.suppress(Exception):
             if hasattr(stream, "reconfigure"):
                 stream.reconfigure(errors="replace")  # type: ignore[union-attr]
-    _router, _err_router = _Router(real_out), _Router(real_err)
+    _router, _err_router = _Router(real_out), _Router(real_err, err=True)
     sys.stdout, sys.stderr = _router, _err_router  # type: ignore[assignment]
     try:
         # (real stdout, real stderr): task blocks land on the first, the live
@@ -732,17 +788,19 @@ def _run_callable(
     capture: bool = True,
     env: dict[str, str] | None = None,
     cwd: str | Path | None = None,
-) -> tuple[int, str]:
+) -> tuple[int, str, str]:
     """Run a callable — parallel-safe under the router, honoring env/cwd.
 
     With the router installed, every write this thread makes already
-    dispatches through `current().sink`, so capture is a thread-confined
-    sink swap — concurrent in-process tools never touch each other's
-    output. Outside a routed run (bare calls in scripts/tests) there is no
-    router to lean on, so fall back to the classic global redirect.
+    dispatches through `current().sink`/`err_sink`, so capture is a
+    thread-confined swap of the two to fresh buffers — concurrent in-process
+    tools never touch each other's output, and the callable's stdout and stderr
+    land in separate buffers for the step's `Result`. Outside a routed run
+    (bare calls in scripts/tests) there is no router to lean on, so fall back to
+    the classic global redirect (still split, into two buffers).
 
-    `capture=False` skips the buffer entirely (live output, returns `''` like
-    the subprocess branch) — for serve-style tasks that must not buffer
+    `capture=False` skips the buffers entirely (live output, returns `('', '')`
+    like the subprocess branch) — for serve-style tasks that must not buffer
     unboundedly. The env overlay and cwd are applied process-globally via
     `_process_state`; the `capture=False` short-circuit runs *inside* it so
     uncaptured callables keep cwd/env too.
@@ -752,19 +810,22 @@ def _run_callable(
     target_cwd = Path(cwd) if cwd is not None else ctx.cwd
     with _process_state(overlay, target_cwd):
         if not capture:
-            return _call_for_code(cmd, args), ""
-        buffer = io.StringIO()
+            return _call_for_code(cmd, args), "", ""
+        out_buf, err_buf = io.StringIO(), io.StringIO()
         if _router is not None:
-            saved = ctx.sink
-            ctx.sink = buffer
+            saved_out, saved_err = ctx.sink, ctx.err_sink
+            ctx.sink, ctx.err_sink = out_buf, err_buf
             try:
                 code = _call_for_code(cmd, args)
             finally:
-                ctx.sink = saved
-            return code, buffer.getvalue()
-        with contextlib.redirect_stdout(buffer), contextlib.redirect_stderr(buffer):
+                ctx.sink, ctx.err_sink = saved_out, saved_err
+            return code, out_buf.getvalue(), err_buf.getvalue()
+        with (
+            contextlib.redirect_stdout(out_buf),
+            contextlib.redirect_stderr(err_buf),
+        ):
             code = _call_for_code(cmd, args)
-        return code, buffer.getvalue()
+        return code, out_buf.getvalue(), err_buf.getvalue()
 
 
 # Live subprocesses footman has spawned, so fail-fast can terminate the ones
@@ -884,7 +945,7 @@ def _run_subprocess(
     killable: bool = True,
     isolate: bool = True,
     keep_going: bool = False,
-) -> tuple[int, str]:
+) -> tuple[int, str, str]:
     # Dev tools (pytest, ruff, git, uv) emit UTF-8 regardless of the OS code
     # page, so decode as UTF-8 by default rather than the locale encoding
     # (cp1252 on Windows would mojibake the capture). `encoding=None` restores
@@ -929,8 +990,9 @@ def _run_subprocess(
     finally:
         if killable:
             _forget_child(proc)
-    output = "" if not capture else (out or "") + (err or "")
-    return proc.returncode, output
+    if not capture:
+        return proc.returncode, "", ""
+    return proc.returncode, out or "", err or ""
 
 
 def _dim(text: str, color: bool) -> str:
@@ -1031,7 +1093,7 @@ def run(
     cwd: str | Path | None = None,
     encoding: str | None = "utf-8",
     _show: Invocation | None = None,
-) -> int:
+) -> Result:
     """Run a command or a Python callable in the current task's context.
 
     Subprocess output is decoded as UTF-8 by default; pass `encoding=` for a
@@ -1065,10 +1127,11 @@ def run(
         # Record the step even when not executing: `dry_run` + `quiet` is the
         # silent-capture mode `footman.testing` builds on. The recorded label
         # is normalised; only the shown line colours or (under -v) goes exact.
-        ctx.steps.append(StepResult(label, 0, "", 0.0, raw=raw))
+        result = Result(0, command=label, raw=raw)
+        ctx.steps.append(result)
         if not ctx.quiet:
             out.write(f"$ {shown if color else shown_plain}\n")
-        return 0
+        return result
 
     show = not silent and not ctx.quiet
     # `ctx.tty` means "this output dresses for a terminal" (colour, marks);
@@ -1091,7 +1154,7 @@ def run(
 
     start = time.perf_counter()
     if callable(cmd):
-        code, output = _run_callable(cmd, args, capture=capture, env=env, cwd=cwd)
+        code, out_s, err_s = _run_callable(cmd, args, capture=capture, env=env, cwd=cwd)
     else:
         if isinstance(cmd, str):
             if (op := _shell_operator(cmd)) is not None:
@@ -1111,7 +1174,7 @@ def run(
             argv = [str(a) for a in cmd]
         run_env = {**os.environ, **ctx.env, **(env or {})}
         cwd_path = Path(cwd) if cwd is not None else ctx.cwd
-        code, output = _run_subprocess(
+        code, out_s, err_s = _run_subprocess(
             argv,
             run_env,
             cwd_path,
@@ -1126,19 +1189,25 @@ def run(
             keep_going=ctx.keep_going,
         )
     duration = time.perf_counter() - start
-    ctx.steps.append(StepResult(label, code, output, duration, raw=raw))
+    result = Result(
+        code, command=label, stdout=out_s, stderr=err_s, duration=duration, raw=raw
+    )
+    ctx.steps.append(result)
 
     if show:
         ok = code == 0
         prefix = "\r\033[K" if ctx.tty and live else ""
         out.write(f"{prefix}{_step_line(ctx, ok, label, duration)}")
-        if capture and output and (not ok or ctx.verbose):
-            out.write(output if output.endswith("\n") else output + "\n")
+        # Join the two streams only to *display* them (stdout then stderr);
+        # nothing merged is stored — the Result keeps them apart.
+        combined = out_s + err_s
+        if capture and combined and (not ok or ctx.verbose):
+            out.write(combined if combined.endswith("\n") else combined + "\n")
         out.flush()
 
     if code != 0 and not nofail:
-        raise RunFailed(ctx.steps[-1])
-    return code
+        raise RunFailed(result)
+    return result
 
 
 # --- parallel() --------------------------------------------------------------
@@ -1177,8 +1246,12 @@ def parallel(*calls: Callable[[], Any], keep_going: bool = False) -> list[int]:
         name = _call_name(call)
         if status is not None:
             status.unit_started(name)
+        # One buffer for both streams at task level, so the atomic flush keeps
+        # this child's stdout/stderr in order; a run() inside it still splits the
+        # step's streams via a temporary swap.
+        buf = io.StringIO()
         child = replace(
-            parent, sink=io.StringIO(), steps=[], task=name, name_width=width
+            parent, sink=buf, err_sink=buf, steps=[], task=name, name_width=width
         )
         token = _current.set(child)
         try:
@@ -1190,7 +1263,7 @@ def parallel(*calls: Callable[[], Any], keep_going: bool = False) -> list[int]:
             # treats both uniformly; `keep_going` still collects the code.
             if code != 0:
                 thunk = _label(call, ())
-                error = RunFailed(StepResult(thunk, code, "", 0.0, raw=thunk))
+                error = RunFailed(Result(code, command=thunk, raw=thunk))
         except RunFailed as exc:
             code, error = exc.result.code or 1, exc
         except SystemExit as exc:
@@ -1202,7 +1275,7 @@ def parallel(*calls: Callable[[], Any], keep_going: bool = False) -> list[int]:
             error = None
             if code != 0:
                 thunk = _label(call, ())
-                error = RunFailed(StepResult(thunk, code, "", 0.0, raw=thunk))
+                error = RunFailed(Result(code, command=thunk, raw=thunk))
         except Exception as exc:  # a failed call must not crash the pool
             code, error = 1, exc
         finally:

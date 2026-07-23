@@ -94,6 +94,82 @@ def test_run_nofail_returns_code():
     assert out["code"] == 1
 
 
+def test_result_is_the_exit_code_int():
+    # A Result *is* the exit code: the int idioms keep working, and it carries
+    # the captured output and the `.ok` shorthand alongside.
+    def tasks(reg):
+        @reg.task
+        def go():
+            ok = run([sys.executable, "-c", "pass"])
+            assert isinstance(ok, int) and ok == 0 and ok.ok and not bool(ok)
+            bad = run([sys.executable, "-c", "import sys; sys.exit(3)"], nofail=True)
+            assert bad == 3 and bad.code == 3 and not bad.ok and bool(bad)
+
+    _, _, results = drive(tasks, "go")
+    assert results[0].ok
+
+
+def test_result_separates_subprocess_streams():
+    def tasks(reg):
+        @reg.task
+        def go():
+            run(
+                [
+                    sys.executable,
+                    "-c",
+                    "import sys; print('to-out'); print('to-err', file=sys.stderr)",
+                ]
+            )
+
+    _, _, results = drive(tasks, "go")
+    step = results[0].steps[0]
+    assert step.stdout.strip() == "to-out"
+    assert step.stderr.strip() == "to-err"
+    # .output is the two joined (stdout first), computed — never stored.
+    assert step.output == step.stdout + step.stderr
+
+
+def test_result_separates_in_process_streams():
+    # An in-process callable splits stdout/stderr exactly like a subprocess —
+    # no user-visible difference between the two kinds of run().
+    def tasks(reg):
+        @reg.task
+        def go():
+            def tool():
+                print("in-out")
+                print("in-err", file=sys.stderr)
+
+            run(tool)
+
+    _, _, results = drive(tasks, "go")
+    step = results[0].steps[0]
+    assert step.stdout.strip() == "in-out"
+    assert step.stderr.strip() == "in-err"
+
+
+def test_parallel_in_process_separates_streams_under_routing():
+    # The delicate path: run() inside a parallel child still splits the step's
+    # streams, even though the child's task-level buffer stays combined for the
+    # atomic flush.
+    def tasks(reg):
+        @reg.task
+        def go():
+            def x():
+                print("x-out")
+                print("x-err", file=sys.stderr)
+
+            def y():
+                print("y-out")
+                print("y-err", file=sys.stderr)
+
+            parallel(lambda: run(x), lambda: run(y))
+
+    _, _, results = drive(tasks, "go")
+    steps = results[0].steps
+    assert {s.stdout.strip() for s in steps} == {"x-out", "y-out"}
+    assert {s.stderr.strip() for s in steps} == {"x-err", "y-err"}
+
+
 def test_run_callable_capture_false_is_live_not_buffered(capsys):
     # F60: capture=False streams the callable's output live instead of buffering
     # it into the step — serve-style tasks must not buffer unboundedly.

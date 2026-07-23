@@ -27,8 +27,8 @@ from typing import Any
 from footman import coerce, context, registry
 from footman.context import (
     Context,
+    Result,
     RunFailed,
-    StepResult,
     _current,
     context_param_name,
 )
@@ -49,7 +49,7 @@ class TaskResult:
     error: BaseException | None = None
     duration: float = 0.0
     output: str = ""
-    steps: list[StepResult] = field(default_factory=list)
+    steps: list[Result] = field(default_factory=list)
     cancelled: bool = False  # failed only because fail-fast killed it mid-run
 
 
@@ -479,7 +479,7 @@ def _result(
     error: BaseException | None,
     duration: float,
     output: str = "",
-    steps: list[StepResult] | None = None,
+    steps: list[Result] | None = None,
 ) -> TaskResult:
     return TaskResult(
         task=seg.task,

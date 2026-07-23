@@ -503,7 +503,7 @@ def test_negation_table_matches_what_the_tools_say():
 # The command line footman *shows* is built from the same translation it
 # *executes*, but spelled for a human: separated flags, shell-quoted values,
 # role-tagged for colour. `recording()` sees that shown form (via
-# StepResult.command), which is why these assertions read naturally and stay
+# Result.command), which is why these assertions read naturally and stay
 # stable even when execution tokenises differently.
 
 
