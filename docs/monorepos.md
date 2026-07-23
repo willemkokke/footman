@@ -20,6 +20,27 @@ Standing in `services/api`, `fm` sees `build*` (the local override), `test`,
 - a **group present at both levels merges** — its tasks are overlaid the same
   way.
 
+!!! note "How footman finds the top of the cascade"
+
+    The walk goes up from your current directory and stops at a **ceiling**,
+    then collects downward. The rules, in order:
+
+    1. **The ceiling is the nearest `.git` at or above your cwd.** That is the
+       repo edge, and where both the task cascade and the [config
+       search](#configuration) start.
+    2. **No `.git`? The nearest ancestor holding a project marker** — a
+       `pyproject.toml`, a `footman.toml`, or a `tasks.py` — is the ceiling
+       instead, so a single-package checkout with no VCS still has a sensible
+       top.
+    3. **Nothing above you at all? Your current directory is the ceiling** — the
+       walk never climbs past your home into the filesystem root looking for
+       one.
+
+    From that ceiling **down to your cwd**, footman loads every `tasks.py` that
+    exists — root first, cwd last, so nearer files override — skipping folders
+    that have none. The filename is the `tasks` [config key](#configuration), so
+    a repo can look for something other than `tasks.py`.
+
 ## Where a task runs
 
 Every task **runs from the folder of the file that defined it**. Root's `build`

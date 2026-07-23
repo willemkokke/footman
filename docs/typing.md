@@ -17,6 +17,16 @@ parse time, with taught error messages.
 | `template: Path`                | required positional (consumed by exact count)       |
 | `*cmd: str`                     | variadic trailing passthrough                       |
 
+**The rule behind the table: the default decides.** A parameter with **no
+default** is a **required positional** — a bare word on the line fills it
+(`fm greet Ada`). A parameter **with a default** is an **option** you pass by
+name (`--mode loose`), or, for a `bool`, a `--flag`/`--no-flag` switch. That is
+the whole distinction: give a parameter a default and it moves from the
+command line's *positions* to its *flags*. The container types layer arity on
+top — `list[T]`/`Many[T]` take one-or-many (a positional one needs at least
+one), and `*args` sweeps up the variadic tail — but the default is still what
+sorts each parameter into a position or a flag.
+
 !!! note "One reserved parameter name: `help`"
 
     A parameter named `help` is the one name the signature can't turn into a

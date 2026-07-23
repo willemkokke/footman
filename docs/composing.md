@@ -51,6 +51,25 @@ reported, each in its own words, so a task needing both a tool and a variable
 says both. A predicate that raises reads as unavailable (a broken gate must not
 swing open).
 
+Keep the gates **below `@task`**, as above — `@task` on top, `@requires_*`
+stacked beneath it. Either order *runs* (a gate sets an attribute the same task
+object carries), but `@task` outermost is what keeps the task's typed signature
+and `.opts()` in view for a type checker; flipped, the gate erases them. It also
+reads the way it works: `@task` is the identity, the gates are modifiers under
+it.
+
+!!! warning "Keep a predicate cheap — it runs live"
+
+    A gate's predicate runs **every time the manifest is built** — on every
+    `fm --list`, every help render, and every background cache refresh — not
+    only when the task runs. That liveness is the whole point (no stale
+    availability), but it means a slow gate slows *listing*, not just
+    execution. Keep predicates to a `which`, an `in os.environ`, a `find_spec`
+    (which is what `@requires_tool`/`_env`/`_dep` already do); never a network
+    call or a heavy import. The completion hot path is exempt — a `<Tab>` reads
+    the baked reason from the cache and runs no predicate — but the refresh that
+    fills that cache is not.
+
 A `pre`/`post` dependency on a disabled task is a **hard failure**, not a
 silent skip — silently dropping `lint` from `check` on the wrong machine is
 how CI learns to lie. When you want the optional-dependency flow, compose the
