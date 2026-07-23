@@ -61,6 +61,7 @@ nav = [
     { "build" = "_generated/tools/build.md" },
     { "bun" = "_generated/tools/bun.md" },
     { "cmake" = "_generated/tools/cmake.md" },
+    { "cmd" = "_generated/tools/cmd.md" },
     { "coverage" = "_generated/tools/coverage.md" },
     { "cspell" = "_generated/tools/cspell.md" },
     { "djlint" = "_generated/tools/djlint.md" },

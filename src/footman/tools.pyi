@@ -36,6 +36,7 @@ from footman._stubs.bash import Bash as Bash
 from footman._stubs.build import Build as Build
 from footman._stubs.bun import Bun as Bun
 from footman._stubs.cmake import Cmake as Cmake
+from footman._stubs.cmd import Cmd as Cmd
 from footman._stubs.coverage import Coverage as Coverage
 from footman._stubs.cspell import Cspell as Cspell
 from footman._stubs.djlint import Djlint as Djlint
@@ -175,5 +176,6 @@ zsh: Zsh
 fish: Fish
 pwsh: Pwsh
 nu: Nu
+cmd: Cmd
 
 def __getattr__(name: str) -> Tool: ...

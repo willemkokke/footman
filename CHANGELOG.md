@@ -25,7 +25,9 @@ versions may include breaking changes.
   errexit), and **`clean=True`** runs the interpreter without the user's
   startup files, so a task's shell behaves the same on every machine. On
   Windows, the shown/`--verbose` command line now quotes the way cmd and
-  PowerShell can read (stdlib `subprocess.list2cmdline`).
+  PowerShell can read (stdlib `subprocess.list2cmdline`). The curated shell
+  tools gain a sixth, **`tools.cmd`** (`cmd /c …`), so all of
+  `bash`/`zsh`/`fish`/`pwsh`/`nu`/`cmd` read consistently.
 
 - **`run()` returns a `Result`.** `run()` — and every `tools.*` call — now
   returns a `Result` instead of a bare exit code. A `Result` *is* the exit code

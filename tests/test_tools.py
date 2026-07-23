@@ -91,6 +91,8 @@ def test_shell_tools_run_a_command_string_through_the_shell(monkeypatch):
     # `tools.bash("cmd")` runs `bash -c cmd` — a real shell, so pipes work.
     assert _one(lambda: tools.bash("echo hi | cat")) == "bash -c 'echo hi | cat'"
     assert _one(lambda: tools.nu("ls | length")) == "nu -c 'ls | length'"
+    # cmd is a curated shell too — it bakes in /c like the others bake in -c.
+    assert _one(lambda: tools.cmd("dir")) == "cmd /c dir"
 
 
 def test_manual_source_driver_is_never_extracted():

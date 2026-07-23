@@ -585,16 +585,18 @@ ninja = Tool("ninja")
 pytest = Tool("pytest", in_process=True, entry="pytest:main")
 python = Tool("python", path=_sys.executable)
 
-# The shells footman autocompletes for, invoked to run a command *string*:
-# `tools.bash("echo $X | grep y")` runs `bash -c "…"`, so pipes, redirects,
-# globbing and `$VAR` all work — the low-level "I want *this* shell" primitive
-# (`run(..., shell="bash")` is the ergonomic front door). `-c` is the
-# run-a-string flag for every one of them (pwsh takes it as an alias for -Command).
+# The shells, invoked to run a command *string*: `tools.bash("echo $X | grep y")`
+# runs `bash -c "…"`, so pipes, redirects, globbing and `$VAR` all work — the
+# low-level "I want *this* shell" primitive (`run(..., shell="bash")` is the
+# ergonomic front door). `-c` is the run-a-string flag for every one of them
+# (pwsh takes it as an alias for -Command); Windows `cmd` uses `/c` and is
+# Windows-only. footman autocompletes for all but cmd (cmd has no completion).
 bash = Tool("bash", "-c")
 zsh = Tool("zsh", "-c")
 fish = Tool("fish", "-c")
 pwsh = Tool("pwsh", "-c")
 nu = Tool("nu", "-c")
+cmd = Tool("cmd", "/c")
 
 
 def __getattr__(name: str) -> Tool:
