@@ -106,29 +106,31 @@ def _classes(tree: dict[str, object], name: str) -> list[str]:
         node = tree[key]
         if isinstance(node, Verb):
             body.append(_method(node, key))
-    # A tool with subcommands gets a typed `.opts()` returning its own class,
+    # A tool with subcommands gets a typed `.flags()` returning its own class,
     # so a globals-before-verb chain stays checked. The root verb's options
     # are the typed globals (git's `--git-dir`, docker's `--host`); a tool
     # with none still gets the self-returning override, for the chaining.
+    # (footman run-control rides the inherited `.opts()`, typed on Tool.)
     if _has_subcommands(tree):
         root = tree.get("")
         globals_ = root.options if isinstance(root, Verb) else ()
-        body.append(_opts_method(globals_, name))
+        body.append(_flags_method(globals_, name))
     out.append(f"class {name}(Tool):\n" + ("\n".join(body) or "    ..."))
     return out
 
 
 def _has_subcommands(tree: dict[str, object]) -> bool:
-    """Whether this class has verbs to precede — the only case `.opts()`
+    """Whether this class has verbs to precede — the only case `.flags()`
     means anything (a global belongs *before* a subcommand)."""
     return any(key != "" for key in tree)
 
 
-def _opts_method(options: tuple[Option, ...], class_name: str) -> str:
-    """The typed `opts()` for a tool's global options — returns the tool,
-    so `tools.docker.opts(host=…).compose.up(…)` stays checked. With no
-    globals it is still declared, so the return type carries the chain."""
-    lines = ["    def opts(", "        self,"]
+def _flags_method(options: tuple[Option, ...], class_name: str) -> str:
+    """The typed `flags()` for a tool's global options — returns the tool,
+    so `tools.docker.flags(host=…).compose.up(…)` stays checked. With no
+    globals it is still declared, so the return type carries the chain.
+    (footman run-control — nofail/capture/… — goes on the inherited `.opts()`.)"""
+    lines = ["    def flags(", "        self,"]
     typed = _unique(options)
     if typed:  # a `*` separator with only `**flags` after it is a syntax error
         lines.append("        *,")
@@ -138,25 +140,32 @@ def _opts_method(options: tuple[Option, ...], class_name: str) -> str:
     lines.append(f"    ) -> {class_name}:")
     lines.append('        """Bind tool-level global options before the subcommand.')
     lines.append("")
-    lines.append("        `tools.docker.opts(host=...)` puts a tool's own")
+    lines.append("        `tools.docker.flags(host=...)` puts a tool's own")
     lines.append('        options ahead of the verb, where they belong."""')
     lines.append("        ...")
     return "\n".join(lines)
 
 
 def _method(verb: Verb, key: str) -> str:
-    """One verb as a stub method — or `__call__` for a tool's own options."""
+    """One verb as a stub method — or `__call__` for a tool's own flags.
+
+    footman run-control (nofail/capture/title/in_process) lives on the inherited
+    `.opts()`, never the call, so a call signature is pure flags — which also
+    means an option literally named `capture` (pytest's) types through here."""
     name = key or "__call__"
     override = "  # type: ignore[override]" if name == "__call__" else ""
-    lines = [f"    def {name}({override}"] if override else [f"    def {name}("]
-    lines.append("        self,")
-    lines.extend(_positional_lines(verb))
-    seen: set[str] = set()
-    for option in _unique(verb.options):
-        seen.add(option.name)
+    header = f"    def {name}({override}" if override else f"    def {name}("
+    positional = _positional_lines(verb)
+    options = _unique(verb.options)
+    # A bare `*,` must be followed by a keyword-only parameter; when the only
+    # thing after it would be `**flags`, drop it — `def f(self, **flags)` already
+    # forbids a positional. (Previously the nofail/in_process params backfilled
+    # the `*,`; those moved to `.opts()`.)
+    if positional == ["        *,"] and not options:
+        positional = []
+    lines = [header, "        self,", *positional]
+    for option in options:
         lines.append(f"        {_safe(option.name)}: {_annotation(option)} = ...,")
-    lines.append("        nofail: bool = False,")
-    lines.append("        in_process: bool | None = None,")
     lines.append("        **flags: Any,")
     lines.append("    ) -> Result:")
     doc = _docstring(verb)
@@ -187,10 +196,12 @@ def _positional_lines(verb: Verb) -> list[str]:
     return ["        *args: str,"]
 
 
-# The method's own parameters. An option named the same (git rev-parse has
-# `--flags`) would be a duplicate parameter — it still works, swallowed by
-# `**flags` at type-check and `**kwargs` at run time, just not typed.
-_RESERVED = frozenset({"self", "args", "flags", "nofail", "in_process"})
+# The method's own structural parameters. An option named the same (git
+# rev-parse has `--flags`) would be a duplicate parameter — it still works,
+# swallowed by `**flags` at type-check and `**kwargs` at run time, just not
+# typed. `nofail`/`in_process` are no longer here — they moved to `.opts()`, so
+# a tool that really has a `--nofail` flag now types through the call.
+_RESERVED = frozenset({"self", "args", "flags"})
 
 
 def _unique(options: tuple[Option, ...]) -> list[Option]:

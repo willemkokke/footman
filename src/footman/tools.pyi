@@ -25,7 +25,7 @@ import subprocess as _subprocess  # noqa: F401
 import sys as _sys  # noqa: F401
 import threading as _threading
 from collections.abc import Iterator, Sequence
-from typing import Any
+from typing import Any, Self
 
 from footman._stubs.basedpyright import Basedpyright as Basedpyright
 
@@ -105,11 +105,16 @@ def _quote(text: str) -> str: ...
 def _console_entrypoint(name: str) -> Any | None: ...
 def _accepts_args(entry: Any) -> bool: ...
 
+_TOOL_OPTS: tuple[str, ...]
+
+def _opts_overrides(kwargs: dict[str, Any]) -> dict[str, Any]: ...
+
 class Tool:
     _argv0: str
     _base: list[str]
     _prefer_in_process: bool
     _single_dash: bool
+    _opts: dict[str, Any]
     def __init__(
         self,
         name: str,
@@ -118,16 +123,25 @@ class Tool:
         path: str = ...,
         entry: str = ...,
         single_dash: bool = False,
+        policy: dict[str, Any] | None = None,
     ) -> None: ...
     def __getattr__(self, verb: str) -> Tool: ...
-    def opts(self, **flags: Any) -> Tool: ...
-    def __call__(
+    # footman run-control policy — a closed vocabulary that rides beside the
+    # call (never a tool flag). Returns Self, so a generated tool keeps its verb
+    # completions: `git.opts(nofail=True).push()`.
+    def opts(
         self,
-        *args: Any,
-        nofail: bool = False,
-        in_process: bool | None = None,
-        **flags: Any,
-    ) -> Result: ...
+        *,
+        nofail: bool = ...,
+        in_process: bool | None = ...,
+        capture: bool = ...,
+        title: str = ...,
+    ) -> Self: ...
+    # A tool's own global options, bound before the next subcommand
+    # (`docker.flags(host="x").ps()`). Generated stubs override it with the
+    # tool's typed globals; the base takes any flag.
+    def flags(self, **flags: Any) -> Self: ...
+    def __call__(self, *args: Any, **flags: Any) -> Result: ...
     def installed_version(self) -> tuple[int, ...]: ...
 
 ruff: Ruff

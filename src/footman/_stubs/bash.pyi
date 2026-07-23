@@ -10,8 +10,6 @@ class Bash(Tool):
         self,
         command: str,
         /,
-        *,
-        nofail: bool = False,
         **flags: Any,
     ) -> Result:
         """Run a command string in bash — `bash -c "<command>"`.

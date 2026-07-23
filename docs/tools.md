@@ -26,7 +26,7 @@ tool — have their own page: [The tools bridge](tools-bridge.md).
 ## `run()`
 
 - Takes a command (string or list) or a Python callable.
-- Raises on a non-zero exit; `nofail=True` returns the code instead.
+- Raises on a non-zero exit; `.opts(nofail=True)` returns the code instead.
 - Honours `--dry-run` (prints the command instead of running it).
 - Records a step for [`--json`](json.md) (command, code, duration, captured
   output); `capture=False` lets output through unbuffered and records an

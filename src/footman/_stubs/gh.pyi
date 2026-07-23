@@ -19,8 +19,6 @@ class GhAuth(Tool):
         skip_ssh_key: _Flag = ...,
         web: _Flag = ...,
         with_token: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Authenticate with a GitHub host.
@@ -47,8 +45,6 @@ class GhAuth(Tool):
         json: _Value = ...,
         show_token: _Flag = ...,
         template: _Value = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Display active account and authentication state on each known GitHub host.
@@ -63,13 +59,13 @@ class GhAuth(Tool):
                 formatting".
         """
         ...
-    def opts(
+    def flags(
         self,
         **flags: Any,
     ) -> GhAuth:
         """Bind tool-level global options before the subcommand.
 
-        `tools.docker.opts(host=...)` puts a tool's own
+        `tools.docker.flags(host=...)` puts a tool's own
         options ahead of the verb, where they belong."""
         ...
 
@@ -93,8 +89,6 @@ class GhIssue(Tool):
         title: _Value = ...,
         type: _Value = ...,
         web: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Create an issue on GitHub.
@@ -140,8 +134,6 @@ class GhIssue(Tool):
         template: _Value = ...,
         type: _Value = ...,
         web: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """List issues in a GitHub repository. By default, this only lists open issues.
@@ -174,8 +166,6 @@ class GhIssue(Tool):
         repo: _Value = ...,
         template: _Value = ...,
         web: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Display the title, body, and other information about an issue.
@@ -190,13 +180,13 @@ class GhIssue(Tool):
             web: Open an issue in the browser.
         """
         ...
-    def opts(
+    def flags(
         self,
         **flags: Any,
     ) -> GhIssue:
         """Bind tool-level global options before the subcommand.
 
-        `tools.docker.opts(host=...)` puts a tool's own
+        `tools.docker.flags(host=...)` puts a tool's own
         options ahead of the verb, where they belong."""
         ...
 
@@ -210,8 +200,6 @@ class GhLabel(Tool):
         description: _Value = ...,
         force: _Flag = ...,
         repo: _Value = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Create a new label on GitHub, or update an existing one with `--force`.
@@ -235,8 +223,6 @@ class GhLabel(Tool):
         sort: _Value = ...,
         template: _Value = ...,
         web: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Display labels in a GitHub repository.
@@ -254,13 +240,13 @@ class GhLabel(Tool):
             web: List labels in the web browser.
         """
         ...
-    def opts(
+    def flags(
         self,
         **flags: Any,
     ) -> GhLabel:
         """Bind tool-level global options before the subcommand.
 
-        `tools.docker.opts(host=...)` puts a tool's own
+        `tools.docker.flags(host=...)` puts a tool's own
         options ahead of the verb, where they belong."""
         ...
 
@@ -273,8 +259,6 @@ class GhPr(Tool):
         force: _Flag = ...,
         recurse_submodules: _Flag = ...,
         repo: _Value = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Check out a pull request in git
@@ -313,8 +297,6 @@ class GhPr(Tool):
         template: _Value = ...,
         title: _Value = ...,
         web: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Create a pull request on GitHub.
@@ -364,8 +346,6 @@ class GhPr(Tool):
         state: _Value = ...,
         template: _Value = ...,
         web: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """List pull requests in a GitHub repository. By default, this only lists open
@@ -406,8 +386,6 @@ class GhPr(Tool):
         repo: _Value = ...,
         squash: _Flag = ...,
         subject: _Value = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Merge a pull request on GitHub.
@@ -441,8 +419,6 @@ class GhPr(Tool):
         repo: _Value = ...,
         template: _Value = ...,
         web: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Display the title, body, and other information about a pull request.
@@ -457,13 +433,13 @@ class GhPr(Tool):
             web: Open a pull request in the browser.
         """
         ...
-    def opts(
+    def flags(
         self,
         **flags: Any,
     ) -> GhPr:
         """Bind tool-level global options before the subcommand.
 
-        `tools.docker.opts(host=...)` puts a tool's own
+        `tools.docker.flags(host=...)` puts a tool's own
         options ahead of the verb, where they belong."""
         ...
 
@@ -485,8 +461,6 @@ class GhRelease(Tool):
         target: _Value = ...,
         title: _Value = ...,
         verify_tag: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Create a new GitHub Release for a repository.
@@ -525,8 +499,6 @@ class GhRelease(Tool):
         order: _Value = ...,
         repo: _Value = ...,
         template: _Value = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """List releases in a repository
@@ -550,8 +522,6 @@ class GhRelease(Tool):
         *args: str,
         clobber: _Flag = ...,
         repo: _Value = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Upload asset files to a GitHub Release.
@@ -569,8 +539,6 @@ class GhRelease(Tool):
         repo: _Value = ...,
         template: _Value = ...,
         web: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """View information about a GitHub Release.
@@ -584,13 +552,13 @@ class GhRelease(Tool):
             web: Open the release in the browser.
         """
         ...
-    def opts(
+    def flags(
         self,
         **flags: Any,
     ) -> GhRelease:
         """Bind tool-level global options before the subcommand.
 
-        `tools.docker.opts(host=...)` puts a tool's own
+        `tools.docker.flags(host=...)` puts a tool's own
         options ahead of the verb, where they belong."""
         ...
 
@@ -602,8 +570,6 @@ class GhRepo(Tool):
         *args: str,
         no_upstream: _Flag = ...,
         upstream_remote_name: _Value = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Clone a GitHub repository locally. Pass additional `git clone` flags by
@@ -623,8 +589,6 @@ class GhRepo(Tool):
         json: _Value = ...,
         template: _Value = ...,
         web: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Display the description and the README of a GitHub repository.
@@ -638,13 +602,13 @@ class GhRepo(Tool):
             web: Open a repository in the browser.
         """
         ...
-    def opts(
+    def flags(
         self,
         **flags: Any,
     ) -> GhRepo:
         """Bind tool-level global options before the subcommand.
 
-        `tools.docker.opts(host=...)` puts a tool's own
+        `tools.docker.flags(host=...)` puts a tool's own
         options ahead of the verb, where they belong."""
         ...
 
@@ -665,8 +629,6 @@ class GhRun(Tool):
         template: _Value = ...,
         user: _Value = ...,
         workflow: _Value = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """List recent workflow runs.
@@ -703,8 +665,6 @@ class GhRun(Tool):
         template: _Value = ...,
         verbose: _Flag = ...,
         web: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """View a summary of a workflow run.
@@ -733,8 +693,6 @@ class GhRun(Tool):
         exit_status: _Flag = ...,
         interval: _Value = ...,
         repo: _Value = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Watch a run until it completes, showing its progress.
@@ -746,13 +704,13 @@ class GhRun(Tool):
             repo: Select another repository using the [HOST/]OWNER/REPO format.
         """
         ...
-    def opts(
+    def flags(
         self,
         **flags: Any,
     ) -> GhRun:
         """Bind tool-level global options before the subcommand.
 
-        `tools.docker.opts(host=...)` puts a tool's own
+        `tools.docker.flags(host=...)` puts a tool's own
         options ahead of the verb, where they belong."""
         ...
 
@@ -766,8 +724,6 @@ class GhWorkflow(Tool):
         limit: _Value = ...,
         repo: _Value = ...,
         template: _Value = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """List workflow files, hiding disabled workflows by default.
@@ -790,8 +746,6 @@ class GhWorkflow(Tool):
         raw_field: _Value = ...,
         ref: _Value = ...,
         repo: _Value = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Create a `workflow_dispatch` event for a given workflow.
@@ -806,13 +760,13 @@ class GhWorkflow(Tool):
             repo: Select another repository using the [HOST/]OWNER/REPO format.
         """
         ...
-    def opts(
+    def flags(
         self,
         **flags: Any,
     ) -> GhWorkflow:
         """Bind tool-level global options before the subcommand.
 
-        `tools.docker.opts(host=...)` puts a tool's own
+        `tools.docker.flags(host=...)` puts a tool's own
         options ahead of the verb, where they belong."""
         ...
 
@@ -828,8 +782,6 @@ class Gh(Tool):
     def __call__(  # type: ignore[override]
         self,
         *args: str,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Work seamlessly with GitHub from the command line."""
@@ -854,8 +806,6 @@ class Gh(Tool):
         slurp: _Flag = ...,
         template: _Value = ...,
         verbose: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Makes an authenticated HTTP request to the GitHub API and prints the
@@ -883,12 +833,12 @@ class Gh(Tool):
             verbose: Include full HTTP request and response in the output.
         """
         ...
-    def opts(
+    def flags(
         self,
         **flags: Any,
     ) -> Gh:
         """Bind tool-level global options before the subcommand.
 
-        `tools.docker.opts(host=...)` puts a tool's own
+        `tools.docker.flags(host=...)` puts a tool's own
         options ahead of the verb, where they belong."""
         ...

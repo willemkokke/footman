@@ -39,12 +39,12 @@ def test_single_dash_long_flags_for_go_style_tools():
     )
 
 
-def test_single_dash_rides_chaining_opts_and_negation():
+def test_single_dash_rides_chaining_flags_and_negation():
     # One dash on the executed argv (raw), not just the shown line — and it holds
-    # across chained verbs, .opts(), and the off-sentinel negation.
+    # across chained verbs, .flags(), and the off-sentinel negation.
     with recording() as steps:
         tools.eclint("src", fix=True, color=tools.off)
-        tools.eclint.opts(verbose=True).check("src")
+        tools.eclint.flags(verbose=True).check("src")
     assert steps[0].raw == "eclint src -fix -no-color"
     assert steps[1].raw == "eclint -verbose check src"
 
@@ -231,13 +231,13 @@ def test_in_process_never_spawns(monkeypatch):
 
     monkeypatch.setattr(context, "_run_subprocess", boom)
     saved_argv = list(sys.argv)
-    assert tools.coverage("--version", nofail=True) == 0
+    assert tools.coverage.opts(nofail=True)("--version") == 0
     assert sys.argv == saved_argv  # patched argv is always restored
 
 
 def test_in_process_demand_without_entry_is_taught():
     with pytest.raises(ValueError, match="no importable in-process entry"):
-        tools.Tool("no-such-python-tool")("--version", in_process=True)
+        tools.Tool("no-such-python-tool").opts(in_process=True)("--version")
 
 
 def test_in_process_preference_falls_back_to_subprocess():
@@ -605,32 +605,46 @@ def test_raw_of_a_plain_run_shell_quotes_a_list():
     assert ctx.steps[-1].command == "echo a b"
 
 
-# --- tool-level globals via .opts() ------------------------------------------
+# --- tool-level globals via .flags() -----------------------------------------
 
 
-def test_opts_places_globals_before_the_verb():
+def test_opts_is_run_control_policy_not_flags():
+    # .opts() carries footman policy (closed vocab), never tool flags: it does
+    # not appear in the command, it rides the chain, and an unknown key teaches.
+    assert _one(lambda: tools.ruff.opts(nofail=True).check("src")) == "ruff check src"
+    with pytest.raises(TypeError, match="unknown option"):
+        # fix is a tool flag, not policy — a runtime error, and a type error too.
+        tools.ruff.opts(fix=True)  # pyright: ignore[reportCallIssue]
+    # capture is unambiguously footman's here; a tool's own --capture is a flag.
+    assert _one(lambda: tools.pytest(capture="no")) == "pytest --capture no"
+
+
+# --- tool-level globals via .flags() -----------------------------------------
+
+
+def test_flags_places_globals_before_the_verb():
     # cobra tools need their globals ahead of the subcommand.
-    assert _one(lambda: tools.docker.opts(host="tcp://x").ps(all=True)) == (
+    assert _one(lambda: tools.docker.flags(host="tcp://x").ps(all=True)) == (
         "docker --host tcp://x ps --all"
     )
 
 
-def test_opts_composes_through_a_nested_verb():
-    cmd = _one(lambda: tools.docker.opts(host="tcp://x").compose.up(detach=True))
+def test_flags_composes_through_a_nested_verb():
+    cmd = _one(lambda: tools.docker.flags(host="tcp://x").compose.up(detach=True))
     assert cmd == "docker --host tcp://x compose up --detach"
 
 
-def test_opts_raw_is_the_attached_executed_form():
+def test_flags_raw_is_the_attached_executed_form():
     with recording() as steps:
-        tools.docker.opts(host="tcp://x").run("alpine")
+        tools.docker.flags(host="tcp://x").run("alpine")
     assert steps[0].command == "docker --host tcp://x run alpine"
     assert steps[0].raw == "docker --host=tcp://x run alpine"
 
 
-def test_opts_keeps_the_in_process_preference():
-    # A tool built in-process stays in-process through .opts().
+def test_flags_keeps_the_in_process_preference():
+    # A tool built in-process stays in-process through .flags().
     tool = tools.Tool("mkdocs", in_process=True)
-    assert tool.opts(v=True)._prefer_in_process is True
+    assert tool.flags(v=True)._prefer_in_process is True
 
 
 # --- wrapper-verb flag ordering ----------------------------------------------
@@ -691,16 +705,16 @@ def test_wrappers_table_matches_what_the_tools_declare():
         assert declared == _WRAPPERS.get(driver.name, frozenset()), driver.name
 
 
-def test_git_globals_via_opts_precede_the_verb():
+def test_git_globals_via_flags_precede_the_verb():
     # git's globals belong before the subcommand; the man page supplies them.
     assert (
         _one(
-            lambda: tools.git.opts(git_dir="/r/.git", work_tree="/r").commit(
+            lambda: tools.git.flags(git_dir="/r/.git", work_tree="/r").commit(
                 message="x"
             )
         )
         == "git --git-dir /r/.git --work-tree /r commit --message x"
     )
-    assert _one(lambda: tools.git.opts(no_pager=True).log(n=1)) == (
+    assert _one(lambda: tools.git.flags(no_pager=True).log(n=1)) == (
         "git --no-pager log -n 1"
     )

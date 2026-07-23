@@ -11,8 +11,6 @@ class Coverage(Tool):
     def __call__(  # type: ignore[override]
         self,
         *args: str,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Coverage.py, version 7.15.2 with C extension"""
@@ -28,8 +26,6 @@ class Coverage(Tool):
         keep_combined: _Flag = ...,
         omit: _Value = ...,
         rcfile: _Value = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Make annotated copies of the given files, marking statements that are
@@ -58,8 +54,6 @@ class Coverage(Tool):
         keep: _Flag = ...,
         quiet: _Flag = ...,
         rcfile: _Value = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Combine data from multiple coverage files. The combined results are written
@@ -81,8 +75,6 @@ class Coverage(Tool):
         data_file: _Value = ...,
         debug: _Value = ...,
         rcfile: _Value = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Erase previously collected coverage data.
@@ -112,8 +104,6 @@ class Coverage(Tool):
         skip_covered: _Flag = ...,
         skip_empty: _Flag = ...,
         title: _Value = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Create an HTML report of coverage results. Each file gets its own page, with
@@ -161,8 +151,6 @@ class Coverage(Tool):
         quiet: _Flag = ...,
         rcfile: _Value = ...,
         show_contexts: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Generate a JSON report of coverage results.
@@ -206,8 +194,6 @@ class Coverage(Tool):
         skip_covered: _Flag = ...,
         skip_empty: _Flag = ...,
         sort: _Value = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Report coverage statistics on modules.
@@ -259,8 +245,6 @@ class Coverage(Tool):
         save_signal: _Value = ...,
         source: _Value = ...,
         timid: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Run a Python program, measuring code execution.
@@ -304,8 +288,6 @@ class Coverage(Tool):
         quiet: _Flag = ...,
         rcfile: _Value = ...,
         skip_empty: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Generate an XML report of coverage results.
@@ -328,12 +310,12 @@ class Coverage(Tool):
             skip_empty: Skip files with no code.
         """
         ...
-    def opts(
+    def flags(
         self,
         **flags: Any,
     ) -> Coverage:
         """Bind tool-level global options before the subcommand.
 
-        `tools.docker.opts(host=...)` puts a tool's own
+        `tools.docker.flags(host=...)` puts a tool's own
         options ahead of the verb, where they belong."""
         ...

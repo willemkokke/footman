@@ -82,8 +82,6 @@ class RuffFormat(Tool):
         ]
         | None = ...,
         verbose: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Run the Ruff formatter on the given files or directories

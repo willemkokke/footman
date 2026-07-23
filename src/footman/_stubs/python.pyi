@@ -36,8 +36,6 @@ class Python(Tool):
         u: _Flag = ...,
         v: _Flag = ...,
         x: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Run this verb.

@@ -20,8 +20,6 @@ class Ruff(Tool):
         quiet: _Flag = ...,
         silent: _Flag = ...,
         verbose: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Ruff: An extremely fast Python linter and code formatter.
@@ -131,8 +129,6 @@ class Ruff(Tool):
         unsafe_fixes: _Flag = ...,
         verbose: _Flag = ...,
         watch: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Run Ruff on the given files or directories
@@ -221,8 +217,6 @@ class Ruff(Tool):
         quiet: _Flag = ...,
         silent: _Flag = ...,
         verbose: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Clear any caches in the current directory and any subdirectories
@@ -314,8 +308,6 @@ class Ruff(Tool):
         ]
         | None = ...,
         verbose: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Run the Ruff formatter on the given files or directories
@@ -366,7 +358,7 @@ class Ruff(Tool):
             verbose: Enable verbose logging.
         """
         ...
-    def opts(
+    def flags(
         self,
         *,
         color: Literal["auto", "always", "never"]
@@ -381,6 +373,6 @@ class Ruff(Tool):
     ) -> Ruff:
         """Bind tool-level global options before the subcommand.
 
-        `tools.docker.opts(host=...)` puts a tool's own
+        `tools.docker.flags(host=...)` puts a tool's own
         options ahead of the verb, where they belong."""
         ...

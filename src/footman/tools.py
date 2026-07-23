@@ -302,11 +302,31 @@ def _accepts_args(entry: Any) -> bool:
 _argv_lock = _threading.Lock()
 
 
+# The run-control policy a tool's `.opts()` accepts — footman options that ride
+# *beside* the call, never translated into tool flags. A closed vocabulary, like a
+# task's `.opts()`, so `capture` here is unambiguously footman's (not a tool's own
+# `--capture`, e.g. pytest's); a tool's own flags go in the call or `.flags()`.
+_TOOL_OPTS = ("nofail", "in_process", "capture", "title")
+
+
+def _opts_overrides(kwargs: dict[str, Any]) -> dict[str, Any]:
+    """Validate `.opts()` policy kwargs against the closed tool-option vocabulary."""
+    unknown = sorted(set(kwargs) - set(_TOOL_OPTS))
+    if unknown:
+        valid = ", ".join(_TOOL_OPTS)
+        raise TypeError(
+            f".opts() got unknown option(s) {unknown}; valid options are {valid}. A "
+            f"tool's own flags go in the call — tools.ruff(fix=True) — or before a "
+            f"verb via .flags()."
+        )
+    return dict(kwargs)
+
+
 class Tool:
     """One command-line tool; see the module docstring for the grammar.
 
-    `in_process` (a reserved keyword, like `nofail`) runs a Python tool
-    inside footman's process instead of spawning: the tool's own
+    `in_process` (footman run-control set via `.opts()`, like `nofail`) runs a
+    Python tool inside footman's process instead of spawning: the tool's own
     `[console_scripts]` entry point is resolved and invoked — the same
     no-transcription contract, minus the interpreter spawn. Beyond speed
     this matters for correctness: on macOS, SIP strips `DYLD_*` from child
@@ -314,8 +334,8 @@ class Tool:
     with cairo, say) can only see them in-process, where an env var set
     before the import sticks. Tools constructed with `in_process=True`
     default to it and fall back to a subprocess when no entry point is
-    installed; `in_process=True` at the *call* is a demand and errors if
-    the entry can't be found. Parallelism survives: entries that accept an
+    installed; `.opts(in_process=True)` is a demand and errors if the entry
+    can't be found. Parallelism survives: entries that accept an
     argument list (click commands, `main(argv=None)` — detected from the
     signature) are called directly and capture through the per-task stdout
     router; only a legacy zero-arg `main()` needs `sys.argv` patched, and
@@ -330,10 +350,15 @@ class Tool:
         path: str = "",
         entry: str = "",
         single_dash: bool = False,
+        policy: dict[str, Any] | None = None,
     ) -> None:
         self._argv0 = name  # the name shown, and the console script looked up
         self._base = list(base)
         self._prefer_in_process = in_process
+        # Run-control policy set via `.opts()` (nofail/in_process/capture/title),
+        # resolved at call time. Rides the chain, so `git.opts(nofail=True).push()`
+        # works. Kept apart from the tool's flags: policy vs work.
+        self._opts = dict(policy or {})
         # The executable actually run, when it isn't the name: `tools.python`
         # runs `sys.executable`, not whatever `python` is on PATH.
         self._path = path or name
@@ -348,7 +373,7 @@ class Tool:
         self._single_dash = single_dash
 
     def _sub(self, *tail: str) -> Tool:
-        """A chained tool sharing this one's executable, entry, and mode."""
+        """A chained tool sharing this one's executable, entry, mode, and policy."""
         return Tool(
             self._argv0,
             *self._base,
@@ -357,6 +382,7 @@ class Tool:
             path=self._path,
             entry=self._entry,
             single_dash=self._single_dash,
+            policy=self._opts,
         )
 
     def __getattr__(self, verb: str) -> Tool:
@@ -364,29 +390,49 @@ class Tool:
             raise AttributeError(verb)
         return self._sub(verb.replace("_", "-"))
 
-    def opts(self, **kwargs: Any) -> Tool:
-        """Bind options *before* the next subcommand — a tool's globals.
+    def opts(self, **overrides: Any) -> Tool:
+        """Set footman run-control policy for the call — the same `.opts()` a task
+        has, mirroring its policy-vs-work split. A closed vocabulary
+        (`nofail`, `in_process`, `capture`, `title`) that rides *beside* the call,
+        never becoming a tool flag:
 
-        Some options belong to the tool, not the verb, and must precede it:
+            git.opts(nofail=True).push()          # tolerate a non-zero exit
+            pytest.opts(capture=False)("-s")      # stream this run live
+
+        Because it is a fixed set, `capture` here is unambiguously footman's — a
+        tool's own `--capture` (pytest's) still goes in the call. The overridden
+        options ride the chain and win at call time. For a tool's *own* global
+        options that must precede a verb, use `.flags()`.
+        """
+        t = self._sub()
+        t._opts = {**self._opts, **_opts_overrides(overrides)}
+        return t
+
+    def flags(self, **kwargs: Any) -> Tool:
+        """Bind a tool's own global options *before* the next subcommand.
+
+        Some flags belong to the tool, not the verb, and must precede it:
         `docker --host tcp://x ps` works, `docker ps --host tcp://x` does
-        not. `opts` places them at the current point in the chain, so they
+        not. `flags` places them at the current point in the chain, so they
         land ahead of whatever verb follows and ahead of its arguments:
 
-            tools.docker.opts(host="tcp://x").ps(all=True)
+            tools.docker.flags(host="tcp://x").ps(all=True)
             #  -> docker --host=tcp://x ps --all
 
         The flags are translated by the same rules as any call, and the
-        returned tool keeps chaining, so `.opts(...)` composes mid-stream.
+        returned tool keeps chaining, so `.flags(...)` composes mid-stream.
+        (footman run-control — `nofail`, `capture`, … — goes in `.opts()`.)
         """
         return self._sub(*_flags(kwargs, self._argv0, single_dash=self._single_dash))
 
-    def __call__(
-        self,
-        *args: Any,
-        nofail: bool = False,
-        in_process: bool | None = None,
-        **kwargs: Any,
-    ) -> int:
+    def __call__(self, *args: Any, **kwargs: Any) -> Result:
+        # Run-control comes from `.opts()` (policy), never the call — so every
+        # kwarg here is a tool flag, with no reserved name to collide with a real
+        # option (pytest's own `--capture`, say).
+        nofail = self._opts.get("nofail", False)
+        capture = self._opts.get("capture", True)
+        title = self._opts.get("title", None)
+        in_process = self._opts.get("in_process", None)
         flags = _flags(kwargs, self._argv0, single_dash=self._single_dash)
         positionals = list(map(str, args))
         # A wrapper verb (`uv run`, `docker exec`) forwards everything after
@@ -414,7 +460,10 @@ class Tool:
                         f"{self._argv0}: in_process=True, but no importable "
                         f"in-process entry ({self._entry or self._argv0!r})"
                     )
-                return _run(argv, nofail=nofail, _show=show)  # prefer → subproc
+                # prefer → subproc
+                return _run(
+                    argv, nofail=nofail, capture=capture, title=title, _show=show
+                )
 
             def _invoke() -> Any:
                 entry = loader()  # the tool's import — deferred to execution,
@@ -429,8 +478,10 @@ class Tool:
                     finally:
                         _sys.argv = saved
 
-            return _run(_invoke, nofail=nofail, _show=show)
-        return _run(argv, nofail=nofail, _show=show)
+            return _run(
+                _invoke, nofail=nofail, capture=capture, title=title, _show=show
+            )
+        return _run(argv, nofail=nofail, capture=capture, title=title, _show=show)
 
     def _inprocess_loader(self) -> Any | None:
         """A callable that imports and returns the in-process target — or None

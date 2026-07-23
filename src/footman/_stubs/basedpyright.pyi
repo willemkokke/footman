@@ -32,8 +32,6 @@ class Basedpyright(Tool):
         warnings: _Flag = ...,
         watch: _Flag = ...,
         writebaseline: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Run this verb.

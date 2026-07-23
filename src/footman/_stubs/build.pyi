@@ -23,8 +23,6 @@ class Build(Tool):
         skip_dependency_check: _Flag = ...,
         verbose: _Flag = ...,
         wheel: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Run this verb.

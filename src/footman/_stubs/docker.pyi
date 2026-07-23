@@ -25,8 +25,6 @@ class DockerCompose(Tool):
         sbom: _Value = ...,
         ssh: _Value = ...,
         with_dependencies: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Build or rebuild services
@@ -57,8 +55,6 @@ class DockerCompose(Tool):
         rmi: _Value = ...,
         timeout: _Value = ...,
         volumes: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Stop and remove containers, networks
@@ -86,8 +82,6 @@ class DockerCompose(Tool):
         privileged: _Flag = ...,
         user: _Value = ...,
         workdir: _Value = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Execute a command in a running container
@@ -116,8 +110,6 @@ class DockerCompose(Tool):
         tail: _Value = ...,
         timestamps: _Flag = ...,
         until: _Value = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """View output from containers
@@ -147,8 +139,6 @@ class DockerCompose(Tool):
         quiet: _Flag = ...,
         services: _Flag = ...,
         status: _Value = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """List containers
@@ -202,8 +192,6 @@ class DockerCompose(Tool):
         user: _Value = ...,
         volume: _Value = ...,
         workdir: _Value = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Run a one-off command on a service
@@ -277,8 +265,6 @@ class DockerCompose(Tool):
         wait_timeout: _Value = ...,
         watch: _Flag = ...,
         yes: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Create and start containers
@@ -328,13 +314,13 @@ class DockerCompose(Tool):
             yes: Assume "yes" as answer to all prompts and run non-interactively.
         """
         ...
-    def opts(
+    def flags(
         self,
         **flags: Any,
     ) -> DockerCompose:
         """Bind tool-level global options before the subcommand.
 
-        `tools.docker.opts(host=...)` puts a tool's own
+        `tools.docker.flags(host=...)` puts a tool's own
         options ahead of the verb, where they belong."""
         ...
 
@@ -353,8 +339,6 @@ class Docker(Tool):
         tlscert: _Value = ...,
         tlskey: _Value = ...,
         tlsverify: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """A self-sufficient runtime for containers
@@ -421,8 +405,6 @@ class Docker(Tool):
         tag: _Value = ...,
         target: _Value = ...,
         ulimit: _Value = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Start a build
@@ -509,8 +491,6 @@ class Docker(Tool):
         tty: _Flag = ...,
         user: _Value = ...,
         workdir: _Value = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Execute a command in a running container
@@ -537,8 +517,6 @@ class Docker(Tool):
         no_trunc: _Flag = ...,
         quiet: _Flag = ...,
         tree: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """List images
@@ -567,8 +545,6 @@ class Docker(Tool):
         tail: _Value = ...,
         timestamps: _Flag = ...,
         until: _Value = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Fetch the logs of a container
@@ -594,8 +570,6 @@ class Docker(Tool):
         no_trunc: _Flag = ...,
         quiet: _Flag = ...,
         size: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """List containers
@@ -623,8 +597,6 @@ class Docker(Tool):
         all_tags: _Flag = ...,
         platform: _Value = ...,
         quiet: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Download an image from a registry
@@ -643,8 +615,6 @@ class Docker(Tool):
         all_tags: _Flag = ...,
         platform: _Value = ...,
         quiet: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Upload an image to a registry
@@ -758,8 +728,6 @@ class Docker(Tool):
         volume_driver: _Value = ...,
         volumes_from: _Value = ...,
         workdir: _Value = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Create and run a new container from an image
@@ -885,7 +853,7 @@ class Docker(Tool):
             workdir: Working directory inside the container.
         """
         ...
-    def opts(
+    def flags(
         self,
         *,
         config: _Value = ...,
@@ -902,6 +870,6 @@ class Docker(Tool):
     ) -> Docker:
         """Bind tool-level global options before the subcommand.
 
-        `tools.docker.opts(host=...)` puts a tool's own
+        `tools.docker.flags(host=...)` puts a tool's own
         options ahead of the verb, where they belong."""
         ...

@@ -12,8 +12,6 @@ class Twine(Tool):
         self,
         *args: str,
         no_color: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Run this verb.
@@ -28,8 +26,6 @@ class Twine(Tool):
         /,
         *args: str,
         strict: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Run this verb.
@@ -59,8 +55,6 @@ class Twine(Tool):
         skip_existing: _Flag = ...,
         username: _Value = ...,
         verbose: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """[--config-file CONFIG_FILE] [--skip-existing] [--cert path] [--client-cert
@@ -92,7 +86,7 @@ class Twine(Tool):
             verbose: Show verbose output.
         """
         ...
-    def opts(
+    def flags(
         self,
         *,
         no_color: _Flag = ...,
@@ -100,6 +94,6 @@ class Twine(Tool):
     ) -> Twine:
         """Bind tool-level global options before the subcommand.
 
-        `tools.docker.opts(host=...)` puts a tool's own
+        `tools.docker.flags(host=...)` puts a tool's own
         options ahead of the verb, where they belong."""
         ...

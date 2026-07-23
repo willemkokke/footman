@@ -10,8 +10,6 @@ class Zsh(Tool):
         self,
         command: str,
         /,
-        *,
-        nofail: bool = False,
         **flags: Any,
     ) -> Result:
         """Run a command string in zsh — `zsh -c "<command>"`.

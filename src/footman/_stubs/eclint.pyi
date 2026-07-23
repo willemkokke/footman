@@ -22,8 +22,6 @@ class Eclint(Tool):
         summary: _Flag = ...,
         v: _Value = ...,
         vmodule: _Value = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Run this verb.

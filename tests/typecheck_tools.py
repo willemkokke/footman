@@ -37,7 +37,7 @@ def _ruff() -> None:
     tools.ruff.check("src", unsafe_fixes=off, respect_gitignore=off)
     tools.ruff.format("src", check=True, diff=True)
     tools.ruff_format("src", "tests", check=True)
-    tools.ruff.check("src", nofail=True)
+    tools.ruff.opts(nofail=True).check("src")  # run-control rides .opts()
     tools.ruff.check("src", a_flag_ruff_grew_last_week=True)  # never a type error
 
 
@@ -104,32 +104,40 @@ def _node_and_rust() -> None:
     tools.markdownlint("**/*.md", fix=True)
 
 
-def _tool_globals_via_opts() -> None:
-    """`.opts()` binds a tool's global options before the verb, stays typed,
+def _tool_globals_via_flags() -> None:
+    """`.flags()` binds a tool's global options before the verb, stays typed,
     and returns the tool so the chain keeps checking."""
-    tools.docker.opts(host="tcp://x").compose.up(detach=True)
-    tools.docker.opts(host="tcp://x", debug=True).ps(all=True)
-    tools.docker.opts(context="remote").run("alpine")
-    tools.uv.opts(directory="sub", offline=True).sync(frozen=True)
+    tools.docker.flags(host="tcp://x").compose.up(detach=True)
+    tools.docker.flags(host="tcp://x", debug=True).ps(all=True)
+    tools.docker.flags(context="remote").run("alpine")
+    tools.uv.flags(directory="sub", offline=True).sync(frozen=True)
     # git's globals — `git -C x commit` runs in x; `git commit -C x` reuses a
     # commit — so placement changes meaning, and the chain stays _Git-typed.
-    tools.git.opts(git_dir="/r/.git", work_tree="/r").commit(message="x")
-    tools.git.opts(no_pager=True).log(n=1, oneline=True)
+    tools.git.flags(git_dir="/r/.git", work_tree="/r").commit(message="x")
+    tools.git.flags(no_pager=True).log(n=1, oneline=True)
     # A tool with no extracted globals still returns its own class, so the
-    # chain after `.opts()` keeps completing.
-    tools.coverage.opts().report(fail_under=90)
-    # A generic tool still has the untyped `.opts()` from the base class.
-    tools.terraform.opts(chdir="infra")("plan")
+    # chain after `.flags()` keeps completing.
+    tools.coverage.flags().report(fail_under=90)
+    # A generic tool still has the untyped `.flags()` from the base class.
+    tools.terraform.flags(chdir="infra")("plan")
 
 
-def _undeclared_and_reserved() -> None:
-    """A tool footman has never heard of still works, and so do the two
-    reserved keywords."""
+def _run_control_via_opts() -> None:
+    """`.opts()` carries footman run-control — a closed vocabulary, typed on the
+    base and returning the tool so the chain keeps checking."""
+    tools.git.opts(nofail=True).push()
+    tools.pytest.opts(capture=False)("-s")
+    tools.mkdocs.opts(in_process=False, title="Build the docs").build()
+
+
+def _undeclared_and_run_control() -> None:
+    """A tool footman has never heard of still works, and run-control rides
+    `.opts()`."""
     tools.terraform("plan", out="tf.plan")
     tools.helm.upgrade("app", "./chart", install=True)
     tools.python("-c", "print(1)")
-    tools.pytest("-q", in_process=True)
-    tools.mkdocs.build(in_process=False, nofail=True)
+    tools.pytest.opts(in_process=True)("-q")
+    tools.mkdocs.opts(in_process=False, nofail=True).build()
     custom = Tool("helmfile", "--environment", "prod", in_process=False)
     custom("apply", skip_deps=True)
 
@@ -161,7 +169,9 @@ def _flags_are_declared_and_typed() -> None:
     tools.cspell.lint(quiet="yes")  # pyright: ignore[reportArgumentType]
     tools.prek.run(all_files="yes")  # pyright: ignore[reportArgumentType]
     tools.markdownlint(fix="yes")  # pyright: ignore[reportArgumentType]
-    tools.docker.opts(debug="yes")  # pyright: ignore[reportArgumentType]
+    tools.docker.flags(debug="yes")  # pyright: ignore[reportArgumentType]
+    tools.git.opts(nofail="yes")  # pyright: ignore[reportArgumentType]
+    tools.git.opts(bogus=True)  # pyright: ignore[reportCallIssue]
 
 
 def _positional_shape_is_enforced() -> None:

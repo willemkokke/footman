@@ -59,8 +59,6 @@ class GitCliff(Tool):
         with_commit: _Value = ...,
         with_tag_message: _Value = ...,
         workdir: _Value = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """git-cliff 2.13.1
