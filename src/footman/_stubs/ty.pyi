@@ -6,7 +6,7 @@
 from collections.abc import Sequence
 from typing import Any, Literal
 
-from footman.tools import Tool, _Flag, _Value
+from footman.tools import Result, Tool, _Flag, _Value
 
 class Ty(Tool):
     def __call__(  # type: ignore[override]
@@ -15,7 +15,7 @@ class Ty(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """An extremely fast Python type checker."""
         ...
     def check(
@@ -59,7 +59,7 @@ class Ty(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Check a project for type errors
 
         Args:

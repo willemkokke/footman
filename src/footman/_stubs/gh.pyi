@@ -5,7 +5,7 @@
 # accepts, and can never forbid what the bridge would happily pass.
 from typing import Any
 
-from footman.tools import Tool, _Flag, _Value
+from footman.tools import Result, Tool, _Flag, _Value
 
 class GhAuth(Tool):
     def login(
@@ -22,7 +22,7 @@ class GhAuth(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Authenticate with a GitHub host.
 
         Args:
@@ -50,7 +50,7 @@ class GhAuth(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Display active account and authentication state on each known GitHub host.
 
         Args:
@@ -96,7 +96,7 @@ class GhIssue(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Create an issue on GitHub.
 
         Args:
@@ -143,7 +143,7 @@ class GhIssue(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """List issues in a GitHub repository. By default, this only lists open issues.
 
         Args:
@@ -177,7 +177,7 @@ class GhIssue(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Display the title, body, and other information about an issue.
 
         Args:
@@ -213,7 +213,7 @@ class GhLabel(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Create a new label on GitHub, or update an existing one with `--force`.
 
         Args:
@@ -238,7 +238,7 @@ class GhLabel(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Display labels in a GitHub repository.
 
         Args:
@@ -276,7 +276,7 @@ class GhPr(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Check out a pull request in git
 
         Args:
@@ -316,7 +316,7 @@ class GhPr(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Create a pull request on GitHub.
 
         Args:
@@ -367,7 +367,7 @@ class GhPr(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """List pull requests in a GitHub repository. By default, this only lists open
         PRs.
 
@@ -409,7 +409,7 @@ class GhPr(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Merge a pull request on GitHub.
 
         Args:
@@ -444,7 +444,7 @@ class GhPr(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Display the title, body, and other information about a pull request.
 
         Args:
@@ -488,7 +488,7 @@ class GhRelease(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Create a new GitHub Release for a repository.
 
         Args:
@@ -528,7 +528,7 @@ class GhRelease(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """List releases in a repository
 
         Args:
@@ -553,7 +553,7 @@ class GhRelease(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Upload asset files to a GitHub Release.
 
         Args:
@@ -572,7 +572,7 @@ class GhRelease(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """View information about a GitHub Release.
 
         Args:
@@ -605,7 +605,7 @@ class GhRepo(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Clone a GitHub repository locally. Pass additional `git clone` flags by
         listing
 
@@ -626,7 +626,7 @@ class GhRepo(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Display the description and the README of a GitHub repository.
 
         Args:
@@ -668,7 +668,7 @@ class GhRun(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """List recent workflow runs.
 
         Args:
@@ -706,7 +706,7 @@ class GhRun(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """View a summary of a workflow run.
 
         Args:
@@ -736,7 +736,7 @@ class GhRun(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Watch a run until it completes, showing its progress.
 
         Args:
@@ -769,7 +769,7 @@ class GhWorkflow(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """List workflow files, hiding disabled workflows by default.
 
         Args:
@@ -793,7 +793,7 @@ class GhWorkflow(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Create a `workflow_dispatch` event for a given workflow.
 
         Args:
@@ -831,7 +831,7 @@ class Gh(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Work seamlessly with GitHub from the command line."""
         ...
     def api(
@@ -857,7 +857,7 @@ class Gh(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Makes an authenticated HTTP request to the GitHub API and prints the
         response.
 

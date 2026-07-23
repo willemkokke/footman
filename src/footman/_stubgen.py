@@ -61,7 +61,8 @@ def _imports(body: str) -> str:
     """Just the imports the body uses — an unused one fails the lint gate."""
     typing = ["Any"] + (["Literal"] if "Literal[" in body else [])
     aliases = ("_Flag", "_Value", "_ValuedFlag")
-    names = ["Tool"] + [n for n in aliases if re.search(rf"\b{n}\b", body)]
+    # `Result` is always the return type of every generated call, so always imported.
+    names = ["Result", "Tool"] + [n for n in aliases if re.search(rf"\b{n}\b", body)]
     lines = []
     if "Sequence[" in body:
         lines.append("from collections.abc import Sequence")
@@ -157,7 +158,7 @@ def _method(verb: Verb, key: str) -> str:
     lines.append("        nofail: bool = False,")
     lines.append("        in_process: bool | None = None,")
     lines.append("        **flags: Any,")
-    lines.append("    ) -> int:")
+    lines.append("    ) -> Result:")
     doc = _docstring(verb)
     if doc:
         lines.append(doc)

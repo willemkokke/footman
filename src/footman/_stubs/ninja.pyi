@@ -5,7 +5,7 @@
 # accepts, and can never forbid what the bridge would happily pass.
 from typing import Any
 
-from footman.tools import Tool, _Flag, _Value
+from footman.tools import Result, Tool, _Flag, _Value
 
 class Ninja(Tool):
     def __call__(  # type: ignore[override]
@@ -25,7 +25,7 @@ class Ninja(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """if targets are unspecified, builds the 'default' target (see manual).
 
         Args:

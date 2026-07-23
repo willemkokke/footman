@@ -43,7 +43,11 @@ import threading as _threading
 from collections.abc import Iterator
 from typing import Any
 
+# `Result` is public, unlike the private aliases: every tool call returns one, and
+# the generated stubs import it from here (`from footman.tools import Result`), so
+# it must resolve to the class — a real module binding beats `__getattr__`.
 from footman.context import Invocation as _Invocation
+from footman.context import Result as Result
 from footman.context import run as _run
 
 _version_cache: dict[str, tuple[int, ...]] = {}

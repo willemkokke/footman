@@ -5,7 +5,7 @@
 # accepts, and can never forbid what the bridge would happily pass.
 from typing import Any
 
-from footman.tools import Tool, _Flag, _Value, _ValuedFlag
+from footman.tools import Result, Tool, _Flag, _Value, _ValuedFlag
 
 class Git(Tool):
     def __call__(  # type: ignore[override]
@@ -35,7 +35,7 @@ class Git(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """[--exec-path[=<path>]] [--html-path] [--man-path] [--info-path]
 
         Args:
@@ -97,7 +97,7 @@ class Git(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """GIT-ADD(1)                        Git Manual
         GIT-ADD(1)
 
@@ -178,7 +178,7 @@ class Git(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """GIT-BRANCH(1)                     Git Manual
         GIT-BRANCH(1)
 
@@ -268,7 +268,7 @@ class Git(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """GIT-CHECKOUT(1)                   Git Manual
         GIT-CHECKOUT(1)
 
@@ -368,7 +368,7 @@ class Git(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """GIT-CLONE(1)                      Git Manual
         GIT-CLONE(1)
 
@@ -496,7 +496,7 @@ class Git(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """GIT-COMMIT(1)                     Git Manual
         GIT-COMMIT(1)
 
@@ -596,7 +596,7 @@ class Git(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """GIT-DESCRIBE(1)                   Git Manual
         GIT-DESCRIBE(1)
 
@@ -713,7 +713,7 @@ class Git(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """GIT-DIFF(1)                       Git Manual
         GIT-DIFF(1)
 
@@ -908,7 +908,7 @@ class Git(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """GIT-FETCH(1)                      Git Manual
         GIT-FETCH(1)
 
@@ -1024,7 +1024,7 @@ class Git(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """GIT-INIT(1)                       Git Manual
         GIT-INIT(1)
 
@@ -1212,7 +1212,7 @@ class Git(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """GIT-LOG(1)                        Git Manual
         GIT-LOG(1)
 
@@ -1594,7 +1594,7 @@ class Git(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """GIT-PULL(1)                       Git Manual
         GIT-PULL(1)
 
@@ -1752,7 +1752,7 @@ class Git(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """GIT-PUSH(1)                       Git Manual
         GIT-PUSH(1)
 
@@ -1823,7 +1823,7 @@ class Git(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """GIT-RESTORE(1)                    Git Manual
         GIT-RESTORE(1)
 
@@ -1914,7 +1914,7 @@ class Git(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """GIT-REV-PARSE(1)                  Git Manual
         GIT-REV-PARSE(1)
 
@@ -2032,7 +2032,7 @@ class Git(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """GIT-STASH(1)                      Git Manual
         GIT-STASH(1)
 
@@ -2078,7 +2078,7 @@ class Git(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """GIT-STATUS(1)                     Git Manual
         GIT-STATUS(1)
 
@@ -2128,7 +2128,7 @@ class Git(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """GIT-SWITCH(1)                     Git Manual
         GIT-SWITCH(1)
 
@@ -2199,7 +2199,7 @@ class Git(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """GIT-TAG(1)                        Git Manual
         GIT-TAG(1)
 
@@ -2260,7 +2260,7 @@ class Git(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """GIT-WORKTREE(1)                   Git Manual
         GIT-WORKTREE(1)
 

@@ -5,7 +5,7 @@
 # accepts, and can never forbid what the bridge would happily pass.
 from typing import Any
 
-from footman.tools import Tool, _Flag, _Value
+from footman.tools import Result, Tool, _Flag, _Value
 
 class DockerCompose(Tool):
     def build(
@@ -28,7 +28,7 @@ class DockerCompose(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Build or rebuild services
 
         Args:
@@ -60,7 +60,7 @@ class DockerCompose(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Stop and remove containers, networks
 
         Args:
@@ -89,7 +89,7 @@ class DockerCompose(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Execute a command in a running container
 
         Args:
@@ -119,7 +119,7 @@ class DockerCompose(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """View output from containers
 
         Args:
@@ -150,7 +150,7 @@ class DockerCompose(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """List containers
 
         Args:
@@ -205,7 +205,7 @@ class DockerCompose(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Run a one-off command on a service
 
         Args:
@@ -280,7 +280,7 @@ class DockerCompose(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Create and start containers
 
         Args:
@@ -356,7 +356,7 @@ class Docker(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """A self-sufficient runtime for containers
 
         Args:
@@ -424,7 +424,7 @@ class Docker(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Start a build
 
         Args:
@@ -512,7 +512,7 @@ class Docker(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Execute a command in a running container
 
         Args:
@@ -540,7 +540,7 @@ class Docker(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """List images
 
         Args:
@@ -570,7 +570,7 @@ class Docker(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Fetch the logs of a container
 
         Args:
@@ -597,7 +597,7 @@ class Docker(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """List containers
 
         Args:
@@ -626,7 +626,7 @@ class Docker(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Download an image from a registry
 
         Args:
@@ -646,7 +646,7 @@ class Docker(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Upload an image to a registry
 
         Args:
@@ -761,7 +761,7 @@ class Docker(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Create and run a new container from an image
 
         Args:

@@ -5,7 +5,7 @@
 # accepts, and can never forbid what the bridge would happily pass.
 from typing import Any
 
-from footman.tools import Tool, _Flag, _Value
+from footman.tools import Result, Tool, _Flag, _Value
 
 class Coverage(Tool):
     def __call__(  # type: ignore[override]
@@ -14,7 +14,7 @@ class Coverage(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Coverage.py, version 7.15.2 with C extension"""
         ...
     def annotate(
@@ -31,7 +31,7 @@ class Coverage(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Make annotated copies of the given files, marking statements that are
         executed with > and statements that are missed with !.
 
@@ -61,7 +61,7 @@ class Coverage(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Combine data from multiple coverage files. The combined results are written
         to a single file representing the union of the data. The positional
         arguments are data files or directories containing
@@ -84,7 +84,7 @@ class Coverage(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Erase previously collected coverage data.
 
         Args:
@@ -115,7 +115,7 @@ class Coverage(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Create an HTML report of coverage results. Each file gets its own page, with
         the source decorated to show executed, excluded, and missed lines.
 
@@ -164,7 +164,7 @@ class Coverage(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Generate a JSON report of coverage results.
 
         Args:
@@ -209,7 +209,7 @@ class Coverage(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Report coverage statistics on modules.
 
         Args:
@@ -262,7 +262,7 @@ class Coverage(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Run a Python program, measuring code execution.
 
         Args:
@@ -307,7 +307,7 @@ class Coverage(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Generate an XML report of coverage results.
 
         Args:

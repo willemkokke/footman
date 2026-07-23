@@ -6,7 +6,7 @@
 from collections.abc import Sequence
 from typing import Any, Literal
 
-from footman.tools import Tool, _Flag, _Value
+from footman.tools import Result, Tool, _Flag, _Value
 
 class Mkdocs(Tool):
     def build(
@@ -25,7 +25,7 @@ class Mkdocs(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Build the MkDocs documentation.
 
         Args:
@@ -66,7 +66,7 @@ class Mkdocs(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Deploy your documentation to GitHub Pages.
 
         Args:
@@ -106,7 +106,7 @@ class Mkdocs(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Create a new MkDocs project.
 
         Args:
@@ -137,7 +137,7 @@ class Mkdocs(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Run the builtin development server.
 
         Args:

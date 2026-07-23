@@ -5,7 +5,7 @@
 # accepts, and can never forbid what the bridge would happily pass.
 from typing import Any
 
-from footman.tools import Tool, _Flag, _Value, _ValuedFlag
+from footman.tools import Result, Tool, _Flag, _Value, _ValuedFlag
 
 class Cmake(Tool):
     def __call__(  # type: ignore[override]
@@ -84,7 +84,7 @@ class Cmake(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """cmake [options] <path-to-source>
 
         Args:

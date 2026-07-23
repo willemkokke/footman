@@ -5,7 +5,7 @@
 # accepts, and can never forbid what the bridge would happily pass.
 from typing import Any
 
-from footman.tools import Tool, _Flag, _Value
+from footman.tools import Result, Tool, _Flag, _Value
 
 class Twine(Tool):
     def __call__(  # type: ignore[override]
@@ -15,7 +15,7 @@ class Twine(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Run this verb.
 
         Args:
@@ -31,7 +31,7 @@ class Twine(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Run this verb.
 
         Args:
@@ -62,7 +62,7 @@ class Twine(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """[--config-file CONFIG_FILE] [--skip-existing] [--cert path] [--client-cert
         path] [--verbose] [--disable-progress-bar]
 

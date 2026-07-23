@@ -5,7 +5,7 @@
 # accepts, and can never forbid what the bridge would happily pass.
 from typing import Any
 
-from footman.tools import Tool, _Flag, _Value
+from footman.tools import Result, Tool, _Flag, _Value
 
 class Bun(Tool):
     def __call__(  # type: ignore[override]
@@ -79,7 +79,7 @@ class Bun(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Bun is a fast JavaScript runtime, package manager, bundler, and test runner.
         (1.3.14+0d9b296af)
 
@@ -214,7 +214,7 @@ class Bun(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Alias: bun a
 
         Args:
@@ -328,7 +328,7 @@ class Bun(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Transpile and bundle one or more files.
 
         Args:
@@ -458,7 +458,7 @@ class Bun(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Alias: bun i
 
         Args:
@@ -553,7 +553,7 @@ class Bun(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Alias: bun r
 
         Args:
@@ -689,7 +689,7 @@ class Bun(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Run this verb.
 
         Args:
@@ -837,7 +837,7 @@ class Bun(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Run all matching test files and print the results to stdout
 
         Args:
@@ -891,7 +891,7 @@ class Bun(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Execute an npm package executable (CLI), automatically installing into a
         global shared cache if not installed in node_modules.
 

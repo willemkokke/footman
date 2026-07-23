@@ -5,7 +5,7 @@
 # accepts, and can never forbid what the bridge would happily pass.
 from typing import Any
 
-from footman.tools import Tool, _Flag, _Value
+from footman.tools import Result, Tool, _Flag, _Value
 
 class GitChangelog(Tool):
     def __call__(  # type: ignore[override]
@@ -37,7 +37,7 @@ class GitChangelog(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """[-s SECTIONS] [-a] [-t TEMPLATE] [-T] [-E] [-Z] [-F RANGE] [-j KEY=VALUE]
         [-V] [--debug-info]
 

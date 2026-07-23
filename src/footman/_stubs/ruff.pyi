@@ -6,7 +6,7 @@
 from collections.abc import Sequence
 from typing import Any, Literal
 
-from footman.tools import Tool, _Flag, _Value, _ValuedFlag
+from footman.tools import Result, Tool, _Flag, _Value, _ValuedFlag
 
 class Ruff(Tool):
     def __call__(  # type: ignore[override]
@@ -23,7 +23,7 @@ class Ruff(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Ruff: An extremely fast Python linter and code formatter.
 
         Args:
@@ -134,7 +134,7 @@ class Ruff(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Run Ruff on the given files or directories
 
         Args:
@@ -224,7 +224,7 @@ class Ruff(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Clear any caches in the current directory and any subdirectories
 
         Args:
@@ -317,7 +317,7 @@ class Ruff(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Run the Ruff formatter on the given files or directories
 
         Args:

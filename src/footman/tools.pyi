@@ -62,6 +62,7 @@ from footman._stubs.uv import Uv as Uv
 from footman._stubs.zensical import Zensical as Zensical
 from footman._stubs.zsh import Zsh as Zsh
 from footman.context import Invocation as _Invocation  # noqa: F401
+from footman.context import Result as Result
 from footman.context import run as _run  # noqa: F401
 
 _argv_lock: _threading.Lock
@@ -125,7 +126,7 @@ class Tool:
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int: ...
+    ) -> Result: ...
     def installed_version(self) -> tuple[int, ...]: ...
 
 ruff: Ruff
