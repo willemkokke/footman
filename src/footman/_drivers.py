@@ -274,6 +274,7 @@ DRIVERS: tuple[Driver, ...] = (
         provision=Provision(kind="gitlab", repo="willemkokke/eclint"),
         url="https://gitlab.com/willemkokke/eclint",
     ),
+    Driver("djlint", url="https://www.djlint.com/"),
     Driver("mypy", url="https://mypy.readthedocs.io/"),
     Driver("ty", verbs=("check",), url="https://docs.astral.sh/ty/"),
     Driver("twine", verbs=("upload", "check"), url="https://twine.readthedocs.io/"),

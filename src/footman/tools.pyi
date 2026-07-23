@@ -38,6 +38,7 @@ from footman._stubs.bun import Bun as Bun
 from footman._stubs.cmake import Cmake as Cmake
 from footman._stubs.coverage import Coverage as Coverage
 from footman._stubs.cspell import Cspell as Cspell
+from footman._stubs.djlint import Djlint as Djlint
 from footman._stubs.docker import Docker as Docker
 from footman._stubs.eclint import Eclint as Eclint
 from footman._stubs.fish import Fish as Fish
@@ -144,6 +145,7 @@ prek: Prek
 markdownlint: Markdownlint
 gh: Gh
 eclint: Eclint
+djlint: Djlint
 mypy: Mypy
 ty: Ty
 twine: Twine

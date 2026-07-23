@@ -63,6 +63,7 @@ nav = [
     { "cmake" = "_generated/tools/cmake.md" },
     { "coverage" = "_generated/tools/coverage.md" },
     { "cspell" = "_generated/tools/cspell.md" },
+    { "djlint" = "_generated/tools/djlint.md" },
     { "docker" = "_generated/tools/docker.md" },
     { "eclint" = "_generated/tools/eclint.md" },
     { "fish" = "_generated/tools/fish.md" },

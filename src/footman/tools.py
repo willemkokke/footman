@@ -509,6 +509,7 @@ prek = Tool("prek")
 markdownlint = Tool("markdownlint-cli2")
 gh = Tool("gh")
 eclint = Tool("eclint", single_dash=True)  # Go flag package: `-fix`, not `--fix`
+djlint = Tool("djlint")
 mypy = Tool("mypy")
 ty = Tool("ty")
 twine = Tool("twine")
