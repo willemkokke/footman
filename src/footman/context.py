@@ -1162,6 +1162,69 @@ def _resolve_shell(kind: bool | str, policy: str = "posix") -> list[str]:
     )
 
 
+# `clean=True`: run the interpreter without the user's startup files, so a task's
+# shell behaves the same on every machine. For `-c` most POSIX shells already
+# skip their rc, but pwsh/cmd load a profile and bash honours $BASH_ENV — so it
+# is both these flags and (POSIX) dropping BASH_ENV/ENV from the child env.
+_CLEAN_FLAGS = {
+    "bash": ("--norc", "--noprofile"),
+    "zsh": ("-f",),
+    "fish": ("--no-config",),
+    "nu": ("-n",),
+    "pwsh": ("-NoProfile",),
+    "powershell": ("-NoProfile",),
+    "cmd": ("/d",),
+}
+
+# `strict=True`: fail on the first error and on a failing pipe stage. Well-defined
+# only for POSIX shells and PowerShell — bash/zsh get pipefail, plain sh cannot
+# (dash has none) so it degrades to errexit-only with a one-time note; fish/nu/
+# cmd have no errexit at all, so strict there is a taught error, not a silent no-op.
+_STRICT_PROLOGUE = {
+    "bash": "set -eo pipefail\n",
+    "zsh": "set -eo pipefail\n",
+    "sh": "set -e\n",
+    "pwsh": (
+        "$ErrorActionPreference = 'Stop'\n"
+        "$PSNativeCommandUseErrorActionPreference = $true\n"
+    ),
+    "powershell": "$ErrorActionPreference = 'Stop'\n",
+}
+
+_strict_sh_noted = False
+
+
+def _shell_kind_of(exe: str) -> str:
+    """The shell family from its executable path — `/usr/bin/bash` → `bash`."""
+    return os.path.basename(exe).lower().removesuffix(".exe")
+
+
+def _shell_prep(
+    kind: str, script: str, *, strict: bool, clean: bool
+) -> tuple[list[str], str]:
+    """Interpreter flags (from *clean*) and the script (from *strict*) for a shell
+    run. Raises a taught error when *strict* can't be honoured (fish/nu/cmd have
+    no errexit/pipefail)."""
+    flags = list(_CLEAN_FLAGS.get(kind, ())) if clean else []
+    if strict:
+        prologue = _STRICT_PROLOGUE.get(kind)
+        if prologue is None:
+            raise ValueError(
+                f"strict=True is not supported for the {kind!r} shell — it has no "
+                f"errexit/pipefail. Use bash, zsh, sh, or pwsh, or drop strict."
+            )
+        if kind == "sh":
+            global _strict_sh_noted
+            if not _strict_sh_noted:
+                _strict_sh_noted = True
+                real_stderr().write(
+                    "note: strict under sh has no pipefail; using `set -e` only "
+                    "(install bash for errexit + pipefail).\n"
+                )
+        script = prologue + script
+    return flags, script
+
+
 def run(
     cmd: str | list[str] | Callable[..., Any],
     *args: Any,
@@ -1173,6 +1236,8 @@ def run(
     cwd: str | Path | None = None,
     encoding: str | None = "utf-8",
     shell: bool | str = False,
+    strict: bool = False,
+    clean: bool = False,
     _show: Invocation | None = None,
 ) -> Result:
     """Run a command or a Python callable in the current task's context.
@@ -1238,6 +1303,7 @@ def run(
         code, out_s, err_s = _run_callable(cmd, args, capture=capture, env=env, cwd=cwd)
     else:
         argv: list[str] | str
+        shell_kind = ""
         if shell:
             # An explicit shell: run the whole string through the resolved
             # interpreter — `[bash, -c, "<cmd>"]` — so pipes/redirects/globs
@@ -1247,7 +1313,12 @@ def run(
                     "run(shell=…) runs a command *string* through a shell; pass a "
                     "str, not a list (a list is the shell-free form)."
                 )
-            argv = [*_resolve_shell(shell, ctx.shell_default or "posix"), cmd]
+            exe, run_flag = _resolve_shell(shell, ctx.shell_default or "posix")
+            shell_kind = _shell_kind_of(exe)
+            clean_flags, script = _shell_prep(
+                shell_kind, cmd, strict=strict, clean=clean
+            )
+            argv = [exe, *clean_flags, run_flag, script]
         elif isinstance(cmd, str):
             if (op := _shell_operator(cmd)) is not None:
                 raise ValueError(
@@ -1264,6 +1335,11 @@ def run(
         else:
             argv = [str(a) for a in cmd]
         run_env = {**os.environ, **ctx.env, **(env or {})}
+        # A clean POSIX shell means no startup files: `--norc`/`--noprofile`
+        # cover interactive/login rc, but bash/sh also source $BASH_ENV/$ENV for
+        # a non-interactive `-c`, so drop those from the child env too.
+        if clean and shell_kind in ("bash", "sh", "zsh"):
+            run_env = {k: v for k, v in run_env.items() if k not in ("BASH_ENV", "ENV")}
         cwd_path = Path(cwd) if cwd is not None else ctx.cwd
         code, out_s, err_s = _run_subprocess(
             argv,

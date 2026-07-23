@@ -573,6 +573,43 @@ def test_run_shell_true_actually_pipes():
     assert results[0].ok, results[0].error
 
 
+def test_shell_strict_and_clean_prep_per_interpreter():
+    from footman.context import _shell_prep
+
+    # strict: bash/zsh get pipefail; sh degrades to errexit-only.
+    assert _shell_prep("bash", "x", strict=True, clean=False) == (
+        [],
+        "set -eo pipefail\nx",
+    )
+    assert _shell_prep("sh", "x", strict=True, clean=False)[1] == "set -e\nx"
+    # clean: the interpreter's no-startup-file flags.
+    assert _shell_prep("bash", "x", strict=False, clean=True)[0] == [
+        "--norc",
+        "--noprofile",
+    ]
+    assert _shell_prep("pwsh", "x", strict=False, clean=True)[0] == ["-NoProfile"]
+    # strict is a taught error where there is no errexit/pipefail.
+    with pytest.raises(ValueError, match="errexit"):
+        _shell_prep("fish", "x", strict=True, clean=False)
+
+
+def test_shell_strict_stops_on_error_and_masked_pipe():
+    def tasks(reg):
+        @reg.task
+        def go():
+            # errexit: `false` stops the script before `echo after`.
+            r = run("false; echo after", shell="bash", strict=True, nofail=True)
+            assert r.code != 0 and "after" not in r.stdout
+            # pipefail: a failing pipe stage fails the whole pipeline.
+            assert run("false | true", shell="bash", strict=True, nofail=True).code != 0
+            # without strict, both run to completion.
+            r2 = run("false; echo after", shell="bash", nofail=True)
+            assert r2.code == 0 and "after" in r2.stdout
+
+    _, _, results = drive(tasks, "go")
+    assert results[0].ok, results[0].error
+
+
 def test_run_list_with_shell_is_a_taught_error():
     def tasks(reg):
         @reg.task

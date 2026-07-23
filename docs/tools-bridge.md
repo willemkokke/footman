@@ -327,6 +327,21 @@ Windows) is a taught error, never a silent wrong shell. And a shell-free
 `run("a | b")` doesn't misfire quietly — footman spots the operator and points
 you at `shell=`.
 
+Two flags harden a shell run:
+
+```python
+run(script, shell=True, strict=True)   # set -eo pipefail
+run(script, shell=True, clean=True)    # no user startup files
+```
+
+`strict=True` fails on the first error **and** on a failing pipe stage
+(`set -eo pipefail` for bash/zsh; `$ErrorActionPreference='Stop'` for pwsh).
+Plain `sh` has no `pipefail`, so it degrades to `set -e` with a one-time note;
+`fish`/`nu`/`cmd` have no errexit at all, so `strict` there is a taught error,
+not a silent no-op. `clean=True` runs the interpreter without the user's
+startup files (`--norc --noprofile` and no `$BASH_ENV` for bash, `-NoProfile`
+for pwsh, `/d` for cmd), so a task's shell behaves the same on every machine.
+
 ## Parallelism
 
 Independent tasks run **concurrently as threads** (a `ThreadPoolExecutor`),
