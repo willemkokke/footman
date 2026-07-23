@@ -673,11 +673,20 @@ def _label(cmd: Any, args: tuple[Any, ...]) -> str:
     return cmd if isinstance(cmd, str) else " ".join(map(str, cmd))
 
 
+def _exit_code(exc: SystemExit) -> int:
+    """A `SystemExit`'s exit code: its int code, 0 for `None`, else 1 (a message).
+
+    `sys.exit()` / `raise SystemExit(...)` is a common "fail this step" idiom, and
+    `SystemExit` is a `BaseException` — so every place that treats a call's
+    outcome as a code must normalise it the same way, or it escapes uncaught."""
+    return exc.code if isinstance(exc.code, int) else (0 if exc.code is None else 1)
+
+
 def _call_for_code(cmd: Callable[..., Any], args: tuple[Any, ...]) -> int:
     try:
         returned = cmd(*args)
     except SystemExit as exc:
-        return exc.code if isinstance(exc.code, int) else (0 if exc.code is None else 1)
+        return _exit_code(exc)
     if isinstance(returned, int) and not isinstance(returned, bool):
         return returned
     return 0
@@ -971,6 +980,46 @@ def _step_line(ctx: Context, ok: bool, label: str, duration: float) -> str:
     return f"{mark} {name}{_dim(label, color)}  {shown}\n"
 
 
+# The tokens that mean "shell" and nothing else. `run(str)` splits and execs
+# directly — no shell — so any of these would ride along as a *literal* argument,
+# silently breaking a pipeline or redirect (a `tar … | ssh …` that never pipes).
+_SHELL_OPERATORS = frozenset(
+    {
+        "|",
+        "||",
+        "|&",
+        "&",
+        "&&",
+        ";",
+        ";;",
+        ">",
+        ">>",
+        "<",
+        "<<",
+        "<<<",
+        "<>",
+        "2>",
+        "2>>",
+        "&>",
+    }
+)
+
+
+def _shell_operator(cmd: str) -> str | None:
+    """The first bare shell-operator token in *cmd*, or `None`.
+
+    Only an operator standing as *its own token* counts — the spaced form a
+    shell would honour (`… | …`, `… > out`). A glued `a>b` stays one token and
+    is left alone, as is any operator inside quotes. Split failures (unbalanced
+    quotes) defer to the exec path, which surfaces them.
+    """
+    try:
+        tokens = shlex.split(cmd)
+    except ValueError:
+        return None
+    return next((t for t in tokens if t in _SHELL_OPERATORS), None)
+
+
 def run(
     cmd: str | list[str] | Callable[..., Any],
     *args: Any,
@@ -1045,6 +1094,15 @@ def run(
         code, output = _run_callable(cmd, args, capture=capture, env=env, cwd=cwd)
     else:
         if isinstance(cmd, str):
+            if (op := _shell_operator(cmd)) is not None:
+                raise ValueError(
+                    f"run({cmd!r}): {op!r} is a shell operator, but run() does "
+                    f"not use a shell, so it would be passed as a literal "
+                    f"argument (the pipeline/redirect would silently not "
+                    f"happen). Invoke a shell explicitly — tools.bash('-c', "
+                    f"{cmd!r}) — split it into separate run() steps, or pass a "
+                    f"list to run [...] to use {op!r} as a literal argument."
+                )
             # POSIX shells split on shlex rules; Windows command lines are a
             # single string (CreateProcess) and shlex would mangle backslash
             # paths — hand the string straight to subprocess there.
@@ -1135,6 +1193,16 @@ def parallel(*calls: Callable[[], Any], keep_going: bool = False) -> list[int]:
                 error = RunFailed(StepResult(thunk, code, "", 0.0, raw=thunk))
         except RunFailed as exc:
             code, error = exc.result.code or 1, exc
+        except SystemExit as exc:
+            # `sys.exit()` / `raise SystemExit(...)` is a common "fail this task"
+            # idiom, but a BaseException — without this it escapes the pool
+            # instead of being collected. Treat its code like a returned one:
+            # 0 succeeds, non-zero is a synthesized failure the gate below raises.
+            code = _exit_code(exc)
+            error = None
+            if code != 0:
+                thunk = _label(call, ())
+                error = RunFailed(StepResult(thunk, code, "", 0.0, raw=thunk))
         except Exception as exc:  # a failed call must not crash the pool
             code, error = 1, exc
         finally:

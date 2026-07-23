@@ -360,6 +360,46 @@ def test_run_string_command():
     assert results[0].steps[0].output.strip() == "tool-ran"
 
 
+def test_run_string_with_shell_operator_is_taught():
+    # A pipe in a run(str) would become a literal argument (run() uses no shell),
+    # so the pipeline would silently not happen — footman refuses with guidance.
+    def tasks(reg):
+        @reg.task
+        def deploy():
+            run("tar cf - . | ssh host tar xf -")
+
+    _, _, results = drive(tasks, "deploy")
+    assert results[0].ok is False
+    assert "shell operator" in str(results[0].error)
+    assert "tools.bash" in str(results[0].error)
+
+
+def test_shell_operator_detection_is_precise():
+    from footman.context import _shell_operator
+
+    assert _shell_operator("tar cf - . | ssh host") == "|"
+    assert _shell_operator("build && test") == "&&"
+    assert _shell_operator("cmd > out.txt") == ">"
+    assert _shell_operator("cat < in.txt") == "<"
+    # Not shell operations: a glued token, an operator inside quotes, an arrow.
+    assert _shell_operator("grep a>b file") is None
+    assert _shell_operator("echo 'a | b'") is None
+    assert _shell_operator("run --from a->b") is None
+    assert _shell_operator("ruff check src --fix") is None
+
+
+def test_run_list_form_allows_a_literal_operator():
+    # The list form bypasses detection: '|' is a literal argument, not a pipe.
+    def tasks(reg):
+        @reg.task
+        def go():
+            run([sys.executable, "-c", "print('ok')", "|", "ignored"])
+
+    _, _, results = drive(tasks, "go")
+    assert results[0].ok is True  # no ValueError; python -c ran, extra args ignored
+    assert results[0].steps[0].output.strip() == "ok"
+
+
 @pytest.mark.parametrize(
     "make, expected",
     [
@@ -495,6 +535,35 @@ def test_parallel_honours_the_sequential_request():
     with use_context(Context(jobs=1)):
         parallel(slow, fast)
     assert order == ["slow-start", "slow-end", "fast-start"]
+
+
+def test_parallel_collects_systemexit():
+    # `raise SystemExit(...)` / sys.exit() is a common "fail this task" idiom, but
+    # SystemExit is a BaseException — it used to escape the pool and crash the whole
+    # run. Now it is collected like any other failure (its code, then a synthesized
+    # RunFailed the gate raises).
+    def boom():
+        raise SystemExit("nope")
+
+    def fine():
+        return 0
+
+    with use_context(Context()):
+        assert parallel(boom, fine, keep_going=True) == [1, 0]
+        with pytest.raises(RunFailed):
+            parallel(boom, fine)
+
+
+def test_parallel_systemexit_zero_is_success():
+    # SystemExit(0) / SystemExit(None) is success — matching run()'s callable path.
+    def clean():
+        raise SystemExit(0)
+
+    def bare():
+        sys.exit()  # SystemExit(None)
+
+    with use_context(Context()):
+        assert parallel(clean, bare) == [0, 0]
 
 
 def test_step_lines_carry_an_aligned_name_column(capsys):
