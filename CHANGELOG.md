@@ -26,6 +26,19 @@ versions may include breaking changes.
 
 ### Changed
 
+- **A tool's `.opts()` is now footman run-control; a tool's own globals move to
+  `.flags()`.** A `tools.*` call is pure flags and positionals again: run-control
+  no longer rides reserved call kwargs. `.opts(nofail=…, in_process=…,
+  capture=…, title=…)` is a closed vocabulary that rides *beside* the call and
+  never becomes a tool flag — `git.opts(nofail=True).push()` — mirroring a task's
+  policy-vs-work `.opts()`. A tool's own global options (bound before a verb)
+  move from `.opts(host=…)` to **`.flags(host=…)`** — `docker.flags(host="x").ps()`.
+  Two consequences: `capture` and `title` reach the bridge for the first time
+  (`pytest.opts(capture=False)` streams a run live), and a tool that really has
+  a `--capture` (pytest) can now be spelled in the call, `pytest(capture="no")`,
+  since footman's `capture` lives on `.opts()`. Migration: `tools.x(…,
+  nofail=True)` → `tools.x.opts(nofail=True)(…)`; `tools.x.opts(host=…)` →
+  `tools.x.flags(host=…)`.
 - **The test-harness result is renamed `InvokeResult`.** `Runner.invoke()` now
   returns `footman.testing.InvokeResult` (was `Result`), freeing the prominent
   `footman.Result` to name the run-step `Result` above. Test code that calls
