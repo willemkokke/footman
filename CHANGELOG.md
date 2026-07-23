@@ -7,8 +7,36 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- **`run()` returns a `Result`.** `run()` — and every `tools.*` call — now
+  returns a `Result` instead of a bare exit code. A `Result` *is* the exit code
+  (it subclasses `int`, so `code = run(...)`, `if run(...)`, and `== 0` are all
+  unchanged), and it also carries the captured output split by stream, so
+  `run("git rev-parse HEAD").stdout.strip()` reads the hash without stderr
+  glued on. `.stdout` and `.stderr` are separated for both subprocess and
+  in-process tools, and `.ok`, `.command`, `.raw`, and `.duration` round it
+  out. The typed tool stubs return `Result` too, so `.stdout` is checked at the
+  call site.
+- **Single-dash long flags for Go-style tools.** `Tool(single_dash=True)`
+  spells every long flag with one dash — `tools.eclint(fix=True)` →
+  `eclint -fix` — for tools whose Go `flag` package rejects the `--fix` form.
+- **`djlint`** joins the curated tools — the HTML/Django/Jinja template
+  linter-formatter, with a typed `tools.djlint(...)` stub.
+
 ### Changed
 
+- **The test-harness result is renamed `InvokeResult`.** `Runner.invoke()` now
+  returns `footman.testing.InvokeResult` (was `Result`), freeing the prominent
+  `footman.Result` to name the run-step `Result` above. Test code that calls
+  `Runner().invoke(...)` and reads `.ok`/`.stdout`/`.exit_code` is unaffected —
+  only the type's own name changed.
+- **A trailing underscore is stripped from a CLI flag.** A task or parameter
+  named with Python's keyword-escape underscore (`sync_`, `import_`) now maps
+  to `--sync` / `--import`, not `--sync-` — matching the `tools.*` bridge,
+  which already stripped it.
+- **`fm --json` step entries carry `stdout` and `stderr`** separately, in place
+  of the previous merged `output` field.
 - **`help` is now a reserved task parameter name.** A flag or option parameter
   named `help` maps to `--help`, which footman intercepts anywhere on the line
   to render help and never run a task — so the option could never bind. Instead
@@ -17,6 +45,24 @@ versions may include breaking changes.
   check is precise: a required positional `<help>` or a variadic `*help` never
   produces `--help`, so both stay legal. This is the only reserved name — every
   other global must precede the first task, so a task parameter may reuse it.
+
+### Fixed
+
+- **`include()` carries a group's default and finalizers.** Grafting a module
+  with `include()` kept its tasks but silently dropped the group's
+  `@group.default` — breaking the bare-group command and hiding its options —
+  and its `@finalize` hooks; both now come across, so a `tasks.py` composed from
+  per-module `include()`s behaves the same as one that defines them directly.
+- **`parallel()` collects a `SystemExit`.** A thunk that calls `sys.exit()` or
+  `raise SystemExit(...)` — a common "fail this task" idiom — is now collected
+  like any other failure instead of escaping and crashing the whole pool.
+- **`run("a | b")` teaches instead of mis-running.** A string command with a
+  bare shell operator (`|`, `>`, `&&`, …) now raises a taught error: `run()`
+  uses no shell, so the operator would otherwise ride along as a literal
+  argument and the pipeline would silently not happen. Reach for a shell
+  explicitly (`tools.bash("-c", …)`) or split into steps.
+- **`fm footman tools provision`** skips the hand-written shell drivers instead
+  of printing a spurious `uv tool install` failure for each.
 
 ### Docs
 
