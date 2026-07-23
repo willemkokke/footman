@@ -47,7 +47,7 @@ project with same-named helpers in several folders, is a known limitation.
 The completion manifest is cached **per directory**, so <kbd>Tab</kbd> in
 `services/api` offers the merged set while the repo root offers only its own.
 
-!!! tip "Load exactly one file"
+??? tip "Load exactly one file"
 
     `-f/--tasks-file PATH` loads a single tasks file, with **no tasks cascade** —
     the tasks-side mirror of `--config PATH` for config. The two are orthogonal:

@@ -230,7 +230,7 @@ a `run()`'s output — but opaque to the planner, which stops at the task body.
 Reach for declared deps when you want the plan to *see* the work, and
 `parallel()` when the fan-out has to be computed at run time.
 
-!!! note "Passing data between tasks"
+??? note "Passing data between tasks"
 
     Result data flows *within* a task — `run()` hands back its output, a called
     function its return — and out of a `parallel()` fan-out through a shared
