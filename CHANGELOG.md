@@ -9,6 +9,25 @@ versions may include breaking changes.
 
 ### Added
 
+- **Colour survives footman's no-PTY boundary.** footman spawns tools over
+  pipes, not a pseudo-terminal, so a tool sees a non-terminal and turns colour
+  off — even when footman itself is on a terminal. footman now forces it back:
+  every subprocess gets `FORCE_COLOR`/`CLICOLOR_FORCE` when the run is colourful
+  and `NO_COLOR` when it is not, and the captured bytes replay onto footman's
+  own terminal (colour is position-independent, so it survives the round-trip;
+  live cursor control is the thing a PTY-less run genuinely can't carry, and it
+  isn't attempted). One run-wide decision drives all of it, resolved from a
+  new **`--color=always|never|auto`** global (`--no-color` is the `never`
+  alias), **`[tool.footman] color`**, then `NO_COLOR`/`FORCE_COLOR` in the
+  environment. `always` colours even into a pipe (for `less -R`); a captured
+  `--json` run stays byte-clean. The few tools that ignore the environment and
+  take a flag instead — git's `-c color.ui=always` — are forced through their
+  own switch, injected into the executed command only, so `recording()` and
+  `--dry-run` still show the tool's own call while `--verbose` shows what ran.
+  **`fm footman tools color`** reports each tool's mechanism (obeys the
+  environment, a forced switch, or a candidate), so the coverage is auditable
+  rather than folklore.
+
 - **`run(shell=…)` runs a command string through an explicit shell.** `run()`
   stays shell-free by default — a string is split, no shell, so `|`/`>`/`$VAR`
   are literal — but `run("a | b", shell=True)` runs the whole string through a
