@@ -573,6 +573,22 @@ def test_run_shell_true_actually_pipes():
     assert results[0].ok, results[0].error
 
 
+def test_run_shell_true_reads_the_configured_policy(monkeypatch):
+    # `[shell] default` flows into ctx.shell_default; run(shell=True) resolves it.
+    monkeypatch.setattr("footman.context.os.path.isfile", lambda p: False)
+    monkeypatch.setattr("footman.context.shutil.which", lambda n: f"/bin/{n}")
+    captured = {}
+
+    def fake(argv, *a, **k):
+        captured["argv"] = argv
+        return 0, "", ""
+
+    monkeypatch.setattr("footman.context._run_subprocess", fake)
+    with use_context(Context(shell_default="pwsh")):
+        run("echo hi", shell=True)
+    assert captured["argv"][:2] == ["/bin/pwsh", "-Command"]  # policy honoured
+
+
 def test_shell_strict_and_clean_prep_per_interpreter():
     from footman.context import _shell_prep
 

@@ -1052,8 +1052,11 @@ def _run_tree(
 
     fetch_cfg = cfg.get("fetch")
     backend = fetch_cfg.get("backend") if isinstance(fetch_cfg, dict) else None
+    shell_cfg = cfg.get("shell")
+    shell_default = shell_cfg.get("default") if isinstance(shell_cfg, dict) else None
     ctx_config = {
         "fetch_backend": str(backend) if isinstance(backend, str) else "",
+        "shell_default": str(shell_default) if isinstance(shell_default, str) else "",
         "quiet": bool(g.get("quiet")),
         "verbose": bool(g.get("verbose")),
         "no_color": bool(g.get("no_color")),
