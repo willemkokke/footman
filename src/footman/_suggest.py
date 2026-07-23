@@ -46,7 +46,10 @@ def _values(param: str, path: list[str], g: dict[str, object]) -> list[str]:
     if task is None:
         return []
     for p in manifest.resolved_signature(task).parameters.values():
-        if p.name.replace("_", "-") != param or p.annotation is inspect.Parameter.empty:
+        if (
+            registry.cli_name(p.name) != param
+            or p.annotation is inspect.Parameter.empty
+        ):
             continue
         completer = coerce.peel(p.annotation).completer
         if completer is None:

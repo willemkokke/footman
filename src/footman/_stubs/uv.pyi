@@ -6,7 +6,7 @@
 from collections.abc import Sequence
 from typing import Any, Literal
 
-from footman.tools import Tool, _Flag, _Value
+from footman.tools import Result, Tool, _Flag, _Value
 
 class UvPip(Tool):
     def compile(
@@ -319,7 +319,7 @@ class UvPip(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Compile a `requirements.in` file to a `requirements.txt` or `pylock.toml`
         file
 
@@ -748,7 +748,7 @@ class UvPip(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Install packages into an environment
 
         Args:
@@ -923,7 +923,7 @@ class UvPip(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """List, in tabular format, packages installed in an environment
 
         Args:
@@ -1253,7 +1253,7 @@ class UvPip(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Sync an environment with a `requirements.txt` or `pylock.toml` file
 
         Args:
@@ -1664,7 +1664,7 @@ class UvTool(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Install commands provided by a Python package
 
         Args:
@@ -2064,7 +2064,7 @@ class UvTool(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Run a command provided by a Python package
 
         Args:
@@ -2340,7 +2340,7 @@ class UvTool(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Upgrade installed tools
 
         Args:
@@ -2456,7 +2456,7 @@ class Uv(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """An extremely fast Python package manager.
 
         Args:
@@ -2588,7 +2588,7 @@ class Uv(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Add dependencies to the project
 
         Args:
@@ -2791,7 +2791,7 @@ class Uv(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Build Python packages into source distributions and wheels
 
         Args:
@@ -2994,7 +2994,7 @@ class Uv(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Export the project's lockfile to an alternate format
 
         Args:
@@ -3194,7 +3194,7 @@ class Uv(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Update the project's lockfile
 
         Args:
@@ -3316,7 +3316,7 @@ class Uv(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Upload distributions to an index
 
         Args:
@@ -3442,7 +3442,7 @@ class Uv(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Remove dependencies from the project
 
         Args:
@@ -3748,7 +3748,7 @@ class Uv(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Run a command or script
 
         Args:
@@ -4075,7 +4075,7 @@ class Uv(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Update the project's environment
 
         Args:
@@ -4390,7 +4390,7 @@ class Uv(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Display the project's dependency tree
 
         Args:
@@ -4544,7 +4544,7 @@ class Uv(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Create a virtual environment
 
         Args:
@@ -4713,7 +4713,7 @@ class Uv(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Read or update the project's version
 
         Args:

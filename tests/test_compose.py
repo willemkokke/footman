@@ -629,6 +629,131 @@ def test_plugin_claimed_by_two_distributions_teaches(monkeypatch):
         compose.plugin("twice")
 
 
+# --- _fork carries every Group field (F: default_task/finalizers were dropped) --
+
+
+def test_fork_copies_every_group_field():
+    # A structural census: _fork must carry EVERY Group field, or a composed
+    # group silently loses it — which is exactly how `@group.default` and
+    # `@finalize` hooks vanished across include(). This fails the moment a field
+    # is added to Group.__init__ without teaching _fork (and this test) to copy
+    # it, so a new field can't be dropped in silence.
+    assert set(vars(Group("x"))) == {
+        "name",
+        "help",
+        "tasks",
+        "groups",
+        "default_task",
+        "finalizers",
+    }
+
+
+def test_fork_preserves_default_and_finalizers():
+    src = Group("release", "Release tasks")
+
+    @src.task
+    def notes(): ...
+
+    @src.default
+    def run(*, armed: bool = False): ...
+
+    def sentinel(tasks): ...
+
+    src.finalizers.append(sentinel)
+
+    fork = compose._fork(src)
+    assert fork.default_task is src.default_task  # shared fn, like the task fns
+    assert fork.finalizers == [sentinel]
+    assert fork.finalizers is not src.finalizers  # a fresh list — no memo leak
+
+
+@pytest.fixture
+def default_provider(tmp_path, monkeypatch):
+    """A provider module whose group carries a `@group.default`."""
+    (tmp_path / "reltasks.py").write_text(
+        textwrap.dedent(
+            """
+            from footman import group
+
+            release = group("release", help="Release tasks")
+
+            @release.default
+            def run(*, armed: bool = False):
+                "Cut a release."
+                print(f"release armed={armed}")
+
+            @release.task
+            def notes():
+                "Show the notes."
+                print("notes")
+            """
+        )
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.setattr(compose, "_module_trees", {})
+    sys.modules.pop("reltasks", None)
+    yield tmp_path
+    sys.modules.pop("reltasks", None)
+
+
+def test_include_preserves_group_default(default_provider):
+    # F: include() grafted the subtasks but dropped the group's @group.default,
+    # so the bare-runnable group broke and its options vanished from the manifest.
+    with registry.capture() as captured:
+        compose.include("reltasks")
+    assert captured.groups["release"].default_task is not None
+    tree = manifest.build_manifest(captured)["tree"]
+    node = tree["groups"]["release"]
+    assert "default" in node  # the runnable-group node the splitter/help read
+    assert [p["name"] for p in node["default"]["params"]] == ["armed"]
+
+
+def test_included_group_default_runs_end_to_end(default_provider, tmp_path):
+    project = tmp_path / "proj_default"
+    project.mkdir()
+    (project / "pyproject.toml").write_text('[project]\nname="x"\n')
+    (project / "tasks.py").write_text(
+        "from footman import include\ninclude('reltasks')\n"
+    )
+    result = Runner().invoke("release --armed", cwd=project)
+    assert result.ok, result.stderr
+    assert "release armed=True" in result.stdout
+
+
+def test_include_runs_provider_finalizers(tmp_path, monkeypatch):
+    # A provider's @finalize hook edits the whole tree; include() must surface it
+    # on the live root so discovery collects and runs it — it was dropped before.
+    (tmp_path / "finmod.py").write_text(
+        textwrap.dedent(
+            """
+            from footman import task, finalize
+
+            @task
+            def build():
+                "Build it."
+                print("build")
+
+            @finalize
+            def note(tasks):
+                tasks["build"].disable("finalizer ran")
+            """
+        )
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.setattr(compose, "_module_trees", {})
+    sys.modules.pop("finmod", None)
+
+    project = tmp_path / "proj_fin"
+    project.mkdir()
+    (project / "pyproject.toml").write_text('[project]\nname="x"\n')
+    (project / "tasks.py").write_text(
+        "from footman import include\ninclude('finmod')\n"
+    )
+    listing = Runner().invoke("--list", cwd=project)
+    assert listing.ok
+    assert "finalizer ran" in listing.stdout  # the hook ran and disabled the task
+
+
 def test_plugin_entry_point_of_the_wrong_type_teaches(monkeypatch):
     """An entry point resolving to something that isn't a Group (or a
     module of tasks) names the type it got."""

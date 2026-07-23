@@ -3,7 +3,7 @@
 # `source="manual"`).
 from typing import Any
 
-from footman.tools import Tool
+from footman.tools import Result, Tool
 
 class Fish(Tool):
     def __call__(  # type: ignore[override]
@@ -13,7 +13,7 @@ class Fish(Tool):
         *,
         nofail: bool = False,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Run a command string in fish — `fish -c "<command>"`.
 
         A real shell: pipes, redirects, globbing and `$VAR` all work. Reach

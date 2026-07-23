@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
     from pathlib import Path
 
-    from footman.context import StepResult
+    from footman.context import Result
     from footman.testing import Runner
 
 __all__ = ["fm", "fm_project", "fm_record"]
@@ -75,7 +75,7 @@ def fm_project(
 
 
 @pytest.fixture
-def fm_record() -> Iterator[list[StepResult]]:
+def fm_record() -> Iterator[list[Result]]:
     """Recorded steps for the whole test: task code runs, commands don't.
 
     ```python

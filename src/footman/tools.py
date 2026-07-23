@@ -43,7 +43,11 @@ import threading as _threading
 from collections.abc import Iterator
 from typing import Any
 
+# `Result` is public, unlike the private aliases: every tool call returns one, and
+# the generated stubs import it from here (`from footman.tools import Result`), so
+# it must resolve to the class — a real module binding beats `__getattr__`.
 from footman.context import Invocation as _Invocation
+from footman.context import Result as Result
 from footman.context import run as _run
 
 _version_cache: dict[str, tuple[int, ...]] = {}
@@ -85,12 +89,18 @@ _NEGATIONS: dict[str, dict[str, str]] = {
 }
 
 
-def _negation(tool: str, key: str) -> str:
-    """The flag that turns *key* off for *tool*."""
+def _negation(tool: str, key: str, *, single_dash: bool = False) -> str:
+    """The flag that turns *key* off for *tool*.
+
+    A single-dash tool (Go's `flag` package: `-fix`, not `--fix`) negates with a
+    single dash too (`-no-fix`); a tool that spells it otherwise lives in
+    `_NEGATIONS`, which wins here regardless of dash style.
+    """
     known = _NEGATIONS.get(tool, {})
     if key in known:
         return known[key]
-    return "--no-" + key.rstrip("_").replace("_", "-")
+    dash = "-no-" if single_dash else "--no-"
+    return dash + key.rstrip("_").replace("_", "-")
 
 
 # Verbs that run *another* command: a wrapper's flags belong before the
@@ -114,7 +124,9 @@ def _is_wrapper(argv0: str, base: list[str]) -> bool:
     return verbs in _WRAPPERS.get(argv0, frozenset())
 
 
-def _emit(kwargs: dict[str, Any], tool: str = "") -> Iterator[tuple[str, str | None]]:
+def _emit(
+    kwargs: dict[str, Any], tool: str = "", *, single_dash: bool = False
+) -> Iterator[tuple[str, str | None]]:
     """The one translation: keyword arguments → `(flag, value)` tokens.
 
     `value` is None for a switch (`--fix`) or a negation (`--dirty`); a
@@ -122,15 +134,18 @@ def _emit(kwargs: dict[str, Any], tool: str = "") -> Iterator[tuple[str, str | N
     list. Both the executed argv (`_flags`) and the shown command line
     (`_show_parts`) are built from this, so they can never disagree about
     what a call means — only about how to spell it.
+
+    *single_dash* spells every long flag with one dash (`-fix`, not `--fix`) for
+    Go-style tools whose `flag` package rejects the double-dash form.
     """
     for key, value in kwargs.items():
         if value is None or value is False:
             continue
         name = key.rstrip("_").replace("_", "-")
         if value is off:
-            yield _negation(tool, key), None
+            yield _negation(tool, key, single_dash=single_dash), None
             continue
-        flag = f"-{name}" if len(name) == 1 else f"--{name}"
+        flag = f"-{name}" if single_dash or len(name) == 1 else f"--{name}"
         if value is True:
             yield flag, None
             continue
@@ -168,7 +183,9 @@ def _spell(flag: str, value: str | None, *, attach_long: bool) -> list[str]:
     return [flag, value]
 
 
-def _flags(kwargs: dict[str, Any], tool: str = "") -> list[str]:
+def _flags(
+    kwargs: dict[str, Any], tool: str = "", *, single_dash: bool = False
+) -> list[str]:
     """Translate keyword arguments into CLI flags, for execution.
 
     Long options attach their value (`--select=E`) so an optional-value or
@@ -177,13 +194,18 @@ def _flags(kwargs: dict[str, Any], tool: str = "") -> list[str]:
     spells the same call more readably; only the tokens differ.
     """
     argv: list[str] = []
-    for flag, value in _emit(kwargs, tool):
+    for flag, value in _emit(kwargs, tool, single_dash=single_dash):
         argv += _spell(flag, value, attach_long=True)
     return argv
 
 
 def _show_parts(
-    argv0: str, base: list[str], args: tuple[Any, ...], kwargs: dict[str, Any]
+    argv0: str,
+    base: list[str],
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+    *,
+    single_dash: bool = False,
 ) -> tuple[tuple[str, str], ...]:
     """The invocation as role-tagged tokens, for a readable, painted line.
 
@@ -208,7 +230,7 @@ def _show_parts(
             parts.append(("group", token))
     arg_parts = [("req", _quote(str(a))) for a in args]
     flag_parts: list[tuple[str, str]] = []
-    for flag, value in _emit(kwargs, argv0):
+    for flag, value in _emit(kwargs, argv0, single_dash=single_dash):
         if value is None:
             flag_parts.append(("opt", flag))
             continue
@@ -307,6 +329,7 @@ class Tool:
         in_process: bool = False,
         path: str = "",
         entry: str = "",
+        single_dash: bool = False,
     ) -> None:
         self._argv0 = name  # the name shown, and the console script looked up
         self._base = list(base)
@@ -319,6 +342,10 @@ class Tool:
         # (serialised), but `pytest.main` takes the argument list and stays
         # parallel — so it is recorded here.
         self._entry = entry
+        # A Go-style tool whose `flag` package wants one dash on long flags
+        # (`eclint -fix`, not `--fix`). Tool-wide: Go's flag package is uniform,
+        # so this rides every flag the tool emits, chained subcommands included.
+        self._single_dash = single_dash
 
     def _sub(self, *tail: str) -> Tool:
         """A chained tool sharing this one's executable, entry, and mode."""
@@ -329,6 +356,7 @@ class Tool:
             in_process=self._prefer_in_process,
             path=self._path,
             entry=self._entry,
+            single_dash=self._single_dash,
         )
 
     def __getattr__(self, verb: str) -> Tool:
@@ -350,7 +378,7 @@ class Tool:
         The flags are translated by the same rules as any call, and the
         returned tool keeps chaining, so `.opts(...)` composes mid-stream.
         """
-        return self._sub(*_flags(kwargs, self._argv0))
+        return self._sub(*_flags(kwargs, self._argv0, single_dash=self._single_dash))
 
     def __call__(
         self,
@@ -359,7 +387,7 @@ class Tool:
         in_process: bool | None = None,
         **kwargs: Any,
     ) -> int:
-        flags = _flags(kwargs, self._argv0)
+        flags = _flags(kwargs, self._argv0, single_dash=self._single_dash)
         positionals = list(map(str, args))
         # A wrapper verb (`uv run`, `docker exec`) forwards everything after
         # its own arguments to a child, so this call's flags must precede the
@@ -372,7 +400,10 @@ class Tool:
         # shown line keeps the name, so the painted command reads `python …`.
         argv = [self._path, *tail]
         show = _Invocation(
-            _show_parts(self._argv0, self._base, args, kwargs), tuple(argv)
+            _show_parts(
+                self._argv0, self._base, args, kwargs, single_dash=self._single_dash
+            ),
+            tuple(argv),
         )
         wanted = self._prefer_in_process if in_process is None else in_process
         if wanted:
@@ -477,7 +508,8 @@ cspell = Tool("cspell")
 prek = Tool("prek")
 markdownlint = Tool("markdownlint-cli2")
 gh = Tool("gh")
-eclint = Tool("eclint")
+eclint = Tool("eclint", single_dash=True)  # Go flag package: `-fix`, not `--fix`
+djlint = Tool("djlint")
 mypy = Tool("mypy")
 ty = Tool("ty")
 twine = Tool("twine")

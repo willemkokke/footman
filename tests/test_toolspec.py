@@ -486,7 +486,7 @@ def test_rendered_stub_imports_only_what_it_uses():
     plain = _stubgen.render(_spec(Option("quiet", ("--quiet",), type_name="bool")))
     assert "Literal" not in plain
     assert "_Value" not in plain, "no value option, so no value alias"
-    assert "from footman.tools import Tool, _Flag" in plain
+    assert "from footman.tools import Result, Tool, _Flag" in plain
 
     choosy = _stubgen.render(
         _spec(Option("color", ("--color",), type_name="choice", choices=("a", "b")))

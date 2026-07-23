@@ -571,7 +571,8 @@ def _print_json(results: list[executor.TaskResult], *, total: float) -> None:
                     "command": s.command,
                     "code": s.code,
                     "duration_ms": round(s.duration * 1000, 3),
-                    "output": s.output,
+                    "stdout": s.stdout,
+                    "stderr": s.stderr,
                 }
                 for s in r.steps
             ],

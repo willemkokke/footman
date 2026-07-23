@@ -94,6 +94,82 @@ def test_run_nofail_returns_code():
     assert out["code"] == 1
 
 
+def test_result_is_the_exit_code_int():
+    # A Result *is* the exit code: the int idioms keep working, and it carries
+    # the captured output and the `.ok` shorthand alongside.
+    def tasks(reg):
+        @reg.task
+        def go():
+            ok = run([sys.executable, "-c", "pass"])
+            assert isinstance(ok, int) and ok == 0 and ok.ok and not bool(ok)
+            bad = run([sys.executable, "-c", "import sys; sys.exit(3)"], nofail=True)
+            assert bad == 3 and bad.code == 3 and not bad.ok and bool(bad)
+
+    _, _, results = drive(tasks, "go")
+    assert results[0].ok
+
+
+def test_result_separates_subprocess_streams():
+    def tasks(reg):
+        @reg.task
+        def go():
+            run(
+                [
+                    sys.executable,
+                    "-c",
+                    "import sys; print('to-out'); print('to-err', file=sys.stderr)",
+                ]
+            )
+
+    _, _, results = drive(tasks, "go")
+    step = results[0].steps[0]
+    assert step.stdout.strip() == "to-out"
+    assert step.stderr.strip() == "to-err"
+    # .output is the two joined (stdout first), computed — never stored.
+    assert step.output == step.stdout + step.stderr
+
+
+def test_result_separates_in_process_streams():
+    # An in-process callable splits stdout/stderr exactly like a subprocess —
+    # no user-visible difference between the two kinds of run().
+    def tasks(reg):
+        @reg.task
+        def go():
+            def tool():
+                print("in-out")
+                print("in-err", file=sys.stderr)
+
+            run(tool)
+
+    _, _, results = drive(tasks, "go")
+    step = results[0].steps[0]
+    assert step.stdout.strip() == "in-out"
+    assert step.stderr.strip() == "in-err"
+
+
+def test_parallel_in_process_separates_streams_under_routing():
+    # The delicate path: run() inside a parallel child still splits the step's
+    # streams, even though the child's task-level buffer stays combined for the
+    # atomic flush.
+    def tasks(reg):
+        @reg.task
+        def go():
+            def x():
+                print("x-out")
+                print("x-err", file=sys.stderr)
+
+            def y():
+                print("y-out")
+                print("y-err", file=sys.stderr)
+
+            parallel(lambda: run(x), lambda: run(y))
+
+    _, _, results = drive(tasks, "go")
+    steps = results[0].steps
+    assert {s.stdout.strip() for s in steps} == {"x-out", "y-out"}
+    assert {s.stderr.strip() for s in steps} == {"x-err", "y-err"}
+
+
 def test_run_callable_capture_false_is_live_not_buffered(capsys):
     # F60: capture=False streams the callable's output live instead of buffering
     # it into the step — serve-style tasks must not buffer unboundedly.
@@ -360,6 +436,46 @@ def test_run_string_command():
     assert results[0].steps[0].output.strip() == "tool-ran"
 
 
+def test_run_string_with_shell_operator_is_taught():
+    # A pipe in a run(str) would become a literal argument (run() uses no shell),
+    # so the pipeline would silently not happen — footman refuses with guidance.
+    def tasks(reg):
+        @reg.task
+        def deploy():
+            run("tar cf - . | ssh host tar xf -")
+
+    _, _, results = drive(tasks, "deploy")
+    assert results[0].ok is False
+    assert "shell operator" in str(results[0].error)
+    assert "tools.bash" in str(results[0].error)
+
+
+def test_shell_operator_detection_is_precise():
+    from footman.context import _shell_operator
+
+    assert _shell_operator("tar cf - . | ssh host") == "|"
+    assert _shell_operator("build && test") == "&&"
+    assert _shell_operator("cmd > out.txt") == ">"
+    assert _shell_operator("cat < in.txt") == "<"
+    # Not shell operations: a glued token, an operator inside quotes, an arrow.
+    assert _shell_operator("grep a>b file") is None
+    assert _shell_operator("echo 'a | b'") is None
+    assert _shell_operator("run --from a->b") is None
+    assert _shell_operator("ruff check src --fix") is None
+
+
+def test_run_list_form_allows_a_literal_operator():
+    # The list form bypasses detection: '|' is a literal argument, not a pipe.
+    def tasks(reg):
+        @reg.task
+        def go():
+            run([sys.executable, "-c", "print('ok')", "|", "ignored"])
+
+    _, _, results = drive(tasks, "go")
+    assert results[0].ok is True  # no ValueError; python -c ran, extra args ignored
+    assert results[0].steps[0].output.strip() == "ok"
+
+
 @pytest.mark.parametrize(
     "make, expected",
     [
@@ -495,6 +611,35 @@ def test_parallel_honours_the_sequential_request():
     with use_context(Context(jobs=1)):
         parallel(slow, fast)
     assert order == ["slow-start", "slow-end", "fast-start"]
+
+
+def test_parallel_collects_systemexit():
+    # `raise SystemExit(...)` / sys.exit() is a common "fail this task" idiom, but
+    # SystemExit is a BaseException — it used to escape the pool and crash the whole
+    # run. Now it is collected like any other failure (its code, then a synthesized
+    # RunFailed the gate raises).
+    def boom():
+        raise SystemExit("nope")
+
+    def fine():
+        return 0
+
+    with use_context(Context()):
+        assert parallel(boom, fine, keep_going=True) == [1, 0]
+        with pytest.raises(RunFailed):
+            parallel(boom, fine)
+
+
+def test_parallel_systemexit_zero_is_success():
+    # SystemExit(0) / SystemExit(None) is success — matching run()'s callable path.
+    def clean():
+        raise SystemExit(0)
+
+    def bare():
+        sys.exit()  # SystemExit(None)
+
+    with use_context(Context()):
+        assert parallel(clean, bare) == [0, 0]
 
 
 def test_step_lines_carry_an_aligned_name_column(capsys):

@@ -250,7 +250,10 @@ def _make_ctx(
 ) -> context.Context:
     ctx = context.Context(**(ctx_config or {}), passthrough=list(seg.passthrough or []))
     ctx.keep_going = keep_going  # per-subtree policy; tags this task's subprocesses
-    ctx.sink = None if (sequential and not capture) else io.StringIO()
+    # One buffer for both streams at task level: the atomic flush keeps this
+    # task's stdout/stderr in order, while a run() inside it still splits the
+    # step's streams via a temporary swap of the two.
+    ctx.sink = ctx.err_sink = None if (sequential and not capture) else io.StringIO()
     # Step lines dress for their *destination*: a buffered block replays
     # onto `real`, so its children style exactly as parallel() children
     # style for their parent's terminal — both engines, one look. Only

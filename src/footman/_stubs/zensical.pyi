@@ -5,7 +5,7 @@
 # accepts, and can never forbid what the bridge would happily pass.
 from typing import Any
 
-from footman.tools import Tool, _Flag, _Value
+from footman.tools import Result, Tool, _Flag, _Value
 
 class Zensical(Tool):
     def build(
@@ -17,7 +17,7 @@ class Zensical(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Build a project.
 
         Args:
@@ -32,7 +32,7 @@ class Zensical(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Create a new template project in the current or given directory."""
         ...
     def serve(
@@ -45,7 +45,7 @@ class Zensical(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Build and serve a project.
 
         Args:

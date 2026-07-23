@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     from footman.compose import include as include
     from footman.compose import plugin as plugin
     from footman.context import Context as Context
+    from footman.context import Result as Result
     from footman.context import RunFailed as RunFailed
     from footman.context import confirm as confirm
     from footman.context import inherited as inherited
@@ -65,7 +66,6 @@ if TYPE_CHECKING:
     from footman.registry import requires_env as requires_env
     from footman.registry import requires_tool as requires_tool
     from footman.registry import task as task
-    from footman.testing import Result as Result
     from footman.testing import Runner as Runner
     from footman.testing import recording as recording
 
@@ -161,7 +161,7 @@ def __getattr__(name: str) -> object:
         from footman import registry
 
         return getattr(registry, name)
-    if name in ("Runner", "Result", "recording"):
+    if name in ("Runner", "recording"):
         from footman import testing
 
         return getattr(testing, name)
@@ -211,6 +211,7 @@ def __getattr__(name: str) -> object:
         "run",
         "parallel",
         "Context",
+        "Result",
         "inherited",
         "passthrough",
         "progress",

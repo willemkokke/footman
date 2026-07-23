@@ -38,6 +38,7 @@ from footman._stubs.bun import Bun as Bun
 from footman._stubs.cmake import Cmake as Cmake
 from footman._stubs.coverage import Coverage as Coverage
 from footman._stubs.cspell import Cspell as Cspell
+from footman._stubs.djlint import Djlint as Djlint
 from footman._stubs.docker import Docker as Docker
 from footman._stubs.eclint import Eclint as Eclint
 from footman._stubs.fish import Fish as Fish
@@ -62,6 +63,7 @@ from footman._stubs.uv import Uv as Uv
 from footman._stubs.zensical import Zensical as Zensical
 from footman._stubs.zsh import Zsh as Zsh
 from footman.context import Invocation as _Invocation  # noqa: F401
+from footman.context import Result as Result
 from footman.context import run as _run  # noqa: F401
 
 _argv_lock: _threading.Lock
@@ -107,6 +109,7 @@ class Tool:
     _argv0: str
     _base: list[str]
     _prefer_in_process: bool
+    _single_dash: bool
     def __init__(
         self,
         name: str,
@@ -114,6 +117,7 @@ class Tool:
         in_process: bool = False,
         path: str = ...,
         entry: str = ...,
+        single_dash: bool = False,
     ) -> None: ...
     def __getattr__(self, verb: str) -> Tool: ...
     def opts(self, **flags: Any) -> Tool: ...
@@ -123,7 +127,7 @@ class Tool:
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int: ...
+    ) -> Result: ...
     def installed_version(self) -> tuple[int, ...]: ...
 
 ruff: Ruff
@@ -141,6 +145,7 @@ prek: Prek
 markdownlint: Markdownlint
 gh: Gh
 eclint: Eclint
+djlint: Djlint
 mypy: Mypy
 ty: Ty
 twine: Twine

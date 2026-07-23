@@ -27,8 +27,8 @@ from typing import Any
 from footman import coerce, context, registry
 from footman.context import (
     Context,
+    Result,
     RunFailed,
-    StepResult,
     _current,
     context_param_name,
 )
@@ -49,7 +49,7 @@ class TaskResult:
     error: BaseException | None = None
     duration: float = 0.0
     output: str = ""
-    steps: list[StepResult] = field(default_factory=list)
+    steps: list[Result] = field(default_factory=list)
     cancelled: bool = False  # failed only because fail-fast killed it mid-run
 
 
@@ -279,7 +279,7 @@ def bind(
                 var_args = [_coerce_extra(v, peeled, label, siblings) for v in extra]
             continue
 
-        cli = param.name.replace("_", "-")
+        cli = registry.cli_name(param.name)
         if cli not in seg.values:
             # A forwarded value overrides a defaulted parameter (never a
             # required one — the guard on `param.default`), ahead of env/default.
@@ -387,7 +387,7 @@ def forward_map(
         if received is not None and param.name in received:
             out[param.name] = received[param.name]
             continue
-        cli = param.name.replace("_", "-")
+        cli = registry.cli_name(param.name)
         if cli not in seg.values:
             out[param.name] = param.default
             continue
@@ -479,7 +479,7 @@ def _result(
     error: BaseException | None,
     duration: float,
     output: str = "",
-    steps: list[StepResult] | None = None,
+    steps: list[Result] | None = None,
 ) -> TaskResult:
     return TaskResult(
         task=seg.task,

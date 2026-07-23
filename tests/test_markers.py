@@ -95,9 +95,9 @@ def test_between_bounds_are_inclusive():
         def test_(jobs: Annotated[int, between(1, 32)] = 4):
             seen["jobs"] = jobs
 
-    run(tasks, "test- --jobs 32")
+    run(tasks, "test --jobs 32")
     assert seen["jobs"] == 32
-    run(tasks, "test- --jobs 1")
+    run(tasks, "test --jobs 1")
     assert seen["jobs"] == 1
 
 
@@ -108,7 +108,7 @@ def test_between_teaches_out_of_range():
 
     _, tree = build_tree(tasks)
     with pytest.raises(ChainError, match="between 1 and 32"):
-        split_chain(tree, ["test-", "--jobs", "99"])
+        split_chain(tree, ["test", "--jobs", "99"])
 
 
 def test_nan_is_rejected_by_bounds():
@@ -196,11 +196,11 @@ def test_env_value_is_coerced_and_bounded(monkeypatch):
             seen["jobs"] = jobs
 
     monkeypatch.setenv("JOBS", "8")
-    run(tasks, "test-")
+    run(tasks, "test")
     assert seen["jobs"] == 8  # coerced to int
 
     monkeypatch.setenv("JOBS", "99")
-    results = run(tasks, "test-")
+    results = run(tasks, "test")
     assert not results[0].ok  # bounds enforced for env values too
     assert "between 1 and 32" in str(results[0].error)
 
@@ -211,7 +211,7 @@ def test_env_uncoercible_value_is_rejected(monkeypatch):
         def test_(jobs: Annotated[int, between(1, 32), env("JOBS")] = 4): ...
 
     monkeypatch.setenv("JOBS", "abc")
-    results = run(tasks, "test-")
+    results = run(tasks, "test")
     assert not results[0].ok  # no longer binds the raw string
     assert "expects an integer" in str(results[0].error)
     assert "$JOBS" in str(results[0].error)

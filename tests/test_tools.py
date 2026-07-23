@@ -29,6 +29,26 @@ def test_mechanical_flag_translation():
     )
 
 
+def test_single_dash_long_flags_for_go_style_tools():
+    # A Go flag-package tool (eclint) wants one dash on long flags: `-fix`, not
+    # `--fix`. Single-char flags already took one dash; single_dash extends it to
+    # long ones too.
+    assert _one(lambda: tools.eclint(fix=True)) == "eclint -fix"
+    assert _one(lambda: tools.eclint("src", exclude="node_modules")) == (
+        "eclint src -exclude node_modules"
+    )
+
+
+def test_single_dash_rides_chaining_opts_and_negation():
+    # One dash on the executed argv (raw), not just the shown line — and it holds
+    # across chained verbs, .opts(), and the off-sentinel negation.
+    with recording() as steps:
+        tools.eclint("src", fix=True, color=tools.off)
+        tools.eclint.opts(verbose=True).check("src")
+    assert steps[0].raw == "eclint src -fix -no-color"
+    assert steps[1].raw == "eclint -verbose check src"
+
+
 def test_off_sentinel_emits_the_negation():
     from footman.tools import off
 
@@ -483,7 +503,7 @@ def test_negation_table_matches_what_the_tools_say():
 # The command line footman *shows* is built from the same translation it
 # *executes*, but spelled for a human: separated flags, shell-quoted values,
 # role-tagged for colour. `recording()` sees that shown form (via
-# StepResult.command), which is why these assertions read naturally and stay
+# Result.command), which is why these assertions read naturally and stay
 # stable even when execution tokenises differently.
 
 

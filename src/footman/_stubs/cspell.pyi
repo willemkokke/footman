@@ -5,7 +5,7 @@
 # accepts, and can never forbid what the bridge would happily pass.
 from typing import Any
 
-from footman.tools import Tool, _Flag, _Value
+from footman.tools import Result, Tool, _Flag, _Value
 
 class Cspell(Tool):
     def __call__(  # type: ignore[override]
@@ -14,7 +14,7 @@ class Cspell(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Spelling Checker for Code"""
         ...
     def check(
@@ -28,7 +28,7 @@ class Cspell(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Spell check file(s) and display the result. The full file is displayed in
         color.
 
@@ -88,7 +88,7 @@ class Cspell(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Run this verb.
 
         Args:
@@ -169,7 +169,7 @@ class Cspell(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Spelling Suggestions for words.
 
         Args:
@@ -209,7 +209,7 @@ class Cspell(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Trace words -- Search for words in the configuration and dictionaries.
 
         Args:

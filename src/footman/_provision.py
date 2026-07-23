@@ -80,11 +80,17 @@ def provision(
     prefix = Path(prefix)
     bin_dir(prefix).mkdir(parents=True, exist_ok=True)
     chosen = [d for d in drivers if not only or d.key == only]
+    outcomes: list[Outcome] = []
     by_kind: dict[str, list[Driver]] = {}
     for driver in chosen:
+        if driver.source == "manual":
+            # A hand-written stub (the shells): its stub is curated, not read
+            # from a binary, so there is nothing to fetch — skip it rather than
+            # try `uv tool install bash` and print a spurious failure.
+            outcomes.append(Outcome(driver.key, "manual", "skip", "hand-written"))
+            continue
         by_kind.setdefault(driver.provision.kind, []).append(driver)
 
-    outcomes: list[Outcome] = []
     for driver in by_kind.get("system", []):
         outcomes.append(
             Outcome(driver.key, "system", "skip", f"uses the system {driver.name}")

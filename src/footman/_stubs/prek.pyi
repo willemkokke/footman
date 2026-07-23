@@ -6,7 +6,7 @@
 from collections.abc import Sequence
 from typing import Any, Literal
 
-from footman.tools import Tool, _Flag, _Value
+from footman.tools import Result, Tool, _Flag, _Value
 
 class Prek(Tool):
     def __call__(  # type: ignore[override]
@@ -66,7 +66,7 @@ class Prek(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """A fast Git hook manager written in Rust, designed as a drop-in alternative
         to pre-commit, reimagined.
 
@@ -126,7 +126,7 @@ class Prek(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Update the `rev` field of repositories in the config file to the latest
         version
 
@@ -181,7 +181,7 @@ class Prek(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Remove all prek cached data
 
         Args:
@@ -243,7 +243,7 @@ class Prek(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Install prek Git shims into Git's effective hooks directory
 
         Args:
@@ -322,7 +322,7 @@ class Prek(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Run hooks
 
         Args:
@@ -397,7 +397,7 @@ class Prek(Tool):
         nofail: bool = False,
         in_process: bool | None = None,
         **flags: Any,
-    ) -> int:
+    ) -> Result:
         """Uninstall prek Git shims
 
         Args:
