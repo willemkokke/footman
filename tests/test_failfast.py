@@ -145,19 +145,23 @@ def test_fail_fast_reaps_only_the_fail_fast_in_flight_tree_in_a_mixed_run(tmp_pa
 
     kept = tmp_path / "kept"
     killed = tmp_path / "killed"
-    sleep = [sys.executable, "-c", "import time; time.sleep(0.6)"]
+    # The victim sleeps long, so the kill has ample margin to land before its
+    # marker even on a slow Windows runner (`taskkill` has real latency); the
+    # keeper sleeps briefly, so once it is spared the run returns promptly.
+    long = [sys.executable, "-c", "import time; time.sleep(30)"]
+    brief = [sys.executable, "-c", "import time; time.sleep(0.5)"]
 
     reg = Group("root")
 
     @reg.task(keep_going=True)
     def keeper():
-        run(sleep)
-        kept.write_text("done")  # keep-going: its subprocess is spared
+        run(brief)
+        kept.write_text("done")  # keep-going: its subprocess is spared, completes
 
     @reg.task
     def victim():
-        run(sleep)
-        killed.write_text("done")  # fail-fast: reaped when boom fails
+        run(long)
+        killed.write_text("done")  # fail-fast: reaped long before this
 
     @reg.task
     def boom():
@@ -169,7 +173,7 @@ def test_fail_fast_reaps_only_the_fail_fast_in_flight_tree_in_a_mixed_run(tmp_pa
     run_plan(reg, segs, sequential=False)
     assert kept.exists()  # the keep-going tree ran to completion
     assert not killed.exists()  # the fail-fast tree was reaped on the failure
-    assert time.perf_counter() - started < 4  # keeper's 0.6s, not anything long
+    assert time.perf_counter() - started < 20  # reaped fast, not the victim's 30s
 
 
 def test_fail_fast_kills_an_in_flight_sibling_subprocess(tmp_path):
