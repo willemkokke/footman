@@ -34,6 +34,18 @@ versions may include breaking changes.
   function's signature** in the type system (parameters and return type), where
   a decorated task used to be typed `Callable[..., Any]` — so a body call with a
   wrong or missing argument is now a type error, not silently `Any`.
+- **`TaskView` round-out for finalizers.** A `@finalize` hook's `TaskView` now
+  reads a task's owning `group` (or `None` at top level), its policy flags
+  (`keep_going`, `atomic`, `infinite`, `interactive`, `timed`, `confirm`) and
+  its **cascade provenance** —
+  `defining_dir` (the folder it was defined in), `shadowed` (the task it
+  overrides one cascade level up), `shadow_chain` (it and everything it
+  shadows), and `source_file` — so a finalizer can make decisions by *where* a
+  task came from and *what* it overrode (e.g. gate every task defined under an
+  `infra/` folder). New `set_opts(**overrides)` sets a task's policy for every
+  use of it — the permanent, tree-wide counterpart to `.opts()`, taking the same
+  options and rejecting a task parameter the same way. A command-line
+  `-k`/`--fail-fast` still wins over a set `keep_going`.
 
 ## [0.18.0] — 2026-07-22
 
