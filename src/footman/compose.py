@@ -108,6 +108,15 @@ def _fork(tree: Group) -> Group:
     fork.tasks.update(tree.tasks)  # share fns, but into a fresh dict
     for name, sub in tree.groups.items():
         fork.groups[name] = _fork(sub)  # recurse: fresh subgroup objects
+    # A faithful copy carries *every* Group field, not only tasks/groups: a
+    # runnable group keeps its `@group.default` (so the bare-group grammar and
+    # its options survive the graft), and a provider's `@finalize` hooks ride
+    # along. The default action stays the shared fn — like the task fns, it is
+    # re-stamped per load, and an empty-body default fans out its group's own
+    # (equally shared) tasks. `test_compose`'s field census fails the moment a
+    # new Group field is added but not copied here.
+    fork.default_task = tree.default_task
+    fork.finalizers = list(tree.finalizers)
     return fork
 
 
@@ -163,6 +172,10 @@ def include(
             target._claim(name)
         target.tasks.pop(name, None)
         target.groups[name] = sub
+    # A provider's `@finalize` hooks edit the whole merged tree, so they belong
+    # on the live root that discovery collects from — grafting only moved tasks
+    # and groups, and a finalizer left on the forked subtree would never run.
+    registry.root.finalizers.extend(tree.finalizers)
     return target
 
 
