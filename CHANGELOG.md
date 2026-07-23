@@ -9,6 +9,24 @@ versions may include breaking changes.
 
 ### Added
 
+- **`run(shell=…)` runs a command string through an explicit shell.** `run()`
+  stays shell-free by default — a string is split, no shell, so `|`/`>`/`$VAR`
+  are literal — but `run("a | b", shell=True)` runs the whole string through a
+  resolved interpreter, so pipes, redirects, globs, and variables work.
+  `shell=True` follows the project's shell policy (`[shell] default`: `posix`
+  by default — bash, then plain sh, git bash on Windows and Homebrew bash on
+  macOS; `native`; `pwsh`; or a concrete shell); a string names a concrete
+  shell (`bash`/`zsh`/`sh`/`fish`/`nu`/`pwsh`/`cmd`) or a strategy. A missing or
+  wrong-platform shell is a taught error, and a shell-free `run("a | b")` now
+  teaches instead of passing the operator as a literal argument. Two flags
+  harden a run: **`strict=True`** fails on the first error and a masked pipe
+  stage (`set -eo pipefail` for bash/zsh; `set -e` with a note on plain sh;
+  `$ErrorActionPreference='Stop'` for pwsh; a taught error where there is no
+  errexit), and **`clean=True`** runs the interpreter without the user's
+  startup files, so a task's shell behaves the same on every machine. On
+  Windows, the shown/`--verbose` command line now quotes the way cmd and
+  PowerShell can read (stdlib `subprocess.list2cmdline`).
+
 - **`run()` returns a `Result`.** `run()` — and every `tools.*` call — now
   returns a `Result` instead of a bare exit code. A `Result` *is* the exit code
   (it subclasses `int`, so `code = run(...)`, `if run(...)`, and `== 0` are all
