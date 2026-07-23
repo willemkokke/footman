@@ -64,6 +64,11 @@ plugins = ["footman.docs", "footman.tools"]
 
 [dependency-groups]
 dev = [
+    # uv itself, unconstrained so it tracks latest — the lockfile still resolves
+    # it to one exact version, so `fm sync` (and every lock write) runs the same
+    # uv on every laptop and in CI. A mismatched *system* uv rewriting uv.lock is
+    # the source of the one-line lockfile churn this removes.
+    "uv",
     "pytest>=8.0",
     "pytest-cov>=5.0",
     "ruff>=0.6",
