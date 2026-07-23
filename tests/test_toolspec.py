@@ -1147,39 +1147,41 @@ def test_md_safe_touches_only_leading_header_and_quote():
     assert safe[2].endswith("mid # hash")  # a mid-line hash is not a block
 
 
-def test_which_prefers_homebrew_bin_on_macos(tmp_path, monkeypatch):
+def test_resolve_prefers_homebrew_keg_for_host_tool(tmp_path, monkeypatch):
+    # A host-read tool (git) on macOS is read from its Homebrew keg.
     monkeypatch.setattr(sys, "platform", "darwin")
-    brew = tmp_path / "brew"
-    (brew / "bin").mkdir(parents=True)
-    tool = brew / "bin" / "faketool"
-    tool.write_text("#!/bin/sh\n")
-    tool.chmod(0o755)
-    monkeypatch.setenv("HOMEBREW_PREFIX", str(brew))
-    assert _toolhelp.which("faketool") == str(tool)
-
-
-def test_which_finds_unlinked_keg_on_macos(tmp_path, monkeypatch):
-    # The keg survives `brew unlink`, so an installed-but-off-PATH tool is still
-    # found — the keg path is checked before the linked bin.
-    monkeypatch.setattr(sys, "platform", "darwin")
-    keg = tmp_path / "opt" / "faketool" / "bin"
+    monkeypatch.setattr(_drivers, "_brew_prefixes", lambda: (str(tmp_path),))
+    keg = tmp_path / "opt" / "git" / "bin"
     keg.mkdir(parents=True)
-    tool = keg / "faketool"
+    tool = keg / "git"
     tool.write_text("#!/bin/sh\n")
     tool.chmod(0o755)
-    monkeypatch.setenv("HOMEBREW_PREFIX", str(tmp_path))
-    assert _toolhelp.which("faketool") == str(tool)
+    assert _drivers._resolve("git") == str(tool)
 
 
-def test_which_falls_back_to_path_off_homebrew(monkeypatch):
-    # macOS, but the tool is not a Homebrew formula -> plain PATH resolution.
+def test_resolve_ignores_homebrew_for_provisioned_tool(tmp_path, monkeypatch):
+    # A provisioned tool (ruff) is never read from Homebrew, even with a keg
+    # present — it comes from PATH (the provision prefix / venv), so a stale
+    # `/opt/homebrew/bin` shim can never shadow it.
     monkeypatch.setattr(sys, "platform", "darwin")
-    monkeypatch.setenv("HOMEBREW_PREFIX", "/nonexistent-brew")
-    monkeypatch.setattr(_toolhelp.shutil, "which", lambda n: f"/usr/bin/{n}")
-    assert _toolhelp.which("faketool") == "/usr/bin/faketool"
+    monkeypatch.setattr(_drivers, "_brew_prefixes", lambda: (str(tmp_path),))
+    keg = tmp_path / "opt" / "ruff" / "bin"
+    keg.mkdir(parents=True)
+    (keg / "ruff").write_text("#!/bin/sh\n")
+    (keg / "ruff").chmod(0o755)
+    monkeypatch.setattr(_drivers.shutil, "which", lambda n: f"/venv/bin/{n}")
+    assert _drivers._resolve("ruff") == "/venv/bin/ruff"
 
 
-def test_which_ignores_homebrew_off_macos(monkeypatch):
+def test_resolve_host_tool_falls_back_to_path(tmp_path, monkeypatch):
+    # A host tool with no keg (docker is Docker Desktop) resolves on PATH.
+    monkeypatch.setattr(sys, "platform", "darwin")
+    monkeypatch.setattr(_drivers, "_brew_prefixes", lambda: (str(tmp_path),))
+    monkeypatch.setattr(_drivers.shutil, "which", lambda n: f"/usr/bin/{n}")
+    assert _drivers._resolve("docker") == "/usr/bin/docker"
+
+
+def test_resolve_off_macos_uses_path(monkeypatch):
     monkeypatch.setattr(sys, "platform", "linux")
-    monkeypatch.setattr(_toolhelp.shutil, "which", lambda n: f"/usr/bin/{n}")
-    assert _toolhelp.which("git") == "/usr/bin/git"
+    monkeypatch.setattr(_drivers.shutil, "which", lambda n: f"/usr/bin/{n}")
+    assert _drivers._resolve("git") == "/usr/bin/git"

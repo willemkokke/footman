@@ -37,7 +37,6 @@ import os
 import re
 import shutil
 import subprocess
-import sys
 from collections.abc import Sequence
 from dataclasses import replace
 
@@ -659,47 +658,13 @@ def subcommands(text: str) -> dict[str, str]:
     return found
 
 
-def _brew_prefixes() -> tuple[str, ...]:
-    """Homebrew's prefixes, most-authoritative first: an explicit
-    `HOMEBREW_PREFIX`, then the Apple-silicon and Intel defaults."""
-    prefixes: list[str] = []
-    if "HOMEBREW_PREFIX" in os.environ:
-        prefixes.append(os.environ["HOMEBREW_PREFIX"])
-    for default in ("/opt/homebrew", "/usr/local"):
-        if default not in prefixes:
-            prefixes.append(default)
-    return tuple(prefixes)
-
-
-def which(name: str) -> str | None:
-    """Resolve *name*'s executable, preferring Homebrew on macOS.
-
-    On macOS the Homebrew build of a tool is almost always the newest and the
-    easiest to keep current, so it wins over whatever the general `PATH`
-    resolves — an older system copy (Apple's `/usr/bin/git`), or a keg that was
-    `brew unlink`ed off `PATH` on purpose. The keg (`opt/<name>/bin`) is checked
-    before the linked `bin`, so an unlinked-but-installed tool is still found.
-    Everywhere else — and as the fallback when Homebrew hasn't got it — this is
-    plain `shutil.which`.
-
-    Only stub generation calls this (`<tool> --help`/`--version`); running a
-    `tools.*` task still resolves the tool on `PATH` as usual.
-    """
-    if sys.platform == "darwin":
-        for prefix in _brew_prefixes():
-            for path in (
-                os.path.join(prefix, "opt", name, "bin", name),  # keg, survives unlink
-                os.path.join(prefix, "bin", name),  # the linked symlink
-            ):
-                if os.access(path, os.X_OK) and not os.path.isdir(path):
-                    return path
-    return shutil.which(name)
-
-
 def run_help(
     argv: list[str], *, flag: str = "--help", man: bool = False, timeout: float = 30.0
 ) -> str:
     """`<tool> ... --help`, as text. Empty when the tool isn't installed.
+
+    `argv[0]` is the executable to run — a bare name resolved on `PATH`, or the
+    absolute path a caller already resolved (`from_help(..., binary=…)`).
 
     Help goes to stdout for every tool footman curates, but a few print
     usage to stderr on older versions, so both are read.
@@ -708,14 +673,9 @@ def run_help(
     terse `-h` omits most of its flags (git's `-h` shows about half). It
     runs only at stub-generation time, never at task time, so its heavier
     footprint (a rendered man page) costs a user nothing.
-
-    The binary is resolved with `which` (Homebrew-first on macOS), so the stub
-    describes the newest installed build rather than an older `PATH` copy.
     """
-    binary = which(argv[0])
-    if binary is None:
+    if shutil.which(argv[0]) is None:
         return ""
-    argv = [binary, *argv[1:]]
     if man:
         return _run_man(argv, timeout)
     try:
@@ -738,7 +698,6 @@ _OVERSTRIKE = re.compile(r".\x08")
 
 def _run_man(argv: list[str], timeout: float) -> str:
     """`<tool> help <verb>`, de-overstruck — the manual as plain text."""
-    import os
 
     env = {
         **os.environ,
@@ -768,7 +727,6 @@ def _wide_env() -> dict[str, str]:
     re-joined prose, and a wide one keeps `[default: …]` on the line it
     belongs to.
     """
-    import os
 
     return {**os.environ, "COLUMNS": "200", "TERM": "dumb", "NO_COLOR": "1"}
 
@@ -776,6 +734,7 @@ def _wide_env() -> dict[str, str]:
 def from_help(
     name: str,
     *,
+    binary: str | None = None,
     verbs: tuple[str, ...] = (),
     version: str = "",
     in_process: bool = False,
@@ -785,12 +744,18 @@ def from_help(
 ) -> ToolSpec:
     """A `ToolSpec` for *name* by asking the installed binary.
 
+    *binary* is the executable to run (the caller may have resolved it, e.g. to
+    a Homebrew keg); it defaults to *name*, resolved on `PATH`. The tool's own
+    verb names still ride as `name`/verbs in each argv, only the executable
+    differs.
+
     Each verb costs one `<tool> <verb> --help` (or `<tool> help <verb>`
     with `man`); the root call supplies the tool's summary and its global
     options (verb `""`). With `man`, per-verb manuals are read but the root
     stays on `--help`, which is where a tool prints its verb list.
     """
-    root = run_help([name], flag=flag)
+    cmd = binary or name
+    root = run_help([cmd], flag=flag)
     if not root:
         return ToolSpec(name=name, version=version)
     root_verb = parse_help(root, name="", shorts=shorts)
@@ -804,14 +769,14 @@ def from_help(
         # The terse root help (`git -h`) lists subcommands, not globals; the
         # tool's own manual (`git help git`) lists the options that must
         # precede the verb — what `.opts()` binds. Read them from there.
-        manual = run_help([name, name], man=True)
+        manual = run_help([cmd, name], man=True)
         if manual:
             root_verb = replace(
                 root_verb, options=parse_help(manual, man=True, shorts=shorts).options
             )
     parsed = [root_verb]
     for verb in verbs:
-        text = run_help([name, *verb.split(".")], flag=flag, man=man)
+        text = run_help([cmd, *verb.split(".")], flag=flag, man=man)
         if text:
             # `git rev-parse` is spelled `tools.git.rev_parse(...)`: the
             # bridge turns the underscore back into a dash when it calls.

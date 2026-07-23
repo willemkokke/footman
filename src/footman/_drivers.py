@@ -19,8 +19,11 @@ from the installed tool, every time the stubs are regenerated.
 
 from __future__ import annotations
 
+import os
 import re
+import shutil
 import subprocess
+import sys
 from dataclasses import dataclass, field
 
 from footman import _toolhelp, _toolspec
@@ -121,7 +124,7 @@ DRIVERS: tuple[Driver, ...] = (
     Driver("basedpyright", url="https://docs.basedpyright.com/"),
     Driver(
         "uv",
-        provision=Provision(kind="system"),  # the uv running provision itself
+        provision=Provision(package="uv"),  # PyPI, `uv tool install uv` — never host
         url="https://docs.astral.sh/uv/",
         verbs=(
             "sync",
@@ -305,17 +308,57 @@ DRIVERS: tuple[Driver, ...] = (
     Driver("nu", source="manual", url="https://www.nushell.sh/"),
 )
 
-_VERSION = re.compile(r"\b(\d+\.\d+(?:\.\d+)?(?:[-.][A-Za-z0-9]+)*)\b")
+# A negative lookbehind, not `\b`: a version glued to a `v` prefix (`v0.23.1`)
+# has no word boundary before its first digit, so `\b` would skip to the middle
+# and read `23.1`. Reject only a preceding digit or dot, so `v0.23.1` -> `0.23.1`
+# while `2` inside `1.2.3` still can't start a fresh match.
+_VERSION = re.compile(r"(?<![\d.])(\d+\.\d+(?:\.\d+)?(?:[-.][A-Za-z0-9]+)*)\b")
+
+
+_HOST_READ = frozenset(d.name for d in DRIVERS if d.provision.kind == "system")
+"""Tools read straight off the host, never provisioned into an isolated prefix
+(git, docker, uv) — the only ones for which Homebrew is consulted on macOS."""
+
+
+def _brew_prefixes() -> tuple[str, ...]:
+    """Homebrew's prefixes, most-authoritative first: an explicit
+    `HOMEBREW_PREFIX`, then the Apple-silicon and Intel defaults."""
+    prefixes: list[str] = []
+    if "HOMEBREW_PREFIX" in os.environ:
+        prefixes.append(os.environ["HOMEBREW_PREFIX"])
+    for default in ("/opt/homebrew", "/usr/local"):
+        if default not in prefixes:
+            prefixes.append(default)
+    return tuple(prefixes)
+
+
+def _resolve(name: str) -> str | None:
+    """The executable to read a tool from.
+
+    A *host-read* tool on macOS (git; docker and uv carry no keg) prefers its
+    Homebrew **keg** (`opt/<name>/bin/<name>`) — the newest build, and it
+    survives `brew unlink`, so an intentionally-off-`PATH` tool is still read;
+    a tool with no keg simply falls through. Everything else — every provisioned
+    tier (pip/uv/npm/release) and every platform but macOS — is plain
+    `shutil.which`, so a `provision --sync` prefix and a venv win, and a stale
+    `/opt/homebrew/bin` console-script shim is never picked.
+    """
+    if name in _HOST_READ and sys.platform == "darwin":
+        for prefix in _brew_prefixes():
+            keg = os.path.join(prefix, "opt", name, "bin", name)
+            if os.access(keg, os.X_OK) and not os.path.isdir(keg):
+                return keg
+    return shutil.which(name)
 
 
 def installed(driver: Driver) -> bool:
-    """Whether this machine has the tool to ask (Homebrew-first on macOS)."""
-    return _toolhelp.which(driver.name) is not None
+    """Whether this machine has the tool to ask."""
+    return _resolve(driver.name) is not None
 
 
 def version(name: str) -> str:
     """`<tool> --version`, reduced to the version itself."""
-    binary = _toolhelp.which(name)
+    binary = _resolve(name)
     if binary is None:
         return ""
     try:
@@ -355,6 +398,7 @@ def extract(driver: Driver) -> ToolSpec:
     if not spec.verbs and driver.source in {"auto", "help"}:
         spec = _toolhelp.from_help(
             driver.name,
+            binary=_resolve(driver.name),
             verbs=driver.wanted,
             version=version(driver.name),
             in_process=in_process_capable(driver.name),
