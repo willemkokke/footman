@@ -49,14 +49,16 @@ versions may include breaking changes.
 
 ### Changed
 
-- **Homebrew-first tool resolution on macOS (stub generation only).** When
-  regenerating a tool's stub, footman now resolves the binary from Homebrew
-  first — the keg (`opt/<name>/bin`, which survives `brew unlink`) then the
-  linked `bin` — and only falls back to general `PATH` if Homebrew hasn't got
-  it. On macOS the Homebrew build is almost always the newest and the easiest
-  to keep current, so the stub describes it rather than an older system copy
-  (e.g. Apple's `/usr/bin/git`). Only `<tool> --help`/`--version` parsing is
-  affected; running a `tools.*` task still resolves the tool on `PATH`.
+- **Homebrew resolution for host-read tools on macOS (stub generation only).**
+  The tools footman reads straight off the host — git, docker, uv, never
+  provisioned into an isolated prefix — resolve their Homebrew **keg**
+  (`opt/<name>/bin/<name>`, which survives `brew unlink`) before falling back to
+  `PATH`, so on macOS the stub describes the newest build (Homebrew git over
+  Apple's older `/usr/bin/git`). Every **provisioned** tool (ruff, mkdocs,
+  pytest, gh, …) still resolves on plain `PATH`, so a `provision --sync` prefix
+  and a venv win and no stale `/opt/homebrew/bin` console-script shim can shadow
+  them. Only `<tool> --help`/`--version` parsing is affected; running a
+  `tools.*` task resolves on `PATH` as before.
 
 ### Fixed
 
@@ -66,6 +68,11 @@ versions may include breaking changes.
   wheels to install alongside a tool — `Provision(plugins=("pytest-cov",))` —
   which `provision` adds with `uv --with`, so the prefix holds a plugin-complete
   pytest and the sync reads its full flag surface.
+- **A `v`-prefixed `0.x` version is read whole.** The version a stub records is
+  scraped from `<tool> --version`, and a tool that printed `v0.23.1` was recorded
+  as `0.23.1`'s tail, `23.1`, because the match required a word boundary the `v`
+  removed. It now reads `0.23.1` (markdownlint-cli2, and any tool that glues `v`
+  to a `0.` version).
 
 ## [0.18.0] — 2026-07-22
 
