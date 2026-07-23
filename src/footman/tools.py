@@ -41,13 +41,14 @@ import subprocess as _subprocess
 import sys as _sys
 import threading as _threading
 from collections.abc import Iterator
-from typing import Any
+from typing import Any, NamedTuple
 
 # `Result` is public, unlike the private aliases: every tool call returns one, and
 # the generated stubs import it from here (`from footman.tools import Result`), so
 # it must resolve to the class — a real module binding beats `__getattr__`.
 from footman.context import Invocation as _Invocation
 from footman.context import Result as Result
+from footman.context import color_on as _color_on
 from footman.context import run as _run
 
 _version_cache: dict[str, tuple[int, ...]] = {}
@@ -122,6 +123,69 @@ def _is_wrapper(argv0: str, base: list[str]) -> bool:
     """Whether the verb reached by *base* forwards to a wrapped command."""
     verbs = ".".join(token for token in base if not token.startswith("-"))
     return verbs in _WRAPPERS.get(argv0, frozenset())
+
+
+# --- colour: force a tool's own switch when the environment isn't enough ------
+#
+# footman already pushes FORCE_COLOR / NO_COLOR into every child (see
+# `context.color_env`), which covers the modern set. This table is only for the
+# tools that ignore those and take a flag instead. It starts with git and grows
+# solely when `fm footman tools audit` finds another — no belt-and-suspenders: a
+# tool that already obeys the environment gets no redundant flag.
+
+
+class _ColorFlag(NamedTuple):
+    """How one tool forces colour on (or off) with its own switch.
+
+    `on`/`off` are the tokens to add for each direction — either may be empty
+    when a tool needs telling only one way (git's `auto` default is already
+    monochrome when piped, so it has no `off`). `pre_verb` places the tokens
+    right after the executable and before the verb (git's `-c color.ui=…` is a
+    global, not a `diff` option); otherwise they ride with the call's flags.
+    """
+
+    on: tuple[str, ...]
+    off: tuple[str, ...] = ()
+    pre_verb: bool = False
+
+
+# Keyed `{tool: {verb: flag}}`; verb `""` applies to every verb the tool has.
+_COLOR: dict[str, dict[str, _ColorFlag]] = {
+    # git captures over footman's pipe → sees a non-tty → auto-disables colour,
+    # and honours no FORCE_COLOR. Force it with the global config, before the
+    # verb. No `off`: its `auto` default is already quiet when piped.
+    "git": {"": _ColorFlag(on=("-c", "color.ui=always"), pre_verb=True)},
+}
+
+
+def _color_flag(argv0: str, base: list[str]) -> _ColorFlag | None:
+    """The colour switch for the verb reached by *base*, or None.
+
+    An exact verb match wins; a `""` entry is the tool-wide fallback (git forces
+    colour the same way for every subcommand)."""
+    table = _COLOR.get(argv0)
+    if not table:
+        return None
+    verb = ".".join(token for token in base if not token.startswith("-"))
+    return table.get(verb) or table.get("")
+
+
+def _color_tokens(argv0: str, base: list[str], kwargs: dict[str, Any]) -> _ColorFlag:
+    """The colour tokens to inject for this call — `_ColorFlag((), ())` for none.
+
+    Injected into the *executed* argv only, never the shown/recorded command
+    line: `.command` (what `recording()` asserts) stays the tool's own call,
+    while `.raw` / `--verbose` show the literal `git -c color.ui=always …` that
+    ran. Skipped when the caller spells colour themselves — `color=`/`colour=`/
+    `colors=` — so a deliberate choice always wins.
+    """
+    if any(k.rstrip("_") in ("color", "colour", "colors") for k in kwargs):
+        return _ColorFlag((), ())
+    flag = _color_flag(argv0, base)
+    if flag is None:
+        return _ColorFlag((), ())
+    tokens = flag.on if _color_on() else flag.off
+    return _ColorFlag(tokens, (), flag.pre_verb) if tokens else _ColorFlag((), ())
 
 
 def _emit(
@@ -438,6 +502,14 @@ class Tool:
         title = self._opts.get("title", None)
         in_process = self._opts.get("in_process", None)
         flags = _flags(kwargs, self._argv0, single_dash=self._single_dash)
+        # Force this tool's own colour switch when the run is colourful and the
+        # tool ignores the environment (git). Injected into the executed argv
+        # only — a verb-scoped flag rides with the others; a pre-verb global goes
+        # ahead of the verb below — so `.command`/`recording()` stay the tool's
+        # own call and only `.raw`/`--verbose` show what actually ran.
+        colour = _color_tokens(self._argv0, self._base, kwargs)
+        if colour.on and not colour.pre_verb:
+            flags = [*flags, *colour.on]
         positionals = list(map(str, args))
         # A wrapper verb (`uv run`, `docker exec`) forwards everything after
         # its own arguments to a child, so this call's flags must precede the
@@ -446,6 +518,8 @@ class Tool:
             tail = [*self._base, *flags, *positionals]
         else:
             tail = [*self._base, *positionals, *flags]
+        if colour.on and colour.pre_verb:
+            tail = [*colour.on, *tail]
         # Execution runs the real executable (`python` → sys.executable); the
         # shown line keeps the name, so the painted command reads `python …`.
         argv = [self._path, *tail]

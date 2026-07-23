@@ -1041,6 +1041,15 @@ def _colored(ctx: Context) -> bool:
     return ctx.tty and "NO_COLOR" not in os.environ
 
 
+def color_on() -> bool:
+    """Whether the current run emits colour — the tools bridge asks this to
+    decide whether to force a tool's own `--color` flag (for the few that
+    ignore the environment). A plain call outside a run reads a default
+    (monochrome) context, so a bare `tools.git.diff()` in a script adds
+    nothing."""
+    return _colored(current())
+
+
 def color_env(on: bool) -> dict[str, str]:
     """The environment that tells a spawned tool whether to emit colour.
 

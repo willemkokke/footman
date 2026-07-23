@@ -25,7 +25,7 @@ import subprocess as _subprocess  # noqa: F401
 import sys as _sys  # noqa: F401
 import threading as _threading
 from collections.abc import Iterator, Sequence
-from typing import Any, Self
+from typing import Any, NamedTuple, Self
 
 from footman._stubs.basedpyright import Basedpyright as Basedpyright
 
@@ -65,6 +65,7 @@ from footman._stubs.zensical import Zensical as Zensical
 from footman._stubs.zsh import Zsh as Zsh
 from footman.context import Invocation as _Invocation  # noqa: F401
 from footman.context import Result as Result
+from footman.context import color_on as _color_on  # noqa: F401
 from footman.context import run as _run  # noqa: F401
 
 _argv_lock: _threading.Lock
@@ -92,8 +93,19 @@ _ValuedFlag = bool | _Value
 _NEGATIONS: dict[str, dict[str, str]]
 _WRAPPERS: dict[str, frozenset[str]]
 
+class _ColorFlag(NamedTuple):
+    on: tuple[str, ...]
+    off: tuple[str, ...] = ...
+    pre_verb: bool = ...
+
+_COLOR: dict[str, dict[str, _ColorFlag]]
+
 def _negation(tool: str, key: str) -> str: ...
 def _is_wrapper(argv0: str, base: list[str]) -> bool: ...
+def _color_flag(argv0: str, base: list[str]) -> _ColorFlag | None: ...
+def _color_tokens(
+    argv0: str, base: list[str], kwargs: dict[str, Any]
+) -> _ColorFlag: ...
 def _emit(
     kwargs: dict[str, Any], tool: str = ...
 ) -> Iterator[tuple[str, str | None]]: ...
