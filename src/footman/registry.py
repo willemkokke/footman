@@ -586,14 +586,19 @@ def _as_fn(t: TaskView | Task) -> Task:
 
 
 class TaskView:
-    """A finalizer's handle on one task: read its wiring and edit it here,
-    never through the private `_footman_*` attributes."""
+    """A finalizer's handle on one task: read its wiring, its policy flags, and
+    its cascade provenance (where it was defined, what it overrode), and edit it
+    here — never through the private `_footman_*` attributes."""
 
-    def __init__(self, fn: Task, name: str) -> None:
+    def __init__(self, fn: Task, name: str, group: Group | None = None) -> None:
         self.fn = fn
         """The task function itself — the escape hatch past the view."""
         self.name = name
         """The task's command-line name, e.g. `deploy-web`."""
+        self.group = group
+        """The group this task lives in, or `None` for a top-level task — its
+        `.name` is the group's command-line spelling (e.g. `docs`). Use it to
+        disambiguate two tasks that share a leaf name across groups."""
 
     @property
     def pre(self) -> tuple[Task, ...]:
@@ -609,6 +614,78 @@ class TaskView:
     def disabled(self) -> str | None:
         """Why the task is unavailable here, or `None` if it can run."""
         return availability(self.fn)
+
+    # Policy flags (read-only — declared at decoration).
+
+    @property
+    def keep_going(self) -> bool | None:
+        """The task's declared failure policy (`@task(keep_going=…)`), or `None`
+        when it left the choice to the command line / the built-in default."""
+        return keeps_going(self.fn)
+
+    @property
+    def atomic(self) -> bool:
+        """Whether the task's subprocesses opt out of fail-fast's kill."""
+        return is_atomic(self.fn)
+
+    @property
+    def infinite(self) -> bool:
+        """Whether the task runs until stopped (`@task(infinite=True)`)."""
+        return is_infinite(self.fn)
+
+    @property
+    def interactive(self) -> bool:
+        """Whether the task owns the real terminal (`@task(interactive=True)`)."""
+        return is_interactive(self.fn)
+
+    @property
+    def timed(self) -> bool:
+        """Whether the task records timing history / shows a determinate bar —
+        `@task(progress=False)` (and `infinite`/`interactive`) opt out."""
+        return wants_progress(self.fn)
+
+    @property
+    def confirm(self) -> str:
+        """The `@task(confirm="…")` prompt gating the task, or `""` if none."""
+        return task_confirm(self.fn)
+
+    # Cascade provenance (read-only) — for finalizers making decisions by
+    # where a task came from and what it overrode.
+
+    @property
+    def defining_dir(self) -> str | None:
+        """The folder the task was defined in, or `None` when the cascade did
+        not tag it (a plugin- or `include()`-composed task, not a cascade file).
+        Use it to act on tasks from one subtree of a monorepo."""
+        from footman import discover
+
+        return discover.defining_dir(self.fn)
+
+    @property
+    def shadowed(self) -> Task | None:
+        """The task this one overrides — same name, one cascade level up — or
+        `None` if it shadows nothing."""
+        from footman import discover
+
+        return discover.shadowed(self.fn)
+
+    @property
+    def shadow_chain(self) -> tuple[Task, ...]:
+        """This task and every task it shadows, nearest (this one) first."""
+        from footman import discover
+
+        return tuple(discover.shadow_chain(self.fn))
+
+    @property
+    def source_file(self) -> str | None:
+        """The file the task's function is defined in, or `None` when it can't
+        be located (a built-in or dynamically constructed function)."""
+        import inspect
+
+        try:
+            return inspect.getsourcefile(self.fn)
+        except TypeError:
+            return None
 
     def add_pre(self, *tasks: TaskView | Task) -> None:
         """Prepend prerequisites (views or functions), skipping any already set."""
@@ -629,6 +706,17 @@ class TaskView:
     def disable(self, reason: str) -> None:
         """Mark the task unavailable — listed with *reason*, refused if run."""
         _gate(lambda: reason)(self.fn)
+
+    def set_opts(self, **overrides: Any) -> None:
+        """Set orchestration options on the task **permanently, for every use** —
+        the finalize-time counterpart to a per-use `.opts()`. Takes the same
+        options (`keep_going`, `atomic`, `interactive`, `progress`, `confirm`,
+        `infinite`) and rejects a task parameter with the same taught error; the
+        difference is that it edits the registered task rather than a per-use
+        proxy, so a finalizer can set a policy across a whole class of tasks. A
+        command-line `-k`/`--fail-fast` still wins over a set `keep_going`."""
+        for attr, value in _opts_overrides(overrides).items():
+            setattr(self.fn, attr, value)
 
 
 class Tasks:
@@ -654,11 +742,11 @@ class Tasks:
         return isinstance(name, str) and self.get(name) is not None
 
 
-def _task_views(g: Group) -> Iterator[TaskView]:
+def _task_views(g: Group, owner: Group | None = None) -> Iterator[TaskView]:
     for name, fn in g.tasks.items():
-        yield TaskView(fn, name)
+        yield TaskView(fn, name, owner)
     for sub in g.groups.values():
-        yield from _task_views(sub)
+        yield from _task_views(sub, sub)
 
 
 @contextlib.contextmanager

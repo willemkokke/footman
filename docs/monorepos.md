@@ -67,10 +67,32 @@ def gate_deploys(tasks):
 
 The hook is handed a `Tasks` view of the merged tree — iterate it for every
 task, or index it by command-line name (`tasks["deploy-web"]`). Each task comes
-back as a `TaskView`: read `t.name`, `t.pre`, `t.post`, and `t.disabled`; edit
-with `t.add_pre(…)`, `t.add_post(…)`, and `t.disable("reason")`. `t.fn` is the
-underlying function if you need to reach past the view — which deliberately
-keeps footman's private task attributes out of your hooks.
+back as a `TaskView`:
+
+- **wiring** — `t.name`, `t.group` (the owning group, or `None` at top level),
+  `t.pre`, `t.post`, `t.disabled`;
+- **policy flags** — `t.keep_going`, `t.atomic`, `t.infinite`, `t.interactive`,
+  `t.timed`, `t.confirm`;
+- **cascade provenance** — `t.defining_dir` (the folder it was defined in),
+  `t.shadowed` (the task it overrides one level up), `t.shadow_chain`, and
+  `t.source_file`;
+- **edits** — `t.add_pre(…)`, `t.add_post(…)`, `t.disable("reason")`, and
+  `t.set_opts(…)` (permanent, tree-wide policy — the finalize-time counterpart
+  to a per-use `.opts()`).
+
+`t.fn` is the underlying function if you need to reach past the view — which
+deliberately keeps footman's private task attributes out of your hooks.
+
+Provenance lets a finalizer decide by *where* a task came from. To gate every
+task defined under an `infra/` folder, regardless of its name:
+
+```python
+@footman.finalize
+def gate_infra(tasks):
+    for t in tasks:
+        if (t.defining_dir or "").endswith("infra"):
+            t.add_pre(tasks["audit"])
+```
 
 Because a finalizer runs **at discovery**, its edits are part of the plan, not
 a runtime surprise: an added `pre` runs and shows in `fm <task> --dry-run`, and
