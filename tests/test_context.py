@@ -530,6 +530,20 @@ def test_non_utf8_subprocess_output_does_not_crash():
     assert "ok" in results[0].steps[0].output  # decoded with replacement, not a crash
 
 
+def test_shown_line_quotes_the_windows_way(monkeypatch):
+    from footman.context import _shell_quote
+
+    # POSIX quoting first (the default on this machine).
+    assert _shell_quote("a b") == "'a b'"
+    # On Windows, list2cmdline (not POSIX single-quotes), so `.raw`/`--verbose`
+    # pastes into cmd/PowerShell; a plain token stays bare, a spaced one gets
+    # double quotes, backslash paths are preserved.
+    monkeypatch.setattr(sys, "platform", "win32")
+    assert _shell_quote("abc") == "abc"
+    assert _shell_quote("a b") == '"a b"'
+    assert _shell_quote(r"C:\tools\a b") == r'"C:\tools\a b"'
+
+
 def test_windows_string_commands_are_not_shlex_split(monkeypatch):
     from footman import context as context_mod
 

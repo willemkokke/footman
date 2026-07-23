@@ -704,8 +704,16 @@ class Invocation:
 
 
 def _shell_quote(text: str) -> str:
-    import shlex
+    """Quote one token so the shown command line pastes back into a real shell.
 
+    Per-platform, so a Windows `.raw`/`--verbose` line actually round-trips:
+    POSIX uses `shlex.quote`; Windows uses stdlib `subprocess.list2cmdline` (the
+    exact inverse of the parsing `CreateProcess` does), never `shlex` — which
+    emits POSIX single-quotes that cmd/PowerShell can't read. `list2cmdline`
+    handles spaces/quotes/backslashes, not cmd metacharacters (`& | ^`), which
+    is fine for a display line that already ran."""
+    if sys.platform == "win32":
+        return subprocess.list2cmdline([text])
     return shlex.quote(text)
 
 
@@ -1076,7 +1084,9 @@ def _shell_operator(cmd: str) -> str | None:
     quotes) defer to the exec path, which surfaces them.
     """
     try:
-        tokens = shlex.split(cmd)
+        # posix=False on Windows: keep backslash paths intact (they'd otherwise
+        # be eaten), so a real path token never looks like an operator.
+        tokens = shlex.split(cmd, posix=(os.name != "nt"))
     except ValueError:
         return None
     return next((t for t in tokens if t in _SHELL_OPERATORS), None)

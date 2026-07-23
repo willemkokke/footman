@@ -253,7 +253,11 @@ def _show_parts(
 
 
 def _quote(text: str) -> str:
-    """Shell-quote a token so the shown line round-trips through a paste."""
+    """Quote a token so the shown line round-trips through a paste — POSIX via
+    `shlex.quote`, Windows via stdlib `subprocess.list2cmdline` (which cmd and
+    PowerShell can read, unlike shlex's POSIX single-quotes)."""
+    if _sys.platform == "win32":
+        return _subprocess.list2cmdline([text])
     import shlex
 
     return shlex.quote(text)
