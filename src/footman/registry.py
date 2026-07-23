@@ -37,6 +37,21 @@ Task = Callable[..., Any]
 Finalizer = Callable[["Tasks"], object]
 """A `@finalize` hook: edits the merged command tree in place at discovery."""
 
+# A task stays a plain function; its metadata rides as `_footman_*` attributes.
+# These name every key in one place, so the strings appear once and the read
+# accessors below are the one way the rest of the framework touches them.
+_PRE = "_footman_pre"
+_POST = "_footman_post"
+_KEEP_GOING = "_footman_keep_going"
+_ATOMIC = "_footman_atomic"
+_INFINITE = "_footman_infinite"
+_INTERACTIVE = "_footman_interactive"
+_PROGRESS = "_footman_progress"
+_CONFIRM = "_footman_confirm"
+_CHECKS = "_footman_checks"
+_DEFAULT_GROUP = "_footman_default_group"
+_DEFAULT_FANOUT = "_footman_default_fanout"
+
 
 class RegistrationError(ValueError):
     """A task or group name collided during registration.
@@ -88,12 +103,12 @@ def _empty_body(fn: object) -> bool:
 # own parameters (the *work*) — which is why they ride in `.opts()` rather than
 # the call, mirroring tools' `.opts()`.
 _OPTS_ATTRS = {
-    "keep_going": "_footman_keep_going",
-    "atomic": "_footman_atomic",
-    "interactive": "_footman_interactive",
-    "progress": "_footman_progress",
-    "confirm": "_footman_confirm",
-    "infinite": "_footman_infinite",
+    "keep_going": _KEEP_GOING,
+    "atomic": _ATOMIC,
+    "interactive": _INTERACTIVE,
+    "progress": _PROGRESS,
+    "confirm": _CONFIRM,
+    "infinite": _INFINITE,
 }
 
 
@@ -284,20 +299,20 @@ class Group:
         def register(fn: Callable[_P, _R_co]) -> TaskFn[_P, _R_co]:
             key = _cli_name(name or fn.__name__)
             self._claim(key)
-            fn._footman_pre = list(pre)  # type: ignore[attr-defined]
-            fn._footman_post = list(post)  # type: ignore[attr-defined]
+            setattr(fn, _PRE, list(pre))
+            setattr(fn, _POST, list(post))
             if not progress:
-                fn._footman_progress = False  # type: ignore[attr-defined]
+                setattr(fn, _PROGRESS, False)
             if infinite:
-                fn._footman_infinite = True  # type: ignore[attr-defined]
+                setattr(fn, _INFINITE, True)
             if confirm:
-                fn._footman_confirm = confirm  # type: ignore[attr-defined]
+                setattr(fn, _CONFIRM, confirm)
             if interactive:
-                fn._footman_interactive = True  # type: ignore[attr-defined]
+                setattr(fn, _INTERACTIVE, True)
             if keep_going is not None:
-                fn._footman_keep_going = keep_going  # type: ignore[attr-defined]
+                setattr(fn, _KEEP_GOING, keep_going)
             if atomic:
-                fn._footman_atomic = True  # type: ignore[attr-defined]
+                setattr(fn, _ATOMIC, True)
             fn.opts = lambda **o: _Opted(fn, _opts_overrides(o))  # type: ignore[attr-defined]
             self.tasks[key] = fn
             return cast("TaskFn[_P, _R_co]", fn)
@@ -367,8 +382,8 @@ class Group:
         # A back-reference plus the empty-body flag: an empty-body default fans
         # out the group's own tasks (they become its implicit prerequisites at
         # DAG-build time); a custom body is the escape hatch and runs as written.
-        fn._footman_default_group = self  # type: ignore[attr-defined]
-        fn._footman_default_fanout = _empty_body(fn)  # type: ignore[attr-defined]
+        setattr(fn, _DEFAULT_GROUP, self)
+        setattr(fn, _DEFAULT_FANOUT, _empty_body(fn))
         self.default_task = fn
         return cast("TaskFn[_P, _R_co]", fn)
 
@@ -397,7 +412,7 @@ class Group:
                 f"@{self.name}.default, so there is no action to call. Add a "
                 f"default action, or call a task inside the group directly."
             )
-        if not getattr(self.default_task, "_footman_default_fanout", False):
+        if not fans_out(self.default_task):
             return self.default_task(*args, **kwargs)  # custom body: as written
         # Empty-body default: fan out the group's own tasks, handing each only
         # the arguments it declares — the imperative echo of `fm <group>`.
@@ -442,43 +457,64 @@ def _importable(module: str) -> bool:
         return False
 
 
+def pre_tasks(fn: Task) -> list[Task]:
+    """The prerequisites declared to run before *fn* (`@task(pre=…)`)."""
+    return getattr(fn, _PRE, [])
+
+
+def post_tasks(fn: Task) -> list[Task]:
+    """The tasks declared to run after *fn* (`@task(post=…)`)."""
+    return getattr(fn, _POST, [])
+
+
+def default_group(fn: Task) -> Group | None:
+    """The group *fn* is the `@group.default` action of, or `None`."""
+    return getattr(fn, _DEFAULT_GROUP, None)
+
+
+def fans_out(fn: Task) -> bool:
+    """Whether *fn* is an empty-body `@group.default` that fans out its group's
+    own tasks (they become its implicit prerequisites) rather than run a body."""
+    return getattr(fn, _DEFAULT_FANOUT, False) is True
+
+
 def wants_progress(fn: Task) -> bool:
     """Whether *fn* consented to timing: `@task(progress=False)` opts out,
     and `infinite=True`/`interactive=True` imply it — a duration that never
     arrives, or one spent waiting on a human, is not history."""
-    if getattr(fn, "_footman_infinite", False):
+    if getattr(fn, _INFINITE, False):
         return False
-    if getattr(fn, "_footman_interactive", False):
+    if getattr(fn, _INTERACTIVE, False):
         return False
-    return getattr(fn, "_footman_progress", True) is not False
+    return getattr(fn, _PROGRESS, True) is not False
 
 
 def is_infinite(fn: Task) -> bool:
     """Whether *fn* runs until stopped: `@task(infinite=True)`."""
-    return getattr(fn, "_footman_infinite", False) is True
+    return getattr(fn, _INFINITE, False) is True
 
 
 def is_interactive(fn: Task) -> bool:
     """Whether *fn* owns the real terminal: `@task(interactive=True)` — no
     output capture, sole stdio, so its body may prompt or run a REPL."""
-    return getattr(fn, "_footman_interactive", False) is True
+    return getattr(fn, _INTERACTIVE, False) is True
 
 
 def keeps_going(fn: Task) -> bool | None:
     """*fn*'s declared failure policy: `@task(keep_going=True/False)`, or `None`
     when it left the choice to the command line / the built-in default."""
-    return getattr(fn, "_footman_keep_going", None)
+    return getattr(fn, _KEEP_GOING, None)
 
 
 def is_atomic(fn: Task) -> bool:
     """Whether *fn*'s subprocesses opt out of fail-fast's kill:
     `@task(atomic=True)` — they run to completion rather than be cut off."""
-    return getattr(fn, "_footman_atomic", False) is True
+    return getattr(fn, _ATOMIC, False) is True
 
 
 def task_confirm(fn: Task) -> str:
     """The `@task(confirm="…")` prompt gating this task, or `""` if none."""
-    return getattr(fn, "_footman_confirm", "")
+    return getattr(fn, _CONFIRM, "")
 
 
 Check = Callable[[], str | None]
@@ -489,10 +525,7 @@ def _gate(check: Check) -> Callable[[Task], Task]:
     """Stack *check* onto a task's availability gates, read live by `availability`."""
 
     def decorate(fn: Task) -> Task:
-        fn._footman_checks = [  # type: ignore[attr-defined]
-            *getattr(fn, "_footman_checks", ()),
-            check,
-        ]
+        setattr(fn, _CHECKS, [*getattr(fn, _CHECKS, ()), check])
         return fn
 
     return decorate
@@ -574,9 +607,7 @@ def availability(fn: Task) -> str | None:
     predicate raises reads as unavailable with the exception named, scoped to
     that one gate.
     """
-    reasons = [
-        r for check in getattr(fn, "_footman_checks", ()) if (r := check()) is not None
-    ]
+    reasons = [r for check in getattr(fn, _CHECKS, ()) if (r := check()) is not None]
     return "; ".join(reasons) if reasons else None
 
 
@@ -603,12 +634,12 @@ class TaskView:
     @property
     def pre(self) -> tuple[Task, ...]:
         """The prerequisites that run before this task."""
-        return tuple(getattr(self.fn, "_footman_pre", ()))
+        return tuple(pre_tasks(self.fn))
 
     @property
     def post(self) -> tuple[Task, ...]:
         """The tasks that run after this one."""
-        return tuple(getattr(self.fn, "_footman_post", ()))
+        return tuple(post_tasks(self.fn))
 
     @property
     def disabled(self) -> str | None:
@@ -689,19 +720,21 @@ class TaskView:
 
     def add_pre(self, *tasks: TaskView | Task) -> None:
         """Prepend prerequisites (views or functions), skipping any already set."""
-        have = list(getattr(self.fn, "_footman_pre", []))
-        self.fn._footman_pre = [  # type: ignore[attr-defined]
-            *(f for t in tasks if (f := _as_fn(t)) not in have),
-            *have,
-        ]
+        have = list(pre_tasks(self.fn))
+        setattr(
+            self.fn,
+            _PRE,
+            [*(f for t in tasks if (f := _as_fn(t)) not in have), *have],
+        )
 
     def add_post(self, *tasks: TaskView | Task) -> None:
         """Append post-tasks (views or functions), skipping any already set."""
-        have = list(getattr(self.fn, "_footman_post", []))
-        self.fn._footman_post = [  # type: ignore[attr-defined]
-            *have,
-            *(f for t in tasks if (f := _as_fn(t)) not in have),
-        ]
+        have = list(post_tasks(self.fn))
+        setattr(
+            self.fn,
+            _POST,
+            [*have, *(f for t in tasks if (f := _as_fn(t)) not in have)],
+        )
 
     def disable(self, reason: str) -> None:
         """Mark the task unavailable — listed with *reason*, refused if run."""
