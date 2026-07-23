@@ -11,8 +11,6 @@ class Cspell(Tool):
     def __call__(  # type: ignore[override]
         self,
         *args: str,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Spelling Checker for Code"""
@@ -25,8 +23,6 @@ class Cspell(Tool):
         no_default_configuration: _Flag = ...,
         no_exit_code: _Flag = ...,
         validate_directives: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Spell check file(s) and display the result. The full file is displayed in
@@ -85,8 +81,6 @@ class Cspell(Tool):
         validate_directives: _Flag = ...,
         verbose: _Flag = ...,
         words_only: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Run this verb.
@@ -166,8 +160,6 @@ class Cspell(Tool):
         repl: _Flag = ...,
         stdin: _Flag = ...,
         verbose: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Spelling Suggestions for words.
@@ -206,8 +198,6 @@ class Cspell(Tool):
         no_dictionary: _Value = ...,
         only_found: _Flag = ...,
         stdin: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Trace words -- Search for words in the configuration and dictionaries.
@@ -233,12 +223,12 @@ class Cspell(Tool):
             stdin: Read words from stdin.
         """
         ...
-    def opts(
+    def flags(
         self,
         **flags: Any,
     ) -> Cspell:
         """Bind tool-level global options before the subcommand.
 
-        `tools.docker.opts(host=...)` puts a tool's own
+        `tools.docker.flags(host=...)` puts a tool's own
         options ahead of the verb, where they belong."""
         ...

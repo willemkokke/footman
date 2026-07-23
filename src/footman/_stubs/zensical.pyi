@@ -14,8 +14,6 @@ class Zensical(Tool):
         clean: _Flag = ...,
         config_file: _Value = ...,
         strict: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Build a project.
@@ -29,8 +27,6 @@ class Zensical(Tool):
     def new(
         self,
         *args: str,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Create a new template project in the current or given directory."""
@@ -42,8 +38,6 @@ class Zensical(Tool):
         dev_addr: _Value = ...,
         open: _Flag = ...,
         strict: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Build and serve a project.
@@ -55,12 +49,12 @@ class Zensical(Tool):
             strict: Strict mode (currently unsupported).
         """
         ...
-    def opts(
+    def flags(
         self,
         **flags: Any,
     ) -> Zensical:
         """Bind tool-level global options before the subcommand.
 
-        `tools.docker.opts(host=...)` puts a tool's own
+        `tools.docker.flags(host=...)` puts a tool's own
         options ahead of the verb, where they belong."""
         ...

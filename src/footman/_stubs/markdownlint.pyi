@@ -16,8 +16,6 @@ class Markdownlint(Tool):
         fix: _Flag = ...,
         format: _Flag = ...,
         no_globs: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """markdownlint-cli2 v0.23.1 (markdownlint v0.41.1)

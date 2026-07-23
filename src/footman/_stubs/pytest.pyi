@@ -111,8 +111,6 @@ class Pytest(Tool):
         verbose: _Flag = ...,
         verbosity: _Value = ...,
         xfail_tb: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Run this verb.

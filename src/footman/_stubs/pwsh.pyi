@@ -10,8 +10,6 @@ class Pwsh(Tool):
         self,
         command: str,
         /,
-        *,
-        nofail: bool = False,
         **flags: Any,
     ) -> Result:
         """Run a command string in PowerShell — `pwsh -c "<command>"`.

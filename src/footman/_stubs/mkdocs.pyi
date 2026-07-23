@@ -22,8 +22,6 @@ class Mkdocs(Tool):
         | None = ...,
         use_directory_urls: _Flag = ...,
         verbose: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Build the MkDocs documentation.
@@ -63,8 +61,6 @@ class Mkdocs(Tool):
         | None = ...,
         use_directory_urls: _Flag = ...,
         verbose: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Deploy your documentation to GitHub Pages.
@@ -103,8 +99,6 @@ class Mkdocs(Tool):
         *args: str,
         quiet: _Flag = ...,
         verbose: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Create a new MkDocs project.
@@ -134,8 +128,6 @@ class Mkdocs(Tool):
         verbose: _Flag = ...,
         watch: _Value = ...,
         watch_theme: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Run the builtin development server.
@@ -165,12 +157,12 @@ class Mkdocs(Tool):
                 reloading. Ignored when live reload is not used.
         """
         ...
-    def opts(
+    def flags(
         self,
         **flags: Any,
     ) -> Mkdocs:
         """Bind tool-level global options before the subcommand.
 
-        `tools.docker.opts(host=...)` puts a tool's own
+        `tools.docker.flags(host=...)` puts a tool's own
         options ahead of the verb, where they belong."""
         ...

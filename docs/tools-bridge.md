@@ -45,16 +45,28 @@ uv.run("pytest", "-q", frozen=True)   # → uv run --frozen pytest -q
 footman knows which verbs wrap (it reads each verb's usage line), so
 `--frozen` reaches uv while `pytest -q` passes through untouched. And a
 tool's own **global** options — the ones that must precede the subcommand —
-go through `opts()`:
+go through `flags()`:
 
 ```python
-docker.opts(host="tcp://x").compose.up(detach=True)
+docker.flags(host="tcp://x").compose.up(detach=True)
 # → docker --host=tcp://x compose up --detach
 ```
 
-`docker --host … ps` works and `docker ps --host …` does not, so `opts()`
+`docker --host … ps` works and `docker ps --host …` does not, so `flags()`
 places a global where the tool expects it and returns the tool, keeping the
 chain typed.
+
+footman's own **run-control** is separate — it rides `opts()`, a closed set
+(`nofail`, `in_process`, `capture`, `title`) that never becomes a tool flag,
+the same policy-vs-work split a task's `.opts()` has:
+
+```python
+git.opts(nofail=True).push()        # tolerate a non-zero exit
+pytest.opts(capture=False)("-s")    # stream this run live
+```
+
+Because it is a fixed set, `capture` here is unambiguously footman's — a tool's
+own `--capture` (pytest's) still goes in the call, `pytest(capture="no")`.
 
 What footman *shows* you is spelled for reading, not for the parser: the
 `--dry-run` line, the live progress line, and `recording()`'s
@@ -236,9 +248,9 @@ simply called; only a legacy zero-arg entry falls back to running under a
 patched `sys.argv`, and only those calls serialise.
 
 ```python
-mkdocs.build(strict=True)                    # in-process by default
-Tool("griffe", in_process=True)("dump", "footman")   # opt any tool in
-coverage.html(in_process=False)              # ...or out, per call
+mkdocs.build(strict=True)                          # in-process by default
+Tool("griffe", in_process=True)("dump", "footman")     # opt any tool in (construction)
+coverage.opts(in_process=False).html()             # ...or out, per call via .opts()
 ```
 
 `mkdocs`, `zensical`, and `coverage` default to in-process. `pytest`
@@ -254,9 +266,10 @@ it happens inside the callable footman runs. So a branch you never take, or
 a `--dry-run`, or a `recording()` test, costs zero tool imports; you pay
 only for the in-process tools you really invoke. A *preference* (`Tool(...,
 in_process=True)`) falls back to a subprocess when no entry point is
-installed; a *demand* (`in_process=True` at the call) errors with a taught
-message instead. `nofail` and `in_process` are the two reserved keywords —
-everything else translates to flags.
+installed; a *demand* (`.opts(in_process=True)`) errors with a taught message
+instead. `nofail`, `in_process`, `capture`, and `title` are footman
+run-control — set through `.opts()`, never translated to flags — so everything
+you pass to the call itself is a tool flag.
 
 Beyond speed, in-process is sometimes the only correct option. On macOS,
 SIP (System Integrity Protection) strips `DYLD_*` library-path variables

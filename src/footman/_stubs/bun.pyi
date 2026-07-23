@@ -76,8 +76,6 @@ class Bun(Tool):
         watch: _Flag = ...,
         workspaces: _Flag = ...,
         zero_fill_buffers: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Bun is a fast JavaScript runtime, package manager, bundler, and test runner.
@@ -211,8 +209,6 @@ class Bun(Tool):
         trust: _Flag = ...,
         verbose: _Flag = ...,
         yarn: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Alias: bun a
@@ -325,8 +321,6 @@ class Bun(Tool):
         windows_publisher: _Value = ...,
         windows_title: _Value = ...,
         windows_version: _Value = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Transpile and bundle one or more files.
@@ -455,8 +449,6 @@ class Bun(Tool):
         trust: _Flag = ...,
         verbose: _Flag = ...,
         yarn: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Alias: bun i
@@ -550,8 +542,6 @@ class Bun(Tool):
         trust: _Flag = ...,
         verbose: _Flag = ...,
         yarn: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Alias: bun r
@@ -686,8 +676,6 @@ class Bun(Tool):
         watch: _Flag = ...,
         workspaces: _Flag = ...,
         zero_fill_buffers: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Run this verb.
@@ -834,8 +822,6 @@ class Bun(Tool):
         timeout: _Value = ...,
         todo: _Flag = ...,
         update_snapshots: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Run all matching test files and print the results to stdout
@@ -888,8 +874,6 @@ class Bun(Tool):
         package: _Value = ...,
         silent: _Flag = ...,
         verbose: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Execute an npm package executable (CLI), automatically installing into a
@@ -904,7 +888,7 @@ class Bun(Tool):
             verbose: Enable verbose output during installation.
         """
         ...
-    def opts(
+    def flags(
         self,
         *,
         bun: _Flag = ...,
@@ -976,6 +960,6 @@ class Bun(Tool):
     ) -> Bun:
         """Bind tool-level global options before the subcommand.
 
-        `tools.docker.opts(host=...)` puts a tool's own
+        `tools.docker.flags(host=...)` puts a tool's own
         options ahead of the verb, where they belong."""
         ...

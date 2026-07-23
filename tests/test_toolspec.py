@@ -961,10 +961,30 @@ def test_click_arguments_give_the_shape_exactly():
 
 
 def test_stub_renders_positional_only_and_keyword_only():
-    none = ToolSpec(name="x", verbs=(Verb(name="build", positional="none"),))
+    from footman._toolspec import Option
+
+    # A keyword-only verb (positional="none") with an option forbids positionals
+    # via `*,`; the option must be passed by keyword.
+    none = ToolSpec(
+        name="x",
+        verbs=(
+            Verb(
+                name="build",
+                positional="none",
+                options=(Option("target", ("--target",), type_name="str"),),
+            ),
+        ),
+    )
     text = _stubgen.render(none)
     ast.parse(text)
     assert "*,\n" in text and "*args" not in text  # keyword-only
+
+    # With no options, `**flags` alone forbids a positional — no redundant `*,`
+    # (which would be a syntax error with nothing keyword-only after it).
+    bare = ToolSpec(name="x", verbs=(Verb(name="build", positional="none"),))
+    text = _stubgen.render(bare)
+    ast.parse(text)
+    assert "*args" not in text  # still accepts no positional
 
     req = ToolSpec(
         name="x", verbs=(Verb(name="run", positional="required", lead="image"),)

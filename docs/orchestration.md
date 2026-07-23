@@ -232,8 +232,9 @@ Reach for declared deps when you want the plan to *see* the work, and
 
 ??? note "Passing data between tasks"
 
-    Result data flows *within* a task — `run()` hands back its output, a called
-    function its return — and out of a `parallel()` fan-out through a shared
+    Result data flows *within* a task — `run()` hands back a `Result` (the exit
+    code, which the value *is*, plus `.stdout`/`.stderr`), a called function its
+    return — and out of a `parallel()` fan-out through a shared
     closure the thunks write to (they run in-process, so a captured list just
     works). `parallel()` itself returns exit *codes*, not values, and the
     declared graph carries no data between tasks: `pre`/`post` are ordering, not

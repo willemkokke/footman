@@ -316,8 +316,6 @@ class UvPip(Tool):
         upgrade_group: _Value = ...,
         upgrade_package: _Value = ...,
         verbose: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Compile a `requirements.in` file to a `requirements.txt` or `pylock.toml`
@@ -745,8 +743,6 @@ class UvPip(Tool):
         upgrade_package: _Value = ...,
         user: _Flag = ...,
         verbose: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Install packages into an environment
@@ -920,8 +916,6 @@ class UvPip(Tool):
         system_certs: _Flag = ...,
         target: _Value = ...,
         verbose: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """List, in tabular format, packages installed in an environment
@@ -1250,8 +1244,6 @@ class UvPip(Tool):
         ]
         | None = ...,
         verbose: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Sync an environment with a `requirements.txt` or `pylock.toml` file
@@ -1354,13 +1346,13 @@ class UvPip(Tool):
             verbose: Use verbose output.
         """
         ...
-    def opts(
+    def flags(
         self,
         **flags: Any,
     ) -> UvPip:
         """Bind tool-level global options before the subcommand.
 
-        `tools.docker.opts(host=...)` puts a tool's own
+        `tools.docker.flags(host=...)` puts a tool's own
         options ahead of the verb, where they belong."""
         ...
 
@@ -1661,8 +1653,6 @@ class UvTool(Tool):
         with_editable: _Value = ...,
         with_executables_from: _Value = ...,
         with_requirements: _Value = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Install commands provided by a Python package
@@ -2061,8 +2051,6 @@ class UvTool(Tool):
         with_: _Value = ...,
         with_editable: _Value = ...,
         with_requirements: _Value = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Run a command provided by a Python package
@@ -2337,8 +2325,6 @@ class UvTool(Tool):
         | None = ...,
         system_certs: _Flag = ...,
         verbose: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Upgrade installed tools
@@ -2420,13 +2406,13 @@ class UvTool(Tool):
             verbose: Use verbose output.
         """
         ...
-    def opts(
+    def flags(
         self,
         **flags: Any,
     ) -> UvTool:
         """Bind tool-level global options before the subcommand.
 
-        `tools.docker.opts(host=...)` puts a tool's own
+        `tools.docker.flags(host=...)` puts a tool's own
         options ahead of the verb, where they belong."""
         ...
 
@@ -2453,8 +2439,6 @@ class Uv(Tool):
         quiet: _Flag = ...,
         system_certs: _Flag = ...,
         verbose: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """An extremely fast Python package manager.
@@ -2585,8 +2569,6 @@ class Uv(Tool):
         upgrade_package: _Value = ...,
         verbose: _Flag = ...,
         workspace: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Add dependencies to the project
@@ -2788,8 +2770,6 @@ class Uv(Tool):
         upgrade_package: _Value = ...,
         verbose: _Flag = ...,
         wheel: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Build Python packages into source distributions and wheels
@@ -2991,8 +2971,6 @@ class Uv(Tool):
         upgrade_group: _Value = ...,
         upgrade_package: _Value = ...,
         verbose: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Export the project's lockfile to an alternate format
@@ -3191,8 +3169,6 @@ class Uv(Tool):
         upgrade_group: _Value = ...,
         upgrade_package: _Value = ...,
         verbose: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Update the project's lockfile
@@ -3313,8 +3289,6 @@ class Uv(Tool):
         | None = ...,
         username: _Value = ...,
         verbose: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Upload distributions to an index
@@ -3439,8 +3413,6 @@ class Uv(Tool):
         upgrade_group: _Value = ...,
         upgrade_package: _Value = ...,
         verbose: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Remove dependencies from the project
@@ -3745,8 +3717,6 @@ class Uv(Tool):
         with_: _Value = ...,
         with_editable: _Value = ...,
         with_requirements: _Value = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Run a command or script
@@ -4072,8 +4042,6 @@ class Uv(Tool):
         upgrade_group: _Value = ...,
         upgrade_package: _Value = ...,
         verbose: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Update the project's environment
@@ -4387,8 +4355,6 @@ class Uv(Tool):
         upgrade_group: _Value = ...,
         upgrade_package: _Value = ...,
         verbose: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Display the project's dependency tree
@@ -4541,8 +4507,6 @@ class Uv(Tool):
         system_certs: _Flag = ...,
         system_site_packages: _Flag = ...,
         verbose: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Create a virtual environment
@@ -4710,8 +4674,6 @@ class Uv(Tool):
         upgrade_group: _Value = ...,
         upgrade_package: _Value = ...,
         verbose: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Read or update the project's version
@@ -4808,7 +4770,7 @@ class Uv(Tool):
             verbose: Use verbose output.
         """
         ...
-    def opts(
+    def flags(
         self,
         *,
         allow_insecure_host: _Value = ...,
@@ -4832,6 +4794,6 @@ class Uv(Tool):
     ) -> Uv:
         """Bind tool-level global options before the subcommand.
 
-        `tools.docker.opts(host=...)` puts a tool's own
+        `tools.docker.flags(host=...)` puts a tool's own
         options ahead of the verb, where they belong."""
         ...

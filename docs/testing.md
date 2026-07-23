@@ -69,9 +69,10 @@ def test_the_check_pipeline(tmp_path):
     assert "lint" in result.stdout
 ```
 
-`Result` carries `exit_code`, `stdout`, `stderr`, the structured
-`results: list[TaskResult]` (one per executed task, dependency order), and an
-`ok` shorthand. Each `TaskResult` exposes the task's return value as
+`Runner.invoke` returns an `InvokeResult` (named apart from the run-step
+`Result` that `run()` returns) carrying `exit_code`, `stdout`, `stderr`, the
+structured `results: list[TaskResult]` (one per executed task, dependency
+order), and an `ok` shorthand. Each `TaskResult` exposes the task's return value as
 `.returned` — the same value `--json` publishes — so asserting on a task's
 data needs no JSON parsing at all. Taught errors land in `result.stderr` with exit code 2 —
 assert on them like any other product surface. The completion cache is
@@ -165,7 +166,7 @@ def test_acme_teaches_with_its_own_name(tmp_path):
 
 - Cache isolation is automatic — parallel test runs can't fight over the
   completion manifest.
-- `Runner.invoke` never raises on task failure; the code is in the `Result`.
+- `Runner.invoke` never raises on task failure; the code is in the `InvokeResult`.
   `KeyboardInterrupt` passes through, as it should.
 - Chained/parallel semantics (`-s`, `-k`) work through `invoke` exactly as on
   the real command line — test the orchestration you actually run in CI.

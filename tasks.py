@@ -47,7 +47,7 @@ def test(*pytest_args: str):
     Args:
         pytest_args: forwarded to pytest verbatim
     """
-    pytest(*pytest_args, in_process=False)
+    pytest.opts(in_process=False)(*pytest_args)
 
 
 @task
@@ -426,7 +426,7 @@ def docs_build(check: bool = False):
     _write_llms_txt()
     # A conditional flag needs no ternary: strict=check is --strict when
     # check is true, omitted otherwise (strict is off by default in zensical).
-    zensical.build(clean=True, strict=check, in_process=False)
+    zensical.opts(in_process=False).build(clean=True, strict=check)
 
 
 dist = group("dist", help="Build and publish")

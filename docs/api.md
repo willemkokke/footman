@@ -29,6 +29,8 @@ it can't run. Every gate is evaluated live, and all failures are collected.
 
 ::: footman.context.run
 
+::: footman.context.Result
+
 ::: footman.context.parallel
 
 ::: footman.context.passthrough
@@ -131,6 +133,6 @@ Pure functions over manifest tree nodes — see
 
 ::: footman.testing.Runner
 
-::: footman.testing.Result
+::: footman.testing.InvokeResult
 
 ::: footman.testing.recording

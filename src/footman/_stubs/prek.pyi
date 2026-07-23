@@ -63,8 +63,6 @@ class Prek(Tool):
         | None = ...,
         to_ref: _Value = ...,
         verbose: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """A fast Git hook manager written in Rust, designed as a drop-in alternative
@@ -123,8 +121,6 @@ class Prek(Tool):
         repo_exclude_tag: _Value = ...,
         repo_include_tag: _Value = ...,
         verbose: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Update the `rev` field of repositories in the config file to the latest
@@ -178,8 +174,6 @@ class Prek(Tool):
         quiet: _Flag = ...,
         refresh: _Flag = ...,
         verbose: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Remove all prek cached data
@@ -240,8 +234,6 @@ class Prek(Tool):
         refresh: _Flag = ...,
         skip: _Value = ...,
         verbose: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Install prek Git shims into Git's effective hooks directory
@@ -319,8 +311,6 @@ class Prek(Tool):
         | None = ...,
         to_ref: _Value = ...,
         verbose: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Run hooks
@@ -394,8 +384,6 @@ class Prek(Tool):
         quiet: _Flag = ...,
         refresh: _Flag = ...,
         verbose: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Uninstall prek Git shims
@@ -415,7 +403,7 @@ class Prek(Tool):
             verbose: Use verbose output.
         """
         ...
-    def opts(
+    def flags(
         self,
         *,
         all_files: _Flag = ...,
@@ -473,6 +461,6 @@ class Prek(Tool):
     ) -> Prek:
         """Bind tool-level global options before the subcommand.
 
-        `tools.docker.opts(host=...)` puts a tool's own
+        `tools.docker.flags(host=...)` puts a tool's own
         options ahead of the verb, where they belong."""
         ...

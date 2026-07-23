@@ -59,8 +59,6 @@ class Djlint(Tool):
         statistics: _Flag = ...,
         use_gitignore: _Flag = ...,
         warn: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """djLint · HTML template linter and formatter.

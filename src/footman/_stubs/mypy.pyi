@@ -105,8 +105,6 @@ class Mypy(Tool):
         xml_report: _Value = ...,
         xslt_html_report: _Value = ...,
         xslt_txt_report: _Value = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """[-m MODULE] [-p PACKAGE] [-c PROGRAM_TEXT] [files ...]

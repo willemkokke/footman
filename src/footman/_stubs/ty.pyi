@@ -12,8 +12,6 @@ class Ty(Tool):
     def __call__(  # type: ignore[override]
         self,
         *args: str,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """An extremely fast Python type checker."""
@@ -56,8 +54,6 @@ class Ty(Tool):
         verbose: _Flag = ...,
         warn: _Value = ...,
         watch: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """Check a project for type errors
@@ -105,12 +101,12 @@ class Ty(Tool):
                 files.
         """
         ...
-    def opts(
+    def flags(
         self,
         **flags: Any,
     ) -> Ty:
         """Bind tool-level global options before the subcommand.
 
-        `tools.docker.opts(host=...)` puts a tool's own
+        `tools.docker.flags(host=...)` puts a tool's own
         options ahead of the verb, where they belong."""
         ...

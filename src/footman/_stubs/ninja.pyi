@@ -22,8 +22,6 @@ class Ninja(Tool):
         t: _Value = ...,
         verbose: _Flag = ...,
         w: _Value = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """if targets are unspecified, builds the 'default' target (see manual).

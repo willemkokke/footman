@@ -34,8 +34,6 @@ class GitChangelog(Tool):
         trailers: _Flag = ...,
         version_regex: _Value = ...,
         versioning: _Value = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """[-s SECTIONS] [-a] [-t TEMPLATE] [-T] [-E] [-Z] [-F RANGE] [-j KEY=VALUE]

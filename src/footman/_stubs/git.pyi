@@ -32,8 +32,6 @@ class Git(Tool):
         noglob_pathspecs: _Flag = ...,
         paginate: _Flag = ...,
         work_tree: _Value = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """[--exec-path[=<path>]] [--html-path] [--man-path] [--info-path]
@@ -94,8 +92,6 @@ class Git(Tool):
         unified: _Value = ...,
         update: _Flag = ...,
         verbose: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """GIT-ADD(1)                        Git Manual
@@ -175,8 +171,6 @@ class Git(Tool):
         track: _ValuedFlag = ...,
         unset_upstream: _Flag = ...,
         verbose: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """GIT-BRANCH(1)                     Git Manual
@@ -265,8 +259,6 @@ class Git(Tool):
         recurse_submodules: _Flag = ...,
         track: _ValuedFlag = ...,
         unified: _Value = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """GIT-CHECKOUT(1)                   Git Manual
@@ -365,8 +357,6 @@ class Git(Tool):
         template: _Value = ...,
         upload_pack: _Value = ...,
         verbose: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """GIT-CLONE(1)                      Git Manual
@@ -493,8 +483,6 @@ class Git(Tool):
         untracked_files: _ValuedFlag = ...,
         verbose: _Flag = ...,
         verify: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """GIT-COMMIT(1)                     Git Manual
@@ -593,8 +581,6 @@ class Git(Tool):
         match: _Value = ...,
         tag: _Flag = ...,
         tags: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """GIT-DESCRIBE(1)                   Git Manual
@@ -710,8 +696,6 @@ class Git(Tool):
         word_diff: _ValuedFlag = ...,
         word_diff_regex: _Value = ...,
         ws_error_highlight: _Value = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """GIT-DIFF(1)                       Git Manual
@@ -905,8 +889,6 @@ class Git(Tool):
         verbose: _Flag = ...,
         write_commit_graph: _Flag = ...,
         write_fetch_head: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """GIT-FETCH(1)                      Git Manual
@@ -1021,8 +1003,6 @@ class Git(Tool):
         separate_git_dir: _Value = ...,
         shared: _ValuedFlag = ...,
         template: _Value = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """GIT-INIT(1)                       Git Manual
@@ -1209,8 +1189,6 @@ class Git(Tool):
         word_diff: _ValuedFlag = ...,
         word_diff_regex: _Value = ...,
         ws_error_highlight: _Value = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """GIT-LOG(1)                        Git Manual
@@ -1591,8 +1569,6 @@ class Git(Tool):
         verbose: _Flag = ...,
         verify: _Flag = ...,
         verify_signatures: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """GIT-PULL(1)                       Git Manual
@@ -1749,8 +1725,6 @@ class Git(Tool):
         thin: _Flag = ...,
         verbose: _Flag = ...,
         verify: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """GIT-PUSH(1)                       Git Manual
@@ -1820,8 +1794,6 @@ class Git(Tool):
         staged: _Flag = ...,
         unified: _Value = ...,
         worktree: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """GIT-RESTORE(1)                    Git Manual
@@ -1911,8 +1883,6 @@ class Git(Tool):
         symbolic_full_name: _Flag = ...,
         until: _Value = ...,
         verify: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """GIT-REV-PARSE(1)                  Git Manual
@@ -2029,8 +1999,6 @@ class Git(Tool):
         staged: _Flag = ...,
         to_ref: _Flag = ...,
         unified: _Value = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """GIT-STASH(1)                      Git Manual
@@ -2075,8 +2043,6 @@ class Git(Tool):
         show_stash: _Flag = ...,
         untracked_files: _ValuedFlag = ...,
         verbose: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """GIT-STATUS(1)                     Git Manual
@@ -2125,8 +2091,6 @@ class Git(Tool):
         quiet: _Flag = ...,
         recurse_submodules: _Flag = ...,
         track: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """GIT-SWITCH(1)                     Git Manual
@@ -2196,8 +2160,6 @@ class Git(Tool):
         sort: _Value = ...,
         trailer: _Value = ...,
         verify: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """GIT-TAG(1)                        Git Manual
@@ -2257,8 +2219,6 @@ class Git(Tool):
         relative_paths: _Flag = ...,
         track: _Flag = ...,
         verbose: _Flag = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """GIT-WORKTREE(1)                   Git Manual
@@ -2295,7 +2255,7 @@ class Git(Tool):
             verbose: With prune, report all removals.
         """
         ...
-    def opts(
+    def flags(
         self,
         *,
         attr_source: _Value = ...,
@@ -2323,6 +2283,6 @@ class Git(Tool):
     ) -> Git:
         """Bind tool-level global options before the subcommand.
 
-        `tools.docker.opts(host=...)` puts a tool's own
+        `tools.docker.flags(host=...)` puts a tool's own
         options ahead of the verb, where they belong."""
         ...

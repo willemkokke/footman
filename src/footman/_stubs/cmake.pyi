@@ -81,8 +81,6 @@ class Cmake(Tool):
         trace_redirect: _Value = ...,
         trace_source: _Value = ...,
         workflow: _Value = ...,
-        nofail: bool = False,
-        in_process: bool | None = None,
         **flags: Any,
     ) -> Result:
         """cmake [options] <path-to-source>

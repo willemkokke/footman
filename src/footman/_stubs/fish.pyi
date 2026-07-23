@@ -10,8 +10,6 @@ class Fish(Tool):
         self,
         command: str,
         /,
-        *,
-        nofail: bool = False,
         **flags: Any,
     ) -> Result:
         """Run a command string in fish — `fish -c "<command>"`.
