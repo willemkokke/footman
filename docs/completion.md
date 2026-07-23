@@ -63,6 +63,15 @@ it drifts (you added a task) past `max_age`, footman serves the cached answer an
 spawns a **detached** rebuild for next time (stale-while-revalidate) — a warm
 <kbd>Tab</kbd> never waits on it, and concurrent presses spawn at most one rebuild.
 
+``` mermaid
+graph LR
+  tab["Tab press"] --> fresh{cache fresh?}
+  fresh -->|yes| answer["cached answer, ~25 ms"]
+  fresh -->|"no, stale"| serve["serve cached answer now"]
+  serve --> rebuild["spawn detached rebuild"]
+  rebuild --> nexttime["fresh for the next Tab"]
+```
+
 Tune it with `[tool.footman]`:
 
 ```toml

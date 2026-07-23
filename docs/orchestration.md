@@ -145,11 +145,22 @@ Declare prerequisites and follow-ups on the task; footman schedules them
 task whose prerequisite failed:
 
 ```python
-@task(pre=[fmt, lint])      # fmt and lint run (concurrently) before check
+@task(pre=[fmt, lint, typecheck, test])   # all four run before check
 def check(): ...
 
 @task(post=[notify])        # notify runs after deploy succeeds
 def deploy(): ...
+```
+
+`check`'s four prerequisites have no edges *between* them, so footman runs all
+four at once and only starts `check` when the last finishes:
+
+``` mermaid
+graph LR
+  fmt --> check
+  lint --> check
+  typecheck --> check
+  test --> check
 ```
 
 This is the **declared** graph: static, so `--dry-run` and completion show it
