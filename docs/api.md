@@ -68,7 +68,7 @@ it can't run. Every gate is evaluated live, and all failures are collected.
 ## Editing the discovered tree
 
 `@finalize` runs a hook over the fully-merged cascade at discovery — see
-[Monorepos & config](monorepos.md#editing-the-discovered-tree). The hook is
+[Composing tasks](composing.md#editing-the-discovered-tree). The hook is
 handed a `Tasks` view; iterating or indexing it yields a `TaskView` that reads
 and edits one task.
 

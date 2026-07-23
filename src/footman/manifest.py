@@ -289,6 +289,17 @@ def _task_node(fn: Any, memo: dict[int, list[str]]) -> dict[str, Any]:
         for p in sig.parameters.values()
         if p.name != ctx_name
     ]
+    for spec in params:
+        if spec["name"] == "help" and spec["kind"] in ("flag", "option"):
+            raise SpecError(
+                "<help>: 'help' is a reserved parameter name — it maps to "
+                "--help, which footman intercepts anywhere on the line to show "
+                "help and never run a task, so the option could never be "
+                "reached. Rename it (e.g. show_help). It is the only reserved "
+                "name: every other global must come before the first task, so a "
+                "task parameter may reuse it (fm deploy --json binds --json to "
+                "deploy)."
+            )
     known: set[str] = set()
     for spec in params:
         python_name = str(spec["name"]).replace("-", "_")

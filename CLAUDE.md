@@ -17,8 +17,8 @@ grammar may break without a deprecation cycle.
 - **Zero runtime deps.** Nothing under `src/footman/` may import a third-party
   package. Dev/test/docs tooling lives in `uv` groups, never in `dependencies`.
   One blessed exception: a first-party plugin task may lazily import an
-  optional third-party package *inside its body* when gated with
-  `@task(requires="…")` (e.g. `docs shots` imports rich) — the package is
+  optional third-party package *inside its body* when gated with a stacked
+  `@requires_dep("…")` (e.g. `docs shots` imports rich) — the package is
   never a declared dependency, never imported at module import time, and the
   task lists as unavailable without it.
 - **The completion hot path is stdlib-only and import-free of the framework.**
@@ -132,7 +132,10 @@ PR, and only the merged commit is tagged. Don't tag before the bump is on
 `main`, or the tag points at a commit that never reached the branch.
 
 1. Branch `release/vX.Y.Z` off an up-to-date `main`.
-2. Bump both version files to `X.Y.Z`.
+2. Bump both version files to `X.Y.Z`, and the doc version references the
+   drift test guards: the `footman~=X.Y.0` pin in `README.md` and
+   `docs/index.md`, and the `--version` example in `docs/json.md`
+   (`tests/test_docs_drift.py` fails the gate if these go stale).
 3. Move CHANGELOG `[Unreleased]` → `[X.Y.Z]` with today's date; add the
    `[X.Y.Z]: …/compare/vPREV...vX.Y.Z` link and repoint `[Unreleased]` to
    `…/compare/vX.Y.Z...HEAD`.

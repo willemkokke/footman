@@ -15,6 +15,8 @@ nav = [
   { "Guide" = [
     { "Typed signatures" = "typing.md" },
     { "Chaining & parallelism" = "orchestration.md" },
+    { "Asking for input" = "input.md" },
+    { "Progress & timing" = "progress.md" },
     { "Running tools" = "tools.md" },
     { "The tools bridge" = "tools-bridge.md" },
     { "Monorepos & config" = "monorepos.md" },
@@ -190,7 +192,11 @@ combine_header_slug = true
 [project.markdown_extensions.pymdownx.tasklist]
 custom_checkbox = true
 [project.markdown_extensions.pymdownx.tilde]
-# Include the repo-root CHANGELOG.md into docs/changelog.md — one source of truth.
+# Include the repo-root CHANGELOG.md into docs/changelog.md — one source of truth,
+# and auto-append the abbreviations glossary to every page so footman's coined
+# terms (manifest, cascade, chain, taught error, …) get a hover tooltip at
+# every occurrence, defined once.
 [project.markdown_extensions.pymdownx.snippets]
 base_path = ["."]
 check_paths = true
+auto_append = ["docs/includes/abbreviations.md"]

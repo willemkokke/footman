@@ -35,6 +35,33 @@ tool — have their own page: [The tools bridge](tools-bridge.md).
   the task was defined in — with the context env overlay applied. Subprocess
   and in-process tools honour this identically.
 
+## Fetch and cache files: `fetch()`
+
+`fetch(url, sha256=…, into=…)` downloads into footman's own cache — the same
+directory `$FOOTMAN_CACHE_DIR` moves and the daily collector tends, so vendored
+artifacts for deleted projects clean themselves up:
+
+```python
+from footman import fetch, task
+
+@task
+def vendor():
+    "Fetch the pinned toolchain."
+    fetch("https://example.com/protoc-27.tar.gz",
+          sha256="9f86d081884c…", into=Path("vendor/protoc"))
+```
+
+Like `run()`, a fetch **is a step**: `--dry-run` prints it without touching the
+network, `recording()` asserts on it in tests, [`--json`](json.md) carries it,
+and its byte counts feed the [progress bar](progress.md). A second run
+revalidates with the server (ETag / `If-None-Match`) — a `304` costs one round
+trip and keeps "cached" honest — and `sha256=` refuses anything that arrived
+wrong. The backend is stdlib `urllib` by default (zero dependencies, and the
+only one that can report bytes as they arrive); `curl`, `httpx`, `requests`, or
+`auto` are available when named in `[fetch]` config, for a corporate proxy whose
+TLS store Python can't see. The full worked example is in the
+[cookbook](cookbook.md#fetch-and-cache-a-toolchain).
+
 ## No `ctx` needed
 
 `run()` and `passthrough()` read the current task's context implicitly, so a
