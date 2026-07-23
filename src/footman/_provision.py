@@ -116,18 +116,27 @@ def _uv_env(prefix: Path) -> dict[str, str]:
 
 
 def _uv_tier(prefix: Path, drivers: list[Driver]) -> list[Outcome]:
-    """`uv tool install --upgrade` each distinct package into the prefix."""
+    """`uv tool install --upgrade` each distinct package into the prefix.
+
+    A driver's `provision.plugins` ride along as `--with` packages in the tool's
+    own isolated environment, so a plugin-extended CLI (pytest + pytest-cov) is
+    installed whole and its plugin flags are there to read.
+    """
     env = _uv_env(prefix)
-    installed: dict[str, bool] = {}
+    installed: dict[tuple[str, tuple[str, ...]], bool] = {}
     outcomes: list[Outcome] = []
     for driver in drivers:
         package = driver.provision.target(driver.name)
-        if package not in installed:
-            installed[package] = _run(
-                ["uv", "tool", "install", "--upgrade", package], env=env
+        plugins = driver.provision.plugins
+        key = (package, plugins)
+        if key not in installed:
+            withs = [f"--with={p}" for p in plugins]
+            installed[key] = _run(
+                ["uv", "tool", "install", "--upgrade", package, *withs], env=env
             )
-        ok = installed[package]
-        outcomes.append(Outcome(driver.key, "uv", "ok" if ok else "fail", package))
+        ok = installed[key]
+        detail = package if not plugins else f"{package} (+{', '.join(plugins)})"
+        outcomes.append(Outcome(driver.key, "uv", "ok" if ok else "fail", detail))
     return outcomes
 
 

@@ -271,6 +271,30 @@ def test_task_sync_runs_sync_with_prefix_on_path(tmp_path, monkeypatch):
     assert str(_provision.bin_dir(tmp_path)) in seen["path"]
 
 
+def test_pytest_provisions_with_its_cov_plugin():
+    from footman import _drivers
+
+    pytest_driver = next(d for d in _drivers.DRIVERS if d.key == "pytest")
+    # The prefix install carries pytest-cov, so provision reads a pytest whose
+    # --cov* flags are present — no dev-env special case, no skip.
+    assert pytest_driver.provision.plugins == ("pytest-cov",)
+
+
+def test_uv_tier_installs_plugins_as_with_packages(tmp_path, monkeypatch):
+    from footman._drivers import Driver, Provision
+
+    calls: list[list[str]] = []
+    monkeypatch.setattr(
+        _provision, "_run", lambda argv, env: calls.append(argv) or True
+    )
+    drivers = (Driver("pytest", provision=Provision(plugins=("pytest-cov",))),)
+    outcomes = _provision.provision(drivers, tmp_path)
+    argv = calls[0]
+    assert argv[:4] == ["uv", "tool", "install", "--upgrade"]
+    assert "pytest" in argv and "--with=pytest-cov" in argv
+    assert outcomes[0].status == "ok" and "pytest-cov" in outcomes[0].detail
+
+
 def test_task_clean_removes_prefix(tmp_path, monkeypatch):
     from footman.tasks import tools
 

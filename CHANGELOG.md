@@ -47,6 +47,15 @@ versions may include breaking changes.
   options and rejecting a task parameter the same way. A command-line
   `-k`/`--fail-fast` still wins over a set `keep_going`.
 
+### Fixed
+
+- **`fm footman tools provision --sync` no longer strips plugin flags.** A
+  provisioned prefix is a bare install, so reading pytest's stub from it dropped
+  every `--cov*` flag (they come from pytest-cov). A driver can now name extra
+  wheels to install alongside a tool — `Provision(plugins=("pytest-cov",))` —
+  which `provision` adds with `uv --with`, so the prefix holds a plugin-complete
+  pytest and the sync reads its full flag surface.
+
 ## [0.18.0] — 2026-07-22
 
 ### Added
