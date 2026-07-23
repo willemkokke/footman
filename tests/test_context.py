@@ -653,7 +653,8 @@ def test_run_list_with_shell_is_a_taught_error():
 def test_shown_line_quotes_the_windows_way(monkeypatch):
     from footman.context import _shell_quote
 
-    # POSIX quoting first (the default on this machine).
+    # POSIX quoting (pin the platform — this runs on Windows CI too).
+    monkeypatch.setattr(sys, "platform", "linux")
     assert _shell_quote("a b") == "'a b'"
     # On Windows, list2cmdline (not POSIX single-quotes), so `.raw`/`--verbose`
     # pastes into cmd/PowerShell; a plain token stays bare, a spaced one gets

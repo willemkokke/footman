@@ -86,7 +86,8 @@ def test_single_letter_kwargs_are_short_flags():
     assert cmd == "pytest-bin -q -k markers"
 
 
-def test_shell_tools_run_a_command_string_through_the_shell():
+def test_shell_tools_run_a_command_string_through_the_shell(monkeypatch):
+    monkeypatch.setattr(sys, "platform", "linux")  # POSIX display, pinned for Win CI
     # `tools.bash("cmd")` runs `bash -c cmd` — a real shell, so pipes work.
     assert _one(lambda: tools.bash("echo hi | cat")) == "bash -c 'echo hi | cat'"
     assert _one(lambda: tools.nu("ls | length")) == "nu -c 'ls | length'"
@@ -507,7 +508,8 @@ def test_negation_table_matches_what_the_tools_say():
 # stable even when execution tokenises differently.
 
 
-def test_shown_values_are_shell_quoted_so_the_line_pastes():
+def test_shown_values_are_shell_quoted_so_the_line_pastes(monkeypatch):
+    monkeypatch.setattr(sys, "platform", "linux")  # POSIX display, pinned for Win CI
     cmd = _one(lambda: tools.git.commit(message="release: cut it now", signoff=True))
     assert cmd == "git commit --message 'release: cut it now' --signoff"
 
@@ -583,7 +585,8 @@ def test_execution_attaches_only_where_a_space_would_break():
     assert _flags({"k": "-x"}, "git") == ["-k-x"]
 
 
-def test_step_result_carries_both_the_shown_and_the_raw_command():
+def test_step_result_carries_both_the_shown_and_the_raw_command(monkeypatch):
+    monkeypatch.setattr(sys, "platform", "linux")  # POSIX display, pinned for Win CI
     # `.command` reads well (separated); `.raw` is the exact executed line
     # (attached). Both are valid, copy-pasteable commands.
     with recording() as steps:
@@ -593,7 +596,8 @@ def test_step_result_carries_both_the_shown_and_the_raw_command():
     assert step.raw == "git commit '--message=a b c' --signoff"
 
 
-def test_raw_of_a_plain_run_shell_quotes_a_list():
+def test_raw_of_a_plain_run_shell_quotes_a_list(monkeypatch):
+    monkeypatch.setattr(sys, "platform", "linux")  # POSIX display, pinned for Win CI
     # A direct `run([...])` (not through the bridge) still gets a raw form:
     # the list, shell-quoted so it pastes, while `.command` reads plainly.
     from footman.context import Context, run, use_context
