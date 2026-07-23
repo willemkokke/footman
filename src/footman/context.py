@@ -1252,6 +1252,14 @@ def run(
     `title` still wins; a direct `run([...])` is unaffected.
     """
     ctx = current()
+    if (strict or clean) and not shell:
+        # strict/clean harden a *shell* run — they mean nothing shell-free, and a
+        # silent no-op would be exactly the surprise footman avoids elsewhere.
+        which = "strict" if strict else "clean"
+        raise ValueError(
+            f"run({which}=True) only applies with a shell — it hardens a shell "
+            f"run. Pass shell=True (or a shell name), or drop {which}."
+        )
     out = sys.stdout
     color = ctx.tty and not ctx.no_color and "NO_COLOR" not in os.environ
     if _show is not None and title is None:

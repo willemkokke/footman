@@ -626,6 +626,19 @@ def test_shell_strict_stops_on_error_and_masked_pipe():
     assert results[0].ok, results[0].error
 
 
+def test_strict_or_clean_without_shell_is_a_taught_error():
+    # strict/clean harden a shell run — silently ignoring them shell-free would
+    # be a surprise, so it's a taught error.
+    def tasks(reg):
+        @reg.task
+        def go():
+            run("echo hi", strict=True)
+
+    _, _, results = drive(tasks, "go")
+    assert results[0].ok is False
+    assert "only applies with a shell" in str(results[0].error)
+
+
 def test_run_list_with_shell_is_a_taught_error():
     def tasks(reg):
         @reg.task
