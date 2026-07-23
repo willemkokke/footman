@@ -52,6 +52,10 @@ class Provision:
     """`owner/repo` for a `github` / `gitlab` release download."""
     note: str = ""
     """Why a `deferred` source is parked — shown by `provision`."""
+    plugins: tuple[str, ...] = ()
+    """Extra packages to install *alongside* the tool (`uv --with`), so a
+    plugin-extended CLI is read whole. pytest's `--cov*` flags come from
+    `pytest-cov`; without it a bare provisioned pytest would stub none of them."""
 
     def target(self, name: str) -> str:
         """What to fetch: the explicit `package`/`repo`, else the tool *name*."""
@@ -281,7 +285,11 @@ DRIVERS: tuple[Driver, ...] = (
     ),
     Driver("cmake", url="https://cmake.org/documentation/"),
     Driver("ninja", url="https://ninja-build.org/"),
-    Driver("pytest", url="https://docs.pytest.org/"),
+    Driver(
+        "pytest",
+        url="https://docs.pytest.org/",
+        provision=Provision(plugins=("pytest-cov",)),  # so --cov* is read too
+    ),
     Driver(
         "python",
         provision=Provision(kind="python", package="3.13"),

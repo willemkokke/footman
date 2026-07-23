@@ -35,6 +35,15 @@ versions may include breaking changes.
   a decorated task used to be typed `Callable[..., Any]` — so a body call with a
   wrong or missing argument is now a type error, not silently `Any`.
 
+### Fixed
+
+- **`fm footman tools provision --sync` no longer strips plugin flags.** A
+  provisioned prefix is a bare install, so reading pytest's stub from it dropped
+  every `--cov*` flag (they come from pytest-cov). A driver can now name extra
+  wheels to install alongside a tool — `Provision(plugins=("pytest-cov",))` —
+  which `provision` adds with `uv --with`, so the prefix holds a plugin-complete
+  pytest and the sync reads its full flag surface.
+
 ## [0.18.0] — 2026-07-22
 
 ### Added
