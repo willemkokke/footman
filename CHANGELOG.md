@@ -7,6 +7,27 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Changed
+
+- **`help` is now a reserved task parameter name.** A flag or option parameter
+  named `help` maps to `--help`, which footman intercepts anywhere on the line
+  to render help and never run a task — so the option could never bind. Instead
+  of silently shadowing the parameter, footman now rejects it at manifest-build
+  time with a taught error that names the fix (rename to e.g. `show_help`). The
+  check is precise: a required positional `<help>` or a variadic `*help` never
+  produces `--help`, so both stay legal. This is the only reserved name — every
+  other global must precede the first task, so a task parameter may reuse it.
+
+### Docs
+
+- Added an abbreviations glossary with site-wide hover tooltips for footman's
+  coined vocabulary (manifest, cascade, chain, taught error, …), split the
+  execution-model pages (new **Asking for input** and **Progress & timing**
+  guide pages), moved `@finalize`/`TaskView` onto the composing page, added
+  mermaid diagrams for the dependency graph and completion refresh, and added
+  docs-drift test guards so undocumented public symbols and stale version pins
+  fail the gate.
+
 ## [0.19.0] — 2026-07-23
 
 ### Added

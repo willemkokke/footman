@@ -132,7 +132,10 @@ PR, and only the merged commit is tagged. Don't tag before the bump is on
 `main`, or the tag points at a commit that never reached the branch.
 
 1. Branch `release/vX.Y.Z` off an up-to-date `main`.
-2. Bump both version files to `X.Y.Z`.
+2. Bump both version files to `X.Y.Z`, and the doc version references the
+   drift test guards: the `footman~=X.Y.0` pin in `README.md` and
+   `docs/index.md`, and the `--version` example in `docs/json.md`
+   (`tests/test_docs_drift.py` fails the gate if these go stale).
 3. Move CHANGELOG `[Unreleased]` → `[X.Y.Z]` with today's date; add the
    `[X.Y.Z]: …/compare/vPREV...vX.Y.Z` link and repoint `[Unreleased]` to
    `…/compare/vX.Y.Z...HEAD`.
