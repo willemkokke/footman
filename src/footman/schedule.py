@@ -25,9 +25,13 @@ from footman.registry import (
     Group,
     Task,
     _Opted,
+    default_group,
+    fans_out,
     is_infinite,
     is_interactive,
     keeps_going,
+    post_tasks,
+    pre_tasks,
     task_confirm,
     wants_progress,
 )
@@ -128,18 +132,18 @@ def _build_dag(root: Group, segments: list[Segment]) -> list[_Node]:
             dep.forwarded[name] = value
 
     def _link(node: _Node) -> None:
-        pre = list(getattr(node.fn, "_footman_pre", []))
+        pre = list(pre_tasks(node.fn))
         # An empty-body group default fans out the group's own tasks: they become
         # implicit prerequisites, so the scheduler runs them (in parallel) and the
         # default's forward-marked values thread into the ones that declare them.
-        group = getattr(node.fn, "_footman_default_group", None)
-        if group is not None and getattr(node.fn, "_footman_default_fanout", False):
+        group = default_group(node.fn)
+        if group is not None and fans_out(node.fn):
             pre = [*group.tasks.values(), *pre]
         for dep in pre:
             d = add_dep(_as_task(dep))
             node.deps.add(d.key)
             node.forward_targets.append(d)  # forwarding threaded in a later pass
-        for dep in getattr(node.fn, "_footman_post", []):
+        for dep in post_tasks(node.fn):
             d = add_dep(_as_task(dep))
             d.deps.add(node.key)
             node.forward_targets.append(d)
