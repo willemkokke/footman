@@ -94,8 +94,16 @@ own `--capture` (pytest's) still goes in the call, `pytest(capture="no")`.
     A few tools ignore the environment and take a flag instead. footman forces
     those through their own switch — git's `-c color.ui=always`, injected into
     the executed command only, so `recording()` still sees `git diff`, not the
-    switch. You never configure this; `fm footman tools color` reports which
-    tools obey the environment and which are forced by flag.
+    switch. You never configure any of this; it is handled per tool:
+
+    | How footman forces colour | Tools |
+    | ------------------------- | ----- |
+    | **Environment** — obeys `FORCE_COLOR` / `NO_COLOR` | ruff, uv, pytest, basedpyright, and the rest of the modern set |
+    | **Its own flag** — ignores the environment | git (`-c color.ui=always`) |
+    | **Cannot be forced** — no environment support and no flag | *(none)* |
+
+    `fm footman tools color` prints this for the tools installed on *your*
+    machine, at their versions.
 
 What footman *shows* you is spelled for reading, not for the parser: the
 `--dry-run` line, the live progress line, and `recording()`'s
