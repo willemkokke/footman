@@ -1044,19 +1044,27 @@ def color_on() -> bool:
     return _colored(current())
 
 
+# Every colour variable footman speaks. `color_environment` clears the whole set
+# before setting a direction, so forcing colour *off* is the *absence* of
+# FORCE_COLOR, not `FORCE_COLOR=0` — some tools (ruff) read the mere presence of
+# FORCE_COLOR as "force on", ignoring `NO_COLOR`, so `"0"` would fail to silence
+# them. footman emits by presence/absence; it consumes `NO_COLOR` by presence and
+# `FORCE_COLOR` by truthiness (`_resolve_color`).
+_COLOR_VARS = ("FORCE_COLOR", "CLICOLOR_FORCE", "CLICOLOR", "NO_COLOR")
+
+
 def color_env(on: bool) -> dict[str, str]:
-    """The environment that tells a spawned tool whether to emit colour.
+    """The colour variables to *set* to force colour on (or off) for a child.
 
     Without a PTY a child's stdout is a pipe, so `isatty()` is false and a
     well-behaved tool auto-disables colour — footman captures the bytes and
-    replays them onto its own terminal, so it wants the colour back. `on` forces
-    it (`FORCE_COLOR`/`CLICOLOR_FORCE`, honoured by the modern set); off pushes
-    footman's own monochrome decision down (`NO_COLOR`, plus `FORCE_COLOR=0` to
-    override a force inherited from the parent environment). Overlaid at lowest
-    precedence, so a task's `env=` or `ctx.env` still wins."""
+    replays them onto its own terminal, so it wants the colour back. `on` sets
+    `FORCE_COLOR`/`CLICOLOR_FORCE`; off sets only `NO_COLOR`. Forcing off is
+    completed by *removing* any inherited `FORCE_COLOR` (see `_COLOR_VARS` /
+    `color_environment`), never by setting it to `"0"`."""
     if on:
         return {"FORCE_COLOR": "1", "CLICOLOR_FORCE": "1", "CLICOLOR": "1"}
-    return {"NO_COLOR": "1", "FORCE_COLOR": "0"}
+    return {"NO_COLOR": "1"}
 
 
 def run_colour_on(
@@ -1080,11 +1088,14 @@ def color_environment(on: bool) -> Iterator[None]:
 
     One decision, set once: a subprocess inherits it, an in-process tool reads
     it — so no `run()` call has to patch the environment itself (and none takes
-    the `_process_state` lock for colour). Restored on exit; nested runs stack,
-    each restoring the value it found."""
-    changes = color_env(on)
-    saved = {key: os.environ.get(key) for key in changes}
-    os.environ.update(changes)
+    the `_process_state` lock for colour). Every colour variable is cleared
+    first, then this direction's are set — so *off* leaves no `FORCE_COLOR` for a
+    presence-checking tool to honour, and *on* leaves no stray `NO_COLOR`.
+    Restored on exit; nested runs stack, each restoring the value it found."""
+    saved = {key: os.environ.get(key) for key in _COLOR_VARS}
+    for key in _COLOR_VARS:
+        os.environ.pop(key, None)
+    os.environ.update(color_env(on))
     try:
         yield
     finally:

@@ -69,6 +69,14 @@ Not gating anything, carried forward minus the entries that shipped
 - **Fingerprint-based skipping** — "inputs unchanged, skip the task"
   (doit/turborepo territory; big, and the DAG is already in place).
 - **Per-task timeout and retry** — `@task(timeout=120, retries=2)`.
+- **Clean environment per task** — run a task's subprocesses with a
+  reconstructed/allowlisted environment (tox's `passenv`, invoke's
+  `replace_env`) so a polluted parent env can't leak into a build — the same
+  reproducibility instinct as `clean=True` shells. `env=` stays an overlay by
+  default; a replace mode would need to merge the run-wide colour decision into
+  the built environment (so the colour contract survives the wipe) and be a
+  taught error for an in-process task — code in footman's own process can't be
+  handed an isolated environment.
 - **`fm --plugins`** — list installed `footman.tasks` entry points with
   dist, version, and enabled state.
 - **`fm new`** — scaffold a tasks.py that demonstrates the good idioms.

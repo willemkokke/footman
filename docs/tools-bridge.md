@@ -94,16 +94,20 @@ own `--capture` (pytest's) still goes in the call, `pytest(capture="no")`.
     A few tools ignore the environment and take a flag instead. footman forces
     those through their own switch — git's `-c color.ui=always`, injected into
     the executed command only, so `recording()` still sees `git diff`, not the
-    switch. You never configure any of this; it is handled per tool:
+    switch. You never configure any of this; it is handled per tool, and the
+    table below records exactly which does what.
 
-    | How footman forces colour | Tools |
-    | ------------------------- | ----- |
-    | **Environment** — obeys `FORCE_COLOR` / `NO_COLOR` | ruff, uv, pytest, basedpyright, and the rest of the modern set |
-    | **Its own flag** — ignores the environment | git (`-c color.ui=always`) |
-    | **Cannot be forced** — no environment support and no flag | *(none)* |
+## Colour support, per tool
 
-    `fm footman tools color` prints this for the tools installed on *your*
-    machine, at their versions.
+`fm footman tools color` *probes* each curated tool — it runs the tool with
+colour forced on and off, both by environment and by the tool's own flag, and
+reads the bytes — so this table is measured, not assumed. A tool obeys the
+**environment** (`FORCE_COLOR`/`NO_COLOR`), needs its own **`flag`**, colours
+but **can't be silenced**, produces **no colour over a pipe** (footman captures
+without a PTY, so a tty-only tool stays plain), or is a **pass-through wrapper**
+whose colour belongs to the program it runs.
+
+--8<-- "docs/color-support.md"
 
 What footman *shows* you is spelled for reading, not for the parser: the
 `--dry-run` line, the live progress line, and `recording()`'s
