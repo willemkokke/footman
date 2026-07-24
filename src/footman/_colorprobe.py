@@ -82,7 +82,6 @@ TRIGGERS: dict[str, Trigger] = {
     "markdownlint": Trigger(("bad.md",), {"bad.md": "#x\n"}),
     "eclint": Trigger(("-h",)),
     "coverage": Trigger(("report",)),
-    "docker": Trigger(("version",)),  # no daemon needed for `version`
     "python": Trigger(("--version",)),  # the interpreter emits no colour
     "zensical": Trigger(("--help",)),
 }
@@ -96,6 +95,13 @@ _CURATED: dict[str, tuple[tuple[str, ...], tuple[str, ...], bool]] = {
     "cspell": (("--color",), ("--no-color",), False),
     "mypy": (("--color-output",), ("--no-color-output",), False),
 }
+
+# Pass-through wrappers: their own CLI output doesn't colour, and their job is to
+# run *another* program (a container) whose colour is the wrapped program's
+# business plus whether the caller passed a tty (`docker run -t`). footman
+# neither forces nor suppresses it — it faithfully relays whatever comes through.
+# So `env`/`flag`/`none` don't apply; the verdict is `n/a`.
+_PASSTHROUGH = frozenset({"docker"})
 
 
 @dataclass(frozen=True)
@@ -194,6 +200,8 @@ def _capture(argv: list[str], cwd: Path, env_add: dict[str, str]) -> str:
 
 def probe(key: str, binary: str, spec: ToolSpec) -> Verdict:
     """Categorise one tool by running its trigger with colour forced each way."""
+    if key in _PASSTHROUGH:  # a wrapper; colour isn't footman's to control
+        return Verdict("n/a", "n/a")
     trigger = TRIGGERS.get(key)
     if trigger is None:
         return Verdict("unprobed", "unprobed")
@@ -214,10 +222,15 @@ def probe(key: str, binary: str, spec: ToolSpec) -> Verdict:
         # `unprobed` if the trigger produced nothing to judge.
         maxed = _capture(_argv(binary, trigger, pre_on, post_on), cwd, _ON_ENV)
         if not _SGR.search(maxed):
-            stuck = "none" if maxed.strip() else "unprobed"
-            # It is (or is stuck) monochrome, so footman's off signal is moot —
-            # it stays clean either way.
-            return Verdict(stuck, "env" if stuck == "none" else "unprobed")
+            # It produced output but no colour by any means → `none`; footman
+            # can't make it colour over its pipe, so there is nothing to suppress
+            # either (`off` is `n/a`, not a spurious `env`). No output at all →
+            # the trigger judged nothing (`unprobed`).
+            return (
+                Verdict("none", "n/a")
+                if maxed.strip()
+                else Verdict("unprobed", "unprobed")
+            )
 
         if coloured(_ON_ENV):
             on = "env"
@@ -226,7 +239,11 @@ def probe(key: str, binary: str, spec: ToolSpec) -> Verdict:
         else:
             on = "none"
 
-        if not coloured(_OFF_ENV):  # footman's off signal keeps it clean
+        # A tool footman can't force *on* has nothing to turn *off* over a pipe —
+        # a monochrome result there is the pipe, not the tool respecting NO_COLOR.
+        if on == "none":
+            off = "n/a"
+        elif not coloured(_OFF_ENV):  # footman's off signal keeps it clean
             off = "env"
         elif flag and (pre_off or post_off) and not coloured({}, pre_off, post_off):
             off = "flag"
