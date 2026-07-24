@@ -54,6 +54,39 @@ if one fails, and a task whose prerequisite failed is skipped.
     line are stderr commentary, so redirecting stdout captures task output
     alone.
 
+## Failing a task
+
+A task **succeeds** unless it says otherwise. Four ways to say otherwise, most to
+least deliberate:
+
+- **`fail("reason")`** — the blessed way to stop with an explanation. The reason
+  prints on the failure line and lands in the [`--json`](json.md) `error` field,
+  verbatim; `fail("…", code=3)` picks the exit code too. It is a *function*, not a
+  `raise`, so it stays clean under a strict linter (flake8-errmsg's `EM101`,
+  tryceratops' `TRY003` flag a string literal in a `raise`) — the same reason
+  `sys.exit()` and `pytest.fail()` are functions.
+- **`return N`** — a bare non-zero exit code, no message. `return 0` (or falling
+  off the end) is success.
+- **`sys.exit("reason")` / `sys.exit(2)`** — the stdlib idiom, honoured: a string
+  reason surfaces like `fail()`'s, an int is the code.
+- **raise any exception** — a *crash*. Its type and message show
+  (`RuntimeError: …`), signalling a bug rather than a chosen stop; the exit code
+  is 1.
+
+```python
+from footman import task, fail
+
+@task
+def release(armed: bool = False):
+    if not open_pr():
+        fail("no open PR for setup — run `fm create repo` first")
+    ...
+```
+
+A `run()` command that exits non-zero raises `RunFailed` on your behalf (unless
+`nofail=True`), so `fm` mirrors the command's own code — you rarely raise that
+one yourself. To *catch* a deliberate `fail()`, `except footman.Failed:`.
+
 ## When a task fails: fail-fast & keep-going
 
 A run is **fail-fast** by default: the first failure stops it. New tasks don't

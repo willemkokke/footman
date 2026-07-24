@@ -26,9 +26,11 @@ if TYPE_CHECKING:
     from footman.compose import include as include
     from footman.compose import plugin as plugin
     from footman.context import Context as Context
+    from footman.context import Failed as Failed
     from footman.context import Result as Result
     from footman.context import RunFailed as RunFailed
     from footman.context import confirm as confirm
+    from footman.context import fail as fail
     from footman.context import inherited as inherited
     from footman.context import parallel as parallel
     from footman.context import passthrough as passthrough
@@ -75,6 +77,7 @@ __all__ = [
     "Brand",
     "Context",
     "Exists",
+    "Failed",
     "FetchError",
     "Forward",
     "Group",
@@ -97,6 +100,7 @@ __all__ = [
     "docstrings",
     "env",
     "exists",
+    "fail",
     "fetch",
     "finalize",
     "forward",
@@ -220,6 +224,8 @@ def __getattr__(name: str) -> object:
         "select",
         "track",
         "RunFailed",
+        "Failed",
+        "fail",
         "use_context",
     ):
         from footman import context

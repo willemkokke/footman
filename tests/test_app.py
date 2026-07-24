@@ -15,7 +15,7 @@ from footman.split import Segment
 TASKS = '''
 from typing import Annotated
 
-from footman import doc, task, group
+from footman import doc, fail, task, group
 
 @task
 def hi(name: str = "world"):
@@ -36,6 +36,21 @@ def boom():
 def refuse():
     """Stop with a reason."""
     raise SystemExit("refused: no open PR to act on")
+
+@task
+def refuse_fn():
+    """Fail via footman.fail with a reason."""
+    fail("no open PR to act on")
+
+@task
+def refuse_fn_code():
+    """Fail via footman.fail with a custom code."""
+    fail("reserved branch", code=3)
+
+@task
+def refuse_fn_bare():
+    """Fail via footman.fail with no reason."""
+    fail()
 
 @task
 def flag(fix: bool = False):
@@ -190,6 +205,34 @@ def test_systemexit_int_code_stays_bare(project, capsys):
     err = capsys.readouterr().err
     assert "exited with code 2" in err
     assert "SystemExit" not in err
+
+
+def test_fail_surfaces_reason(project, capsys):
+    # `footman.fail("reason")` — the blessed task-failure idiom: the reason shows
+    # verbatim (no `Failed:` type prefix), exit 1.
+    assert _app.run(["refuse-fn"]) == 1
+    err = capsys.readouterr().err
+    assert "no open PR to act on" in err
+    assert "Failed" not in err
+
+
+def test_fail_honours_a_custom_code(project, capsys):
+    # `fail("reason", code=3)` — a reason AND a chosen exit code together.
+    assert _app.run(["refuse-fn-code"]) == 3
+    assert "reserved branch" in capsys.readouterr().err
+
+
+def test_fail_bare_falls_back_to_the_code_line(project, capsys):
+    # `fail()` with no reason has nothing to render verbatim: it must not print a
+    # dangling "task:" — it falls back to the code line.
+    assert _app.run(["refuse-fn-bare"]) == 1
+    assert "refuse-fn-bare: exited with code 1" in capsys.readouterr().err
+
+
+def test_fail_reason_reaches_json(project, capsys):
+    assert _app.run(["--json", "refuse-fn"]) == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["results"][0]["error"] == "no open PR to act on"
 
 
 def test_unknown_task_is_teaching_error(project, capsys):
