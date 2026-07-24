@@ -1541,6 +1541,10 @@ def parallel(*calls: Callable[[], Any], keep_going: bool = False) -> list[int]:
             # idiom, but a BaseException — without this it escapes the pool
             # instead of being collected. Treat its code like a returned one:
             # 0 succeeds, non-zero is a synthesized failure the gate below raises.
+            # (A string reason is not carried through here: parallel() deliberately
+            # normalises failures to a catchable RunFailed, so it must not re-raise
+            # a BaseException. A task body's own sys.exit("reason") keeps its
+            # message — see executor._call.)
             code = _exit_code(exc)
             error = None
             if code != 0:
