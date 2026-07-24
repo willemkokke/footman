@@ -80,6 +80,12 @@ Not gating anything, carried forward minus the entries that shipped
 - **`fm --plugins`** — list installed `footman.tasks` entry points with
   dist, version, and enabled state.
 - **`fm new`** — scaffold a tasks.py that demonstrates the good idioms.
+- **Optional rich terminal output** — a lazily-imported renderer, behind a
+  stacked `@requires_dep` (the one blessed zero-dep exception), that paints
+  `--help` and docstrings as formatted markdown in the terminal. Off by default
+  and never a dependency: on only when the package is both installed and asked
+  for, so plain text stays the contract and colour stays the only styling
+  footman applies unbidden.
 - **Handoffs for other package managers** (poetry, pdm) — if there's a
   want. uv shipped first because `uv.lock` makes the fire-rule
   unambiguous; each manager needs an equally sharp rule of its own.
