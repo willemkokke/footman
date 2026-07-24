@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import io
 import os
+import sys
 import threading
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from dataclasses import dataclass, field
@@ -392,7 +393,28 @@ def run_plan(
     # duration isn't late, it's intentional. The status line yields to a
     # one-time hint (printed at the node's start) saying how this ends.
     endless = any(is_infinite(n.fn) for n in nodes)
+    # Resolve colour once for the whole run and publish it into os.environ, so
+    # every tool — subprocess (inherits) and in-process (reads it) — sees one
+    # answer set once, with no per-call environment patching. sys.stdout is the
+    # run's real stdout here (routing captures it next), so its tty-ness is the
+    # same input `_make_ctx` uses per node.
+    cfg = ctx_config or {}
+    try:
+        stdout_tty = sys.stdout.isatty()
+    except Exception:
+        stdout_tty = False
+    colour_on = context.run_colour_on(
+        no_color=bool(cfg.get("no_color")),
+        force_color=bool(cfg.get("force_color")),
+        capture=capture,
+        isatty=stdout_tty,
+    )
     with context.routing() as (real, err):
+        # Decide the status line and the infinite-task hint from the *user's*
+        # environment — before `color_environment` publishes footman's own
+        # NO_COLOR/FORCE_COLOR for the children, which `_plain_output` would
+        # otherwise read back and mistake for a user's monochrome request (a
+        # `fm check > log` still wants its spinner on the stderr terminal).
         status = _make_status(
             err,
             ctx_config,
@@ -400,32 +422,35 @@ def run_plan(
             estimate,
             progress and not endless and not interactive,
         )
+        hint_err = (
+            err
+            if sequential
+            and endless
+            and not capture
+            and not cfg.get("quiet")
+            and err.isatty()
+            and not _plain_output(bool(cfg.get("no_color")))
+            else None
+        )
         if status is not None:
             status.unit_added(len(nodes))
             context.set_status(status)  # parallel() and the routers find it
             status.open()
         try:
-            if sequential:
-                cfg = ctx_config or {}
-                hint_err = (
-                    err
-                    if endless
-                    and not capture
-                    and not cfg.get("quiet")
-                    and err.isatty()
-                    and not _plain_output(bool(cfg.get("no_color")))
-                    else None
-                )
-                try:
-                    _run_sequential(nodes, real, capture, ctx_config, status, hint_err)
-                except BaseException:
-                    # Ctrl-C mid-task: the running child is group-isolated, so it
-                    # missed the terminal's SIGINT — reap its tree by hand before
-                    # the interrupt propagates. (Parallel does this itself.)
-                    context.terminate_live_children()
-                    raise
-            else:
-                _run_parallel(nodes, real, err, capture, ctx_config, status, jobs)
+            with context.color_environment(colour_on):
+                if sequential:
+                    try:
+                        _run_sequential(
+                            nodes, real, capture, ctx_config, status, hint_err
+                        )
+                    except BaseException:
+                        # Ctrl-C mid-task: the running child is group-isolated, so
+                        # it missed the terminal's SIGINT — reap its tree by hand
+                        # before the interrupt propagates. (Parallel does this.)
+                        context.terminate_live_children()
+                        raise
+                else:
+                    _run_parallel(nodes, real, err, capture, ctx_config, status, jobs)
         finally:
             if status is not None:
                 context.set_status(None)

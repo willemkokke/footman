@@ -55,6 +55,34 @@ def test_color_env_helper():
     assert color_env(False) == {"NO_COLOR": "1", "FORCE_COLOR": "0"}
 
 
+def test_run_colour_on_decision(monkeypatch):
+    from footman.context import run_colour_on
+
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    monkeypatch.setenv("TERM", "xterm")
+    d = run_colour_on
+    assert d(no_color=True, force_color=False, capture=False, isatty=True) is False
+    assert (
+        d(no_color=False, force_color=True, capture=True, isatty=True) is False
+    )  # json
+    assert d(no_color=False, force_color=True, capture=False, isatty=False) is True
+    assert d(no_color=False, force_color=False, capture=False, isatty=True) is True
+    assert d(no_color=False, force_color=False, capture=False, isatty=False) is False
+
+
+def test_color_environment_sets_once_and_restores(monkeypatch):
+    from footman.context import color_environment
+
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    monkeypatch.delenv("FORCE_COLOR", raising=False)
+    with color_environment(True):
+        assert os.environ["FORCE_COLOR"] == "1" and "NO_COLOR" not in os.environ
+    assert "FORCE_COLOR" not in os.environ  # restored
+    with color_environment(False):
+        assert os.environ["NO_COLOR"] == "1"
+    assert "NO_COLOR" not in os.environ
+
+
 _READ_ENV = (
     "import os;"
     "print('FC=' + str(os.environ.get('FORCE_COLOR')),"
@@ -95,9 +123,10 @@ def test_task_env_overrides_the_color_overlay(monkeypatch):
     assert "FC=3" in results[0].steps[0].stdout
 
 
-def test_in_process_auto_leaves_environment_untouched(monkeypatch):
-    # auto reads the router's isatty(), so it needs no env patch — the lock-free
-    # fast path in _process_state stays intact and os.environ is not touched.
+def test_in_process_reads_the_run_wide_colour_env(monkeypatch):
+    # Colour is published once at the run boundary, so an in-process tool reads
+    # it from os.environ — no per-call patch (so no _process_state lock) — and it
+    # is restored when the run ends.
     monkeypatch.delenv("NO_COLOR", raising=False)
     monkeypatch.delenv("FORCE_COLOR", raising=False)
     seen = {}
@@ -111,11 +140,12 @@ def test_in_process_auto_leaves_environment_untouched(monkeypatch):
 
             run(inproc)
 
-    drive(tasks, "probe")  # auto
-    assert seen == {"fc": None, "nc": None}
-    seen.clear()
-    drive(tasks, "probe", force_color=True)  # always -> patched in-process
+    drive(tasks, "probe", force_color=True)  # always
     assert seen["fc"] == "1"
+    assert "FORCE_COLOR" not in os.environ  # restored after the run
+    drive(tasks, "probe", no_color=True)  # never
+    assert seen["nc"] == "1"
+    assert "NO_COLOR" not in os.environ
 
 
 # --- run() -------------------------------------------------------------------

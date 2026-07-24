@@ -824,17 +824,11 @@ def _run_callable(
     uncaptured callables keep cwd/env too.
     """
     ctx = current()
-    # An in-process tool reads the router's `isatty()` (footman's real stdout),
-    # so `auto` already colours correctly on a terminal and stays quiet piped —
-    # no env needed, and the lock-free fast path in `_process_state` is kept. Only
-    # the explicit overrides need a patched environment: `always` (colour past a
-    # non-terminal) and `never` (silence a tool that ignores isatty). `auto` never
-    # coexists with an inherited FORCE_COLOR/NO_COLOR — those resolve the mode away
-    # from auto up front — so there is nothing to neutralise here.
-    cenv = (
-        color_env(True) if ctx.force_color else color_env(False) if ctx.no_color else {}
-    )
-    overlay = {**cenv, **ctx.env, **(env or {})}
+    # Colour is decided once for the whole run and published into os.environ at
+    # the run boundary (`color_environment`), so an in-process tool reads it
+    # straight from the environment — no per-call patch here, so the lock-free
+    # fast path in `_process_state` is kept in every colour mode.
+    overlay = {**ctx.env, **(env or {})}
     target_cwd = Path(cwd) if cwd is not None else ctx.cwd
     with _process_state(overlay, target_cwd):
         if not capture:
@@ -1063,6 +1057,42 @@ def color_env(on: bool) -> dict[str, str]:
     if on:
         return {"FORCE_COLOR": "1", "CLICOLOR_FORCE": "1", "CLICOLOR": "1"}
     return {"NO_COLOR": "1", "FORCE_COLOR": "0"}
+
+
+def run_colour_on(
+    *, no_color: bool, force_color: bool, capture: bool, isatty: bool
+) -> bool:
+    """The run-wide colour decision, computed once from its run-wide inputs.
+
+    Colour cannot change during a run, so this is `_colored` for every task at
+    once — letting the environment be set once at the run boundary rather than
+    per call. Capture (a `--json` run) is byte-clean and gates `force_color` off,
+    exactly as the scheduler does per task; the rest defers to `_colored`."""
+    if capture:
+        return False
+    tty = isatty and os.environ.get("TERM") != "dumb"
+    return _colored(Context(no_color=no_color, force_color=force_color, tty=tty))
+
+
+@contextlib.contextmanager
+def color_environment(on: bool) -> Iterator[None]:
+    """Publish the run-wide colour decision into `os.environ` for the run.
+
+    One decision, set once: a subprocess inherits it, an in-process tool reads
+    it — so no `run()` call has to patch the environment itself (and none takes
+    the `_process_state` lock for colour). Restored on exit; nested runs stack,
+    each restoring the value it found."""
+    changes = color_env(on)
+    saved = {key: os.environ.get(key) for key in changes}
+    os.environ.update(changes)
+    try:
+        yield
+    finally:
+        for key, previous in saved.items():
+            if previous is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = previous
 
 
 def _name_col(ctx: Context) -> str:
@@ -1392,15 +1422,11 @@ def run(
             argv = cmd if sys.platform == "win32" else shlex.split(cmd)
         else:
             argv = [str(a) for a in cmd]
-        # Force colour on (or push footman's monochrome down) for the child:
-        # its stdout is a pipe, so it would otherwise auto-disable. Lowest
-        # precedence — a task's `ctx.env`/`env=` still wins.
-        run_env = {
-            **os.environ,
-            **color_env(_colored(ctx)),
-            **ctx.env,
-            **(env or {}),
-        }
+        # The child inherits the run-wide colour decision from os.environ, set
+        # once at the run boundary (`color_environment`) — FORCE_COLOR so it
+        # colours past its own pipe, or NO_COLOR so it stays quiet. A task's
+        # `ctx.env`/`env=` still overrides it.
+        run_env = {**os.environ, **ctx.env, **(env or {})}
         # A clean POSIX shell means no startup files: `--norc`/`--noprofile`
         # cover interactive/login rc, but bash/sh also source $BASH_ENV/$ENV for
         # a non-interactive `-c`, so drop those from the child env too.

@@ -502,33 +502,48 @@ class Tool:
         title = self._opts.get("title", None)
         in_process = self._opts.get("in_process", None)
         flags = _flags(kwargs, self._argv0, single_dash=self._single_dash)
-        # Force this tool's own colour switch when the run is colourful and the
-        # tool ignores the environment (git). Injected into the executed argv
-        # only — a verb-scoped flag rides with the others; a pre-verb global goes
-        # ahead of the verb below — so `.command`/`recording()` stay the tool's
-        # own call and only `.raw`/`--verbose` show what actually ran.
-        colour = _color_tokens(self._argv0, self._base, kwargs)
-        if colour.on and not colour.pre_verb:
-            flags = [*flags, *colour.on]
         positionals = list(map(str, args))
-        # A wrapper verb (`uv run`, `docker exec`) forwards everything after
-        # its own arguments to a child, so this call's flags must precede the
-        # positionals — otherwise `--frozen` lands on `pytest`, not `uv`.
-        if _is_wrapper(self._argv0, self._base):
-            tail = [*self._base, *flags, *positionals]
-        else:
-            tail = [*self._base, *positionals, *flags]
-        if colour.on and colour.pre_verb:
-            tail = [*colour.on, *tail]
-        # Execution runs the real executable (`python` → sys.executable); the
-        # shown line keeps the name, so the painted command reads `python …`.
-        argv = [self._path, *tail]
-        show = _Invocation(
-            _show_parts(
-                self._argv0, self._base, args, kwargs, single_dash=self._single_dash
-            ),
-            tuple(argv),
+        wrapper = _is_wrapper(self._argv0, self._base)
+
+        def _tail(fl: list[str]) -> list[str]:
+            # A wrapper verb (`uv run`, `docker exec`) forwards everything after
+            # its own arguments to a child, so this call's flags must precede the
+            # positionals — otherwise `--frozen` lands on `pytest`, not `uv`.
+            if wrapper:
+                return [*self._base, *fl, *positionals]
+            return [*self._base, *positionals, *fl]
+
+        # `parts` is the shown/recorded command line and never carries a forced
+        # colour switch, so `.command`/`recording()` stay the tool's own call.
+        parts = _show_parts(
+            self._argv0, self._base, args, kwargs, single_dash=self._single_dash
         )
+        # The in-process argv/tail are colour-free: an in-process tool reads the
+        # run-wide colour from the environment (set once at the run boundary), so
+        # only a *spawned* tool that ignores the environment (git) needs its own
+        # switch. Execution runs the real executable (`python` → sys.executable).
+        tail = _tail(flags)
+        argv = [self._path, *tail]
+
+        def _spawn() -> Result:
+            # The forced colour switch, subprocess-only, into the executed argv:
+            # a pre-verb global (`git -c color.ui=always`) leads; a verb-scoped
+            # flag rides with the others. `.raw`/`--verbose` show what ran.
+            colour = _color_tokens(self._argv0, self._base, kwargs)
+            if not colour.on:
+                spawned = argv
+            elif colour.pre_verb:
+                spawned = [self._path, *colour.on, *tail]
+            else:
+                spawned = [self._path, *_tail([*flags, *colour.on])]
+            return _run(
+                spawned,
+                nofail=nofail,
+                capture=capture,
+                title=title,
+                _show=_Invocation(parts, tuple(spawned)),
+            )
+
         wanted = self._prefer_in_process if in_process is None else in_process
         if wanted:
             loader = self._inprocess_loader()  # metadata only — no import
@@ -538,10 +553,9 @@ class Tool:
                         f"{self._argv0}: in_process=True, but no importable "
                         f"in-process entry ({self._entry or self._argv0!r})"
                     )
-                # prefer → subproc
-                return _run(
-                    argv, nofail=nofail, capture=capture, title=title, _show=show
-                )
+                return _spawn()  # prefer → subproc
+
+            show = _Invocation(parts, tuple(argv))
 
             def _invoke() -> Any:
                 entry = loader()  # the tool's import — deferred to execution,
@@ -559,7 +573,7 @@ class Tool:
             return _run(
                 _invoke, nofail=nofail, capture=capture, title=title, _show=show
             )
-        return _run(argv, nofail=nofail, capture=capture, title=title, _show=show)
+        return _spawn()
 
     def _inprocess_loader(self) -> Any | None:
         """A callable that imports and returns the in-process target — or None
