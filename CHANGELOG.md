@@ -118,6 +118,15 @@ versions may include breaking changes.
 - **`parallel()` collects a `SystemExit`.** A thunk that calls `sys.exit()` or
   `raise SystemExit(...)` — a common "fail this task" idiom — is now collected
   like any other failure instead of escaping and crashing the whole pool.
+- **A task's `sys.exit("reason")` shows its reason.** A task body that raises
+  `SystemExit` with a string (Python's "print this message, exit 1" idiom) used
+  to fail with a bare `exited with code 1`, the message swallowed; the debugging
+  tax was re-running the task under Python to read the traceback. The reason now
+  surfaces in the failure line and the `--json` `error` field, rendered verbatim
+  (no `SystemExit:` prefix). An int/`None` code (`sys.exit(2)` — the
+  fail-with-a-code idiom) is unchanged. (A reason raised inside a `parallel()`
+  thunk is still normalised to a code-only failure — the fan-out deliberately
+  converts a `SystemExit` to a catchable `RunFailed`.)
 - **`run("a | b")` teaches instead of mis-running.** A string command with a
   bare shell operator (`|`, `>`, `&&`, …) now raises a taught error: `run()`
   uses no shell, so the operator would otherwise ride along as a literal

@@ -408,8 +408,14 @@ def _call(
     try:
         returned = fn(*args, **kwargs)
     except SystemExit as exc:
-        code = exc.code if isinstance(exc.code, int) else (0 if exc.code is None else 1)
-        return code, None, None
+        # A non-int, non-None code is Python's `sys.exit("message")` idiom: the
+        # object is the reason the interpreter would print to stderr. Carry it as
+        # the failure error so it renders (stderr + --json) like any other failure,
+        # instead of vanishing into a bare "exited with code 1". An int/None code
+        # (the "fail with code N" idiom) has no message to surface.
+        has_reason = not isinstance(exc.code, int) and exc.code is not None
+        code = 1 if has_reason else (exc.code if isinstance(exc.code, int) else 0)
+        return code, None, (exc if has_reason else None)
     except RunFailed as exc:
         # A `run()` command failed: propagate its own exit code, not a flat 1,
         # so `fm` mirrors the command's code (docs/ci.md's "exited N" contract).

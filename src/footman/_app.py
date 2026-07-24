@@ -599,7 +599,16 @@ def _print_summary(
         if cancelled:
             _error(f"{result.task}: cancelled — fail-fast stopped the run")
         elif result.error is not None:
-            _error(f"{result.task}: {type(result.error).__name__}: {result.error}")
+            # A `sys.exit("…")` reason renders verbatim, the way Python prints it —
+            # not "SystemExit: …". A real exception keeps its type, which signals a
+            # crash rather than a deliberate stop with a message.
+            err = result.error
+            detail = (
+                str(err)
+                if isinstance(err, SystemExit)
+                else (f"{type(err).__name__}: {err}")
+            )
+            _error(f"{result.task}: {detail}")
         elif not result.ok:
             _error(f"{result.task}: exited with code {result.code}")
     if len(results) > 1:  # one task's receipt already carries the total

@@ -33,6 +33,11 @@ def boom():
     raise SystemExit(2)
 
 @task
+def refuse():
+    """Stop with a reason."""
+    raise SystemExit("refused: no open PR to act on")
+
+@task
 def flag(fix: bool = False):
     """A flag task."""
     print(f"fix={fix}")
@@ -161,6 +166,30 @@ def test_failing_task_sets_exit_code(project):
 
 def test_crash_task_exits_1(project):
     assert _app.run(["crash"]) == 1  # a raised exception -> flat 1
+
+
+def test_systemexit_message_surfaces(project, capsys):
+    # F2: `sys.exit("reason")` in a task body must reach the user, not be
+    # swallowed into a bare "exited with code 1". Rendered verbatim (the way
+    # Python prints it), with no "SystemExit:" type prefix.
+    assert _app.run(["refuse"]) == 1
+    err = capsys.readouterr().err
+    assert "refused: no open PR to act on" in err
+    assert "SystemExit" not in err
+
+
+def test_systemexit_message_reaches_json(project, capsys):
+    assert _app.run(["--json", "refuse"]) == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["results"][0]["error"] == "refused: no open PR to act on"
+
+
+def test_systemexit_int_code_stays_bare(project, capsys):
+    # An int code carries no message: unchanged "exited with code N", no reason.
+    assert _app.run(["boom"]) == 2
+    err = capsys.readouterr().err
+    assert "exited with code 2" in err
+    assert "SystemExit" not in err
 
 
 def test_unknown_task_is_teaching_error(project, capsys):
