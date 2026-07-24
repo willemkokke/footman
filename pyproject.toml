@@ -71,6 +71,10 @@ dev = [
     "uv",
     "pytest>=8.0",
     "pytest-cov>=5.0",
+    # Parallelise the suite across cores (`-n auto`, wired into addopts). The
+    # gate is test-bound, so this roughly halves it; xdist runs workers as
+    # processes, so subprocess/parallel coverage still merges cleanly.
+    "pytest-xdist>=3.6",
     "ruff>=0.6",
     "basedpyright>=1.18",
     # The optional fetch backends, so every one of them is driven against a
@@ -123,7 +127,10 @@ select = ["E", "F", "I", "UP", "B", "SIM", "C4", "RUF"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-q"
+# `-n auto` fans the suite across cores (pytest-xdist). It is test-bound, so
+# this roughly halves both the local gate and every CI pytest job. To debug a
+# single test serially (live `-s`, `--pdb`, `-x` ordering), override with `-n0`.
+addopts = "-q -n auto"
 
 [tool.basedpyright]
 # First-party code only. comparison/ exercises third-party runners (duty,
