@@ -121,6 +121,16 @@ versions may include breaking changes.
   explicitly (`tools.bash("-c", …)`) or split into steps.
 - **`fm footman tools provision`** skips the hand-written shell drivers instead
   of printing a spurious `uv tool install` failure for each.
+- **`fm --help "group task"` accepts a quoted or dotted path.** A path handed as
+  one shell token (`"docs serve"`) or dotted (`docs.serve`) is split into its
+  components and resolved, instead of failing with a self-referential "did you
+  mean 'docs serve'?". A genuinely unknown quoted path now names its first bad
+  component and suggests a real neighbour.
+- **A missing `include()` module names the call, not the file.** `include("x.y")`
+  for a module that can't be imported raised "failed to import `<tasks.py>`",
+  blaming the tasks file; it now raises a taught error naming the `include()`
+  call and the reason (`include('x.y'): failed to import (ModuleNotFoundError:
+  …)`), the same shape `plugin()` already gives.
 
 ### Docs
 
