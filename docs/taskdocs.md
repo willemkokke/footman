@@ -6,6 +6,27 @@ that `fm --help` shows, as pages you can publish. Everything on this page is
 dogfooded: the [task reference](tasks/index.md) in this site's nav is
 generated output, and the sample further down is embedded live.
 
+## Write plain prose
+
+footman surfaces a docstring — and a [`doc()`](typing.md#validation-markers)
+string — **as plain text**: verbatim in `fm --help`, so it reads in any terminal
+and survives a pipe (`fm --help build | less`) byte for byte, and as plain
+paragraphs in the exported markdown. It renders no rich markup in the terminal:
+no bold, no headings, no reflowed tables. That is deliberate — footman is
+[zero-dependency](comparison.md), and plain text is the one format every
+terminal, pager, and CI log agrees on.
+
+So write your help as prose. A sentence or two that reads straight is worth more
+than markup footman won't paint, and it exports cleanly either way. The one
+styling footman *does* apply is [colour](color-support.md) — to its own chrome
+(names, receipts, the progress line) and, through the tools it spawns, to their
+output — never injected into your text. Your task's own stdout is yours; footman
+routes it untouched.
+
+(A future opt-in could render markdown in the terminal too — see the
+[roadmap](roadmap.md) — but it stays off by default and never becomes a
+dependency.)
+
 ## Mount it
 
 The plugin mounts like any other — two lines of config, no tasks-file edit:

@@ -145,6 +145,10 @@ versions may include breaking changes.
   mermaid diagrams for the dependency graph and completion refresh, and added
   docs-drift test guards so undocumented public symbols and stale version pins
   fail the gate.
+- Documented the plain-prose output convention (task docstrings/`doc()` render
+  as plain text in `--help` and export cleanly to markdown; footman paints no
+  rich markup in the terminal — colour is the one styling it applies), and
+  recorded an optional post-1.0 rich-terminal renderer in the roadmap.
 
 ## [0.19.0] — 2026-07-23
 
