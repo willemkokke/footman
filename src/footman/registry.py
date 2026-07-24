@@ -194,6 +194,42 @@ class _Opted:
         return (id(base), frozenset(overrides.items()))
 
 
+def _apply_policy(
+    fn: Task,
+    *,
+    pre: Sequence[Task],
+    post: Sequence[Task],
+    progress: bool,
+    infinite: bool,
+    confirm: str,
+    interactive: bool,
+    keep_going: bool | None,
+    atomic: bool,
+) -> None:
+    """Stamp a task's `_footman_*` policy attributes onto *fn*.
+
+    The single writer of the orchestration markers, shared by `@task` and
+    `@group.default` so the two option surfaces cannot drift apart. Only the
+    non-default markers are set, so `getattr(fn, _…, default)` reads elsewhere
+    stay the source of truth; `pre`/`post` are always written (as lists) so a
+    later mutation edits a list this task owns.
+    """
+    setattr(fn, _PRE, list(pre))
+    setattr(fn, _POST, list(post))
+    if not progress:
+        setattr(fn, _PROGRESS, False)
+    if infinite:
+        setattr(fn, _INFINITE, True)
+    if confirm:
+        setattr(fn, _CONFIRM, confirm)
+    if interactive:
+        setattr(fn, _INTERACTIVE, True)
+    if keep_going is not None:
+        setattr(fn, _KEEP_GOING, keep_going)
+    if atomic:
+        setattr(fn, _ATOMIC, True)
+
+
 _P = ParamSpec("_P")
 _R_co = TypeVar("_R_co", covariant=True)
 
@@ -307,20 +343,17 @@ class Group:
         def register(fn: Callable[_P, _R_co]) -> TaskFn[_P, _R_co]:
             key = cli_name(name or fn.__name__)
             self._claim(key)
-            setattr(fn, _PRE, list(pre))
-            setattr(fn, _POST, list(post))
-            if not progress:
-                setattr(fn, _PROGRESS, False)
-            if infinite:
-                setattr(fn, _INFINITE, True)
-            if confirm:
-                setattr(fn, _CONFIRM, confirm)
-            if interactive:
-                setattr(fn, _INTERACTIVE, True)
-            if keep_going is not None:
-                setattr(fn, _KEEP_GOING, keep_going)
-            if atomic:
-                setattr(fn, _ATOMIC, True)
+            _apply_policy(
+                fn,
+                pre=pre,
+                post=post,
+                progress=progress,
+                infinite=infinite,
+                confirm=confirm,
+                interactive=interactive,
+                keep_going=keep_going,
+                atomic=atomic,
+            )
             fn.opts = lambda **o: _Opted(fn, _opts_overrides(o))  # type: ignore[attr-defined]
             self.tasks[key] = fn
             return cast("TaskFn[_P, _R_co]", fn)
@@ -359,41 +392,104 @@ class Group:
         self.finalizers.append(fn)
         return fn
 
-    def default(self, fn: Callable[_P, _R_co]) -> TaskFn[_P, _R_co]:
+    @overload
+    def default(self, fn: Callable[_P, _R_co]) -> TaskFn[_P, _R_co]: ...
+    @overload
+    def default(
+        self,
+        fn: None = None,
+        *,
+        pre: Sequence[Task] = (),
+        post: Sequence[Task] = (),
+        progress: bool = True,
+        infinite: bool = False,
+        confirm: str = "",
+        interactive: bool = False,
+        keep_going: bool | None = None,
+        atomic: bool = False,
+    ) -> Callable[[Callable[_P, _R_co]], TaskFn[_P, _R_co]]: ...
+
+    def default(
+        self,
+        fn: Task | None = None,
+        *,
+        pre: Sequence[Task] = (),
+        post: Sequence[Task] = (),
+        progress: bool = True,
+        infinite: bool = False,
+        confirm: str = "",
+        interactive: bool = False,
+        keep_going: bool | None = None,
+        atomic: bool = False,
+    ) -> Task | Callable[[Task], Task]:
         """Register *fn* as this group's default action — what a bare
         `fm <group>` runs, and what the group returns when called.
+
+        Usable bare (`@group.default`) or parameterised
+        (`@group.default(keep_going=True)`). It takes the same orchestration
+        options as `@task` — `pre`/`post`, `progress`, `infinite`, `confirm`,
+        `interactive`, `keep_going`, `atomic` — with no `name` (the group
+        already names it).
 
         The function's signature *is* the group's option surface, so it takes
         flags/options only: a positional parameter is rejected at load time,
         because a bare word after a group names a child, not a value. Model a
         positional action as a task, or take free arguments via `--` passthrough.
-        """
-        # Lazy: manifest imports registry, so importing it at module load would
-        # cycle. By call time (a tasks file being imported) it resolves fine.
-        from footman.context import context_param_name
-        from footman.manifest import param_spec, resolved_signature
 
-        sig = resolved_signature(fn)
-        ctx_name = context_param_name(sig)
-        for param in sig.parameters.values():
-            if param.name == ctx_name:
-                continue
-            if param_spec(param).get("kind") in ("argument", "variadic"):
-                where = self.name if self.name != "root" else "the root group"
+        An **empty-body** default fans the group's own tasks out in parallel, so
+        `interactive=True` on one is rejected — there is no single body to own
+        the terminal. Give the default a real body to make it interactive.
+        """
+        where = self.name if self.name != "root" else "the root group"
+
+        def register(fn: Callable[_P, _R_co]) -> TaskFn[_P, _R_co]:
+            # Lazy: manifest imports registry, so importing it at module load
+            # would cycle. By call time (a tasks file being imported) it resolves.
+            from footman.context import context_param_name
+            from footman.manifest import param_spec, resolved_signature
+
+            sig = resolved_signature(fn)
+            ctx_name = context_param_name(sig)
+            for param in sig.parameters.values():
+                if param.name == ctx_name:
+                    continue
+                if param_spec(param).get("kind") in ("argument", "variadic"):
+                    raise RegistrationError(
+                        f"{where}'s default {fn.__name__!r} takes a positional "
+                        f"parameter ({param.name!r}); a group default takes "
+                        f"flags/options only — a bare word after a group names a "
+                        f"child. Model a positional action as a task, or take "
+                        f"free arguments via `--` passthrough."
+                    )
+            fanout = _empty_body(fn)
+            if interactive and fanout:
                 raise RegistrationError(
-                    f"{where}'s default {fn.__name__!r} takes a positional "
-                    f"parameter ({param.name!r}); a group default takes "
-                    f"flags/options only — a bare word after a group names a "
-                    f"child. Model a positional action as a task, or take free "
-                    f"arguments via `--` passthrough."
+                    f"{where}'s default {fn.__name__!r} is interactive but has "
+                    f"an empty body, so it fans the group's tasks out in "
+                    f"parallel — there is no single body to own the terminal. "
+                    f"Give it a real body, or drop interactive."
                 )
-        # A back-reference plus the empty-body flag: an empty-body default fans
-        # out the group's own tasks (they become its implicit prerequisites at
-        # DAG-build time); a custom body is the escape hatch and runs as written.
-        setattr(fn, _DEFAULT_GROUP, self)
-        setattr(fn, _DEFAULT_FANOUT, _empty_body(fn))
-        self.default_task = fn
-        return cast("TaskFn[_P, _R_co]", fn)
+            _apply_policy(
+                fn,
+                pre=pre,
+                post=post,
+                progress=progress,
+                infinite=infinite,
+                confirm=confirm,
+                interactive=interactive,
+                keep_going=keep_going,
+                atomic=atomic,
+            )
+            # A back-reference plus the empty-body flag: an empty-body default
+            # fans out the group's own tasks (implicit prerequisites at DAG-build
+            # time); a custom body is the escape hatch and runs as written.
+            setattr(fn, _DEFAULT_GROUP, self)
+            setattr(fn, _DEFAULT_FANOUT, fanout)
+            fn.opts = lambda **o: _Opted(fn, _opts_overrides(o))  # type: ignore[attr-defined]
+            self.default_task = fn
+            return cast("TaskFn[_P, _R_co]", fn)
+
+        return register(fn) if fn is not None else register
 
     def opts(self, **overrides: Any) -> _Opted:
         """Per-use option overrides for this group's default action, the same

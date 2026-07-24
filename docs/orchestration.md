@@ -274,6 +274,17 @@ def lint_all(fix: Forward[bool] = False):
   names a child, not a value — model a positional action as a task instead.
 - An **empty body** fans out the group's own tasks; a non-empty body is the
   escape hatch where you write the fan-out yourself.
+- On an empty-body default, **mark a parameter `Forward` if you want it to reach
+  the surfaces.** The default has no body, so a plain parameter binds to it and
+  goes nowhere — `fix: bool` accepts `--fix` and then nothing happens with it.
+  `fix: Forward[bool]` threads the value to every surface that declares `fix`.
+  (A parameter the default *does* use in a custom body needs no `Forward`; the
+  marker is only for values that must travel onward.)
+- The default takes the same **policy options** as `@task` —
+  `@lint.default(pre=[...], keep_going=True, confirm="…", atomic=True)` and the
+  rest — with no `name` (the group already names it). `interactive=True` needs a
+  real body: an empty-body default fans out in parallel, so there is no single
+  body to own the terminal, and asking for one is a load-time error.
 
 The group tab-completes (`fm lint <Tab>` offers `--fix` and the surface names)
 and `fm --help lint` renders it as a first-class command. And it composes: a

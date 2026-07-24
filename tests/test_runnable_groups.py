@@ -7,7 +7,15 @@ import pytest
 from footman import manifest
 from footman.executor import run_chain
 from footman.params import Forward
-from footman.registry import Group
+from footman.registry import (
+    Group,
+    RegistrationError,
+    is_atomic,
+    is_interactive,
+    keeps_going,
+    pre_tasks,
+    task_confirm,
+)
 from footman.split import ChainError, split_chain
 
 
@@ -199,6 +207,89 @@ def test_completion_offers_the_default_flags_alongside_children():
     assert "--fix" in offered  # the default's flag
     assert {"python", "markdown", "spelling"} <= offered  # and the children
     assert complete(tree, ["lint", "--f"]) == ["--fix"]
+
+
+# --- @group.default options ---------------------------------------------------
+
+
+def test_default_takes_task_policy_options():
+    reg = Group("root")
+    lint = reg.group("lint")
+
+    @lint.default(keep_going=True, atomic=True, confirm="lint everything?")
+    def lint_all(fix: Forward[bool] = False):
+        """Lint everything."""
+
+    assert keeps_going(lint_all) is True
+    assert is_atomic(lint_all) is True
+    assert task_confirm(lint_all) == "lint everything?"
+
+
+def test_default_pre_runs_before_the_default():
+    ran = []
+
+    def tasks(reg):
+        @reg.task
+        def bootstrap():
+            ran.append("bootstrap")
+
+        lint = reg.group("lint")
+
+        @lint.default(pre=[bootstrap])
+        def lint_all():
+            ran.append("lint")
+
+    drive(tasks, "lint")
+    assert ran == ["bootstrap", "lint"]
+
+
+def test_bare_default_still_registers_with_no_options():
+    reg = Group("root")
+    lint = reg.group("lint")
+
+    @lint.default
+    def lint_all(fix: Forward[bool] = False):
+        """Lint everything."""
+
+    assert reg.groups["lint"].default_task is lint_all
+    assert keeps_going(lint_all) is None
+    assert pre_tasks(lint_all) == []
+
+
+def test_interactive_on_an_empty_body_default_is_rejected():
+    reg = Group("root")
+    lint = reg.group("lint")
+
+    @lint.task
+    def python(fix: bool = False): ...
+
+    with pytest.raises(RegistrationError, match=r"empty body.*own the terminal"):
+
+        @lint.default(interactive=True)
+        def lint_all(fix: Forward[bool] = False):
+            """Empty body -> fans out; cannot own the terminal."""
+
+
+def test_interactive_on_a_custom_body_default_is_allowed():
+    reg = Group("root")
+    shell = reg.group("shell")
+
+    @shell.default(interactive=True)
+    def repl():
+        print("would drop into a REPL")
+
+    assert is_interactive(repl) is True
+
+
+def test_default_still_rejects_a_positional_parameter():
+    reg = Group("root")
+    lint = reg.group("lint")
+
+    with pytest.raises(RegistrationError, match=r"positional parameter"):
+
+        @lint.default(keep_going=True)
+        def lint_all(path: str):
+            """A positional is a child name, not a value."""
 
 
 # --- body-callability: a runnable group is callable from a task body ----------

@@ -62,6 +62,12 @@ versions may include breaking changes.
   `eclint -fix` — for tools whose Go `flag` package rejects the `--fix` form.
 - **`djlint`** joins the curated tools — the HTML/Django/Jinja template
   linter-formatter, with a typed `tools.djlint(...)` stub.
+- **`@group.default` takes `@task`'s policy options.** A group default can now
+  be parameterised — `@lint.default(pre=[bootstrap], keep_going=True,
+  confirm="…", atomic=True)` and the rest — the same orchestration surface a
+  task has, minus `name` (the group already names it). `interactive=True` on an
+  **empty-body** default is a load-time error: an empty body fans the group's
+  tasks out in parallel, so there is no single body to own the terminal.
 
 ### Changed
 
