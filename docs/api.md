@@ -59,6 +59,10 @@ it can't run. Every gate is evaluated live, and all failures are collected.
 
 ::: footman.context.RunFailed
 
+::: footman.context.fail
+
+::: footman.context.Failed
+
 ## Composing tasks
 
 ::: footman.compose.include

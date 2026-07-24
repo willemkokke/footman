@@ -27,6 +27,7 @@ from typing import Any
 from footman import coerce, context, registry
 from footman.context import (
     Context,
+    Failed,
     Result,
     RunFailed,
     _current,
@@ -416,6 +417,10 @@ def _call(
         has_reason = not isinstance(exc.code, int) and exc.code is not None
         code = 1 if has_reason else (exc.code if isinstance(exc.code, int) else 0)
         return code, None, (exc if has_reason else None)
+    except Failed as exc:
+        # `footman.fail("reason", code=…)`: a deliberate stop. Honour its code and
+        # carry the reason as the error, rendered verbatim (see _app / context).
+        return exc.code, None, exc
     except RunFailed as exc:
         # A `run()` command failed: propagate its own exit code, not a flat 1,
         # so `fm` mirrors the command's code (docs/ci.md's "exited N" contract).

@@ -9,6 +9,15 @@ versions may include breaking changes.
 
 ### Added
 
+- **`footman.fail(reason, code=1)` — a blessed way to fail a task.** A function
+  (not a `raise`) that stops the current task with a reason: the reason renders
+  verbatim on the failure line and in the `--json` `error` field, and
+  `fail("…", code=3)` sets the exit code too. It is a function on purpose — a
+  task lives in your repo under your linter, and a call trips no flake8-errmsg
+  (`EM101`) or tryceratops (`TRY003`), where `raise SomeError("literal")` would;
+  the same reason `sys.exit()` and `pytest.fail()` are functions. The exception
+  it raises, **`footman.Failed`**, is exported for `except footman.Failed:`. The
+  stdlib idioms (`return N`, `sys.exit(...)`, raising) still work unchanged.
 - **Colour survives footman's no-PTY boundary.** footman spawns tools over
   pipes, not a pseudo-terminal, so a tool sees a non-terminal and turns colour
   off — even when footman itself is on a terminal. footman now forces it back:

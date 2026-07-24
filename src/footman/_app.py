@@ -599,15 +599,15 @@ def _print_summary(
         if cancelled:
             _error(f"{result.task}: cancelled — fail-fast stopped the run")
         elif result.error is not None:
-            # A `sys.exit("…")` reason renders verbatim, the way Python prints it —
-            # not "SystemExit: …". A real exception keeps its type, which signals a
-            # crash rather than a deliberate stop with a message.
+            # A deliberate stop with a reason (`fail("…")` / `sys.exit("…")`)
+            # renders verbatim, the way Python prints it — not "Failed: …"; a bare
+            # `fail()` with no reason falls back to the code line. A real exception
+            # keeps its type, which signals a crash, not a chosen stop.
             err = result.error
-            detail = (
-                str(err)
-                if isinstance(err, SystemExit)
-                else (f"{type(err).__name__}: {err}")
-            )
+            if context._is_deliberate_stop(err):
+                detail = str(err) or f"exited with code {result.code}"
+            else:
+                detail = f"{type(err).__name__}: {err}"
             _error(f"{result.task}: {detail}")
         elif not result.ok:
             _error(f"{result.task}: exited with code {result.code}")

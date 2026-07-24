@@ -29,7 +29,7 @@ from collections.abc import Callable, Iterator, Sequence
 from contextvars import ContextVar
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Any, TextIO
+from typing import Any, NoReturn, TextIO
 
 
 class Result(int):
@@ -352,6 +352,43 @@ class RunFailed(Exception):
     def __init__(self, result: Result) -> None:
         self.result = result
         super().__init__(f"`{result.command}` exited with code {result.code}")
+
+
+class Failed(Exception):
+    """A task chose to fail — the exception `footman.fail()` raises.
+
+    A *deliberate* stop with a reason (and optional exit code): the user-facing
+    sibling of `RunFailed` (which is a *command*'s failure). Carries `.reason`
+    and `.code`; footman renders the reason verbatim — no type prefix — in the
+    failure line and the `--json` `error` field. Exported so a task can
+    `except footman.Failed:`, but `fail()` is the blessed way to raise it.
+    """
+
+    def __init__(self, reason: str = "", *, code: int = 1) -> None:
+        self.reason = reason
+        self.code = code
+        super().__init__(reason)
+
+
+def fail(reason: str = "", *, code: int = 1) -> NoReturn:
+    """Fail the current task with a *reason* (and exit *code*, default 1).
+
+    The blessed way to stop a task deliberately: `fail("no open PR to act on")`,
+    or `fail("reserved branch", code=3)` to pick the exit code too. A *function*,
+    not a `raise`, on purpose — a task lives in your repo under your linter, and
+    `raise SomeError("a literal")` trips flake8-errmsg (EM101) and tryceratops
+    (TRY003) at the call site, every failure. A call trips neither, the same
+    reason `sys.exit()` and `pytest.fail()` are functions. `return N` still
+    spells a bare code; `sys.exit(...)` still works — `fail()` is just the
+    footman-native one, with a reason and a code together.
+    """
+    raise Failed(reason, code=code)
+
+
+def _is_deliberate_stop(err: BaseException) -> bool:
+    """Whether *err* is a chosen stop with a message (`fail()`/`sys.exit("…")`)
+    rather than a crash — so its reason renders verbatim, no type prefix."""
+    return isinstance(err, (SystemExit, Failed))
 
 
 def context_param_name(sig: inspect.Signature) -> str | None:
@@ -1550,6 +1587,12 @@ def parallel(*calls: Callable[[], Any], keep_going: bool = False) -> list[int]:
             if code != 0:
                 thunk = _label(call, ())
                 error = RunFailed(Result(code, command=thunk, raw=thunk))
+        except Failed as exc:
+            # `footman.fail("reason")` in a thunk: an Exception (not a
+            # BaseException), so the gate can re-raise it and its reason surfaces
+            # at the task level — better than the sys.exit-in-parallel corner.
+            # Its own code rides the return list too.
+            code, error = exc.code, exc
         except Exception as exc:  # a failed call must not crash the pool
             code, error = 1, exc
         finally:

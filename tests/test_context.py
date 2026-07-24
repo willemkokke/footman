@@ -933,6 +933,42 @@ def test_parallel_systemexit_zero_is_success():
         assert parallel(clean, bare) == [0, 0]
 
 
+def test_fail_raises_failed_with_reason_and_code():
+    from footman import Failed, fail
+
+    with pytest.raises(Failed) as caught:
+        fail("boom", code=3)
+    assert caught.value.reason == "boom"
+    assert caught.value.code == 3
+    assert str(caught.value) == "boom"  # str is the reason (verbatim rendering)
+
+    with pytest.raises(Failed) as bare:
+        fail()
+    assert bare.value.reason == "" and bare.value.code == 1
+
+
+def test_fail_is_a_function_so_it_is_lint_clean_for_consumers(tmp_path):
+    # The whole reason fail() is a function, not `raise Failed(...)`: a call trips
+    # no EM101 (flake8-errmsg) or TRY003 (tryceratops) at a consumer's call site,
+    # where a `raise SomeError("literal")` would. Guard the property directly.
+    import shutil
+    import subprocess
+
+    ruff = shutil.which("ruff")
+    if ruff is None:
+        pytest.skip("ruff not on PATH")
+    snippet = tmp_path / "consumer_task.py"
+    snippet.write_text(
+        "import footman\n\n\ndef t() -> None:\n    footman.fail('a literal reason')\n"
+    )
+    proc = subprocess.run(
+        [ruff, "check", "--isolated", "--select", "EM,TRY", str(snippet)],
+        capture_output=True,
+        text=True,
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+
+
 def test_step_lines_carry_an_aligned_name_column(capsys):
     # mark · task name (padded to the widest sibling) · command · (time).
     def tasks(reg):
