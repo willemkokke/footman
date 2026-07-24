@@ -359,6 +359,55 @@ def test_include_memoises_per_module(provider):
     assert set(a.tasks) == {"lint"} and set(b.tasks) == {"fmt"}
 
 
+def test_include_carries_a_providers_finalize_to_the_merged_tree(tmp_path, monkeypatch):
+    # An included provider's `@finalize` must run over the *merged* tree — the
+    # env-guard pattern the cascade relies on. include() moves the provider's
+    # finalizers onto the live root that discovery collects and runs, so they are
+    # not stranded on the forked subtree.
+    #
+    # Assert on the merged TREE, never a provider module-global: include() imports
+    # the provider under capture() as a distinct instance, and `_evict_siblings`
+    # drops it from sys.modules — so a re-`import` of it sees a stale copy the
+    # grafted finalizer never touched (the module-aliasing trap).
+    from footman import discover
+
+    monkeypatch.setattr(compose, "_module_trees", {})
+    monkeypatch.syspath_prepend(str(tmp_path))
+    sys.modules.pop("guard_tasks", None)
+    (tmp_path / "guard_tasks.py").write_text(
+        textwrap.dedent(
+            """
+            from footman import task, finalize
+
+            @task
+            def shared_audit(): ...
+
+            @finalize
+            def gate(tasks):
+                for t in tasks:
+                    if t.name.startswith("deploy"):
+                        t.add_pre(tasks["shared-audit"])
+            """
+        )
+    )
+    root = tmp_path / "tasks.py"
+    root.write_text(
+        textwrap.dedent(
+            """
+            from footman import task, include
+
+            @task
+            def deploy_web(): ...
+
+            include("guard_tasks")
+            """
+        )
+    )
+    view = registry.Tasks(discover.load_tree([root]))
+    # the provider's finalizer edited a ROOT task, proving it saw the merged tree.
+    assert view["shared-audit"].fn in view["deploy-web"].pre
+
+
 def test_included_tasks_run_from_the_includers_dir(tmp_path, monkeypatch):
     # F58: an included provider task is stamped with the INCLUDER's directory,
     # not the provider module's. Observe it directly: the task prints ctx.cwd,
