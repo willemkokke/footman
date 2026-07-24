@@ -52,7 +52,10 @@ def test_color_env_helper():
         "CLICOLOR_FORCE": "1",
         "CLICOLOR": "1",
     }
-    assert color_env(False) == {"NO_COLOR": "1", "FORCE_COLOR": "0"}
+    # off sets only NO_COLOR — forcing colour off is the *absence* of
+    # FORCE_COLOR (`color_environment` clears it), never `FORCE_COLOR=0`, which a
+    # presence-checking tool (ruff) would read as "force on".
+    assert color_env(False) == {"NO_COLOR": "1"}
 
 
 def test_run_colour_on_decision(monkeypatch):
@@ -78,8 +81,11 @@ def test_color_environment_sets_once_and_restores(monkeypatch):
     with color_environment(True):
         assert os.environ["FORCE_COLOR"] == "1" and "NO_COLOR" not in os.environ
     assert "FORCE_COLOR" not in os.environ  # restored
+    monkeypatch.setenv("FORCE_COLOR", "1")  # an inherited force...
     with color_environment(False):
-        assert os.environ["NO_COLOR"] == "1"
+        # ...is cleared, not set to "0" — off is FORCE_COLOR's absence.
+        assert os.environ["NO_COLOR"] == "1" and "FORCE_COLOR" not in os.environ
+    assert os.environ["FORCE_COLOR"] == "1"  # restored
     assert "NO_COLOR" not in os.environ
 
 
@@ -103,10 +109,11 @@ def _child_env(line, **cfg):
 def test_run_forces_color_env_for_a_child(monkeypatch):
     monkeypatch.delenv("NO_COLOR", raising=False)
     monkeypatch.delenv("FORCE_COLOR", raising=False)
-    # always -> force it on; never (and auto-when-piped) -> push monochrome down.
+    # always -> force it on; never (and auto-when-piped) -> push monochrome down
+    # as NO_COLOR with FORCE_COLOR *absent* (not "0", which ruff reads as on).
     assert _child_env("show", force_color=True) == "FC=1 NC=None"
-    assert _child_env("show", no_color=True) == "FC=0 NC=1"
-    assert _child_env("show") == "FC=0 NC=1"  # auto, no tty
+    assert _child_env("show", no_color=True) == "FC=None NC=1"
+    assert _child_env("show") == "FC=None NC=1"  # auto, no tty
 
 
 def test_task_env_overrides_the_color_overlay(monkeypatch):
