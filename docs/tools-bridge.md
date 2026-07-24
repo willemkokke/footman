@@ -68,19 +68,42 @@ pytest.opts(capture=False)("-s")    # stream this run live
 Because it is a fixed set, `capture` here is unambiguously footman's — a tool's
 own `--capture` (pytest's) still goes in the call, `pytest(capture="no")`.
 
-!!! note "Captured output and colour (no pty)"
+!!! note "Colour without a pty"
 
-    footman captures a subprocess through a plain pipe, not a pseudo-terminal.
-    A tool that only colourises when it sees a terminal (`isatty()`) therefore
-    prints plain text when its output is *captured* in a parallel run — footman
-    does not allocate a pty to fake a terminal, deliberately: a cross-platform
-    pty needs a Unix-only stdlib module, ctypes ConPTY on Windows, or a
-    third-party dependency, and footman is zero-dependency and cross-platform.
+    footman captures a subprocess through a plain pipe, not a pseudo-terminal —
+    deliberately, since a cross-platform pty needs a Unix-only stdlib module,
+    ctypes ConPTY on Windows, or a third-party dependency, and footman is
+    zero-dependency and cross-platform. A tool that only colourises when it sees
+    a terminal (`isatty()`) would therefore print plain text.
 
-    Two escape hatches, both of which hand the tool the *real* terminal (so
-    `isatty()` is genuinely true): `.opts(capture=False)` streams a run live,
-    and `@task(interactive=True)` gives a task sole stdio. Otherwise, ask the
-    tool to colour unconditionally — most have a flag, `ruff(color="always")`.
+    So footman forces colour back. When the run is colourful — footman's own
+    output is a terminal and `--color`/`NO_COLOR` don't say otherwise — every
+    subprocess is handed `FORCE_COLOR`/`CLICOLOR_FORCE`, and the captured bytes
+    replay onto footman's terminal (colour is just SGR bytes, so it survives the
+    round-trip). When the run is monochrome, footman pushes `NO_COLOR` down
+    instead, so its tools stay quiet too. The decision is one run-wide
+    tri-state: **`--color=always|never|auto`**, `[tool.footman] color`, then
+    `NO_COLOR`/`FORCE_COLOR`. `always` colours even into a pipe (`fm --color=always
+    check | less -R`); a captured `--json` run stays byte-clean.
+
+    A live cursor is the one thing a pty-less run genuinely can't carry — a
+    tool's own progress bar or full-screen UI. For that, `.opts(capture=False)`
+    streams a run live and `@task(interactive=True)` gives a task sole stdio,
+    both handing over the real terminal.
+
+    A few tools ignore the environment and take a flag instead. footman forces
+    those through their own switch — git's `-c color.ui=always`, injected into
+    the executed command only, so `recording()` still sees `git diff`, not the
+    switch. You never configure any of this; it is handled per tool:
+
+    | How footman forces colour | Tools |
+    | ------------------------- | ----- |
+    | **Environment** — obeys `FORCE_COLOR` / `NO_COLOR` | ruff, uv, pytest, basedpyright, and the rest of the modern set |
+    | **Its own flag** — ignores the environment | git (`-c color.ui=always`) |
+    | **Cannot be forced** — no environment support and no flag | *(none)* |
+
+    `fm footman tools color` prints this for the tools installed on *your*
+    machine, at their versions.
 
 What footman *shows* you is spelled for reading, not for the parser: the
 `--dry-run` line, the live progress line, and `recording()`'s

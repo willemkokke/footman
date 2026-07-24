@@ -45,8 +45,15 @@ def _no_cache_override(monkeypatch, tmp_path_factory):
     ~/.config/footman/config.toml must never leak settings into the suite,
     so FOOTMAN_CONFIG points at a path that doesn't exist. The
     step-alignment width is a per-run learning global for the same reason:
-    reset it, or one test's wide command pads another's lines."""
+    reset it, or one test's wide command pads another's lines. NO_COLOR /
+    FORCE_COLOR are cleared too: the colour resolution reads them, and the suite
+    dogfoods footman — which now pushes one or the other into every child it
+    spawns — so a run under `fm check` would otherwise leak an ambient colour
+    decision into tests that assume a clean environment (a test that needs one
+    sets it with monkeypatch)."""
     monkeypatch.delenv("FOOTMAN_CACHE_DIR", raising=False)
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    monkeypatch.delenv("FORCE_COLOR", raising=False)
     monkeypatch.setenv(
         "FOOTMAN_CONFIG",
         str(tmp_path_factory.getbasetemp() / "no-global-config.toml"),

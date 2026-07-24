@@ -119,6 +119,49 @@ class ToolSpec:
         argv rather than leaking them into the child."""
         return frozenset(verb.name for verb in self.verbs if verb.wraps)
 
+    def color_flags(self) -> dict[str, tuple[str, str, str]]:
+        """The colour switch this tool exposes, per verb: `{verb: (flag, on,
+        off)}`.
+
+        A verb with a `--color`/`--colour`/`--colors` option taking a closed set
+        that includes `always`/`never` — the spelling footman would force to
+        make the tool colour past its own non-tty check (or stay quiet past an
+        ignored `NO_COLOR`). Both directions fall out of the one `choices` list,
+        so detecting the *off* form costs nothing. Empty when the tool has no
+        such switch, in which case it is assumed to obey `FORCE_COLOR`/`NO_COLOR`.
+        This informs the curated `_COLOR` table (via `fm footman tools color`);
+        it is not applied automatically — a flag is only added for a tool proven
+        to ignore the environment.
+        """
+        found: dict[str, tuple[str, str, str]] = {}
+        for verb in self.verbs:
+            for option in verb.options:
+                detected = _color_option(option)
+                if detected is not None:
+                    found[verb.name] = detected
+                    break
+        return found
+
+
+_COLOR_KEYWORDS = frozenset({"color", "colour", "colors", "colours"})
+
+
+def _color_option(option: Option) -> tuple[str, str, str] | None:
+    """`(flag, on, off)` if *option* is a `--color`-style switch, else None.
+
+    The tool's own flag spelling (longest first), and the `always`/`never`
+    values it takes from its closed set — either may be absent, but at least
+    one must be, or this is not a forcing switch footman can use."""
+    if option.name not in _COLOR_KEYWORDS or not option.choices:
+        return None
+    choices = set(option.choices)
+    on = "always" if "always" in choices else ""
+    off = "never" if "never" in choices else ""
+    if not on and not off:
+        return None
+    flag = option.flags[0] if option.flags else f"--{option.name}"
+    return (flag, on, off)
+
 
 def _type_name(param: Any) -> str:
     """The stub's declared type for a click parameter."""

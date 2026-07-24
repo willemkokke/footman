@@ -156,6 +156,32 @@ def test_clap_options_negations_and_choices():
     assert got["line_length"].type_name == "str"
 
 
+def test_color_flags_detects_the_switch():
+    # The `--color` with an always/never choice set is the spelling footman
+    # would force — both directions from the one list.
+    verb = _toolhelp.parse_help(CLAP, name="check")
+    spec = ToolSpec(name="ruff", verbs=(verb,))
+    assert spec.color_flags() == {"check": ("--color", "always", "never")}
+
+
+def test_color_flags_ignores_colorless_or_choiceless_options():
+    # A --color without always/never, or no --color at all, is not a switch.
+    spec = ToolSpec(
+        name="d",
+        verbs=(
+            Verb(
+                name="",
+                options=(
+                    Option("color", ("--color",), choices=("16", "256")),
+                    Option("colour", ("--colour",)),  # no choices at all
+                    Option("fix", ("--fix",), type_name="bool"),
+                ),
+            ),
+        ),
+    )
+    assert spec.color_flags() == {}
+
+
 def test_clap_flag_indent_varies_within_one_block():
     """`  -w, --watch` and `      --fix-only` are both flag lines.
 
@@ -672,6 +698,30 @@ def test_spec_refuses_an_unknown_or_absent_tool():
 
     with pytest.raises(SystemExit, match="no driver"):
         tools_tasks.spec("not-a-curated-tool")
+
+
+def test_colour_mechanism_classification():
+    from footman import tools as bridge
+    from footman.tasks import tools as tools_tasks
+
+    curated = {"": bridge._ColorFlag(on=("-c", "color.ui=always"), pre_verb=True)}
+    mech, detail = tools_tasks._colour_mechanism(curated, {})
+    assert mech == "curated" and "color.ui=always" in detail and "off=—" in detail
+    mech, detail = tools_tasks._colour_mechanism(
+        None, {"check": ("--color", "always", "never")}
+    )
+    assert mech == "flag?" and "check" in detail  # a candidate, not forced
+    assert tools_tasks._colour_mechanism(None, {})[0] == "env"  # assumed
+
+
+def test_color_report_marks_git_curated(capsys):
+    # git is a system tool (this is a git repo), and its row reads off the
+    # curated table without extracting — so no man-page dependency here.
+    from footman.tasks import tools as tools_tasks
+
+    tools_tasks.color(only="git")
+    out = capsys.readouterr().out
+    assert "git" in out and "curated" in out and "color.ui=always" in out
 
 
 @needs_ruff

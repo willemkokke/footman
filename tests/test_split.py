@@ -60,6 +60,14 @@ def test_interactivity_globals(tree):
     assert [s.task for s in segs(tree, "-y --no-input format")] == ["format"]
 
 
+def test_color_global_takes_a_value(tree):
+    # --color is a valued global; --no-color stays a bare flag beside it.
+    assert globs(tree, "--color always format") == ["--color", "always"]
+    assert globs(tree, "--color=never format") == ["--color=never"]
+    assert globs(tree, "--no-color format") == ["--no-color"]
+    assert [s.task for s in segs(tree, "--color always format")] == ["format"]
+
+
 def test_group_descent_and_typed_option(tree):
     (seg,) = segs(tree, "docs serve --port 8001")
     assert seg.task == "docs.serve"

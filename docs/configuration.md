@@ -66,6 +66,7 @@ older footman.
 | ------------ | --------------------------------------------------------- |
 | `tasks`      | Filename to look for in each folder (default `tasks.py`). |
 | `sequential` | Run tasks one at a time by default.                       |
+| `color`      | `always` / `never` / `auto` (default): when to emit ANSI colour, for footman's own output and the tools it spawns. `--color` / `--no-color` override it. |
 | `jobs`       | Max parallel tasks (default: cores - 1, never below 2).   |
 | `plugins`    | `footman.tasks` entry points to mount as command groups (opt-in). |
 | `progress`   | `false` permanently disables the progress bar, eta line, and timing capture. |
@@ -83,7 +84,8 @@ older footman.
 | `FOOTMAN_CACHE_DIR` | Moves every footman cache (completion manifests, timing history). |
 | `FOOTMAN_NO_UV`     | Disables the uv handoff, regardless of any config.  |
 | `FOOTMAN_NO_GC`     | Disables the cache collector, regardless of any config. |
-| `NO_COLOR` / `TERM=dumb` | Disable ANSI styling, as everywhere.           |
+| `NO_COLOR` / `TERM=dumb` | Disable ANSI styling — for footman and for every tool it spawns, which footman tells to stay monochrome too. |
+| `FORCE_COLOR`       | Force ANSI styling on, even piped (below `--color` and `[tool.footman] color` in the ladder). |
 
 See also [Monorepos & config](monorepos.md) for how the tasks cascade
 itself composes, and the [CLI reference](reference.md) for the flags that

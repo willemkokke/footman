@@ -113,7 +113,13 @@ class Context:
     verbose: bool = False
     """`--verbose`: replay captured `run()` output even on success."""
     no_color: bool = False
-    """`--no-color` (or `NO_COLOR`): never emit ANSI styling."""
+    """`--no-color` / `--color=never` (or `NO_COLOR`): never emit ANSI styling."""
+    force_color: bool = False
+    """`--color=always` (or `FORCE_COLOR`): colour even when output is not a
+    terminal — so `run()` forces the tools it spawns to colour and the shown
+    command line paints, for a pipe into `less -R`. Gated off under capture
+    (`--json`), where ANSI would corrupt the envelope. Never sets the live
+    cursor affordances `tty` governs — those still need a real terminal."""
     prog: str = "fm"
     """The invoking CLI's command name — a branded CLI's own `prog`, so
     tasks (the taskdocs plugin, say) can speak the brand's name."""
@@ -818,6 +824,10 @@ def _run_callable(
     uncaptured callables keep cwd/env too.
     """
     ctx = current()
+    # Colour is decided once for the whole run and published into os.environ at
+    # the run boundary (`color_environment`), so an in-process tool reads it
+    # straight from the environment — no per-call patch here, so the lock-free
+    # fast path in `_process_state` is kept in every colour mode.
     overlay = {**ctx.env, **(env or {})}
     target_cwd = Path(cwd) if cwd is not None else ctx.cwd
     with _process_state(overlay, target_cwd):
@@ -1012,7 +1022,77 @@ def _dim(text: str, color: bool) -> str:
 
 
 def _colored(ctx: Context) -> bool:
-    return ctx.tty and not ctx.no_color and "NO_COLOR" not in os.environ
+    """The one colour predicate: does footman dress this run's output — its own
+    chrome and the tools it spawns — for colour?
+
+    `never` (`no_color`) always wins; `always` (`force_color`) forces colour on
+    even off a terminal (a pipe into `less -R`); otherwise `auto` follows the
+    run's tty-ness (`NO_COLOR` in the environment still bows out)."""
+    if ctx.no_color:
+        return False
+    if ctx.force_color:
+        return True
+    return ctx.tty and "NO_COLOR" not in os.environ
+
+
+def color_on() -> bool:
+    """Whether the current run emits colour — the tools bridge asks this to
+    decide whether to force a tool's own `--color` flag (for the few that
+    ignore the environment). A plain call outside a run reads a default
+    (monochrome) context, so a bare `tools.git.diff()` in a script adds
+    nothing."""
+    return _colored(current())
+
+
+def color_env(on: bool) -> dict[str, str]:
+    """The environment that tells a spawned tool whether to emit colour.
+
+    Without a PTY a child's stdout is a pipe, so `isatty()` is false and a
+    well-behaved tool auto-disables colour — footman captures the bytes and
+    replays them onto its own terminal, so it wants the colour back. `on` forces
+    it (`FORCE_COLOR`/`CLICOLOR_FORCE`, honoured by the modern set); off pushes
+    footman's own monochrome decision down (`NO_COLOR`, plus `FORCE_COLOR=0` to
+    override a force inherited from the parent environment). Overlaid at lowest
+    precedence, so a task's `env=` or `ctx.env` still wins."""
+    if on:
+        return {"FORCE_COLOR": "1", "CLICOLOR_FORCE": "1", "CLICOLOR": "1"}
+    return {"NO_COLOR": "1", "FORCE_COLOR": "0"}
+
+
+def run_colour_on(
+    *, no_color: bool, force_color: bool, capture: bool, isatty: bool
+) -> bool:
+    """The run-wide colour decision, computed once from its run-wide inputs.
+
+    Colour cannot change during a run, so this is `_colored` for every task at
+    once — letting the environment be set once at the run boundary rather than
+    per call. Capture (a `--json` run) is byte-clean and gates `force_color` off,
+    exactly as the scheduler does per task; the rest defers to `_colored`."""
+    if capture:
+        return False
+    tty = isatty and os.environ.get("TERM") != "dumb"
+    return _colored(Context(no_color=no_color, force_color=force_color, tty=tty))
+
+
+@contextlib.contextmanager
+def color_environment(on: bool) -> Iterator[None]:
+    """Publish the run-wide colour decision into `os.environ` for the run.
+
+    One decision, set once: a subprocess inherits it, an in-process tool reads
+    it — so no `run()` call has to patch the environment itself (and none takes
+    the `_process_state` lock for colour). Restored on exit; nested runs stack,
+    each restoring the value it found."""
+    changes = color_env(on)
+    saved = {key: os.environ.get(key) for key in changes}
+    os.environ.update(changes)
+    try:
+        yield
+    finally:
+        for key, previous in saved.items():
+            if previous is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = previous
 
 
 def _name_col(ctx: Context) -> str:
@@ -1261,7 +1341,7 @@ def run(
             f"run. Pass shell=True (or a shell name), or drop {which}."
         )
     out = sys.stdout
-    color = ctx.tty and not ctx.no_color and "NO_COLOR" not in os.environ
+    color = _colored(ctx)
     if _show is not None and title is None:
         # `label` (recorded as .command, and the step-line receipt) is always
         # the normalised form, so a recording() assertion never depends on
@@ -1342,6 +1422,10 @@ def run(
             argv = cmd if sys.platform == "win32" else shlex.split(cmd)
         else:
             argv = [str(a) for a in cmd]
+        # The child inherits the run-wide colour decision from os.environ, set
+        # once at the run boundary (`color_environment`) — FORCE_COLOR so it
+        # colours past its own pipe, or NO_COLOR so it stays quiet. A task's
+        # `ctx.env`/`env=` still overrides it.
         run_env = {**os.environ, **ctx.env, **(env or {})}
         # A clean POSIX shell means no startup files: `--norc`/`--noprofile`
         # cover interactive/login rc, but bash/sh also source $BASH_ENV/$ENV for
@@ -1457,6 +1541,12 @@ def parallel(*calls: Callable[[], Any], keep_going: bool = False) -> list[int]:
             _current.reset(token)
         with lock:
             blob = child.sink.getvalue()  # type: ignore[union-attr]
+            # A child that ended mid-colour (a crash, an unterminated SGR) must
+            # not bleed into the next child's block when they interleave: cap a
+            # colourful run's block with a reset. Only when colour is on, so a
+            # byte-clean run stays byte-clean.
+            if blob and _colored(parent):
+                blob += "\033[0m"
             if status is not None and dest_is_real:
                 # This write bypasses the routers (dest is the raw stream):
                 # tell the status line to get out of the way itself.

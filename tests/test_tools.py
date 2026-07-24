@@ -49,6 +49,56 @@ def test_single_dash_rides_chaining_flags_and_negation():
     assert steps[1].raw == "eclint -verbose check src"
 
 
+def test_git_forces_colour_with_its_own_switch():
+    # git ignores FORCE_COLOR and auto-disables over footman's pipe, so a
+    # colourful run injects its pre-verb switch — into the executed argv only.
+    # `.command` (what recording() asserts) stays git's own call; `.raw` shows
+    # what actually ran.
+    with recording(force_color=True) as steps:
+        tools.git.diff("--stat")
+    assert steps[0].command == "git diff --stat"
+    assert steps[0].raw == "git -c color.ui=always diff --stat"
+
+
+def test_git_no_colour_injection_when_monochrome():
+    # A non-colour run (piped/--no-color) injects nothing: git has no `off`
+    # form because its `auto` default is already quiet when piped.
+    with recording() as steps:
+        tools.git.diff("--stat")
+    assert steps[0].raw == "git diff --stat"
+
+
+def test_explicit_colour_kwarg_suppresses_injection():
+    # A caller who spells colour wins: no switch is forced on top of it.
+    with recording(force_color=True) as steps:
+        tools.git.diff("--stat", color="never")
+    assert steps[0].raw == "git diff --stat --color=never"
+
+
+@pytest.mark.parametrize("spelling", ["color", "colour", "colors", "colours"])
+def test_colour_override_guard_accepts_every_spelling(spelling):
+    # The override guard recognises all four colour spellings — so a caller's
+    # explicit choice suppresses the forced switch (`.on` stays empty).
+    from footman.context import Context, use_context
+
+    with use_context(Context(force_color=True)):
+        assert tools._color_tokens("git", ["diff"], {spelling: "never"}).on == ()
+
+
+def test_verb_scoped_colour_flag_rides_with_the_flags(monkeypatch):
+    # A tool that takes `--color=always` (not git's pre-verb global) gets it
+    # appended with the call's flags — both directions, keyed by verb.
+    entry = {"check": tools._ColorFlag(on=("--color=always",), off=("--color=never",))}
+    monkeypatch.setitem(tools._COLOR, "ruff", entry)
+    with recording(force_color=True) as steps:
+        tools.ruff.check("src")
+    assert steps[0].raw == "ruff check src --color=always"
+    assert steps[0].command == "ruff check src"  # shown line stays clean
+    with recording() as steps:  # monochrome -> the off direction
+        tools.ruff.check("src")
+    assert steps[0].raw == "ruff check src --color=never"
+
+
 def test_off_sentinel_emits_the_negation():
     from footman.tools import off
 

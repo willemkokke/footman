@@ -10,7 +10,7 @@ import pytest
 
 from footman import manifest, parallel, run, schedule
 from footman.registry import Group
-from footman.split import ChainError, split_chain
+from footman.split import ChainError, Segment, split_chain
 
 
 def drive(build, line, **kw):
@@ -19,6 +19,26 @@ def drive(build, line, **kw):
     tree = manifest.build_manifest(reg)["tree"]
     _, segments = split_chain(tree, line.split())
     return schedule.run_plan(reg, segments, **kw)
+
+
+def test_force_color_survives_a_terminal_but_not_capture(monkeypatch):
+    # `--color=always` (force_color) reaches a task's context, but capture
+    # (`--json`) strips it — ANSI must never land in the envelope.
+    monkeypatch.delenv("NO_COLOR", raising=False)
+
+    class _Tty(io.StringIO):
+        def isatty(self) -> bool:
+            return True
+
+    seg = Segment(task="t", path=["t"])
+    live = schedule._make_ctx(
+        seg, {"force_color": True}, sequential=True, capture=False, real=_Tty()
+    )
+    assert live.force_color is True
+    captured = schedule._make_ctx(
+        seg, {"force_color": True}, sequential=True, capture=True, real=_Tty()
+    )
+    assert captured.force_color is False
 
 
 def test_chain_runs_concurrently_by_default():
