@@ -231,66 +231,64 @@ def audit(
     )
 
 
-def _colour_mechanism(curated: dict | None, detected: dict) -> tuple[str, str]:
-    """`(mechanism, detail)` for one tool's colour forcing — the report's row.
-
-    `curated` is the tool's `_COLOR` entry (or None); `detected` is what
-    `spec.color_flags()` found. A curated entry is the answer; otherwise a
-    detected `--color` is a *candidate* (add it only if the tool ignores the
-    environment); otherwise the tool is assumed to obey `FORCE_COLOR`/`NO_COLOR`.
-    """
-    if curated:
-        parts = []
-        for verb, flag in curated.items():
-            where = "pre-verb" if flag.pre_verb else (verb or "call")
-            on = " ".join(flag.on) or "—"
-            off = " ".join(flag.off) or "—"
-            parts.append(f"{where}: on={on} off={off}")
-        return "curated", "; ".join(parts)
-    if detected:
-        verbs = ", ".join(v or "(root)" for v in sorted(detected))
-        return "flag?", f"has --color ({verbs}) — candidate"
-    return "env", "assumed FORCE_COLOR/NO_COLOR"
-
-
 @tasks.task
 def color(
-    only: Annotated[str, doc("report just this tool")] = "",
+    only: Annotated[str, doc("probe just this tool")] = "",
+    write: Annotated[bool, doc("regenerate src/footman/_colordata.py")] = True,
 ):
-    """How footman forces colour for each curated tool — env, flag, or none.
+    """Probe how footman forces colour for each installed tool, and regenerate
+    the colour data.
 
-    footman spawns over pipes (no PTY), so it pushes `FORCE_COLOR`/`NO_COLOR`
-    into every child; the modern set obeys them. A tool that ignores the
-    environment needs its own switch, curated in `tools.py`'s `_COLOR`. This
-    reports each installed tool's mechanism: `env` (obeys the variables),
-    `curated` (a forced switch, with its tokens), or `flag?` (has a `--color`
-    that footman does *not* yet force — a candidate to curate only if the tool
-    proves to ignore the environment). A tool that can force neither direction
-    would be named here, not left a silent monochrome surprise — hopefully there
-    are none.
+    footman spawns over pipes (no PTY), so it forces colour into the tools it
+    spawns — by the environment (`FORCE_COLOR`/`NO_COLOR`) for the modern set, by
+    the tool's own switch for the few that ignore it. Which is which is *probed*,
+    not assumed: each tool is run with colour forced on and off, and the bytes
+    read, so a direction is recorded `env`, `flag` (like git's
+    `-c color.ui=always`), `none`, or `unprobed` (no trigger figured out).
+
+    Writes `src/footman/_colordata.py`, which `tools.py` reads for its forcing
+    table and the docs read for the support table. Run it against the
+    provisioned binaries so the set is complete:
+    `fm footman tools provision --sync` puts them on PATH.
     """
-    from footman import tools as _bridge
+    from footman import _colorprobe
 
     on = wants_color(sys.stdout)
-    rows: list[tuple[str, str, str]] = []
+    installed: list[tuple[str, str, str, _toolspec.ToolSpec]] = []
     for driver in _drivers.DRIVERS:
         if only and driver.key != only:
             continue
-        if driver.source == "manual" or driver.base:
+        if driver.source == "manual" or not _drivers.installed(driver):
             continue
-        if not _drivers.installed(driver):
-            rows.append((driver.key, "—", "not installed"))
+        binary = _drivers._resolve(driver.name)
+        if binary is None:
             continue
-        curated = _bridge._COLOR.get(driver.name)
-        # A curated tool's row reads off the table; only an un-curated one needs
-        # the (slower) extraction to look for a candidate `--color`.
-        detected = {} if curated else _drivers.extract(driver).color_flags()
-        mech, detail = _colour_mechanism(curated, detected)
-        rows.append((driver.key, mech, detail))
-    width = max((len(r[0]) for r in rows), default=4)
-    print(bold(f"{'tool'.ljust(width)}  mechanism  detail", on))
-    for key, mech, detail in rows:
-        print(f"{key.ljust(width)}  {mech:<9}  {detail}")
+        # Only a triggered, non-curated tool needs its stub read for a `--color`
+        # candidate; a curated tool (git) and an untriggered one (→ `unprobed`)
+        # skip the sometimes-slow extraction.
+        needs_spec = (
+            driver.key in _colorprobe.TRIGGERS
+            and driver.key not in _colorprobe._CURATED
+        )
+        spec: _toolspec.ToolSpec = (
+            _drivers.extract(driver)
+            if needs_spec
+            else _toolspec.ToolSpec(name=driver.name)
+        )
+        installed.append((driver.key, driver.name, binary, spec))
+
+    results = _colorprobe.probe_all(installed)
+    width = max((len(k) for k in results), default=4)
+    print(bold(f"{'tool'.ljust(width)}  {'on':<8}  {'off':<8}  switch", on))
+    for key in sorted(results):
+        _argv0, verdict = results[key]
+        switch = " ".join(verdict.flag.on) if verdict.flag else ""
+        print(f"{key.ljust(width)}  {verdict.on:<8}  {verdict.off:<8}  {switch}")
+
+    if write and not only:
+        path = Path(__file__).resolve().parent.parent / "_colordata.py"
+        path.write_text(_formatted(_colorprobe.render(results)), encoding="utf-8")
+        print(f"\nwrote {path.name} ({len(results)} tools)")
 
 
 @tasks.task

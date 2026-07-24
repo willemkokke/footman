@@ -129,9 +129,9 @@ def _is_wrapper(argv0: str, base: list[str]) -> bool:
 #
 # footman already pushes FORCE_COLOR / NO_COLOR into every child (see
 # `context.color_env`), which covers the modern set. This table is only for the
-# tools that ignore those and take a flag instead. It starts with git and grows
-# solely when `fm footman tools audit` finds another — no belt-and-suspenders: a
-# tool that already obeys the environment gets no redundant flag.
+# tools that ignore those and take a flag instead (git). It is *probed*, not
+# hand-written: `fm footman tools color` runs each tool with colour forced on
+# and off and records the verdict in `_colordata.py`, which is loaded below.
 
 
 class _ColorFlag(NamedTuple):
@@ -149,13 +149,27 @@ class _ColorFlag(NamedTuple):
     pre_verb: bool = False
 
 
-# Keyed `{tool: {verb: flag}}`; verb `""` applies to every verb the tool has.
-_COLOR: dict[str, dict[str, _ColorFlag]] = {
-    # git captures over footman's pipe → sees a non-tty → auto-disables colour,
-    # and honours no FORCE_COLOR. Force it with the global config, before the
-    # verb. No `off`: its `auto` default is already quiet when piped.
-    "git": {"": _ColorFlag(on=("-c", "color.ui=always"), pre_verb=True)},
-}
+def _load_color() -> dict[str, dict[str, _ColorFlag]]:
+    """Build the forcing table from probed `_colordata.py`, keyed
+    `{argv0: {verb: flag}}` (verb `""` = tool-wide). Only a tool that a
+    direction reports `flag` for gets an entry; everyone else obeys the
+    environment. A missing data file degrades to no flag-forcing (env only)."""
+    try:
+        from footman import _colordata
+    except ImportError:  # not yet generated — env forcing still works
+        return {}
+    table: dict[str, dict[str, _ColorFlag]] = {}
+    for argv0, on, off, flag_on, flag_off, pre_verb in _colordata.COLOUR.values():
+        if on == "flag" or off == "flag":
+            table.setdefault(argv0, {})[""] = _ColorFlag(
+                on=flag_on if on == "flag" else (),
+                off=flag_off if off == "flag" else (),
+                pre_verb=pre_verb,
+            )
+    return table
+
+
+_COLOR: dict[str, dict[str, _ColorFlag]] = _load_color()
 
 
 def _color_flag(argv0: str, base: list[str]) -> _ColorFlag | None:

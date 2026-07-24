@@ -700,28 +700,62 @@ def test_spec_refuses_an_unknown_or_absent_tool():
         tools_tasks.spec("not-a-curated-tool")
 
 
-def test_colour_mechanism_classification():
-    from footman import tools as bridge
-    from footman.tasks import tools as tools_tasks
-
-    curated = {"": bridge._ColorFlag(on=("-c", "color.ui=always"), pre_verb=True)}
-    mech, detail = tools_tasks._colour_mechanism(curated, {})
-    assert mech == "curated" and "color.ui=always" in detail and "off=—" in detail
-    mech, detail = tools_tasks._colour_mechanism(
-        None, {"check": ("--color", "always", "never")}
-    )
-    assert mech == "flag?" and "check" in detail  # a candidate, not forced
-    assert tools_tasks._colour_mechanism(None, {})[0] == "env"  # assumed
-
-
-def test_color_report_marks_git_curated(capsys):
-    # git is a system tool (this is a git repo), and its row reads off the
-    # curated table without extracting — so no man-page dependency here.
+def test_color_probes_git_as_flag_forced(capsys):
+    # git is a system tool (this is a git repo). Probed live, it forces colour
+    # ON with its own switch (`-c color.ui=always`) and OFF via the environment.
+    # `only=` skips the file write, so nothing on disk changes.
     from footman.tasks import tools as tools_tasks
 
     tools_tasks.color(only="git")
     out = capsys.readouterr().out
-    assert "git" in out and "curated" in out and "color.ui=always" in out
+    assert "git" in out and "flag" in out and "color.ui=always" in out
+
+
+def test_colorprobe_categorises_git_and_unprobed():
+    from footman import _colorprobe, _drivers
+    from footman._toolspec import ToolSpec
+
+    git = _drivers._resolve("git")
+    assert git is not None
+    v = _colorprobe.probe("git", git, ToolSpec(name="git"))
+    assert v.on == "flag" and v.off == "env"
+    assert v.flag is not None and v.flag.on == ("-c", "color.ui=always")
+    # a tool with no trigger is `unprobed` — never run, never a crash.
+    assert (
+        _colorprobe.probe("python", "python", ToolSpec(name="python")).on == "unprobed"
+    )
+
+
+@needs_ruff
+def test_colorprobe_ruff_obeys_the_environment():
+    from footman import _colorprobe, _drivers
+
+    driver = _drivers.find("ruff")
+    assert driver is not None
+    spec = _drivers.extract(driver)
+    ruff = _drivers._resolve("ruff")
+    assert ruff is not None
+    v = _colorprobe.probe("ruff", ruff, spec)
+    assert v.on == "env" and v.off == "env" and v.flag is None
+
+
+def test_colorprobe_render_round_trips():
+    from footman import _colorprobe
+
+    flag = _colorprobe.ColourFlag(("-c", "color.ui=always"), (), True)
+    text = _colorprobe.render(
+        {"git": ("git", _colorprobe.Verdict("flag", "env", flag))}
+    )
+    ns: dict = {}
+    exec(text, ns)  # the generated module must be valid, importable Python
+    assert ns["COLOUR"]["git"] == (
+        "git",
+        "flag",
+        "env",
+        ("-c", "color.ui=always"),
+        (),
+        True,
+    )
 
 
 @needs_ruff

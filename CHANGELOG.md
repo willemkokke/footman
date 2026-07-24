@@ -24,9 +24,13 @@ versions may include breaking changes.
   take a flag instead — git's `-c color.ui=always` — are forced through their
   own switch, injected into the executed command only, so `recording()` and
   `--dry-run` still show the tool's own call while `--verbose` shows what ran.
-  **`fm footman tools color`** reports each tool's mechanism (obeys the
-  environment, a forced switch, or a candidate), so the coverage is auditable
-  rather than folklore.
+  Which tools obey the environment and which need a switch is *probed*, not
+  guessed: **`fm footman tools color`** runs each tool with colour forced on and
+  off and reads the bytes, categorising every direction `env`/`flag`/`none`, and
+  regenerates the `_colordata.py` the forcing table loads. Forcing colour *off*
+  is the absence of `FORCE_COLOR`, not `FORCE_COLOR=0` — some tools (ruff) read
+  the mere presence of `FORCE_COLOR` as "on", so `--no-color` and piped runs
+  clear it rather than setting `"0"`.
 
 - **`run(shell=…)` runs a command string through an explicit shell.** `run()`
   stays shell-free by default — a string is split, no shell, so `|`/`>`/`$VAR`
