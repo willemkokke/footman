@@ -177,9 +177,9 @@ def _color_tokens(argv0: str, base: list[str], kwargs: dict[str, Any]) -> _Color
     line: `.command` (what `recording()` asserts) stays the tool's own call,
     while `.raw` / `--verbose` show the literal `git -c color.ui=always …` that
     ran. Skipped when the caller spells colour themselves — `color=`/`colour=`/
-    `colors=` — so a deliberate choice always wins.
+    `colors=`/`colours=` — so a deliberate choice always wins.
     """
-    if any(k.rstrip("_") in ("color", "colour", "colors") for k in kwargs):
+    if any(k.rstrip("_") in ("color", "colour", "colors", "colours") for k in kwargs):
         return _ColorFlag((), ())
     flag = _color_flag(argv0, base)
     if flag is None:

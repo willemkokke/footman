@@ -75,6 +75,16 @@ def test_explicit_colour_kwarg_suppresses_injection():
     assert steps[0].raw == "git diff --stat --color=never"
 
 
+@pytest.mark.parametrize("spelling", ["color", "colour", "colors", "colours"])
+def test_colour_override_guard_accepts_every_spelling(spelling):
+    # The override guard recognises all four colour spellings — so a caller's
+    # explicit choice suppresses the forced switch (`.on` stays empty).
+    from footman.context import Context, use_context
+
+    with use_context(Context(force_color=True)):
+        assert tools._color_tokens("git", ["diff"], {spelling: "never"}).on == ()
+
+
 def test_verb_scoped_colour_flag_rides_with_the_flags(monkeypatch):
     # A tool that takes `--color=always` (not git's pre-verb global) gets it
     # appended with the call's flags — both directions, keyed by verb.
