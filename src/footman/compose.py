@@ -73,7 +73,18 @@ def _import_source(dotted: str) -> Group:
     if dotted in sys.modules:
         return _tree_of_module(sys.modules[dotted])
     with registry.capture() as captured:
-        module = importlib.import_module(dotted)
+        try:
+            module = importlib.import_module(dotted)
+        except ImportError as exc:
+            # A missing module (a typo, a module not on the path, a missing
+            # dependency) otherwise surfaces as "failed to import <tasks.py>",
+            # blaming the file and never naming the include() call that broke.
+            # Name it, and the reason — the same taught shape plugin() gives. A
+            # RegistrationError from the provider's own body isn't an
+            # ImportError, so it propagates already-taught, untouched.
+            raise RegistrationError(
+                f"include({dotted!r}): failed to import ({type(exc).__name__}: {exc})"
+            ) from exc
     tree = (
         captured
         if (captured.tasks or captured.groups)

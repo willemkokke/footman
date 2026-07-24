@@ -506,6 +506,39 @@ def test_help_with_target_tolerates_arg_tokens(project, capsys):
     assert "usage: fm add" in capsys.readouterr().out
 
 
+def test_help_accepts_a_quoted_group_task_path(project, capsys):
+    # `fm --help "tools echo"` — the shell hands the path as one token. It used
+    # to fail with a self-referential "did you mean 'tools echo'?"; now the
+    # token is split and the group task's help renders.
+    assert _app.run(["--help", "tools echo"]) == 0
+    out = capsys.readouterr().out
+    assert "usage: fm tools echo" in out
+    assert "Echo words." in out
+
+
+def test_help_accepts_a_dotted_path(project, capsys):
+    # A user may dot the path the way `--where` prints it; help accepts it too.
+    assert _app.run(["--help", "tools.echo"]) == 0
+    assert "usage: fm tools echo" in capsys.readouterr().out
+
+
+def test_help_path_expansion_leaves_a_passthrough_boundary_alone(project, capsys):
+    # Path-splitting stops at `--`: a target before it still resolves, and the
+    # tokens after are left verbatim (never split into strays).
+    assert _app.run(["--help", "tools echo", "--", "raw arg"]) == 0
+    assert "usage: fm tools echo" in capsys.readouterr().out
+
+
+def test_help_unknown_quoted_path_suggests_a_component_not_itself(project, capsys):
+    # A genuinely unknown quoted pair splits, so the refusal names the first
+    # bad component and suggests a real neighbour — never the whole input back.
+    assert _app.run(["--help", "tolz ecko"]) == 2
+    err = capsys.readouterr().err
+    assert "unknown task or group 'tolz'" in err
+    assert "did you mean 'tools'?" in err
+    assert "'tolz ecko'" not in err  # not the self-referential echo
+
+
 def test_help_alone_shows_the_global_options(project, capsys):
     assert _app.run(["--help"]) == 0
     out = capsys.readouterr().out

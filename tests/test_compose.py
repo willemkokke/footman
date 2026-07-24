@@ -311,6 +311,20 @@ def test_include_unknown_only_name_is_a_typo_error(provider):
         compose.include("shared_tasks", only=["lnt"])
 
 
+def test_include_missing_module_names_the_call_not_the_file():
+    # A missing module used to surface as "failed to import <tasks.py>", blaming
+    # the file. Now it names the include() call and the reason.
+    with (
+        registry.capture(),
+        pytest.raises(
+            RegistrationError,
+            match=r"include\('no_such_provider_xyz'\): failed to import "
+            r"\(ModuleNotFoundError",
+        ),
+    ):
+        compose.include("no_such_provider_xyz")
+
+
 def test_include_collision_is_loud_unless_override(provider):
     with registry.capture() as captured:
 

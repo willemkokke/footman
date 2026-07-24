@@ -446,6 +446,29 @@ def _wants_help(argv: list[str]) -> bool:
     return False
 
 
+def _expand_help_path(argv: list[str], start: int) -> list[str]:
+    """Split a quoted multi-word or dotted path token into its components.
+
+    `fm --help "dict add"` (the shell hands the path as one token) and
+    `fm --help dict.add` (a user dots the path) both name the task at
+    `dict` → `add`. No group or task name contains a space or a dot, so
+    splitting a path token on either only ever un-quotes a path the walk can
+    then resolve — turning a self-referential "did you mean 'dict add'?" into a
+    real lookup. Option-shaped tokens and everything past `--` are left verbatim.
+    """
+    out = argv[:start]
+    for j in range(start, len(argv)):
+        tok = argv[j]
+        if tok == "--":
+            out.extend(argv[j:])  # passthrough boundary — leave the rest verbatim
+            break
+        if not tok.startswith("-") and (" " in tok or "." in tok):
+            out.extend(tok.replace(".", " ").split())
+        else:
+            out.append(tok)
+    return out
+
+
 def _help_targets(
     tree: dict, argv: list[str]
 ) -> tuple[list[tuple[str, list[str]]], list[str]]:
@@ -459,6 +482,7 @@ def _help_targets(
     once a target is found, its argument values).
     """
     _, i = split._parse_globals(argv, 0)
+    argv = _expand_help_path(argv, i)
     targets: list[tuple[str, list[str]]] = []
     strays: list[str] = []
     while i < len(argv):
