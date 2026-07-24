@@ -52,15 +52,16 @@ def test(*pytest_args: str):
 
 @task
 def check():
-    """Run format --check, lint, typecheck, and test — in parallel.
+    """Run format --check, lint, typecheck, and the covered suite — in parallel.
 
-    The gate: run it before every commit, and CI runs exactly this.
-    Coverage is not enforced here — that's the explicit
-    `pytest --cov=footman` invocation documented in CLAUDE.md.
+    The gate: run it before every commit, and CI runs the same checks. The
+    test step runs under coverage and enforces `fail_under` (pyproject), so
+    this one command is the whole local gate — no separate `pytest --cov`.
     """
     # partial, not a lambda: it keeps the callee's name, so the live line
-    # and step column say "format" instead of "…".
-    parallel(functools.partial(format, check=True), lint, typecheck, test)
+    # and step column say "format"/"test" instead of "…".
+    covered = functools.partial(test, "--cov=footman", "--cov-report=")
+    parallel(functools.partial(format, check=True), lint, typecheck, covered)
 
 
 @task

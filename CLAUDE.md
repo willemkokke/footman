@@ -37,14 +37,15 @@ grammar may break without a deprecation cycle.
 This project dogfoods itself, so use `uv run fm …`:
 
 ```sh
-uv run fm check                                   # ruff format --check, ruff check, basedpyright, pytest (parallel)
-uv run pytest -q --cov=footman --cov-report=      # ENFORCES coverage; `fm check`'s pytest does NOT
+uv run fm check                                   # ruff format --check, ruff check, basedpyright, covered pytest (all parallel)
 uv run --group docs zensical build --clean --strict   # ONLY when docs/ changed
 ```
 
-`fm check`'s pytest does not enforce coverage — always run the explicit
-`--cov` command too. ruff line length is 88; target `py311`; type-checker is
-basedpyright.
+`fm check` is the whole gate: its test step runs `pytest -n auto` under
+coverage and enforces `fail_under` (pyproject) — no separate `--cov` command.
+The suite runs across cores via pytest-xdist (`addopts = "-n auto"`); to debug
+one test serially (live `-s`, `--pdb`, `-x`), override with `-n0`. ruff line
+length is 88; target `py311`; type-checker is basedpyright.
 
 ## Layout
 
