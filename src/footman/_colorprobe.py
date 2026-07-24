@@ -49,26 +49,52 @@ class Trigger:
     git: bool = False  # init a repo and commit the files first (for git itself)
 
 
-# One entry per tool footman can actually make colour. A tool absent here is
-# reported `unprobed` rather than guessed. Keyed by driver key.
+# One command per tool that produces colourable output — figured out once each,
+# from the tool's own verbs (see its stub). Every curated tool has one, so none
+# is left `unprobed`; a tool that then shows no colour by any means is a true
+# `none`. Keyed by driver key. `PY_TYPE`/`SPELL`/`HTML`/`MD` are shared fixtures.
+_PY_TYPE = "x: int = 'a'\n"  # a type error, for the type checkers
+_SPELL = "helllo wrold\n"
 TRIGGERS: dict[str, Trigger] = {
     "ruff": Trigger(("check", "bad.py"), {"bad.py": "import os\n"}),
     "ruff_format": Trigger(("format", "--diff", "bad.py"), {"bad.py": "x=1\n"}),
-    "mypy": Trigger(("--pretty", "bad.py"), {"bad.py": "x: int = 'a'\n"}),
-    "ty": Trigger(("check", "bad.py"), {"bad.py": "x: int = 'a'\n"}),
-    "pytest": Trigger(
-        ("test_x.py",), {"test_x.py": "def test_x():\n    assert True\n"}
+    "basedpyright": Trigger(("bad.py",), {"bad.py": _PY_TYPE}),
+    "mypy": Trigger(("bad.py",), {"bad.py": _PY_TYPE}),
+    "ty": Trigger(("check", "bad.py"), {"bad.py": _PY_TYPE}),
+    "pytest": Trigger(("t.py",), {"t.py": "def test():\n    assert True\n"}),
+    "cspell": Trigger(("lint", "bad.txt"), {"bad.txt": _SPELL}),
+    "uv": Trigger(("python", "list")),
+    "gh": Trigger(("--help",)),
+    "bun": Trigger(("--help",)),
+    "prek": Trigger(("--help",)),
+    "mkdocs": Trigger(("--help",)),  # in-process for footman; probed as subprocess
+    "twine": Trigger(("check", "s.py"), {"s.py": "print(1)\n"}),
+    "cmake": Trigger(("-S", ".", "-B", "b")),  # configuring an empty dir → error
+    "ninja": Trigger((), {"build.ninja": "rule f\n  command = false\nbuild x: f\n"}),
+    "build": Trigger(
+        ("--sdist",),
+        {"pyproject.toml": '[project]\nname="x"\nversion="1"\n'},
     ),
-    "cspell": Trigger(("lint", "bad.txt"), {"bad.txt": "helllo wrold\n"}),
     "git": Trigger(("log", "--oneline", "-1"), {"a.txt": "hi\n"}, git=True),
+    "git_cliff": Trigger((), {"a.txt": "hi\n"}, git=True),
+    "git_changelog": Trigger((".",), {"a.txt": "hi\n"}, git=True),
+    "djlint": Trigger(("bad.html",), {"bad.html": "<div ></div>\n"}),
+    "markdownlint": Trigger(("bad.md",), {"bad.md": "#x\n"}),
+    "eclint": Trigger(("-h",)),
+    "coverage": Trigger(("report",)),
+    "docker": Trigger(("version",)),  # no daemon needed for `version`
+    "python": Trigger(("--version",)),  # the interpreter emits no colour
+    "zensical": Trigger(("--help",)),
 }
 
-# A tool's own colour switch, when it is a curated quirk the stub can't surface
-# (git spells it as a pre-verb config, not a `--color` flag). `(on, off)` token
-# tuples; `pre_verb` places them before the verb. Auto-detected `--color=always`
-# switches come from the tool's stub instead (see `flag_candidate`).
+# A tool's own colour switch, when the stub's `color_flags()` can't surface it:
+# git spells it as a pre-verb config; cspell/mypy use plain boolean flags, not a
+# `--color=always/never` choice. `(on, off, pre_verb)`; auto-detected
+# `--color=always` switches still come from the stub (see `flag_candidate`).
 _CURATED: dict[str, tuple[tuple[str, ...], tuple[str, ...], bool]] = {
     "git": (("-c", "color.ui=always"), ("-c", "color.ui=never"), True),
+    "cspell": (("--color",), ("--no-color",), False),
+    "mypy": (("--color-output",), ("--no-color-output",), False),
 }
 
 
@@ -139,10 +165,16 @@ def _argv(
     return [binary, *pre, *trigger.args, *post]
 
 
-def _emits_colour(argv: list[str], cwd: Path, env_add: dict[str, str]) -> bool:
-    """Run *argv* over a pipe with a clean-plus-*env_add* environment; did it
-    print an SGR escape?"""
+def _capture(argv: list[str], cwd: Path, env_add: dict[str, str]) -> str:
+    """Run *argv* over a pipe with a clean-plus-*env_add* environment; return
+    its combined stdout+stderr (empty on failure to launch).
+
+    A real `TERM` is set when the ambient one is empty or `dumb` — many tools
+    (mypy, …) refuse colour without one even under `FORCE_COLOR`, and the probe
+    must judge them as they behave from a genuine terminal, not a bare CI env."""
     env = {k: v for k, v in os.environ.items() if k not in _COLOR_VARS}
+    if env.get("TERM", "") in ("", "dumb"):
+        env["TERM"] = "xterm-256color"
     env.update(env_add)
     try:
         done = subprocess.run(
@@ -156,8 +188,8 @@ def _emits_colour(argv: list[str], cwd: Path, env_add: dict[str, str]) -> bool:
             timeout=60,
         )
     except (OSError, subprocess.SubprocessError):
-        return False
-    return bool(_SGR.search(done.stdout + done.stderr))
+        return ""
+    return done.stdout + done.stderr
 
 
 def probe(key: str, binary: str, spec: ToolSpec) -> Verdict:
@@ -171,26 +203,32 @@ def probe(key: str, binary: str, spec: ToolSpec) -> Verdict:
     pre_off = flag.off if (flag and flag.pre_verb) else ()
     post_off = flag.off if (flag and not flag.pre_verb) else ()
 
+    def coloured(env_add: dict[str, str], pre=(), post=()) -> bool:
+        return bool(
+            _SGR.search(_capture(_argv(binary, trigger, pre, post), cwd, env_add))
+        )
+
     with _fixture(binary, trigger) as cwd:
+        # Force colour maximally (environment and flag). No colour then means
+        # the tool can't be forced: `none` if it produced output to colour,
+        # `unprobed` if the trigger produced nothing to judge.
+        maxed = _capture(_argv(binary, trigger, pre_on, post_on), cwd, _ON_ENV)
+        if not _SGR.search(maxed):
+            stuck = "none" if maxed.strip() else "unprobed"
+            # It is (or is stuck) monochrome, so footman's off signal is moot —
+            # it stays clean either way.
+            return Verdict(stuck, "env" if stuck == "none" else "unprobed")
 
-        def emits(env_add: dict[str, str], pre=(), post=()) -> bool:
-            return _emits_colour(_argv(binary, trigger, pre, post), cwd, env_add)
-
-        # The trigger must be able to produce colour at all, or nothing is
-        # provable — force it maximally (environment and flag together).
-        if not emits(_ON_ENV, pre_on, post_on):
-            return Verdict("unprobed", "unprobed")
-
-        if emits(_ON_ENV):
+        if coloured(_ON_ENV):
             on = "env"
-        elif flag and (pre_on or post_on) and emits({}, pre_on, post_on):
+        elif flag and (pre_on or post_on) and coloured({}, pre_on, post_on):
             on = "flag"
         else:
             on = "none"
 
-        if not emits(_OFF_ENV):  # footman's off signal keeps it clean
+        if not coloured(_OFF_ENV):  # footman's off signal keeps it clean
             off = "env"
-        elif flag and (pre_off or post_off) and not emits({}, pre_off, post_off):
+        elif flag and (pre_off or post_off) and not coloured({}, pre_off, post_off):
             off = "flag"
         else:
             off = "none"

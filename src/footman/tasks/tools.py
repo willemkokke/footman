@@ -235,6 +235,7 @@ def audit(
 def color(
     only: Annotated[str, doc("probe just this tool")] = "",
     write: Annotated[bool, doc("regenerate src/footman/_colordata.py")] = True,
+    prefix: Annotated[str, doc("probe binaries from this prefix's bin/")] = "",
 ):
     """Probe how footman forces colour for each installed tool, and regenerate
     the colour data.
@@ -247,13 +248,25 @@ def color(
     `-c color.ui=always`), `none`, or `unprobed` (no trigger figured out).
 
     Writes `src/footman/_colordata.py`, which `tools.py` reads for its forcing
-    table and the docs read for the support table. Run it against the
-    provisioned binaries so the set is complete:
-    `fm footman tools provision --sync` puts them on PATH.
+    table and the docs read for the support table. Point `--prefix` at a
+    `fm footman tools provision` directory to probe the complete, latest set
+    rather than whatever happens to be on PATH.
     """
+    import os
+
+    saved_path = os.environ.get("PATH", "")
+    if prefix:
+        bindir = Path(prefix).expanduser().resolve() / "bin"
+        os.environ["PATH"] = f"{bindir}{os.pathsep}{saved_path}"
+    try:
+        _color_probe_and_write(only, write, wants_color(sys.stdout))
+    finally:
+        os.environ["PATH"] = saved_path
+
+
+def _color_probe_and_write(only: str, write: bool, on: bool) -> None:
     from footman import _colorprobe
 
-    on = wants_color(sys.stdout)
     installed: list[tuple[str, str, str, _toolspec.ToolSpec]] = []
     for driver in _drivers.DRIVERS:
         if only and driver.key != only:

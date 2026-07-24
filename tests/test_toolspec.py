@@ -720,10 +720,9 @@ def test_colorprobe_categorises_git_and_unprobed():
     v = _colorprobe.probe("git", git, ToolSpec(name="git"))
     assert v.on == "flag" and v.off == "env"
     assert v.flag is not None and v.flag.on == ("-c", "color.ui=always")
-    # a tool with no trigger is `unprobed` — never run, never a crash.
-    assert (
-        _colorprobe.probe("python", "python", ToolSpec(name="python")).on == "unprobed"
-    )
+    # a tool with no trigger is `unprobed` — returned without running anything.
+    none = _colorprobe.probe("notatool", "notatool", ToolSpec(name="notatool"))
+    assert none.on == "unprobed" and none.off == "unprobed"
 
 
 @needs_ruff
