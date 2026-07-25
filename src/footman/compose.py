@@ -162,6 +162,17 @@ def include(
     known = set(tree.tasks) | set(tree.groups)
     for name in (*only, *exclude):
         if name not in known:
+            if "." in name:
+                # A dotted address names a nested entry — a real thing to
+                # want, not yet a thing these filters reach. Taught, never a
+                # silent no-match.
+                raise RegistrationError(
+                    f"include(): {name!r} is a dotted address, but only=/"
+                    f"exclude= filter the source's top level today — dotted "
+                    f"cherry-picking is coming. Filter the whole group "
+                    f"({name.split('.', 1)[0]!r}) for now "
+                    f"(top level has: {', '.join(sorted(known)) or 'nothing'})"
+                )
             raise RegistrationError(
                 f"include(): {source!r} has no task or group named {name!r} "
                 f"(has: {', '.join(sorted(known)) or 'nothing'})"

@@ -557,10 +557,13 @@ class Group:
         `interactive`, `keep_going`, `atomic` — with no `name` (the group
         already names it).
 
-        The function's signature *is* the group's option surface, so it takes
-        flags/options only: a positional parameter is rejected at load time,
-        because a bare word after a group names a child, not a value. Model a
-        positional action as a task, or take free arguments via `--` passthrough.
+        The function's signature *is* the group's whole CLI surface,
+        positionals included: `fm lint src/` hands `src/` to the default the
+        way any task takes an argument. A nested task always keeps its own
+        dotted address (`fm lint.python`), so a bare word after the group is
+        unambiguously the default's value — when a value happens to equal a
+        child's name, the run carries a one-line stderr note pointing at the
+        dotted spelling.
 
         An **empty-body** default fans the group's own tasks out in parallel, so
         `interactive=True` on one is rejected — there is no single body to own
@@ -569,24 +572,6 @@ class Group:
         where = self.name if self.name != "root" else "the root group"
 
         def register(fn: Callable[_P, _R_co]) -> TaskFn[_P, _R_co]:
-            # Lazy: manifest imports registry, so importing it at module load
-            # would cycle. By call time (a tasks file being imported) it resolves.
-            from footman.context import context_param_name
-            from footman.manifest import param_spec, resolved_signature
-
-            sig = resolved_signature(fn)
-            ctx_name = context_param_name(sig)
-            for param in sig.parameters.values():
-                if param.name == ctx_name:
-                    continue
-                if param_spec(param).get("kind") in ("argument", "variadic"):
-                    raise RegistrationError(
-                        f"{where}'s default {fn.__name__!r} takes a positional "
-                        f"parameter ({param.name!r}); a group default takes "
-                        f"flags/options only — a bare word after a group names a "
-                        f"child. Model a positional action as a task, or take "
-                        f"free arguments via `--` passthrough."
-                    )
             fanout = _empty_body(fn)
             if interactive and fanout:
                 raise RegistrationError(
