@@ -13,10 +13,6 @@ directory. Nearer files win, so a package can override repo-wide defaults; a
   for footman's own output and the tools it spawns. `--color` / `--no-color`
   override it; `NO_COLOR` / `FORCE_COLOR` in the environment are consulted
   below it.
-* `plugins` — `footman.tasks` entry points to mount as command groups
-  (opt-in; installing a package never adds tasks by itself). A plugin's
-  name is its command path: `["footman.tools"]` mounts as `fm footman
-  tools …`, nesting one group per dotted segment.
 * `cascade` — `none` | `repo` (default) | `filesystem`: how far discovery
   ranges for task files *and* config. User-level-only (see
   `USER_LEVEL_KEYS`); `FOOTMAN_CASCADE` overrides it per invocation.

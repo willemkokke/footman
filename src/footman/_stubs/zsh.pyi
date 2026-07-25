@@ -1,5 +1,5 @@
 # Hand-written: a shell is invoked to run a command *string*, not for its own
-# flags, so `fm footman.tools.sync` never touches this file (its driver is
+# flags, so `fm tools.sync` never touches this file (its driver is
 # `source="manual"`).
 from typing import Any
 

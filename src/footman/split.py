@@ -398,7 +398,7 @@ def _resolve_head(
     # A namespace group is never a segment target. Before refusing, look
     # ahead: if the following words walk to something runnable, the user
     # spelled a nested address with spaces — teach the dotted form, longest
-    # resolvable path first (`fm footman tools sync` → 'footman.tools.sync').
+    # resolvable path first (`fm tools sync` → 'tools.sync').
     walk_node, walk_path, j = node, list(path), i + 1
     while j < len(argv):
         nxt = argv[j]
