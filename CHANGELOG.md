@@ -7,6 +7,17 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- **`[tool.footman] sort = true` — alphabetical listings.** One boolean
+  orders every human-facing walk of the tree: `--list`, `--tree`, help,
+  the `--json` catalog, and the generated docs pages. A `--sort` global
+  does the same for a single invocation. The default stays definition
+  order — a tasks file is an authored page, and its order is the
+  author's (the same order the composition rules preserve). Tasks still
+  list before groups at every level, and the setting is presentation
+  only: what runs, and in what order, never follows it.
+
 ### Changed
 
 - **footman's own tasks overlay the tree — no container at all.** The

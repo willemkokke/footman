@@ -17,7 +17,16 @@ import sys
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
-from footman import _paths, _shellcomp, config, context, discover, markdown, registry
+from footman import (
+    _describe,
+    _paths,
+    _shellcomp,
+    config,
+    context,
+    discover,
+    markdown,
+    registry,
+)
 from footman import manifest as _manifest
 from footman.params import between, doc
 from footman.registry import Group, requires, requires_dep
@@ -45,7 +54,10 @@ def _project_tree(include_self: bool) -> dict:
     reg = discover.load_tree(files, base=base)
     if not include_self:
         _prune_first_party(reg)
-    return _manifest.build_manifest(reg)["tree"]
+    tree = _manifest.build_manifest(reg)["tree"]
+    if config.sort_listing(cfg):  # the pages follow the same one setting
+        tree = _describe.sort_tree(tree)
+    return tree
 
 
 def _prune_first_party(node: registry.Group) -> None:

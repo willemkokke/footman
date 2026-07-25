@@ -1267,3 +1267,100 @@ def test_where_is_strict_about_empty_segments(project, capsys):
     # The shared resolver never silently normalises a malformed address.
     assert _app.run(["--where", "tools..echo"]) == 2
     assert "unknown task 'tools..echo'" in capsys.readouterr().err
+
+
+# --- [tool.footman] sort: alphabetical listings, definition order default ----
+
+_UNSORTED_TASKS = """
+from footman import group, task
+
+
+@task
+def zebra():
+    "First in the file, last in the alphabet."
+
+
+@task
+def alpha():
+    "Last in the file, first in the alphabet."
+
+
+wash = group("wash")
+
+
+@wash.task
+def rinse(): ...
+
+
+@wash.task
+def dry(): ...
+"""
+
+
+@pytest.fixture
+def unsorted_project(tmp_path, monkeypatch):
+    """A project whose file order disagrees with the alphabet everywhere;
+    returns a hook to rewrite the `[tool.footman]` table."""
+    (tmp_path / "tasks.py").write_text(_UNSORTED_TASKS)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
+
+    def configure(body: str) -> None:
+        (tmp_path / "pyproject.toml").write_text(
+            f"[project]\nname='x'\n[tool.footman]\n{body}"
+        )
+
+    configure("")
+    return configure
+
+
+def test_list_defaults_to_definition_order(unsorted_project, capsys):
+    assert _app.run(["--list"]) == 0
+    out = capsys.readouterr().out
+    assert out.index("zebra") < out.index("alpha")
+    assert out.index("wash.rinse") < out.index("wash.dry")
+
+
+def test_sort_lists_alphabetically_tasks_still_before_groups(unsorted_project, capsys):
+    unsorted_project("sort = true")
+    assert _app.run(["--list"]) == 0
+    out = capsys.readouterr().out
+    assert out.index("alpha") < out.index("zebra")
+    assert out.index("wash.dry") < out.index("wash.rinse")
+    assert out.index("zebra") < out.index("wash.dry")  # the two-band shape holds
+    assert _app.run(["--tree"]) == 0  # the same one setting orders --tree
+    tree_out = capsys.readouterr().out
+    assert tree_out.index("alpha") < tree_out.index("zebra")
+
+
+def test_sort_orders_the_json_catalog(unsorted_project, capsys):
+    unsorted_project("sort = true")
+    assert _app.run(["--json"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert list(payload["tree"]["tasks"]) == ["alpha", "zebra"]
+    assert list(payload["tree"]["groups"]["wash"]["tasks"]) == ["dry", "rinse"]
+
+
+def test_sort_must_be_a_boolean(unsorted_project, capsys):
+    unsorted_project("sort = 'yes'")
+    assert _app.run(["--list"]) == 2
+    assert "`sort` expects true" in capsys.readouterr().err
+
+
+def test_sort_never_reorders_the_run(unsorted_project, capsys):
+    # Presentation only: a chain still runs in the order it was written.
+    unsorted_project("sort = true")
+    assert _app.run(["-s", "zebra", "alpha"]) == 0
+
+
+def test_sort_flag_orders_one_invocation(unsorted_project, capsys):
+    # No config at all: --sort alone sorts this listing.
+    assert _app.run(["--sort", "--list"]) == 0
+    out = capsys.readouterr().out
+    assert out.index("alpha") < out.index("zebra")
+
+
+def test_sort_flag_never_masks_a_broken_config_value(unsorted_project, capsys):
+    unsorted_project("sort = 'yes'")
+    assert _app.run(["--sort", "--list"]) == 2
+    assert "`sort` expects true" in capsys.readouterr().err

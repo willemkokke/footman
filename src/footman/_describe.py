@@ -259,6 +259,20 @@ def iter_tasks(node: dict, prefix: str = ""):
         yield from iter_tasks(sub, f"{prefix}{name}.")
 
 
+def sort_tree(node: dict) -> dict:
+    """A copy of *node* with tasks and groups each in name order, recursively.
+
+    The listing shape survives — tasks still come before groups at every
+    level — so `[tool.footman] sort = true` changes only where names fall,
+    never the two-band layout."""
+    copy = dict(node)
+    copy["tasks"] = {name: node["tasks"][name] for name in sorted(node["tasks"])}
+    copy["groups"] = {
+        name: sort_tree(sub) for name, sub in sorted(node["groups"].items())
+    }
+    return copy
+
+
 def iter_group_paths(node: dict, prefix: str = ""):
     for name, sub in node["groups"].items():
         yield f"{prefix}{name}"

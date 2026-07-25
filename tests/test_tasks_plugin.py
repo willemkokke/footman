@@ -264,3 +264,22 @@ def test_errors_page_extracts_the_taught_errors(tmp_path):
     assert "scoped it to this task" in text  # the environ note
     assert "⟨" in text  # placeholders survive extraction
     assert text.count("**note**") >= 4  # the teach-once notes are listed too
+
+
+def test_page_follows_the_sort_setting(plugin_project, capsys):
+    # One setting for every listing: the generated pages sort too.
+    (plugin_project / "pyproject.toml").write_text(
+        "[project]\nname='x'\n[tool.footman]\nsort = true\n"
+    )
+    (plugin_project / "tasks.py").write_text(
+        "from footman import plugin, task\n"
+        "plugin('footman.docs')\n"
+        "@task\n"
+        "def zebra(): ...\n"
+        "@task\n"
+        "def alpha(): ...\n",
+        encoding="utf-8",
+    )
+    assert _app.run(["docs.page"]) == 0
+    out = capsys.readouterr().out
+    assert out.index("## alpha") < out.index("## zebra")

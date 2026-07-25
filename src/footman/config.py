@@ -20,6 +20,10 @@ directory. Nearer files win, so a package can override repo-wide defaults; a
 * `cascade` — `none` | `repo` (default) | `filesystem`: how far discovery
   ranges for task files *and* config. User-level-only (see
   `USER_LEVEL_KEYS`); `FOOTMAN_CASCADE` overrides it per invocation.
+* `sort` — `true` lists tasks alphabetically (in `--list`, `--tree`, help,
+  and the generated docs pages); the `--sort` global does the same for one
+  invocation. Default `false`: definition order — the task file is an
+  authored page, and its order is the author's.
 
 Unknown keys are kept but ignored, so newer settings never break an older
 footman.
@@ -189,6 +193,22 @@ def completion_max_age(cfg: dict[str, Any]) -> int | None:
     completion = cfg.get("completion")
     raw = completion.get("max_age") if isinstance(completion, dict) else None
     return _parse_duration(raw)
+
+
+def sort_listing(cfg: dict[str, Any]) -> bool:
+    """Whether listings show names alphabetically instead of in definition
+    order. One setting for every human-facing walk of the tree: `--list`,
+    `--tree`, help, and the docs pages. Never the run: what executes and in
+    what order is the DAG's business, not a presentation setting."""
+    raw = cfg.get("sort")
+    if raw is None:
+        return False
+    if not isinstance(raw, bool):
+        raise ConfigError(
+            f"`sort` expects true (list tasks alphabetically) or false "
+            f"(definition order, the default) — got {raw!r}"
+        )
+    return raw
 
 
 def load_config(
