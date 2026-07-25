@@ -841,3 +841,35 @@ def test_zero_arg_entry_parallelises_via_the_router(monkeypatch):
     assert all(r.ok for r in results.values()), [str(r.error) for r in results.values()]
     assert seen["a"] == ["tool-a", "--x"]
     assert seen["b"] == ["tool-b"]
+
+
+def _mp_read_force_color(path):
+    import os as _os
+
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write(str(_os.environ.get("FORCE_COLOR")))
+
+
+def test_multiprocessing_workers_inherit_the_run_wide_colour(tmp_path, monkeypatch):
+    # A spawn worker bypasses the env router and reads the *real*
+    # environment — which carries the run-wide colour decision, because
+    # color_environment publishes into it before any task runs. The note's
+    # warning is only about the task overlay.
+    import multiprocessing
+
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    monkeypatch.delenv("FORCE_COLOR", raising=False)
+    out = tmp_path / "fc.txt"
+
+    def tasks(reg):
+        @reg.task
+        def spawn_worker():
+            proc = multiprocessing.get_context("spawn").Process(
+                target=_mp_read_force_color, args=(str(out),)
+            )
+            proc.start()
+            proc.join()
+
+    results = drive(tasks, "spawn-worker", force_color=True)
+    assert results[0].ok, results[0].error
+    assert out.read_text(encoding="utf-8") == "1"  # colour rode the real env
