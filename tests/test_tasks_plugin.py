@@ -32,7 +32,8 @@ def plugin_project(tmp_path, monkeypatch):
         "\n"
         "@docs.task\n"
         "def serve(port: int = 8000):\n"
-        '    "Serve the docs."\n'
+        '    "Serve the docs."\n',
+        encoding="utf-8",  # the comment's em dash must survive Windows
     )
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
