@@ -196,11 +196,13 @@ def _prompt_param(
     peeled: coerce.Peeled,
     ctx: Context | None,
     params: dict[str, Any] | None = None,
-) -> Any:
+) -> tuple[str, Any]:
     """Resolve a defaultless `ask()` parameter by prompting, coercing the answer
     through the same pipeline as a CLI token and re-asking on a bad value. Off a
     terminal or under `--no-input`/`--json` it raises instead — the value must
-    then be supplied on the command line."""
+    then be supplied on the command line. Returns `(raw, value)`: the accepted
+    token and its coerced value — bind uses the value, the ask front-loader
+    records the raw token so binding re-runs the one pipeline."""
     marker = peeled.ask
     assert marker is not None  # bind only calls this when ask() is present
     if (ctx is not None and ctx.no_input) or not context._stdin_is_tty():
@@ -220,7 +222,7 @@ def _prompt_param(
             continue
         try:
             value = coerce.coerce_token(raw, peeled.element)
-            return _run_checks(value, peeled, f"--{cli}", params)
+            return raw, _run_checks(value, peeled, f"--{cli}", params)
         except ValueError as exc:
             out = context.real_stderr()
             out.write(f"  {exc}\n")
@@ -243,6 +245,42 @@ def _left_siblings(
         elif p.default is not inspect.Parameter.empty:
             view[p.name] = p.default
     return view
+
+
+def resolve_asks(fn: Task, seg: Segment, ctx: Context | None) -> None:
+    """Front-load a node's promptable `ask()` parameters — ask-serial,
+    run-parallel: asked before anything runs.
+
+    Every question whose answer cannot depend on a prerequisite's effects is
+    asked up front (the scheduler calls this over the DAG in order), so the
+    human answers once and walks away. A parameter carrying a live `suggest`
+    completer resolves at node launch instead — its menu may need a dep's
+    output — and CLI/env/default fills are skipped exactly as `bind` skips
+    them. The accepted answer lands in `seg.values` as a raw token, so
+    binding runs the one coercion pipeline: a front-loaded answer is
+    indistinguishable from a CLI value. A required question with no way to
+    ask (`--no-input`, no terminal) raises here, refusing the run before
+    anything starts.
+    """
+    sig = resolved_signature(fn)
+    empty = inspect.Parameter.empty
+    for param in sig.parameters.values():
+        if param.kind is inspect.Parameter.VAR_POSITIONAL:
+            continue
+        if param.annotation is empty:
+            continue
+        cli = registry.cli_name(param.name)
+        if cli in seg.values:
+            continue
+        peeled = coerce.peel(param.annotation)
+        if peeled.ask is None or param.default is not empty:
+            continue
+        if peeled.completer is not None:
+            continue  # a live suggest may need a prerequisite's effects
+        if peeled.env is not None and os.environ.get(peeled.env) is not None:
+            continue  # the env variable fills it at bind time
+        raw, _value = _prompt_param(cli, peeled, ctx, None)
+        seg.values[cli] = raw
 
 
 def bind(
@@ -304,7 +342,7 @@ def bind(
                 # env didn't fill — CLI > env > default > prompt, so a default
                 # short-circuits it and the prompt is the last resort.
                 if peeled.ask is not None and param.default is empty:
-                    kwargs[param.name] = _prompt_param(cli, peeled, ctx, siblings)
+                    _, kwargs[param.name] = _prompt_param(cli, peeled, ctx, siblings)
             continue
         raw = seg.values[cli]
         if isinstance(raw, bool):  # a flag, already resolved by the splitter
