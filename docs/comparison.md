@@ -25,9 +25,13 @@ Before any table makes footman look clever: I've been running my projects on
 pleasure the whole way. footman exists *because* of duty — the `ctx.run` capture
 model, the lazy tool wrappers, the decorator ergonomics are all ideas I'm
 happily standing on. This is a "here's what I wanted to tweak," not a takedown.
-And duty still wins outright in one place: its `tools` standard library is far
-more extensive and detailed than footman's handful — dozens of tools, carefully
-typed. footman has some catching up to do there.
+Its `tools` library in particular is the direct inspiration for footman's: it
+is where I got the idea that a task runner should ship typed wrappers for the
+tools you actually call. footman's take separates the two halves duty fuses —
+wrapping a command-line utility is generic, and the type hints are a layer
+generated on top. So the code reads the same whether or not footman has heard
+of your tool: `tools.terraform("plan")` runs exactly like `tools.ruff.check()`,
+and a stub only decides whether your editor can help.
 
 ## Completion latency
 
@@ -106,8 +110,7 @@ where footman is answering from cache. Not a knock on typer; just a different jo
 ## Feature matrix
 
 The list is footman's own feature set, so the left column is green by
-construction — the honest content is in the other columns, and in the one ❌
-footman concedes: duty's tools library.
+construction — the honest content is in the other columns.
 
 | capability                                  | footman | typer   | duty          | invoke        | poe      |
 | ------------------------------------------- | :-----: | :-----: | ------------- | ------------- | -------- |
@@ -121,7 +124,7 @@ footman concedes: duty's tools library.
 | Separator-free chaining                     |   ✅    |   ❌    | reserved-word | reserved-word | seq task |
 | Parallel-by-default DAG (`pre`/`post`)      |   ✅    |   ❌    | sequential    | sequential    | ✅       |
 | `run()` capture / replay-on-failure         |   ✅    |   ❌    | ✅            | partial       | ❌       |
-| Extensive typed `tools` standard library    |   ❌    |   ❌    | ✅            | ❌            | ❌       |
+| Typed `tools` standard library              |   ✅    |   ❌    | ✅            | ❌            | ❌       |
 | Monorepo `tasks.py` cascade                 |   ✅    |   ❌    | ❌            | ❌            | ❌       |
 | Custom-branded CLI as a library             |   ✅    |   ✅    | ❌            | ❌            | ❌       |
 | Completion without re-importing             |   ✅    |   ❌    | ❌            | ❌            | ✅\*     |
