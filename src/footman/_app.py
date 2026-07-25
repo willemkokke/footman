@@ -738,6 +738,7 @@ def _print_json(results: list[executor.TaskResult], *, total: float) -> None:
         if value is not None and not (
             isinstance(value, int) and not isinstance(value, bool)
         ):
+            value = _describe.redact(value)  # a Secret never serialises
             try:
                 json.dumps(value, default=_describe.json_default)
             except (TypeError, ValueError) as exc:  # ValueError: circular refs

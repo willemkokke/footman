@@ -118,6 +118,8 @@ and edits one task.
 
 ::: footman.params.ask
 
+::: footman.params.Secret
+
 ## Docstrings
 
 Standalone (stdlib-only, no footman imports) — reusable outside footman.

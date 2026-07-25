@@ -287,11 +287,31 @@ def json_default(value: object) -> object:
     raise TypeError(f"{type(value).__name__} is not JSON-serialisable")
 
 
+def redact(value: Any) -> Any:
+    """Secrets never serialise: any `params.Secret` inside *value* becomes
+    `***` before a JSON surface (the `--json` envelope, baked manifest
+    defaults). A str subclass rides json.dumps' fast path and never reaches
+    the `default` hook, so this pre-walk is the only reliable interception."""
+    from footman.params import Secret
+
+    if isinstance(value, Secret):
+        return "***"
+    if isinstance(value, dict):
+        return {redact(k): redact(v) for k, v in value.items()}
+    if isinstance(value, tuple):
+        return tuple(redact(v) for v in value)
+    if isinstance(value, list):
+        return [redact(v) for v in value]
+    if isinstance(value, (set, frozenset)):
+        return {redact(v) for v in value}
+    return value
+
+
 def jsonable(value: Any) -> tuple[bool, Any]:
     """(True, encoded) when *value* survives the JSON coercion mirror —
     used to bake parameter defaults into the manifest; (False, None) when it
     doesn't, in which case the key is simply omitted."""
     try:
-        return True, json.loads(json.dumps(value, default=json_default))
+        return True, json.loads(json.dumps(redact(value), default=json_default))
     except (TypeError, ValueError):
         return False, None

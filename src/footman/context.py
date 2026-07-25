@@ -632,14 +632,25 @@ def _prompt_core(
     with _prompt_lock:
         if status is not None:
             status.notify(message or " ")  # clear the live status line
+        closed = (
+            "stdin closed mid-prompt (Ctrl-D, or piped input ran out) — "
+            "nothing left to ask. Pass the value as a flag, or rerun with "
+            "a terminal attached."
+        )
         if secret:
             import getpass
 
-            value = getpass.getpass(message, stream=err).rstrip("\n")
+            try:
+                value = getpass.getpass(message, stream=err).rstrip("\n")
+            except EOFError:
+                raise RuntimeError(closed) from None
         else:
             err.write(message)
             err.flush()
-            value = sys.stdin.readline().rstrip("\n")
+            line = sys.stdin.readline()
+            if line == "":  # EOF: a re-ask loop would spin on it forever
+                raise RuntimeError(closed)
+            value = line.rstrip("\n")
         if status is not None:
             status.notify("\n")  # Enter returned the cursor to column 0
     return default if value == "" and default is not None else value
