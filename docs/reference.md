@@ -69,7 +69,7 @@ def gate(tasks):            # (see Monorepos & config)
 | `parallel(*calls)`           | fan tasks/thunks out concurrently                    |
 | `passthrough()`              | arguments after `--` on the command line             |
 | `Context`, `use_context`     | the task context; install one from your own code     |
-| `Many[T]`, `nosplit`         | one-or-many; opt a collection out of comma-splitting |
+| `Many[T]`, `NoSplit[T]`      | one-or-many; opt a collection out of comma-splitting (the `nosplit` marker, subscripted) |
 | `forward`, `Forward[T]`      | thread a value to the tasks/groups this task dispatches — see [Chaining & parallelism](orchestration.md#forward-a-value-to-what-a-task-dispatches) |
 | `ask("prompt")`              | prompt for a missing value (CLI > env > default > prompt); CI-safe |
 | `prompt()`, `confirm()`, `select()` | mid-task questions — only inside an `interactive=True` task |
