@@ -246,3 +246,18 @@ def test_shots_renders_a_real_svg(plugin_project, capsys):
     assert svg.startswith("<svg")
     assert "#ff5f57" in svg  # the macOS window chrome
     assert "greet" in svg  # the real listing, captured from the real CLI
+
+
+def test_errors_page_extracts_the_taught_errors(tmp_path):
+    from footman.tasks.docs import errors
+
+    out = tmp_path / "errors.md"
+    errors(out=out)
+    text = out.read_text(encoding="utf-8")
+    # The marquee teachings are present, with runtime holes marked.
+    assert "use dots" in text  # dotted's teaching error
+    assert "footman.cwd()" in text  # the chdir guard
+    assert "reads stdin" in text  # the stdin guard
+    assert "scoped it to this task" in text  # the environ note
+    assert "⟨" in text  # placeholders survive extraction
+    assert text.count("**note**") >= 4  # the teach-once notes are listed too

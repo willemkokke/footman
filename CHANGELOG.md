@@ -9,6 +9,13 @@ versions may include breaking changes.
 
 ### Added
 
+- **A generated "Errors & notes" reference page.** Everything footman can
+  say when it refuses, warns, or teaches — every message-bearing error and
+  every teach-once note — extracted from the source itself on each docs
+  build (runtime holes shown as ⟨placeholders⟩), grouped by module, listed
+  under Reference. Generated, not transcribed, so it can never drift from
+  what the runner actually says.
+
 - **The argv router — the last hidden serialisation point is gone.** A
   legacy zero-argument `main()` that reads `sys.argv` used to take a
   process-wide lock while footman patched the global around it; inside a

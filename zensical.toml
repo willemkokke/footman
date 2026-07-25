@@ -65,6 +65,7 @@ nav = [
     { "API reference" = "api.md" },
     { "Task reference (generated)" = "tasks/index.md" },
     { "Troubleshooting" = "troubleshooting.md" },
+    { "Errors & notes (generated)" = "_generated/errors.md" },
   ] },
   { "Tools" = [
     { "The curated tools" = "_generated/tools/index.md" },

@@ -745,6 +745,81 @@ def cast(
     return [str(out)]
 
 
+@tasks.task
+def errors(out: Path | None = None):
+    """Render every runtime error and note as a markdown reference page.
+
+    The entries are extracted from footman's own source (AST, not prose):
+    every message-bearing `raise` and every teach-once `_note(...)` in the
+    runtime modules, with f-string placeholders shown as `\u27e8expr\u27e9`. A page
+    that regenerates this on each docs build can never drift from what the
+    runner actually says. Without --out the page is the task's stdout.
+    """
+    import ast
+
+    import footman
+
+    def template(node: ast.expr) -> str | None:
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            return node.value
+        if isinstance(node, ast.JoinedStr):
+            parts: list[str] = []
+            for value in node.values:
+                if isinstance(value, ast.Constant):
+                    parts.append(str(value.value))
+                elif isinstance(value, ast.FormattedValue):
+                    parts.append("\u27e8" + ast.unparse(value.value) + "\u27e9")
+            return "".join(parts)
+        return None
+
+    src = Path(footman.__file__).parent
+    entries: list[tuple[str, str, str]] = []  # (module, kind, message)
+    for py in sorted(src.glob("*.py")):
+        tree = ast.parse(py.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Raise) and isinstance(node.exc, ast.Call):
+                call = node.exc
+                func = call.func
+                kind = getattr(func, "id", None) or getattr(func, "attr", None)
+                if not call.args or kind is None:
+                    continue
+                message = template(call.args[0])
+                # Length filters the trivia (AttributeError(name), re-raises);
+                # every taught error is a sentence or three.
+                if message and len(message) >= 40:
+                    entries.append((py.stem, kind, message))
+            elif isinstance(node, ast.Call):
+                func_name = getattr(node.func, "id", None)
+                if func_name == "_note" and len(node.args) >= 2:
+                    message = template(node.args[1])
+                    if message:
+                        entries.append((py.stem, "note", message))
+
+    lines = [
+        "# Errors & notes",
+        "",
+        "Everything footman can say when it refuses, warns, or teaches —",
+        "extracted from the source on every docs build, so this page cannot",
+        "drift from the runner. Angle-bracketed parts (\u27e8like this\u27e9) are",
+        "filled in at runtime; **note** entries print once per task on",
+        "stderr and never stop the run.",
+        "",
+    ]
+    for module in sorted({m for m, _, _ in entries}):
+        lines += [f"## `{module}`", ""]
+        module_entries = sorted((k, msg) for m, k, msg in entries if m == module)
+        for kind, message in module_entries:
+            lines += [f"**{kind}**", "", "``` text", message.rstrip(), "```", ""]
+    text = "\n".join(lines)
+    if out is None:
+        print(text, end="")
+        return None
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(text + "\n", encoding="utf-8")
+    print(f"wrote {out}")
+    return [str(out)]
+
+
 @tasks.task(name="globals")
 def globals_(
     out: Path | None = None,

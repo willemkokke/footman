@@ -318,6 +318,11 @@ def docs_build(check: bool = False):
     # The CLI reference's global-options table, from the grammar itself —
     # reference.md snippet-includes it, so it can't drift from --help.
     taskdocs_globals(out=Path("docs/_generated/globals.md"))
+    # Every error and note the runtime can say, extracted from the source —
+    # a reference page that regenerates each build and so can never drift.
+    from footman.tasks.docs import errors as taskdocs_errors
+
+    taskdocs_errors(out=Path("docs/_generated/errors.md"))
     # One reference page per curated tool, rendered by mkdocstrings from
     # the checked-in stubs — so the pages say what actually ships, and the
     # build needs no tool on PATH.
