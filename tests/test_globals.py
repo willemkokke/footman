@@ -504,3 +504,59 @@ def test_chdir_cm_outside_a_run(tmp_path):
 def test_chdir_cm_relative_target_is_a_taught_error(tmp_path):
     with pytest.raises(TypeError, match="rel="), chdir("somewhere/relative"):
         pass  # pragma: no cover
+
+
+# --- the stdin router ---------------------------------------------------------
+
+
+def test_stdin_read_is_a_taught_error_in_a_parallel_task():
+    def tasks(reg):
+        @reg.task
+        def go():
+            input()
+
+    results = drive(tasks, "go")
+    assert not results[0].ok
+    assert "ask()" in str(results[0].error)
+
+
+def test_stdin_passes_through_for_an_interactive_task(monkeypatch):
+    import io as _io
+
+    monkeypatch.setattr(sys, "stdin", _io.StringIO("typed answer\n"))
+    seen = {}
+
+    def tasks(reg):
+        @reg.task(interactive=True)
+        def wizard():
+            seen["line"] = sys.stdin.readline().strip()
+
+    results = drive(tasks, "wizard")
+    assert results[0].ok, results[0].error
+    assert seen["line"] == "typed answer"
+
+
+def test_stdin_passes_through_for_a_serial_task(monkeypatch):
+    import io as _io
+
+    monkeypatch.setattr(sys, "stdin", _io.StringIO("serial line\n"))
+    seen = {}
+
+    def tasks(reg):
+        @reg.task(serial=True)
+        def own():
+            seen["line"] = sys.stdin.readline().strip()
+
+    results = drive(tasks, "own")
+    assert results[0].ok, results[0].error
+    assert seen["line"] == "serial line"
+
+
+def test_stdin_untouched_outside_a_run():
+    before = sys.stdin
+    _globals.install()
+    try:
+        assert sys.stdin is not before  # wrapped for the run
+    finally:
+        _globals.uninstall()
+    assert sys.stdin is before  # and restored

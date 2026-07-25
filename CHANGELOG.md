@@ -151,6 +151,12 @@ versions may include breaking changes.
   with a one-time note suggesting the deliberate spellings. Explicit
   arguments always win, `env={}` stays a deliberately clean environment, and
   the `unmanaged` policy is the one off-switch.
+- **stdin is guarded like the global it is.** A bare `input()` (or any
+  `sys.stdin` read) in a plain parallel task is now a taught error naming
+  the exits — declare the value with `ask()`, or mark the task
+  `interactive=True` to own the terminal — instead of a silent hang or a
+  stolen read. Interactive and serial tasks, the framework's own boundary
+  prompts, and anything outside a run pass through untouched.
 - **In-process tool calls demote instead of breaking.** A `tools.*` call
   that would run in-process but needs a cwd other than the live process
   directory runs as its subprocess twin instead — same command, same

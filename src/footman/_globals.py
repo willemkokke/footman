@@ -418,6 +418,74 @@ def _restore_multiprocessing() -> None:
         _mp_saved = None
 
 
+# --- the stdin router ---------------------------------------------------------
+
+_stdin_saved: Any = None
+
+
+class _GuardedStdin:
+    """The parallel regime's stdin — the fourth global, guarded not served.
+
+    A read from a plain parallel task body is a taught error (one terminal,
+    consumed rather than mutated: it belongs to no one there); the
+    framework's own boundary prompts run outside task bodies, an
+    `interactive=True` or serial task owns the terminal legitimately, and
+    everything outside a run passes through untouched. `input()` is caught
+    too: with `sys.stdin` replaced, Python falls back to
+    `sys.stdin.readline()` instead of the C readline path.
+    """
+
+    def __init__(self, real: Any) -> None:
+        self._real = real
+
+    def _guard(self) -> None:
+        from footman.context import current
+
+        ctx = current()
+        if _installs and ctx.in_task and not ctx.interactive and not ctx.serial_active:
+            raise RuntimeError(
+                f"task {ctx.task or '?'} reads stdin in a parallel task — "
+                f"declare the value with ask(), or mark the task "
+                f"interactive=True to own the terminal."
+            )
+
+    def read(self, *a: Any) -> Any:
+        self._guard()
+        return self._real.read(*a)
+
+    def readline(self, *a: Any) -> Any:
+        self._guard()
+        return self._real.readline(*a)
+
+    def readlines(self, *a: Any) -> Any:
+        self._guard()
+        return self._real.readlines(*a)
+
+    def __iter__(self) -> Any:
+        self._guard()
+        return iter(self._real)
+
+    def __getattr__(self, name: str) -> Any:  # fileno, isatty, encoding, …
+        return getattr(self._real, name)
+
+
+def _install_stdin() -> None:
+    import sys as _sys
+
+    global _stdin_saved
+    _stdin_saved = _sys.stdin
+    _sys.stdin = _GuardedStdin(_stdin_saved)
+
+
+def _restore_stdin() -> None:
+    import sys as _sys
+
+    global _stdin_saved
+    if _stdin_saved is not None:
+        _sys.stdin = _stdin_saved
+        _stdin_saved = None
+
+
 # --- the arbiter lanes --------------------------------------------------------
 #
 # Serialisation in the new regime is *declared* (serial= / exclusive=) and
@@ -548,6 +616,7 @@ def install() -> None:
         _install_popen()
         _install_os_guards()
         _install_multiprocessing()
+        _install_stdin()
 
 
 def uninstall() -> None:
@@ -559,6 +628,7 @@ def uninstall() -> None:
         _installs -= 1
         if _installs > 0:
             return
+        _restore_stdin()
         _restore_multiprocessing()
         _restore_os_guards()
         _restore_popen()
