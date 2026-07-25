@@ -459,7 +459,11 @@ def _header(path: Path) -> tuple[str, str]:
     head = path.read_text(encoding="utf-8")[:600].replace("\n# ", " ")
     match = _READ_FROM.search(head)
     if not match:
-        return "hand-written", "unknown"
+        # A hand-written stub exists precisely because the tool is not a
+        # Python package to extract from (the shells, cmd): there is no
+        # entry point to call, so in-process is structurally "no" — not
+        # unknown.
+        return "hand-written", "no"
     return f"{match['version']} ({match['platform']})", match["mode"] or "unknown"
 
 
