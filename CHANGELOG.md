@@ -9,6 +9,18 @@ versions may include breaking changes.
 
 ### Added
 
+- **The cascade walk is configurable.** A user-level **`cascade`** key —
+  `none` (the current directory's own files only), `repo` (the `.git`
+  ceiling, the default and today's behaviour), or `filesystem` (past
+  repository boundaries, up to the filesystem root) — decides how far
+  discovery ranges, and task files and config follow the same walk. The
+  key is user-level-only (what sits above a repo is the machine owner's
+  layout, not any project's business; a project file setting it is
+  stripped with a `-v` advisory), and a new **`FOOTMAN_CASCADE`**
+  environment variable overrides it per invocation
+  (`FOOTMAN_CASCADE=none fm test` in CI). An unknown value is a taught
+  error naming the three modes, never a silent default.
+
 - **`footman.fail(reason, code=1)` — a blessed way to fail a task.** A function
   (not a `raise`) that stops the current task with a reason: the reason renders
   verbatim on the failure line and in the `--json` `error` field, and

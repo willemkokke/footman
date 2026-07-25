@@ -17,6 +17,9 @@ directory. Nearer files win, so a package can override repo-wide defaults; a
   (opt-in; installing a package never adds tasks by itself). A plugin's
   name is its command path: `["footman.tools"]` mounts as `fm footman
   tools …`, nesting one group per dotted segment.
+* `cascade` — `none` | `repo` (default) | `filesystem`: how far discovery
+  ranges for task files *and* config. User-level-only (see
+  `USER_LEVEL_KEYS`); `FOOTMAN_CASCADE` overrides it per invocation.
 
 Unknown keys are kept but ignored, so newer settings never break an older
 footman.
@@ -24,6 +27,7 @@ footman.
 
 from __future__ import annotations
 
+import os
 import tomllib
 from collections.abc import Callable
 from pathlib import Path
@@ -41,11 +45,50 @@ FOOTMAN_TOML = "footman.toml"
 # project), so a per-project value would be a lie waiting to confuse
 # someone. Stripped from cascade files, with a note under -v; an explicit
 # `--config` file keeps them — the user named that file on purpose.
-USER_LEVEL_KEYS = frozenset({"gc"})
+USER_LEVEL_KEYS = frozenset({"gc", "cascade"})
 
 
 class ConfigError(Exception):
     """A config TOML file exists but cannot be parsed."""
+
+
+class CascadeError(ConfigError):
+    """The cascade mode (env or config) is not one of the known walks."""
+
+
+CASCADE_MODES = ("none", "repo", "filesystem")
+
+
+def cascade_mode(cli_path: str | None = None) -> str:
+    """How far discovery ranges for task files and config: `"none"` (the
+    cwd's own files only), `"repo"` (the `.git` ceiling — the default,
+    today's walk), or `"filesystem"` (past repo boundaries, up to the
+    filesystem root).
+
+    `FOOTMAN_CASCADE` overrides the `cascade` key — env over durable config,
+    per-invocation over machine-wide. The key itself is user-level-only:
+    what sits above a repo is the machine owner's layout, not any project's
+    business — and the walk's own reach depends on it, so without an
+    explicit `--config` it is read from the user-level file alone, before
+    any walk. An unknown value is a taught error, never a silent default.
+    """
+    value, source = os.environ.get("FOOTMAN_CASCADE"), "FOOTMAN_CASCADE"
+    if not value:
+        path = Path(cli_path).expanduser() if cli_path else _paths.footman_config_file()
+        try:
+            raw = _footman_table(path).get("cascade")
+        except ConfigError:
+            raw = None  # load_config warns about the malformed file itself
+        if raw is None:
+            return "repo"
+        value, source = str(raw), f"`cascade` (in {path})"
+    if value not in CASCADE_MODES:
+        raise CascadeError(
+            f"{source}: unknown cascade mode {value!r} — use 'none' (this "
+            f"directory only), 'repo' (the repository, default), or "
+            f"'filesystem' (across repositories)"
+        )
+    return value
 
 
 def _read_toml(path: Path, required: bool = False) -> dict[str, Any] | None:

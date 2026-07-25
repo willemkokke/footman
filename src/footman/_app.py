@@ -160,12 +160,23 @@ def resolve_task_files(
     discover exactly the same tasks.
 
     `-f/--tasks-file` loads exactly one file, no cascade; otherwise every
-    `tasks.py` from the repo root down to the cwd. Raises `config.ConfigError`
-    on a bad `--config`; an empty file list means nothing matched. The caller
-    owns how either outcome is surfaced.
+    `tasks.py` along the cascade walk down to the cwd. The walk's reach is
+    the cascade mode (user-level `cascade` key, `FOOTMAN_CASCADE` override):
+    the cwd alone (`none`), the repo root (`repo`, default), or the whole
+    ancestor path (`filesystem`) — and config search follows the same walk,
+    so the two cascades stay one concept. Raises `config.ConfigError` on a
+    bad `--config` or an unknown cascade mode (`config.CascadeError`); an
+    empty file list means nothing matched. The caller owns how either
+    outcome is surfaced.
     """
     cwd = Path.cwd()
-    ceiling = _paths.find_repo_root(cwd)
+    mode = config.cascade_mode(g.get("config"))  # type: ignore[arg-type]
+    if mode == "none":
+        ceiling = cwd
+    elif mode == "filesystem":
+        ceiling = Path(cwd.anchor)
+    else:
+        ceiling = _paths.find_repo_root(cwd)
     cfg = config.load_config(
         cwd,
         ceiling,
@@ -200,6 +211,10 @@ def _discover(
             on_warning=_error,
             on_note=_error if g.get("verbose") else None,
         )
+    except config.CascadeError as exc:
+        # Self-describing (names FOOTMAN_CASCADE / the `cascade` key): no
+        # `--config:` prefix, which would misattribute an env-var mistake.
+        return _refuse(bool(g.get("json")), str(exc))
     except config.ConfigError as exc:
         return _refuse(bool(g.get("json")), f"--config: {exc}")
 
