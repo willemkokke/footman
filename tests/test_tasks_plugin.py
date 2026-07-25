@@ -18,9 +18,7 @@ from footman import _app, _paths
 def plugin_project(tmp_path, monkeypatch):
     (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
     (tmp_path / "tasks.py").write_text(
-        "from footman import plugin, task, group\n"
-        "plugin('footman.docs', into='fm')\n"
-        "plugin('footman.tools', into='fm')\n"
+        "from footman import group, plugin, task\n"
         "\n"
         "@task\n"
         "def greet(name: str = 'world'):\n"
@@ -31,6 +29,10 @@ def plugin_project(tmp_path, monkeypatch):
         "@docs.task\n"
         "def serve(port: int = 8000):\n"
         '    "Serve the docs."\n'
+        "\n"
+        "# pulled last: each node merges with what the file already defined\n"
+        "plugin('footman.docs')\n"
+        "plugin('footman.tools')\n"
     )
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
@@ -49,11 +51,11 @@ def test_bare_import_never_loads_first_party_tasks():
 def test_plugin_mounts_under_the_prog(plugin_project, capsys):
     assert _app.run(["--list"]) == 0
     out = capsys.readouterr().out
-    assert "fm.docs.page" in out and "fm.docs.site" in out
+    assert "docs.page" in out and "docs.site" in out
 
 
 def test_page_prints_the_tree_to_stdout(plugin_project, capsys):
-    assert _app.run(["fm.docs.page"]) == 0
+    assert _app.run(["docs.page"]) == 0
     out = capsys.readouterr().out
     assert out.startswith("# fm tasks\n")
     assert "## greet" in out and "### docs.serve" in out
@@ -61,13 +63,13 @@ def test_page_prints_the_tree_to_stdout(plugin_project, capsys):
 
 
 def test_page_all_includes_the_documenter(plugin_project, capsys):
-    assert _app.run(["fm.docs.page", "--all"]) == 0
-    assert "fm.docs.page" in capsys.readouterr().out
+    assert _app.run(["docs.page", "--all"]) == 0
+    assert "docs.page" in capsys.readouterr().out
 
 
 def test_page_scoped_and_written_to_a_file(plugin_project, capsys):
     dest = plugin_project / "build" / "serve.md"
-    line = ["fm.docs.page", "--target", "docs.serve", "--out", str(dest)]
+    line = ["docs.page", "--target", "docs.serve", "--out", str(dest)]
     collected: list = []
     assert _app.run(line, collect=collected) == 0
     text = dest.read_text()
@@ -78,13 +80,13 @@ def test_page_scoped_and_written_to_a_file(plugin_project, capsys):
 
 
 def test_page_unknown_target_is_a_task_failure(plugin_project, capsys):
-    assert _app.run(["fm.docs.page", "--target", "nope"]) == 1
+    assert _app.run(["docs.page", "--target", "nope"]) == 1
     assert "no task or group named 'nope'" in capsys.readouterr().err
 
 
 def test_site_writes_indexes_and_pages(plugin_project, capsys):
     collected: list = []
-    assert _app.run(["fm.docs.site", "pages"], collect=collected) == 0
+    assert _app.run(["docs.site", "pages"], collect=collected) == 0
     root = plugin_project / "pages"
     assert (root / "index.md").exists()
     assert (root / "greet.md").exists()
@@ -104,24 +106,24 @@ def test_branded_cli_documents_itself(plugin_project):
     from footman.testing import Runner
 
     acme = Runner(App(name="Acme", prog="acme", version="1.0"))
-    result = acme.invoke("fm.docs.page")
+    result = acme.invoke("docs.page")
     assert result.ok
     assert result.stdout.startswith("# acme tasks\n")
     assert "acme greet" in result.stdout
-    overridden = acme.invoke("fm.docs.page --prog other")
+    overridden = acme.invoke("docs.page --prog other")
     assert overridden.stdout.startswith("# other tasks\n")
 
 
 def test_page_rides_the_json_envelope(plugin_project, capsys):
-    assert _app.run(["--json", "fm.docs.page"]) == 0
+    assert _app.run(["--json", "docs.page"]) == 0
     payload = json.loads(capsys.readouterr().out)
     (entry,) = payload["results"]
-    assert entry["task"] == "fm.docs.page"
+    assert entry["task"] == "docs.page"
     assert "# fm tasks" in entry["output"]  # the markdown, captured
 
 
 def test_globals_task_prints_the_grammar(plugin_project, capsys):
-    assert _app.run(["fm.docs.globals"]) == 0
+    assert _app.run(["docs.globals"]) == 0
     out = capsys.readouterr().out
     assert out.startswith("| option")
     assert "`--json`" in out
@@ -130,7 +132,7 @@ def test_globals_task_prints_the_grammar(plugin_project, capsys):
 
 def test_globals_task_writes_out(plugin_project, capsys):
     dest = plugin_project / "docs" / "_generated" / "globals.md"
-    assert _app.run(["fm.docs.globals", "--out", str(dest)]) == 0
+    assert _app.run(["docs.globals", "--out", str(dest)]) == 0
     assert dest.read_text(encoding="utf-8").startswith("| option")
 
 
@@ -148,11 +150,11 @@ def test_shots_lists_unavailable_without_rich(plugin_project, capsys, monkeypatc
     )
     assert _app.run(["--list"]) == 0
     out = capsys.readouterr().out
-    assert "fm.docs.shots" in out
+    assert "docs.shots" in out
     # Substring, not the exact `(unavailable: requires rich)`: on Windows the
     # POSIX-pty gate also fails, so collect-all lists both reasons.
     assert "requires rich" in out
-    assert _app.run(["fm.docs.shots", "--out", "x.svg"]) != 0
+    assert _app.run(["docs.shots", "--out", "x.svg"]) != 0
     assert "requires rich" in capsys.readouterr().err
 
 
@@ -232,7 +234,7 @@ def test_shots_renders_a_real_svg(plugin_project, capsys):
     dest = plugin_project / "shot.svg"
     code = _app.run(
         [
-            "fm.docs.shots",
+            "docs.shots",
             "--out",
             str(dest),
             "--width",

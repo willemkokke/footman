@@ -50,16 +50,16 @@ def _project_tree(include_self: bool) -> dict:
 
 def _prune_first_party(node: registry.Group) -> None:
     """Don't document the documenter (opted back in with --all): drop every
-    node pulled from footman's own plugins, *wherever the author mounted
-    it* — the provenance stamp is the identity, never a hardcoded mount
-    name (placement is the author's choice since the composition rework)."""
+    *task* pulled from footman's own plugins, wherever the author mounted
+    it — the per-fn provenance stamp is the identity, never a mount name.
+    Task-level on purpose: a pulled group may carry the author's own tasks
+    grafted onto it (`docs = plugin("footman.docs")` plus `@docs.task`),
+    and those are theirs to document. A group emptied by the prune was the
+    bare mount point and goes too."""
     for name, sub in list(node.groups.items()):
-        if str(getattr(sub, "pulled_from", "")).startswith("footman."):
-            del node.groups[name]
-            continue
         _prune_first_party(sub)
         if not sub.tasks and not sub.groups and sub.default_task is None:
-            del node.groups[name]  # an emptied container: the bare mount point
+            del node.groups[name]
     for name, fn in list(node.tasks.items()):
         if str(getattr(fn, registry._PULLED, "")).startswith("footman."):
             del node.tasks[name]
