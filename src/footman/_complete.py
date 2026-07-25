@@ -207,7 +207,7 @@ def _address_candidates(tree: dict, partial: str) -> list[str]:
 
     Two generosities, both completion-only (the runtime resolver stays
     strict, so scripts cannot rot): segment-wise abbreviation walks each
-    typed segment by unique prefix, `fm f.t.sy⇥` → `footman.tools.sync`,
+    typed segment by unique prefix, `fm t.sy⇥` → `tools.sync`,
     the way zsh expands `/u/l/b`; and on zero top-level matches the
     leaf-name fallback completes against last segments instead
     (`fm serve⇥` → `docs.serve`).
