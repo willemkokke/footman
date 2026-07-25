@@ -67,18 +67,18 @@ a tool that supports parallelism gets to use it. Reproduce with
 | ------- | ------------------------------ | ----------: |
 | footman | parallel (pre-deps, *default*) |  **563 ms** |
 | poe     | parallel (`parallel` task)     |      625 ms |
-| typer   | serial (no orchestration)      |     2092 ms |
-| duty    | serial (pre-duties)            |     2120 ms |
-| invoke  | serial (pre-tasks)             |     2146 ms |
+| typer   | sequential (no orchestration)  |     2092 ms |
+| duty    | sequential (pre-duties)        |     2120 ms |
+| invoke  | sequential (pre-tasks)         |     2146 ms |
 
-The floors are 0.5 s parallel and 2.0 s serial, so everyone's *overhead* is
-a rounding error — the 4× gap is architecture, not dispatch speed. duty and
-invoke run prerequisites serially and have no parallel switch to flip; the
+The floors are 0.5 s parallel and 2.0 s sequential, so everyone's *overhead*
+is a rounding error — the 4× gap is architecture, not dispatch speed. duty and
+invoke run prerequisites one at a time and have no parallel switch to flip; the
 same four steps simply cost the sum instead of the max. poe genuinely ticks
 this box (a dedicated `parallel` task type — credit where due); the
 difference is spelling. In poe you declare a parallel composite per case; in
 footman `pre=[fmt, lint, typecheck, test]` is parallel *by default* and goes
-serial only when you ask (`-s`). And typer hands you nothing here — four
+sequential only when you ask (`-s`). And typer hands you nothing here — four
 calls in a row, unless you hand-roll a thread pool, at which point you've
 written the scheduler yourself.
 
@@ -119,7 +119,7 @@ footman concedes: duty's tools library.
 | Native nested groups                        |   ✅    | ✅      | ❌            | manual        | ❌       |
 | Zero-boilerplate discovery (module = group) |   ✅    |   ❌    | ❌            | ❌            | ❌       |
 | Separator-free chaining                     |   ✅    |   ❌    | reserved-word | reserved-word | seq task |
-| Parallel-by-default DAG (`pre`/`post`)      |   ✅    |   ❌    | serial        | serial        | ✅       |
+| Parallel-by-default DAG (`pre`/`post`)      |   ✅    |   ❌    | sequential    | sequential    | ✅       |
 | `run()` capture / replay-on-failure         |   ✅    |   ❌    | ✅            | partial       | ❌       |
 | Extensive typed `tools` standard library    |   ❌    |   ❌    | ✅            | ❌            | ❌       |
 | Monorepo `tasks.py` cascade                 |   ✅    |   ❌    | ❌            | ❌            | ❌       |

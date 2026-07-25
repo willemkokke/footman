@@ -7,4 +7,6 @@
 *[passthrough]: Everything after -- on the command line, handed to a task verbatim via *args or passthrough().
 *[stale-while-revalidate]: Serving the cached completion answer at once while a detached rebuild refreshes it for next time.
 *[in-process]: Running a Python tool inside footman's own process via its console-script entry point, skipping the subprocess spawn.
+*[sequential]: The run-wide mode (-s/--sequential, or sequential = true in config): no pool at all, every task one at a time, output live.
+*[serial]: One task's lane in the globals arbiter (@task(serial=True)): it owns the process globals, at most one at a time — and unlike a sequential run, the parallel pool keeps running around it.
 *[wrapper verb]: A subcommand that runs another command (uv run, docker exec); its own flags go before the wrapped command.

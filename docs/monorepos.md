@@ -94,7 +94,7 @@ sequential = false     # run tasks one at a time by default
 
 ```toml
 # repo/services/api/footman.toml   (no pyproject here — a standalone file)
-sequential = true      # this package prefers serial runs
+sequential = true      # this package prefers one task at a time
 ```
 
 Within one directory, `footman.toml` wins over `pyproject.toml`'s
