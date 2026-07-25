@@ -58,9 +58,22 @@ def check():
     test step runs under coverage and enforces `fail_under` (pyproject), so
     this one command is the whole local gate — no separate `pytest --cov`.
     """
+    import os
+    import tempfile
+
+    # Coverage data goes to a per-invocation file: two `fm check` runs
+    # sharing the repo's .coverage (a second session, a hook racing a manual
+    # run) clobber the SQLite file mid-write, and the reporter then sees a
+    # bogus partial total with every test passing.
+    cov_file = os.path.join(tempfile.mkdtemp(prefix="fm-check-cov-"), "coverage")
+
+    def covered():
+        run("pytest --cov=footman --cov-report=", env={"COVERAGE_FILE": cov_file})
+
     # partial, not a lambda: it keeps the callee's name, so the live line
-    # and step column say "format"/"test" instead of "…".
-    covered = functools.partial(test, "--cov=footman", "--cov-report=")
+    # and step column say "format" instead of "…"; `covered` borrows the
+    # task's name the same way.
+    covered.__name__ = "test"
     parallel(functools.partial(format, check=True), lint, typecheck, covered)
 
 
