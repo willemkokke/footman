@@ -9,6 +9,29 @@ versions may include breaking changes.
 
 ### Added
 
+- **Completion grows the other half of the `cd` idiom — two generosities,
+  both completion-only** (the runtime resolver stays strict, so scripts
+  cannot rot). *Segment-wise abbreviation*: each typed segment
+  prefix-matches its own tree level, `fm f.t.sy⇥` → `footman.tools.sync`,
+  the way zsh expands `/u/l/b` — and because footman generates the
+  candidates itself, every shell gets it. An ambiguous segment expands up
+  to itself and lists that level's matches. *Leaf-name fallback*: a token
+  matching no top-level name completes against last segments instead
+  (`fm serve⇥` → `docs.serve`) — the rescue for "I know the task, not
+  where it lives", gated on zero top-level matches so it can never pollute
+  a first tab or a valid descent.
+- **The transition TAB is crash-proof.** The completion hot path now
+  checks the manifest's `schema` before walking it: a cache baked by a
+  different footman routes into the existing cold build (which also
+  refuses to serve the stale file mid-rebuild), so the first TAB after an
+  upgrade serves correct candidates instead of a traceback. A drift test
+  pins the hot path's literal to `manifest.SCHEMA_VERSION`.
+- **A "Shell differences" docs page.** The path-style completion model is
+  documented shell-neutrally; the observable per-shell differences
+  (description columns, menus, the space after a unique match) now have
+  one advanced page, and the five-shell functional tests drive a dotted
+  descent through real bash/zsh/fish/pwsh/nushell.
+
 - **Questions front-load: ask-serial, run-parallel, as early as correct.**
   Every promptable `ask()` parameter across the whole run answers *up
   front*, right after the `confirm=` gates and before anything executes —

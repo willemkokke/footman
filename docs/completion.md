@@ -98,6 +98,33 @@ its bare name *and* its dotted children — a space runs the default, a `.`
 descends. When only one group matches, completion steps straight through it,
 the way zsh descends a lone subdirectory.
 
+Two generosities round out the `cd` idiom, and both are **completion-only** —
+the runtime resolver stays strict, so an abbreviation that works today can
+never change meaning when a new task lands, and scripts cannot rot:
+
+- **Segment-wise abbreviation.** Each typed segment prefix-matches its own
+  tree level, the way zsh expands `/u/l/b` to `/usr/local/bin`:
+
+    ```sh
+    fm f.t.sy<TAB>    # footman.tools.sync
+    fm d.<TAB>        # ambiguous first segment: db.  deps.  dns.  docker.  docs.
+    ```
+
+    Because footman generates the candidates itself, every shell gets the
+    expansion, not just zsh.
+
+- **Leaf-name fallback.** When what you typed matches no top-level name at
+  all, completion tries *last* segments instead — the rescue for "I know the
+  task, not where it lives":
+
+    ```sh
+    fm serve<TAB>     # docs.serve
+    ```
+
+All five shells are supported to the best of each shell's ability; the
+observable differences (description columns, menus, the space after a unique
+match) are collected in [Shell differences](completion-differences.md).
+
 ## Chained completion
 
 Completion is aware of the whole command line, not just the first word:

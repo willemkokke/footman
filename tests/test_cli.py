@@ -21,7 +21,7 @@ def _completion_names(out: str) -> set[str]:
 
 def test_complete_cli_reads_explicit_manifest(tree, tmp_path, capsys):
     path = tmp_path / "m.json"
-    path.write_text(json.dumps({"tree": tree}))
+    path.write_text(json.dumps({"schema": 1, "tree": tree}))
     assert complete_cli(["--manifest", str(path), "--", "docs."]) == 0
     assert _completion_names(capsys.readouterr().out) == {"docs.serve", "docs.build"}
 
@@ -36,7 +36,7 @@ def test_complete_cli_empty_partial_appends_blank(tree, tmp_path, capsys):
     # the resolver appends the "" itself — completing the fresh position, not the
     # previous word. `--empty-partial` (no trailing "") == "check" + "".
     path = tmp_path / "m.json"
-    path.write_text(json.dumps({"tree": tree}))
+    path.write_text(json.dumps({"schema": 1, "tree": tree}))
     args = ["--manifest", str(path), "--empty-partial", "--", "check"]
     assert complete_cli(args) == 0
     assert "docs." in _completion_names(capsys.readouterr().out)
@@ -47,7 +47,9 @@ def test_complete_cli_empty_partial_appends_blank(tree, tmp_path, capsys):
 
 def _aged_manifest(tree, tmp_path, max_age, age_s=3600):
     path = tmp_path / "m.json"
-    path.write_text(json.dumps({"tree": tree, "completion_max_age": max_age}))
+    path.write_text(
+        json.dumps({"schema": 1, "tree": tree, "completion_max_age": max_age})
+    )
     when = time.time() - age_s
     os.utime(path, (when, when))
     return path
@@ -57,7 +59,9 @@ def test_swr_fresh_manifest_does_not_spawn(tree, tmp_path, monkeypatch):
     spawns: list[int] = []
     monkeypatch.setattr(_complete, "_spawn_refresh", lambda: spawns.append(1))
     path = tmp_path / "m.json"
-    path.write_text(json.dumps({"tree": tree, "completion_max_age": 600}))  # just now
+    path.write_text(
+        json.dumps({"schema": 1, "tree": tree, "completion_max_age": 600})
+    )  # just now
     complete_cli(["--manifest", str(path), "--", ""])
     assert spawns == []
 
@@ -199,7 +203,7 @@ def test_refresh_source_missing_file_builds_nothing(tmp_path, monkeypatch):
 
 def test_main_dispatches_complete(tree, tmp_path, monkeypatch, capsys):
     path = tmp_path / "m.json"
-    path.write_text(json.dumps({"tree": tree}))
+    path.write_text(json.dumps({"schema": 1, "tree": tree}))
     monkeypatch.setattr(
         sys, "argv", ["fm", "--complete", "--manifest", str(path), "--", "che"]
     )

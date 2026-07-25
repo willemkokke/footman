@@ -34,6 +34,7 @@ nav = [
     { "fish" = "completion-fish.md" },
     { "PowerShell" = "completion-pwsh.md" },
     { "nushell" = "completion-nushell.md" },
+    { "Shell differences" = "completion-differences.md" },
   ] },
   { "Machine use" = [
     { "CI" = "ci.md" },
