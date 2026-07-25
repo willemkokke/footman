@@ -543,6 +543,17 @@ class Group:
                 f"group's default action\" and belongs to a task — declare "
                 f"@{self.name}.default, or name a task 'default'"
             )
+        adopted = self.groups.get(key)
+        if adopted is not None and adopted.pulled_from is not None:
+            # A local definition over a *pulled* group adopts it rather than
+            # evicting it: claiming the name means adding to it — exactly
+            # what pulling after the definition produces. Local leaves still
+            # shadow pulled ones (task-level `_shadow_pulled`), so definition
+            # order stops mattering: either way the union, local wins per
+            # leaf, and only the listing order follows the file.
+            if help:
+                adopted.help = help
+            return adopted
         self._shadow_pulled(key)
         self._claim(key)
         sub = Group(key, help)

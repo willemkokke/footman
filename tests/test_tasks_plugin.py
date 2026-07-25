@@ -19,6 +19,10 @@ def plugin_project(tmp_path, monkeypatch):
     (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
     (tmp_path / "tasks.py").write_text(
         "from footman import group, plugin, task\n"
+        "# pulled FIRST on purpose: the local group() below adopts the\n"
+        "# pulled docs group — order must not matter\n"
+        "plugin('footman.docs')\n"
+        "plugin('footman.tools')\n"
         "\n"
         "@task\n"
         "def greet(name: str = 'world'):\n"
@@ -28,11 +32,8 @@ def plugin_project(tmp_path, monkeypatch):
         "\n"
         "@docs.task\n"
         "def serve(port: int = 8000):\n"
-        '    "Serve the docs."\n'
-        "\n"
-        "# pulled last: each node merges with what the file already defined\n"
-        "plugin('footman.docs')\n"
-        "plugin('footman.tools')\n"
+        '    "Serve the docs."\n',
+        encoding="utf-8",  # the comment's em dash must survive Windows
     )
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
