@@ -137,9 +137,13 @@ def _build_dag(root: Group, segments: list[Segment]) -> list[_Node]:
         # An empty-body group default fans out the group's own tasks: they become
         # implicit prerequisites, so the scheduler runs them (in parallel) and the
         # default's forward-marked values thread into the ones that declare them.
+        # The `default` child is the fan-out itself — excluded from its own set.
         group = default_group(node.fn)
         if group is not None and fans_out(node.fn):
-            pre = [*group.tasks.values(), *pre]
+            pre = [
+                *(fn for name, fn in group.tasks.items() if name != "default"),
+                *pre,
+            ]
         for dep in pre:
             d = add_dep(_as_task(dep))
             node.deps.add(d.key)

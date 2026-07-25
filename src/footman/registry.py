@@ -345,8 +345,37 @@ class Group:
         self.help = help
         self.tasks: dict[str, Task] = {}
         self.groups: dict[str, Group] = {}
-        self.default_task: Task | None = None  # runs on a bare `fm <group>`
         self.finalizers: list[Finalizer] = []  # @finalize hooks (root registry only)
+
+    @property
+    def default_task(self) -> Task | None:
+        """The default action — what a bare `fm <group>` runs.
+
+        Derived, never stored: the default *is* the child task named
+        `default` (`@group.default` ↔ `fm lint.default`), so default-ness
+        has one spelling, survives forks and grafts by construction, and
+        there is no pointer to desync.
+        """
+        return self.tasks.get("default")
+
+    def _stamp_default(self, fn: Task, interactive: bool) -> None:
+        """The default-action validations and markers, one code path for
+        every way a task can come to be named `default` — the decorator,
+        `@task(name="default")`, or a pull landing one here."""
+        fanout = _empty_body(fn)
+        where = self.name if self.name != "root" else "the root group"
+        if interactive and fanout:
+            raise RegistrationError(
+                f"{where}'s default {fn.__name__!r} is interactive but has "
+                f"an empty body, so it fans the group's tasks out in "
+                f"parallel — there is no single body to own the terminal. "
+                f"Give it a real body, or drop interactive."
+            )
+        # A back-reference plus the empty-body flag: an empty-body default
+        # fans out the group's own tasks (implicit prerequisites at DAG-build
+        # time); a custom body is the escape hatch and runs as written.
+        setattr(fn, _DEFAULT_GROUP, self)
+        setattr(fn, _DEFAULT_FANOUT, fanout)
 
     def _claim(self, key: str) -> None:
         where = f"group {self.name!r}" if self.name != "root" else "the root"
@@ -457,6 +486,11 @@ class Group:
         def register(fn: Callable[_P, _R_co]) -> TaskFn[_P, _R_co]:
             key = cli_name(name or fn.__name__)
             self._claim(key)
+            if key == "default":
+                # The name *is* the mechanism: any task named `default` is its
+                # group's default action — `@group.default` is sugar for this.
+                # One validation path, so there are no second-class defaults.
+                self._stamp_default(fn, interactive)
             _apply_policy(
                 fn,
                 pre=pre,
@@ -481,6 +515,16 @@ class Group:
     def group(self, name: str, help: str = "") -> Group:
         """Create and register a nested command group, returning it."""
         key = cli_name(name)
+        if key == "default":
+            # `default` is a meaningful *task* name — the group's default
+            # action. A group-typed default is incoherent (a bare `fm lint`
+            # resolving to another bare group — turtles), so the name is
+            # refused for groups at load time.
+            raise RegistrationError(
+                f"a group cannot be named 'default': the name means \"this "
+                f"group's default action\" and belongs to a task — declare "
+                f"@{self.name}.default, or name a task 'default'"
+            )
         self._claim(key)
         sub = Group(key, help)
         self.groups[key] = sub
@@ -568,18 +612,18 @@ class Group:
         An **empty-body** default fans the group's own tasks out in parallel, so
         `interactive=True` on one is rejected — there is no single body to own
         the terminal. Give the default a real body to make it interactive.
+
+        The default registers as the child task named **`default`** — a
+        fixed, well-known name, not the function's own (which stays private,
+        so renaming it is free). The decorator you wrote is the address you
+        type: `@lint.default` ↔ `fm lint.default`; bare `fm lint` stays the
+        idiomatic spelling, the way `GET /` serves `/index.html`. The name is
+        the mechanism — `@group.default` is sugar for a task named `default`.
         """
-        where = self.name if self.name != "root" else "the root group"
 
         def register(fn: Callable[_P, _R_co]) -> TaskFn[_P, _R_co]:
-            fanout = _empty_body(fn)
-            if interactive and fanout:
-                raise RegistrationError(
-                    f"{where}'s default {fn.__name__!r} is interactive but has "
-                    f"an empty body, so it fans the group's tasks out in "
-                    f"parallel — there is no single body to own the terminal. "
-                    f"Give it a real body, or drop interactive."
-                )
+            self._claim("default")
+            self._stamp_default(fn, interactive)
             _apply_policy(
                 fn,
                 pre=pre,
@@ -595,13 +639,8 @@ class Group:
                 serial=serial,
                 exclusive=exclusive,
             )
-            # A back-reference plus the empty-body flag: an empty-body default
-            # fans out the group's own tasks (implicit prerequisites at DAG-build
-            # time); a custom body is the escape hatch and runs as written.
-            setattr(fn, _DEFAULT_GROUP, self)
-            setattr(fn, _DEFAULT_FANOUT, fanout)
             fn.opts = lambda **o: _Opted(fn, _opts_overrides(o))  # type: ignore[attr-defined]
-            self.default_task = fn
+            self.tasks["default"] = fn
             return cast("TaskFn[_P, _R_co]", fn)
 
         return register(fn) if fn is not None else register
@@ -636,9 +675,12 @@ class Group:
         # Empty-body default: fan out the group's own tasks, handing each only
         # the arguments it declares — the imperative echo of `fm <group>`.
         # Sequential, like any body call; wrap the call in parallel() to overlap.
+        # The `default` child is the fan-out itself: excluded from its own set.
         from footman.manifest import resolved_signature
 
-        for child in self.tasks.values():
+        for name, child in self.tasks.items():
+            if name == "default":
+                continue
             accepts = set(resolved_signature(child).parameters)
             child(**{k: v for k, v in kwargs.items() if k in accepts})
         return None

@@ -311,6 +311,19 @@ def lint_all(fix: Forward[bool] = False):
   dotted spelling — `note: ran lint's default with 'markdown'; for the
   subtask: fm lint.markdown` — and a path-shaped value (`fm lint
   ./markdown`) keeps quiet.
+- The default registers as the child task named **`default`** — a fixed,
+  well-known name, so the decorator you wrote is the address you type:
+  `@lint.default` ↔ `fm lint.default`. Bare `fm lint` stays the idiomatic
+  spelling, the way `GET /` serves `/index.html` — and like the index
+  document, the default has a well-known name, not whatever the author
+  called the function (which stays private; renaming it is free). The
+  **name is the mechanism**: `@group.default` is sugar, and any *task*
+  named `default` — `@task(name="default")`, or one arriving through
+  `include()` — is its group's default through the same validations. So
+  naming a task `default` *means something*, exactly like `tasks.py`
+  itself does. A *group* named `default` is a load-time error (a
+  group-typed default would make bare `fm lint` resolve to another bare
+  group — turtles).
 - An **empty body** fans out the group's own tasks; a non-empty body is the
   escape hatch where you write the fan-out yourself.
 - On an empty-body default, **mark a parameter `Forward` if you want it to reach
