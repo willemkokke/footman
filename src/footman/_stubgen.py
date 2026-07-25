@@ -129,7 +129,8 @@ def _flags_method(options: tuple[Option, ...], class_name: str) -> str:
     """The typed `flags()` for a tool's global options — returns the tool,
     so `tools.docker.flags(host=…).compose.up(…)` stays checked. With no
     globals it is still declared, so the return type carries the chain.
-    (footman run-control — nofail/capture/… — goes on the inherited `.opts()`.)"""
+    (footman run-control — nofail/capture/cwd/rel/… — goes on the
+    inherited `.opts()`.)"""
     lines = ["    def flags(", "        self,"]
     typed = _unique(options)
     if typed:  # a `*` separator with only `**flags` after it is a syntax error
@@ -149,7 +150,7 @@ def _flags_method(options: tuple[Option, ...], class_name: str) -> str:
 def _method(verb: Verb, key: str) -> str:
     """One verb as a stub method — or `__call__` for a tool's own flags.
 
-    footman run-control (nofail/capture/title/in_process) lives on the inherited
+    footman run-control (nofail/capture/title/in_process/cwd/rel) lives on the inherited
     `.opts()`, never the call, so a call signature is pure flags — which also
     means an option literally named `capture` (pytest's) types through here."""
     name = key or "__call__"
