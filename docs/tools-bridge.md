@@ -285,8 +285,8 @@ flags: no transcription. Every installed Python CLI declares a
 arguments — the tool runs inside footman's process, no interpreter spawn.
 Nearly every entry point accepts arguments directly (click commands like
 mkdocs's and zensical's `cli`, or coverage's `main(argv=None)`) and is
-simply called; only a legacy zero-arg entry falls back to running under a
-patched `sys.argv`, and only those calls serialise.
+simply called; a legacy zero-arg entry runs under the argv router's per-call
+`sys.argv` view instead, and stays parallel too.
 
 ```python
 mkdocs.build(strict=True)                          # in-process by default
@@ -294,12 +294,15 @@ Tool("griffe", in_process=True)("dump", "footman")     # opt any tool in (constr
 coverage.opts(in_process=False).html()             # ...or out, per call via .opts()
 ```
 
-`mkdocs`, `zensical`, and `coverage` default to in-process. `pytest`
-keeps its dedicated `pytest.main` path for a concrete reason: pytest's
-console entry point takes *no* arguments — the generic path could only
-drive it through the patched-`sys.argv` fallback, serialised — while
-`pytest.main(args)` is pytest's own argument-accepting API. Same
-no-transcription contract, direct call, parallel-safe.
+`mkdocs`, `zensical`, `coverage` and `pytest` default to in-process. pytest
+keeps a dedicated `pytest.main` path for a concrete reason — and since the
+argv router that reason is no longer parallelism. Its console entry point is
+the private, zero-argument `_console_main`, which on a broken pipe (`fm check
+| head`) points the *process's* real stdout at `/dev/null`: tidy in a
+subprocess of its own, blinding in footman's, where it would take every task
+running beside it with it. `pytest.main(args)` is pytest's public,
+argument-accepting API and does none of that. Same no-transcription contract,
+direct call.
 
 The tool's own module is imported only when the call actually *executes* —
 resolving the entry point is pure metadata, but the `.load()` that imports
@@ -391,10 +394,8 @@ and imports. That one choice explains the rest:
   at once keep their lines apart.
 
 So the defaults line up rather than fight: the tools marked `default`
-in-process — mkdocs, zensical, coverage — all take an argument list and run in
-parallel, and `pytest` is a function calling the arg-accepting `pytest.main`
-for exactly this reason. The single serialised case, a zero-arg `main()`, is
-rare and clearly bounded.
+in-process — mkdocs, zensical, coverage, pytest — all take an argument list,
+and a zero-arg `main()` gets a per-call argv view. Nothing here serialises.
 
 ## Sharing tools between projects
 

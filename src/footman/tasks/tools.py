@@ -22,7 +22,7 @@ from __future__ import annotations
 import re as _re
 import sys
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 
 from footman import _drivers, _stubgen, _toolspec
 from footman._describe import bold, cyan, wants_color
@@ -97,14 +97,24 @@ def _formatted(text: str) -> str:
 
 @tasks.task(name="list")
 def list_(
-    missing: Annotated[bool, doc("only the tools this machine lacks")] = False,
+    show: Annotated[
+        Literal["all", "installed", "missing"],
+        doc("which tools to list (default: all, present or not)"),
+    ] = "all",
 ):
-    """The curated tools: version, in-process capability, stub state."""
+    """The curated tools: version, in-process capability, stub state.
+
+    Every curated tool is listed by default, absent ones included — the
+    version column says `not installed`. `--show installed` narrows to what
+    this machine can actually run, `--show missing` to what it can't.
+    """
     on = wants_color(sys.stdout)
     rows: list[tuple[str, str, str, str]] = []
     for driver in _drivers.DRIVERS:
         here = _drivers.installed(driver)
-        if missing and here:
+        if show == "missing" and here:
+            continue
+        if show == "installed" and not here:
             continue
         version = _drivers.version(driver.name) if here else ""
         capable = _drivers.in_process_capable(driver.name) if here else False

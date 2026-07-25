@@ -43,6 +43,34 @@ versions may include breaking changes.
   was always true: the uv handoff re-execs the *(branded)* footman you
   invoked — `acme` hands off to the project's own `acme`, never `fm`.
 
+- **BREAKING: `fm tools.list --missing` is now `--show missing`.** Listing
+  all tools, only the installed ones, or only the missing ones is one
+  question with three answers, so it is one parameter:
+  `show: Literal["all", "installed", "missing"]`, defaulting to `all`. The
+  boolean it replaces could only say two of the three, and adding a second
+  boolean would have made `--missing --installed` a representable request
+  that silently lists nothing.
+
+### Fixed
+
+- **pytest is reported as in-process by default, because it is.** `tools.py`
+  builds it in-process (through `pytest.main`), but its driver never said so,
+  so the two places that *label* the mode read the detected capability
+  instead: `fm tools.list` showed pytest as `capable` and its stub header as
+  `In-process: available` rather than `default`. A parity test now pins every
+  driver's `name`/`in_process` to how `tools.py` builds that tool, so the
+  label can't drift from the runtime again.
+
+### Docs
+
+- Corrected the tools-bridge page and its code comments where they still said
+  a zero-argument `main()` serialises — the argv router ended that. pytest's
+  dedicated `pytest.main` path is kept for the reason that still stands: its
+  console entry is the private `_console_main`, which on a broken pipe points
+  the process's real stdout at `/dev/null` — harmless in a subprocess,
+  blinding in footman's, where it would take every task running beside it
+  with it.
+
 ## [0.20.0] — 2026-07-25
 
 ### Added

@@ -676,10 +676,19 @@ def test_list_names_every_curated_tool(capsys):
 def test_list_missing_only_shows_what_is_absent(capsys):
     from footman.tasks import tools as tools_tasks
 
-    tools_tasks.list_(missing=True)
+    tools_tasks.list_(show="missing")
     out = capsys.readouterr().out
     for line in out.splitlines()[1:]:
         assert "not installed" in line
+
+
+def test_list_installed_only_shows_what_is_present(capsys):
+    from footman.tasks import tools as tools_tasks
+
+    tools_tasks.list_(show="installed")
+    out = capsys.readouterr().out
+    for line in out.splitlines()[1:]:
+        assert "not installed" not in line
 
 
 @needs_ruff
@@ -975,6 +984,24 @@ def test_in_process_mode_is_detected_not_listed():
     )
     assert tools_tasks._mode(_drivers.Driver("x"), capable) == "available"
     assert tools_tasks._mode(_drivers.Driver("x"), plain) == "no"
+
+
+def test_every_driver_mirrors_how_tools_py_builds_its_tool():
+    """A driver's `name`/`in_process` are a *label* — they feed the stub header
+    and `fm footman.tools list`; `tools.py` is what actually runs. pytest
+    drifted once (the Tool was in-process, the driver never said so, so its
+    stub read "available"), so the two are pinned to each other here."""
+    from footman import tools
+
+    for driver in _drivers.DRIVERS:
+        tool = getattr(tools, driver.key)
+        assert tool._argv0 == driver.name, (
+            f"tools.{driver.key} runs {tool._argv0!r}, its driver says {driver.name!r}"
+        )
+        assert tool._prefer_in_process == driver.in_process, (
+            f"tools.{driver.key} is built in_process={tool._prefer_in_process}, "
+            f"its driver says {driver.in_process}"
+        )
 
 
 # --- positional shape from the usage line ---------------------------------
