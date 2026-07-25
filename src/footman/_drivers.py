@@ -291,6 +291,7 @@ DRIVERS: tuple[Driver, ...] = (
     Driver(
         "pytest",
         url="https://docs.pytest.org/",
+        in_process=True,  # `tools.py` builds it in-process, via `pytest:main`
         provision=Provision(plugins=("pytest-cov",)),  # so --cov* is read too
     ),
     Driver(

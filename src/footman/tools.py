@@ -451,9 +451,11 @@ class Tool:
         # runs `sys.executable`, not whatever `python` is on PATH.
         self._path = path or name
         # An in-process callable to prefer over the console script, spelled
-        # `module:attr`. pytest's console entry is a zero-arg `_console_main`
-        # (serialised), but `pytest.main` takes the argument list and stays
-        # parallel — so it is recorded here.
+        # `module:attr`. pytest's console entry is the private zero-arg
+        # `_console_main`, whose broken-pipe branch dup2s /dev/null over the
+        # process's real stdout — footman's, and every sibling task's.
+        # `pytest.main` is the public argument-accepting API and does none of
+        # that, so it is recorded here.
         self._entry = entry
         # A Go-style tool whose `flag` package wants one dash on long flags
         # (`eclint -fix`, not `--fix`). Tool-wide: Go's flag package is uniform,
@@ -630,9 +632,10 @@ class Tool:
         when there is nothing to run in-process (so the call spawns instead).
 
         A recorded `entry` override wins over the console script: pytest's
-        console entry is the zero-arg `_console_main`, but `pytest.main` takes
-        the argument list, so it is recorded as `pytest:main` and stays
-        parallel. Availability is checked without importing (a dry-run of the
+        console entry is the private `_console_main`, whose broken-pipe branch
+        redirects the process's real stdout, so `pytest.main` — pytest's
+        public, argument-accepting API — is recorded as `pytest:main` and run
+        instead. Availability is checked without importing (a dry-run of the
         call must import nothing); the import itself is deferred to the loader.
         """
         if self._entry:
@@ -713,8 +716,9 @@ cmake = Tool("cmake")
 ninja = Tool("ninja")
 
 
-# pytest runs in-process through the arg-accepting `pytest.main` (parallel),
-# not its zero-arg `_console_main` console script. python always targets the
+# pytest runs in-process through the public, arg-accepting `pytest.main`, not
+# its private `_console_main` console script (which redirects the process's
+# real stdout to /dev/null on a broken pipe). python always targets the
 # running interpreter, whatever `python`/`python3` is (or isn't) on PATH; its
 # stub is read from provisioned interpreters. There is no `sh`: a command as a
 # single string is `run("…")` — footman splits and runs it (no shell). When you

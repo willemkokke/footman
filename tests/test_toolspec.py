@@ -977,6 +977,24 @@ def test_in_process_mode_is_detected_not_listed():
     assert tools_tasks._mode(_drivers.Driver("x"), plain) == "no"
 
 
+def test_every_driver_mirrors_how_tools_py_builds_its_tool():
+    """A driver's `name`/`in_process` are a *label* — they feed the stub header
+    and `fm footman.tools list`; `tools.py` is what actually runs. pytest
+    drifted once (the Tool was in-process, the driver never said so, so its
+    stub read "available"), so the two are pinned to each other here."""
+    from footman import tools
+
+    for driver in _drivers.DRIVERS:
+        tool = getattr(tools, driver.key)
+        assert tool._argv0 == driver.name, (
+            f"tools.{driver.key} runs {tool._argv0!r}, its driver says {driver.name!r}"
+        )
+        assert tool._prefer_in_process == driver.in_process, (
+            f"tools.{driver.key} is built in_process={tool._prefer_in_process}, "
+            f"its driver says {driver.in_process}"
+        )
+
+
 # --- positional shape from the usage line ---------------------------------
 #
 # A wrong shape *forbids a valid call*, so these pin the exact boundary
