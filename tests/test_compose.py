@@ -712,12 +712,13 @@ def test_fork_copies_every_group_field():
     # `@finalize` hooks vanished across include(). This fails the moment a field
     # is added to Group.__init__ without teaching _fork (and this test) to copy
     # it, so a new field can't be dropped in silence.
+    # `default_task` is no longer a field: the default is the child task
+    # named `default`, so it rides the tasks-dict copy and cannot desync.
     assert set(vars(Group("x"))) == {
         "name",
         "help",
         "tasks",
         "groups",
-        "default_task",
         "finalizers",
     }
 

@@ -162,6 +162,22 @@ versions may include breaking changes.
 
 ### Changed
 
+- **BREAKING: the group default is the child task named `default`.**
+  `@group.default` now registers its function as the child `default` — a
+  fixed, well-known name — so the default finally has an address
+  (`@lint.default` ↔ `fm lint.default`), appears in listings and
+  completion, and default-ness is *derived* from the tree
+  (`Group.default_task` became a read-only property), so a fork or graft
+  can never desync it. The name is the mechanism: any task named
+  `default` — via the decorator, `@task(name="default")`, or a pull — is
+  its group's default through the same validations (an empty body fans
+  out, and excludes itself from its own fan-out set; `interactive=True`
+  on an empty body still refuses). Two consequences to know: a group
+  that declared both `@group.default` and a task literally named
+  `default` now collides loudly at load, and a *group* named `default`
+  is refused (a group-typed default is incoherent — bare `fm lint`
+  resolving to another bare group).
+
 - **BREAKING: a nested task's address is one dotted token, everywhere.**
   `fm docs serve` is now `fm docs.serve`; flat tasks and chains are
   unchanged (`fm build lint test`). One spelling serves every surface —

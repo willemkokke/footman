@@ -120,13 +120,11 @@ def _fork(tree: Group) -> Group:
     for name, sub in tree.groups.items():
         fork.groups[name] = _fork(sub)  # recurse: fresh subgroup objects
     # A faithful copy carries *every* Group field, not only tasks/groups: a
-    # runnable group keeps its `@group.default` (so the bare-group grammar and
-    # its options survive the graft), and a provider's `@finalize` hooks ride
-    # along. The default action stays the shared fn — like the task fns, it is
-    # re-stamped per load, and an empty-body default fans out its group's own
-    # (equally shared) tasks. `test_compose`'s field census fails the moment a
-    # new Group field is added but not copied here.
-    fork.default_task = tree.default_task
+    # provider's `@finalize` hooks ride along, and a runnable group keeps its
+    # `@group.default` for free — the default *is* the child task named
+    # `default`, so the tasks-dict copy above already carried it (derived
+    # default-ness cannot desync through a fork). `test_compose`'s field
+    # census fails the moment a new Group field is added but not copied here.
     fork.finalizers = list(tree.finalizers)
     return fork
 

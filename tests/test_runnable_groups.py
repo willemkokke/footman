@@ -537,3 +537,133 @@ def test_collision_note_reaches_stderr(tmp_path, monkeypatch, capsys):
     assert "subtask ran" not in captured.out
     assert "note: ran lint's default with 'markdown'" in captured.err
     assert "fm lint.markdown" in captured.err  # {prog} substituted
+
+
+# --- the default is the child named `default` ----------------------------------
+
+
+def test_default_registers_as_the_child_named_default():
+    reg = Group("root")
+    lint = reg.group("lint")
+
+    @lint.default
+    def lint_all(fix: Forward[bool] = False):
+        """Lint everything."""
+
+    # Derived, not stored: default-ness IS the child named `default`.
+    assert lint.tasks["default"] is lint_all
+    assert lint.default_task is lint_all
+
+
+def test_the_default_has_a_dotted_address():
+    # `@lint.default` ↔ `fm lint.default`: the decorator you wrote is the
+    # address you type; bare `fm lint` stays the idiomatic spelling.
+    reg = Group("root")
+    seen = {}
+    lint = reg.group("lint")
+
+    @lint.task
+    def markdown(fix: bool = False):
+        seen["markdown"] = fix
+
+    @lint.default
+    def lint_all(fix: bool = False):
+        seen["default"] = fix
+
+    tree = manifest.build_manifest(reg)["tree"]
+    _, segs = split_chain(tree, ["lint.default", "--fix"])
+    run_chain(reg, segs)
+    assert seen == {"default": True}
+    assert segs[0].task == "lint.default"
+
+
+def test_a_task_named_default_is_the_default():
+    # The name is the mechanism — `@group.default` is sugar. A task that
+    # comes to be named `default` any other way is the group's default too,
+    # through the same validation path.
+    reg = Group("root")
+    seen = {}
+    lint = reg.group("lint")
+
+    @lint.task(name="default")
+    def anything(fix: bool = False):
+        seen["ran"] = fix
+
+    assert lint.default_task is anything
+    tree = manifest.build_manifest(reg)["tree"]
+    _, segs = split_chain(tree, ["lint", "--fix"])
+    run_chain(reg, segs)
+    assert seen == {"ran": True}
+
+
+def test_an_empty_task_named_default_fans_out():
+    # One code path: an empty body registered under the name gets the
+    # fan-out flag exactly as the decorator form does.
+    reg = Group("root")
+    seen = {}
+    lint = reg.group("lint")
+
+    @lint.task
+    def markdown(fix: bool = False):
+        seen["markdown"] = fix
+
+    @lint.task(name="default")
+    def lint_all(fix: Forward[bool] = False):
+        pass
+
+    tree = manifest.build_manifest(reg)["tree"]
+    _, segs = split_chain(tree, ["lint", "--fix"])
+    run_chain(reg, segs)
+    assert seen == {"markdown": True}  # fanned out; never ran itself twice
+
+
+def test_interactive_empty_task_named_default_is_rejected():
+    reg = Group("root")
+    lint = reg.group("lint")
+
+    with pytest.raises(RegistrationError, match=r"interactive but has\s+an empty body"):
+
+        @lint.task(name="default", interactive=True)
+        def lint_all():
+            pass
+
+
+def test_a_group_named_default_is_illegal():
+    reg = Group("root")
+    lint = reg.group("lint")
+    with pytest.raises(RegistrationError, match=r"cannot be named 'default'"):
+        lint.group("default")
+
+
+def test_two_defaults_collide_loudly():
+    reg = Group("root")
+    lint = reg.group("lint")
+
+    @lint.default
+    def lint_all(): ...
+
+    with pytest.raises(RegistrationError, match=r"already has a task named 'default'"):
+
+        @lint.task(name="default")
+        def another(): ...
+
+
+def test_default_is_listed_and_completes_dotted():
+    from footman import _describe
+    from footman._complete import complete
+
+    reg = Group("root")
+    lint = reg.group("lint")
+
+    @lint.task
+    def markdown(fix: bool = False): ...
+
+    @lint.default
+    def lint_all(fix: Forward[bool] = False):
+        """Lint everything."""
+
+    tree = manifest.build_manifest(reg)["tree"]
+    rows = dict(_describe.iter_tasks(tree))
+    assert rows["lint.default"] == "Lint everything."
+    offered = {c.split("\t")[0] for c in complete(tree, ["lint."])}
+    assert "lint.default" in offered
