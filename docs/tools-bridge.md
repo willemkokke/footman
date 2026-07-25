@@ -332,9 +332,11 @@ def docs():
 And in-process keeps footman's parallelism: capture routes through the
 per-task stdout router (thread-confined, no global redirect), and entries
 that accept an argument list — click commands, `main(argv=None)`, which is
-nearly all of them — are called directly, no `sys.argv` in sight. Only a
-legacy zero-argument `main()` that insists on reading `sys.argv` gets the
-patched-and-serialised fallback.
+nearly all of them — are called directly, no `sys.argv` in sight. Even a
+legacy zero-argument `main()` that insists on reading `sys.argv` stays
+parallel: the argv router serves each call its own view of the one
+`sys.argv` object, the same move the environment router makes for
+`os.environ`.
 
 `python(...)` targets the current interpreter, whatever is (or isn't) on your
 PATH. There is no `sh`: a command as one string is `run("…")` — footman splits
@@ -380,9 +382,10 @@ and imports. That one choice explains the rest:
   `sys.argv`, trivially parallel.
 - An **in-process** tool runs in the calling thread. footman calls its entry
   point *directly* when the entry accepts an argument list (`cli(argv)`,
-  `main(argv=None)`, `pytest.main(args)`), so it stays parallel. The *only*
-  thing that serialises is a legacy zero-argument `main()` that reads
-  `sys.argv` — because `sys.argv` is process-global, those calls take a lock.
+  `main(argv=None)`, `pytest.main(args)`) — and a legacy zero-argument
+  `main()` that reads `sys.argv` gets its own per-call view from the argv
+  router. Either way it stays parallel: nothing in the in-process path
+  serialises.
 - Concurrent output can't interleave: each task writes through a **per-task
   stdout router** (thread-confined, no global redirect), so two tools running
   at once keep their lines apart.

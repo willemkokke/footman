@@ -740,3 +740,104 @@ def test_status_line_suspend_stops_painting():
     assert err.getvalue() == before
     line.resume()  # repaints immediately, and truthfully
     assert len(err.getvalue()) > len(before)
+
+
+# --- the argv router ----------------------------------------------------------
+
+
+def test_argv_router_gives_each_thread_its_own_view():
+    import sys as _s
+
+    _globals.install()
+    try:
+        alias = _s.argv  # a `from sys import argv`-style alias: same object
+        seen = {}
+        barrier = threading.Barrier(2, timeout=5)
+
+        def worker(name, args):
+            with _globals.argv_override(args):
+                barrier.wait()  # both overrides live at once
+                seen[name] = (list(_s.argv), alias[0], len(_s.argv))
+
+        a = threading.Thread(target=worker, args=("a", ["tool-a", "--x"]))
+        b = threading.Thread(target=worker, args=("b", ["tool-b"]))
+        a.start()
+        b.start()
+        a.join(5)
+        b.join(5)
+        assert seen["a"] == (["tool-a", "--x"], "tool-a", 2)
+        assert seen["b"] == (["tool-b"], "tool-b", 1)
+    finally:
+        _globals.uninstall()
+    assert not isinstance(_s.argv, _globals._ArgvProxy)  # restored
+
+
+def test_argv_override_mutations_stay_in_the_view(monkeypatch):
+    import sys as _s
+
+    _globals.install()
+    try:
+        real_before = list(_globals._argv_saved)
+        with _globals.argv_override(["legacy", "one", "two"]):
+            _s.argv.pop(0)  # the classic legacy-main idiom
+            _s.argv.append("three")
+            assert list(_s.argv) == ["one", "two", "three"]
+        assert list(_globals._argv_saved) == real_before  # the real argv untouched
+    finally:
+        _globals.uninstall()
+
+
+def test_zero_arg_entry_parallelises_via_the_router(monkeypatch):
+    # Two legacy zero-arg mains overlapping, each reading its own argv —
+    # the cross-handshake deadlocks-and-fails if they serialise on a lock.
+    import sys as _s
+
+    from footman import tools as _tools
+
+    e1, e2 = threading.Event(), threading.Event()
+    seen = {}
+
+    def make_entry(name, wait_for, then_set):
+        def entry():  # zero-arg: reads sys.argv like an old argparse main
+            then_set.set()
+            assert wait_for.wait(5), "the sibling never ran alongside"
+            seen[name] = list(_s.argv)
+            return 0
+
+        return entry
+
+    entries = {
+        "tool-a": make_entry("a", e2, e1),
+        "tool-b": make_entry("b", e1, e2),
+    }
+
+    class _EP:
+        def __init__(self, target):
+            self._t = target
+
+        def load(self):
+            return self._t
+
+    monkeypatch.setattr(
+        _tools, "_console_entrypoint", lambda name: _EP(entries.get(name))
+    )
+
+    def tasks(reg):
+        @reg.task
+        def one():
+            _tools.Tool("tool-a", in_process=True)("--x")
+
+        @reg.task
+        def two():
+            _tools.Tool("tool-b", in_process=True)()
+
+    from footman import schedule
+
+    reg = Group("root")
+    tasks(reg)
+    tree = manifest.build_manifest(reg)["tree"]
+    _, segments = split_chain(tree, ["one", "two"])
+    results = {r.task: r for r in schedule.run_plan(reg, segments)}
+    assert all(r.ok for r in results.values()), [str(r.error) for r in results.values()]
+    assert seen["a"] == ["tool-a", "--x"]
+    assert seen["b"] == ["tool-b"]

@@ -9,6 +9,18 @@ versions may include breaking changes.
 
 ### Added
 
+- **The argv router — the last hidden serialisation point is gone.** A
+  legacy zero-argument `main()` that reads `sys.argv` used to take a
+  process-wide lock while footman patched the global around it; inside a
+  run, `sys.argv` is now a per-call view served by a router (the same move
+  the environment router makes for `os.environ`), so those entries
+  parallelise exactly like their argument-accepting siblings. Nothing in
+  the in-process path serialises any more — the parallel regime's claim
+  ("the only non-parallel execution is declared") now holds with no
+  asterisk. Outside a run the classic patch remains as the bare-call
+  fallback; a C extension reading the list storage directly, or code
+  *reassigning* `sys.argv` wholesale, degrades to the old behaviour.
+
 - **Dotted cherry-picking in `only=`/`exclude=`.** The last surface of
   one-spelling-everywhere: filters take full dotted addresses relative to
   the pulled node — `plugin("acme.shared", only=["docs.build", "fmt"])`
