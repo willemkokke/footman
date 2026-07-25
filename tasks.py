@@ -463,8 +463,10 @@ def clean():
 
 
 # Dogfood: pull footman's own first-party plugins, exactly as a user would.
-# Pulled last, each node lands under its own name and merges with what the
-# file already defined — the docs tasks join the local `docs` group leaf
-# by leaf, tools lands at top level: one surface, no container.
+# Each node lands under its own name and merges with what the file defines
+# — the docs tasks join the local `docs` group leaf by leaf, tools lands at
+# top level: one surface, no container. Order doesn't matter (a local
+# group() adopts a pulled one, and pulls compose with existing groups);
+# pulled last only so the file's own tasks list first.
 plugin("footman.docs")
 plugin("footman.tools")

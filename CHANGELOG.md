@@ -15,8 +15,12 @@ versions may include breaking changes.
   join the local `docs` group leaf by leaf (`docs.serve` beside
   `docs.page`), and `tools.…` lands at top level — one surface, no
   `footman.` prefix (entry-point names unchanged; your
-  `plugin("footman.tools", into=…)` still mounts wherever *you* say, and
-  pull-last-to-merge works for any plugin, not just ours). The
+  `plugin("footman.tools", into=…)` still mounts wherever *you* say).
+  Merging is order-independent for any plugin, not just ours: a pull
+  composes with a group the file already defined, and a `group()` defined
+  *after* a pull now adopts the pulled group instead of replacing it —
+  either way you get the union, with local tasks winning name clashes;
+  order only decides listing order. The
   documenter's self-exclusion now keys on per-task provenance instead of
   a hardcoded mount name, so it excludes exactly the pulled tasks
   wherever an author mounts them — the author's own tasks on a shared

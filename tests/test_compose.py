@@ -1174,3 +1174,42 @@ def test_default_survives_only_if_the_default_survives(tmp_path, monkeypatch):
         compose.plugin("runkit", exclude=["default"])  # everything but it
     assert captured.groups["lint"].default_task is None
     assert set(captured.groups["lint"].tasks) == {"python"}
+
+
+def test_local_group_adopts_a_pulled_one(provider):
+    # A local group() over a *pulled* group adopts it — claiming the name
+    # means adding to it, exactly what pulling after the definition
+    # produces. Either order: the union, local wins per leaf.
+    with registry.capture() as captured:
+        compose.include("shared_tasks", only=["docs"])  # pull first
+
+        docs = registry.group("docs", help="Mine now")
+
+        @docs.task
+        def publish(): ...
+
+        got = captured.groups["docs"]
+        assert set(got.tasks) == {"build", "serve", "publish"}
+        assert got.help == "Mine now"  # the local definition names it
+
+    with registry.capture() as captured:  # the mirror order, same tree
+        docs = registry.group("docs")
+
+        @docs.task
+        def publish(): ...
+
+        compose.include("shared_tasks", only=["docs"])
+        assert set(captured.groups["docs"].tasks) == {"build", "serve", "publish"}
+
+
+def test_adopted_group_still_shadows_pulled_leaves(provider):
+    with registry.capture() as captured:
+        compose.include("shared_tasks", only=["docs"])
+        docs = registry.group("docs")
+
+        @docs.task
+        def build(): ...  # the same name as a pulled leaf: local wins
+
+        got = captured.groups["docs"]
+        assert got.tasks["build"] is build
+        assert "serve" in got.tasks  # the rest of the pull survives
