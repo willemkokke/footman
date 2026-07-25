@@ -311,6 +311,17 @@ def test_include_unknown_only_name_is_a_typo_error(provider):
         compose.include("shared_tasks", only=["lnt"])
 
 
+def test_include_dotted_only_name_is_taught_not_a_silent_no_match(provider):
+    # Interim until dotted cherry-picking lands: a dotted address in only=/
+    # exclude= is a real thing to want, so the refusal says what filters
+    # reach today and names the whole-group spelling that works now.
+    with (
+        registry.capture(),
+        pytest.raises(RegistrationError, match=r"dotted cherry-picking is coming"),
+    ):
+        compose.include("shared_tasks", only=["docs.build"])
+
+
 def test_include_missing_module_names_the_call_not_the_file():
     # A missing module used to surface as "failed to import <tasks.py>", blaming
     # the file. Now it names the include() call and the reason.
