@@ -159,7 +159,7 @@ def _default_cell(p: dict) -> str:
 def _task_page(
     path: list[str], task: dict, level: int, flavor: str, prog: str
 ) -> list[str]:
-    title = " ".join(path) or prog
+    title = ".".join(path) or prog
     parts = [_h(level, title, path, flavor), ""]
     if task["help"]:
         parts += [task["help"], ""]
@@ -169,7 +169,7 @@ def _task_page(
         parts += [f"*Unavailable here: {task['disabled']}*", ""]
 
     fragments = [f for p in task["params"] if (f := _describe.usage_fragment(p))]
-    usage = " ".join([prog, *path, *fragments])
+    usage = " ".join([prog, ".".join(path), *fragments])
     parts += ["```text", usage, "```", ""]
 
     if task["params"]:
@@ -204,7 +204,7 @@ def _task_page(
 def _group_page(
     path: list[str], node: dict, level: int, flavor: str, prog: str
 ) -> list[str]:
-    title = " ".join(path) if path else f"{prog} tasks"
+    title = ".".join(path) if path else f"{prog} tasks"
     parts = [_h(level, title, path, flavor), ""]
     if node.get("help"):
         parts += [node["help"], ""]
@@ -226,7 +226,7 @@ def _site_group(
     flavor: str,
     prog: str,
 ) -> None:
-    title = " ".join(path) if path else f"{prog} tasks"
+    title = ".".join(path) if path else f"{prog} tasks"
     parts = [_h(1, title, path, flavor), ""]
     if node.get("help"):
         parts += [node["help"], ""]

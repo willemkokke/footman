@@ -454,11 +454,11 @@ def test_config_mounts_plugin_as_group(provider, tmp_path):
     (project / "tasks.py").write_text(
         "from footman import task\n@task\ndef own(): ...\n"
     )
-    result = Runner().invoke("shared lint", cwd=project)
+    result = Runner().invoke("shared.lint", cwd=project)
     assert result.ok
     assert "lint fix=False" in result.stdout
     listing = Runner().invoke("--list", cwd=project)
-    assert "shared lint" in listing.stdout and "own" in listing.stdout
+    assert "shared.lint" in listing.stdout and "own" in listing.stdout
 
 
 def test_user_task_shadows_plugin_group(provider, tmp_path):
@@ -561,8 +561,8 @@ def test_dotted_plugin_name_nests_and_shares_namespace(tmp_path, monkeypatch):
     listing = Runner().invoke("--list", cwd=project)
     assert listing.ok
     # Both leaves live under the one shared `suite` namespace group.
-    assert "suite alpha go" in listing.stdout and "suite beta go" in listing.stdout
-    ran = Runner().invoke("suite alpha go", cwd=project)
+    assert "suite.alpha.go" in listing.stdout and "suite.beta.go" in listing.stdout
+    ran = Runner().invoke("suite.alpha.go", cwd=project)
     assert ran.ok and "alpha-go!" in ran.stdout
 
 

@@ -171,11 +171,13 @@ def paint_cli(parts: list[tuple[str, str]], on: bool) -> str:
 
 
 def invocation_parts(prog: str, path: list[str]) -> list[tuple[str, str]]:
-    """`prog group… task` as tokens — the head of every usage and example."""
+    """`prog dotted.task` as tokens — the head of every usage and example.
+
+    The address is one dotted token (`fm docs.build`), never a token walk —
+    what help shows must be what the splitter accepts."""
     parts: list[tuple[str, str]] = [("prog", prog)]
-    parts += [("group", name) for name in path[:-1]]
     if path:
-        parts.append(("task", path[-1]))
+        parts.append(("task", ".".join(path)))
     return parts
 
 
@@ -233,13 +235,13 @@ def iter_tasks(node: dict, prefix: str = ""):
     for name, task in node["tasks"].items():
         yield f"{prefix}{name}", task_line(task)
     for name, sub in node["groups"].items():
-        yield from iter_tasks(sub, f"{prefix}{name} ")
+        yield from iter_tasks(sub, f"{prefix}{name}.")
 
 
 def iter_group_paths(node: dict, prefix: str = ""):
     for name, sub in node["groups"].items():
         yield f"{prefix}{name}"
-        yield from iter_group_paths(sub, f"{prefix}{name} ")
+        yield from iter_group_paths(sub, f"{prefix}{name}.")
 
 
 def json_default(value: object) -> object:

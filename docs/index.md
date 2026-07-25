@@ -18,7 +18,7 @@ code**.
 ```sh
 fm lint --fix
 fm format lint --fix test          # a chain: three tasks, no separator
-fm workspace mount --share <TAB>   # main  scratch  archive
+fm workspace.mount --share <TAB>   # main  scratch  archive
 ```
 
 ![fm --list in a terminal: bold task names, dim group prefixes, one-line help](_generated/shots/list.svg)
@@ -93,7 +93,7 @@ Then:
 
 ```sh
 fm lint --fix
-fm docs serve --port 8001
+fm docs.serve --port 8001
 fm --list
 ```
 

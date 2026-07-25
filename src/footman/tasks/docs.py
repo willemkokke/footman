@@ -1,4 +1,4 @@
-"""Render the invoking project's task tree as markdown — `fm footman docs …`.
+"""Render the invoking project's task tree as markdown — `fm footman.docs.…`.
 
 `page` prints (or writes) one document; `site` writes linked pages with an
 `index.md` per group. Both rebuild the project's tree exactly the way `fm`

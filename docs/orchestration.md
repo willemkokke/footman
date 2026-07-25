@@ -275,7 +275,7 @@ Reach for declared deps when you want the plan to *see* the work, and
 
 ## Runnable groups
 
-A group is a namespace: `fm lint markdown` runs a task under `lint`, but bare
+A group is a namespace: `fm lint.markdown` runs a task under `lint`, but bare
 `fm lint` is an error. Give the group a **default action** with `@group.default`
 and the bare form runs — while the surfaces stay addressable:
 
@@ -301,7 +301,7 @@ def lint_all(fix: Forward[bool] = False):
 - `fm lint` fans out every surface; `fm lint --fix` fixes what's fixable and
   lints the rest (the `forward` marker carries `--fix` to the surfaces that take
   it — see [above](#forward-a-value-to-what-a-task-dispatches)).
-- `fm lint markdown` / `fm lint markdown --fix` runs one surface.
+- `fm lint.markdown` / `fm lint.markdown --fix` runs one surface.
 - The default's **signature is the group's options**, so it takes flags/options
   only. A positional is a load-time error, because a bare word after a group
   names a child, not a value — model a positional action as a task instead.

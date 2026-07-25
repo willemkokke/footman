@@ -111,6 +111,31 @@ versions may include breaking changes.
 
 ### Changed
 
+- **BREAKING: a nested task's address is one dotted token, everywhere.**
+  `fm docs serve` is now `fm docs.serve`; flat tasks and chains are
+  unchanged (`fm build lint test`). One spelling serves every surface —
+  running, `--help`, `--where`, completion — and `--help`/`--where` drop
+  the space walk for the same strict resolver (`docs..serve`, `.docs`, and
+  a trailing `docs.` are taught errors, never silently normalised). The
+  space form is permanently *taught*, not parsed: `fm docs serve` answers
+  "nested tasks use dots: 'docs.serve'", the lookahead teaching the longest
+  resolvable path (`fm footman tools sync` → `footman.tools.sync`), and a
+  child of a just-run runnable group teaches the same way (`fm lint python`
+  → `lint.python`). Unknown addresses get did-you-mean suggestions over the
+  flat dotted index; listings, `--tree`, help, and the markdown exporter
+  print full dotted addresses so everything shown is copy-paste-runnable.
+- **BREAKING: task completion is path completion — the `.` is footman's
+  `/`.** Candidates sit one segment beyond the typed prefix, `ls -F`
+  style: a namespace group always carries its trailing dot (`docs.`), a
+  runnable group offers itself *plus* its dotted children (space runs the
+  default, `.` descends), a task completes terminally. A unique namespace
+  match completes straight through to its children, so no shell ever
+  strands the cursor with a space after `docs.`.
+- **BREAKING: task and group names may not contain `.` or whitespace** —
+  `.` is the address separator, so `group("v2.0")` or
+  `@task(name="docs.build")` would alias into fake nesting; both refuse at
+  load time with a taught `RegistrationError`.
+
 - **`os.environ` is virtualised for the run.** Reads inside a task see the
   run-start snapshot plus the task's own overlay — exactly what the
   subprocess branch of the same call injects as `env=`, so in-process and

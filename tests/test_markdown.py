@@ -39,7 +39,7 @@ def sample_tree():
 def test_page_whole_tree(sample_tree):
     page = markdown.render_page(sample_tree)
     assert page.startswith("# fm tasks\n")
-    assert "## build" in page and "## docs" in page and "### docs serve" in page
+    assert "## build" in page and "## docs" in page and "### docs.serve" in page
     assert "```text\nfm build <target> [--fix] [--jobs INT]\n```" in page
     assert "| Parameter | Type | Default | Description |" in page
     assert (
@@ -54,17 +54,17 @@ def test_page_whole_tree(sample_tree):
 def test_page_scoped_to_group_and_task(sample_tree):
     group_page = markdown.render_page(sample_tree, path=("docs",))
     assert group_page.startswith("# docs\n")
-    assert "Documentation" in group_page and "## docs serve" in group_page
+    assert "Documentation" in group_page and "## docs.serve" in group_page
     assert "build" not in group_page  # scoped: the sibling task is absent
 
     task_page = markdown.render_page(sample_tree, path=("docs", "serve"))
-    assert task_page.startswith("# docs serve\n")
-    assert "fm docs serve [--port INT]" in task_page
+    assert task_page.startswith("# docs.serve\n")
+    assert "fm docs.serve [--port INT]" in task_page
 
 
 def test_page_heading_level_nests(sample_tree):
     page = markdown.render_page(sample_tree, path=("docs", "serve"), heading=3)
-    assert page.startswith("### docs serve\n")
+    assert page.startswith("### docs.serve\n")
 
 
 def test_page_unknown_target_teaches(sample_tree):
@@ -75,7 +75,7 @@ def test_page_unknown_target_teaches(sample_tree):
 def test_material_flavor_adds_anchors_and_admonition(sample_tree):
     page = markdown.render_page(sample_tree, flavor="material")
     assert "## build { #build }" in page
-    assert "### docs serve { #docs-serve }" in page
+    assert "### docs.serve { #docs-serve }" in page
     assert "!!! example" in page
     plain = markdown.render_page(sample_tree)
     assert "{ #" not in plain and "!!!" not in plain  # plain stays portable
@@ -96,7 +96,7 @@ def test_site_layout_and_links(sample_tree):
     assert "Build one target." in index  # the task's help line in the table
     sub = files["docs/index.md"]
     assert "[`serve`](serve.md)" in sub  # links are relative to their folder
-    assert files["docs/serve.md"].startswith("# docs serve\n")
+    assert files["docs/serve.md"].startswith("# docs.serve\n")
 
 
 def test_site_scoped_to_task_is_one_file(sample_tree):

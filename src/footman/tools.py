@@ -81,7 +81,7 @@ off = _Off()
 # exceptions live here, extracted from the tools themselves (click states
 # it as `secondary_opts`) rather than assumed: `mkdocs build --no-clean`
 # is rejected outright — the flag is `--dirty`. Regenerate with
-# `fm footman tools negations`.
+# `fm footman.tools negations`.
 _NEGATIONS: dict[str, dict[str, str]] = {
     "mkdocs": {
         "clean": "--dirty",
@@ -112,7 +112,7 @@ def _negation(tool: str, key: str, *, single_dash: bool = False) -> str:
 # child's argv, or they leak past the tool into the child — `uv run
 # --frozen pytest`, not `uv run pytest --frozen` (which hands `--frozen`
 # to pytest). Dotted for nesting; extracted from each verb's usage line
-# and checked by `fm footman tools audit`.
+# and checked by `fm footman.tools.audit`.
 _WRAPPERS: dict[str, frozenset[str]] = {
     "uv": frozenset({"run", "tool.run"}),
     "coverage": frozenset({"run"}),
@@ -134,7 +134,7 @@ def _is_wrapper(argv0: str, base: list[str]) -> bool:
 # footman already pushes FORCE_COLOR / NO_COLOR into every child (see
 # `context.color_env`), which covers the modern set. This table is only for the
 # tools that ignore those and take a flag instead (git). It is *probed*, not
-# hand-written: `fm footman tools color` runs each tool with colour forced on
+# hand-written: `fm footman.tools.color` runs each tool with colour forced on
 # and off and records the verdict in `_colordata.py`, which is loaded below.
 
 

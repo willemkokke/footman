@@ -133,25 +133,106 @@ class _Segment:
             )
 
 
-def _describe(name: str, node: dict) -> str:
-    """`name\\tdescription` when *name* is a task/group in *node* with a help
-    line, else the bare name.
+def _cand(address: str, summary: str) -> str:
+    """`address\\tdescription` when there is a help line, else the address.
 
     The tab is the backward-safe wire format: shells that render descriptions
     (zsh, fish) split on it; bash (and others) keep the first field. Options and
     choice values carry no help, so they pass through bare.
     """
-    item = node["tasks"].get(name) or node["groups"].get(name)
-    summary = item.get("help") if isinstance(item, dict) else ""
-    return f"{name}\t{summary}" if summary else name
+    return f"{address}\t{summary}" if summary else address
+
+
+def _walk_address(tree: dict, token: str) -> tuple[str, dict, list[str]] | None:
+    """Resolve one dotted token to `("task"|"group", node, path)`, or None."""
+    parts = token.split(".")
+    if "" in parts:
+        return None
+    node, path = tree, []
+    for pos, part in enumerate(parts):
+        last = pos == len(parts) - 1
+        if part in node["groups"]:
+            node = node["groups"][part]
+            path.append(part)
+            if last:
+                return ("group", node, path)
+        elif part in node["tasks"] and last:
+            return ("task", node["tasks"][part], [*path, part])
+        else:
+            return None
+    return None
+
+
+def _group_at(tree: dict, dotted: str) -> dict | None:
+    """The group node at *dotted*, or None (a task or nothing there)."""
+    node = tree
+    for part in dotted.split("."):
+        sub = node["groups"].get(part)
+        if sub is None:
+            return None
+        node = sub
+    return node
+
+
+def _address_candidates(tree: dict, partial: str) -> list[str]:
+    """Path-style completion over the tree: the `.` is footman's `/`.
+
+    One emission rule, `ls -F` style: candidates sit one segment beyond the
+    typed prefix, and a namespace-group candidate always carries its trailing
+    dot (the descend-vs-run signal). A runnable group emits itself *plus* its
+    dotted children, so the common prefix is the group and the next keystroke
+    (space or `.`) is the stop-or-descend choice. On a unique namespace match
+    the rule skips ahead to the children — the candidate set stays non-unique,
+    so no shell ever forces a space after `docs.`.
+    """
+    base, sep, leaf = partial.rpartition(".")
+    node, prefix = tree, ""
+    if sep:
+        node = _group_at(tree, base)
+        if node is None:
+            return []
+        prefix = f"{base}."
+    while True:
+        groups = [n for n in node["groups"] if n.startswith(leaf)]
+        tasks = [n for n in node["tasks"] if n.startswith(leaf)]
+        if (
+            len(groups) == 1
+            and not tasks
+            and "default" not in node["groups"][groups[0]]
+        ):
+            # Unique namespace match: complete straight through it, the way
+            # zsh descends a lone subdirectory.
+            prefix = f"{prefix}{groups[0]}."
+            node = node["groups"][groups[0]]
+            leaf = ""
+            continue
+        break
+    out: list[str] = []
+    for name in groups:
+        sub = node["groups"][name]
+        default = sub.get("default")
+        if default is not None:
+            # Runnable group: itself (described by what "stop here" runs),
+            # then one level of dotted children for the descent.
+            out.append(_cand(f"{prefix}{name}", default.get("help") or sub["help"]))
+            for child, csub in sub["groups"].items():
+                out.append(_cand(f"{prefix}{name}.{child}.", csub["help"]))
+            for child, spec in sub["tasks"].items():
+                out.append(_cand(f"{prefix}{name}.{child}", spec.get("help", "")))
+        else:
+            out.append(_cand(f"{prefix}{name}.", sub["help"]))
+    for name in tasks:
+        out.append(_cand(f"{prefix}{name}", node["tasks"][name].get("help", "")))
+    return out
 
 
 def complete(tree: dict, words: list[str]) -> list[str]:
     """Resolve completion candidates for *words* against a manifest *tree*.
 
-    Chain-aware: the walk tracks segments the way the splitter would — exact
-    positional arity first, then a trailing multiple/variadic consumer, then
-    the next bare word starts a new segment from the root. So in
+    Chain-aware: the walk tracks segments the way the splitter would — a
+    dotted address names each segment's task in one word, then exact
+    positional arity, then a trailing multiple/variadic consumer, then the
+    next bare word starts a new segment from the root. So in
     `fm format lint --fi<TAB>` the options offered are *lint's*, and once a
     task's arity is satisfied a bare TAB offers the next task names too.
     `+` resets a segment explicitly; after `--` everything belongs to the
@@ -164,7 +245,7 @@ def complete(tree: dict, words: list[str]) -> list[str]:
     prior, value_global = _consume_globals(prior)
 
     node, seg = tree, _Segment()
-    path: list[str] = []  # the group/task names of the current segment
+    path: list[str] = []  # the dotted segments of the current head
     value_opt: dict | None = None  # the option whose value comes next
 
     for word in prior:
@@ -179,12 +260,17 @@ def complete(tree: dict, words: list[str]) -> list[str]:
             node, seg, path = tree, _Segment(), []
             continue
         if seg.task is None:
-            if word in node["groups"]:
-                node = node["groups"][word]
-                path.append(word)
-            elif word in node["tasks"]:
-                seg = _Segment(node["tasks"][word])
-                path.append(word)
+            # A head word is one dotted address, resolved from the root —
+            # landing on a group parks there (a runnable group's options and
+            # the next head both stay reachable); landing on a task opens
+            # its tail; anything else is ignored, as the splitter would err.
+            resolved = _walk_address(tree, word)
+            if resolved is not None:
+                kind, hit, path = resolved
+                if kind == "task":
+                    seg = _Segment(hit)
+                else:
+                    node = hit
             continue
         # Inside a task's tail: options and their values first.
         name = word.split("=", 1)[0]
@@ -207,12 +293,13 @@ def complete(tree: dict, words: list[str]) -> list[str]:
         if seg.rest is not None:
             continue
         node, seg, path = tree, _Segment(), []
-        if word in tree["groups"]:
-            node = tree["groups"][word]
-            path.append(word)
-        elif word in tree["tasks"]:
-            seg = _Segment(tree["tasks"][word])
-            path.append(word)
+        resolved = _walk_address(tree, word)
+        if resolved is not None:
+            kind, hit, path = resolved
+            if kind == "task":
+                seg = _Segment(hit)
+            else:
+                node = hit
 
     # A leading global expecting a value (`fm --install-completion <TAB>`):
     # offer its choices, if any (a PATH-valued global has none — the shell's
@@ -236,17 +323,26 @@ def complete(tree: dict, words: list[str]) -> list[str]:
         return [c for c in value_opt.get("choices", []) if c.startswith(partial)]
 
     if seg.task is None:
-        names = list(node["groups"]) + list(node["tasks"])
-        out = [_describe(n, node) for n in names if n.startswith(partial)]
-        # A runnable group also offers its default action's flags/options, so
-        # `fm lint <TAB>` proposes `--fix` alongside the child names.
-        if "default" in node:
-            out += [
+        if node is not tree:
+            # A prior word parked on a group. Runnable: its default's
+            # flags/options, plus fresh heads — the default's arity is
+            # satisfied, so the next bare word starts a new segment. A
+            # namespace group has no valid continuation as a fresh word:
+            # stay silent, the way the splitter refuses it.
+            if "default" not in node:
+                return []
+            out = [
                 "--" + p["name"]
                 for p in node["default"]["params"]
                 if p["kind"] in ("flag", "option")
                 and ("--" + p["name"]).startswith(partial)
             ]
+            if not partial.startswith("-"):
+                out += _address_candidates(tree, partial)
+            return out
+        # Path-style over the whole word: the partial is a dotted address
+        # in progress, and candidates sit one segment beyond it.
+        out = [] if partial.startswith("-") else _address_candidates(tree, partial)
         # fm's own global options bind before the first task, so offer them when
         # a flag is being typed at the root (`not prior` ⇒ nothing but globals
         # preceded). A bare `<TAB>` still lists only tasks — globals would be
@@ -280,33 +376,34 @@ def complete(tree: dict, words: list[str]) -> list[str]:
     # Option position: this task's flags/options — minus the ones already
     # given, unless the param legitimately repeats — plus what the next bare
     # word could be: the pending positional's choices, the trailing
-    # consumer's choices, or (arity satisfied) the next segment's names.
+    # consumer's choices, or (arity satisfied) the next segment's addresses.
     candidates = [
         name
         for name, p in seg.opts.items()
         if name not in seg.used or p.get("multiple") or p.get("mapping")
     ]
+    next_heads: list[str] = []
     if seg.filled < len(seg.fixed):
         candidates += seg.fixed[seg.filled].get("choices", [])
     elif seg.rest is not None:
         candidates += seg.rest.get("choices", [])
     elif not partial.startswith("-"):
-        candidates += list(tree["groups"]) + list(tree["tasks"])
+        next_heads = _address_candidates(tree, partial)
     seen: dict[str, None] = {}
     for c in candidates:
         if c.startswith(partial):
             seen.setdefault(c)
-    # Next-segment task/group names carry their help line; an option carries
-    # its doc("...") text when the task author wrote one; choice values stay
-    # bare. Same tab-separated wire format either way.
+    # An option carries its doc("...") text when the task author wrote one;
+    # choice values stay bare; next-segment addresses arrive pre-described.
+    # Same tab-separated wire format either way.
     out = []
     for c in seen:
         p = seg.opts.get(c)
         if p is not None and p.get("doc"):
             out.append(f"{c}\t{p['doc']}")
         else:
-            out.append(_describe(c, tree))
-    return out
+            out.append(c)
+    return out + next_heads
 
 
 def _load_manifest(path: str) -> dict | None:

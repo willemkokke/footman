@@ -270,7 +270,7 @@ jobs:
       # so it is measured and merged into the coverage gate like any test
       # job. Child fm processes aren't traced; the suite covers those.
       - name: Build site (strict, under coverage)
-        run: uv run coverage run -m footman docs build --check
+        run: uv run coverage run -m footman docs.build --check
         env:
           COVERAGE_FILE: .coverage.docs-build
           # The casts spawn real shells which spawn `fm --complete`; this

@@ -39,25 +39,25 @@ plugins = ["footman.docs"]
 
 That's also the two-line demo of the [plugin system](composing.md): a plugin's
 name is its command path, so `footman.docs` mounts under `footman`, and after
-it `fm --list` shows `footman docs page` and `footman docs site`. (Cherry-pick
+it `fm --list` shows `footman.docs.page` and `footman.docs.site`. (Cherry-pick
 or remount with `include(plugin("footman.docs"), …)` if you'd rather not take
 the whole group. The maintainer-facing stub toolkit is a separate plugin,
 `footman.tools`.)
 
-## One page: `fm footman docs page`
+## One page: `fm footman.docs.page`
 
 ```sh
-fm footman docs page > TASKS.md          # the whole tree, one document
-fm footman docs page --target docs       # just one group…
-fm footman docs page --target docs.build # …or one task
-fm footman docs page --out TASKS.md      # write the file directly
+fm footman.docs.page > TASKS.md          # the whole tree, one document
+fm footman.docs.page --target docs       # just one group…
+fm footman.docs.page --target docs.build # …or one task
+fm footman.docs.page --out TASKS.md      # write the file directly
 ```
 
 The page goes to stdout (stdout is the answer; footman's summary is stderr
 commentary), so it pipes:
 
 ```sh
-fm footman docs page | pandoc -o tasks.pdf     # or .html, .docx, …
+fm footman.docs.page | pandoc -o tasks.pdf     # or .html, .docx, …
 ```
 
 `--heading 2` (up to 6) makes the headings start deeper, so the output nests
@@ -75,10 +75,10 @@ zensical/mkdocs-material site already understands: heading anchors for
 stable deep links and an `!!! example` admonition for the synthesized
 invocation.
 
-## A linked site: `fm footman docs site`
+## A linked site: `fm footman.docs.site`
 
 ```console
-$ fm footman docs site docs/tasks
+$ fm footman.docs.site docs/tasks
 wrote 19 pages under docs/tasks
 ```
 
@@ -89,7 +89,7 @@ into [`zensical.toml`](https://github.com/willemkokke/footman/blob/main/zensical
 nav. `site` defaults to `--flavor material` because a docs site is where it
 lands; pass `--flavor plain` for anything else.
 
-## The runner itself: `fm footman docs globals`
+## The runner itself: `fm footman.docs.globals`
 
 Your tasks aren't the only thing worth documenting — the runner's global
 options deserve a page too. `globals` renders them as a markdown table
@@ -99,11 +99,11 @@ is exactly that, regenerated on every docs build — it *cannot* drift,
 because it was never written by hand.
 
 ```console
-$ fm footman docs globals --out docs/_generated/globals.md
+$ fm footman.docs.globals --out docs/_generated/globals.md
 wrote docs/_generated/globals.md
 ```
 
-## Terminal screenshots: `fm footman docs shots`
+## Terminal screenshots: `fm footman.docs.shots`
 
 Prose about colours drifts the moment the palette changes; a screenshot
 generated from the CLI cannot. `shots` runs a command on a real
@@ -112,7 +112,7 @@ shows them — collapses the live rewrites to their final frame, and renders
 the capture as an SVG in a macOS-style window:
 
 ```console
-$ fm footman docs shots --out docs/_generated/shots/run.svg -- format lint
+$ fm footman.docs.shots --out docs/_generated/shots/run.svg -- format lint
 wrote docs/_generated/shots/run.svg
 ```
 
@@ -131,7 +131,7 @@ message — add rich to your docs dependency group and it comes alive.
 footman documenting itself with its own availability machinery is exactly
 the use `@requires_dep` was built for.
 
-## Animated sessions: `fm footman docs cast`
+## Animated sessions: `fm footman.docs.cast`
 
 A static frame can't show <kbd>Tab</kbd> completion. `cast` boots a real
 interactive shell (zsh, bash, fish, pwsh, or nushell) from a scratch config
@@ -143,7 +143,7 @@ image does. The session even answers its shell's terminal interrogations
 modern shells refuse to paint a prompt into silence:
 
 ```console
-$ fm footman docs cast --out docs/_generated/shots/zsh-cast.svg \
+$ fm footman.docs.cast --out docs/_generated/shots/zsh-cast.svg \
       --shell zsh -- "fm " "<TAB>" "<WAIT>" "che" "<TAB>" "<ENTER>" "<WAIT:2500>"
 wrote docs/_generated/shots/zsh-cast.svg (55 frames)
 ```
@@ -186,7 +186,7 @@ doesn't document itself unless asked).
 
 ## The live sample
 
-Everything below this line is `fm footman docs page --target docs
+Everything below this line is `fm footman.docs.page --target docs
 --heading 3 --flavor material`, regenerated on every docs build:
 
 --8<-- "docs/_generated/tasks-page.md"

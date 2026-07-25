@@ -18,7 +18,7 @@ grammar may break without a deprecation cycle.
   package. Dev/test/docs tooling lives in `uv` groups, never in `dependencies`.
   One blessed exception: a first-party plugin task may lazily import an
   optional third-party package *inside its body* when gated with a stacked
-  `@requires_dep("…")` (e.g. `docs shots` imports rich) — the package is
+  `@requires_dep("…")` (e.g. `docs.shots` imports rich) — the package is
   never a declared dependency, never imported at module import time, and the
   task lists as unavailable without it.
 - **The completion hot path is stdlib-only and import-free of the framework.**
@@ -113,7 +113,7 @@ tasks.py          footman's own tasks — the gate is `fm check`
 ## Docs
 
 - Site is [Zensical](https://zensical.org) in `docs/`; build strictly with
-  `uv run fm docs build --check`. Coverage HTML embeds via `fm docs coverage`.
+  `uv run fm docs.build --check`. Coverage HTML embeds via `fm docs.coverage`.
 - **Plain words — no consultant jargon** ("lever"/"leverage"/"synergy",
   "utilize", "delve", etc.) in README, CHANGELOG, or docs.
 - CHANGELOG follows [Keep a Changelog](https://keepachangelog.com/) + SemVer;

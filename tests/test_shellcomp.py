@@ -782,7 +782,7 @@ def test_zsh_cast_records_an_animated_completion(home, tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_CACHE_HOME", str(home / ".cache"))
     assert _app.run(["--list"]) == 0  # warm the manifest TAB will serve
     dest = tmp_path / "cast.svg"
-    line = ["footman", "docs", "cast", "--out", str(dest), "--shell", "zsh"]
+    line = ["footman.docs.cast", "--out", str(dest), "--shell", "zsh"]
     # The trailing wait gives the hook's `fm --complete` subprocess room on
     # a cold CI runner — the settle window alone raced its Python startup.
     line += ["--width", "70", "--height", "10", "--", "fm li", "<TAB>", "<WAIT:2500>"]
@@ -855,7 +855,7 @@ def test_cast_completes_in_every_posix_shell(shell: str, home, tmp_path, monkeyp
     monkeypatch.setenv("XDG_CACHE_HOME", str(home / ".cache"))
     assert _app.run(["--list"]) == 0  # warm the manifest TAB will serve
     dest = tmp_path / "cast.svg"
-    line = ["footman", "docs", "cast", "--out", str(dest), "--shell", shell]
+    line = ["footman.docs.cast", "--out", str(dest), "--shell", shell]
     line += ["--width", "70", "--height", "12", "--", "fm li", "<TAB>", "<WAIT:2500>"]
     assert _app.run(line) == 0
     svg = dest.read_text(encoding="utf-8")
