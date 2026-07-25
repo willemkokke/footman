@@ -502,35 +502,40 @@ _running = 0  # task bodies in flight (scheduler nodes + parallel() children)
 _parked = 0  # of those, parked waiting on their own children
 _serial_holder: str | None = None
 _excl_holder: str | None = None
+_console_holder: str | None = None
 _excl_waiting = 0
 
 
-def lane(policy: str | None, name: str = "", inherited: bool = False) -> Any:
+def lane(
+    policy: str | None, name: str = "", inherited: bool = False, console: bool = False
+) -> Any:
     """A context manager holding *policy*'s lane around one task body.
 
     `None` is the parallel regime: it only counts the body for the drain
-    and yields to a waiting exclusive first. `inherited` marks a lineage
-    child of a lane holder: it bypasses every bar (the holder is waiting on
-    it) and only counts.
+    and yields to a waiting exclusive first. `console=True` additionally
+    claims the terminal (an `interactive=True` body): one owner at a time,
+    granted **atomically with the policy lane** in a single predicate, so a
+    partial hold can never chain into hold-and-wait between lanes.
+    `inherited` marks a lineage child of a lane holder: it bypasses every
+    bar (the holder is waiting on it) and only counts.
     """
     import contextlib
 
     @contextlib.contextmanager
     def _lane() -> Any:
-        global _running, _serial_holder, _excl_holder, _excl_waiting
+        global _running, _serial_holder, _excl_holder, _excl_waiting, _console_holder
         if not _installs:
             yield
             return
         with _arb_cv:
-            if inherited or policy is None:
-                if not inherited:
-                    while _excl_holder is not None or _excl_waiting:
-                        _wait_note(name, "the exclusive drain", _excl_holder)
+            if inherited:
+                pass  # a lineage extends every hold, the console included
             elif policy == "serial":
                 while (
                     _serial_holder is not None
                     or _excl_holder is not None
                     or _excl_waiting
+                    or (console and _console_holder is not None)
                 ):
                     _wait_note(name, "the serial lane", _serial_holder or _excl_holder)
                 _serial_holder = name or "?"
@@ -541,24 +546,61 @@ def lane(policy: str | None, name: str = "", inherited: bool = False) -> Any:
                         _excl_holder is not None
                         or _serial_holder is not None
                         or (_running - _parked) > 0
+                        or (console and _console_holder is not None)
                     ):
                         _wait_note(name, "the exclusive drain", _serial_holder)
                 finally:
                     _excl_waiting -= 1
                 _excl_holder = name or "?"
+            else:
+                while (
+                    _excl_holder is not None
+                    or _excl_waiting
+                    or (console and _console_holder is not None)
+                ):
+                    what = "the console" if console else "the exclusive drain"
+                    _wait_note(name, what, _console_holder or _excl_holder)
+            if console and not inherited:
+                _console_holder = name or "?"
             _running += 1
         try:
             yield
         finally:
             with _arb_cv:
                 _running -= 1
-                if not inherited and policy == "serial":
-                    _serial_holder = None
-                elif not inherited and policy == "exclusive":
-                    _excl_holder = None
+                if not inherited:
+                    if policy == "serial":
+                        _serial_holder = None
+                    elif policy == "exclusive":
+                        _excl_holder = None
+                    if console:
+                        _console_holder = None
                 _arb_cv.notify_all()
 
     return _lane()
+
+
+def console_gate() -> Any:
+    """Hold a real-terminal write until no console owner is active.
+
+    A captured sibling finishing mid-wizard must not splat its buffered
+    block over the wizard's screen: the flush queues here and lands when
+    the terminal frees. Best-effort by design — a wizard *starting* between
+    the gate and the write is the same race as one starting just after it,
+    and the write is a single atomic block either way."""
+    import contextlib
+
+    @contextlib.contextmanager
+    def _gate() -> Any:
+        if not _installs:
+            yield
+            return
+        with _arb_cv:
+            while _console_holder is not None:
+                _arb_cv.wait(timeout=1.0)
+        yield
+
+    return _gate()
 
 
 def _wait_note(name: str, what: str, holder: str | None) -> None:

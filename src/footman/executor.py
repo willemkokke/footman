@@ -550,12 +550,15 @@ def run_task(
     # its ancestor's hold instead of contending with it.
     inherited = ctx.serial_active
     lane_policy = None if inherited else registry.task_lane(fn)
+    console = not inherited and registry.is_interactive(fn)
 
     token = _current.set(ctx)
     ctx.in_task = True  # a mid-body prompt()/confirm()/select() is now guarded
     start = time.perf_counter()
     try:
-        with _globals.lane(lane_policy, name=seg.task, inherited=inherited):
+        with _globals.lane(
+            lane_policy, name=seg.task, inherited=inherited, console=console
+        ):
             if lane_policy is not None:
                 with _serial_globals(ctx):
                     code, returned, error = _call(fn, args, kwargs)

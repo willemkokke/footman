@@ -387,8 +387,12 @@ def run_plan(
     # An interactive task owns the real terminal: it forces sequential (it can't
     # share with parallel siblings) and suppresses the status line, whose
     # clear-line repaints would otherwise erase its prompt.
+    # An interactive task no longer forces the whole run sequential: it
+    # claims the arbiter's console lane (one owner, real stdio) and the
+    # parallel pool keeps running around it, captured; only the status
+    # line still yields for the run (its repaints would fight the prompt).
     interactive = any(is_interactive(n.fn) for n in nodes)
-    sequential = sequential or len(nodes) == 1 or interactive
+    sequential = sequential or len(nodes) == 1
     # A run containing an infinite task has no progress to show — its
     # duration isn't late, it's intentional. The status line yields to a
     # one-time hint (printed at the node's start) saying how this ends.
@@ -558,9 +562,16 @@ def _run_parallel(nodes, real, err, capture, ctx_config, status, jobs) -> None:
             name_width=width,
             keep_going=n.keep_going,
         )
+        if is_interactive(n.fn) and not capture:
+            # A console owner runs on the real terminal even inside the
+            # parallel pool: the arbiter's console lane guarantees one owner,
+            # and captured siblings' flushes queue on the gate below.
+            ctx.sink = ctx.err_sink = None
         n.result = executor.run_task(n.fn, n.seg, ctx, n.forwarded)
-        if not capture:  # flush this task's buffered output as one block
-            with lock:
+        if not capture and ctx.sink is not None:
+            # Flush this task's buffered output as one block — queued while a
+            # wizard owns the terminal, so it never splats over a prompt.
+            with _globals.console_gate(), lock:
                 blob = ctx.sink.getvalue()  # type: ignore[union-attr]
                 if status is not None:
                     # A direct real-stream write (bypasses the routers): the

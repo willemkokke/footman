@@ -560,3 +560,117 @@ def test_stdin_untouched_outside_a_run():
     finally:
         _globals.uninstall()
     assert sys.stdin is before  # and restored
+
+
+# --- the console lane (interactive overlaps the pool) -------------------------
+
+
+def test_interactive_overlaps_the_parallel_pool():
+    # A cross-handshake that only completes when the two nodes truly run
+    # concurrently: the old model (interactive forces the whole run
+    # sequential) would deadlock both waits and fail loudly.
+    from footman import schedule
+
+    e_wizard, e_sibling = threading.Event(), threading.Event()
+    reg = Group("root")
+
+    @reg.task(interactive=True)
+    def wizard():
+        e_wizard.set()
+        assert e_sibling.wait(5), "sibling never ran while the wizard held"
+
+    @reg.task
+    def sibling():
+        assert e_wizard.wait(5), "wizard never started alongside"
+        e_sibling.set()
+
+    tree = manifest.build_manifest(reg)["tree"]
+    _, segments = split_chain(tree, ["wizard", "sibling"])
+    results = schedule.run_plan(reg, segments)
+    assert all(r.ok for r in results), [str(r.error) for r in results]
+
+
+def test_console_lane_has_one_owner_at_a_time():
+    from footman import schedule
+
+    holds: list[tuple[str, float]] = []
+    guard = threading.Lock()
+
+    def _mark(tag):
+        with guard:
+            holds.append((tag, time.monotonic()))
+
+    reg = Group("root")
+
+    @reg.task(interactive=True)
+    def first():
+        _mark("first-in")
+        time.sleep(0.2)
+        _mark("first-out")
+
+    @reg.task(interactive=True)
+    def second():
+        _mark("second-in")
+        time.sleep(0.2)
+        _mark("second-out")
+
+    tree = manifest.build_manifest(reg)["tree"]
+    _, segments = split_chain(tree, ["first", "second"])
+    results = schedule.run_plan(reg, segments)
+    assert all(r.ok for r in results), [str(r.error) for r in results]
+    stamps = dict(holds)
+    windows = sorted(
+        [
+            (stamps["first-in"], stamps["first-out"]),
+            (stamps["second-in"], stamps["second-out"]),
+        ]
+    )
+    assert windows[0][1] <= windows[1][0]  # the terminal has one owner
+
+
+def test_console_gate_queues_until_the_console_frees():
+    _globals.install()
+    try:
+        entered, release = threading.Event(), threading.Event()
+        passed = threading.Event()
+        holder = _hold(None, "wizard", entered, release)
+        assert entered.wait(5)
+
+        def flusher():
+            with _globals.console_gate():
+                passed.set()
+
+        # No console owner yet from _hold (console=False): the gate is open.
+        t = threading.Thread(target=flusher, daemon=True)
+        t.start()
+        assert passed.wait(5)
+        release.set()
+        holder.join(5)
+
+        # Now with a real console owner: the gate queues.
+        entered2, release2 = threading.Event(), threading.Event()
+
+        def console_holder():
+            with _globals.lane(None, name="wizard", console=True):
+                entered2.set()
+                release2.wait(timeout=10)
+
+        h = threading.Thread(target=console_holder, daemon=True)
+        h.start()
+        assert entered2.wait(5)
+        passed2 = threading.Event()
+
+        def flusher2():
+            with _globals.console_gate():
+                passed2.set()
+
+        t2 = threading.Thread(target=flusher2, daemon=True)
+        t2.start()
+        time.sleep(0.15)
+        assert not passed2.is_set()  # queued behind the wizard
+        release2.set()
+        assert passed2.wait(5)  # and lands when the terminal frees
+        h.join(5)
+        t2.join(5)
+    finally:
+        _globals.uninstall()

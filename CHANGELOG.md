@@ -151,6 +151,15 @@ versions may include breaking changes.
   with a one-time note suggesting the deliberate spellings. Explicit
   arguments always win, `env={}` stays a deliberately clean environment, and
   the `unmanaged` policy is the one off-switch.
+- **An interactive task no longer stops the world.** `interactive=True`
+  used to force the entire run sequential; it now claims the arbiter's
+  *console* lane instead — one terminal owner at a time, granted
+  atomically with any serial/exclusive lane so partial holds can't chain —
+  while the parallel pool keeps running around it, captured. A finished
+  sibling's buffered output queues until the wizard frees the terminal,
+  so nothing splats over a prompt (the status line still yields for such
+  runs, as before). A wizard now costs you the terminal, not the run's
+  parallelism.
 - **stdin is guarded like the global it is.** A bare `input()` (or any
   `sys.stdin` read) in a plain parallel task is now a taught error naming
   the exits — declare the value with `ask()`, or mark the task
