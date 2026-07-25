@@ -708,5 +708,5 @@ acme = "acme_cli:main"
 ```
 
 `acme --install-completion` installs for `acme`; errors say `acme:`; and
-`acme acme.docs.page` (mounted with `into="acme"`) documents *your*
-task surface under *your* prog. The details: [Custom CLI](custom-cli.md).
+`acme docs.page` (the plugin overlays your own `docs` group) documents
+*your* task surface under *your* prog. The details: [Custom CLI](custom-cli.md).

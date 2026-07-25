@@ -39,24 +39,24 @@ plugin("footman.docs", into="footman")
 
 That's also the one-line demo of the [plugin system](composing.md): the
 entry point is the identity, `into=` is your placement, and after the pull
-`fm --list` shows `fm.docs.page` and `fm.docs.site`. (Cherry-pick
+`fm --list` shows `docs.page` and `docs.site`. (Cherry-pick
 with `only=`, or drop the `into=` to land the `docs` group at top level.
 The maintainer-facing stub toolkit is a separate plugin, `footman.tools`.)
 
-## One page: `fm fm.docs.page`
+## One page: `fm docs.page`
 
 ```sh
-fm fm.docs.page > TASKS.md          # the whole tree, one document
-fm fm.docs.page --target docs       # just one group…
-fm fm.docs.page --target docs.build # …or one task
-fm fm.docs.page --out TASKS.md      # write the file directly
+fm docs.page > TASKS.md          # the whole tree, one document
+fm docs.page --target docs       # just one group…
+fm docs.page --target docs.build # …or one task
+fm docs.page --out TASKS.md      # write the file directly
 ```
 
 The page goes to stdout (stdout is the answer; footman's summary is stderr
 commentary), so it pipes:
 
 ```sh
-fm fm.docs.page | pandoc -o tasks.pdf     # or .html, .docx, …
+fm docs.page | pandoc -o tasks.pdf     # or .html, .docx, …
 ```
 
 `--heading 2` (up to 6) makes the headings start deeper, so the output nests
@@ -74,10 +74,10 @@ zensical/mkdocs-material site already understands: heading anchors for
 stable deep links and an `!!! example` admonition for the synthesized
 invocation.
 
-## A linked site: `fm fm.docs.site`
+## A linked site: `fm docs.site`
 
 ```console
-$ fm fm.docs.site docs/tasks
+$ fm docs.site docs/tasks
 wrote 19 pages under docs/tasks
 ```
 
@@ -88,7 +88,7 @@ into [`zensical.toml`](https://github.com/willemkokke/footman/blob/main/zensical
 nav. `site` defaults to `--flavor material` because a docs site is where it
 lands; pass `--flavor plain` for anything else.
 
-## The runner itself: `fm fm.docs.globals`
+## The runner itself: `fm docs.globals`
 
 Your tasks aren't the only thing worth documenting — the runner's global
 options deserve a page too. `globals` renders them as a markdown table
@@ -98,11 +98,11 @@ is exactly that, regenerated on every docs build — it *cannot* drift,
 because it was never written by hand.
 
 ```console
-$ fm fm.docs.globals --out docs/_generated/globals.md
+$ fm docs.globals --out docs/_generated/globals.md
 wrote docs/_generated/globals.md
 ```
 
-## Terminal screenshots: `fm fm.docs.shots`
+## Terminal screenshots: `fm docs.shots`
 
 Prose about colours drifts the moment the palette changes; a screenshot
 generated from the CLI cannot. `shots` runs a command on a real
@@ -111,7 +111,7 @@ shows them — collapses the live rewrites to their final frame, and renders
 the capture as an SVG in a macOS-style window:
 
 ```console
-$ fm fm.docs.shots --out docs/_generated/shots/run.svg -- format lint
+$ fm docs.shots --out docs/_generated/shots/run.svg -- format lint
 wrote docs/_generated/shots/run.svg
 ```
 
@@ -130,7 +130,7 @@ message — add rich to your docs dependency group and it comes alive.
 footman documenting itself with its own availability machinery is exactly
 the use `@requires_dep` was built for.
 
-## Animated sessions: `fm fm.docs.cast`
+## Animated sessions: `fm docs.cast`
 
 A static frame can't show <kbd>Tab</kbd> completion. `cast` boots a real
 interactive shell (zsh, bash, fish, pwsh, or nushell) from a scratch config
@@ -142,7 +142,7 @@ image does. The session even answers its shell's terminal interrogations
 modern shells refuse to paint a prompt into silence:
 
 ```console
-$ fm fm.docs.cast --out docs/_generated/shots/zsh-cast.svg \
+$ fm docs.cast --out docs/_generated/shots/zsh-cast.svg \
       --shell zsh -- "fm " "<TAB>" "<WAIT>" "che" "<TAB>" "<ENTER>" "<WAIT:2500>"
 wrote docs/_generated/shots/zsh-cast.svg (55 frames)
 ```
@@ -185,7 +185,7 @@ doesn't document itself unless asked).
 
 ## The live sample
 
-Everything below this line is `fm fm.docs.page --target docs
+Everything below this line is `fm docs.page --target docs
 --heading 3 --flavor material`, regenerated on every docs build:
 
 --8<-- "docs/_generated/tasks-page.md"

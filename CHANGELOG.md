@@ -9,14 +9,20 @@ versions may include breaking changes.
 
 ### Changed
 
-- **footman's own tasks live at `fm.…` now.** The first-party plugins
-  mount under the prog people actually type — `fm.docs.page`,
-  `fm.tools.sync` — instead of `footman.…` (one line each in footman's
-  own `tasks.py`; entry-point names are unchanged, so your
-  `plugin("footman.tools", into=…)` keeps working and mounts wherever
-  *you* say). The documenter's self-exclusion now keys on provenance
-  instead of a hardcoded mount name, so it excludes itself wherever an
-  author mounts it. `--list` wraps long descriptions with a hanging
+- **footman's own tasks overlay the tree — no container at all.** The
+  first-party plugins are pulled at the end of footman's own `tasks.py`,
+  so each node merges with what the file already defined: the docs tasks
+  join the local `docs` group leaf by leaf (`docs.serve` beside
+  `docs.page`), and `tools.…` lands at top level — one surface, no
+  `footman.` prefix (entry-point names unchanged; your
+  `plugin("footman.tools", into=…)` still mounts wherever *you* say, and
+  pull-last-to-merge works for any plugin, not just ours). The
+  documenter's self-exclusion now keys on per-task provenance instead of
+  a hardcoded mount name, so it excludes exactly the pulled tasks
+  wherever an author mounts them — the author's own tasks on a shared
+  group stay documented. The tools index also stops saying "unknown" for
+  the shells' in-process capability: a hand-written stub means there is
+  no entry point to call, so the answer is "no". `--list` wraps long descriptions with a hanging
   indent to the description column, so a narrow terminal no longer
   shears the two-column layout apart. And the custom-CLI page says what
   was always true: the uv handoff re-execs the *(branded)* footman you

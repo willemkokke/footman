@@ -12,12 +12,7 @@ from typing import TYPE_CHECKING, Annotated
 from footman import doc, group, parallel, plugin, run, task
 from footman.tools import basedpyright, pytest, ruff, ruff_format, uv, zensical
 
-# Dogfood: pull footman's own first-party plugins, exactly as a user would.
-# `docs` is the end-user-facing family (task-doc generation); `tools` is the
-# maintainer-facing stub toolkit. Both land under `footman`, so the addresses
-# read `fm fm.docs.…` / `fm fm.tools.…` — the prog is the brand.
-plugin("footman.docs", into="fm")
-plugin("footman.tools", into="fm")
+docs = group("docs", help="Documentation site (Zensical)")
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -94,9 +89,6 @@ def sync():
     one-line churn this avoids.
     """
     uv.sync()
-
-
-docs = group("docs", help="Documentation site (Zensical)")
 
 
 def _scaffold_suggest_demo() -> str:
@@ -468,3 +460,11 @@ def build():
 def clean():
     """Remove build artifacts."""
     run("rm -rf dist")
+
+
+# Dogfood: pull footman's own first-party plugins, exactly as a user would.
+# Pulled last, each node lands under its own name and merges with what the
+# file already defined — the docs tasks join the local `docs` group leaf
+# by leaf, tools lands at top level: one surface, no container.
+plugin("footman.docs")
+plugin("footman.tools")
