@@ -41,6 +41,7 @@ import subprocess as _subprocess
 import sys as _sys
 import threading as _threading
 from collections.abc import Iterator
+from pathlib import Path as _Path
 from typing import Any, NamedTuple
 
 # `Result` is public, unlike the private aliases: every tool call returns one, and
@@ -48,7 +49,10 @@ from typing import Any, NamedTuple
 # it must resolve to the class — a real module binding beats `__getattr__`.
 from footman.context import Invocation as _Invocation
 from footman.context import Result as Result
+from footman.context import _target_cwd as _target_cwd_of
 from footman.context import color_on as _color_on
+from footman.context import current as _current
+from footman.context import real_stderr as _real_stderr
 from footman.context import run as _run
 
 _version_cache: dict[str, tuple[int, ...]] = {}
@@ -388,7 +392,7 @@ _argv_lock = _threading.Lock()
 # *beside* the call, never translated into tool flags. A closed vocabulary, like a
 # task's `.opts()`, so `capture` here is unambiguously footman's (not a tool's own
 # `--capture`, e.g. pytest's); a tool's own flags go in the call or `.flags()`.
-_TOOL_OPTS = ("nofail", "in_process", "capture", "title")
+_TOOL_OPTS = ("nofail", "in_process", "capture", "title", "cwd", "rel")
 
 
 def _opts_overrides(kwargs: dict[str, Any]) -> dict[str, Any]:
@@ -515,6 +519,8 @@ class Tool:
         capture = self._opts.get("capture", True)
         title = self._opts.get("title", None)
         in_process = self._opts.get("in_process", None)
+        cwd_opt = self._opts.get("cwd", None)
+        rel_opt = self._opts.get("rel", None)
         flags = _flags(kwargs, self._argv0, single_dash=self._single_dash)
         positionals = list(map(str, args))
         wrapper = _is_wrapper(self._argv0, self._base)
@@ -555,11 +561,28 @@ class Tool:
                 nofail=nofail,
                 capture=capture,
                 title=title,
+                cwd=cwd_opt,
+                rel=rel_opt,
                 _show=_Invocation(parts, tuple(spawned)),
             )
 
         wanted = self._prefer_in_process if in_process is None else in_process
         if wanted:
+            from footman import _globals as _pg
+
+            target = _target_cwd_of(_current(), cwd_opt, rel_opt)
+            if target is not None and target.resolve() != _Path(_pg.real_getcwd()):
+                # In-process can't apply a foreign cwd (footman never chdirs
+                # in a parallel task): demote to the subprocess twin — same
+                # command, same semantics, still fully parallel; the
+                # in-process speedup is the only loss. A serial task's cwd is
+                # really applied, so it compares equal and stays in-process.
+                if _current().verbose:
+                    _real_stderr().write(
+                        f"note: {self._argv0}: ran as subprocess — in-process "
+                        f"can't apply cwd in parallel\n"
+                    )
+                return _spawn()
             loader = self._inprocess_loader()  # metadata only — no import
             if loader is None:
                 if in_process is True:  # a demand can't be met — fail fast
@@ -585,7 +608,13 @@ class Tool:
                         _sys.argv = saved
 
             return _run(
-                _invoke, nofail=nofail, capture=capture, title=title, _show=show
+                _invoke,
+                nofail=nofail,
+                capture=capture,
+                title=title,
+                cwd=cwd_opt,
+                rel=rel_opt,
+                _show=show,
             )
         return _spawn()
 

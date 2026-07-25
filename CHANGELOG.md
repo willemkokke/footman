@@ -151,6 +151,18 @@ versions may include breaking changes.
   with a one-time note suggesting the deliberate spellings. Explicit
   arguments always win, `env={}` stays a deliberately clean environment, and
   the `unmanaged` policy is the one off-switch.
+- **In-process tool calls demote instead of breaking.** A `tools.*` call
+  that would run in-process but needs a cwd other than the live process
+  directory runs as its subprocess twin instead — same command, same
+  semantics, right directory, still fully parallel; the in-process
+  startup saving is the only loss (a `-v` note says so). Equal target and
+  live cwd — the common single-package case — stays in-process untouched,
+  and a serial task's cwd is really applied, so it stays in-process too.
+  `Tool.opts()` gains **`cwd=` and `rel=`** beside `nofail`/`capture` —
+  the bridge's per-call override, threading straight into `run()`, so
+  `tools.npm.opts(rel="web").run("build")` roots one call in a
+  subdirectory (and a bound `web_npm = tools.npm.opts(rel="web")` roots
+  every call through it).
 - **The process globals are guarded in parallel tasks.** `os.chdir` /
   `os.fchdir` raise a taught error (the cwd belongs to no one in a parallel
   run); `os.putenv`/`os.unsetenv` raise one too (they bypass env scoping
