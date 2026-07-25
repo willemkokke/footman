@@ -31,6 +31,7 @@ import contextlib
 import os
 import shutil
 from collections.abc import Callable, Iterator, Sequence
+from pathlib import Path
 from typing import Any, ParamSpec, Protocol, TypeVar, cast, overload
 
 Task = Callable[..., Any]
@@ -48,6 +49,46 @@ _INFINITE = "_footman_infinite"
 _INTERACTIVE = "_footman_interactive"
 _PROGRESS = "_footman_progress"
 _CONFIRM = "_footman_confirm"
+_CWD = "_footman_cwd"
+_REL = "_footman_rel"
+_SERIAL = "_footman_serial"
+_EXCLUSIVE = "_footman_exclusive"
+
+# The cwd policy tokens — where a task's working directory roots. Anything
+# else passed as `cwd=` must be an absolute path (a relative one is a taught
+# error pointing at `rel=`, so base-vs-suffix stays unambiguous).
+CWD_TOKENS = ("root", "taskfile", "asinvoked", "unmanaged")
+
+
+def _validate_cwd(value: str | Path) -> str | Path:
+    """A cwd policy value: one of `CWD_TOKENS`, or an absolute path."""
+    if isinstance(value, str) and value in CWD_TOKENS:
+        return value
+    path = Path(value)
+    if not path.is_absolute():
+        raise TypeError(
+            f"cwd={str(value)!r} is relative — cwd takes a policy token "
+            f"({', '.join(CWD_TOKENS)}) or an absolute path; a relative "
+            f"suffix goes in rel=…"
+        )
+    return path
+
+
+def _validate_rel(value: str | Path) -> str:
+    """A rel suffix: a relative path, appended to the resolved cwd base.
+
+    Anchored counts as absolute: on Windows a driveless-rooted path
+    (`/x` — `is_absolute()` False, `anchor` set) would silently replace
+    the base's whole path portion when joined, the opposite of a suffix."""
+    rel_path = Path(value)
+    if rel_path.is_absolute() or rel_path.anchor:
+        raise TypeError(
+            f"rel={str(value)!r} is absolute — rel is a suffix appended to the "
+            f"resolved cwd base; an absolute directory goes in cwd=…"
+        )
+    return str(value)
+
+
 _CHECKS = "_footman_checks"
 _DEFAULT_GROUP = "_footman_default_group"
 _DEFAULT_FANOUT = "_footman_default_fanout"
@@ -117,6 +158,10 @@ _OPTS_ATTRS = {
     "progress": _PROGRESS,
     "confirm": _CONFIRM,
     "infinite": _INFINITE,
+    "cwd": _CWD,
+    "rel": _REL,
+    "serial": _SERIAL,
+    "exclusive": _EXCLUSIVE,
 }
 
 
@@ -141,6 +186,15 @@ def _opts_overrides(kwargs: dict[str, Any]) -> dict[str, Any]:
                 f".opts({name}=…) needs a hashable value — options key the run's "
                 f"deduplication — but got an unhashable {type(value).__name__}"
             ) from None
+    if "cwd" in kwargs:
+        kwargs["cwd"] = _validate_cwd(kwargs["cwd"])
+    if "rel" in kwargs:
+        kwargs["rel"] = _validate_rel(kwargs["rel"])
+    if kwargs.get("cwd") == "unmanaged" and kwargs.get("rel"):
+        raise TypeError(
+            "rel=… needs a managed base and cwd='unmanaged' has none — "
+            "use cwd='asinvoked' for a pinned launch-directory base"
+        )
     return {_OPTS_ATTRS[k]: v for k, v in kwargs.items()}
 
 
@@ -171,7 +225,26 @@ class _Opted:
         return getattr(object.__getattribute__(self, "_opted_base"), name)
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
-        return object.__getattribute__(self, "_opted_base")(*args, **kwargs)
+        base = object.__getattribute__(self, "_opted_base")
+        overrides = object.__getattribute__(self, "_opted_overrides")
+        if _CWD in overrides or _REL in overrides:
+            # A direct body-call must honour a cwd/rel override: resolve it
+            # against the caller's context and install it as `ctx.cwd` around
+            # the base invocation — a save/restore of the *field*, never a
+            # process chdir. The other options are scheduler-read and inert
+            # on a plain call. Lazy import: executor imports registry.
+            from footman import executor
+            from footman.context import current
+
+            ctx = current()
+            saved, saved_unmanaged = ctx.cwd, ctx.cwd_unmanaged
+            ctx.cwd = None  # let the override's ladder re-resolve
+            ctx.cwd, ctx.cwd_unmanaged = executor.resolve_cwd(self, ctx)
+            try:
+                return base(*args, **kwargs)
+            finally:
+                ctx.cwd, ctx.cwd_unmanaged = saved, saved_unmanaged
+        return base(*args, **kwargs)
 
     def opts(self, **overrides: Any) -> _Opted:
         base = object.__getattribute__(self, "_opted_base")
@@ -205,6 +278,10 @@ def _apply_policy(
     interactive: bool,
     keep_going: bool | None,
     atomic: bool,
+    cwd: str | Path = "",
+    rel: str | Path = "",
+    serial: bool = False,
+    exclusive: bool = False,
 ) -> None:
     """Stamp a task's `_footman_*` policy attributes onto *fn*.
 
@@ -228,6 +305,19 @@ def _apply_policy(
         setattr(fn, _KEEP_GOING, keep_going)
     if atomic:
         setattr(fn, _ATOMIC, True)
+    if cwd == "unmanaged" and rel:
+        raise TypeError(
+            "rel=… needs a managed base and cwd='unmanaged' has none — "
+            "use cwd='asinvoked' for a pinned launch-directory base"
+        )
+    if cwd:
+        setattr(fn, _CWD, _validate_cwd(cwd))
+    if rel:
+        setattr(fn, _REL, _validate_rel(rel))
+    if serial:
+        setattr(fn, _SERIAL, True)
+    if exclusive:
+        setattr(fn, _EXCLUSIVE, True)
 
 
 _P = ParamSpec("_P")
@@ -281,6 +371,10 @@ class Group:
         interactive: bool = False,
         keep_going: bool | None = None,
         atomic: bool = False,
+        cwd: str | Path = "",
+        rel: str | Path = "",
+        serial: bool = False,
+        exclusive: bool = False,
     ) -> Callable[[Callable[_P, _R_co]], TaskFn[_P, _R_co]]: ...
 
     def task(
@@ -296,6 +390,10 @@ class Group:
         interactive: bool = False,
         keep_going: bool | None = None,
         atomic: bool = False,
+        cwd: str | Path = "",
+        rel: str | Path = "",
+        serial: bool = False,
+        exclusive: bool = False,
     ) -> Task | Callable[[Task], Task]:
         """Register a function as a task.
 
@@ -332,6 +430,13 @@ class Group:
         so its body can prompt or run a REPL; it can't run under `--json`, and
         because it owns the terminal, a run that contains an interactive task
         goes fully sequential — that task and everything else, one at a time.
+
+        `cwd=` roots the task's working directory: a policy token (`"root"` —
+        the highest cascade file's directory, `"taskfile"` — the file the task
+        was defined in (the default), `"asinvoked"` — a pinned snapshot of the
+        launch directory, `"unmanaged"` — footman stays out entirely) or an
+        absolute path. `rel=` appends a relative suffix to the resolved base.
+        `ctx.cwd` and every `run()`/tools subprocess follow it.
         """
 
         if infinite and not progress:
@@ -353,6 +458,10 @@ class Group:
                 interactive=interactive,
                 keep_going=keep_going,
                 atomic=atomic,
+                cwd=cwd,
+                rel=rel,
+                serial=serial,
+                exclusive=exclusive,
             )
             fn.opts = lambda **o: _Opted(fn, _opts_overrides(o))  # type: ignore[attr-defined]
             self.tasks[key] = fn
@@ -407,6 +516,10 @@ class Group:
         interactive: bool = False,
         keep_going: bool | None = None,
         atomic: bool = False,
+        cwd: str | Path = "",
+        rel: str | Path = "",
+        serial: bool = False,
+        exclusive: bool = False,
     ) -> Callable[[Callable[_P, _R_co]], TaskFn[_P, _R_co]]: ...
 
     def default(
@@ -421,6 +534,10 @@ class Group:
         interactive: bool = False,
         keep_going: bool | None = None,
         atomic: bool = False,
+        cwd: str | Path = "",
+        rel: str | Path = "",
+        serial: bool = False,
+        exclusive: bool = False,
     ) -> Task | Callable[[Task], Task]:
         """Register *fn* as this group's default action — what a bare
         `fm <group>` runs, and what the group returns when called.
@@ -479,6 +596,10 @@ class Group:
                 interactive=interactive,
                 keep_going=keep_going,
                 atomic=atomic,
+                cwd=cwd,
+                rel=rel,
+                serial=serial,
+                exclusive=exclusive,
             )
             # A back-reference plus the empty-body flag: an empty-body default
             # fans out the group's own tasks (implicit prerequisites at DAG-build
@@ -619,6 +740,28 @@ def is_atomic(fn: Task) -> bool:
 def task_confirm(fn: Task) -> str:
     """The `@task(confirm="…")` prompt gating this task, or `""` if none."""
     return getattr(fn, _CONFIRM, "")
+
+
+def task_cwd(fn: Task) -> str | Path | None:
+    """The task's declared cwd policy — a token from `CWD_TOKENS` or an
+    absolute `Path` — or `None` when undeclared (the config ladder decides)."""
+    return getattr(fn, _CWD, None)
+
+
+def task_rel(fn: Task) -> str | None:
+    """The task's declared rel suffix (appended to the resolved cwd base)."""
+    return getattr(fn, _REL, None)
+
+
+def task_lane(fn: Task) -> str | None:
+    """The task's declared arbiter lane: `"exclusive"` (runs with nothing
+    else in flight), `"serial"` (owns the process globals, one at a time,
+    overlapping the parallel pool), or `None` (the parallel regime)."""
+    if getattr(fn, _EXCLUSIVE, False):
+        return "exclusive"
+    if getattr(fn, _SERIAL, False):
+        return "serial"
+    return None
 
 
 Check = Callable[[], str | None]

@@ -5,6 +5,7 @@ from __future__ import annotations
 import io
 import os
 import sys
+from pathlib import Path
 from typing import Annotated, Literal
 
 import pytest
@@ -343,9 +344,30 @@ def test_run_callable_capture_false_is_live_not_buffered(capsys):
     assert results[0].steps[0].output == ""  # nothing captured into the step
 
 
-def test_run_callable_honors_cwd(tmp_path):
-    # F17: an in-process callable runs from the given cwd, like the subprocess
-    # branch of the same call already does.
+def test_run_callable_foreign_cwd_is_a_taught_error(tmp_path):
+    # The old F17 contract (chdir the process around the call) is gone:
+    # footman never chdirs in a parallel task. A foreign target teaches the
+    # exits instead of silently serialising the run.
+    seen = {}
+
+    def tasks(reg):
+        @reg.task
+        def go():
+            def tool():
+                seen["ran"] = True
+                return 0
+
+            run(tool, cwd=tmp_path)
+
+    _, _, results = drive(tasks, "go")
+    assert not results[0].ok
+    assert "no longer chdirs" in str(results[0].error)
+    assert "ran" not in seen  # refused before the callable ran
+
+
+def test_run_callable_matching_cwd_runs(tmp_path):
+    # Equal target and live cwd: nothing to apply, the call just runs — the
+    # common single-package case is untouched by the breaking change.
     seen = {}
 
     def tasks(reg):
@@ -355,10 +377,27 @@ def test_run_callable_honors_cwd(tmp_path):
                 seen["cwd"] = os.getcwd()
                 return 0
 
-            run(tool, cwd=tmp_path)
+            run(tool, cwd=Path.cwd())
 
     drive(tasks, "go")
-    assert seen["cwd"] == str(tmp_path.resolve())  # macOS /tmp is a symlink
+    assert seen["cwd"] == os.getcwd()
+
+
+def test_run_callable_unmanaged_skips_the_check(tmp_path):
+    # cwd='unmanaged' is the "insensitive at my own risk" declaration: the
+    # resolved ctx.cwd is ignored for in-process calls, no error, no chdir.
+    seen = {}
+    with use_context(Context(cwd=tmp_path, cwd_unmanaged=True)):
+        run(lambda: seen.setdefault("ran", True) and 0)
+    assert seen["ran"] is True
+
+
+def test_footman_cwd_is_concrete(tmp_path):
+    import footman
+
+    with use_context(Context(cwd=tmp_path)):
+        assert footman.cwd() == tmp_path
+    assert footman.cwd() == Path.cwd()  # outside a run: the process cwd
 
 
 def test_run_callable_honors_env_overlay(monkeypatch):
@@ -379,10 +418,10 @@ def test_run_callable_honors_env_overlay(monkeypatch):
     assert seen["env"] == ("base", "extra")
 
 
-def test_run_callable_restores_cwd_and_env(tmp_path, monkeypatch):
-    # The process-global patch is undone on exit — no leak into the next task.
+def test_run_callable_restores_env(monkeypatch):
+    # The env patch is undone on exit — no leak into the next task. (cwd no
+    # longer has a patch to restore: footman never chdirs in parallel.)
     monkeypatch.delenv("EXTRA", raising=False)
-    before = os.getcwd()
 
     def tasks(reg):
         @reg.task
@@ -390,10 +429,9 @@ def test_run_callable_restores_cwd_and_env(tmp_path, monkeypatch):
             def tool():
                 return 0
 
-            run(tool, cwd=tmp_path, env={"EXTRA": "x"})
+            run(tool, env={"EXTRA": "x"})
 
     drive(tasks, "go")
-    assert os.getcwd() == before
     assert "EXTRA" not in os.environ
 
 

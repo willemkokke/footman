@@ -14,17 +14,19 @@ returns a non-zero `int` exit code; failures stop the chain unless
 
 from __future__ import annotations
 
+import contextlib
 import enum
 import inspect
 import io
 import os
 import time
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path, PurePath
 from types import MappingProxyType
 from typing import Any
 
-from footman import coerce, context, registry
+from footman import _globals, coerce, context, registry
 from footman.context import (
     Context,
     Failed,
@@ -436,6 +438,79 @@ class Unavailable(Exception):
     """A `@requires`-gated task was asked to run; the message is the reason."""
 
 
+def resolve_cwd(fn: Task, ctx: Context) -> tuple[Path | None, bool]:
+    """The task's working directory under the policy ladder, resolved once.
+
+    Ladder: the task's own declaration — `.opts(cwd=)` over `@task(cwd=)`,
+    both read through the same `getattr` an `_Opted` proxies — then the
+    config default (`ctx.cwd_policy`), then `"taskfile"`. `rel` resolves the
+    same way and is appended to the base. Pure path arithmetic: the
+    directory need not exist at resolve time — existence errors surface
+    where the path is used.
+
+    Returns `(cwd, unmanaged)`. Under `"unmanaged"` the cwd is the live
+    process cwd at task start (for the body to read) and the flag makes
+    `run()` spawn children with `cwd=None`. `"taskfile"` falls back to
+    `root` when the task carries no defining-dir stamp (config-mounted
+    plugins); with nothing known (bare calls outside discovery) the cwd
+    stays `None`, as before.
+    """
+    policy = registry.task_cwd(fn) or ctx.cwd_policy or "taskfile"
+    rel = registry.task_rel(fn)
+    if policy == "unmanaged":
+        if rel:
+            raise ValueError(
+                "rel=… needs a managed base and cwd='unmanaged' has none — "
+                "use cwd='asinvoked' for a pinned launch-directory base"
+            )
+        return Path.cwd(), True
+    base: Path | None
+    if isinstance(policy, Path):
+        base = policy
+    elif policy == "root":
+        base = Path(ctx.root_dir) if ctx.root_dir else None
+    elif policy == "asinvoked":
+        base = Path(ctx.invoked_dir) if ctx.invoked_dir else Path.cwd()
+    elif policy == "taskfile":
+        home = defining_dir(fn)
+        if home is not None:
+            base = Path(home)
+        else:
+            base = Path(ctx.root_dir) if ctx.root_dir else None
+    else:  # a config default naming an absolute path (validated at startup)
+        base = Path(policy)
+    if base is None:
+        return None, False
+    return (base / rel) if rel else base, False
+
+
+@contextlib.contextmanager
+def _serial_globals(ctx: Context) -> Iterator[None]:
+    """A serial/exclusive body owns the real process globals.
+
+    Sole occupancy (the lane) is what makes this safe: apply the task's
+    resolved cwd with a real chdir and its env overlay onto the real
+    `os.environ`, snapshot and restore both. `serial_active` flips the
+    routers and guards to pass-through for the duration — this is the
+    declared regime where today's conveniences are legitimate again.
+    """
+    ctx.serial_active = True
+    saved_cwd = _globals.real_getcwd()
+    saved_env = dict(os.environ)  # passthrough: serial_active is already set
+    try:
+        if ctx.env:
+            os.environ.update(ctx.env)
+        if ctx.cwd is not None and not ctx.cwd_unmanaged:
+            _globals.real_chdir(ctx.cwd)
+        yield
+    finally:
+        with contextlib.suppress(OSError):  # the saved dir may have vanished
+            _globals.real_chdir(saved_cwd)
+        os.environ.clear()
+        os.environ.update(saved_env)
+        ctx.serial_active = False
+
+
 def run_task(
     fn: Task, seg: Segment, ctx: Context, forwarded: dict[str, Any] | None = None
 ) -> TaskResult:
@@ -463,14 +538,32 @@ def run_task(
     ctx.fn = fn  # what inherited() reads to find the shadowed task
     ctx.interactive = registry.is_interactive(fn)  # arms the prompt guard
     ctx.atomic = registry.is_atomic(fn)  # its subprocesses opt out of the kill
-    if ctx.cwd is None and (home := defining_dir(fn)) is not None:
-        ctx.cwd = Path(home)  # run from the folder that defined the task
+    if ctx.cwd is None:  # a preset ctx.cwd (tests / use_context) wins
+        try:
+            ctx.cwd, ctx.cwd_unmanaged = resolve_cwd(fn, ctx)
+        except ValueError as exc:  # e.g. rel= under an unmanaged config default
+            return _result(seg, 2, None, exc, 0.0)
+
+    # The arbiter lane is a *scheduling* declaration, acquired here at the
+    # task boundary — never mid-body, which is what keeps it deadlock-free.
+    # A lineage child (serial_active inherited through a fan-out) extends
+    # its ancestor's hold instead of contending with it.
+    inherited = ctx.serial_active
+    lane_policy = None if inherited else registry.task_lane(fn)
+    console = not inherited and registry.is_interactive(fn)
 
     token = _current.set(ctx)
     ctx.in_task = True  # a mid-body prompt()/confirm()/select() is now guarded
     start = time.perf_counter()
     try:
-        code, returned, error = _call(fn, args, kwargs)
+        with _globals.lane(
+            lane_policy, name=seg.task, inherited=inherited, console=console
+        ):
+            if lane_policy is not None:
+                with _serial_globals(ctx):
+                    code, returned, error = _call(fn, args, kwargs)
+            else:
+                code, returned, error = _call(fn, args, kwargs)
     finally:
         _current.reset(token)
     duration = time.perf_counter() - start

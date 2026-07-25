@@ -31,6 +31,8 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, NoReturn, TextIO
 
+from footman import _globals
+
 
 class Result(int):
     """The outcome of one `run()` call — and the value `run()` returns.
@@ -103,8 +105,29 @@ class Context:
     env: dict[str, str] = field(default_factory=dict)
     """Extra environment variables overlaid on every `run()` subprocess."""
     cwd: Path | None = None
-    """Where `run()` executes: the folder that defined the task; `None`
-    means the process cwd (plain calls outside a footman run)."""
+    """Where `run()` executes — resolved once per task by the policy ladder
+    (`.opts(cwd=)` / `@task(cwd=)` / config `cwd`, default `taskfile`), so it
+    is concrete inside a run. A preset value (tests, `use_context`) wins.
+    `None` means unresolved (plain calls outside a footman run)."""
+    cwd_policy: str = ""
+    """`[tool.footman] cwd` — the run-wide default policy token (or absolute
+    path) the ladder bottoms out on. Empty means `taskfile`."""
+    root_dir: str = ""
+    """The `root` token's target: the highest cascade task file's directory
+    (`files[0].parent`), pinned by discovery. Empty outside a real run."""
+    invoked_dir: str = ""
+    """The `asinvoked` token's target: the process cwd where `fm` was
+    launched, pinned as a snapshot at startup."""
+    cwd_unmanaged: bool = False
+    """`cwd="unmanaged"`: footman stays out — subprocesses spawn with
+    `cwd=None` (inherit the live process cwd) even though `ctx.cwd` records
+    the process cwd at task start for the body to read."""
+    serial_active: bool = False
+    """This task holds (or inherited, through a fan-out) the serial or
+    exclusive lane: it owns the real process globals — the environ router,
+    the Popen injection, and the os guards all pass through. Set by the
+    executor around a `serial=`/`exclusive=` body; `parallel()` children
+    inherit it, because a lineage extends a hold."""
     dry_run: bool = False
     """`--dry-run`: `run()` prints and records the command, executes
     nothing, and reports success."""
@@ -192,6 +215,81 @@ def current() -> Context:
     """The context of the running task (a fresh default one outside a run)."""
     ctx = _current.get()
     return ctx if ctx is not None else Context()
+
+
+@contextlib.contextmanager
+def chdir(
+    target: str | Path | None = None, *, rel: str | Path | None = None
+) -> Iterator[None]:
+    """Really change the process directory — inside a serial/exclusive task.
+
+    The sugar for bodies that own the globals: the default target is the
+    task's own `ctx.cwd`; arguments follow the marker grammar exactly — a
+    policy token (`root`, `taskfile`, `asinvoked`) or an absolute path, with
+    `rel=` for a relative suffix; a bare relative path is the same taught
+    error the markers give. Performs a real `os.chdir`, keeps `ctx.cwd` in
+    sync (so a nested `run()` roots where the block does), restores both on
+    exit. In a parallel task it is a taught error — the cwd belongs to no
+    one there.
+    """
+    ctx = current()
+    if ctx.in_task and not ctx.serial_active:
+        raise RuntimeError(
+            f"task {ctx.task or '?'} calls footman.chdir() in a parallel "
+            f"task — the process directory belongs to no one there. Mark "
+            f"the task serial (or exclusive), or build paths from "
+            f"footman.cwd()."
+        )
+    base: Path
+    if target is None:
+        base = ctx.cwd if ctx.cwd is not None else Path(_globals.real_getcwd())
+    elif isinstance(target, str) and target == "root" and ctx.root_dir:
+        base = Path(ctx.root_dir)
+    elif isinstance(target, str) and target == "asinvoked" and ctx.invoked_dir:
+        base = Path(ctx.invoked_dir)
+    elif isinstance(target, str) and target == "taskfile":
+        from footman.discover import defining_dir
+
+        home = defining_dir(ctx.fn) if ctx.fn is not None else None
+        base = Path(home) if home else Path(_globals.real_getcwd())
+    elif isinstance(target, str) and target == "unmanaged":
+        raise TypeError("chdir(cwd='unmanaged') has no directory to change to")
+    else:
+        base = Path(target)
+        if not base.is_absolute():
+            raise TypeError(
+                f"chdir({str(target)!r}) is relative — chdir takes a policy "
+                f"token or an absolute path; a relative suffix goes in rel=…"
+            )
+    if rel is not None:
+        rel_suffix = Path(rel)
+        if rel_suffix.is_absolute() or rel_suffix.anchor:
+            raise TypeError(
+                f"rel={str(rel)!r} is absolute — rel is a suffix appended "
+                f"to the resolved base; an absolute directory goes first."
+            )
+        base = base / rel
+    saved_fs, saved_ctx = _globals.real_getcwd(), ctx.cwd
+    _globals.real_chdir(base)
+    ctx.cwd = base
+    try:
+        yield
+    finally:
+        with contextlib.suppress(OSError):
+            _globals.real_chdir(saved_fs)
+        ctx.cwd = saved_ctx
+
+
+def cwd() -> Path:
+    """The current task's working directory, always concrete.
+
+    `ctx.cwd` as the policy ladder resolved it — the blessed base for a task
+    body's own path arithmetic (`footman.cwd() / "dist"`), instead of
+    relative paths against the process cwd, which belongs to no one in a
+    parallel run. Outside a run it is simply the process cwd.
+    """
+    resolved = current().cwd
+    return resolved if resolved is not None else Path.cwd()
 
 
 @contextlib.contextmanager
@@ -807,33 +905,47 @@ _state_lock = threading.RLock()
 
 
 @contextlib.contextmanager
-def _process_state(env: dict[str, str], cwd: Path | None) -> Iterator[None]:
-    """Patch `os.environ` / the process cwd around an in-process callable.
+def _process_state(env: dict[str, str]) -> Iterator[None]:
+    """Patch `os.environ` around an in-process callable — the *bare-call
+    fallback only*.
 
-    In-process tools must honor the same env overlay and run-from-defining-
-    folder contract the subprocess branch of the *same* call already obeys.
-    `os.chdir` and `os.environ` are process-global, so any change is guarded by a
-    re-entrant lock (a callable may itself call `run()`) and restored on exit —
-    calls that need a patch therefore serialize. The common case (no overlay, no
-    cwd — in-memory Group tasks have no defining dir) takes the lock-free fast
-    path, so barrier-overlap parallelism stays fully concurrent.
+    Inside a run the environ router serves reads from the task's overlay
+    (`_env_overlay` below: thread-confined, lock-free). Outside a routed run
+    (bare calls in scripts/tests) there is no router to lean on, so fall
+    back to the classic global patch, guarded by a re-entrant lock and
+    restored on exit — exactly the shape of the output router's own
+    fallback. The common case (no overlay) is lock-free either way.
+
+    The process **cwd** is never touched: footman does not chdir. A call
+    that needs a different directory runs as a subprocess (explicit `cwd=`,
+    fully parallel) — `_run_callable` raises the taught error for the
+    in-process case.
     """
-    if not env and cwd is None:
+    if not env:
         yield
         return
     with _state_lock:
         saved_env = os.environ.copy()
-        saved_cwd = os.getcwd() if cwd is not None else None
         try:
             os.environ.update(env)
-            if cwd is not None:
-                os.chdir(cwd)
             yield
         finally:
-            if saved_cwd is not None:
-                os.chdir(saved_cwd)
             os.environ.clear()
             os.environ.update(saved_env)
+
+
+@contextlib.contextmanager
+def _env_overlay(ctx: Context, overlay: dict[str, str]) -> Iterator[None]:
+    """Thread-confined env for an in-process call inside a run: swap
+    `ctx.env` for the call's merged overlay — the environ router serves the
+    callable's reads from it, and any child it spawns inherits it. No
+    process global is touched, so concurrent calls never serialise."""
+    saved = ctx.env
+    ctx.env = overlay
+    try:
+        yield
+    finally:
+        ctx.env = saved
 
 
 def _run_callable(
@@ -856,9 +968,14 @@ def _run_callable(
 
     `capture=False` skips the buffers entirely (live output, returns `('', '')`
     like the subprocess branch) — for serve-style tasks that must not buffer
-    unboundedly. The env overlay and cwd are applied process-globally via
+    unboundedly. The env overlay is applied process-globally via
     `_process_state`; the `capture=False` short-circuit runs *inside* it so
-    uncaptured callables keep cwd/env too.
+    uncaptured callables keep env too.
+
+    cwd is **checked, never applied**: footman does not chdir in a parallel
+    task. Equal target and live cwd (the common single-package case) runs
+    untouched; a *foreign* target is a taught error naming the exits —
+    exactly the case the old chdir silently serialised the run for.
     """
     ctx = current()
     # Colour is decided once for the whole run and published into os.environ at
@@ -866,8 +983,22 @@ def _run_callable(
     # straight from the environment — no per-call patch here, so the lock-free
     # fast path in `_process_state` is kept in every colour mode.
     overlay = {**ctx.env, **(env or {})}
-    target_cwd = Path(cwd) if cwd is not None else ctx.cwd
-    with _process_state(overlay, target_cwd):
+    # `unmanaged` means footman stays out: no cwd opinion for the callable,
+    # exactly as the subprocess branch spawns with cwd=None.
+    default_cwd = None if ctx.cwd_unmanaged else ctx.cwd
+    target_cwd = Path(cwd) if cwd is not None else default_cwd
+    if target_cwd is not None:
+        live = Path(_globals.real_getcwd())
+        if target_cwd.resolve() != live:
+            raise ValueError(
+                f"this in-process call needs cwd {target_cwd} but the process "
+                f"is at {live} — footman no longer chdirs in a parallel task. "
+                f"Run it as a subprocess (which gets cwd= for free), build "
+                f"paths from footman.cwd(), or declare @task(cwd='unmanaged') "
+                f"if the call genuinely doesn't care."
+            )
+    state = _env_overlay(ctx, overlay) if _globals.active() else _process_state(overlay)
+    with state:
         if not capture:
             return _call_for_code(cmd, args), "", ""
         out_buf, err_buf = io.StringIO(), io.StringIO()
@@ -1353,6 +1484,30 @@ def _shell_prep(
     return flags, script
 
 
+def _target_cwd(
+    ctx: Context, cwd: str | Path | None, rel: str | Path | None
+) -> Path | None:
+    """The effective directory for one call. Explicit `cwd=` wins; otherwise
+    the task's resolved `ctx.cwd` (or none at all under the `unmanaged`
+    policy). `rel=` is a relative suffix on whatever base is in force at
+    this call — `ctx.cwd` in the common case."""
+    base = Path(cwd) if cwd is not None else (None if ctx.cwd_unmanaged else ctx.cwd)
+    if rel is None:
+        return base
+    rel_path = Path(rel)
+    if rel_path.is_absolute() or rel_path.anchor:  # anchored = absolute on win
+        raise ValueError(
+            f"rel={str(rel)!r} is absolute — rel is a suffix on the call's cwd "
+            f"base; pass an absolute directory as cwd=…"
+        )
+    if base is None and ctx.cwd_unmanaged:
+        raise ValueError(
+            "rel=… needs a managed base and cwd='unmanaged' has none — "
+            "pass cwd=… explicitly, or use the asinvoked policy"
+        )
+    return (base if base is not None else Path.cwd()) / rel_path
+
+
 def run(
     cmd: str | list[str] | Callable[..., Any],
     *args: Any,
@@ -1362,6 +1517,7 @@ def run(
     title: str | None = None,
     env: dict[str, str] | None = None,
     cwd: str | Path | None = None,
+    rel: str | Path | None = None,
     encoding: str | None = "utf-8",
     shell: bool | str = False,
     strict: bool = False,
@@ -1373,6 +1529,11 @@ def run(
     Subprocess output is decoded as UTF-8 by default; pass `encoding=` for a
     tool that speaks another code page, or `encoding=None` for the locale
     default. Ignored for callables (in-process, no bytes boundary).
+
+    `cwd=` roots this one call somewhere other than the task's directory;
+    `rel=` appends a relative suffix to the base in force (`ctx.cwd`, or the
+    explicit `cwd=`), so `run("npm run build", rel="web")` is the ergonomic
+    spelling of `cwd=ctx.cwd / "web"`.
 
     `_show` is an internal channel from the `tools.*` bridge: a structured
     view of the call, so the shown command line can be normalised and
@@ -1436,7 +1597,9 @@ def run(
 
     start = time.perf_counter()
     if callable(cmd):
-        code, out_s, err_s = _run_callable(cmd, args, capture=capture, env=env, cwd=cwd)
+        code, out_s, err_s = _run_callable(
+            cmd, args, capture=capture, env=env, cwd=_target_cwd(ctx, cwd, rel)
+        )
     else:
         argv: list[str] | str
         shell_kind = ""
@@ -1480,7 +1643,9 @@ def run(
         # a non-interactive `-c`, so drop those from the child env too.
         if clean and shell_kind in ("bash", "sh", "zsh"):
             run_env = {k: v for k, v in run_env.items() if k not in ("BASH_ENV", "ENV")}
-        cwd_path = Path(cwd) if cwd is not None else ctx.cwd
+        # `unmanaged` spawns with cwd=None (inherit the live process cwd);
+        # a per-call cwd=/rel= override wins — see `_target_cwd`.
+        cwd_path = _target_cwd(ctx, cwd, rel)
         code, out_s, err_s = _run_subprocess(
             argv,
             run_env,
@@ -1562,7 +1727,11 @@ def parallel(*calls: Callable[[], Any], keep_going: bool = False) -> list[int]:
         )
         token = _current.set(child)
         try:
-            returned = call()
+            # The arbiter counts every child body (an exclusive drain must
+            # see them); a lineage child of a lane holder bypasses the bars —
+            # `serial_active` rode in through `replace(parent, …)`.
+            with _globals.lane(None, name=name, inherited=child.serial_active):
+                returned = call()
             code = returned if _is_code(returned) else 0
             error: BaseException | None = None
             # A thunk that *returns* a non-zero code failed just as surely as one
@@ -1597,7 +1766,8 @@ def parallel(*calls: Callable[[], Any], keep_going: bool = False) -> list[int]:
             code, error = 1, exc
         finally:
             _current.reset(token)
-        with lock:
+        gate = _globals.console_gate() if dest_is_real else contextlib.nullcontext()
+        with gate, lock:
             blob = child.sink.getvalue()  # type: ignore[union-attr]
             # A child that ended mid-colour (a crash, an unterminated SGR) must
             # not bleed into the next child's block when they interleave: cap a
@@ -1626,7 +1796,10 @@ def parallel(*calls: Callable[[], Any], keep_going: bool = False) -> list[int]:
         workers = max(1, min(parent.jobs, len(calls)))
     else:
         workers = max(1, len(calls))
-    with ThreadPoolExecutor(max_workers=workers) as pool:
+    # Parked for the pool wait: this body is blocked in footman code and
+    # cannot touch globals, so an exclusive drain may exempt it (the
+    # ancestry exemption — its own children still count on their own).
+    with _globals.parked(), ThreadPoolExecutor(max_workers=workers) as pool:
         outcomes = list(pool.map(invoke, calls))
 
     if not keep_going:

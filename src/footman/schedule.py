@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 from itertools import count
 from typing import Any, TextIO
 
-from footman import _describe, _progress, context, executor
+from footman import _describe, _globals, _progress, context, executor
 from footman.registry import (
     Group,
     Task,
@@ -387,8 +387,12 @@ def run_plan(
     # An interactive task owns the real terminal: it forces sequential (it can't
     # share with parallel siblings) and suppresses the status line, whose
     # clear-line repaints would otherwise erase its prompt.
+    # An interactive task no longer forces the whole run sequential: it
+    # claims the arbiter's console lane (one owner, real stdio) and the
+    # parallel pool keeps running around it, captured; only the status
+    # line still yields for the run (its repaints would fight the prompt).
     interactive = any(is_interactive(n.fn) for n in nodes)
-    sequential = sequential or len(nodes) == 1 or interactive
+    sequential = sequential or len(nodes) == 1
     # A run containing an infinite task has no progress to show — its
     # duration isn't late, it's intentional. The status line yields to a
     # one-time hint (printed at the node's start) saying how this ends.
@@ -438,23 +442,38 @@ def run_plan(
             status.open()
         try:
             with context.color_environment(colour_on):
-                if sequential:
-                    try:
-                        _run_sequential(
-                            nodes, real, capture, ctx_config, status, hint_err
+                # The process-globals routers arm inside the colour publish,
+                # so the pinned env snapshot carries it; refcounted, so a
+                # nested run (a task body driving a Runner) shares one install.
+                _globals.install()
+                try:
+                    if sequential:
+                        try:
+                            _run_sequential(
+                                nodes, real, capture, ctx_config, status, hint_err
+                            )
+                        except BaseException:
+                            # Ctrl-C mid-task: the running child is group-isolated,
+                            # so it missed the terminal's SIGINT — reap its tree by
+                            # hand before the interrupt propagates.
+                            context.terminate_live_children()
+                            raise
+                    else:
+                        _run_parallel(
+                            nodes, real, err, capture, ctx_config, status, jobs
                         )
-                    except BaseException:
-                        # Ctrl-C mid-task: the running child is group-isolated, so
-                        # it missed the terminal's SIGINT — reap its tree by hand
-                        # before the interrupt propagates. (Parallel does this.)
-                        context.terminate_live_children()
-                        raise
-                else:
-                    _run_parallel(nodes, real, err, capture, ctx_config, status, jobs)
+                finally:
+                    _globals.uninstall()
         finally:
             if status is not None:
                 context.set_status(None)
                 status.close()
+    # The abort latch is run-scoped: leaving it set after a normal return
+    # would make `_register_child` reap a *later* bare run()'s child (a
+    # latched fail-fast from one test killing the next test's echo). The
+    # Ctrl-C/internal-error path unwinds by exception and keeps the latch,
+    # which the interrupted-reporting above this layer still reads.
+    context.reset_abort()
     return denied + [n.result for n in _toposort(nodes) if n.result is not None]
 
 
@@ -549,9 +568,16 @@ def _run_parallel(nodes, real, err, capture, ctx_config, status, jobs) -> None:
             name_width=width,
             keep_going=n.keep_going,
         )
+        if is_interactive(n.fn) and not capture:
+            # A console owner runs on the real terminal even inside the
+            # parallel pool: the arbiter's console lane guarantees one owner,
+            # and captured siblings' flushes queue on the gate below.
+            ctx.sink = ctx.err_sink = None
         n.result = executor.run_task(n.fn, n.seg, ctx, n.forwarded)
-        if not capture:  # flush this task's buffered output as one block
-            with lock:
+        if not capture and ctx.sink is not None:
+            # Flush this task's buffered output as one block — queued while a
+            # wizard owns the terminal, so it never splats over a prompt.
+            with _globals.console_gate(), lock:
                 blob = ctx.sink.getvalue()  # type: ignore[union-attr]
                 if status is not None:
                     # A direct real-stream write (bypasses the routers): the

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -346,9 +347,11 @@ def test_in_process_tools_run_concurrently_with_separate_capture(monkeypatch):
     assert "B-OUT" in results["b"].steps[0].output
 
 
-def test_in_process_tool_runs_from_context_cwd(monkeypatch, tmp_path):
-    # F17: an in-process tool honors the task's context cwd, exactly as the
-    # subprocess branch of the same call already does.
+def test_in_process_tool_with_foreign_cwd_demotes_to_subprocess(monkeypatch, tmp_path):
+    # footman never chdirs in a parallel task, so an in-process tool whose
+    # target cwd differs from the live process cwd runs as its subprocess
+    # twin instead: same command, right cwd, still fully parallel — the
+    # in-process speedup is the only loss.
     from footman import manifest, schedule
     from footman.registry import Group
     from footman.split import split_chain
@@ -356,7 +359,49 @@ def test_in_process_tool_runs_from_context_cwd(monkeypatch, tmp_path):
     seen = {}
 
     def entry(argv=None):
-        seen["cwd"] = os.getcwd()
+        seen["in_process"] = True
+        return 0
+
+    monkeypatch.setattr(
+        tools,
+        "_console_entrypoint",
+        lambda name: _FakeEP(entry) if name == "python" else None,
+    )
+
+    reg = Group("root")
+
+    @reg.task
+    def go():
+        tools.Tool(
+            "python",
+            "-c",
+            "import os; print(os.getcwd())",
+            path=sys.executable,
+            in_process=True,
+        )()
+
+    tree = manifest.build_manifest(reg)["tree"]
+    _, segments = split_chain(tree, ["go"])
+    results = {
+        r.task: r
+        for r in schedule.run_plan(reg, segments, ctx_config={"cwd": tmp_path})
+    }
+    assert results["go"].ok, results["go"].error
+    assert "in_process" not in seen  # the entry never ran: demoted
+    assert results["go"].steps[0].output.strip() == str(tmp_path)
+
+
+def test_in_process_tool_with_matching_cwd_stays_in_process(monkeypatch):
+    # Equal target and live cwd (the common single-package case): no
+    # demotion, the in-process speedup is kept.
+    from footman import _globals, manifest, schedule
+    from footman.registry import Group
+    from footman.split import split_chain
+
+    seen = {}
+
+    def entry(argv=None):
+        seen["in_process"] = True
         return 0
 
     monkeypatch.setattr(
@@ -373,8 +418,40 @@ def test_in_process_tool_runs_from_context_cwd(monkeypatch, tmp_path):
 
     tree = manifest.build_manifest(reg)["tree"]
     _, segments = split_chain(tree, ["go"])
-    schedule.run_plan(reg, segments, ctx_config={"cwd": tmp_path})
-    assert seen["cwd"] == str(tmp_path.resolve())  # macOS /tmp is a symlink
+    here = _globals.real_getcwd()
+    results = {
+        r.task: r
+        for r in schedule.run_plan(reg, segments, ctx_config={"cwd": Path(here)})
+    }
+    assert results["go"].ok, results["go"].error
+    assert seen.get("in_process") is True
+
+
+def test_tool_opts_rel_roots_the_call(tmp_path):
+    # Tool.opts(cwd=, rel=) is the bridge's per-call override — the same
+    # policy carrier as nofail/capture, threading straight into run().
+    from footman import manifest, schedule
+    from footman.registry import Group
+    from footman.split import split_chain
+
+    (tmp_path / "web").mkdir()
+    reg = Group("root")
+
+    @reg.task
+    def go():
+        t = tools.Tool(
+            "python", "-c", "import os; print(os.getcwd())", path=sys.executable
+        )
+        t.opts(rel="web")()
+
+    tree = manifest.build_manifest(reg)["tree"]
+    _, segments = split_chain(tree, ["go"])
+    results = {
+        r.task: r
+        for r in schedule.run_plan(reg, segments, ctx_config={"cwd": tmp_path})
+    }
+    assert results["go"].ok, results["go"].error
+    assert results["go"].steps[0].output.strip() == str(tmp_path / "web")
 
 
 def test_zero_arg_entries_fall_back_to_argv_patching(monkeypatch):

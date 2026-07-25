@@ -9,6 +9,33 @@ versions may include breaking changes.
 
 ### Added
 
+- **The cascade walk is configurable.** A user-level **`cascade`** key —
+  `none` (the current directory's own files only), `repo` (the `.git`
+  ceiling, the default and today's behaviour), or `filesystem` (past
+  repository boundaries, up to the filesystem root) — decides how far
+  discovery ranges, and task files and config follow the same walk. The
+  key is user-level-only (what sits above a repo is the machine owner's
+  layout, not any project's business; a project file setting it is
+  stripped with a `-v` advisory), and a new **`FOOTMAN_CASCADE`**
+  environment variable overrides it per invocation
+  (`FOOTMAN_CASCADE=none fm test` in CI). An unknown value is a taught
+  error naming the three modes, never a silent default.
+- **The working directory is a policy, not an accident.** A task's cwd is
+  resolved once, before the body runs, by a ladder — `.opts(cwd=)` per use,
+  `@task(cwd=, rel=)` per definition, `[tool.footman] cwd` as the run-wide
+  default — from four tokens or an absolute path: `taskfile` (the directory
+  of the file defining the task — the default, today's implicit behaviour,
+  now named), `root` (the highest cascade file's directory), `asinvoked` (a
+  pinned snapshot of the launch directory), and `unmanaged` (footman stays
+  out: children spawn from the live process cwd). `rel=` appends a relative
+  suffix to the resolved base — a nearer `rel` replaces a farther one — and
+  `ctx.cwd` is always concrete inside a run. Per call, `run()` gains
+  `rel=` beside `cwd=`, so `run("npm run build", rel="web")` roots one
+  command in a subdirectory of the task's cwd. Relative `cwd=`, absolute
+  `rel=`, and `rel=` under `unmanaged` are taught errors. `.opts(cwd=)`
+  works on direct body-calls too, and two uses of one task at different
+  cwds are two DAG nodes, never silently merged.
+
 - **`footman.fail(reason, code=1)` — a blessed way to fail a task.** A function
   (not a `raise`) that stops the current task with a reason: the reason renders
   verbatim on the failure line and in the `--json` `error` field, and
@@ -84,6 +111,95 @@ versions may include breaking changes.
 
 ### Changed
 
+- **`os.environ` is virtualised for the run.** Reads inside a task see the
+  run-start snapshot plus the task's own overlay — exactly what the
+  subprocess branch of the same call injects as `env=`, so in-process and
+  subprocess tool calls finally read the same world. Writes from a task
+  body scope to the task's overlay: visible to its own reads and every
+  child it spawns, invisible to siblings — with a one-time, task-attributed
+  stderr note naming the deliberate spelling (`env=` / `ctx.env`). Deleting
+  a variable has no additive spelling and is a taught error. The env
+  overlay for in-process calls now rides this router (thread-confined, no
+  lock — concurrent overlaid calls no longer serialise); outside a run,
+  `os.environ` behaves exactly as stock Python, and bare `run(callable,
+  env=…)` calls keep the classic guarded global patch as their fallback.
+- **`serial=` and `exclusive=` — declared serialisation, the only kind
+  left.** `@task(serial=True)` (and `.opts(serial=True)` per use) declares
+  "this task owns the process globals": the scheduler runs at most one
+  serial task at a time, *overlapping the full parallel pool*, and inside
+  it footman restores the old conveniences safely — a real chdir to the
+  task's resolved cwd, the env overlay applied to the real `os.environ`,
+  both snapshotted and restored, with the routers and guards standing
+  down. `@task(exclusive=True)` is the honest full drain for benchmarks
+  and migrations: it runs with nothing else in flight, exempting only
+  ancestors parked waiting on their own children. Lane waits are never
+  silent (a note names the holder after two seconds), new starts yield to
+  a waiting exclusive, and a fan-out child of a lane holder inherits the
+  lane — a lineage extends a hold, it never contends with it. Body-calls
+  keep inheriting the caller's regime; the markers are scheduling
+  declarations, read at task boundaries — which is what keeps the whole
+  design deadlock-free. **`footman.chdir()`** completes the serial story:
+  real directory changes as a context manager (default target the task's
+  own cwd, marker-grammar arguments, `ctx.cwd` kept in sync, everything
+  restored) — legal in serial/exclusive tasks and a taught error in
+  parallel ones.
+- **Raw `subprocess` is quietly correct in parallel.** `subprocess.Popen`
+  (and everything that funnels through it — `subprocess.run`, `os.popen`,
+  third-party code) gets the task's context filled in when a spawn passes
+  neither `cwd=` nor `env=`: the child starts in the task's directory with
+  the snapshot-plus-overlay environment, exactly as `run()` would spawn it —
+  with a one-time note suggesting the deliberate spellings. Explicit
+  arguments always win, `env={}` stays a deliberately clean environment, and
+  the `unmanaged` policy is the one off-switch.
+- **An interactive task no longer stops the world.** `interactive=True`
+  used to force the entire run sequential; it now claims the arbiter's
+  *console* lane instead — one terminal owner at a time, granted
+  atomically with any serial/exclusive lane so partial holds can't chain —
+  while the parallel pool keeps running around it, captured. A finished
+  sibling's buffered output queues until the wizard frees the terminal,
+  so nothing splats over a prompt (the status line still yields for such
+  runs, as before). A wizard now costs you the terminal, not the run's
+  parallelism.
+- **stdin is guarded like the global it is.** A bare `input()` (or any
+  `sys.stdin` read) in a plain parallel task is now a taught error naming
+  the exits — declare the value with `ask()`, or mark the task
+  `interactive=True` to own the terminal — instead of a silent hang or a
+  stolen read. Interactive and serial tasks, the framework's own boundary
+  prompts, and anything outside a run pass through untouched.
+- **In-process tool calls demote instead of breaking.** A `tools.*` call
+  that would run in-process but needs a cwd other than the live process
+  directory runs as its subprocess twin instead — same command, same
+  semantics, right directory, still fully parallel; the in-process
+  startup saving is the only loss (a `-v` note says so). Equal target and
+  live cwd — the common single-package case — stays in-process untouched,
+  and a serial task's cwd is really applied, so it stays in-process too.
+  `Tool.opts()` gains **`cwd=` and `rel=`** beside `nofail`/`capture` —
+  the bridge's per-call override, threading straight into `run()`, so
+  `tools.npm.opts(rel="web").run("build")` roots one call in a
+  subdirectory (and a bound `web_npm = tools.npm.opts(rel="web")` roots
+  every call through it).
+- **The process globals are guarded in parallel tasks.** `os.chdir` /
+  `os.fchdir` raise a taught error (the cwd belongs to no one in a parallel
+  run); `os.putenv`/`os.unsetenv` raise one too (they bypass env scoping
+  even in plain Python); `os.getcwd` warns once per task toward
+  `footman.cwd()`; `os.fork` warns that forking a threaded process is
+  unsafe; and `multiprocessing`'s `BaseProcess.start` (which also covers
+  `ProcessPoolExecutor`) notes that in-process workers inherit the real
+  environment, not the task's overlay — and that self-parallelising tools
+  lose little by taking the serial lane. Everything passes through
+  untouched outside a run.
+- **Breaking: footman never chdirs in a parallel task.** In-process calls
+  used to get a real `os.chdir` (guarded by a process-wide lock) whenever
+  the task's directory differed from the process cwd — which silently
+  serialised the run for every such call, whether the callable cared or
+  not. The chdir is gone: an in-process call whose target directory equals
+  the live process cwd (the common single-package case) runs untouched and
+  fully parallel; a *foreign* target is now a taught error naming the exits
+  — run it as a subprocess (which gets `cwd=` for free), build paths from
+  the new **`footman.cwd()`** (the task's resolved directory as a concrete
+  path), or declare `@task(cwd="unmanaged")` if the call genuinely doesn't
+  care. The env overlay for in-process calls is unchanged. Subprocesses were
+  always spawned with an explicit `cwd=` and keep working exactly as before.
 - **A tool's `.opts()` is now footman run-control; a tool's own globals move to
   `.flags()`.** A `tools.*` call is pure flags and positionals again: run-control
   no longer rides reserved call kwargs. `.opts(nofail=…, in_process=…,

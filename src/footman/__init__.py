@@ -29,7 +29,9 @@ if TYPE_CHECKING:
     from footman.context import Failed as Failed
     from footman.context import Result as Result
     from footman.context import RunFailed as RunFailed
+    from footman.context import chdir as chdir
     from footman.context import confirm as confirm
+    from footman.context import cwd as cwd
     from footman.context import fail as fail
     from footman.context import inherited as inherited
     from footman.context import parallel as parallel
@@ -94,8 +96,10 @@ __all__ = [
     "ask",
     "between",
     "capture",
+    "chdir",
     "check",
     "confirm",
+    "cwd",
     "doc",
     "docstrings",
     "env",
@@ -220,7 +224,9 @@ def __getattr__(name: str) -> object:
         "passthrough",
         "progress",
         "prompt",
+        "chdir",
         "confirm",
+        "cwd",
         "select",
         "track",
         "RunFailed",

@@ -25,6 +25,7 @@ import subprocess as _subprocess  # noqa: F401
 import sys as _sys  # noqa: F401
 import threading as _threading
 from collections.abc import Iterator, Sequence
+from pathlib import Path as _Path
 from typing import Any, NamedTuple, Self
 
 from footman._stubs.basedpyright import Basedpyright as Basedpyright
@@ -65,7 +66,10 @@ from footman._stubs.zensical import Zensical as Zensical
 from footman._stubs.zsh import Zsh as Zsh
 from footman.context import Invocation as _Invocation  # noqa: F401
 from footman.context import Result as Result
+from footman.context import _target_cwd as _target_cwd_of  # noqa: F401
 from footman.context import color_on as _color_on  # noqa: F401
+from footman.context import current as _current  # noqa: F401
+from footman.context import real_stderr as _real_stderr  # noqa: F401
 from footman.context import run as _run  # noqa: F401
 
 _argv_lock: _threading.Lock
@@ -151,6 +155,8 @@ class Tool:
         in_process: bool | None = ...,
         capture: bool = ...,
         title: str = ...,
+        cwd: str | _Path = ...,
+        rel: str | _Path = ...,
     ) -> Self: ...
     # A tool's own global options, bound before the next subcommand
     # (`docker.flags(host="x").ps()`). Generated stubs override it with the

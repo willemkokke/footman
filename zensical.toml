@@ -15,6 +15,7 @@ nav = [
   { "Guide" = [
     { "Typed signatures" = "typing.md" },
     { "Chaining & parallelism" = "orchestration.md" },
+    { "Working directory & environment" = "working-dir.md" },
     { "Asking for input" = "input.md" },
     { "Progress & timing" = "progress.md" },
     { "Running tools" = "tools.md" },

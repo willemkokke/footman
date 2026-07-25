@@ -489,3 +489,106 @@ def test_help_shows_the_inherited_options(tmp_path, monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "shadows" in out and "inherited() calls it" in out
     assert "fm check [--fix]" in out  # the parent's options, not the leaf's
+
+
+# --- the cascade walk mode (tri-state) ---------------------------------------
+
+
+def _three_level_tree(tmp_path):
+    """outer/ (tasks.py) above outer/repo/ (.git + tasks.py) above repo/pkg/."""
+    outer = tmp_path / "outer"
+    repo = outer / "repo"
+    pkg = repo / "pkg"
+    pkg.mkdir(parents=True)
+    (repo / ".git").mkdir()
+    for d in (outer, repo, pkg):
+        (d / "tasks.py").write_text("from footman import task\n", encoding="utf-8")
+    return outer, repo, pkg
+
+
+@pytest.fixture
+def iso_cascade(tmp_path, monkeypatch):
+    """Isolate the user-level file and the env override from the machine."""
+    monkeypatch.delenv("FOOTMAN_CASCADE", raising=False)
+    monkeypatch.setenv("FOOTMAN_CONFIG", str(tmp_path / "global.toml"))
+
+
+def test_cascade_default_walks_to_the_repo_root(tmp_path, monkeypatch, iso_cascade):
+    _, repo, pkg = _three_level_tree(tmp_path)
+    monkeypatch.chdir(pkg)
+    files, _ = _app.resolve_task_files({})
+    assert files == [repo / "tasks.py", pkg / "tasks.py"]
+
+
+def test_cascade_none_limits_discovery_to_the_cwd(tmp_path, monkeypatch, iso_cascade):
+    _, _, pkg = _three_level_tree(tmp_path)
+    monkeypatch.setenv("FOOTMAN_CASCADE", "none")
+    monkeypatch.chdir(pkg)
+    files, _ = _app.resolve_task_files({})
+    assert files == [pkg / "tasks.py"]
+
+
+def test_cascade_filesystem_crosses_the_repo_boundary(
+    tmp_path, monkeypatch, iso_cascade
+):
+    outer, repo, pkg = _three_level_tree(tmp_path)
+    monkeypatch.setenv("FOOTMAN_CASCADE", "filesystem")
+    monkeypatch.chdir(pkg)
+    files, _ = _app.resolve_task_files({})
+    assert files[-3:] == [outer / "tasks.py", repo / "tasks.py", pkg / "tasks.py"]
+
+
+def test_cascade_key_reads_from_the_user_level_file(tmp_path, monkeypatch, iso_cascade):
+    _, _, pkg = _three_level_tree(tmp_path)
+    (tmp_path / "global.toml").write_text("cascade = 'none'\n", encoding="utf-8")
+    monkeypatch.chdir(pkg)
+    files, _ = _app.resolve_task_files({})
+    assert files == [pkg / "tasks.py"]
+
+
+def test_cascade_env_overrides_the_config_key(tmp_path, monkeypatch, iso_cascade):
+    _, _, pkg = _three_level_tree(tmp_path)
+    (tmp_path / "global.toml").write_text("cascade = 'filesystem'\n", encoding="utf-8")
+    monkeypatch.setenv("FOOTMAN_CASCADE", "none")
+    monkeypatch.chdir(pkg)
+    files, _ = _app.resolve_task_files({})
+    assert files == [pkg / "tasks.py"]
+
+
+def test_cascade_in_a_project_file_is_stripped(tmp_path, monkeypatch, iso_cascade):
+    outer, repo, pkg = _three_level_tree(tmp_path)
+    (repo / "footman.toml").write_text("cascade = 'filesystem'\n", encoding="utf-8")
+    monkeypatch.chdir(pkg)
+    files, _ = _app.resolve_task_files({})
+    assert outer / "tasks.py" not in files  # a project key cannot widen the walk
+
+
+def test_cascade_config_search_follows_the_mode(tmp_path, monkeypatch, iso_cascade):
+    outer, _, pkg = _three_level_tree(tmp_path)
+    (outer / "footman.toml").write_text("color = 'never'\n", encoding="utf-8")
+    monkeypatch.chdir(pkg)
+    _, cfg = _app.resolve_task_files({})
+    assert "color" not in cfg  # above the repo: invisible under the default walk
+    monkeypatch.setenv("FOOTMAN_CASCADE", "filesystem")
+    _, cfg = _app.resolve_task_files({})
+    assert cfg["color"] == "never"  # one walk governs config and task files
+
+
+def test_cascade_unknown_env_value_is_a_taught_error(
+    tmp_path, monkeypatch, iso_cascade
+):
+    monkeypatch.setenv("FOOTMAN_CASCADE", "galaxy")
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(config.CascadeError, match="galaxy"):
+        _app.resolve_task_files({})
+
+
+def test_cascade_unknown_config_value_names_the_tokens(
+    tmp_path, monkeypatch, iso_cascade
+):
+    (tmp_path / "global.toml").write_text("cascade = 'sideways'\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(config.CascadeError) as exc:
+        _app.resolve_task_files({})
+    for token in ("none", "repo", "filesystem"):
+        assert token in str(exc.value)

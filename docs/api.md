@@ -29,6 +29,10 @@ it can't run. Every gate is evaluated live, and all failures are collected.
 
 ::: footman.context.run
 
+::: footman.context.cwd
+
+::: footman.context.chdir
+
 ::: footman.context.Result
 
 ::: footman.context.parallel
