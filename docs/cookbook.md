@@ -365,6 +365,88 @@ by default. And on macOS, in-process is sometimes the only *correct*
 option — SIP strips `DYLD_*` from subprocesses, so a tool needing
 Homebrew's native libraries only works inside the process.
 
+## Working directory & environment
+
+### A task rooted somewhere else
+
+The cwd is policy, not an accident: root a task anywhere on the ladder, and
+suffix one call without ceremony.
+
+```python
+from footman import task, run
+
+@task(cwd="root", rel="services/api")
+def deploy():
+    "Deploy the api service, wherever fm was invoked from."
+    run("docker compose up -d")
+
+@task
+def bundle():
+    "Build the web bundle from a subdirectory of this task's own dir."
+    run("npm run build", rel="web")           # <task cwd>/web, this call only
+```
+
+### The legacy task that owns the process
+
+A helper that genuinely chdirs — or drives a library that only reads the
+process state — declares it and gets the old conveniences back, safely:
+
+```python
+import footman
+from footman import task, run
+
+@task(serial=True)
+def legacy_build():
+    "One serial task at a time; the parallel pool keeps running around it."
+    with footman.chdir(rel="vendor"):         # a real chdir — legal here
+        run("make")
+```
+
+The serial lane costs less than it sounds for tools that parallelise
+themselves (pytest with xdist, build systems): they saturate the machine on
+their own, so serialising the *task* forgoes almost nothing.
+
+### The benchmark that needs a quiet machine
+
+`exclusive=True` is the honest full drain — nothing else in flight:
+
+```python
+@task(exclusive=True)
+def bench():
+    "Timings mean nothing with a build running next door."
+    run("pytest tests/bench --benchmark-only")
+```
+
+### Environment for a child, not the world
+
+Writes to `os.environ` in a parallel task scope to the task — its children
+see them, siblings never do. The deliberate spellings say it out loud:
+
+```python
+@task
+def publish(ctx):
+    ctx.env["TWINE_NON_INTERACTIVE"] = "1"    # every child of this task
+    run("twine upload dist/*", shell=True, env={"TWINE_VERBOSE": "1"})  # one call
+```
+
+### The release flow that asks once
+
+`ask()` parameters front-load: every question is asked before anything
+runs, so you answer and walk away — and a value on the command line, in the
+environment, or in a default means no question at all.
+
+```python
+from typing import Annotated
+from footman import ask, task, run
+
+@task(confirm="Publish to PyPI?")
+def release(version: Annotated[str, ask()]):
+    "fm release → asks version up front, confirms, then runs unattended."
+    run(f"uv version {version}", shell=False)
+    run("uv build")
+    run("uv publish")
+```
+
 ## Monorepos
 
 ### Monorepo: root gate, leaf overrides
