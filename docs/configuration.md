@@ -45,14 +45,14 @@ In a `pyproject.toml`, settings live under the tool table:
 
 ```toml
 [tool.footman]
-plugins = ["footman.docs"]
+tasks = "tasks.py"
 sequential = false
 ```
 
 A standalone `footman.toml` is the same keys, top-level:
 
 ```toml
-plugins = ["footman.docs"]
+tasks = "tasks.py"
 sequential = false
 ```
 
@@ -68,7 +68,6 @@ older footman.
 | `sequential` | Run tasks one at a time by default.                       |
 | `color`      | `always` / `never` / `auto` (default): when to emit ANSI colour, for footman's own output and the tools it spawns. `--color` / `--no-color` override it. |
 | `jobs`       | Max parallel tasks (default: cores - 1, never below 2).   |
-| `plugins`    | `footman.tasks` entry points to mount as command groups (opt-in). |
 | `progress`   | `false` permanently disables the progress bar, eta line, and timing capture. |
 | `uv`         | `false` disables the uv handoff (a globally-installed `fm` re-running itself via `uv run` when the project's lockfile pins footman). |
 | `completion.max_age` | Age before a background completion refresh (e.g. `"10m"`; `off` to disable). |

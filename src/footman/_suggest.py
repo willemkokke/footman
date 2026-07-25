@@ -28,15 +28,14 @@ def _values(param: str, path: list[str], g: dict[str, object]) -> list[str]:
     completer. Any miss — no tasks file, a renamed task, a plain parameter —
     is an empty list, never an error.
     """
-    from footman import _app, coerce, compose, discover, manifest, registry
+    from footman import _app, coerce, discover, manifest, registry
 
-    files, cfg = _app.resolve_task_files(g, on_warning=lambda *a: None, on_note=None)
+    files, _cfg = _app.resolve_task_files(g, on_warning=lambda *a: None, on_note=None)
     if not files or not path:
         return []
+    # Plugin pulls are authored in the tasks files, so discovery alone
+    # rebuilds the whole tree — a completer on a pulled task included.
     base = registry.Group("root")
-    plugins = cfg.get("plugins")
-    if isinstance(plugins, list):  # a completer may live on a plugin task
-        compose.mount_plugins(base, plugins)
     root = discover.load_tree(files, base=base)
 
     node: registry.Group | None = root

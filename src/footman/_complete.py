@@ -35,7 +35,7 @@ _GLOBAL_FLAG = frozenset(
         "--dry-run", "-n", "--keep-going", "-k", "--fail-fast", "--sequential", "-s",
         "--yes", "-y", "--no-input",
         "--quiet", "-q", "--verbose", "-v", "--no-color", "--no-progress",
-        "--json", "--timings",
+        "--json", "--timings", "--plugins",
     }
 )  # fmt: skip
 _GLOBAL_VALUE = frozenset(

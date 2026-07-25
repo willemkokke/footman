@@ -323,29 +323,50 @@ def test_include_dotted_only_name_is_taught_not_a_silent_no_match(provider):
 
 
 def test_include_missing_module_names_the_call_not_the_file():
-    # A missing module used to surface as "failed to import <tasks.py>", blaming
-    # the file. Now it names the include() call and the reason.
+    # A missing module names the include() call, never blames the tasks file.
     with (
         registry.capture(),
         pytest.raises(
             RegistrationError,
-            match=r"include\('no_such_provider_xyz'\): failed to import "
-            r"\(ModuleNotFoundError",
+            match=r"include\('no_such_provider_xyz'\): no importable module",
         ),
     ):
         compose.include("no_such_provider_xyz")
 
 
-def test_include_collision_is_loud_unless_override(provider):
+def test_local_definition_silently_beats_a_pull(provider):
+    # Local-vs-imported: the local leaf wins, whatever the order — the
+    # cascade's "user names shadow plugins", carried by provenance.
     with registry.capture() as captured:
 
         @registry.task
         def lint(): ...
 
-        with pytest.raises(RegistrationError, match="already has a task"):
+        compose.include("shared_tasks", only=["lint"])  # silent: local wins
+        assert captured.tasks["lint"] is lint
+
+    with registry.capture() as captured:
+        compose.include("shared_tasks", only=["lint"])
+
+        @registry.task  # local def AFTER the pull shadows it just the same
+        def lint(): ...
+
+        assert captured.tasks["lint"] is lint
+
+
+def test_overlapping_repulls_clash_loudly_unless_override(provider):
+    # Imported-vs-imported: every pull is authored, so a clash is a bug with
+    # a one-line fix — loud beats silently running the wrong task. The
+    # message cites provenance.
+    with registry.capture() as captured:
+        compose.include("shared_tasks", only=["lint"])
+        with pytest.raises(RegistrationError, match="claimed by both"):
             compose.include("shared_tasks", only=["lint"])
         compose.include("shared_tasks", only=["lint"], override=True)
-        assert captured.tasks["lint"] is not lint  # provider's won
+        assert "lint" in captured.tasks
+        # Disjoint re-pulls of one source (two filters) compose.
+        compose.include("shared_tasks", only=["fmt"])
+        assert "fmt" in captured.tasks
 
 
 def test_include_forks_provider_tree_no_memo_leak(provider):
@@ -456,48 +477,74 @@ def test_plugin_unknown_names_installed(provider):
         compose.plugin("nope")
 
 
-def test_config_mounts_plugin_as_group(provider, tmp_path):
+def test_pull_line_splats_an_anonymous_container(provider, tmp_path):
+    # plugin("shared") resolves the entry point; the module capture's root is
+    # an anonymous container, so pulling it lands its *children* — the splat.
     project = tmp_path / "proj2"
     project.mkdir()
-    (project / "pyproject.toml").write_text(
-        '[project]\nname="x"\n[tool.footman]\nplugins = ["shared"]\n'
-    )
+    (project / "pyproject.toml").write_text('[project]\nname="x"\n')
     (project / "tasks.py").write_text(
-        "from footman import task\n@task\ndef own(): ...\n"
+        "from footman import plugin, task\nplugin('shared')\n@task\ndef own(): ...\n"
     )
-    result = Runner().invoke("shared.lint", cwd=project)
+    result = Runner().invoke("lint", cwd=project)
     assert result.ok
     assert "lint fix=False" in result.stdout
     listing = Runner().invoke("--list", cwd=project)
-    assert "shared.lint" in listing.stdout and "own" in listing.stdout
+    assert "docs.build" in listing.stdout and "own" in listing.stdout
 
 
-def test_user_task_shadows_plugin_group(provider, tmp_path):
+def test_pull_line_into_names_the_consumers_placement(provider, tmp_path):
+    # into= is the consumer's remap: a dotted address, created on demand.
+    project = tmp_path / "proj2b"
+    project.mkdir()
+    (project / "pyproject.toml").write_text('[project]\nname="x"\n')
+    (project / "tasks.py").write_text(
+        "from footman import plugin\nplugin('shared', into='vendor.kit')\n"
+    )
+    result = Runner().invoke("vendor.kit.lint", cwd=project)
+    assert result.ok and "lint fix=False" in result.stdout
+
+
+def test_user_task_shadows_a_pulled_one(provider, tmp_path):
     project = tmp_path / "proj3"
     project.mkdir()
-    (project / "pyproject.toml").write_text(
-        '[project]\nname="x"\n[tool.footman]\nplugins = ["shared"]\n'
-    )
+    (project / "pyproject.toml").write_text('[project]\nname="x"\n')
     (project / "tasks.py").write_text(
-        "from footman import task\n@task\ndef shared():\n    print('mine')\n"
+        "from footman import plugin, task\n"
+        "plugin('shared')\n"
+        "@task\ndef lint():\n    print('mine')\n"
     )
-    result = Runner().invoke("shared", cwd=project)
+    result = Runner().invoke("lint", cwd=project)
     assert result.ok
     assert "mine" in result.stdout  # the user's name wins, silently
 
 
-def test_missing_configured_plugin_is_exit_2(tmp_path):
+def test_missing_plugin_pull_is_exit_2(tmp_path):
     project = tmp_path / "proj4"
     project.mkdir()
+    (project / "pyproject.toml").write_text('[project]\nname="x"\n')
+    (project / "tasks.py").write_text(
+        "from footman import plugin, task\nplugin('ghost')\n@task\ndef own(): ...\n"
+    )
+    result = Runner().invoke("own", cwd=project)
+    assert result.exit_code == 2
+    assert "ghost" in result.stderr
+
+
+def test_stale_plugins_config_key_is_taught(tmp_path):
+    # The config key died with the composition rework; a leftover key is a
+    # taught refusal, never a silent ignore.
+    project = tmp_path / "proj4b"
+    project.mkdir()
     (project / "pyproject.toml").write_text(
-        '[project]\nname="x"\n[tool.footman]\nplugins = ["ghost"]\n'
+        '[project]\nname="x"\n[tool.footman]\nplugins = ["shared"]\n'
     )
     (project / "tasks.py").write_text(
         "from footman import task\n@task\ndef own(): ...\n"
     )
     result = Runner().invoke("own", cwd=project)
     assert result.exit_code == 2
-    assert "ghost" in result.stderr
+    assert "plugins key was removed" in result.stderr
 
 
 def _advertise(tmp_path, monkeypatch, module, body, entry):
@@ -563,11 +610,12 @@ def test_dotted_plugin_name_nests_and_shares_namespace(tmp_path, monkeypatch):
     )
     project = tmp_path / "proj_nest"
     project.mkdir()
-    (project / "pyproject.toml").write_text(
-        '[project]\nname="x"\n[tool.footman]\nplugins = ["suite.alpha", "suite.beta"]\n'
-    )
+    (project / "pyproject.toml").write_text('[project]\nname="x"\n')
     (project / "tasks.py").write_text(
-        "from footman import task\n@task\ndef own(): ...\n"
+        "from footman import plugin, task\n"
+        "plugin('suite.alpha', into='suite')\n"
+        "plugin('suite.beta', into='suite')\n"
+        "@task\ndef own(): ...\n"
     )
     listing = Runner().invoke("--list", cwd=project)
     assert listing.ok
@@ -577,9 +625,9 @@ def test_dotted_plugin_name_nests_and_shares_namespace(tmp_path, monkeypatch):
     assert ran.ok and "alpha-go!" in ran.stdout
 
 
-def test_broken_plugin_config_mount_is_exit_2(tmp_path, monkeypatch):
-    # F07 end-to-end: a broken config-mounted plugin is a clean exit 2, not a
-    # raw traceback on every invocation.
+def test_broken_plugin_pull_is_exit_2(tmp_path, monkeypatch):
+    # F07 end-to-end: a broken pulled plugin is a clean exit 2, not a raw
+    # traceback on every invocation.
     _advertise(
         tmp_path,
         monkeypatch,
@@ -589,11 +637,9 @@ def test_broken_plugin_config_mount_is_exit_2(tmp_path, monkeypatch):
     )
     project = tmp_path / "proj_broken"
     project.mkdir()
-    (project / "pyproject.toml").write_text(
-        '[project]\nname="x"\n[tool.footman]\nplugins = ["broken2"]\n'
-    )
+    (project / "pyproject.toml").write_text('[project]\nname="x"\n')
     (project / "tasks.py").write_text(
-        "from footman import task\n@task\ndef own(): ...\n"
+        "from footman import plugin, task\nplugin('broken2')\n@task\ndef own(): ...\n"
     )
     result = Runner().invoke("own", cwd=project)
     assert result.exit_code == 2
@@ -619,8 +665,9 @@ def test_plugin_explicit_group_module_is_adopted(tmp_path, monkeypatch):
         """,
         "explicit = explicit_plugin",
     )
-    tree = compose.plugin("explicit")
-    assert set(tree.tasks) == {"ping"}
+    with registry.capture() as captured:
+        compose.plugin("explicit")
+    assert set(captured.groups["explicit"].tasks) == {"ping"}
 
 
 # --- include()/plugin() taught errors -----------------------------------------
@@ -669,7 +716,7 @@ def test_include_of_a_module_with_two_groups_teaches(tmp_path, monkeypatch):
 
 
 def test_include_accepts_a_group_directly(tmp_path):
-    """The simplest source of all: a Group object you already hold."""
+    """A Group object you already hold lands under its own name."""
     donor = Group("donor")
 
     @donor.task
@@ -678,7 +725,7 @@ def test_include_accepts_a_group_directly(tmp_path):
 
     root = Group("root")
     compose.include(donor, into=root)
-    assert "ship" in root.tasks
+    assert "ship" in root.groups["donor"].tasks
 
 
 def test_plugin_claimed_by_two_distributions_teaches(monkeypatch):
@@ -720,6 +767,7 @@ def test_fork_copies_every_group_field():
         "tasks",
         "groups",
         "finalizers",
+        "pulled_from",
     }
 
 
@@ -847,3 +895,194 @@ def test_plugin_entry_point_of_the_wrong_type_teaches(monkeypatch):
     monkeypatch.setattr(compose, "_module_trees", {})
     with pytest.raises(RegistrationError, match="got int"):
         compose.plugin("wrong")
+
+
+# --- the two typed verbs over one engine ----------------------------------------
+
+
+def test_include_subpath_pulls_one_group_out_of_a_module(provider):
+    # include("shared_tasks.docs"): the longest importable prefix is the
+    # module; the remainder walks the captured tree. The node lands under
+    # its own name.
+    with registry.capture() as captured:
+        compose.include("shared_tasks.docs")
+    assert set(captured.groups) == {"docs"}
+    assert "build" in captured.groups["docs"].tasks
+    assert "lint" not in captured.tasks  # siblings stayed home
+
+
+def test_plugin_subpath_walks_the_advertised_tree(provider, tmp_path):
+    project = tmp_path / "proj_sub"
+    project.mkdir()
+    (project / "pyproject.toml").write_text('[project]\nname="x"\n')
+    (project / "tasks.py").write_text(
+        "from footman import plugin\nplugin('shared.docs')\n"
+    )
+    result = Runner().invoke("docs.build", cwd=project)
+    assert result.ok and "docs-build" in result.stdout
+
+
+def test_pull_a_single_task_adopts_it(provider):
+    # The subpath can land on a task: plugin("acme.linters.default",
+    # into="lint") is the adopt-a-provider's-default one-liner. Module flavour:
+    with registry.capture() as captured:
+        compose.include("shared_tasks.docs.build", into="site")
+    assert "build" in captured.groups["site"].tasks
+    with pytest.raises(RegistrationError, match=r"pull it bare"):
+        compose.include("shared_tasks.fmt", only=["x"])
+
+
+def test_filters_are_relative_to_the_pulled_node(provider):
+    with registry.capture() as captured:
+        compose.include("shared_tasks.docs", only=["build"])
+    assert set(captured.groups["docs"].tasks) == {"build"}
+
+
+def test_into_naming_a_task_is_a_type_error(provider):
+    with registry.capture():
+
+        @registry.task
+        def site(): ...
+
+        with pytest.raises(RegistrationError, match=r"'site' is a task — into="):
+            compose.include("shared_tasks.docs", into="site")
+
+
+def test_into_default_is_the_group_typed_default_type_error(provider):
+    with (
+        registry.capture(),
+        pytest.raises(RegistrationError, match=r"'default' is a task"),
+    ):
+        compose.include("shared_tasks.docs", into="lint.default")
+
+
+def test_provenance_is_stamped_and_reported(provider, tmp_path):
+    project = tmp_path / "proj_prov"
+    project.mkdir()
+    (project / "pyproject.toml").write_text('[project]\nname="x"\n')
+    (project / "tasks.py").write_text(
+        "from footman import plugin\nplugin('shared', into='vendor')\n"
+    )
+    result = Runner().invoke("--plugins", cwd=project)
+    assert result.ok
+    assert "shared" in result.stdout
+    assert "pulled at vendor" in result.stdout
+
+
+def test_unpulled_plugin_shows_dist_summary(provider, tmp_path):
+    project = tmp_path / "proj_unpulled"
+    project.mkdir()
+    (project / "pyproject.toml").write_text('[project]\nname="x"\n')
+    (project / "tasks.py").write_text("from footman import task\n@task\ndef t(): ...\n")
+    result = Runner().invoke("--plugins", cwd=project)
+    assert result.ok
+    assert "shared" in result.stdout
+    assert "(not pulled)" in result.stdout
+
+
+def test_two_pulls_compose_one_subtree(provider, tmp_path, monkeypatch):
+    # Two pulls into one target compose all the way down — group-vs-group is
+    # never a clash, only a same-address leaf is.
+    _advertise(
+        tmp_path,
+        monkeypatch,
+        "other_kit",
+        """
+        from footman import group
+
+        docs = group("docs", help="Other docs")
+
+        @docs.task
+        def deploy():
+            "Deploy docs."
+        """,
+        "other = other_kit",
+    )
+    with registry.capture() as captured:
+        compose.include("shared_tasks")  # brings docs.build
+        compose.plugin("other")  # brings docs.deploy — composes, no clash
+    assert set(captured.groups["docs"].tasks) == {"build", "deploy"}
+
+
+def test_leaf_clash_across_identities_cites_both(provider, tmp_path, monkeypatch):
+    _advertise(
+        tmp_path,
+        monkeypatch,
+        "rival_kit",
+        """
+        from footman import group
+
+        docs = group("docs")
+
+        @docs.task
+        def build():
+            "Rival build."
+        """,
+        "rival = rival_kit",
+    )
+    with registry.capture():
+        compose.include("shared_tasks")
+        with pytest.raises(RegistrationError) as excinfo:
+            compose.plugin("rival")
+    message = str(excinfo.value)
+    assert "'docs.build' claimed by both" in message
+    assert "shared_tasks" in message and "rival" in message
+
+
+def test_module_docstring_becomes_container_help(tmp_path, monkeypatch):
+    (tmp_path / "documented_kit.py").write_text(
+        '"""A documented kit of tasks.\n\nMore prose.\n"""\n'
+        "from footman import task\n\n@task\ndef go(): ...\n"
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.setattr(compose, "_module_trees", {})
+    sys.modules.pop("documented_kit", None)
+    try:
+        with registry.capture():
+            compose.include("documented_kit", into="kit")
+        tree = compose._module_trees["documented_kit"]
+        assert tree.help == "A documented kit of tasks."
+    finally:
+        sys.modules.pop("documented_kit", None)
+
+
+def test_adopted_default_fans_out_the_group_it_landed_in(tmp_path, monkeypatch):
+    # Default-ness is parent-relative: a provider's empty-body default pulled
+    # into a consumer group fans out the group it LANDED in, not the one it
+    # was declared on — the fn is shared, so the declaration stamp cannot
+    # know where the pull placed it.
+    _advertise(
+        tmp_path,
+        monkeypatch,
+        "default_kit",
+        """
+        from footman import group
+        from footman.params import Forward
+
+        linters = group("linters")
+
+        @linters.task
+        def never():
+            print("provider-side surface — must NOT run")
+
+        @linters.default
+        def all_of_them(fix: Forward[bool] = False):
+            "Run every linter."
+        """,
+        "defaultkit = default_kit:linters",
+    )
+    project = tmp_path / "proj_adopt"
+    project.mkdir()
+    (project / "pyproject.toml").write_text('[project]\nname="x"\n')
+    (project / "tasks.py").write_text(
+        "from footman import group, plugin\n"
+        "lint = group('lint')\n"
+        "@lint.task\n"
+        "def markdown(fix: bool = False):\n"
+        "    print(f'markdown fix={fix}')\n"
+        "plugin('defaultkit.default', into='lint')\n"
+    )
+    result = Runner().invoke("lint --fix", cwd=project)
+    assert result.ok
+    assert "markdown fix=True" in result.stdout  # the CONSUMER group fanned out
+    assert "provider-side surface" not in result.stdout

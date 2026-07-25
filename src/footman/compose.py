@@ -1,28 +1,40 @@
-"""Compose the task surface: adopt tasks from other modules and packages.
+"""Compose the task surface: two typed verbs over one engine.
 
-Two public pieces, designed to be used together from a tasks file:
+- `plugin("acme.devkit.lint")` pulls from an installed package's
+  **`footman.tasks` entry point** — the console-script of task trees: a
+  stable public identity for a Group the package offers, enumerable,
+  inert until pulled. The longest installed entry-point name is the
+  identity; the rest of the string walks the advertised tree.
+- `include("mytasks.lint")` pulls from an **importable module** — the same
+  grammar over your own reach: file-splitting, monorepo-local sharing.
+  The longest importable prefix is imported (under a registry capture, so
+  the provider's decorators can't leak); the rest walks the captured tree.
 
-- `include(source, ...)` grafts another module's task tree into yours —
-  cherry-picked, namespaced under a group, loud on collisions.
-- `plugin(name)` resolves a `footman.tasks` entry point published by an
-  installed package to its advertised `Group`, ready to `include()`.
+The type tag lives in the verb: no string is ever resolved against both
+registries, so there is no precedence and no silent re-pointing when a new
+package lands. The model is Python imports — `plugin("acme.devkit.lint")`
+is `from acme_devkit import lint` for task trees; pulling a whole container
+is the `import *`, safe here because local definitions silently win and
+imported-vs-imported clashes are loud.
 
-Config-mounted plugins (`[tool.footman] plugins = ["name"]`) use the same
-resolution but mount the group *under* the tasks-file cascade, so any name a
-user defines shadows a plugin's. One rule of thumb: *config mounts a tool;
-tasks.py adopts a task.*
+A pulled node lands under its **own name** (identity never becomes an
+address); `into=` — a dotted address, auto-vivified — is the consumer's
+placement. Everything after resolution (walk, land, filter, merge) is one
+shared engine, and every imported node carries its provider identity as
+provenance: collision messages cite it, `fm --plugins` reports it.
 
-Everything resolves at import/manifest-build time; the completion hot path is
-untouched. `importlib.metadata` is stdlib — footman stays zero-dependency.
+Everything resolves at import/manifest-build time; the completion hot path
+is untouched. `importlib.metadata` is stdlib — footman stays zero-dependency.
 """
 
 from __future__ import annotations
 
 import importlib
+import sys
 from types import ModuleType
 
 from footman import registry
-from footman.registry import Group, RegistrationError
+from footman.registry import Group, RegistrationError, Task, pulled_from
 
 ENTRY_POINT_GROUP = "footman.tasks"
 
@@ -64,11 +76,16 @@ def _adopt_explicit_group(module: ModuleType) -> Group:
     )
 
 
-def _import_source(dotted: str) -> Group:
-    """Import *dotted* under `capture()` and memoise its captured tree."""
+def _import_source(dotted: str, *, allow_empty: bool = False) -> Group:
+    """Import *dotted* under `capture()` and memoise its captured tree.
+
+    *allow_empty* tolerates a module that registers nothing and offers no
+    explicit Group — an intermediate package on the way to a longer prefix
+    (`include("pkg.tasks")` walks through `pkg`) is allowed to be empty; a
+    terminal one keeps the taught refusal.
+    """
     if dotted in _module_trees:
         return _module_trees[dotted]
-    import sys
 
     if dotted in sys.modules:
         return _tree_of_module(sys.modules[dotted])
@@ -85,24 +102,22 @@ def _import_source(dotted: str) -> Group:
             raise RegistrationError(
                 f"include({dotted!r}): failed to import ({type(exc).__name__}: {exc})"
             ) from exc
-    tree = (
-        captured
-        if (captured.tasks or captured.groups)
+    if captured.tasks or captured.groups:
+        tree = captured
+    elif allow_empty:
+        tree = captured  # an empty intermediate package: fine, walk on
+    else:
         # Nothing registered at module level: the provider keeps an explicit
         # Group instead (the entry-point convention) — unambiguous only
         # because the capture came back empty.
-        else _adopt_explicit_group(module)
-    )
+        tree = _adopt_explicit_group(module)
+    if not tree.help and (module.__doc__ or "").strip():
+        # A container describes itself through its module docstring — the
+        # first line becomes the root's help, so `--plugins` and group help
+        # have words even for a bare bundle of groups.
+        tree.help = (module.__doc__ or "").strip().splitlines()[0]
     _module_trees[dotted] = tree
     return tree
-
-
-def _as_group(source: str | ModuleType | Group) -> Group:
-    if isinstance(source, Group):
-        return source
-    if isinstance(source, ModuleType):
-        return _tree_of_module(source)
-    return _import_source(source)
 
 
 def _fork(tree: Group) -> Group:
@@ -120,108 +135,63 @@ def _fork(tree: Group) -> Group:
     for name, sub in tree.groups.items():
         fork.groups[name] = _fork(sub)  # recurse: fresh subgroup objects
     # A faithful copy carries *every* Group field, not only tasks/groups: a
-    # provider's `@finalize` hooks ride along, and a runnable group keeps its
-    # `@group.default` for free — the default *is* the child task named
-    # `default`, so the tasks-dict copy above already carried it (derived
-    # default-ness cannot desync through a fork). `test_compose`'s field
-    # census fails the moment a new Group field is added but not copied here.
+    # provider's `@finalize` hooks ride along, provenance survives, and a
+    # runnable group keeps its `@group.default` for free — the default *is*
+    # the child task named `default`, so the tasks-dict copy above already
+    # carried it. `test_compose`'s field census fails the moment a new Group
+    # field is added but not copied here.
     fork.finalizers = list(tree.finalizers)
+    fork.pulled_from = tree.pulled_from
     return fork
 
 
-def include(
-    source: str | ModuleType | Group,
-    /,
-    *,
-    into: Group | None = None,
-    only: tuple[str, ...] | list[str] = (),
-    exclude: tuple[str, ...] | list[str] = (),
-    override: bool = False,
-) -> Group:
-    """Graft another module's tasks into the current tree (or *into* a group).
+def _stamp(node: Group, identity: str) -> None:
+    """Record *identity* as provenance on every node of a pulled tree.
 
-    ```python
-    include("shared_tasks")                          # everything, at root
-    include("shared_tasks", only=["lint", "fmt"])    # cherry-pick by CLI name
-    include("mkdocs_helpers.tasks", into=docs)       # namespace: fm docs.…
-    include(plugin("mkdocs"), only=["build"])        # from an entry point
-    ```
-
-    *source* is a dotted module name, an imported module, or a `Group`. The
-    provider imports under a registry capture, so its decorators can't leak
-    into your tree. Collisions are loud (`RegistrationError`) unless
-    `override=True`; unknown `only=`/`exclude=` names are errors too (typo
-    protection). Included tasks run from *your* file's directory — a shared
-    lint task lints this project. Returns the group it grafted into.
+    Groups carry it as a field (each pull grafts fresh Group objects); task
+    fns carry the marker attribute — they are shared between forks, and the
+    identity is the same everywhere the same provider's fn lands.
     """
-    tree = _fork(_as_group(source))  # graft a private copy; never the memo
-    target = into if into is not None else registry.root
+    node.pulled_from = identity
+    for fn in node.tasks.values():
+        setattr(fn, registry._PULLED, identity)
+    for sub in node.groups.values():
+        _stamp(sub, identity)
 
-    known = set(tree.tasks) | set(tree.groups)
-    for name in (*only, *exclude):
-        if name not in known:
-            if "." in name:
-                # A dotted address names a nested entry — a real thing to
-                # want, not yet a thing these filters reach. Taught, never a
-                # silent no-match.
-                raise RegistrationError(
-                    f"include(): {name!r} is a dotted address, but only=/"
-                    f"exclude= filter the source's top level today — dotted "
-                    f"cherry-picking is coming. Filter the whole group "
-                    f"({name.split('.', 1)[0]!r}) for now "
-                    f"(top level has: {', '.join(sorted(known)) or 'nothing'})"
-                )
-            raise RegistrationError(
-                f"include(): {source!r} has no task or group named {name!r} "
-                f"(has: {', '.join(sorted(known)) or 'nothing'})"
-            )
-    wanted = set(only) if only else known
-    wanted -= set(exclude)
 
-    for name, fn in tree.tasks.items():
-        if name not in wanted:
+def _walk_subpath(
+    tree: Group, segments: list[str], *, verb: str, source: str
+) -> Group | Task:
+    """Walk the remainder of a source string inside a provider's tree."""
+    node: Group = tree
+    for pos, seg in enumerate(segments):
+        last = pos == len(segments) - 1
+        if seg in node.groups:
+            node = node.groups[seg]
             continue
-        if not override:
-            target._claim(name)
-        target.groups.pop(name, None)
-        target.tasks[name] = fn
-    for name, sub in tree.groups.items():
-        if name not in wanted:
-            continue
-        if not override:
-            target._claim(name)
-        target.tasks.pop(name, None)
-        target.groups[name] = sub
-    # A provider's `@finalize` hooks edit the whole merged tree, so they belong
-    # on the live root that discovery collects from — grafting only moved tasks
-    # and groups, and a finalizer left on the forked subtree would never run.
-    registry.root.finalizers.extend(tree.finalizers)
-    return target
+        if seg in node.tasks and last:
+            return node.tasks[seg]
+        bad = ".".join(segments[: pos + 1])
+        known = ", ".join(sorted([*node.groups, *node.tasks])) or "nothing"
+        raise RegistrationError(
+            f"{verb}({source!r}): no task or group at {bad!r} in the "
+            f"provider's tree (has: {known})"
+        )
+    return node
 
 
-def plugin(name: str) -> Group:
-    """The `Group` a package advertises under the `footman.tasks` entry point.
+def _load_entry_point(name: str) -> Group:
+    """Load the installed `footman.tasks` entry point *name* to its Group.
 
-    ```toml
-    # the plugin package's pyproject.toml
-    [project.entry-points."footman.tasks"]
-    mkdocs = "footman_mkdocs:tasks"
-    ```
-
-    Raises `RegistrationError` naming the installed entry points when *name*
-    isn't one of them — a configured-but-missing plugin should read as the
-    typo or missing install it is.
+    Raises `RegistrationError` with a taught message for the failure shapes
+    that matter: claimed by two distributions, an import-time crash (a
+    missing optional dep must not dump a traceback on every `--help`), or an
+    entry point that resolves to something that isn't a Group or a module
+    of tasks.
     """
     from importlib.metadata import entry_points
 
-    found = entry_points(group=ENTRY_POINT_GROUP)
-    matches = [ep for ep in found if ep.name == name]
-    if not matches:
-        installed = ", ".join(sorted(ep.name for ep in found)) or "none"
-        raise RegistrationError(
-            f"plugin {name!r}: no {ENTRY_POINT_GROUP!r} entry point found "
-            f"(installed: {installed})"
-        )
+    matches = [ep for ep in entry_points(group=ENTRY_POINT_GROUP) if ep.name == name]
     if len(matches) > 1:
         dists = ", ".join(str(ep.dist) for ep in matches)
         raise RegistrationError(
@@ -233,32 +203,29 @@ def plugin(name: str) -> Group:
     except RegistrationError:
         raise  # already a taught message; don't re-wrap
     except Exception as exc:
-        # A plugin with a missing optional dep (or any import-time failure)
-        # would otherwise dump a raw traceback on *every* invocation, `--help`
-        # included. Teach it; the mount guard reports it at exit 2.
         raise RegistrationError(
             f"plugin {name!r}: failed to import ({type(exc).__name__}: {exc})"
         ) from exc
     if isinstance(loaded, Group):
         return loaded
     if isinstance(loaded, ModuleType):
-        name = loaded.__name__
+        module_name = loaded.__name__
         if captured.tasks or captured.groups:
+            if not captured.help and (loaded.__doc__ or "").strip():
+                # A container describes itself through its module docstring.
+                captured.help = (loaded.__doc__ or "").strip().splitlines()[0]
             # Memoise under the module name so re-resolving in the same
             # process (or a later include of the same module) reuses the tree.
-            _module_trees[name] = captured
+            _module_trees[module_name] = captured
             return captured
         # Registered nothing at module level. Reuse a memoised tree if a prior
         # resolve captured one (the entry point re-`load()`s the cached module,
         # so decorators no longer fire and `captured` comes back empty);
-        # otherwise adopt the module's single explicit Group. Routing through
-        # _import_source would hit sys.modules — the entry point just loaded the
-        # module — and raise the misleading "already imported outside include()"
-        # error.
-        if name in _module_trees:
-            return _module_trees[name]
+        # otherwise adopt the module's single explicit Group.
+        if module_name in _module_trees:
+            return _module_trees[module_name]
         tree = _adopt_explicit_group(loaded)
-        _module_trees[name] = tree
+        _module_trees[module_name] = tree
         return tree
     raise RegistrationError(
         f"plugin {name!r}: entry point must resolve to a footman Group "
@@ -266,52 +233,351 @@ def plugin(name: str) -> Group:
     )
 
 
-def mount_plugins(base: Group, names: list[str]) -> None:
-    """Mount config-listed plugins at the command path each name spells.
+def _resolve_plugin(source: str) -> tuple[str, Group | Task]:
+    """Resolve *source* against the installed `footman.tasks` entry points.
 
-    A plugin's name *is* its command path. A bare name mounts at the root
-    (`plugins = ["acme"]` → `fm acme …`); a dotted name nests, one group per
-    segment (`plugins = ["footman.tools"]` → `fm footman tools …`). The last
-    segment names the entry point to resolve; the leading segments are
-    namespace groups, created on demand and shared by every plugin that
-    spells the same prefix — so `footman.docs` and `footman.tools` meet under
-    one `footman` group without either owning it.
-
-    Called by the app layer *before* the cascade overlays, so user-defined
-    names shadow plugin groups silently — consistent with the cascade's own
-    nearest-wins rule.
+    The longest installed entry-point name that prefixes *source* is the
+    identity; the remainder walks the advertised tree. When a *shorter*
+    installed prefix would also resolve fully, both readings are named on
+    stderr — a new package must never silently re-point an existing pull.
     """
-    for raw in names:
-        dotted = str(raw)
-        tree = _fork(plugin(dotted))  # graft a private copy; never the memo
-        *parents, leaf = dotted.split(".")
-        target = base
-        for segment in parents:
-            target = _namespace(target, segment)
-        target.tasks.pop(leaf, None)
-        target.groups[leaf] = tree if tree.name == leaf else _named(tree, leaf)
+    from importlib.metadata import entry_points
+
+    installed = {ep.name: ep for ep in entry_points(group=ENTRY_POINT_GROUP)}
+    segments = source.split(".")
+    prefixes = [
+        ".".join(segments[:n])
+        for n in range(len(segments), 0, -1)
+        if ".".join(segments[:n]) in installed
+    ]
+    if not prefixes:
+        names = ", ".join(sorted(installed)) or "none"
+        raise RegistrationError(
+            f"plugin({source!r}): no {ENTRY_POINT_GROUP!r} entry point "
+            f"matches (installed: {names})"
+        )
+    identity = prefixes[0]
+    rest = segments[len(identity.split(".")) :]
+    tree = _load_entry_point(identity)
+    node = _walk_subpath(tree, rest, verb="plugin", source=source)
+    for shorter in prefixes[1:]:
+        # Both viable? Name the two readings; the longest wins, on purpose.
+        alt_rest = segments[len(shorter.split(".")) :]
+        try:
+            _walk_subpath(
+                _load_entry_point(shorter), alt_rest, verb="plugin", source=source
+            )
+        except RegistrationError:
+            continue
+        print(
+            f"note: plugin({source!r}) resolves via the entry point "
+            f"{identity!r}; the shorter {shorter!r} would also resolve — "
+            f"the longest prefix wins",
+            file=sys.stderr,
+        )
+        break
+    return identity, node
 
 
-def _namespace(parent: Group, name: str) -> Group:
-    """The subgroup *name* of *parent*, reused if present or created if not.
+def _resolve_module(source: str) -> tuple[str, Group | Task]:
+    """Resolve *source* against importable modules: the longest importable
+    prefix is imported under capture; the remainder walks the captured tree.
 
-    Each leading segment of a dotted plugin name is a namespace group; two
-    plugins that share a prefix (`footman.docs`, `footman.tools`) share the
-    group rather than fight over it. A task of the same name yields — a group
-    has to sit there for anything to nest beneath it.
+    Probing runs shortest-first on purpose: `find_spec("a.b")` imports `a`
+    to locate `b`, so testing the long prefix first would import the parent
+    *outside* capture and poison the fallback. Importing each prefix under
+    capture as we walk keeps every side effect caught, and the deepest
+    module still wins.
     """
-    existing = parent.groups.get(name)
-    if isinstance(existing, Group):
-        return existing
-    parent.tasks.pop(name, None)
-    created = Group(name)
-    parent.groups[name] = created
-    return created
+    segments = source.split(".")
+    for n in range(len(segments), 0, -1):
+        prefix = ".".join(segments[:n])
+        if prefix in _module_trees:  # already captured this process: reuse
+            node = _walk_subpath(
+                _module_trees[prefix], segments[n:], verb="include", source=source
+            )
+            return prefix, node
+    if not (segments[0] in sys.modules or registry._importable(segments[0])):
+        raise RegistrationError(
+            f"include({source!r}): no importable module matches — "
+            f"{segments[0]!r} is not importable"
+        )
+    best = 1
+    _import_source(segments[0], allow_empty=len(segments) > 1)
+    for n in range(2, len(segments) + 1):
+        prefix = ".".join(segments[:n])
+        if not registry._importable(prefix):
+            break
+        _import_source(prefix, allow_empty=n < len(segments))
+        best = n
+    prefix = ".".join(segments[:best])
+    tree = _module_trees.get(prefix)
+    if tree is None:  # pre-imported outside include(): the taught refusal
+        tree = _tree_of_module(sys.modules[prefix])
+    node = _walk_subpath(tree, segments[best:], verb="include", source=source)
+    return prefix, node
 
 
-def _named(tree: Group, name: str) -> Group:
-    """Re-home a captured root tree under a named group."""
-    named = Group(name, tree.help)
-    named.tasks.update(tree.tasks)
-    named.groups.update(tree.groups)
-    return named
+def _vivify_into(into: str | Group | None, verb: str) -> Group:
+    """The consumer-side landing group: root, a Group, or a dotted address
+    (created on demand — placement is always the consumer's)."""
+    if into is None:
+        return registry.root
+    if isinstance(into, Group):
+        return into
+    node = registry.root
+    walked: list[str] = []
+    for seg in str(into).split("."):
+        walked.append(seg)
+        addr = ".".join(walked)
+        if seg == "default" or not seg or any(c.isspace() for c in seg):
+            # `into=` names a *group* to graft into; `default` is task-typed
+            # by definition, and empty/whitespace segments are not addresses.
+            # For a provider's default, pull it by address instead:
+            # plugin("acme.linters.default", into="lint").
+            raise RegistrationError(
+                f"{verb}(into={str(into)!r}): {addr!r} cannot name a group — "
+                f"'default' is a task; to adopt a provider's default, pull "
+                f'it directly: {verb}("…​.default", into="<group>")'
+                if seg == "default"
+                else f"{verb}(into={str(into)!r}): {addr!r} is not a legal "
+                f"group address"
+            )
+        if seg in node.tasks:
+            raise RegistrationError(
+                f"{verb}(into={str(into)!r}): {addr!r} is a task — into= "
+                f"names a group to graft into"
+            )
+        sub = node.groups.get(seg)
+        if sub is None:
+            sub = Group(seg)
+            node.groups[seg] = sub
+        node = sub
+    return node
+
+
+def _merge_group(dst: Group, src: Group, *, override: bool, at: str) -> None:
+    """The one recursive leaf merge: two pulls into one subtree compose all
+    the way down; only a same-address leaf conflicts.
+
+    Local-vs-imported: the local leaf silently wins, whatever the order.
+    Imported-vs-imported (a task-vs-task or type clash): loud unless
+    `override=True` — every pull is authored, so a clash is a bug with a
+    one-line fix (`exclude=`/`into=`), and loud beats silently running the
+    wrong task.
+    """
+
+    def clash(name: str, theirs: Task | Group) -> None:
+        addr = f"{at}.{name}" if at else name
+        raise RegistrationError(
+            f"{addr!r} claimed by both {pulled_from(theirs)!r} and "
+            f"{src.pulled_from!r} — exclude= one side, retarget with into=, "
+            f"or pass override=True to take the later pull's"
+        )
+
+    for name, fn in src.tasks.items():
+        existing_t = dst.tasks.get(name)
+        existing_g = dst.groups.get(name)
+        if existing_t is not None:
+            if pulled_from(existing_t) is None:  # local silently wins
+                continue
+            if not override:
+                clash(name, existing_t)
+            dst.tasks[name] = fn
+        elif existing_g is not None:
+            if existing_g.pulled_from is None:  # local group beats a pulled task
+                continue
+            if not override:
+                clash(name, existing_g)
+            del dst.groups[name]
+            dst.tasks[name] = fn
+        else:
+            dst.tasks[name] = fn
+    for name, sub in src.groups.items():
+        existing_t = dst.tasks.get(name)
+        existing_g = dst.groups.get(name)
+        if existing_t is not None:
+            if pulled_from(existing_t) is None:
+                continue
+            if not override:
+                clash(name, existing_t)
+            del dst.tasks[name]
+            dst.groups[name] = sub
+        elif existing_g is not None:
+            # Group-vs-group is composition, never a clash: recurse. This is
+            # what lets two pulls (or a pull and a local group) share one
+            # namespace all the way down.
+            _merge_group(
+                existing_g, sub, override=override, at=f"{at}.{name}" if at else name
+            )
+        else:
+            dst.groups[name] = sub
+
+
+def _prune(
+    node: Group, only: tuple[str, ...], exclude: tuple[str, ...], verb: str
+) -> None:
+    """Apply `only=`/`exclude=` to *node*'s children — filters are relative
+    to the pulled node. Unknown names are taught; dotted names are the
+    cherry-picking interim (taught, never a silent no-match)."""
+    known = set(node.tasks) | set(node.groups)
+    for name in (*only, *exclude):
+        if name not in known:
+            if "." in name:
+                raise RegistrationError(
+                    f"{verb}(): {name!r} is a dotted address, but only=/"
+                    f"exclude= filter the pulled node's top level today — "
+                    f"dotted cherry-picking is coming. Filter the whole "
+                    f"group ({name.split('.', 1)[0]!r}) for now "
+                    f"(top level has: {', '.join(sorted(known)) or 'nothing'})"
+                )
+            raise RegistrationError(
+                f"{verb}(): the pulled node has no task or group named "
+                f"{name!r} (has: {', '.join(sorted(known)) or 'nothing'})"
+            )
+    wanted = set(only) if only else known
+    wanted -= set(exclude)
+    for name in list(node.tasks):
+        if name not in wanted:
+            del node.tasks[name]
+    for name in list(node.groups):
+        if name not in wanted:
+            del node.groups[name]
+
+
+def _pull(
+    verb: str,
+    identity: str,
+    node: Group | Task,
+    *,
+    into: str | Group | None,
+    only: tuple[str, ...] | list[str],
+    exclude: tuple[str, ...] | list[str],
+    override: bool,
+    landing_name: str,
+) -> Group:
+    """The shared engine: fork, stamp, filter, land, merge."""
+    target = _vivify_into(into, verb)
+    if not isinstance(node, Group):
+        # A single task (`plugin("acme.linters.default", into="lint")` — the
+        # adopt-a-default one-liner). Filters filter children; a task has none.
+        if only or exclude:
+            raise RegistrationError(
+                f"{verb}(): only=/exclude= filter a group's children, and "
+                f"{landing_name!r} is a task — pull it bare"
+            )
+        setattr(node, registry._PULLED, identity)
+        wrapper = Group("root")
+        wrapper.tasks[landing_name] = node
+        wrapper.pulled_from = identity
+        _merge_group(target, wrapper, override=override, at="")
+        return target
+
+    fork = _fork(node)
+    _stamp(fork, identity)
+    _prune(fork, tuple(only), tuple(exclude), verb)
+    # A provider's `@finalize` hooks edit the whole merged tree, so they
+    # belong on the live root that discovery collects from.
+    registry.root.finalizers.extend(fork.finalizers)
+    fork.finalizers = []
+    if fork.name == "root":
+        # An anonymous container (a module capture's root): pulling it lands
+        # its *children* — the splat, `import *` for task trees. A devkit
+        # update that adds a group just appears on the next pull.
+        _merge_group(target, fork, override=override, at="")
+        return target
+    # A named node lands under its own name; identity never becomes an
+    # address. Compose with an existing group of that name rather than
+    # clobbering it — an existing task of that name is the usual leaf clash.
+    wrapper = Group("root")
+    wrapper.groups[fork.name] = fork
+    wrapper.pulled_from = identity
+    _merge_group(target, wrapper, override=override, at="")
+    return target
+
+
+def plugin(
+    source: str,
+    /,
+    *,
+    into: str | Group | None = None,
+    only: tuple[str, ...] | list[str] = (),
+    exclude: tuple[str, ...] | list[str] = (),
+    override: bool = False,
+) -> Group:
+    """Pull a task tree from an installed package's `footman.tasks` entry
+    point — **entry points only**; for your own modules use `include()`.
+
+    ```python
+    plugin("acme.devkit")                      # the import *: every group, top level
+    plugin("acme.devkit.lint")                 # from acme_devkit import lint
+    plugin("acme.ci", exclude=["deploy"])      # everything but one child
+    plugin("footman.tools", into="footman")    # built-ins are ordinary plugins
+    plugin("acme.linters.default", into="lint")  # adopt a provider's default
+    ```
+
+    The longest installed entry-point name is the *identity* (consumed at
+    resolve time, retained as provenance); the rest of the string walks the
+    advertised tree. The pulled node lands under its **own name** — `into=`
+    (a dotted address, created on demand) is the consumer's placement, and
+    there is no rename. Returns the group grafted into.
+    """
+    identity, node = _resolve_plugin(source)
+    return _pull(
+        "plugin",
+        identity,
+        node,
+        into=into,
+        only=only,
+        exclude=exclude,
+        override=override,
+        landing_name=source.rsplit(".", 1)[-1],
+    )
+
+
+def include(
+    source: str | ModuleType | Group,
+    /,
+    *,
+    into: str | Group | None = None,
+    only: tuple[str, ...] | list[str] = (),
+    exclude: tuple[str, ...] | list[str] = (),
+    override: bool = False,
+) -> Group:
+    """Pull a task tree from an importable module — **modules only**; for an
+    installed package's advertised tasks use `plugin()`.
+
+    ```python
+    include("shared_tasks")                    # everything, at root
+    include("shared_tasks", only=["lint"])     # cherry-pick a child
+    include("mytasks.lint")                    # one group out of a module
+    include("mkdocs_helpers.tasks", into="docs")  # namespaced: fm docs.…
+    ```
+
+    The longest importable prefix is imported under a registry capture (the
+    provider's decorators can't leak into your tree); the rest of the string
+    walks the captured tree. Collisions are loud (`RegistrationError`)
+    unless `override=True`; your own definitions silently win. Included
+    tasks run from *your* file's directory — a shared lint task lints this
+    project. A `Group` or imported module may be passed programmatically
+    (tests, generated trees). Returns the group grafted into.
+    """
+    if isinstance(source, Group):
+        identity, node = source.name, source
+        landing = source.name
+    elif isinstance(source, ModuleType):
+        identity, node = source.__name__, _tree_of_module(source)
+        landing = source.__name__
+    else:
+        identity, node = _resolve_module(source)
+        landing = source.rsplit(".", 1)[-1]
+    return _pull(
+        "include",
+        identity,
+        node,
+        into=into,
+        only=only,
+        exclude=exclude,
+        override=override,
+        landing_name=landing,
+    )

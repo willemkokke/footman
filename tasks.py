@@ -9,8 +9,15 @@ from __future__ import annotations
 import functools
 from typing import TYPE_CHECKING, Annotated
 
-from footman import doc, group, parallel, run, task
+from footman import doc, group, parallel, plugin, run, task
 from footman.tools import basedpyright, pytest, ruff, ruff_format, uv, zensical
+
+# Dogfood: pull footman's own first-party plugins, exactly as a user would.
+# `docs` is the end-user-facing family (task-doc generation); `tools` is the
+# maintainer-facing stub toolkit. Both land under `footman`, so the addresses
+# read `fm footman.docs.…` / `fm footman.tools.…`.
+plugin("footman.docs", into="footman")
+plugin("footman.tools", into="footman")
 
 if TYPE_CHECKING:
     from pathlib import Path

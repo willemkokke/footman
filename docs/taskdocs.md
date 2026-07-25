@@ -27,22 +27,21 @@ routes it untouched.
 [roadmap](roadmap.md) — but it stays off by default and never becomes a
 dependency.)
 
-## Mount it
+## Pull it
 
-The plugin mounts like any other — two lines of config, no tasks-file edit:
+The plugin pulls like any other — one line in your tasks file:
 
-```toml
-# pyproject.toml (or footman.toml)
-[tool.footman]
-plugins = ["footman.docs"]
+```python
+from footman import plugin
+
+plugin("footman.docs", into="footman")
 ```
 
-That's also the two-line demo of the [plugin system](composing.md): a plugin's
-name is its command path, so `footman.docs` mounts under `footman`, and after
-it `fm --list` shows `footman.docs.page` and `footman.docs.site`. (Cherry-pick
-or remount with `include(plugin("footman.docs"), …)` if you'd rather not take
-the whole group. The maintainer-facing stub toolkit is a separate plugin,
-`footman.tools`.)
+That's also the one-line demo of the [plugin system](composing.md): the
+entry point is the identity, `into=` is your placement, and after the pull
+`fm --list` shows `footman.docs.page` and `footman.docs.site`. (Cherry-pick
+with `only=`, or drop the `into=` to land the `docs` group at top level.
+The maintainer-facing stub toolkit is a separate plugin, `footman.tools`.)
 
 ## One page: `fm footman.docs.page`
 

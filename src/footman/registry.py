@@ -49,6 +49,7 @@ _INFINITE = "_footman_infinite"
 _INTERACTIVE = "_footman_interactive"
 _PROGRESS = "_footman_progress"
 _CONFIRM = "_footman_confirm"
+_PULLED = "_footman_pulled_from"  # provenance: the plugin identity a pull stamped
 _CWD = "_footman_cwd"
 _REL = "_footman_rel"
 _SERIAL = "_footman_serial"
@@ -346,6 +347,10 @@ class Group:
         self.tasks: dict[str, Task] = {}
         self.groups: dict[str, Group] = {}
         self.finalizers: list[Finalizer] = []  # @finalize hooks (root registry only)
+        # Provenance: the plugin identity that pulled this group in, or None
+        # for a locally-defined one. Collision messages cite it, `--plugins`
+        # reports it, and "local silently wins" is decided by it.
+        self.pulled_from: str | None = None
 
     @property
     def default_task(self) -> Task | None:
@@ -392,6 +397,18 @@ class Group:
             raise RegistrationError(f"{where} already has a task named {key!r}")
         if key in self.groups:
             raise RegistrationError(f"{where} already has a group named {key!r}")
+
+    def _shadow_pulled(self, key: str) -> None:
+        """Make way for a *local* definition of *key*: a pulled entry yields
+        silently, whatever the file order — the cascade's "user names shadow
+        plugins" principle, carried by provenance instead of ordering.
+        Local-vs-local stays loud in `_claim`."""
+        existing_task = self.tasks.get(key)
+        if existing_task is not None and pulled_from(existing_task) is not None:
+            del self.tasks[key]
+        existing_group = self.groups.get(key)
+        if existing_group is not None and existing_group.pulled_from is not None:
+            del self.groups[key]
 
     @overload
     def task(self, fn: Callable[_P, _R_co]) -> TaskFn[_P, _R_co]: ...
@@ -485,6 +502,7 @@ class Group:
 
         def register(fn: Callable[_P, _R_co]) -> TaskFn[_P, _R_co]:
             key = cli_name(name or fn.__name__)
+            self._shadow_pulled(key)
             self._claim(key)
             if key == "default":
                 # The name *is* the mechanism: any task named `default` is its
@@ -525,6 +543,7 @@ class Group:
                 f"group's default action\" and belongs to a task — declare "
                 f"@{self.name}.default, or name a task 'default'"
             )
+        self._shadow_pulled(key)
         self._claim(key)
         sub = Group(key, help)
         self.groups[key] = sub
@@ -726,6 +745,19 @@ def pre_tasks(fn: Task) -> list[Task]:
 def post_tasks(fn: Task) -> list[Task]:
     """The tasks declared to run after *fn* (`@task(post=…)`)."""
     return getattr(fn, _POST, [])
+
+
+def pulled_from(node: Task | Group) -> str | None:
+    """The plugin identity that pulled *node* in, or None for local code.
+
+    Groups carry it as a real field (each graft gets fresh Group objects);
+    task functions carry it as a marker attribute — fns are shared between
+    forks on purpose, so the stamp is the *identity*, which is the same
+    everywhere the same provider's fn lands.
+    """
+    if isinstance(node, Group):
+        return node.pulled_from
+    return getattr(node, _PULLED, None)
 
 
 def default_group(fn: Task) -> Group | None:

@@ -80,28 +80,60 @@ list instead:
 def check(): ...
 ```
 
-## Adopting tasks from another module — `include()`
+## Two typed verbs over one engine
+
+Composition is two sibling verbs sharing one engine — resolution differs,
+everything after it (walk, land, filter, merge) is the same code:
+
+- **`plugin("acme.devkit.lint")`** pulls from an installed package's
+  **`footman.tasks` entry point** — the console-script of task trees: a
+  stable public identity for a Group the package offers, enumerable,
+  inert until pulled.
+- **`include("mytasks.lint")`** pulls from an **importable module** — the
+  same grammar over your own reach: file-splitting, monorepo-local sharing.
+
+The type tag lives in the verb, so no string is ever resolved against both
+registries — there is no precedence and no silent re-pointing when a new
+package lands. The model is Python imports: `plugin("acme.devkit.lint")` is
+`from acme_devkit import lint` for task trees; pulling a whole container is
+the `import *` — safe here, because your own definitions silently win and
+imported-vs-imported clashes are loud.
+
+## Pulling from your own modules — `include()`
 
 ```python
-from footman import group, include
+from footman import include
 
-include("shared_tasks")                          # graft everything at root
-include("shared_tasks", only=["lint", "fmt"])    # cherry-pick by CLI name
-docs = group("docs", help="Docs")
-include("mkdocs_helpers.tasks", into=docs)       # mounts under: fm docs.…
+include("shared_tasks")                          # everything, at root
+include("shared_tasks", only=["lint", "fmt"])    # cherry-pick children
+include("mytasks.lint")                          # one group out of a module
+include("mkdocs_helpers.tasks", into="docs")     # namespaced: fm docs.…
 ```
 
-`include()` imports the provider inside a registry capture, so its decorators
-can't leak into your tree, then grafts what you asked for:
+The longest importable prefix is imported inside a registry capture (the
+provider's decorators can't leak into your tree); the rest of the string
+walks the captured tree, so `include("mytasks.lint")` pulls one group out
+of a module the way an import pulls one name. Then the engine grafts:
 
-- **Collisions are loud** — a name you already have raises immediately; pass
-  `override=True` when the shadowing is intended.
+- **A node lands under its own name.** `include("mytasks.lint")` → `fm
+  lint`. A whole module is an anonymous container, so pulling it lands its
+  *children* — the splat. `into=` (a dotted address, created on demand) is
+  your placement; there is no rename.
+- **Your names win, silently** — a task or group you define shadows a
+  pulled one of the same name, whatever the file order, exactly as nearer
+  cascade files shadow farther ones.
+- **Pull-vs-pull clashes are loud** — a same-address leaf from two pulls
+  raises, citing both providers; pass `override=True` when the later pull
+  should win. Group-vs-group is composition, never a clash: two pulls into
+  one subtree merge all the way down.
 - **Typos are loud** — an unknown name in `only=`/`exclude=` is an error
-  listing what the provider actually has.
+  listing what the pulled node actually has (filters are relative to the
+  pulled node).
 - **Included tasks run from *your* directory** — a shared lint task lints
   this project, not the provider's install location.
-- `--where lint` still points at the provider's source, so provenance is one
-  flag away.
+- `--where lint` still points at the provider's source, so provenance is
+  one flag away — and `fm --plugins` lists every installed entry point,
+  pulled or not, with where it landed.
 
 Two idioms worth knowing. Renaming a single task needs no machinery at all —
 `@task` returns plain functions, so `task(name="fmt")(shared.fmt)` re-exports
@@ -147,18 +179,18 @@ runs. (`find_spec` is import-free for a top-level distribution; a deeply
 dotted name like `google.cloud.storage` imports its parent packages, so name
 the top-level dist where you can.)
 
-## Packages advertising tasks — `footman.tasks` entry points
+## Pulling from installed packages — `plugin()`
 
 A package publishes a `Group` under the `footman.tasks` entry point:
 
 ```toml
 # the plugin package's pyproject.toml
 [project.entry-points."footman.tasks"]
-mkdocs = "footman_mkdocs:tasks"
+"acme.mkdocs" = "acme_mkdocs:tasks"
 ```
 
 ```python
-# footman_mkdocs/__init__.py
+# acme_mkdocs/__init__.py
 from footman import Group, requires_tool
 
 tasks = Group("mkdocs", help="MkDocs site tasks")
@@ -171,54 +203,55 @@ def build(strict: bool = True): ...
 def deploy(version: str): ...
 ```
 
-And a project **opts in** through config:
-
-```toml
-# pyproject.toml (or footman.toml)
-[tool.footman]
-plugins = ["mkdocs"]        # mounts as `fm mkdocs build`, `fm mkdocs deploy`
-```
-
-A plugin's **name is its command path**, so a dotted name nests — one group
-per segment — and plugins that share a prefix meet under one namespace group
-without either owning it:
-
-```toml
-plugins = ["footman.docs", "footman.tools"]   # `fm footman.docs.…`, `fm footman.tools.…`
-```
-
-or adopts pieces of it from a tasks file, composing with `include()`:
+And a project **opts in** with a pull line in its tasks file:
 
 ```python
-from footman import include, plugin
+from footman import plugin
 
-include(plugin("mkdocs"), only=["build"])        # flat: `fm build`
+plugin("acme.mkdocs")                        # fm mkdocs.build, fm mkdocs.deploy
+plugin("acme.mkdocs", only=["build"])        # just one child
+plugin("acme.mkdocs.build", into="site")     # one task, placed by you
+plugin("acme.devkit")                        # a container of groups: the splat
 ```
+
+The longest installed entry-point name is the **identity** — consumed at
+resolve time, retained as provenance — and the rest of the string walks the
+advertised tree, dots continuing seamlessly. The pulled node lands under
+its **own name**: the identity (`acme.mkdocs`) never becomes an address,
+and placement is always yours (`into=`). A provider advertising a whole
+container of groups splats them — one line adopts a devkit, and a devkit
+update that adds a group just appears on the next pull.
 
 Design choices you can rely on:
 
 - **Never auto-loaded.** `pip install something` growing your command
   surface unasked is a supply-chain surprise; the task surface stays
   reproducible from the files in your repo. The `importlib.metadata` scan
-  runs only when `plugins` is configured, only on the execution path — the
+  runs only when a pull line asks for it, only on the execution path — the
   completion hot path never changes, and footman stays zero-dependency.
 - **A missing plugin is a crisp error** naming the entry points that *are*
-  installed — a typo or a missing install should read as one.
-- **Your names win.** A task or group you define shadows a plugin group of
-  the same name silently, exactly as nearer cascade files shadow farther
-  ones. One rule of thumb: *config mounts a tool; tasks.py adopts a task.*
-- Config-mounted plugin tasks run from your invocation directory;
-  `include()`-adopted tasks run from the including file's directory.
+  installed — a typo or a missing install should read as one. `fm
+  --plugins` lists them all, marked pulled-or-not and where they landed,
+  so "installed but nobody pulled it" is visible.
+- **Your names win.** A task or group you define shadows a pulled one of
+  the same name silently; two pulls clashing at one leaf is loud, and the
+  message cites both identities.
+- **Publisher convention:** advertise either one named group (an ecosystem
+  plugin) or a container of groups (a devkit — it splats). Loose tasks in
+  a published container are a smell: the splat drops them straight into
+  every consumer's top level. Entry-point names stay vendor-prefixed
+  (`acme.devkit`) — identity hygiene in the shared registry, not address
+  design.
 
-footman ships two first-party plugins, `footman.docs` and `footman.tools` —
-dotted names that share the `footman` namespace group without either owning it
-(there is no plugin named plain `footman`). Mounting `footman.docs` is the
-two-line demo of this whole mechanism, and what it mounts is
-[your tasks, documented](taskdocs.md) (`fm footman.docs.page` / `site`);
-`footman.tools` mounts the maintainer-facing stub toolkit under
-`fm footman.tools.…`. A naming symmetry to know: the `footman.tasks`
-entry-point *group* is served by the `footman.tasks` *package* — different
-namespaces, one product.
+footman's own tooling follows the same rule — built-ins are ordinary,
+opt-in plugins. This repo's tasks.py pulls both of its first-party
+plugins: `plugin("footman.docs", into="footman")` is [your tasks,
+documented](taskdocs.md) (`fm footman.docs.page` / `site`), and
+`plugin("footman.tools", into="footman")` is the maintainer-facing stub
+toolkit. A branded CLI writes `into="acme.tools"` instead — branding is a
+one-line authoring choice, not framework machinery. A naming symmetry to
+know: the `footman.tasks` entry-point *group* is served by the
+`footman.tasks` *package* — different namespaces, one product.
 
 ## Editing the discovered tree
 
