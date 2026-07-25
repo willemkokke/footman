@@ -113,6 +113,34 @@ chains through callees that re-declare the marker. Forwarding supplies a
 (every parameter defaulted)."""
 
 
+class _ArgMarker:
+    """Marker for `Arg`."""
+
+    __slots__ = ()
+
+    def __repr__(self) -> str:
+        return "optional-arg"
+
+
+_arg = _ArgMarker()
+
+Arg = Annotated[_T, _arg]
+"""An *optional trailing positional*, via `Annotated`-alias:
+
+```python
+@task
+def files(pattern: Arg[str] = "*"): ...
+```
+
+`fm files src` fills the positional; a bare `fm files` runs on the default.
+The grammar is deterministic and greedy: when a bare word follows, it *is*
+the value — never re-interpreted as the next task, no name-peeking — and
+capped at one token. To run the task argument-less ahead of another, say so
+with the explicit boundary: `fm files + build`. An `Arg` needs a default
+(absence must mean something), takes at most one token (use a list
+parameter for many), and must trail every required positional."""
+
+
 Forward = Annotated[_T, forward]
 """Shorthand for `Annotated[T, forward]`, like `Many[T]` is for a list:
 

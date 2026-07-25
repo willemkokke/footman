@@ -154,7 +154,24 @@ def param_spec(param: inspect.Parameter) -> dict[str, Any]:
         _marker_keys(spec, peeled, param, has_default)
         return spec
 
-    if peeled.ask is not None and not has_default:
+    if peeled.optional:
+        # Arg[T]: an optional trailing positional — greedy for one token when
+        # present, running on the default when absent (`+` says "absent, next
+        # task"). Deterministic by construction: no name-peeking, cap one.
+        if not has_default:
+            raise SpecError(
+                f"<{param.name}>: Arg[…] needs a default — an optional "
+                f"positional's absence must mean something"
+            )
+        if peeled.multiple:
+            raise SpecError(
+                f"<{param.name}>: Arg[…] takes at most one token; a "
+                f"many-valued positional is already optionalable as "
+                f"`Many[…]` with a default"
+            )
+        spec["kind"] = "argument"
+        spec["optional"] = True
+    elif peeled.ask is not None and not has_default:
         # ask() makes a defaultless parameter a CLI-optional option: absence is
         # filled by prompting (executor.bind), so the splitter must let it be
         # missing rather than enforce it as a required positional.
@@ -297,6 +314,24 @@ def _task_node(fn: Any, memo: dict[int, list[str]]) -> dict[str, Any]:
         for p in sig.parameters.values()
         if p.name != ctx_name
     ]
+    # An optional positional must trail everything positional: a required
+    # argument or a rest-consumer after it would make "which token is
+    # whose" ambiguous — exactly what the grammar refuses to be.
+    seen_optional: str | None = None
+    for spec in params:
+        if seen_optional is not None and (
+            spec["kind"] == "variadic"
+            or (spec["kind"] == "argument" and not spec.get("optional"))
+            or (spec["kind"] == "argument" and spec.get("multiple"))
+        ):
+            raise SpecError(
+                f"<{seen_optional}>: an Arg[…] optional positional must come "
+                f"last — <{spec['name']}> follows it, so which token belongs "
+                f"to whom would be a guess. Reorder, or make "
+                f"<{spec['name']}> an option."
+            )
+        if spec["kind"] == "argument" and spec.get("optional"):
+            seen_optional = spec["name"]
     for spec in params:
         if spec["name"] == "help" and spec["kind"] in ("flag", "option"):
             raise SpecError(

@@ -424,6 +424,10 @@ def complete(tree: dict, words: list[str]) -> list[str]:
     next_heads: list[str] = []
     if seg.filled < len(seg.fixed):
         candidates += seg.fixed[seg.filled].get("choices", [])
+        if seg.fixed[seg.filled].get("optional") and not partial.startswith("-"):
+            # The boundary documents itself: an optional positional's slot
+            # offers `+` — run without it, the next word starts a task.
+            candidates.append("+")
     elif seg.rest is not None:
         candidates += seg.rest.get("choices", [])
     elif not partial.startswith("-"):

@@ -532,7 +532,7 @@ def split_chain(tree: dict, argv: list[str]) -> tuple[list[str], list[Segment]]:
             else:
                 break  # arity satisfied: the next word starts a new segment
 
-        missing = [f"<{p['name']}>" for p in fixed[filled:]]
+        missing = [f"<{p['name']}>" for p in fixed[filled:] if not p.get("optional")]
         if rest is not None and rest["kind"] == "argument" and rest_count == 0:
             missing.append(f"<{rest['name']}>")
         if missing:

@@ -13,6 +13,7 @@ from footman._complete import complete
 from footman.coerce import peel
 from footman.executor import run_chain
 from footman.params import (
+    Arg,
     Exists,
     Forward,
     IsDir,
@@ -694,3 +695,123 @@ def test_unicode_digit_lookalikes_are_taught_errors():
     _, tree = build_tree(tasks)
     with pytest.raises(ChainError, match="an integer"):
         split_chain(tree, ["add", "²", "3"])
+
+
+# --- Arg[T]: the optional trailing positional --------------------------------
+
+
+def test_arg_fills_from_one_token(monkeypatch):
+    seen = {}
+
+    def tasks(reg):
+        @reg.task
+        def files(pattern: Arg[str] = "*"):
+            seen["p"] = pattern
+
+    run(tasks, "files src")
+    assert seen["p"] == "src"
+
+
+def test_arg_absent_runs_on_the_default():
+    seen = {}
+
+    def tasks(reg):
+        @reg.task
+        def files(pattern: Arg[str] = "*"):
+            seen["p"] = pattern
+
+    run(tasks, "files")
+    assert seen["p"] == "*"
+
+
+def test_arg_is_greedy_and_never_peeks_at_task_names():
+    # `files build` gives the token to files — deterministically, even
+    # though a task named build exists. The grammar never guesses.
+    seen = {}
+
+    def tasks(reg):
+        @reg.task
+        def files(pattern: Arg[str] = "*"):
+            seen["p"] = pattern
+
+        @reg.task
+        def build():
+            seen["built"] = True
+
+    run(tasks, "files build")
+    assert seen["p"] == "build"
+    assert "built" not in seen
+
+
+def test_arg_plus_boundary_says_absent_next_task():
+    seen = {}
+
+    def tasks(reg):
+        @reg.task
+        def files(pattern: Arg[str] = "*"):
+            seen["p"] = pattern
+
+        @reg.task
+        def build():
+            seen["built"] = True
+
+    run(tasks, "files + build")
+    assert seen["p"] == "*"  # the boundary spelled "without it"
+    assert seen["built"] is True
+
+
+def test_arg_coerces_and_caps_at_one():
+    seen = {}
+
+    def tasks(reg):
+        @reg.task
+        def scale(n: Arg[int] = 1):
+            seen["n"] = n
+
+        @reg.task
+        def other():
+            seen["other"] = True
+
+    run(tasks, "scale 5 other")
+    assert seen["n"] == 5  # one token consumed, coerced
+    assert seen["other"] is True  # the next word started a segment
+
+
+def test_arg_needs_a_default():
+    def tasks(reg):
+        @reg.task
+        def files(pattern: Arg[str]):
+            pass
+
+    with pytest.raises(manifest.SpecError, match="needs a default"):
+        build_tree(tasks)
+
+
+def test_arg_must_trail_required_positionals():
+    def tasks(reg):
+        @reg.task
+        def files(pattern: Arg[str] = "*", where: str = ""): ...
+
+    # `where` defaults, so it's an option — fine. The illegal shape is a
+    # *positional* after the Arg:
+    def bad(reg):
+        @reg.task
+        def files2(pattern: Arg[str] = "*", *rest: str): ...
+
+    build_tree(tasks)  # option-after-Arg is legal
+    with pytest.raises(manifest.SpecError, match="must come last"):
+        build_tree(bad)
+
+
+def test_arg_completion_offers_the_boundary():
+    from footman._complete import complete
+
+    def tasks(reg):
+        @reg.task
+        def files(pattern: Arg[str] = "*"): ...
+
+        @reg.task
+        def build(): ...
+
+    _, tree = build_tree(tasks)
+    assert "+" in complete(tree, ["files", ""])  # the boundary documents itself
