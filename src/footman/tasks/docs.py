@@ -694,21 +694,30 @@ def cast(
 
     with tempfile.TemporaryDirectory() as scratch:
         argv, env_extra = _boot_shell(shell, prog, Path(scratch))
-        chunks = _pty_session(
-            argv,
-            width=width,
-            height=height,
-            sends=keystrokes(keys),
-            settle=1.5,
-            env_extra=env_extra,
-            # bash: readline honours the tty's echo flag and types
-            # invisibly without it — and bash sends no queries, so
-            # nothing can flash. Every other shell self-renders.
-            keep_echo=shell == "bash",
-            cwd=cwd,
-            answer_cursor=shell in _NEEDS_CURSOR_REPLY,
-        )
-    frames = _screens(chunks, width=width, height=height)
+        # A cold shell on a loaded CI runner — pwsh especially, with its
+        # .NET startup — can take longer than one settle window to draw
+        # anything at all, and an empty capture is indistinguishable from
+        # a dead session. Retry once with a much longer settle before
+        # declaring failure; the happy path pays nothing extra.
+        frames = []
+        for settle in (1.5, 5.0):
+            chunks = _pty_session(
+                argv,
+                width=width,
+                height=height,
+                sends=keystrokes(keys),
+                settle=settle,
+                env_extra=env_extra,
+                # bash: readline honours the tty's echo flag and types
+                # invisibly without it — and bash sends no queries, so
+                # nothing can flash. Every other shell self-renders.
+                keep_echo=shell == "bash",
+                cwd=cwd,
+                answer_cursor=shell in _NEEDS_CURSOR_REPLY,
+            )
+            frames = _screens(chunks, width=width, height=height)
+            if frames:
+                break
     if not frames:
         raise RuntimeError(f"the {shell} session produced no output")
     if len(frames) > max_frames:  # keep first/last, thin the middle evenly
