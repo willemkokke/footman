@@ -401,9 +401,10 @@ def _install_multiprocessing() -> None:
             _note(
                 "mp-start",
                 f"task {ctx.task or '?'} spawns worker processes in-process "
-                f"— they inherit the real environment, not the task's "
-                f"overlay. A tool that parallelises itself loses little in "
-                f"the serial lane: mark the task serial.",
+                f"— they inherit the real environment (run-wide state like "
+                f"colour is published there), but not the task's overlay. A "
+                f"tool that parallelises itself loses little in the serial "
+                f"lane: mark the task serial.",
             )
         return orig(self)
 
