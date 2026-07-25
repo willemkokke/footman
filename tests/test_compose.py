@@ -549,7 +549,10 @@ def test_stale_plugins_config_key_is_taught(tmp_path):
 
 def _advertise(tmp_path, monkeypatch, module, body, entry):
     """Put a provider *module* on sys.path with dist-info advertising *entry*."""
-    (tmp_path / f"{module}.py").write_text(textwrap.dedent(body))
+    # utf-8 explicitly: write_text's platform default is cp1252 on Windows,
+    # and Python reads source as utf-8 — an em dash in a body would poison
+    # the provider module for every Windows runner.
+    (tmp_path / f"{module}.py").write_text(textwrap.dedent(body), encoding="utf-8")
     dist = tmp_path / f"{module}-1.0.dist-info"
     dist.mkdir()
     (dist / "METADATA").write_text(
@@ -1063,7 +1066,7 @@ def test_adopted_default_fans_out_the_group_it_landed_in(tmp_path, monkeypatch):
 
         @linters.task
         def never():
-            print("provider-side surface — must NOT run")
+            print("provider-side surface, must NOT run")
 
         @linters.default
         def all_of_them(fix: Forward[bool] = False):
