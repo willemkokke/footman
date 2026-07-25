@@ -4,9 +4,9 @@ Each family is its own `footman.tasks` entry point, and a plugin's name is
 its command path (see `compose.mount_plugins`):
 
 * `footman.docs`  → `footman.tasks.docs:tasks` — task-documentation
-  generation (`fm footman docs …`). The end-user-facing family.
+  generation (`fm footman.docs …`). The end-user-facing family.
 * `footman.tools` → `footman.tasks.tools:tasks` — the `tools.*` stub
-  toolkit and its provisioning (`fm footman tools …`). Maintainer-facing,
+  toolkit and its provisioning (`fm footman.tools …`). Maintainer-facing,
   rarely what a user wants.
 
 They mount independently: `plugins = ["footman.docs"]` takes just the docs

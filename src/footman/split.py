@@ -2,6 +2,8 @@
 
 `fm build lint --fix test` is split into three independent segments with no
 separator at all — duty's muscle memory, but with real flags and positionals.
+A task's *address* is always a single dotted token (`fm docs.serve`), so the
+first word of every segment names its task completely — no group descent.
 The manifest gives the splitter exact knowledge of every task's shape, which
 makes the split deterministic under six rules (see `NOTES`):
 
@@ -14,7 +16,9 @@ makes the split deterministic under six rules (see `NOTES`):
 6. globals precede the first task name.
 
 Every error names the task, states the expectation, and proposes the fix —
-error messages are product surface here, not diagnostics.
+error messages are product surface here, not diagnostics. The space form of
+a nested address (`fm docs serve`) is permanently *taught against*, never
+parsed: the error path detects it and answers with the dotted spelling.
 """
 
 from __future__ import annotations
@@ -249,41 +253,153 @@ def _parse_globals(argv: list[str], i: int) -> tuple[list[str], int]:
     return globals_, i
 
 
+def flat_addresses(tree: dict) -> list[str]:
+    """Every runnable dotted address: tasks at any depth, plus runnable groups.
+
+    The one index behind did-you-mean suggestions for a mistyped address —
+    everything in it is copy-paste-runnable, so a suggestion can never
+    propose a bare namespace group.
+    """
+    out: list[str] = []
+
+    def walk(node: dict, prefix: str) -> None:
+        for name in node["tasks"]:
+            out.append(prefix + name)
+        for name, sub in node["groups"].items():
+            if "default" in sub:
+                out.append(prefix + name)
+            walk(sub, f"{prefix}{name}.")
+
+    walk(tree, "")
+    return out
+
+
+def _children(node: dict, prefix: str) -> list[str]:
+    """A node's children as addresses for a "know:" listing — groups keep a
+    trailing dot (`docs.`), the `ls -F` idiom, so descend-vs-run is visible;
+    tasks are bare and copy-paste-runnable."""
+    return [f"{prefix}{name}." for name in node["groups"]] + [
+        f"{prefix}{name}" for name in node["tasks"]
+    ]
+
+
+def _resolve_head(
+    tree: dict, argv: list[str], i: int, prev_group: tuple[str, dict] | None
+) -> tuple[dict, list[str], dict | None, int]:
+    """Resolve segment head `argv[i]` — one dotted address — to its task.
+
+    Returns `(task, path, group_node, next_i)`; `group_node` is set when the
+    address named a runnable group (its default runs), so the caller can teach
+    `group.child` if the *next* head turns out to be a child of it. Every
+    failure is a taught `ChainError`; the space form of a nested address is
+    detected by lookahead and answered with the dotted spelling.
+    """
+    token = argv[i]
+    parts = token.split(".")
+    if "" in parts:
+        if token.endswith(".") and "" not in token[:-1].split("."):
+            # `docs.` — an address left hanging; resolve the prefix so the
+            # answer can list what completes it.
+            node, path = tree, []
+            for part in token[:-1].split("."):
+                if part not in node["groups"]:
+                    break
+                node = node["groups"][part]
+                path.append(part)
+            else:
+                known = ", ".join(_children(node, f"{'.'.join(path)}."))
+                raise ChainError(f"{token!r} is an incomplete address (know: {known})")
+        raise ChainError(
+            f"{token!r} is not a task address — addresses are dot-separated "
+            f"names with no empty segments, like 'docs.serve'"
+        )
+
+    node, path = tree, []
+    for pos, part in enumerate(parts):
+        last = pos == len(parts) - 1
+        if part in node["groups"]:
+            node = node["groups"][part]
+            path.append(part)
+            continue
+        if part in node["tasks"]:
+            path.append(part)
+            if not last:
+                dotted = ".".join(path)
+                raise ChainError(
+                    f"{token!r}: {dotted!r} is a task, not a group — "
+                    f"nothing lives beneath it"
+                )
+            return node["tasks"][part], path, None, i + 1
+        # Unknown segment. At the very start this may be a misplaced global,
+        # or a child of the runnable group that led the previous segment
+        # (`fm lint python` — the space form, taught, not parsed).
+        if pos == 0:
+            if (misplaced := _misplaced_global(token)) is not None:
+                raise ChainError(misplaced)
+            if prev_group is not None:
+                prev_path, prev_node = prev_group
+                if part in prev_node["groups"] or part in prev_node["tasks"]:
+                    raise ChainError(
+                        f"nested tasks use dots: '{prev_path}.{token}', "
+                        f"not '{prev_path} {token}'"
+                    )
+        bad = ".".join([*path, part])
+        hint = _did_you_mean(token, flat_addresses(tree))
+        scope = f"{'.'.join(path)} has" if path else "know"
+        known = ", ".join(_children(node, f"{'.'.join(path)}." if path else ""))
+        raise ChainError(
+            f"no task at {bad!r}{hint} ({scope}: {known})"
+            if path
+            else f"expected a task name, got {token!r}{hint} ({scope}: {known})"
+        )
+
+    # The whole token named a group. Runnable — one with `@group.default` —
+    # resolves to its default action: `fm lint` / `fm lint --fix` run it,
+    # `path` stays the group's. A default takes no positionals, so a trailing
+    # bare token (`fm lint test`) ends the segment and opens a fresh head.
+    if "default" in node:
+        return node["default"], path, node, i + 1
+
+    # A namespace group is never a segment target. Before refusing, look
+    # ahead: if the following words walk to something runnable, the user
+    # spelled a nested address with spaces — teach the dotted form, longest
+    # resolvable path first (`fm footman tools sync` → 'footman.tools.sync').
+    walk_node, walk_path, j = node, list(path), i + 1
+    while j < len(argv):
+        nxt = argv[j]
+        if nxt in walk_node["groups"]:
+            walk_node = walk_node["groups"][nxt]
+            walk_path.append(nxt)
+            j += 1
+            continue
+        if nxt in walk_node["tasks"]:
+            walk_path.append(nxt)
+            spaced = " ".join(walk_path)
+            raise ChainError(
+                f"nested tasks use dots: '{'.'.join(walk_path)}', not '{spaced}'"
+            )
+        break
+    if len(walk_path) > len(path) and "default" in walk_node:
+        spaced = " ".join(walk_path)
+        raise ChainError(
+            f"nested tasks use dots: '{'.'.join(walk_path)}', not '{spaced}'"
+        )
+    dotted = ".".join(walk_path)
+    known = ", ".join(_children(walk_node, f"{dotted}."))
+    raise ChainError(
+        f"{dotted!r} is a group, not a task — name one of its tasks (know: {known})"
+    )
+
+
 def split_chain(tree: dict, argv: list[str]) -> tuple[list[str], list[Segment]]:
     """Split *argv* into leading globals and a list of resolved segments."""
     globals_, i = _parse_globals(argv, 0)
     segments: list[Segment] = []
+    prev_group: tuple[str, dict] | None = None
 
     while i < len(argv):
-        node, path = tree, []
-        while i < len(argv) and argv[i] in node["groups"]:
-            path.append(argv[i])
-            node = node["groups"][argv[i]]
-            i += 1
-        if i < len(argv) and argv[i] in node["tasks"]:
-            task = node["tasks"][argv[i]]
-            path.append(argv[i])
-            i += 1
-        elif "default" in node:
-            # A runnable group (one with `@group.default`) resolves to its
-            # default action: `fm lint` / `fm lint --fix` run it. `path` stays
-            # the group's; `i` is not advanced, so the flag loop below parses
-            # the default's options. A default takes no positionals, so a
-            # trailing non-flag token (`fm lint test`) ends the segment and
-            # opens a fresh target on the next pass.
-            task = node["default"]
-        else:
-            got = argv[i] if i < len(argv) else "(end of line)"
-            if i < len(argv) and (misplaced := _misplaced_global(got)) is not None:
-                raise ChainError(misplaced)
-            scope = " ".join(path)
-            where = f"{scope}: " if scope else ""
-            names = list(node["groups"]) + list(node["tasks"])
-            hint = _did_you_mean(got, names) if i < len(argv) else ""
-            known = ", ".join(names)
-            raise ChainError(
-                f"{where}expected a task name, got {got!r}{hint} (know: {known})"
-            )
+        task, path, group_node, i = _resolve_head(tree, argv, i, prev_group)
+        prev_group = (".".join(path), group_node) if group_node is not None else None
 
         opts = {
             "--" + p["name"]: p
@@ -446,13 +562,31 @@ def _consume_pair(seg: Segment, p: dict, cli: str, pair: str) -> None:
     seg.values.setdefault(cli, []).append((key, value))
 
 
+def _is_address(tree: dict, tok: str) -> bool:
+    """Whether *tok* walks the tree to a task or group — the "looks like the
+    next task" peek for choice-positional errors. Loose on purpose: it only
+    shapes an error message, so a namespace group counts too."""
+    node = tree
+    parts = tok.split(".")
+    if "" in parts:
+        return False
+    for pos, part in enumerate(parts):
+        if part in node["groups"]:
+            node = node["groups"][part]
+        elif part in node["tasks"]:
+            return pos == len(parts) - 1
+        else:
+            return False
+    return True
+
+
 def _consume_positional(seg: Segment, tree: dict, p: dict, tok: str) -> None:
     if (
         "choices" in p
         and tok not in p["choices"]
         and not _suggest_only(p["choices"], p.get("dynamic"))
         and not (p.get("types") and coerce.coerce_scalar(tok, p["types"])[0])
-        and (tok in tree["tasks"] or tok in tree["groups"])
+        and _is_address(tree, tok)
     ):
         raise ChainError(
             f"{seg.task}: <{p['name']}> must be one of "

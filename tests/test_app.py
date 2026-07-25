@@ -127,7 +127,7 @@ def test_chain_with_coercion(project, capsys):
 
 
 def test_group_task_variadic(project, capsys):
-    assert _app.run(["tools", "echo", "a", "b", "c"]) == 0
+    assert _app.run(["tools.echo", "a", "b", "c"]) == 0
     assert "a b c" in capsys.readouterr().out
 
 
@@ -141,7 +141,7 @@ def test_version(project, capsys):
 def test_list_with_no_segments(project, capsys):
     assert _app.run([]) == 0
     out = capsys.readouterr().out
-    assert "hi" in out and "tools echo" in out
+    assert "hi" in out and "tools.echo" in out
 
 
 def test_dry_run_does_not_execute(project, capsys):
@@ -299,7 +299,7 @@ def test_missing_tasks_file_with_help_shows_globals(tmp_path, monkeypatch, capsy
 def test_tree_output(project, capsys):
     assert _app.run(["--tree"]) == 0
     out = capsys.readouterr().out
-    assert "tools/" in out
+    assert "tools." in out
     assert "echo" in out
 
 
@@ -432,9 +432,7 @@ def test_keep_going_via_cli(project, capsys):
 
 def test_dry_run_flag_variadic_passthrough(project, capsys):
     assert (
-        _app.run(
-            ["--dry-run", "flag", "--no-fix", "+", "tools", "echo", "a", "--", "b"]
-        )
+        _app.run(["--dry-run", "flag", "--no-fix", "+", "tools.echo", "a", "--", "b"])
         == 0
     )
     out = capsys.readouterr().out
@@ -511,7 +509,7 @@ def test_empty_task_list(tmp_path, monkeypatch, capsys):
 def test_help_alone_lists_tasks(project, capsys):
     assert _app.run(["--help"]) == 0
     out = capsys.readouterr().out
-    assert "hi" in out and "tools echo" in out
+    assert "hi" in out and "tools.echo" in out
 
 
 def test_help_with_task_shows_usage_without_executing(project, capsys):
@@ -578,37 +576,36 @@ def test_help_with_target_tolerates_arg_tokens(project, capsys):
     assert "usage: fm add" in capsys.readouterr().out
 
 
-def test_help_accepts_a_quoted_group_task_path(project, capsys):
-    # `fm --help "tools echo"` — the shell hands the path as one token. It used
-    # to fail with a self-referential "did you mean 'tools echo'?"; now the
-    # token is split and the group task's help renders.
-    assert _app.run(["--help", "tools echo"]) == 0
+def test_help_takes_the_dotted_address(project, capsys):
+    # The one address spelling: `--help` resolves the same dotted token the
+    # run grammar does.
+    assert _app.run(["--help", "tools.echo"]) == 0
     out = capsys.readouterr().out
-    assert "usage: fm tools echo" in out
+    assert "usage: fm tools.echo" in out
     assert "Echo words." in out
 
 
-def test_help_accepts_a_dotted_path(project, capsys):
-    # A user may dot the path the way `--where` prints it; help accepts it too.
-    assert _app.run(["--help", "tools.echo"]) == 0
-    assert "usage: fm tools echo" in capsys.readouterr().out
-
-
-def test_help_path_expansion_leaves_a_passthrough_boundary_alone(project, capsys):
-    # Path-splitting stops at `--`: a target before it still resolves, and the
-    # tokens after are left verbatim (never split into strays).
-    assert _app.run(["--help", "tools echo", "--", "raw arg"]) == 0
-    assert "usage: fm tools echo" in capsys.readouterr().out
-
-
-def test_help_unknown_quoted_path_suggests_a_component_not_itself(project, capsys):
-    # A genuinely unknown quoted pair splits, so the refusal names the first
-    # bad component and suggests a real neighbour — never the whole input back.
-    assert _app.run(["--help", "tolz ecko"]) == 2
+def test_help_space_path_is_taught_dotted(project, capsys):
+    # `fm --help "tools echo"` — the space form is no longer an address, and
+    # the refusal suggests the dotted spelling instead of shrugging.
+    assert _app.run(["--help", "tools echo"]) == 2
     err = capsys.readouterr().err
-    assert "unknown task or group 'tolz'" in err
-    assert "did you mean 'tools'?" in err
-    assert "'tolz ecko'" not in err  # not the self-referential echo
+    assert "unknown task or group 'tools echo'" in err
+    assert "did you mean 'tools.echo'?" in err
+
+
+def test_help_resolves_before_a_passthrough_boundary(project, capsys):
+    # Address resolution stops at `--`: a target before it still resolves,
+    # and the tokens after are left verbatim (never counted as strays).
+    assert _app.run(["--help", "tools.echo", "--", "raw arg"]) == 0
+    assert "usage: fm tools.echo" in capsys.readouterr().out
+
+
+def test_help_unknown_address_suggests_a_real_neighbour(project, capsys):
+    assert _app.run(["--help", "tools.ecko"]) == 2
+    err = capsys.readouterr().err
+    assert "unknown task or group 'tools.ecko'" in err
+    assert "did you mean 'tools.echo'?" in err
 
 
 def test_help_alone_shows_the_global_options(project, capsys):
@@ -629,16 +626,16 @@ def test_help_anywhere_on_the_line_wins(project, capsys):
 
 def test_help_after_passthrough_is_passthrough(project, capsys):
     # After `--` the token belongs to the task, not to fm.
-    assert _app.run(["tools", "echo", "--", "--help"]) == 0
+    assert _app.run(["tools.echo", "--", "--help"]) == 0
     assert "--help" in capsys.readouterr().out
 
 
 def test_help_for_a_group(project, capsys):
     assert _app.run(["--help", "tools"]) == 0
     out = capsys.readouterr().out
-    assert "usage: fm tools <task>" in out
+    assert "usage: fm tools.<task>" in out
     assert "Extra tools" in out
-    assert "echo" in out
+    assert "tools.echo" in out
 
 
 # --- import failures name the culprit ----------------------------------------
@@ -891,7 +888,7 @@ def test_json_no_tasks_file(tmp_path, monkeypatch, capsys):
 
 
 def test_json_dry_run_emits_plan(project, capsys):
-    line = ["--json", "-n", "hi", "--name", "x", "tools", "echo", "a", "--", "b"]
+    line = ["--json", "-n", "hi", "--name", "x", "tools.echo", "a", "--", "b"]
     assert _app.run(line) == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["schema"] == 1
@@ -1036,9 +1033,9 @@ def test_task_help_paints_the_command_line(project, monkeypatch):
     # The one CLI grammar: prog bold, groups bold cyan, task bold, and the
     # synthesised example painted with the same brush as the usage line.
     out, _ = _tty_streams(monkeypatch)
-    assert _app.run(["--help", "tools", "echo"]) == 0
+    assert _app.run(["--help", "tools.echo"]) == 0
     text = out.getvalue()
-    assert "\033[1mfm\033[0m \033[1;36mtools\033[0m \033[1mecho\033[0m" in text
+    assert "\033[1mfm\033[0m \033[1mtools.echo\033[0m" in text
     assert "\033[2mExample:\033[0m" in text
 
 
@@ -1047,8 +1044,8 @@ def test_list_and_tree_paint_names(project, monkeypatch):
     assert _app.run(["--list"]) == 0
     assert _app.run(["--tree"]) == 0
     text = out.getvalue()
-    assert "\033[2mtools \033[0m\033[1mecho\033[0m" in text  # dim prefix, bold leaf
-    assert "\033[1;36mtools/\033[0m" in text  # tree group
+    assert "\033[2mtools.\033[0m\033[1mecho\033[0m" in text  # dim prefix, bold leaf
+    assert "\033[1;36mtools.\033[0m" in text  # tree group
 
 
 def test_dry_run_plan_paints(project, monkeypatch):
@@ -1259,3 +1256,14 @@ def test_handoff_windows_waits_and_carries_the_code(uv_project, monkeypatch):
     with pytest.raises(SystemExit) as excinfo:
         _app.run(["hi"])
     assert excinfo.value.code == 7
+
+
+def test_where_takes_the_dotted_address(project, capsys):
+    assert _app.run(["--where", "tools.echo"]) == 0
+    assert "tasks.py:" in capsys.readouterr().out
+
+
+def test_where_is_strict_about_empty_segments(project, capsys):
+    # The shared resolver never silently normalises a malformed address.
+    assert _app.run(["--where", "tools..echo"]) == 2
+    assert "unknown task 'tools..echo'" in capsys.readouterr().err

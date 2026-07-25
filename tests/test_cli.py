@@ -22,8 +22,8 @@ def _completion_names(out: str) -> set[str]:
 def test_complete_cli_reads_explicit_manifest(tree, tmp_path, capsys):
     path = tmp_path / "m.json"
     path.write_text(json.dumps({"tree": tree}))
-    assert complete_cli(["--manifest", str(path), "--", "docs", ""]) == 0
-    assert _completion_names(capsys.readouterr().out) == {"serve", "build"}
+    assert complete_cli(["--manifest", str(path), "--", "docs."]) == 0
+    assert _completion_names(capsys.readouterr().out) == {"docs.serve", "docs.build"}
 
 
 def test_complete_cli_missing_manifest_is_silent(tmp_path, capsys):
@@ -34,12 +34,12 @@ def test_complete_cli_missing_manifest_is_silent(tmp_path, capsys):
 def test_complete_cli_empty_partial_appends_blank(tree, tmp_path, capsys):
     # F16: pwsh drops the trailing "" arg, so its hook passes --empty-partial and
     # the resolver appends the "" itself — completing the fresh position, not the
-    # previous word. `--empty-partial` (no trailing "") == "docs" + "".
+    # previous word. `--empty-partial` (no trailing "") == "check" + "".
     path = tmp_path / "m.json"
     path.write_text(json.dumps({"tree": tree}))
-    args = ["--manifest", str(path), "--empty-partial", "--", "docs"]
+    args = ["--manifest", str(path), "--empty-partial", "--", "check"]
     assert complete_cli(args) == 0
-    assert _completion_names(capsys.readouterr().out) == {"serve", "build"}
+    assert "docs." in _completion_names(capsys.readouterr().out)
 
 
 # --- stale-while-revalidate completion refresh (D18) --------------------------

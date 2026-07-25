@@ -54,13 +54,16 @@ each option in `--help` and in completion.
 
 The command name is the function name with underscores turned into hyphens
 (`add_word` → `add-word`). A module of functions becomes a flat set of commands;
-each `group()` opens a nested command group.
+each `group()` opens a nested command group. A nested task's address is one
+dotted token — `fm docs.serve`, the same spelling everywhere: running,
+`--help`, `--where`, and completion (typing `fm docs serve` gets a one-line
+correction, not a guess).
 
 ## Run tasks
 
 ```sh
 fm lint --fix
-fm docs serve --port 8001
+fm docs.serve --port 8001
 fm --list            # every task, flat
 fm --tree            # grouped by command group
 ```

@@ -11,9 +11,9 @@
 #   it and the stub merely hasn't heard of it yet;
 # - unknown verbs fall through to `Tool` via `__getattr__`, so nothing the
 #   runtime accepts is a type error.
-# Flag lists are *generated* from the installed tools — `fm footman tools
-# sync` writes one file per tool under `_stubs/`, and `fm footman tools
-# audit` fails when a checked-in stub and its tool disagree. Stub drift
+# Flag lists are *generated* from the installed tools — `fm footman.tools.sync`
+# writes one file per tool under `_stubs/`, and `fm footman.tools.audit`
+# fails when a checked-in stub and its tool disagree. Stub drift
 # therefore degrades a hint, never a run.
 
 # The private aliases (`_re`, `_run`, …) mirror tools.py: they keep those names
@@ -30,7 +30,7 @@ from typing import Any, NamedTuple, Self
 
 from footman._stubs.basedpyright import Basedpyright as Basedpyright
 
-# One generated file per tool — `fm footman tools sync` writes them from
+# One generated file per tool — `fm footman.tools.sync` writes them from
 # the installed binaries, and `audit` fails when they drift. They import
 # `Tool` and the aliases from here, which a stub may do circularly.
 from footman._stubs.bash import Bash as Bash

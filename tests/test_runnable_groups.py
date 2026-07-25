@@ -66,7 +66,7 @@ def test_targeting_a_child_runs_the_child_not_the_default():
     reg = Group("root")
     seen = _lint(reg)
     tree = manifest.build_manifest(reg)["tree"]
-    _, segs = split_chain(tree, ["lint", "markdown", "--fix"])
+    _, segs = split_chain(tree, ["lint.markdown", "--fix"])
     run_chain(reg, segs)
     assert seen == {"markdown": True}  # the default never ran
     assert [s.task for s in segs] == ["lint.markdown"]
@@ -98,7 +98,7 @@ def test_a_group_without_a_default_is_still_a_taught_error():
         @plain.task
         def sub(): ...
 
-    with pytest.raises(ChainError, match=r"expected a task name"):
+    with pytest.raises(ChainError, match=r"is a group, not a task"):
         drive(tasks, "plain")
 
 
@@ -203,9 +203,16 @@ def test_completion_offers_the_default_flags_alongside_children():
     reg = Group("root")
     _surfaces(reg)  # lint with python/markdown/spelling + a fix default
     tree = manifest.build_manifest(reg)["tree"]
+    # In-word, the stop-or-descend choice: the group itself plus its dotted
+    # children (the common prefix stays `lint`, so no shell forces a space).
+    offered = {c.split("\t")[0] for c in complete(tree, ["lin"])}
+    assert "lint" in offered
+    assert {"lint.python", "lint.markdown", "lint.spelling"} <= offered
+    # After the space the default is committed: its flags complete, and the
+    # children are no longer reachable in this segment.
     offered = {c.split("\t")[0] for c in complete(tree, ["lint", ""])}
     assert "--fix" in offered  # the default's flag
-    assert {"python", "markdown", "spelling"} <= offered  # and the children
+    assert not {"python", "markdown", "spelling"} & offered
     assert complete(tree, ["lint", "--f"]) == ["--fix"]
 
 

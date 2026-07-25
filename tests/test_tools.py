@@ -825,7 +825,7 @@ def test_wrapper_raw_and_shown_agree_on_order():
     "verified here until CI generates the table too (post-1.0)",
 )
 def test_wrappers_table_matches_what_the_tools_declare():
-    # The runtime table is hand-written; this mirrors `fm footman tools audit`,
+    # The runtime table is hand-written; this mirrors `fm footman.tools.audit`,
     # so drift fails fast in the local `fm check` gate. Skipped in CI (marker
     # above): CI's tool versions differ from the curated table.
     from footman import _drivers

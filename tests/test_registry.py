@@ -147,3 +147,23 @@ def test_group_default_allows_the_injected_ctx_param():
     def build_all(ctx: Context, fix: Forward[bool] = False): ...
 
     assert build.default_task is build_all
+
+
+def test_task_and_group_names_reject_dots_and_whitespace():
+    # `.` is the address separator (`fm docs.serve`): a name containing one
+    # would alias into fake nesting or become unreachable; whitespace can
+    # never survive shell word-splitting. Both refuse at load time.
+    reg = Group("root")
+
+    with pytest.raises(RegistrationError, match=r"not a legal name"):
+        reg.group("v2.0")
+
+    with pytest.raises(RegistrationError, match=r"not a legal name"):
+
+        @reg.task(name="docs.build")
+        def dotted(): ...
+
+    with pytest.raises(RegistrationError, match=r"not a legal name"):
+
+        @reg.task(name="two words")
+        def spaced(): ...

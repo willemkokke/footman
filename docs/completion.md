@@ -80,12 +80,30 @@ completion.max_age = "10m"   # default; "30s", "1h", a plain int (seconds)
 # completion.max_age = "off" #   or 0 — disable background refresh entirely
 ```
 
-## Chained and grouped completion
+## Path-style task completion
+
+A nested task's address is one dotted token (`fm docs.serve`), and completion
+treats the `.` the way your shell treats `/` in a file path: a group completes
+with a trailing dot and the next <kbd>Tab</kbd> lists what's inside it, so a
+descent reads like `cd` with dots:
+
+```sh
+fm do<TAB>        # docs.  docker.
+fm docs.<TAB>     # docs.build  docs.serve
+fm docs.s<TAB>    # docs.serve ␣
+```
+
+A group with a [default action](orchestration.md#runnable-groups) completes to
+its bare name *and* its dotted children — a space runs the default, a `.`
+descends. When only one group matches, completion steps straight through it,
+the way zsh descends a lone subdirectory.
+
+## Chained completion
 
 Completion is aware of the whole command line, not just the first word:
 
 ```sh
-fm workspace mount --share <TAB>   # main  scratch  archive
+fm workspace.mount --share <TAB>   # main  scratch  archive
 fm format lint --fix <TAB>         # completes within the chain
 ```
 

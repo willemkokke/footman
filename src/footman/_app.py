@@ -288,10 +288,10 @@ def _print_footer() -> None:
 
 
 def _styled_name(name: str, width: int) -> str:
-    """A task name for a listing: dim group prefix, bold leaf, padded."""
+    """A task address for a listing: dim group prefix, bold leaf, padded."""
     pad = " " * (width - len(name))
-    prefix, _, leaf = name.rpartition(" ")
-    lead = _describe.dim(f"{prefix} ", _color_out) if prefix else ""
+    prefix, _, leaf = name.rpartition(".")
+    lead = _describe.dim(f"{prefix}.", _color_out) if prefix else ""
     return f"{lead}{_describe.bold(leaf, _color_out)}{pad}"
 
 
@@ -316,7 +316,7 @@ def _print_list(tree: dict) -> None:
         print(line.rstrip())
 
 
-def _print_tree(node: dict, indent: str = "") -> None:
+def _print_tree(node: dict, indent: str = "", prefix: str = "") -> None:
     # Top-level empty tree (indent sentinel) → mirror _print_list rather than
     # printing zero bytes and exiting 0.
     if not indent and not node["tasks"] and not node["groups"]:
@@ -326,11 +326,13 @@ def _print_tree(node: dict, indent: str = "") -> None:
     for name, task in node["tasks"].items():
         line = _describe.task_line(task)
         help_text = f"  {dash} {_styled_help(line)}" if line else ""
-        print(f"{indent}{_describe.bold(name, _color_out)}{help_text}")
+        # Full dotted address, so every listed task is copy-paste-runnable.
+        print(f"{indent}{_describe.bold(f'{prefix}{name}', _color_out)}{help_text}")
     for name, sub in node["groups"].items():
         label = f"  {dash} {sub['help']}" if sub["help"] else ""
-        print(f"{indent}{_describe.bold_cyan(f'{name}/', _color_out)}{label}")
-        _print_tree(sub, indent + "  ")
+        address = f"{prefix}{name}."
+        print(f"{indent}{_describe.bold_cyan(address, _color_out)}{label}")
+        _print_tree(sub, indent + "  ", address)
 
 
 def _print_task_help(tree: dict, path: list[str]) -> None:
@@ -388,17 +390,17 @@ def _print_group_help(tree: dict, path: list[str]) -> None:
         node = node["groups"][name]
     on = _color_out
     default = node.get("default")
-    parts = [("prog", _brand.prog), *[("group", name) for name in path]]
+    dotted = ".".join(path)
     # A runnable group (one with `@group.default`) can run bare — its default —
-    # so the task becomes optional.
-    parts += [("opt", "[<task>]")] if default else [("req", "<task>")]
-    parts += [("opt", "[options]")]
+    # so the task suffix becomes optional. The address stays one dotted token.
+    head = f"{dotted}[.<task>]" if default else f"{dotted}.<task>"
+    parts = [("prog", _brand.prog), ("group", head), ("opt", "[options]")]
     print(f"usage: {_describe.paint_cli(parts, on)}")
     if node["help"]:
         print(f"\n  {node['help']}")
     if default:
         print(_describe.dim("\n  runs its default when no task is named", on))
-    rows = list(_describe.iter_tasks(node))
+    rows = list(_describe.iter_tasks(node, f"{dotted}."))
     if rows:
         width = max(len(name) for name, _ in rows)
         print(f"\n{_describe.bold('tasks:', on)}")
@@ -461,61 +463,55 @@ def _wants_help(argv: list[str]) -> bool:
     return False
 
 
-def _expand_help_path(argv: list[str], start: int) -> list[str]:
-    """Split a quoted multi-word or dotted path token into its components.
+def _resolve_lenient(tree: dict, token: str) -> tuple[str, list[str]] | None:
+    """Walk one dotted address to `("task"|"group", path)`, or None.
 
-    `fm --help "dict add"` (the shell hands the path as one token) and
-    `fm --help dict.add` (a user dots the path) both name the task at
-    `dict` → `add`. No group or task name contains a space or a dot, so
-    splitting a path token on either only ever un-quotes a path the walk can
-    then resolve — turning a self-referential "did you mean 'dict add'?" into a
-    real lookup. Option-shaped tokens and everything past `--` are left verbatim.
+    The help surface's resolver: never raises — a token that isn't an address
+    is someone's argument value or a typo, and the caller decides which.
     """
-    out = argv[:start]
-    for j in range(start, len(argv)):
-        tok = argv[j]
-        if tok == "--":
-            out.extend(argv[j:])  # passthrough boundary — leave the rest verbatim
-            break
-        if not tok.startswith("-") and (" " in tok or "." in tok):
-            out.extend(tok.replace(".", " ").split())
+    parts = token.split(".")
+    if "" in parts:
+        return None
+    node, path = tree, []
+    for pos, part in enumerate(parts):
+        last = pos == len(parts) - 1
+        if part in node["groups"]:
+            node = node["groups"][part]
+            path.append(part)
+            if last:
+                return ("group", path)
+        elif part in node["tasks"] and last:
+            return ("task", [*path, part])
         else:
-            out.append(tok)
-    return out
+            return None
+    return None
 
 
 def _help_targets(
     tree: dict, argv: list[str]
 ) -> tuple[list[tuple[str, list[str]]], list[str]]:
-    """Group/task paths mentioned on a `--help` line, resolved leniently —
+    """Group/task addresses mentioned on a `--help` line, resolved leniently —
     plus the bare words that resolved to nothing, so the caller can refuse a
     `--help typo` instead of shrugging.
 
     The real splitter enforces arity — `--help add` must work even though
-    `add` alone would be "missing required argument(s)" — so this walks group
-    and task names only and skips every other token (option-shaped tokens and,
-    once a target is found, its argument values).
+    `add` alone would be "missing required argument(s)" — so this resolves
+    dotted addresses only and skips every other token (option-shaped tokens
+    and, once a target is found, its argument values).
     """
     _, i = split._parse_globals(argv, 0)
-    argv = _expand_help_path(argv, i)
     targets: list[tuple[str, list[str]]] = []
     strays: list[str] = []
-    while i < len(argv):
-        if argv[i] == "--":
+    for tok in argv[i:]:
+        if tok == "--":
             break
-        node, path = tree, []
-        while i < len(argv) and argv[i] in node["groups"]:
-            path.append(argv[i])
-            node = node["groups"][argv[i]]
-            i += 1
-        if i < len(argv) and argv[i] in node["tasks"]:
-            targets.append(("task", [*path, argv[i]]))
-        elif path:
-            targets.append(("group", path))
-            continue  # the walk already consumed the group name(s)
-        elif i < len(argv) and not argv[i].startswith("-"):
-            strays.append(argv[i])
-        i += 1
+        if tok.startswith("-"):
+            continue
+        resolved = _resolve_lenient(tree, tok)
+        if resolved is not None:
+            targets.append(resolved)
+        else:
+            strays.append(tok)
     return targets, strays
 
 
@@ -552,11 +548,15 @@ def _print_help(tree: dict, argv: list[str]) -> int:
 
 
 def _where(root: registry.Group, tree: dict, dotted: str) -> int:
-    path = dotted.replace(".", " ").split()
+    # Strict, like every address surface: `docs..serve` or a trailing dot is
+    # an error, never silently normalised away.
+    path = dotted.split(".")
     try:
+        if "" in path:
+            raise KeyError(dotted)
         fn = executor.resolve(root, path)
     except (KeyError, IndexError):
-        names = [name.replace(" ", ".") for name, _ in _describe.iter_tasks(tree)]
+        names = split.flat_addresses(tree)
         _error(f"--where: unknown task {dotted!r}{split._did_you_mean(dotted, names)}")
         return 2
     chain = discover.shadow_chain(fn)

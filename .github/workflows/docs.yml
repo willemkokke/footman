@@ -85,7 +85,7 @@ jobs:
           fi
       - name: Build site
         # The same task devs run — regenerates llms.txt, then builds strictly.
-        run: uv run fm docs build --check
+        run: uv run fm docs.build --check
       - uses: actions/upload-pages-artifact@v5
         with:
           path: site

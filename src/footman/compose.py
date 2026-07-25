@@ -145,7 +145,7 @@ def include(
     ```python
     include("shared_tasks")                          # everything, at root
     include("shared_tasks", only=["lint", "fmt"])    # cherry-pick by CLI name
-    include("mkdocs_helpers.tasks", into=docs)       # namespace: fm docs …
+    include("mkdocs_helpers.tasks", into=docs)       # namespace: fm docs.…
     include(plugin("mkdocs"), only=["build"])        # from an entry point
     ```
 

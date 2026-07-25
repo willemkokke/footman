@@ -350,6 +350,15 @@ class Group:
 
     def _claim(self, key: str) -> None:
         where = f"group {self.name!r}" if self.name != "root" else "the root"
+        # `.` is the address separator (`fm docs.serve`), so a name containing
+        # one would alias into fake nesting or become unreachable; whitespace
+        # can never survive shell word-splitting. Refuse both at load time.
+        if "." in key or any(c.isspace() for c in key):
+            raise RegistrationError(
+                f"{where}: {key!r} is not a legal name — '.' is the address "
+                f"separator and spaces cannot be addressed; use '_' or '-' "
+                f"inside a name, or nest a group instead"
+            )
         if key in self.tasks:
             raise RegistrationError(f"{where} already has a task named {key!r}")
         if key in self.groups:

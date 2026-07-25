@@ -63,7 +63,7 @@ def serve(port: int = 8000):
 
 ```console
 $ fm lint --fix
-$ fm lint test docs serve --port 8001   # one chain; independent tasks run in parallel
+$ fm lint test docs.serve --port 8001   # one chain; independent tasks run in parallel
 $ fm test -- -k grammar -x              # everything after -- goes to pytest
 $ fm deploy produ
 fm: deploy: <target> must be one of dev|staging|prod (got 'produ') — did you mean 'prod'?

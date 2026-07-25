@@ -62,15 +62,30 @@ def test_docstring_doc_becomes_option_description():
 
 
 def test_empty_partial_lists_everything(tree):
+    # Path-style: candidates sit one segment beyond the typed prefix, and a
+    # namespace group carries its trailing dot, `ls -F` style.
     out = _names(complete(tree, [""]))
     assert "check" in out
-    assert "docs" in out
-    assert "workspace" in out
+    assert "docs." in out
+    assert "workspace." in out
 
 
-def test_group_descent(tree):
-    assert set(_names(complete(tree, ["docs", ""]))) == {"serve", "build"}
-    assert _names(complete(tree, ["docs", "ser"])) == ["serve"]
+def test_dotted_descent(tree):
+    assert set(_names(complete(tree, ["docs."]))) == {"docs.serve", "docs.build"}
+    assert _names(complete(tree, ["docs.ser"])) == ["docs.serve"]
+
+
+def test_unique_namespace_match_skips_ahead(tree):
+    # `rel<TAB>` matches only the `release` group: completion descends
+    # straight through it, so no shell ever forces a space after `release.`.
+    out = _names(complete(tree, ["rel"]))
+    assert set(out) == {"release.prepare", "release.publish"}
+
+
+def test_a_bare_group_word_is_a_dead_end(tree):
+    # `fm docs <TAB>` — the space form has no valid continuation; silence
+    # mirrors the splitter's refusal.
+    assert complete(tree, ["docs", ""]) == []
 
 
 def test_task_options(tree):
@@ -87,7 +102,7 @@ def test_option_value_choices(tree):
 
 
 def test_nested_option_value_choices(tree):
-    out = complete(tree, ["workspace", "mount", "--share", ""])
+    out = complete(tree, ["workspace.mount", "--share", ""])
     assert set(out) == {"main", "scratch", "archive"}
 
 
@@ -549,14 +564,14 @@ def test_option_value_not_confused_with_next_task(tree):
     assert set(out) == {"strict", "loose"}
 
 
-def test_group_descent_in_a_later_segment(tree):
-    out = _names(complete(tree, ["lint", "--fix", "docs", ""]))
-    assert set(out) == {"serve", "build"}
+def test_dotted_descent_in_a_later_segment(tree):
+    out = _names(complete(tree, ["lint", "--fix", "docs."]))
+    assert set(out) == {"docs.serve", "docs.build"}
 
 
 def test_plus_resets_the_segment(tree):
     out = _names(complete(tree, ["lint", "+", ""]))
-    assert "check" in out and "docs" in out
+    assert "check" in out and "docs." in out
 
 
 def test_nothing_after_passthrough(tree):

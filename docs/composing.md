@@ -88,7 +88,7 @@ from footman import group, include
 include("shared_tasks")                          # graft everything at root
 include("shared_tasks", only=["lint", "fmt"])    # cherry-pick by CLI name
 docs = group("docs", help="Docs")
-include("mkdocs_helpers.tasks", into=docs)       # mounts under: fm docs …
+include("mkdocs_helpers.tasks", into=docs)       # mounts under: fm docs.…
 ```
 
 `include()` imports the provider inside a registry capture, so its decorators
@@ -184,7 +184,7 @@ per segment — and plugins that share a prefix meet under one namespace group
 without either owning it:
 
 ```toml
-plugins = ["footman.docs", "footman.tools"]   # `fm footman docs …`, `fm footman tools …`
+plugins = ["footman.docs", "footman.tools"]   # `fm footman.docs.…`, `fm footman.tools.…`
 ```
 
 or adopts pieces of it from a tasks file, composing with `include()`:
@@ -214,9 +214,9 @@ footman ships two first-party plugins, `footman.docs` and `footman.tools` —
 dotted names that share the `footman` namespace group without either owning it
 (there is no plugin named plain `footman`). Mounting `footman.docs` is the
 two-line demo of this whole mechanism, and what it mounts is
-[your tasks, documented](taskdocs.md) (`fm footman docs page` / `site`);
+[your tasks, documented](taskdocs.md) (`fm footman.docs.page` / `site`);
 `footman.tools` mounts the maintainer-facing stub toolkit under
-`fm footman tools …`. A naming symmetry to know: the `footman.tasks`
+`fm footman.tools.…`. A naming symmetry to know: the `footman.tasks`
 entry-point *group* is served by the `footman.tasks` *package* — different
 namespaces, one product.
 

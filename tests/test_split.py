@@ -68,15 +68,15 @@ def test_color_global_takes_a_value(tree):
     assert [s.task for s in segs(tree, "--color always format")] == ["format"]
 
 
-def test_group_descent_and_typed_option(tree):
-    (seg,) = segs(tree, "docs serve --port 8001")
+def test_dotted_address_and_typed_option(tree):
+    (seg,) = segs(tree, "docs.serve --port 8001")
     assert seg.task == "docs.serve"
     assert seg.path == ["docs", "serve"]
     assert seg.values == {"port": "8001"}
 
 
 def test_required_positional_then_option(tree):
-    a, b = segs(tree, "docs build --strict deploy staging --version 2026.07.16")
+    a, b = segs(tree, "docs.build --strict deploy staging --version 2026.07.16")
     assert a.task == "docs.build"
     assert a.values == {"strict": True}
     assert b.task == "deploy"
@@ -94,7 +94,7 @@ def test_two_required_positionals_repeated_task(tree):
 
 
 def test_explicit_plus_boundary_before_variadic(tree):
-    a, b = segs(tree, "deps add requests rich typer + lint --fix")
+    a, b = segs(tree, "deps.add requests rich typer + lint --fix")
     assert a.task == "deps.add"
     assert a.variadic == ["requests", "rich", "typer"]
     assert b.task == "lint"
@@ -113,7 +113,7 @@ def test_passthrough_is_terminal(tree):
 
 
 def test_no_flag_negation(tree):
-    (seg,) = segs(tree, "docs serve --no-live")
+    (seg,) = segs(tree, "docs.serve --no-live")
     assert seg.values == {"live": False}
 
 
@@ -129,7 +129,7 @@ def test_where_global_takes_a_value(tree):
 
 ERROR_CASES = [
     ("lint --mode fast", "lint: --mode must be one of strict|loose (got 'fast')"),
-    ("docs serve --port http", "docs.serve: --port expects an integer (got 'http')"),
+    ("docs.serve --port http", "docs.serve: --port expects an integer (got 'http')"),
     ("bench --timeout fast", "bench: --timeout expects a number (got 'fast')"),
     ("version huge", "version: <part> must be one of major|minor|patch (got 'huge')"),
     (
@@ -138,7 +138,34 @@ ERROR_CASES = [
         "the next task; did you forget <env>?",
     ),
     ("lint test --fix", "test: unknown option --fix"),
-    ("docs deplo", "docs: expected a task name, got 'deplo'"),
+    # The space form of a nested address is permanently taught, never parsed.
+    ("docs serve", "nested tasks use dots: 'docs.serve', not 'docs serve'"),
+    (
+        "docs serve --port 8001",
+        "nested tasks use dots: 'docs.serve', not 'docs serve'",
+    ),
+    # A bare namespace group is never a segment target; the answer lists
+    # its children as addresses.
+    (
+        "docs",
+        "'docs' is a group, not a task — name one of its tasks "
+        "(know: docs.serve, docs.build)",
+    ),
+    (
+        "docs deplo",
+        "'docs' is a group, not a task — name one of its tasks "
+        "(know: docs.serve, docs.build)",
+    ),
+    # The teach stops at the longest resolvable prefix — the rest of the
+    # line is someone else's segment.
+    ("docs build lint", "nested tasks use dots: 'docs.build', not 'docs build'"),
+    # Strict addresses: empty segments and hanging dots are taught, never
+    # silently normalised.
+    ("docs.", "'docs.' is an incomplete address (know: docs.serve, docs.build)"),
+    ("docs..serve", "'docs..serve' is not a task address"),
+    (".docs", "'.docs' is not a task address"),
+    ("check.deep", "'check' is a task, not a group — nothing lives beneath it"),
+    ("docs.sevre", "no task at 'docs.sevre' — did you mean 'docs.serve'?"),
     # A misplaced global names the real problem — position — not "unknown".
     (
         "--json lint --quiet",

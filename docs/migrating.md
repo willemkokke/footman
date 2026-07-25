@@ -43,7 +43,7 @@ dist = group("dist")
 def build(): ...
 ```
 
-`inv dist.build` becomes `fm dist build` (a space, not a dot); `c.run(...)` →
+`inv dist.build` stays `fm dist.build` (the same dotted address); `c.run(...)` →
 `run(...)`.
 
 ## From typer
