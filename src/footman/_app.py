@@ -401,6 +401,10 @@ def _print_group_help(tree: dict, path: list[str]) -> None:
     if default:
         print(_describe.dim("\n  runs its default when no task is named", on))
     rows = list(_describe.iter_tasks(node, f"{dotted}."))
+    if default:
+        # The bare-group spelling is itself a runnable, listed address —
+        # described by its default action (docstring, or generated).
+        rows.insert(0, (dotted, _describe.default_line(node)))
     if rows:
         width = max(len(name) for name, _ in rows)
         print(f"\n{_describe.bold('tasks:', on)}")
@@ -1092,6 +1096,16 @@ def _run_tree(
         globals_, segments = split.split_chain(tree, argv)
     except split.ChainError as exc:
         return _refuse(json_mode, str(exc))
+
+    # Advisory notes from the splitter (a group default's positional value
+    # that names — or nearly names — a child task): stderr commentary, ahead
+    # of the run, so the plan stays deterministic but never silent. Skipped
+    # under --json: the envelope's stdout is the contract and the notes are
+    # human-facing teaching, not results.
+    if not json_mode:
+        for seg in segments:
+            for note in seg.notes:
+                print(note.replace("{prog}", _brand.prog), file=sys.stderr)
 
     if not segments:
         if json_mode:

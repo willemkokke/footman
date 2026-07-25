@@ -129,14 +129,16 @@ def test_group_default_registers_a_flags_only_action():
     assert lint.default_task is lint_all
 
 
-def test_group_default_rejects_a_positional_parameter():
+def test_group_default_accepts_a_positional_parameter():
+    # The old no-positional rule dissolved with dotted addressing: a bare
+    # word after the group is the default's value, never a child address.
     reg = Group("root")
     deploy = reg.group("deploy")
 
-    with pytest.raises(RegistrationError, match=r"positional parameter"):
+    @deploy.default
+    def deploy_all(target: str): ...
 
-        @deploy.default
-        def deploy_all(target: str): ...
+    assert deploy.default_task is deploy_all
 
 
 def test_group_default_allows_the_injected_ctx_param():

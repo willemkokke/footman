@@ -288,15 +288,82 @@ def test_interactive_on_a_custom_body_default_is_allowed():
     assert is_interactive(repl) is True
 
 
-def test_default_still_rejects_a_positional_parameter():
+def test_default_takes_positionals():
+    # Dotted addressing dissolved the old no-positional rule: a bare word
+    # after the group is unambiguously the default's value, because every
+    # child keeps its own dotted spelling (`fm lint.markdown`).
+    reg = Group("root")
+    seen = {}
+    lint = reg.group("lint")
+
+    @lint.task
+    def markdown(fix: bool = False):
+        seen["markdown"] = fix
+
+    @lint.default(keep_going=True)
+    def lint_all(path: str):
+        seen["path"] = path
+
+    tree = manifest.build_manifest(reg)["tree"]
+    _, segs = split_chain(tree, ["lint", "src"])
+    run_chain(reg, segs)
+    assert seen == {"path": "src"}
+    assert segs[0].notes == []  # 'src' names no child: nothing to say
+
+
+def test_positional_matching_a_child_name_wins_and_notes():
+    # Deterministic grammar (the positional wins), never silent: an exact
+    # child-name value carries a one-line stderr note with the dotted form.
+    reg = Group("root")
+    seen = {}
+    lint = reg.group("lint")
+
+    @lint.task
+    def markdown(fix: bool = False):
+        seen["markdown"] = fix
+
+    @lint.default
+    def lint_all(path: str):
+        seen["path"] = path
+
+    tree = manifest.build_manifest(reg)["tree"]
+    _, segs = split_chain(tree, ["lint", "markdown"])
+    run_chain(reg, segs)
+    assert seen == {"path": "markdown"}  # the value, not the subtask
+    (note,) = segs[0].notes
+    assert "ran lint's default with 'markdown'" in note
+    assert "{prog} lint.markdown" in note
+
+
+def test_near_miss_of_a_child_name_notes_the_nearest_subtask():
+    # `fm lint markdwon` used to be an "unknown task" error; under
+    # positional-wins it is a valid parse that would silently filter on a
+    # pattern matching nothing — so the note names the nearest subtask.
     reg = Group("root")
     lint = reg.group("lint")
 
-    with pytest.raises(RegistrationError, match=r"positional parameter"):
+    @lint.task
+    def markdown(fix: bool = False): ...
 
-        @lint.default(keep_going=True)
-        def lint_all(path: str):
-            """A positional is a child name, not a value."""
+    @lint.default
+    def lint_all(path: str): ...
+
+    tree = manifest.build_manifest(reg)["tree"]
+
+    def notes_for(line):
+        _, segs = split_chain(tree, line.split())
+        return segs[0].notes
+
+    (note,) = notes_for("lint markdwon")
+    assert "'markdwon' ran as lint's positional" in note
+    assert "{prog} lint.markdown" in note
+    # A path-shaped value is the documented quiet spelling — a legitimate
+    # value that happens to equal (or nearly equal) a child name is not
+    # nagged on every run forever.
+    assert notes_for("lint ./markdown") == []
+    assert notes_for("lint markdown/x") == []
+    # And a value nothing like any child says nothing.
+    assert notes_for("lint src") == []
 
 
 # --- body-callability: a runnable group is callable from a task body ----------
@@ -360,3 +427,113 @@ def test_a_task_body_runs_a_group_and_forwards_through_the_runner():
         "spelling": "ran",
         "check": True,
     }
+
+
+# --- defaults are listed, described, and noted end-to-end ----------------------
+
+
+def test_listings_carry_the_default_with_its_docstring():
+    from footman import _describe
+
+    reg = Group("root")
+    lint = reg.group("lint", help="Lint things")
+
+    @lint.task
+    def markdown(fix: bool = False):
+        """Lint Markdown."""
+
+    @lint.default
+    def lint_all(fix: Forward[bool] = False):
+        """Lint everything."""
+
+    tree = manifest.build_manifest(reg)["tree"]
+    rows = dict(_describe.iter_tasks(tree))
+    assert rows["lint"] == "Lint everything."  # the bare-group spelling, described
+    assert rows["lint.markdown"] == "Lint Markdown."
+
+
+def test_undocumented_empty_body_default_gets_generated_help():
+    from footman import _describe
+
+    reg = Group("root")
+    lint = reg.group("lint")
+
+    @lint.task
+    def markdown(fix: bool = False): ...
+
+    @lint.default
+    def lint_all(fix: Forward[bool] = False):
+        pass
+
+    tree = manifest.build_manifest(reg)["tree"]
+    rows = dict(_describe.iter_tasks(tree))
+    assert rows["lint"] == "run every task in this group"
+
+
+def test_undocumented_custom_body_default_gets_generated_help():
+    from footman import _describe
+
+    reg = Group("root")
+    lint = reg.group("lint")
+
+    @lint.task
+    def markdown(fix: bool = False): ...
+
+    @lint.default
+    def lint_all(fix: bool = False):
+        markdown(fix=fix)
+
+    tree = manifest.build_manifest(reg)["tree"]
+    rows = dict(_describe.iter_tasks(tree))
+    assert rows["lint"] == "run this group's default action"
+
+
+def test_group_help_lists_the_default_row(tmp_path, monkeypatch, capsys):
+    from footman import _app, _paths
+
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
+    (tmp_path / "tasks.py").write_text(
+        "from footman import group\n"
+        "lint = group('lint', help='Lint things')\n"
+        "@lint.task\n"
+        "def markdown(fix: bool = False):\n"
+        '    """Lint Markdown."""\n'
+        "@lint.default\n"
+        "def lint_all(fix: bool = False):\n"
+        '    """Lint everything."""\n'
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
+    assert _app.run(["--help", "lint"]) == 0
+    out = capsys.readouterr().out
+    assert "usage: fm lint[.<task>]" in out
+    assert "Lint everything." in out  # the default's own row, described
+    assert "lint.markdown" in out
+    # And the flat list shows the bare-group spelling as a runnable row.
+    assert _app.run(["--list"]) == 0
+    listing = capsys.readouterr().out
+    assert "Lint everything." in listing
+
+
+def test_collision_note_reaches_stderr(tmp_path, monkeypatch, capsys):
+    from footman import _app, _paths
+
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
+    (tmp_path / "tasks.py").write_text(
+        "from footman import group\n"
+        "lint = group('lint')\n"
+        "@lint.task\n"
+        "def markdown(fix: bool = False):\n"
+        "    print('subtask ran')\n"
+        "@lint.default\n"
+        "def lint_all(path: str):\n"
+        "    print(f'default ran on {path}')\n"
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
+    assert _app.run(["lint", "markdown"]) == 0
+    captured = capsys.readouterr()
+    assert "default ran on markdown" in captured.out
+    assert "subtask ran" not in captured.out
+    assert "note: ran lint's default with 'markdown'" in captured.err
+    assert "fm lint.markdown" in captured.err  # {prog} substituted

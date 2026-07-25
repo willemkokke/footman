@@ -302,9 +302,15 @@ def lint_all(fix: Forward[bool] = False):
   lints the rest (the `forward` marker carries `--fix` to the surfaces that take
   it — see [above](#forward-a-value-to-what-a-task-dispatches)).
 - `fm lint.markdown` / `fm lint.markdown --fix` runs one surface.
-- The default's **signature is the group's options**, so it takes flags/options
-  only. A positional is a load-time error, because a bare word after a group
-  names a child, not a value — model a positional action as a task instead.
+- The default's **signature is the group's whole CLI surface, positionals
+  included**: `fm lint src/` hands `src/` to the default the way any task
+  takes an argument. There is no ambiguity to guard against — a nested task
+  always keeps its own dotted address, so a bare word after the group is
+  the default's value. When a value happens to equal (or nearly equal) a
+  child's name, the run carries a one-line stderr note pointing at the
+  dotted spelling — `note: ran lint's default with 'markdown'; for the
+  subtask: fm lint.markdown` — and a path-shaped value (`fm lint
+  ./markdown`) keeps quiet.
 - An **empty body** fans out the group's own tasks; a non-empty body is the
   escape hatch where you write the fan-out yourself.
 - On an empty-body default, **mark a parameter `Forward` if you want it to reach

@@ -32,6 +32,33 @@ from typing import Any
 from footman import coerce
 
 
+def _close1(a: str, b: str) -> bool:
+    """Damerau-Levenshtein distance exactly 1: one substitution, insertion,
+    deletion, or adjacent transposition — the "pyhton" shapes a hurried hand
+    actually types. Bounded and cheap; called only on a group default's
+    positional values against its child names."""
+    if a == b:
+        return False
+    la, lb = len(a), len(b)
+    if abs(la - lb) > 1:
+        return False
+    if la == lb:
+        diffs = [i for i in range(la) if a[i] != b[i]]
+        if len(diffs) == 1:
+            return True  # substitution
+        return (
+            len(diffs) == 2
+            and diffs[1] == diffs[0] + 1
+            and a[diffs[0]] == b[diffs[1]]
+            and a[diffs[1]] == b[diffs[0]]
+        )  # adjacent transposition
+    short, long_ = (a, b) if la < lb else (b, a)
+    i = 0
+    while i < len(short) and short[i] == long_[i]:
+        i += 1
+    return short[i:] == long_[i + 1 :]  # one insertion/deletion
+
+
 def _did_you_mean(word: str, known: Iterable[str]) -> str:
     """A ` — did you mean 'x'?` suffix when *word* closely matches a known name.
 
@@ -114,6 +141,10 @@ class Segment:
     values: dict[str, Any] = field(default_factory=dict)  # cli-name -> value
     variadic: list[str] = field(default_factory=list)
     passthrough: list[str] | None = None
+    # Advisory stderr lines the app prints before running — `{prog}` is
+    # substituted there. Notes never change what runs; the grammar stays
+    # deterministic (a positional wins), they just say so out loud.
+    notes: list[str] = field(default_factory=list)
 
 
 def _required_label(p: dict) -> str:
@@ -355,8 +386,10 @@ def _resolve_head(
 
     # The whole token named a group. Runnable — one with `@group.default` —
     # resolves to its default action: `fm lint` / `fm lint --fix` run it,
-    # `path` stays the group's. A default takes no positionals, so a trailing
-    # bare token (`fm lint test`) ends the segment and opens a fresh head.
+    # `path` stays the group's. The default's own signature decides what a
+    # trailing bare token means: a declared positional consumes it (a value
+    # wins — every child keeps its dotted spelling), otherwise it opens a
+    # fresh head on the next pass.
     if "default" in node:
         return node["default"], path, node, i + 1
 
@@ -389,6 +422,52 @@ def _resolve_head(
     raise ChainError(
         f"{dotted!r} is a group, not a task — name one of its tasks (know: {known})"
     )
+
+
+def _default_notes(
+    seg: Segment, group_node: dict, fixed: list[dict], rest: dict | None
+) -> None:
+    """Advisory notes for a runnable group's positional values.
+
+    The grammar is deterministic — a positional wins — but consequence 3
+    carves a hole in the teaching error: `fm lint python` is a *valid* parse
+    when lint's default takes a positional, so the git-habit space form runs
+    instead of teaching. These stderr notes close the hole: an exact child
+    name gets the dotted pointer, and an edit-distance-1 near miss (which
+    used to be an "unknown task" error and would now silently filter on a
+    pattern matching nothing) names the nearest subtask. A path-shaped value
+    (`fm lint ./python`) is the documented quiet spelling — a legitimate
+    value that happens to equal a child name is not nagged forever.
+    """
+    children = set(group_node["groups"]) | set(group_node["tasks"])
+    if not children:
+        return
+    values: list[str] = list(seg.variadic)
+    params = list(fixed)
+    if rest is not None and rest["kind"] == "argument":
+        params.append(rest)
+    for p in params:
+        got = seg.values.get(p["name"])
+        if isinstance(got, str):
+            values.append(got)
+        elif isinstance(got, list):
+            values.extend(v for v in got if isinstance(v, str))
+    dotted = seg.task
+    for value in values:
+        if "/" in value or value.startswith((".", "~")):
+            continue  # path-shaped: the quiet spelling
+        if value in children:
+            seg.notes.append(
+                f"note: ran {dotted}'s default with {value!r}; "
+                f"for the subtask: {{prog}} {dotted}.{value}"
+            )
+        elif (
+            near := next((c for c in sorted(children) if _close1(value, c)), None)
+        ) is not None:
+            seg.notes.append(
+                f"note: {value!r} ran as {dotted}'s positional; "
+                f"nearest subtask: {{prog}} {dotted}.{near}"
+            )
 
 
 def split_chain(tree: dict, argv: list[str]) -> tuple[list[str], list[Segment]]:
@@ -471,6 +550,8 @@ def split_chain(tree: dict, argv: list[str]) -> tuple[list[str], list[Segment]]:
             raise ChainError(
                 f"{seg.task}: missing required option(s): {', '.join(missing_opts)}"
             )
+        if group_node is not None:
+            _default_notes(seg, group_node, fixed, rest)
         segments.append(seg)
 
     return globals_, segments

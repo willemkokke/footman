@@ -9,6 +9,23 @@ versions may include breaking changes.
 
 ### Added
 
+- **Group defaults take positionals.** The `@group.default` no-positional
+  rule existed only because `fm lint foo` used to be ambiguous; dotted
+  addressing dissolved the ambiguity (the subtask is `fm lint.foo`), so
+  the rule goes with it: the default's signature is now the group's whole
+  CLI surface — `fm lint src/` hands `src/` to the default like any task
+  argument. The grammar stays deterministic (a positional wins) but never
+  silent: a value that exactly names a child gets a one-line stderr note
+  with the dotted spelling, an edit-distance-1 near miss (`fm lint
+  markdwon`, which used to error and would now filter on nothing) names
+  the nearest subtask, and a path-shaped value (`fm lint ./markdown`) is
+  the documented quiet spelling.
+- **Runnable groups are listed and described.** `--list`, group help, and
+  the did-you-mean index now carry the bare-group spelling as its own
+  row, described by the default's docstring — or,
+  when the default has none, by generated text that says what it does:
+  "run every task in this group" for an empty body, "run this group's
+  default action" for a custom one.
 - **Completion grows the other half of the `cd` idiom — two generosities,
   both completion-only** (the runtime resolver stays strict, so scripts
   cannot rot). *Segment-wise abbreviation*: each typed segment

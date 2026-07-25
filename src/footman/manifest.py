@@ -351,8 +351,12 @@ def _node(g: Group, memo: dict[int, list[str]]) -> dict[str, Any]:
     # A runnable group (one with `@group.default`) carries the default's option
     # surface — the same `{help, params}` shape a task node has — so the splitter
     # parses a bare `fm <group> [flags]` against it and completion/help render it.
+    # The fan-out flag rides beside it (not inside: `_task_node` memoises task
+    # specs, and fan-out is a property of this default, not of the function)
+    # so listings can *say* what an undocumented default does.
     if g.default_task is not None:
         node["default"] = _task_node(g.default_task, memo)
+        node["default_fanout"] = registry.fans_out(g.default_task)
     return node
 
 

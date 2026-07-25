@@ -231,10 +231,31 @@ def task_line(task: dict) -> str:
     return f"{task['help']}  {' '.join(notes)}".strip()
 
 
+def default_line(node: dict) -> str:
+    """The one-line description of a runnable group's default action.
+
+    The author's docstring when there is one; otherwise generated from what
+    the default actually does — an empty body fans the group's tasks out, a
+    custom body runs as written — so an undocumented default is still
+    explained, never a blank cell.
+    """
+    default = node["default"]
+    line = task_line(default)
+    if line:
+        return line
+    if node.get("default_fanout"):
+        return "run every task in this group"
+    return "run this group's default action"
+
+
 def iter_tasks(node: dict, prefix: str = ""):
     for name, task in node["tasks"].items():
         yield f"{prefix}{name}", task_line(task)
     for name, sub in node["groups"].items():
+        # A runnable group is itself a listed, runnable address: the bare
+        # `fm <group>` spelling, described by its default action.
+        if "default" in sub:
+            yield f"{prefix}{name}", default_line(sub)
         yield from iter_tasks(sub, f"{prefix}{name}.")
 
 
