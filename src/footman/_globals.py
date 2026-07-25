@@ -192,6 +192,220 @@ def _restore_environ() -> None:
     _environ_saved.clear()
 
 
+# --- the Popen injection ------------------------------------------------------
+
+_popen_saved: Any = None
+
+
+def _managed_task() -> tuple[Any, bool]:
+    """(ctx, guarded) — guarded only inside a managed parallel task body.
+
+    `unmanaged` is the one off-switch: that token *means* footman stays out."""
+    from footman.context import current
+
+    ctx = current()
+    return ctx, bool(_installs) and ctx.in_task and not ctx.cwd_unmanaged
+
+
+def _install_popen() -> None:
+    import subprocess
+
+    global _popen_saved
+    _popen_saved = subprocess.Popen.__init__
+    orig = _popen_saved
+
+    def __init__(self: Any, args: Any, *pa: Any, **kw: Any) -> None:
+        ctx, guarded = _managed_task()
+        # Inject only for a managed parallel task, only into kwargs left at
+        # their defaults, and never when positionals reach as far as cwd
+        # (the 10-positional spelling is antique; leave it alone entirely).
+        if guarded and len(pa) < 9:
+            filled = []
+            if kw.get("cwd") is None and ctx.cwd is not None:
+                kw["cwd"] = ctx.cwd
+                filled.append("cwd")
+            if kw.get("env") is None:
+                kw["env"] = {**_snapshot, **ctx.env}
+                filled.append("env")
+            if filled:
+                _note(
+                    "popen-inject",
+                    f"task {ctx.task or '?'} spawns via raw subprocess — "
+                    f"footman filled in {' and '.join(filled)} from the task "
+                    f"context. Prefer run() for capture and reporting, or "
+                    f"pass cwd=/env= to make it deliberate.",
+                )
+        orig(self, args, *pa, **kw)
+
+    subprocess.Popen.__init__ = __init__  # type: ignore[method-assign]
+
+
+def _restore_popen() -> None:
+    global _popen_saved
+    if _popen_saved is not None:
+        import subprocess
+
+        subprocess.Popen.__init__ = _popen_saved  # type: ignore[method-assign]
+        _popen_saved = None
+
+
+# --- the os guards ------------------------------------------------------------
+
+_guard_saved: dict[str, Any] = {}
+
+
+def _install_os_guards() -> None:
+    _guard_saved["chdir"] = os.chdir
+    _guard_saved["getcwd"] = os.getcwd
+    _guard_saved["putenv"] = getattr(os, "putenv", None)
+    _guard_saved["unsetenv"] = getattr(os, "unsetenv", None)
+    _guard_saved["fchdir"] = getattr(os, "fchdir", None)
+    _guard_saved["fork"] = getattr(os, "fork", None)
+
+    def _chdir_error(ctx: Any) -> RuntimeError:
+        return RuntimeError(
+            f"task {ctx.task or '?'} changes the process directory in a "
+            f"parallel task — the cwd belongs to no one there. Mark the task "
+            f"serial, or build paths from footman.cwd()."
+        )
+
+    orig_chdir = _guard_saved["chdir"]
+
+    def chdir(path: Any) -> None:
+        ctx, guarded = _managed_task()
+        if guarded:
+            raise _chdir_error(ctx)
+        orig_chdir(path)
+
+    os.chdir = chdir  # type: ignore[assignment]
+
+    if _guard_saved["fchdir"] is not None:
+        orig_fchdir = _guard_saved["fchdir"]
+
+        def fchdir(fd: Any) -> None:
+            ctx, guarded = _managed_task()
+            if guarded:
+                raise _chdir_error(ctx)
+            orig_fchdir(fd)
+
+        os.fchdir = fchdir  # type: ignore[assignment]
+
+    orig_getcwd = _guard_saved["getcwd"]
+
+    def getcwd() -> str:
+        ctx, guarded = _managed_task()
+        if guarded:
+            _note(
+                "getcwd",
+                f"task {ctx.task or '?'} reads the process cwd — in a "
+                f"parallel run it can be anyone's; footman.cwd() is this "
+                f"task's own directory.",
+            )
+        return orig_getcwd()
+
+    os.getcwd = getcwd  # type: ignore[assignment]
+
+    def _env_bypass_error(name: str) -> RuntimeError:
+        return RuntimeError(
+            f"os.{name} bypasses env scoping even in plain Python (it never "
+            f"updates os.environ) — assign through os.environ (scoped to "
+            f"this task), or pass env= to the call."
+        )
+
+    if _guard_saved["putenv"] is not None:
+        orig_putenv = _guard_saved["putenv"]
+
+        def putenv(name: str, value: str) -> None:
+            _, guarded = _managed_task()
+            if guarded:
+                raise _env_bypass_error("putenv")
+            orig_putenv(name, value)
+
+        os.putenv = putenv  # type: ignore[assignment]
+
+    if _guard_saved["unsetenv"] is not None:
+        orig_unsetenv = _guard_saved["unsetenv"]
+
+        def unsetenv(name: str) -> None:
+            _, guarded = _managed_task()
+            if guarded:
+                raise _env_bypass_error("unsetenv")
+            orig_unsetenv(name)
+
+        os.unsetenv = unsetenv  # type: ignore[assignment]
+
+    if _guard_saved["fork"] is not None:
+        orig_fork = _guard_saved["fork"]
+
+        def fork() -> int:
+            ctx, guarded = _managed_task()
+            if guarded:
+                _note(
+                    "fork",
+                    f"task {ctx.task or '?'} forks — forking a threaded "
+                    f"process is unsafe (the child can inherit locks "
+                    f"mid-hold). Prefer run()/subprocess, or mark the task "
+                    f"serial.",
+                )
+            return orig_fork()
+
+        os.fork = fork  # type: ignore[assignment]
+
+
+def _restore_os_guards() -> None:
+    if not _guard_saved:
+        return
+    os.chdir = _guard_saved["chdir"]
+    os.getcwd = _guard_saved["getcwd"]
+    if _guard_saved["fchdir"] is not None:
+        os.fchdir = _guard_saved["fchdir"]
+    if _guard_saved["putenv"] is not None:
+        os.putenv = _guard_saved["putenv"]
+    if _guard_saved["unsetenv"] is not None:
+        os.unsetenv = _guard_saved["unsetenv"]
+    if _guard_saved["fork"] is not None:
+        os.fork = _guard_saved["fork"]
+    _guard_saved.clear()
+
+
+# --- multiprocessing detection ------------------------------------------------
+
+_mp_saved: Any = None
+
+
+def _install_multiprocessing() -> None:
+    global _mp_saved
+    try:
+        from multiprocessing import process as mp_process
+    except Exception:  # a stripped-down build without multiprocessing
+        return
+    _mp_saved = mp_process.BaseProcess.start
+    orig = _mp_saved
+
+    def start(self: Any) -> None:
+        ctx, guarded = _managed_task()
+        if guarded:
+            _note(
+                "mp-start",
+                f"task {ctx.task or '?'} spawns worker processes in-process "
+                f"— they inherit the real environment, not the task's "
+                f"overlay. A tool that parallelises itself loses little in "
+                f"the serial lane: mark the task serial.",
+            )
+        return orig(self)
+
+    mp_process.BaseProcess.start = start  # type: ignore[method-assign]
+
+
+def _restore_multiprocessing() -> None:
+    global _mp_saved
+    if _mp_saved is not None:
+        from multiprocessing import process as mp_process
+
+        mp_process.BaseProcess.start = _mp_saved  # type: ignore[method-assign]
+        _mp_saved = None
+
+
 def install() -> None:
     """Arm the routers for a run. Refcounted; the first install pins the
     environment snapshot (so anything published at the run boundary —
@@ -201,10 +415,20 @@ def install() -> None:
         _installs += 1
         if _installs > 1:
             return
+        # Warm stdlib caches that lazily read process globals on first use
+        # (tempfile.gettempdir walks candidates with a getcwd fallback), so a
+        # task's first mkdtemp doesn't trip the getcwd note for a read the
+        # task never made.
+        import tempfile
+
+        tempfile.gettempdir()
         _snapshot.clear()
         _snapshot.update(os.environ)
         _noted.clear()
         _install_environ()
+        _install_popen()
+        _install_os_guards()
+        _install_multiprocessing()
 
 
 def uninstall() -> None:
@@ -216,5 +440,8 @@ def uninstall() -> None:
         _installs -= 1
         if _installs > 0:
             return
+        _restore_multiprocessing()
+        _restore_os_guards()
+        _restore_popen()
         _restore_environ()
         _snapshot.clear()

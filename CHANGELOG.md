@@ -123,6 +123,24 @@ versions may include breaking changes.
   lock — concurrent overlaid calls no longer serialise); outside a run,
   `os.environ` behaves exactly as stock Python, and bare `run(callable,
   env=…)` calls keep the classic guarded global patch as their fallback.
+- **Raw `subprocess` is quietly correct in parallel.** `subprocess.Popen`
+  (and everything that funnels through it — `subprocess.run`, `os.popen`,
+  third-party code) gets the task's context filled in when a spawn passes
+  neither `cwd=` nor `env=`: the child starts in the task's directory with
+  the snapshot-plus-overlay environment, exactly as `run()` would spawn it —
+  with a one-time note suggesting the deliberate spellings. Explicit
+  arguments always win, `env={}` stays a deliberately clean environment, and
+  the `unmanaged` policy is the one off-switch.
+- **The process globals are guarded in parallel tasks.** `os.chdir` /
+  `os.fchdir` raise a taught error (the cwd belongs to no one in a parallel
+  run); `os.putenv`/`os.unsetenv` raise one too (they bypass env scoping
+  even in plain Python); `os.getcwd` warns once per task toward
+  `footman.cwd()`; `os.fork` warns that forking a threaded process is
+  unsafe; and `multiprocessing`'s `BaseProcess.start` (which also covers
+  `ProcessPoolExecutor`) notes that in-process workers inherit the real
+  environment, not the task's overlay — and that self-parallelising tools
+  lose little by taking the serial lane. Everything passes through
+  untouched outside a run.
 - **Breaking: footman never chdirs in a parallel task.** In-process calls
   used to get a real `os.chdir` (guarded by a process-wide lock) whenever
   the task's directory differed from the process cwd — which silently
