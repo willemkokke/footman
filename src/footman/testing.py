@@ -160,5 +160,11 @@ class Runner:
                 # `_run`, not `run`: bypass the CLI's KeyboardInterrupt->130
                 # wrapper so Ctrl-C reaches pytest (the invoke docstring's
                 # contract). The wrapper stays for real CLI entry.
-                code = _app._run(argv, brand=self.app.brand, collect=collected)
+                # `handoff=False`: the uv re-exec must never fire from an
+                # embedded invocation — it would execvp the HOST process
+                # (pytest; under pytest-xdist the worker whose stdio is the
+                # test-protocol channel, which the exec kills outright).
+                code = _app._run(
+                    argv, brand=self.app.brand, collect=collected, handoff=False
+                )
         return InvokeResult(code, out.getvalue(), err.getvalue(), collected)

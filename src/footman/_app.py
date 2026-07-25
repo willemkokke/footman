@@ -901,6 +901,8 @@ def _run(
     argv: list[str],
     brand: Brand,
     collect: list[executor.TaskResult] | None = None,
+    *,
+    handoff: bool = True,
 ) -> int:
     global _brand
     _brand = brand
@@ -925,7 +927,12 @@ def _run(
 
     # May replace the process (POSIX) or exit with the child's code
     # (Windows); returns quietly whenever the handoff doesn't apply.
-    _uv_handoff(argv, g)
+    # `handoff=False` is the embedded-harness escape: `Runner.invoke` runs
+    # inside a host process (pytest — possibly a pytest-xdist worker whose
+    # stdio IS the test-protocol channel), and an execvp there replaces the
+    # host itself. An embedded invocation must always run in-process.
+    if handoff:
+        _uv_handoff(argv, g)
 
     if not g.get("directory"):
         return _execute(argv, g, wants_help, collect)

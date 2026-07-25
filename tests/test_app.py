@@ -1197,6 +1197,22 @@ def test_handoff_skips_every_optout(uv_project, monkeypatch, capsys):
     assert calls == []
 
 
+def test_handoff_never_fires_from_runner_invoke(uv_project, monkeypatch):
+    # An embedded invocation must run in-process even when every handoff
+    # condition holds: `Runner.invoke` drives a HOST process (pytest — under
+    # pytest-xdist, a worker whose stdio is the test-protocol channel), and
+    # the execvp would replace the host itself. Regression: Runner-based CLI
+    # tests crashed every xdist worker whenever the suite ran under an
+    # interpreter outside the project venv (e.g. `uv run --with pytest-xdist`).
+    from footman.testing import Runner
+
+    calls = _capture_exec(monkeypatch)
+    result = Runner().invoke("hi")
+    assert result.ok
+    assert "hello world" in result.stdout
+    assert calls == []
+
+
 def test_handoff_needs_footman_in_the_lock(uv_project, monkeypatch, capsys):
     calls = _capture_exec(monkeypatch)
     (uv_project / "uv.lock").write_text(
