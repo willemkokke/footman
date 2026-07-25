@@ -676,10 +676,19 @@ def test_list_names_every_curated_tool(capsys):
 def test_list_missing_only_shows_what_is_absent(capsys):
     from footman.tasks import tools as tools_tasks
 
-    tools_tasks.list_(missing=True)
+    tools_tasks.list_(show="missing")
     out = capsys.readouterr().out
     for line in out.splitlines()[1:]:
         assert "not installed" in line
+
+
+def test_list_installed_only_shows_what_is_present(capsys):
+    from footman.tasks import tools as tools_tasks
+
+    tools_tasks.list_(show="installed")
+    out = capsys.readouterr().out
+    for line in out.splitlines()[1:]:
+        assert "not installed" not in line
 
 
 @needs_ruff

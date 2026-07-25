@@ -43,6 +43,14 @@ versions may include breaking changes.
   was always true: the uv handoff re-execs the *(branded)* footman you
   invoked — `acme` hands off to the project's own `acme`, never `fm`.
 
+- **BREAKING: `fm tools.list --missing` is now `--show missing`.** Listing
+  all tools, only the installed ones, or only the missing ones is one
+  question with three answers, so it is one parameter:
+  `show: Literal["all", "installed", "missing"]`, defaulting to `all`. The
+  boolean it replaces could only say two of the three, and adding a second
+  boolean would have made `--missing --installed` a representable request
+  that silently lists nothing.
+
 ### Fixed
 
 - **pytest is reported as in-process by default, because it is.** `tools.py`
