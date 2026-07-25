@@ -147,8 +147,15 @@ def test_collector_runs_for_real_as_a_detached_child(tmp_path, monkeypatch):
 
     _app._maybe_collect({})  # spawns the real detached child
 
+    # Poll for BOTH files of the pair: the child unlinks them sequentially
+    # (manifest, then times), so watching the manifest alone can wake in the
+    # window between the two unlinks and flake on the times assert.
     deadline = time.time() + 30
-    while (cache / "dead.json").exists() and time.time() < deadline:
+
+    def pair_exists():
+        return (cache / "dead.json").exists() or (cache / "dead.times.json").exists()
+
+    while pair_exists() and time.time() < deadline:
         time.sleep(0.1)
     assert not (cache / "dead.json").exists()  # the child really collected
     assert not (cache / "dead.times.json").exists()
