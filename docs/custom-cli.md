@@ -71,3 +71,11 @@ directory. Completion works through your binary too —
     definitions, third-party libraries), you pay that cost on every
     <kbd>Tab</kbd>. Keep `acme/cli.py` lean — build the `App` and nothing else —
     and let the `tasks.py` cascade carry the tasks.
+
+## The uv handoff follows the brand
+
+A globally installed branded CLI hands off exactly as `fm` does: when the
+project's `uv.lock` pins footman and you aren't inside its environment,
+the handoff re-execs the *(branded)* footman you invoked — `acme` hands
+off to the project's own `acme`, never to `fm`. The prog you typed is the
+prog that runs; only the version moves.

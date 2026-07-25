@@ -15,9 +15,9 @@ from footman.tools import basedpyright, pytest, ruff, ruff_format, uv, zensical
 # Dogfood: pull footman's own first-party plugins, exactly as a user would.
 # `docs` is the end-user-facing family (task-doc generation); `tools` is the
 # maintainer-facing stub toolkit. Both land under `footman`, so the addresses
-# read `fm footman.docs.…` / `fm footman.tools.…`.
-plugin("footman.docs", into="footman")
-plugin("footman.tools", into="footman")
+# read `fm fm.docs.…` / `fm fm.tools.…` — the prog is the brand.
+plugin("footman.docs", into="fm")
+plugin("footman.tools", into="fm")
 
 if TYPE_CHECKING:
     from pathlib import Path

@@ -106,7 +106,7 @@ never change meaning when a new task lands, and scripts cannot rot:
   tree level, the way zsh expands `/u/l/b` to `/usr/local/bin`:
 
     ```sh
-    fm f.t.sy<TAB>    # footman.tools.sync
+    fm f.t.sy<TAB>    # fm.tools.sync
     fm d.<TAB>        # ambiguous first segment: db.  deps.  dns.  docker.  docs.
     ```
 
