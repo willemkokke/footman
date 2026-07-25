@@ -61,6 +61,11 @@ _GLOBAL_FILES = frozenset({"--directory", "-C", "--tasks-file", "-f", "--config"
 _FILES = "\x00files"  # internal sentinel: complete() -> complete_cli()
 _EXIT_FILES = 100  # complete_cli exit code the hooks read as "complete files"
 _DYNAMIC = "\x00dynamic"  # internal sentinel: a dynamic completer, recompute fresh
+# Mirror of manifest.SCHEMA_VERSION — the hot path can't import manifest.py.
+# A cache written by a different footman gets rebuilt, never walked: the first
+# TAB after an upgrade serves correct candidates instead of a traceback.
+# `test_completion_schema_mirrors_manifest` keeps the two from drifting.
+_SCHEMA = 1
 _DYNAMIC_TIMEOUT = 2.0  # seconds to wait for a fresh dynamic completer subprocess
 _COLD_TIMEOUT = 3.0  # seconds to wait for a first-time cwd manifest build
 _SHELLS = ("bash", "zsh", "fish", "pwsh", "nushell")
@@ -163,15 +168,30 @@ def _walk_address(tree: dict, token: str) -> tuple[str, dict, list[str]] | None:
     return None
 
 
-def _group_at(tree: dict, dotted: str) -> dict | None:
-    """The group node at *dotted*, or None (a task or nothing there)."""
-    node = tree
-    for part in dotted.split("."):
-        sub = node["groups"].get(part)
-        if sub is None:
-            return None
-        node = sub
-    return node
+def _leaf_fallback(tree: dict, partial: str) -> list[str]:
+    """Nested candidates whose *last* segment starts with *partial*.
+
+    The rescue for "I know the task, not where it lives": when a typed token
+    prefix-matches no top-level segment, complete against last segments over
+    the whole tree instead — `serve` → `docs.serve`. Only nested entries
+    (a top-level match would have answered already, so the zero-match guard
+    means this can never pollute a first tab or a valid descent).
+    """
+    out: list[str] = []
+
+    def walk(node: dict, prefix: str) -> None:
+        for name, spec in node["tasks"].items():
+            if prefix and name.startswith(partial):
+                out.append(_cand(f"{prefix}{name}", spec.get("help", "")))
+        for name, sub in node["groups"].items():
+            if prefix and name.startswith(partial) and "default" in sub:
+                out.append(
+                    _cand(f"{prefix}{name}", sub["default"].get("help") or sub["help"])
+                )
+            walk(sub, f"{prefix}{name}.")
+
+    walk(tree, "")
+    return out
 
 
 def _address_candidates(tree: dict, partial: str) -> list[str]:
@@ -184,14 +204,31 @@ def _address_candidates(tree: dict, partial: str) -> list[str]:
     (space or `.`) is the stop-or-descend choice. On a unique namespace match
     the rule skips ahead to the children — the candidate set stays non-unique,
     so no shell ever forces a space after `docs.`.
+
+    Two generosities, both completion-only (the runtime resolver stays
+    strict, so scripts cannot rot): segment-wise abbreviation walks each
+    typed segment by unique prefix, `fm f.t.sy⇥` → `footman.tools.sync`,
+    the way zsh expands `/u/l/b`; and on zero top-level matches the
+    leaf-name fallback completes against last segments instead
+    (`fm serve⇥` → `docs.serve`).
     """
-    base, sep, leaf = partial.rpartition(".")
+    *bases, leaf = partial.split(".")
     node, prefix = tree, ""
-    if sep:
-        node = _group_at(tree, base)
-        if node is None:
-            return []
-        prefix = f"{base}."
+    for seg in bases:
+        if seg in node["groups"]:  # an exact name always wins
+            node = node["groups"][seg]
+            prefix = f"{prefix}{seg}."
+            continue
+        matches = [n for n in node["groups"] if n.startswith(seg)] if seg else []
+        if len(matches) == 1:  # unique abbreviation: expand and keep walking
+            node = node["groups"][matches[0]]
+            prefix = f"{prefix}{matches[0]}."
+            continue
+        if len(matches) > 1:
+            # Ambiguous segment: expand up to it and list that level's
+            # matches — the user picks, then keeps tabbing.
+            return [_cand(f"{prefix}{m}.", node["groups"][m]["help"]) for m in matches]
+        return []  # a segment that matches nothing: not an address
     while True:
         groups = [n for n in node["groups"] if n.startswith(leaf)]
         tasks = [n for n in node["tasks"] if n.startswith(leaf)]
@@ -223,6 +260,8 @@ def _address_candidates(tree: dict, partial: str) -> list[str]:
             out.append(_cand(f"{prefix}{name}.", sub["help"]))
     for name in tasks:
         out.append(_cand(f"{prefix}{name}", node["tasks"][name].get("help", "")))
+    if not out and not bases and leaf:
+        return _leaf_fallback(tree, leaf)
     return out
 
 
@@ -487,7 +526,14 @@ def _cold_build(manifest: str, override: str | None) -> dict | None:
     while time.monotonic() < deadline:
         time.sleep(0.03)
         data = _load_manifest(manifest)
-        if isinstance(data, dict) and isinstance(data.get("tree"), dict):
+        # The schema check matters here too: on the post-upgrade TAB the
+        # *stale* file is still on disk, and without it the poll would win
+        # the race against the rebuild and hand the old tree back.
+        if (
+            isinstance(data, dict)
+            and isinstance(data.get("tree"), dict)
+            and data.get("schema") == _SCHEMA
+        ):
             return data
     return None
 
@@ -609,12 +655,22 @@ def complete_cli(args: list[str]) -> int:
         )
 
     data = _load_manifest(manifest)
-    if data is None or not isinstance(data.get("tree"), dict):
-        # Cold cache: rather than answer empty, build the manifest once (bounded)
-        # and serve it, so the first TAB in a fresh directory is accurate — for
-        # the cwd cascade and for a finished `-f <file>` alike.
+    if (
+        data is None
+        or not isinstance(data.get("tree"), dict)
+        or data.get("schema") != _SCHEMA
+    ):
+        # Cold cache, or one baked by a different footman: rather than answer
+        # empty (or walk a reshaped tree into a traceback), build the manifest
+        # once (bounded) and serve it, so the first TAB in a fresh directory —
+        # or right after an upgrade — is accurate. Covers the cwd cascade and
+        # a finished `-f <file>` alike.
         data = _cold_build(manifest, override) if derived else None
-        if not isinstance(data, dict) or not isinstance(data.get("tree"), dict):
+        if (
+            not isinstance(data, dict)
+            or not isinstance(data.get("tree"), dict)
+            or data.get("schema") != _SCHEMA
+        ):
             return 0  # cold and couldn't build in time — stay silent and fast
     out = complete(data["tree"], args)
     if out == [_FILES]:

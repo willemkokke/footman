@@ -317,7 +317,7 @@ def test_complete_cli_exits_files_for_a_path_value(tmp_path, capsys):
     from footman._complete import _EXIT_FILES
 
     m = tmp_path / "m.json"
-    m.write_text('{"tree": {"tasks": {}, "groups": {}}}')
+    m.write_text('{"schema": 1, "tree": {"tasks": {}, "groups": {}}}')
     rc = complete_cli(["--manifest", str(m), "--", "-f", ""])
     assert rc == _EXIT_FILES
     assert capsys.readouterr().out == ""
@@ -621,3 +621,91 @@ def test_completion_output_is_lf_only(tree, tmp_path, monkeypatch, capsysbinary)
     assert out, "the fixture tree should complete to something"
     assert b"\r" not in out
     assert out.endswith(b"\n")
+
+
+def test_segment_wise_abbreviation_expands_uniquely(tree):
+    # The other half of the `cd` idiom: each typed segment prefix-matches its
+    # tree level, and a whole word that resolves uniquely emits the one
+    # expanded candidate — `fm w.m⇥` → `workspace.mount`.
+    assert _names(complete(tree, ["w.m"])) == ["workspace.mount"]
+    assert _names(complete(tree, ["w.mo"])) == ["workspace.mount"]
+
+
+def test_abbreviation_is_completion_only(tree):
+    # The runtime resolver stays strict, so an abbreviation that runs today
+    # cannot change meaning when a new task lands.
+    import pytest as _pytest
+
+    from footman.split import ChainError, split_chain
+
+    with _pytest.raises(ChainError):
+        split_chain(tree, ["w.mount"])
+
+
+def test_ambiguous_segment_expands_up_to_it_and_lists_matches(tree):
+    # `d.` could open db, deps, dns, docker, or docs: expand up to the
+    # ambiguous level and list its matches, dot-marked.
+    out = set(_names(complete(tree, ["d.serve"])))
+    assert out == {"db.", "deps.", "dns.", "docker.", "docs."}
+
+
+def test_exact_segment_name_beats_abbreviation(tree):
+    # `docs.` names a group exactly; deps/dns/… sharing the `d` prefix must
+    # not turn it ambiguous.
+    assert set(_names(complete(tree, ["docs."]))) == {"docs.serve", "docs.build"}
+
+
+def test_leaf_name_fallback_rescues_a_known_task_name(tree):
+    # Zero top-level matches: complete against last segments over the flat
+    # index — the "I know the task, not where it lives" rescue.
+    assert _names(complete(tree, ["serve"])) == ["docs.serve"]
+    assert set(_names(complete(tree, ["mig"]))) == {"db.migrate"}
+
+
+def test_leaf_fallback_never_fires_on_a_valid_descent(tree):
+    # `bu` matches the top-level `build` task, so the fallback must not add
+    # docs.build alongside it.
+    assert _names(complete(tree, ["bu"])) == ["build"]
+
+
+def test_completion_schema_mirrors_manifest():
+    # Drift pin: the hot path's schema literal must match the manifest's, so
+    # bumping SCHEMA_VERSION without teaching the completer fails CI.
+    from footman import _complete as hot
+    from footman import manifest as cold
+
+    assert hot._SCHEMA == cold.SCHEMA_VERSION
+
+
+def test_complete_cli_rejects_a_mismatched_schema(tree, tmp_path, capsys):
+    # A cache baked by a different footman is never walked: the --manifest
+    # path (no rebuild machinery) stays silent instead of tracebacking.
+    import json as _json
+
+    path = tmp_path / "m.json"
+    path.write_text(_json.dumps({"schema": 999, "tree": tree}))
+    assert complete_cli(["--manifest", str(path), "--", "che"]) == 0
+    assert capsys.readouterr().out == ""
+
+
+def test_stale_schema_cache_rebuilds_instead_of_walking(tmp_path, monkeypatch, capsys):
+    # The transition TAB: a cwd cache written by a pre-upgrade footman (wrong
+    # schema) routes into the cold build, so the first post-upgrade TAB serves
+    # correct candidates instead of tracebacking on a reshaped tree.
+    import json as _json
+
+    from footman import _paths
+
+    monkeypatch.setenv("FOOTMAN_CACHE_DIR", str(tmp_path / "cache"))
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    (proj / "pyproject.toml").write_text("[project]\nname='x'\nversion='0'\n")
+    (proj / "tasks.py").write_text(
+        "from footman import task\n\n@task\ndef lint(): ...\n"
+    )
+    monkeypatch.chdir(proj)
+    stale = _paths.cwd_manifest_path()
+    stale.parent.mkdir(parents=True, exist_ok=True)
+    stale.write_text(_json.dumps({"schema": 0, "tree": {"bogus": True}}))
+    complete_cli(["--", "li"])
+    assert "lint" in capsys.readouterr().out.split()

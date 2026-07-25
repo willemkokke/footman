@@ -365,7 +365,11 @@ def fm_project_dir(home, tmp_path, monkeypatch):
     """A tiny project with a built manifest, plus the venv bin for PATH."""
     (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
     (tmp_path / "tasks.py").write_text(
-        'from footman import task\n\n@task\ndef lint(fix: bool = False):\n    "Lint."\n'
+        "from footman import group, task\n\n"
+        '@task\ndef lint(fix: bool = False):\n    "Lint."\n\n'
+        'docs = group("docs", help="Docs")\n\n'
+        '@docs.task\ndef serve():\n    "Serve."\n\n'
+        '@docs.task\ndef build():\n    "Build."\n'
     )
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("XDG_CACHE_HOME", str(home / ".cache"))
@@ -420,6 +424,9 @@ def test_bash_completion_functional(home, fm_project_dir):
         "COMP_WORDS=(fm lint --f); COMP_CWORD=2\n"
         "_fm_complete\n"
         'printf "%s\\n" "${COMPREPLY[@]}"\n'
+        "COMP_WORDS=(fm docs.); COMP_CWORD=1\n"
+        "_fm_complete\n"
+        'printf "%s\\n" "${COMPREPLY[@]}"\n'
     )
     out = subprocess.run(
         [bash, "-c", body],
@@ -434,6 +441,9 @@ def test_bash_completion_functional(home, fm_project_dir):
     assert "lint" in out.stdout.splitlines()
     assert "Lint." not in out.stdout
     assert "--fix" in out.stdout.split()  # the bash-3.2 slice regression case
+    # Path-style descent: `fm docs.<TAB>` answers full dotted addresses; `.`
+    # is not in COMP_WORDBREAKS, so bash inserts them whole.
+    assert {"docs.serve", "docs.build"} <= set(out.stdout.split())
 
 
 @_posix_shell
@@ -451,6 +461,10 @@ def test_zsh_completion_functional(home, fm_project_dir):
         'raw="$(fm --complete -- "${(@)words[2,CURRENT]}" 2>/dev/null)"\n'
         "completions=(${(f)raw})\n"
         "print -rl -- $completions\n"
+        "words=(fm docs.); CURRENT=2\n"
+        'raw="$(fm --complete -- "${(@)words[2,CURRENT]}" 2>/dev/null)"\n'
+        "completions=(${(f)raw})\n"
+        "print -rl -- $completions\n"
     )
     out = subprocess.run(
         ["zsh", "-c", body],
@@ -462,6 +476,8 @@ def test_zsh_completion_functional(home, fm_project_dir):
     assert out.returncode == 0, out.stderr
     assert "--fix" in out.stdout.split()  # empty current word survives quoting
     assert "Lint." in out.stdout  # 11.2: the description column reaches zsh
+    # Path-style descent through the same quoting path.
+    assert "docs.serve" in out.stdout and "docs.build" in out.stdout
 
 
 @_posix_shell
@@ -475,6 +491,8 @@ def test_fish_completion_functional(home, fm_project_dir):
         f'source "{script}"\n'
         'complete -C "fm li"\n'
         'complete -C "fm lint --f"\n'
+        'complete -C "fm docs."\n'
+        'complete -C "fm do"\n'
     )
     out = subprocess.run(
         ["fish", "-c", body],
@@ -487,6 +505,12 @@ def test_fish_completion_functional(home, fm_project_dir):
     assert "lint" in out.stdout.split()
     assert "--fix" in out.stdout.split()
     assert "Lint." in out.stdout  # 11.2: fish renders the tab-separated description
+    # Path-style descent, and the unique-namespace skip-ahead: `fm do` matches
+    # only the docs group, so fish (which appends a space after a unique
+    # match) is handed the children as full addresses instead of a lone
+    # `docs.` it would strand a space after.
+    assert {"docs.serve", "docs.build"} <= set(out.stdout.split())
+    assert out.stdout.count("docs.serve") >= 2  # both the descent and skip-ahead
 
 
 @_posix_shell
@@ -678,7 +702,11 @@ def test_nushell_completion_functional(home, tmp_path, monkeypatch):
     """The generated hook, sourced and invoked by a real nushell."""
     (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
     (tmp_path / "tasks.py").write_text(
-        'from footman import task\n\n@task\ndef lint(fix: bool = False):\n    "Lint."\n'
+        "from footman import group, task\n\n"
+        '@task\ndef lint(fix: bool = False):\n    "Lint."\n\n'
+        'docs = group("docs", help="Docs")\n\n'
+        '@docs.task\ndef serve():\n    "Serve."\n\n'
+        '@docs.task\ndef build():\n    "Build."\n'
     )
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("XDG_CACHE_HOME", str(home / ".cache"))
@@ -700,6 +728,8 @@ def test_nushell_completion_functional(home, tmp_path, monkeypatch):
         " | each {|r| $'($r.value)=($r.description? | default NONE)'} | to text)\n"
         'print (do $env.config.completions.external.completer [fm lint ""]'
         " | get value | to text)\n"
+        'print (do $env.config.completions.external.completer [fm "docs."]'
+        " | get value | to text)\n"
     )
     out = subprocess.run(
         ["nu", "-c", nu_script],
@@ -711,6 +741,9 @@ def test_nushell_completion_functional(home, tmp_path, monkeypatch):
     assert out.returncode == 0, out.stderr
     assert "lint=Lint." in out.stdout.split()  # value carries its description
     assert "--fix" in out.stdout.split()  # a bare option value still completes
+    # Path-style descent: full dotted addresses, so even nushell's
+    # space-after-unique behaviour lands the cursor after a complete address.
+    assert {"docs.serve", "docs.build"} <= set(out.stdout.split())
 
 
 @pytest.mark.skipif(shutil.which("pwsh") is None, reason="pwsh not installed")
@@ -718,7 +751,11 @@ def test_pwsh_completion_functional(home, tmp_path, monkeypatch):
     """The generated completer, driven by PowerShell's own completion engine."""
     (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
     (tmp_path / "tasks.py").write_text(
-        'from footman import task\n\n@task\ndef lint(fix: bool = False):\n    "Lint."\n'
+        "from footman import group, task\n\n"
+        '@task\ndef lint(fix: bool = False):\n    "Lint."\n\n'
+        'docs = group("docs", help="Docs")\n\n'
+        '@docs.task\ndef serve():\n    "Serve."\n\n'
+        '@docs.task\ndef build():\n    "Build."\n'
     )
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("XDG_CACHE_HOME", str(home / ".cache"))
@@ -732,6 +769,9 @@ def test_pwsh_completion_functional(home, tmp_path, monkeypatch):
         f". '{script}'; "
         "$r = [System.Management.Automation.CommandCompletion]::CompleteInput("
         '"fm li", 5, $null); '
+        "$r.CompletionMatches | ForEach-Object CompletionText; "
+        "$r = [System.Management.Automation.CommandCompletion]::CompleteInput("
+        '"fm docs.", 8, $null); '
         "$r.CompletionMatches | ForEach-Object CompletionText"
     )
     out = subprocess.run(
@@ -743,6 +783,7 @@ def test_pwsh_completion_functional(home, tmp_path, monkeypatch):
     )
     assert out.returncode == 0, out.stderr
     assert "lint" in out.stdout.split()
+    assert {"docs.serve", "docs.build"} <= set(out.stdout.split())
 
 
 # --- CI guard: prove no functional shell test is silently skipping ---------------
