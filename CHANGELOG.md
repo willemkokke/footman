@@ -153,6 +153,18 @@ versions may include breaking changes.
   blaming the tasks file; it now raises a taught error naming the `include()`
   call and the reason (`include('x.y'): failed to import (ModuleNotFoundError:
   …)`), the same shape `plugin()` already gives.
+- **`Runner.invoke` never hands off to uv.** The uv re-exec replaces the
+  process via `execvp` when the interpreter running footman sits outside a
+  project venv whose `uv.lock` pins footman. `Runner.invoke` could reach it,
+  so an embedded invocation could exec the *host* process — under pytest-xdist
+  that is the worker whose stdio carries the test protocol, and every
+  Runner-based test died as `worker 'gwN' crashed` with no traceback. Embedded
+  invocations now always run in-process; real CLI entry still hands off.
+- **`fm footman docs cast` retries a cast that produced no output.** A cold
+  pwsh (.NET startup) on a loaded CI runner can exceed the 1.5s pty settle
+  window, and zero frames looked identical to a dead session. An empty cast
+  now retries once with a 5s settle; the happy path pays nothing, and a
+  genuinely broken shell still raises the same error.
 
 ### Docs
 

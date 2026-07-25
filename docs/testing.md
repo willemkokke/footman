@@ -168,5 +168,9 @@ def test_acme_teaches_with_its_own_name(tmp_path):
   completion manifest.
 - `Runner.invoke` never raises on task failure; the code is in the `InvokeResult`.
   `KeyboardInterrupt` passes through, as it should.
+- Embedded invocations never hand off to uv: the re-exec that keeps the real
+  CLI on a project's pinned footman is disabled inside `invoke`, so the test
+  process is never replaced — even when the suite runs from an interpreter
+  outside the project venv (`uv run --with …`, tox-style envs).
 - Chained/parallel semantics (`-s`, `-k`) work through `invoke` exactly as on
   the real command line — test the orchestration you actually run in CI.
