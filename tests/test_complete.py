@@ -20,8 +20,12 @@ def _generous_cold_budget(monkeypatch):
     to spawn and import the detached builder. Every cold-path test in this
     file asserts builds-and-serves, never how fast the runner's disk is;
     the flake kept hopping between whichever cold test ran on the slow box.
+    The dynamic budget gets the same treatment: the fresh completer spawns a
+    framework-importing subprocess, and on timeout serves *nothing* on
+    purpose — so a slow spawn reads as an empty candidate list.
     """
     monkeypatch.setattr(_complete, "_COLD_TIMEOUT", 30.0)
+    monkeypatch.setattr(_complete, "_DYNAMIC_TIMEOUT", 30.0)
 
 
 def _names(result):
