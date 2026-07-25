@@ -9,6 +9,17 @@ versions may include breaking changes.
 
 ### Added
 
+- **Questions front-load: ask-serial, run-parallel, as early as correct.**
+  Every promptable `ask()` parameter across the whole run answers *up
+  front*, right after the `confirm=` gates and before anything executes —
+  you answer once and walk away, and think-time can never land inside a
+  task's recorded duration. Only a question carrying a live `suggest`
+  completer waits (its menu may need a prerequisite's output) and resolves
+  at its task's launch, as before. A required question with no way to ask
+  (`--no-input`, no terminal) now refuses the whole run before anything
+  starts, naming the flag — instead of failing one task mid-run. Accepted
+  answers flow through the same coercion pipeline as command-line values.
+
 - **The cascade walk is configurable.** A user-level **`cascade`** key —
   `none` (the current directory's own files only), `repo` (the `.git`
   ceiling, the default and today's behaviour), or `filesystem` (past

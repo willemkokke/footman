@@ -13,7 +13,7 @@ import pytest
 from footman import manifest, tools
 from footman.context import Context, RunFailed, parallel, passthrough, run, use_context
 from footman.executor import run_chain
-from footman.params import ask
+from footman.params import ask, suggest
 from footman.registry import Group
 from footman.split import split_chain
 
@@ -1359,18 +1359,19 @@ def test_ask_validates_a_literal_choice(monkeypatch):
 
 def test_ask_off_a_terminal_fails_loudly(monkeypatch):
     from footman import context
+    from footman.split import ChainError
 
-    # No tty, no default: the required value can't be prompted, so the task
-    # fails naming the flag rather than hanging.
+    # No tty, no default: the required value can't be prompted. Since asks
+    # front-load, the whole run refuses before anything starts — naming the
+    # flag — rather than hanging or failing one task mid-run.
     monkeypatch.setattr(context, "_stdin_is_tty", lambda: False)
 
     def build(reg):
         @reg.task
         def release(version: Annotated[str, ask()]): ...
 
-    _, _, results = drive(build, "release")
-    assert not results[0].ok
-    assert "--version is required" in str(results[0].error)
+    with pytest.raises(ChainError, match="--version is required"):
+        drive(build, "release")
 
 
 # --- @task(confirm=) gate -----------------------------------------------------
@@ -1457,3 +1458,88 @@ def test_select_scrubs_control_characters_in_labels(monkeypatch):
     context.select("pick", ["\x1b[31mred\x1b[0m", "green"])
     assert "\x1b" not in err.getvalue()
     assert "red" in err.getvalue()  # the visible text survives
+
+
+def _live_options():  # module-level: `from __future__ import annotations` makes
+    return ["pick"]  # annotations strings, so names must resolve at module scope
+
+
+def test_ask_front_loads_before_any_body_runs(monkeypatch):
+    from footman import context, schedule
+
+    monkeypatch.setattr(context, "_stdin_is_tty", lambda: True)
+    order = []
+
+    def fake_prompt(text, **kw):
+        order.append("ask")
+        return "42"
+
+    monkeypatch.setattr(context, "_prompt_core", fake_prompt)
+    reg = Group("root")
+
+    @reg.task
+    def alpha(a: Annotated[int, ask()]):
+        order.append("body")
+
+    @reg.task
+    def beta(b: Annotated[int, ask()]):
+        order.append("body")
+
+    tree = manifest.build_manifest(reg)["tree"]
+    _, segments = split_chain(tree, ["alpha", "beta"])
+    results = schedule.run_plan(reg, segments)
+    assert all(r.ok for r in results), [str(r.error) for r in results]
+    assert order[:2] == ["ask", "ask"]  # every question first, then the work
+    assert order[2:] == ["body", "body"]
+
+
+def test_ask_with_live_suggest_resolves_after_its_prereqs(monkeypatch):
+    from footman import context, schedule
+
+    monkeypatch.setattr(context, "_stdin_is_tty", lambda: True)
+    ran = []
+
+    def fake_prompt(text, **kw):
+        ran.append("ask")
+        return "pick"
+
+    monkeypatch.setattr(context, "_prompt_core", fake_prompt)
+    reg = Group("root")
+
+    @reg.task
+    def dep():
+        ran.append("dep")
+
+    @reg.task(pre=[dep])
+    def choose(which: Annotated[str, ask(), suggest(_live_options)]):
+        ran.append("body")
+
+    tree = manifest.build_manifest(reg)["tree"]
+    _, segments = split_chain(tree, ["choose"])
+    results = schedule.run_plan(reg, segments)
+    assert all(r.ok for r in results), [str(r.error) for r in results]
+    # A live-suggest question may need the dep's effects: asked late.
+    assert ran.index("dep") < ran.index("ask") < ran.index("body")
+
+
+def test_ask_refuses_up_front_without_a_terminal(monkeypatch):
+    from footman import context, schedule
+    from footman.split import ChainError
+
+    monkeypatch.setattr(context, "_stdin_is_tty", lambda: False)
+    ran = []
+    reg = Group("root")
+
+    @reg.task
+    def noop():
+        ran.append("noop")
+
+    @reg.task
+    def release(version: Annotated[str, ask()]):
+        ran.append("body")
+
+    tree = manifest.build_manifest(reg)["tree"]
+    _, segments = split_chain(tree, ["noop", "release"])
+    with pytest.raises(ChainError, match="--version"):
+        schedule.run_plan(reg, segments)
+    assert ran == []  # refused before anything started, noop included

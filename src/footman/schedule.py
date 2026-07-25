@@ -379,6 +379,18 @@ def run_plan(
     nodes = _build_dag(root, segments)
     _check_cycles(nodes)
     _scope_keep_going(nodes, keep_going)  # per-node failure policy (tri-state + scope)
+    # Ask-serial, run-parallel — as early as correct: every promptable ask()
+    # across the DAG answers up front (confirms were gated above), so the
+    # human answers once and walks away; only a live-suggest question waits
+    # for its prerequisites, resolving at node launch. Think-time can never
+    # land inside any task's recorded duration, and an unanswerable question
+    # (--no-input, no terminal) refuses the run before anything starts.
+    ask_ctx = context.Context(**(ctx_config or {}))
+    try:
+        for n in _toposort(nodes):
+            executor.resolve_asks(n.fn, n.seg, ask_ctx)
+    except ValueError as exc:
+        raise ChainError(str(exc)) from exc
     # One node has nothing to parallelise — run it on the sequential-live
     # path instead: output streams as it happens, and run()'s TTY mode
     # (colour, in-place step rewrite) applies. `fm check` is this shape. An
