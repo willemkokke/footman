@@ -103,8 +103,23 @@ class Context:
     env: dict[str, str] = field(default_factory=dict)
     """Extra environment variables overlaid on every `run()` subprocess."""
     cwd: Path | None = None
-    """Where `run()` executes: the folder that defined the task; `None`
-    means the process cwd (plain calls outside a footman run)."""
+    """Where `run()` executes — resolved once per task by the policy ladder
+    (`.opts(cwd=)` / `@task(cwd=)` / config `cwd`, default `taskfile`), so it
+    is concrete inside a run. A preset value (tests, `use_context`) wins.
+    `None` means unresolved (plain calls outside a footman run)."""
+    cwd_policy: str = ""
+    """`[tool.footman] cwd` — the run-wide default policy token (or absolute
+    path) the ladder bottoms out on. Empty means `taskfile`."""
+    root_dir: str = ""
+    """The `root` token's target: the highest cascade task file's directory
+    (`files[0].parent`), pinned by discovery. Empty outside a real run."""
+    invoked_dir: str = ""
+    """The `asinvoked` token's target: the process cwd where `fm` was
+    launched, pinned as a snapshot at startup."""
+    cwd_unmanaged: bool = False
+    """`cwd="unmanaged"`: footman stays out — subprocesses spawn with
+    `cwd=None` (inherit the live process cwd) even though `ctx.cwd` records
+    the process cwd at task start for the body to read."""
     dry_run: bool = False
     """`--dry-run`: `run()` prints and records the command, executes
     nothing, and reports success."""
@@ -866,7 +881,10 @@ def _run_callable(
     # straight from the environment — no per-call patch here, so the lock-free
     # fast path in `_process_state` is kept in every colour mode.
     overlay = {**ctx.env, **(env or {})}
-    target_cwd = Path(cwd) if cwd is not None else ctx.cwd
+    # `unmanaged` means footman stays out: no cwd patch for the callable,
+    # exactly as the subprocess branch spawns with cwd=None.
+    default_cwd = None if ctx.cwd_unmanaged else ctx.cwd
+    target_cwd = Path(cwd) if cwd is not None else default_cwd
     with _process_state(overlay, target_cwd):
         if not capture:
             return _call_for_code(cmd, args), "", ""
@@ -1353,6 +1371,30 @@ def _shell_prep(
     return flags, script
 
 
+def _target_cwd(
+    ctx: Context, cwd: str | Path | None, rel: str | Path | None
+) -> Path | None:
+    """The effective directory for one call. Explicit `cwd=` wins; otherwise
+    the task's resolved `ctx.cwd` (or none at all under the `unmanaged`
+    policy). `rel=` is a relative suffix on whatever base is in force at
+    this call — `ctx.cwd` in the common case."""
+    base = Path(cwd) if cwd is not None else (None if ctx.cwd_unmanaged else ctx.cwd)
+    if rel is None:
+        return base
+    rel_path = Path(rel)
+    if rel_path.is_absolute():
+        raise ValueError(
+            f"rel={str(rel)!r} is absolute — rel is a suffix on the call's cwd "
+            f"base; pass an absolute directory as cwd=…"
+        )
+    if base is None and ctx.cwd_unmanaged:
+        raise ValueError(
+            "rel=… needs a managed base and cwd='unmanaged' has none — "
+            "pass cwd=… explicitly, or use the asinvoked policy"
+        )
+    return (base if base is not None else Path.cwd()) / rel_path
+
+
 def run(
     cmd: str | list[str] | Callable[..., Any],
     *args: Any,
@@ -1362,6 +1404,7 @@ def run(
     title: str | None = None,
     env: dict[str, str] | None = None,
     cwd: str | Path | None = None,
+    rel: str | Path | None = None,
     encoding: str | None = "utf-8",
     shell: bool | str = False,
     strict: bool = False,
@@ -1373,6 +1416,11 @@ def run(
     Subprocess output is decoded as UTF-8 by default; pass `encoding=` for a
     tool that speaks another code page, or `encoding=None` for the locale
     default. Ignored for callables (in-process, no bytes boundary).
+
+    `cwd=` roots this one call somewhere other than the task's directory;
+    `rel=` appends a relative suffix to the base in force (`ctx.cwd`, or the
+    explicit `cwd=`), so `run("npm run build", rel="web")` is the ergonomic
+    spelling of `cwd=ctx.cwd / "web"`.
 
     `_show` is an internal channel from the `tools.*` bridge: a structured
     view of the call, so the shown command line can be normalised and
@@ -1436,7 +1484,9 @@ def run(
 
     start = time.perf_counter()
     if callable(cmd):
-        code, out_s, err_s = _run_callable(cmd, args, capture=capture, env=env, cwd=cwd)
+        code, out_s, err_s = _run_callable(
+            cmd, args, capture=capture, env=env, cwd=_target_cwd(ctx, cwd, rel)
+        )
     else:
         argv: list[str] | str
         shell_kind = ""
@@ -1480,7 +1530,9 @@ def run(
         # a non-interactive `-c`, so drop those from the child env too.
         if clean and shell_kind in ("bash", "sh", "zsh"):
             run_env = {k: v for k, v in run_env.items() if k not in ("BASH_ENV", "ENV")}
-        cwd_path = Path(cwd) if cwd is not None else ctx.cwd
+        # `unmanaged` spawns with cwd=None (inherit the live process cwd);
+        # a per-call cwd=/rel= override wins — see `_target_cwd`.
+        cwd_path = _target_cwd(ctx, cwd, rel)
         code, out_s, err_s = _run_subprocess(
             argv,
             run_env,

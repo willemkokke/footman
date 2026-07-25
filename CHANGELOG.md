@@ -20,6 +20,21 @@ versions may include breaking changes.
   environment variable overrides it per invocation
   (`FOOTMAN_CASCADE=none fm test` in CI). An unknown value is a taught
   error naming the three modes, never a silent default.
+- **The working directory is a policy, not an accident.** A task's cwd is
+  resolved once, before the body runs, by a ladder — `.opts(cwd=)` per use,
+  `@task(cwd=, rel=)` per definition, `[tool.footman] cwd` as the run-wide
+  default — from four tokens or an absolute path: `taskfile` (the directory
+  of the file defining the task — the default, today's implicit behaviour,
+  now named), `root` (the highest cascade file's directory), `asinvoked` (a
+  pinned snapshot of the launch directory), and `unmanaged` (footman stays
+  out: children spawn from the live process cwd). `rel=` appends a relative
+  suffix to the resolved base — a nearer `rel` replaces a farther one — and
+  `ctx.cwd` is always concrete inside a run. Per call, `run()` gains
+  `rel=` beside `cwd=`, so `run("npm run build", rel="web")` roots one
+  command in a subdirectory of the task's cwd. Relative `cwd=`, absolute
+  `rel=`, and `rel=` under `unmanaged` are taught errors. `.opts(cwd=)`
+  works on direct body-calls too, and two uses of one task at different
+  cwds are two DAG nodes, never silently merged.
 
 - **`footman.fail(reason, code=1)` — a blessed way to fail a task.** A function
   (not a `raise`) that stops the current task with a reason: the reason renders

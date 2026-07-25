@@ -1042,7 +1042,9 @@ def _execute(
     except manifest.ManifestError as exc:  # broken completer, bad markers, …
         return _refuse(json_mode, str(exc))
 
-    code = _run_tree(reg, tree, argv, cfg, collect)
+    # The `root` policy token's target: the highest cascade file's directory.
+    root_dir = str(files[0].parent) if files else ""
+    code = _run_tree(reg, tree, argv, cfg, collect, root_dir=root_dir)
     # After the run, so it never adds latency before the user's command —
     # and after the uv handoff by construction (the handoff replaced this
     # process back in _run), so a pinned project's own footman collects.
@@ -1056,6 +1058,7 @@ def _run_tree(
     argv: list[str],
     cfg: dict[str, object],
     collect: list[executor.TaskResult] | None,
+    root_dir: str = "",
 ) -> int:
     """The post-manifest tail: help/where/split/list/tree/dry-run/run/report.
 
@@ -1149,9 +1152,28 @@ def _run_tree(
     backend = fetch_cfg.get("backend") if isinstance(fetch_cfg, dict) else None
     shell_cfg = cfg.get("shell")
     shell_default = shell_cfg.get("default") if isinstance(shell_cfg, dict) else None
+    cwd_cfg = cfg.get("cwd")
+    cwd_policy = cwd_cfg if isinstance(cwd_cfg, str) else ""
+    if (
+        cwd_policy
+        and cwd_policy not in registry.CWD_TOKENS
+        and not Path(cwd_policy).is_absolute()
+    ):
+        return _refuse(
+            json_mode,
+            f"config cwd = {cwd_policy!r} is not a policy token "
+            f"({', '.join(registry.CWD_TOKENS)}) or an absolute path — "
+            f"a relative suffix belongs on a task's rel=…",
+        )
     ctx_config = {
         "fetch_backend": str(backend) if isinstance(backend, str) else "",
         "shell_default": str(shell_default) if isinstance(shell_default, str) else "",
+        # The cwd policy ladder's run-wide rungs: the config default, and the
+        # two pinned directions tokens resolve against — the highest cascade
+        # file's directory (`root`) and the launch cwd snapshot (`asinvoked`).
+        "cwd_policy": cwd_policy,
+        "root_dir": root_dir,
+        "invoked_dir": str(Path.cwd()),
         "quiet": bool(g.get("quiet")),
         "verbose": bool(g.get("verbose")),
         # The resolved tri-state, split into the two Context bits: `never` stops

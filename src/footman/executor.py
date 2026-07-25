@@ -436,6 +436,52 @@ class Unavailable(Exception):
     """A `@requires`-gated task was asked to run; the message is the reason."""
 
 
+def resolve_cwd(fn: Task, ctx: Context) -> tuple[Path | None, bool]:
+    """The task's working directory under the policy ladder, resolved once.
+
+    Ladder: the task's own declaration — `.opts(cwd=)` over `@task(cwd=)`,
+    both read through the same `getattr` an `_Opted` proxies — then the
+    config default (`ctx.cwd_policy`), then `"taskfile"`. `rel` resolves the
+    same way and is appended to the base. Pure path arithmetic: the
+    directory need not exist at resolve time — existence errors surface
+    where the path is used.
+
+    Returns `(cwd, unmanaged)`. Under `"unmanaged"` the cwd is the live
+    process cwd at task start (for the body to read) and the flag makes
+    `run()` spawn children with `cwd=None`. `"taskfile"` falls back to
+    `root` when the task carries no defining-dir stamp (config-mounted
+    plugins); with nothing known (bare calls outside discovery) the cwd
+    stays `None`, as before.
+    """
+    policy = registry.task_cwd(fn) or ctx.cwd_policy or "taskfile"
+    rel = registry.task_rel(fn)
+    if policy == "unmanaged":
+        if rel:
+            raise ValueError(
+                "rel=… needs a managed base and cwd='unmanaged' has none — "
+                "use cwd='asinvoked' for a pinned launch-directory base"
+            )
+        return Path.cwd(), True
+    base: Path | None
+    if isinstance(policy, Path):
+        base = policy
+    elif policy == "root":
+        base = Path(ctx.root_dir) if ctx.root_dir else None
+    elif policy == "asinvoked":
+        base = Path(ctx.invoked_dir) if ctx.invoked_dir else Path.cwd()
+    elif policy == "taskfile":
+        home = defining_dir(fn)
+        if home is not None:
+            base = Path(home)
+        else:
+            base = Path(ctx.root_dir) if ctx.root_dir else None
+    else:  # a config default naming an absolute path (validated at startup)
+        base = Path(policy)
+    if base is None:
+        return None, False
+    return (base / rel) if rel else base, False
+
+
 def run_task(
     fn: Task, seg: Segment, ctx: Context, forwarded: dict[str, Any] | None = None
 ) -> TaskResult:
@@ -463,8 +509,11 @@ def run_task(
     ctx.fn = fn  # what inherited() reads to find the shadowed task
     ctx.interactive = registry.is_interactive(fn)  # arms the prompt guard
     ctx.atomic = registry.is_atomic(fn)  # its subprocesses opt out of the kill
-    if ctx.cwd is None and (home := defining_dir(fn)) is not None:
-        ctx.cwd = Path(home)  # run from the folder that defined the task
+    if ctx.cwd is None:  # a preset ctx.cwd (tests / use_context) wins
+        try:
+            ctx.cwd, ctx.cwd_unmanaged = resolve_cwd(fn, ctx)
+        except ValueError as exc:  # e.g. rel= under an unmanaged config default
+            return _result(seg, 2, None, exc, 0.0)
 
     token = _current.set(ctx)
     ctx.in_task = True  # a mid-body prompt()/confirm()/select() is now guarded
