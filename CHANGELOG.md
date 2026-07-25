@@ -7,6 +7,21 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Changed
+
+- **footman's own tasks live at `fm.…` now.** The first-party plugins
+  mount under the prog people actually type — `fm.docs.page`,
+  `fm.tools.sync` — instead of `footman.…` (one line each in footman's
+  own `tasks.py`; entry-point names are unchanged, so your
+  `plugin("footman.tools", into=…)` keeps working and mounts wherever
+  *you* say). The documenter's self-exclusion now keys on provenance
+  instead of a hardcoded mount name, so it excludes itself wherever an
+  author mounts it. `--list` wraps long descriptions with a hanging
+  indent to the description column, so a narrow terminal no longer
+  shears the two-column layout apart. And the custom-CLI page says what
+  was always true: the uv handoff re-execs the *(branded)* footman you
+  invoked — `acme` hands off to the project's own `acme`, never `fm`.
+
 ## [0.20.0] — 2026-07-25
 
 ### Added

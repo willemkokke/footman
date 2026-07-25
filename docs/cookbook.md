@@ -708,5 +708,5 @@ acme = "acme_cli:main"
 ```
 
 `acme --install-completion` installs for `acme`; errors say `acme:`; and
-`acme footman.docs.page` documents *your* task surface under *your*
-prog. The details: [Custom CLI](custom-cli.md).
+`acme acme.docs.page` (mounted with `into="acme"`) documents *your*
+task surface under *your* prog. The details: [Custom CLI](custom-cli.md).

@@ -99,7 +99,7 @@ own `--capture` (pytest's) still goes in the call, `pytest(capture="no")`.
 
 ## Colour support, per tool
 
-`fm footman.tools.color` *probes* each curated tool — it runs the tool with
+`fm fm.tools.color` *probes* each curated tool — it runs the tool with
 colour forced on and off, both by environment and by the tool's own flag, and
 reads the bytes — so this table is measured, not assumed. A tool obeys the
 **environment** (`FORCE_COLOR`/`NO_COLOR`), needs its own **`flag`**, colours
@@ -151,7 +151,7 @@ mkdocs.build(strict=off)              # → --no-strict, convention holds
 Only the tool knows, so footman asks it: the spellings are extracted from
 each tool's own description of itself (click states a negatable flag as
 `secondary_opts`; git prints `--[no-]verify`; clap says so in prose) and
-the exceptions are cached. `fm footman.tools.audit` compares that cache
+the exceptions are cached. `fm fm.tools.audit` compares that cache
 against the installed tools, so one that changes its mind fails a check
 rather than quietly producing a command it refuses.
 
@@ -216,12 +216,12 @@ the bridge:
 Which means stub drift — the thing that breaks duty's wrappers at run
 time — here degrades a *hint* at worst.
 
-And the stubs are not written by hand. `fm footman.tools.sync` reads the
+And the stubs are not written by hand. `fm fm.tools.sync` reads the
 tools installed on your machine and writes one file per tool, so what your
 editor suggests is what your binary accepts:
 
 ```console
-$ fm footman.tools.sync
+$ fm fm.tools.sync
 wrote 9 stub(s): ruff, ruff_format, basedpyright, uv, git, docker, mkdocs, zensical, coverage
 skipped (not installed): bun, cspell, prek, markdownlint
 ```
@@ -236,13 +236,13 @@ on the lines below. The dialects are small — `[default: 3]` (clap),
 `--no-fix` to disable" (clap's prose), and git's `--[no-]quiet`, which
 states both spellings at once.
 
-`fm footman.tools.audit` regenerates and compares, so a tool that moves
+`fm fm.tools.audit` regenerates and compares, so a tool that moves
 fails a check rather than quietly leaving your editor a version behind. A
 tool that isn't installed is skipped *and named* — a check that quietly
 covered nine of thirteen would be worse than no check at all:
 
 ```console
-$ fm footman.tools.audit
+$ fm fm.tools.audit
 skipped (not installed): bun, cspell, prek, markdownlint
 9 stub(s) match their installed tool
 ```

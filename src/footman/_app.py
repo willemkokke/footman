@@ -305,15 +305,25 @@ def _styled_help(help_text: str) -> str:
 
 
 def _print_list(tree: dict) -> None:
+    import textwrap
+
     rows = list(_describe.iter_tasks(tree))
     if not rows:
         print("No tasks defined.")
         return
     width = max(len(name) for name, _ in rows)
+    # Wrap long descriptions with a hanging indent to the description
+    # column — the terminal's own wrap would drop continuations to column
+    # 0, shearing the two-column layout apart.
+    desc_col = 2 + width + 2
+    avail = max(24, shutil.get_terminal_size().columns - desc_col)
     print(_describe.bold("Tasks:", _color_out))
     for name, help_text in rows:
-        line = f"  {_styled_name(name, width)}  {_styled_help(help_text)}"
+        pieces = textwrap.wrap(help_text, avail) or [""]
+        line = f"  {_styled_name(name, width)}  {_styled_help(pieces[0])}"
         print(line.rstrip())
+        for cont in pieces[1:]:
+            print(f"{' ' * desc_col}{_styled_help(cont)}".rstrip())
 
 
 def _print_tree(node: dict, indent: str = "", prefix: str = "") -> None:

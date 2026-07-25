@@ -43,12 +43,26 @@ def _project_tree(include_self: bool) -> dict:
     files = _paths.task_files(cwd, ceiling, filename)
     base = registry.Group("root")
     reg = discover.load_tree(files, base=base)
-    tree = _manifest.build_manifest(reg)["tree"]
     if not include_self:
-        # Don't document the documenter: the mounted `footman` group is
-        # opted back in with --all.
-        tree["groups"].pop("footman", None)
-    return tree
+        _prune_first_party(reg)
+    return _manifest.build_manifest(reg)["tree"]
+
+
+def _prune_first_party(node: registry.Group) -> None:
+    """Don't document the documenter (opted back in with --all): drop every
+    node pulled from footman's own plugins, *wherever the author mounted
+    it* — the provenance stamp is the identity, never a hardcoded mount
+    name (placement is the author's choice since the composition rework)."""
+    for name, sub in list(node.groups.items()):
+        if str(getattr(sub, "pulled_from", "")).startswith("footman."):
+            del node.groups[name]
+            continue
+        _prune_first_party(sub)
+        if not sub.tasks and not sub.groups and sub.default_task is None:
+            del node.groups[name]  # an emptied container: the bare mount point
+    for name, fn in list(node.tasks.items()):
+        if str(getattr(fn, registry._PULLED, "")).startswith("footman."):
+            del node.tasks[name]
 
 
 def _path_of(target: str) -> tuple[str, ...]:
