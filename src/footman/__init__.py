@@ -30,6 +30,7 @@ if TYPE_CHECKING:
     from footman.context import Result as Result
     from footman.context import RunFailed as RunFailed
     from footman.context import confirm as confirm
+    from footman.context import cwd as cwd
     from footman.context import fail as fail
     from footman.context import inherited as inherited
     from footman.context import parallel as parallel
@@ -96,6 +97,7 @@ __all__ = [
     "capture",
     "check",
     "confirm",
+    "cwd",
     "doc",
     "docstrings",
     "env",
@@ -221,6 +223,7 @@ def __getattr__(name: str) -> object:
         "progress",
         "prompt",
         "confirm",
+        "cwd",
         "select",
         "track",
         "RunFailed",

@@ -111,6 +111,18 @@ versions may include breaking changes.
 
 ### Changed
 
+- **Breaking: footman never chdirs in a parallel task.** In-process calls
+  used to get a real `os.chdir` (guarded by a process-wide lock) whenever
+  the task's directory differed from the process cwd — which silently
+  serialised the run for every such call, whether the callable cared or
+  not. The chdir is gone: an in-process call whose target directory equals
+  the live process cwd (the common single-package case) runs untouched and
+  fully parallel; a *foreign* target is now a taught error naming the exits
+  — run it as a subprocess (which gets `cwd=` for free), build paths from
+  the new **`footman.cwd()`** (the task's resolved directory as a concrete
+  path), or declare `@task(cwd="unmanaged")` if the call genuinely doesn't
+  care. The env overlay for in-process calls is unchanged. Subprocesses were
+  always spawned with an explicit `cwd=` and keep working exactly as before.
 - **A tool's `.opts()` is now footman run-control; a tool's own globals move to
   `.flags()`.** A `tools.*` call is pure flags and positionals again: run-control
   no longer rides reserved call kwargs. `.opts(nofail=…, in_process=…,

@@ -209,6 +209,18 @@ def current() -> Context:
     return ctx if ctx is not None else Context()
 
 
+def cwd() -> Path:
+    """The current task's working directory, always concrete.
+
+    `ctx.cwd` as the policy ladder resolved it — the blessed base for a task
+    body's own path arithmetic (`footman.cwd() / "dist"`), instead of
+    relative paths against the process cwd, which belongs to no one in a
+    parallel run. Outside a run it is simply the process cwd.
+    """
+    resolved = current().cwd
+    return resolved if resolved is not None else Path.cwd()
+
+
 @contextlib.contextmanager
 def use_context(ctx: Context | None = None) -> Iterator[Context]:
     """Install *ctx* as the current run context for the duration of the block.
@@ -822,31 +834,30 @@ _state_lock = threading.RLock()
 
 
 @contextlib.contextmanager
-def _process_state(env: dict[str, str], cwd: Path | None) -> Iterator[None]:
-    """Patch `os.environ` / the process cwd around an in-process callable.
+def _process_state(env: dict[str, str]) -> Iterator[None]:
+    """Patch `os.environ` around an in-process callable.
 
-    In-process tools must honor the same env overlay and run-from-defining-
-    folder contract the subprocess branch of the *same* call already obeys.
-    `os.chdir` and `os.environ` are process-global, so any change is guarded by a
-    re-entrant lock (a callable may itself call `run()`) and restored on exit —
-    calls that need a patch therefore serialize. The common case (no overlay, no
-    cwd — in-memory Group tasks have no defining dir) takes the lock-free fast
-    path, so barrier-overlap parallelism stays fully concurrent.
+    In-process tools must honor the same env overlay the subprocess branch of
+    the *same* call already obeys. `os.environ` is process-global, so the
+    patch is guarded by a re-entrant lock (a callable may itself call `run()`)
+    and restored on exit — calls that need an overlay therefore serialize.
+    The common case (no overlay) takes the lock-free fast path, so
+    barrier-overlap parallelism stays fully concurrent.
+
+    The process **cwd** is deliberately not touched any more: footman never
+    chdirs in a parallel task. A call that needs a different directory runs
+    as a subprocess (explicit `cwd=`, fully parallel) — `_run_callable`
+    raises the taught error for the in-process case.
     """
-    if not env and cwd is None:
+    if not env:
         yield
         return
     with _state_lock:
         saved_env = os.environ.copy()
-        saved_cwd = os.getcwd() if cwd is not None else None
         try:
             os.environ.update(env)
-            if cwd is not None:
-                os.chdir(cwd)
             yield
         finally:
-            if saved_cwd is not None:
-                os.chdir(saved_cwd)
             os.environ.clear()
             os.environ.update(saved_env)
 
@@ -871,9 +882,14 @@ def _run_callable(
 
     `capture=False` skips the buffers entirely (live output, returns `('', '')`
     like the subprocess branch) — for serve-style tasks that must not buffer
-    unboundedly. The env overlay and cwd are applied process-globally via
+    unboundedly. The env overlay is applied process-globally via
     `_process_state`; the `capture=False` short-circuit runs *inside* it so
-    uncaptured callables keep cwd/env too.
+    uncaptured callables keep env too.
+
+    cwd is **checked, never applied**: footman does not chdir in a parallel
+    task. Equal target and live cwd (the common single-package case) runs
+    untouched; a *foreign* target is a taught error naming the exits —
+    exactly the case the old chdir silently serialised the run for.
     """
     ctx = current()
     # Colour is decided once for the whole run and published into os.environ at
@@ -881,11 +897,21 @@ def _run_callable(
     # straight from the environment — no per-call patch here, so the lock-free
     # fast path in `_process_state` is kept in every colour mode.
     overlay = {**ctx.env, **(env or {})}
-    # `unmanaged` means footman stays out: no cwd patch for the callable,
+    # `unmanaged` means footman stays out: no cwd opinion for the callable,
     # exactly as the subprocess branch spawns with cwd=None.
     default_cwd = None if ctx.cwd_unmanaged else ctx.cwd
     target_cwd = Path(cwd) if cwd is not None else default_cwd
-    with _process_state(overlay, target_cwd):
+    if target_cwd is not None:
+        live = Path(os.getcwd())
+        if target_cwd.resolve() != live:
+            raise ValueError(
+                f"this in-process call needs cwd {target_cwd} but the process "
+                f"is at {live} — footman no longer chdirs in a parallel task. "
+                f"Run it as a subprocess (which gets cwd= for free), build "
+                f"paths from footman.cwd(), or declare @task(cwd='unmanaged') "
+                f"if the call genuinely doesn't care."
+            )
+    with _process_state(overlay):
         if not capture:
             return _call_for_code(cmd, args), "", ""
         out_buf, err_buf = io.StringIO(), io.StringIO()

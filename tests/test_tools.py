@@ -346,9 +346,11 @@ def test_in_process_tools_run_concurrently_with_separate_capture(monkeypatch):
     assert "B-OUT" in results["b"].steps[0].output
 
 
-def test_in_process_tool_runs_from_context_cwd(monkeypatch, tmp_path):
-    # F17: an in-process tool honors the task's context cwd, exactly as the
-    # subprocess branch of the same call already does.
+def test_in_process_tool_with_foreign_cwd_is_a_taught_error(monkeypatch, tmp_path):
+    # The old F17 contract (chdir the process around the call) is gone:
+    # footman never chdirs in a parallel task, so an in-process tool whose
+    # target cwd differs from the live process cwd refuses with the exits.
+    # (The tools bridge will demote this case to the subprocess twin.)
     from footman import manifest, schedule
     from footman.registry import Group
     from footman.split import split_chain
@@ -373,8 +375,13 @@ def test_in_process_tool_runs_from_context_cwd(monkeypatch, tmp_path):
 
     tree = manifest.build_manifest(reg)["tree"]
     _, segments = split_chain(tree, ["go"])
-    schedule.run_plan(reg, segments, ctx_config={"cwd": tmp_path})
-    assert seen["cwd"] == str(tmp_path.resolve())  # macOS /tmp is a symlink
+    results = {
+        r.task: r
+        for r in schedule.run_plan(reg, segments, ctx_config={"cwd": tmp_path})
+    }
+    assert not results["go"].ok
+    assert "no longer chdirs" in str(results["go"].error)
+    assert "cwd" not in seen  # refused before the entry ran
 
 
 def test_zero_arg_entries_fall_back_to_argv_patching(monkeypatch):
