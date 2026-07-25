@@ -168,9 +168,13 @@ versions may include breaking changes.
   atomically with any serial/exclusive lane so partial holds can't chain —
   while the parallel pool keeps running around it, captured. A finished
   sibling's buffered output queues until the wizard frees the terminal,
-  so nothing splats over a prompt (the status line still yields for such
-  runs, as before). A wizard now costs you the terminal, not the run's
-  parallelism.
+  so nothing splats over a prompt — and the status line *suspends* for
+  exactly the ownership window instead of yielding for the whole run: it
+  clears when a wizard takes the terminal and repaints, truthfully, the
+  moment it frees. A wizard costs you the terminal — not the run's
+  parallelism, and no longer its progress line. Listings and `--json`
+  also carry a `lane` key (`serial`/`exclusive`), so the scheduling
+  declarations show where `interactive`/`infinite`/`confirm` already do.
 - **stdin is guarded like the global it is.** A bare `input()` (or any
   `sys.stdin` read) in a plain parallel task is now a taught error naming
   the exits — declare the value with `ask()`, or mark the task
