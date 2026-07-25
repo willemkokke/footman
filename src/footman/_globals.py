@@ -563,6 +563,9 @@ def lane(
             if console and not inherited:
                 _console_holder = name or "?"
             _running += 1
+        claimed_console = console and not inherited
+        if claimed_console:
+            _suspend_status(True)  # outside the cv: lock order is arb → status
         try:
             yield
         finally:
@@ -576,8 +579,21 @@ def lane(
                     if console:
                         _console_holder = None
                 _arb_cv.notify_all()
+            if claimed_console:
+                _suspend_status(False)
 
     return _lane()
+
+
+def _suspend_status(on: bool) -> None:
+    """Pause/resume the live status line around console ownership — its
+    repaints and a wizard's prompt would fight for the one terminal."""
+    from footman.context import active_status
+
+    status = active_status()
+    if status is None:
+        return
+    (status.suspend if on else status.resume)()
 
 
 def console_gate() -> Any:

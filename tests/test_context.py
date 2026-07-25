@@ -1543,3 +1543,33 @@ def test_ask_refuses_up_front_without_a_terminal(monkeypatch):
     with pytest.raises(ChainError, match="--version"):
         schedule.run_plan(reg, segments)
     assert ran == []  # refused before anything started, noop included
+
+
+def test_ask_with_live_suggest_under_no_input_fails_that_task_loudly(monkeypatch):
+    # The late corner: a live-suggest question resolves at node launch (its
+    # menu may need a dep's output), so --no-input can't refuse it up front —
+    # the task fails loudly at launch instead, and can never hang. A sibling
+    # is untouched.
+    from footman import context, schedule
+
+    monkeypatch.setattr(context, "_stdin_is_tty", lambda: True)
+    ran = []
+    reg = Group("root")
+
+    @reg.task
+    def sibling():
+        ran.append("sibling")
+
+    @reg.task
+    def choose(which: Annotated[str, ask(), suggest(_live_options)]):
+        ran.append("body")
+
+    tree = manifest.build_manifest(reg)["tree"]
+    _, segments = split_chain(tree, ["sibling", "choose"])
+    results = {
+        r.task: r
+        for r in schedule.run_plan(reg, segments, ctx_config={"no_input": True})
+    }
+    assert not results["choose"].ok
+    assert "--which is required" in str(results["choose"].error)
+    assert "body" not in ran
