@@ -389,7 +389,7 @@ def bundle():
 ### The legacy task that owns the process
 
 A helper that genuinely chdirs — or drives a library that only reads the
-process state — declares it and gets the old conveniences back, safely:
+process state — declares it and gets the real globals, safely:
 
 ```python
 import footman

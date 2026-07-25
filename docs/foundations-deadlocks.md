@@ -23,11 +23,11 @@ impossible.
 
 ## A worked example: how a careful design still deadlocks
 
-footman's first design for the working directory was a clever lock: tasks
-needing the same directory *shared* a hold; a nested block could *escalate*
-to a different directory by waiting for its co-holders to leave; a fan-out
-child re-targeting under its parent's hold was detected and refused. Every
-rule was individually sound. Composing two of them was fatal:
+The tempting way to share one working directory between parallel tasks is a
+clever lock: tasks needing the same directory *share* a hold; a nested block
+can *escalate* to a different directory by waiting for its co-holders to
+leave; a fan-out child re-targeting under its parent's hold is detected and
+refused. Every rule is individually sound. Composing two of them is fatal:
 
 1. A parent takes the lock at directory `A`, then fans out children and
    waits for them — legal.
@@ -37,21 +37,20 @@ rule was individually sound. Composing two of them was fatal:
    waits for its co-holders to leave. Its co-holder is the parent. The
    parent is waiting for the child.
 
-A certain, silent deadlock built from two blessed moves — and under the
-default policy every task shared one directory, making the setup the
-*common case*. No detection rule fired, because each rule was checked at
-the moment of one move, and the circle only existed across both.
+A certain, silent deadlock built from two blessed moves — and since most
+projects point every task at one directory, that setup is the *common
+case*, not a corner. No detection rule fires, because each rule is checked
+at the moment of one move, and the circle only exists across both.
 
-The design was killed, not patched. Its replacement changes the ingredient:
-serialisation is **declared on the task and granted at the task boundary**,
-before the body runs — the scheduler *orders* claims instead of letting
-bodies contend mid-flight. A resource acquired only at boundaries can
-always be scheduled; hold-and-wait needs a mid-body wait that no longer
-exists. Lineage makes the fan-out case safe by construction: a child of a
-lane holder *extends* the hold rather than contending with it. And the
-waits that remain are never silent — a queued task prints who holds what
-after a couple of seconds, because an invisible wait is a deadlock you
-haven't confirmed yet.
+footman changes the ingredient instead. Serialisation is **declared on the
+task and granted at the task boundary**, before the body runs — the
+scheduler *orders* claims instead of letting bodies contend mid-flight. A
+resource acquired only at boundaries can always be scheduled; hold-and-wait
+needs a mid-body wait, and there is none. Lineage makes the fan-out case
+safe by construction: a child of a lane holder *extends* the hold rather
+than contending with it. And the waits that remain are never silent — a
+queued task prints who holds what after a couple of seconds, because an
+invisible wait is a deadlock you haven't confirmed yet.
 
 ## The one rule
 

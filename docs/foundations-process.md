@@ -37,23 +37,23 @@ for process isolation. But it means every parallel task shares one cwd, one
 environment, one terminal. A task that "just quickly" changes any of them
 changes it for *everyone, mid-flight*.
 
-Two true stories from footman's own history make the point:
+Two concrete shapes of that, both worth recognising on sight:
 
-**Separate processes protect you; shared files don't.** Two `fm check`
-runs — separate processes, safely isolated worlds — once corrupted each
-other anyway, because both wrote one shared `.coverage` file: whichever
-finished second clobbered the database mid-write, and the survivor reported
-a nonsense total with every test passing. Process isolation ends where
-shared resources begin. The fix was per-invocation files — giving each
-process its own resource, the same move footman makes for cwd and env.
+**Separate processes protect you; shared files don't.** Two `fm check` runs
+are separate processes with safely isolated worlds — and they will still
+corrupt each other if both write one shared `.coverage` file: whichever
+finishes second clobbers the database mid-write, and the survivor reports a
+nonsense total with every test passing. Process isolation ends where shared
+resources begin, so footman gives each invocation its own file — the same
+move it makes for cwd and env.
 
 **State scoped to a run must die with the run.** footman's fail-fast abort
 is *latched*: once a run is doomed, any subprocess registered afterwards is
-killed at birth, so a doomed run can't outrun the kill. The latch once
-survived past the end of its run — process-global state with no owner —
-and reached forward to kill an innocent `echo hi` started by whatever ran
-next in the same process. The lesson generalises: in a shared world, state
-needs a declared scope and a declared end.
+killed at birth, so a doomed run can't outrun the kill. A latch that
+outlived its run would be process-global state with no owner — it would
+reach forward and kill an innocent `echo hi` started by whatever ran next
+in the same process. In a shared world, state needs a declared scope and a
+declared end.
 
 ## What footman does about it
 
