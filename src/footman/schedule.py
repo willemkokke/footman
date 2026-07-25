@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 from itertools import count
 from typing import Any, TextIO
 
-from footman import _describe, _progress, context, executor
+from footman import _describe, _globals, _progress, context, executor
 from footman.registry import (
     Group,
     Task,
@@ -438,19 +438,28 @@ def run_plan(
             status.open()
         try:
             with context.color_environment(colour_on):
-                if sequential:
-                    try:
-                        _run_sequential(
-                            nodes, real, capture, ctx_config, status, hint_err
+                # The process-globals routers arm inside the colour publish,
+                # so the pinned env snapshot carries it; refcounted, so a
+                # nested run (a task body driving a Runner) shares one install.
+                _globals.install()
+                try:
+                    if sequential:
+                        try:
+                            _run_sequential(
+                                nodes, real, capture, ctx_config, status, hint_err
+                            )
+                        except BaseException:
+                            # Ctrl-C mid-task: the running child is group-isolated,
+                            # so it missed the terminal's SIGINT — reap its tree by
+                            # hand before the interrupt propagates.
+                            context.terminate_live_children()
+                            raise
+                    else:
+                        _run_parallel(
+                            nodes, real, err, capture, ctx_config, status, jobs
                         )
-                    except BaseException:
-                        # Ctrl-C mid-task: the running child is group-isolated, so
-                        # it missed the terminal's SIGINT — reap its tree by hand
-                        # before the interrupt propagates. (Parallel does this.)
-                        context.terminate_live_children()
-                        raise
-                else:
-                    _run_parallel(nodes, real, err, capture, ctx_config, status, jobs)
+                finally:
+                    _globals.uninstall()
         finally:
             if status is not None:
                 context.set_status(None)

@@ -111,6 +111,18 @@ versions may include breaking changes.
 
 ### Changed
 
+- **`os.environ` is virtualised for the run.** Reads inside a task see the
+  run-start snapshot plus the task's own overlay — exactly what the
+  subprocess branch of the same call injects as `env=`, so in-process and
+  subprocess tool calls finally read the same world. Writes from a task
+  body scope to the task's overlay: visible to its own reads and every
+  child it spawns, invisible to siblings — with a one-time, task-attributed
+  stderr note naming the deliberate spelling (`env=` / `ctx.env`). Deleting
+  a variable has no additive spelling and is a taught error. The env
+  overlay for in-process calls now rides this router (thread-confined, no
+  lock — concurrent overlaid calls no longer serialise); outside a run,
+  `os.environ` behaves exactly as stock Python, and bare `run(callable,
+  env=…)` calls keep the classic guarded global patch as their fallback.
 - **Breaking: footman never chdirs in a parallel task.** In-process calls
   used to get a real `os.chdir` (guarded by a process-wide lock) whenever
   the task's directory differed from the process cwd — which silently

@@ -31,6 +31,8 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, NoReturn, TextIO
 
+from footman import _globals
+
 
 class Result(int):
     """The outcome of one `run()` call — and the value `run()` returns.
@@ -835,19 +837,20 @@ _state_lock = threading.RLock()
 
 @contextlib.contextmanager
 def _process_state(env: dict[str, str]) -> Iterator[None]:
-    """Patch `os.environ` around an in-process callable.
+    """Patch `os.environ` around an in-process callable — the *bare-call
+    fallback only*.
 
-    In-process tools must honor the same env overlay the subprocess branch of
-    the *same* call already obeys. `os.environ` is process-global, so the
-    patch is guarded by a re-entrant lock (a callable may itself call `run()`)
-    and restored on exit — calls that need an overlay therefore serialize.
-    The common case (no overlay) takes the lock-free fast path, so
-    barrier-overlap parallelism stays fully concurrent.
+    Inside a run the environ router serves reads from the task's overlay
+    (`_env_overlay` below: thread-confined, lock-free). Outside a routed run
+    (bare calls in scripts/tests) there is no router to lean on, so fall
+    back to the classic global patch, guarded by a re-entrant lock and
+    restored on exit — exactly the shape of the output router's own
+    fallback. The common case (no overlay) is lock-free either way.
 
-    The process **cwd** is deliberately not touched any more: footman never
-    chdirs in a parallel task. A call that needs a different directory runs
-    as a subprocess (explicit `cwd=`, fully parallel) — `_run_callable`
-    raises the taught error for the in-process case.
+    The process **cwd** is never touched: footman does not chdir. A call
+    that needs a different directory runs as a subprocess (explicit `cwd=`,
+    fully parallel) — `_run_callable` raises the taught error for the
+    in-process case.
     """
     if not env:
         yield
@@ -860,6 +863,20 @@ def _process_state(env: dict[str, str]) -> Iterator[None]:
         finally:
             os.environ.clear()
             os.environ.update(saved_env)
+
+
+@contextlib.contextmanager
+def _env_overlay(ctx: Context, overlay: dict[str, str]) -> Iterator[None]:
+    """Thread-confined env for an in-process call inside a run: swap
+    `ctx.env` for the call's merged overlay — the environ router serves the
+    callable's reads from it, and any child it spawns inherits it. No
+    process global is touched, so concurrent calls never serialise."""
+    saved = ctx.env
+    ctx.env = overlay
+    try:
+        yield
+    finally:
+        ctx.env = saved
 
 
 def _run_callable(
@@ -902,7 +919,7 @@ def _run_callable(
     default_cwd = None if ctx.cwd_unmanaged else ctx.cwd
     target_cwd = Path(cwd) if cwd is not None else default_cwd
     if target_cwd is not None:
-        live = Path(os.getcwd())
+        live = Path(_globals.real_getcwd())
         if target_cwd.resolve() != live:
             raise ValueError(
                 f"this in-process call needs cwd {target_cwd} but the process "
@@ -911,7 +928,8 @@ def _run_callable(
                 f"paths from footman.cwd(), or declare @task(cwd='unmanaged') "
                 f"if the call genuinely doesn't care."
             )
-    with _process_state(overlay):
+    state = _env_overlay(ctx, overlay) if _globals.active() else _process_state(overlay)
+    with state:
         if not capture:
             return _call_for_code(cmd, args), "", ""
         out_buf, err_buf = io.StringIO(), io.StringIO()
