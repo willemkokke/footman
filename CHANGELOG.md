@@ -182,7 +182,8 @@ versions may include breaking changes.
   one advanced page, and the five-shell functional tests drive a dotted
   descent through real bash/zsh/fish/pwsh/nushell.
 
-- **Questions front-load: ask-serial, run-parallel, as early as correct.**
+- **Questions front-load: asked one at a time, run in parallel, as early as
+  correct.**
   Every promptable `ask()` parameter across the whole run answers *up
   front*, right after the `confirm=` gates and before anything executes —
   you answer once and walk away, and think-time can never land inside a

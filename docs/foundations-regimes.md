@@ -33,8 +33,8 @@ thing, named in one word each:
   it, captured, and the status line steps aside for exactly that window.
 
 All three are granted at task boundaries by one arbiter, which is why they
-can be scheduled instead of contended for — the deadlocks page is the
-story of learning that distinction.
+can be scheduled instead of contended for — the deadlocks page is why that
+distinction earns its keep.
 
 ## The sentence to defend
 

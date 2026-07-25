@@ -62,12 +62,11 @@ The rule that makes all of this one idea: **`rel` is a suffix on whatever
 base is in force at the point it appears** — the ladder's base on a task,
 `ctx.cwd` at a call site.
 
-## What footman no longer does
+## In-process calls and the directory
 
-Before this design, an in-process tool call quietly did a real `os.chdir`
-under a process-wide lock whenever the task's directory differed from the
-process cwd — which silently serialised the run, whether the callable cared
-or not. That chdir is gone:
+An in-process call runs inside footman's own process, which has exactly one
+working directory. Nothing ever chdirs it out from under the other tasks, so
+the directory a call needs decides how that call runs:
 
 - An in-process call whose target equals the live process cwd (the common
   single-package case) runs untouched, fully parallel.
@@ -90,8 +89,7 @@ environment router:
 
 - **Reads** see the environment as it was when the run started, plus the
   task's own overlay — exactly what a subprocess spawned by the same task
-  would receive. In-process and subprocess tool calls finally read the same
-  world.
+  would receive. In-process and subprocess tool calls read the same world.
 - **Writes** scope to the task: `os.environ["API_KEY"] = "…"` is visible to
   the task's own reads and every child it spawns, and invisible to
   siblings. A one-time note names the deliberate spellings (`env=` per
@@ -155,16 +153,3 @@ a sibling that finishes mid-prompt has its output held until the terminal
 frees, so nothing lands across your typing. A bare `input()` in a plain
 parallel task is an error naming the two honest spellings: declare the
 value with `ask()`, or mark the task `interactive=True`.
-
-## Migrating
-
-Two breaking changes, each with a one-line fix:
-
-- **In-process calls no longer chdir.** If a task depended on it, either
-  its target already equals the process cwd (nothing to do), or mark it
-  `serial=True`, or rewrite the paths against `footman.cwd()`. The error
-  text says exactly this at the point of failure.
-- **Environment writes are task-scoped.** If a task wrote `os.environ` for
-  a *later* task to read, pass the value explicitly instead (`env=` on the
-  call, or a `forward`-marked parameter). Writes for the task's own
-  children keep working unchanged.

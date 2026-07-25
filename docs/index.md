@@ -53,7 +53,8 @@ parts that compound:
 - Modules become nested command groups, and task signatures carry no `ctx`
   boilerplate.
 - Independent tasks run in parallel by default, scheduled from the chain and
-  each task's `pre`/`post` dependencies — duty and invoke run these serially.
+  each task's `pre`/`post` dependencies — duty and invoke run these one at a
+  time.
 - A monorepo task cascade merges a `tasks.py` per folder, from the repo root
   down to where you stand.
 

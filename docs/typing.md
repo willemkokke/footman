@@ -82,13 +82,17 @@ When a value may itself contain a comma, mark the parameter `nosplit`: then only
 the repeated flag adds items, and a comma stays literal.
 
 ```python
-from typing import Annotated
-from footman import nosplit
+from footman import NoSplit
 
 @task
-def notify(lines: Annotated[list[str], nosplit]): ...
+def notify(lines: NoSplit[list[str]]): ...
 # fm notify --lines "Smith, John" --lines "Doe, Jane"  -> two names, commas kept
 ```
+
+`NoSplit[list[str]]` is shorthand for `Annotated[list[str], nosplit]` — the
+same marker, less to type. Every bare marker has a subscript form like this;
+[Terse aliases](#terse-aliases-and-forwarding) below has the full set and the
+rule for which markers can have one.
 
 ## Dictionaries
 

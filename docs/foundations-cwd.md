@@ -25,18 +25,17 @@ One sharp edge worth knowing even outside footman: **"starts with a slash"
 does not mean absolute**. On Windows, `Path("/x")` has no drive letter —
 it is *anchored* but not absolute — and joining it onto a base does not
 append, it **replaces** the base's whole path portion: `C:/base / "/x"`
-is `C:/x`. footman's own test suite learned this from a red Windows CI
-run; it is why every `rel=` in footman rejects anchored paths, not just
-absolute ones.
+is `C:/x`. That is why every `rel=` in footman rejects anchored paths, not
+just absolute ones.
 
 ## Why it matters to a task runner
 
 Parallel tasks plus relative paths is a race by construction: task A
 resolves `dist/` while task B chdirs elsewhere, and A's files land wherever
-B happened to point the process. Worse, the old convenience — chdir under a
-lock around each call that needed it — meant any such call silently
-**serialised the whole run**, whether the code cared about the cwd or not.
-The one global was quietly costing all the parallelism.
+B happened to point the process. And the obvious repair is worse than the
+disease: chdir under a lock around each call that needs it, and any such
+call silently **serialises the whole run**, whether the code cared about
+the cwd or not. One global quietly costs all the parallelism.
 
 ## What footman does about it
 

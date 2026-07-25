@@ -79,7 +79,7 @@ By default a collection parameter splits a single token on commas
 (`--tag a,b,c` -> `["a", "b", "c"]`) *in addition to* the repeatable form
 (`--tag a --tag b`). Mark it `nosplit` when a value may itself contain a comma:
 then only the repeated flag adds items and `--name "a,b"` stays the literal
-`"a,b"`."""
+`"a,b"`. `NoSplit[list[str]]` is the terser spelling of the same thing."""
 
 
 NoSplit = Annotated[_T, nosplit]

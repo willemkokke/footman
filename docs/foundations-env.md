@@ -27,11 +27,12 @@ never `putenv`.
 ## Why it matters to a task runner
 
 Two parallel tasks writing `os.environ` race exactly like two threads
-writing any shared dict — last write wins, at a time nobody chose. And
-before this design, footman had a subtler problem: a tool run **in-process**
-read the live `os.environ`, while the **subprocess** form of the very same
-call received a constructed `env=` — two lanes of one tool call reading
-*different worlds*. Correct code could break by switching lanes.
+writing any shared dict — last write wins, at a time nobody chose. And a
+runner that can run the same tool two ways has a subtler problem waiting: a
+tool run **in-process** reads the live `os.environ`, while the
+**subprocess** form of the very same call receives a constructed `env=` —
+two lanes of one tool call reading *different worlds*, so correct code
+breaks by switching lanes.
 
 ## What footman does about it
 
@@ -40,7 +41,7 @@ router** — the same move as its stdout router, applied to a second global:
 
 - **Reads** see the environment as it was at run start, plus *this task's*
   own overlay — exactly what the subprocess lane would inject. The two
-  lanes finally read one world.
+  lanes read one world.
 - **Writes scope to the task.** `os.environ["API_KEY"] = "…"` is visible to
   this task's reads and to every child it spawns, and invisible to
   siblings. A one-time note names the deliberate spellings: `env=` for one
