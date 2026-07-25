@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import os
 import threading
+from contextvars import ContextVar
 from typing import Any
 
 # Originals, captured at import time. Internals use these; the guards and
@@ -418,6 +419,142 @@ def _restore_multiprocessing() -> None:
         _mp_saved = None
 
 
+# --- the argv router ----------------------------------------------------------
+
+_argv_saved: Any = None
+_argv_ctx: ContextVar[list[str] | None] = ContextVar("footman_argv", default=None)
+
+
+class _ArgvProxy(list):
+    """The run's `sys.argv` — a real list underneath, with every Python-level
+    operation consulting the current call's override first.
+
+    This is what lets a legacy zero-argument `main()` run in parallel: each
+    in-process call sees its *own* argv through the same `sys.argv` object,
+    no lock, no global patch. A C extension reading the list storage directly
+    sees the base (the process's real argv) and degrades to the old
+    behaviour; direct reassignment (`sys.argv = […]`) replaces the proxy and
+    stays process-global — both documented edges, neither a crash."""
+
+    def _ov(self) -> list[str] | None:
+        return _argv_ctx.get()
+
+    def __getitem__(self, i: Any) -> Any:
+        ov = self._ov()
+        return ov[i] if ov is not None else super().__getitem__(i)
+
+    def __setitem__(self, i: Any, v: Any) -> None:
+        ov = self._ov()
+        if ov is not None:
+            ov[i] = v
+        else:
+            super().__setitem__(i, v)
+
+    def __delitem__(self, i: Any) -> None:
+        ov = self._ov()
+        if ov is not None:
+            del ov[i]
+        else:
+            super().__delitem__(i)
+
+    def __iter__(self) -> Any:
+        ov = self._ov()
+        return iter(ov) if ov is not None else super().__iter__()
+
+    def __len__(self) -> int:
+        ov = self._ov()
+        return len(ov) if ov is not None else super().__len__()
+
+    def __contains__(self, x: Any) -> bool:
+        ov = self._ov()
+        return x in ov if ov is not None else super().__contains__(x)
+
+    def __repr__(self) -> str:
+        ov = self._ov()
+        return repr(ov) if ov is not None else super().__repr__()
+
+    def __eq__(self, other: Any) -> bool:
+        ov = self._ov()
+        return (ov == other) if ov is not None else super().__eq__(other)
+
+    __hash__ = None  # type: ignore[assignment]  # lists are unhashable
+
+    def __add__(self, other: Any) -> Any:
+        ov = self._ov()
+        return (ov + other) if ov is not None else list(self) + other
+
+    def append(self, v: Any) -> None:
+        ov = self._ov()
+        ov.append(v) if ov is not None else super().append(v)
+
+    def extend(self, it: Any) -> None:
+        ov = self._ov()
+        ov.extend(it) if ov is not None else super().extend(it)
+
+    def insert(self, i: Any, v: Any) -> None:
+        ov = self._ov()
+        ov.insert(i, v) if ov is not None else super().insert(i, v)
+
+    def pop(self, i: Any = -1) -> Any:
+        ov = self._ov()
+        return ov.pop(i) if ov is not None else super().pop(i)
+
+    def remove(self, v: Any) -> None:
+        ov = self._ov()
+        ov.remove(v) if ov is not None else super().remove(v)
+
+    def clear(self) -> None:
+        ov = self._ov()
+        ov.clear() if ov is not None else super().clear()
+
+    def index(self, *a: Any) -> int:
+        ov = self._ov()
+        return ov.index(*a) if ov is not None else super().index(*a)
+
+    def count(self, v: Any) -> int:
+        ov = self._ov()
+        return ov.count(v) if ov is not None else super().count(v)
+
+    def copy(self) -> list[str]:
+        ov = self._ov()
+        return list(ov) if ov is not None else list(self)
+
+
+def argv_override(args: list[str]) -> Any:
+    """A context manager giving this thread its own `sys.argv` view for the
+    block — served by the argv router, lock-free. The tools bridge wraps a
+    legacy zero-argument `main()` in one, so those calls parallelise like
+    their argument-accepting siblings."""
+    import contextlib
+
+    @contextlib.contextmanager
+    def _cm() -> Any:
+        token = _argv_ctx.set(list(args))
+        try:
+            yield
+        finally:
+            _argv_ctx.reset(token)
+
+    return _cm()
+
+
+def _install_argv() -> None:
+    import sys as _sys
+
+    global _argv_saved
+    _argv_saved = _sys.argv
+    _sys.argv = _ArgvProxy(_argv_saved)
+
+
+def _restore_argv() -> None:
+    import sys as _sys
+
+    global _argv_saved
+    if _argv_saved is not None:
+        _sys.argv = _argv_saved
+        _argv_saved = None
+
+
 # --- the stdin router ---------------------------------------------------------
 
 _stdin_saved: Any = None
@@ -675,6 +812,7 @@ def install() -> None:
         _install_os_guards()
         _install_multiprocessing()
         _install_stdin()
+        _install_argv()
 
 
 def uninstall() -> None:
@@ -686,6 +824,7 @@ def uninstall() -> None:
         _installs -= 1
         if _installs > 0:
             return
+        _restore_argv()
         _restore_stdin()
         _restore_multiprocessing()
         _restore_os_guards()

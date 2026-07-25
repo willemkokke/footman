@@ -366,7 +366,8 @@ def _accepts_args(entry: Any) -> bool:
 
     Click commands (`cli(args)`) and argv-parameter mains
     (`main(argv=None)`) both can — their first parameter is positional. Only
-    a true zero-arg `main()` needs `sys.argv` patched, which is process-
+    a true zero-arg `main()` needs a `sys.argv` view, which the argv router
+    serves per call inside a run — outside one it is patched process-
     global and therefore serialised.
     """
     import inspect
@@ -383,7 +384,8 @@ def _accepts_args(entry: Any) -> bool:
     return any(p.kind in positional for p in sig.parameters.values())
 
 
-# Only the sys.argv-patching fallback needs serialising; argument-accepting
+# Only the bare-call (outside-a-run) sys.argv patch needs serialising; inside
+# a run the argv router gives each call its own view, and argument-accepting
 # entries (the overwhelming majority) run fully in parallel.
 _argv_lock = _threading.Lock()
 
@@ -424,8 +426,8 @@ class Tool:
     can't be found. Parallelism survives: entries that accept an
     argument list (click commands, `main(argv=None)` — detected from the
     signature) are called directly and capture through the per-task stdout
-    router; only a legacy zero-arg `main()` needs `sys.argv` patched, and
-    only those serialise.
+    router; even a legacy zero-arg `main()` parallelises — the argv router
+    serves each call its own view of `sys.argv`.
     """
 
     def __init__(
@@ -599,7 +601,12 @@ class Tool:
                 # so a dry-run of this call imports nothing.
                 if _accepts_args(entry):
                     return entry(tail)  # click / main(argv): lock-free, parallel
-                with _argv_lock:  # legacy zero-arg main(): patch argv, serialised
+                if _pg.active():
+                    # The argv router: this call gets its own sys.argv view —
+                    # lock-free, so even a legacy zero-arg main() parallelises.
+                    with _pg.argv_override(argv):
+                        return entry()
+                with _argv_lock:  # bare calls outside a run: classic patch
                     saved = _sys.argv
                     _sys.argv = argv
                     try:
