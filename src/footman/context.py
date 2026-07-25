@@ -262,7 +262,8 @@ def chdir(
                 f"token or an absolute path; a relative suffix goes in rel=…"
             )
     if rel is not None:
-        if Path(rel).is_absolute():
+        rel_suffix = Path(rel)
+        if rel_suffix.is_absolute() or rel_suffix.anchor:
             raise TypeError(
                 f"rel={str(rel)!r} is absolute — rel is a suffix appended "
                 f"to the resolved base; an absolute directory goes first."
@@ -1494,7 +1495,7 @@ def _target_cwd(
     if rel is None:
         return base
     rel_path = Path(rel)
-    if rel_path.is_absolute():
+    if rel_path.is_absolute() or rel_path.anchor:  # anchored = absolute on win
         raise ValueError(
             f"rel={str(rel)!r} is absolute — rel is a suffix on the call's cwd "
             f"base; pass an absolute directory as cwd=…"
@@ -1765,7 +1766,8 @@ def parallel(*calls: Callable[[], Any], keep_going: bool = False) -> list[int]:
             code, error = 1, exc
         finally:
             _current.reset(token)
-        with lock:
+        gate = _globals.console_gate() if dest_is_real else contextlib.nullcontext()
+        with gate, lock:
             blob = child.sink.getvalue()  # type: ignore[union-attr]
             # A child that ended mid-colour (a crash, an unterminated SGR) must
             # not bleed into the next child's block when they interleave: cap a

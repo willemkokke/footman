@@ -75,8 +75,13 @@ def _validate_cwd(value: str | Path) -> str | Path:
 
 
 def _validate_rel(value: str | Path) -> str:
-    """A rel suffix: a relative path, appended to the resolved cwd base."""
-    if Path(value).is_absolute():
+    """A rel suffix: a relative path, appended to the resolved cwd base.
+
+    Anchored counts as absolute: on Windows a driveless-rooted path
+    (`/x` — `is_absolute()` False, `anchor` set) would silently replace
+    the base's whole path portion when joined, the opposite of a suffix."""
+    rel_path = Path(value)
+    if rel_path.is_absolute() or rel_path.anchor:
         raise TypeError(
             f"rel={str(value)!r} is absolute — rel is a suffix appended to the "
             f"resolved cwd base; an absolute directory goes in cwd=…"
