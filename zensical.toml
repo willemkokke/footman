@@ -27,6 +27,17 @@ nav = [
     { "Cookbook" = "cookbook.md" },
     { "Custom CLI" = "custom-cli.md" },
   ] },
+  { "Foundations" = [
+    { "Start here" = "foundations.md" },
+    { "One process, many tasks" = "foundations-process.md" },
+    { "The working directory" = "foundations-cwd.md" },
+    { "The environment" = "foundations-env.md" },
+    { "The shell" = "foundations-shell.md" },
+    { "Spawning programs" = "foundations-spawning.md" },
+    { "Threads & the GIL" = "foundations-threads.md" },
+    { "Deadlocks" = "foundations-deadlocks.md" },
+    { "The four globals, two regimes" = "foundations-regimes.md" },
+  ] },
   { "Completion" = [
     { "How it works" = "completion.md" },
     { "bash" = "completion-bash.md" },

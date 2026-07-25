@@ -55,3 +55,28 @@ def test_json_version_example_is_current():
     """The --version JSON example on the JSON page tracks __version__."""
     text = (DOCS / "json.md").read_text(encoding="utf-8")
     assert f'"version": "{footman.__version__}"' in text
+
+
+def test_foundations_pages_teach_their_guards():
+    """Every process-globals guard has a Foundations page teaching its
+    ground. The mapping lives here (runtime error texts don't carry doc
+    links yet — making them is a separate, user-visible design call); the
+    assert is that each page and its load-bearing lesson exist, so a future
+    link always has a stable target."""
+    lessons = {
+        "foundations-process.md": ["process global", "at spawn"],
+        "foundations-cwd.md": ["footman.cwd()", "serial", "anchored"],
+        "foundations-env.md": ["scope", "putenv", "ctx.env"],
+        "foundations-shell.md": ["shell", "pipes"],
+        "foundations-spawning.md": ["fork", "process group", "explicit arguments"],
+        "foundations-threads.md": ["GIL", "serial lane"],
+        "foundations-deadlocks.md": ["hold-and-wait", "boundary", "declared"],
+        "foundations-regimes.md": ["declared", "interactive=True", "exclusive=True"],
+    }
+    nav = (ROOT / "zensical.toml").read_text(encoding="utf-8")
+    for name, needles in lessons.items():
+        raw = (DOCS / name).read_text(encoding="utf-8")
+        text = " ".join(raw.split())  # wrap-proof: prose reflows freely
+        assert name in nav, f"{name} exists but is not in the nav"
+        for needle in needles:
+            assert needle in text, f"{name} lost its lesson: {needle!r}"
