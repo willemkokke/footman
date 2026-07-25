@@ -360,3 +360,26 @@ def test_confirm_and_interactive_carry_note_keys():
     assert tree["tasks"]["deploy"]["confirm"] == "to prod?"
     assert "interactive" not in tree["tasks"]["plain"]
     assert "confirm" not in tree["tasks"]["plain"]
+
+
+def test_serial_and_exclusive_carry_the_lane_key():
+    from footman import registry
+
+    with registry.capture() as root:
+
+        @registry.task(serial=True)
+        def legacy():
+            "Owns the globals."
+
+        @registry.task(exclusive=True)
+        def bench():
+            "Owns the machine."
+
+        @registry.task
+        def plain():
+            "Plain."
+
+    tree = manifest.build_manifest(root)["tree"]
+    assert tree["tasks"]["legacy"]["lane"] == "serial"
+    assert tree["tasks"]["bench"]["lane"] == "exclusive"
+    assert "lane" not in tree["tasks"]["plain"]

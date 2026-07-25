@@ -399,11 +399,10 @@ def run_plan(
     # An interactive task owns the real terminal: it forces sequential (it can't
     # share with parallel siblings) and suppresses the status line, whose
     # clear-line repaints would otherwise erase its prompt.
-    # An interactive task no longer forces the whole run sequential: it
-    # claims the arbiter's console lane (one owner, real stdio) and the
-    # parallel pool keeps running around it, captured; only the status
-    # line still yields for the run (its repaints would fight the prompt).
-    interactive = any(is_interactive(n.fn) for n in nodes)
+    # An interactive task neither forces the run sequential nor costs it
+    # the status line: it claims the arbiter's console lane (one owner,
+    # real stdio), the parallel pool keeps running around it captured, and
+    # the lane suspends the status line for exactly the ownership window.
     sequential = sequential or len(nodes) == 1
     # A run containing an infinite task has no progress to show — its
     # duration isn't late, it's intentional. The status line yields to a
@@ -436,7 +435,10 @@ def run_plan(
             ctx_config,
             capture,
             estimate,
-            progress and not endless and not interactive,
+            # An interactive run keeps its status line now: the console
+            # lane suspends it while a wizard owns the terminal and resumes
+            # it after — instead of sacrificing it for the whole run.
+            progress and not endless,
         )
         hint_err = (
             err

@@ -578,23 +578,27 @@ def test_infinite_task_hints_and_suppresses_the_status_line(monkeypatch):
     assert "\r" not in err  # no status-line repaints: nothing is "in progress"
 
 
-def test_interactive_task_suppresses_the_status_line(monkeypatch):
-    # An interactive task owns the real terminal; a status-line repaint
-    # (\r + clear-line) would erase its prompt, so the line must not draw.
+def test_interactive_task_suspends_the_status_line_for_its_body(monkeypatch):
+    # The console lane suspends the status line for exactly the ownership
+    # window: not one byte of repaint may land while the wizard's body owns
+    # the terminal (a \r + clear-line would erase its prompt) — but the line
+    # itself lives on around the body, instead of costing the whole run.
     monkeypatch.delenv("NO_COLOR", raising=False)
     err_fake = _Tty()
     monkeypatch.setattr(sys, "stderr", err_fake)
     monkeypatch.setattr(sys, "stdout", io.StringIO())
+    marks = {}
 
     def tasks(reg):
         @reg.task(interactive=True)
         def wizard():
+            marks["start"] = err_fake.getvalue()
             run("echo hi", title="hi")
+            marks["end"] = err_fake.getvalue()
 
     drive(tasks, "wizard")
-    err = err_fake.getvalue()
-    assert "\r" not in err
-    assert "running:" not in err
+    assert marks["start"] == marks["end"]  # silent while the body owns it
+    assert "\r" in err_fake.getvalue()  # and alive around it
 
 
 def test_infinite_hint_respects_quiet(monkeypatch):

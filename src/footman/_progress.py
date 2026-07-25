@@ -223,6 +223,7 @@ class StatusLine:
         self.counted: dict[str, tuple[int, int]] = {}
         self.painted = False
         self.at_col0 = True
+        self.suspended = False
         self.ticks = 0
         self._stop = threading.Event()
         self._ticker: threading.Thread | None = None
@@ -285,11 +286,26 @@ class StatusLine:
             self._clear_locked()
             self.at_col0 = s.endswith("\n")
 
+    # -- console coexistence
+    def suspend(self) -> None:
+        """A console owner (an interactive task) holds the real terminal:
+        clear the line and stop painting until `resume` — a repaint would
+        fight the prompt for the cursor. Unit events keep accumulating, so
+        the resumed line is immediately truthful."""
+        with self.lock:
+            self.suspended = True
+            self._clear_locked()
+
+    def resume(self) -> None:
+        with self.lock:
+            self.suspended = False
+        self.paint()
+
     # -- painting
     def paint(self) -> None:
         with self.lock:
-            if not self.at_col0:
-                return  # someone's mid-line (a live `→ step`): stay away
+            if self.suspended or not self.at_col0:
+                return  # a wizard owns the terminal, or someone's mid-line
             self.ticks += 1
             self.err.write(f"{_CLEAR}{self._render()}")
             self.err.flush()

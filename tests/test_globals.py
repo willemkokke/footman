@@ -696,3 +696,47 @@ def test_abort_latch_clears_after_a_failed_run():
         r = run([sys.executable, "-c", "print('alive')"], silent=True)
     assert r == 0
     assert r.stdout.strip() == "alive"
+
+
+# --- the status line suspends for a console owner -----------------------------
+
+
+def test_console_lane_suspends_the_status_line():
+    from footman import context
+
+    calls = []
+
+    class _FakeStatus:
+        def suspend(self):
+            calls.append("suspend")
+
+        def resume(self):
+            calls.append("resume")
+
+    _globals.install()
+    context.set_status(_FakeStatus())
+    try:
+        with _globals.lane(None, name="wizard", console=True):
+            assert calls == ["suspend"]  # paused for exactly the ownership
+        assert calls == ["suspend", "resume"]
+    finally:
+        context.set_status(None)
+        _globals.uninstall()
+
+
+def test_status_line_suspend_stops_painting():
+    import io as _io
+
+    from footman._progress import StatusLine
+
+    err = _io.StringIO()
+    line = StatusLine(err, None, color=False)
+    line.unit_added(1)
+    line.unit_started("wizard")  # paints
+    assert err.getvalue()
+    line.suspend()
+    before = err.getvalue()
+    line.paint()  # a tick while a wizard owns the terminal: no repaint
+    assert err.getvalue() == before
+    line.resume()  # repaints immediately, and truthfully
+    assert len(err.getvalue()) > len(before)
