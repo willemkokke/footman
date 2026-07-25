@@ -468,6 +468,12 @@ def run_plan(
             if status is not None:
                 context.set_status(None)
                 status.close()
+    # The abort latch is run-scoped: leaving it set after a normal return
+    # would make `_register_child` reap a *later* bare run()'s child (a
+    # latched fail-fast from one test killing the next test's echo). The
+    # Ctrl-C/internal-error path unwinds by exception and keeps the latch,
+    # which the interrupted-reporting above this layer still reads.
+    context.reset_abort()
     return denied + [n.result for n in _toposort(nodes) if n.result is not None]
 
 

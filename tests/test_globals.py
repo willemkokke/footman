@@ -674,3 +674,25 @@ def test_console_gate_queues_until_the_console_frees():
         t2.join(5)
     finally:
         _globals.uninstall()
+
+
+# --- the abort latch is run-scoped --------------------------------------------
+
+
+def test_abort_latch_clears_after_a_failed_run():
+    # A run that ends in a failed task latches fail-fast; the latch must die
+    # with the run — a *later* bare run() (no scheduler, so no start-of-run
+    # reset) must not have its freshly registered child reaped at birth.
+    from footman.context import Context, use_context
+
+    def tasks(reg):
+        @reg.task
+        def boom():
+            raise RuntimeError("x")
+
+    results = drive(tasks, "boom")
+    assert not results[0].ok
+    with use_context(Context()):
+        r = run([sys.executable, "-c", "print('alive')"], silent=True)
+    assert r == 0
+    assert r.stdout.strip() == "alive"
