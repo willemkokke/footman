@@ -68,6 +68,7 @@ older footman.
 | `sequential` | Run tasks one at a time by default.                       |
 | `color`      | `always` / `never` / `auto` (default): when to emit ANSI colour, for footman's own output and the tools it spawns. `--color` / `--no-color` override it. |
 | `jobs`       | Max parallel tasks (default: cores - 1, never below 2).   |
+| `sort`       | `true` lists tasks alphabetically — in `--list`, `--tree`, help, and the generated docs pages. Default `false`: definition order, so the file's own order is the listing's. `--sort` does the same for one invocation. Presentation only; never changes what runs or when. |
 | `progress`   | `false` permanently disables the progress bar, eta line, and timing capture. |
 | `uv`         | `false` disables the uv handoff (a globally-installed `fm` re-running itself via `uv run` when the project's lockfile pins footman). |
 | `completion.max_age` | Age before a background completion refresh (e.g. `"10m"`; `off` to disable). |

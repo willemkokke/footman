@@ -1169,6 +1169,18 @@ def _run_tree(
     color_mode = _resolve_color(g, cfg)
     _set_colors(color_mode)
 
+    # Presentation only: the sorted copy feeds every human-facing walk
+    # (--list, --tree, help, the --json catalog). The run resolves through
+    # the registry, so execution order never follows this setting. The
+    # config key is validated even when --sort already decides, so a broken
+    # value teaches on every invocation, not just unflagged ones.
+    try:
+        sort_cfg = config.sort_listing(cfg)
+    except config.ConfigError as exc:
+        return _refuse(json_mode, str(exc))
+    if g.get("sort") or sort_cfg:
+        tree = _describe.sort_tree(tree)
+
     if _wants_help(argv):
         return _print_help(tree, argv)
 

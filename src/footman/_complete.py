@@ -31,7 +31,7 @@ import time
 # these FROM split.GLOBALS, so renaming or re-typing a global fails CI.
 _GLOBAL_FLAG = frozenset(
     {
-        "--help", "-h", "--version", "-V", "--list", "-l", "--tree",
+        "--help", "-h", "--version", "-V", "--list", "-l", "--tree", "--sort",
         "--dry-run", "-n", "--keep-going", "-k", "--fail-fast", "--sequential", "-s",
         "--yes", "-y", "--no-input",
         "--quiet", "-q", "--verbose", "-v", "--no-color", "--no-progress",
