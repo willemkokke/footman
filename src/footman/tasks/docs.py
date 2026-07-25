@@ -42,11 +42,6 @@ def _project_tree(include_self: bool) -> dict:
     filename = name if isinstance(name, str) else _paths.DEFAULT_TASKS_FILE
     files = _paths.task_files(cwd, ceiling, filename)
     base = registry.Group("root")
-    plugins = cfg.get("plugins")
-    if isinstance(plugins, list) and plugins:
-        from footman import compose
-
-        compose.mount_plugins(base, plugins)
     reg = discover.load_tree(files, base=base)
     tree = _manifest.build_manifest(reg)["tree"]
     if not include_self:

@@ -551,6 +551,79 @@ def _print_help(tree: dict, argv: list[str]) -> int:
     return 0
 
 
+def _plugins_report(reg: registry.Group) -> int:
+    """`--plugins`: installed `footman.tasks` entry points, pulled or not.
+
+    "Installed but nobody pulled it" becomes visible. Descriptions are
+    two-tier: a pulled plugin shows its landed tree's own help; an unpulled
+    one shows its distribution's Summary (the entry-point record itself
+    cannot carry a description — the packaging spec is strictly
+    `name = "module:attr"`), read from metadata with zero imports.
+    """
+    from importlib.metadata import entry_points
+
+    from footman import compose
+
+    eps = sorted(entry_points(group=compose.ENTRY_POINT_GROUP), key=lambda e: e.name)
+    if not eps:
+        print("No footman.tasks plugins installed.")
+        return 0
+
+    landed: dict[str, list[str]] = {}
+
+    def walk(node: registry.Group, prefix: str, inside: bool) -> None:
+        # Report the top-most pulled node per identity — its whole subtree
+        # shares the provenance, and the top is the copy-paste address.
+        for name, fn in node.tasks.items():
+            ident = registry.pulled_from(fn)
+            if ident is not None and not inside:
+                landed.setdefault(ident, []).append(f"{prefix}{name}")
+        for name, sub in node.groups.items():
+            ident = sub.pulled_from
+            if ident is not None and not inside:
+                landed.setdefault(ident, []).append(f"{prefix}{name}")
+            walk(sub, f"{prefix}{name}.", inside or ident is not None)
+
+    walk(reg, "", False)
+
+    def described(addresses: list[str]) -> str:
+        node: object = reg
+        for part in addresses[0].split("."):
+            node = (
+                node.groups.get(part, node.tasks.get(part))
+                if isinstance(node, registry.Group)
+                else None
+            )
+        if isinstance(node, registry.Group):
+            return node.help
+        doc = (getattr(node, "__doc__", "") or "").strip()
+        return doc.splitlines()[0] if doc else ""
+
+    rows: list[tuple[str, str, str]] = []
+    for ep in eps:
+        where = landed.get(ep.name)
+        if where:
+            rows.append(
+                (ep.name, f"pulled at {', '.join(sorted(where))}", described(where))
+            )
+        else:
+            meta = getattr(ep.dist, "metadata", None)
+            summary = (meta.get("Summary", "") if meta else "") or ""
+            rows.append((ep.name, "(not pulled)", summary))
+    name_w = max(len(name) for name, _, _ in rows)
+    state_w = max(len(state) for _, state, _ in rows)
+    on = _color_out
+    for name, state, desc in rows:
+        line = (
+            f"  {_describe.bold(name, on)}{' ' * (name_w - len(name))}"
+            f"  {state}{' ' * (state_w - len(state))}"
+        )
+        if desc:
+            line += f"  {_describe.dim(f'— {desc}', on)}"
+        print(line.rstrip())
+    return 0
+
+
 def _where(root: registry.Group, tree: dict, dotted: str) -> int:
     # Strict, like every address surface: `docs..serve` or a trailing dot is
     # an error, never silently normalised away.
@@ -992,14 +1065,15 @@ def _execute(
     json_mode = bool(g.get("json"))
 
     base = registry.Group("root")
-    plugins = cfg.get("plugins")
-    if isinstance(plugins, list) and plugins:
-        from footman import compose
-
-        try:
-            compose.mount_plugins(base, plugins)
-        except registry.RegistrationError as exc:
-            return _refuse(json_mode, str(exc))
+    if cfg.get("plugins"):
+        # The config key died with the composition rework: pulls are authored
+        # in tasks.py, where placement, filtering, and overrides live.
+        return _refuse(
+            json_mode,
+            "the [tool.footman] plugins key was removed — pull plugins from "
+            'tasks.py instead: plugin("footman.docs", into="footman") '
+            "(footman.compose.plugin; see the composing docs)",
+        )
 
     try:
         reg = discover.load_tree(files, base=base)
@@ -1086,6 +1160,9 @@ def _run_tree(
 
     if _wants_help(argv):
         return _print_help(tree, argv)
+
+    if g.get("plugins"):
+        return _plugins_report(reg)
 
     if g.get("where"):
         # Deliberately plain under --json too: `file:line` already is the

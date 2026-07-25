@@ -9,6 +9,13 @@ versions may include breaking changes.
 
 ### Added
 
+- **`fm --plugins`** lists the installed `footman.tasks` entry points,
+  marked pulled-or-not and where each landed — "installed but nobody
+  pulled it" becomes visible. Descriptions are two-tier: a pulled plugin
+  shows its landed tree's own help; an unpulled one shows its
+  distribution's Summary (entry-point records can't carry a description),
+  read from metadata with zero imports. A container module's docstring
+  becomes its root help.
 - **Group defaults take positionals.** The `@group.default` no-positional
   rule existed only because `fm lint foo` used to be ambiguous; dotted
   addressing dissolved the ambiguity (the subtask is `fm lint.foo`), so
@@ -162,6 +169,26 @@ versions may include breaking changes.
 
 ### Changed
 
+- **BREAKING: composition is two typed verbs — `plugin()` pulls entry
+  points, `include()` pulls modules — and the `plugins=` config key is
+  gone.** A pull line in your tasks file replaces the config mount:
+  `plugin("footman.docs", into="footman")`. The longest installed
+  `footman.tasks` entry-point name (for `plugin()`) or importable module
+  prefix (for `include()`) is the *identity*; the rest of the string walks
+  the provider's tree, so `plugin("acme.devkit.lint")` reads like
+  `from acme_devkit import lint`. A pulled node lands under its **own
+  name** — identity never becomes an address; `into=` (a dotted address,
+  created on demand) is the consumer's placement, and a whole container
+  splats its children (the devkit one-liner). Filters are relative to the
+  pulled node; a subpath can land a single task
+  (`plugin("acme.linters.default", into="lint")` adopts a provider's
+  default, which then fans out the group it *landed in* — default-ness is
+  parent-relative). Collisions are provenance-based: your own definitions
+  silently win, whatever the file order; two pulls clashing at one leaf
+  raise loudly, citing both identities, unless `override=True`;
+  group-vs-group composes recursively all the way down. A leftover
+  `plugins=` key is a taught refusal pointing at the pull line, never a
+  silent ignore.
 - **BREAKING: the group default is the child task named `default`.**
   `@group.default` now registers its function as the child `default` — a
   fixed, well-known name — so the default finally has an address

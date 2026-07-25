@@ -29,7 +29,7 @@ def refresh_cwd() -> None:
 def _rebuild() -> None:
     from pathlib import Path
 
-    from footman import _paths, compose, config, discover, manifest, registry
+    from footman import _paths, config, discover, manifest, registry
 
     cwd = Path.cwd()
     ceiling = _paths.find_repo_root(cwd)
@@ -46,15 +46,9 @@ def _rebuild() -> None:
     if not files:
         return
 
-    # Mirror the app layer's cwd cascade build (discovery + config plugins), so
-    # the refreshed manifest matches what a real `fm` run would cache.
+    # Mirror the app layer's cwd cascade build; plugin pulls are authored in
+    # the tasks files themselves, so discovery alone rebuilds the whole tree.
     base = registry.Group("root")
-    plugins = cfg.get("plugins")
-    if isinstance(plugins, list) and plugins:
-        # A broken plugin shouldn't abort the whole refresh.
-        with contextlib.suppress(registry.RegistrationError):
-            compose.mount_plugins(base, plugins)
-
     reg = discover.load_tree(files, base=base)
     manifest.sync_manifest(
         reg, cwd, completion_max_age=config.completion_max_age(cfg), tasks_file=name
@@ -71,24 +65,17 @@ def refresh_source(tasks_file: str) -> None:
 def _rebuild_source(tasks_file: str) -> None:
     from pathlib import Path
 
-    from footman import _paths, compose, config, discover, manifest, registry
+    from footman import _paths, discover, manifest, registry
 
     one = Path(tasks_file).expanduser()
     if not one.is_file():
         return  # a typed-but-missing -f value: nothing to build
     cwd = Path.cwd()
-    ceiling = _paths.find_repo_root(cwd)
-    cfg = config.load_config(cwd, ceiling)
 
-    # Mirror a real `-f` run (see _app._run): one file, no cascade, config
-    # plugins mounted, cached under the (cwd, file) key with max_age=0 — no
-    # background refresh, rebuilt on the next -f run or the next cold TAB.
+    # Mirror a real `-f` run (see _app._run): one file, no cascade, cached
+    # under the (cwd, file) key with max_age=0 — no background refresh,
+    # rebuilt on the next -f run or the next cold TAB.
     base = registry.Group("root")
-    plugins = cfg.get("plugins")
-    if isinstance(plugins, list) and plugins:
-        with contextlib.suppress(registry.RegistrationError):
-            compose.mount_plugins(base, plugins)
-
     reg = discover.load_tree([one], base=base)
     manifest.sync_manifest(
         reg,

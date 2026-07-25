@@ -16,12 +16,11 @@ from footman import _app, _paths
 
 @pytest.fixture
 def plugin_project(tmp_path, monkeypatch):
-    (tmp_path / "pyproject.toml").write_text(
-        "[project]\nname='x'\n[tool.footman]\n"
-        "plugins = ['footman.docs', 'footman.tools']\n"
-    )
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
     (tmp_path / "tasks.py").write_text(
-        "from footman import task, group\n"
+        "from footman import plugin, task, group\n"
+        "plugin('footman.docs', into='footman')\n"
+        "plugin('footman.tools', into='footman')\n"
         "\n"
         "@task\n"
         "def greet(name: str = 'world'):\n"

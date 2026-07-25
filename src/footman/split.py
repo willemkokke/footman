@@ -98,6 +98,7 @@ GLOBALS: list[tuple[str, str | None, str, str | None, str]] = [
     ("--list", "-l", "flag", None, "list tasks (flat)"),
     ("--tree", None, "flag", None, "list tasks grouped by command group"),
     ("--where", None, "option", "TASK", "print the task's source file:line"),
+    ("--plugins", None, "flag", None, "list installed footman.tasks plugins"),
     ("--dry-run", "-n", "flag", None, "print the parsed plan without running"),
     ("--keep-going", "-k", "flag", None, "run every branch even if one fails"),
     ("--fail-fast", None, "flag", None, "stop at the first failure"),

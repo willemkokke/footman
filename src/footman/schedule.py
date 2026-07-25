@@ -50,6 +50,12 @@ class _Node:
     forwarded: dict[str, Any] = field(default_factory=dict)  # `forward`ed values in
     forward_targets: list[_Node] = field(default_factory=list)  # …and out
     keep_going: bool = False  # resolved failure policy for THIS node (per-subtree)
+    # The group this default action was *reached through*, when known.
+    # Default-ness is parent-relative: a provider's default pulled into a
+    # consumer group must fan out the group it landed in, not the one it was
+    # declared on — task fns are shared between trees, so the declaration
+    # stamp cannot know where a pull placed it.
+    group: Group | None = None
 
 
 def _default_seg(fn: Task) -> Segment:
@@ -86,6 +92,25 @@ def _as_task(dep: Task | Group | _Opted) -> Task:
     return dep
 
 
+def _owner_of(dep: Task | Group | _Opted) -> Group | None:
+    """The group a `pre=`/`post=` reference reaches a default *through*."""
+    if isinstance(dep, _Opted):
+        base = dep._opted_base
+        return base if isinstance(base, Group) else None
+    return dep if isinstance(dep, Group) else None
+
+
+def _segment_group(root: Group, seg: Segment) -> Group | None:
+    """The group a bare-group segment names (`fm lint` — its default runs)."""
+    node = root
+    for name in seg.path:
+        sub = node.groups.get(name)
+        if sub is None:
+            return None  # the path ends on a task, not a group
+        node = sub
+    return node
+
+
 def _build_dag(root: Group, segments: list[Segment]) -> list[_Node]:
     """Nodes for the chain plus their transitive pre/post deps.
 
@@ -105,10 +130,11 @@ def _build_dag(root: Group, segments: list[Segment]) -> list[_Node]:
         nodes.append(node)
         return node
 
-    def add_dep(fn: Task) -> _Node:
+    def add_dep(fn: Task, owner: Group | None = None) -> _Node:
         node = dep_nodes.get(_dep_key(fn))
         if node is None:
             node = new_node(fn, _default_seg(fn))
+            node.group = owner
             dep_nodes[_dep_key(fn)] = node
             _link(node)
         return node
@@ -138,18 +164,18 @@ def _build_dag(root: Group, segments: list[Segment]) -> list[_Node]:
         # implicit prerequisites, so the scheduler runs them (in parallel) and the
         # default's forward-marked values thread into the ones that declare them.
         # The `default` child is the fan-out itself — excluded from its own set.
-        group = default_group(node.fn)
+        group = node.group or default_group(node.fn)
         if group is not None and fans_out(node.fn):
             pre = [
                 *(fn for name, fn in group.tasks.items() if name != "default"),
                 *pre,
             ]
         for dep in pre:
-            d = add_dep(_as_task(dep))
+            d = add_dep(_as_task(dep), _owner_of(dep))
             node.deps.add(d.key)
             node.forward_targets.append(d)  # forwarding threaded in a later pass
         for dep in post_tasks(node.fn):
-            d = add_dep(_as_task(dep))
+            d = add_dep(_as_task(dep), _owner_of(dep))
             d.deps.add(node.key)
             node.forward_targets.append(d)
 
@@ -164,6 +190,7 @@ def _build_dag(root: Group, segments: list[Segment]) -> list[_Node]:
             seen_explicit.add(key)
             continue
         node = new_node(fn, seg)
+        node.group = _segment_group(root, seg)
         if existing is None:
             dep_nodes[key] = node
         seen_explicit.add(key)

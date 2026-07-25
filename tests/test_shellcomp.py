@@ -813,11 +813,11 @@ def test_zsh_cast_records_an_animated_completion(home, tmp_path, monkeypatch):
     the hook loaded via --setup-completion, TAB answered from the warm cache
     (FOOTMAN_CACHE_DIR carries it past the scratch HOME), and the frames
     composed into one animated SVG."""
-    (tmp_path / "pyproject.toml").write_text(
-        "[project]\nname='x'\n[tool.footman]\nplugins = ['footman.docs']\n"
-    )
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
     (tmp_path / "tasks.py").write_text(
-        'from footman import task\n\n@task\ndef lint(fix: bool = False):\n    "Lint."\n'
+        "from footman import plugin, task\n\n"
+        "plugin('footman.docs', into='footman')\n\n"
+        '@task\ndef lint(fix: bool = False):\n    "Lint."\n'
     )
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("XDG_CACHE_HOME", str(home / ".cache"))
@@ -886,11 +886,11 @@ def test_cast_completes_in_every_posix_shell(shell: str, home, tmp_path, monkeyp
     exe = {"nushell": "nu"}.get(shell, shell)
     if shutil.which(exe) is None:
         pytest.skip(f"{exe} not installed")
-    (tmp_path / "pyproject.toml").write_text(
-        "[project]\nname='x'\n[tool.footman]\nplugins = ['footman.docs']\n"
-    )
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
     (tmp_path / "tasks.py").write_text(
-        'from footman import task\n\n@task\ndef lint(fix: bool = False):\n    "Lint."\n'
+        "from footman import plugin, task\n\n"
+        "plugin('footman.docs', into='footman')\n\n"
+        '@task\ndef lint(fix: bool = False):\n    "Lint."\n'
     )
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("XDG_CACHE_HOME", str(home / ".cache"))
