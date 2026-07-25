@@ -5,9 +5,23 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Annotated
 
+import pytest
+
 from footman import _complete, manifest, registry, task
 from footman._complete import _tasks_file_from, complete, complete_cli
 from footman.params import doc, suggest
+
+
+@pytest.fixture(autouse=True)
+def _generous_cold_budget(monkeypatch):
+    """The product's cold-TAB budget is tight on purpose (a keystroke must
+    never hang); the *test* budget is generous, because a loaded CI runner —
+    Windows especially, free-threaded builds worst — can take many seconds
+    to spawn and import the detached builder. Every cold-path test in this
+    file asserts builds-and-serves, never how fast the runner's disk is;
+    the flake kept hopping between whichever cold test ran on the slow box.
+    """
+    monkeypatch.setattr(_complete, "_COLD_TIMEOUT", 30.0)
 
 
 def _names(result):
@@ -491,12 +505,6 @@ def test_fresh_dynamic_passes_context_and_falls_back(monkeypatch):
 
 
 def test_cold_cache_builds_and_serves(tmp_path, monkeypatch, capsys):
-    # The product budget is tight on purpose (a TAB must never hang);
-    # the *test* budget is generous, because a loaded CI runner can
-    # take seconds to spawn+import the builder — the flake CI kept
-    # hitting on Windows. What's under test is builds-and-serves,
-    # not how fast the runner's disk is.
-    monkeypatch.setattr(_complete, "_COLD_TIMEOUT", 30.0)
     monkeypatch.setenv("FOOTMAN_CACHE_DIR", str(tmp_path / "cache"))
     proj = tmp_path / "proj"
     proj.mkdir()
@@ -513,12 +521,6 @@ def test_cold_cache_builds_and_serves(tmp_path, monkeypatch, capsys):
 
 
 def test_cold_f_cache_builds_and_serves(tmp_path, monkeypatch, capsys):
-    # The product budget is tight on purpose (a TAB must never hang);
-    # the *test* budget is generous, because a loaded CI runner can
-    # take seconds to spawn+import the builder — the flake CI kept
-    # hitting on Windows. What's under test is builds-and-serves,
-    # not how fast the runner's disk is.
-    monkeypatch.setattr(_complete, "_COLD_TIMEOUT", 30.0)
     monkeypatch.setenv("FOOTMAN_CACHE_DIR", str(tmp_path / "cache"))
     proj = tmp_path / "proj"
     proj.mkdir()

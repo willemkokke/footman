@@ -9,6 +9,17 @@ versions may include breaking changes.
 
 ### Added
 
+- **`Arg[T]` — the optional trailing positional.** `def files(pattern:
+  Arg[str] = "*")` makes `fm files src` fill the positional and a bare
+  `fm files` run on the default. The grammar stays deterministic and
+  greedy: a following bare word *is* the value — never re-interpreted as
+  the next task, no name-peeking — and capped at one token. To run
+  argument-less ahead of another task, say so with the explicit boundary:
+  `fm files + build` — and completion offers the `+` right at the optional
+  slot, so the boundary documents itself. An `Arg` needs a default, takes
+  at most one token, and must trail every required positional — each rule
+  a taught error.
+
 - **Live `suggest` completers drive the prompt.** A defaultless `ask()`
   parameter carrying a *strict* completer now asks with a numbered menu of
   the completer's fresh values — and `Many[...]` makes it a multi-select

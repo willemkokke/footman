@@ -22,6 +22,7 @@ from dataclasses import dataclass
 from pathlib import Path, PurePath
 from typing import Annotated, Any
 
+from footman.params import _arg as _ARG
 from footman.params import _PathRequirement, ask, between, check, doc, env, suggest
 from footman.params import forward as _FORWARD
 from footman.params import nosplit as _NOSPLIT
@@ -95,6 +96,7 @@ class Peeled:
     doc: str | None = None  # per-parameter help text (doc("..."))
     ask: ask | None = None  # prompt-if-missing marker (ask())
     forward: bool = False  # thread this value to dispatched tasks (forward)
+    optional: bool = False  # Arg[T]: an optional trailing positional
 
 
 def peel(ann: Any) -> Peeled:
@@ -108,6 +110,7 @@ def peel(ann: Any) -> Peeled:
     doc_text: str | None = None
     ask_marker: ask | None = None
     is_forward = False
+    is_optional = False
 
     # Strip Annotated and Optional wrappers in any order/nesting, e.g. both
     # `Annotated[list[X], nosplit] | None` and `Annotated[list[X] | None, nosplit]`.
@@ -138,6 +141,8 @@ def peel(ann: Any) -> Peeled:
                     ask_marker = mark
                 elif mark is _FORWARD:
                     is_forward = True
+                elif mark is _ARG:
+                    is_optional = True
                 elif callable(mark) and not isinstance(mark, type):
                     completer = suggest(mark)  # a bare callable == suggest(fn)
             ann, changed = base, True
@@ -154,6 +159,7 @@ def peel(ann: Any) -> Peeled:
         "doc": doc_text,
         "ask": ask_marker,
         "forward": is_forward,
+        "optional": is_optional,
     }
 
     if ann is dict or typing.get_origin(ann) is dict:  # dict[K, V] or bare dict

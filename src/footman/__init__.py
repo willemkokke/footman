@@ -42,6 +42,7 @@ if TYPE_CHECKING:
     from footman.context import select as select
     from footman.context import track as track
     from footman.context import use_context as use_context
+    from footman.params import Arg as Arg
     from footman.params import Exists as Exists
     from footman.params import Forward as Forward
     from footman.params import IsDir as IsDir
@@ -77,6 +78,7 @@ if TYPE_CHECKING:
 __version__ = "0.19.0"
 __all__ = [
     "App",
+    "Arg",
     "Brand",
     "Context",
     "Exists",
@@ -196,6 +198,7 @@ def __getattr__(name: str) -> object:
 
         return getattr(compose, name)
     if name in (
+        "Arg",
         "suggest",
         "Many",
         "nosplit",

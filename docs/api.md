@@ -98,6 +98,8 @@ and edits one task.
 
 ::: footman.params.Many
 
+::: footman.params.Arg
+
 ::: footman.params.nosplit
 
 ::: footman.params.suggest
