@@ -114,7 +114,12 @@ def _install_environ() -> None:
     orig_setdefault = _environ_saved["setdefault"]
 
     def _virtual(self: Any) -> bool:
-        return self is os.environ and _installs > 0
+        if self is not os.environ or not _installs:
+            return False
+        from footman.context import current
+
+        # A serial/exclusive task owns the real globals: pass through.
+        return not current().serial_active
 
     def __getitem__(self: Any, key: str) -> str:
         if not _virtual(self):
@@ -198,13 +203,20 @@ _popen_saved: Any = None
 
 
 def _managed_task() -> tuple[Any, bool]:
-    """(ctx, guarded) — guarded only inside a managed parallel task body.
+    """(ctx, guarded) — guarded only inside a managed *parallel* task body.
 
-    `unmanaged` is the one off-switch: that token *means* footman stays out."""
+    `unmanaged` is the one off-switch (that token *means* footman stays
+    out), and a serial/exclusive task owns the real globals legitimately."""
     from footman.context import current
 
     ctx = current()
-    return ctx, bool(_installs) and ctx.in_task and not ctx.cwd_unmanaged
+    guarded = (
+        bool(_installs)
+        and ctx.in_task
+        and not ctx.cwd_unmanaged
+        and not ctx.serial_active
+    )
+    return ctx, guarded
 
 
 def _install_popen() -> None:
@@ -404,6 +416,113 @@ def _restore_multiprocessing() -> None:
 
         mp_process.BaseProcess.start = _mp_saved  # type: ignore[method-assign]
         _mp_saved = None
+
+
+# --- the arbiter lanes --------------------------------------------------------
+#
+# Serialisation in the new regime is *declared* (serial= / exclusive=) and
+# acquired at task boundaries, where it can be scheduled instead of contended
+# for. The serial lane holds at most one owner and overlaps the parallel
+# pool; exclusive drains the world. A parent parked in a pool wait on its own
+# children is exempt from the drain (it is blocked in footman code and cannot
+# touch globals), and a child of a lane holder inherits the lane through its
+# context (`serial_active`), bypassing every bar — a lineage extends a hold,
+# it never contends with it.
+
+_arb_cv = threading.Condition(threading.Lock())
+_running = 0  # task bodies in flight (scheduler nodes + parallel() children)
+_parked = 0  # of those, parked waiting on their own children
+_serial_holder: str | None = None
+_excl_holder: str | None = None
+_excl_waiting = 0
+
+
+def lane(policy: str | None, name: str = "", inherited: bool = False) -> Any:
+    """A context manager holding *policy*'s lane around one task body.
+
+    `None` is the parallel regime: it only counts the body for the drain
+    and yields to a waiting exclusive first. `inherited` marks a lineage
+    child of a lane holder: it bypasses every bar (the holder is waiting on
+    it) and only counts.
+    """
+    import contextlib
+
+    @contextlib.contextmanager
+    def _lane() -> Any:
+        global _running, _serial_holder, _excl_holder, _excl_waiting
+        if not _installs:
+            yield
+            return
+        with _arb_cv:
+            if inherited or policy is None:
+                if not inherited:
+                    while _excl_holder is not None or _excl_waiting:
+                        _wait_note(name, "the exclusive drain", _excl_holder)
+            elif policy == "serial":
+                while (
+                    _serial_holder is not None
+                    or _excl_holder is not None
+                    or _excl_waiting
+                ):
+                    _wait_note(name, "the serial lane", _serial_holder or _excl_holder)
+                _serial_holder = name or "?"
+            elif policy == "exclusive":
+                _excl_waiting += 1
+                try:
+                    while (
+                        _excl_holder is not None
+                        or _serial_holder is not None
+                        or (_running - _parked) > 0
+                    ):
+                        _wait_note(name, "the exclusive drain", _serial_holder)
+                finally:
+                    _excl_waiting -= 1
+                _excl_holder = name or "?"
+            _running += 1
+        try:
+            yield
+        finally:
+            with _arb_cv:
+                _running -= 1
+                if not inherited and policy == "serial":
+                    _serial_holder = None
+                elif not inherited and policy == "exclusive":
+                    _excl_holder = None
+                _arb_cv.notify_all()
+
+    return _lane()
+
+
+def _wait_note(name: str, what: str, holder: str | None) -> None:
+    """One bounded wait step, with a one-time visibility note — a lane wait
+    must never be a silent hang."""
+    if not _arb_cv.wait(timeout=2.0):
+        held = f" (held by {holder})" if holder else ""
+        _note(f"lane-wait:{name}", f"task {name or '?'} waiting for {what}{held}")
+
+
+def parked() -> Any:
+    """Mark the current body parked (a pool wait on its own children): it is
+    blocked in footman code and cannot touch globals, so the exclusive drain
+    exempts it — this is the ancestry exemption."""
+    import contextlib
+
+    @contextlib.contextmanager
+    def _parked_cm() -> Any:
+        global _parked
+        if not _installs:
+            yield
+            return
+        with _arb_cv:
+            _parked += 1
+            _arb_cv.notify_all()
+        try:
+            yield
+        finally:
+            with _arb_cv:
+                _parked -= 1
+
+    return _parked_cm()
 
 
 def install() -> None:

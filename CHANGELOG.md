@@ -123,6 +123,26 @@ versions may include breaking changes.
   lock — concurrent overlaid calls no longer serialise); outside a run,
   `os.environ` behaves exactly as stock Python, and bare `run(callable,
   env=…)` calls keep the classic guarded global patch as their fallback.
+- **`serial=` and `exclusive=` — declared serialisation, the only kind
+  left.** `@task(serial=True)` (and `.opts(serial=True)` per use) declares
+  "this task owns the process globals": the scheduler runs at most one
+  serial task at a time, *overlapping the full parallel pool*, and inside
+  it footman restores the old conveniences safely — a real chdir to the
+  task's resolved cwd, the env overlay applied to the real `os.environ`,
+  both snapshotted and restored, with the routers and guards standing
+  down. `@task(exclusive=True)` is the honest full drain for benchmarks
+  and migrations: it runs with nothing else in flight, exempting only
+  ancestors parked waiting on their own children. Lane waits are never
+  silent (a note names the holder after two seconds), new starts yield to
+  a waiting exclusive, and a fan-out child of a lane holder inherits the
+  lane — a lineage extends a hold, it never contends with it. Body-calls
+  keep inheriting the caller's regime; the markers are scheduling
+  declarations, read at task boundaries — which is what keeps the whole
+  design deadlock-free. **`footman.chdir()`** completes the serial story:
+  real directory changes as a context manager (default target the task's
+  own cwd, marker-grammar arguments, `ctx.cwd` kept in sync, everything
+  restored) — legal in serial/exclusive tasks and a taught error in
+  parallel ones.
 - **Raw `subprocess` is quietly correct in parallel.** `subprocess.Popen`
   (and everything that funnels through it — `subprocess.run`, `os.popen`,
   third-party code) gets the task's context filled in when a spawn passes

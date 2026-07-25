@@ -122,6 +122,12 @@ class Context:
     """`cwd="unmanaged"`: footman stays out — subprocesses spawn with
     `cwd=None` (inherit the live process cwd) even though `ctx.cwd` records
     the process cwd at task start for the body to read."""
+    serial_active: bool = False
+    """This task holds (or inherited, through a fan-out) the serial or
+    exclusive lane: it owns the real process globals — the environ router,
+    the Popen injection, and the os guards all pass through. Set by the
+    executor around a `serial=`/`exclusive=` body; `parallel()` children
+    inherit it, because a lineage extends a hold."""
     dry_run: bool = False
     """`--dry-run`: `run()` prints and records the command, executes
     nothing, and reports success."""
@@ -209,6 +215,68 @@ def current() -> Context:
     """The context of the running task (a fresh default one outside a run)."""
     ctx = _current.get()
     return ctx if ctx is not None else Context()
+
+
+@contextlib.contextmanager
+def chdir(
+    target: str | Path | None = None, *, rel: str | Path | None = None
+) -> Iterator[None]:
+    """Really change the process directory — inside a serial/exclusive task.
+
+    The sugar for bodies that own the globals: the default target is the
+    task's own `ctx.cwd`; arguments follow the marker grammar exactly — a
+    policy token (`root`, `taskfile`, `asinvoked`) or an absolute path, with
+    `rel=` for a relative suffix; a bare relative path is the same taught
+    error the markers give. Performs a real `os.chdir`, keeps `ctx.cwd` in
+    sync (so a nested `run()` roots where the block does), restores both on
+    exit. In a parallel task it is a taught error — the cwd belongs to no
+    one there.
+    """
+    ctx = current()
+    if ctx.in_task and not ctx.serial_active:
+        raise RuntimeError(
+            f"task {ctx.task or '?'} calls footman.chdir() in a parallel "
+            f"task — the process directory belongs to no one there. Mark "
+            f"the task serial (or exclusive), or build paths from "
+            f"footman.cwd()."
+        )
+    base: Path
+    if target is None:
+        base = ctx.cwd if ctx.cwd is not None else Path(_globals.real_getcwd())
+    elif isinstance(target, str) and target == "root" and ctx.root_dir:
+        base = Path(ctx.root_dir)
+    elif isinstance(target, str) and target == "asinvoked" and ctx.invoked_dir:
+        base = Path(ctx.invoked_dir)
+    elif isinstance(target, str) and target == "taskfile":
+        from footman.discover import defining_dir
+
+        home = defining_dir(ctx.fn) if ctx.fn is not None else None
+        base = Path(home) if home else Path(_globals.real_getcwd())
+    elif isinstance(target, str) and target == "unmanaged":
+        raise TypeError("chdir(cwd='unmanaged') has no directory to change to")
+    else:
+        base = Path(target)
+        if not base.is_absolute():
+            raise TypeError(
+                f"chdir({str(target)!r}) is relative — chdir takes a policy "
+                f"token or an absolute path; a relative suffix goes in rel=…"
+            )
+    if rel is not None:
+        if Path(rel).is_absolute():
+            raise TypeError(
+                f"rel={str(rel)!r} is absolute — rel is a suffix appended "
+                f"to the resolved base; an absolute directory goes first."
+            )
+        base = base / rel
+    saved_fs, saved_ctx = _globals.real_getcwd(), ctx.cwd
+    _globals.real_chdir(base)
+    ctx.cwd = base
+    try:
+        yield
+    finally:
+        with contextlib.suppress(OSError):
+            _globals.real_chdir(saved_fs)
+        ctx.cwd = saved_ctx
 
 
 def cwd() -> Path:
@@ -1658,7 +1726,11 @@ def parallel(*calls: Callable[[], Any], keep_going: bool = False) -> list[int]:
         )
         token = _current.set(child)
         try:
-            returned = call()
+            # The arbiter counts every child body (an exclusive drain must
+            # see them); a lineage child of a lane holder bypasses the bars —
+            # `serial_active` rode in through `replace(parent, …)`.
+            with _globals.lane(None, name=name, inherited=child.serial_active):
+                returned = call()
             code = returned if _is_code(returned) else 0
             error: BaseException | None = None
             # A thunk that *returns* a non-zero code failed just as surely as one
@@ -1722,7 +1794,10 @@ def parallel(*calls: Callable[[], Any], keep_going: bool = False) -> list[int]:
         workers = max(1, min(parent.jobs, len(calls)))
     else:
         workers = max(1, len(calls))
-    with ThreadPoolExecutor(max_workers=workers) as pool:
+    # Parked for the pool wait: this body is blocked in footman code and
+    # cannot touch globals, so an exclusive drain may exempt it (the
+    # ancestry exemption — its own children still count on their own).
+    with _globals.parked(), ThreadPoolExecutor(max_workers=workers) as pool:
         outcomes = list(pool.map(invoke, calls))
 
     if not keep_going:

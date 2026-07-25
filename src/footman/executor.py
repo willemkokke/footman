@@ -14,17 +14,19 @@ returns a non-zero `int` exit code; failures stop the chain unless
 
 from __future__ import annotations
 
+import contextlib
 import enum
 import inspect
 import io
 import os
 import time
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path, PurePath
 from types import MappingProxyType
 from typing import Any
 
-from footman import coerce, context, registry
+from footman import _globals, coerce, context, registry
 from footman.context import (
     Context,
     Failed,
@@ -482,6 +484,33 @@ def resolve_cwd(fn: Task, ctx: Context) -> tuple[Path | None, bool]:
     return (base / rel) if rel else base, False
 
 
+@contextlib.contextmanager
+def _serial_globals(ctx: Context) -> Iterator[None]:
+    """A serial/exclusive body owns the real process globals.
+
+    Sole occupancy (the lane) is what makes this safe: apply the task's
+    resolved cwd with a real chdir and its env overlay onto the real
+    `os.environ`, snapshot and restore both. `serial_active` flips the
+    routers and guards to pass-through for the duration — this is the
+    declared regime where today's conveniences are legitimate again.
+    """
+    ctx.serial_active = True
+    saved_cwd = _globals.real_getcwd()
+    saved_env = dict(os.environ)  # passthrough: serial_active is already set
+    try:
+        if ctx.env:
+            os.environ.update(ctx.env)
+        if ctx.cwd is not None and not ctx.cwd_unmanaged:
+            _globals.real_chdir(ctx.cwd)
+        yield
+    finally:
+        with contextlib.suppress(OSError):  # the saved dir may have vanished
+            _globals.real_chdir(saved_cwd)
+        os.environ.clear()
+        os.environ.update(saved_env)
+        ctx.serial_active = False
+
+
 def run_task(
     fn: Task, seg: Segment, ctx: Context, forwarded: dict[str, Any] | None = None
 ) -> TaskResult:
@@ -515,11 +544,23 @@ def run_task(
         except ValueError as exc:  # e.g. rel= under an unmanaged config default
             return _result(seg, 2, None, exc, 0.0)
 
+    # The arbiter lane is a *scheduling* declaration, acquired here at the
+    # task boundary — never mid-body, which is what keeps it deadlock-free.
+    # A lineage child (serial_active inherited through a fan-out) extends
+    # its ancestor's hold instead of contending with it.
+    inherited = ctx.serial_active
+    lane_policy = None if inherited else registry.task_lane(fn)
+
     token = _current.set(ctx)
     ctx.in_task = True  # a mid-body prompt()/confirm()/select() is now guarded
     start = time.perf_counter()
     try:
-        code, returned, error = _call(fn, args, kwargs)
+        with _globals.lane(lane_policy, name=seg.task, inherited=inherited):
+            if lane_policy is not None:
+                with _serial_globals(ctx):
+                    code, returned, error = _call(fn, args, kwargs)
+            else:
+                code, returned, error = _call(fn, args, kwargs)
     finally:
         _current.reset(token)
     duration = time.perf_counter() - start

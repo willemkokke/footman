@@ -5,11 +5,13 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+import threading
+import time
 
 import pytest
 
 from footman import _globals, manifest
-from footman.context import run
+from footman.context import chdir, run
 from footman.executor import run_chain
 from footman.registry import Group
 from footman.split import split_chain
@@ -288,6 +290,7 @@ def test_putenv_is_a_taught_error():
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="fork is POSIX-only")
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")  # the taught unsafety
 def test_fork_notes_the_serial_lane(capfd):
     def tasks(reg):
         @reg.task
@@ -317,3 +320,187 @@ def test_multiprocessing_start_notes_the_serial_lane(capfd):
 
     assert drive(tasks, "go")[0].ok
     assert "worker processes in-process" in capfd.readouterr().err
+
+
+# --- the arbiter lanes --------------------------------------------------------
+
+
+def _hold(policy, name, entered, release, inherited=False):
+    def body():
+        with _globals.lane(policy, name=name, inherited=inherited):
+            entered.set()
+            release.wait(timeout=10)
+
+    t = threading.Thread(target=body, daemon=True)
+    t.start()
+    return t
+
+
+def test_serial_lane_is_mutually_exclusive():
+    _globals.install()
+    try:
+        e1, r1 = threading.Event(), threading.Event()
+        e2, r2 = threading.Event(), threading.Event()
+        t1 = _hold("serial", "a", e1, r1)
+        assert e1.wait(5)
+        t2 = _hold("serial", "b", e2, r2)
+        time.sleep(0.15)
+        assert not e2.is_set()  # one lane, one owner
+        r1.set()
+        assert e2.wait(5)  # b takes the lane once a leaves
+        r2.set()
+        t1.join(5)
+        t2.join(5)
+    finally:
+        _globals.uninstall()
+
+
+def test_exclusive_drains_and_bars_new_starts():
+    _globals.install()
+    try:
+        en, rn = threading.Event(), threading.Event()
+        ee, re_ = threading.Event(), threading.Event()
+        e2, r2 = threading.Event(), threading.Event()
+        tn = _hold(None, "normal", en, rn)
+        assert en.wait(5)
+        te = _hold("exclusive", "big", ee, re_)
+        time.sleep(0.15)
+        assert not ee.is_set()  # a running body blocks the drain
+        t2 = _hold(None, "late", e2, r2)
+        time.sleep(0.15)
+        assert not e2.is_set()  # new starts bar while exclusive waits
+        rn.set()
+        assert ee.wait(5)  # drained: exclusive enters
+        assert not e2.is_set()  # and still owns the world
+        re_.set()
+        assert e2.wait(5)  # the barred start proceeds after
+        r2.set()
+        for t in (tn, te, t2):
+            t.join(5)
+    finally:
+        _globals.uninstall()
+
+
+def test_parked_bodies_are_exempt_from_the_drain():
+    _globals.install()
+    try:
+        ep, rp = threading.Event(), threading.Event()
+        ee, re_ = threading.Event(), threading.Event()
+
+        def parked_body():
+            with _globals.lane(None, name="parent"), _globals.parked():
+                ep.set()
+                rp.wait(timeout=10)
+
+        tp = threading.Thread(target=parked_body, daemon=True)
+        tp.start()
+        assert ep.wait(5)
+        te = _hold("exclusive", "big", ee, re_)
+        assert ee.wait(5)  # the parked parent does not block the drain
+        re_.set()
+        rp.set()
+        tp.join(5)
+        te.join(5)
+    finally:
+        _globals.uninstall()
+
+
+def test_inherited_lineage_bypasses_the_bars():
+    _globals.install()
+    try:
+        ee, re_ = threading.Event(), threading.Event()
+        ei, ri = threading.Event(), threading.Event()
+        te = _hold("exclusive", "holder", ee, re_)
+        assert ee.wait(5)
+        ti = _hold(None, "child", ei, ri, inherited=True)
+        assert ei.wait(5)  # a lineage child extends the hold, never contends
+        ri.set()
+        re_.set()
+        ti.join(5)
+        te.join(5)
+    finally:
+        _globals.uninstall()
+
+
+# --- serial/exclusive tasks own the real globals ------------------------------
+
+
+def test_serial_task_owns_the_real_globals(tmp_path, monkeypatch):
+    monkeypatch.delenv("SERIAL_ENV", raising=False)
+    (tmp_path / "sub").mkdir()
+    before = _globals.real_getcwd()
+    seen = {}
+
+    def tasks(reg):
+        @reg.task(serial=True)
+        def own():
+            seen["cwd"] = _globals.real_getcwd()  # really chdir-ed
+            os.environ["SERIAL_ENV"] = "real"  # passthrough, no scoping
+            seen["visible"] = os.environ["SERIAL_ENV"]
+            os.chdir(tmp_path / "sub")  # the guards stand down
+            seen["moved"] = _globals.real_getcwd()
+
+    results = drive(tasks, "own", cwd=tmp_path)
+    assert results[0].ok, results[0].error
+    assert seen["cwd"] == str(tmp_path)
+    assert seen["visible"] == "real"
+    assert seen["moved"] == str(tmp_path / "sub")
+    assert _globals.real_getcwd() == before  # both restored after the body
+    assert "SERIAL_ENV" not in os.environ
+
+
+def test_exclusive_task_owns_the_real_globals(tmp_path):
+    seen = {}
+
+    def tasks(reg):
+        @reg.task(exclusive=True)
+        def big():
+            seen["cwd"] = _globals.real_getcwd()
+
+    results = drive(tasks, "big", cwd=tmp_path)
+    assert results[0].ok, results[0].error
+    assert seen["cwd"] == str(tmp_path)
+
+
+# --- footman.chdir() ----------------------------------------------------------
+
+
+def test_chdir_cm_errors_in_a_parallel_task(tmp_path):
+    def tasks(reg):
+        @reg.task
+        def go():
+            with chdir(tmp_path):
+                pass
+
+    results = drive(tasks, "go")
+    assert not results[0].ok
+    assert "footman.chdir()" in str(results[0].error)
+
+
+def test_chdir_cm_in_a_serial_task(tmp_path):
+    (tmp_path / "sub").mkdir()
+    seen = {}
+
+    def tasks(reg):
+        @reg.task(serial=True)
+        def go():
+            with chdir(rel="sub"):
+                seen["inside"] = _globals.real_getcwd()
+            seen["after"] = _globals.real_getcwd()
+
+    results = drive(tasks, "go", cwd=tmp_path)
+    assert results[0].ok, results[0].error
+    assert seen["inside"] == str(tmp_path / "sub")
+    assert seen["after"] == str(tmp_path)  # restored to the task's own cwd
+
+
+def test_chdir_cm_outside_a_run(tmp_path):
+    before = _globals.real_getcwd()
+    with chdir(tmp_path):
+        assert _globals.real_getcwd() == str(tmp_path)
+    assert _globals.real_getcwd() == before
+
+
+def test_chdir_cm_relative_target_is_a_taught_error(tmp_path):
+    with pytest.raises(TypeError, match="rel="), chdir("somewhere/relative"):
+        pass  # pragma: no cover

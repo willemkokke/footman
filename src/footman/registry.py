@@ -51,6 +51,8 @@ _PROGRESS = "_footman_progress"
 _CONFIRM = "_footman_confirm"
 _CWD = "_footman_cwd"
 _REL = "_footman_rel"
+_SERIAL = "_footman_serial"
+_EXCLUSIVE = "_footman_exclusive"
 
 # The cwd policy tokens — where a task's working directory roots. Anything
 # else passed as `cwd=` must be an absolute path (a relative one is a taught
@@ -153,6 +155,8 @@ _OPTS_ATTRS = {
     "infinite": _INFINITE,
     "cwd": _CWD,
     "rel": _REL,
+    "serial": _SERIAL,
+    "exclusive": _EXCLUSIVE,
 }
 
 
@@ -271,6 +275,8 @@ def _apply_policy(
     atomic: bool,
     cwd: str | Path = "",
     rel: str | Path = "",
+    serial: bool = False,
+    exclusive: bool = False,
 ) -> None:
     """Stamp a task's `_footman_*` policy attributes onto *fn*.
 
@@ -303,6 +309,10 @@ def _apply_policy(
         setattr(fn, _CWD, _validate_cwd(cwd))
     if rel:
         setattr(fn, _REL, _validate_rel(rel))
+    if serial:
+        setattr(fn, _SERIAL, True)
+    if exclusive:
+        setattr(fn, _EXCLUSIVE, True)
 
 
 _P = ParamSpec("_P")
@@ -358,6 +368,8 @@ class Group:
         atomic: bool = False,
         cwd: str | Path = "",
         rel: str | Path = "",
+        serial: bool = False,
+        exclusive: bool = False,
     ) -> Callable[[Callable[_P, _R_co]], TaskFn[_P, _R_co]]: ...
 
     def task(
@@ -375,6 +387,8 @@ class Group:
         atomic: bool = False,
         cwd: str | Path = "",
         rel: str | Path = "",
+        serial: bool = False,
+        exclusive: bool = False,
     ) -> Task | Callable[[Task], Task]:
         """Register a function as a task.
 
@@ -441,6 +455,8 @@ class Group:
                 atomic=atomic,
                 cwd=cwd,
                 rel=rel,
+                serial=serial,
+                exclusive=exclusive,
             )
             fn.opts = lambda **o: _Opted(fn, _opts_overrides(o))  # type: ignore[attr-defined]
             self.tasks[key] = fn
@@ -497,6 +513,8 @@ class Group:
         atomic: bool = False,
         cwd: str | Path = "",
         rel: str | Path = "",
+        serial: bool = False,
+        exclusive: bool = False,
     ) -> Callable[[Callable[_P, _R_co]], TaskFn[_P, _R_co]]: ...
 
     def default(
@@ -513,6 +531,8 @@ class Group:
         atomic: bool = False,
         cwd: str | Path = "",
         rel: str | Path = "",
+        serial: bool = False,
+        exclusive: bool = False,
     ) -> Task | Callable[[Task], Task]:
         """Register *fn* as this group's default action — what a bare
         `fm <group>` runs, and what the group returns when called.
@@ -573,6 +593,8 @@ class Group:
                 atomic=atomic,
                 cwd=cwd,
                 rel=rel,
+                serial=serial,
+                exclusive=exclusive,
             )
             # A back-reference plus the empty-body flag: an empty-body default
             # fans out the group's own tasks (implicit prerequisites at DAG-build
@@ -724,6 +746,17 @@ def task_cwd(fn: Task) -> str | Path | None:
 def task_rel(fn: Task) -> str | None:
     """The task's declared rel suffix (appended to the resolved cwd base)."""
     return getattr(fn, _REL, None)
+
+
+def task_lane(fn: Task) -> str | None:
+    """The task's declared arbiter lane: `"exclusive"` (runs with nothing
+    else in flight), `"serial"` (owns the process globals, one at a time,
+    overlapping the parallel pool), or `None` (the parallel regime)."""
+    if getattr(fn, _EXCLUSIVE, False):
+        return "exclusive"
+    if getattr(fn, _SERIAL, False):
+        return "serial"
+    return None
 
 
 Check = Callable[[], str | None]
