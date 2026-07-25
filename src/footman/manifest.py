@@ -209,6 +209,10 @@ def _marker_keys(
     serialize (the same reason `_finish` strips `_completer`); it runs at
     binding time instead.
     """
+    if peeled.ask is not None and peeled.ask.secret:
+        # A secret parameter never publishes values: no baked choices, no
+        # completer run — the flag completes, its value stays yours.
+        spec["secret"] = True
     if peeled.doc is not None:
         spec["doc"] = peeled.doc
     if peeled.path_req is not None:
@@ -258,6 +262,9 @@ def _run_completer(completer: suggest, memo: dict[int, list[str]]) -> list[str]:
 
 def _finish(spec: dict[str, Any], memo: dict[int, list[str]]) -> dict[str, Any]:
     completer = spec.pop("_completer", None)
+    if spec.get("secret"):
+        spec.pop("choices", None)  # never bake a secret's values
+        completer = None
     if completer is not None:
         spec["choices"] = _run_completer(completer, memo)
     return spec

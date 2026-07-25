@@ -37,6 +37,7 @@ from footman.context import (
 )
 from footman.discover import defining_dir
 from footman.manifest import resolved_signature
+from footman.params import Secret
 from footman.registry import Group, Task
 from footman.split import ChainError, Segment
 
@@ -210,23 +211,73 @@ def _prompt_param(
             f"--{cli} is required and nothing supplied it — pass --{cli} "
             f"(a terminal is needed to prompt; --no-input and --json never ask)."
         )
+
+    def note(text: str) -> None:
+        out = context.real_stderr()
+        out.write(context._scrub(text) + "\n")  # echoes reflect typed input
+        out.flush()
+
+    # A *strict* live completer is a menu: its choices are law, so show them
+    # as numbers rather than free text — and `Many[...]` makes it a
+    # multi-select. (Secrets never menu; best-effort completers only hint.)
+    if peeled.completer is not None and peeled.completer.strict and not marker.secret:
+        from footman.manifest import _run_completer
+
+        options = _run_completer(peeled.completer, {})
+        if options:
+            label = marker.prompt or f"{cli}:"
+            while True:
+                try:
+                    chosen = context.select(label, options, multiple=peeled.multiple)
+                except RuntimeError as exc:  # a bad number: say so, re-show
+                    note(f"  {exc}")
+                    continue
+                try:
+                    if peeled.multiple:
+                        picked = [
+                            _run_checks(
+                                coerce.coerce_token(c, peeled.element),
+                                peeled,
+                                f"--{cli}",
+                                params,
+                            )
+                            for c in chosen
+                        ]
+                        return ",".join(chosen), picked
+                    value = coerce.coerce_token(chosen, peeled.element)
+                    return chosen, _run_checks(value, peeled, f"--{cli}", params)
+                except ValueError as exc:
+                    note(f"  {exc}")
+                    continue
+
     choices = coerce.all_choices(peeled.element)
-    hint = f" ({'/'.join(choices)})" if choices else ""
+    hints = choices
+    if hints is None and peeled.completer is not None:
+        # A best-effort completer suggests, never enforces: its values ride
+        # the hint, the answer stays free text.
+        from footman.manifest import _run_completer
+
+        hints = _run_completer(peeled.completer, {}) or None
+    if hints and len(hints) > 6:
+        hints = [*hints[:6], "…"]
+    hint = f" ({'/'.join(hints)})" if hints else ""
     text = marker.prompt or f"{cli}{hint}: "
     while True:
         raw = context._prompt_core(text, secret=marker.secret)
         if choices is not None and raw not in choices:
-            out = context.real_stderr()
-            out.write(f"  choose one of {', '.join(choices)}\n")
-            out.flush()
+            note(f"  choose one of {', '.join(choices)}")
             continue
         try:
             value = coerce.coerce_token(raw, peeled.element)
-            return raw, _run_checks(value, peeled, f"--{cli}", params)
+            value = _run_checks(value, peeled, f"--{cli}", params)
         except ValueError as exc:
-            out = context.real_stderr()
-            out.write(f"  {exc}\n")
-            out.flush()
+            note(f"  {exc}")
+            continue
+        if marker.secret:
+            raw = Secret(raw)
+            if isinstance(value, str):
+                value = Secret(value)
+        return raw, value
 
 
 def _left_siblings(

@@ -13,7 +13,7 @@ import pytest
 from footman import manifest, tools
 from footman.context import Context, RunFailed, parallel, passthrough, run, use_context
 from footman.executor import run_chain
-from footman.params import ask, suggest
+from footman.params import Many, Secret, ask, suggest
 from footman.registry import Group
 from footman.split import split_chain
 
@@ -1460,6 +1460,14 @@ def test_select_scrubs_control_characters_in_labels(monkeypatch):
     assert "red" in err.getvalue()  # the visible text survives
 
 
+_TRACE: list[str] = []
+
+
+def _traced_options():
+    _TRACE.append("ask")
+    return ["pick"]
+
+
 def _live_options():  # module-level: `from __future__ import annotations` makes
     return ["pick"]  # annotations strings, so names must resolve at module scope
 
@@ -1497,29 +1505,26 @@ def test_ask_with_live_suggest_resolves_after_its_prereqs(monkeypatch):
     from footman import context, schedule
 
     monkeypatch.setattr(context, "_stdin_is_tty", lambda: True)
-    ran = []
-
-    def fake_prompt(text, **kw):
-        ran.append("ask")
-        return "pick"
-
-    monkeypatch.setattr(context, "_prompt_core", fake_prompt)
+    monkeypatch.setattr(sys, "stdin", io.StringIO("1\n"))  # pick from the menu
+    monkeypatch.setattr(context, "real_stderr", io.StringIO)
     reg = Group("root")
 
     @reg.task
     def dep():
-        ran.append("dep")
+        _TRACE.append("dep")
 
     @reg.task(pre=[dep])
-    def choose(which: Annotated[str, ask(), suggest(_live_options)]):
-        ran.append("body")
+    def choose(which: Annotated[str, ask(), suggest(_traced_options)]):
+        _TRACE.append("body")
 
     tree = manifest.build_manifest(reg)["tree"]
+    _TRACE.clear()  # the manifest build bakes choices (one completer run)
     _, segments = split_chain(tree, ["choose"])
     results = schedule.run_plan(reg, segments)
     assert all(r.ok for r in results), [str(r.error) for r in results]
-    # A live-suggest question may need the dep's effects: asked late.
-    assert ran.index("dep") < ran.index("ask") < ran.index("body")
+    # The completer runs at ask time — which must be after the dep, before
+    # the body: a live-suggest question may need the dep's effects.
+    assert _TRACE.index("dep") < _TRACE.index("ask") < _TRACE.index("body")
 
 
 def test_ask_refuses_up_front_without_a_terminal(monkeypatch):
@@ -1573,3 +1578,141 @@ def test_ask_with_live_suggest_under_no_input_fails_that_task_loudly(monkeypatch
     assert not results["choose"].ok
     assert "--which is required" in str(results["choose"].error)
     assert "body" not in ran
+
+
+def _menu_opts():
+    return ["alpha", "beta", "gamma"]
+
+
+def test_ask_with_strict_suggest_is_a_menu(monkeypatch):
+    from footman import context
+
+    monkeypatch.setattr(context, "_stdin_is_tty", lambda: True)
+    monkeypatch.setattr(sys, "stdin", io.StringIO("2\n"))
+    monkeypatch.setattr(context, "real_stderr", io.StringIO)
+    got = {}
+
+    def build(reg):
+        @reg.task
+        def deploy(target: Annotated[str, ask(), suggest(_menu_opts)]):
+            got["t"] = target
+
+    _, _, results = drive(build, "deploy")
+    assert results[0].ok, results[0].error
+    assert got["t"] == "beta"  # picked by number, not typed
+
+
+def test_ask_with_strict_suggest_multi_select(monkeypatch):
+    from footman import context
+
+    monkeypatch.setattr(context, "_stdin_is_tty", lambda: True)
+    monkeypatch.setattr(sys, "stdin", io.StringIO("1,3\n"))
+    monkeypatch.setattr(context, "real_stderr", io.StringIO)
+    got = {}
+
+    def build(reg):
+        @reg.task
+        def deploy(targets: Annotated[Many[str], ask(), suggest(_menu_opts)]):
+            got["t"] = targets
+
+    _, _, results = drive(build, "deploy")
+    assert results[0].ok, results[0].error
+    assert got["t"] == ["alpha", "gamma"]
+
+
+def test_ask_menu_re_asks_on_a_bad_number(monkeypatch):
+    from footman import context
+
+    monkeypatch.setattr(context, "_stdin_is_tty", lambda: True)
+    monkeypatch.setattr(sys, "stdin", io.StringIO("9\n1\n"))
+    monkeypatch.setattr(context, "real_stderr", io.StringIO)
+    got = {}
+
+    def build(reg):
+        @reg.task
+        def deploy(target: Annotated[str, ask(), suggest(_menu_opts)]):
+            got["t"] = target
+
+    _, _, results = drive(build, "deploy")
+    assert results[0].ok, results[0].error
+    assert got["t"] == "alpha"  # out-of-range taught, then the retry took 1
+
+
+def test_ask_with_best_effort_suggest_stays_free_text(monkeypatch, capfd):
+    from footman import context
+
+    monkeypatch.setattr(context, "_stdin_is_tty", lambda: True)
+    monkeypatch.setattr(sys, "stdin", io.StringIO("custom\n"))
+    got = {}
+
+    def build(reg):
+        @reg.task
+        def deploy(
+            target: Annotated[str, ask(), suggest(_menu_opts, strict=False)],
+        ):
+            got["t"] = target
+
+    _, _, results = drive(build, "deploy")
+    assert results[0].ok, results[0].error
+    assert got["t"] == "custom"  # suggestions hint, never bind
+    assert "alpha" in capfd.readouterr().err  # and they were shown
+
+
+def test_secret_answers_arrive_redacting(monkeypatch):
+    from footman import context, executor
+    from footman.coerce import peel
+
+    monkeypatch.setattr(context, "_stdin_is_tty", lambda: True)
+    monkeypatch.setattr(context, "_prompt_core", lambda *a, **k: "hunter2")
+    peeled = peel(Annotated[str, ask(secret=True)])
+    raw, value = executor._prompt_param("token", peeled, None)
+    assert isinstance(raw, Secret) and isinstance(value, Secret)
+    assert repr(value) == "Secret('***')"  # what logs and tracebacks see
+    assert str(value) == "hunter2"  # what the body uses
+
+
+def test_redact_walks_containers():
+    from footman._describe import redact
+
+    tangled = ["a", Secret("s"), {"k": Secret("t"), "n": 1}, (Secret("u"),)]
+    assert redact(tangled) == ["a", "***", {"k": "***", "n": 1}, ("***",)]
+
+
+def test_secret_params_publish_no_values():
+    reg = Group("root")
+
+    @reg.task
+    def login(token: Annotated[str, ask(secret=True), suggest(_menu_opts)]):
+        pass
+
+    spec = manifest.build_manifest(reg)["tree"]["tasks"]["login"]["params"][0]
+    assert spec["secret"] is True
+    assert "choices" not in spec  # the completer never ran, nothing baked
+
+
+def test_prompt_eof_is_a_taught_error_not_a_spin(monkeypatch):
+    from footman import context
+
+    monkeypatch.setattr(context, "_stdin_is_tty", lambda: True)
+    monkeypatch.setattr(sys, "stdin", io.StringIO(""))  # closed pipe
+    monkeypatch.setattr(context, "real_stderr", io.StringIO)
+    with pytest.raises(RuntimeError, match="stdin closed"):
+        context._prompt_core("name? ")
+
+
+def test_prompt_echo_scrubs_reflected_input(monkeypatch, capfd):
+    from footman import context
+
+    monkeypatch.setattr(context, "_stdin_is_tty", lambda: True)
+    monkeypatch.setattr(sys, "stdin", io.StringIO("\x1b[31mbad\n5\n"))
+    got = {}
+
+    def build(reg):
+        @reg.task
+        def scale(replicas: Annotated[int, ask()]):
+            got["n"] = replicas
+
+    _, _, results = drive(build, "scale")
+    assert results[0].ok, results[0].error
+    assert got["n"] == 5
+    assert "\x1b" not in capfd.readouterr().err  # the bad input echoed scrubbed

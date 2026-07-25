@@ -17,6 +17,22 @@ from typing import Annotated, Any, TypeVar
 _T = TypeVar("_T")
 
 
+class Secret(str):
+    """A string that redacts everywhere it is *shown*.
+
+    Answers to `ask(secret=True)` arrive as `Secret`: a real `str` for the
+    body (comparisons, formatting — the caller's business), but its repr —
+    what tracebacks, logs, and debuggers print — is `Secret('***')`, and
+    JSON surfaces (the `--json` envelope, baked manifest defaults)
+    serialise it as `***`.
+    """
+
+    __slots__ = ()
+
+    def __repr__(self) -> str:
+        return "Secret('***')"
+
+
 class suggest:
     """Attach a dynamic completer to a parameter, via `Annotated`:
 

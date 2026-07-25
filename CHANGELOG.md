@@ -9,6 +9,24 @@ versions may include breaking changes.
 
 ### Added
 
+- **Live `suggest` completers drive the prompt.** A defaultless `ask()`
+  parameter carrying a *strict* completer now asks with a numbered menu of
+  the completer's fresh values — and `Many[...]` makes it a multi-select
+  (numbers, `all`, `none`) — instead of free text. A best-effort completer
+  (`strict=False`) shows its values as a hint and leaves the answer free.
+  Bad picks re-ask; answers ride the same coercion pipeline as CLI values.
+- **Secrets redact.** Answers to `ask(secret=True)` arrive as
+  **`footman.Secret`** — a real `str` for the body, but its repr (logs,
+  tracebacks, debuggers) is `Secret('***')`, the `--json` envelope
+  serialises it as `***` (containers are walked), and a secret parameter
+  never publishes values into the completion manifest (no baked choices,
+  its completer never runs there).
+- **Prompt hardening.** Stdin closing mid-prompt (Ctrl-D, piped input
+  running out) is a taught error instead of an infinite re-ask; everything
+  a prompt echoes back — including your own mistyped input — is scrubbed
+  of control characters, closing the terminal-injection class `select()`
+  already guarded against.
+
 - **A generated "Errors & notes" reference page.** Everything footman can
   say when it refuses, warns, or teaches — every message-bearing error and
   every teach-once note — extracted from the source itself on each docs
