@@ -9,6 +9,18 @@ versions may include breaking changes.
 
 ### Added
 
+- **Dotted cherry-picking in `only=`/`exclude=`.** The last surface of
+  one-spelling-everywhere: filters take full dotted addresses relative to
+  the pulled node — `plugin("acme.shared", only=["docs.build", "fmt"])`
+  grafts one nested task and one flat one, materialising the path with
+  the source's own group copies. Matching is exact (the whole-group
+  spelling is the glob); unions are redundant, not errors; a group pruned
+  empty is dropped, never grafted as a shell; validation is per-segment
+  ("no task or group at 'docs.buidl' (docs has: build, serve)"). And
+  because the default is the child named `default`, default-ness survives
+  only if the default survives: `only=["lint.python"]` grafts a
+  default-less `lint`, `only=["lint.default"]` grafts just the default,
+  `exclude=["lint.default"]` everything but it.
 - **`fm --plugins`** lists the installed `footman.tasks` entry points,
   marked pulled-or-not and where each landed — "installed but nobody
   pulled it" becomes visible. Descriptions are two-tier: a pulled plugin

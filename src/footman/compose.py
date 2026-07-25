@@ -414,35 +414,107 @@ def _merge_group(dst: Group, src: Group, *, override: bool, at: str) -> None:
             dst.groups[name] = sub
 
 
+def _validate_filter(node: Group, address: str, verb: str) -> None:
+    """Resolve one filter address segment-wise; every miss is taught."""
+    current = node
+    walked: list[str] = []
+    for pos, seg in enumerate(address.split(".")):
+        last = pos == len(address.split(".")) - 1
+        walked.append(seg)
+        parent = ".".join(walked[:-1]) or "the pulled node"
+        if seg in current.groups:
+            current = current.groups[seg]
+            continue
+        if seg in current.tasks:
+            if last:
+                return
+            raise RegistrationError(
+                f"{verb}(): {'.'.join(walked)!r} is a task, not a group — "
+                f"nothing lives beneath it"
+            )
+        known = ", ".join(sorted([*current.groups, *current.tasks])) or "nothing"
+        raise RegistrationError(
+            f"{verb}(): no task or group at {'.'.join(walked)!r} "
+            f"({parent} has: {known})"
+        )
+
+
+_KEEP = object()  # sentinel: keep this whole subtree
+
+
+def _keep_tree(only: tuple[str, ...]) -> dict:
+    """The `only=` addresses as a nested keep-tree.
+
+    Union semantics: `only=["docs", "docs.build"]` is redundant, not an
+    error — the whole-group entry subsumes the leaf.
+    """
+    tree: dict = {}
+    for address in only:
+        node = tree
+        segments = address.split(".")
+        for pos, seg in enumerate(segments):
+            if node.get(seg) is _KEEP:
+                break  # a whole-subtree keep already subsumes this address
+            if pos == len(segments) - 1:
+                node[seg] = _KEEP
+            else:
+                node = node.setdefault(seg, {})
+    return tree
+
+
+def _apply_only(node: Group, keep: dict) -> None:
+    for name in list(node.tasks):
+        if keep.get(name) is not _KEEP:
+            del node.tasks[name]
+    for name in list(node.groups):
+        wanted = keep.get(name)
+        if wanted is _KEEP:
+            continue  # the whole subtree, help text and flags riding along
+        if isinstance(wanted, dict):
+            _apply_only(node.groups[name], wanted)
+        else:
+            del node.groups[name]
+
+
+def _remove(node: Group, address: str) -> None:
+    *parents, leaf = address.split(".")
+    for seg in parents:
+        sub = node.groups.get(seg)
+        if sub is None:
+            return  # an only= filter already dropped the path: nothing left
+        node = sub
+    node.tasks.pop(leaf, None)
+    node.groups.pop(leaf, None)
+
+
+def _drop_empty(node: Group) -> None:
+    """A group pruned empty is dropped entirely, never grafted as a shell."""
+    for name, sub in list(node.groups.items()):
+        _drop_empty(sub)
+        if not sub.tasks and not sub.groups:
+            del node.groups[name]
+
+
 def _prune(
     node: Group, only: tuple[str, ...], exclude: tuple[str, ...], verb: str
 ) -> None:
-    """Apply `only=`/`exclude=` to *node*'s children — filters are relative
-    to the pulled node. Unknown names are taught; dotted names are the
-    cherry-picking interim (taught, never a silent no-match)."""
-    known = set(node.tasks) | set(node.groups)
-    for name in (*only, *exclude):
-        if name not in known:
-            if "." in name:
-                raise RegistrationError(
-                    f"{verb}(): {name!r} is a dotted address, but only=/"
-                    f"exclude= filter the pulled node's top level today — "
-                    f"dotted cherry-picking is coming. Filter the whole "
-                    f"group ({name.split('.', 1)[0]!r}) for now "
-                    f"(top level has: {', '.join(sorted(known)) or 'nothing'})"
-                )
-            raise RegistrationError(
-                f"{verb}(): the pulled node has no task or group named "
-                f"{name!r} (has: {', '.join(sorted(known)) or 'nothing'})"
-            )
-    wanted = set(only) if only else known
-    wanted -= set(exclude)
-    for name in list(node.tasks):
-        if name not in wanted:
-            del node.tasks[name]
-    for name in list(node.groups):
-        if name not in wanted:
-            del node.groups[name]
+    """Apply `only=`/`exclude=` to the pulled node — full dotted addresses,
+    matched exactly (no globs: the whole-group spelling `only=["docs"]` *is*
+    the glob). Grafting a nested address materialises its path — the
+    intermediate groups are the source's own forked copies — and
+    default-ness survives only if the default survives, literally: the
+    default is the child named `default`, so `only=["lint.python"]` grafts a
+    default-less `lint`, `only=["lint.default"]` grafts *just* the default,
+    and `exclude=["lint.default"]` grafts everything but it. No pointer
+    bookkeeping — dropping the child *is* dropping default-ness.
+    """
+    for address in (*only, *exclude):
+        _validate_filter(node, address, verb)
+    if only:
+        _apply_only(node, _keep_tree(tuple(only)))
+    for address in exclude:
+        _remove(node, address)
+    _drop_empty(node)
 
 
 def _pull(

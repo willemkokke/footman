@@ -272,6 +272,10 @@ def provider(tmp_path, monkeypatch):
             def build():
                 "Build docs."
                 print("docs-build")
+
+            @docs.task
+            def serve():
+                "Serve docs."
             """
         )
     )
@@ -306,20 +310,56 @@ def test_include_cherry_picks_and_namespaces(provider):
 def test_include_unknown_only_name_is_a_typo_error(provider):
     with (
         registry.capture(),
-        pytest.raises(RegistrationError, match="no task or group named 'lnt'"),
+        pytest.raises(RegistrationError, match="no task or group at 'lnt'"),
     ):
         compose.include("shared_tasks", only=["lnt"])
 
 
-def test_include_dotted_only_name_is_taught_not_a_silent_no_match(provider):
-    # Interim until dotted cherry-picking lands: a dotted address in only=/
-    # exclude= is a real thing to want, so the refusal says what filters
-    # reach today and names the whole-group spelling that works now.
+def test_dotted_only_materialises_the_path(provider):
+    # only= takes full dotted addresses: the nested pick grafts its path —
+    # the intermediate group is the source's own forked copy, help riding
+    # along — pruned to just the listed leaf.
+    with registry.capture() as captured:
+        compose.include("shared_tasks", only=["docs.build", "fmt"])
+    assert set(captured.tasks) == {"fmt"}
+    docs = captured.groups["docs"]
+    assert set(docs.tasks) == {"build"}
+    assert docs.help == "Shared docs tasks"  # the fork carried the group's help
+
+
+def test_dotted_exclude_drops_one_leaf(provider):
+    with registry.capture() as captured:
+        compose.include("shared_tasks", exclude=["docs.build"])
+    assert set(captured.groups["docs"].tasks) == {"serve"}
+    assert set(captured.tasks) == {"lint", "fmt"}
+
+
+def test_a_group_pruned_empty_is_dropped(provider):
+    with registry.capture() as captured:
+        compose.include("shared_tasks", exclude=["docs.build", "docs.serve"])
+    assert "docs" not in captured.groups  # never grafted as a shell
+
+
+def test_only_union_is_redundant_not_an_error(provider):
+    with registry.capture() as captured:
+        compose.include("shared_tasks", only=["docs", "docs.build"])
+    assert set(captured.groups["docs"].tasks) == {"build", "serve"}  # whole group
+
+
+def test_dotted_filter_typo_is_taught_per_segment(provider):
     with (
         registry.capture(),
-        pytest.raises(RegistrationError, match=r"dotted cherry-picking is coming"),
+        pytest.raises(
+            RegistrationError,
+            match=r"no task or group at 'docs.buidl' \(docs has: build, serve\)",
+        ),
     ):
-        compose.include("shared_tasks", only=["docs.build"])
+        compose.include("shared_tasks", only=["docs.buidl"])
+    with (
+        registry.capture(),
+        pytest.raises(RegistrationError, match=r"'fmt' is a task, not a group"),
+    ):
+        compose.include("shared_tasks", exclude=["fmt.deep"])
 
 
 def test_include_missing_module_names_the_call_not_the_file():
@@ -1004,7 +1044,7 @@ def test_two_pulls_compose_one_subtree(provider, tmp_path, monkeypatch):
     with registry.capture() as captured:
         compose.include("shared_tasks")  # brings docs.build
         compose.plugin("other")  # brings docs.deploy — composes, no clash
-    assert set(captured.groups["docs"].tasks) == {"build", "deploy"}
+    assert set(captured.groups["docs"].tasks) == {"build", "serve", "deploy"}
 
 
 def test_leaf_clash_across_identities_cites_both(provider, tmp_path, monkeypatch):
@@ -1089,3 +1129,48 @@ def test_adopted_default_fans_out_the_group_it_landed_in(tmp_path, monkeypatch):
     assert result.ok
     assert "markdown fix=True" in result.stdout  # the CONSUMER group fanned out
     assert "provider-side surface" not in result.stdout
+
+
+def test_default_survives_only_if_the_default_survives(tmp_path, monkeypatch):
+    # Literal, because the default IS the child named `default`: cherry-pick
+    # a sibling and the graft is a default-less group; pick the whole group
+    # and it stays runnable; and both node-granular spellings work without
+    # ever opening the provider's source.
+    _advertise(
+        tmp_path,
+        monkeypatch,
+        "runnable_kit",
+        """
+        from footman import group
+        from footman.params import Forward
+
+        lint = group("lint", help="Lint things")
+
+        @lint.task
+        def python(fix: bool = False):
+            "Lint Python."
+
+        @lint.default
+        def lint_all(fix: Forward[bool] = False):
+            "Lint everything."
+        """,
+        "runkit = runnable_kit:lint",
+    )
+    with registry.capture() as captured:
+        compose.plugin("runkit", only=["python"])
+    assert captured.groups["lint"].default_task is None  # not resurrected
+    assert set(captured.groups["lint"].tasks) == {"python"}
+
+    with registry.capture() as captured:
+        compose.plugin("runkit")  # the whole group keeps its default
+    assert captured.groups["lint"].default_task is not None
+
+    with registry.capture() as captured:
+        compose.plugin("runkit", only=["default"])  # just the default
+    assert set(captured.groups["lint"].tasks) == {"default"}
+    assert captured.groups["lint"].default_task is not None
+
+    with registry.capture() as captured:
+        compose.plugin("runkit", exclude=["default"])  # everything but it
+    assert captured.groups["lint"].default_task is None
+    assert set(captured.groups["lint"].tasks) == {"python"}

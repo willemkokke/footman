@@ -126,9 +126,18 @@ of a module the way an import pulls one name. Then the engine grafts:
   raises, citing both providers; pass `override=True` when the later pull
   should win. Group-vs-group is composition, never a clash: two pulls into
   one subtree merge all the way down.
-- **Typos are loud** — an unknown name in `only=`/`exclude=` is an error
-  listing what the pulled node actually has (filters are relative to the
-  pulled node).
+- **Filters take full dotted addresses**, relative to the pulled node —
+  `only=["docs.build", "fmt"]` grafts one nested task and one flat one,
+  materialising the path (the intermediate groups are the source's own
+  copies, help text riding along). Matching is exact; the whole-group
+  spelling `only=["docs"]` *is* the glob, and `only=["docs",
+  "docs.build"]` is redundant, not an error. A group pruned empty is
+  dropped entirely. Default-ness survives only if the default survives —
+  the default is the child named `default`, so `only=["lint.default"]`
+  grafts *just* the default and `exclude=["lint.default"]` grafts
+  everything but it, readable without ever opening the provider's source.
+- **Typos are loud** — an unknown filter address errors per segment,
+  naming what that level actually has.
 - **Included tasks run from *your* directory** — a shared lint task lints
   this project, not the provider's install location.
 - `--where lint` still points at the provider's source, so provenance is
