@@ -85,7 +85,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "p=$(jq -r '.tool_input.file_path // empty'); case \"$p\" in *.py) uv run fm format lint 1>&2 || exit 2;; esac"
+            "command": "uv run fm hooks.post-edit 1>&2"
           }
         ]
       }
@@ -95,7 +95,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "jq -e '.stop_hook_active' >/dev/null && exit 0; uv run fm check 1>&2 || exit 2"
+            "command": "uv run fm hooks.stop 1>&2"
           }
         ]
       }

@@ -9,6 +9,57 @@ versions may include breaking changes.
 
 ### Added
 
+- **`stdin` — a parameter bound from the pipe.** footman is a pipe target:
+  `git diff | fm review` and `fm review < changes.patch` both bind the
+  stream to a typed parameter, with no flag to remember. The annotation
+  decides the interpretation — `Annotated[str, stdin]` (or `Stdin[str]`)
+  reads the stream as UTF-8 text, `bytes` reads it raw, `stdin("field")`
+  reads one top-level key of a JSON document, and `stdin(lines=True)` binds
+  a list one line per element, each line coerced exactly like a CLI token
+  (`list[int]`, `list[Path]`). Precedence is CLI > stdin > env > default >
+  prompt, so an explicit option always wins and one signature serves both
+  spellings. The stream is read once, fully, at the boundary and shared by
+  every parameter in the run that asks — task bodies still never touch
+  stdin, so bound tasks stay fully parallel with no `interactive=True`. A
+  terminal means "not provided": a defaulted parameter falls back, a
+  required one refuses with a taught message, and nothing ever blocks on a
+  read. `--help` says what a parameter reads; `Runner.invoke` grew a
+  `stdin=` argument so tests pipe without touching the real stream.
+
+- **`Stdout[T]` — the return annotation that owns stdout.** A task declares
+  that its return value is the document on stdout, in the signature:
+  `def status() -> Stdout[dict]` makes `fm status | jq .` work with no flag
+  at any call site — a filter the way `sort` and `jq` are filters. The
+  return type decides the bytes, mirroring `stdin`: `Stdout[str]` verbatim
+  plus a trailing newline, `Stdout[bytes]` raw, anything structured JSON —
+  pretty-printed at a terminal, one compact line into a pipe, dataclasses
+  and `Secret` redaction handled by the same encoder `--json` uses. The
+  rules: `--json` wins (the document rides in `results[].returned`); only
+  the addressed task emits (a declaring `pre=`/`post=` dependency or
+  fan-out member is suppressed, not refused); two declaring tasks in one
+  chain is a plan-time refusal; `None` means empty stdout, exit 0;
+  `Stdout[int]` makes the number the document (a bare `-> int` stays the
+  exit-code channel); a failed task emits nothing; everything that is not
+  the document replays on stderr, so `fm status > out.json` captures
+  exactly the document. `Stdout[T]` + `interactive=True` is a taught
+  declaration-time error, and a body call is unaffected.
+
+- **The document binder: JSON on stdin into typed shapes.** A parameter
+  annotated with a dataclass, `dict`, or `list` and marked `stdin` binds
+  the whole JSON document: nested dataclasses recurse (no dotted field
+  paths — `event.tool_input.file_path` is just attribute access), `list[T]`
+  and `T | None` recurse too, and scalar leaves run the same coercion a
+  CLI token gets, so `Path`, `Literal`, enums and `datetime` behave as they
+  do on the command line. Unknown keys are ignored, never refused — a
+  producer may grow fields without breaking a consumer. Missing keys follow
+  the dataclass: a field with a default is optional, a defaultless absent
+  one is a taught refusal. Every refusal names the exact JSON path
+  (`event.tool_input.file_path: expected text, got a number`). A
+  dataclass parameter is boundary-only — not a flag, not a positional; the
+  pipe is its only source, and `fm task < fixture.json` replays the real
+  parse. A bare-marker `list` parameter reads a JSON array; a `dict`
+  parameter reads a JSON object.
+
 - **`[tool.footman] sort = true` — alphabetical listings.** One boolean
   orders every human-facing walk of the tree: `--list`, `--tree`, help,
   the `--json` catalog, and the generated docs pages. A `--sort` global
@@ -63,6 +114,20 @@ versions may include breaking changes.
   fallback for callers outside a run.
 
 ### Changed
+
+- **BREAKING: refusals exit 64 (`EX_USAGE`), not 2.** Exit 2 used to mean
+  four different things — an unknown task or flag, a value that would not
+  coerce, a task saying `fail(code=2)`, and a `run()` subprocess exiting 2 —
+  so a caller could not tell a broken invocation from a real verdict, and a
+  harness reading 2 as "blocking error" acted on refusals as if they were
+  results. Now every refusal — parse, binding, tasks-file, config,
+  availability, `--where`, the completion installers — exits 64, on the
+  process and inside the `--json` envelope (`error.code`, `results[].code`)
+  alike. Interrupt stays 130. The low codes belong to tasks again: exit 2
+  from a task now means exactly what the task said. Anyone keying on 2 for
+  footman's own errors must key on 64; hook recipes that flattened every
+  failure to one code now pass 64 through untouched (`docs/agents.md` shows
+  the shape).
 
 - **`--tree` draws a tree.** It used to print every task at its full dotted
   address under an indented group header, which made it the `--list` output
@@ -143,6 +208,14 @@ versions may include breaking changes.
   label can't drift from the runtime again.
 
 ### Docs
+
+- footman's own agent hooks are footman tasks now: `.claude/settings.json`
+  runs `fm hooks.post-edit` and `fm hooks.stop` (a hidden group in
+  `tasks.py`) instead of shell one-liners. The payload arrives as a typed
+  dataclass from stdin — the `jq` host dependency is gone — the loop guard
+  is a field read, and the exit contract is exact: 0 quiet, 2 a blocking
+  verdict with receipts on stderr, 64 passing through so a broken hook
+  line reaches the human, never the model.
 
 - Corrected the tools-bridge page and its code comments where they still said
   a zero-argument `main()` serialises — the argv router ended that. pytest's

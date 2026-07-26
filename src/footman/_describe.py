@@ -90,6 +90,8 @@ def value_hint(p: dict) -> str:
 def usage_fragment(p: dict) -> str:
     kind = p["kind"]
     required = p.get("required")
+    if kind == "stdin":
+        return ""  # a whole-document parameter has no token spelling
     if kind == "flag":
         return f"--{p['name']}" if required else f"[--{p['name']}]"
     if kind == "option":
@@ -139,6 +141,20 @@ def _mechanics(p: dict) -> str:
         bits.append("repeatable" if p.get("nosplit") else "repeatable/comma-split")
     if p["kind"] == "variadic":
         bits.append("extra arguments (also receives everything after --)")
+    source = p.get("stdin")
+    if source:
+        if source.startswith("field:"):
+            note = f"reads stdin (JSON field {source[6:]!r})"
+        elif source == "lines":
+            note = "reads stdin (one line per value)"
+        elif source == "bytes":
+            note = "reads stdin (raw bytes)"
+        elif source == "json":
+            shape = p.get("shape")
+            note = f"reads stdin (JSON document{' → ' + shape if shape else ''})"
+        else:
+            note = "reads stdin (text)"
+        bits.append(note)
     if p.get("required"):
         bits.append("required")
     return "; ".join(bits)

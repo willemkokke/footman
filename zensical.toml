@@ -48,6 +48,7 @@ nav = [
     { "Shell differences" = "completion-differences.md" },
   ] },
   { "Machine use" = [
+    { "Pipelines" = "pipelines.md" },
     { "CI" = "ci.md" },
     { "JSON output" = "json.md" },
     { "AI agents" = "agents.md" },

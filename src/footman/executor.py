@@ -18,6 +18,7 @@ import contextlib
 import enum
 import inspect
 import io
+import json
 import os
 import time
 from collections.abc import Iterator
@@ -26,7 +27,7 @@ from pathlib import Path, PurePath
 from types import MappingProxyType
 from typing import Any
 
-from footman import _globals, coerce, context, registry
+from footman import _binder, _globals, coerce, context, registry
 from footman.context import (
     Context,
     Failed,
@@ -40,6 +41,15 @@ from footman.manifest import resolved_signature
 from footman.params import Secret
 from footman.registry import Group, Task
 from footman.split import ChainError, Segment
+
+EX_USAGE = 64
+"""The refusal exit code — footman did not understand the command line.
+
+`EX_USAGE` from BSD's `sysexits.h`: an unknown task, an unknown flag, a
+malformed chain, a value that will not coerce, an unavailable task. Distinct
+from anything a task says on purpose, so a caller can tell a broken
+invocation from a real verdict; the low codes (1, 2, …) belong to tasks and
+their subprocesses. Interrupt stays 130."""
 
 
 @dataclass
@@ -192,6 +202,121 @@ def _env_value(
     return one(raw)
 
 
+def _decode_stdin(payload: bytes) -> str:
+    """stdin bytes as text: UTF-8, universal newlines. A stream that is not
+    UTF-8 is a taught refusal — bind it as `bytes` instead of guessing."""
+    try:
+        text = payload.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ValueError(
+            f"stdin is not valid UTF-8 ({exc}) — bind the parameter as "
+            f"`bytes` to read the raw stream"
+        ) from exc
+    return text.replace("\r\n", "\n").replace("\r", "\n")
+
+
+def _stdin_json(payload: bytes) -> Any:
+    """The JSON value on stdin — any shape; the caller owns the fit."""
+    if not payload.strip():
+        raise ValueError("stdin was empty; expected a JSON document")
+    try:
+        return json.loads(_decode_stdin(payload))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"stdin is not JSON: {exc}") from exc
+
+
+def _stdin_document(payload: bytes) -> dict[str, Any]:
+    """The JSON object on stdin, for a `stdin(\"field\")` parameter."""
+    document = _stdin_json(payload)
+    if not isinstance(document, dict):
+        raise ValueError(
+            f"stdin holds a JSON {type(document).__name__}, not an object — "
+            f"a stdin(field) parameter reads one top-level key"
+        )
+    return document
+
+
+def _stdin_value(
+    param: inspect.Parameter,
+    peeled: coerce.Peeled,
+    params: dict[str, Any] | None = None,
+) -> Any:
+    """The stdin path for an absent option: CLI beats stdin beats env.
+
+    The boundary read happens here (once per process, shared — see
+    `context.stdin_payload`), and the value flows through the same coercion
+    and validation a CLI token gets. `_MISSING` means stdin did not supply
+    it: no pipe, or a JSON document without the named field — the parameter
+    then falls to env, default, or the required-and-absent refusal.
+    """
+    marker = peeled.stdin
+    assert marker is not None  # bind only calls this when stdin is present
+    payload = context.stdin_payload()
+    if payload is None:
+        return _MISSING
+    label = f"--{param.name.replace('_', '-')} (from stdin)"
+
+    if marker.field is not None:
+        value = _stdin_document(payload).get(marker.field, _MISSING)
+        if value is _MISSING or value is None:  # absent and null both fall
+            return _MISSING
+        if isinstance(value, (dict, list)):
+            raise ValueError(
+                f"{label}: the {marker.field!r} field is a JSON "
+                f"{type(value).__name__}, not a single value"
+            )
+        token = value if isinstance(value, str) else str(value)
+        return _coerce_extra(token, peeled, label, params)
+
+    if marker.lines:
+        lines = _decode_stdin(payload).splitlines()
+        return [_coerce_extra(line, peeled, label, params) for line in lines]
+
+    if peeled.element is bytes:
+        return _run_checks(payload, peeled, label, params)
+
+    target = _document_shape(peeled)
+    if target is not None:
+        bound = _binder.bind_document(_stdin_json(payload), target, param.name)
+        if isinstance(bound, list):
+            return [_run_checks(v, peeled, label, params) for v in bound]
+        if isinstance(bound, dict):
+            return {k: _run_checks(v, peeled, label, params) for k, v in bound.items()}
+        return _run_checks(bound, peeled, label, params)
+
+    text = _decode_stdin(payload)
+    return _run_checks(_validate_value(text, peeled, label), peeled, label, params)
+
+
+def _document_shape(peeled: coerce.Peeled) -> Any:
+    """The JSON shape a bare `stdin` parameter binds to, rebuilt from its
+    peeled form: the dataclass itself, `list[T]` for a list parameter,
+    `dict[K, V]` for a mapping. `None` for the text/bytes forms."""
+    if peeled.mapping:
+        value_t: Any = list[peeled.element] if peeled.value_multiple else peeled.element
+        return dict[peeled.key, value_t]
+    if peeled.multiple:
+        return list[peeled.element]
+    if _binder.is_document_target(peeled.element):
+        return peeled.element
+    return None
+
+
+def _stdin_fillable(peeled: coerce.Peeled) -> bool:
+    """Whether the boundary's stdin would fill this parameter — the ask()
+    front-loader skips a question stdin already answers."""
+    payload = context.stdin_payload()
+    if payload is None:
+        return False
+    if peeled.stdin is not None and peeled.stdin.field is not None:
+        try:
+            value = _stdin_document(payload).get(peeled.stdin.field)
+        except ValueError:
+            return False
+        return value is not None
+    return True
+
+
 def _prompt_param(
     cli: str,
     peeled: coerce.Peeled,
@@ -328,6 +453,8 @@ def resolve_asks(fn: Task, seg: Segment, ctx: Context | None) -> None:
             continue
         if peeled.completer is not None:
             continue  # a live suggest may need a prerequisite's effects
+        if peeled.stdin is not None and _stdin_fillable(peeled):
+            continue  # the piped payload fills it at bind time
         if peeled.env is not None and os.environ.get(peeled.env) is not None:
             continue  # the env variable fills it at bind time
         raw, _value = _prompt_param(cli, peeled, ctx, None)
@@ -384,16 +511,52 @@ def bind(
                 continue
             if param.annotation is not empty:
                 peeled = coerce.peel(param.annotation)
+                # CLI > stdin > env > default > prompt: the piped payload
+                # outranks the ambient environment, and both lose to an
+                # explicit option.
+                if peeled.stdin is not None:
+                    value = _stdin_value(param, peeled, siblings)
+                    if value is not _MISSING:
+                        kwargs[param.name] = value
+                        continue
                 if peeled.env is not None:
                     value = _env_value(param, peeled, siblings)
                     if value is not _MISSING:
                         kwargs[param.name] = value
                         continue
-                # ask(): prompt for a required (defaultless) param the CLI and
-                # env didn't fill — CLI > env > default > prompt, so a default
-                # short-circuits it and the prompt is the last resort.
+                # ask(): prompt for a required (defaultless) param nothing
+                # else filled — the prompt is the last resort.
                 if peeled.ask is not None and param.default is empty:
                     _, kwargs[param.name] = _prompt_param(cli, peeled, ctx, siblings)
+                    continue
+                if peeled.stdin is not None and param.default is empty:
+                    # Required, reads stdin, and nothing supplied it. A taught
+                    # refusal, never a blocking terminal read.
+                    if peeled.stdin.field is not None and (
+                        context.stdin_payload() is not None
+                    ):
+                        raise ValueError(
+                            f"--{cli} is required and the JSON document on "
+                            f"stdin has no {peeled.stdin.field!r} field — "
+                            f"add the field, or pass --{cli}"
+                        )
+                    if (
+                        not peeled.mapping
+                        and not peeled.multiple
+                        and (_binder.is_document_target(peeled.element))
+                    ):
+                        # A whole-document parameter has no token spelling —
+                        # the boundary is its only source, so teach the pipe.
+                        raise ValueError(
+                            f"<{param.name}> is required and reads a JSON "
+                            f"document from stdin — pipe one in, or replay "
+                            f"a fixture (< payload.json)"
+                        )
+                    raise ValueError(
+                        f"--{cli} is required and reads stdin — pipe a "
+                        f"document in, redirect a file (< payload), or "
+                        f"pass --{cli}"
+                    )
             continue
         raw = seg.values[cli]
         if isinstance(raw, bool):  # a flag, already resolved by the splitter
@@ -519,7 +682,13 @@ def _call(
     except Exception as exc:  # a failed task must not crash the runner
         return 1, None, exc
     if isinstance(returned, int) and not isinstance(returned, bool):
-        return returned, returned, None
+        # An int return is the exit-code channel — unless the signature
+        # declares `Stdout[int]`, in which case the number is the document
+        # (a filter like wordcount could not exist otherwise). Declaration
+        # wins; a bare `-> int` keeps its long-standing meaning.
+        declares, _ = coerce.emitted(resolved_signature(fn).return_annotation)
+        if not declares:
+            return returned, returned, None
     return 0, returned, None
 
 
@@ -613,13 +782,15 @@ def run_task(
     # `@requires` availability is re-checked live at the moment of execution —
     # the manifest's cached answer is only ever a listing annotation.
     if (reason := registry.availability(fn)) is not None:
-        return TaskResult(task=seg.task, ok=False, code=2, error=Unavailable(reason))
+        return TaskResult(
+            task=seg.task, ok=False, code=EX_USAGE, error=Unavailable(reason)
+        )
     try:
         args, kwargs = bind(seg, fn, ctx, forwarded)
     except ChainError:
         raise  # e.g. passthrough with no *args — reported by the app layer
     except Exception as exc:  # a coercion failure (e.g. a custom-type constructor)
-        return _result(seg, 2, None, exc, 0.0)
+        return _result(seg, EX_USAGE, None, exc, 0.0)
 
     if context_param_name(resolved_signature(fn)):
         args = [ctx, *args]  # ctx is the first positional parameter
@@ -631,7 +802,7 @@ def run_task(
         try:
             ctx.cwd, ctx.cwd_unmanaged = resolve_cwd(fn, ctx)
         except ValueError as exc:  # e.g. rel= under an unmanaged config default
-            return _result(seg, 2, None, exc, 0.0)
+            return _result(seg, EX_USAGE, None, exc, 0.0)
 
     # The arbiter lane is a *scheduling* declaration, acquired here at the
     # task boundary — never mid-body, which is what keeps it deadlock-free.
@@ -677,8 +848,9 @@ def _result(
     return TaskResult(
         task=seg.task,
         ok=error is None and code == 0,
-        # Honor an explicit non-zero code (run_task passes 2 for bind/coercion
-        # refusals); only synthesize 1 when an error carries no code of its own.
+        # Honor an explicit non-zero code (run_task passes EX_USAGE for
+        # bind/coercion refusals); only synthesize 1 when an error carries no
+        # code of its own.
         code=code if code != 0 else (1 if error is not None else 0),
         returned=returned,
         error=error,

@@ -67,8 +67,8 @@ The rules, all of them:
 
 - `None` (the usual case) omits the key entirely.
 - An `int` return keeps its long-standing meaning — the task's **exit
-  code**, never data. Return `{"count": 42}` when you mean data. Bools are
-  data.
+  code**, never data. Return `{"count": 42}` when you mean data, or declare
+  `Stdout[int]` (below) when the number *is* the document. Bools are data.
 - The types footman coerces *in* serialise on the way *out*: `Path` → string,
   `Enum` → its value, `datetime`/`date`/`time` → ISO format, `UUID` →
   string, `Decimal` → string (precision kept), dataclasses → dicts, sets →
@@ -81,7 +81,58 @@ The rules, all of them:
 
 In tests, the same value is `Runner.invoke(...).results[n].returned` — see
 [Testing your tasks](testing.md). Without `--json`, return values are
-simply ignored.
+simply ignored — unless the task claims stdout, below.
+
+## The document on stdout: `Stdout[T]`
+
+A task can declare that its return value *is* the document on stdout, in
+the signature, where the rest of its contract lives:
+
+```python
+from footman import Stdout, task
+
+@task
+def status() -> Stdout[dict]:
+    "Where the repo stands."
+    return {"branch": "main", "dirty": False}
+```
+
+```console
+$ fm status | jq .branch
+"main"
+```
+
+No flag at any call site — `fm status` is a filter the way `sort` and `jq`
+are filters. The return type decides the bytes, mirroring `stdin`:
+`Stdout[str]` emits the string verbatim plus a trailing newline,
+`Stdout[bytes]` writes raw bytes, and anything structured is JSON —
+pretty-printed at a terminal, one compact line into a pipe, encoded by the
+same rules as `returned` above (dataclasses to dicts, `Secret` redacted).
+
+The rules, all of them:
+
+- **An explicit `--json` wins.** The envelope keeps stdout and the document
+  rides inside `results[].returned`, where a return value already lives.
+- **Only the addressed task emits.** A declaring task reached as a `pre=`/
+  `post=` dependency or a group fan-out member is suppressed, not refused —
+  composing a filter into a bigger task stays legal.
+- **Two declaring tasks in one chain is a refusal**, at plan time: "whose
+  document?" has no answer worth guessing.
+- **`None` returned means empty stdout, exit 0.** Nothing to say, said
+  nothing. `Stdout[dict | None]` is the house spelling for that signature.
+- **Declaring `Stdout[int]` makes the number the document** — the bare
+  `-> int` exit-code channel applies only to undeclared returns, so a
+  counting filter is possible.
+- **A failed task emits nothing**; the exit code talks.
+- **Everything that is not the document goes to stderr**: a declaring
+  task's prints and `run()` lines replay there, beside the summary, so
+  `fm status > out.json` captures exactly the document.
+- **A body call is unaffected** — `status()` from another task returns the
+  value; stdout is a boundary concern.
+
+`Stdout[T]` and `interactive=True` cannot both hold (an interactive task
+owns the real terminal, uncaptured) — that is a taught error at declaration
+time, not a surprise in a pipeline.
 
 ## Refusals
 
@@ -94,7 +145,7 @@ $ fm --json chekc
 {
   "schema": 1,
   "error": {
-    "code": 2,
+    "code": 64,
     "message": "expected a task name, got 'chekc' — did you mean 'check'? (know: docs, lint, test, check)"
   },
   "results": []
@@ -178,10 +229,10 @@ The process exit code tells the same story as the envelope:
 | 0 | everything ran and succeeded |
 | 1 | a task raised an exception |
 | N | a task returned N / its `run()` command exited N — first failure wins |
-| 2 | footman refused before or while binding: parse, tasks-file, config, availability |
+| 64 | footman refused before or while binding: parse, tasks-file, config, availability |
 | 130 | interrupted (Ctrl-C) |
 
-Exit 2 before anything runs is a feature in CI: a typo'd workflow fails in
+Exit 64 before anything runs is a feature in CI: a typo'd workflow fails in
 milliseconds with a taught message, not after twenty minutes of setup.
 
 ## Recipes

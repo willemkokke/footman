@@ -7,6 +7,7 @@ dogfoods the same harness users are told to test their branded CLIs with.
 from __future__ import annotations
 
 from footman import App, Brand, __version__
+from footman.executor import EX_USAGE
 from footman.testing import Runner
 
 
@@ -29,7 +30,7 @@ def test_custom_brand_version(capsys):
 def test_custom_brand_error_prefix():
     acme = Runner(App(name="Acme", prog="acme", version="1.4.0"))
     result = acme.invoke("-f /nope/tasks.py whatever")
-    assert result.exit_code == 2
+    assert result.exit_code == EX_USAGE
     assert result.stderr.startswith("acme: ")
 
 

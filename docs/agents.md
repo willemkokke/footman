@@ -43,7 +43,7 @@ form a chain, and independent tasks run in parallel (output never
 interleaves). Everything after `--` passes through to the task's
 `*args`.
 
-Exit codes: 0 all ok · 1 a task raised · N a task exited N · 2 footman
+Exit codes: 0 all ok · 1 a task raised · N a task exited N · 64 footman
 refused the line (the stderr message states the fix) · 130 interrupted.
 
 To add or change tasks, edit `tasks.py` — the signature is the CLI.
@@ -52,13 +52,59 @@ Never edit the completion cache under `~/.cache/footman/`; it's derived.
 
 ## Hooks: Claude Code
 
-Two recipes for `.claude/settings.json`. The mechanics in one sentence: a
-hook's **stderr plus exit code 2** is fed back to Claude as something to
-fix; anything else is display-only — so route footman's output to stderr
-and let the exit code do the talking.
+A hook is a pipeline whose producer and consumer happen to be an agent
+harness: JSON arrives on stdin, the verdict leaves as an exit code plus
+stderr. That is exactly the boundary [Pipelines](pipelines.md) describes,
+so a hook is a small footman task — the payload binds to a dataclass, the
+loop guard is a field read, and no `jq` is involved. The mechanics in one
+sentence: a hook's **stderr plus exit code 2** is fed back to Claude as
+something to fix; anything else is display-only; and footman's own refusal
+(a typo'd flag, an unknown task) exits 64, which the harness shows to the
+*human* — a wiring problem never impersonates a verdict about the project.
 
-**Format and lint after every edit** — the tree stays clean as the agent
-works, and lint failures land straight back in its context:
+The tasks, in `tasks.py` — `hidden=True` keeps machine-called adapters out
+of `--list` and completion:
+
+```python
+from dataclasses import dataclass, field
+from typing import Annotated
+from footman import RunFailed, fail, group, stdin
+
+hooks = group("hooks", hidden=True, help="Agent lifecycle hooks")
+
+@dataclass
+class ToolInput:
+    file_path: str = ""
+
+@dataclass
+class HookEvent:
+    tool_input: ToolInput = field(default_factory=ToolInput)
+    stop_hook_active: bool = False
+
+@hooks.task
+def post_edit(event: Annotated[HookEvent, stdin]) -> None:
+    """Format and lint a Python file the agent just edited."""
+    if not event.tool_input.file_path.endswith(".py"):
+        return
+    try:
+        format()   # your own format/lint tasks, body-called
+        lint()
+    except RunFailed:
+        fail("format/lint failed — fix it before continuing", code=2)
+
+@hooks.task
+def stop(event: Annotated[HookEvent, stdin]) -> None:
+    """Refuse to let a session end on a red gate."""
+    if event.stop_hook_active:
+        return  # this stop already is the retry — never ping-pong
+    try:
+        check()
+    except RunFailed:
+        fail("the gate is red — fix it before stopping", code=2)
+```
+
+The wiring, in `.claude/settings.json` — the redirection is what puts the
+receipts on the channel Claude reads:
 
 ```json
 {
@@ -67,28 +113,14 @@ works, and lint failures land straight back in its context:
       {
         "matcher": "Edit|Write",
         "hooks": [
-          { "type": "command", "command": "uv run fm format lint 1>&2 || exit 2" }
+          { "type": "command", "command": "uv run fm hooks.post-edit 1>&2" }
         ]
       }
-    ]
-  }
-}
-```
-
-**The gate as the definition of done** — a `Stop` hook that refuses to let
-the session end red. `stop_hook_active` is the loop guard: when this stop
-*is already* the retry, skip, so a stubborn failure can't ping-pong forever:
-
-```json
-{
-  "hooks": {
+    ],
     "Stop": [
       {
         "hooks": [
-          {
-            "type": "command",
-            "command": "jq -e '.stop_hook_active' >/dev/null && exit 0; uv run fm check 1>&2 || exit 2"
-          }
+          { "type": "command", "command": "uv run fm hooks.stop 1>&2" }
         ]
       }
     ]
@@ -96,10 +128,11 @@ the session end red. `stop_hook_active` is the loop guard: when this stop
 }
 ```
 
-Two refinements when you need them: gate the PostToolUse command on Python
-files (`p=$(jq -r '.tool_input.file_path // empty'); case "$p" in *.py) …;;
-esac`) in repos where non-Python edits dominate, and swap `check` for a
-lighter chain if the full gate is slow.
+Unknown payload fields are ignored by construction, so the hook survives
+the harness growing its schema. To debug one, keep a fixture and replay it:
+`uv run fm hooks.stop < fixture.json` exercises the real parse — and
+`Runner.invoke("hooks.stop", stdin=payload)` is the same replay in a test.
+(This repository wires its own hooks exactly this way.)
 
 ## Hooks: Cursor
 

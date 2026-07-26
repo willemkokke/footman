@@ -23,9 +23,20 @@ from pathlib import Path, PurePath
 from typing import Annotated, Any
 
 from footman.params import _arg as _ARG
-from footman.params import _PathRequirement, ask, between, check, doc, env, suggest
+from footman.params import (
+    _PathRequirement,
+    _StdoutMarker,
+    ask,
+    between,
+    check,
+    doc,
+    env,
+    suggest,
+)
 from footman.params import forward as _FORWARD
 from footman.params import nosplit as _NOSPLIT
+from footman.params import stdin as _stdin_marker
+from footman.params import stdout as _STDOUT
 
 _TAG_ORDER = {"bool": 0, "int": 1, "float": 2, "path": 3, "str": 4}
 
@@ -97,6 +108,7 @@ class Peeled:
     ask: ask | None = None  # prompt-if-missing marker (ask())
     forward: bool = False  # thread this value to dispatched tasks (forward)
     optional: bool = False  # Arg[T]: an optional trailing positional
+    stdin: _stdin_marker | None = None  # bind from the boundary's stdin read
 
 
 def peel(ann: Any) -> Peeled:
@@ -111,6 +123,7 @@ def peel(ann: Any) -> Peeled:
     ask_marker: ask | None = None
     is_forward = False
     is_optional = False
+    stdin_marker: _stdin_marker | None = None
 
     # Strip Annotated and Optional wrappers in any order/nesting, e.g. both
     # `Annotated[list[X], nosplit] | None` and `Annotated[list[X] | None, nosplit]`.
@@ -143,6 +156,13 @@ def peel(ann: Any) -> Peeled:
                     is_forward = True
                 elif mark is _ARG:
                     is_optional = True
+                elif mark is _stdin_marker or isinstance(mark, _stdin_marker):
+                    # The bare class and an instance both mark the parameter:
+                    # `Annotated[str, stdin]` reads the whole stream,
+                    # `stdin("field")` / `stdin(lines=True)` refine it.
+                    stdin_marker = (
+                        mark if isinstance(mark, _stdin_marker) else _stdin_marker()
+                    )
                 elif callable(mark) and not isinstance(mark, type):
                     completer = suggest(mark)  # a bare callable == suggest(fn)
             ann, changed = base, True
@@ -160,6 +180,7 @@ def peel(ann: Any) -> Peeled:
         "ask": ask_marker,
         "forward": is_forward,
         "optional": is_optional,
+        "stdin": stdin_marker,
     }
 
     if ann is dict or typing.get_origin(ann) is dict:  # dict[K, V] or bare dict
@@ -184,6 +205,7 @@ def peel(ann: Any) -> Peeled:
             env=env_var,
             checks=(*checks, *value.checks),
             doc=doc_text,
+            stdin=stdin_marker,
         )
 
     if ann is list or typing.get_origin(ann) is list:  # list[X] / Many[X] / bare
@@ -202,6 +224,42 @@ def peel(ann: Any) -> Peeled:
         return Peeled(False, ann, completer, is_nosplit, **markers)  # scalar union
 
     return Peeled(False, ann, completer, is_nosplit, **markers)  # plain scalar
+
+
+def emitted(ann: Any) -> tuple[bool, Any]:
+    """Whether a *return* annotation carries the `stdout` marker, and the
+    type inside it.
+
+    `Stdout[dict | None]` and `Stdout[dict] | None` read identically —
+    `Annotated` and `Optional` strip in any order and nesting, the same
+    normalisation `peel` applies to parameters. The inner type decides the
+    emission: `str` verbatim, `bytes` raw, anything else JSON.
+    """
+    found = False
+    changed = True
+    while changed:
+        changed = False
+        if typing.get_origin(ann) is Annotated:
+            base, *meta = typing.get_args(ann)
+            if any(m is _STDOUT or isinstance(m, _StdoutMarker) for m in meta):
+                found = True
+            ann, changed = base, True
+        elif _is_union(ann):
+            members = _strip_none(list(typing.get_args(ann)))
+            if len(members) == 1:
+                ann, changed = members[0], True
+    return found, ann
+
+
+def emission_mode(inner: Any) -> str:
+    """How an emitted value reaches stdout: `text`, `bytes`, or `json`."""
+    members = union_members(inner)
+    if len(members) == 1:
+        if members[0] is str:
+            return "text"
+        if members[0] is bytes:
+            return "bytes"
+    return "json"
 
 
 def is_flag(element: Any) -> bool:
@@ -390,6 +448,10 @@ def coerce_custom(value: str, element: Any) -> Any:
     # on Python >=3.11, so without this guard `Any("x")` would raise.
     if element is Any or element is object or not isinstance(element, type):
         return value
+    if element is bytes:
+        # A CLI token for a bytes parameter is its UTF-8 encoding — the raw
+        # form arrives via the stdin boundary, where bytes stay bytes.
+        return value.encode()
     try:
         if issubclass(element, _datetime.datetime):
             return element.fromisoformat(value)

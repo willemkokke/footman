@@ -596,6 +596,56 @@ _UNSET: Any = object()  # "no default given" — None is a valid default/value
 
 _prompt_lock = threading.Lock()
 
+# --- the boundary's one read of stdin ----------------------------------------
+#
+# stdin is the fourth process global: task bodies never read it (the guard in
+# _globals refuses), and parameters marked `stdin` are filled here, at the
+# boundary. The stream is read once, fully, into memory, and the same payload
+# serves every parameter in the run that asks — stdin is consumable, so two
+# tasks in a chain could never each read it. `None` means "not provided": a
+# terminal, a missing stream, or an embedded `Runner.invoke` that injected
+# nothing. The read is lazy — only a bind that meets a `stdin` parameter
+# calls `stdin_payload()`, so a run without one never touches the stream.
+
+_STDIN_UNREAD: Any = object()
+_stdin_payload: Any = _STDIN_UNREAD
+
+
+def stdin_payload() -> bytes | None:
+    """The process's piped stdin as bytes, read once and cached; `None` when
+    stdin is a terminal (interactive input is `ask()`'s job, and a pipe
+    target must never block on a terminal read)."""
+    global _stdin_payload
+    if _stdin_payload is _STDIN_UNREAD:
+        if _stdin_is_tty() or sys.stdin is None:
+            _stdin_payload = None
+        else:
+            try:
+                # `.buffer` reaches the raw stream through the guard proxy —
+                # this is the boundary, exactly who may read.
+                _stdin_payload = sys.stdin.buffer.read()
+            except (AttributeError, OSError, ValueError):
+                # No byte buffer (an embedded/captured stream) or a stream
+                # that refuses to read: nothing was provided.
+                _stdin_payload = None
+    return _stdin_payload
+
+
+def _inject_stdin(payload: bytes | None) -> Any:
+    """Set the boundary payload directly (the testing seam) and return the
+    previous cache state for `_restore_stdin_payload`. `Runner.invoke` always
+    injects — under a test runner the real stream is the harness's, never the
+    test's — so `stdin=None` means "a terminal", not "read the harness"."""
+    global _stdin_payload
+    previous = _stdin_payload
+    _stdin_payload = payload
+    return previous
+
+
+def _restore_stdin_payload(previous: Any) -> None:
+    global _stdin_payload
+    _stdin_payload = previous
+
 
 def _stdin_is_tty() -> bool:
     try:

@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 
 from footman import _app, _shellcomp
+from footman.executor import EX_USAGE
 
 
 @pytest.fixture
@@ -194,7 +195,7 @@ def test_setup_completion_detection_note_stays_off_stdout(home, monkeypatch, cap
 
 
 def test_setup_completion_unknown_shell_teaches(home, capsys):
-    assert _app.run(["--setup-completion", "tcsh"]) == 2
+    assert _app.run(["--setup-completion", "tcsh"]) == EX_USAGE
     err = capsys.readouterr().err
     assert "--setup-completion expects one of" in err and "tcsh" in err
 
@@ -326,7 +327,7 @@ def test_uninstall_via_cli_unknown_shell_teaches(home, tmp_path, monkeypatch, ca
         "from footman import task\n@task\ndef t(): ...\n"
     )
     monkeypatch.chdir(tmp_path)
-    assert _app.run(["--uninstall-completion", "tcsh"]) == 2
+    assert _app.run(["--uninstall-completion", "tcsh"]) == EX_USAGE
     assert "bash|zsh|fish" in capsys.readouterr().err
 
 
@@ -351,7 +352,9 @@ def test_pwsh_missing_is_a_taught_error(home, tmp_path, monkeypatch, capsys):
     )
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(_shellcomp.shutil, "which", lambda _: None)
-    assert _app.run(["--install-completion", "powershell"]) == 2  # alias accepted
+    assert (
+        _app.run(["--install-completion", "powershell"]) == EX_USAGE
+    )  # alias accepted
     assert "not found on PATH" in capsys.readouterr().err
 
 
@@ -559,7 +562,7 @@ def test_bare_install_undetectable_teaches(home, tmp_path, monkeypatch, capsys):
     )
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(_shellcomp, "detect_shell", lambda: None)
-    assert _app.run(["--install-completion"]) == 2
+    assert _app.run(["--install-completion"]) == EX_USAGE
     err = capsys.readouterr().err
     assert "could not detect" in err and "bash|zsh|fish|pwsh|nushell" in err
 
@@ -693,7 +696,7 @@ def test_nu_missing_is_a_taught_error(home, tmp_path, monkeypatch, capsys):
     )
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(_shellcomp.shutil, "which", lambda _: None)
-    assert _app.run(["--install-completion", "nu"]) == 2  # alias accepted
+    assert _app.run(["--install-completion", "nu"]) == EX_USAGE  # alias accepted
     assert "not found on PATH" in capsys.readouterr().err
 
 

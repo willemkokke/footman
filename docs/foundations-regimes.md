@@ -13,7 +13,7 @@ by one page and one footman answer:
 | working directory | one per process; chdir moves it for everyone | `ctx.cwd` as data; children get it at spawn; `footman.cwd()` in bodies |
 | environment | one map; flows down only at spawn | reads = snapshot + task overlay; writes scope to the task |
 | spawning | the child's world is fixed at spawn | `run()`/injection fill `cwd=`/`env=` per child, race-free |
-| the terminal | one stdin, consumed not mutated | `ask()` at the boundary; `interactive=True` to own it |
+| the terminal | one stdin, consumed not mutated | `ask()` and the `stdin` marker at the boundary; `interactive=True` to own it |
 
 ## The two regimes
 

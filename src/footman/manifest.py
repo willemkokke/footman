@@ -21,6 +21,7 @@ Parameter mapping (function signature -> CLI shape):
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import inspect
 import json
@@ -29,7 +30,7 @@ import warnings
 from pathlib import Path
 from typing import Any
 
-from footman import _describe, _paths, coerce, discover, docstrings, registry
+from footman import _binder, _describe, _paths, coerce, discover, docstrings, registry
 from footman.context import context_param_name
 from footman.params import suggest
 from footman.registry import Group
@@ -145,11 +146,31 @@ def param_spec(param: inspect.Parameter) -> dict[str, Any]:
         return spec
 
     element = peeled.element
+    if (
+        peeled.stdin is not None
+        and peeled.stdin.field is None
+        and not peeled.stdin.lines
+        and not peeled.multiple
+        and dataclasses.is_dataclass(element)
+        and isinstance(element, type)
+    ):
+        # A whole-document parameter is boundary-only, not a CLI surface: a
+        # document is not one token, and exploding it into per-field flags
+        # founders on nesting. The splitter and completion both key on the
+        # known kinds, so `"stdin"` is invisible to them by construction;
+        # help still lists it, with the shape it binds.
+        spec["kind"] = "stdin"
+        spec["shape"] = element.__name__
+        _marker_keys(spec, peeled, param, has_default)
+        return spec
+
     if coerce.is_flag(element) and not peeled.multiple:
         # Only a *scalar* bool is a --flag; `list[bool]` stays a repeatable
         # option whose tokens parse as booleans (true/false/1/0/yes/no/on/off).
         spec["kind"] = "flag"
-        if not has_default and peeled.ask is None:  # ask() prompts if absent
+        # ask() prompts if absent; stdin fills at the boundary — either one
+        # makes a defaultless flag satisfiable without the command line.
+        if not has_default and peeled.ask is None and peeled.stdin is None:
             spec["required"] = True  # else state it explicitly: --x or --no-x
         _marker_keys(spec, peeled, param, has_default)
         return spec
@@ -171,10 +192,12 @@ def param_spec(param: inspect.Parameter) -> dict[str, Any]:
             )
         spec["kind"] = "argument"
         spec["optional"] = True
-    elif peeled.ask is not None and not has_default:
-        # ask() makes a defaultless parameter a CLI-optional option: absence is
-        # filled by prompting (executor.bind), so the splitter must let it be
-        # missing rather than enforce it as a required positional.
+    elif (peeled.ask is not None or peeled.stdin is not None) and not has_default:
+        # ask() and stdin both make a defaultless parameter a CLI-optional
+        # option: absence is filled at the boundary (a prompt, the piped
+        # payload) or refused with a taught message there, so the splitter
+        # must let it be missing rather than enforce it as a required
+        # positional.
         spec["kind"] = "option"
     elif has_default or kw_only:
         spec["kind"] = "option"
@@ -203,6 +226,15 @@ def param_spec(param: inspect.Parameter) -> dict[str, Any]:
     if tags and tags != ["str"] and coerce.eagerly_checkable(element):
         spec["types"] = tags
     elif choices is None and not tags and not isinstance(element, type):
+        if isinstance(element, str) and "stdin" in element:
+            # `eval_str` failed for the whole signature, so the marker never
+            # even peeled — but the annotation names it, and a silently
+            # text-degraded stdin parameter would be a mystery at bind time.
+            raise SpecError(
+                f"<{param.name}>: annotation {element!r} did not resolve — "
+                f"a stdin payload type and everything it names must be "
+                f"module-level, where `eval_str` can see them"
+            )
         # The annotation resolves to nothing footman can coerce (a string
         # that never resolved, a value, an exotic generic): values will pass
         # through as plain text. Silent degrade is a debugging tax — say so.
@@ -252,6 +284,45 @@ def _marker_keys(
                 f"somewhere to fall"
             )
         spec["env"] = peeled.env
+    if peeled.stdin is not None:
+        marker = peeled.stdin
+        if spec.get("mapping") and (marker.field is not None or marker.lines):
+            raise SpecError(
+                f"<{param.name}>: a dict parameter reads stdin whole (a JSON "
+                f"object) — stdin(field)/stdin(lines=True) do not apply"
+            )
+        if marker.lines and not peeled.multiple:
+            raise SpecError(
+                f"<{param.name}>: stdin(lines=True) needs a list parameter — "
+                f"each line binds as one element"
+            )
+        if marker.field is not None and peeled.multiple:
+            raise SpecError(
+                f"<{param.name}>: stdin({marker.field!r}) binds a single "
+                f"value — a list parameter reads lines (stdin(lines=True)) "
+                f"or a JSON array (bare stdin)"
+            )
+        if isinstance(peeled.element, str):
+            raise SpecError(
+                f"<{param.name}>: annotation {peeled.element!r} did not "
+                f"resolve — a stdin payload type and everything it names "
+                f"must be module-level, where `eval_str` can see them"
+            )
+        if marker.field is not None:
+            spec["stdin"] = f"field:{marker.field}"
+        elif marker.lines:
+            spec["stdin"] = "lines"
+        elif peeled.element is bytes:
+            spec["stdin"] = "bytes"
+        elif (
+            spec.get("mapping")
+            or peeled.multiple
+            or spec.get("kind") == "stdin"
+            or _binder.is_document_target(peeled.element)
+        ):
+            spec["stdin"] = "json"
+        else:
+            spec["stdin"] = "text"
 
 
 def _run_completer(completer: suggest, memo: dict[int, list[str]]) -> list[str]:
@@ -367,6 +438,16 @@ def _task_node(fn: Any, memo: dict[int, list[str]]) -> dict[str, Any]:
             "params": [_finish(param_spec(p), memo) for p in _cli_params(previous)],
             "where": _source_of(previous),
         }
+    declares, _inner = coerce.emitted(sig.return_annotation)
+    if declares:
+        if interactive:
+            raise SpecError(
+                f"{getattr(fn, '__name__', fn)!s}: Stdout[…] and "
+                f"interactive=True cannot both hold — an interactive task "
+                f"owns the real terminal, uncaptured, and a declaring task's "
+                f"stdout belongs to its return value. Drop one."
+            )
+        node["emits"] = True  # additive: this task's stdout is its return value
     if infinite:
         node["infinite"] = True  # additive: listings and help say how it ends
     if interactive:

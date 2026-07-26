@@ -74,9 +74,14 @@ def test_the_check_pipeline(tmp_path):
 structured `results: list[TaskResult]` (one per executed task, dependency
 order), and an `ok` shorthand. Each `TaskResult` exposes the task's return value as
 `.returned` — the same value `--json` publishes — so asserting on a task's
-data needs no JSON parsing at all. Taught errors land in `result.stderr` with exit code 2 —
+data needs no JSON parsing at all. Taught errors land in `result.stderr` with exit code 64 —
 assert on them like any other product surface. The completion cache is
 isolated per invocation automatically, so tests never touch your real one.
+
+For a task that reads the pipe, `stdin=` *is* the pipe:
+`Runner().invoke("hooks.stop", stdin='{"stop_hook_active": true}')` binds
+exactly as `fm hooks.stop < fixture.json` would — and leaving it off means
+"a terminal", so a test never reads the harness's own stream.
 
 Point it at a task surface three ways:
 

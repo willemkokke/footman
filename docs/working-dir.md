@@ -152,4 +152,7 @@ the real stdio while the parallel pool keeps running around it, captured;
 a sibling that finishes mid-prompt has its output held until the terminal
 frees, so nothing lands across your typing. A bare `input()` in a plain
 parallel task is an error naming the two honest spellings: declare the
-value with `ask()`, or mark the task `interactive=True`.
+value with `ask()`, or mark the task `interactive=True`. (A *piped* stdin
+is different again: a parameter marked `stdin` binds it at the boundary,
+before any task runs, so the pipe's payload reaches bodies as data and the
+guard never enters into it — see [Pipelines](pipelines.md).)

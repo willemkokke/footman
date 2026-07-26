@@ -4,7 +4,9 @@ Most values should be flags — typed, completable, and CI-safe. But some runs
 genuinely need to ask the person at the keyboard: a version string, a
 production confirmation, a pick from a list computed at run time. footman has
 three shapes for it, and all three are **CI-safe by construction** — off a
-terminal they fail loudly or take a supplied answer, never hang.
+terminal they fail loudly or take a supplied answer, never hang. (A fourth
+input is not a question at all: a document piped in on stdin — the last
+section below.)
 
 A bare `input()` doesn't work in a task: its prompt goes to stdout, which
 footman buffers so parallel output can't interleave — so the prompt is
@@ -77,9 +79,48 @@ at run time, the case a flag can't cover. Two globals cover the rest: `--yes`
 auto-answers every confirm, and `--no-input` refuses to prompt (a required
 prompt errors instead).
 
-Because it owns the terminal, an interactive task can't share it with parallel
-siblings: **a run that contains one goes fully sequential** — every task, one at
-a time — and the live status line steps aside so its repaints can't scribble
-over a prompt. (It also can't run under `--json`.)
+Owning the terminal is a *lane*, not a lockdown: the interactive task runs
+on the real stdio while the parallel pool keeps working around it,
+captured — a sibling that finishes mid-prompt has its output held until
+the terminal frees, and the live status line suspends for exactly the
+ownership window, so nothing scribbles over a prompt.
 
 ![Animated: fm scaffold prompts for a project name, then a numbered what-kind menu picked by number](_generated/shots/interactive-cast.svg)
+
+## Read the pipe: `stdin`
+
+A parameter marked `stdin` binds from whatever the caller piped in, which
+makes a task a real pipe target: `git diff | fm review` and
+`fm review < changes.patch` both work, with no flag to remember. The
+annotation decides how the bytes are interpreted:
+
+```python
+from typing import Annotated
+from footman import Stdin, stdin, task
+
+@task
+def review(diff: Annotated[str, stdin] = ""): ...        # the stream as text
+@task
+def digest(data: Annotated[bytes, stdin] = b""): ...     # raw bytes
+@task
+def submit(prompt: Annotated[str, stdin("prompt")] = ""): ...  # one JSON field
+@task
+def rm(paths: Annotated[list[str], stdin(lines=True)] = ()): ...  # a line each
+```
+
+`Stdin[str]` is the shorthand for the bare marker, like `Forward[T]` and
+`NoSplit[T]`. `stdin("field")` reads one top-level key of a JSON document;
+`stdin(lines=True)` turns each line into one list element, coerced exactly
+like a repeated flag — `list[int]` and `list[Path]` behave as they would on
+the command line.
+
+Precedence is **CLI > stdin > env > default > prompt**: an explicit option
+always wins, so one signature serves both spellings. The stream is read
+once, fully, at the boundary and shared by every parameter that asks —
+task bodies never touch stdin, so `stdin`-bound tasks stay fully parallel
+and need no `interactive=True`. A terminal on stdin means "not provided":
+nothing ever blocks on a read, a defaulted parameter falls back, and a
+required one refuses with a taught message naming the fix.
+
+In tests, `Runner.invoke(..., stdin="payload")` is the pipe; its absence
+means a terminal, so a test never reads the harness's own stream.

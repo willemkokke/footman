@@ -8,6 +8,7 @@ import textwrap
 import pytest
 
 from footman import compose, manifest, registry
+from footman.executor import EX_USAGE
 from footman.registry import (
     Group,
     RegistrationError,
@@ -50,7 +51,7 @@ def test_requires_predicate_is_reevaluated_live():
     runner = Runner()
 
     result = runner.invoke("guarded", tasks=reg)
-    assert result.exit_code == 2
+    assert result.exit_code == EX_USAGE
     assert "gate closed" in str(result.results[0].error)
 
     gate["open"] = True  # the manifest is stale now — execution must not care
@@ -69,7 +70,7 @@ def test_requires_raising_predicate_reads_as_unavailable():
     assert "broken gate (ZeroDivisionError" in tree["tasks"]["guarded"]["disabled"]
     reg, _ = _tree(tasks)
     result = Runner().invoke("guarded", tasks=reg)
-    assert result.exit_code == 2
+    assert result.exit_code == EX_USAGE
 
 
 def test_requires_dep_present_is_available():
@@ -93,7 +94,7 @@ def test_requires_dep_missing_is_listed_but_disabled():
 
     reg, _ = _tree(tasks)
     result = Runner().invoke("publish", tasks=reg)
-    assert result.exit_code == 2
+    assert result.exit_code == EX_USAGE
     assert "requires stripe_nope" in str(result.results[0].error)
 
 
@@ -223,7 +224,7 @@ def test_disabled_prerequisite_fails_the_dependent():
 
     reg, _ = _tree(tasks)
     result = Runner().invoke("integration", tasks=reg)
-    assert result.exit_code == 2  # hard failure, not a silent skip
+    assert result.exit_code == EX_USAGE  # hard failure, not a silent skip
     assert ran == []  # the dependent was skipped
 
 
@@ -559,7 +560,7 @@ def test_user_task_shadows_a_pulled_one(provider, tmp_path):
     assert "mine" in result.stdout  # the user's name wins, silently
 
 
-def test_missing_plugin_pull_is_exit_2(tmp_path):
+def test_missing_plugin_pull_refuses(tmp_path):
     project = tmp_path / "proj4"
     project.mkdir()
     (project / "pyproject.toml").write_text('[project]\nname="x"\n')
@@ -567,7 +568,7 @@ def test_missing_plugin_pull_is_exit_2(tmp_path):
         "from footman import plugin, task\nplugin('ghost')\n@task\ndef own(): ...\n"
     )
     result = Runner().invoke("own", cwd=project)
-    assert result.exit_code == 2
+    assert result.exit_code == EX_USAGE
     assert "ghost" in result.stderr
 
 
@@ -583,7 +584,7 @@ def test_stale_plugins_config_key_is_taught(tmp_path):
         "from footman import task\n@task\ndef own(): ...\n"
     )
     result = Runner().invoke("own", cwd=project)
-    assert result.exit_code == 2
+    assert result.exit_code == EX_USAGE
     assert "plugins key was removed" in result.stderr
 
 
@@ -668,8 +669,8 @@ def test_dotted_plugin_name_nests_and_shares_namespace(tmp_path, monkeypatch):
     assert ran.ok and "alpha-go!" in ran.stdout
 
 
-def test_broken_plugin_pull_is_exit_2(tmp_path, monkeypatch):
-    # F07 end-to-end: a broken pulled plugin is a clean exit 2, not a raw
+def test_broken_plugin_pull_refuses(tmp_path, monkeypatch):
+    # F07 end-to-end: a broken pulled plugin is a clean refusal, not a raw
     # traceback on every invocation.
     _advertise(
         tmp_path,
@@ -685,7 +686,7 @@ def test_broken_plugin_pull_is_exit_2(tmp_path, monkeypatch):
         "from footman import plugin, task\nplugin('broken2')\n@task\ndef own(): ...\n"
     )
     result = Runner().invoke("own", cwd=project)
-    assert result.exit_code == 2
+    assert result.exit_code == EX_USAGE
     assert "failed to import" in result.stderr
 
 
