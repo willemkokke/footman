@@ -46,6 +46,7 @@ _POST = "_footman_post"
 _KEEP_GOING = "_footman_keep_going"
 _ATOMIC = "_footman_atomic"
 _INFINITE = "_footman_infinite"
+_HIDDEN = "_footman_hidden"
 _INTERACTIVE = "_footman_interactive"
 _PROGRESS = "_footman_progress"
 _CONFIRM = "_footman_confirm"
@@ -283,6 +284,7 @@ def _apply_policy(
     rel: str | Path = "",
     serial: bool = False,
     exclusive: bool = False,
+    hidden: bool | None = None,
 ) -> None:
     """Stamp a task's `_footman_*` policy attributes onto *fn*.
 
@@ -298,6 +300,11 @@ def _apply_policy(
         setattr(fn, _PROGRESS, False)
     if infinite:
         setattr(fn, _INFINITE, True)
+    if hidden is not None:
+        # Tri-state on purpose: unset inherits the enclosing group's answer,
+        # so `hidden=False` on a child of a hidden group is a real override
+        # rather than indistinguishable from silence.
+        setattr(fn, _HIDDEN, hidden)
     if confirm:
         setattr(fn, _CONFIRM, confirm)
     if interactive:
@@ -341,9 +348,13 @@ class TaskFn(Protocol[_P, _R_co]):
 class Group:
     """A node in the command tree: named tasks and nested sub-groups."""
 
-    def __init__(self, name: str, help: str = "") -> None:
+    def __init__(self, name: str, help: str = "", hidden: bool | None = None) -> None:
         self.name = name
         self.help = help
+        # Tri-state, like a task's: unset inherits the enclosing group's
+        # answer, so a hidden subtree needs saying once at its root and a
+        # child can still opt back into the listings with `hidden=False`.
+        self.hidden = hidden
         self.tasks: dict[str, Task] = {}
         self.groups: dict[str, Group] = {}
         self.finalizers: list[Finalizer] = []  # @finalize hooks (root registry only)
@@ -430,6 +441,7 @@ class Group:
         rel: str | Path = "",
         serial: bool = False,
         exclusive: bool = False,
+        hidden: bool | None = None,
     ) -> Callable[[Callable[_P, _R_co]], TaskFn[_P, _R_co]]: ...
 
     def task(
@@ -449,6 +461,7 @@ class Group:
         rel: str | Path = "",
         serial: bool = False,
         exclusive: bool = False,
+        hidden: bool | None = None,
     ) -> Task | Callable[[Task], Task]:
         """Register a function as a task.
 
@@ -465,8 +478,26 @@ class Group:
         Availability gating lives in the `@requires` decorators — stack
         `@requires`, `@requires_dep`, `@requires_tool`, or `@requires_env`
         above `@task` to list a task as unavailable (with a reason) where it
-        can't run, rather than hide it. To hide a task entirely, use plain
-        Python: `if sys.platform == "darwin": @task ...`
+        can't run, rather than hide it.
+
+        Three different things, worth keeping apart:
+
+        * `hidden=True` — **listed nowhere, callable as ever.** The task
+          drops out of `--list`, `--tree`, group help, the did-you-mean
+          index and completion, while `fm <name>` runs it exactly as
+          before. For the tasks a machine calls and a human never types: a
+          CI entry point, a release step another task drives. It is
+          presentation only — prerequisites still run it, a group's
+          empty-body fan-out still includes it, and `--json` reports it
+          *marked* rather than missing, because a machine is who calls it.
+          Unset inherits the enclosing group's answer, so
+          `group("internal", hidden=True)` hides a whole subtree and a
+          child can still say `hidden=False`.
+        * `@requires…` — listed *with a reason* it can't run here.
+        * `if sys.platform == "darwin": @task ...` — plain Python, and the
+          task does not **exist**: nothing to list, nothing to call, no
+          address at all. Reach for it when the task is meaningless on this
+          machine, not when it is merely uninteresting to type.
 
         `progress=False` marks a task whose duration has no rhyme or
         reason (a REPL, a watcher, a network fetch): any run containing it
@@ -523,6 +554,7 @@ class Group:
                 rel=rel,
                 serial=serial,
                 exclusive=exclusive,
+                hidden=hidden,
             )
             fn.opts = lambda **o: _Opted(fn, _opts_overrides(o))  # type: ignore[attr-defined]
             self.tasks[key] = fn
@@ -530,8 +562,13 @@ class Group:
 
         return register(fn) if fn is not None else register
 
-    def group(self, name: str, help: str = "") -> Group:
-        """Create and register a nested command group, returning it."""
+    def group(self, name: str, help: str = "", hidden: bool | None = None) -> Group:
+        """Create and register a nested command group, returning it.
+
+        `hidden=True` keeps the whole subtree out of the human listings
+        (`--list`, `--tree`, help, completion) while leaving every address in
+        it callable — see `@task(hidden=…)`.
+        """
         key = cli_name(name)
         if key == "default":
             # `default` is a meaningful *task* name — the group's default
@@ -553,10 +590,12 @@ class Group:
             # leaf, and only the listing order follows the file.
             if help:
                 adopted.help = help
+            if hidden is not None:
+                adopted.hidden = hidden
             return adopted
         self._shadow_pulled(key)
         self._claim(key)
-        sub = Group(key, help)
+        sub = Group(key, help, hidden)
         self.groups[key] = sub
         return sub
 
@@ -603,6 +642,7 @@ class Group:
         rel: str | Path = "",
         serial: bool = False,
         exclusive: bool = False,
+        hidden: bool | None = None,
     ) -> Callable[[Callable[_P, _R_co]], TaskFn[_P, _R_co]]: ...
 
     def default(
@@ -621,6 +661,7 @@ class Group:
         rel: str | Path = "",
         serial: bool = False,
         exclusive: bool = False,
+        hidden: bool | None = None,
     ) -> Task | Callable[[Task], Task]:
         """Register *fn* as this group's default action — what a bare
         `fm <group>` runs, and what the group returns when called.
@@ -668,6 +709,7 @@ class Group:
                 rel=rel,
                 serial=serial,
                 exclusive=exclusive,
+                hidden=hidden,
             )
             fn.opts = lambda **o: _Opted(fn, _opts_overrides(o))  # type: ignore[attr-defined]
             self.tasks["default"] = fn
@@ -796,6 +838,17 @@ def wants_progress(fn: Task) -> bool:
 def is_infinite(fn: Task) -> bool:
     """Whether *fn* runs until stopped: `@task(infinite=True)`."""
     return getattr(fn, _INFINITE, False) is True
+
+
+def declared_hidden(fn: Task) -> bool | None:
+    """*fn*'s own answer to "list me?", or `None` when it never said.
+
+    `None` is the whole point: the manifest resolves it against the enclosing
+    group, so hiding a subtree is one declaration at its root and a child can
+    still say `hidden=False` to come back.
+    """
+    value = getattr(fn, _HIDDEN, None)
+    return value if value is None else bool(value)
 
 
 def is_interactive(fn: Task) -> bool:
@@ -994,6 +1047,15 @@ class TaskView:
     def interactive(self) -> bool:
         """Whether the task owns the real terminal (`@task(interactive=True)`)."""
         return is_interactive(self.fn)
+
+    @property
+    def hidden(self) -> bool | None:
+        """The task's own `hidden=` answer, or `None` when it inherits one.
+
+        Read the *declaration*, not the resolved answer: a finalizer that
+        hides a group wants to know whether this task overrode it.
+        """
+        return declared_hidden(self.fn)
 
     @property
     def timed(self) -> bool:

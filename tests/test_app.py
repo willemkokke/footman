@@ -1364,3 +1364,102 @@ def test_sort_flag_never_masks_a_broken_config_value(unsorted_project, capsys):
     unsorted_project("sort = 'yes'")
     assert _app.run(["--sort", "--list"]) == 2
     assert "`sort` expects true" in capsys.readouterr().err
+
+
+_HIDDEN_TASKS = """
+from footman import group, task
+
+
+@task
+def visible():
+    "Typed by humans."
+
+
+@task(hidden=True)
+def machine_only():
+    "Called by CI, never typed."
+
+
+internal = group("internal", hidden=True)
+
+
+@internal.task
+def cleanup():
+    "Hidden by the group it lives in."
+
+
+@internal.task(hidden=False)
+def rescued():
+    "Opted back into the listings."
+
+
+ops = group("ops")
+
+
+@ops.task
+def deploy():
+    "An ordinary nested task."
+"""
+
+
+@pytest.fixture
+def hidden_project(tmp_path, monkeypatch):
+    (tmp_path / "tasks.py").write_text(_HIDDEN_TASKS)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
+
+
+def test_hidden_leaves_the_listings_but_still_runs(hidden_project, capsys):
+    assert _app.run(["--list"]) == 0
+    out = capsys.readouterr().out
+    assert "visible" in out
+    assert "machine-only" not in out  # the task nobody is meant to type
+
+    # ...and it is a perfectly ordinary address.
+    assert _app.run(["machine-only"]) == 0
+
+
+def test_hidden_is_inherited_and_overridable(hidden_project, capsys):
+    assert _app.run(["--list"]) == 0
+    out = capsys.readouterr().out
+    assert "internal.cleanup" not in out  # inherited from the group
+    assert "internal.rescued" in out  # hidden=False is a real way back
+    assert _app.run(["internal.cleanup"]) == 0  # still callable
+
+
+def test_hidden_is_marked_not_omitted_under_json(hidden_project, capsys):
+    assert _app.run(["--json"]) == 0
+    tree = json.loads(capsys.readouterr().out)["tree"]
+    # A machine is exactly who calls these, so the catalog keeps them —
+    # flagged, so a consumer can tell them apart.
+    assert tree["tasks"]["machine-only"]["hidden"] is True
+    assert "hidden" not in tree["tasks"]["visible"]
+    assert tree["groups"]["internal"]["hidden"] is True
+    assert "hidden" not in tree["groups"]["internal"]["tasks"]["rescued"]
+
+
+def test_hidden_is_absent_from_completion(hidden_project, capsys):
+    from footman import _complete
+
+    assert _app.run(["--json"]) == 0
+    tree = json.loads(capsys.readouterr().out)["tree"]
+
+    top = " ".join(_complete.complete(tree, [""]))
+    assert "visible" in top
+    assert "machine-only" not in top  # never suggested, always callable
+    # The hidden group is still a reachable namespace, because a child opted
+    # back in — and descending offers that child alone.
+    assert "internal." in top
+    inside = " ".join(_complete.complete(tree, ["internal."]))
+    assert "internal.rescued" in inside
+    assert "internal.cleanup" not in inside
+
+
+def test_tree_draws_branches_and_skips_hidden(hidden_project, capsys):
+    assert _app.run(["--tree"]) == 0
+    out = capsys.readouterr().out
+    assert "├─" in out or "└─" in out  # a drawn tree, not an indented listing
+    assert "deploy" in out and "ops." in out
+    # The nested leaf shows its own name; the address lives in --list.
+    assert "ops.deploy" not in out
+    assert "machine-only" not in out and "cleanup" not in out

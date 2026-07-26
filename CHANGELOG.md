@@ -18,6 +18,28 @@ versions may include breaking changes.
   list before groups at every level, and the setting is presentation
   only: what runs, and in what order, never follows it.
 
+- **`@task(hidden=True)` — listed nowhere, callable as ever.** For the tasks
+  a machine calls and a human never types: a CI entry point, a step another
+  task drives. The task drops out of `--list`, `--tree`, group help, the
+  did-you-mean index and completion, and nothing else changes — `fm <name>`
+  runs it, a `pre=`/`post=` dependency runs it, a runnable group's
+  empty-body fan-out still includes it. It is presentation, not policy.
+  `--json` reports it **marked** rather than missing, because a machine is
+  exactly who calls it, and the generated task docs badge it, because the
+  docs are where you look up what the listings won't offer.
+
+  `hidden` is inherited: unset means "whatever my group said", so
+  `group("internal", hidden=True)` (or a `hidden=True` on the group's
+  `@group.default`) hides a whole subtree in one word, and a child can say
+  `hidden=False` to come back. A group with nothing listed under it prints
+  no heading at all. `TaskView.hidden` reads the declaration — `None` when
+  it inherits — so a `@finalize` hook can tell an override from silence.
+
+  This is a third thing, next to the two that already existed, and the docs
+  now separate them: **hidden** is listed nowhere but callable; a plain
+  `if` around the decorator **omits** the task entirely (no address at all);
+  `@requires…` **lists it with a reason** it can't run here.
+
 - **`--prefix` on `tools.sync` and `tools.audit`.** Both can now read the
   binaries from a `fm tools.provision` directory instead of the machine
   they run on — the question a scheduled check actually wants to ask
@@ -28,6 +50,15 @@ versions may include breaking changes.
   fallback for callers outside a run.
 
 ### Changed
+
+- **`--tree` draws a tree.** It used to print every task at its full dotted
+  address under an indented group header, which made it the `--list` output
+  with worse alignment. It now draws branches (`├─`, `└─`, `│`) and names
+  each leaf once, so the shape is the point; `--list` remains the flat view
+  where every row is a copy-paste-runnable address. Both now read one
+  traversal (`_describe.walk`), so a rule about what is listed cannot be
+  true of one and false of the other — which is what let `hidden` reach
+  both by construction.
 
 - **footman's own tasks overlay the tree — no container at all.** The
   first-party plugins are pulled at the end of footman's own `tasks.py`,

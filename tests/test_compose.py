@@ -807,6 +807,7 @@ def test_fork_copies_every_group_field():
     assert set(vars(Group("x"))) == {
         "name",
         "help",
+        "hidden",
         "tasks",
         "groups",
         "finalizers",

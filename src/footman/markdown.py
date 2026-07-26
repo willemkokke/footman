@@ -165,6 +165,15 @@ def _task_page(
         parts += [task["help"], ""]
     if task.get("long"):
         parts += [task["long"], ""]
+    if task.get("hidden"):
+        # Documented, and marked: the docs are where you look a machine-facing
+        # task up *because* the listings never offer it.
+        parts += [
+            "*Hidden: this task is not listed by "
+            f"`{prog} --list`, `--tree` or completion — it runs like any other "
+            "when named.*",
+            "",
+        ]
     if task.get("disabled"):
         parts += [f"*Unavailable here: {task['disabled']}*", ""]
 
