@@ -13,9 +13,12 @@ tools and by failing a check when the two disagree.
 
 A stub is a snapshot, not a contract: `sync` takes one, `audit` says which
 tools have released a newer version since. Being behind is news rather than
-a fault, so `audit` reports and exits zero unless you ask for `--strict`.
-Tools that aren't installed are skipped and named — a check that quietly
-covered three of thirteen would be worse than no check.
+a fault, so `audit` reports and exits zero unless you ask for `--strict`,
+and the snapshots are retaken at release time rather than the moment a tool
+ships. A snapshot only ever moves forward: a tool that isn't installed, is
+missing from a `--prefix`, or reads older than the stub already records is
+named and left alone — a check that quietly covered three of thirteen would
+be worse than no check.
 """
 
 from __future__ import annotations
@@ -196,6 +199,82 @@ def spec(
             print(f"    {option.name:<28} {option.type_name:<10}{negation}")
 
 
+def _numeric(version: str) -> tuple[int, ...]:
+    """The leading numeric components of a version string, for comparison.
+
+    Tools spell the tail however they like (`0.6.0-wk.5`,
+    `1.13.0.git.kitware.jobserver-1`), so only the plain integer run at the
+    front is compared and anything else stops the read. An unreadable
+    version yields `()`, which compares lower than everything — the caller
+    treats "can't tell" as "don't skip".
+    """
+    parts: list[int] = []
+    for piece in version.split("."):
+        digits = ""
+        for char in piece:
+            if not char.isdigit():
+                break
+            digits += char
+        if digits:
+            parts.append(int(digits))
+        if not piece.isdigit():
+            # A component carrying a suffix (`0-wk`) still contributes its
+            # number, and ends the read: whatever follows a build tag is
+            # that tool's own grammar, not a version footman can order.
+            break
+    return tuple(parts)
+
+
+def _from_prefix(binary: str, root: Path) -> bool:
+    """Whether *binary* was reached through the provisioned prefix.
+
+    The launcher in `<prefix>/bin` is what counts, not where it points: the
+    node tier's scripts live in a shared `node_modules`, and a provisioned
+    interpreter lives in uv's own store, so following the symlink would call
+    two properly provisioned tools missing.
+    """
+    path = Path(binary)
+    return path.parent == root / "bin" or path.resolve().is_relative_to(root)
+
+
+def _ignore(driver: _drivers.Driver, root: Path | None) -> str:
+    """Why this tool is left alone, or `""` to read it.
+
+    Two ways a reading is worth less than the snapshot already checked in,
+    and in both the honest move is to change nothing:
+
+    * **not in the prefix** — a provisioned tool that failed to fetch (or a
+      tier that was skipped) would otherwise fall through to whatever the
+      host has, quietly turning a partial provision into "the tools moved".
+      Only the `system` tier is *meant* to come from the host.
+    * **older than the snapshot** — a host-read tool (git, docker) on a
+      machine behind the one that took the snapshot. Reading it would
+      rewrite the stub *backwards*, losing flags that exist upstream.
+    """
+    binary = _drivers._resolve(driver.name)
+    if binary is None:
+        return "not installed"
+    if (
+        root is not None
+        and driver.provision.kind != "system"
+        and not _from_prefix(binary, root)
+    ):
+        return "not in the prefix"
+    stub = _stub_path(driver.key)
+    if not stub.exists():
+        return ""
+    recorded = _header(stub)[0].partition(" ")[0]
+    found = _drivers.version(driver.name)
+    if _numeric(found) and _numeric(recorded) > _numeric(found):
+        return f"older than the snapshot ({found} < {recorded})"
+    return ""
+
+
+def _prefix_root(prefix: str) -> Path | None:
+    """The provisioned tree a reading must come from, or None for "anywhere"."""
+    return Path(prefix).expanduser().resolve() if prefix else None
+
+
 @tasks.task
 def sync(
     only: Annotated[str, doc("regenerate just this tool")] = "",
@@ -215,10 +294,10 @@ def sync(
     deleted because a laptop happened to be missing a binary.
     """
     with _on_path(prefix):
-        _sync(only)
+        _sync(only, _prefix_root(prefix))
 
 
-def _sync(only: str) -> None:
+def _sync(only: str, root: Path | None = None) -> None:
     _STUBS.mkdir(exist_ok=True)
     wrote, skipped = [], []
     for driver in _drivers.DRIVERS:
@@ -226,8 +305,10 @@ def _sync(only: str) -> None:
             continue
         if driver.source == "manual":
             continue  # hand-written stub — never extracted or overwritten
-        if not _drivers.installed(driver):
-            skipped.append(driver.key)
+        if reason := _ignore(driver, root):
+            # A snapshot only ever moves forward: a reading worth less than
+            # the checked-in one leaves the stub exactly as it is.
+            skipped.append(f"{driver.key} ({reason})")
             continue
         text = _generate(driver)
         path = _stub_path(driver.key)
@@ -236,7 +317,7 @@ def _sync(only: str) -> None:
             wrote.append(driver.key)
     print(f"wrote {len(wrote)} stub(s): {', '.join(wrote) or 'none changed'}")
     if skipped:
-        print(f"skipped (not installed): {', '.join(skipped)}")
+        print(f"left alone: {', '.join(skipped)}")
 
 
 @tasks.task
@@ -257,15 +338,24 @@ def audit(
     `--strict` gives automation something to trip on, and `--prefix` asks
     the question against a provisioned latest set rather than this machine.
 
+    A snapshot only ever moves **forward**, so two readings are worth less
+    than the file already checked in and are named and left alone: a tool
+    missing from `--prefix` (a partial provision must not read as drift,
+    and the host's copy is not the answer), and one whose version is older
+    than the stub records (a machine behind the one that took the snapshot
+    has nothing to add). Neither counts as behind — they are unanswered.
+
     One finding here *is* a fault, and always exits non-zero: footman's
     negation and wrapper tables are read by the runtime, so a disagreement
     there means a task emits the wrong command today.
     """
     with _on_path(prefix):
-        return _audit(only, fix, strict)
+        return _audit(only, fix, strict, _prefix_root(prefix))
 
 
-def _audit(only: str, fix: bool, strict: bool) -> dict[str, object]:
+def _audit(
+    only: str, fix: bool, strict: bool, root: Path | None = None
+) -> dict[str, object]:
     from footman import tools as _bridge
 
     stale, skipped, wrong, checked = [], [], [], 0
@@ -274,8 +364,11 @@ def _audit(only: str, fix: bool, strict: bool) -> dict[str, object]:
             continue
         if driver.source == "manual":
             continue  # hand-written stub — nothing to compare against
-        if not _drivers.installed(driver):
-            skipped.append(driver.key)
+        if reason := _ignore(driver, root):
+            # Nothing to say about a tool this machine can't read *better*
+            # than the snapshot already did — it is not behind, it is
+            # unanswered, and the difference matters to a release job.
+            skipped.append(f"{driver.key} ({reason})")
             continue
         path = _stub_path(driver.key)
         spec = _drivers.extract(driver)
@@ -297,7 +390,7 @@ def _audit(only: str, fix: bool, strict: bool) -> dict[str, object]:
         if wraps != _bridge._WRAPPERS.get(driver.name, frozenset()):
             wrong.append(f"_WRAPPERS[{driver.name!r}] should be {set(wraps)}")
     if skipped:
-        print(f"skipped (not installed): {', '.join(skipped)}")
+        print(f"left alone: {', '.join(skipped)}")
     report: dict[str, object] = {
         "checked": checked,
         "behind": stale,
