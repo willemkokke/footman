@@ -20,7 +20,6 @@ from the installed tool, every time the stubs are regenerated.
 from __future__ import annotations
 
 import os
-import re
 import shutil
 import subprocess
 import sys
@@ -315,13 +314,6 @@ DRIVERS: tuple[Driver, ...] = (
     ),
 )
 
-# A negative lookbehind, not `\b`: a version glued to a `v` prefix (`v0.23.1`)
-# has no word boundary before its first digit, so `\b` would skip to the middle
-# and read `23.1`. Reject only a preceding digit or dot, so `v0.23.1` -> `0.23.1`
-# while `2` inside `1.2.3` still can't start a fresh match.
-_VERSION = re.compile(r"(?<![\d.])(\d+\.\d+(?:\.\d+)?(?:[-.][A-Za-z0-9]+)*)\b")
-
-
 _HOST_READ = frozenset(d.name for d in DRIVERS if d.provision.kind == "system")
 """Tools read straight off the host, never provisioned into an isolated prefix
 (git, docker, uv) — the only ones for which Homebrew is consulted on macOS."""
@@ -364,7 +356,15 @@ def installed(driver: Driver) -> bool:
 
 
 def version(name: str) -> str:
-    """`<tool> --version`, reduced to the version itself."""
+    """`<tool> --version`, reduced to the version itself.
+
+    Reads the binary *extraction* resolves, which is not always the one a
+    task would run (`_resolve` prefers a Homebrew keg for host-read tools).
+    The parsing is shared with `tools.Tool.installed_version` so only the
+    choice of binary can ever differ, never the grammar.
+    """
+    from footman import tools
+
     binary = _resolve(name)
     if binary is None:
         return ""
@@ -374,8 +374,7 @@ def version(name: str) -> str:
         )
     except (OSError, subprocess.SubprocessError):
         return ""
-    match = _VERSION.search(done.stdout or done.stderr)
-    return match[1] if match else ""
+    return tools.read_version(done.stdout or done.stderr)
 
 
 def in_process_capable(name: str) -> bool:

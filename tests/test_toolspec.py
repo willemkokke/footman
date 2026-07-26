@@ -1424,3 +1424,29 @@ def test_the_prefix_launcher_counts_not_where_it_points(tmp_path):
 
     assert _from_prefix(str(launcher), root)  # via the prefix's bin
     assert not _from_prefix("/usr/bin/thing", root)  # the host's own copy
+
+
+def test_every_installed_driver_reports_a_readable_version(capsys):
+    """A version-keyed history is only as good as this: a tool whose version
+    can't be read would append events under an empty key, silently.
+
+    Tools this machine lacks are skipped *and named*, the same doctrine
+    `audit` follows — a check that quietly covered three of thirteen would be
+    worse than no check.
+    """
+    from footman import _drivers
+
+    read, unreadable, absent = [], [], []
+    for driver in _drivers.DRIVERS:
+        if _drivers._resolve(driver.name) is None:
+            absent.append(driver.key)
+            continue
+        found = _drivers.version(driver.name)
+        (read if found else unreadable).append(f"{driver.key} ({found or '—'})")
+
+    with capsys.disabled():
+        print(f"\n  version read from {len(read)}/{len(_drivers.DRIVERS)} drivers")
+        if absent:
+            print(f"  not installed here: {', '.join(absent)}")
+    assert not unreadable, f"no version could be read from: {', '.join(unreadable)}"
+    assert read, "no curated tool was installed — this check proved nothing"

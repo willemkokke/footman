@@ -227,8 +227,51 @@ def test_installed_version_is_cached_and_comparable():
     tools._version_cache.clear()
     version = tools.ruff.installed_version()
     assert version >= (0, 1)
+    # Keyed on the binary actually run, not the name typed: `tools.python`
+    # runs sys.executable, and reporting PATH's python instead would answer
+    # about a different interpreter than the one it invokes.
     assert tools._version_cache["ruff"] == version  # second read hits the cache
     assert tools.ruff.installed_version() is not None
+
+
+def test_installed_version_answers_about_the_binary_it_runs():
+    import sys
+
+    tools._version_cache.clear()
+    running = sys.version_info[:2]
+    assert tools.python.installed_version()[:2] == running
+
+
+def test_version_spelling_is_declarable():
+    """Windows `cmd` has no `--version`; `cmd /c ver` is how it answers. A
+    tool that spells it differently says so at construction rather than
+    leaving `installed_version()` a special case nobody can reach."""
+    assert tools.cmd._version_argv == ("/c", "ver")
+    assert tools.ruff._version_argv == ("--version",)
+    # It rides a chain, like every other construction fact.
+    assert tools.cmd.anything._version_argv == ("/c", "ver")
+
+
+def test_read_version_handles_the_grammars_tools_really_ship():
+    read = tools.read_version
+    assert read("ruff 0.16.0") == "0.16.0"
+    assert read("eclint v0.6.0-wk.5") == "0.6.0-wk.5"  # the `v` prefix, whole
+    assert read("1.13.0.git.kitware.jobserver-pipe-1") == (
+        "1.13.0.git.kitware.jobserver-pipe-1"
+    )
+    assert read("Microsoft Windows [Version 10.0.19045.3803]") == "10.0.19045.3803"
+    assert read("no numbers here") == ""
+
+
+def test_one_parser_serves_the_extractor_and_the_bridge():
+    """A stub's recorded version and a task's `installed_version()` may
+    disagree about *which binary* they asked — `_resolve` prefers a Homebrew
+    keg for host-read tools — but never about how a version string reads."""
+    from footman import _drivers
+
+    assert _drivers.version.__globals__  # imported lazily inside the function
+    for text in ("git version 2.55.0", "gh version 2.96.0 (2026-01-01)"):
+        assert tools.read_version(text)
 
 
 def test_installed_version_unreadable_is_taught():

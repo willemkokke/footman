@@ -19,8 +19,9 @@
 # The private aliases (`_re`, `_run`, …) mirror tools.py: they keep those names
 # out of the public namespace so `tools.run`/`tools.sys`/… resolve to Tools via
 # __getattr__, and they satisfy the AST parity test (tools.py bindings ⊆ this
-# stub). Only `_threading` is referenced here; the rest exist purely for parity.
-import re as _re  # noqa: F401
+# stub). Only `_re` and `_threading` are referenced here; the rest exist purely
+# for parity.
+import re as _re
 import subprocess as _subprocess  # noqa: F401
 import sys as _sys  # noqa: F401
 import threading as _threading
@@ -75,6 +76,9 @@ from footman.context import run as _run  # noqa: F401
 _argv_lock: _threading.Lock
 
 _version_cache: dict[str, tuple[int, ...]]
+_VERSION: _re.Pattern[str]
+
+def read_version(text: str) -> str: ...
 
 class _Off: ...
 
@@ -142,6 +146,7 @@ class Tool:
         path: str = ...,
         entry: str = ...,
         single_dash: bool = False,
+        version_argv: tuple[str, ...] = ...,
         policy: dict[str, Any] | None = None,
     ) -> None: ...
     def __getattr__(self, verb: str) -> Tool: ...
