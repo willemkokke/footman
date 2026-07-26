@@ -1458,3 +1458,41 @@ def test_every_installed_driver_reports_a_readable_version(capsys):
             print(f"  not installed here: {', '.join(absent)}")
     assert not unreadable, f"no version could be read from: {', '.join(unreadable)}"
     assert read, "no curated tool was installed — this check proved nothing"
+
+
+def test_a_page_documents_every_subcommand_class():
+    """A subcommand group is its own class in the stub (`DockerCompose`,
+    `UvPip`), and a page naming only the root describes `docker compose up`
+    and its flags nowhere at all — 641 options across docker, gh and uv."""
+    from footman import _drivers
+    from footman.tasks import tools as tools_tasks
+
+    def page(key: str) -> str:
+        driver = _drivers.find(key)
+        assert driver is not None
+        return tools_tasks._page(driver)
+
+    docker = page("docker")
+    assert "::: footman._stubs.docker.Docker\n" in docker
+    assert "::: footman._stubs.docker.DockerCompose" in docker
+
+    # gh nests eight groups; every one of them earns a directive.
+    gh = page("gh")
+    for cls in ("GhAuth", "GhIssue", "GhPr", "GhRelease", "GhRepo", "GhWorkflow"):
+        assert f"::: footman._stubs.gh.{cls}" in gh
+
+    assert page("ruff").count(":::") == 1  # a flat tool stays one directive
+
+
+def test_index_verbs_are_dotted_so_they_read_as_they_are_called():
+    """Flattened to bare names, `compose.up` reads as `up` and uv's two
+    `install` verbs collapse into one — the index then claims a tool has
+    fewer verbs than it has."""
+    from footman.tasks import tools as tools_tasks
+
+    uv = tools_tasks._verbs_of(tools_tasks._stub_path("uv"), "Uv")
+    assert "pip.install" in uv and "tool.install" in uv
+    docker = tools_tasks._verbs_of(tools_tasks._stub_path("docker"), "Docker")
+    assert "compose.up" in docker and "up" not in docker
+    # `flags` is footman's own typed-globals accessor, not a verb of the tool.
+    assert not any(v.endswith("flags") for v in uv + docker)

@@ -22,6 +22,18 @@ versions may include breaking changes.
 
 ### Fixed
 
+- **The tool reference documented a fifth of nothing.** A tool with
+  subcommand groups spreads over several stub classes — `Docker` holds
+  `compose: DockerCompose`, `Uv` holds `pip` and `tool`, `Gh` holds eight —
+  but each page named only the root class, so `docker compose up`, `uv pip
+  install`, `gh pr create` and their flags were described nowhere at all:
+  **48 callables and 641 options**, a fifth of the whole stubbed surface. Each
+  page now carries one directive per class. The index table had the same blind
+  spot from the other side: it flattened nested verbs to bare names, so
+  `compose.up` read as `up` and uv's two `install` verbs collapsed into one
+  row. Verbs are listed dotted now, as they are called, and footman's own
+  `flags()` accessor stops posing as a verb of the tool.
+
 - **One version parser, and `installed_version()` answers about the binary it
   runs.** The bridge and the stub extractor each had their own regex, and the
   bridge's read `PATH` while the extractor resolves differently (a Homebrew
