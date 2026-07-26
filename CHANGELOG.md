@@ -26,6 +26,22 @@ versions may include breaking changes.
   read. `--help` says what a parameter reads; `Runner.invoke` grew a
   `stdin=` argument so tests pipe without touching the real stream.
 
+- **The document binder: JSON on stdin into typed shapes.** A parameter
+  annotated with a dataclass, `dict`, or `list` and marked `stdin` binds
+  the whole JSON document: nested dataclasses recurse (no dotted field
+  paths — `event.tool_input.file_path` is just attribute access), `list[T]`
+  and `T | None` recurse too, and scalar leaves run the same coercion a
+  CLI token gets, so `Path`, `Literal`, enums and `datetime` behave as they
+  do on the command line. Unknown keys are ignored, never refused — a
+  producer may grow fields without breaking a consumer. Missing keys follow
+  the dataclass: a field with a default is optional, a defaultless absent
+  one is a taught refusal. Every refusal names the exact JSON path
+  (`event.tool_input.file_path: expected text, got a number`). A
+  dataclass parameter is boundary-only — not a flag, not a positional; the
+  pipe is its only source, and `fm task < fixture.json` replays the real
+  parse. A bare-marker `list` parameter reads a JSON array; a `dict`
+  parameter reads a JSON object.
+
 - **`[tool.footman] sort = true` — alphabetical listings.** One boolean
   orders every human-facing walk of the tree: `--list`, `--tree`, help,
   the `--json` catalog, and the generated docs pages. A `--sort` global

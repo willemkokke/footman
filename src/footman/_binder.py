@@ -1,0 +1,190 @@
+"""The document binder: a JSON value from the boundary into a typed shape.
+
+The inbound half of "dataclass in, dataclass out" (`_describe.json_default`
+serialises the way out). Structural rules, in priority order:
+
+- **Unknown keys are ignored, never refused.** A producer adds fields over
+  time; a consumer that breaks when its input gains a field is worse than
+  one that ignores it.
+- **Missing keys follow the dataclass**: a field with a default is optional,
+  a defaultless field that is absent is a taught refusal naming its path.
+- **No aliasing layer.** Keys map to field names directly.
+- **Recursion** covers nested dataclasses, `list[T]`, `dict[str, V]` and
+  `T | None`; scalar leaves reuse the one coercion pipeline, so `Path`,
+  `Literal`, enums and `datetime` behave exactly as a CLI token would.
+- **Refuse the rest, taught.** This is a binder, not a validation DSL —
+  `check(…)` owns validation, and every error names the JSON path
+  (`event.tool_input.file_path: expected text, got 3`).
+"""
+
+from __future__ import annotations
+
+import dataclasses
+import types
+import typing
+from typing import Any
+
+from footman import coerce
+
+_MISSING = dataclasses.MISSING
+
+
+def is_document_target(ann: Any) -> bool:
+    """Whether an annotation names a shape a JSON document binds to — a
+    dataclass, a `dict`, or a `list` (bare or subscripted)."""
+    if dataclasses.is_dataclass(ann):
+        return True
+    origin = typing.get_origin(ann)
+    return ann in (dict, list) or origin in (dict, list)
+
+
+def _json_name(value: Any) -> str:
+    return {
+        type(None): "null",
+        bool: "true/false",
+        int: "a number",
+        float: "a number",
+        str: "text",
+        list: "an array",
+        dict: "an object",
+    }.get(type(value), type(value).__name__)
+
+
+def _strip(ann: Any) -> Any:
+    """Peel `Annotated[...]` wrappers off a field annotation (markers inside a
+    payload dataclass carry no meaning here)."""
+    while typing.get_origin(ann) is typing.Annotated:
+        ann = typing.get_args(ann)[0]
+    return ann
+
+
+def _optional_member(ann: Any) -> Any:
+    """For `T | None`, the lone `T`; `None` when *ann* is not that shape."""
+    if typing.get_origin(ann) in (typing.Union, getattr(types, "UnionType", ())):
+        members = [m for m in typing.get_args(ann) if m is not type(None)]
+        if len(members) == 1 and len(typing.get_args(ann)) == 2:
+            return members[0]
+    return None
+
+
+def _field_types(target: Any, path: str) -> dict[str, Any]:
+    try:
+        return typing.get_type_hints(target, include_extras=True)
+    except NameError as exc:
+        raise ValueError(
+            f"{path}: the annotations of {target.__name__} did not resolve "
+            f"({exc}) — a stdin payload dataclass and everything it names "
+            f"must be module-level, where `eval_str` can see them"
+        ) from exc
+
+
+def bind_document(value: Any, target: Any, path: str) -> Any:
+    """Bind one JSON *value* to *target*, recursing; *path* names where we are
+    (`event`, `event.tool_input.file_path`, `rows[2]`) so a refusal points at
+    the exact spot in the document."""
+    target = _strip(target)
+
+    if target is Any or target is object:
+        return value
+
+    member = _optional_member(target)
+    if member is not None:
+        return None if value is None else bind_document(value, member, path)
+
+    if dataclasses.is_dataclass(target) and isinstance(target, type):
+        if not isinstance(value, dict):
+            raise ValueError(
+                f"{path}: expected an object for {target.__name__}, "
+                f"got {_json_name(value)}"
+            )
+        hints = _field_types(target, path)
+        kwargs: dict[str, Any] = {}
+        for f in dataclasses.fields(target):
+            if f.name in value:
+                kwargs[f.name] = bind_document(
+                    value[f.name], hints.get(f.name, Any), f"{path}.{f.name}"
+                )
+            elif f.default is _MISSING and f.default_factory is _MISSING:
+                raise ValueError(
+                    f"{path}: the document has no {f.name!r} field and "
+                    f"{target.__name__}.{f.name} has no default"
+                )
+        return target(**kwargs)
+
+    origin = typing.get_origin(target)
+    if target is list or origin is list:
+        if not isinstance(value, list):
+            raise ValueError(f"{path}: expected an array, got {_json_name(value)}")
+        element = (typing.get_args(target) or (Any,))[0]
+        return [
+            bind_document(item, element, f"{path}[{index}]")
+            for index, item in enumerate(value)
+        ]
+
+    if target is dict or origin is dict:
+        if not isinstance(value, dict):
+            raise ValueError(f"{path}: expected an object, got {_json_name(value)}")
+        args = typing.get_args(target)
+        if args and _strip(args[0]) is not str:
+            raise ValueError(
+                f"{path}: a JSON object's keys are text — dict keys must be "
+                f"str, not {getattr(args[0], '__name__', args[0])}"
+            )
+        element = args[1] if len(args) > 1 else Any
+        return {
+            key: bind_document(item, element, f"{path}.{key}")
+            for key, item in value.items()
+        }
+
+    return _leaf(value, target, path)
+
+
+def _leaf(value: Any, target: Any, path: str) -> Any:
+    """One scalar JSON value to one scalar annotation, through the same
+    pipeline a CLI token gets when the value arrives as text."""
+    if value is None or isinstance(value, (dict, list)):
+        raise ValueError(f"{path}: expected {_phrase(target)}, got {_json_name(value)}")
+    if isinstance(value, str):
+        try:
+            out = coerce.coerce_token(value, target)
+        except ValueError as exc:
+            raise ValueError(f"{path}: {exc}") from exc
+        choices = coerce.all_choices(target)
+        if choices is not None:
+            shown = str(out.value) if hasattr(out, "value") else str(out)
+            if shown not in choices:
+                raise ValueError(
+                    f"{path}: must be one of {'|'.join(choices)} (got {value!r})"
+                )
+        return out
+    # A JSON number or bool: no token to parse, so the fit is structural.
+    for member in coerce.union_members(target):
+        member = _strip(member)
+        if isinstance(value, bool):
+            if member is bool:
+                return value
+        elif isinstance(value, int):
+            if member is int:
+                return value
+            if member is float:
+                return float(value)
+        elif isinstance(value, float) and member is float:
+            return value
+        literal_values = (
+            typing.get_args(member)
+            if typing.get_origin(member) is typing.Literal
+            else ()
+        )
+        if any(value is lit or value == lit for lit in literal_values):
+            return value
+    raise ValueError(f"{path}: expected {_phrase(target)}, got {_json_name(value)}")
+
+
+def _phrase(target: Any) -> str:
+    tags = coerce.element_tags(target)
+    if tags:
+        return coerce.type_phrase(tags)
+    choices = coerce.all_choices(target)
+    if choices:
+        return "one of " + "|".join(choices)
+    return getattr(target, "__name__", str(target))

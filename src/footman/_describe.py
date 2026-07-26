@@ -90,6 +90,8 @@ def value_hint(p: dict) -> str:
 def usage_fragment(p: dict) -> str:
     kind = p["kind"]
     required = p.get("required")
+    if kind == "stdin":
+        return ""  # a whole-document parameter has no token spelling
     if kind == "flag":
         return f"--{p['name']}" if required else f"[--{p['name']}]"
     if kind == "option":
@@ -147,6 +149,9 @@ def _mechanics(p: dict) -> str:
             note = "reads stdin (one line per value)"
         elif source == "bytes":
             note = "reads stdin (raw bytes)"
+        elif source == "json":
+            shape = p.get("shape")
+            note = f"reads stdin (JSON document{' → ' + shape if shape else ''})"
         else:
             note = "reads stdin (text)"
         bits.append(note)

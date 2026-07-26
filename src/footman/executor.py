@@ -27,7 +27,7 @@ from pathlib import Path, PurePath
 from types import MappingProxyType
 from typing import Any
 
-from footman import _globals, coerce, context, registry
+from footman import _binder, _globals, coerce, context, registry
 from footman.context import (
     Context,
     Failed,
@@ -215,14 +215,19 @@ def _decode_stdin(payload: bytes) -> str:
     return text.replace("\r\n", "\n").replace("\r", "\n")
 
 
-def _stdin_document(payload: bytes) -> dict[str, Any]:
-    """The JSON object on stdin, for a `stdin(\"field\")` parameter."""
+def _stdin_json(payload: bytes) -> Any:
+    """The JSON value on stdin — any shape; the caller owns the fit."""
     if not payload.strip():
         raise ValueError("stdin was empty; expected a JSON document")
     try:
-        document = json.loads(_decode_stdin(payload))
+        return json.loads(_decode_stdin(payload))
     except json.JSONDecodeError as exc:
         raise ValueError(f"stdin is not JSON: {exc}") from exc
+
+
+def _stdin_document(payload: bytes) -> dict[str, Any]:
+    """The JSON object on stdin, for a `stdin(\"field\")` parameter."""
+    document = _stdin_json(payload)
     if not isinstance(document, dict):
         raise ValueError(
             f"stdin holds a JSON {type(document).__name__}, not an object — "
@@ -270,8 +275,31 @@ def _stdin_value(
     if peeled.element is bytes:
         return _run_checks(payload, peeled, label, params)
 
+    target = _document_shape(peeled)
+    if target is not None:
+        bound = _binder.bind_document(_stdin_json(payload), target, param.name)
+        if isinstance(bound, list):
+            return [_run_checks(v, peeled, label, params) for v in bound]
+        if isinstance(bound, dict):
+            return {k: _run_checks(v, peeled, label, params) for k, v in bound.items()}
+        return _run_checks(bound, peeled, label, params)
+
     text = _decode_stdin(payload)
     return _run_checks(_validate_value(text, peeled, label), peeled, label, params)
+
+
+def _document_shape(peeled: coerce.Peeled) -> Any:
+    """The JSON shape a bare `stdin` parameter binds to, rebuilt from its
+    peeled form: the dataclass itself, `list[T]` for a list parameter,
+    `dict[K, V]` for a mapping. `None` for the text/bytes forms."""
+    if peeled.mapping:
+        value_t: Any = list[peeled.element] if peeled.value_multiple else peeled.element
+        return dict[peeled.key, value_t]
+    if peeled.multiple:
+        return list[peeled.element]
+    if _binder.is_document_target(peeled.element):
+        return peeled.element
+    return None
 
 
 def _stdin_fillable(peeled: coerce.Peeled) -> bool:
@@ -511,6 +539,18 @@ def bind(
                             f"--{cli} is required and the JSON document on "
                             f"stdin has no {peeled.stdin.field!r} field — "
                             f"add the field, or pass --{cli}"
+                        )
+                    if (
+                        not peeled.mapping
+                        and not peeled.multiple
+                        and (_binder.is_document_target(peeled.element))
+                    ):
+                        # A whole-document parameter has no token spelling —
+                        # the boundary is its only source, so teach the pipe.
+                        raise ValueError(
+                            f"<{param.name}> is required and reads a JSON "
+                            f"document from stdin — pipe one in, or replay "
+                            f"a fixture (< payload.json)"
                         )
                     raise ValueError(
                         f"--{cli} is required and reads stdin — pipe a "

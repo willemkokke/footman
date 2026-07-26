@@ -379,13 +379,15 @@ def test_ask_front_loader_skips_a_filled_question(piped):
 # --- declaration errors -------------------------------------------------------
 
 
-def test_a_bare_list_from_stdin_is_a_spec_error():
+def test_a_bare_list_reads_a_json_array():
+    # The structured rule: a bare-marker list binds a JSON array (the lines
+    # idiom is the explicit opt-in). The binding itself is test_binder's.
     def tasks(reg):
         @reg.task
         def each(names: Annotated[list[str], stdin] = ()): ...  # type: ignore[assignment]
 
-    with pytest.raises(manifest.SpecError, match=r"stdin\(lines=True\)"):
-        build_tree(tasks)
+    _, tree = build_tree(tasks)
+    assert tree["tasks"]["each"]["params"][0]["stdin"] == "json"
 
 
 def test_lines_on_a_scalar_is_a_spec_error():
@@ -406,12 +408,13 @@ def test_field_on_a_list_is_a_spec_error():
         build_tree(tasks)
 
 
-def test_stdin_on_a_dict_is_a_spec_error():
+def test_field_or_lines_on_a_dict_is_a_spec_error():
+    # A dict reads stdin whole (a JSON object) — the refinements don't apply.
     def tasks(reg):
         @reg.task
-        def conf(pairs: Annotated[dict[str, str], stdin] = {}): ...
+        def conf(pairs: Annotated[dict[str, str], stdin("k")] = {}): ...
 
-    with pytest.raises(manifest.SpecError, match="dict"):
+    with pytest.raises(manifest.SpecError, match="whole"):
         build_tree(tasks)
 
 

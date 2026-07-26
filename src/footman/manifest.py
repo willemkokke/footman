@@ -21,6 +21,7 @@ Parameter mapping (function signature -> CLI shape):
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import inspect
 import json
@@ -29,7 +30,7 @@ import warnings
 from pathlib import Path
 from typing import Any
 
-from footman import _describe, _paths, coerce, discover, docstrings, registry
+from footman import _binder, _describe, _paths, coerce, discover, docstrings, registry
 from footman.context import context_param_name
 from footman.params import suggest
 from footman.registry import Group
@@ -145,6 +146,24 @@ def param_spec(param: inspect.Parameter) -> dict[str, Any]:
         return spec
 
     element = peeled.element
+    if (
+        peeled.stdin is not None
+        and peeled.stdin.field is None
+        and not peeled.stdin.lines
+        and not peeled.multiple
+        and dataclasses.is_dataclass(element)
+        and isinstance(element, type)
+    ):
+        # A whole-document parameter is boundary-only, not a CLI surface: a
+        # document is not one token, and exploding it into per-field flags
+        # founders on nesting. The splitter and completion both key on the
+        # known kinds, so `"stdin"` is invisible to them by construction;
+        # help still lists it, with the shape it binds.
+        spec["kind"] = "stdin"
+        spec["shape"] = element.__name__
+        _marker_keys(spec, peeled, param, has_default)
+        return spec
+
     if coerce.is_flag(element) and not peeled.multiple:
         # Only a *scalar* bool is a --flag; `list[bool]` stays a repeatable
         # option whose tokens parse as booleans (true/false/1/0/yes/no/on/off).
@@ -207,6 +226,15 @@ def param_spec(param: inspect.Parameter) -> dict[str, Any]:
     if tags and tags != ["str"] and coerce.eagerly_checkable(element):
         spec["types"] = tags
     elif choices is None and not tags and not isinstance(element, type):
+        if isinstance(element, str) and "stdin" in element:
+            # `eval_str` failed for the whole signature, so the marker never
+            # even peeled — but the annotation names it, and a silently
+            # text-degraded stdin parameter would be a mystery at bind time.
+            raise SpecError(
+                f"<{param.name}>: annotation {element!r} did not resolve — "
+                f"a stdin payload type and everything it names must be "
+                f"module-level, where `eval_str` can see them"
+            )
         # The annotation resolves to nothing footman can coerce (a string
         # that never resolved, a value, an exotic generic): values will pass
         # through as plain text. Silent degrade is a debugging tax — say so.
@@ -258,9 +286,10 @@ def _marker_keys(
         spec["env"] = peeled.env
     if peeled.stdin is not None:
         marker = peeled.stdin
-        if spec.get("mapping"):
+        if spec.get("mapping") and (marker.field is not None or marker.lines):
             raise SpecError(
-                f"<{param.name}>: stdin is not supported on dict parameters"
+                f"<{param.name}>: a dict parameter reads stdin whole (a JSON "
+                f"object) — stdin(field)/stdin(lines=True) do not apply"
             )
         if marker.lines and not peeled.multiple:
             raise SpecError(
@@ -270,12 +299,14 @@ def _marker_keys(
         if marker.field is not None and peeled.multiple:
             raise SpecError(
                 f"<{param.name}>: stdin({marker.field!r}) binds a single "
-                f"value — a list parameter reads lines (stdin(lines=True))"
+                f"value — a list parameter reads lines (stdin(lines=True)) "
+                f"or a JSON array (bare stdin)"
             )
-        if marker.field is None and not marker.lines and peeled.multiple:
+        if isinstance(peeled.element, str):
             raise SpecError(
-                f"<{param.name}>: a list from stdin reads lines — mark it "
-                f"stdin(lines=True), each line one element"
+                f"<{param.name}>: annotation {peeled.element!r} did not "
+                f"resolve — a stdin payload type and everything it names "
+                f"must be module-level, where `eval_str` can see them"
             )
         if marker.field is not None:
             spec["stdin"] = f"field:{marker.field}"
@@ -283,6 +314,13 @@ def _marker_keys(
             spec["stdin"] = "lines"
         elif peeled.element is bytes:
             spec["stdin"] = "bytes"
+        elif (
+            spec.get("mapping")
+            or peeled.multiple
+            or spec.get("kind") == "stdin"
+            or _binder.is_document_target(peeled.element)
+        ):
+            spec["stdin"] = "json"
         else:
             spec["stdin"] = "text"
 
