@@ -7,6 +7,12 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+## [0.21.0] — 2026-07-26
+
+- Tool stubs retaken at release, per the audit: **uv, prek, djlint** had
+  released newer versions than the snapshots recorded. A snapshot only
+  ever moves forward.
+
 ### Added
 
 - **`stdin` — a parameter bound from the pipe.** footman is a pipe target:
@@ -1944,7 +1950,8 @@ versions may include breaking changes.
 
 - Placeholder release claiming the `footman` name on PyPI. Not tagged in git.
 
-[Unreleased]: https://github.com/willemkokke/footman/compare/v0.20.0...HEAD
+[Unreleased]: https://github.com/willemkokke/footman/compare/v0.21.0...HEAD
+[0.21.0]: https://github.com/willemkokke/footman/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/willemkokke/footman/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/willemkokke/footman/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/willemkokke/footman/compare/v0.17.0...v0.18.0
