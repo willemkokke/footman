@@ -8,11 +8,12 @@ tools and by failing a check when the two disagree.
     fm tools.list                  what footman curates, and what's installed
     fm tools.spec ruff             what one tool says about itself, right now
     fm tools.sync                  rewrite the stubs from the installed tools
-    fm tools.audit                 fail if a stub and its tool disagree
+    fm tools.audit                 which tools have moved past their snapshot
     fm tools.color                 how footman forces colour, per tool
 
-`audit` is the one worth running anywhere: it answers "does the version I
-have still match what my editor is telling me?" without changing a file.
+A stub is a snapshot, not a contract: `sync` takes one, `audit` says which
+tools have released a newer version since. Being behind is news rather than
+a fault, so `audit` reports and exits zero unless you ask for `--strict`.
 Tools that aren't installed are skipped and named — a check that quietly
 covered three of thirteen would be worse than no check.
 """
@@ -21,11 +22,14 @@ from __future__ import annotations
 
 import re as _re
 import sys
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Annotated, Literal
 
 from footman import _drivers, _stubgen, _toolspec
 from footman._describe import bold, cyan, wants_color
+from footman.context import current
 from footman.params import doc
 from footman.registry import Group
 
@@ -36,6 +40,47 @@ _STUBS = Path(__file__).resolve().parent.parent / "_stubs"
 
 def _stub_path(key: str) -> Path:
     return _STUBS / f"{key}.pyi"
+
+
+@contextmanager
+def _on_path(prefix: str | Path) -> Iterator[None]:
+    """Read binaries from *prefix*`/bin` for the duration — a
+    `fm tools.provision` directory, so a task reads the provisioned set
+    instead of whatever this machine happens to have.
+
+    Empty *prefix* is a no-op, so every caller can pass its parameter
+    straight through.
+
+    Inside a run the overlay goes through `ctx.env`, which scopes it to this
+    task and its children: a sibling's `PATH` is untouched, and footman has
+    no reason to draw its own note about a raw `os.environ` write. Called
+    bare — from a test, or a script importing the task — there is no router
+    to serve that overlay, so it patches `os.environ` and restores it, the
+    same bare-call fallback `context._process_state` makes.
+    """
+    if not prefix:
+        yield
+        return
+    import os
+
+    from footman import _globals
+
+    bindir = Path(prefix).expanduser().resolve() / "bin"
+    if _globals.active():
+        ctx = current()
+        saved = ctx.env.get("PATH", os.environ.get("PATH", ""))
+        ctx.env["PATH"] = f"{bindir}{os.pathsep}{saved}"
+        try:
+            yield
+        finally:
+            ctx.env["PATH"] = saved
+        return
+    saved = os.environ.get("PATH", "")
+    os.environ["PATH"] = f"{bindir}{os.pathsep}{saved}"
+    try:
+        yield
+    finally:
+        os.environ["PATH"] = saved
 
 
 def _platform() -> str:
@@ -154,13 +199,26 @@ def spec(
 @tasks.task
 def sync(
     only: Annotated[str, doc("regenerate just this tool")] = "",
+    prefix: Annotated[str, doc("read binaries from this prefix's bin/")] = "",
 ):
     """Rewrite the stubs from the tools installed on this machine.
+
+    A stub is a *snapshot*: what one tool accepted at one version, on one
+    machine. Point `--prefix` at a `fm tools.provision` directory to take
+    that snapshot from the isolated latest set instead of whatever this
+    machine has — a dev environment's pytest carries its plugins' flags
+    too, and those do not belong in a stub whose driver never asked for
+    them.
 
     A tool that isn't installed keeps the stub that is checked in — there
     is nothing to read it from, and a stub that exists beats one that was
     deleted because a laptop happened to be missing a binary.
     """
+    with _on_path(prefix):
+        _sync(only)
+
+
+def _sync(only: str) -> None:
     _STUBS.mkdir(exist_ok=True)
     wrote, skipped = [], []
     for driver in _drivers.DRIVERS:
@@ -184,14 +242,30 @@ def sync(
 @tasks.task
 def audit(
     only: Annotated[str, doc("check just this tool")] = "",
-    fix: Annotated[bool, doc("write the differences instead of reporting")] = False,
+    fix: Annotated[bool, doc("take a fresh snapshot instead of reporting")] = False,
+    prefix: Annotated[str, doc("read binaries from this prefix's bin/")] = "",
+    strict: Annotated[bool, doc("exit non-zero when a snapshot is behind")] = False,
 ):
-    """Fail when a checked-in stub and its installed tool disagree.
+    """Report which tools have moved on since their stub snapshot.
 
-    Drift here is not a broken build — every stubbed verb ends in
-    `**flags: Any`, so the bridge still runs whatever you pass. It is a
-    stale *hint*, and this is how it gets noticed.
+    A stub records what one tool accepted at the version it was read from.
+    Tools keep releasing, and footman promises no particular speed at
+    following them — so a tool showing up here means a newer version exists,
+    **not** that anything is wrong. Every stubbed verb ends in
+    `**flags: Any`, so the bridge already speaks a flag the stub has never
+    heard of; only the *hint* is behind. `--fix` takes a fresh snapshot,
+    `--strict` gives automation something to trip on, and `--prefix` asks
+    the question against a provisioned latest set rather than this machine.
+
+    One finding here *is* a fault, and always exits non-zero: footman's
+    negation and wrapper tables are read by the runtime, so a disagreement
+    there means a task emits the wrong command today.
     """
+    with _on_path(prefix):
+        return _audit(only, fix, strict)
+
+
+def _audit(only: str, fix: bool, strict: bool) -> dict[str, object]:
     from footman import tools as _bridge
 
     stale, skipped, wrong, checked = [], [], [], 0
@@ -224,21 +298,34 @@ def audit(
             wrong.append(f"_WRAPPERS[{driver.name!r}] should be {set(wraps)}")
     if skipped:
         print(f"skipped (not installed): {', '.join(skipped)}")
+    report: dict[str, object] = {
+        "checked": checked,
+        "behind": stale,
+        "skipped": skipped,
+        "resnapshotted": bool(fix and stale),
+    }
     if wrong:
+        # Not news: these two tables are what the *runtime* reads, so a
+        # disagreement means the wrong command goes out today.
         raise SystemExit(
             "tools.py runtime tables disagree with the installed tool(s):\n  "
             + "\n  ".join(wrong)
         )
     if not stale:
-        print(f"{checked} stub(s) match their installed tool")
-        return
+        print(f"{checked} stub(s) match the tools they were read from")
+        return report
     if fix:
-        print(f"updated {len(stale)} stub(s): {', '.join(stale)}")
-        return
-    raise SystemExit(
-        f"{len(stale)} stub(s) differ from the installed tool: "
-        f"{', '.join(stale)}\nrun `fm tools.sync` to update"
+        print(f"took a fresh snapshot of {len(stale)}: {', '.join(stale)}")
+        return report
+    print(
+        f"{len(stale)} tool(s) have released a newer version than the stub "
+        f"snapshot: {', '.join(stale)}\n"
+        f"nothing is broken — the bridge speaks flags the stub hasn't heard "
+        f"of. Take a fresh snapshot with `fm tools.sync` when you want one."
     )
+    if strict:
+        raise SystemExit(2)
+    return report
 
 
 @tasks.task
@@ -262,16 +349,8 @@ def color(
     `fm tools.provision` directory to probe the complete, latest set
     rather than whatever happens to be on PATH.
     """
-    import os
-
-    saved_path = os.environ.get("PATH", "")
-    if prefix:
-        bindir = Path(prefix).expanduser().resolve() / "bin"
-        os.environ["PATH"] = f"{bindir}{os.pathsep}{saved_path}"
-    try:
+    with _on_path(prefix):
         _color_probe_and_write(only, write, wants_color(sys.stdout))
-    finally:
-        os.environ["PATH"] = saved_path
 
 
 def _color_probe_and_write(only: str, write: bool, on: bool) -> None:
@@ -400,16 +479,7 @@ def _print_outcomes(outcomes: list) -> None:
 
 def _sync_against(prefix: Path, only: str) -> None:
     """Run `sync` with the prefix on PATH, so it reads the fresh binaries."""
-    import os
-
-    from footman import _provision
-
-    saved = os.environ.get("PATH", "")
-    os.environ["PATH"] = f"{_provision.bin_dir(prefix)}{os.pathsep}{saved}"
-    try:
-        sync(only=only)
-    finally:
-        os.environ["PATH"] = saved
+    sync(only=only, prefix=str(prefix))
 
 
 _READ_FROM = _re.compile(
@@ -428,10 +498,10 @@ curated tool accepted at the version footman last read it from, with that
 tool's own help text per flag.
 
 Nothing here is a wrapper. The stubs are generated by `fm tools.sync`,
-which asks the installed binaries what they take, and
-`fm tools.audit` fails when a stub and its tool disagree. A flag
-missing from a stub still runs — every verb ends in `**flags: Any`, so a
-stub can suggest but never forbid.
+which asks the installed binaries what they take, and `fm tools.audit`
+reports which tools have released a newer version since. A flag missing
+from a stub still runs — every verb ends in `**flags: Any`, so a stub can
+suggest but never forbid.
 
 Where a flag defaults *on*, its documentation names the spelling that
 turns it off, because that is the one thing the bridge cannot infer:

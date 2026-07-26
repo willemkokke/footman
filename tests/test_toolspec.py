@@ -778,23 +778,63 @@ def test_sync_writes_a_stub_and_audit_then_agrees(stubs, capsys):
     capsys.readouterr()
 
     tools_tasks.audit(only="ruff")
-    assert "match their installed tool" in capsys.readouterr().out
+    assert "match the tools they were read from" in capsys.readouterr().out
+
+
+def test_prefix_reads_binaries_from_the_provisioned_set(tmp_path, monkeypatch):
+    """`--prefix` is what lets a scheduled job ask "have the tools moved?"
+    against isolated latest binaries instead of whatever the runner has."""
+    import os
+
+    from footman.tasks import tools as tools_tasks
+
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    before = os.environ["PATH"]
+    with tools_tasks._on_path(str(tmp_path)):
+        assert os.environ["PATH"].startswith(f"{bindir}{os.pathsep}")
+    assert os.environ["PATH"] == before  # restored, and scoped to the task
+
+    with tools_tasks._on_path(""):  # empty: every caller passes its param through
+        assert os.environ["PATH"] == before
 
 
 @needs_ruff
-def test_audit_fails_when_a_stub_drifts(stubs, capsys):
+def test_audit_reports_a_behind_snapshot_without_failing(stubs, capsys):
+    """A tool that has moved on is news, not a fault: the stub is a snapshot
+    and footman promises no particular speed at retaking it. Reporting must
+    not exit non-zero, or a weekly check reads as a broken build every time
+    somebody else ships a release."""
     from footman.tasks import tools as tools_tasks
 
     tools_tasks.sync(only="ruff")
     (stubs / "ruff.pyi").write_text("class Ruff(Tool): ...\n")
     capsys.readouterr()
-    with pytest.raises(SystemExit, match="differ from the installed tool"):
-        tools_tasks.audit(only="ruff")
 
-    # ...and --fix writes the difference instead of complaining.
+    report = tools_tasks.audit(only="ruff")
+    out = capsys.readouterr().out
+    assert "released a newer version" in out
+    assert "nothing is broken" in out
+    assert report["behind"] == ["ruff"]
+
+    # ...and --fix takes the fresh snapshot instead of reporting it.
     tools_tasks.audit(only="ruff", fix=True)
-    assert "updated 1 stub" in capsys.readouterr().out
+    assert "took a fresh snapshot of 1" in capsys.readouterr().out
     assert "class Ruff(Tool):\n    def __call__(" in (stubs / "ruff.pyi").read_text()
+
+
+@needs_ruff
+def test_audit_strict_gives_automation_something_to_trip_on(stubs, capsys):
+    from footman.tasks import tools as tools_tasks
+
+    tools_tasks.sync(only="ruff")
+    (stubs / "ruff.pyi").write_text("class Ruff(Tool): ...\n")
+    capsys.readouterr()
+    with pytest.raises(SystemExit) as caught:
+        tools_tasks.audit(only="ruff", strict=True)
+    assert caught.value.code == 2
+    # The wording is the same either way — only the exit code differs.
+    assert "released a newer version" in capsys.readouterr().out
 
 
 @needs_ruff
