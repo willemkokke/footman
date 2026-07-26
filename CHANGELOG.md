@@ -124,6 +124,16 @@ versions may include breaking changes.
 
 ### Fixed
 
+- **A background manifest rebuild no longer loses a race with the TAB that
+  spawned it (Windows).** Windows refuses to replace a file another process
+  holds open, and a reader holding it open is the design: completion polls
+  the cached manifest every 30 ms while the detached refresh rewrites it.
+  The `os.replace` failed, the child swallowed the error (a background
+  refresh must never crash or print), and the rebuild silently never landed
+  — leaving the stale answer in place until some later write found a quiet
+  moment. `write_manifest` now retries for about a second, and cleans up its
+  temp file if it does give up rather than littering the cache directory.
+
 - **pytest is reported as in-process by default, because it is.** `tools.py`
   builds it in-process (through `pytest.main`), but its driver never said so,
   so the two places that *label* the mode read the detected capability
