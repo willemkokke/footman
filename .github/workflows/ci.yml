@@ -128,7 +128,7 @@ jobs:
         run: uv run pytest -q --cov=footman --cov-report= --cov-fail-under=0
         env:
           COVERAGE_FILE: .coverage.${{ matrix.os }}-py${{ matrix.python }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: coverage-${{ matrix.os }}-py${{ matrix.python }}
           path: .coverage.*
@@ -197,7 +197,7 @@ jobs:
           --cov=footman --cov-report= --cov-fail-under=0
         env:
           COVERAGE_FILE: .coverage.shells-${{ matrix.os }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: coverage-shells-${{ matrix.os }}
           path: .coverage.*
@@ -219,7 +219,7 @@ jobs:
           python-version: "3.13"
           enable-cache: true
       - run: uv sync --frozen
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: coverage-*
           merge-multiple: true
@@ -231,7 +231,7 @@ jobs:
       # slice: render it here, hand it to the docs builds as an artifact.
       - name: Render merged HTML report
         run: uv run coverage html -d htmlcov
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: coverage-html
           path: htmlcov
@@ -277,7 +277,7 @@ jobs:
           # arms coverage in those children so the completion hot path is
           # measured as the shells actually invoke it.
           COVERAGE_PROCESS_START: pyproject.toml
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: coverage-docs-build
           path: .coverage.*
