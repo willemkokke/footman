@@ -40,6 +40,19 @@ versions may include breaking changes.
   `if` around the decorator **omits** the task entirely (no address at all);
   `@requires…` **lists it with a reason** it can't run here.
 
+- **A stub snapshot only ever moves forward.** Two readings are worth less
+  than the file already checked in, and both are now named and left alone
+  rather than treated as drift: a tool **missing from a `--prefix`** (a
+  partial provision would otherwise fall through to the host's copy, quietly
+  turning a failed fetch into "the tools moved"), and one whose version is
+  **older than the stub records** (a machine behind the one that took the
+  snapshot has nothing to add, and reading it would rewrite the stub
+  backwards, dropping flags that exist upstream). Neither counts as behind —
+  they are unanswered, and `sync` leaves those files untouched. Only the
+  `system` tier (git, docker) is meant to come from the host. On a laptop
+  that trails the snapshots, `tools.audit` went from reporting eight tools
+  as drifted to two.
+
 - **`--prefix` on `tools.sync` and `tools.audit`.** Both can now read the
   binaries from a `fm tools.provision` directory instead of the machine
   they run on — the question a scheduled check actually wants to ask

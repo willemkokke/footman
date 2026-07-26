@@ -223,7 +223,7 @@ editor suggests is what your binary accepts:
 ```console
 $ fm tools.sync
 wrote 9 stub(s): ruff, ruff_format, basedpyright, uv, git, docker, mkdocs, zensical, coverage
-skipped (not installed): bun, cspell, prek, markdownlint
+left alone: bun (not installed), cspell (not installed), prek (not installed)
 ```
 
 Reading a tool means reading whatever it offers. click and argparse hand
@@ -239,14 +239,22 @@ states both spellings at once.
 A stub is a **snapshot**: what one tool accepted at the version it was read
 from. Tools keep releasing and footman promises no particular speed at
 retaking the snapshot, so `fm tools.audit` regenerates and compares to tell
-you which ones have moved on — news, not a fault, and it exits zero. A tool
-that isn't installed is skipped *and named*, because a check that quietly
-covered nine of thirteen would be worse than no check at all:
+you which ones have moved on — news, not a fault, and it exits zero.
+
+A snapshot only ever moves **forward**, so a reading worth less than the
+file already checked in is *named and left alone* rather than counted:
+a tool that isn't installed, one missing from a `--prefix` (a partial
+provision must not read as drift, and the host's copy is not the answer),
+and one whose version is older than the stub records (reading it would
+rewrite the stub backwards). Named, because a check that quietly covered
+nine of thirteen would be worse than no check at all:
 
 ```console
-$ fm tools.audit
-skipped (not installed): bun, cspell, prek, markdownlint
-9 stub(s) match the tools they were read from
+$ fm tools.audit --prefix .tools-latest
+left alone: git (older than the snapshot (2.51.0 < 2.55.0))
+3 tool(s) have released a newer version than the stub snapshot: uv, prek, djlint
+nothing is broken — the bridge speaks flags the stub hasn't heard of.
+Take a fresh snapshot with `fm tools.sync` when you want one.
 ```
 
 `--fix` takes the fresh snapshot; `--strict` exits non-zero, for a

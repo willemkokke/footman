@@ -133,16 +133,31 @@ PR, and only the merged commit is tagged. Don't tag before the bump is on
 `main`, or the tag points at a commit that never reached the branch.
 
 1. Branch `release/vX.Y.Z` off an up-to-date `main`.
-2. Bump both version files to `X.Y.Z`, and the doc version references the
+2. Retake the tool-stub snapshots — the release is when they move, not
+   whenever a tool ships:
+
+   ```sh
+   uv run fm tools.provision                        # latest into .tools-latest (network)
+   uv run fm tools.audit --prefix .tools-latest     # what moved → the CHANGELOG line
+   uv run fm tools.sync  --prefix .tools-latest     # retake them
+   ```
+
+   `--prefix` is not optional: without it both tasks read *this machine*, so
+   a stale local ruff or a plugin-carrying pytest becomes the snapshot. A
+   tool that failed to provision, or one whose reading is older than the
+   stub already records, is named and left alone — a snapshot only ever
+   moves forward, and `git`/`docker` still come from the host (the `system`
+   tier is never provisioned).
+3. Bump both version files to `X.Y.Z`, and the doc version references the
    drift test guards: the `footman~=X.Y.0` pin in `README.md` and
    `docs/index.md`, and the `--version` example in `docs/json.md`
    (`tests/test_docs_drift.py` fails the gate if these go stale).
-3. Move CHANGELOG `[Unreleased]` → `[X.Y.Z]` with today's date; add the
+4. Move CHANGELOG `[Unreleased]` → `[X.Y.Z]` with today's date; add the
    `[X.Y.Z]: …/compare/vPREV...vX.Y.Z` link and repoint `[Unreleased]` to
    `…/compare/vX.Y.Z...HEAD`.
-4. Commit `chore(release): vX.Y.Z — <summary>`, push the branch, open a PR.
-5. When its checks are green, **merge it by hand** (repo auto-merge is off).
-6. Fast-forward local `main` (`git fetch` then `git merge --ff-only`), then tag
+5. Commit `chore(release): vX.Y.Z — <summary>`, push the branch, open a PR.
+6. When its checks are green, **merge it by hand** (repo auto-merge is off).
+7. Fast-forward local `main` (`git fetch` then `git merge --ff-only`), then tag
    that merged commit `vX.Y.Z` and push **only the tag**.
 
 Pushing a `v*` tag triggers `.github/workflows/release.yml`: it runs full CI,

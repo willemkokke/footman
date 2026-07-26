@@ -1357,3 +1357,70 @@ def test_resolve_off_macos_uses_path(monkeypatch):
     monkeypatch.setattr(sys, "platform", "linux")
     monkeypatch.setattr(_drivers.shutil, "which", lambda n: f"/usr/bin/{n}")
     assert _drivers._resolve("git") == "/usr/bin/git"
+
+
+# --- a snapshot only ever moves forward -----------------------------------
+
+
+def test_numeric_reads_the_leading_integers_and_stops():
+    from footman.tasks.tools import _numeric
+
+    assert _numeric("2.55.0") == (2, 55, 0)
+    assert _numeric("0.6.0-wk.5") == (0, 6, 0)  # the tail is anybody's grammar
+    assert _numeric("1.13.0.git.kitware.jobserver-1") == (1, 13, 0)
+    assert _numeric("") == ()  # unreadable: the caller must not skip on it
+    assert _numeric("nightly") == ()
+
+
+@needs_ruff
+def test_a_tool_older_than_the_snapshot_is_left_alone(stubs, capsys, monkeypatch):
+    """A machine behind the one that took the snapshot has nothing to add.
+    Reading it would rewrite the stub *backwards*, dropping flags that exist
+    upstream — so audit ignores it and sync leaves the file untouched."""
+    from footman import _drivers
+    from footman.tasks import tools as tools_tasks
+
+    tools_tasks.sync(only="ruff")
+    written = (stubs / "ruff.pyi").read_text()
+    capsys.readouterr()
+
+    # The same tool, one release older than the stub records.
+    monkeypatch.setattr(_drivers, "version", lambda name: "0.0.1")
+    report = tools_tasks.audit(only="ruff")
+    out = capsys.readouterr().out
+    assert "older than the snapshot" in out
+    assert report["behind"] == []  # not behind — unanswered
+    assert report["checked"] == 0
+
+    tools_tasks.sync(only="ruff")
+    assert (stubs / "ruff.pyi").read_text() == written  # unchanged
+
+
+def test_a_tool_missing_from_the_prefix_is_left_alone(stubs, tmp_path, capsys):
+    """A partial provision must not read as drift: a provisioned tool that
+    isn't in the prefix falls back to nothing, never to the host's copy."""
+    from footman.tasks import tools as tools_tasks
+
+    empty = tmp_path / "prefix"
+    (empty / "bin").mkdir(parents=True)
+    report = tools_tasks.audit(only="ruff", prefix=str(empty))
+    assert "not in the prefix" in capsys.readouterr().out
+    assert report["checked"] == 0 and report["behind"] == []
+
+
+def test_the_prefix_launcher_counts_not_where_it_points(tmp_path):
+    """The node tier's scripts live in a shared node_modules and a provisioned
+    interpreter in uv's store, so following the symlink out of the prefix
+    would call two properly provisioned tools missing."""
+    from footman.tasks.tools import _from_prefix
+
+    root = tmp_path / "prefix"
+    (root / "bin").mkdir(parents=True)
+    elsewhere = tmp_path / "store" / "thing"
+    elsewhere.parent.mkdir()
+    elsewhere.write_text("#!/bin/sh\n")
+    launcher = root / "bin" / "thing"
+    launcher.symlink_to(elsewhere)
+
+    assert _from_prefix(str(launcher), root)  # via the prefix's bin
+    assert not _from_prefix("/usr/bin/thing", root)  # the host's own copy
