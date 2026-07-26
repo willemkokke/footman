@@ -1,11 +1,13 @@
 """A live demo of footman's interactive input. Run these:
 
-    fm -f notes/demo_interactive.py release            # single prompt
-    fm -f notes/demo_interactive.py deploy             # typed choice menu
-    fm -f notes/demo_interactive.py release --version 2.0   # flag wins, no prompt
-    fm -f notes/demo_interactive.py build test lint docs    # parallel: ask-serial, run-parallel
-    fm -f notes/demo_interactive.py wizard             # interactive task owns the terminal
-    fm -f notes/demo_interactive.py --no-input release      # errors loudly, never hangs
+    fm -f DEMO release                  # single prompt
+    fm -f DEMO deploy                   # typed choice menu
+    fm -f DEMO release --version 2.0    # flag wins, no prompt
+    fm -f DEMO build test lint docs     # parallel: asked one at a time, run together
+    fm -f DEMO wizard                   # interactive task owns the terminal
+    fm -f DEMO --no-input release       # errors loudly, never hangs
+
+where DEMO is this file, `notes/demo_interactive.py`.
 
 `ask()` makes a defaultless param a CLI-optional option: pass it, or get asked.
 """

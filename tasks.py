@@ -19,7 +19,10 @@ docs = group("docs", help="Documentation site (Zensical)")
 if TYPE_CHECKING:
     from pathlib import Path
 
-SRC = ("src", "tests")
+# The whole repo, as CI lints it (`ruff check .`). Anything narrower lets a
+# tracked file outside src/tests — a notes demo, a comparison script — fail in
+# CI after a green local gate, which is how `notes/demo_interactive.py` got in.
+SRC = (".",)
 
 
 @task

@@ -89,7 +89,8 @@ tasks.py          footman's own tasks — the gate is `fm check`
 - ruff nits that fail the gate: line length 88; RUF043 (regex metachars in
   `pytest.raises(match=…)` → raw string, escape `.`/`|`); RUF003 (en-dash in
   comments → hyphen); I001 import order; RUF022 (`__all__` sort). Fix fast with
-  `uv run ruff check --fix src tests && uv run ruff format src tests`.
+  `uv run ruff check --fix . && uv run ruff format .` (the whole repo, as CI
+  lints it — `notes/` and `comparison/` are tracked too).
 
 ## Commits & identity
 
