@@ -618,16 +618,57 @@ def _header(path: Path) -> tuple[str, str]:
     return f"{match['version']} ({match['platform']})", match["mode"] or "unknown"
 
 
-def _verbs_of(path: Path) -> list[str]:
-    """The verbs a stub declares, for the index table."""
+def _stub_classes(path: Path) -> tuple[dict[str, list[str]], dict[str, dict[str, str]]]:
+    """A stub's classes: `{class: [verb]}` and `{class: {attr: class}}`.
+
+    A tool with subcommand groups spreads over several classes — `Docker`
+    holds `compose: DockerCompose`, `Uv` holds `pip` and `tool` — so reading
+    one class answers for only part of the tool.
+    """
     import ast
 
-    found: list[str] = []
+    verbs: dict[str, list[str]] = {}
+    nested: dict[str, dict[str, str]] = {}
     for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
-        if isinstance(node, ast.ClassDef):
-            for item in node.body:
-                if isinstance(item, ast.FunctionDef) and not item.name.startswith("_"):
-                    found.append(item.name)
+        if not isinstance(node, ast.ClassDef):
+            continue
+        verbs[node.name] = [
+            item.name
+            for item in node.body
+            # `flags` is footman's own typed-globals accessor, written into
+            # every subcommand class by the generator — not one of the tool's
+            # verbs, and listing it once per class buries the real ones.
+            if isinstance(item, ast.FunctionDef)
+            and not item.name.startswith("_")
+            and item.name != "flags"
+        ]
+        nested[node.name] = {
+            item.target.id: item.annotation.id
+            for item in node.body
+            if isinstance(item, ast.AnnAssign)
+            and isinstance(item.target, ast.Name)
+            and isinstance(item.annotation, ast.Name)
+        }
+    return verbs, nested
+
+
+def _verbs_of(path: Path, root: str) -> list[str]:
+    """The verbs a stub declares, dotted, for the index table.
+
+    Dotted because that is how they are called: `compose.up`, `pip.install`,
+    `tool.install`. Flattened to bare names they read as `up` and collide —
+    uv's two `install` verbs are not one verb.
+    """
+    verbs, nested = _stub_classes(path)
+    found: list[str] = []
+
+    def walk(cls: str, prefix: str) -> None:
+        found.extend(f"{prefix}{name}" for name in verbs.get(cls, ()))
+        for attr, child in nested.get(cls, {}).items():
+            if child in verbs:
+                walk(child, f"{prefix}{attr}.")
+
+    walk(root, "")
     return sorted(set(found))
 
 
@@ -692,7 +733,7 @@ def nav_keys(config: Path) -> list[str]:
 
 def _row(driver: _drivers.Driver, path: Path) -> str:
     """One line of the index table: what it is, and what it was read from."""
-    verbs = _verbs_of(path)
+    verbs = _verbs_of(path, _class_name(driver.key))
     listed = ", ".join(f"`{v}`" for v in verbs[:5]) or "the tool itself"
     if len(verbs) > 5:
         listed += f", … ({len(verbs)} in all)"
@@ -704,12 +745,32 @@ def _row(driver: _drivers.Driver, path: Path) -> str:
 
 
 def _page(driver: _drivers.Driver) -> str:
-    """One tool's reference page — mkdocstrings renders it from the stub."""
+    """One tool's reference page — mkdocstrings renders it from the stub.
+
+    One directive per class, not one per tool: a subcommand group is its own
+    class in the stub (`DockerCompose`, `UvPip`), and documenting only the
+    root leaves everything under it — `docker compose up` and its flags —
+    described nowhere at all.
+    """
     home = f"[{driver.name} documentation]({driver.url})\n\n" if driver.url else ""
-    return (
-        f"# {driver.key}\n\n{home}"
-        f"::: footman._stubs.{driver.key}.{_class_name(driver.key)}\n"
-    )
+    root = _class_name(driver.key)
+    _, nested = _stub_classes(_stub_path(driver.key))
+    blocks = [f"::: footman._stubs.{driver.key}.{root}"]
+    for cls in _reachable(root, nested):
+        blocks.append(f"::: footman._stubs.{driver.key}.{cls}")
+    return f"# {driver.key}\n\n{home}" + "\n\n".join(blocks) + "\n"
+
+
+def _reachable(root: str, nested: dict[str, dict[str, str]]) -> list[str]:
+    """Every subcommand class below *root*, breadth-first, named once."""
+    out: list[str] = []
+    queue = [root]
+    while queue:
+        for child in sorted(nested.get(queue.pop(0), {}).values()):
+            if child in nested and child not in out and child != root:
+                out.append(child)
+                queue.append(child)
+    return out
 
 
 __all__ = ["tasks"]
