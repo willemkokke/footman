@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Annotated, Literal, Optional
 
@@ -270,6 +271,45 @@ def test_write_load_roundtrip(root, tmp_path):
     path = tmp_path / "manifest.json"
     manifest.write_manifest(m, path)
     assert manifest.load_manifest(path) == m
+
+
+def test_write_retries_when_a_reader_holds_the_destination(root, tmp_path, monkeypatch):
+    """Windows refuses to replace a file another process has open, and a
+    reader holding it open is the design: completion polls this manifest
+    every few milliseconds while a detached refresh rewrites it. Losing that
+    race silently means the rebuild never lands (the child swallows its
+    errors), so the write retries instead."""
+    m = manifest.build_manifest(root)
+    path = tmp_path / "manifest.json"
+    real_replace = os.replace
+    denials = [PermissionError(5, "being used by another process")] * 3
+
+    def flaky(src, dst):
+        if denials:
+            raise denials.pop()
+        return real_replace(src, dst)
+
+    monkeypatch.setattr(manifest, "_REPLACE_PAUSE", 0)
+    monkeypatch.setattr(os, "replace", flaky)
+    manifest.write_manifest(m, path)
+    assert manifest.load_manifest(path) == m
+    assert not denials  # every denial was actually met with a retry
+
+
+def test_write_gives_up_without_littering_the_cache(root, tmp_path, monkeypatch):
+    """A reader that never lets go must not leave `<name>.<pid>.tmp` behind:
+    nothing ever reads those, and the cache directory is not a graveyard."""
+    m = manifest.build_manifest(root)
+    path = tmp_path / "manifest.json"
+
+    def always_denied(src, dst):
+        raise PermissionError(5, "being used by another process")
+
+    monkeypatch.setattr(manifest, "_REPLACE_PAUSE", 0)
+    monkeypatch.setattr(os, "replace", always_denied)
+    with pytest.raises(PermissionError):
+        manifest.write_manifest(m, path)
+    assert list(tmp_path.glob("*.tmp")) == []
 
 
 def test_load_missing_or_corrupt_returns_none(tmp_path):

@@ -453,12 +453,40 @@ def build_manifest(
     }
 
 
+_REPLACE_ATTEMPTS = 25
+_REPLACE_PAUSE = 0.04  # ≈1s of retries in all
+
+
 def write_manifest(manifest: dict[str, Any], path: Path) -> None:
-    """Write *manifest* to *path* atomically (never leave a half file)."""
+    """Write *manifest* to *path* atomically (never leave a half file).
+
+    Windows refuses to replace a destination another process holds open, and
+    a reader holding it open is the *design* here: a completion poll reads
+    this file every few milliseconds while a detached refresh rewrites it.
+    Losing that race silently means the rebuild never lands — the caller is
+    a background child that swallows its errors — so the file stays stale
+    until some later write happens to find a quiet moment.
+
+    Hence a bounded retry: about a second of attempts, then give up without
+    leaving the temp file behind. POSIX never takes this path (rename over
+    an open file is fine), and no caller waits longer than it already did.
+    """
+    import time
+
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
     tmp.write_text(json.dumps(manifest, indent=1, ensure_ascii=False), "utf-8")
-    os.replace(tmp, path)
+    for attempt in range(_REPLACE_ATTEMPTS):
+        try:
+            os.replace(tmp, path)
+            return
+        except PermissionError:
+            if attempt == _REPLACE_ATTEMPTS - 1:
+                # Out of patience: clean up rather than litter the cache
+                # directory with `<name>.<pid>.tmp` files nobody reads.
+                tmp.unlink(missing_ok=True)
+                raise
+            time.sleep(_REPLACE_PAUSE)
 
 
 def load_manifest(path: Path) -> dict[str, Any] | None:

@@ -28,6 +28,25 @@ def _generous_cold_budget(monkeypatch):
     monkeypatch.setattr(_complete, "_DYNAMIC_TIMEOUT", 30.0)
 
 
+def _cold_evidence(cache_dir) -> str:
+    """What the cold build left behind, for a failure message.
+
+    These tests fail on loaded CI runners and the assertion alone can't say
+    why: an empty candidate list means the detached builder never landed,
+    but not whether it was slow, dead, or blocked. The cache directory
+    answers that — a manifest present means "landed too late", a stray
+    `.pid.tmp` means the write couldn't replace its destination, and an
+    empty directory means the child never got that far.
+    """
+    from pathlib import Path
+
+    root = Path(cache_dir)
+    if not root.exists():
+        return f"cache dir {root} does not exist"
+    files = sorted(f"{p.name} ({p.stat().st_size}b)" for p in root.rglob("*"))
+    return f"cache dir {root} holds: {files or 'nothing'}"
+
+
 def _names(result):
     """Candidate names, dropping any `\t`-separated description column (11.2)."""
     return [c.split("\t", 1)[0] for c in result]
@@ -521,7 +540,7 @@ def test_cold_cache_builds_and_serves(tmp_path, monkeypatch, capsys):
     # rather than answering empty until the first real run
     complete_cli(["--", ""])
     out = capsys.readouterr().out.split()
-    assert "lint" in out and "check" in out
+    assert "lint" in out and "check" in out, _cold_evidence(tmp_path / "cache")
 
 
 def test_cold_f_cache_builds_and_serves(tmp_path, monkeypatch, capsys):
@@ -536,7 +555,8 @@ def test_cold_f_cache_builds_and_serves(tmp_path, monkeypatch, capsys):
     # a finished `-f <file>` with a cold cache builds that file's (cwd, file)
     # manifest and serves it, the same as a plain cold TAB — not empty
     complete_cli(["--", "-f", "other.py", ""])
-    assert "ship" in capsys.readouterr().out.split()
+    out = capsys.readouterr().out.split()
+    assert "ship" in out, _cold_evidence(tmp_path / "cache")
 
 
 def test_cold_build_times_out_to_none(tmp_path, monkeypatch):
@@ -726,4 +746,5 @@ def test_stale_schema_cache_rebuilds_instead_of_walking(tmp_path, monkeypatch, c
     stale.parent.mkdir(parents=True, exist_ok=True)
     stale.write_text(_json.dumps({"schema": 0, "tree": {"bogus": True}}))
     complete_cli(["--", "li"])
-    assert "lint" in capsys.readouterr().out.split()
+    out = capsys.readouterr().out.split()
+    assert "lint" in out, _cold_evidence(tmp_path / "cache")
