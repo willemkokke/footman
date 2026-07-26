@@ -176,7 +176,7 @@ class Runner:
                 )
             else:
                 if tasks is not None:
-                    argv = ["--tasks-file", str(tasks), *argv]
+                    argv = [f"--tasks-file={tasks}", *argv]
                 # `_run`, not `run`: bypass the CLI's KeyboardInterrupt->130
                 # wrapper so Ctrl-C reaches pytest (the invoke docstring's
                 # contract). The wrapper stays for real CLI entry.

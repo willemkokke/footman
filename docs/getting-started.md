@@ -63,7 +63,7 @@ correction, not a guess).
 
 ```sh
 fm lint --fix
-fm docs.serve --port 8001
+fm docs.serve --port=8001
 fm --list            # every task, flat
 fm --tree            # grouped by command group
 ```
@@ -88,6 +88,12 @@ exact shape, which is what makes the split deterministic:
 ```sh
 fm format lint --fix test
 ```
+
+A chain reads without a manual: a bare word is a task (or a positional
+value), `--x` is a flag, and an option's value is always `=`-attached —
+`fm lint --mode=strict test`, shorts included (`-j=4`). A value across a
+space refuses with the fix spelled out: `--mode strict` answers
+"did you mean `--mode=strict`?".
 
 Independent tasks in the chain run **in parallel by default**; `-s/--sequential`
 forces one-at-a-time. See [Chaining & parallelism](orchestration.md).

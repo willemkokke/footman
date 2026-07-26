@@ -603,7 +603,7 @@ def _boot_shell(
             f"path=({bin_dir!r} $path)\n"
             "PROMPT='%F{green}\u276f%f '\n"
             "autoload -Uz compinit && compinit -u\n"
-            f'eval "$({prog} --setup-completion zsh)"\n',
+            f'eval "$({prog} --setup-completion=zsh)"\n',
             encoding="utf-8",
         )
         env["ZDOTDIR"] = str(scratch)
@@ -622,7 +622,7 @@ def _boot_shell(
         rc.write_text(
             f'PATH="{bin_dir}:$PATH"\n'
             "PS1='\\[\\e[32m\\]\u276f\\[\\e[0m\\] '\n"
-            f'eval "$({prog} --setup-completion bash)"\n',
+            f'eval "$({prog} --setup-completion=bash)"\n',
             encoding="utf-8",
         )
         return ["bash", "--rcfile", str(rc), "-i"], env
@@ -636,7 +636,7 @@ def _boot_shell(
             # completion, not the host's PATH.
             "set -g fish_autosuggestion_enabled 0; "
             f"fish_add_path --prepend {bin_dir!r}; "
-            f"{prog} --setup-completion fish | source; "
+            f"{prog} --setup-completion=fish | source; "
             "function fish_prompt; set_color green; echo -n '\u276f '; "
             "set_color normal; end"
         )
@@ -649,7 +649,7 @@ def _boot_shell(
             f"$env:PATH = '{bin_dir}' + [IO.Path]::PathSeparator + $env:PATH; "
             'function prompt { "\u276f " }; '
             "Set-PSReadLineKeyHandler -Key Tab -Function MenuComplete; "
-            f"{prog} --setup-completion pwsh | Out-String | Invoke-Expression"
+            f"{prog} --setup-completion=pwsh | Out-String | Invoke-Expression"
         )
         return ["pwsh", "-NoLogo", "-NoProfile", "-NoExit", "-Command", boot], env
     if shell == "nushell":

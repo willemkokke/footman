@@ -175,7 +175,7 @@ of a module the way an import pulls one name. Then the engine grafts:
   naming what that level actually has.
 - **Included tasks run from *your* directory** — a shared lint task lints
   this project, not the provider's install location.
-- `--where lint` still points at the provider's source, so provenance is
+- `--where=lint` still points at the provider's source, so provenance is
   one flag away — and `fm --plugins` lists every installed entry point,
   pulled or not, with where it landed.
 

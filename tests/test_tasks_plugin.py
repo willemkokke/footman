@@ -70,7 +70,7 @@ def test_page_all_includes_the_documenter(plugin_project, capsys):
 
 def test_page_scoped_and_written_to_a_file(plugin_project, capsys):
     dest = plugin_project / "build" / "serve.md"
-    line = ["docs.page", "--target", "docs.serve", "--out", str(dest)]
+    line = ["docs.page", "--target=docs.serve", f"--out={dest}"]
     collected: list = []
     assert _app.run(line, collect=collected) == 0
     text = dest.read_text()
@@ -81,7 +81,7 @@ def test_page_scoped_and_written_to_a_file(plugin_project, capsys):
 
 
 def test_page_unknown_target_is_a_task_failure(plugin_project, capsys):
-    assert _app.run(["docs.page", "--target", "nope"]) == 1
+    assert _app.run(["docs.page", "--target=nope"]) == 1
     assert "no task or group named 'nope'" in capsys.readouterr().err
 
 
@@ -111,7 +111,7 @@ def test_branded_cli_documents_itself(plugin_project):
     assert result.ok
     assert result.stdout.startswith("# acme tasks\n")
     assert "acme greet" in result.stdout
-    overridden = acme.invoke("docs.page --prog other")
+    overridden = acme.invoke("docs.page --prog=other")
     assert overridden.stdout.startswith("# other tasks\n")
 
 
@@ -133,7 +133,7 @@ def test_globals_task_prints_the_grammar(plugin_project, capsys):
 
 def test_globals_task_writes_out(plugin_project, capsys):
     dest = plugin_project / "docs" / "_generated" / "globals.md"
-    assert _app.run(["docs.globals", "--out", str(dest)]) == 0
+    assert _app.run(["docs.globals", f"--out={dest}"]) == 0
     assert dest.read_text(encoding="utf-8").startswith("| option")
 
 
@@ -155,7 +155,7 @@ def test_shots_lists_unavailable_without_rich(plugin_project, capsys, monkeypatc
     # Substring, not the exact `(unavailable: requires rich)`: on Windows the
     # POSIX-pty gate also fails, so collect-all lists both reasons.
     assert "requires rich" in out
-    assert _app.run(["docs.shots", "--out", "x.svg"]) != 0
+    assert _app.run(["docs.shots", "--out=x.svg"]) != 0
     assert "requires rich" in capsys.readouterr().err
 
 
@@ -236,10 +236,8 @@ def test_shots_renders_a_real_svg(plugin_project, capsys):
     code = _app.run(
         [
             "docs.shots",
-            "--out",
-            str(dest),
-            "--width",
-            "60",
+            f"--out={dest}",
+            "--width=60",
             "--",
             "--list",
         ]

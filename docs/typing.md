@@ -13,14 +13,14 @@ parse time, with taught error messages.
 | `mode: Literal["a", "b"]`       | completable, eagerly-validated choices              |
 | `count: int = 100`              | typed option, validated at parse time               |
 | `paths: list[Path] = ()`        | repeatable or comma-separated (`--paths a,b`)       |
-| `env: dict[str, int]`           | `--env KEY=VAL` pairs (repeatable or comma-separated)|
+| `env: dict[str, int]`           | `--env=KEY=VAL` pairs (repeatable or comma-separated)|
 | `template: Path`                | required positional (consumed by exact count)       |
 | `*cmd: str`                     | variadic trailing passthrough                       |
 
 **The rule behind the table: the default decides.** A parameter with **no
 default** is a **required positional** — a bare word on the line fills it
 (`fm greet Ada`). A parameter **with a default** is an **option** you pass by
-name (`--mode loose`), or, for a `bool`, a `--flag`/`--no-flag` switch. That is
+name (`--mode=loose`), or, for a `bool`, a `--flag`/`--no-flag` switch. That is
 the whole distinction: give a parameter a default and it moves from the
 command line's *positions* to its *flags*. The container types layer arity on
 top — `list[T]`/`Many[T]` take one-or-many (a positional one needs at least
@@ -69,13 +69,13 @@ def build(targets: Many[str]): ...   # fm build web     -> ["web"]
 ## Comma-splitting and `nosplit`
 
 Every collection parameter (list or dict) splits a single token on commas **by
-default**, on top of the repeatable form — so `--tag a,b,c` and
-`--tag a --tag b --tag c` both work. Only `,` is a separator (no alternatives),
+default**, on top of the repeatable form — so `--tag=a,b,c` and
+`--tag=a --tag=b --tag=c` both work. Only `,` is a separator (no alternatives),
 and it is shell-portable, including PowerShell:
 
 ```python
 @task
-def release(tags: list[str]): ...   # fm release --tags a,b,c  -> ["a", "b", "c"]
+def release(tags: list[str]): ...   # fm release --tags=a,b,c  -> ["a", "b", "c"]
 ```
 
 When a value may itself contain a comma, mark the parameter `nosplit`: then only
@@ -86,7 +86,7 @@ from footman import NoSplit
 
 @task
 def notify(lines: NoSplit[list[str]]): ...
-# fm notify --lines "Smith, John" --lines "Doe, Jane"  -> two names, commas kept
+# fm notify --lines="Smith, John" --lines="Doe, Jane"  -> two names, commas kept
 ```
 
 `NoSplit[list[str]]` is shorthand for `Annotated[list[str], nosplit]` — the
@@ -101,7 +101,7 @@ system — `dict[str, int | str]`, and even `dict[str, list[...]]`:
 
 ```python
 @task
-def env(vars: dict[str, int | str]): ...   # fm env --vars port=8080 --vars name=web
+def env(vars: dict[str, int | str]): ...   # fm env --vars=port=8080 --vars=name=web
 ```
 
 ## Custom types
@@ -141,7 +141,7 @@ def deploy(
 ```console
 $ fm deploy missing.toml
 fm: deploy: <config> must be an existing file (got 'missing.toml')
-$ fm deploy app.toml --jobs 99
+$ fm deploy app.toml --jobs=99
 fm: deploy: --jobs must be between 1 and 32 (got '99')
 $ DEPLOY_ENV=prod fm deploy app.toml      # target == "prod"
 ```

@@ -153,7 +153,7 @@ def test_cli_install_end_to_end(home, tmp_path, monkeypatch, capsys):
         "from footman import task\n@task\ndef t(): ...\n"
     )
     monkeypatch.chdir(tmp_path)
-    assert _app.run(["--install-completion", "fish"]) == 0
+    assert _app.run(["--install-completion=fish"]) == 0
     out = capsys.readouterr().out
     assert "installed" in out
     assert Path(home / ".config" / "fish" / "completions" / "fm.fish").exists()
@@ -167,7 +167,7 @@ def test_install_completion_yields_to_help(home, tmp_path, monkeypatch, capsys):
         "from footman import task\n@task\ndef t(): ...\n"
     )
     monkeypatch.chdir(tmp_path)
-    assert _app.run(["--install-completion", "fish", "--help"]) == 0
+    assert _app.run(["--install-completion=fish", "--help"]) == 0
     out = capsys.readouterr().out
     assert "usage:" in out  # help, not an install confirmation
     assert not (home / ".config" / "fish" / "completions" / "fm.fish").exists()
@@ -177,7 +177,7 @@ def test_install_completion_yields_to_help(home, tmp_path, monkeypatch, capsys):
 
 
 def test_setup_completion_prints_hook_and_writes_nothing(home, capsys):
-    assert _app.run(["--setup-completion", "zsh"]) == 0
+    assert _app.run(["--setup-completion=zsh"]) == 0
     out = capsys.readouterr().out
     assert "_fm_complete" in out and "compdef" in out  # the sourceable hook
     assert not (home / ".local" / "share" / "fm" / "completion.zsh").exists()
@@ -195,20 +195,20 @@ def test_setup_completion_detection_note_stays_off_stdout(home, monkeypatch, cap
 
 
 def test_setup_completion_unknown_shell_teaches(home, capsys):
-    assert _app.run(["--setup-completion", "tcsh"]) == EX_USAGE
+    assert _app.run(["--setup-completion=tcsh"]) == EX_USAGE
     err = capsys.readouterr().err
     assert "--setup-completion expects one of" in err and "tcsh" in err
 
 
 def test_setup_completion_alias_and_yields_to_help(home, tmp_path, monkeypatch, capsys):
-    assert _app.run(["--setup-completion", "nu"]) == 0  # nu → nushell
+    assert _app.run(["--setup-completion=nu"]) == 0  # nu → nushell
     assert "completions.external.completer" in capsys.readouterr().out
     (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
     (tmp_path / "tasks.py").write_text(
         "from footman import task\n@task\ndef t(): ...\n"
     )
     monkeypatch.chdir(tmp_path)
-    assert _app.run(["--setup-completion", "zsh", "--help"]) == 0
+    assert _app.run(["--setup-completion=zsh", "--help"]) == 0
     assert "usage:" in capsys.readouterr().out  # help wins, no hook printed
 
 
@@ -327,7 +327,7 @@ def test_uninstall_via_cli_unknown_shell_teaches(home, tmp_path, monkeypatch, ca
         "from footman import task\n@task\ndef t(): ...\n"
     )
     monkeypatch.chdir(tmp_path)
-    assert _app.run(["--uninstall-completion", "tcsh"]) == EX_USAGE
+    assert _app.run(["--uninstall-completion=tcsh"]) == EX_USAGE
     assert "bash|zsh|fish" in capsys.readouterr().err
 
 
@@ -337,9 +337,9 @@ def test_uninstall_via_cli(home, tmp_path, monkeypatch, capsys):
         "from footman import task\n@task\ndef t(): ...\n"
     )
     monkeypatch.chdir(tmp_path)
-    assert _app.run(["--install-completion", "bash"]) == 0
+    assert _app.run(["--install-completion=bash"]) == 0
     capsys.readouterr()
-    assert _app.run(["--uninstall-completion", "bash"]) == 0
+    assert _app.run(["--uninstall-completion=bash"]) == 0
     out = capsys.readouterr().out
     assert "removed" in out
     assert not (home / ".local" / "share" / "fm" / "completion.bash").exists()
@@ -352,9 +352,7 @@ def test_pwsh_missing_is_a_taught_error(home, tmp_path, monkeypatch, capsys):
     )
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(_shellcomp.shutil, "which", lambda _: None)
-    assert (
-        _app.run(["--install-completion", "powershell"]) == EX_USAGE
-    )  # alias accepted
+    assert _app.run(["--install-completion=powershell"]) == EX_USAGE  # alias accepted
     assert "not found on PATH" in capsys.readouterr().err
 
 
@@ -526,7 +524,7 @@ def test_fish_completes_files_after_a_path_flag(home, fm_project_dir):
     body = (
         f"set -gx PATH {VENV_BIN} $PATH\n"
         f'source "{script}"\n'
-        'complete -C "fm -f t"\n'  # tasks.py is the only t* in the project dir
+        'complete -C "fm -f=t"\n'  # tasks.py is the only t* in the project dir
     )
     out = subprocess.run(
         ["fish", "-c", body],
@@ -595,14 +593,14 @@ def test_detection_through_a_real_shell(home, tmp_path, monkeypatch):
 @_posix_shell
 @pytest.mark.skipif(shutil.which("zsh") is None, reason="zsh not installed")
 def test_setup_completion_evals_in_real_zsh(tmp_path):
-    """`eval "$(fm --setup-completion zsh)"` defines the completer in-session,
+    """`eval "$(fm --setup-completion=zsh)"` defines the completer in-session,
     with no rc file written — the session-only counterpart to install."""
     venv_bin = Path(sys.executable).parent
     out = subprocess.run(
         [
             "zsh",
             "-fc",
-            f'PATH="{venv_bin}:$PATH"; eval "$(fm --setup-completion zsh)"; '
+            f'PATH="{venv_bin}:$PATH"; eval "$(fm --setup-completion=zsh)"; '
             "typeset -f _fm_complete >/dev/null && echo DEFINED",
         ],
         capture_output=True,
@@ -696,7 +694,7 @@ def test_nu_missing_is_a_taught_error(home, tmp_path, monkeypatch, capsys):
     )
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(_shellcomp.shutil, "which", lambda _: None)
-    assert _app.run(["--install-completion", "nu"]) == EX_USAGE  # alias accepted
+    assert _app.run(["--install-completion=nu"]) == EX_USAGE  # alias accepted
     assert "not found on PATH" in capsys.readouterr().err
 
 
@@ -826,10 +824,10 @@ def test_zsh_cast_records_an_animated_completion(home, tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_CACHE_HOME", str(home / ".cache"))
     assert _app.run(["--list"]) == 0  # warm the manifest TAB will serve
     dest = tmp_path / "cast.svg"
-    line = ["footman.docs.cast", "--out", str(dest), "--shell", "zsh"]
+    line = ["footman.docs.cast", f"--out={dest}", "--shell=zsh"]
     # The trailing wait gives the hook's `fm --complete` subprocess room on
     # a cold CI runner — the settle window alone raced its Python startup.
-    line += ["--width", "70", "--height", "10", "--", "fm li", "<TAB>", "<WAIT:2500>"]
+    line += ["--width=70", "--height=10", "--", "fm li", "<TAB>", "<WAIT:2500>"]
     assert _app.run(line) == 0
     svg = dest.read_text(encoding="utf-8")
     assert svg.count("cast-frame") >= 2  # it animates
@@ -899,8 +897,8 @@ def test_cast_completes_in_every_posix_shell(shell: str, home, tmp_path, monkeyp
     monkeypatch.setenv("XDG_CACHE_HOME", str(home / ".cache"))
     assert _app.run(["--list"]) == 0  # warm the manifest TAB will serve
     dest = tmp_path / "cast.svg"
-    line = ["footman.docs.cast", "--out", str(dest), "--shell", shell]
-    line += ["--width", "70", "--height", "12", "--", "fm li", "<TAB>", "<WAIT:2500>"]
+    line = ["footman.docs.cast", f"--out={dest}", f"--shell={shell}"]
+    line += ["--width=70", "--height=12", "--", "fm li", "<TAB>", "<WAIT:2500>"]
     assert _app.run(line) == 0
     svg = dest.read_text(encoding="utf-8")
     text = _re.sub(r"&#160;", "", _re.sub(r"<[^>]+>", "", svg))

@@ -102,7 +102,9 @@ def _import_source(dotted: str, *, allow_empty: bool = False) -> Group:
             raise RegistrationError(
                 f"include({dotted!r}): failed to import ({type(exc).__name__}: {exc})"
             ) from exc
-    if captured.tasks or captured.groups:
+    if captured.tasks or captured.groups or any(captured.contributions.values()):
+        # Tasks, groups, or lifecycle contributions alone — a hooks-only
+        # provider (a `@finalize` module) is a valid pull with no tree.
         tree = captured
     elif allow_empty:
         tree = captured  # an empty intermediate package: fine, walk on
@@ -135,12 +137,13 @@ def _fork(tree: Group) -> Group:
     for name, sub in tree.groups.items():
         fork.groups[name] = _fork(sub)  # recurse: fresh subgroup objects
     # A faithful copy carries *every* Group field, not only tasks/groups: a
-    # provider's `@finalize` hooks ride along, provenance survives, and a
-    # runnable group keeps its `@group.default` for free — the default *is*
-    # the child task named `default`, so the tasks-dict copy above already
-    # carried it. `test_compose`'s field census fails the moment a new Group
-    # field is added but not copied here.
-    fork.finalizers = list(tree.finalizers)
+    # provider's lifecycle contributions (`@finalize` hooks today) ride
+    # along, provenance survives, and a runnable group keeps its
+    # `@group.default` for free — the default *is* the child task named
+    # `default`, so the tasks-dict copy above already carried it.
+    # `test_compose`'s field census fails the moment a new Group field is
+    # added but not copied here.
+    fork.contributions = {k: list(b) for k, b in tree.contributions.items()}
     fork.pulled_from = tree.pulled_from
     return fork
 
@@ -210,7 +213,7 @@ def _load_entry_point(name: str) -> Group:
         return loaded
     if isinstance(loaded, ModuleType):
         module_name = loaded.__name__
-        if captured.tasks or captured.groups:
+        if captured.tasks or captured.groups or any(captured.contributions.values()):
             if not captured.help and (loaded.__doc__ or "").strip():
                 # A container describes itself through its module docstring.
                 captured.help = (loaded.__doc__ or "").strip().splitlines()[0]
@@ -548,10 +551,12 @@ def _pull(
     fork = _fork(node)
     _stamp(fork, identity)
     _prune(fork, tuple(only), tuple(exclude), verb)
-    # A provider's `@finalize` hooks edit the whole merged tree, so they
-    # belong on the live root that discovery collects from.
-    registry.root.finalizers.extend(fork.finalizers)
-    fork.finalizers = []
+    # A provider's lifecycle contributions act on the whole merged tree
+    # (a `@finalize` hook edits it in place), so they belong on the live
+    # root that discovery collects from, never the grafted subtree.
+    for kind, bucket in fork.contributions.items():
+        registry.root.contributions[kind].extend(bucket)
+        bucket.clear()
     if fork.name == "root":
         # An anonymous container (a module capture's root): pulling it lands
         # its *children* — the splat, `import *` for task trees. A devkit

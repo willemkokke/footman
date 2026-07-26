@@ -95,9 +95,9 @@ def test_between_bounds_are_inclusive():
         def test_(jobs: Annotated[int, between(1, 32)] = 4):
             seen["jobs"] = jobs
 
-    run(tasks, "test --jobs 32")
+    run(tasks, "test --jobs=32")
     assert seen["jobs"] == 32
-    run(tasks, "test --jobs 1")
+    run(tasks, "test --jobs=1")
     assert seen["jobs"] == 1
 
 
@@ -108,7 +108,7 @@ def test_between_teaches_out_of_range():
 
     _, tree = build_tree(tasks)
     with pytest.raises(ChainError, match="between 1 and 32"):
-        split_chain(tree, ["test", "--jobs", "99"])
+        split_chain(tree, ["test", "--jobs=99"])
 
 
 def test_nan_is_rejected_by_bounds():
@@ -118,8 +118,8 @@ def test_nan_is_rejected_by_bounds():
 
     _, tree = build_tree(tasks)
     with pytest.raises(ChainError, match=r"between 0\.0 and 1\.0"):
-        split_chain(tree, ["mix", "--ratio", "nan"])
-    split_chain(tree, ["mix", "--ratio", "0.5"])  # a real value still binds
+        split_chain(tree, ["mix", "--ratio=nan"])
+    split_chain(tree, ["mix", "--ratio=0.5"])  # a real value still binds
 
 
 def test_env_nan_is_rejected_by_bounds(monkeypatch):
@@ -139,9 +139,9 @@ def test_bare_range_is_half_open():
         def shard(index: Annotated[int, range(0, 8)] = 0): ...
 
     _, tree = build_tree(tasks)
-    split_chain(tree, ["shard", "--index", "7"])  # ok: 0..7
+    split_chain(tree, ["shard", "--index=7"])  # ok: 0..7
     with pytest.raises(ChainError, match="between 0 and 7"):
-        split_chain(tree, ["shard", "--index", "8"])
+        split_chain(tree, ["shard", "--index=8"])
 
 
 def test_open_ended_bound():
@@ -151,7 +151,7 @@ def test_open_ended_bound():
 
     _, tree = build_tree(tasks)
     with pytest.raises(ChainError, match="at least 1"):
-        split_chain(tree, ["retry", "--times", "0"])
+        split_chain(tree, ["retry", "--times=0"])
 
 
 def test_bounds_apply_to_positionals_and_lists():
@@ -160,9 +160,9 @@ def test_bounds_apply_to_positionals_and_lists():
         def pick(shards: Annotated[list[int], between(0, 3)] | None = None): ...
 
     _, tree = build_tree(tasks)
-    split_chain(tree, ["pick", "--shards", "0,3"])
+    split_chain(tree, ["pick", "--shards=0,3"])
     with pytest.raises(ChainError, match="between 0 and 3"):
-        split_chain(tree, ["pick", "--shards", "0,4"])
+        split_chain(tree, ["pick", "--shards=0,4"])
 
 
 # --- env() fallback (late, validated) --------------------------------------------
@@ -183,7 +183,7 @@ def test_env_fallback_precedence(monkeypatch):
     run(tasks, "deploy")
     assert seen["target"] == "prod"  # env beats default
 
-    run(tasks, "deploy --target edge")
+    run(tasks, "deploy --target=edge")
     assert seen["target"] == "edge"  # CLI beats env
 
 
@@ -279,12 +279,12 @@ def test_dict_value_bounds_are_enforced():
         def build(opts: dict[str, Annotated[int, between(1, 5)]] | None = None):
             seen["opts"] = opts
 
-    run(tasks, "build --opts x=3")
+    run(tasks, "build --opts=x=3")
     assert seen["opts"] == {"x": 3}
 
     _, tree = build_tree(tasks)
     with pytest.raises(ChainError, match="between 1 and 5"):
-        split_chain(tree, ["build", "--opts", "x=99"])
+        split_chain(tree, ["build", "--opts=x=99"])
 
 
 def test_dict_value_check_runs_per_value():
@@ -292,7 +292,7 @@ def test_dict_value_check_runs_per_value():
         @reg.task
         def build(counts: dict[str, Annotated[int, check(_even)]] | None = None): ...
 
-    results = run(tasks, "build --counts x=3")  # 3 is odd -> check fails at bind
+    results = run(tasks, "build --counts=x=3")  # 3 is odd -> check fails at bind
     assert not results[0].ok
     assert isinstance(results[0].error, ValueError)
 
@@ -345,10 +345,10 @@ def test_check_accepts_and_rejects():
         def tag(version: Annotated[str, check(_semver)] = "0.0.0"):
             seen["v"] = version
 
-    run(tasks, "tag --version 1.2.3")
+    run(tasks, "tag --version=1.2.3")
     assert seen["v"] == "1.2.3"
 
-    results = run(tasks, "tag --version nope")
+    results = run(tasks, "tag --version=nope")
     assert not results[0].ok
     assert "is not MAJOR.MINOR.PATCH" in str(results[0].error)
 
@@ -358,7 +358,7 @@ def test_check_runs_per_element():
         @reg.task
         def tag(versions: Annotated[list[str], check(_semver)] | None = None): ...
 
-    results = run(tasks, "tag --versions 1.2.3,bad")
+    results = run(tasks, "tag --versions=1.2.3,bad")
     assert not results[0].ok
     assert "bad" in str(results[0].error)
 
@@ -458,10 +458,10 @@ def test_check_context_includes_a_defaulted_sibling():
         ): ...
 
     # channel unset -> the view carries its default, not a KeyError
-    unset = run(tasks, "deploy --target prod")
+    unset = run(tasks, "deploy --target=prod")
     assert not unset[0].ok and "channel is stable" in str(unset[0].error)
     # a provided value overrides that default in the view
-    given = run(tasks, "deploy --channel beta --target prod")
+    given = run(tasks, "deploy --channel=beta --target=prod")
     assert not given[0].ok and "channel is beta" in str(given[0].error)
 
 

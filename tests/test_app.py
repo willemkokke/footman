@@ -116,7 +116,7 @@ def project(tmp_path, monkeypatch):
 
 
 def test_run_a_task(project, capsys):
-    assert _app.run(["hi", "--name", "footman"]) == 0
+    assert _app.run(["hi", "--name=footman"]) == 0
     assert "hello footman" in capsys.readouterr().out
 
 
@@ -146,7 +146,7 @@ def test_list_with_no_segments(project, capsys):
 
 
 def test_dry_run_does_not_execute(project, capsys):
-    assert _app.run(["--dry-run", "hi", "--name", "x"]) == 0
+    assert _app.run(["--dry-run", "hi", "--name=x"]) == 0
     out = capsys.readouterr().out
     assert "hi" in out
     assert "hello x" not in out
@@ -242,7 +242,7 @@ def test_unknown_task_is_teaching_error(project, capsys):
 
 
 def test_where(project, capsys):
-    assert _app.run(["--where", "hi"]) == 0
+    assert _app.run(["--where=hi"]) == 0
     out = capsys.readouterr().out.strip()
     # A real pin (not the old `or ":" in out` tautology): the tasks file, and
     # hi's definition line — the decorator (6) on 3.9+, the def (7) on older
@@ -365,12 +365,12 @@ def test_binding_refusals_exit_usage_end_to_end(tmp_path, monkeypatch):
 
 
 def test_install_completion_unknown_shell_teaches(project, capsys):
-    assert _app.run(["--install-completion", "tcsh"]) == EX_USAGE
+    assert _app.run(["--install-completion=tcsh"]) == EX_USAGE
     assert "bash|zsh|fish" in capsys.readouterr().err
 
 
 def test_directory_bad(project, capsys):
-    assert _app.run(["-C", str(project / "nope"), "hi"]) == EX_USAGE
+    assert _app.run([f"-C={project / 'nope'}", "hi"]) == EX_USAGE
     assert "-C" in capsys.readouterr().err
 
 
@@ -387,7 +387,7 @@ def test_tasks_file_does_not_poison_completion_cache(project):
 
     other = project / "other.py"
     other.write_text("from footman import task\n@task\ndef solo(): ...\n")
-    assert _app.run(["-f", str(other), "solo"]) == 0
+    assert _app.run([f"-f={other}", "solo"]) == 0
     after = cache.read_text()
     assert after == before  # cache untouched
     assert "solo" not in after
@@ -401,7 +401,7 @@ def test_directory_restores_cwd(project):
     sub.mkdir()
     (sub / "tasks.py").write_text("from footman import task\n@task\ndef t(): ...\n")
     before = os.getcwd()
-    assert _app.run(["-C", str(sub), "t"]) == 0
+    assert _app.run([f"-C={sub}", "t"]) == 0
     assert os.getcwd() == before
 
 
@@ -417,12 +417,12 @@ def test_passthrough_without_varargs_is_accepted(project, capsys):
 
 def test_where_unknown_suggests(project, capsys):
     # 11.1: --where routes its not-found through the same _did_you_mean helper.
-    assert _app.run(["--where", "hii"]) == EX_USAGE
+    assert _app.run(["--where=hii"]) == EX_USAGE
     assert "did you mean 'hi'?" in capsys.readouterr().err
 
 
 def test_where_unknown(project, capsys):
-    assert _app.run(["--where", "nope"]) == EX_USAGE
+    assert _app.run(["--where=nope"]) == EX_USAGE
     assert "unknown task" in capsys.readouterr().err
 
 
@@ -450,7 +450,7 @@ def test_tasks_file_override(tmp_path, monkeypatch, capsys):
     )
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
-    assert _app.run(["-f", str(alt), "only"]) == 0
+    assert _app.run([f"-f={alt}", "only"]) == 0
     assert "only-ran" in capsys.readouterr().out
 
 
@@ -516,7 +516,7 @@ def test_help_alone_lists_tasks(project, capsys):
 def test_help_with_task_shows_usage_without_executing(project, capsys):
     assert _app.run(["--help", "hi"]) == 0
     out = capsys.readouterr().out
-    assert "usage: fm hi [--name VALUE]" in out
+    assert "usage: fm hi [--name=VALUE]" in out
     assert "Say hello." in out
     assert "hello world" not in out  # the task did not run
 
@@ -700,7 +700,7 @@ def test_malformed_explicit_config_is_an_error(project, capsys):
 
 def test_missing_explicit_config_is_an_error(project, capsys):
     # F15: a typo'd --config (prod.tmol) must be loud, not silently ignored.
-    assert _app.run(["--config", "prod.tmol", "hi"]) == EX_USAGE
+    assert _app.run(["--config=prod.tmol", "hi"]) == EX_USAGE
     err = capsys.readouterr().err
     assert "--config" in err and "no such file" in err and "prod.tmol" in err
 
@@ -778,18 +778,18 @@ def test_config_progress_false_turns_it_off_permanently(project, capsys):
 
 
 def test_jobs_flag_validates_and_runs(project, capsys):
-    assert _app.run(["--jobs", "0", "hi"]) == EX_USAGE
+    assert _app.run(["--jobs=0", "hi"]) == EX_USAGE
     assert "positive integer" in capsys.readouterr().err
-    assert _app.run(["-j", "abc", "hi"]) == EX_USAGE
+    assert _app.run(["-j=abc", "hi"]) == EX_USAGE
     assert "positive integer" in capsys.readouterr().err
-    assert _app.run(["-j", "2", "hi"]) == 0
+    assert _app.run(["-j=2", "hi"]) == 0
     assert "hello world" in capsys.readouterr().out
 
 
 def test_jobs_changes_the_timing_key(project):
     # A 3-core CI runner's default width IS 2 — pick one that can't collide.
     other = _progress.default_jobs() + 1
-    assert _app.run(["-j", str(other), "hi"]) == 0
+    assert _app.run([f"-j={other}", "hi"]) == 0
     assert _progress.load_runs(project, _hi_key()) == []  # default-width key
     keyed = _progress.chain_key(
         [Segment(task="hi", path=["hi"])], sequential=False, jobs=other
@@ -889,7 +889,7 @@ def test_json_no_tasks_file(tmp_path, monkeypatch, capsys):
 
 
 def test_json_dry_run_emits_plan(project, capsys):
-    line = ["--json", "-n", "hi", "--name", "x", "tools.echo", "a", "--", "b"]
+    line = ["--json", "-n", "hi", "--name=x", "tools.echo", "a", "--", "b"]
     assert _app.run(line) == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["schema"] == 1
@@ -1158,9 +1158,9 @@ def _capture_exec(monkeypatch):
 def test_handoff_execs_the_projects_footman(uv_project, monkeypatch):
     calls = _capture_exec(monkeypatch)
     with pytest.raises(SystemExit):
-        _app.run(["hi", "--name", "x"])
+        _app.run(["hi", "--name=x"])
     assert calls == [
-        ["/fake/uv", "run", "--project", str(uv_project), "fm", "hi", "--name", "x"]
+        ["/fake/uv", "run", "--project", str(uv_project), "fm", "hi", "--name=x"]
     ]
 
 
@@ -1171,10 +1171,10 @@ def test_handoff_probes_the_dash_c_target_without_moving(
     monkeypatch.chdir(elsewhere)
     calls = _capture_exec(monkeypatch)
     with pytest.raises(SystemExit):
-        _app.run(["-C", str(uv_project), "hi"])
+        _app.run([f"-C={uv_project}", "hi"])
     (call,) = calls
     assert call[2:4] == ["--project", str(uv_project)]
-    assert call[5:] == ["-C", str(uv_project), "hi"]  # original argv, verbatim
+    assert call[5:] == [f"-C={uv_project}", "hi"]  # original argv, verbatim
     assert Path.cwd() == elsewhere  # the child repeats -C; we never moved
 
 
@@ -1260,13 +1260,13 @@ def test_handoff_windows_waits_and_carries_the_code(uv_project, monkeypatch):
 
 
 def test_where_takes_the_dotted_address(project, capsys):
-    assert _app.run(["--where", "tools.echo"]) == 0
+    assert _app.run(["--where=tools.echo"]) == 0
     assert "tasks.py:" in capsys.readouterr().out
 
 
 def test_where_is_strict_about_empty_segments(project, capsys):
     # The shared resolver never silently normalises a malformed address.
-    assert _app.run(["--where", "tools..echo"]) == EX_USAGE
+    assert _app.run(["--where=tools..echo"]) == EX_USAGE
     assert "unknown task 'tools..echo'" in capsys.readouterr().err
 
 

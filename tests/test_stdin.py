@@ -84,7 +84,7 @@ def test_cli_beats_stdin(piped):
             seen["text"] = text
 
     piped("from the pipe")
-    run(tasks, "wc --text explicit")
+    run(tasks, "wc --text=explicit")
     assert seen["text"] == "explicit"
 
 
@@ -192,7 +192,7 @@ def test_bytes_cli_token_encodes(piped):
         def digest(data: Annotated[bytes, stdin] = b""):
             seen["data"] = data
 
-    run(tasks, "digest --data abc")
+    run(tasks, "digest --data=abc")
     assert seen["data"] == b"abc"
 
 

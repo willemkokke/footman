@@ -26,34 +26,23 @@ import subprocess
 import sys
 import time
 
-# Hardcoded mirror of split.GLOBALS arity — the hot path can't import split (it
-# would pull the whole package). `test_completion_globals_mirror_split` rebuilds
-# these FROM split.GLOBALS, so renaming or re-typing a global fails CI.
-_GLOBAL_FLAG = frozenset(
+# Hardcoded mirror of split.GLOBALS — the hot path can't import split (it
+# would pull the whole package). `test_completion_globals_mirror_split`
+# rebuilds this FROM split.GLOBALS, so renaming a global fails CI. The
+# grammar is lexical — every value is `=`-attached, every dash token
+# self-contained — so the walk needs no arity: only the names (to suggest)
+# and the value surfaces below (to complete).
+_GLOBALS = frozenset(
     {
         "--help", "-h", "--version", "-V", "--list", "-l", "--tree", "--sort",
-        "--dry-run", "-n", "--keep-going", "-k", "--fail-fast", "--sequential", "-s",
-        "--yes", "-y", "--no-input",
-        "--quiet", "-q", "--verbose", "-v", "--no-color", "--no-progress",
-        "--json", "--timings", "--plugins",
+        "--where", "--plugins", "--dry-run", "-n", "--keep-going", "-k",
+        "--fail-fast", "--sequential", "-s", "--jobs", "-j", "--yes", "-y",
+        "--no-input", "--quiet", "-q", "--verbose", "-v", "--color",
+        "--no-color", "--no-progress", "--json", "--timings",
+        "--directory", "-C", "--tasks-file", "-f", "--config",
+        "--install-completion", "--setup-completion", "--uninstall-completion",
     }
 )  # fmt: skip
-_GLOBAL_VALUE = frozenset(
-    {
-        "--where",
-        "--directory",
-        "-C",
-        "--tasks-file",
-        "-f",
-        "--config",
-        "--jobs",
-        "-j",
-        "--color",
-    }
-)  # consume the next word as the value
-_GLOBAL_MAYBE = frozenset(
-    {"--install-completion", "--setup-completion", "--uninstall-completion"}
-)  # value optional
 # Value positions that are file paths. footman can't know the filesystem from a
 # cached manifest (and shouldn't try), so the resolver signals these and the
 # shell hooks defer to native file completion.
@@ -73,40 +62,54 @@ _GLOBAL_CHOICES = {
     "--install-completion": _SHELLS,
     "--setup-completion": _SHELLS,
     "--uninstall-completion": _SHELLS,
+    "--color": ("always", "never", "auto"),
 }
 
 
-def _consume_globals(prior: list[str]) -> tuple[list[str], str | None]:
-    """Strip leading global options (mirroring `split._parse_globals`).
+def _rejoin(words: list[str]) -> tuple[list[str], bool]:
+    """Undo bash's `=` word-splitting: `--opt`, `=`, `val` → `--opt=val`.
 
-    Returns the remaining words (the task chain) and, when the partial itself is
-    a value-bearing global's value, that global's name — so `fm -C docs <TAB>`
-    treats `docs` as `-C`'s value instead of descending into a `docs` group.
+    bash breaks the completion line on `=` (COMP_WORDBREAKS), so an attached
+    value arrives as two or three words; zsh/fish/pwsh/nushell pass the token
+    whole. Joining here gives every shell one shape — self-contained tokens,
+    exactly the grammar's own reading — with the *partial* folded into its
+    option (`--opt=va`), so one value-completion branch serves every shell.
+
+    The second return says whether the final word was folded — i.e. the shell
+    split the token, so it is completing the bare value and candidates must
+    not carry the `--opt=` prefix; an unsplit shell replaces the whole token
+    and needs full `--opt=value` candidates.
+    """
+    out: list[str] = []
+    merged_last = False
+    i = 0
+    while i < len(words):
+        word = words[i]
+        if word == "=" and out and out[-1].startswith("-") and "=" not in out[-1]:
+            out[-1] += "="
+            i += 1
+            if i < len(words):
+                out[-1] += words[i]
+                i += 1
+            merged_last = i >= len(words)
+            continue
+        out.append(word)
+        i += 1
+        merged_last = False
+    return out, merged_last
+
+
+def _consume_globals(prior: list[str]) -> list[str]:
+    """Strip the leading global options; the rest is the task chain.
+
+    Purely lexical, like `split._parse_globals`: every dash token is
+    self-contained (values are `=`-attached), so the walk is a scan for the
+    first bare word — no arity table.
     """
     i = 0
-    while i < len(prior):
-        word = prior[i]
-        name = word.split("=", 1)[0]
-        if name in _GLOBAL_FLAG:
-            i += 1
-        elif name in _GLOBAL_VALUE:
-            i += 1
-            if "=" in word:
-                continue
-            if i >= len(prior):
-                return prior[i:], name  # the value is the partial (no choices)
-            i += 1  # consume the value word
-        elif name in _GLOBAL_MAYBE:
-            i += 1
-            if "=" in word:
-                continue
-            if i >= len(prior):
-                return prior[i:], name  # the partial completes its choices
-            if not prior[i].startswith("-"):
-                i += 1  # optional value present
-        else:
-            break  # first non-global word: the task chain starts here
-    return prior[i:], None
+    while i < len(prior) and prior[i].startswith("-") and prior[i] != "--":
+        i += 1
+    return prior[i:]
 
 
 class _Segment:
@@ -316,24 +319,35 @@ def complete(tree: dict, words: list[str]) -> list[str]:
     `+` resets a segment explicitly; after `--` everything belongs to the
     passthrough, so there is nothing to offer.
     """
-    *prior, partial = words or [""]
+    # bash splits attached values on `=`; rejoin so every shell presents the
+    # grammar's own shape — self-contained tokens (`--opt=val` is one word,
+    # and a value being typed folds into its option as the partial).
+    # `bash_split` remembers the fold: that shell completes the bare value,
+    # the others replace the whole token.
+    rejoined, bash_split = _rejoin(words or [""])
+    *prior, partial = rejoined or [""]
 
-    # Leading global options bind before the task walk, exactly as the splitter
-    # consumes them — so `-C docs` reads `docs` as the value, not a group.
-    prior, value_global = _consume_globals(prior)
+    # Leading global options bind before the task walk, exactly as the
+    # splitter consumes them: a lexical scan to the first bare word.
+    at_globals = not prior  # nothing typed yet but globals (or nothing)
+    prior = _consume_globals(prior)
+    at_globals = at_globals or not prior
+
+    # An attached global value in progress (`--color=al<TAB>`, `-C=src/`):
+    # the token is self-contained, so the partial says everything.
+    if at_globals and partial.startswith("-") and "=" in partial:
+        optname, _, valpart = partial.partition("=")
+        if optname in _GLOBAL_FILES:
+            return [_FILES]  # hand the value part to the shell's file completion
+        choices = [c for c in _GLOBAL_CHOICES.get(optname, ()) if c.startswith(valpart)]
+        return choices if bash_split else [f"{optname}={c}" for c in choices]
 
     node, seg = tree, _Segment()
     path: list[str] = []  # the dotted segments of the current head
-    value_opt: dict | None = None  # the option whose value comes next
 
     for word in prior:
         if word == "--":
             return []  # passthrough: the words after this aren't ours
-        if value_opt is not None:
-            if word == "=":  # bash splits `--opt=val` into `--opt`, `=`, `val`;
-                continue  # the `=` is a separator — stay armed for the value
-            value_opt = None
-            continue
         if word == "+":  # explicit segment boundary
             node, seg, path = tree, _Segment(), []
             continue
@@ -350,12 +364,11 @@ def complete(tree: dict, words: list[str]) -> list[str]:
                 else:
                     node = hit
             continue
-        # Inside a task's tail: options and their values first.
+        # Inside a task's tail: every token is self-contained — an option
+        # word (attached value or not) never consumes its neighbour.
         name = word.split("=", 1)[0]
         if name in seg.opts:
             seg.used.add(name)
-            if seg.opts[name]["kind"] == "option" and "=" not in word:
-                value_opt = seg.opts[name]
             continue
         if name.startswith("--no-") and "--" + name[len("--no-") :] in seg.opts:
             seg.used.add("--" + name[len("--no-") :])
@@ -378,27 +391,6 @@ def complete(tree: dict, words: list[str]) -> list[str]:
                 seg = _Segment(hit)
             else:
                 node = hit
-
-    # A leading global expecting a value (`fm --install-completion <TAB>`):
-    # offer its choices, if any (a PATH-valued global has none — the shell's
-    # default file completion covers it).
-    if value_global is not None:
-        if value_global in _GLOBAL_FILES:
-            return [_FILES]  # a path value — hand off to the shell's file completion
-        return [
-            c for c in _GLOBAL_CHOICES.get(value_global, ()) if c.startswith(partial)
-        ]
-
-    # Value position: the previous word was an option expecting a value. A bash
-    # `--opt=<TAB>` can leave the `=` as the partial — strip it.
-    if value_opt is not None:
-        if partial.startswith("="):  # bash `--opt=<TAB>` leaves `=` as the partial
-            partial = partial[1:]
-        if "path" in value_opt.get("types", []):
-            return [_FILES]  # a Path-typed option value — files
-        if value_opt.get("dynamic"):  # recompute fresh, never the baked snapshot
-            return [_DYNAMIC, partial, value_opt["name"], *path]
-        return [c for c in value_opt.get("choices", []) if c.startswith(partial)]
 
     if seg.task is None:
         if node is not tree:
@@ -426,18 +418,25 @@ def complete(tree: dict, words: list[str]) -> list[str]:
         # preceded). A bare `<TAB>` still lists only tasks — globals would be
         # noise there.
         if not prior and partial.startswith("-"):
-            globals_ = _GLOBAL_FLAG | _GLOBAL_VALUE | _GLOBAL_MAYBE
-            out += [g for g in sorted(globals_) if g.startswith(partial)]
+            out += [g for g in sorted(_GLOBALS) if g.startswith(partial)]
         return out
 
-    # An attached `--opt=value` partial (zsh/fish don't split on `=`): offer the
-    # option's choices as full `--opt=choice` tokens.
+    # An attached `--opt=value` partial: the one value position the grammar
+    # has. A Path-typed value hands off to file completion; a dynamic
+    # completer recomputes fresh, its emission prefix chosen by the shell's
+    # word shape; choices likewise come back bare (bash completes the value
+    # word) or as full `--opt=choice` tokens (whole-token shells).
     if partial.startswith("-") and "=" in partial:
         optname, _, valpart = partial.partition("=")
         opt = seg.opts.get(optname)
         if opt is not None and opt["kind"] == "option":
-            choices = opt.get("choices", [])
-            return [f"{optname}={c}" for c in choices if c.startswith(valpart)]
+            if "path" in opt.get("types", []):
+                return [_FILES]
+            if opt.get("dynamic"):  # recompute fresh, never the baked snapshot
+                prefix = "" if bash_split else f"{optname}="
+                return [_DYNAMIC, valpart, prefix, opt["name"], *path]
+            choices = [c for c in opt.get("choices", []) if c.startswith(valpart)]
+            return choices if bash_split else [f"{optname}={c}" for c in choices]
 
     # A path-typed positional (or trailing consumer): once the partial is a
     # value being typed rather than an option, hand it to native file
@@ -449,7 +448,7 @@ def complete(tree: dict, words: list[str]) -> list[str]:
             if "path" in pending.get("types", []):
                 return [_FILES]
             if pending.get("dynamic"):  # recompute fresh, never the baked snapshot
-                return [_DYNAMIC, partial, pending["name"], *path]
+                return [_DYNAMIC, partial, "", pending["name"], *path]
 
     # Option position: this task's flags/options — minus the ones already
     # given, unless the param legitimately repeats — plus what the next bare
@@ -584,23 +583,15 @@ def _cold_build(manifest: str, override: str | None) -> dict | None:
 def _leading_global_value(args: list[str], names: tuple[str, ...]) -> str | None:
     """The value of the first of *names* among the leading globals, or None.
 
-    Walks only the leading globals — stopping at the first task name — skipping
-    other flags and value-options by the same arity mirror the resolver uses.
+    Walks only the leading globals — stopping at the first bare word — the
+    same lexical scan the resolver uses; values are always `=`-attached
+    (rejoined first, so bash's split forms read the same).
     """
-    i = 0
-    while i < len(args):
-        tok = args[i]
-        if tok in names:
-            return args[i + 1] if i + 1 < len(args) else None
+    for tok in _rejoin(list(args))[0]:
+        if not tok.startswith("-") or tok == "--":
+            break  # the first bare word — a task name (or its partial)
         if any(tok.startswith(n + "=") for n in names):
             return tok.split("=", 1)[1]
-        name = tok.split("=", 1)[0]
-        if "=" not in tok and name in _GLOBAL_VALUE:
-            i += 2  # a value-option consumes the next word
-        elif name in _GLOBAL_FLAG or name in _GLOBAL_MAYBE or "=" in tok:
-            i += 1  # a flag, an option?, or --opt=value
-        else:
-            break  # the first non-global — a task name (or its partial)
     return None
 
 
@@ -723,11 +714,13 @@ def complete_cli(args: list[str]) -> int:
     if out and out[0] == _DYNAMIC:
         # A dynamic completer: recompute it fresh in a subprocess rather than
         # serve the manifest's baked snapshot — a build-critical answer must not
-        # be stale. Empty on timeout or failure, never the old values.
-        partial, param, seg_path = out[1], out[2], out[3:]
+        # be stale. Empty on timeout or failure, never the old values. The
+        # prefix (`--opt=` for an attached value, "" for a positional) rides
+        # along so emitted candidates replace the shell's whole word.
+        partial, prefix, param, seg_path = out[1], out[2], out[3], out[4:]
         fresh = _fresh_dynamic(param, seg_path, args)
         if fresh is not None:
-            _emit([c for c in fresh if c.startswith(partial)])
+            _emit([prefix + c for c in fresh if c.startswith(partial)])
         _maybe_refresh(manifest, data)
         return 0
     _emit(out)

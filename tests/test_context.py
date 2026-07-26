@@ -596,7 +596,7 @@ def test_ctx_injected_and_not_a_cli_param():
             seen["ctx"] = ctx
             seen["target"] = target
 
-    _, tree, _ = drive(tasks, "deploy --target staging")
+    _, tree, _ = drive(tasks, "deploy --target=staging")
     assert [p["name"] for p in tree["tasks"]["deploy"]["params"]] == ["target"]
     assert isinstance(seen["ctx"], Context)
     assert seen["target"] == "staging"
@@ -1292,7 +1292,7 @@ def test_ask_cli_value_wins_over_the_prompt(monkeypatch):
         def release(version: Annotated[str, ask()]):
             got["v"] = version
 
-    _, _, results = drive(build, "release --version 9.9.9")
+    _, _, results = drive(build, "release --version=9.9.9")
     assert results[0].ok
     assert got["v"] == "9.9.9"
 

@@ -40,12 +40,12 @@ def test_page_whole_tree(sample_tree):
     page = markdown.render_page(sample_tree)
     assert page.startswith("# fm tasks\n")
     assert "## build" in page and "## docs" in page and "### docs.serve" in page
-    assert "```text\nfm build <target> [--fix] [--jobs INT]\n```" in page
+    assert "```text\nfm build <target> [--fix] [--jobs=INT]\n```" in page
     assert "| Parameter | Type | Default | Description |" in page
     assert (
         "| `<target>` | `web` \\| `api` | *required* | which target to build |" in page
     )
-    assert "| `--jobs INT` | int | `4` | parallel workers |" in page
+    assert "| `--jobs=INT` | int | `4` | parallel workers |" in page
     assert "The long story about building." in page
     assert "**Example:** `fm build web --fix`" in page
     assert "port to bind" in page  # the doc() marker text rides along
@@ -59,7 +59,7 @@ def test_page_scoped_to_group_and_task(sample_tree):
 
     task_page = markdown.render_page(sample_tree, path=("docs", "serve"))
     assert task_page.startswith("# docs.serve\n")
-    assert "fm docs.serve [--port INT]" in task_page
+    assert "fm docs.serve [--port=INT]" in task_page
 
 
 def test_page_heading_level_nests(sample_tree):

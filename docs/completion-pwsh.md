@@ -11,7 +11,7 @@ it cannot drift from what your terminal will do:
 ## Install
 
 ```console
-fm --install-completion pwsh        # `powershell` works too
+fm --install-completion=pwsh        # `powershell` works too
 ```
 
 This writes the hook to `$XDG_DATA_HOME/fm/completion.ps1` and dot-sources it
@@ -25,7 +25,7 @@ either. Running the installer twice changes nothing, and a UTF-16 profile
 For the **current session only** — no profile touched:
 
 ```console
-fm --setup-completion pwsh | Out-String | Invoke-Expression
+fm --setup-completion=pwsh | Out-String | Invoke-Expression
 ```
 
 ## What you get
@@ -71,7 +71,7 @@ rather not see them.
 ## Uninstall
 
 ```console
-fm --uninstall-completion pwsh
+fm --uninstall-completion=pwsh
 ```
 
 Removes the script and the dot-source line from every PowerShell profile the

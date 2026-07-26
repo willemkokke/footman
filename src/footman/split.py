@@ -9,8 +9,10 @@ makes the split deterministic under six rules (see `NOTES`):
 
 1. params with defaults are options, never positionals (the load-bearing rule);
 2. required positionals are consumed by exact arity, eagerly validated;
-3. options bind to their own segment;
-4. list options repeat the flag (`--tag a --tag b`);
+3. options bind to their own segment, and a value is always `=`-attached
+   (`--target=prod`, `-j=4`) — a bare word is a task or a positional, a bare
+   `--x`/`-x` is a flag, so every token reads without arity knowledge;
+4. list options repeat the flag (`--tag=a --tag=b`) or comma-join (`--tag=a,b`);
 5. variadic / `--` passthrough segments are terminal; `+` is the always
    available explicit boundary;
 6. globals precede the first task name.
@@ -117,14 +119,14 @@ GLOBALS: list[tuple[str, str | None, str, str | None, str]] = [
     ("--directory", "-C", "option", "PATH", "run as if launched from PATH"),
     ("--tasks-file", "-f", "option", "PATH", "only this tasks file, no tasks cascade"),
     ("--config", None, "option", "PATH", "only this config file, no config cascade"),
-    # "option?": the value is optional — bare `--install-completion` /
-    # `--setup-completion` detect the invoking shell.
-    ("--install-completion", None, "option?", "[SHELL]", "install shell completion"),
-    ("--setup-completion", None, "option?", "[SHELL]", "print completion for eval"),
+    # The bracketed hint marks the value optional: bare `--install-completion`
+    # / `--setup-completion` detect the invoking shell.
+    ("--install-completion", None, "option", "[SHELL]", "install shell completion"),
+    ("--setup-completion", None, "option", "[SHELL]", "print completion for eval"),
     (
         "--uninstall-completion",
         None,
-        "option?",
+        "option",
         "[SHELL]",
         "remove the completion hook",
     ),
@@ -132,6 +134,12 @@ GLOBALS: list[tuple[str, str | None, str, str | None, str]] = [
 _GLOBAL_KIND = {name: kind for name, _, kind, _, _ in GLOBALS}
 _GLOBAL_KIND.update({alias: kind for _, alias, kind, _, _ in GLOBALS if alias})
 _CANON = {alias: name for name, alias, _, _, _ in GLOBALS if alias}
+_GLOBAL_HINT = {name: hint for name, _, _, hint, _ in GLOBALS if hint}
+# Options whose bare form is itself meaningful (`--install-completion` detects
+# the invoking shell), so a missing `=value` is not an error.
+_VALUE_OPTIONAL = frozenset(
+    name for name, _, _, hint, _ in GLOBALS if hint and hint.startswith("[")
+)
 
 
 @dataclass
@@ -257,7 +265,28 @@ def _validate(where: str, p: dict, value: str) -> None:
     )
 
 
+def _expects_value(
+    where: str | None, given: str, hint: str, follower: str | None
+) -> str:
+    """The `=`-attachment teaching for a value-bearing option given bare.
+
+    When a bare word follows, name the exact fix with the user's own value
+    (`--target prod` → "did you mean --target=prod?") — that word must never
+    surface as "unknown task 'prod'". Otherwise state the shape.
+    """
+    prefix = f"{where}: " if where else ""
+    if follower is not None:
+        return (
+            f"{prefix}{given} takes its value attached — "
+            f"did you mean {given}={follower}?"
+        )
+    return f"{prefix}{given} expects a value, attached: {given}={hint}"
+
+
 def _parse_globals(argv: list[str], i: int) -> tuple[list[str], int]:
+    """Consume the leading globals — purely lexical: every dash token is
+    self-contained (a value is `=`-attached), and the first bare word starts
+    the task chain."""
     globals_: list[str] = []
     while i < len(argv) and argv[i].startswith("-") and argv[i] != "--":
         name = argv[i].split("=", 1)[0]
@@ -266,23 +295,26 @@ def _parse_globals(argv: list[str], i: int) -> tuple[list[str], int]:
                 f"unknown global option {name} "
                 f"(global options go before the first task)"
             )
-        kind = _GLOBAL_KIND[name]
-        if kind == "flag" and "=" in argv[i]:
-            raise ChainError(f"{_CANON.get(name, name)} is a flag and takes no value")
-        globals_.append(_CANON.get(name, name) + argv[i][len(name) :])
+        canon = _CANON.get(name, name)
+        if _GLOBAL_KIND[name] == "flag" and "=" in argv[i]:
+            raise ChainError(f"{canon} is a flag and takes no value")
+        if (
+            _GLOBAL_KIND[name] == "option"
+            and "=" not in argv[i]
+            and canon not in _VALUE_OPTIONAL
+        ):
+            follower = (
+                argv[i + 1]
+                if i + 1 < len(argv)
+                and argv[i + 1] not in ("--", "+")
+                and not argv[i + 1].startswith("-")
+                else None
+            )
+            raise ChainError(
+                _expects_value(None, name, _GLOBAL_HINT.get(canon, "VALUE"), follower)
+            )
+        globals_.append(canon + argv[i][len(name) :])
         i += 1
-        if kind == "option" and "=" not in globals_[-1]:
-            if i >= len(argv):
-                raise ChainError(f"{name} expects a value")
-            globals_.append(argv[i])
-            i += 1
-        elif kind == "option?" and "=" not in globals_[-1]:
-            # Optional value: consume the next word only when one is present
-            # and not option-shaped; normalise to --name=value so downstream
-            # can tell "given with value" from "given bare".
-            if i < len(argv) and not argv[i].startswith("-"):
-                globals_[-1] += f"={argv[i]}"
-                i += 1
     return globals_, i
 
 
@@ -369,6 +401,19 @@ def _resolve_head(
         if pos == 0:
             if (misplaced := _misplaced_global(token)) is not None:
                 raise ChainError(misplaced)
+            if (
+                i > 0
+                and (prev := argv[i - 1]).startswith("-")
+                and "=" not in prev
+                and _GLOBAL_KIND.get(prev) == "option"
+            ):
+                # The word rode behind a bare value-optional global
+                # (`--install-completion zsh` — required-value globals
+                # already refused in _parse_globals): teach the attachment,
+                # never "unknown task 'zsh'".
+                raise ChainError(
+                    _expects_value(None, prev, _GLOBAL_HINT.get(prev, "VALUE"), token)
+                )
             if prev_group is not None:
                 prev_path, prev_node = prev_group
                 if part in prev_node["groups"] or part in prev_node["tasks"]:
@@ -587,21 +632,18 @@ def _consume_option(seg: Segment, opts: dict, argv: list[str], i: int) -> int:
         seg.values[cli] = not negated
         return i + 1
 
-    # value-bearing option
-    if "=" in tok:
-        value = tok.split("=", 1)[1]
-        i += 1
-    else:
-        i += 1
-        if i >= len(argv):
-            raise ChainError(f"{seg.task}: {name} expects a value")
-        if argv[i] == "--":
-            raise ChainError(
-                f"{seg.task}: {name} expects a value, but found '--' — give "
-                f"{name} a value, or use {name}=-- if the literal is intended"
-            )
-        value = argv[i]
-        i += 1
+    # value-bearing option: the value is always `=`-attached
+    if "=" not in tok:
+        follower = (
+            argv[i + 1]
+            if i + 1 < len(argv)
+            and argv[i + 1] not in ("--", "+")
+            and not argv[i + 1].startswith("-")
+            else None
+        )
+        raise ChainError(_expects_value(seg.task, name, "VALUE", follower))
+    value = tok.split("=", 1)[1]
+    i += 1
     if p.get("mapping"):
         for pair in _values(p, value):
             _consume_pair(seg, p, cli, pair)

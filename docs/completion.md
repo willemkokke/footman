@@ -154,8 +154,8 @@ manifest. This covers the path-valued globals (`-f`/`--tasks-file`,
 whether an option, a positional, or a variadic:
 
 ```sh
-fm -f tasks/<TAB>            # your shell's own file completion
-fm build --out dist/<TAB>    # a Path option
+fm -f=tasks/<TAB>            # your shell's own file completion
+fm build --out=dist/<TAB>    # a Path option
 fm deploy dist/<TAB>         # a Path positional (options stay one `-` away)
 ```
 
@@ -170,7 +170,7 @@ dependency), or takes the name explicitly:
 
 ```console
 fm --install-completion         # detected: bash, zsh, fish, pwsh, or nushell
-fm --install-completion zsh     # or name it yourself
+fm --install-completion=zsh     # or name it yourself
 fm --uninstall-completion       # reverses exactly what install did
 ```
 
@@ -179,13 +179,13 @@ form, and how to style the completion menu, colours included:
 
 | shell | descriptions shown as | installed via | session-only form |
 | ----- | --------------------- | ------------- | ----------------- |
-| [bash](completion-bash.md) | — (bash has no description column) | script + rc line | `eval "$(fm --setup-completion bash)"` |
-| [zsh](completion-zsh.md) | aligned column (`_describe`) | script + rc line | `eval "$(fm --setup-completion zsh)"` |
-| [fish](completion-fish.md) | aligned column, native | one auto-loaded file | `fm --setup-completion fish \| source` |
+| [bash](completion-bash.md) | — (bash has no description column) | script + rc line | `eval "$(fm --setup-completion=bash)"` |
+| [zsh](completion-zsh.md) | aligned column (`_describe`) | script + rc line | `eval "$(fm --setup-completion=zsh)"` |
+| [fish](completion-fish.md) | aligned column, native | one auto-loaded file | `fm --setup-completion=fish \| source` |
 | [PowerShell](completion-pwsh.md) | tooltip (menu completion) | script + `$PROFILE`(s) | `… \| Out-String \| Invoke-Expression` |
 | [nushell](completion-nushell.md) | description column, native | script + config line | — (install only) |
 
 Every installer and uninstaller is idempotent — running one twice changes
 nothing. A custom-branded CLI installs completion for *its* name the same
-way (`acme --install-completion zsh`), and the generated hook calls that
+way (`acme --install-completion=zsh`), and the generated hook calls that
 brand's `--complete`.

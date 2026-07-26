@@ -29,7 +29,7 @@ def release(version: Annotated[str, ask()]): ...
 def deploy(env: Annotated[Literal["staging", "prod"], ask()]): ...
 ```
 
-`fm release --version 1.2.3` uses the flag; `fm release` asks `version:` and
+`fm release --version=1.2.3` uses the flag; `fm release` asks `version:` and
 runs the answer through coercion — a `Literal` is a typed choice, a bad value
 re-asks. The precedence is **CLI > `env` > default > prompt**: a default *is*
 the answer, so `ask()` only prompts a parameter that has none. (An `ask()`

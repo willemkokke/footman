@@ -79,7 +79,7 @@ def _demo_group() -> Group:
 
 
 def test_runner_group_invoke():
-    result = Runner().invoke("greet --name tester", tasks=_demo_group())
+    result = Runner().invoke("greet --name=tester", tasks=_demo_group())
     assert result.ok
     assert "hello tester" in result.stdout
     assert [r.task for r in result.results] == ["greet"]
@@ -98,7 +98,7 @@ def test_runner_group_chain_error_teaches():
 
 
 def test_runner_group_dry_run_matches_cli_semantics():
-    result = Runner().invoke("--dry-run greet --name x", tasks=_demo_group())
+    result = Runner().invoke("--dry-run greet --name=x", tasks=_demo_group())
     assert result.ok
     assert "greet" in result.stdout
     assert "hello x" not in result.stdout  # planned, not executed
@@ -151,7 +151,7 @@ def test_empty_tree_reports_no_tasks():
 
 
 def test_runner_group_json_output():
-    result = Runner().invoke("--json greet --name J", tasks=_demo_group())
+    result = Runner().invoke("--json greet --name=J", tasks=_demo_group())
     assert result.ok
     payload = json.loads(result.stdout)
     assert payload["results"][0]["task"] == "greet"
@@ -173,7 +173,7 @@ def test_help_example_uses_choice_values():
 
 
 def test_runner_group_where_locates_source():
-    result = Runner().invoke("--where greet", tasks=_demo_group())
+    result = Runner().invoke("--where=greet", tasks=_demo_group())
     assert result.ok
     assert "test_testing.py:" in result.stdout  # file:line of the task body
 
@@ -193,7 +193,7 @@ def hi(name: str = "world"):
 def test_runner_tasks_path_uses_single_file(tmp_path):
     tasks = tmp_path / "mytasks.py"
     tasks.write_text(TASKS)
-    result = Runner().invoke("hi --name path", tasks=tasks, cwd=tmp_path)
+    result = Runner().invoke("hi --name=path", tasks=tasks, cwd=tmp_path)
     assert result.ok
     assert "hello path" in result.stdout
     assert result.results[0].task == "hi"

@@ -147,7 +147,7 @@ def deploy(
 validator (raise `ValueError` with a message written for the person at
 the prompt); `workers` is bounds-checked; and `target` falls back to
 `$DEPLOY_ENV` before its default — CI sets the variable, humans say
-`--target prod`, and both flow through the same validation.
+`--target=prod`, and both flow through the same validation.
 
 ### Validate one input against another
 
@@ -228,7 +228,7 @@ def image(tag: str, build_args: dict[str, str] | None = None):
 ```
 
 ```console
-$ fm image v3 --build-args PYTHON=3.13 --build-args DEBIAN=trixie
+$ fm image v3 --build-args=PYTHON=3.13 --build-args=DEBIAN=trixie
 ```
 
 ### Variadic in front, required option behind
@@ -247,7 +247,7 @@ def bundle(*entries: str, out: Path):
 ```
 
 ```console
-$ fm bundle web api worker --out dist/app.tar
+$ fm bundle web api worker --out=dist/app.tar
 $ fm bundle web
 fm: bundle: missing required option --out
 ```
@@ -462,7 +462,7 @@ repo/
   tools/legacy/footman.toml   # `uv = false`: run in the parent's env
 ```
 
-From `svc/api`, `fm check` is the override; `fm -C ../.. check` is the
+From `svc/api`, `fm check` is the override; `fm -C=../.. check` is the
 root's. A deep folder can adjust behaviour with a two-line
 `footman.toml` — the [configuration ladder](configuration.md) reaches
 everywhere the cascade does.
@@ -504,7 +504,7 @@ reaches the root's, and the leaf's call reaches the mid's. Two commands
 answer "what am I overriding, and what does it take?":
 
 ```console
-$ fm --where check
+$ fm --where=check
 /repo/svc/api/tasks.py:6
 /repo/svc/tasks.py:4     (shadowed)
 /repo/tasks.py:9         (shadowed)

@@ -38,7 +38,7 @@ def test_scalar_coercion():
         ):
             seen.update(n=n, ratio=ratio, out=out, fix=fix)
 
-    _, results = _run(tasks, "build --n 5 --ratio 2.5 --out /tmp/x --fix")
+    _, results = _run(tasks, "build --n=5 --ratio=2.5 --out=/tmp/x --fix")
     assert results[0].ok
     assert seen == {"n": 5, "ratio": 2.5, "out": Path("/tmp/x"), "fix": True}
 
@@ -51,7 +51,7 @@ def test_literal_and_list_coercion():
         def go(mode: Literal["a", "b"] = "a", nums: list[int] | None = None):
             seen.update(mode=mode, nums=nums)
 
-    _run(tasks, "go --mode b --nums 1 --nums 2")
+    _run(tasks, "go --mode=b --nums=1 --nums=2")
     assert seen == {"mode": "b", "nums": [1, 2]}
 
 
@@ -63,7 +63,7 @@ def test_enum_coercion():
         def paint(colour: Colour = Colour.RED):
             seen["colour"] = colour
 
-    _run(tasks, "paint --colour blue")
+    _run(tasks, "paint --colour=blue")
     assert seen == {"colour": Colour.BLUE}
 
 
@@ -87,7 +87,7 @@ def test_keyword_only_required_option_binds_by_name():
         def shot(*argv: str, out: Path, width: int = 72):
             seen.update(argv=argv, out=out, width=width)
 
-    _run(tasks, "shot --out x.svg --width 80 -- --list --tree")
+    _run(tasks, "shot --out=x.svg --width=80 -- --list --tree")
     assert seen == {"argv": ("--list", "--tree"), "out": Path("x.svg"), "width": 80}
 
 
@@ -212,7 +212,7 @@ def test_positional_only_mixed_with_regular():
         def f(a: str, /, b: int = 2):
             seen["ab"] = (a, b)
 
-    _, results = _run(tasks, "f hello --b 5")
+    _, results = _run(tasks, "f hello --b=5")
     assert results[0].ok
     assert seen["ab"] == ("hello", 5)
 
@@ -225,7 +225,7 @@ def test_positional_only_default_hole_is_filled():
         def f(a: str = "x", b: str = "y", /):
             seen["ab"] = (a, b)
 
-    _, results = _run(tasks, "f --b z")
+    _, results = _run(tasks, "f --b=z")
     assert results[0].ok
     assert seen["ab"] == ("x", "z")  # skipped `a` filled from its default
 
@@ -241,9 +241,9 @@ def test_union_literal_and_int_accepts_either():
         def go(x: Literal["fast", "slow"] | int = 1):
             seen["x"] = x
 
-    _run(tasks, "go --x fast")
+    _run(tasks, "go --x=fast")
     assert seen["x"] == "fast"
-    _run(tasks, "go --x 7")
+    _run(tasks, "go --x=7")
     assert seen["x"] == 7 and type(seen["x"]) is int
 
 
@@ -253,7 +253,7 @@ def test_union_literal_and_int_rejects_neither():
         def go(x: Literal["fast", "slow"] | int = 1): ...
 
     with pytest.raises(ChainError, match=r"one of fast\|slow, or an integer"):
-        _run(tasks, "go --x nope")
+        _run(tasks, "go --x=nope")
 
 
 def test_union_literal_and_int_manifest_carries_both():
@@ -276,7 +276,7 @@ def test_union_literal_value_coerces_to_int():
         def f(x: Literal[5] | str = "a"):
             seen["x"] = x
 
-    _run(tasks, "f --x 5")
+    _run(tasks, "f --x=5")
     assert seen["x"] == 5 and type(seen["x"]) is int
 
 
@@ -288,7 +288,7 @@ def test_union_enum_member_binds():
         def paint(c: Colour | int = 0):
             seen["c"] = c
 
-    _run(tasks, "paint --c red")
+    _run(tasks, "paint --c=red")
     assert seen["c"] is Colour.RED
 
 
@@ -301,5 +301,5 @@ def test_union_custom_type_binds_and_is_not_rejected():
         def rec(id: uuid.UUID | int = 0):
             seen["id"] = id
 
-    _run(tasks, f"rec --id {identifier}")
+    _run(tasks, f"rec --id={identifier}")
     assert seen["id"] == uuid.UUID(identifier)

@@ -474,7 +474,7 @@ def test_inherited_without_a_shadow_is_taught(tmp_path, monkeypatch, capsys):
 
 def test_where_lists_the_shadow_chain(tmp_path, monkeypatch, capsys):
     _inherit_repo(tmp_path, monkeypatch, LEAF)
-    assert _app.run(["--where", "check"]) == 0
+    assert _app.run(["--where=check"]) == 0
     lines = capsys.readouterr().out.strip().splitlines()
     assert len(lines) == 3  # leaf, mid, root
     # os.sep, not "/": --where prints native paths so editors can open them.

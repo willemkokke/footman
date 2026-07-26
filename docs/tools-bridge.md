@@ -250,7 +250,7 @@ rewrite the stub backwards). Named, because a check that quietly covered
 nine of thirteen would be worse than no check at all:
 
 ```console
-$ fm tools.audit --prefix .tools-latest
+$ fm tools.audit --prefix=.tools-latest
 left alone: git (older than the snapshot (2.51.0 < 2.55.0))
 3 tool(s) have released a newer version than the stub snapshot: uv, prek, djlint
 nothing is broken — the bridge speaks flags the stub hasn't heard of.

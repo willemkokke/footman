@@ -17,7 +17,7 @@ press, that's readline's `show-all-if-ambiguous` in your `~/.inputrc`.
 ## Install
 
 ```console
-fm --install-completion bash
+fm --install-completion=bash
 ```
 
 This writes the hook to `$XDG_DATA_HOME/fm/completion.bash` (default
@@ -31,7 +31,7 @@ is fine.
 For the **current session only** — no rc file touched:
 
 ```console
-eval "$(fm --setup-completion bash)"
+eval "$(fm --setup-completion=bash)"
 ```
 
 ## Windows (git-bash)
@@ -48,7 +48,7 @@ typing: the launcher exports `MSYSTEM`, and that's the tell. A bare
 `bash.exe` spawned by some other Windows program doesn't have it and is
 indistinguishable from any other process, so footman falls back to the
 PowerShell answer there — name the shell explicitly
-(`fm --install-completion bash`) if you're in that unusual spot.
+(`fm --install-completion=bash`) if you're in that unusual spot.
 
 ## What you get
 
@@ -93,7 +93,7 @@ not footman.
 ## Uninstall
 
 ```console
-fm --uninstall-completion bash
+fm --uninstall-completion=bash
 ```
 
 Removes the script and the `source` line from every rc file the installer

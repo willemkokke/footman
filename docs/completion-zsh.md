@@ -10,7 +10,7 @@ build, so it cannot drift from what your terminal will do:
 ## Install
 
 ```console
-fm --install-completion zsh
+fm --install-completion=zsh
 ```
 
 This writes the hook to `$XDG_DATA_HOME/fm/completion.zsh` (default
@@ -23,7 +23,7 @@ so there's nothing to arrange first.
 For the **current session only** — no rc file touched:
 
 ```console
-eval "$(fm --setup-completion zsh)"
+eval "$(fm --setup-completion=zsh)"
 ```
 
 ## What you get
@@ -78,7 +78,7 @@ theme (or framework like oh-my-zsh) that styles completion styles `fm` too.
 ## Uninstall
 
 ```console
-fm --uninstall-completion zsh
+fm --uninstall-completion=zsh
 ```
 
 Removes the script and the `source` line from your `.zshrc`. (Everything the

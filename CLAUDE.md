@@ -138,8 +138,8 @@ PR, and only the merged commit is tagged. Don't tag before the bump is on
 
    ```sh
    uv run fm tools.provision                        # latest into .tools-latest (network)
-   uv run fm tools.audit --prefix .tools-latest     # what moved → the CHANGELOG line
-   uv run fm tools.sync  --prefix .tools-latest     # retake them
+   uv run fm tools.audit --prefix=.tools-latest     # what moved → the CHANGELOG line
+   uv run fm tools.sync  --prefix=.tools-latest     # retake them
    ```
 
    `--prefix` is not optional: without it both tasks read *this machine*, so

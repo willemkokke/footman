@@ -11,7 +11,7 @@ cannot drift from what your terminal will do:
 ## Install
 
 ```console
-fm --install-completion nushell     # `nu` works too
+fm --install-completion=nushell     # `nu` works too
 ```
 
 This writes the hook to `$XDG_DATA_HOME/fm/completion.nu` and appends one
@@ -74,7 +74,7 @@ most room; `columnar` packs more candidates per screen.
 ## Uninstall
 
 ```console
-fm --uninstall-completion nushell
+fm --uninstall-completion=nushell
 ```
 
 Removes the script and the `source` line from your nushell config. Your

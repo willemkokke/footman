@@ -38,6 +38,13 @@ Task = Callable[..., Any]
 Finalizer = Callable[["Tasks"], object]
 """A `@finalize` hook: edits the merged command tree in place at discovery."""
 
+# The hook kinds a provider module can contribute alongside (or instead of)
+# tasks. Each kind is one bucket in `Group.contributions`, and the whole
+# carriage — `capture()`/`reset()` here, `_fork`/`_pull` in compose,
+# `load_tree`'s collection in discover — walks the dict generically, so a
+# future hook kind is one entry here plus its own run semantics.
+CONTRIBUTION_KINDS: tuple[str, ...] = ("finalize",)
+
 # A task stays a plain function; its metadata rides as `_footman_*` attributes.
 # These name every key in one place, so the strings appear once and the read
 # accessors below are the one way the rest of the framework touches them.
@@ -357,7 +364,11 @@ class Group:
         self.hidden = hidden
         self.tasks: dict[str, Task] = {}
         self.groups: dict[str, Group] = {}
-        self.finalizers: list[Finalizer] = []  # @finalize hooks (root registry only)
+        # Lifecycle contributions, one bucket per hook kind (root registry
+        # only). `@finalize` hooks are the only kind today.
+        self.contributions: dict[str, list[Callable[..., object]]] = {
+            kind: [] for kind in CONTRIBUTION_KINDS
+        }
         # Provenance: the plugin identity that pulled this group in, or None
         # for a locally-defined one. Collision messages cite it, `--plugins`
         # reports it, and "local silently wins" is decided by it.
@@ -620,7 +631,7 @@ class Group:
                     if t.name.startswith("deploy"):
                         t.add_pre(audit)
         """
-        self.finalizers.append(fn)
+        self.contributions["finalize"].append(fn)
         return fn
 
     @overload
@@ -771,7 +782,8 @@ def reset() -> None:
     """Clear the global `root` registry (used by the test-suite)."""
     root.tasks.clear()
     root.groups.clear()
-    root.finalizers.clear()
+    for bucket in root.contributions.values():
+        bucket.clear()
 
 
 def _importable(module: str) -> bool:
@@ -1181,11 +1193,11 @@ def capture() -> Iterator[Group]:
     """
     captured = Group("root")
     saved_tasks, saved_groups = root.tasks, root.groups
-    saved_finalizers = root.finalizers
+    saved_contributions = root.contributions
     root.tasks, root.groups = captured.tasks, captured.groups
-    root.finalizers = captured.finalizers
+    root.contributions = captured.contributions
     try:
         yield captured
     finally:
         root.tasks, root.groups = saved_tasks, saved_groups
-        root.finalizers = saved_finalizers
+        root.contributions = saved_contributions

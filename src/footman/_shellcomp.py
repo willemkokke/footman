@@ -92,8 +92,9 @@ _{fn}_complete() {{
     raw="$({prog} --complete -- "${{(@)words[2,CURRENT]}}" 2>/dev/null)"
     ret=$?
     # Exit 100 = a path value: defer to zsh's own file completion, which
-    # honours the user's file colours and list settings.
-    (( ret == 100 )) && {{ _files; return; }}
+    # honours the user's file colours and list settings. compset strips an
+    # attached `--opt=` prefix first so the value part completes in place.
+    (( ret == 100 )) && {{ compset -P '*='; _files; return; }}
     for line in ${{(f)raw}}; do
         # `value:description` feeds _describe, which right-aligns the
         # descriptions into a column and honours the user's completion colours
@@ -115,9 +116,19 @@ _FISH = """\
 function __{fn}_complete
     set -l words (commandline -opc) (commandline -ct)
     set -l out ({prog} --complete -- $words[2..-1] 2>/dev/null)
-    # Exit 100 = a path value: hand off to fish's own path completion.
+    # Exit 100 = a path value: hand off to fish's own path completion. An
+    # attached `--opt=path` token completes by stripping the prefix for the
+    # path walk and re-attaching it on each candidate (fish replaces the
+    # whole token).
     if test $status -eq 100
-        __fish_complete_path (commandline -ct)
+        set -l tok (commandline -ct)
+        set -l pre (string match -r -- '^-[^=]*=' $tok)
+        if test -n "$pre"
+            __fish_complete_path (string replace -- $pre '' $tok) | \\
+                string replace -r -- '^' $pre
+        else
+            __fish_complete_path $tok
+        end
     else if set -q out[1]
         printf '%s\n' $out
     end
