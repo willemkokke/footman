@@ -4,11 +4,13 @@
 # Every verb ends in `**flags: Any`: the stub suggests what this tool
 # accepts, and can never forbid what the bridge would happily pass.
 from collections.abc import Sequence
-from typing import Any, Literal
+from typing import Any, Literal, Self
 
-from footman.tools import Result, Tool, _Flag, _Value
+from footman.tools import Result as _Result
+from footman.tools import Tool as _Tool
+from footman.tools import _Flag, _Value
 
-class Mkdocs(Tool):
+class Mkdocs(_Tool):
     def build(
         self,
         *,
@@ -23,7 +25,7 @@ class Mkdocs(Tool):
         use_directory_urls: _Flag = ...,
         verbose: _Flag = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """Build the MkDocs documentation.
 
         Args:
@@ -62,7 +64,7 @@ class Mkdocs(Tool):
         use_directory_urls: _Flag = ...,
         verbose: _Flag = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """Deploy your documentation to GitHub Pages.
 
         Args:
@@ -100,7 +102,7 @@ class Mkdocs(Tool):
         quiet: _Flag = ...,
         verbose: _Flag = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """Create a new MkDocs project.
 
         Args:
@@ -129,7 +131,7 @@ class Mkdocs(Tool):
         watch: _Value = ...,
         watch_theme: _Flag = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """Run the builtin development server.
 
         Args:
@@ -160,7 +162,7 @@ class Mkdocs(Tool):
     def flags(
         self,
         **flags: Any,
-    ) -> Mkdocs:
+    ) -> Self:
         """Bind tool-level global options before the subcommand.
 
         `tools.docker.flags(host=...)` puts a tool's own

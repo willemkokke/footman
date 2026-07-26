@@ -5,9 +5,11 @@
 # accepts, and can never forbid what the bridge would happily pass.
 from typing import Any
 
-from footman.tools import Result, Tool, _Flag, _Value
+from footman.tools import Result as _Result
+from footman.tools import Tool as _Tool
+from footman.tools import _Flag, _Value
 
-class Python(Tool):
+class Python(_Tool):
     def __call__(  # type: ignore[override]
         self,
         *args: str,
@@ -37,7 +39,7 @@ class Python(Tool):
         v: _Flag = ...,
         x: _Flag = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """Run this verb.
 
         Args:

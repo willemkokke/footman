@@ -5,9 +5,11 @@
 # accepts, and can never forbid what the bridge would happily pass.
 from typing import Any
 
-from footman.tools import Result, Tool, _Flag, _Value
+from footman.tools import Result as _Result
+from footman.tools import Tool as _Tool
+from footman.tools import _Flag, _Value
 
-class Djlint(Tool):
+class Djlint(_Tool):
     def __call__(  # type: ignore[override]
         self,
         src: str,
@@ -60,7 +62,7 @@ class Djlint(Tool):
         use_gitignore: _Flag = ...,
         warn: _Flag = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """djLint · HTML template linter and formatter.
 
         Args:

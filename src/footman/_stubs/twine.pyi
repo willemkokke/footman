@@ -3,17 +3,19 @@
 # Read from twine 6.2.0 on macOS. In-process: no.
 # Every verb ends in `**flags: Any`: the stub suggests what this tool
 # accepts, and can never forbid what the bridge would happily pass.
-from typing import Any
+from typing import Any, Self
 
-from footman.tools import Result, Tool, _Flag, _Value
+from footman.tools import Result as _Result
+from footman.tools import Tool as _Tool
+from footman.tools import _Flag, _Value
 
-class Twine(Tool):
+class Twine(_Tool):
     def __call__(  # type: ignore[override]
         self,
         *args: str,
         no_color: _Flag = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """Run this verb.
 
         Args:
@@ -27,7 +29,7 @@ class Twine(Tool):
         *args: str,
         strict: _Flag = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """Run this verb.
 
         Args:
@@ -56,7 +58,7 @@ class Twine(Tool):
         username: _Value = ...,
         verbose: _Flag = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """[--config-file CONFIG_FILE] [--skip-existing] [--cert path] [--client-cert
         path] [--verbose] [--disable-progress-bar]
 
@@ -91,7 +93,7 @@ class Twine(Tool):
         *,
         no_color: _Flag = ...,
         **flags: Any,
-    ) -> Twine:
+    ) -> Self:
         """Bind tool-level global options before the subcommand.
 
         `tools.docker.flags(host=...)` puts a tool's own

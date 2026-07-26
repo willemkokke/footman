@@ -3,16 +3,18 @@
 # Read from cspell 10.0.1 on macOS. In-process: no.
 # Every verb ends in `**flags: Any`: the stub suggests what this tool
 # accepts, and can never forbid what the bridge would happily pass.
-from typing import Any
+from typing import Any, Self
 
-from footman.tools import Result, Tool, _Flag, _Value
+from footman.tools import Result as _Result
+from footman.tools import Tool as _Tool
+from footman.tools import _Flag, _Value
 
-class Cspell(Tool):
+class Cspell(_Tool):
     def __call__(  # type: ignore[override]
         self,
         *args: str,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """Spelling Checker for Code"""
         ...
     def check(
@@ -24,7 +26,7 @@ class Cspell(Tool):
         no_exit_code: _Flag = ...,
         validate_directives: _Flag = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """Spell check file(s) and display the result. The full file is displayed in
         color.
 
@@ -82,7 +84,7 @@ class Cspell(Tool):
         verbose: _Flag = ...,
         words_only: _Flag = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """Run this verb.
 
         Args:
@@ -161,7 +163,7 @@ class Cspell(Tool):
         stdin: _Flag = ...,
         verbose: _Flag = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """Spelling Suggestions for words.
 
         Args:
@@ -199,7 +201,7 @@ class Cspell(Tool):
         only_found: _Flag = ...,
         stdin: _Flag = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """Trace words -- Search for words in the configuration and dictionaries.
 
         Args:
@@ -226,7 +228,7 @@ class Cspell(Tool):
     def flags(
         self,
         **flags: Any,
-    ) -> Cspell:
+    ) -> Self:
         """Bind tool-level global options before the subcommand.
 
         `tools.docker.flags(host=...)` puts a tool's own

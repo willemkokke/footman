@@ -6,9 +6,11 @@
 from collections.abc import Sequence
 from typing import Any, Literal
 
-from footman.tools import Result, Tool, _Flag, _Value
+from footman.tools import Result as _Result
+from footman.tools import Tool as _Tool
+from footman.tools import _Flag, _Value
 
-class RuffFormat(Tool):
+class RuffFormat(_Tool):
     def __call__(  # type: ignore[override]
         self,
         *args: str,
@@ -83,7 +85,7 @@ class RuffFormat(Tool):
         | None = ...,
         verbose: _Flag = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """Run the Ruff formatter on the given files or directories
 
         Args:

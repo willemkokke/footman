@@ -123,25 +123,38 @@ def _class_name(key: str) -> str:
 
 
 def _formatted(text: str) -> str:
-    """Run the generated text through the formatter that guards the repo.
+    """Run the generated text through the linter and formatter that guard the
+    repo.
 
-    Generated code lands in `src/`, where `ruff format --check` runs on
-    every commit — so it has to be formatted the same way by construction,
-    not by a follow-up nobody remembers.
+    Generated code lands in `src/`, where `ruff check` and `ruff format
+    --check` run on every commit — so it has to satisfy both by construction,
+    not by a follow-up nobody remembers. Import sorting is the half a
+    formatter cannot do: the generator writes one `from footman.tools import
+    …` line and ruff's isort has its own opinion about aliased members.
     """
     import subprocess
 
-    try:
-        done = subprocess.run(
-            ["ruff", "format", "--stdin-filename", "stub.pyi", "-"],
-            input=text,
-            capture_output=True,
-            text=True,
-            timeout=60,
-        )
-    except (OSError, subprocess.SubprocessError):
-        return text
-    return done.stdout or text
+    for argv in (
+        [
+            "ruff",
+            "check",
+            "--fix",
+            "--select",
+            "I",
+            "--stdin-filename",
+            "stub.pyi",
+            "-",
+        ],
+        ["ruff", "format", "--stdin-filename", "stub.pyi", "-"],
+    ):
+        try:
+            done = subprocess.run(
+                argv, input=text, capture_output=True, text=True, timeout=60
+            )
+        except (OSError, subprocess.SubprocessError):
+            return text
+        text = done.stdout or text
+    return text
 
 
 @tasks.task(name="list")
@@ -618,58 +631,59 @@ def _header(path: Path) -> tuple[str, str]:
     return f"{match['version']} ({match['platform']})", match["mode"] or "unknown"
 
 
-def _stub_classes(path: Path) -> tuple[dict[str, list[str]], dict[str, dict[str, str]]]:
-    """A stub's classes: `{class: [verb]}` and `{class: {attr: class}}`.
+def _verb_tree(path: Path) -> dict[str, object]:
+    """A stub's verbs, nested the way its classes are.
 
-    A tool with subcommand groups spreads over several classes — `Docker`
-    holds `compose: DockerCompose`, `Uv` holds `pip` and `tool` — so reading
-    one class answers for only part of the tool.
+    A subcommand group is a nested class holding an attribute of that type
+    (`class Compose` + `compose: Compose`), so the attribute name is the verb
+    and the class is what hangs under it.
     """
     import ast
 
-    verbs: dict[str, list[str]] = {}
-    nested: dict[str, dict[str, str]] = {}
-    for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
-        if not isinstance(node, ast.ClassDef):
-            continue
-        verbs[node.name] = [
-            item.name
-            for item in node.body
-            # `flags` is footman's own typed-globals accessor, written into
-            # every subcommand class by the generator — not one of the tool's
-            # verbs, and listing it once per class buries the real ones.
-            if isinstance(item, ast.FunctionDef)
-            and not item.name.startswith("_")
-            and item.name != "flags"
-        ]
-        nested[node.name] = {
-            item.target.id: item.annotation.id
-            for item in node.body
-            if isinstance(item, ast.AnnAssign)
-            and isinstance(item.target, ast.Name)
-            and isinstance(item.annotation, ast.Name)
+    def walk(node: ast.ClassDef) -> dict[str, object]:
+        classes = {
+            item.name: item for item in node.body if isinstance(item, ast.ClassDef)
         }
-    return verbs, nested
+        out: dict[str, object] = {}
+        for item in node.body:
+            if isinstance(item, ast.FunctionDef) and not item.name.startswith("_"):
+                # `flags` is footman's own typed-globals accessor, written into
+                # every subcommand class by the generator — not a verb of the
+                # tool, and listing it once per group buries the real ones.
+                if item.name != "flags":
+                    out[item.name] = None
+            elif (
+                isinstance(item, ast.AnnAssign)
+                and isinstance(item.target, ast.Name)
+                and isinstance(item.annotation, ast.Name)
+                and item.annotation.id in classes
+            ):
+                out[item.target.id] = walk(classes[item.annotation.id])
+        return out
+
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    roots = [n for n in tree.body if isinstance(n, ast.ClassDef)]
+    return walk(roots[0]) if roots else {}
 
 
-def _verbs_of(path: Path, root: str) -> list[str]:
+def _verbs_of(path: Path) -> list[str]:
     """The verbs a stub declares, dotted, for the index table.
 
     Dotted because that is how they are called: `compose.up`, `pip.install`,
     `tool.install`. Flattened to bare names they read as `up` and collide —
     uv's two `install` verbs are not one verb.
     """
-    verbs, nested = _stub_classes(path)
     found: list[str] = []
 
-    def walk(cls: str, prefix: str) -> None:
-        found.extend(f"{prefix}{name}" for name in verbs.get(cls, ()))
-        for attr, child in nested.get(cls, {}).items():
-            if child in verbs:
-                walk(child, f"{prefix}{attr}.")
+    def walk(node: dict[str, object], prefix: str) -> None:
+        for name, child in node.items():
+            if isinstance(child, dict):
+                walk(child, f"{prefix}{name}.")
+            else:
+                found.append(f"{prefix}{name}")
 
-    walk(root, "")
-    return sorted(set(found))
+    walk(_verb_tree(path), "")
+    return sorted(found)
 
 
 @tasks.task
@@ -733,7 +747,7 @@ def nav_keys(config: Path) -> list[str]:
 
 def _row(driver: _drivers.Driver, path: Path) -> str:
     """One line of the index table: what it is, and what it was read from."""
-    verbs = _verbs_of(path, _class_name(driver.key))
+    verbs = _verbs_of(path)
     listed = ", ".join(f"`{v}`" for v in verbs[:5]) or "the tool itself"
     if len(verbs) > 5:
         listed += f", … ({len(verbs)} in all)"
@@ -747,30 +761,15 @@ def _row(driver: _drivers.Driver, path: Path) -> str:
 def _page(driver: _drivers.Driver) -> str:
     """One tool's reference page — mkdocstrings renders it from the stub.
 
-    One directive per class, not one per tool: a subcommand group is its own
-    class in the stub (`DockerCompose`, `UvPip`), and documenting only the
-    root leaves everything under it — `docker compose up` and its flags —
-    described nowhere at all.
+    One directive is enough: a subcommand group is a *nested* class, which is
+    a member, and the renderer walks members. `docker compose up` and its
+    flags come along without the page having to name `Docker.Compose`.
     """
     home = f"[{driver.name} documentation]({driver.url})\n\n" if driver.url else ""
-    root = _class_name(driver.key)
-    _, nested = _stub_classes(_stub_path(driver.key))
-    blocks = [f"::: footman._stubs.{driver.key}.{root}"]
-    for cls in _reachable(root, nested):
-        blocks.append(f"::: footman._stubs.{driver.key}.{cls}")
-    return f"# {driver.key}\n\n{home}" + "\n\n".join(blocks) + "\n"
-
-
-def _reachable(root: str, nested: dict[str, dict[str, str]]) -> list[str]:
-    """Every subcommand class below *root*, breadth-first, named once."""
-    out: list[str] = []
-    queue = [root]
-    while queue:
-        for child in sorted(nested.get(queue.pop(0), {}).values()):
-            if child in nested and child not in out and child != root:
-                out.append(child)
-                queue.append(child)
-    return out
+    return (
+        f"# {driver.key}\n\n{home}"
+        f"::: footman._stubs.{driver.key}.{_class_name(driver.key)}\n"
+    )
 
 
 __all__ = ["tasks"]

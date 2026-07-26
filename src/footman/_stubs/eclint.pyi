@@ -5,9 +5,11 @@
 # accepts, and can never forbid what the bridge would happily pass.
 from typing import Any
 
-from footman.tools import Result, Tool, _Flag, _Value
+from footman.tools import Result as _Result
+from footman.tools import Tool as _Tool
+from footman.tools import _Flag, _Value
 
-class Eclint(Tool):
+class Eclint(_Tool):
     def __call__(  # type: ignore[override]
         self,
         *args: str,
@@ -23,7 +25,7 @@ class Eclint(Tool):
         v: _Value = ...,
         vmodule: _Value = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """Run this verb.
 
         Args:
