@@ -51,6 +51,7 @@ if TYPE_CHECKING:
     from footman.params import NoSplit as NoSplit
     from footman.params import Secret as Secret
     from footman.params import Stdin as Stdin
+    from footman.params import Stdout as Stdout
     from footman.params import ask as ask
     from footman.params import between as between
     from footman.params import check as check
@@ -62,6 +63,7 @@ if TYPE_CHECKING:
     from footman.params import isfile as isfile
     from footman.params import nosplit as nosplit
     from footman.params import stdin as stdin
+    from footman.params import stdout as stdout
     from footman.params import suggest as suggest
     from footman.registry import Group as Group
     from footman.registry import Tasks as Tasks
@@ -97,6 +99,7 @@ __all__ = [
     "Runner",
     "Secret",
     "Stdin",
+    "Stdout",
     "TaskView",
     "Tasks",
     "__version__",
@@ -136,6 +139,7 @@ __all__ = [
     "run",
     "select",
     "stdin",
+    "stdout",
     "suggest",
     "task",
     "tools",
@@ -220,6 +224,9 @@ def __getattr__(name: str) -> object:
         "Secret",
         "stdin",
         "Stdin",
+        "stdout",
+        "Stdout",
+        "Stdout",
         "Exists",
         "IsFile",
         "IsDir",

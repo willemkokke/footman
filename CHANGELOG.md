@@ -26,6 +26,24 @@ versions may include breaking changes.
   read. `--help` says what a parameter reads; `Runner.invoke` grew a
   `stdin=` argument so tests pipe without touching the real stream.
 
+- **`Stdout[T]` — the return annotation that owns stdout.** A task declares
+  that its return value is the document on stdout, in the signature:
+  `def status() -> Stdout[dict]` makes `fm status | jq .` work with no flag
+  at any call site — a filter the way `sort` and `jq` are filters. The
+  return type decides the bytes, mirroring `stdin`: `Stdout[str]` verbatim
+  plus a trailing newline, `Stdout[bytes]` raw, anything structured JSON —
+  pretty-printed at a terminal, one compact line into a pipe, dataclasses
+  and `Secret` redaction handled by the same encoder `--json` uses. The
+  rules: `--json` wins (the document rides in `results[].returned`); only
+  the addressed task emits (a declaring `pre=`/`post=` dependency or
+  fan-out member is suppressed, not refused); two declaring tasks in one
+  chain is a plan-time refusal; `None` means empty stdout, exit 0;
+  `Stdout[int]` makes the number the document (a bare `-> int` stays the
+  exit-code channel); a failed task emits nothing; everything that is not
+  the document replays on stderr, so `fm status > out.json` captures
+  exactly the document. `Stdout[T]` + `interactive=True` is a taught
+  declaration-time error, and a body call is unaffected.
+
 - **The document binder: JSON on stdin into typed shapes.** A parameter
   annotated with a dataclass, `dict`, or `list` and marked `stdin` binds
   the whole JSON document: nested dataclasses recurse (no dotted field

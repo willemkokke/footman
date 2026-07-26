@@ -285,6 +285,55 @@ The bare-marker form only — the call forms (`stdin("field")`,
 `stdin(lines=True)`) are spelled inside `Annotated`, like `env("VAR")`."""
 
 
+class _StdoutMarker:
+    """Marker for `stdout`."""
+
+    __slots__ = ()
+
+    def __repr__(self) -> str:
+        return "stdout"
+
+
+stdout = _StdoutMarker()
+"""Declare that a task's return value is the document on stdout, via the
+*return* annotation:
+
+```python
+@task
+def status() -> Stdout[dict]: ...
+# fm status | jq .branch
+```
+
+The task is then a Unix filter by declaration — no flag at any call site.
+The return type decides the bytes, mirroring `stdin`: `Stdout[str]` emits
+the string verbatim (plus a trailing newline), `Stdout[bytes]` writes raw
+bytes, anything structured is JSON — pretty-printed on a terminal, one
+compact line into a pipe, dataclasses and `Secret` redaction handled by
+the same encoder `--json` uses.
+
+The rules that keep it honest: an explicit `--json` wins (the document
+rides inside `results[].returned`); only the addressed task emits (a
+declaring task reached as a `pre=`/`post=` dependency or a fan-out member
+is suppressed, not refused); two declaring tasks in one chain is a
+plan-time refusal; `None` means empty stdout, exit 0; a failed task emits
+nothing; everything that is not the document — prints, `run()` output —
+replays on stderr. A bare `-> int` stays the exit-code channel; declaring
+`Stdout[int]` makes the int the document instead. A body call is
+unaffected: `status()` from another task just returns the value."""
+
+
+Stdout = Annotated[_T, stdout]
+"""Shorthand for `Annotated[T, stdout]` on a *return* annotation:
+
+```python
+def wordcount(text: Stdin[str] = "") -> Stdout[int]: ...
+```
+
+`Stdout[dict | None]` is the house spelling for a filter that sometimes
+has nothing to say (marker outermost, like `NoSplit[list[X] | None]`);
+`Stdout[dict] | None` means the same thing. See `stdout`."""
+
+
 class check:
     """A custom validator, run after coercion; raise `ValueError` to reject:
 

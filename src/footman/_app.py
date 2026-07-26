@@ -23,6 +23,7 @@ from footman import (
     _describe,
     _paths,
     _progress,
+    coerce,
     config,
     context,
     discover,
@@ -691,6 +692,38 @@ def _where(root: registry.Group, tree: dict, dotted: str) -> int:
     return 0
 
 
+def _emit_document(value: object, inner: object) -> None:
+    """The declared document, on stdout: text verbatim (plus a trailing
+    newline), bytes raw, anything else JSON — pretty-printed on a terminal,
+    one compact line into a pipe, always a trailing newline. Encoded via
+    `_describe.json_default`, the same encoder `--json` uses, so dataclasses
+    serialise and `Secret` redacts identically on both surfaces."""
+    mode = coerce.emission_mode(inner)
+    if mode == "bytes" and isinstance(value, (bytes, bytearray)):
+        buffer = getattr(sys.stdout, "buffer", None)
+        if buffer is not None:
+            buffer.write(bytes(value))
+            buffer.flush()
+        else:  # an embedded runner's text capture has no byte buffer
+            sys.stdout.write(bytes(value).decode("utf-8", "replace"))
+        return
+    if mode == "text" and isinstance(value, str):
+        sys.stdout.write(value if value.endswith("\n") else value + "\n")
+        return
+    try:
+        tty = sys.stdout.isatty()
+    except Exception:
+        tty = False
+    text = json.dumps(
+        value,
+        default=_describe.json_default,
+        ensure_ascii=False,
+        indent=2 if tty else None,
+        separators=None if tty else (",", ":"),
+    )
+    sys.stdout.write(text + "\n")
+
+
 def _print_summary(
     results: list[executor.TaskResult],
     *,
@@ -1225,6 +1258,33 @@ def _run_tree(
     except split.ChainError as exc:
         return _refuse(json_mode, str(exc))
 
+    # A task whose signature claims stdout (`-> Stdout[T]`) makes this a
+    # *document run*: stdout carries exactly the addressed task's return
+    # value, and every print and run() line replays on stderr instead. Two
+    # claimants leave "whose document?" without an answer, so that is a
+    # plan-time refusal rather than a silent pick. Only the addressed tasks
+    # count — a declaring task reached as a dependency or through a group
+    # fan-out is suppressed, not refused, so composing a filter into a
+    # bigger task stays legal.
+    emitters: list[tuple[split.Segment, object]] = []
+    for seg in segments:
+        try:
+            seg_fn = executor.resolve(reg, seg.task.split("."))
+        except (KeyError, IndexError):
+            continue  # the splitter validated; never refuse twice
+        declares, inner = coerce.emitted(
+            manifest.resolved_signature(seg_fn).return_annotation
+        )
+        if declares:
+            emitters.append((seg, inner))
+    if len(emitters) > 1:
+        names = " and ".join(s.task for s, _ in emitters)
+        return _refuse(
+            json_mode,
+            f"{names} both declare Stdout[…] — whose document would stdout "
+            f"carry? Run them as separate invocations.",
+        )
+
     # Advisory notes from the splitter (a group default's positional value
     # that names — or nearly names — a child task): stderr commentary, ahead
     # of the run, so the plan stays deterministic but never silent. Skipped
@@ -1370,7 +1430,9 @@ def _run_tree(
             segments,
             sequential=sequential,
             keep_going=cli_keep_going,  # None = unspecified; run_plan scopes per node
-            capture=json_mode,
+            # A document run buffers exactly as --json does: stdout belongs
+            # to the declared return value, so no task print may stream to it.
+            capture=json_mode or bool(emitters),
             ctx_config=ctx_config,
             estimate=est,
             progress=progress_on,
@@ -1388,8 +1450,28 @@ def _run_tree(
 
     if json_mode:
         _print_json(results, total=total)
-    elif not g.get("quiet"):
-        _print_summary(results, timings=bool(g.get("timings")), total=total)
+    else:
+        if emitters:
+            # The document run's receipts: everything that is not the
+            # document — prints, run() lines — replays on stderr, where the
+            # summary already lives, in dependency order.
+            for r in results:
+                if r.output:
+                    sys.stderr.write(r.output)
+            sys.stderr.flush()
+        if not g.get("quiet"):
+            _print_summary(results, timings=bool(g.get("timings")), total=total)
+        if emitters:
+            doc_seg, doc_inner = emitters[0]
+            doc_result = next((r for r in results if r.task == doc_seg.task), None)
+            # A failed task emits nothing (the exit code talks), and a None
+            # return means empty stdout: nothing to say, said nothing.
+            if (
+                doc_result is not None
+                and doc_result.ok
+                and doc_result.returned is not None
+            ):
+                _emit_document(doc_result.returned, doc_inner)
 
     # The exit code is the first genuine failure's — a cancelled task carries
     # only a kill signal, so it's the fallback, not the headline.

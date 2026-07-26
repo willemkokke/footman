@@ -682,7 +682,13 @@ def _call(
     except Exception as exc:  # a failed task must not crash the runner
         return 1, None, exc
     if isinstance(returned, int) and not isinstance(returned, bool):
-        return returned, returned, None
+        # An int return is the exit-code channel — unless the signature
+        # declares `Stdout[int]`, in which case the number is the document
+        # (a filter like wordcount could not exist otherwise). Declaration
+        # wins; a bare `-> int` keeps its long-standing meaning.
+        declares, _ = coerce.emitted(resolved_signature(fn).return_annotation)
+        if not declares:
+            return returned, returned, None
     return 0, returned, None
 
 

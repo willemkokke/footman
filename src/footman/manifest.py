@@ -438,6 +438,16 @@ def _task_node(fn: Any, memo: dict[int, list[str]]) -> dict[str, Any]:
             "params": [_finish(param_spec(p), memo) for p in _cli_params(previous)],
             "where": _source_of(previous),
         }
+    declares, _inner = coerce.emitted(sig.return_annotation)
+    if declares:
+        if interactive:
+            raise SpecError(
+                f"{getattr(fn, '__name__', fn)!s}: Stdout[…] and "
+                f"interactive=True cannot both hold — an interactive task "
+                f"owns the real terminal, uncaptured, and a declaring task's "
+                f"stdout belongs to its return value. Drop one."
+            )
+        node["emits"] = True  # additive: this task's stdout is its return value
     if infinite:
         node["infinite"] = True  # additive: listings and help say how it ends
     if interactive:

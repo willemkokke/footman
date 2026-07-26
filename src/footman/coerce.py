@@ -23,10 +23,20 @@ from pathlib import Path, PurePath
 from typing import Annotated, Any
 
 from footman.params import _arg as _ARG
-from footman.params import _PathRequirement, ask, between, check, doc, env, suggest
+from footman.params import (
+    _PathRequirement,
+    _StdoutMarker,
+    ask,
+    between,
+    check,
+    doc,
+    env,
+    suggest,
+)
 from footman.params import forward as _FORWARD
 from footman.params import nosplit as _NOSPLIT
 from footman.params import stdin as _stdin_marker
+from footman.params import stdout as _STDOUT
 
 _TAG_ORDER = {"bool": 0, "int": 1, "float": 2, "path": 3, "str": 4}
 
@@ -214,6 +224,42 @@ def peel(ann: Any) -> Peeled:
         return Peeled(False, ann, completer, is_nosplit, **markers)  # scalar union
 
     return Peeled(False, ann, completer, is_nosplit, **markers)  # plain scalar
+
+
+def emitted(ann: Any) -> tuple[bool, Any]:
+    """Whether a *return* annotation carries the `stdout` marker, and the
+    type inside it.
+
+    `Stdout[dict | None]` and `Stdout[dict] | None` read identically —
+    `Annotated` and `Optional` strip in any order and nesting, the same
+    normalisation `peel` applies to parameters. The inner type decides the
+    emission: `str` verbatim, `bytes` raw, anything else JSON.
+    """
+    found = False
+    changed = True
+    while changed:
+        changed = False
+        if typing.get_origin(ann) is Annotated:
+            base, *meta = typing.get_args(ann)
+            if any(m is _STDOUT or isinstance(m, _StdoutMarker) for m in meta):
+                found = True
+            ann, changed = base, True
+        elif _is_union(ann):
+            members = _strip_none(list(typing.get_args(ann)))
+            if len(members) == 1:
+                ann, changed = members[0], True
+    return found, ann
+
+
+def emission_mode(inner: Any) -> str:
+    """How an emitted value reaches stdout: `text`, `bytes`, or `json`."""
+    members = union_members(inner)
+    if len(members) == 1:
+        if members[0] is str:
+            return "text"
+        if members[0] is bytes:
+            return "bytes"
+    return "json"
 
 
 def is_flag(element: Any) -> bool:
