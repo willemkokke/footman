@@ -69,12 +69,15 @@ def _child_argv(override: str | None = None) -> list[str] | None:
 # silently when `task_files` comes back empty, which is exactly what an
 # unexpected cwd looks like from outside: a child that ran, said nothing, and
 # wrote nothing. Only the child can tell those apart from "never started".
+# Plain `key=value`, not JSON: json.dumps escapes, and a Windows path comes
+# back with every backslash doubled — unreadable on the one platform this is
+# for.
 _PROBE = (
-    "import json, sys; from pathlib import Path; from footman import _paths; "
+    "import sys; from pathlib import Path; from footman import _paths; "
     "cwd = Path.cwd(); ceiling = _paths.find_repo_root(cwd); "
-    "print(json.dumps({'cwd': str(cwd), 'ceiling': str(ceiling), "
-    "'task_files': [str(f) for f in _paths.task_files(cwd, ceiling)], "
-    "'manifest': str(_paths.manifest_path(cwd)), 'exe': sys.executable}))"
+    "files = ', '.join(str(f) for f in _paths.task_files(cwd, ceiling)) or 'none'; "
+    "print('cwd=%s; ceiling=%s; task_files=%s; manifest=%s; exe=%s' "
+    "% (cwd, ceiling, files, _paths.manifest_path(cwd), sys.executable))"
 )
 
 
@@ -118,7 +121,10 @@ def _cold_evidence(cache_dir, override: str | None = None) -> str:
     try:
         cwd = Path.cwd()
         ceiling = _paths.find_repo_root(cwd)
-        found = [str(p) for p in _paths.task_files(cwd, ceiling)] or "none"
+        # Joined, never a list repr: `repr` escapes, so an embedded list of
+        # Windows paths reads back with every backslash doubled — the one
+        # platform this diagnostic is for.
+        found = ", ".join(str(p) for p in _paths.task_files(cwd, ceiling)) or "none"
         target = (
             _paths.source_manifest_path(cwd, Path(override))
             if override
@@ -140,7 +146,7 @@ def _cold_evidence(cache_dir, override: str | None = None) -> str:
         return "\n".join([*lines, f"child argv unavailable: {exc!r}"])
     if argv is None:
         return "\n".join([*lines, "child: _spawn_refresh spawned nothing"])
-    lines.append(f"child argv {argv}")
+    lines.append(f"child argv {subprocess.list2cmdline(argv)}")  # not a list repr
     started = time.monotonic()
     try:
         proc = subprocess.run(
@@ -728,7 +734,7 @@ def test_cold_evidence_reports_the_childs_own_words(tmp_path, monkeypatch):
 
     def fake_run(cmd, **kwargs):
         if "_paths.find_repo_root" in cmd[2]:  # the where-am-I probe
-            return subprocess.CompletedProcess(cmd, 0, '{"cwd": "elsewhere"}', "")
+            return subprocess.CompletedProcess(cmd, 0, "cwd=elsewhere", "")
         return subprocess.CompletedProcess(cmd, 1, "", "ImportError: no footman\n")
 
     monkeypatch.setattr(subprocess, "run", fake_run)
@@ -736,10 +742,13 @@ def test_cold_evidence_reports_the_childs_own_words(tmp_path, monkeypatch):
 
     report = _cold_evidence(tmp_path / "cache")
     assert "cache dir" in report and "does not exist" in report
-    assert 'child sees {"cwd": "elsewhere"}' in report  # the child's own words
+    assert "child sees cwd=elsewhere" in report  # the child's own words
     assert "ImportError: no footman" in report
     assert "child exit 1" in report
     assert "_refresh.refresh_cwd()" in report
+    # Paths land verbatim. A `repr` (an f-string over a list, json.dumps)
+    # doubles every backslash, and this report is read on Windows.
+    assert sys.executable in report
     assert str(proj / "tasks.py") in report  # the builder can find a task file
     assert str(_paths.cwd_manifest_path()) in report
 
