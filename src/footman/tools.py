@@ -57,6 +57,61 @@ from footman.context import run as _run
 
 _version_cache: dict[str, tuple[int, ...]] = {}
 
+# The one way footman reads a version out of a tool's own words, shared with
+# the extractor (`_drivers.version`) so a stub's recorded version and a task's
+# `installed_version()` can never disagree about *parsing* — only, deliberately,
+# about which binary they asked (see `installed_version`).
+#
+# A negative lookbehind, not `\b`: a version glued to a `v` prefix (`v0.23.1`)
+# has no word boundary before its first digit, so `\b` would skip to the middle
+# and read `23.1`. Reject only a preceding digit or dot, so `v0.23.1` -> `0.23.1`
+# while `2` inside `1.2.3` still can't start a fresh match. The tail matches the
+# build grammars tools really ship (`0.6.0-wk.5`, `1.13.0.git.kitware…`).
+_VERSION = _re.compile(r"(?<![\d.])(\d+\.\d+(?:\.\d+)?(?:[-.][A-Za-z0-9]+)*)\b")
+
+
+def read_version(text: str) -> str:
+    """The version string inside a tool's `--version` output, or `""`.
+
+    The string is preserved exactly, build tail and all (`0.6.0-wk.5`), for
+    anything that records *which* build was read. Use `version_tuple` to
+    compare.
+    """
+    match = _VERSION.search(text)
+    return match[1] if match else ""
+
+
+def version_tuple(version: str) -> tuple[int, ...]:
+    """A version string reduced to comparable integers — the CLI generation.
+
+    Only the leading numeric run counts, and the first component carrying a
+    build tag ends the read: `0.6.0-wk.5` and `1.13.0.git.kitware.jobserver-1`
+    both compare as their base, `(0, 6, 0)` and `(1, 13, 0)`.
+
+    That is the honest answer to the question this is asked — *is the CLI new
+    enough* — because a build tail says nothing about which flags exist.
+    Scraping its digits would answer it backwards: `0.6.0-wk.5` is a fork
+    build *of* 0.6.0, which every version grammar sorts at or before it,
+    while `(0, 6, 0, 5)` sorts after. The cost is that two builds of one base
+    compare equal; when the build itself matters, keep the string from
+    `read_version`.
+
+    An unreadable version yields `()`, which compares lower than everything —
+    "can't tell" must never read as "newer".
+    """
+    parts: list[int] = []
+    for piece in version.split("."):
+        digits = ""
+        for char in piece:
+            if not char.isdigit():
+                break
+            digits += char
+        if digits:
+            parts.append(int(digits))
+        if not piece.isdigit():
+            break
+    return tuple(parts)
+
 
 class _Off:
     """The value that disables a flag: `flag=off` → `--no-flag`.
@@ -438,6 +493,7 @@ class Tool:
         path: str = "",
         entry: str = "",
         single_dash: bool = False,
+        version_argv: tuple[str, ...] = ("--version",),
         policy: dict[str, Any] | None = None,
     ) -> None:
         self._argv0 = name  # the name shown, and the console script looked up
@@ -461,6 +517,9 @@ class Tool:
         # (`eclint -fix`, not `--fix`). Tool-wide: Go's flag package is uniform,
         # so this rides every flag the tool emits, chained subcommands included.
         self._single_dash = single_dash
+        # How this tool is asked its version. Nearly everything answers
+        # `--version`; Windows `cmd` has no such flag and spells it `cmd /c ver`.
+        self._version_argv = tuple(version_argv)
 
     def _sub(self, *tail: str) -> Tool:
         """A chained tool sharing this one's executable, entry, mode, and policy."""
@@ -472,6 +531,7 @@ class Tool:
             path=self._path,
             entry=self._entry,
             single_dash=self._single_dash,
+            version_argv=self._version_argv,
             policy=self._opts,
         )
 
@@ -659,33 +719,40 @@ class Tool:
         return ep.load if ep is not None else None
 
     def installed_version(self) -> tuple[int, ...]:
-        """The installed binary's version, as a comparable int tuple.
+        """The version of the binary *this tool runs*, as a comparable int tuple.
 
-        Runs `<tool> --version` directly (never through the task context, so
-        dry-run/recording still see the truth) and caches per process. For a
-        tool that spells it differently, fall back to calling it yourself.
+        Asks the executable itself — `<tool> --version`, or whatever spelling
+        the tool was declared with (`cmd /c ver`) — and reads the answer with
+        the same parser the stub extractor uses, so the two can never disagree
+        about a version string's grammar. Runs outside the task context, so
+        `--dry-run` and `recording()` can't lie to it, and caches per process.
+
+        It answers "what will this task actually invoke", which is *not* the
+        version a stub header records. A stub says what extraction read, on
+        whatever machine synced it, from whatever binary it resolved — the
+        two differ whenever `PATH` and the extractor disagree (a Homebrew keg
+        against `/usr/bin/git`, say). This one is the end-user question; the
+        stub's is maintainer bookkeeping.
         """
-        if self._argv0 not in _version_cache:
+        key = self._path
+        if key not in _version_cache:
             # Decode as UTF-8 with replacement (F39): a tool that prints a
             # non-ASCII glyph in its --version must not crash the read on a
             # locale-encoded pipe (cp1252 on Windows).
+            argv = [self._path, *self._version_argv]
             out = _subprocess.run(
-                [self._argv0, "--version"],
+                argv,
                 capture_output=True,
                 text=True,
                 encoding="utf-8",
                 errors="replace",
                 timeout=30,
             )
-            match = _re.search(r"(\d+(?:\.\d+)+)", out.stdout or out.stderr)
-            if out.returncode != 0 or match is None:
-                raise ValueError(
-                    f"could not read a version from `{self._argv0} --version`"
-                )
-            _version_cache[self._argv0] = tuple(
-                int(part) for part in match[1].split(".")
-            )
-        return _version_cache[self._argv0]
+            found = read_version(out.stdout or out.stderr)
+            if out.returncode != 0 or not found:
+                raise ValueError(f"could not read a version from `{' '.join(argv)}`")
+            _version_cache[key] = version_tuple(found)
+        return _version_cache[key]
 
 
 # Curated instances — the ones with a non-obvious executable name live here;
@@ -738,7 +805,7 @@ zsh = Tool("zsh", "-c")
 fish = Tool("fish", "-c")
 pwsh = Tool("pwsh", "-c")
 nu = Tool("nu", "-c")
-cmd = Tool("cmd", "/c")
+cmd = Tool("cmd", "/c", version_argv=("/c", "ver"))  # no --version; `ver` is it
 
 
 def __getattr__(name: str) -> Tool:
