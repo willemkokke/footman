@@ -1716,3 +1716,47 @@ def test_prompt_echo_scrubs_reflected_input(monkeypatch, capfd):
     assert results[0].ok, results[0].error
     assert got["n"] == 5
     assert "\x1b" not in capfd.readouterr().err  # the bad input echoed scrubbed
+
+
+def test_prompt_secret_answers_redact_like_ask_does(monkeypatch):
+    """Hiding a value while it is typed and then printing it in the first
+    traceback would be a strange kind of secret — the mid-task question and
+    the declared parameter answer the same way."""
+    from footman import context
+
+    monkeypatch.setattr(context, "_stdin_is_tty", lambda: True)
+    monkeypatch.setattr(context, "_prompt_core", lambda *a, **k: "hunter2")
+
+    answer = context.prompt("token? ", secret=True)
+    assert isinstance(answer, Secret)
+    assert repr(answer) == "Secret('***')"
+    assert str(answer) == "hunter2"  # the body still gets the real thing
+
+    plain = context.prompt("name? ")
+    assert not isinstance(plain, Secret)  # only a secret question redacts
+
+
+def test_prompt_secret_wraps_an_unattended_default(monkeypatch):
+    # Where the value came from doesn't change what it is.
+    from footman import context
+
+    monkeypatch.setattr(context, "_stdin_is_tty", lambda: False)
+    answer = context.prompt("token? ", default="fallback", secret=True)
+    assert isinstance(answer, Secret) and str(answer) == "fallback"
+
+
+def test_reveal_is_the_unwrap_said_out_loud():
+    """A `Secret` that reaches a structured surface redacts; `reveal()` is how
+    a task that *means* to emit one (an `export …` line for `eval`) says so —
+    greppable, unlike a run-wide switch."""
+    from footman._describe import redact
+
+    token = Secret("hunter2")
+    assert redact({"token": token}) == {"token": "***"}
+    assert redact({"token": token.reveal()}) == {"token": "hunter2"}
+    assert type(token.reveal()) is str  # a plain str, nothing left to redact
+
+    # Deliberate bytes were never redacted: every string operation on a
+    # Secret already yields a plain str, which is what makes the filter case
+    # work without a flag to disarm.
+    assert f"export TOKEN={token}" == "export TOKEN=hunter2"

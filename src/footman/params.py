@@ -20,17 +20,45 @@ _T = TypeVar("_T")
 class Secret(str):
     """A string that redacts everywhere it is *shown*.
 
-    Answers to `ask(secret=True)` arrive as `Secret`: a real `str` for the
-    body (comparisons, formatting — the caller's business), but its repr —
-    what tracebacks, logs, and debuggers print — is `Secret('***')`, and
-    JSON surfaces (the `--json` envelope, baked manifest defaults)
-    serialise it as `***`.
+    Answers to `ask(secret=True)` and `prompt(secret=True)` arrive as
+    `Secret`, and a parameter annotated `Secret` coerces into one whatever
+    its value came from — a flag, an `env()` fallback, a default. It is a
+    real `str` for the body (comparisons, formatting — the caller's
+    business), but its repr — what tracebacks, logs, and debuggers print —
+    is `Secret('***')`, and structured surfaces serialise it as `***`: the
+    `--json` envelope, a `Stdout[…]` document, baked manifest defaults.
+
+    Redaction covers the places footman *shows* a value, not the bytes a
+    task deliberately writes. `print(token)` and `f"TOKEN={token}"` emit the
+    real thing, because every string operation on a `Secret` yields a plain
+    `str` — which is what makes a task that must print a secret (an
+    `export …` line for `eval`) work without a switch to disarm.
+
+    `reveal()` is that unwrap said out loud, for where it isn't implicit:
+
+    ```python
+    @task
+    def creds(token: Secret) -> Stdout[dict]:
+        return {"token": token.reveal()}   # meant to leave; not redacted
+    ```
+
+    Because it is a method, every intentional exposure is greppable — an
+    audit list a run-wide "don't redact" flag could never give you.
     """
 
     __slots__ = ()
 
     def __repr__(self) -> str:
         return "Secret('***')"
+
+    def reveal(self) -> str:
+        """The real value as a plain `str`, deliberately un-redacted.
+
+        Reach for it where a `Secret` would otherwise survive into a
+        structured surface that redacts — a dict, a dataclass field, a
+        `Stdout[…]` document — and you mean the value to be there.
+        """
+        return str.__str__(self)
 
 
 class suggest:
@@ -309,7 +337,12 @@ The return type decides the bytes, mirroring `stdin`: `Stdout[str]` emits
 the string verbatim (plus a trailing newline), `Stdout[bytes]` writes raw
 bytes, anything structured is JSON — pretty-printed on a terminal, one
 compact line into a pipe, dataclasses and `Secret` redaction handled by
-the same encoder `--json` uses.
+the same encoder `--json` uses — so a `Secret` inside a structured document
+serialises as `***`, and a task that *means* to emit one says
+`token.reveal()`. A `Stdout[str]` built by formatting is unaffected: string
+operations on a `Secret` yield a plain `str`, which is how the
+print-a-credential filter (`eval "$(fm env-export)"`) works without a
+switch to disarm redaction everywhere else.
 
 The rules that keep it honest: an explicit `--json` wins (the document
 rides inside `results[].returned`); only the addressed task emits (a
