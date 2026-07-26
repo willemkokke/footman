@@ -32,9 +32,10 @@ executing anything, so a typo never half-runs a chain.
 | `test: --jobs expects an integer (got 'many')` | eager type validation from the annotation | typed params parse before anything runs |
 | `test: --jobs must be between 1 and 32 (got '99')` | a `between(...)`/`range` bound | bounds are inclusive; the message quotes them |
 | `render: <template> must be an existing file (got 'missing.toml')` | an `exists`/`isfile`/`isdir` marker | the path is checked before the task runs |
-| `deploy: --env expects KEY=VALUE (got 'DEBUG')` | a `dict[K, V]` param needs pairs | `--env DEBUG=1`, comma-split or repeated |
+| `deploy: --env expects KEY=VALUE (got 'DEBUG')` | a `dict[K, V]` param needs pairs | `--env=DEBUG=1`, comma-split or repeated |
 | `lint: --fix is a flag and takes no value` | `--fix=yes` on a `bool` param | flags are bare: `--fix`, or `--no-fix` |
-| `--where expects a value` | a value-bearing global given bare | `--where TASK` |
+| `--where expects a value, attached: --where=TASK` | a value-bearing option given bare | `--where=TASK` — a value is always `=`-attached |
+| `--target takes its value attached — did you mean --target=prod?` | a value across a space | attach it: `--target=prod` |
 | `unknown global option --bogus (global options go before the first task)` | not one of fm's globals | `fm --help` lists them all |
 
 One asymmetry worth knowing: constraints on **env-supplied** values

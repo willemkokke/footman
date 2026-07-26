@@ -188,7 +188,7 @@ def test_task_names_carry_descriptions(tree):
 def test_options_and_choices_have_no_description(tree):
     # Undocumented options and choice values pass through bare (no tab).
     assert complete(tree, ["lint", "--f"]) == ["--fix"]
-    assert "\t" not in "".join(complete(tree, ["lint", "--mode", ""]))
+    assert "\t" not in "".join(complete(tree, ["lint", "--mode="]))
 
 
 def test_doc_marker_becomes_option_description():
@@ -255,13 +255,15 @@ def test_task_options(tree):
 
 
 def test_option_value_choices(tree):
-    assert set(complete(tree, ["lint", "--mode", ""])) == {"strict", "loose"}
-    assert complete(tree, ["lint", "--mode", "st"]) == ["strict"]
+    # The value position is `=`-attached. A detached word is never a value:
+    # a bare `--mode` marks the option given and the walk moves on.
+    assert set(complete(tree, ["lint", "--mode="])) == {"--mode=strict", "--mode=loose"}
+    assert "strict" not in complete(tree, ["lint", "--mode", ""])
 
 
 def test_nested_option_value_choices(tree):
-    out = complete(tree, ["workspace.mount", "--share", ""])
-    assert set(out) == {"main", "scratch", "archive"}
+    out = complete(tree, ["workspace.mount", "--share="])
+    assert set(out) == {"--share=main", "--share=scratch", "--share=archive"}
 
 
 def test_positional_choices_offered_alongside_options(tree):
@@ -297,32 +299,34 @@ def test_leading_global_value_not_read_as_task(tree):
     # F61: `-C docs <TAB>` — `docs` is -C's value, so completion offers the
     # top-level names, not the `docs` group's tasks.
     top = set(complete(tree, [""]))
-    assert set(complete(tree, ["-C", "docs", ""])) == top
-    assert set(complete(tree, ["-C", "anydir", ""])) == top
+    assert set(complete(tree, ["-C=docs", ""])) == top
+    assert set(complete(tree, ["-C=anydir", ""])) == top
 
 
 def test_install_completion_completes_shells(tree):
     # F61: --install-completion's optional value is one of the shells.
-    assert set(complete(tree, ["--install-completion", ""])) == {
-        "bash",
-        "zsh",
-        "fish",
-        "pwsh",
-        "nushell",
+    assert set(complete(tree, ["--install-completion="])) == {
+        "--install-completion=bash",
+        "--install-completion=zsh",
+        "--install-completion=fish",
+        "--install-completion=pwsh",
+        "--install-completion=nushell",
     }
-    assert complete(tree, ["--install-completion", "z"]) == ["zsh"]
+    assert complete(tree, ["--install-completion=z"]) == ["--install-completion=zsh"]
+    # bash splits the token: the shell completes the bare value word
+    assert complete(tree, ["--install-completion", "=", "z"]) == ["zsh"]
 
 
 def test_setup_completion_completes_shells(tree):
     # --setup-completion mirrors --install-completion: its value is a shell.
-    assert set(complete(tree, ["--setup-completion", ""])) == {
-        "bash",
-        "zsh",
-        "fish",
-        "pwsh",
-        "nushell",
+    assert set(complete(tree, ["--setup-completion="])) == {
+        "--setup-completion=bash",
+        "--setup-completion=zsh",
+        "--setup-completion=fish",
+        "--setup-completion=pwsh",
+        "--setup-completion=nushell",
     }
-    assert complete(tree, ["--setup-completion", "fi"]) == ["fish"]
+    assert complete(tree, ["--setup-completion=fi"]) == ["--setup-completion=fish"]
 
 
 def test_leading_flag_global_then_task(tree):
@@ -363,15 +367,12 @@ def test_completion_globals_mirror_split():
     # renaming or re-typing a global fails CI instead of silently misparsing.
     from footman import _complete, _shellcomp, split
 
-    flag: set[str] = set()
-    value: set[str] = set()
-    maybe: set[str] = set()
-    buckets = {"flag": flag, "option": value, "option?": maybe}
-    for name, alias, kind, _hint, _help in split.GLOBALS:
-        buckets[kind] |= {name} | ({alias} if alias else set())
-    assert flag == _complete._GLOBAL_FLAG
-    assert value == _complete._GLOBAL_VALUE
-    assert maybe == _complete._GLOBAL_MAYBE
+    names: set[str] = set()
+    for name, alias, _kind, _hint, _help in split.GLOBALS:
+        names |= {name} | ({alias} if alias else set())
+    assert names == _complete._GLOBALS
+    assert _complete._GLOBAL_FILES <= _complete._GLOBALS
+    assert set(_complete._GLOBAL_CHOICES) <= names
     assert _complete._GLOBAL_CHOICES["--install-completion"] == tuple(_shellcomp.SHELLS)
     assert _complete._GLOBAL_CHOICES["--setup-completion"] == tuple(_shellcomp.SHELLS)
 
@@ -380,12 +381,13 @@ def test_completion_globals_mirror_split():
 
 
 def test_tasks_file_from_leading_globals():
-    assert _tasks_file_from(["-f", "x.py", ""]) == "x.py"
-    assert _tasks_file_from(["--tasks-file", "x.py", "build"]) == "x.py"
-    assert _tasks_file_from(["--tasks-file=x.py"]) == "x.py"
-    assert _tasks_file_from(["-C", "sub", "-f", "x.py"]) == "x.py"  # skip -C + value
-    assert _tasks_file_from(["-k", "-f", "x.py"]) == "x.py"  # skip a flag
-    assert _tasks_file_from(["build", "-f", "x.py"]) is None  # after a task: not global
+    assert _tasks_file_from(["-f=x.py", ""]) == "x.py"
+    assert _tasks_file_from(["--tasks-file=x.py", "build"]) == "x.py"
+    assert _tasks_file_from(["-f", "=", "x.py"]) == "x.py"  # bash-split form
+    assert _tasks_file_from(["-C=sub", "-f=x.py"]) == "x.py"  # skip another option
+    assert _tasks_file_from(["-k", "-f=x.py"]) == "x.py"  # skip a flag
+    assert _tasks_file_from(["-f", "x.py"]) is None  # detached: not a value
+    assert _tasks_file_from(["build", "-f=x.py"]) is None  # after a task: not global
     assert _tasks_file_from(["build"]) is None
     assert _tasks_file_from([""]) is None
 
@@ -432,7 +434,7 @@ def test_f_completion_reads_the_source_key(tmp_path, monkeypatch, capsys):
         tasks_file=str(tf),
         path=_paths.source_manifest_path(Path.cwd(), tf),
     )
-    complete_cli(["--", "-f", str(tf), ""])
+    complete_cli(["--", f"-f={tf}", ""])
     out = capsys.readouterr().out.split()
     assert "alpha" in out and "beta" in out
 
@@ -450,11 +452,11 @@ def test_f_partial_value_defers_to_file_completion(tmp_path, monkeypatch, capsys
     @g.task
     def alpha(): ...
 
-    # `-f cust` here is a *partial* being typed, not a finished override, so
+    # `-f=cust` here is a *partial* being typed, not a finished override, so
     # completion must land on the cwd tree and signal files (exit 100) rather
     # than hunt for a "(cwd, 'cust')" manifest that never existed.
     manifest.sync_manifest(g, Path.cwd(), completion_max_age=0)
-    assert complete_cli(["--", "-f", "cust"]) == _EXIT_FILES
+    assert complete_cli(["--", "-f=cust"]) == _EXIT_FILES
     assert capsys.readouterr().out == ""
 
 
@@ -462,13 +464,14 @@ def test_f_partial_value_defers_to_file_completion(tmp_path, monkeypatch, capsys
 
 
 def test_path_value_globals_signal_file_completion(tree):
-    from footman._complete import _FILES, _GLOBAL_FILES, _GLOBAL_VALUE
+    from footman._complete import _FILES, _GLOBAL_FILES, _GLOBALS
 
-    assert _GLOBAL_FILES <= _GLOBAL_VALUE  # every file-global consumes its value
-    assert complete(tree, ["-f", ""]) == [_FILES]
-    assert complete(tree, ["--config", ""]) == [_FILES]
-    assert complete(tree, ["-C", ""]) == [_FILES]
-    assert complete(tree, ["--where", ""]) != [_FILES]  # --where takes a task
+    assert _GLOBAL_FILES <= _GLOBALS  # every file-global is a known global
+    assert complete(tree, ["-f="]) == [_FILES]
+    assert complete(tree, ["--config="]) == [_FILES]
+    assert complete(tree, ["-C="]) == [_FILES]
+    assert complete(tree, ["-C", "="]) == [_FILES]  # bash-split form
+    assert complete(tree, ["--where="]) != [_FILES]  # --where takes a task
 
 
 def test_complete_cli_exits_files_for_a_path_value(tmp_path, capsys):
@@ -476,7 +479,7 @@ def test_complete_cli_exits_files_for_a_path_value(tmp_path, capsys):
 
     m = tmp_path / "m.json"
     m.write_text('{"schema": 1, "tree": {"tasks": {}, "groups": {}}}')
-    rc = complete_cli(["--manifest", str(m), "--", "-f", ""])
+    rc = complete_cli(["--manifest", str(m), "--", "-f="])
     assert rc == _EXIT_FILES
     assert capsys.readouterr().out == ""
 
@@ -491,7 +494,7 @@ def test_path_typed_option_value_signals_file_completion():
             "Fetch."
 
     built = manifest.build_manifest(root)["tree"]
-    assert complete(built, ["fetch", "--out", ""]) == [_FILES]
+    assert complete(built, ["fetch", "--out="]) == [_FILES]
     # a plain str option value has no such signal — it stays empty, so the
     # shell never bluntly offers files where a name was wanted.
     with registry.capture() as root2:
@@ -501,7 +504,7 @@ def test_path_typed_option_value_signals_file_completion():
             "Greet."
 
     built2 = manifest.build_manifest(root2)["tree"]
-    assert complete(built2, ["greet", "--name", ""]) == []
+    assert complete(built2, ["greet", "--name="]) == []
 
 
 def test_path_positional_signals_file_completion():
@@ -546,10 +549,19 @@ def test_dynamic_option_signals_recompute():
             "Deploy."
 
     built = manifest.build_manifest(root)["tree"]
-    # the value is dynamic → defer to a fresh recompute, carrying the partial,
-    # the param name, and the task path
-    assert complete(built, ["deploy", "--target", ""]) == [
+    # the value is dynamic → defer to a fresh recompute, carrying the
+    # partial, the emission prefix (whole-token shells re-attach `--opt=`;
+    # bash completes the bare value), the param name, and the task path
+    assert complete(built, ["deploy", "--target="]) == [
         _DYNAMIC,
+        "",
+        "--target=",
+        "target",
+        "deploy",
+    ]
+    assert complete(built, ["deploy", "--target", "=", ""]) == [
+        _DYNAMIC,
+        "",
         "",
         "target",
         "deploy",
@@ -608,8 +620,11 @@ def test_dynamic_completion_is_fresh_not_baked(tmp_path, monkeypatch, capsys):
     capsys.readouterr()
 
     (proj / "targets.txt").write_text("gamma\ndelta\n")  # the world moved on
-    complete_cli(["--", "deploy", "--target", ""])
+    complete_cli(["--", "deploy", "--target", "=", ""])
     assert capsys.readouterr().out.split() == ["gamma", "delta"]  # fresh, not baked
+    (proj / "targets.txt").write_text("eta\ntheta\n")
+    complete_cli(["--", "deploy", "--target="])  # whole-token shells: prefixed
+    assert capsys.readouterr().out.split() == ["--target=eta", "--target=theta"]
 
 
 def test_fresh_dynamic_passes_context_and_falls_back(monkeypatch):
@@ -624,7 +639,7 @@ def test_fresh_dynamic_passes_context_and_falls_back(monkeypatch):
         return subprocess.CompletedProcess(cmd, 0, "gamma\ndelta\n", "")
 
     monkeypatch.setattr(_complete.subprocess, "run", ok)
-    args = ["-f", "x.py", "--config", "c.toml", "deploy", "--target", ""]
+    args = ["-f=x.py", "--config=c.toml", "deploy", "--target="]
     assert _complete._fresh_dynamic("target", ["deploy"], args) == ["gamma", "delta"]
     cmd = captured["cmd"]  # the subprocess carries the target and the context
     assert cmd[cmd.index("--param") + 1] == "target"
@@ -675,7 +690,7 @@ def test_cold_f_cache_builds_and_serves(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(proj)
     # a finished `-f <file>` with a cold cache builds that file's (cwd, file)
     # manifest and serves it, the same as a plain cold TAB — not empty
-    complete_cli(["--", "-f", "other.py", ""])
+    complete_cli(["--", "-f=other.py", ""])
     out = capsys.readouterr().out.split()
     assert "ship" in out, _cold_evidence(tmp_path / "cache", "other.py")
 
@@ -767,9 +782,9 @@ def test_next_task_name_completes_after_a_chain(tree):
 
 
 def test_option_value_not_confused_with_next_task(tree):
-    # "--mode" wants a value: its choices complete, not task names.
-    out = complete(tree, ["lint", "--mode", ""])
-    assert set(out) == {"strict", "loose"}
+    # "--mode=" is the value position: its choices complete, not task names.
+    out = complete(tree, ["lint", "--mode="])
+    assert set(out) == {"--mode=strict", "--mode=loose"}
 
 
 def test_dotted_descent_in_a_later_segment(tree):
@@ -801,7 +816,7 @@ def test_negated_flag_counts_as_used(tree):
 
 def test_repeatable_options_stay_offered(tree):
     # --paths is list-valued: repeating it is the grammar, keep offering it.
-    out = complete(tree, ["lint", "--paths", "a", ""])
+    out = complete(tree, ["lint", "--paths=a", ""])
     assert "--paths" in out
 
 

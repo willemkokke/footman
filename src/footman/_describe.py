@@ -95,7 +95,7 @@ def usage_fragment(p: dict) -> str:
     if kind == "flag":
         return f"--{p['name']}" if required else f"[--{p['name']}]"
     if kind == "option":
-        core = f"--{p['name']} {value_hint(p)}"
+        core = f"--{p['name']}={value_hint(p)}"
         if p.get("multiple") or p.get("mapping"):
             core += " ..."
         return core if required else f"[{core}]"
@@ -110,7 +110,7 @@ def param_label(p: dict) -> str:
     if kind == "flag":
         return f"--{p['name']}"
     if kind == "option":
-        return f"--{p['name']} {value_hint(p)}"
+        return f"--{p['name']}={value_hint(p)}"
     suffix = "..." if kind == "variadic" or p.get("multiple") else ""
     return f"<{p['name']}>{suffix}"
 

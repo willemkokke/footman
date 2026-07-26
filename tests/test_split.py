@@ -26,7 +26,7 @@ def test_single_task(tree):
 
 
 def test_flags_and_options_split_into_segments(tree):
-    result = segs(tree, "format --fix lint --fix --mode strict typecheck test")
+    result = segs(tree, "format --fix lint --fix --mode=strict typecheck test")
     assert [s.task for s in result] == ["format", "lint", "typecheck", "test"]
     assert result[0].values == {"fix": True}
     assert result[1].values == {"fix": True, "mode": "strict"}
@@ -36,7 +36,7 @@ def test_flags_and_options_split_into_segments(tree):
 
 def test_repeated_option_collects_a_list(tree):
     (seg,) = segs(
-        tree, "test --marker slow --path tests/unit --path tests/e2e --coverage"
+        tree, "test --marker=slow --path=tests/unit --path=tests/e2e --coverage"
     )
     assert seg.values == {
         "marker": "slow",
@@ -62,21 +62,21 @@ def test_interactivity_globals(tree):
 
 def test_color_global_takes_a_value(tree):
     # --color is a valued global; --no-color stays a bare flag beside it.
-    assert globs(tree, "--color always format") == ["--color", "always"]
+    assert globs(tree, "--color=always format") == ["--color=always"]
     assert globs(tree, "--color=never format") == ["--color=never"]
     assert globs(tree, "--no-color format") == ["--no-color"]
-    assert [s.task for s in segs(tree, "--color always format")] == ["format"]
+    assert [s.task for s in segs(tree, "--color=always format")] == ["format"]
 
 
 def test_dotted_address_and_typed_option(tree):
-    (seg,) = segs(tree, "docs.serve --port 8001")
+    (seg,) = segs(tree, "docs.serve --port=8001")
     assert seg.task == "docs.serve"
     assert seg.path == ["docs", "serve"]
     assert seg.values == {"port": "8001"}
 
 
 def test_required_positional_then_option(tree):
-    a, b = segs(tree, "docs.build --strict deploy staging --version 2026.07.16")
+    a, b = segs(tree, "docs.build --strict deploy staging --version=2026.07.16")
     assert a.task == "docs.build"
     assert a.values == {"strict": True}
     assert b.task == "deploy"
@@ -107,7 +107,7 @@ def test_variadic_consumes_rest_of_segment(tree):
 
 
 def test_passthrough_is_terminal(tree):
-    (seg,) = segs(tree, "test --marker unit -- -k manifest_or_split -x")
+    (seg,) = segs(tree, "test --marker=unit -- -k manifest_or_split -x")
     assert seg.values == {"marker": "unit"}
     assert seg.passthrough == ["-k", "manifest_or_split", "-x"]
 
@@ -122,15 +122,50 @@ def test_option_equals_form(tree):
     assert seg.values == {"mode": "strict"}
 
 
+def test_dash_leading_value_attaches(tree):
+    # A value that starts with a dash parses trivially in attached form —
+    # the case the space form could never express.
+    assert globs(tree, "--jobs=-1 check") == ["--jobs=-1"]
+    (seg,) = segs(tree, "bench --timeout=-1.5")
+    assert seg.values == {"timeout": "-1.5"}
+
+
 def test_where_global_takes_a_value(tree):
-    assert globs(tree, "--where docker.build") == ["--where", "docker.build"]
-    assert segs(tree, "--where docker.build") == []
+    assert globs(tree, "--where=docker.build") == ["--where=docker.build"]
+    assert segs(tree, "--where=docker.build") == []
 
 
 ERROR_CASES = [
-    ("lint --mode fast", "lint: --mode must be one of strict|loose (got 'fast')"),
-    ("docs.serve --port http", "docs.serve: --port expects an integer (got 'http')"),
-    ("bench --timeout fast", "bench: --timeout expects a number (got 'fast')"),
+    ("lint --mode=fast", "lint: --mode must be one of strict|loose (got 'fast')"),
+    ("docs.serve --port=http", "docs.serve: --port expects an integer (got 'http')"),
+    ("bench --timeout=fast", "bench: --timeout expects a number (got 'fast')"),
+    # A value is always `=`-attached. The space form is permanently taught —
+    # with the user's own value in the fix, never "unknown task 'strict'".
+    (
+        "lint --mode strict",
+        "lint: --mode takes its value attached — did you mean --mode=strict?",
+    ),
+    (
+        "--color always lint",
+        "--color takes its value attached — did you mean --color=always?",
+    ),
+    (
+        "--jobs 4 check",
+        "--jobs takes its value attached — did you mean --jobs=4?",
+    ),
+    ("-j 4 check", "-j takes its value attached — did you mean -j=4?"),
+    # Bare with nothing attachable following: state the shape instead.
+    ("lint --mode", "lint: --mode expects a value, attached: --mode=VALUE"),
+    ("--jobs check --fix", "--jobs takes its value attached"),
+    ("--jobs", "--jobs expects a value, attached: --jobs=N"),
+    ("--where lint", "--where takes its value attached — did you mean --where=lint?"),
+    # A value-optional global is valid bare — but a detached value behind it
+    # still teaches the attachment, never "unknown task 'zsh'".
+    (
+        "--install-completion zsh",
+        "--install-completion takes its value attached — "
+        "did you mean --install-completion=zsh?",
+    ),
     ("version huge", "version: <part> must be one of major|minor|patch (got 'huge')"),
     (
         "deploy check",
@@ -183,10 +218,10 @@ ERROR_CASES = [
     ("--nope check", "unknown global option --nope"),
     ("--sequential=false lint", "--sequential is a flag and takes no value"),
     ("--json=0 lint", "--json is a flag and takes no value"),
-    ("lint --mode -- x", "--mode expects a value, but found '--'"),
+    ("lint --mode -- x", "lint: --mode expects a value, attached: --mode=VALUE"),
     ("chekc", "did you mean 'check'?"),  # unknown task → nearest name
     ("lint --fux", "did you mean '--fix'?"),  # unknown option → nearest option
-    ("lint --mode strikt", "did you mean 'strict'?"),  # unknown choice value
+    ("lint --mode=strikt", "did you mean 'strict'?"),  # unknown choice value
 ]
 
 

@@ -7,6 +7,27 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING: a value is always `=`-attached.** Every option value — long
+  options, short aliases, globals, task options — attaches with `=`:
+  `fm build --target=prod`, `fm -j=4 check`, `fm --color=never lint`. A
+  bare `--x`/`-x` is a flag, a bare word is a task or a positional, so a
+  chain reads token by token with no arity table. The space form refuses
+  with the fix spelled out — `fm build --target prod` answers "did you
+  mean `--target=prod`?", never "unknown task 'prod'" — and a bare
+  value-bearing option teaches the shape (`--jobs expects a value,
+  attached: --jobs=N`). Values that start with a dash now just work
+  (`--jobs=-1`); lists repeat or comma-join as before (`--tag=a --tag=b`,
+  `--tag=a,b`); dict pairs read better anchored on their first `=`
+  (`--env=DEBUG=1`). The completion-installer trio keeps its optional
+  value (`--install-completion` detects the shell; `=zsh` names one), and
+  `--help` renders every option in the attached spelling. Both the
+  splitter and the completion hot path drop their value-consumption
+  states — the whole option grammar is lexical now. The `tools.*` bridge
+  is untouched: it renders each child tool's argv in that tool's own
+  dialect, and everything after `--` stays opaque passthrough.
+
 ### Added
 
 - **`Secret.reveal()` — deliberate exposure, said out loud.** A task whose

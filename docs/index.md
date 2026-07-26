@@ -94,7 +94,7 @@ Then:
 
 ```sh
 fm lint --fix
-fm docs.serve --port 8001
+fm docs.serve --port=8001
 fm --list
 ```
 

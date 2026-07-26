@@ -70,9 +70,9 @@ def test_union_scalar_coercion():
         def go(x: str | int = "d"):
             seen["x"] = x
 
-    run(tasks, "go --x 5")
+    run(tasks, "go --x=5")
     assert seen["x"] == 5 and type(seen["x"]) is int
-    run(tasks, "go --x hi")
+    run(tasks, "go --x=hi")
     assert seen["x"] == "hi"
 
 
@@ -84,9 +84,9 @@ def test_union_specificity_int_before_float():
         def go(x: int | float = 0):
             seen["x"] = x
 
-    run(tasks, "go --x 3")
+    run(tasks, "go --x=3")
     assert type(seen["x"]) is int and seen["x"] == 3
-    run(tasks, "go --x 3.5")
+    run(tasks, "go --x=3.5")
     assert type(seen["x"]) is float and seen["x"] == 3.5
 
 
@@ -96,7 +96,7 @@ def test_union_validation_error_lists_both():
         def bench(n: int | float = 0): ...
 
     with pytest.raises(ChainError) as exc:
-        run(tasks, "bench --n abc")
+        run(tasks, "bench --n=abc")
     assert "expects an integer or a number" in str(exc.value)
 
 
@@ -111,7 +111,7 @@ def test_list_union_option_repeatable():
         def go(vals: list[str | int] | None = None):
             seen["vals"] = vals
 
-    run(tasks, "go --vals a --vals 3 --vals b")
+    run(tasks, "go --vals=a --vals=3 --vals=b")
     assert seen["vals"] == ["a", 3, "b"]
 
 
@@ -178,7 +178,7 @@ def test_list_splits_on_comma_by_default():
         def build(tags: list[str] | None = None):
             seen["tags"] = tags
 
-    run(tasks, "build --tags a,b,c")
+    run(tasks, "build --tags=a,b,c")
     assert seen["tags"] == ["a", "b", "c"]  # no marker needed
 
 
@@ -190,7 +190,7 @@ def test_list_also_accepts_repeat_and_mixes():
         def build(tags: list[str] | None = None):
             seen["tags"] = tags
 
-    run(tasks, "build --tags a,b --tags c")
+    run(tasks, "build --tags=a,b --tags=c")
     assert seen["tags"] == ["a", "b", "c"]
 
 
@@ -202,10 +202,10 @@ def test_split_coerces_and_validates_each_part():
         def build(nums: list[int] | None = None):
             seen["nums"] = nums
 
-    run(tasks, "build --nums 1,2,3")
+    run(tasks, "build --nums=1,2,3")
     assert seen["nums"] == [1, 2, 3]
     with pytest.raises(ChainError, match="expects an integer"):
-        run(tasks, "build --nums 1,x,3")
+        run(tasks, "build --nums=1,x,3")
 
 
 def test_split_skips_empty_parts():
@@ -216,7 +216,7 @@ def test_split_skips_empty_parts():
         def build(tags: list[str] | None = None):
             seen["tags"] = tags
 
-    run(tasks, "build --tags a,,b,")
+    run(tasks, "build --tags=a,,b,")
     assert seen["tags"] == ["a", "b"]
 
 
@@ -228,7 +228,7 @@ def test_nosplit_keeps_comma_literal():
         def build(names: Annotated[list[str], nosplit] | None = None):
             seen["names"] = names
 
-    run(tasks, "build --names a,b --names c")
+    run(tasks, "build --names=a,b --names=c")
     assert seen["names"] == ["a,b", "c"]  # nosplit: only the repeated flag adds items
 
 
@@ -270,7 +270,7 @@ def test_dict_str_str():
         def build(env: dict[str, str] | None = None):
             seen["env"] = env
 
-    run(tasks, "build --env A=1 --env B=2")
+    run(tasks, "build --env=A=1 --env=B=2")
     assert seen["env"] == {"A": "1", "B": "2"}
 
 
@@ -292,7 +292,7 @@ def test_dict_value_type_validated():
         def build(nums: dict[str, int] | None = None): ...
 
     with pytest.raises(ChainError, match="value expects an integer"):
-        run(tasks, "build --nums a=x")
+        run(tasks, "build --nums=a=x")
 
 
 def test_dict_missing_equals_is_taught():
@@ -301,7 +301,7 @@ def test_dict_missing_equals_is_taught():
         def build(env: dict[str, str] | None = None): ...
 
     with pytest.raises(ChainError, match="expects KEY=VALUE"):
-        run(tasks, "build --env justkey")
+        run(tasks, "build --env=justkey")
 
 
 def test_dict_value_may_contain_equals():
@@ -312,7 +312,7 @@ def test_dict_value_may_contain_equals():
         def build(env: dict[str, str] | None = None):
             seen["env"] = env
 
-    run(tasks, "build --env URL=a=b")
+    run(tasks, "build --env=URL=a=b")
     assert seen["env"] == {"URL": "a=b"}  # split on first '=' only
 
 
@@ -324,7 +324,7 @@ def test_dict_scalar_value_last_wins():
         def build(env: dict[str, str] | None = None):
             seen["env"] = env
 
-    run(tasks, "build --env X=1 --env X=2")
+    run(tasks, "build --env=X=1 --env=X=2")
     assert seen["env"] == {"X": "2"}
 
 
@@ -336,7 +336,7 @@ def test_dict_of_list_appends_on_repeated_key():
         def build(label: dict[str, list[int]] | None = None):
             seen["label"] = label
 
-    run(tasks, "build --label ports=8080 --label ports=8443 --label mem=512")
+    run(tasks, "build --label=ports=8080 --label=ports=8443 --label=mem=512")
     assert seen["label"] == {"ports": [8080, 8443], "mem": [512]}
 
 
@@ -375,7 +375,7 @@ def test_uuid_via_constructor():
         def build(id: uuid.UUID | None = None):
             seen["id"] = id
 
-    run(tasks, f"build --id {value}")
+    run(tasks, f"build --id={value}")
     assert seen["id"] == uuid.UUID(value)
 
 
@@ -387,7 +387,7 @@ def test_datetime_via_fromisoformat():
         def at(when: datetime.datetime | None = None):
             seen["when"] = when
 
-    run(tasks, "at --when 2020-01-02T03:04:05")
+    run(tasks, "at --when=2020-01-02T03:04:05")
     assert seen["when"] == datetime.datetime(2020, 1, 2, 3, 4, 5)
 
 
@@ -399,7 +399,7 @@ def test_custom_type_via_constructor():
         def build(v: Version | None = None):
             seen["v"] = v
 
-    run(tasks, "build --v 1.2.3")
+    run(tasks, "build --v=1.2.3")
     assert seen["v"] == Version("1.2.3")
 
 
@@ -408,7 +408,7 @@ def test_invalid_custom_value_fails_cleanly():
         @reg.task
         def build(id: uuid.UUID | None = None): ...
 
-    results = run(tasks, "build --id not-a-uuid")
+    results = run(tasks, "build --id=not-a-uuid")
     assert results[0].ok is False
     assert isinstance(results[0].error, ValueError)
     assert results[0].code == EX_USAGE  # a binding-time refusal, not a task failure
@@ -429,10 +429,18 @@ def test_dynamic_choices_baked_but_completion_defers():
     assert spec["choices"] == ["alpha", "beta"]  # baked as the fallback snapshot
     assert spec["dynamic"] == {"strict": True}
     # Completion no longer serves the baked snapshot: it defers to a fresh
-    # recompute (a subprocess, exercised end to end in test_complete), returning
-    # a sentinel carrying the partial, the param name, and the task path.
-    assert complete(tree, ["build", ""]) == [_DYNAMIC, "", "project", "build"]
-    assert complete(tree, ["build", "al"]) == [_DYNAMIC, "al", "project", "build"]
+    # recompute (a subprocess, exercised end to end in test_complete),
+    # returning a sentinel carrying the partial, the emission prefix ("" for
+    # a positional; `--opt=` for an attached value), the param name, and the
+    # task path.
+    assert complete(tree, ["build", ""]) == [_DYNAMIC, "", "", "project", "build"]
+    assert complete(tree, ["build", "al"]) == [
+        _DYNAMIC,
+        "al",
+        "",
+        "project",
+        "build",
+    ]
 
 
 def test_dynamic_strict_validation_rejects_unknown():
@@ -485,7 +493,7 @@ def test_required_dict_option_binds_and_is_enforced():
             seen["vars"] = vars
 
     # The escape underscore is stripped: `env_` is the `env` command, not `env-`.
-    run(tasks, "env --vars port=8080 --vars name=web")
+    run(tasks, "env --vars=port=8080 --vars=name=web")
     assert seen["vars"] == {"port": 8080, "name": "web"}
 
     with pytest.raises(ChainError, match=r"missing required option\(s\): --vars"):
@@ -534,7 +542,7 @@ def test_any_annotation_passes_through():
         def deploy(payload: Any = ""):
             seen["p"] = payload
 
-    run(tasks, "deploy --payload hello")
+    run(tasks, "deploy --payload=hello")
     assert seen["p"] == "hello"
 
 
@@ -560,7 +568,7 @@ def test_bare_dict_is_a_required_mapping():
         def envs(vars: dict):
             seen["vars"] = vars
 
-    run(tasks, "envs --vars A=1")
+    run(tasks, "envs --vars=A=1")
     assert seen["vars"] == {"A": "1"}
 
 
@@ -632,7 +640,7 @@ def test_dict_bool_values_coerce():
         def deploy(flags: dict[str, bool] | None = None):
             seen["flags"] = flags
 
-    run(tasks, "deploy --flags cache=false,retry=1 --flags verbose=off")
+    run(tasks, "deploy --flags=cache=false,retry=1 --flags=verbose=off")
     assert seen["flags"] == {"cache": False, "retry": True, "verbose": False}
 
 
@@ -643,7 +651,7 @@ def test_dict_bool_value_validated_eagerly():
 
     _, tree = build_tree(tasks)
     with pytest.raises(ChainError, match="true or false"):
-        split_chain(tree, ["deploy", "--flags", "cache=maybe"])
+        split_chain(tree, ["deploy", "--flags=cache=maybe"])
 
 
 def test_list_of_bool_is_a_repeatable_option_not_a_flag():
@@ -658,7 +666,7 @@ def test_list_of_bool_is_a_repeatable_option_not_a_flag():
     spec = tree["tasks"]["toggles"]["params"][0]
     assert spec["kind"] == "option" and spec.get("multiple") is True
     assert spec["types"] == ["bool"]
-    run(tasks, "toggles --switches true,false --switches yes")
+    run(tasks, "toggles --switches=true,false --switches=yes")
     assert seen["switches"] == [True, False, True]
 
 
@@ -679,9 +687,9 @@ def test_bool_in_union_coerces_tokens():
         def go(x: bool | str = "d"):
             seen["x"] = x
 
-    run(tasks, "go --x true")
+    run(tasks, "go --x=true")
     assert seen["x"] is True
-    run(tasks, "go --x nope")
+    run(tasks, "go --x=nope")
     assert seen["x"] == "nope"
 
 

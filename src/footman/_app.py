@@ -107,20 +107,9 @@ def _wants_json(argv: list[str]) -> bool:
     """
     i = 0
     while i < len(argv) and argv[i].startswith("-") and argv[i] != "--":
-        name = argv[i].split("=", 1)[0]
-        if name == "--json":
+        if argv[i].split("=", 1)[0] == "--json":
             return True
-        kind = split._GLOBAL_KIND.get(name)
-        i += 1
-        if kind == "option" and "=" not in argv[i - 1] and i < len(argv):
-            i += 1  # skip the option's value
-        elif (
-            kind == "option?"
-            and "=" not in argv[i - 1]
-            and i < len(argv)
-            and not argv[i].startswith("-")
-        ):
-            i += 1
+        i += 1  # every global is one self-contained token (values `=`-attach)
     return False
 
 
@@ -136,20 +125,13 @@ def _print_version(json_mode: bool) -> int:
 def _globals_to_dict(tokens: list[str]) -> dict[str, object]:
     """Interpret the splitter's canonical global tokens into a flat mapping."""
     result: dict[str, object] = {}
-    i = 0
-    while i < len(tokens):
-        tok = tokens[i]
+    for tok in tokens:
         name = tok.split("=", 1)[0]
         key = name.lstrip("-").replace("-", "_")
         if "=" in tok:  # a value attached by the splitter (--name=value)
             result[key] = tok.split("=", 1)[1]
-            i += 1
-        elif split._GLOBAL_KIND.get(name) == "option":
-            result[key] = tokens[i + 1] if i + 1 < len(tokens) else ""
-            i += 2
-        else:  # a flag, or an option? given bare
+        else:  # a flag, or a value-optional option given bare
             result[key] = True
-            i += 1
     return result
 
 
@@ -481,7 +463,7 @@ def _print_global_help(tree: dict) -> None:
     for name, alias, _kind, hint, help_text in split.GLOBALS:
         label = f"{alias}, {name}" if alias else f"    {name}"
         if hint:
-            label += f" {hint}"
+            label += f"={hint}"  # values are always `=`-attached
         # `.replace` (not `.format`) so a help string containing braces can
         # never crash help output.
         rows.append((label, help_text.replace("{prog}", prog)))
@@ -1071,7 +1053,7 @@ def _run(
     global _brand
     _brand = brand
     try:
-        pre_globals, _ = split._parse_globals(argv, 0)
+        pre_globals, after = split._parse_globals(argv, 0)
     except split.ChainError as exc:
         return _refuse(_wants_json(argv), str(exc))
     g = _globals_to_dict(pre_globals)
@@ -1082,12 +1064,24 @@ def _run(
         return _print_version(bool(g.get("json")))
     # Asking for help must never touch the filesystem: `--install-completion
     # fish --help` used to write rc files before printing anything.
-    if "install_completion" in g and not wants_help:
-        return _install_completion(g.get("install_completion"))
-    if "setup_completion" in g and not wants_help:
-        return _setup_completion(g.get("setup_completion"))
-    if "uninstall_completion" in g and not wants_help:
-        return _uninstall_completion(g.get("uninstall_completion"))
+    actions: dict[str, Callable[[object], int]] = {
+        "install_completion": _install_completion,
+        "setup_completion": _setup_completion,
+        "uninstall_completion": _uninstall_completion,
+    }
+    for key, run_action in actions.items():
+        if key in g and not wants_help:
+            value = g.get(key)
+            if value is True and after < len(argv) and not argv[after].startswith("-"):
+                # A detached word behind the bare action is a value that
+                # failed to attach (`--install-completion zsh`): teach the
+                # `=` form — never act on the detected shell instead.
+                flag = "--" + key.replace("_", "-")
+                return _refuse(
+                    bool(g.get("json")),
+                    split._expects_value(None, flag, "[SHELL]", argv[after]),
+                )
+            return run_action(value)
 
     # May replace the process (POSIX) or exit with the child's code
     # (Windows); returns quietly whenever the handoff doesn't apply.

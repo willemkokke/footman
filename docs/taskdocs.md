@@ -47,9 +47,9 @@ The maintainer-facing stub toolkit is a separate plugin, `footman.tools`.)
 
 ```sh
 fm docs.page > TASKS.md          # the whole tree, one document
-fm docs.page --target docs       # just one group…
-fm docs.page --target docs.build # …or one task
-fm docs.page --out TASKS.md      # write the file directly
+fm docs.page --target=docs       # just one group…
+fm docs.page --target=docs.build # …or one task
+fm docs.page --out=TASKS.md      # write the file directly
 ```
 
 The page goes to stdout (stdout is the answer; footman's summary is stderr
@@ -98,7 +98,7 @@ is exactly that, regenerated on every docs build — it *cannot* drift,
 because it was never written by hand.
 
 ```console
-$ fm docs.globals --out docs/_generated/globals.md
+$ fm docs.globals --out=docs/_generated/globals.md
 wrote docs/_generated/globals.md
 ```
 
@@ -111,7 +111,7 @@ shows them — collapses the live rewrites to their final frame, and renders
 the capture as an SVG in a macOS-style window:
 
 ```console
-$ fm docs.shots --out docs/_generated/shots/run.svg -- format lint
+$ fm docs.shots --out=docs/_generated/shots/run.svg -- format lint
 wrote docs/_generated/shots/run.svg
 ```
 
@@ -142,8 +142,8 @@ image does. The session even answers its shell's terminal interrogations
 modern shells refuse to paint a prompt into silence:
 
 ```console
-$ fm docs.cast --out docs/_generated/shots/zsh-cast.svg \
-      --shell zsh -- "fm " "<TAB>" "<WAIT>" "che" "<TAB>" "<ENTER>" "<WAIT:2500>"
+$ fm docs.cast --out=docs/_generated/shots/zsh-cast.svg \
+      --shell=zsh -- "fm " "<TAB>" "<WAIT>" "che" "<TAB>" "<ENTER>" "<WAIT:2500>"
 wrote docs/_generated/shots/zsh-cast.svg (55 frames)
 ```
 
@@ -185,7 +185,7 @@ doesn't document itself unless asked).
 
 ## The live sample
 
-Everything below this line is `fm docs.page --target docs
+Everything below this line is `fm docs.page --target=docs
 --heading 3 --flavor material`, regenerated on every docs build:
 
 --8<-- "docs/_generated/tasks-page.md"

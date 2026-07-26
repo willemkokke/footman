@@ -11,7 +11,7 @@ will do:
 ## Install
 
 ```console
-fm --install-completion fish
+fm --install-completion=fish
 ```
 
 This writes one file, `~/.config/fish/completions/fm.fish`, and that's the
@@ -21,7 +21,7 @@ edit and nothing to source. Running it twice changes nothing.
 For the **current session only**, without writing the file:
 
 ```console
-fm --setup-completion fish | source
+fm --setup-completion=fish | source
 ```
 
 ## What you get
@@ -60,7 +60,7 @@ completions with it — footman adds nothing shell-specific.
 ## Uninstall
 
 ```console
-fm --uninstall-completion fish
+fm --uninstall-completion=fish
 ```
 
 Deletes `~/.config/fish/completions/fm.fish` — the one thing the installer

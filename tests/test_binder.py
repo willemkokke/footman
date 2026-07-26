@@ -238,7 +238,7 @@ def test_cli_still_beats_a_json_list(piped):
             seen["names"] = names
 
     piped('["piped"]')
-    run(tasks, "audit --names explicit")
+    run(tasks, "audit --names=explicit")
     assert seen["names"] == ["explicit"]
 
 
