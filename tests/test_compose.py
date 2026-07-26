@@ -811,9 +811,12 @@ def test_fork_copies_every_group_field():
         "hidden",
         "tasks",
         "groups",
-        "finalizers",
+        "contributions",
         "pulled_from",
     }
+    # Hook kinds live inside `contributions`, one bucket per declared kind —
+    # _fork copies the dict generically, so a new kind never touches it.
+    assert set(Group("x").contributions) == set(registry.CONTRIBUTION_KINDS)
 
 
 def test_fork_preserves_default_and_finalizers():
@@ -827,12 +830,13 @@ def test_fork_preserves_default_and_finalizers():
 
     def sentinel(tasks): ...
 
-    src.finalizers.append(sentinel)
+    src.contributions["finalize"].append(sentinel)
 
     fork = compose._fork(src)
     assert fork.default_task is src.default_task  # shared fn, like the task fns
-    assert fork.finalizers == [sentinel]
-    assert fork.finalizers is not src.finalizers  # a fresh list — no memo leak
+    assert fork.contributions["finalize"] == [sentinel]
+    # fresh buckets — no memo leak
+    assert fork.contributions["finalize"] is not src.contributions["finalize"]
 
 
 @pytest.fixture
@@ -920,6 +924,64 @@ def test_include_runs_provider_finalizers(tmp_path, monkeypatch):
     listing = Runner().invoke("--list", cwd=project)
     assert listing.ok
     assert "finalizer ran" in listing.stdout  # the hook ran and disabled the task
+
+
+def test_include_of_a_hooks_only_module_is_a_valid_pull(tmp_path, monkeypatch):
+    # A lifecycle-only provider — hooks, not a single task — is a valid pull.
+    # Before the relaxation this include() refused with "no module-level
+    # Group"; the module's whole contribution is what its hooks do.
+    (tmp_path / "hooks_only.py").write_text(
+        textwrap.dedent(
+            """
+            from footman import finalize
+
+            @finalize
+            def gate(tasks):
+                tasks["deploy"].disable("gated by hooks_only")
+            """
+        )
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.setattr(compose, "_module_trees", {})
+    sys.modules.pop("hooks_only", None)
+
+    project = tmp_path / "proj_hooks_only"
+    project.mkdir()
+    (project / "pyproject.toml").write_text('[project]\nname="x"\n')
+    (project / "tasks.py").write_text(
+        "from footman import task, include\n"
+        "@task\ndef deploy(): ...\n"
+        "include('hooks_only')\n"
+    )
+    listing = Runner().invoke("--list", cwd=project)
+    assert listing.ok, listing.stderr
+    assert "gated by hooks_only" in listing.stdout  # the provider's hook ran
+
+
+def test_plugin_of_a_hooks_only_provider_is_a_valid_pull(tmp_path, monkeypatch):
+    # The entry-point doorway accepts a lifecycle-only provider too, and the
+    # pull lands its contributions on the live root, not the grafted subtree.
+    _advertise(
+        tmp_path,
+        monkeypatch,
+        "hooks_only_plugin",
+        """
+        from footman import finalize
+
+        @finalize
+        def gate(tasks): ...
+        """,
+        "hooksonly = hooks_only_plugin",
+    )
+    with registry.capture() as captured:
+        compose.plugin("hooksonly")
+    assert captured.contributions["finalize"]
+    assert not captured.tasks and not captured.groups
+    # A second pull re-forks the memoised tree: the graft must drain the
+    # fork's buckets, never the memo's, or the hook arrives only once.
+    with registry.capture() as again:
+        compose.plugin("hooksonly")
+    assert again.contributions["finalize"]
 
 
 def test_plugin_entry_point_of_the_wrong_type_teaches(monkeypatch):

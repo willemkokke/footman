@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import importlib.util
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 from footman import registry
@@ -132,14 +133,17 @@ def load_tree(files: list[Path], base: Group | None = None) -> Group:
     exactly as nearer cascade files win over farther ones.
     """
     merged = base if base is not None else Group("root")
-    finalizers: list[registry.Finalizer] = []
+    contributions: dict[str, list[Callable[..., object]]] = {
+        kind: [] for kind in registry.CONTRIBUTION_KINDS
+    }
     try:
         for index, path in enumerate(files):
             tree = _import_file(path, index)
             _overlay(merged, tree, str(path.parent))
-            # Collect each file's @finalize hooks in cascade order, before the
-            # next _import_file resets the registry.
-            finalizers.extend(tree.finalizers)
+            # Collect each file's lifecycle contributions in cascade order,
+            # before the next _import_file resets the registry.
+            for kind, bucket in tree.contributions.items():
+                contributions[kind].extend(bucket)
     finally:
         # Leave no global state behind — even when a file registered some tasks
         # and then raised, which would otherwise strand ghost tasks in
@@ -149,7 +153,7 @@ def load_tree(files: list[Path], base: Group | None = None) -> Group:
     # folder nearest cwd last), each seeing the previous edits — so a subfolder
     # refines what root did. Discovery-time, so the edits reach the manifest.
     view = registry.Tasks(merged)
-    for run in finalizers:
+    for run in contributions["finalize"]:
         try:
             run(view)
         except Exception as exc:  # a bad hook names itself, never a bare traceback
