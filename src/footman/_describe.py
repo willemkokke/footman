@@ -248,15 +248,68 @@ def default_line(node: dict) -> str:
     return "run this group's default action"
 
 
-def iter_tasks(node: dict, prefix: str = ""):
+def listed(node: dict) -> bool:
+    """Whether a task or group node belongs in a human listing.
+
+    `hidden` is the only thing that takes one out — a task nobody is meant to
+    type. It stays callable, completes nothing, and shows up under `--json`
+    marked, because a machine is exactly who calls it.
+    """
+    return not node.get("hidden")
+
+
+def has_listed(node: dict) -> bool:
+    """Whether anything under *node* is worth printing.
+
+    Deliberately *not* short-circuited on the group's own `hidden`: hiding a
+    group hides everything that inherits from it, but a child that answered
+    `hidden=False` is still listed, and it needs its heading to be placed.
+    A group with nothing listed under it prints no heading at all, rather
+    than one with nothing beneath it.
+    """
+    if "default" in node and listed(node["default"]):
+        return True
+    return any(listed(t) for t in node["tasks"].values()) or any(
+        has_listed(sub) for sub in node["groups"].values()
+    )
+
+
+def walk(node: dict, prefix: str = "", depth: int = 0):
+    """The one traversal every human listing reads — `--list`, `--tree`, group
+    help, and the did-you-mean index.
+
+    Yields `(depth, address, leaf, help, kind)` per row, parents before their
+    children, hidden nodes and empty groups already gone: `--list` renders the
+    address and ignores the depth, `--tree` renders the leaf and indents by it.
+    Two views of one walk, so a rule about what is listed cannot be true of
+    one and false of the other.
+    """
     for name, task in node["tasks"].items():
-        yield f"{prefix}{name}", task_line(task)
+        if listed(task):
+            yield depth, f"{prefix}{name}", name, task_line(task), "task"
     for name, sub in node["groups"].items():
-        # A runnable group is itself a listed, runnable address: the bare
-        # `fm <group>` spelling, described by its default action.
-        if "default" in sub:
-            yield f"{prefix}{name}", default_line(sub)
-        yield from iter_tasks(sub, f"{prefix}{name}.")
+        if not has_listed(sub):
+            continue
+        # A runnable group is itself a *runnable address* — the bare
+        # `fm <group>` spelling, described by its default action — so it earns
+        # a row in the flat listing. A plain group is only a heading.
+        runnable = listed(sub) and "default" in sub and listed(sub["default"])
+        yield (
+            depth,
+            f"{prefix}{name}",
+            name,
+            default_line(sub) if runnable else sub["help"],
+            "runnable-group" if runnable else "group",
+        )
+        yield from walk(sub, f"{prefix}{name}.", depth + 1)
+
+
+def iter_tasks(node: dict, prefix: str = ""):
+    """`walk()` as the flat listing sees it: `(address, help)` for everything
+    you can actually type, headings dropped."""
+    for _depth, address, _leaf, help_text, kind in walk(node, prefix):
+        if kind != "group":
+            yield address, help_text
 
 
 def sort_tree(node: dict) -> dict:

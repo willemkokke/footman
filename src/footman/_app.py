@@ -326,23 +326,48 @@ def _print_list(tree: dict) -> None:
             print(f"{' ' * desc_col}{_styled_help(cont)}".rstrip())
 
 
-def _print_tree(node: dict, indent: str = "", prefix: str = "") -> None:
-    # Top-level empty tree (indent sentinel) → mirror _print_list rather than
-    # printing zero bytes and exiting 0.
-    if not indent and not node["tasks"] and not node["groups"]:
+def _print_tree(node: dict) -> None:
+    rows = list(_describe.walk(node))
+    if not rows:
+        # Mirror _print_list rather than printing zero bytes and exiting 0.
         print("No tasks defined.")
         return
     dash = _describe.dim("—", _color_out)
-    for name, task in node["tasks"].items():
-        line = _describe.task_line(task)
-        help_text = f"  {dash} {_styled_help(line)}" if line else ""
-        # Full dotted address, so every listed task is copy-paste-runnable.
-        print(f"{indent}{_describe.bold(f'{prefix}{name}', _color_out)}{help_text}")
-    for name, sub in node["groups"].items():
-        label = f"  {dash} {sub['help']}" if sub["help"] else ""
-        address = f"{prefix}{name}."
-        print(f"{indent}{_describe.bold_cyan(address, _color_out)}{label}")
-        _print_tree(sub, indent + "  ", address)
+    last = _last_of_each_branch(rows)
+    trunk: list[bool] = []  # per ancestor depth: was it its branch's last child?
+    for i, (depth, _address, leaf, help_text, kind) in enumerate(rows):
+        del trunk[depth:]
+        trunk.append(last[i])
+        # Leaf names under a drawn branch, not repeated dotted addresses:
+        # `--list` is the flat, copy-paste view, and a `--tree` that only
+        # indented the same addresses was that listing with worse alignment.
+        # Top level carries no connector: those names *are* the root, and a
+        # branch drawn from nothing reads as a stray glyph.
+        stem = "".join("   " if up else "│  " for up in trunk[1:-1])
+        joint = "" if depth == 0 else ("└─ " if last[i] else "├─ ")
+        label = f"  {dash} {_styled_help(help_text)}" if help_text else ""
+        name = (
+            _describe.bold(leaf, _color_out)
+            if kind == "task"
+            else _describe.bold_cyan(f"{leaf}.", _color_out)
+        )
+        print(f"{_describe.dim(stem + joint, _color_out)}{name}{label}".rstrip())
+
+
+def _last_of_each_branch(rows: list[tuple]) -> list[bool]:
+    """Which rows end their own branch — the `└─` corners.
+
+    A row is last when no later row sits at its depth before the walk climbs
+    back out above it."""
+    flags = [True] * len(rows)
+    for i, row in enumerate(rows):
+        for later in rows[i + 1 :]:
+            if later[0] < row[0]:
+                break
+            if later[0] == row[0]:
+                flags[i] = False
+                break
+    return flags
 
 
 def _print_task_help(tree: dict, path: list[str]) -> None:

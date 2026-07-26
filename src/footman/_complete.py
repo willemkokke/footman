@@ -138,6 +138,22 @@ class _Segment:
             )
 
 
+def _has_visible(node: dict) -> bool:
+    """Whether anything under a group is offered to a human.
+
+    The completion twin of `_describe.has_listed`, spelled again here because
+    the hot path imports no framework: dict reads over the manifest a TAB
+    already loaded. Hiding a group hides everything that inherits from it,
+    but a child that answered `hidden=False` still completes — and can only
+    be reached by descending through its parent.
+    """
+    if node.get("default") is not None and not node["default"].get("hidden"):
+        return True
+    if any(not spec.get("hidden") for spec in node["tasks"].values()):
+        return True
+    return any(_has_visible(sub) for sub in node["groups"].values())
+
+
 def _cand(address: str, summary: str) -> str:
     """`address\\tdescription` when there is a help line, else the address.
 
@@ -181,10 +197,17 @@ def _leaf_fallback(tree: dict, partial: str) -> list[str]:
 
     def walk(node: dict, prefix: str) -> None:
         for name, spec in node["tasks"].items():
-            if prefix and name.startswith(partial):
+            if prefix and name.startswith(partial) and not spec.get("hidden"):
                 out.append(_cand(f"{prefix}{name}", spec.get("help", "")))
         for name, sub in node["groups"].items():
-            if prefix and name.startswith(partial) and "default" in sub:
+            if not _has_visible(sub):
+                continue  # a hidden subtree suggests nothing, at any depth
+            if (
+                prefix
+                and name.startswith(partial)
+                and "default" in sub
+                and not sub["default"].get("hidden")
+            ):
                 out.append(
                     _cand(f"{prefix}{name}", sub["default"].get("help") or sub["help"])
                 )
@@ -230,8 +253,21 @@ def _address_candidates(tree: dict, partial: str) -> list[str]:
             return [_cand(f"{prefix}{m}.", node["groups"][m]["help"]) for m in matches]
         return []  # a segment that matches nothing: not an address
     while True:
-        groups = [n for n in node["groups"] if n.startswith(leaf)]
-        tasks = [n for n in node["tasks"] if n.startswith(leaf)]
+        # `hidden` nodes are typed, never suggested: a task nobody is meant to
+        # reach for stays out of the menu (one dict read — the hot path holds).
+        # A hidden *group* is still offered when something under it opted back
+        # in with `hidden=False`, because that child is listed and TAB has to
+        # be able to reach it — completion offers exactly what `--list` shows.
+        groups = [
+            n
+            for n in node["groups"]
+            if n.startswith(leaf) and _has_visible(node["groups"][n])
+        ]
+        tasks = [
+            n
+            for n in node["tasks"]
+            if n.startswith(leaf) and not node["tasks"][n].get("hidden")
+        ]
         if (
             len(groups) == 1
             and not tasks
@@ -251,11 +287,14 @@ def _address_candidates(tree: dict, partial: str) -> list[str]:
         if default is not None:
             # Runnable group: itself (described by what "stop here" runs),
             # then one level of dotted children for the descent.
-            out.append(_cand(f"{prefix}{name}", default.get("help") or sub["help"]))
+            if not default.get("hidden"):
+                out.append(_cand(f"{prefix}{name}", default.get("help") or sub["help"]))
             for child, csub in sub["groups"].items():
-                out.append(_cand(f"{prefix}{name}.{child}.", csub["help"]))
+                if not csub.get("hidden"):
+                    out.append(_cand(f"{prefix}{name}.{child}.", csub["help"]))
             for child, spec in sub["tasks"].items():
-                out.append(_cand(f"{prefix}{name}.{child}", spec.get("help", "")))
+                if not spec.get("hidden"):
+                    out.append(_cand(f"{prefix}{name}.{child}", spec.get("help", "")))
         else:
             out.append(_cand(f"{prefix}{name}.", sub["help"]))
     for name in tasks:

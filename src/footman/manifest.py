@@ -384,12 +384,34 @@ def _task_node(fn: Any, memo: dict[int, list[str]]) -> dict[str, Any]:
     return node
 
 
-def _node(g: Group, memo: dict[int, list[str]]) -> dict[str, Any]:
+def _hide(node: dict[str, Any], own: bool | None, inherited: bool) -> dict[str, Any]:
+    """Stamp the resolved `hidden` onto a task node: its own answer if it gave
+    one, otherwise the group's. Additive — absent means listed."""
+    if inherited if own is None else own:
+        node["hidden"] = True
+    return node
+
+
+def _node(g: Group, memo: dict[int, list[str]], hidden: bool = False) -> dict[str, Any]:
+    # `hidden` is resolved here, where the tree structure is: a node that never
+    # declared one inherits its group's answer, so hiding a subtree is said once
+    # at the root and `hidden=False` on a child is a real way back. The group's
+    # own answer may come from its default action — hiding what a bare
+    # `fm <group>` runs hides the group it speaks for.
+    own = g.hidden
+    if own is None and g.default_task is not None:
+        own = registry.declared_hidden(g.default_task)
+    mine = hidden if own is None else own
     node: dict[str, Any] = {
         "help": g.help,
-        "tasks": {name: _task_node(fn, memo) for name, fn in g.tasks.items()},
-        "groups": {name: _node(sub, memo) for name, sub in g.groups.items()},
+        "tasks": {
+            name: _hide(_task_node(fn, memo), registry.declared_hidden(fn), mine)
+            for name, fn in g.tasks.items()
+        },
+        "groups": {name: _node(sub, memo, mine) for name, sub in g.groups.items()},
     }
+    if mine:
+        node["hidden"] = True  # additive: listings skip it, the address still runs
     # A runnable group (one with `@group.default`) carries the default's option
     # surface — the same `{help, params}` shape a task node has — so the splitter
     # parses a bare `fm <group> [flags]` against it and completion/help render it.
@@ -397,7 +419,11 @@ def _node(g: Group, memo: dict[int, list[str]]) -> dict[str, Any]:
     # specs, and fan-out is a property of this default, not of the function)
     # so listings can *say* what an undocumented default does.
     if g.default_task is not None:
-        node["default"] = _task_node(g.default_task, memo)
+        node["default"] = _hide(
+            _task_node(g.default_task, memo),
+            registry.declared_hidden(g.default_task),
+            mine,
+        )
         node["default_fanout"] = registry.fans_out(g.default_task)
     return node
 

@@ -7,13 +7,48 @@ package advertises. One contract ties it together: everything resolves when
 your code imports (so completion keeps answering from its cache), and
 conditions re-check *live* when a task actually runs.
 
-## Hiding vs disabling
+## Hidden, omitted, disabled
 
-Two different intents, two mechanisms — and the first one is deliberately
-not a feature, because Python already has it:
+Three different intents, and the difference is what happens when someone
+names the task anyway:
 
-**Hidden** — not in the tree, the listing, or completion. A tasks file is
-executed code, so an `if` does exactly what it says:
+**Hidden — listed nowhere, callable as ever.** For the tasks a machine calls
+and a human never types: a CI entry point, a step another task drives.
+
+```python
+@task(hidden=True)
+def ci_publish(): ...
+```
+
+It drops out of `--list`, `--tree`, group help, the did-you-mean index and
+completion. Everything else is untouched: `fm ci-publish` runs it, a
+`pre=`/`post=` dependency runs it, a runnable group's empty-body fan-out
+still includes it, and `--json` reports it *marked* rather than missing —
+a machine is exactly who calls it, so the catalog keeps it. The generated
+task docs list it too, badged, because the docs are where you look up
+something the listings won't offer.
+
+`hidden` is inherited: unset means "whatever my group said", so one
+declaration hides a whole subtree, and a child can still come back.
+
+```python
+internal = group("internal", hidden=True)   # the whole subtree, one word
+
+@internal.task
+def sweep(): ...                            # hidden, like its group
+
+@internal.task(hidden=False)
+def status(): ...                           # listed again, deliberately
+```
+
+Setting it on a `@group.default` says the same thing about the group it
+speaks for. A group whose every task ends up hidden prints no heading at
+all, rather than an empty one.
+
+**Omitted — the task does not exist.** A tasks file is executed code, so an
+`if` does exactly what it says: no address, nothing to call, nothing to
+list. Reach for it when the task is *meaningless* here, not merely
+uninteresting to type.
 
 ```python
 if sys.platform == "darwin":

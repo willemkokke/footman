@@ -48,6 +48,9 @@ def repl(): ...
 @task(infinite=True)        # runs until Ctrl-C: hinted at start, never timed
 def serve(): ...
 
+@task(hidden=True)          # listed nowhere, callable as ever (machine-facing)
+def ci_entry(): ...
+
 fmt.opts(atomic=True)       # override a task's policy for one use (pre=/post=/body call)
 
 release = group("release", help="Cut a release")
