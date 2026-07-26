@@ -6,10 +6,12 @@ Chaining works: ``fm format lint --fix test``.
 
 from __future__ import annotations
 
+import dataclasses
 import functools
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Annotated
 
-from footman import doc, group, parallel, plugin, run, task
+from footman import RunFailed, doc, fail, group, parallel, plugin, run, stdin, task
 from footman.tools import basedpyright, pytest, ruff, ruff_format, uv, zensical
 
 docs = group("docs", help="Documentation site (Zensical)")
@@ -445,6 +447,53 @@ def docs_build(check: bool = False):
     # A conditional flag needs no ternary: strict=check is --strict when
     # check is true, omitted otherwise (strict is off by default in zensical).
     zensical.opts(in_process=False).build(clean=True, strict=check)
+
+
+# The agent-hook adapters: machine-called, human-invisible (the hidden
+# group keeps the whole subtree out of --list/--tree/completion). Each one
+# reads its harness's JSON payload from stdin as a typed dataclass — no jq,
+# no host dependency — and speaks the exit-code contract its caller reads:
+# 0 all quiet, 2 a blocking verdict with the receipts on stderr, and
+# footman's own 64 passing through untouched, so a broken hook line reaches
+# the human who wired it, never the model as a fake verdict. Coupling a
+# task to its caller is fine here — this is user-land; only src/footman/
+# must stay caller-blind. Wired in .claude/settings.json as
+# `uv run fm hooks.<name> 1>&2`.
+hooks = group("hooks", hidden=True, help="Agent lifecycle hooks (stdin-driven)")
+
+
+@dataclass
+class ToolInput:
+    file_path: str = ""
+
+
+@dataclass
+class HookEvent:
+    tool_input: ToolInput = dataclasses.field(default_factory=ToolInput)
+    stop_hook_active: bool = False
+
+
+@hooks.task
+def post_edit(event: Annotated[HookEvent, stdin]) -> None:
+    """Format and lint a Python file the agent just edited."""
+    if not event.tool_input.file_path.endswith(".py"):
+        return
+    try:
+        format()
+        lint()
+    except RunFailed:
+        fail("format/lint failed — fix it before continuing", code=2)
+
+
+@hooks.task
+def stop(event: Annotated[HookEvent, stdin]) -> None:
+    """Refuse to let a session end on a red gate."""
+    if event.stop_hook_active:
+        return  # this stop already is the retry — never ping-pong
+    try:
+        check()
+    except RunFailed:
+        fail("the gate is red — fix it before stopping", code=2)
 
 
 dist = group("dist", help="Build and publish")

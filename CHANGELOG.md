@@ -199,6 +199,14 @@ versions may include breaking changes.
 
 ### Docs
 
+- footman's own agent hooks are footman tasks now: `.claude/settings.json`
+  runs `fm hooks.post-edit` and `fm hooks.stop` (a hidden group in
+  `tasks.py`) instead of shell one-liners. The payload arrives as a typed
+  dataclass from stdin — the `jq` host dependency is gone — the loop guard
+  is a field read, and the exit contract is exact: 0 quiet, 2 a blocking
+  verdict with receipts on stderr, 64 passing through so a broken hook
+  line reaches the human, never the model.
+
 - Corrected the tools-bridge page and its code comments where they still said
   a zero-argument `main()` serialises — the argv router ended that. pytest's
   dedicated `pytest.main` path is kept for the reason that still stands: its
