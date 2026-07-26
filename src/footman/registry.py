@@ -28,6 +28,7 @@ completion hot path never imports either.
 from __future__ import annotations
 
 import contextlib
+import functools
 import os
 import shutil
 from collections.abc import Callable, Iterator, Sequence
@@ -134,11 +135,10 @@ def _empty_body(fn: object) -> bool:
     treated as one we must run.
     """
     import ast
-    import inspect
     import textwrap
 
     try:
-        src = textwrap.dedent(inspect.getsource(fn))  # type: ignore[arg-type]
+        src = textwrap.dedent(task_source(fn))
         mod = ast.parse(src)
     except (OSError, TypeError, SyntaxError):
         return False
@@ -274,6 +274,76 @@ class _Opted:
         base = object.__getattribute__(self, "_opted_base")
         overrides = object.__getattribute__(self, "_opted_overrides")
         return (id(base), frozenset(overrides.items()))
+
+
+class _TaskFn:
+    """The object `@task` returns — and the very same object it registers.
+
+    A task's metadata rides as `_footman_*` attributes, and the framework keys
+    a great deal on the *identity* of the task object: the DAG's dedup key
+    (`schedule._dep_key`), the cascade's "am I shadowing myself?" test, the
+    provenance and defining-directory stamps. So there is exactly **one**
+    handle per decoration, and it is both registered and returned — a second
+    handle over the same function would read as a different task.
+
+    It is deliberately thin. Attribute reads fall through to the function, so
+    a marker stamped *before* wrapping (`@requires` written below `@task`) is
+    still read back; `functools.update_wrapper` gives it the function's name,
+    docstring, and `__wrapped__`, so `inspect.signature`, `inspect.getdoc` and
+    `inspect.unwrap` all answer about the function. The two `inspect` readers
+    that don't follow `__wrapped__` are wrapped once in `task_source` /
+    `task_source_file` below, so no call site carries the caveat.
+    """
+
+    def __init__(self, fn: Callable[..., Any]) -> None:
+        # Copies __name__/__qualname__/__doc__/__module__/__annotations__ and
+        # the function's __dict__ (markers stamped below @task), and sets
+        # __wrapped__ — the seam every unwrapping reader follows.
+        functools.update_wrapper(self, fn)
+
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        return self.__wrapped__(*args, **kwargs)
+
+    def __getattr__(self, name: str) -> Any:
+        # Reached only for what neither the instance nor the class carries:
+        # the function's own dunders (`__code__`, `__globals__`) and any
+        # attribute set on it after wrapping. Read `__wrapped__` out of the
+        # instance dict directly — going through `self` would recurse here
+        # while `__init__` is still running.
+        try:
+            fn = object.__getattribute__(self, "__dict__")["__wrapped__"]
+        except KeyError:
+            raise AttributeError(name) from None
+        return getattr(fn, name)
+
+    def opts(self, **overrides: Any) -> _Opted:
+        """Per-use option overrides — `lint.opts(keep_going=True)`. The base is
+        this handle, so an opted reference and a bare one agree about which
+        task they name (the DAG's dedup key reads `id(base)`)."""
+        return _Opted(self, _opts_overrides(overrides))
+
+    def __repr__(self) -> str:
+        return f"<task {getattr(self, '__name__', '?')}>"
+
+
+# `inspect`, told about task handles. Everything else in `inspect` follows
+# `__wrapped__` on its own; these two resolve a *file and line*, which a
+# handle doesn't have, so they unwrap to the function first. Wrapped here so
+# reading a task's source stays a one-liner wherever it's needed.
+
+
+def task_source(fn: Any) -> str:
+    """The source text of the function behind *fn* (decorators included)."""
+    import inspect
+
+    return inspect.getsource(inspect.unwrap(fn))
+
+
+def task_source_file(fn: Any) -> str | None:
+    """The file the function behind *fn* is defined in, if it has one."""
+    import inspect
+
+    return inspect.getsourcefile(inspect.unwrap(fn))
 
 
 def _apply_policy(
@@ -546,13 +616,14 @@ class Group:
             key = cli_name(name or fn.__name__)
             self._shadow_pulled(key)
             self._claim(key)
+            task = _TaskFn(fn)  # one handle: registered *and* returned
             if key == "default":
                 # The name *is* the mechanism: any task named `default` is its
                 # group's default action — `@group.default` is sugar for this.
                 # One validation path, so there are no second-class defaults.
-                self._stamp_default(fn, interactive)
+                self._stamp_default(task, interactive)
             _apply_policy(
-                fn,
+                task,
                 pre=pre,
                 post=post,
                 progress=progress,
@@ -567,9 +638,8 @@ class Group:
                 exclusive=exclusive,
                 hidden=hidden,
             )
-            fn.opts = lambda **o: _Opted(fn, _opts_overrides(o))  # type: ignore[attr-defined]
-            self.tasks[key] = fn
-            return cast("TaskFn[_P, _R_co]", fn)
+            self.tasks[key] = task
+            return cast("TaskFn[_P, _R_co]", task)
 
         return register(fn) if fn is not None else register
 
@@ -705,9 +775,10 @@ class Group:
 
         def register(fn: Callable[_P, _R_co]) -> TaskFn[_P, _R_co]:
             self._claim("default")
-            self._stamp_default(fn, interactive)
+            task = _TaskFn(fn)  # one handle: registered *and* returned
+            self._stamp_default(task, interactive)
             _apply_policy(
-                fn,
+                task,
                 pre=pre,
                 post=post,
                 progress=progress,
@@ -722,9 +793,8 @@ class Group:
                 exclusive=exclusive,
                 hidden=hidden,
             )
-            fn.opts = lambda **o: _Opted(fn, _opts_overrides(o))  # type: ignore[attr-defined]
-            self.tasks["default"] = fn
-            return cast("TaskFn[_P, _R_co]", fn)
+            self.tasks["default"] = task
+            return cast("TaskFn[_P, _R_co]", task)
 
         return register(fn) if fn is not None else register
 
@@ -1111,10 +1181,8 @@ class TaskView:
     def source_file(self) -> str | None:
         """The file the task's function is defined in, or `None` when it can't
         be located (a built-in or dynamically constructed function)."""
-        import inspect
-
         try:
-            return inspect.getsourcefile(self.fn)
+            return task_source_file(self.fn)
         except TypeError:
             return None
 

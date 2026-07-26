@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import types
+
 import pytest
 
 from footman import Context, registry
@@ -169,3 +171,82 @@ def test_task_and_group_names_reject_dots_and_whitespace():
 
         @reg.task(name="two words")
         def spaced(): ...
+
+
+# --- the task handle: `@task` returns the object it registers ------------------
+# A task is a `_TaskFn` handle over the decorated function, and the framework
+# keys on its identity (DAG dedup, the cascade's self-shadow test, provenance
+# stamps) and on `inspect` answering about the *function*. These pin both.
+
+
+def test_the_decorator_returns_the_registered_handle():
+    # One handle per decoration, registered *and* returned: a second handle
+    # over the same function would read as a different task everywhere
+    # identity is the key.
+    reg = Group("root")
+
+    @reg.task
+    def build(): ...
+
+    assert reg.tasks["build"] is build
+    assert isinstance(build, registry._TaskFn)
+    assert build.__wrapped__ is not build  # the function is still in there
+
+
+def test_the_handle_is_transparent_to_inspection():
+    # Every introspection footman does on a task must answer about the
+    # function: the command name, help text, the CLI signature, `--where`'s
+    # source location, and `inspect.unwrap`.
+    import inspect
+
+    reg = Group("root")
+
+    @reg.task
+    def greet(name: str, loud: bool = False) -> None:
+        """Say hello."""
+
+    assert greet.__name__ == "greet"
+    assert greet.__doc__ == "Say hello."
+    assert inspect.getdoc(greet) == "Say hello."  # not the handle's class doc
+    assert list(inspect.signature(greet).parameters) == ["name", "loud"]
+    assert inspect.signature(greet, eval_str=True).parameters["name"].annotation is str
+    assert getattr(greet, "__code__").co_name == "greet"  # what `--where` reads
+    assert registry.task_source_file(greet) == __file__  # what TaskView reports
+    assert "def greet" in registry.task_source(greet)
+    body = inspect.unwrap(greet)
+    assert body is not greet and isinstance(body, types.FunctionType)
+    assert callable(greet)
+    assert "greet" in repr(greet)
+
+
+def test_a_marker_stamped_below_the_task_decorator_is_read_back():
+    # `@requires` may be stacked either side of `@task`. Below it, the check
+    # lands on the bare function *before* the handle exists — the handle must
+    # still report it, or availability silently passes.
+    reg = Group("root")
+
+    @reg.task
+    @registry.requires(lambda: False, reason="nope")
+    def gated(): ...
+
+    assert registry.availability(gated) == "nope"
+
+
+def test_source_reading_survives_the_handle():
+    # `inspect.getsource`/`getsourcefile` do NOT follow `__wrapped__`, which
+    # is why reading a task's source goes through `registry.task_source*`. An
+    # empty-body default is detected by reading source, so losing the unwrap
+    # would silently stop every group fan-out and make source_file None for
+    # every task.
+    reg = Group("root")
+    lint = reg.group("lint")
+
+    @lint.default
+    def lint_all():
+        """Lint everything."""
+
+    default = lint.default_task
+    assert default is not None
+    assert registry.fans_out(default)  # the source read still works
+    view = registry.Tasks(reg)["default"]
+    assert view.source_file is not None and view.source_file.endswith(".py")
