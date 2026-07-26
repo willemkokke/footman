@@ -18,6 +18,15 @@ versions may include breaking changes.
   list before groups at every level, and the setting is presentation
   only: what runs, and in what order, never follows it.
 
+- **`--prefix` on `tools.sync` and `tools.audit`.** Both can now read the
+  binaries from a `fm tools.provision` directory instead of the machine
+  they run on — the question a scheduled check actually wants to ask
+  ("have the tools released anything since our snapshot?") rather than the
+  one the local PATH answers ("is this laptop's ruff the one we read?").
+  `color` already took `--prefix`; the three now share one helper that
+  scopes the overlay to the task through `ctx.env`, with a bare-call
+  fallback for callers outside a run.
+
 ### Changed
 
 - **footman's own tasks overlay the tree — no container at all.** The
@@ -42,6 +51,24 @@ versions may include breaking changes.
   shears the two-column layout apart. And the custom-CLI page says what
   was always true: the uv handoff re-execs the *(branded)* footman you
   invoked — `acme` hands off to the project's own `acme`, never `fm`.
+
+- **BREAKING: a stub that is behind is news, not a failure.** A stub records
+  what one tool accepted at the version it was read from, and footman
+  promises no particular speed at retaking that snapshot — so
+  `fm tools.audit` finding a newer release upstream never meant anything was
+  wrong, while its exit code and its wording ("differ from the installed
+  tool … run `fm tools.sync` to update") both said otherwise. It now reports
+  and exits zero: *"3 tool(s) have released a newer version than the stub
+  snapshot … nothing is broken — the bridge speaks flags the stub hasn't
+  heard of."* `--strict` restores a non-zero exit for automation that needs
+  something to trip on, and the task returns its findings
+  (`{"checked", "behind", "skipped", "resnapshotted"}`), so
+  `fm --json tools.audit` hands a scheduled job the list to act on.
+
+  One finding keeps failing unconditionally: a disagreement in footman's
+  negation or wrapper tables. Those are read by the *runtime*, so a mismatch
+  means a task emits the wrong command today — a defect, not a release
+  someone else shipped.
 
 - **BREAKING: `fm tools.list --missing` is now `--show missing`.** Listing
   all tools, only the installed ones, or only the missing ones is one

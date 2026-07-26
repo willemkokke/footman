@@ -9,8 +9,8 @@ there on hover, without importing the tool to find out.
 Three things make a generated stub better than a hand-written one:
 
 * it says what the tool says, because it was read from the tool;
-* it can be regenerated, so drift is a diff rather than an archaeology
-  exercise (`fm tools.audit` is that diff, run in CI);
+* it can be regenerated, so a tool moving on is a diff rather than an
+  archaeology exercise (`fm tools.audit` reports that diff);
 * it can carry the tool's own prose per flag, including the one fact a
   bridge can never infer — how *this* tool spells "off".
 

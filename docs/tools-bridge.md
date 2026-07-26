@@ -236,16 +236,25 @@ on the lines below. The dialects are small — `[default: 3]` (clap),
 `--no-fix` to disable" (clap's prose), and git's `--[no-]quiet`, which
 states both spellings at once.
 
-`fm tools.audit` regenerates and compares, so a tool that moves
-fails a check rather than quietly leaving your editor a version behind. A
-tool that isn't installed is skipped *and named* — a check that quietly
+A stub is a **snapshot**: what one tool accepted at the version it was read
+from. Tools keep releasing and footman promises no particular speed at
+retaking the snapshot, so `fm tools.audit` regenerates and compares to tell
+you which ones have moved on — news, not a fault, and it exits zero. A tool
+that isn't installed is skipped *and named*, because a check that quietly
 covered nine of thirteen would be worse than no check at all:
 
 ```console
 $ fm tools.audit
 skipped (not installed): bun, cspell, prek, markdownlint
-9 stub(s) match their installed tool
+9 stub(s) match the tools they were read from
 ```
+
+`--fix` takes the fresh snapshot; `--strict` exits non-zero, for a
+scheduled job that wants something to trip on; `--prefix` asks the question
+against a `fm tools.provision` directory rather than the machine you happen
+to be on. The one finding that *does* fail regardless is a disagreement in
+footman's negation or wrapper tables — the runtime reads those, so a
+mismatch means a task emits the wrong command today.
 
 The flip side of "never forbid" is that the stub can't reject a flag name
 it doesn't know — `**flags: Any` accepts anything. So a mistyped flag isn't
