@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import subprocess
+import sys
+import time
 from pathlib import Path
 from typing import Annotated
+from unittest import mock
 
 import pytest
 
@@ -28,23 +32,134 @@ def _generous_cold_budget(monkeypatch):
     monkeypatch.setattr(_complete, "_DYNAMIC_TIMEOUT", 30.0)
 
 
-def _cold_evidence(cache_dir) -> str:
-    """What the cold build left behind, for a failure message.
+def _cache_state(cache_dir) -> str:
+    """What the cold build left behind.
 
-    These tests fail on loaded CI runners and the assertion alone can't say
-    why: an empty candidate list means the detached builder never landed,
-    but not whether it was slow, dead, or blocked. The cache directory
-    answers that — a manifest present means "landed too late", a stray
-    `.pid.tmp` means the write couldn't replace its destination, and an
-    empty directory means the child never got that far.
+    A manifest present means "landed too late", a stray `.pid.tmp` means the
+    write couldn't replace its destination, and an empty (or missing)
+    directory means the child never got that far.
     """
-    from pathlib import Path
-
     root = Path(cache_dir)
     if not root.exists():
         return f"cache dir {root} does not exist"
     files = sorted(f"{p.name} ({p.stat().st_size}b)" for p in root.rglob("*"))
     return f"cache dir {root} holds: {files or 'nothing'}"
+
+
+def _child_argv(override: str | None = None) -> list[str] | None:
+    """The exact argv `_spawn_refresh` would detach — recorded, not retyped.
+
+    Standing in for `Popen` reads the command out of the product, so this can
+    never drift from what a real TAB spawns, and the hot path keeps its own
+    spelling of the spawn (no seam added there for the tests' benefit).
+    Returns None if nothing was spawned at all.
+    """
+    seen: list[list[str]] = []
+
+    def _record(cmd, **kwargs):
+        seen.append(list(cmd))
+        return None
+
+    with mock.patch.object(subprocess, "Popen", _record):
+        _complete._spawn_refresh(override)
+    return seen[0] if seen else None
+
+
+# Asks the *child* where it stands, in its own words. `_rebuild` returns
+# silently when `task_files` comes back empty, which is exactly what an
+# unexpected cwd looks like from outside: a child that ran, said nothing, and
+# wrote nothing. Only the child can tell those apart from "never started".
+_PROBE = (
+    "import json, sys; from pathlib import Path; from footman import _paths; "
+    "cwd = Path.cwd(); ceiling = _paths.find_repo_root(cwd); "
+    "print(json.dumps({'cwd': str(cwd), 'ceiling': str(ceiling), "
+    "'task_files': [str(f) for f in _paths.task_files(cwd, ceiling)], "
+    "'manifest': str(_paths.manifest_path(cwd)), 'exe': sys.executable}))"
+)
+
+
+def _child_view() -> str:
+    """The child's own answer to "where am I, and can I see any tasks?"."""
+    try:
+        proc = subprocess.run(
+            [sys.executable, "-c", _PROBE],
+            capture_output=True,
+            text=True,
+            errors="replace",
+            timeout=120,
+        )
+    except Exception as exc:
+        return f"child view unavailable: {exc!r}"
+    return f"child sees {proc.stdout.strip() or '(nothing)'} {proc.stderr.strip()}"
+
+
+def _cold_evidence(cache_dir, override: str | None = None) -> str:
+    """Why the cold build produced nothing — assembled *after* a failure.
+
+    These tests fail on loaded CI runners (py3.12 · windows-latest, hopping
+    between whichever cold test lands on the slow box) and the assertion alone
+    can't say why: an empty candidate list means the detached builder never
+    landed, but not whether it was slow, dead, or standing somewhere it could
+    find no tasks. Two things hide the answer in production, both deliberate:
+    `_spawn_refresh` sends the child's output to DEVNULL, and `refresh_cwd`
+    suppresses every exception — a background refresh must never crash or
+    print at a user.
+
+    So the *test* re-runs the very same child, synchronously and with its
+    output captured, and reports what it said (or its silence) alongside the
+    ground the builder stands on: cwd, interpreter, the task files
+    discoverable from there, and the manifest path the hot path polled. None
+    of it runs on the happy path — an assertion has already failed by the
+    time this is called — and none of it touches the product's spawn.
+    """
+    from footman import _paths
+
+    lines = [_cache_state(cache_dir)]
+    try:
+        cwd = Path.cwd()
+        ceiling = _paths.find_repo_root(cwd)
+        found = [str(p) for p in _paths.task_files(cwd, ceiling)] or "none"
+        target = (
+            _paths.source_manifest_path(cwd, Path(override))
+            if override
+            else _paths.cwd_manifest_path()
+        )
+        lines += [
+            f"cwd {cwd}",
+            f"sys.executable {sys.executable}",
+            f"repo root {ceiling}; task files {found}",
+            f"manifest {target} exists={target.exists()}",
+        ]
+    except Exception as exc:  # a diagnostic must not replace the failure
+        lines.append(f"context unavailable: {exc!r}")
+
+    lines.append(_child_view())
+    try:
+        argv = _child_argv(override)
+    except Exception as exc:  # never let the diagnostic eat the failure
+        return "\n".join([*lines, f"child argv unavailable: {exc!r}"])
+    if argv is None:
+        return "\n".join([*lines, "child: _spawn_refresh spawned nothing"])
+    lines.append(f"child argv {argv}")
+    started = time.monotonic()
+    try:
+        proc = subprocess.run(
+            argv, capture_output=True, text=True, errors="replace", timeout=120
+        )
+    except subprocess.TimeoutExpired:
+        elapsed = time.monotonic() - started
+        return "\n".join([*lines, f"child still running after {elapsed:.1f}s"])
+    except Exception as exc:
+        return "\n".join([*lines, f"child could not be spawned: {exc!r}"])
+    return "\n".join(
+        [
+            *lines,
+            f"child exit {proc.returncode} after {time.monotonic() - started:.1f}s",
+            f"child stdout: {proc.stdout.strip() or '(silent)'}",
+            f"child stderr: {proc.stderr.strip() or '(silent)'}",
+            f"after the rerun, {_cache_state(cache_dir)}",
+        ]
+    )
 
 
 def _names(result):
@@ -556,7 +671,7 @@ def test_cold_f_cache_builds_and_serves(tmp_path, monkeypatch, capsys):
     # manifest and serves it, the same as a plain cold TAB — not empty
     complete_cli(["--", "-f", "other.py", ""])
     out = capsys.readouterr().out.split()
-    assert "ship" in out, _cold_evidence(tmp_path / "cache")
+    assert "ship" in out, _cold_evidence(tmp_path / "cache", "other.py")
 
 
 def test_cold_build_times_out_to_none(tmp_path, monkeypatch):
@@ -581,6 +696,52 @@ def test_cold_build_skips_missing_f_file(tmp_path, monkeypatch):
     monkeypatch.setattr(_complete, "_spawn_refresh", _spawn)
     got = _complete._cold_build(str(tmp_path / "m.json"), str(tmp_path / "missing.py"))
     assert got is None and spawned == []
+
+
+def test_child_argv_mirrors_the_real_spawn():
+    # The failure diagnostic re-runs the *same* child the hot path detaches,
+    # so it reads that command out of `_spawn_refresh` rather than retyping
+    # it. This is the drift guard: if the spawn ever stops going through
+    # `subprocess.Popen`, the recorder comes back empty and says so here —
+    # not on the CI failure the diagnostic exists to explain.
+    plain = _child_argv()
+    assert plain is not None
+    assert plain[0] == sys.executable and plain[1] == "-c"
+    assert "_refresh.refresh_cwd()" in plain[2]
+
+    override = _child_argv("other.py")
+    assert override is not None
+    assert "_refresh.refresh_source" in override[2] and override[-1] == "other.py"
+
+
+def test_cold_evidence_reports_the_childs_own_words(tmp_path, monkeypatch):
+    # What the next windows-latest failure will actually print. The child is
+    # faked here (the point is the report, not the build): its captured
+    # stderr, the argv it was given, and the ground it stands on — cwd,
+    # interpreter, discoverable task files, polled manifest path.
+    monkeypatch.setenv("FOOTMAN_CACHE_DIR", str(tmp_path / "cache"))
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    (proj / "pyproject.toml").write_text("[project]\nname='x'\nversion='0'\n")
+    (proj / "tasks.py").write_text("from footman import task\n\n@task\ndef go(): ...\n")
+    monkeypatch.chdir(proj)
+
+    def fake_run(cmd, **kwargs):
+        if "_paths.find_repo_root" in cmd[2]:  # the where-am-I probe
+            return subprocess.CompletedProcess(cmd, 0, '{"cwd": "elsewhere"}', "")
+        return subprocess.CompletedProcess(cmd, 1, "", "ImportError: no footman\n")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    from footman import _paths
+
+    report = _cold_evidence(tmp_path / "cache")
+    assert "cache dir" in report and "does not exist" in report
+    assert 'child sees {"cwd": "elsewhere"}' in report  # the child's own words
+    assert "ImportError: no footman" in report
+    assert "child exit 1" in report
+    assert "_refresh.refresh_cwd()" in report
+    assert str(proj / "tasks.py") in report  # the builder can find a task file
+    assert str(_paths.cwd_manifest_path()) in report
 
 
 # --- chain-aware completion -----------------------------------------------------
