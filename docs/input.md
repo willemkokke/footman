@@ -41,6 +41,62 @@ loudly, and CI passes the value as a flag like any other.
 
 ![Animated: fm release prompts version, the typed answer runs through coercion, and the release runs](_generated/shots/ask-cast.svg)
 
+## Secrets: `Secret` and `secret=True`
+
+Two halves of the same idea — how a value is *collected*, and how it is
+*shown*.
+
+`secret=True` is the collection half: `ask(secret=True)` on a parameter, or
+`prompt(secret=True)` mid-task, hides the typing (no echo) and hands back a
+`Secret`.
+
+```python
+from footman import Secret, ask, task
+
+@task
+def login(token: Annotated[str, ask(secret=True)]): ...
+
+@task
+def publish(token: Secret): ...        # a flag or env() value, still redacted
+```
+
+`Secret` is the display half, and it stands alone: annotate any parameter
+with it and whatever fills it — a flag, an `env()` fallback, a default —
+redacts wherever footman *shows* it. Its repr is `Secret('***')`, so
+tracebacks, logs and debuggers can't leak it, and structured surfaces
+serialise it as `***`: the `--json` envelope, a `Stdout[…]` document, baked
+manifest defaults.
+
+### What redaction does not cover, on purpose
+
+The bytes a task deliberately writes. `Secret` is a real `str`, so every
+string operation on it yields a plain one:
+
+```python
+@task
+def env_export(token: Secret) -> Stdout[str]:
+    return f"export TOKEN={token}"     # emits the real value — no switch needed
+```
+
+That is what makes footman usable as a filter for a task whose *job* is to
+print a credential (`eval "$(fm env-export)"`), without a run-wide flag to
+disarm protection everywhere else. The flip side is worth knowing: a secret
+f-stringed into a log message loses its redaction the same way, because
+neither footman nor Python can tell the two apart.
+
+Where a `Secret` *would* survive into a structured surface and you mean it
+to be emitted, say so:
+
+```python
+@task
+def creds(token: Secret) -> Stdout[dict]:
+    return {"token": token.reveal()}   # deliberate; a plain str from here on
+```
+
+`reveal()` exists so that intent is greppable — every deliberate exposure in
+a codebase is one search away, which no global "don't redact" option could
+give you.
+
 ## Gate a task: `@task(confirm=…)`
 
 A yes/no question asked *before* the task and its prerequisites run:

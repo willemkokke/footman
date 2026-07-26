@@ -7,6 +7,37 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- **`Secret.reveal()` — deliberate exposure, said out loud.** A task whose
+  *job* is to print a credential (an `export …` line for `eval "$(fm
+  env-export)"`) needs the value to leave, and a `Secret` inside a
+  structured document (`Stdout[dict]`, the `--json` envelope) redacts to
+  `***`. `reveal()` returns the plain `str`, so the intent reads at the
+  point of use and every deliberate exposure in a codebase is one `grep`
+  away — an audit surface a run-wide "don't redact" flag could never give.
+  Formatting was never redacted and still isn't: string operations on a
+  `Secret` yield a plain `str`, which is what makes `f"export
+  TOKEN={token}"` work with no switch to disarm protection elsewhere.
+
+### Fixed
+
+- **`prompt(secret=True)` returns a `Secret`.** It hid the typing and then
+  handed back a bare `str`, so a mid-task secret was fully printable in the
+  next traceback or `--json` payload — while the identical-looking
+  `ask(secret=True)` redacted. Hiding a value while it is typed and then
+  printing it at the first error is a strange kind of secret. An unattended
+  default is wrapped too: where the value came from doesn't change what it
+  is.
+
+### Docs
+
+- The input guide gains a **Secrets** section, covering the two halves
+  (`secret=True` collects, `Secret` displays), what redaction deliberately
+  does *not* cover (the bytes a task writes on purpose), and the honest
+  flip side — a secret f-stringed into a log message loses its redaction
+  the same way, because nothing can tell the two apart.
+
 ## [0.21.0] — 2026-07-26
 
 - Tool stubs retaken at release, per the audit: **uv, prek, djlint** had

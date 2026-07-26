@@ -741,16 +741,26 @@ def prompt(
     under `--no-input`, or when it would otherwise block, it returns `default`
     if given, else raises — an unattended run fails loudly. For a value a
     script must supply, take it as a task parameter (a CLI flag) instead.
+
+    `secret=True` hides the typing (getpass) *and* returns a `Secret`, so the
+    answer redacts in tracebacks and structured output the same way
+    `ask(secret=True)` does — hiding a value while it is typed and then
+    printing it in the first traceback would be a strange kind of secret.
+    A default returned unattended is wrapped too: where the value came from
+    doesn't change what it is.
     """
+    from footman.params import Secret
+
     ctx = _guard_interactive("prompt()")
     if ctx.no_input:
         if default is not None:
-            return default
+            return Secret(default) if secret else default
         raise RuntimeError(
             "prompt(): --no-input is set, so nothing can be asked. Pass a "
             "default, or supply the value as a task parameter (a CLI flag)."
         )
-    return _prompt_core(message, default=default, secret=secret)
+    answer = _prompt_core(message, default=default, secret=secret)
+    return Secret(answer) if secret else answer
 
 
 def confirm(message: str, *, default: bool = False) -> bool:
