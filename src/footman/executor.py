@@ -18,6 +18,7 @@ import contextlib
 import enum
 import inspect
 import io
+import json
 import os
 import time
 from collections.abc import Iterator
@@ -201,6 +202,93 @@ def _env_value(
     return one(raw)
 
 
+def _decode_stdin(payload: bytes) -> str:
+    """stdin bytes as text: UTF-8, universal newlines. A stream that is not
+    UTF-8 is a taught refusal — bind it as `bytes` instead of guessing."""
+    try:
+        text = payload.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ValueError(
+            f"stdin is not valid UTF-8 ({exc}) — bind the parameter as "
+            f"`bytes` to read the raw stream"
+        ) from exc
+    return text.replace("\r\n", "\n").replace("\r", "\n")
+
+
+def _stdin_document(payload: bytes) -> dict[str, Any]:
+    """The JSON object on stdin, for a `stdin(\"field\")` parameter."""
+    if not payload.strip():
+        raise ValueError("stdin was empty; expected a JSON document")
+    try:
+        document = json.loads(_decode_stdin(payload))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"stdin is not JSON: {exc}") from exc
+    if not isinstance(document, dict):
+        raise ValueError(
+            f"stdin holds a JSON {type(document).__name__}, not an object — "
+            f"a stdin(field) parameter reads one top-level key"
+        )
+    return document
+
+
+def _stdin_value(
+    param: inspect.Parameter,
+    peeled: coerce.Peeled,
+    params: dict[str, Any] | None = None,
+) -> Any:
+    """The stdin path for an absent option: CLI beats stdin beats env.
+
+    The boundary read happens here (once per process, shared — see
+    `context.stdin_payload`), and the value flows through the same coercion
+    and validation a CLI token gets. `_MISSING` means stdin did not supply
+    it: no pipe, or a JSON document without the named field — the parameter
+    then falls to env, default, or the required-and-absent refusal.
+    """
+    marker = peeled.stdin
+    assert marker is not None  # bind only calls this when stdin is present
+    payload = context.stdin_payload()
+    if payload is None:
+        return _MISSING
+    label = f"--{param.name.replace('_', '-')} (from stdin)"
+
+    if marker.field is not None:
+        value = _stdin_document(payload).get(marker.field, _MISSING)
+        if value is _MISSING or value is None:  # absent and null both fall
+            return _MISSING
+        if isinstance(value, (dict, list)):
+            raise ValueError(
+                f"{label}: the {marker.field!r} field is a JSON "
+                f"{type(value).__name__}, not a single value"
+            )
+        token = value if isinstance(value, str) else str(value)
+        return _coerce_extra(token, peeled, label, params)
+
+    if marker.lines:
+        lines = _decode_stdin(payload).splitlines()
+        return [_coerce_extra(line, peeled, label, params) for line in lines]
+
+    if peeled.element is bytes:
+        return _run_checks(payload, peeled, label, params)
+
+    text = _decode_stdin(payload)
+    return _run_checks(_validate_value(text, peeled, label), peeled, label, params)
+
+
+def _stdin_fillable(peeled: coerce.Peeled) -> bool:
+    """Whether the boundary's stdin would fill this parameter — the ask()
+    front-loader skips a question stdin already answers."""
+    payload = context.stdin_payload()
+    if payload is None:
+        return False
+    if peeled.stdin is not None and peeled.stdin.field is not None:
+        try:
+            value = _stdin_document(payload).get(peeled.stdin.field)
+        except ValueError:
+            return False
+        return value is not None
+    return True
+
+
 def _prompt_param(
     cli: str,
     peeled: coerce.Peeled,
@@ -337,6 +425,8 @@ def resolve_asks(fn: Task, seg: Segment, ctx: Context | None) -> None:
             continue
         if peeled.completer is not None:
             continue  # a live suggest may need a prerequisite's effects
+        if peeled.stdin is not None and _stdin_fillable(peeled):
+            continue  # the piped payload fills it at bind time
         if peeled.env is not None and os.environ.get(peeled.env) is not None:
             continue  # the env variable fills it at bind time
         raw, _value = _prompt_param(cli, peeled, ctx, None)
@@ -393,16 +483,40 @@ def bind(
                 continue
             if param.annotation is not empty:
                 peeled = coerce.peel(param.annotation)
+                # CLI > stdin > env > default > prompt: the piped payload
+                # outranks the ambient environment, and both lose to an
+                # explicit option.
+                if peeled.stdin is not None:
+                    value = _stdin_value(param, peeled, siblings)
+                    if value is not _MISSING:
+                        kwargs[param.name] = value
+                        continue
                 if peeled.env is not None:
                     value = _env_value(param, peeled, siblings)
                     if value is not _MISSING:
                         kwargs[param.name] = value
                         continue
-                # ask(): prompt for a required (defaultless) param the CLI and
-                # env didn't fill — CLI > env > default > prompt, so a default
-                # short-circuits it and the prompt is the last resort.
+                # ask(): prompt for a required (defaultless) param nothing
+                # else filled — the prompt is the last resort.
                 if peeled.ask is not None and param.default is empty:
                     _, kwargs[param.name] = _prompt_param(cli, peeled, ctx, siblings)
+                    continue
+                if peeled.stdin is not None and param.default is empty:
+                    # Required, reads stdin, and nothing supplied it. A taught
+                    # refusal, never a blocking terminal read.
+                    if peeled.stdin.field is not None and (
+                        context.stdin_payload() is not None
+                    ):
+                        raise ValueError(
+                            f"--{cli} is required and the JSON document on "
+                            f"stdin has no {peeled.stdin.field!r} field — "
+                            f"add the field, or pass --{cli}"
+                        )
+                    raise ValueError(
+                        f"--{cli} is required and reads stdin — pipe a "
+                        f"document in, redirect a file (< payload), or "
+                        f"pass --{cli}"
+                    )
             continue
         raw = seg.values[cli]
         if isinstance(raw, bool):  # a flag, already resolved by the splitter

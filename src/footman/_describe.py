@@ -139,6 +139,17 @@ def _mechanics(p: dict) -> str:
         bits.append("repeatable" if p.get("nosplit") else "repeatable/comma-split")
     if p["kind"] == "variadic":
         bits.append("extra arguments (also receives everything after --)")
+    source = p.get("stdin")
+    if source:
+        if source.startswith("field:"):
+            note = f"reads stdin (JSON field {source[6:]!r})"
+        elif source == "lines":
+            note = "reads stdin (one line per value)"
+        elif source == "bytes":
+            note = "reads stdin (raw bytes)"
+        else:
+            note = "reads stdin (text)"
+        bits.append(note)
     if p.get("required"):
         bits.append("required")
     return "; ".join(bits)

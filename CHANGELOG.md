@@ -9,6 +9,23 @@ versions may include breaking changes.
 
 ### Added
 
+- **`stdin` — a parameter bound from the pipe.** footman is a pipe target:
+  `git diff | fm review` and `fm review < changes.patch` both bind the
+  stream to a typed parameter, with no flag to remember. The annotation
+  decides the interpretation — `Annotated[str, stdin]` (or `Stdin[str]`)
+  reads the stream as UTF-8 text, `bytes` reads it raw, `stdin("field")`
+  reads one top-level key of a JSON document, and `stdin(lines=True)` binds
+  a list one line per element, each line coerced exactly like a CLI token
+  (`list[int]`, `list[Path]`). Precedence is CLI > stdin > env > default >
+  prompt, so an explicit option always wins and one signature serves both
+  spellings. The stream is read once, fully, at the boundary and shared by
+  every parameter in the run that asks — task bodies still never touch
+  stdin, so bound tasks stay fully parallel with no `interactive=True`. A
+  terminal means "not provided": a defaulted parameter falls back, a
+  required one refuses with a taught message, and nothing ever blocks on a
+  read. `--help` says what a parameter reads; `Runner.invoke` grew a
+  `stdin=` argument so tests pipe without touching the real stream.
+
 - **`[tool.footman] sort = true` — alphabetical listings.** One boolean
   orders every human-facing walk of the tree: `--list`, `--tree`, help,
   the `--json` catalog, and the generated docs pages. A `--sort` global

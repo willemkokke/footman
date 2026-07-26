@@ -233,6 +233,58 @@ class env:
         self.var = var
 
 
+class stdin:
+    """Bind this parameter from the process's standard input, via `Annotated`:
+
+    ```python
+    def review(diff: Annotated[str, stdin] = ""): ...
+    # git diff | fm review     AND     fm review < changes.patch
+    ```
+
+    The annotation decides how the bytes are interpreted: `str` reads the
+    stream as UTF-8 text (universal newlines), `bytes` reads it raw. Two
+    call forms refine that:
+
+    - `stdin("prompt")` binds one top-level field of a JSON document on
+      stdin — the value flows through the same coercion and validation as
+      a CLI token.
+    - `stdin(lines=True)` binds a list parameter from lines of text — each
+      line is coerced like one CLI token, so `list[int]` and `list[Path]`
+      work as they would as repeated flags.
+
+    Precedence is CLI > stdin > env > default > prompt, so an explicit
+    option always wins and one signature serves both `fm process file.txt`
+    and `cat file.txt | fm process`. The stream is read once, fully, at the
+    boundary — never inside a task body, so the parallel-stdin guard is
+    never in play — and the same payload serves every parameter that asks.
+    A terminal on stdin means "not provided": the parameter falls back to
+    its default, and a required parameter refuses with a taught message
+    rather than blocking on a read.
+    """
+
+    __slots__ = ("field", "lines")
+
+    def __init__(self, field: str | None = None, *, lines: bool = False) -> None:
+        if field is not None and lines:
+            raise ValueError(
+                "stdin(field) and stdin(lines=True) are exclusive — a field "
+                "binds one JSON value, lines bind a list of tokens"
+            )
+        self.field = field
+        self.lines = lines
+
+
+Stdin = Annotated[_T, stdin]
+"""Shorthand for `Annotated[T, stdin]`, in the `Arg`/`Forward` mould:
+
+```python
+def review(diff: Stdin[str] = ""): ...
+```
+
+The bare-marker form only — the call forms (`stdin("field")`,
+`stdin(lines=True)`) are spelled inside `Annotated`, like `env("VAR")`."""
+
+
 class check:
     """A custom validator, run after coercion; raise `ValueError` to reject:
 

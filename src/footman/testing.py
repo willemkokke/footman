@@ -43,7 +43,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from footman import _app
+from footman import _app, context
 from footman.app import App
 from footman.context import Context, Result, use_context
 from footman.executor import TaskResult
@@ -130,19 +130,39 @@ class Runner:
         *,
         tasks: Path | Group | None = None,
         cwd: Path | None = None,
+        stdin: str | bytes | None = None,
     ) -> InvokeResult:
         """Run one command line and return everything it produced.
 
         `args` is a string (shlex-split) or an argv list. `tasks` overrides
         discovery: a `Path` routes through `--tasks-file`, a `Group` skips
         discovery entirely (an in-memory tree, no files needed). Without it,
-        the normal `tasks.py` cascade from `cwd` applies. Never raises on
-        task failure — the code is in the `Result`; `KeyboardInterrupt`
-        passes through.
+        the normal `tasks.py` cascade from `cwd` applies. `stdin` is what a
+        pipe would have delivered — a `str` is encoded UTF-8 — and its
+        absence means "a terminal": the invocation never reads the test
+        harness's real stream, so `stdin`-bound parameters see exactly what
+        the test says and nothing else. Never raises on task failure — the
+        code is in the `Result`; `KeyboardInterrupt` passes through.
         """
         argv = shlex.split(args) if isinstance(args, str) else [str(a) for a in args]
         out, err = io.StringIO(), io.StringIO()
         collected: list[TaskResult] = []
+        payload = stdin.encode("utf-8") if isinstance(stdin, str) else stdin
+        previous = context._inject_stdin(payload)
+        try:
+            return self._invoke(argv, tasks, cwd, out, err, collected)
+        finally:
+            context._restore_stdin_payload(previous)
+
+    def _invoke(
+        self,
+        argv: list[str],
+        tasks: Path | Group | None,
+        cwd: Path | None,
+        out: io.StringIO,
+        err: io.StringIO,
+        collected: list[TaskResult],
+    ) -> InvokeResult:
         with (
             _isolated(cwd),
             contextlib.redirect_stdout(out),

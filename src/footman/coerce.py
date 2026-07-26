@@ -26,6 +26,7 @@ from footman.params import _arg as _ARG
 from footman.params import _PathRequirement, ask, between, check, doc, env, suggest
 from footman.params import forward as _FORWARD
 from footman.params import nosplit as _NOSPLIT
+from footman.params import stdin as _stdin_marker
 
 _TAG_ORDER = {"bool": 0, "int": 1, "float": 2, "path": 3, "str": 4}
 
@@ -97,6 +98,7 @@ class Peeled:
     ask: ask | None = None  # prompt-if-missing marker (ask())
     forward: bool = False  # thread this value to dispatched tasks (forward)
     optional: bool = False  # Arg[T]: an optional trailing positional
+    stdin: _stdin_marker | None = None  # bind from the boundary's stdin read
 
 
 def peel(ann: Any) -> Peeled:
@@ -111,6 +113,7 @@ def peel(ann: Any) -> Peeled:
     ask_marker: ask | None = None
     is_forward = False
     is_optional = False
+    stdin_marker: _stdin_marker | None = None
 
     # Strip Annotated and Optional wrappers in any order/nesting, e.g. both
     # `Annotated[list[X], nosplit] | None` and `Annotated[list[X] | None, nosplit]`.
@@ -143,6 +146,13 @@ def peel(ann: Any) -> Peeled:
                     is_forward = True
                 elif mark is _ARG:
                     is_optional = True
+                elif mark is _stdin_marker or isinstance(mark, _stdin_marker):
+                    # The bare class and an instance both mark the parameter:
+                    # `Annotated[str, stdin]` reads the whole stream,
+                    # `stdin("field")` / `stdin(lines=True)` refine it.
+                    stdin_marker = (
+                        mark if isinstance(mark, _stdin_marker) else _stdin_marker()
+                    )
                 elif callable(mark) and not isinstance(mark, type):
                     completer = suggest(mark)  # a bare callable == suggest(fn)
             ann, changed = base, True
@@ -160,6 +170,7 @@ def peel(ann: Any) -> Peeled:
         "ask": ask_marker,
         "forward": is_forward,
         "optional": is_optional,
+        "stdin": stdin_marker,
     }
 
     if ann is dict or typing.get_origin(ann) is dict:  # dict[K, V] or bare dict
@@ -184,6 +195,7 @@ def peel(ann: Any) -> Peeled:
             env=env_var,
             checks=(*checks, *value.checks),
             doc=doc_text,
+            stdin=stdin_marker,
         )
 
     if ann is list or typing.get_origin(ann) is list:  # list[X] / Many[X] / bare
@@ -390,6 +402,10 @@ def coerce_custom(value: str, element: Any) -> Any:
     # on Python >=3.11, so without this guard `Any("x")` would raise.
     if element is Any or element is object or not isinstance(element, type):
         return value
+    if element is bytes:
+        # A CLI token for a bytes parameter is its UTF-8 encoding — the raw
+        # form arrives via the stdin boundary, where bytes stay bytes.
+        return value.encode()
     try:
         if issubclass(element, _datetime.datetime):
             return element.fromisoformat(value)

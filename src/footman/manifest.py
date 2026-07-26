@@ -149,7 +149,9 @@ def param_spec(param: inspect.Parameter) -> dict[str, Any]:
         # Only a *scalar* bool is a --flag; `list[bool]` stays a repeatable
         # option whose tokens parse as booleans (true/false/1/0/yes/no/on/off).
         spec["kind"] = "flag"
-        if not has_default and peeled.ask is None:  # ask() prompts if absent
+        # ask() prompts if absent; stdin fills at the boundary — either one
+        # makes a defaultless flag satisfiable without the command line.
+        if not has_default and peeled.ask is None and peeled.stdin is None:
             spec["required"] = True  # else state it explicitly: --x or --no-x
         _marker_keys(spec, peeled, param, has_default)
         return spec
@@ -171,10 +173,12 @@ def param_spec(param: inspect.Parameter) -> dict[str, Any]:
             )
         spec["kind"] = "argument"
         spec["optional"] = True
-    elif peeled.ask is not None and not has_default:
-        # ask() makes a defaultless parameter a CLI-optional option: absence is
-        # filled by prompting (executor.bind), so the splitter must let it be
-        # missing rather than enforce it as a required positional.
+    elif (peeled.ask is not None or peeled.stdin is not None) and not has_default:
+        # ask() and stdin both make a defaultless parameter a CLI-optional
+        # option: absence is filled at the boundary (a prompt, the piped
+        # payload) or refused with a taught message there, so the splitter
+        # must let it be missing rather than enforce it as a required
+        # positional.
         spec["kind"] = "option"
     elif has_default or kw_only:
         spec["kind"] = "option"
@@ -252,6 +256,35 @@ def _marker_keys(
                 f"somewhere to fall"
             )
         spec["env"] = peeled.env
+    if peeled.stdin is not None:
+        marker = peeled.stdin
+        if spec.get("mapping"):
+            raise SpecError(
+                f"<{param.name}>: stdin is not supported on dict parameters"
+            )
+        if marker.lines and not peeled.multiple:
+            raise SpecError(
+                f"<{param.name}>: stdin(lines=True) needs a list parameter — "
+                f"each line binds as one element"
+            )
+        if marker.field is not None and peeled.multiple:
+            raise SpecError(
+                f"<{param.name}>: stdin({marker.field!r}) binds a single "
+                f"value — a list parameter reads lines (stdin(lines=True))"
+            )
+        if marker.field is None and not marker.lines and peeled.multiple:
+            raise SpecError(
+                f"<{param.name}>: a list from stdin reads lines — mark it "
+                f"stdin(lines=True), each line one element"
+            )
+        if marker.field is not None:
+            spec["stdin"] = f"field:{marker.field}"
+        elif marker.lines:
+            spec["stdin"] = "lines"
+        elif peeled.element is bytes:
+            spec["stdin"] = "bytes"
+        else:
+            spec["stdin"] = "text"
 
 
 def _run_completer(completer: suggest, memo: dict[int, list[str]]) -> list[str]:
