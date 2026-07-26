@@ -1362,14 +1362,22 @@ def test_resolve_off_macos_uses_path(monkeypatch):
 # --- a snapshot only ever moves forward -----------------------------------
 
 
-def test_numeric_reads_the_leading_integers_and_stops():
-    from footman.tasks.tools import _numeric
+def test_version_tuple_reads_the_leading_integers_and_stops():
+    """One comparator for the whole framework — the snapshot guard and
+    `installed_version()` must not disagree about which build is newer.
 
-    assert _numeric("2.55.0") == (2, 55, 0)
-    assert _numeric("0.6.0-wk.5") == (0, 6, 0)  # the tail is anybody's grammar
-    assert _numeric("1.13.0.git.kitware.jobserver-1") == (1, 13, 0)
-    assert _numeric("") == ()  # unreadable: the caller must not skip on it
-    assert _numeric("nightly") == ()
+    A build tail says nothing about which flags exist, and scraping its
+    digits answers the question backwards: `0.6.0-wk.5` is a fork build *of*
+    0.6.0, so `(0, 6, 0, 5)` would sort it *after* its own base.
+    """
+    from footman.tools import version_tuple
+
+    assert version_tuple("2.55.0") == (2, 55, 0)
+    assert version_tuple("0.6.0-wk.5") == (0, 6, 0)  # the tail is anybody's grammar
+    assert version_tuple("1.13.0.git.kitware.jobserver-1") == (1, 13, 0)
+    assert version_tuple("0.6.0-wk.5") <= version_tuple("0.6.0")  # never "newer"
+    assert version_tuple("") == ()  # unreadable: the caller must not skip on it
+    assert version_tuple("nightly") == ()
 
 
 @needs_ruff

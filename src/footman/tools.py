@@ -71,9 +71,46 @@ _VERSION = _re.compile(r"(?<![\d.])(\d+\.\d+(?:\.\d+)?(?:[-.][A-Za-z0-9]+)*)\b")
 
 
 def read_version(text: str) -> str:
-    """The version string inside a tool's `--version` output, or `""`."""
+    """The version string inside a tool's `--version` output, or `""`.
+
+    The string is preserved exactly, build tail and all (`0.6.0-wk.5`), for
+    anything that records *which* build was read. Use `version_tuple` to
+    compare.
+    """
     match = _VERSION.search(text)
     return match[1] if match else ""
+
+
+def version_tuple(version: str) -> tuple[int, ...]:
+    """A version string reduced to comparable integers — the CLI generation.
+
+    Only the leading numeric run counts, and the first component carrying a
+    build tag ends the read: `0.6.0-wk.5` and `1.13.0.git.kitware.jobserver-1`
+    both compare as their base, `(0, 6, 0)` and `(1, 13, 0)`.
+
+    That is the honest answer to the question this is asked — *is the CLI new
+    enough* — because a build tail says nothing about which flags exist.
+    Scraping its digits would answer it backwards: `0.6.0-wk.5` is a fork
+    build *of* 0.6.0, which every version grammar sorts at or before it,
+    while `(0, 6, 0, 5)` sorts after. The cost is that two builds of one base
+    compare equal; when the build itself matters, keep the string from
+    `read_version`.
+
+    An unreadable version yields `()`, which compares lower than everything —
+    "can't tell" must never read as "newer".
+    """
+    parts: list[int] = []
+    for piece in version.split("."):
+        digits = ""
+        for char in piece:
+            if not char.isdigit():
+                break
+            digits += char
+        if digits:
+            parts.append(int(digits))
+        if not piece.isdigit():
+            break
+    return tuple(parts)
 
 
 class _Off:
@@ -714,9 +751,7 @@ class Tool:
             found = read_version(out.stdout or out.stderr)
             if out.returncode != 0 or not found:
                 raise ValueError(f"could not read a version from `{' '.join(argv)}`")
-            _version_cache[key] = tuple(
-                int(part) for part in _re.findall(r"\d+", found)
-            )
+            _version_cache[key] = version_tuple(found)
         return _version_cache[key]
 
 

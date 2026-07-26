@@ -32,6 +32,17 @@ versions may include breaking changes.
   interpreter rather than whatever `python` happens to be on `PATH`. A stub's
   recorded version was never the same question, and the docstring now says so.
 
+- **One comparator too: a build tail can't read as newer than its own base.**
+  `installed_version()` scraped every digit it found, so `eclint 0.6.0-wk.5`
+  compared as `(0, 6, 0, 5)` — *after* the 0.6.0 it is a fork build of, which
+  is backwards under every version grammar — and ninja's
+  `1.13.0.git.kitware.jobserver-pipe-1` picked up a stray `1`. Both now
+  compare as their base, `(0, 6, 0)` and `(1, 13, 0)`, which is the honest
+  answer to the only question the tuple is asked: is the CLI new enough. The
+  snapshot guard's own copy of that logic is gone; `tools.version_tuple` is
+  the one comparator, beside `tools.read_version`, and the exact string
+  survives for anything that records *which* build was read.
+
 - **`cmd.installed_version()` works.** Windows `cmd` has no `--version`; it
   spells it `cmd /c ver`. `Tool(…, version_argv=…)` makes that declarable
   rather than a special case nobody could reach, and it rides a chain like

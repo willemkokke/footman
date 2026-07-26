@@ -35,6 +35,7 @@ from footman._describe import bold, cyan, wants_color
 from footman.context import current
 from footman.params import doc
 from footman.registry import Group
+from footman.tools import version_tuple as _version_tuple
 
 tasks = Group("tools", help="Keep the tools.* stubs honest")
 
@@ -199,32 +200,6 @@ def spec(
             print(f"    {option.name:<28} {option.type_name:<10}{negation}")
 
 
-def _numeric(version: str) -> tuple[int, ...]:
-    """The leading numeric components of a version string, for comparison.
-
-    Tools spell the tail however they like (`0.6.0-wk.5`,
-    `1.13.0.git.kitware.jobserver-1`), so only the plain integer run at the
-    front is compared and anything else stops the read. An unreadable
-    version yields `()`, which compares lower than everything — the caller
-    treats "can't tell" as "don't skip".
-    """
-    parts: list[int] = []
-    for piece in version.split("."):
-        digits = ""
-        for char in piece:
-            if not char.isdigit():
-                break
-            digits += char
-        if digits:
-            parts.append(int(digits))
-        if not piece.isdigit():
-            # A component carrying a suffix (`0-wk`) still contributes its
-            # number, and ends the read: whatever follows a build tag is
-            # that tool's own grammar, not a version footman can order.
-            break
-    return tuple(parts)
-
-
 def _from_prefix(binary: str, root: Path) -> bool:
     """Whether *binary* was reached through the provisioned prefix.
 
@@ -265,7 +240,10 @@ def _ignore(driver: _drivers.Driver, root: Path | None) -> str:
         return ""
     recorded = _header(stub)[0].partition(" ")[0]
     found = _drivers.version(driver.name)
-    if _numeric(found) and _numeric(recorded) > _numeric(found):
+    # One comparator, shared with the bridge: only the leading numeric run
+    # counts, so a build tail can never read as "newer than its own base".
+    here, snapshot = _version_tuple(found), _version_tuple(recorded)
+    if here and snapshot > here:
         return f"older than the snapshot ({found} < {recorded})"
     return ""
 
