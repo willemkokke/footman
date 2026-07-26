@@ -5,9 +5,11 @@
 # accepts, and can never forbid what the bridge would happily pass.
 from typing import Any
 
-from footman.tools import Result, Tool, _Flag, _Value
+from footman.tools import Result as _Result
+from footman.tools import Tool as _Tool
+from footman.tools import _Flag, _Value
 
-class Mypy(Tool):
+class Mypy(_Tool):
     def __call__(  # type: ignore[override]
         self,
         *args: str,
@@ -106,7 +108,7 @@ class Mypy(Tool):
         xslt_html_report: _Value = ...,
         xslt_txt_report: _Value = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """[-m MODULE] [-p PACKAGE] [-c PROGRAM_TEXT] [files ...]
 
         Args:

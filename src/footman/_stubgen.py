@@ -45,24 +45,31 @@ def render(
 ) -> str:
     """The full text of `_stubs/<tool>.pyi` for *spec*."""
     root = class_name or _class_name(spec.name)
-    tree = _tree(spec.verbs)
-    classes = _classes(tree, root)
+    body = _classes(_tree(spec.verbs), root)
     header = _HEADER.format(
         name=spec.name,
         version=spec.version or "an unpinned version",
         platform=platform or "this machine",
         in_process=in_process or ("available" if spec.in_process else "no"),
-        imports=_imports("\n".join(classes)),
+        imports=_imports(body),
     )
-    return "\n".join([header, *classes])
+    return f"{header}\n{body}"
 
 
 def _imports(body: str) -> str:
     """Just the imports the body uses — an unused one fails the lint gate."""
     typing = ["Any"] + (["Literal"] if "Literal[" in body else [])
+    if "-> Self:" in body:
+        typing.append("Self")
     aliases = ("_Flag", "_Value", "_ValuedFlag")
-    # `Result` is always the return type of every generated call, so always imported.
-    names = ["Result", "Tool"] + [n for n in aliases if re.search(rf"\b{n}\b", body)]
+    # footman's own two names are aliased private, because a subcommand group
+    # becomes a nested class named after the verb — and `uv tool` would
+    # otherwise generate `class Tool(Tool)`, which cannot derive from itself.
+    # A verb can never produce a leading underscore, so the collision is gone
+    # rather than dodged. (`Result` is every call's return type: always used.)
+    names = ["Result as _Result", "Tool as _Tool"] + [
+        n for n in aliases if re.search(rf"\b{n}\b", body)
+    ]
     lines = []
     if "Sequence[" in body:
         lines.append("from collections.abc import Sequence")
@@ -92,31 +99,47 @@ def _tree(verbs: Iterable[Verb]) -> dict[str, object]:
     return tree
 
 
-def _classes(tree: dict[str, object], name: str) -> list[str]:
-    """This class, plus one for every subgroup below it, deepest first."""
-    out: list[str] = []
+def _classes(tree: dict[str, object], name: str, depth: int = 0) -> str:
+    """One class, with every subgroup nested *inside* it.
+
+    A subcommand group belongs to its tool — `docker compose up` is not a
+    `DockerCompose` that happens to sit beside `Docker`. Nesting says that
+    in the only place it can be said, and it earns two things beyond
+    tidiness: the reference page needs one directive rather than one per
+    group (the renderer walks members, and a nested class is a member), and
+    the names stop being invented — `Docker.Compose`, not `DockerCompose`,
+    with no way for two tools to collide.
+    """
     body: list[str] = []
     for key in sorted(tree):
         node = tree[key]
         if isinstance(node, dict):
-            child = f"{name}{key.title().replace('_', '')}"
-            out.extend(_classes(node, child))
+            child = key.title().replace("_", "")
+            body.append(_indent(_classes(node, child, depth + 1)))
             body.append(f"    {key}: {child}")
     for key in sorted(tree):
         node = tree[key]
         if isinstance(node, Verb):
-            body.append(_method(node, key))
-    # A tool with subcommands gets a typed `.flags()` returning its own class,
-    # so a globals-before-verb chain stays checked. The root verb's options
-    # are the typed globals (git's `--git-dir`, docker's `--host`); a tool
-    # with none still gets the self-returning override, for the chaining.
+            body.append(_method(node, key, depth))
+    # A tool with subcommands gets a typed `.flags()` returning `Self`, so a
+    # globals-before-verb chain stays checked. The root verb's options are the
+    # typed globals (git's `--git-dir`, docker's `--host`); a tool with none
+    # still gets the override, for the chaining. `Self` rather than the class
+    # by name: a nested class cannot refer to itself from inside its own body,
+    # and Self is what the chain means anyway.
     # (footman run-control rides the inherited `.opts()`, typed on Tool.)
     if _has_subcommands(tree):
         root = tree.get("")
         globals_ = root.options if isinstance(root, Verb) else ()
-        body.append(_flags_method(globals_, name))
-    out.append(f"class {name}(Tool):\n" + ("\n".join(body) or "    ..."))
-    return out
+        body.append(_flags_method(globals_))
+    return f"class {name}(_Tool):\n" + ("\n".join(body) or "    ...")
+
+
+def _indent(block: str) -> str:
+    """A nested class body, one level in."""
+    return "\n".join(
+        f"    {line}" if line.strip() else line for line in block.split("\n")
+    )
 
 
 def _has_subcommands(tree: dict[str, object]) -> bool:
@@ -125,9 +148,9 @@ def _has_subcommands(tree: dict[str, object]) -> bool:
     return any(key != "" for key in tree)
 
 
-def _flags_method(options: tuple[Option, ...], class_name: str) -> str:
-    """The typed `flags()` for a tool's global options — returns the tool,
-    so `tools.docker.flags(host=…).compose.up(…)` stays checked. With no
+def _flags_method(options: tuple[Option, ...]) -> str:
+    """The typed `flags()` for a tool's global options — returns `Self`, so
+    `tools.docker.flags(host=…).compose.up(…)` stays checked. With no
     globals it is still declared, so the return type carries the chain.
     (footman run-control — nofail/capture/cwd/rel/… — goes on the
     inherited `.opts()`.)"""
@@ -138,7 +161,7 @@ def _flags_method(options: tuple[Option, ...], class_name: str) -> str:
         for option in typed:
             lines.append(f"        {_safe(option.name)}: {_annotation(option)} = ...,")
     lines.append("        **flags: Any,")
-    lines.append(f"    ) -> {class_name}:")
+    lines.append("    ) -> Self:")
     lines.append('        """Bind tool-level global options before the subcommand.')
     lines.append("")
     lines.append("        `tools.docker.flags(host=...)` puts a tool's own")
@@ -147,7 +170,7 @@ def _flags_method(options: tuple[Option, ...], class_name: str) -> str:
     return "\n".join(lines)
 
 
-def _method(verb: Verb, key: str) -> str:
+def _method(verb: Verb, key: str, depth: int = 0) -> str:
     """One verb as a stub method — or `__call__` for a tool's own flags.
 
     footman run-control (nofail/capture/title/in_process/cwd/rel) lives on the inherited
@@ -168,8 +191,8 @@ def _method(verb: Verb, key: str) -> str:
     for option in options:
         lines.append(f"        {_safe(option.name)}: {_annotation(option)} = ...,")
     lines.append("        **flags: Any,")
-    lines.append("    ) -> Result:")
-    doc = _docstring(verb)
+    lines.append("    ) -> _Result:")
+    doc = _docstring(verb, depth)
     if doc:
         lines.append(doc)
     lines.append("        ...")
@@ -253,7 +276,7 @@ def _annotation(option: Option) -> str:
     return "_Value"
 
 
-def _docstring(verb: Verb) -> str:
+def _docstring(verb: Verb, depth: int = 0) -> str:
     """The verb's own help, plus one `Args:` entry per flag.
 
     Google-style because two readers want it: Pylance surfaces a
@@ -266,7 +289,7 @@ def _docstring(verb: Verb) -> str:
         return ""
     summary = textwrap.wrap(
         _esc(verb.help) or "Run this verb.",
-        width=84,
+        width=84 - 4 * depth,
         initial_indent=" " * 8,
         subsequent_indent=" " * 8,
         break_long_words=False,
@@ -279,7 +302,7 @@ def _docstring(verb: Verb) -> str:
         lines.append("")
         lines.append("        Args:")
         for option in documented:
-            lines.extend(_arg_lines(option))
+            lines.extend(_arg_lines(option, depth))
     lines.append('        """')
     return "\n".join(lines)
 
@@ -306,7 +329,7 @@ def _md_safe(lines: list[str]) -> list[str]:
     return out
 
 
-def _arg_lines(option: Option) -> list[str]:
+def _arg_lines(option: Option, depth: int = 0) -> list[str]:
     """One `Args:` entry, wrapped, with the `off` spelling when it matters."""
     text = _esc(option.help).rstrip(".")
     if option.type_name.startswith("list[") or option.type_name.endswith("[]"):
@@ -321,7 +344,7 @@ def _arg_lines(option: Option) -> list[str]:
         text = f"{text}. Defaults to `{option.default}`"
     wrapped = textwrap.wrap(
         f"{_safe(option.name)}: {text}.".replace("  ", " "),
-        width=84,
+        width=84 - 4 * depth,
         initial_indent=" " * 12,
         subsequent_indent=" " * 16,
         break_long_words=False,

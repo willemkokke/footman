@@ -4,11 +4,13 @@
 # Every verb ends in `**flags: Any`: the stub suggests what this tool
 # accepts, and can never forbid what the bridge would happily pass.
 from collections.abc import Sequence
-from typing import Any, Literal
+from typing import Any, Literal, Self
 
-from footman.tools import Result, Tool, _Flag, _Value
+from footman.tools import Result as _Result
+from footman.tools import Tool as _Tool
+from footman.tools import _Flag, _Value
 
-class Prek(Tool):
+class Prek(_Tool):
     def __call__(  # type: ignore[override]
         self,
         *args: str,
@@ -65,7 +67,7 @@ class Prek(Tool):
         to_ref: _Value = ...,
         verbose: _Flag = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """A fast Git hook manager written in Rust, designed as a drop-in alternative
         to pre-commit, reimagined.
 
@@ -124,7 +126,7 @@ class Prek(Tool):
         repo_include_tag: _Value = ...,
         verbose: _Flag = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """Update the `rev` field of repositories in the config file to the latest
         version
 
@@ -177,7 +179,7 @@ class Prek(Tool):
         refresh: _Flag = ...,
         verbose: _Flag = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """Remove all prek cached data
 
         Args:
@@ -237,7 +239,7 @@ class Prek(Tool):
         skip: _Value = ...,
         verbose: _Flag = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """Install prek Git shims into Git's effective hooks directory
 
         Args:
@@ -315,7 +317,7 @@ class Prek(Tool):
         to_ref: _Value = ...,
         verbose: _Flag = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """Run hooks
 
         Args:
@@ -389,7 +391,7 @@ class Prek(Tool):
         refresh: _Flag = ...,
         verbose: _Flag = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """Uninstall prek Git shims
 
         Args:
@@ -463,7 +465,7 @@ class Prek(Tool):
         to_ref: _Value = ...,
         verbose: _Flag = ...,
         **flags: Any,
-    ) -> Prek:
+    ) -> Self:
         """Bind tool-level global options before the subcommand.
 
         `tools.docker.flags(host=...)` puts a tool's own

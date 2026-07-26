@@ -22,17 +22,31 @@ versions may include breaking changes.
 
 ### Fixed
 
-- **The tool reference documented a fifth of nothing.** A tool with
-  subcommand groups spreads over several stub classes — `Docker` holds
-  `compose: DockerCompose`, `Uv` holds `pip` and `tool`, `Gh` holds eight —
-  but each page named only the root class, so `docker compose up`, `uv pip
-  install`, `gh pr create` and their flags were described nowhere at all:
-  **48 callables and 641 options**, a fifth of the whole stubbed surface. Each
-  page now carries one directive per class. The index table had the same blind
-  spot from the other side: it flattened nested verbs to bare names, so
-  `compose.up` read as `up` and uv's two `install` verbs collapsed into one
-  row. Verbs are listed dotted now, as they are called, and footman's own
-  `flags()` accessor stops posing as a verb of the tool.
+- **A subcommand group is a nested class, and the tool reference shows it.**
+  `docker compose up` was `DockerCompose` sitting *beside* `Docker` — a name
+  invented by flattening — and a reference page named only the root class, so
+  `docker compose up`, `uv pip install`, `gh pr create` and every flag they
+  take were described nowhere at all: **48 callables and 641 options**, a fifth
+  of the whole stubbed surface. Groups now generate as `Docker.Compose`,
+  `Uv.Pip`, `Gh.Pr`, which the docs renderer walks on its own — one directive
+  documents a tool whatever its shape, and two tools can no longer collide over
+  an invented name. `flags()` returns `Self` rather than its class by name,
+  since a nested class cannot refer to itself from inside its own body and
+  `Self` is what the chain meant anyway.
+
+  Two things fell out of the rename. footman's own `Tool` and `Result` are
+  imported privately in generated stubs (`Tool as _Tool`), because `uv tool`
+  would otherwise write `class Tool(Tool)` — a class deriving from itself; a
+  verb can never produce a leading underscore, so the collision is gone rather
+  than dodged. And docstring wrapping now knows its nesting depth, so a group's
+  help text stays inside the line limit instead of pushing four characters past
+  it.
+
+  The index table had the same blind spot from the other side: it flattened
+  nested verbs to bare names, so `compose.up` read as `up` and uv's two
+  `install` verbs collapsed into one row. Verbs are listed dotted now, as they
+  are called, and footman's own `flags()` accessor stops posing as a verb of
+  the tool.
 
 - **One version parser, and `installed_version()` answers about the binary it
   runs.** The bridge and the stub extractor each had their own regex, and the

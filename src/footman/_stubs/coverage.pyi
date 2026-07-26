@@ -3,16 +3,18 @@
 # Read from coverage 7.15.2 on macOS. In-process: default.
 # Every verb ends in `**flags: Any`: the stub suggests what this tool
 # accepts, and can never forbid what the bridge would happily pass.
-from typing import Any
+from typing import Any, Self
 
-from footman.tools import Result, Tool, _Flag, _Value
+from footman.tools import Result as _Result
+from footman.tools import Tool as _Tool
+from footman.tools import _Flag, _Value
 
-class Coverage(Tool):
+class Coverage(_Tool):
     def __call__(  # type: ignore[override]
         self,
         *args: str,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """Coverage.py, version 7.15.2 with C extension"""
         ...
     def annotate(
@@ -27,7 +29,7 @@ class Coverage(Tool):
         omit: _Value = ...,
         rcfile: _Value = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """Make annotated copies of the given files, marking statements that are
         executed with > and statements that are missed with !.
 
@@ -55,7 +57,7 @@ class Coverage(Tool):
         quiet: _Flag = ...,
         rcfile: _Value = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """Combine data from multiple coverage files. The combined results are written
         to a single file representing the union of the data. The positional
         arguments are data files or directories containing
@@ -76,7 +78,7 @@ class Coverage(Tool):
         debug: _Value = ...,
         rcfile: _Value = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """Erase previously collected coverage data.
 
         Args:
@@ -105,7 +107,7 @@ class Coverage(Tool):
         skip_empty: _Flag = ...,
         title: _Value = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """Create an HTML report of coverage results. Each file gets its own page, with
         the source decorated to show executed, excluded, and missed lines.
 
@@ -152,7 +154,7 @@ class Coverage(Tool):
         rcfile: _Value = ...,
         show_contexts: _Flag = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """Generate a JSON report of coverage results.
 
         Args:
@@ -195,7 +197,7 @@ class Coverage(Tool):
         skip_empty: _Flag = ...,
         sort: _Value = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """Report coverage statistics on modules.
 
         Args:
@@ -246,7 +248,7 @@ class Coverage(Tool):
         source: _Value = ...,
         timid: _Flag = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """Run a Python program, measuring code execution.
 
         Args:
@@ -289,7 +291,7 @@ class Coverage(Tool):
         rcfile: _Value = ...,
         skip_empty: _Flag = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """Generate an XML report of coverage results.
 
         Args:
@@ -313,7 +315,7 @@ class Coverage(Tool):
     def flags(
         self,
         **flags: Any,
-    ) -> Coverage:
+    ) -> Self:
         """Bind tool-level global options before the subcommand.
 
         `tools.docker.flags(host=...)` puts a tool's own

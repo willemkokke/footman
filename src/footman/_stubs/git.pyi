@@ -3,11 +3,13 @@
 # Read from git 2.55.0 on macOS. In-process: no.
 # Every verb ends in `**flags: Any`: the stub suggests what this tool
 # accepts, and can never forbid what the bridge would happily pass.
-from typing import Any
+from typing import Any, Self
 
-from footman.tools import Result, Tool, _Flag, _Value, _ValuedFlag
+from footman.tools import Result as _Result
+from footman.tools import Tool as _Tool
+from footman.tools import _Flag, _Value, _ValuedFlag
 
-class Git(Tool):
+class Git(_Tool):
     def __call__(  # type: ignore[override]
         self,
         *args: str,
@@ -33,7 +35,7 @@ class Git(Tool):
         paginate: _Flag = ...,
         work_tree: _Value = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """[--exec-path[=<path>]] [--html-path] [--man-path] [--info-path]
 
         Args:
@@ -93,7 +95,7 @@ class Git(Tool):
         update: _Flag = ...,
         verbose: _Flag = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """GIT-ADD(1)                        Git Manual
         GIT-ADD(1)
 
@@ -172,7 +174,7 @@ class Git(Tool):
         unset_upstream: _Flag = ...,
         verbose: _Flag = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """GIT-BRANCH(1)                     Git Manual
         GIT-BRANCH(1)
 
@@ -260,7 +262,7 @@ class Git(Tool):
         track: _ValuedFlag = ...,
         unified: _Value = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """GIT-CHECKOUT(1)                   Git Manual
         GIT-CHECKOUT(1)
 
@@ -358,7 +360,7 @@ class Git(Tool):
         upload_pack: _Value = ...,
         verbose: _Flag = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """GIT-CLONE(1)                      Git Manual
         GIT-CLONE(1)
 
@@ -484,7 +486,7 @@ class Git(Tool):
         verbose: _Flag = ...,
         verify: _Flag = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """GIT-COMMIT(1)                     Git Manual
         GIT-COMMIT(1)
 
@@ -582,7 +584,7 @@ class Git(Tool):
         tag: _Flag = ...,
         tags: _Flag = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """GIT-DESCRIBE(1)                   Git Manual
         GIT-DESCRIBE(1)
 
@@ -697,7 +699,7 @@ class Git(Tool):
         word_diff_regex: _Value = ...,
         ws_error_highlight: _Value = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """GIT-DIFF(1)                       Git Manual
         GIT-DIFF(1)
 
@@ -890,7 +892,7 @@ class Git(Tool):
         write_commit_graph: _Flag = ...,
         write_fetch_head: _Flag = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """GIT-FETCH(1)                      Git Manual
         GIT-FETCH(1)
 
@@ -1004,7 +1006,7 @@ class Git(Tool):
         shared: _ValuedFlag = ...,
         template: _Value = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """GIT-INIT(1)                       Git Manual
         GIT-INIT(1)
 
@@ -1190,7 +1192,7 @@ class Git(Tool):
         word_diff_regex: _Value = ...,
         ws_error_highlight: _Value = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """GIT-LOG(1)                        Git Manual
         GIT-LOG(1)
 
@@ -1570,7 +1572,7 @@ class Git(Tool):
         verify: _Flag = ...,
         verify_signatures: _Flag = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """GIT-PULL(1)                       Git Manual
         GIT-PULL(1)
 
@@ -1726,7 +1728,7 @@ class Git(Tool):
         verbose: _Flag = ...,
         verify: _Flag = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """GIT-PUSH(1)                       Git Manual
         GIT-PUSH(1)
 
@@ -1795,7 +1797,7 @@ class Git(Tool):
         unified: _Value = ...,
         worktree: _Flag = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """GIT-RESTORE(1)                    Git Manual
         GIT-RESTORE(1)
 
@@ -1884,7 +1886,7 @@ class Git(Tool):
         until: _Value = ...,
         verify: _Flag = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """GIT-REV-PARSE(1)                  Git Manual
         GIT-REV-PARSE(1)
 
@@ -2000,7 +2002,7 @@ class Git(Tool):
         to_ref: _Flag = ...,
         unified: _Value = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """GIT-STASH(1)                      Git Manual
         GIT-STASH(1)
 
@@ -2044,7 +2046,7 @@ class Git(Tool):
         untracked_files: _ValuedFlag = ...,
         verbose: _Flag = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """GIT-STATUS(1)                     Git Manual
         GIT-STATUS(1)
 
@@ -2092,7 +2094,7 @@ class Git(Tool):
         recurse_submodules: _Flag = ...,
         track: _Flag = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """GIT-SWITCH(1)                     Git Manual
         GIT-SWITCH(1)
 
@@ -2161,7 +2163,7 @@ class Git(Tool):
         trailer: _Value = ...,
         verify: _Flag = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """GIT-TAG(1)                        Git Manual
         GIT-TAG(1)
 
@@ -2220,7 +2222,7 @@ class Git(Tool):
         track: _Flag = ...,
         verbose: _Flag = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """GIT-WORKTREE(1)                   Git Manual
         GIT-WORKTREE(1)
 
@@ -2280,7 +2282,7 @@ class Git(Tool):
         paginate: _Flag = ...,
         work_tree: _Value = ...,
         **flags: Any,
-    ) -> Git:
+    ) -> Self:
         """Bind tool-level global options before the subcommand.
 
         `tools.docker.flags(host=...)` puts a tool's own

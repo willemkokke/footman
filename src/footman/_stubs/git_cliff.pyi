@@ -6,9 +6,11 @@
 from collections.abc import Sequence
 from typing import Any, Literal
 
-from footman.tools import Result, Tool, _Flag, _Value
+from footman.tools import Result as _Result
+from footman.tools import Tool as _Tool
+from footman.tools import _Flag, _Value
 
-class GitCliff(Tool):
+class GitCliff(_Tool):
     def __call__(  # type: ignore[override]
         self,
         *args: str,
@@ -60,7 +62,7 @@ class GitCliff(Tool):
         with_tag_message: _Value = ...,
         workdir: _Value = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """git-cliff 2.13.1
 
         Args:

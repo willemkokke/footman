@@ -3,11 +3,13 @@
 # Read from bun 1.3.14 on macOS. In-process: no.
 # Every verb ends in `**flags: Any`: the stub suggests what this tool
 # accepts, and can never forbid what the bridge would happily pass.
-from typing import Any
+from typing import Any, Self
 
-from footman.tools import Result, Tool, _Flag, _Value
+from footman.tools import Result as _Result
+from footman.tools import Tool as _Tool
+from footman.tools import _Flag, _Value
 
-class Bun(Tool):
+class Bun(_Tool):
     def __call__(  # type: ignore[override]
         self,
         *args: str,
@@ -77,7 +79,7 @@ class Bun(Tool):
         workspaces: _Flag = ...,
         zero_fill_buffers: _Flag = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """Bun is a fast JavaScript runtime, package manager, bundler, and test runner.
         (1.3.14+0d9b296af)
 
@@ -210,7 +212,7 @@ class Bun(Tool):
         verbose: _Flag = ...,
         yarn: _Flag = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """Alias: bun a
 
         Args:
@@ -322,7 +324,7 @@ class Bun(Tool):
         windows_title: _Value = ...,
         windows_version: _Value = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """Transpile and bundle one or more files.
 
         Args:
@@ -450,7 +452,7 @@ class Bun(Tool):
         verbose: _Flag = ...,
         yarn: _Flag = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """Alias: bun i
 
         Args:
@@ -543,7 +545,7 @@ class Bun(Tool):
         verbose: _Flag = ...,
         yarn: _Flag = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """Alias: bun r
 
         Args:
@@ -677,7 +679,7 @@ class Bun(Tool):
         workspaces: _Flag = ...,
         zero_fill_buffers: _Flag = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """Run this verb.
 
         Args:
@@ -823,7 +825,7 @@ class Bun(Tool):
         todo: _Flag = ...,
         update_snapshots: _Flag = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """Run all matching test files and print the results to stdout
 
         Args:
@@ -875,7 +877,7 @@ class Bun(Tool):
         silent: _Flag = ...,
         verbose: _Flag = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """Execute an npm package executable (CLI), automatically installing into a
         global shared cache if not installed in node_modules.
 
@@ -957,7 +959,7 @@ class Bun(Tool):
         workspaces: _Flag = ...,
         zero_fill_buffers: _Flag = ...,
         **flags: Any,
-    ) -> Bun:
+    ) -> Self:
         """Bind tool-level global options before the subcommand.
 
         `tools.docker.flags(host=...)` puts a tool's own

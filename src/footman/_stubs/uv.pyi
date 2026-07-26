@@ -4,148 +4,108 @@
 # Every verb ends in `**flags: Any`: the stub suggests what this tool
 # accepts, and can never forbid what the bridge would happily pass.
 from collections.abc import Sequence
-from typing import Any, Literal
+from typing import Any, Literal, Self
 
-from footman.tools import Result, Tool, _Flag, _Value
+from footman.tools import Result as _Result
+from footman.tools import Tool as _Tool
+from footman.tools import _Flag, _Value
 
-class UvPip(Tool):
-    def compile(
-        self,
-        *args: str,
-        all_extras: _Flag = ...,
-        allow_insecure_host: _Value = ...,
-        annotation_style: Literal["line", "split"]
-        | Sequence[Literal["line", "split"]]
-        | None = ...,
-        build_constraints: _Value = ...,
-        cache_dir: _Value = ...,
-        color: Literal["auto", "always", "never"]
-        | Sequence[Literal["auto", "always", "never"]]
-        | None = ...,
-        config_file: _Value = ...,
-        config_setting: _Value = ...,
-        config_settings_package: _Value = ...,
-        constraints: _Value = ...,
-        custom_compile_command: _Value = ...,
-        default_index: _Value = ...,
-        directory: _Value = ...,
-        emit_build_options: _Flag = ...,
-        emit_find_links: _Flag = ...,
-        emit_index_annotation: _Flag = ...,
-        emit_index_url: _Flag = ...,
-        exclude_newer: _Value = ...,
-        exclude_newer_package: _Value = ...,
-        excludes: _Value = ...,
-        extra: _Value = ...,
-        extra_index_url: _Value = ...,
-        find_links: _Value = ...,
-        fork_strategy: Literal["fewest", "requires-python"]
-        | Sequence[Literal["fewest", "requires-python"]]
-        | None = ...,
-        format: Literal["requirements.txt", "pylock.toml"]
-        | Sequence[Literal["requirements.txt", "pylock.toml"]]
-        | None = ...,
-        generate_hashes: _Flag = ...,
-        group: _Value = ...,
-        index: _Value = ...,
-        index_strategy: Literal[
-            "first-index", "unsafe-first-match", "unsafe-best-match"
-        ]
-        | Sequence[Literal["first-index", "unsafe-first-match", "unsafe-best-match"]]
-        | None = ...,
-        index_url: _Value = ...,
-        keyring_provider: Literal["disabled", "subprocess"]
-        | Sequence[Literal["disabled", "subprocess"]]
-        | None = ...,
-        link_mode: Literal["clone", "copy", "hardlink", "symlink"]
-        | Sequence[Literal["clone", "copy", "hardlink", "symlink"]]
-        | None = ...,
-        managed_python: _Flag = ...,
-        no_annotate: _Flag = ...,
-        no_binary: _Value = ...,
-        no_build: _Flag = ...,
-        no_build_isolation: _Flag = ...,
-        no_build_isolation_package: _Value = ...,
-        no_cache: _Flag = ...,
-        no_deps: _Flag = ...,
-        no_emit_package: _Value = ...,
-        no_header: _Flag = ...,
-        no_index: _Flag = ...,
-        no_progress: _Flag = ...,
-        no_python_downloads: _Flag = ...,
-        no_sources: _Flag = ...,
-        no_sources_package: _Value = ...,
-        no_strip_extras: _Flag = ...,
-        no_strip_markers: _Flag = ...,
-        offline: _Flag = ...,
-        only_binary: _Value = ...,
-        output_file: _Value = ...,
-        overrides: _Value = ...,
-        prerelease: Literal[
-            "disallow", "allow", "if-necessary", "explicit", "if-necessary-or-explicit"
-        ]
-        | Sequence[
-            Literal[
+class Uv(_Tool):
+    class Pip(_Tool):
+        def compile(
+            self,
+            *args: str,
+            all_extras: _Flag = ...,
+            allow_insecure_host: _Value = ...,
+            annotation_style: Literal["line", "split"]
+            | Sequence[Literal["line", "split"]]
+            | None = ...,
+            build_constraints: _Value = ...,
+            cache_dir: _Value = ...,
+            color: Literal["auto", "always", "never"]
+            | Sequence[Literal["auto", "always", "never"]]
+            | None = ...,
+            config_file: _Value = ...,
+            config_setting: _Value = ...,
+            config_settings_package: _Value = ...,
+            constraints: _Value = ...,
+            custom_compile_command: _Value = ...,
+            default_index: _Value = ...,
+            directory: _Value = ...,
+            emit_build_options: _Flag = ...,
+            emit_find_links: _Flag = ...,
+            emit_index_annotation: _Flag = ...,
+            emit_index_url: _Flag = ...,
+            exclude_newer: _Value = ...,
+            exclude_newer_package: _Value = ...,
+            excludes: _Value = ...,
+            extra: _Value = ...,
+            extra_index_url: _Value = ...,
+            find_links: _Value = ...,
+            fork_strategy: Literal["fewest", "requires-python"]
+            | Sequence[Literal["fewest", "requires-python"]]
+            | None = ...,
+            format: Literal["requirements.txt", "pylock.toml"]
+            | Sequence[Literal["requirements.txt", "pylock.toml"]]
+            | None = ...,
+            generate_hashes: _Flag = ...,
+            group: _Value = ...,
+            index: _Value = ...,
+            index_strategy: Literal[
+                "first-index", "unsafe-first-match", "unsafe-best-match"
+            ]
+            | Sequence[
+                Literal["first-index", "unsafe-first-match", "unsafe-best-match"]
+            ]
+            | None = ...,
+            index_url: _Value = ...,
+            keyring_provider: Literal["disabled", "subprocess"]
+            | Sequence[Literal["disabled", "subprocess"]]
+            | None = ...,
+            link_mode: Literal["clone", "copy", "hardlink", "symlink"]
+            | Sequence[Literal["clone", "copy", "hardlink", "symlink"]]
+            | None = ...,
+            managed_python: _Flag = ...,
+            no_annotate: _Flag = ...,
+            no_binary: _Value = ...,
+            no_build: _Flag = ...,
+            no_build_isolation: _Flag = ...,
+            no_build_isolation_package: _Value = ...,
+            no_cache: _Flag = ...,
+            no_deps: _Flag = ...,
+            no_emit_package: _Value = ...,
+            no_header: _Flag = ...,
+            no_index: _Flag = ...,
+            no_progress: _Flag = ...,
+            no_python_downloads: _Flag = ...,
+            no_sources: _Flag = ...,
+            no_sources_package: _Value = ...,
+            no_strip_extras: _Flag = ...,
+            no_strip_markers: _Flag = ...,
+            offline: _Flag = ...,
+            only_binary: _Value = ...,
+            output_file: _Value = ...,
+            overrides: _Value = ...,
+            prerelease: Literal[
                 "disallow",
                 "allow",
                 "if-necessary",
                 "explicit",
                 "if-necessary-or-explicit",
             ]
-        ]
-        | None = ...,
-        project: _Value = ...,
-        python: _Value = ...,
-        python_platform: Literal[
-            "windows",
-            "linux",
-            "macos",
-            "x86_64-pc-windows-msvc",
-            "aarch64-pc-windows-msvc",
-            "i686-pc-windows-msvc",
-            "x86_64-unknown-linux-gnu",
-            "aarch64-apple-darwin",
-            "x86_64-apple-darwin",
-            "aarch64-unknown-linux-gnu",
-            "aarch64-unknown-linux-musl",
-            "x86_64-unknown-linux-musl",
-            "riscv64-unknown-linux",
-            "x86_64-manylinux2014",
-            "x86_64-manylinux_2_17",
-            "x86_64-manylinux_2_28",
-            "x86_64-manylinux_2_31",
-            "x86_64-manylinux_2_32",
-            "x86_64-manylinux_2_33",
-            "x86_64-manylinux_2_34",
-            "x86_64-manylinux_2_35",
-            "x86_64-manylinux_2_36",
-            "x86_64-manylinux_2_37",
-            "x86_64-manylinux_2_38",
-            "x86_64-manylinux_2_39",
-            "x86_64-manylinux_2_40",
-            "aarch64-manylinux2014",
-            "aarch64-manylinux_2_17",
-            "aarch64-manylinux_2_28",
-            "aarch64-manylinux_2_31",
-            "aarch64-manylinux_2_32",
-            "aarch64-manylinux_2_33",
-            "aarch64-manylinux_2_34",
-            "aarch64-manylinux_2_35",
-            "aarch64-manylinux_2_36",
-            "aarch64-manylinux_2_37",
-            "aarch64-manylinux_2_38",
-            "aarch64-manylinux_2_39",
-            "aarch64-manylinux_2_40",
-            "aarch64-linux-android",
-            "x86_64-linux-android",
-            "wasm32-pyodide2024",
-            "wasm32-pyodide2025",
-            "arm64-apple-ios",
-            "arm64-apple-ios-simulator",
-            "x86_64-apple-ios-simulator",
-        ]
-        | Sequence[
-            Literal[
+            | Sequence[
+                Literal[
+                    "disallow",
+                    "allow",
+                    "if-necessary",
+                    "explicit",
+                    "if-necessary-or-explicit",
+                ]
+            ]
+            | None = ...,
+            project: _Value = ...,
+            python: _Value = ...,
+            python_platform: Literal[
                 "windows",
                 "linux",
                 "macos",
@@ -193,71 +153,67 @@ class UvPip(Tool):
                 "arm64-apple-ios-simulator",
                 "x86_64-apple-ios-simulator",
             ]
-        ]
-        | None = ...,
-        python_version: _Value = ...,
-        quiet: _Flag = ...,
-        refresh: _Flag = ...,
-        refresh_package: _Value = ...,
-        resolution: Literal["highest", "lowest", "lowest-direct"]
-        | Sequence[Literal["highest", "lowest", "lowest-direct"]]
-        | None = ...,
-        system: _Flag = ...,
-        system_certs: _Flag = ...,
-        torch_backend: Literal[
-            "auto",
-            "cpu",
-            "cu132",
-            "cu130",
-            "cu129",
-            "cu128",
-            "cu126",
-            "cu125",
-            "cu124",
-            "cu123",
-            "cu122",
-            "cu121",
-            "cu120",
-            "cu118",
-            "cu117",
-            "cu116",
-            "cu115",
-            "cu114",
-            "cu113",
-            "cu112",
-            "cu111",
-            "cu110",
-            "cu102",
-            "cu101",
-            "cu100",
-            "cu92",
-            "cu91",
-            "cu90",
-            "cu80",
-            "rocm7.2",
-            "rocm7.1",
-            "rocm7.0",
-            "rocm6.4",
-            "rocm6.3",
-            "rocm6.2.4",
-            "rocm6.2",
-            "rocm6.1",
-            "rocm6.0",
-            "rocm5.7",
-            "rocm5.6",
-            "rocm5.5",
-            "rocm5.4.2",
-            "rocm5.4",
-            "rocm5.3",
-            "rocm5.2",
-            "rocm5.1.1",
-            "rocm4.2",
-            "rocm4.1",
-            "rocm4.0.1",
-            "xpu",
-        ]
-        | Sequence[
-            Literal[
+            | Sequence[
+                Literal[
+                    "windows",
+                    "linux",
+                    "macos",
+                    "x86_64-pc-windows-msvc",
+                    "aarch64-pc-windows-msvc",
+                    "i686-pc-windows-msvc",
+                    "x86_64-unknown-linux-gnu",
+                    "aarch64-apple-darwin",
+                    "x86_64-apple-darwin",
+                    "aarch64-unknown-linux-gnu",
+                    "aarch64-unknown-linux-musl",
+                    "x86_64-unknown-linux-musl",
+                    "riscv64-unknown-linux",
+                    "x86_64-manylinux2014",
+                    "x86_64-manylinux_2_17",
+                    "x86_64-manylinux_2_28",
+                    "x86_64-manylinux_2_31",
+                    "x86_64-manylinux_2_32",
+                    "x86_64-manylinux_2_33",
+                    "x86_64-manylinux_2_34",
+                    "x86_64-manylinux_2_35",
+                    "x86_64-manylinux_2_36",
+                    "x86_64-manylinux_2_37",
+                    "x86_64-manylinux_2_38",
+                    "x86_64-manylinux_2_39",
+                    "x86_64-manylinux_2_40",
+                    "aarch64-manylinux2014",
+                    "aarch64-manylinux_2_17",
+                    "aarch64-manylinux_2_28",
+                    "aarch64-manylinux_2_31",
+                    "aarch64-manylinux_2_32",
+                    "aarch64-manylinux_2_33",
+                    "aarch64-manylinux_2_34",
+                    "aarch64-manylinux_2_35",
+                    "aarch64-manylinux_2_36",
+                    "aarch64-manylinux_2_37",
+                    "aarch64-manylinux_2_38",
+                    "aarch64-manylinux_2_39",
+                    "aarch64-manylinux_2_40",
+                    "aarch64-linux-android",
+                    "x86_64-linux-android",
+                    "wasm32-pyodide2024",
+                    "wasm32-pyodide2025",
+                    "arm64-apple-ios",
+                    "arm64-apple-ios-simulator",
+                    "x86_64-apple-ios-simulator",
+                ]
+            ]
+            | None = ...,
+            python_version: _Value = ...,
+            quiet: _Flag = ...,
+            refresh: _Flag = ...,
+            refresh_package: _Value = ...,
+            resolution: Literal["highest", "lowest", "lowest-direct"]
+            | Sequence[Literal["highest", "lowest", "lowest-direct"]]
+            | None = ...,
+            system: _Flag = ...,
+            system_certs: _Flag = ...,
+            torch_backend: Literal[
                 "auto",
                 "cpu",
                 "cu132",
@@ -309,264 +265,282 @@ class UvPip(Tool):
                 "rocm4.0.1",
                 "xpu",
             ]
-        ]
-        | None = ...,
-        universal: _Flag = ...,
-        upgrade: _Flag = ...,
-        upgrade_group: _Value = ...,
-        upgrade_package: _Value = ...,
-        verbose: _Flag = ...,
-        **flags: Any,
-    ) -> Result:
-        """Compile a `requirements.in` file to a `requirements.txt` or `pylock.toml`
-        file
+            | Sequence[
+                Literal[
+                    "auto",
+                    "cpu",
+                    "cu132",
+                    "cu130",
+                    "cu129",
+                    "cu128",
+                    "cu126",
+                    "cu125",
+                    "cu124",
+                    "cu123",
+                    "cu122",
+                    "cu121",
+                    "cu120",
+                    "cu118",
+                    "cu117",
+                    "cu116",
+                    "cu115",
+                    "cu114",
+                    "cu113",
+                    "cu112",
+                    "cu111",
+                    "cu110",
+                    "cu102",
+                    "cu101",
+                    "cu100",
+                    "cu92",
+                    "cu91",
+                    "cu90",
+                    "cu80",
+                    "rocm7.2",
+                    "rocm7.1",
+                    "rocm7.0",
+                    "rocm6.4",
+                    "rocm6.3",
+                    "rocm6.2.4",
+                    "rocm6.2",
+                    "rocm6.1",
+                    "rocm6.0",
+                    "rocm5.7",
+                    "rocm5.6",
+                    "rocm5.5",
+                    "rocm5.4.2",
+                    "rocm5.4",
+                    "rocm5.3",
+                    "rocm5.2",
+                    "rocm5.1.1",
+                    "rocm4.2",
+                    "rocm4.1",
+                    "rocm4.0.1",
+                    "xpu",
+                ]
+            ]
+            | None = ...,
+            universal: _Flag = ...,
+            upgrade: _Flag = ...,
+            upgrade_group: _Value = ...,
+            upgrade_package: _Value = ...,
+            verbose: _Flag = ...,
+            **flags: Any,
+        ) -> _Result:
+            """Compile a `requirements.in` file to a `requirements.txt` or
+            `pylock.toml` file
 
-        Args:
-            all_extras: Include all optional dependencies.
-            allow_insecure_host: Allow insecure connections to a host.
-            annotation_style: The style of the annotation comments included in the
-                output file, used to indicate the source of each package.
-            build_constraints: Constrain build dependencies using the given
-                requirements files when building source distributions.
-            cache_dir: Path to the cache directory.
-            color: Control the use of color in output.
-            config_file: The path to a `uv.toml` file to use for configuration.
-            config_setting: Settings to pass to the PEP 517 build backend, specified
-                as `KEY=VALUE` pairs.
-            config_settings_package: Settings to pass to the PEP 517 build backend
-                for a specific package, specified as `PACKAGE:KEY=VALUE` pairs.
-            constraints: Constrain versions using the given requirements files.
-            custom_compile_command: The header comment to include at the top of the
-                output file generated by `uv pip compile`.
-            default_index: The URL of the default package index (by default:
-                <https://pypi.org/simple>).
-            directory: Change to the given directory prior to running the command.
-            emit_build_options: Include `--no-binary` and `--only-binary` entries in
-                the generated output file.
-            emit_find_links: Include `--find-links` entries in the generated output
-                file.
-            emit_index_annotation: Include comment annotations indicating the index
-                used to resolve each package (e.g., `# from
-                https://pypi.org/simple`).
-            emit_index_url: Include `--index-url` and `--extra-index-url` entries in
-                the generated output file.
-            exclude_newer: Limit candidate packages to those that were uploaded
-                prior to the given date.
-            exclude_newer_package: Limit candidate packages for specific packages to
-                those that were uploaded prior to the given date.
-            excludes: Exclude packages from resolution using the given requirements
-                files.
-            extra: Include optional dependencies from the specified extra name; may
-                be provided more than once.
-            extra_index_url: (Deprecated: use `--index` instead) Extra URLs of
-                package indexes to use, in addition to `--index-url`.
-            find_links: Locations to search for candidate distributions, in addition
-                to those found in the registry indexes.
-            fork_strategy: The strategy to use when selecting multiple versions of a
-                given package across Python versions and platforms.
-            format: The format in which the resolution should be output.
-            generate_hashes: Include distribution hashes in the output file.
-            group: Install the specified dependency group from a `pyproject.toml`.
-            index: The URLs to use when resolving dependencies, in addition to the
-                default index.
-            index_strategy: The strategy to use when resolving against multiple
-                index URLs.
-            index_url: (Deprecated: use `--default-index` instead) The URL of the
-                Python package index (by default: <https://pypi.org/simple>).
-            keyring_provider: Attempt to use `keyring` for authentication for index
-                URLs.
-            link_mode: The method to use when installing packages from the global
-                cache.
-            managed_python: Require use of uv-managed Python versions.
-                `managed_python=off` emits `--no-managed-python`.
-            no_annotate: Exclude comment annotations indicating the source of each
-                package.
-            no_binary: Don't install pre-built wheels.
-            no_build: Don't build source distributions.
-            no_build_isolation: Disable isolation when building source
-                distributions.
-            no_build_isolation_package: Disable isolation when building source
-                distributions for a specific package.
-            no_cache: Avoid reading from or writing to the cache, instead using a
-                temporary directory for the duration of the operation.
-            no_deps: Ignore package dependencies, instead only add those packages
-                explicitly listed on the command line to the resulting requirements
-                file.
-            no_emit_package: Specify a package to omit from the output resolution.
-            no_header: Exclude the comment header at the top of the generated output
-                file.
-            no_index: Ignore the registry index (e.g., PyPI), instead relying on
-                direct URL dependencies and those provided via `--find-links`.
-            no_progress: Hide all progress outputs.
-            no_python_downloads: Disable automatic downloads of Python.
-            no_sources: Ignore the `tool.uv.sources` table when resolving
-                dependencies.
-            no_sources_package: Don't use sources from the `tool.uv.sources` table
-                for the specified packages.
-            no_strip_extras: Include extras in the output file.
-            no_strip_markers: Include environment markers in the output file.
-            offline: Disable network access.
-            only_binary: Only use pre-built wheels; don't build source
-                distributions.
-            output_file: Write the compiled requirements to the given
-                `requirements.txt` or `pylock.toml` file.
-            overrides: Override versions using the given requirements files.
-            prerelease: The strategy to use when considering pre-release versions.
-            project: Discover a project in the given directory.
-            python: The Python interpreter to use during resolution.
-            python_platform: The platform for which requirements should be resolved.
-            python_version: The Python version to use for resolution.
-            quiet: Use quiet output.
-            refresh: Refresh all cached data.
-            refresh_package: Refresh cached data for a specific package.
-            resolution: The strategy to use when selecting between the different
-                compatible versions for a given package requirement.
-            system: Install packages into the system Python environment.
-            system_certs: Whether to load TLS certificates from the platform's
-                native certificate store.
-            torch_backend: The backend to use when fetching packages in the PyTorch
-                ecosystem (e.g., `cpu`, `cu126`, or `auto`).
-            universal: Perform a universal resolution, attempting to generate a
-                single `requirements.txt` output file that is compatible with all
-                operating systems, architectures, and Python implementations.
-            upgrade: Allow package upgrades, ignoring pinned versions in any
-                existing output file.
-            upgrade_group: Allow upgrades for all packages in a dependency group,
-                ignoring pinned versions in any existing output file.
-            upgrade_package: Allow upgrades for a specific package, ignoring pinned
-                versions in any existing output file.
-            verbose: Use verbose output.
-        """
-        ...
-    def install(
-        self,
-        *args: str,
-        all_extras: _Flag = ...,
-        allow_insecure_host: _Value = ...,
-        break_system_packages: _Flag = ...,
-        build_constraints: _Value = ...,
-        cache_dir: _Value = ...,
-        color: Literal["auto", "always", "never"]
-        | Sequence[Literal["auto", "always", "never"]]
-        | None = ...,
-        compile_bytecode: _Flag = ...,
-        config_file: _Value = ...,
-        config_setting: _Value = ...,
-        config_settings_package: _Value = ...,
-        constraints: _Value = ...,
-        default_index: _Value = ...,
-        directory: _Value = ...,
-        dry_run: _Flag = ...,
-        editable: _Value = ...,
-        exact: _Flag = ...,
-        exclude_newer: _Value = ...,
-        exclude_newer_package: _Value = ...,
-        excludes: _Value = ...,
-        extra: _Value = ...,
-        extra_index_url: _Value = ...,
-        find_links: _Value = ...,
-        fork_strategy: Literal["fewest", "requires-python"]
-        | Sequence[Literal["fewest", "requires-python"]]
-        | None = ...,
-        group: _Value = ...,
-        index: _Value = ...,
-        index_strategy: Literal[
-            "first-index", "unsafe-first-match", "unsafe-best-match"
-        ]
-        | Sequence[Literal["first-index", "unsafe-first-match", "unsafe-best-match"]]
-        | None = ...,
-        index_url: _Value = ...,
-        keyring_provider: Literal["disabled", "subprocess"]
-        | Sequence[Literal["disabled", "subprocess"]]
-        | None = ...,
-        link_mode: Literal["clone", "copy", "hardlink", "symlink"]
-        | Sequence[Literal["clone", "copy", "hardlink", "symlink"]]
-        | None = ...,
-        managed_python: _Flag = ...,
-        no_binary: _Value = ...,
-        no_build: _Flag = ...,
-        no_build_isolation: _Flag = ...,
-        no_build_isolation_package: _Value = ...,
-        no_cache: _Flag = ...,
-        no_config: _Flag = ...,
-        no_deps: _Flag = ...,
-        no_editable: _Flag = ...,
-        no_editable_package: _Value = ...,
-        no_index: _Flag = ...,
-        no_progress: _Flag = ...,
-        no_python_downloads: _Flag = ...,
-        no_sources: _Flag = ...,
-        no_sources_package: _Value = ...,
-        no_verify_hashes: _Flag = ...,
-        offline: _Flag = ...,
-        only_binary: _Value = ...,
-        overrides: _Value = ...,
-        prefix: _Value = ...,
-        prerelease: Literal[
-            "disallow", "allow", "if-necessary", "explicit", "if-necessary-or-explicit"
-        ]
-        | Sequence[
-            Literal[
+            Args:
+                all_extras: Include all optional dependencies.
+                allow_insecure_host: Allow insecure connections to a host.
+                annotation_style: The style of the annotation comments included in
+                    the output file, used to indicate the source of each package.
+                build_constraints: Constrain build dependencies using the given
+                    requirements files when building source distributions.
+                cache_dir: Path to the cache directory.
+                color: Control the use of color in output.
+                config_file: The path to a `uv.toml` file to use for configuration.
+                config_setting: Settings to pass to the PEP 517 build backend,
+                    specified as `KEY=VALUE` pairs.
+                config_settings_package: Settings to pass to the PEP 517 build
+                    backend for a specific package, specified as `PACKAGE:KEY=VALUE`
+                    pairs.
+                constraints: Constrain versions using the given requirements files.
+                custom_compile_command: The header comment to include at the top of
+                    the output file generated by `uv pip compile`.
+                default_index: The URL of the default package index (by default:
+                    <https://pypi.org/simple>).
+                directory: Change to the given directory prior to running the
+                    command.
+                emit_build_options: Include `--no-binary` and `--only-binary`
+                    entries in the generated output file.
+                emit_find_links: Include `--find-links` entries in the generated
+                    output file.
+                emit_index_annotation: Include comment annotations indicating the
+                    index used to resolve each package (e.g., `# from
+                    https://pypi.org/simple`).
+                emit_index_url: Include `--index-url` and `--extra-index-url`
+                    entries in the generated output file.
+                exclude_newer: Limit candidate packages to those that were uploaded
+                    prior to the given date.
+                exclude_newer_package: Limit candidate packages for specific
+                    packages to those that were uploaded prior to the given date.
+                excludes: Exclude packages from resolution using the given
+                    requirements files.
+                extra: Include optional dependencies from the specified extra name;
+                    may be provided more than once.
+                extra_index_url: (Deprecated: use `--index` instead) Extra URLs of
+                    package indexes to use, in addition to `--index-url`.
+                find_links: Locations to search for candidate distributions, in
+                    addition to those found in the registry indexes.
+                fork_strategy: The strategy to use when selecting multiple versions
+                    of a given package across Python versions and platforms.
+                format: The format in which the resolution should be output.
+                generate_hashes: Include distribution hashes in the output file.
+                group: Install the specified dependency group from a
+                    `pyproject.toml`.
+                index: The URLs to use when resolving dependencies, in addition to
+                    the default index.
+                index_strategy: The strategy to use when resolving against multiple
+                    index URLs.
+                index_url: (Deprecated: use `--default-index` instead) The URL of
+                    the Python package index (by default:
+                    <https://pypi.org/simple>).
+                keyring_provider: Attempt to use `keyring` for authentication for
+                    index URLs.
+                link_mode: The method to use when installing packages from the
+                    global cache.
+                managed_python: Require use of uv-managed Python versions.
+                    `managed_python=off` emits `--no-managed-python`.
+                no_annotate: Exclude comment annotations indicating the source of
+                    each package.
+                no_binary: Don't install pre-built wheels.
+                no_build: Don't build source distributions.
+                no_build_isolation: Disable isolation when building source
+                    distributions.
+                no_build_isolation_package: Disable isolation when building source
+                    distributions for a specific package.
+                no_cache: Avoid reading from or writing to the cache, instead using
+                    a temporary directory for the duration of the operation.
+                no_deps: Ignore package dependencies, instead only add those
+                    packages explicitly listed on the command line to the resulting
+                    requirements file.
+                no_emit_package: Specify a package to omit from the output
+                    resolution.
+                no_header: Exclude the comment header at the top of the generated
+                    output file.
+                no_index: Ignore the registry index (e.g., PyPI), instead relying on
+                    direct URL dependencies and those provided via `--find-links`.
+                no_progress: Hide all progress outputs.
+                no_python_downloads: Disable automatic downloads of Python.
+                no_sources: Ignore the `tool.uv.sources` table when resolving
+                    dependencies.
+                no_sources_package: Don't use sources from the `tool.uv.sources`
+                    table for the specified packages.
+                no_strip_extras: Include extras in the output file.
+                no_strip_markers: Include environment markers in the output file.
+                offline: Disable network access.
+                only_binary: Only use pre-built wheels; don't build source
+                    distributions.
+                output_file: Write the compiled requirements to the given
+                    `requirements.txt` or `pylock.toml` file.
+                overrides: Override versions using the given requirements files.
+                prerelease: The strategy to use when considering pre-release
+                    versions.
+                project: Discover a project in the given directory.
+                python: The Python interpreter to use during resolution.
+                python_platform: The platform for which requirements should be
+                    resolved.
+                python_version: The Python version to use for resolution.
+                quiet: Use quiet output.
+                refresh: Refresh all cached data.
+                refresh_package: Refresh cached data for a specific package.
+                resolution: The strategy to use when selecting between the different
+                    compatible versions for a given package requirement.
+                system: Install packages into the system Python environment.
+                system_certs: Whether to load TLS certificates from the platform's
+                    native certificate store.
+                torch_backend: The backend to use when fetching packages in the
+                    PyTorch ecosystem (e.g., `cpu`, `cu126`, or `auto`).
+                universal: Perform a universal resolution, attempting to generate a
+                    single `requirements.txt` output file that is compatible with
+                    all operating systems, architectures, and Python
+                    implementations.
+                upgrade: Allow package upgrades, ignoring pinned versions in any
+                    existing output file.
+                upgrade_group: Allow upgrades for all packages in a dependency
+                    group, ignoring pinned versions in any existing output file.
+                upgrade_package: Allow upgrades for a specific package, ignoring
+                    pinned versions in any existing output file.
+                verbose: Use verbose output.
+            """
+            ...
+        def install(
+            self,
+            *args: str,
+            all_extras: _Flag = ...,
+            allow_insecure_host: _Value = ...,
+            break_system_packages: _Flag = ...,
+            build_constraints: _Value = ...,
+            cache_dir: _Value = ...,
+            color: Literal["auto", "always", "never"]
+            | Sequence[Literal["auto", "always", "never"]]
+            | None = ...,
+            compile_bytecode: _Flag = ...,
+            config_file: _Value = ...,
+            config_setting: _Value = ...,
+            config_settings_package: _Value = ...,
+            constraints: _Value = ...,
+            default_index: _Value = ...,
+            directory: _Value = ...,
+            dry_run: _Flag = ...,
+            editable: _Value = ...,
+            exact: _Flag = ...,
+            exclude_newer: _Value = ...,
+            exclude_newer_package: _Value = ...,
+            excludes: _Value = ...,
+            extra: _Value = ...,
+            extra_index_url: _Value = ...,
+            find_links: _Value = ...,
+            fork_strategy: Literal["fewest", "requires-python"]
+            | Sequence[Literal["fewest", "requires-python"]]
+            | None = ...,
+            group: _Value = ...,
+            index: _Value = ...,
+            index_strategy: Literal[
+                "first-index", "unsafe-first-match", "unsafe-best-match"
+            ]
+            | Sequence[
+                Literal["first-index", "unsafe-first-match", "unsafe-best-match"]
+            ]
+            | None = ...,
+            index_url: _Value = ...,
+            keyring_provider: Literal["disabled", "subprocess"]
+            | Sequence[Literal["disabled", "subprocess"]]
+            | None = ...,
+            link_mode: Literal["clone", "copy", "hardlink", "symlink"]
+            | Sequence[Literal["clone", "copy", "hardlink", "symlink"]]
+            | None = ...,
+            managed_python: _Flag = ...,
+            no_binary: _Value = ...,
+            no_build: _Flag = ...,
+            no_build_isolation: _Flag = ...,
+            no_build_isolation_package: _Value = ...,
+            no_cache: _Flag = ...,
+            no_config: _Flag = ...,
+            no_deps: _Flag = ...,
+            no_editable: _Flag = ...,
+            no_editable_package: _Value = ...,
+            no_index: _Flag = ...,
+            no_progress: _Flag = ...,
+            no_python_downloads: _Flag = ...,
+            no_sources: _Flag = ...,
+            no_sources_package: _Value = ...,
+            no_verify_hashes: _Flag = ...,
+            offline: _Flag = ...,
+            only_binary: _Value = ...,
+            overrides: _Value = ...,
+            prefix: _Value = ...,
+            prerelease: Literal[
                 "disallow",
                 "allow",
                 "if-necessary",
                 "explicit",
                 "if-necessary-or-explicit",
             ]
-        ]
-        | None = ...,
-        project: _Value = ...,
-        python: _Value = ...,
-        python_platform: Literal[
-            "windows",
-            "linux",
-            "macos",
-            "x86_64-pc-windows-msvc",
-            "aarch64-pc-windows-msvc",
-            "i686-pc-windows-msvc",
-            "x86_64-unknown-linux-gnu",
-            "aarch64-apple-darwin",
-            "x86_64-apple-darwin",
-            "aarch64-unknown-linux-gnu",
-            "aarch64-unknown-linux-musl",
-            "x86_64-unknown-linux-musl",
-            "riscv64-unknown-linux",
-            "x86_64-manylinux2014",
-            "x86_64-manylinux_2_17",
-            "x86_64-manylinux_2_28",
-            "x86_64-manylinux_2_31",
-            "x86_64-manylinux_2_32",
-            "x86_64-manylinux_2_33",
-            "x86_64-manylinux_2_34",
-            "x86_64-manylinux_2_35",
-            "x86_64-manylinux_2_36",
-            "x86_64-manylinux_2_37",
-            "x86_64-manylinux_2_38",
-            "x86_64-manylinux_2_39",
-            "x86_64-manylinux_2_40",
-            "aarch64-manylinux2014",
-            "aarch64-manylinux_2_17",
-            "aarch64-manylinux_2_28",
-            "aarch64-manylinux_2_31",
-            "aarch64-manylinux_2_32",
-            "aarch64-manylinux_2_33",
-            "aarch64-manylinux_2_34",
-            "aarch64-manylinux_2_35",
-            "aarch64-manylinux_2_36",
-            "aarch64-manylinux_2_37",
-            "aarch64-manylinux_2_38",
-            "aarch64-manylinux_2_39",
-            "aarch64-manylinux_2_40",
-            "aarch64-linux-android",
-            "x86_64-linux-android",
-            "wasm32-pyodide2024",
-            "wasm32-pyodide2025",
-            "arm64-apple-ios",
-            "arm64-apple-ios-simulator",
-            "x86_64-apple-ios-simulator",
-        ]
-        | Sequence[
-            Literal[
+            | Sequence[
+                Literal[
+                    "disallow",
+                    "allow",
+                    "if-necessary",
+                    "explicit",
+                    "if-necessary-or-explicit",
+                ]
+            ]
+            | None = ...,
+            project: _Value = ...,
+            python: _Value = ...,
+            python_platform: Literal[
                 "windows",
                 "linux",
                 "macos",
@@ -614,77 +588,73 @@ class UvPip(Tool):
                 "arm64-apple-ios-simulator",
                 "x86_64-apple-ios-simulator",
             ]
-        ]
-        | None = ...,
-        python_version: _Value = ...,
-        quiet: _Flag = ...,
-        refresh: _Flag = ...,
-        refresh_package: _Value = ...,
-        reinstall: _Flag = ...,
-        reinstall_package: _Value = ...,
-        require_hashes: _Flag = ...,
-        requirements: _Value = ...,
-        resolution: Literal["highest", "lowest", "lowest-direct"]
-        | Sequence[Literal["highest", "lowest", "lowest-direct"]]
-        | None = ...,
-        strict: _Flag = ...,
-        system: _Flag = ...,
-        system_certs: _Flag = ...,
-        target: _Value = ...,
-        torch_backend: Literal[
-            "auto",
-            "cpu",
-            "cu132",
-            "cu130",
-            "cu129",
-            "cu128",
-            "cu126",
-            "cu125",
-            "cu124",
-            "cu123",
-            "cu122",
-            "cu121",
-            "cu120",
-            "cu118",
-            "cu117",
-            "cu116",
-            "cu115",
-            "cu114",
-            "cu113",
-            "cu112",
-            "cu111",
-            "cu110",
-            "cu102",
-            "cu101",
-            "cu100",
-            "cu92",
-            "cu91",
-            "cu90",
-            "cu80",
-            "rocm7.2",
-            "rocm7.1",
-            "rocm7.0",
-            "rocm6.4",
-            "rocm6.3",
-            "rocm6.2.4",
-            "rocm6.2",
-            "rocm6.1",
-            "rocm6.0",
-            "rocm5.7",
-            "rocm5.6",
-            "rocm5.5",
-            "rocm5.4.2",
-            "rocm5.4",
-            "rocm5.3",
-            "rocm5.2",
-            "rocm5.1.1",
-            "rocm4.2",
-            "rocm4.1",
-            "rocm4.0.1",
-            "xpu",
-        ]
-        | Sequence[
-            Literal[
+            | Sequence[
+                Literal[
+                    "windows",
+                    "linux",
+                    "macos",
+                    "x86_64-pc-windows-msvc",
+                    "aarch64-pc-windows-msvc",
+                    "i686-pc-windows-msvc",
+                    "x86_64-unknown-linux-gnu",
+                    "aarch64-apple-darwin",
+                    "x86_64-apple-darwin",
+                    "aarch64-unknown-linux-gnu",
+                    "aarch64-unknown-linux-musl",
+                    "x86_64-unknown-linux-musl",
+                    "riscv64-unknown-linux",
+                    "x86_64-manylinux2014",
+                    "x86_64-manylinux_2_17",
+                    "x86_64-manylinux_2_28",
+                    "x86_64-manylinux_2_31",
+                    "x86_64-manylinux_2_32",
+                    "x86_64-manylinux_2_33",
+                    "x86_64-manylinux_2_34",
+                    "x86_64-manylinux_2_35",
+                    "x86_64-manylinux_2_36",
+                    "x86_64-manylinux_2_37",
+                    "x86_64-manylinux_2_38",
+                    "x86_64-manylinux_2_39",
+                    "x86_64-manylinux_2_40",
+                    "aarch64-manylinux2014",
+                    "aarch64-manylinux_2_17",
+                    "aarch64-manylinux_2_28",
+                    "aarch64-manylinux_2_31",
+                    "aarch64-manylinux_2_32",
+                    "aarch64-manylinux_2_33",
+                    "aarch64-manylinux_2_34",
+                    "aarch64-manylinux_2_35",
+                    "aarch64-manylinux_2_36",
+                    "aarch64-manylinux_2_37",
+                    "aarch64-manylinux_2_38",
+                    "aarch64-manylinux_2_39",
+                    "aarch64-manylinux_2_40",
+                    "aarch64-linux-android",
+                    "x86_64-linux-android",
+                    "wasm32-pyodide2024",
+                    "wasm32-pyodide2025",
+                    "arm64-apple-ios",
+                    "arm64-apple-ios-simulator",
+                    "x86_64-apple-ios-simulator",
+                ]
+            ]
+            | None = ...,
+            python_version: _Value = ...,
+            quiet: _Flag = ...,
+            refresh: _Flag = ...,
+            refresh_package: _Value = ...,
+            reinstall: _Flag = ...,
+            reinstall_package: _Value = ...,
+            require_hashes: _Flag = ...,
+            requirements: _Value = ...,
+            resolution: Literal["highest", "lowest", "lowest-direct"]
+            | Sequence[Literal["highest", "lowest", "lowest-direct"]]
+            | None = ...,
+            strict: _Flag = ...,
+            system: _Flag = ...,
+            system_certs: _Flag = ...,
+            target: _Value = ...,
+            torch_backend: Literal[
                 "auto",
                 "cpu",
                 "cu132",
@@ -736,346 +706,363 @@ class UvPip(Tool):
                 "rocm4.0.1",
                 "xpu",
             ]
-        ]
-        | None = ...,
-        upgrade: _Flag = ...,
-        upgrade_group: _Value = ...,
-        upgrade_package: _Value = ...,
-        user: _Flag = ...,
-        verbose: _Flag = ...,
-        **flags: Any,
-    ) -> Result:
-        """Install packages into an environment
+            | Sequence[
+                Literal[
+                    "auto",
+                    "cpu",
+                    "cu132",
+                    "cu130",
+                    "cu129",
+                    "cu128",
+                    "cu126",
+                    "cu125",
+                    "cu124",
+                    "cu123",
+                    "cu122",
+                    "cu121",
+                    "cu120",
+                    "cu118",
+                    "cu117",
+                    "cu116",
+                    "cu115",
+                    "cu114",
+                    "cu113",
+                    "cu112",
+                    "cu111",
+                    "cu110",
+                    "cu102",
+                    "cu101",
+                    "cu100",
+                    "cu92",
+                    "cu91",
+                    "cu90",
+                    "cu80",
+                    "rocm7.2",
+                    "rocm7.1",
+                    "rocm7.0",
+                    "rocm6.4",
+                    "rocm6.3",
+                    "rocm6.2.4",
+                    "rocm6.2",
+                    "rocm6.1",
+                    "rocm6.0",
+                    "rocm5.7",
+                    "rocm5.6",
+                    "rocm5.5",
+                    "rocm5.4.2",
+                    "rocm5.4",
+                    "rocm5.3",
+                    "rocm5.2",
+                    "rocm5.1.1",
+                    "rocm4.2",
+                    "rocm4.1",
+                    "rocm4.0.1",
+                    "xpu",
+                ]
+            ]
+            | None = ...,
+            upgrade: _Flag = ...,
+            upgrade_group: _Value = ...,
+            upgrade_package: _Value = ...,
+            user: _Flag = ...,
+            verbose: _Flag = ...,
+            **flags: Any,
+        ) -> _Result:
+            """Install packages into an environment
 
-        Args:
-            all_extras: Include all optional dependencies.
-            allow_insecure_host: Allow insecure connections to a host.
-            break_system_packages: Allow uv to modify an `EXTERNALLY-MANAGED` Python
-                installation. `break_system_packages=off` emits
-                `--no-break-system-packages`.
-            build_constraints: Constrain build dependencies using the given
-                requirements files when building source distributions.
-            cache_dir: Path to the cache directory.
-            color: Control the use of color in output.
-            compile_bytecode: Compile Python files to bytecode after installation.
-            config_file: The path to a `uv.toml` file to use for configuration.
-            config_setting: Settings to pass to the PEP 517 build backend, specified
-                as `KEY=VALUE` pairs.
-            config_settings_package: Settings to pass to the PEP 517 build backend
-                for a specific package, specified as `PACKAGE:KEY=VALUE` pairs.
-            constraints: Constrain versions using the given requirements files.
-            default_index: The URL of the default package index (by default:
-                <https://pypi.org/simple>).
-            directory: Change to the given directory prior to running the command.
-            dry_run: Perform a dry run, i.e., don't actually install anything but
-                resolve the dependencies and print the resulting plan.
-            editable: Install the editable package based on the provided local file
-                path.
-            exact: Perform an exact sync, removing extraneous packages.
-            exclude_newer: Limit candidate packages to those that were uploaded
-                prior to the given date.
-            exclude_newer_package: Limit candidate packages for specific packages to
-                those that were uploaded prior to the given date.
-            excludes: Exclude packages from resolution using the given requirements
-                files.
-            extra: Include optional dependencies from the specified extra name; may
-                be provided more than once.
-            extra_index_url: (Deprecated: use `--index` instead) Extra URLs of
-                package indexes to use, in addition to `--index-url`.
-            find_links: Locations to search for candidate distributions, in addition
-                to those found in the registry indexes.
-            fork_strategy: The strategy to use when selecting multiple versions of a
-                given package across Python versions and platforms.
-            group: Install the specified dependency group from a `pylock.toml` or
-                `pyproject.toml`.
-            index: The URLs to use when resolving dependencies, in addition to the
-                default index.
-            index_strategy: The strategy to use when resolving against multiple
-                index URLs.
-            index_url: (Deprecated: use `--default-index` instead) The URL of the
-                Python package index (by default: <https://pypi.org/simple>).
-            keyring_provider: Attempt to use `keyring` for authentication for index
-                URLs.
-            link_mode: The method to use when installing packages from the global
-                cache.
-            managed_python: Require use of uv-managed Python versions.
-                `managed_python=off` emits `--no-managed-python`.
-            no_binary: Don't install pre-built wheels.
-            no_build: Don't build source distributions.
-            no_build_isolation: Disable isolation when building source
-                distributions.
-            no_build_isolation_package: Disable isolation when building source
-                distributions for a specific package.
-            no_cache: Avoid reading from or writing to the cache, instead using a
-                temporary directory for the duration of the operation.
-            no_config: Avoid discovering configuration files (`pyproject.toml`,
-                `uv.toml`).
-            no_deps: Ignore package dependencies, instead only installing those
-                packages explicitly listed on the command line or in the
-                requirements files.
-            no_editable: Install any editable dependencies as non-editable.
-            no_editable_package: Install the specified editable packages as
-                non-editable.
-            no_index: Ignore the registry index (e.g., PyPI), instead relying on
-                direct URL dependencies and those provided via `--find-links`.
-            no_progress: Hide all progress outputs.
-            no_python_downloads: Disable automatic downloads of Python.
-            no_sources: Ignore the `tool.uv.sources` table when resolving
-                dependencies.
-            no_sources_package: Don't use sources from the `tool.uv.sources` table
-                for the specified packages.
-            no_verify_hashes: Disable validation of hashes in the requirements file.
-            offline: Disable network access.
-            only_binary: Only use pre-built wheels; don't build source
-                distributions.
-            overrides: Override versions using the given requirements files.
-            prefix: Install packages into `lib`, `bin`, and other top-level folders
-                under the specified directory, as if a virtual environment were
-                present at that location.
-            prerelease: The strategy to use when considering pre-release versions.
-            project: Discover a project in the given directory.
-            python: The Python interpreter into which packages should be installed.
-            python_platform: The platform for which requirements should be
-                installed.
-            python_version: The minimum Python version that should be supported by
-                the requirements (e.g., `3.7` or `3.7.9`).
-            quiet: Use quiet output.
-            refresh: Refresh all cached data.
-            refresh_package: Refresh cached data for a specific package.
-            reinstall: Reinstall all packages, regardless of whether they're already
-                installed.
-            reinstall_package: Reinstall a specific package, regardless of whether
-                it's already installed.
-            require_hashes: Require a matching hash for each requirement.
-            requirements: Install the packages listed in the given files.
-            resolution: The strategy to use when selecting between the different
-                compatible versions for a given package requirement.
-            strict: Validate the Python environment after completing the
-                installation, to detect packages with missing dependencies or other
-                issues.
-            system: Install packages into the system Python environment.
-            system_certs: Whether to load TLS certificates from the platform's
-                native certificate store.
-            target: Install packages into the specified directory, rather than into
-                the virtual or system Python environment.
-            torch_backend: The backend to use when fetching packages in the PyTorch
-                ecosystem (e.g., `cpu`, `cu126`, or `auto`).
-            upgrade: Allow package upgrades, ignoring pinned versions in any
-                existing output file.
-            upgrade_group: Allow upgrades for all packages in a dependency group,
-                ignoring pinned versions in any existing output file.
-            upgrade_package: Allow upgrades for a specific package, ignoring pinned
-                versions in any existing output file.
-            verbose: Use verbose output.
-        """
-        ...
-    def list(
-        self,
-        *,
-        allow_insecure_host: _Value = ...,
-        cache_dir: _Value = ...,
-        color: Literal["auto", "always", "never"]
-        | Sequence[Literal["auto", "always", "never"]]
-        | None = ...,
-        config_file: _Value = ...,
-        default_index: _Value = ...,
-        directory: _Value = ...,
-        editable: _Flag = ...,
-        exclude: _Value = ...,
-        exclude_editable: _Flag = ...,
-        exclude_newer: _Value = ...,
-        extra_index_url: _Value = ...,
-        find_links: _Value = ...,
-        format: Literal["columns", "freeze", "json"]
-        | Sequence[Literal["columns", "freeze", "json"]]
-        | None = ...,
-        index: _Value = ...,
-        index_strategy: Literal[
-            "first-index", "unsafe-first-match", "unsafe-best-match"
-        ]
-        | Sequence[Literal["first-index", "unsafe-first-match", "unsafe-best-match"]]
-        | None = ...,
-        index_url: _Value = ...,
-        keyring_provider: Literal["disabled", "subprocess"]
-        | Sequence[Literal["disabled", "subprocess"]]
-        | None = ...,
-        managed_python: _Flag = ...,
-        no_cache: _Flag = ...,
-        no_config: _Flag = ...,
-        no_index: _Flag = ...,
-        no_progress: _Flag = ...,
-        no_python_downloads: _Flag = ...,
-        offline: _Flag = ...,
-        outdated: _Flag = ...,
-        prefix: _Value = ...,
-        project: _Value = ...,
-        python: _Value = ...,
-        quiet: _Flag = ...,
-        strict: _Flag = ...,
-        system: _Flag = ...,
-        system_certs: _Flag = ...,
-        target: _Value = ...,
-        verbose: _Flag = ...,
-        **flags: Any,
-    ) -> Result:
-        """List, in tabular format, packages installed in an environment
+            Args:
+                all_extras: Include all optional dependencies.
+                allow_insecure_host: Allow insecure connections to a host.
+                break_system_packages: Allow uv to modify an `EXTERNALLY-MANAGED`
+                    Python installation. `break_system_packages=off` emits
+                    `--no-break-system-packages`.
+                build_constraints: Constrain build dependencies using the given
+                    requirements files when building source distributions.
+                cache_dir: Path to the cache directory.
+                color: Control the use of color in output.
+                compile_bytecode: Compile Python files to bytecode after
+                    installation.
+                config_file: The path to a `uv.toml` file to use for configuration.
+                config_setting: Settings to pass to the PEP 517 build backend,
+                    specified as `KEY=VALUE` pairs.
+                config_settings_package: Settings to pass to the PEP 517 build
+                    backend for a specific package, specified as `PACKAGE:KEY=VALUE`
+                    pairs.
+                constraints: Constrain versions using the given requirements files.
+                default_index: The URL of the default package index (by default:
+                    <https://pypi.org/simple>).
+                directory: Change to the given directory prior to running the
+                    command.
+                dry_run: Perform a dry run, i.e., don't actually install anything
+                    but resolve the dependencies and print the resulting plan.
+                editable: Install the editable package based on the provided local
+                    file path.
+                exact: Perform an exact sync, removing extraneous packages.
+                exclude_newer: Limit candidate packages to those that were uploaded
+                    prior to the given date.
+                exclude_newer_package: Limit candidate packages for specific
+                    packages to those that were uploaded prior to the given date.
+                excludes: Exclude packages from resolution using the given
+                    requirements files.
+                extra: Include optional dependencies from the specified extra name;
+                    may be provided more than once.
+                extra_index_url: (Deprecated: use `--index` instead) Extra URLs of
+                    package indexes to use, in addition to `--index-url`.
+                find_links: Locations to search for candidate distributions, in
+                    addition to those found in the registry indexes.
+                fork_strategy: The strategy to use when selecting multiple versions
+                    of a given package across Python versions and platforms.
+                group: Install the specified dependency group from a `pylock.toml`
+                    or `pyproject.toml`.
+                index: The URLs to use when resolving dependencies, in addition to
+                    the default index.
+                index_strategy: The strategy to use when resolving against multiple
+                    index URLs.
+                index_url: (Deprecated: use `--default-index` instead) The URL of
+                    the Python package index (by default:
+                    <https://pypi.org/simple>).
+                keyring_provider: Attempt to use `keyring` for authentication for
+                    index URLs.
+                link_mode: The method to use when installing packages from the
+                    global cache.
+                managed_python: Require use of uv-managed Python versions.
+                    `managed_python=off` emits `--no-managed-python`.
+                no_binary: Don't install pre-built wheels.
+                no_build: Don't build source distributions.
+                no_build_isolation: Disable isolation when building source
+                    distributions.
+                no_build_isolation_package: Disable isolation when building source
+                    distributions for a specific package.
+                no_cache: Avoid reading from or writing to the cache, instead using
+                    a temporary directory for the duration of the operation.
+                no_config: Avoid discovering configuration files (`pyproject.toml`,
+                    `uv.toml`).
+                no_deps: Ignore package dependencies, instead only installing those
+                    packages explicitly listed on the command line or in the
+                    requirements files.
+                no_editable: Install any editable dependencies as non-editable.
+                no_editable_package: Install the specified editable packages as
+                    non-editable.
+                no_index: Ignore the registry index (e.g., PyPI), instead relying on
+                    direct URL dependencies and those provided via `--find-links`.
+                no_progress: Hide all progress outputs.
+                no_python_downloads: Disable automatic downloads of Python.
+                no_sources: Ignore the `tool.uv.sources` table when resolving
+                    dependencies.
+                no_sources_package: Don't use sources from the `tool.uv.sources`
+                    table for the specified packages.
+                no_verify_hashes: Disable validation of hashes in the requirements
+                    file.
+                offline: Disable network access.
+                only_binary: Only use pre-built wheels; don't build source
+                    distributions.
+                overrides: Override versions using the given requirements files.
+                prefix: Install packages into `lib`, `bin`, and other top-level
+                    folders under the specified directory, as if a virtual
+                    environment were present at that location.
+                prerelease: The strategy to use when considering pre-release
+                    versions.
+                project: Discover a project in the given directory.
+                python: The Python interpreter into which packages should be
+                    installed.
+                python_platform: The platform for which requirements should be
+                    installed.
+                python_version: The minimum Python version that should be supported
+                    by the requirements (e.g., `3.7` or `3.7.9`).
+                quiet: Use quiet output.
+                refresh: Refresh all cached data.
+                refresh_package: Refresh cached data for a specific package.
+                reinstall: Reinstall all packages, regardless of whether they're
+                    already installed.
+                reinstall_package: Reinstall a specific package, regardless of
+                    whether it's already installed.
+                require_hashes: Require a matching hash for each requirement.
+                requirements: Install the packages listed in the given files.
+                resolution: The strategy to use when selecting between the different
+                    compatible versions for a given package requirement.
+                strict: Validate the Python environment after completing the
+                    installation, to detect packages with missing dependencies or
+                    other issues.
+                system: Install packages into the system Python environment.
+                system_certs: Whether to load TLS certificates from the platform's
+                    native certificate store.
+                target: Install packages into the specified directory, rather than
+                    into the virtual or system Python environment.
+                torch_backend: The backend to use when fetching packages in the
+                    PyTorch ecosystem (e.g., `cpu`, `cu126`, or `auto`).
+                upgrade: Allow package upgrades, ignoring pinned versions in any
+                    existing output file.
+                upgrade_group: Allow upgrades for all packages in a dependency
+                    group, ignoring pinned versions in any existing output file.
+                upgrade_package: Allow upgrades for a specific package, ignoring
+                    pinned versions in any existing output file.
+                verbose: Use verbose output.
+            """
+            ...
+        def list(
+            self,
+            *,
+            allow_insecure_host: _Value = ...,
+            cache_dir: _Value = ...,
+            color: Literal["auto", "always", "never"]
+            | Sequence[Literal["auto", "always", "never"]]
+            | None = ...,
+            config_file: _Value = ...,
+            default_index: _Value = ...,
+            directory: _Value = ...,
+            editable: _Flag = ...,
+            exclude: _Value = ...,
+            exclude_editable: _Flag = ...,
+            exclude_newer: _Value = ...,
+            extra_index_url: _Value = ...,
+            find_links: _Value = ...,
+            format: Literal["columns", "freeze", "json"]
+            | Sequence[Literal["columns", "freeze", "json"]]
+            | None = ...,
+            index: _Value = ...,
+            index_strategy: Literal[
+                "first-index", "unsafe-first-match", "unsafe-best-match"
+            ]
+            | Sequence[
+                Literal["first-index", "unsafe-first-match", "unsafe-best-match"]
+            ]
+            | None = ...,
+            index_url: _Value = ...,
+            keyring_provider: Literal["disabled", "subprocess"]
+            | Sequence[Literal["disabled", "subprocess"]]
+            | None = ...,
+            managed_python: _Flag = ...,
+            no_cache: _Flag = ...,
+            no_config: _Flag = ...,
+            no_index: _Flag = ...,
+            no_progress: _Flag = ...,
+            no_python_downloads: _Flag = ...,
+            offline: _Flag = ...,
+            outdated: _Flag = ...,
+            prefix: _Value = ...,
+            project: _Value = ...,
+            python: _Value = ...,
+            quiet: _Flag = ...,
+            strict: _Flag = ...,
+            system: _Flag = ...,
+            system_certs: _Flag = ...,
+            target: _Value = ...,
+            verbose: _Flag = ...,
+            **flags: Any,
+        ) -> _Result:
+            """List, in tabular format, packages installed in an environment
 
-        Args:
-            allow_insecure_host: Allow insecure connections to a host.
-            cache_dir: Path to the cache directory.
-            color: Control the use of color in output.
-            config_file: The path to a `uv.toml` file to use for configuration.
-            default_index: The URL of the default package index (by default:
-                <https://pypi.org/simple>).
-            directory: Change to the given directory prior to running the command.
-            editable: Only include editable projects.
-            exclude: Exclude the specified package(s) from the output.
-            exclude_editable: Exclude any editable packages from output.
-            exclude_newer: Limit candidate packages to those that were uploaded
-                prior to the given date.
-            extra_index_url: (Deprecated: use `--index` instead) Extra URLs of
-                package indexes to use, in addition to `--index-url`.
-            find_links: Locations to search for candidate distributions, in addition
-                to those found in the registry indexes.
-            format: Select the output format. Defaults to `columns`.
-            index: The URLs to use when resolving dependencies, in addition to the
-                default index.
-            index_strategy: The strategy to use when resolving against multiple
-                index URLs.
-            index_url: (Deprecated: use `--default-index` instead) The URL of the
-                Python package index (by default: <https://pypi.org/simple>).
-            keyring_provider: Attempt to use `keyring` for authentication for index
-                URLs.
-            managed_python: Require use of uv-managed Python versions.
-                `managed_python=off` emits `--no-managed-python`.
-            no_cache: Avoid reading from or writing to the cache, instead using a
-                temporary directory for the duration of the operation.
-            no_config: Avoid discovering configuration files (`pyproject.toml`,
-                `uv.toml`).
-            no_index: Ignore the registry index (e.g., PyPI), instead relying on
-                direct URL dependencies and those provided via `--find-links`.
-            no_progress: Hide all progress outputs.
-            no_python_downloads: Disable automatic downloads of Python.
-            offline: Disable network access.
-            outdated: List outdated packages.
-            prefix: List packages from the specified `--prefix` directory.
-            project: Discover a project in the given directory.
-            python: The Python interpreter for which packages should be listed.
-            quiet: Use quiet output.
-            strict: Validate the Python environment, to detect packages with missing
-                dependencies and other issues.
-            system: List packages in the system Python environment.
-            system_certs: Whether to load TLS certificates from the platform's
-                native certificate store.
-            target: List packages from the specified `--target` directory.
-            verbose: Use verbose output.
-        """
-        ...
-    def sync(
-        self,
-        *args: str,
-        all_extras: _Flag = ...,
-        allow_empty_requirements: _Flag = ...,
-        allow_insecure_host: _Value = ...,
-        break_system_packages: _Flag = ...,
-        build_constraints: _Value = ...,
-        cache_dir: _Value = ...,
-        color: Literal["auto", "always", "never"]
-        | Sequence[Literal["auto", "always", "never"]]
-        | None = ...,
-        compile_bytecode: _Flag = ...,
-        config_file: _Value = ...,
-        config_setting: _Value = ...,
-        config_settings_package: _Value = ...,
-        constraints: _Value = ...,
-        default_index: _Value = ...,
-        directory: _Value = ...,
-        dry_run: _Flag = ...,
-        exclude_newer: _Value = ...,
-        exclude_newer_package: _Value = ...,
-        extra: _Value = ...,
-        extra_index_url: _Value = ...,
-        find_links: _Value = ...,
-        group: _Value = ...,
-        index: _Value = ...,
-        index_strategy: Literal[
-            "first-index", "unsafe-first-match", "unsafe-best-match"
-        ]
-        | Sequence[Literal["first-index", "unsafe-first-match", "unsafe-best-match"]]
-        | None = ...,
-        index_url: _Value = ...,
-        keyring_provider: Literal["disabled", "subprocess"]
-        | Sequence[Literal["disabled", "subprocess"]]
-        | None = ...,
-        link_mode: Literal["clone", "copy", "hardlink", "symlink"]
-        | Sequence[Literal["clone", "copy", "hardlink", "symlink"]]
-        | None = ...,
-        managed_python: _Flag = ...,
-        no_binary: _Value = ...,
-        no_build: _Flag = ...,
-        no_build_isolation: _Flag = ...,
-        no_cache: _Flag = ...,
-        no_index: _Flag = ...,
-        no_progress: _Flag = ...,
-        no_python_downloads: _Flag = ...,
-        no_sources: _Flag = ...,
-        no_sources_package: _Value = ...,
-        no_verify_hashes: _Flag = ...,
-        offline: _Flag = ...,
-        only_binary: _Value = ...,
-        prefix: _Value = ...,
-        project: _Value = ...,
-        python: _Value = ...,
-        python_platform: Literal[
-            "windows",
-            "linux",
-            "macos",
-            "x86_64-pc-windows-msvc",
-            "aarch64-pc-windows-msvc",
-            "i686-pc-windows-msvc",
-            "x86_64-unknown-linux-gnu",
-            "aarch64-apple-darwin",
-            "x86_64-apple-darwin",
-            "aarch64-unknown-linux-gnu",
-            "aarch64-unknown-linux-musl",
-            "x86_64-unknown-linux-musl",
-            "riscv64-unknown-linux",
-            "x86_64-manylinux2014",
-            "x86_64-manylinux_2_17",
-            "x86_64-manylinux_2_28",
-            "x86_64-manylinux_2_31",
-            "x86_64-manylinux_2_32",
-            "x86_64-manylinux_2_33",
-            "x86_64-manylinux_2_34",
-            "x86_64-manylinux_2_35",
-            "x86_64-manylinux_2_36",
-            "x86_64-manylinux_2_37",
-            "x86_64-manylinux_2_38",
-            "x86_64-manylinux_2_39",
-            "x86_64-manylinux_2_40",
-            "aarch64-manylinux2014",
-            "aarch64-manylinux_2_17",
-            "aarch64-manylinux_2_28",
-            "aarch64-manylinux_2_31",
-            "aarch64-manylinux_2_32",
-            "aarch64-manylinux_2_33",
-            "aarch64-manylinux_2_34",
-            "aarch64-manylinux_2_35",
-            "aarch64-manylinux_2_36",
-            "aarch64-manylinux_2_37",
-            "aarch64-manylinux_2_38",
-            "aarch64-manylinux_2_39",
-            "aarch64-manylinux_2_40",
-            "aarch64-linux-android",
-            "x86_64-linux-android",
-            "wasm32-pyodide2024",
-            "wasm32-pyodide2025",
-            "arm64-apple-ios",
-            "arm64-apple-ios-simulator",
-            "x86_64-apple-ios-simulator",
-        ]
-        | Sequence[
-            Literal[
+            Args:
+                allow_insecure_host: Allow insecure connections to a host.
+                cache_dir: Path to the cache directory.
+                color: Control the use of color in output.
+                config_file: The path to a `uv.toml` file to use for configuration.
+                default_index: The URL of the default package index (by default:
+                    <https://pypi.org/simple>).
+                directory: Change to the given directory prior to running the
+                    command.
+                editable: Only include editable projects.
+                exclude: Exclude the specified package(s) from the output.
+                exclude_editable: Exclude any editable packages from output.
+                exclude_newer: Limit candidate packages to those that were uploaded
+                    prior to the given date.
+                extra_index_url: (Deprecated: use `--index` instead) Extra URLs of
+                    package indexes to use, in addition to `--index-url`.
+                find_links: Locations to search for candidate distributions, in
+                    addition to those found in the registry indexes.
+                format: Select the output format. Defaults to `columns`.
+                index: The URLs to use when resolving dependencies, in addition to
+                    the default index.
+                index_strategy: The strategy to use when resolving against multiple
+                    index URLs.
+                index_url: (Deprecated: use `--default-index` instead) The URL of
+                    the Python package index (by default:
+                    <https://pypi.org/simple>).
+                keyring_provider: Attempt to use `keyring` for authentication for
+                    index URLs.
+                managed_python: Require use of uv-managed Python versions.
+                    `managed_python=off` emits `--no-managed-python`.
+                no_cache: Avoid reading from or writing to the cache, instead using
+                    a temporary directory for the duration of the operation.
+                no_config: Avoid discovering configuration files (`pyproject.toml`,
+                    `uv.toml`).
+                no_index: Ignore the registry index (e.g., PyPI), instead relying on
+                    direct URL dependencies and those provided via `--find-links`.
+                no_progress: Hide all progress outputs.
+                no_python_downloads: Disable automatic downloads of Python.
+                offline: Disable network access.
+                outdated: List outdated packages.
+                prefix: List packages from the specified `--prefix` directory.
+                project: Discover a project in the given directory.
+                python: The Python interpreter for which packages should be listed.
+                quiet: Use quiet output.
+                strict: Validate the Python environment, to detect packages with
+                    missing dependencies and other issues.
+                system: List packages in the system Python environment.
+                system_certs: Whether to load TLS certificates from the platform's
+                    native certificate store.
+                target: List packages from the specified `--target` directory.
+                verbose: Use verbose output.
+            """
+            ...
+        def sync(
+            self,
+            *args: str,
+            all_extras: _Flag = ...,
+            allow_empty_requirements: _Flag = ...,
+            allow_insecure_host: _Value = ...,
+            break_system_packages: _Flag = ...,
+            build_constraints: _Value = ...,
+            cache_dir: _Value = ...,
+            color: Literal["auto", "always", "never"]
+            | Sequence[Literal["auto", "always", "never"]]
+            | None = ...,
+            compile_bytecode: _Flag = ...,
+            config_file: _Value = ...,
+            config_setting: _Value = ...,
+            config_settings_package: _Value = ...,
+            constraints: _Value = ...,
+            default_index: _Value = ...,
+            directory: _Value = ...,
+            dry_run: _Flag = ...,
+            exclude_newer: _Value = ...,
+            exclude_newer_package: _Value = ...,
+            extra: _Value = ...,
+            extra_index_url: _Value = ...,
+            find_links: _Value = ...,
+            group: _Value = ...,
+            index: _Value = ...,
+            index_strategy: Literal[
+                "first-index", "unsafe-first-match", "unsafe-best-match"
+            ]
+            | Sequence[
+                Literal["first-index", "unsafe-first-match", "unsafe-best-match"]
+            ]
+            | None = ...,
+            index_url: _Value = ...,
+            keyring_provider: Literal["disabled", "subprocess"]
+            | Sequence[Literal["disabled", "subprocess"]]
+            | None = ...,
+            link_mode: Literal["clone", "copy", "hardlink", "symlink"]
+            | Sequence[Literal["clone", "copy", "hardlink", "symlink"]]
+            | None = ...,
+            managed_python: _Flag = ...,
+            no_binary: _Value = ...,
+            no_build: _Flag = ...,
+            no_build_isolation: _Flag = ...,
+            no_cache: _Flag = ...,
+            no_index: _Flag = ...,
+            no_progress: _Flag = ...,
+            no_python_downloads: _Flag = ...,
+            no_sources: _Flag = ...,
+            no_sources_package: _Value = ...,
+            no_verify_hashes: _Flag = ...,
+            offline: _Flag = ...,
+            only_binary: _Value = ...,
+            prefix: _Value = ...,
+            project: _Value = ...,
+            python: _Value = ...,
+            python_platform: Literal[
                 "windows",
                 "linux",
                 "macos",
@@ -1123,73 +1110,69 @@ class UvPip(Tool):
                 "arm64-apple-ios-simulator",
                 "x86_64-apple-ios-simulator",
             ]
-        ]
-        | None = ...,
-        python_version: _Value = ...,
-        quiet: _Flag = ...,
-        refresh: _Flag = ...,
-        refresh_package: _Value = ...,
-        reinstall: _Flag = ...,
-        reinstall_package: _Value = ...,
-        require_hashes: _Flag = ...,
-        strict: _Flag = ...,
-        system: _Flag = ...,
-        system_certs: _Flag = ...,
-        target: _Value = ...,
-        torch_backend: Literal[
-            "auto",
-            "cpu",
-            "cu132",
-            "cu130",
-            "cu129",
-            "cu128",
-            "cu126",
-            "cu125",
-            "cu124",
-            "cu123",
-            "cu122",
-            "cu121",
-            "cu120",
-            "cu118",
-            "cu117",
-            "cu116",
-            "cu115",
-            "cu114",
-            "cu113",
-            "cu112",
-            "cu111",
-            "cu110",
-            "cu102",
-            "cu101",
-            "cu100",
-            "cu92",
-            "cu91",
-            "cu90",
-            "cu80",
-            "rocm7.2",
-            "rocm7.1",
-            "rocm7.0",
-            "rocm6.4",
-            "rocm6.3",
-            "rocm6.2.4",
-            "rocm6.2",
-            "rocm6.1",
-            "rocm6.0",
-            "rocm5.7",
-            "rocm5.6",
-            "rocm5.5",
-            "rocm5.4.2",
-            "rocm5.4",
-            "rocm5.3",
-            "rocm5.2",
-            "rocm5.1.1",
-            "rocm4.2",
-            "rocm4.1",
-            "rocm4.0.1",
-            "xpu",
-        ]
-        | Sequence[
-            Literal[
+            | Sequence[
+                Literal[
+                    "windows",
+                    "linux",
+                    "macos",
+                    "x86_64-pc-windows-msvc",
+                    "aarch64-pc-windows-msvc",
+                    "i686-pc-windows-msvc",
+                    "x86_64-unknown-linux-gnu",
+                    "aarch64-apple-darwin",
+                    "x86_64-apple-darwin",
+                    "aarch64-unknown-linux-gnu",
+                    "aarch64-unknown-linux-musl",
+                    "x86_64-unknown-linux-musl",
+                    "riscv64-unknown-linux",
+                    "x86_64-manylinux2014",
+                    "x86_64-manylinux_2_17",
+                    "x86_64-manylinux_2_28",
+                    "x86_64-manylinux_2_31",
+                    "x86_64-manylinux_2_32",
+                    "x86_64-manylinux_2_33",
+                    "x86_64-manylinux_2_34",
+                    "x86_64-manylinux_2_35",
+                    "x86_64-manylinux_2_36",
+                    "x86_64-manylinux_2_37",
+                    "x86_64-manylinux_2_38",
+                    "x86_64-manylinux_2_39",
+                    "x86_64-manylinux_2_40",
+                    "aarch64-manylinux2014",
+                    "aarch64-manylinux_2_17",
+                    "aarch64-manylinux_2_28",
+                    "aarch64-manylinux_2_31",
+                    "aarch64-manylinux_2_32",
+                    "aarch64-manylinux_2_33",
+                    "aarch64-manylinux_2_34",
+                    "aarch64-manylinux_2_35",
+                    "aarch64-manylinux_2_36",
+                    "aarch64-manylinux_2_37",
+                    "aarch64-manylinux_2_38",
+                    "aarch64-manylinux_2_39",
+                    "aarch64-manylinux_2_40",
+                    "aarch64-linux-android",
+                    "x86_64-linux-android",
+                    "wasm32-pyodide2024",
+                    "wasm32-pyodide2025",
+                    "arm64-apple-ios",
+                    "arm64-apple-ios-simulator",
+                    "x86_64-apple-ios-simulator",
+                ]
+            ]
+            | None = ...,
+            python_version: _Value = ...,
+            quiet: _Flag = ...,
+            refresh: _Flag = ...,
+            refresh_package: _Value = ...,
+            reinstall: _Flag = ...,
+            reinstall_package: _Value = ...,
+            require_hashes: _Flag = ...,
+            strict: _Flag = ...,
+            system: _Flag = ...,
+            system_certs: _Flag = ...,
+            target: _Value = ...,
+            torch_backend: Literal[
                 "auto",
                 "cpu",
                 "cu132",
@@ -1241,245 +1224,262 @@ class UvPip(Tool):
                 "rocm4.0.1",
                 "xpu",
             ]
-        ]
-        | None = ...,
-        verbose: _Flag = ...,
-        **flags: Any,
-    ) -> Result:
-        """Sync an environment with a `requirements.txt` or `pylock.toml` file
+            | Sequence[
+                Literal[
+                    "auto",
+                    "cpu",
+                    "cu132",
+                    "cu130",
+                    "cu129",
+                    "cu128",
+                    "cu126",
+                    "cu125",
+                    "cu124",
+                    "cu123",
+                    "cu122",
+                    "cu121",
+                    "cu120",
+                    "cu118",
+                    "cu117",
+                    "cu116",
+                    "cu115",
+                    "cu114",
+                    "cu113",
+                    "cu112",
+                    "cu111",
+                    "cu110",
+                    "cu102",
+                    "cu101",
+                    "cu100",
+                    "cu92",
+                    "cu91",
+                    "cu90",
+                    "cu80",
+                    "rocm7.2",
+                    "rocm7.1",
+                    "rocm7.0",
+                    "rocm6.4",
+                    "rocm6.3",
+                    "rocm6.2.4",
+                    "rocm6.2",
+                    "rocm6.1",
+                    "rocm6.0",
+                    "rocm5.7",
+                    "rocm5.6",
+                    "rocm5.5",
+                    "rocm5.4.2",
+                    "rocm5.4",
+                    "rocm5.3",
+                    "rocm5.2",
+                    "rocm5.1.1",
+                    "rocm4.2",
+                    "rocm4.1",
+                    "rocm4.0.1",
+                    "xpu",
+                ]
+            ]
+            | None = ...,
+            verbose: _Flag = ...,
+            **flags: Any,
+        ) -> _Result:
+            """Sync an environment with a `requirements.txt` or `pylock.toml` file
 
-        Args:
-            all_extras: Include all optional dependencies.
-            allow_empty_requirements: Allow sync of empty requirements, which will
-                clear the environment of all packages.
-                `allow_empty_requirements=off` emits
-                `--no-allow-empty-requirements`.
-            allow_insecure_host: Allow insecure connections to a host.
-            break_system_packages: Allow uv to modify an `EXTERNALLY-MANAGED` Python
-                installation. `break_system_packages=off` emits
-                `--no-break-system-packages`.
-            build_constraints: Constrain build dependencies using the given
-                requirements files when building source distributions.
-            cache_dir: Path to the cache directory.
-            color: Control the use of color in output.
-            compile_bytecode: Compile Python files to bytecode after installation.
-            config_file: The path to a `uv.toml` file to use for configuration.
-            config_setting: Settings to pass to the PEP 517 build backend, specified
-                as `KEY=VALUE` pairs.
-            config_settings_package: Settings to pass to the PEP 517 build backend
-                for a specific package, specified as `PACKAGE:KEY=VALUE` pairs.
-            constraints: Constrain versions using the given requirements files.
-            default_index: The URL of the default package index (by default:
-                <https://pypi.org/simple>).
-            directory: Change to the given directory prior to running the command.
-            dry_run: Perform a dry run, i.e., don't actually install anything but
-                resolve the dependencies and print the resulting plan.
-            exclude_newer: Limit candidate packages to those that were uploaded
-                prior to the given date.
-            exclude_newer_package: Limit candidate packages for specific packages to
-                those that were uploaded prior to the given date.
-            extra: Include optional dependencies from the specified extra name; may
-                be provided more than once.
-            extra_index_url: (Deprecated: use `--index` instead) Extra URLs of
-                package indexes to use, in addition to `--index-url`.
-            find_links: Locations to search for candidate distributions, in addition
-                to those found in the registry indexes.
-            group: Install the specified dependency group from a `pylock.toml` or
-                `pyproject.toml`.
-            index: The URLs to use when resolving dependencies, in addition to the
-                default index.
-            index_strategy: The strategy to use when resolving against multiple
-                index URLs.
-            index_url: (Deprecated: use `--default-index` instead) The URL of the
-                Python package index (by default: <https://pypi.org/simple>).
-            keyring_provider: Attempt to use `keyring` for authentication for index
-                URLs.
-            link_mode: The method to use when installing packages from the global
-                cache.
-            managed_python: Require use of uv-managed Python versions.
-                `managed_python=off` emits `--no-managed-python`.
-            no_binary: Don't install pre-built wheels.
-            no_build: Don't build source distributions.
-            no_build_isolation: Disable isolation when building source
-                distributions.
-            no_cache: Avoid reading from or writing to the cache, instead using a
-                temporary directory for the duration of the operation.
-            no_index: Ignore the registry index (e.g., PyPI), instead relying on
-                direct URL dependencies and those provided via `--find-links`.
-            no_progress: Hide all progress outputs.
-            no_python_downloads: Disable automatic downloads of Python.
-            no_sources: Ignore the `tool.uv.sources` table when resolving
-                dependencies.
-            no_sources_package: Don't use sources from the `tool.uv.sources` table
-                for the specified packages.
-            no_verify_hashes: Disable validation of hashes in the requirements file.
-            offline: Disable network access.
-            only_binary: Only use pre-built wheels; don't build source
-                distributions.
-            prefix: Install packages into `lib`, `bin`, and other top-level folders
-                under the specified directory, as if a virtual environment were
-                present at that location.
-            project: Discover a project in the given directory.
-            python: The Python interpreter into which packages should be installed.
-            python_platform: The platform for which requirements should be
-                installed.
-            python_version: The minimum Python version that should be supported by
-                the requirements (e.g., `3.7` or `3.7.9`).
-            quiet: Use quiet output.
-            refresh: Refresh all cached data.
-            refresh_package: Refresh cached data for a specific package.
-            reinstall: Reinstall all packages, regardless of whether they're already
-                installed.
-            reinstall_package: Reinstall a specific package, regardless of whether
-                it's already installed.
-            require_hashes: Require a matching hash for each requirement.
-            strict: Validate the Python environment after completing the
-                installation, to detect packages with missing dependencies or other
-                issues.
-            system: Install packages into the system Python environment.
-            system_certs: Whether to load TLS certificates from the platform's
-                native certificate store.
-            target: Install packages into the specified directory, rather than into
-                the virtual or system Python environment.
-            torch_backend: The backend to use when fetching packages in the PyTorch
-                ecosystem (e.g., `cpu`, `cu126`, or `auto`).
-            verbose: Use verbose output.
-        """
-        ...
-    def flags(
-        self,
-        **flags: Any,
-    ) -> UvPip:
-        """Bind tool-level global options before the subcommand.
+            Args:
+                all_extras: Include all optional dependencies.
+                allow_empty_requirements: Allow sync of empty requirements, which
+                    will clear the environment of all packages.
+                    `allow_empty_requirements=off` emits
+                    `--no-allow-empty-requirements`.
+                allow_insecure_host: Allow insecure connections to a host.
+                break_system_packages: Allow uv to modify an `EXTERNALLY-MANAGED`
+                    Python installation. `break_system_packages=off` emits
+                    `--no-break-system-packages`.
+                build_constraints: Constrain build dependencies using the given
+                    requirements files when building source distributions.
+                cache_dir: Path to the cache directory.
+                color: Control the use of color in output.
+                compile_bytecode: Compile Python files to bytecode after
+                    installation.
+                config_file: The path to a `uv.toml` file to use for configuration.
+                config_setting: Settings to pass to the PEP 517 build backend,
+                    specified as `KEY=VALUE` pairs.
+                config_settings_package: Settings to pass to the PEP 517 build
+                    backend for a specific package, specified as `PACKAGE:KEY=VALUE`
+                    pairs.
+                constraints: Constrain versions using the given requirements files.
+                default_index: The URL of the default package index (by default:
+                    <https://pypi.org/simple>).
+                directory: Change to the given directory prior to running the
+                    command.
+                dry_run: Perform a dry run, i.e., don't actually install anything
+                    but resolve the dependencies and print the resulting plan.
+                exclude_newer: Limit candidate packages to those that were uploaded
+                    prior to the given date.
+                exclude_newer_package: Limit candidate packages for specific
+                    packages to those that were uploaded prior to the given date.
+                extra: Include optional dependencies from the specified extra name;
+                    may be provided more than once.
+                extra_index_url: (Deprecated: use `--index` instead) Extra URLs of
+                    package indexes to use, in addition to `--index-url`.
+                find_links: Locations to search for candidate distributions, in
+                    addition to those found in the registry indexes.
+                group: Install the specified dependency group from a `pylock.toml`
+                    or `pyproject.toml`.
+                index: The URLs to use when resolving dependencies, in addition to
+                    the default index.
+                index_strategy: The strategy to use when resolving against multiple
+                    index URLs.
+                index_url: (Deprecated: use `--default-index` instead) The URL of
+                    the Python package index (by default:
+                    <https://pypi.org/simple>).
+                keyring_provider: Attempt to use `keyring` for authentication for
+                    index URLs.
+                link_mode: The method to use when installing packages from the
+                    global cache.
+                managed_python: Require use of uv-managed Python versions.
+                    `managed_python=off` emits `--no-managed-python`.
+                no_binary: Don't install pre-built wheels.
+                no_build: Don't build source distributions.
+                no_build_isolation: Disable isolation when building source
+                    distributions.
+                no_cache: Avoid reading from or writing to the cache, instead using
+                    a temporary directory for the duration of the operation.
+                no_index: Ignore the registry index (e.g., PyPI), instead relying on
+                    direct URL dependencies and those provided via `--find-links`.
+                no_progress: Hide all progress outputs.
+                no_python_downloads: Disable automatic downloads of Python.
+                no_sources: Ignore the `tool.uv.sources` table when resolving
+                    dependencies.
+                no_sources_package: Don't use sources from the `tool.uv.sources`
+                    table for the specified packages.
+                no_verify_hashes: Disable validation of hashes in the requirements
+                    file.
+                offline: Disable network access.
+                only_binary: Only use pre-built wheels; don't build source
+                    distributions.
+                prefix: Install packages into `lib`, `bin`, and other top-level
+                    folders under the specified directory, as if a virtual
+                    environment were present at that location.
+                project: Discover a project in the given directory.
+                python: The Python interpreter into which packages should be
+                    installed.
+                python_platform: The platform for which requirements should be
+                    installed.
+                python_version: The minimum Python version that should be supported
+                    by the requirements (e.g., `3.7` or `3.7.9`).
+                quiet: Use quiet output.
+                refresh: Refresh all cached data.
+                refresh_package: Refresh cached data for a specific package.
+                reinstall: Reinstall all packages, regardless of whether they're
+                    already installed.
+                reinstall_package: Reinstall a specific package, regardless of
+                    whether it's already installed.
+                require_hashes: Require a matching hash for each requirement.
+                strict: Validate the Python environment after completing the
+                    installation, to detect packages with missing dependencies or
+                    other issues.
+                system: Install packages into the system Python environment.
+                system_certs: Whether to load TLS certificates from the platform's
+                    native certificate store.
+                target: Install packages into the specified directory, rather than
+                    into the virtual or system Python environment.
+                torch_backend: The backend to use when fetching packages in the
+                    PyTorch ecosystem (e.g., `cpu`, `cu126`, or `auto`).
+                verbose: Use verbose output.
+            """
+            ...
+        def flags(
+            self,
+            **flags: Any,
+        ) -> Self:
+            """Bind tool-level global options before the subcommand.
 
-        `tools.docker.flags(host=...)` puts a tool's own
-        options ahead of the verb, where they belong."""
-        ...
+            `tools.docker.flags(host=...)` puts a tool's own
+            options ahead of the verb, where they belong."""
+            ...
 
-class UvTool(Tool):
-    def install(
-        self,
-        package: str,
-        /,
-        *args: str,
-        allow_insecure_host: _Value = ...,
-        build_constraints: _Value = ...,
-        cache_dir: _Value = ...,
-        color: Literal["auto", "always", "never"]
-        | Sequence[Literal["auto", "always", "never"]]
-        | None = ...,
-        compile_bytecode: _Flag = ...,
-        config_file: _Value = ...,
-        config_setting: _Value = ...,
-        config_settings_package: _Value = ...,
-        constraints: _Value = ...,
-        default_index: _Value = ...,
-        directory: _Value = ...,
-        editable: _Flag = ...,
-        exclude_newer: _Value = ...,
-        exclude_newer_package: _Value = ...,
-        excludes: _Value = ...,
-        extra_index_url: _Value = ...,
-        find_links: _Value = ...,
-        force: _Flag = ...,
-        fork_strategy: Literal["fewest", "requires-python"]
-        | Sequence[Literal["fewest", "requires-python"]]
-        | None = ...,
-        index: _Value = ...,
-        index_strategy: Literal[
-            "first-index", "unsafe-first-match", "unsafe-best-match"
-        ]
-        | Sequence[Literal["first-index", "unsafe-first-match", "unsafe-best-match"]]
-        | None = ...,
-        index_url: _Value = ...,
-        keyring_provider: Literal["disabled", "subprocess"]
-        | Sequence[Literal["disabled", "subprocess"]]
-        | None = ...,
-        lfs: _Flag = ...,
-        link_mode: Literal["clone", "copy", "hardlink", "symlink"]
-        | Sequence[Literal["clone", "copy", "hardlink", "symlink"]]
-        | None = ...,
-        managed_python: _Flag = ...,
-        no_binary: _Flag = ...,
-        no_binary_package: _Value = ...,
-        no_build: _Flag = ...,
-        no_build_isolation: _Flag = ...,
-        no_build_isolation_package: _Value = ...,
-        no_build_package: _Value = ...,
-        no_cache: _Flag = ...,
-        no_config: _Flag = ...,
-        no_index: _Flag = ...,
-        no_progress: _Flag = ...,
-        no_python_downloads: _Flag = ...,
-        no_sources: _Flag = ...,
-        no_sources_package: _Value = ...,
-        offline: _Flag = ...,
-        overrides: _Value = ...,
-        prerelease: Literal[
-            "disallow", "allow", "if-necessary", "explicit", "if-necessary-or-explicit"
-        ]
-        | Sequence[
-            Literal[
+    pip: Pip
+    class Tool(_Tool):
+        def install(
+            self,
+            package: str,
+            /,
+            *args: str,
+            allow_insecure_host: _Value = ...,
+            build_constraints: _Value = ...,
+            cache_dir: _Value = ...,
+            color: Literal["auto", "always", "never"]
+            | Sequence[Literal["auto", "always", "never"]]
+            | None = ...,
+            compile_bytecode: _Flag = ...,
+            config_file: _Value = ...,
+            config_setting: _Value = ...,
+            config_settings_package: _Value = ...,
+            constraints: _Value = ...,
+            default_index: _Value = ...,
+            directory: _Value = ...,
+            editable: _Flag = ...,
+            exclude_newer: _Value = ...,
+            exclude_newer_package: _Value = ...,
+            excludes: _Value = ...,
+            extra_index_url: _Value = ...,
+            find_links: _Value = ...,
+            force: _Flag = ...,
+            fork_strategy: Literal["fewest", "requires-python"]
+            | Sequence[Literal["fewest", "requires-python"]]
+            | None = ...,
+            index: _Value = ...,
+            index_strategy: Literal[
+                "first-index", "unsafe-first-match", "unsafe-best-match"
+            ]
+            | Sequence[
+                Literal["first-index", "unsafe-first-match", "unsafe-best-match"]
+            ]
+            | None = ...,
+            index_url: _Value = ...,
+            keyring_provider: Literal["disabled", "subprocess"]
+            | Sequence[Literal["disabled", "subprocess"]]
+            | None = ...,
+            lfs: _Flag = ...,
+            link_mode: Literal["clone", "copy", "hardlink", "symlink"]
+            | Sequence[Literal["clone", "copy", "hardlink", "symlink"]]
+            | None = ...,
+            managed_python: _Flag = ...,
+            no_binary: _Flag = ...,
+            no_binary_package: _Value = ...,
+            no_build: _Flag = ...,
+            no_build_isolation: _Flag = ...,
+            no_build_isolation_package: _Value = ...,
+            no_build_package: _Value = ...,
+            no_cache: _Flag = ...,
+            no_config: _Flag = ...,
+            no_index: _Flag = ...,
+            no_progress: _Flag = ...,
+            no_python_downloads: _Flag = ...,
+            no_sources: _Flag = ...,
+            no_sources_package: _Value = ...,
+            offline: _Flag = ...,
+            overrides: _Value = ...,
+            prerelease: Literal[
                 "disallow",
                 "allow",
                 "if-necessary",
                 "explicit",
                 "if-necessary-or-explicit",
             ]
-        ]
-        | None = ...,
-        project: _Value = ...,
-        python: _Value = ...,
-        python_platform: Literal[
-            "windows",
-            "linux",
-            "macos",
-            "x86_64-pc-windows-msvc",
-            "aarch64-pc-windows-msvc",
-            "i686-pc-windows-msvc",
-            "x86_64-unknown-linux-gnu",
-            "aarch64-apple-darwin",
-            "x86_64-apple-darwin",
-            "aarch64-unknown-linux-gnu",
-            "aarch64-unknown-linux-musl",
-            "x86_64-unknown-linux-musl",
-            "riscv64-unknown-linux",
-            "x86_64-manylinux2014",
-            "x86_64-manylinux_2_17",
-            "x86_64-manylinux_2_28",
-            "x86_64-manylinux_2_31",
-            "x86_64-manylinux_2_32",
-            "x86_64-manylinux_2_33",
-            "x86_64-manylinux_2_34",
-            "x86_64-manylinux_2_35",
-            "x86_64-manylinux_2_36",
-            "x86_64-manylinux_2_37",
-            "x86_64-manylinux_2_38",
-            "x86_64-manylinux_2_39",
-            "x86_64-manylinux_2_40",
-            "aarch64-manylinux2014",
-            "aarch64-manylinux_2_17",
-            "aarch64-manylinux_2_28",
-            "aarch64-manylinux_2_31",
-            "aarch64-manylinux_2_32",
-            "aarch64-manylinux_2_33",
-            "aarch64-manylinux_2_34",
-            "aarch64-manylinux_2_35",
-            "aarch64-manylinux_2_36",
-            "aarch64-manylinux_2_37",
-            "aarch64-manylinux_2_38",
-            "aarch64-manylinux_2_39",
-            "aarch64-manylinux_2_40",
-            "aarch64-linux-android",
-            "x86_64-linux-android",
-            "wasm32-pyodide2024",
-            "wasm32-pyodide2025",
-            "arm64-apple-ios",
-            "arm64-apple-ios-simulator",
-            "x86_64-apple-ios-simulator",
-        ]
-        | Sequence[
-            Literal[
+            | Sequence[
+                Literal[
+                    "disallow",
+                    "allow",
+                    "if-necessary",
+                    "explicit",
+                    "if-necessary-or-explicit",
+                ]
+            ]
+            | None = ...,
+            project: _Value = ...,
+            python: _Value = ...,
+            python_platform: Literal[
                 "windows",
                 "linux",
                 "macos",
@@ -1527,71 +1527,67 @@ class UvTool(Tool):
                 "arm64-apple-ios-simulator",
                 "x86_64-apple-ios-simulator",
             ]
-        ]
-        | None = ...,
-        quiet: _Flag = ...,
-        refresh: _Flag = ...,
-        refresh_package: _Value = ...,
-        reinstall: _Flag = ...,
-        reinstall_package: _Value = ...,
-        resolution: Literal["highest", "lowest", "lowest-direct"]
-        | Sequence[Literal["highest", "lowest", "lowest-direct"]]
-        | None = ...,
-        system_certs: _Flag = ...,
-        torch_backend: Literal[
-            "auto",
-            "cpu",
-            "cu132",
-            "cu130",
-            "cu129",
-            "cu128",
-            "cu126",
-            "cu125",
-            "cu124",
-            "cu123",
-            "cu122",
-            "cu121",
-            "cu120",
-            "cu118",
-            "cu117",
-            "cu116",
-            "cu115",
-            "cu114",
-            "cu113",
-            "cu112",
-            "cu111",
-            "cu110",
-            "cu102",
-            "cu101",
-            "cu100",
-            "cu92",
-            "cu91",
-            "cu90",
-            "cu80",
-            "rocm7.2",
-            "rocm7.1",
-            "rocm7.0",
-            "rocm6.4",
-            "rocm6.3",
-            "rocm6.2.4",
-            "rocm6.2",
-            "rocm6.1",
-            "rocm6.0",
-            "rocm5.7",
-            "rocm5.6",
-            "rocm5.5",
-            "rocm5.4.2",
-            "rocm5.4",
-            "rocm5.3",
-            "rocm5.2",
-            "rocm5.1.1",
-            "rocm4.2",
-            "rocm4.1",
-            "rocm4.0.1",
-            "xpu",
-        ]
-        | Sequence[
-            Literal[
+            | Sequence[
+                Literal[
+                    "windows",
+                    "linux",
+                    "macos",
+                    "x86_64-pc-windows-msvc",
+                    "aarch64-pc-windows-msvc",
+                    "i686-pc-windows-msvc",
+                    "x86_64-unknown-linux-gnu",
+                    "aarch64-apple-darwin",
+                    "x86_64-apple-darwin",
+                    "aarch64-unknown-linux-gnu",
+                    "aarch64-unknown-linux-musl",
+                    "x86_64-unknown-linux-musl",
+                    "riscv64-unknown-linux",
+                    "x86_64-manylinux2014",
+                    "x86_64-manylinux_2_17",
+                    "x86_64-manylinux_2_28",
+                    "x86_64-manylinux_2_31",
+                    "x86_64-manylinux_2_32",
+                    "x86_64-manylinux_2_33",
+                    "x86_64-manylinux_2_34",
+                    "x86_64-manylinux_2_35",
+                    "x86_64-manylinux_2_36",
+                    "x86_64-manylinux_2_37",
+                    "x86_64-manylinux_2_38",
+                    "x86_64-manylinux_2_39",
+                    "x86_64-manylinux_2_40",
+                    "aarch64-manylinux2014",
+                    "aarch64-manylinux_2_17",
+                    "aarch64-manylinux_2_28",
+                    "aarch64-manylinux_2_31",
+                    "aarch64-manylinux_2_32",
+                    "aarch64-manylinux_2_33",
+                    "aarch64-manylinux_2_34",
+                    "aarch64-manylinux_2_35",
+                    "aarch64-manylinux_2_36",
+                    "aarch64-manylinux_2_37",
+                    "aarch64-manylinux_2_38",
+                    "aarch64-manylinux_2_39",
+                    "aarch64-manylinux_2_40",
+                    "aarch64-linux-android",
+                    "x86_64-linux-android",
+                    "wasm32-pyodide2024",
+                    "wasm32-pyodide2025",
+                    "arm64-apple-ios",
+                    "arm64-apple-ios-simulator",
+                    "x86_64-apple-ios-simulator",
+                ]
+            ]
+            | None = ...,
+            quiet: _Flag = ...,
+            refresh: _Flag = ...,
+            refresh_package: _Value = ...,
+            reinstall: _Flag = ...,
+            reinstall_package: _Value = ...,
+            resolution: Literal["highest", "lowest", "lowest-direct"]
+            | Sequence[Literal["highest", "lowest", "lowest-direct"]]
+            | None = ...,
+            system_certs: _Flag = ...,
+            torch_backend: Literal[
                 "auto",
                 "cpu",
                 "cu132",
@@ -1643,242 +1639,258 @@ class UvTool(Tool):
                 "rocm4.0.1",
                 "xpu",
             ]
-        ]
-        | None = ...,
-        upgrade: _Flag = ...,
-        upgrade_group: _Value = ...,
-        upgrade_package: _Value = ...,
-        verbose: _Flag = ...,
-        with_: _Value = ...,
-        with_editable: _Value = ...,
-        with_executables_from: _Value = ...,
-        with_requirements: _Value = ...,
-        **flags: Any,
-    ) -> Result:
-        """Install commands provided by a Python package
+            | Sequence[
+                Literal[
+                    "auto",
+                    "cpu",
+                    "cu132",
+                    "cu130",
+                    "cu129",
+                    "cu128",
+                    "cu126",
+                    "cu125",
+                    "cu124",
+                    "cu123",
+                    "cu122",
+                    "cu121",
+                    "cu120",
+                    "cu118",
+                    "cu117",
+                    "cu116",
+                    "cu115",
+                    "cu114",
+                    "cu113",
+                    "cu112",
+                    "cu111",
+                    "cu110",
+                    "cu102",
+                    "cu101",
+                    "cu100",
+                    "cu92",
+                    "cu91",
+                    "cu90",
+                    "cu80",
+                    "rocm7.2",
+                    "rocm7.1",
+                    "rocm7.0",
+                    "rocm6.4",
+                    "rocm6.3",
+                    "rocm6.2.4",
+                    "rocm6.2",
+                    "rocm6.1",
+                    "rocm6.0",
+                    "rocm5.7",
+                    "rocm5.6",
+                    "rocm5.5",
+                    "rocm5.4.2",
+                    "rocm5.4",
+                    "rocm5.3",
+                    "rocm5.2",
+                    "rocm5.1.1",
+                    "rocm4.2",
+                    "rocm4.1",
+                    "rocm4.0.1",
+                    "xpu",
+                ]
+            ]
+            | None = ...,
+            upgrade: _Flag = ...,
+            upgrade_group: _Value = ...,
+            upgrade_package: _Value = ...,
+            verbose: _Flag = ...,
+            with_: _Value = ...,
+            with_editable: _Value = ...,
+            with_executables_from: _Value = ...,
+            with_requirements: _Value = ...,
+            **flags: Any,
+        ) -> _Result:
+            """Install commands provided by a Python package
 
-        Args:
-            allow_insecure_host: Allow insecure connections to a host.
-            build_constraints: Constrain build dependencies using the given
-                requirements files when building source distributions.
-            cache_dir: Path to the cache directory.
-            color: Control the use of color in output.
-            compile_bytecode: Compile Python files to bytecode after installation.
-            config_file: The path to a `uv.toml` file to use for configuration.
-            config_setting: Settings to pass to the PEP 517 build backend, specified
-                as `KEY=VALUE` pairs.
-            config_settings_package: Settings to pass to the PEP 517 build backend
-                for a specific package, specified as `PACKAGE:KEY=VALUE` pairs.
-            constraints: Constrain versions using the given requirements files.
-            default_index: The URL of the default package index (by default:
-                <https://pypi.org/simple>).
-            directory: Change to the given directory prior to running the command.
-            editable: Install the target package in editable mode, such that changes
-                in the package's source directory are reflected without
-                reinstallation.
-            exclude_newer: Limit candidate packages to those that were uploaded
-                prior to the given date.
-            exclude_newer_package: Limit candidate packages for specific packages to
-                those that were uploaded prior to the given date.
-            excludes: Exclude packages from resolution using the given requirements
-                files.
-            extra_index_url: (Deprecated: use `--index` instead) Extra URLs of
-                package indexes to use, in addition to `--index-url`.
-            find_links: Locations to search for candidate distributions, in addition
-                to those found in the registry indexes.
-            force: Force installation of the tool.
-            fork_strategy: The strategy to use when selecting multiple versions of a
-                given package across Python versions and platforms.
-            index: The URLs to use when resolving dependencies, in addition to the
-                default index.
-            index_strategy: The strategy to use when resolving against multiple
-                index URLs.
-            index_url: (Deprecated: use `--default-index` instead) The URL of the
-                Python package index (by default: <https://pypi.org/simple>).
-            keyring_provider: Attempt to use `keyring` for authentication for index
-                URLs.
-            lfs: Whether to use Git LFS when adding a dependency from Git.
-            link_mode: The method to use when installing packages from the global
-                cache.
-            managed_python: Require use of uv-managed Python versions.
-                `managed_python=off` emits `--no-managed-python`.
-            no_binary: Don't install pre-built wheels.
-            no_binary_package: Don't install pre-built wheels for a specific
-                package.
-            no_build: Don't build source distributions.
-            no_build_isolation: Disable isolation when building source
-                distributions.
-            no_build_isolation_package: Disable isolation when building source
-                distributions for a specific package.
-            no_build_package: Don't build source distributions for a specific
-                package.
-            no_cache: Avoid reading from or writing to the cache, instead using a
-                temporary directory for the duration of the operation.
-            no_config: Avoid discovering configuration files (`pyproject.toml`,
-                `uv.toml`).
-            no_index: Ignore the registry index (e.g., PyPI), instead relying on
-                direct URL dependencies and those provided via `--find-links`.
-            no_progress: Hide all progress outputs.
-            no_python_downloads: Disable automatic downloads of Python.
-            no_sources: Ignore the `tool.uv.sources` table when resolving
-                dependencies.
-            no_sources_package: Don't use sources from the `tool.uv.sources` table
-                for the specified packages.
-            offline: Disable network access.
-            overrides: Override versions using the given requirements files.
-            prerelease: The strategy to use when considering pre-release versions.
-            project: Discover a project in the given directory.
-            python: The Python interpreter to use to build the tool environment.
-            python_platform: The platform for which requirements should be
-                installed.
-            quiet: Use quiet output.
-            refresh: Refresh all cached data.
-            refresh_package: Refresh cached data for a specific package.
-            reinstall: Reinstall all packages, regardless of whether they're already
-                installed.
-            reinstall_package: Reinstall a specific package, regardless of whether
-                it's already installed.
-            resolution: The strategy to use when selecting between the different
-                compatible versions for a given package requirement.
-            system_certs: Whether to load TLS certificates from the platform's
-                native certificate store.
-            torch_backend: The backend to use when fetching packages in the PyTorch
-                ecosystem (e.g., `cpu`, `cu126`, or `auto`).
-            upgrade: Allow package upgrades, ignoring pinned versions in any
-                existing output file.
-            upgrade_group: Allow upgrades for all packages in a dependency group,
-                ignoring pinned versions in any existing output file.
-            upgrade_package: Allow upgrades for a specific package, ignoring pinned
-                versions in any existing output file.
-            verbose: Use verbose output.
-            with_: Include the following additional requirements.
-            with_editable: Include the given packages in editable mode.
-            with_executables_from: Install executables from the following packages.
-            with_requirements: Run with the packages listed in the given files.
-        """
-        ...
-    def run(
-        self,
-        *args: str,
-        allow_insecure_host: _Value = ...,
-        build_constraints: _Value = ...,
-        cache_dir: _Value = ...,
-        color: Literal["auto", "always", "never"]
-        | Sequence[Literal["auto", "always", "never"]]
-        | None = ...,
-        compile_bytecode: _Flag = ...,
-        config_file: _Value = ...,
-        config_setting: _Value = ...,
-        config_settings_package: _Value = ...,
-        constraints: _Value = ...,
-        default_index: _Value = ...,
-        directory: _Value = ...,
-        env_file: _Value = ...,
-        exclude_newer: _Value = ...,
-        exclude_newer_package: _Value = ...,
-        extra_index_url: _Value = ...,
-        find_links: _Value = ...,
-        fork_strategy: Literal["fewest", "requires-python"]
-        | Sequence[Literal["fewest", "requires-python"]]
-        | None = ...,
-        from_: _Value = ...,
-        index: _Value = ...,
-        index_strategy: Literal[
-            "first-index", "unsafe-first-match", "unsafe-best-match"
-        ]
-        | Sequence[Literal["first-index", "unsafe-first-match", "unsafe-best-match"]]
-        | None = ...,
-        index_url: _Value = ...,
-        isolated: _Flag = ...,
-        keyring_provider: Literal["disabled", "subprocess"]
-        | Sequence[Literal["disabled", "subprocess"]]
-        | None = ...,
-        lfs: _Flag = ...,
-        link_mode: Literal["clone", "copy", "hardlink", "symlink"]
-        | Sequence[Literal["clone", "copy", "hardlink", "symlink"]]
-        | None = ...,
-        managed_python: _Flag = ...,
-        no_binary: _Flag = ...,
-        no_binary_package: _Value = ...,
-        no_build: _Flag = ...,
-        no_build_isolation: _Flag = ...,
-        no_build_isolation_package: _Value = ...,
-        no_build_package: _Value = ...,
-        no_cache: _Flag = ...,
-        no_config: _Flag = ...,
-        no_env_file: _Flag = ...,
-        no_index: _Flag = ...,
-        no_progress: _Flag = ...,
-        no_python_downloads: _Flag = ...,
-        no_sources: _Flag = ...,
-        no_sources_package: _Value = ...,
-        offline: _Flag = ...,
-        overrides: _Value = ...,
-        prerelease: Literal[
-            "disallow", "allow", "if-necessary", "explicit", "if-necessary-or-explicit"
-        ]
-        | Sequence[
-            Literal[
+            Args:
+                allow_insecure_host: Allow insecure connections to a host.
+                build_constraints: Constrain build dependencies using the given
+                    requirements files when building source distributions.
+                cache_dir: Path to the cache directory.
+                color: Control the use of color in output.
+                compile_bytecode: Compile Python files to bytecode after
+                    installation.
+                config_file: The path to a `uv.toml` file to use for configuration.
+                config_setting: Settings to pass to the PEP 517 build backend,
+                    specified as `KEY=VALUE` pairs.
+                config_settings_package: Settings to pass to the PEP 517 build
+                    backend for a specific package, specified as `PACKAGE:KEY=VALUE`
+                    pairs.
+                constraints: Constrain versions using the given requirements files.
+                default_index: The URL of the default package index (by default:
+                    <https://pypi.org/simple>).
+                directory: Change to the given directory prior to running the
+                    command.
+                editable: Install the target package in editable mode, such that
+                    changes in the package's source directory are reflected without
+                    reinstallation.
+                exclude_newer: Limit candidate packages to those that were uploaded
+                    prior to the given date.
+                exclude_newer_package: Limit candidate packages for specific
+                    packages to those that were uploaded prior to the given date.
+                excludes: Exclude packages from resolution using the given
+                    requirements files.
+                extra_index_url: (Deprecated: use `--index` instead) Extra URLs of
+                    package indexes to use, in addition to `--index-url`.
+                find_links: Locations to search for candidate distributions, in
+                    addition to those found in the registry indexes.
+                force: Force installation of the tool.
+                fork_strategy: The strategy to use when selecting multiple versions
+                    of a given package across Python versions and platforms.
+                index: The URLs to use when resolving dependencies, in addition to
+                    the default index.
+                index_strategy: The strategy to use when resolving against multiple
+                    index URLs.
+                index_url: (Deprecated: use `--default-index` instead) The URL of
+                    the Python package index (by default:
+                    <https://pypi.org/simple>).
+                keyring_provider: Attempt to use `keyring` for authentication for
+                    index URLs.
+                lfs: Whether to use Git LFS when adding a dependency from Git.
+                link_mode: The method to use when installing packages from the
+                    global cache.
+                managed_python: Require use of uv-managed Python versions.
+                    `managed_python=off` emits `--no-managed-python`.
+                no_binary: Don't install pre-built wheels.
+                no_binary_package: Don't install pre-built wheels for a specific
+                    package.
+                no_build: Don't build source distributions.
+                no_build_isolation: Disable isolation when building source
+                    distributions.
+                no_build_isolation_package: Disable isolation when building source
+                    distributions for a specific package.
+                no_build_package: Don't build source distributions for a specific
+                    package.
+                no_cache: Avoid reading from or writing to the cache, instead using
+                    a temporary directory for the duration of the operation.
+                no_config: Avoid discovering configuration files (`pyproject.toml`,
+                    `uv.toml`).
+                no_index: Ignore the registry index (e.g., PyPI), instead relying on
+                    direct URL dependencies and those provided via `--find-links`.
+                no_progress: Hide all progress outputs.
+                no_python_downloads: Disable automatic downloads of Python.
+                no_sources: Ignore the `tool.uv.sources` table when resolving
+                    dependencies.
+                no_sources_package: Don't use sources from the `tool.uv.sources`
+                    table for the specified packages.
+                offline: Disable network access.
+                overrides: Override versions using the given requirements files.
+                prerelease: The strategy to use when considering pre-release
+                    versions.
+                project: Discover a project in the given directory.
+                python: The Python interpreter to use to build the tool environment.
+                python_platform: The platform for which requirements should be
+                    installed.
+                quiet: Use quiet output.
+                refresh: Refresh all cached data.
+                refresh_package: Refresh cached data for a specific package.
+                reinstall: Reinstall all packages, regardless of whether they're
+                    already installed.
+                reinstall_package: Reinstall a specific package, regardless of
+                    whether it's already installed.
+                resolution: The strategy to use when selecting between the different
+                    compatible versions for a given package requirement.
+                system_certs: Whether to load TLS certificates from the platform's
+                    native certificate store.
+                torch_backend: The backend to use when fetching packages in the
+                    PyTorch ecosystem (e.g., `cpu`, `cu126`, or `auto`).
+                upgrade: Allow package upgrades, ignoring pinned versions in any
+                    existing output file.
+                upgrade_group: Allow upgrades for all packages in a dependency
+                    group, ignoring pinned versions in any existing output file.
+                upgrade_package: Allow upgrades for a specific package, ignoring
+                    pinned versions in any existing output file.
+                verbose: Use verbose output.
+                with_: Include the following additional requirements.
+                with_editable: Include the given packages in editable mode.
+                with_executables_from: Install executables from the following
+                    packages.
+                with_requirements: Run with the packages listed in the given files.
+            """
+            ...
+        def run(
+            self,
+            *args: str,
+            allow_insecure_host: _Value = ...,
+            build_constraints: _Value = ...,
+            cache_dir: _Value = ...,
+            color: Literal["auto", "always", "never"]
+            | Sequence[Literal["auto", "always", "never"]]
+            | None = ...,
+            compile_bytecode: _Flag = ...,
+            config_file: _Value = ...,
+            config_setting: _Value = ...,
+            config_settings_package: _Value = ...,
+            constraints: _Value = ...,
+            default_index: _Value = ...,
+            directory: _Value = ...,
+            env_file: _Value = ...,
+            exclude_newer: _Value = ...,
+            exclude_newer_package: _Value = ...,
+            extra_index_url: _Value = ...,
+            find_links: _Value = ...,
+            fork_strategy: Literal["fewest", "requires-python"]
+            | Sequence[Literal["fewest", "requires-python"]]
+            | None = ...,
+            from_: _Value = ...,
+            index: _Value = ...,
+            index_strategy: Literal[
+                "first-index", "unsafe-first-match", "unsafe-best-match"
+            ]
+            | Sequence[
+                Literal["first-index", "unsafe-first-match", "unsafe-best-match"]
+            ]
+            | None = ...,
+            index_url: _Value = ...,
+            isolated: _Flag = ...,
+            keyring_provider: Literal["disabled", "subprocess"]
+            | Sequence[Literal["disabled", "subprocess"]]
+            | None = ...,
+            lfs: _Flag = ...,
+            link_mode: Literal["clone", "copy", "hardlink", "symlink"]
+            | Sequence[Literal["clone", "copy", "hardlink", "symlink"]]
+            | None = ...,
+            managed_python: _Flag = ...,
+            no_binary: _Flag = ...,
+            no_binary_package: _Value = ...,
+            no_build: _Flag = ...,
+            no_build_isolation: _Flag = ...,
+            no_build_isolation_package: _Value = ...,
+            no_build_package: _Value = ...,
+            no_cache: _Flag = ...,
+            no_config: _Flag = ...,
+            no_env_file: _Flag = ...,
+            no_index: _Flag = ...,
+            no_progress: _Flag = ...,
+            no_python_downloads: _Flag = ...,
+            no_sources: _Flag = ...,
+            no_sources_package: _Value = ...,
+            offline: _Flag = ...,
+            overrides: _Value = ...,
+            prerelease: Literal[
                 "disallow",
                 "allow",
                 "if-necessary",
                 "explicit",
                 "if-necessary-or-explicit",
             ]
-        ]
-        | None = ...,
-        project: _Value = ...,
-        python: _Value = ...,
-        python_platform: Literal[
-            "windows",
-            "linux",
-            "macos",
-            "x86_64-pc-windows-msvc",
-            "aarch64-pc-windows-msvc",
-            "i686-pc-windows-msvc",
-            "x86_64-unknown-linux-gnu",
-            "aarch64-apple-darwin",
-            "x86_64-apple-darwin",
-            "aarch64-unknown-linux-gnu",
-            "aarch64-unknown-linux-musl",
-            "x86_64-unknown-linux-musl",
-            "riscv64-unknown-linux",
-            "x86_64-manylinux2014",
-            "x86_64-manylinux_2_17",
-            "x86_64-manylinux_2_28",
-            "x86_64-manylinux_2_31",
-            "x86_64-manylinux_2_32",
-            "x86_64-manylinux_2_33",
-            "x86_64-manylinux_2_34",
-            "x86_64-manylinux_2_35",
-            "x86_64-manylinux_2_36",
-            "x86_64-manylinux_2_37",
-            "x86_64-manylinux_2_38",
-            "x86_64-manylinux_2_39",
-            "x86_64-manylinux_2_40",
-            "aarch64-manylinux2014",
-            "aarch64-manylinux_2_17",
-            "aarch64-manylinux_2_28",
-            "aarch64-manylinux_2_31",
-            "aarch64-manylinux_2_32",
-            "aarch64-manylinux_2_33",
-            "aarch64-manylinux_2_34",
-            "aarch64-manylinux_2_35",
-            "aarch64-manylinux_2_36",
-            "aarch64-manylinux_2_37",
-            "aarch64-manylinux_2_38",
-            "aarch64-manylinux_2_39",
-            "aarch64-manylinux_2_40",
-            "aarch64-linux-android",
-            "x86_64-linux-android",
-            "wasm32-pyodide2024",
-            "wasm32-pyodide2025",
-            "arm64-apple-ios",
-            "arm64-apple-ios-simulator",
-            "x86_64-apple-ios-simulator",
-        ]
-        | Sequence[
-            Literal[
+            | Sequence[
+                Literal[
+                    "disallow",
+                    "allow",
+                    "if-necessary",
+                    "explicit",
+                    "if-necessary-or-explicit",
+                ]
+            ]
+            | None = ...,
+            project: _Value = ...,
+            python: _Value = ...,
+            python_platform: Literal[
                 "windows",
                 "linux",
                 "macos",
@@ -1926,71 +1938,67 @@ class UvTool(Tool):
                 "arm64-apple-ios-simulator",
                 "x86_64-apple-ios-simulator",
             ]
-        ]
-        | None = ...,
-        quiet: _Flag = ...,
-        refresh: _Flag = ...,
-        refresh_package: _Value = ...,
-        reinstall: _Flag = ...,
-        reinstall_package: _Value = ...,
-        resolution: Literal["highest", "lowest", "lowest-direct"]
-        | Sequence[Literal["highest", "lowest", "lowest-direct"]]
-        | None = ...,
-        system_certs: _Flag = ...,
-        torch_backend: Literal[
-            "auto",
-            "cpu",
-            "cu132",
-            "cu130",
-            "cu129",
-            "cu128",
-            "cu126",
-            "cu125",
-            "cu124",
-            "cu123",
-            "cu122",
-            "cu121",
-            "cu120",
-            "cu118",
-            "cu117",
-            "cu116",
-            "cu115",
-            "cu114",
-            "cu113",
-            "cu112",
-            "cu111",
-            "cu110",
-            "cu102",
-            "cu101",
-            "cu100",
-            "cu92",
-            "cu91",
-            "cu90",
-            "cu80",
-            "rocm7.2",
-            "rocm7.1",
-            "rocm7.0",
-            "rocm6.4",
-            "rocm6.3",
-            "rocm6.2.4",
-            "rocm6.2",
-            "rocm6.1",
-            "rocm6.0",
-            "rocm5.7",
-            "rocm5.6",
-            "rocm5.5",
-            "rocm5.4.2",
-            "rocm5.4",
-            "rocm5.3",
-            "rocm5.2",
-            "rocm5.1.1",
-            "rocm4.2",
-            "rocm4.1",
-            "rocm4.0.1",
-            "xpu",
-        ]
-        | Sequence[
-            Literal[
+            | Sequence[
+                Literal[
+                    "windows",
+                    "linux",
+                    "macos",
+                    "x86_64-pc-windows-msvc",
+                    "aarch64-pc-windows-msvc",
+                    "i686-pc-windows-msvc",
+                    "x86_64-unknown-linux-gnu",
+                    "aarch64-apple-darwin",
+                    "x86_64-apple-darwin",
+                    "aarch64-unknown-linux-gnu",
+                    "aarch64-unknown-linux-musl",
+                    "x86_64-unknown-linux-musl",
+                    "riscv64-unknown-linux",
+                    "x86_64-manylinux2014",
+                    "x86_64-manylinux_2_17",
+                    "x86_64-manylinux_2_28",
+                    "x86_64-manylinux_2_31",
+                    "x86_64-manylinux_2_32",
+                    "x86_64-manylinux_2_33",
+                    "x86_64-manylinux_2_34",
+                    "x86_64-manylinux_2_35",
+                    "x86_64-manylinux_2_36",
+                    "x86_64-manylinux_2_37",
+                    "x86_64-manylinux_2_38",
+                    "x86_64-manylinux_2_39",
+                    "x86_64-manylinux_2_40",
+                    "aarch64-manylinux2014",
+                    "aarch64-manylinux_2_17",
+                    "aarch64-manylinux_2_28",
+                    "aarch64-manylinux_2_31",
+                    "aarch64-manylinux_2_32",
+                    "aarch64-manylinux_2_33",
+                    "aarch64-manylinux_2_34",
+                    "aarch64-manylinux_2_35",
+                    "aarch64-manylinux_2_36",
+                    "aarch64-manylinux_2_37",
+                    "aarch64-manylinux_2_38",
+                    "aarch64-manylinux_2_39",
+                    "aarch64-manylinux_2_40",
+                    "aarch64-linux-android",
+                    "x86_64-linux-android",
+                    "wasm32-pyodide2024",
+                    "wasm32-pyodide2025",
+                    "arm64-apple-ios",
+                    "arm64-apple-ios-simulator",
+                    "x86_64-apple-ios-simulator",
+                ]
+            ]
+            | None = ...,
+            quiet: _Flag = ...,
+            refresh: _Flag = ...,
+            refresh_package: _Value = ...,
+            reinstall: _Flag = ...,
+            reinstall_package: _Value = ...,
+            resolution: Literal["highest", "lowest", "lowest-direct"]
+            | Sequence[Literal["highest", "lowest", "lowest-direct"]]
+            | None = ...,
+            system_certs: _Flag = ...,
+            torch_backend: Literal[
                 "auto",
                 "cpu",
                 "cu132",
@@ -2042,232 +2050,248 @@ class UvTool(Tool):
                 "rocm4.0.1",
                 "xpu",
             ]
-        ]
-        | None = ...,
-        upgrade: _Flag = ...,
-        upgrade_group: _Value = ...,
-        upgrade_package: _Value = ...,
-        verbose: _Flag = ...,
-        with_: _Value = ...,
-        with_editable: _Value = ...,
-        with_requirements: _Value = ...,
-        **flags: Any,
-    ) -> Result:
-        """Run a command provided by a Python package
+            | Sequence[
+                Literal[
+                    "auto",
+                    "cpu",
+                    "cu132",
+                    "cu130",
+                    "cu129",
+                    "cu128",
+                    "cu126",
+                    "cu125",
+                    "cu124",
+                    "cu123",
+                    "cu122",
+                    "cu121",
+                    "cu120",
+                    "cu118",
+                    "cu117",
+                    "cu116",
+                    "cu115",
+                    "cu114",
+                    "cu113",
+                    "cu112",
+                    "cu111",
+                    "cu110",
+                    "cu102",
+                    "cu101",
+                    "cu100",
+                    "cu92",
+                    "cu91",
+                    "cu90",
+                    "cu80",
+                    "rocm7.2",
+                    "rocm7.1",
+                    "rocm7.0",
+                    "rocm6.4",
+                    "rocm6.3",
+                    "rocm6.2.4",
+                    "rocm6.2",
+                    "rocm6.1",
+                    "rocm6.0",
+                    "rocm5.7",
+                    "rocm5.6",
+                    "rocm5.5",
+                    "rocm5.4.2",
+                    "rocm5.4",
+                    "rocm5.3",
+                    "rocm5.2",
+                    "rocm5.1.1",
+                    "rocm4.2",
+                    "rocm4.1",
+                    "rocm4.0.1",
+                    "xpu",
+                ]
+            ]
+            | None = ...,
+            upgrade: _Flag = ...,
+            upgrade_group: _Value = ...,
+            upgrade_package: _Value = ...,
+            verbose: _Flag = ...,
+            with_: _Value = ...,
+            with_editable: _Value = ...,
+            with_requirements: _Value = ...,
+            **flags: Any,
+        ) -> _Result:
+            """Run a command provided by a Python package
 
-        Args:
-            allow_insecure_host: Allow insecure connections to a host.
-            build_constraints: Constrain build dependencies using the given
-                requirements files when building source distributions.
-            cache_dir: Path to the cache directory.
-            color: Control the use of color in output.
-            compile_bytecode: Compile Python files to bytecode after installation.
-            config_file: The path to a `uv.toml` file to use for configuration.
-            config_setting: Settings to pass to the PEP 517 build backend, specified
-                as `KEY=VALUE` pairs.
-            config_settings_package: Settings to pass to the PEP 517 build backend
-                for a specific package, specified as `PACKAGE:KEY=VALUE` pairs.
-            constraints: Constrain versions using the given requirements files.
-            default_index: The URL of the default package index (by default:
-                <https://pypi.org/simple>).
-            directory: Change to the given directory prior to running the command.
-            env_file: Load environment variables from a `.env` file.
-            exclude_newer: Limit candidate packages to those that were uploaded
-                prior to the given date.
-            exclude_newer_package: Limit candidate packages for specific packages to
-                those that were uploaded prior to the given date.
-            extra_index_url: (Deprecated: use `--index` instead) Extra URLs of
-                package indexes to use, in addition to `--index-url`.
-            find_links: Locations to search for candidate distributions, in addition
-                to those found in the registry indexes.
-            fork_strategy: The strategy to use when selecting multiple versions of a
-                given package across Python versions and platforms.
-            from_: Use the given package to provide the command.
-            index: The URLs to use when resolving dependencies, in addition to the
-                default index.
-            index_strategy: The strategy to use when resolving against multiple
-                index URLs.
-            index_url: (Deprecated: use `--default-index` instead) The URL of the
-                Python package index (by default: <https://pypi.org/simple>).
-            isolated: Run the tool in an isolated virtual environment, ignoring any
-                already-installed tools.
-            keyring_provider: Attempt to use `keyring` for authentication for index
-                URLs.
-            lfs: Whether to use Git LFS when adding a dependency from Git.
-            link_mode: The method to use when installing packages from the global
-                cache.
-            managed_python: Require use of uv-managed Python versions.
-                `managed_python=off` emits `--no-managed-python`.
-            no_binary: Don't install pre-built wheels.
-            no_binary_package: Don't install pre-built wheels for a specific
-                package.
-            no_build: Don't build source distributions.
-            no_build_isolation: Disable isolation when building source
-                distributions.
-            no_build_isolation_package: Disable isolation when building source
-                distributions for a specific package.
-            no_build_package: Don't build source distributions for a specific
-                package.
-            no_cache: Avoid reading from or writing to the cache, instead using a
-                temporary directory for the duration of the operation.
-            no_config: Avoid discovering configuration files (`pyproject.toml`,
-                `uv.toml`).
-            no_env_file: Avoid reading environment variables from a `.env` file.
-            no_index: Ignore the registry index (e.g., PyPI), instead relying on
-                direct URL dependencies and those provided via `--find-links`.
-            no_progress: Hide all progress outputs.
-            no_python_downloads: Disable automatic downloads of Python.
-            no_sources: Ignore the `tool.uv.sources` table when resolving
-                dependencies.
-            no_sources_package: Don't use sources from the `tool.uv.sources` table
-                for the specified packages.
-            offline: Disable network access.
-            overrides: Override versions using the given requirements files.
-            prerelease: The strategy to use when considering pre-release versions.
-            project: Discover a project in the given directory.
-            python: The Python interpreter to use to build the run environment.
-            python_platform: The platform for which requirements should be
-                installed.
-            quiet: Use quiet output.
-            refresh: Refresh all cached data.
-            refresh_package: Refresh cached data for a specific package.
-            reinstall: Reinstall all packages, regardless of whether they're already
-                installed.
-            reinstall_package: Reinstall a specific package, regardless of whether
-                it's already installed.
-            resolution: The strategy to use when selecting between the different
-                compatible versions for a given package requirement.
-            system_certs: Whether to load TLS certificates from the platform's
-                native certificate store.
-            torch_backend: The backend to use when fetching packages in the PyTorch
-                ecosystem (e.g., `cpu`, `cu126`, or `auto`).
-            upgrade: Allow package upgrades, ignoring pinned versions in any
-                existing output file.
-            upgrade_group: Allow upgrades for all packages in a dependency group,
-                ignoring pinned versions in any existing output file.
-            upgrade_package: Allow upgrades for a specific package, ignoring pinned
-                versions in any existing output file.
-            verbose: Use verbose output.
-            with_: Run with the given packages installed.
-            with_editable: Run with the given packages installed in editable mode.
-            with_requirements: Run with the packages listed in the given files.
-        """
-        ...
-    def upgrade(
-        self,
-        *args: str,
-        all: _Flag = ...,
-        allow_insecure_host: _Value = ...,
-        cache_dir: _Value = ...,
-        color: Literal["auto", "always", "never"]
-        | Sequence[Literal["auto", "always", "never"]]
-        | None = ...,
-        compile_bytecode: _Flag = ...,
-        config_file: _Value = ...,
-        config_setting: _Value = ...,
-        config_setting_package: _Value = ...,
-        default_index: _Value = ...,
-        directory: _Value = ...,
-        exclude_newer: _Value = ...,
-        exclude_newer_package: _Value = ...,
-        extra_index_url: _Value = ...,
-        find_links: _Value = ...,
-        fork_strategy: Literal["fewest", "requires-python"]
-        | Sequence[Literal["fewest", "requires-python"]]
-        | None = ...,
-        index: _Value = ...,
-        index_strategy: Literal[
-            "first-index", "unsafe-first-match", "unsafe-best-match"
-        ]
-        | Sequence[Literal["first-index", "unsafe-first-match", "unsafe-best-match"]]
-        | None = ...,
-        index_url: _Value = ...,
-        keyring_provider: Literal["disabled", "subprocess"]
-        | Sequence[Literal["disabled", "subprocess"]]
-        | None = ...,
-        link_mode: Literal["clone", "copy", "hardlink", "symlink"]
-        | Sequence[Literal["clone", "copy", "hardlink", "symlink"]]
-        | None = ...,
-        managed_python: _Flag = ...,
-        no_binary: _Flag = ...,
-        no_binary_package: _Value = ...,
-        no_build: _Flag = ...,
-        no_build_isolation: _Flag = ...,
-        no_build_isolation_package: _Value = ...,
-        no_build_package: _Value = ...,
-        no_cache: _Flag = ...,
-        no_config: _Flag = ...,
-        no_index: _Flag = ...,
-        no_progress: _Flag = ...,
-        no_python_downloads: _Flag = ...,
-        no_sources: _Flag = ...,
-        no_sources_package: _Value = ...,
-        offline: _Flag = ...,
-        prerelease: Literal[
-            "disallow", "allow", "if-necessary", "explicit", "if-necessary-or-explicit"
-        ]
-        | Sequence[
-            Literal[
+            Args:
+                allow_insecure_host: Allow insecure connections to a host.
+                build_constraints: Constrain build dependencies using the given
+                    requirements files when building source distributions.
+                cache_dir: Path to the cache directory.
+                color: Control the use of color in output.
+                compile_bytecode: Compile Python files to bytecode after
+                    installation.
+                config_file: The path to a `uv.toml` file to use for configuration.
+                config_setting: Settings to pass to the PEP 517 build backend,
+                    specified as `KEY=VALUE` pairs.
+                config_settings_package: Settings to pass to the PEP 517 build
+                    backend for a specific package, specified as `PACKAGE:KEY=VALUE`
+                    pairs.
+                constraints: Constrain versions using the given requirements files.
+                default_index: The URL of the default package index (by default:
+                    <https://pypi.org/simple>).
+                directory: Change to the given directory prior to running the
+                    command.
+                env_file: Load environment variables from a `.env` file.
+                exclude_newer: Limit candidate packages to those that were uploaded
+                    prior to the given date.
+                exclude_newer_package: Limit candidate packages for specific
+                    packages to those that were uploaded prior to the given date.
+                extra_index_url: (Deprecated: use `--index` instead) Extra URLs of
+                    package indexes to use, in addition to `--index-url`.
+                find_links: Locations to search for candidate distributions, in
+                    addition to those found in the registry indexes.
+                fork_strategy: The strategy to use when selecting multiple versions
+                    of a given package across Python versions and platforms.
+                from_: Use the given package to provide the command.
+                index: The URLs to use when resolving dependencies, in addition to
+                    the default index.
+                index_strategy: The strategy to use when resolving against multiple
+                    index URLs.
+                index_url: (Deprecated: use `--default-index` instead) The URL of
+                    the Python package index (by default:
+                    <https://pypi.org/simple>).
+                isolated: Run the tool in an isolated virtual environment, ignoring
+                    any already-installed tools.
+                keyring_provider: Attempt to use `keyring` for authentication for
+                    index URLs.
+                lfs: Whether to use Git LFS when adding a dependency from Git.
+                link_mode: The method to use when installing packages from the
+                    global cache.
+                managed_python: Require use of uv-managed Python versions.
+                    `managed_python=off` emits `--no-managed-python`.
+                no_binary: Don't install pre-built wheels.
+                no_binary_package: Don't install pre-built wheels for a specific
+                    package.
+                no_build: Don't build source distributions.
+                no_build_isolation: Disable isolation when building source
+                    distributions.
+                no_build_isolation_package: Disable isolation when building source
+                    distributions for a specific package.
+                no_build_package: Don't build source distributions for a specific
+                    package.
+                no_cache: Avoid reading from or writing to the cache, instead using
+                    a temporary directory for the duration of the operation.
+                no_config: Avoid discovering configuration files (`pyproject.toml`,
+                    `uv.toml`).
+                no_env_file: Avoid reading environment variables from a `.env` file.
+                no_index: Ignore the registry index (e.g., PyPI), instead relying on
+                    direct URL dependencies and those provided via `--find-links`.
+                no_progress: Hide all progress outputs.
+                no_python_downloads: Disable automatic downloads of Python.
+                no_sources: Ignore the `tool.uv.sources` table when resolving
+                    dependencies.
+                no_sources_package: Don't use sources from the `tool.uv.sources`
+                    table for the specified packages.
+                offline: Disable network access.
+                overrides: Override versions using the given requirements files.
+                prerelease: The strategy to use when considering pre-release
+                    versions.
+                project: Discover a project in the given directory.
+                python: The Python interpreter to use to build the run environment.
+                python_platform: The platform for which requirements should be
+                    installed.
+                quiet: Use quiet output.
+                refresh: Refresh all cached data.
+                refresh_package: Refresh cached data for a specific package.
+                reinstall: Reinstall all packages, regardless of whether they're
+                    already installed.
+                reinstall_package: Reinstall a specific package, regardless of
+                    whether it's already installed.
+                resolution: The strategy to use when selecting between the different
+                    compatible versions for a given package requirement.
+                system_certs: Whether to load TLS certificates from the platform's
+                    native certificate store.
+                torch_backend: The backend to use when fetching packages in the
+                    PyTorch ecosystem (e.g., `cpu`, `cu126`, or `auto`).
+                upgrade: Allow package upgrades, ignoring pinned versions in any
+                    existing output file.
+                upgrade_group: Allow upgrades for all packages in a dependency
+                    group, ignoring pinned versions in any existing output file.
+                upgrade_package: Allow upgrades for a specific package, ignoring
+                    pinned versions in any existing output file.
+                verbose: Use verbose output.
+                with_: Run with the given packages installed.
+                with_editable: Run with the given packages installed in editable
+                    mode.
+                with_requirements: Run with the packages listed in the given files.
+            """
+            ...
+        def upgrade(
+            self,
+            *args: str,
+            all: _Flag = ...,
+            allow_insecure_host: _Value = ...,
+            cache_dir: _Value = ...,
+            color: Literal["auto", "always", "never"]
+            | Sequence[Literal["auto", "always", "never"]]
+            | None = ...,
+            compile_bytecode: _Flag = ...,
+            config_file: _Value = ...,
+            config_setting: _Value = ...,
+            config_setting_package: _Value = ...,
+            default_index: _Value = ...,
+            directory: _Value = ...,
+            exclude_newer: _Value = ...,
+            exclude_newer_package: _Value = ...,
+            extra_index_url: _Value = ...,
+            find_links: _Value = ...,
+            fork_strategy: Literal["fewest", "requires-python"]
+            | Sequence[Literal["fewest", "requires-python"]]
+            | None = ...,
+            index: _Value = ...,
+            index_strategy: Literal[
+                "first-index", "unsafe-first-match", "unsafe-best-match"
+            ]
+            | Sequence[
+                Literal["first-index", "unsafe-first-match", "unsafe-best-match"]
+            ]
+            | None = ...,
+            index_url: _Value = ...,
+            keyring_provider: Literal["disabled", "subprocess"]
+            | Sequence[Literal["disabled", "subprocess"]]
+            | None = ...,
+            link_mode: Literal["clone", "copy", "hardlink", "symlink"]
+            | Sequence[Literal["clone", "copy", "hardlink", "symlink"]]
+            | None = ...,
+            managed_python: _Flag = ...,
+            no_binary: _Flag = ...,
+            no_binary_package: _Value = ...,
+            no_build: _Flag = ...,
+            no_build_isolation: _Flag = ...,
+            no_build_isolation_package: _Value = ...,
+            no_build_package: _Value = ...,
+            no_cache: _Flag = ...,
+            no_config: _Flag = ...,
+            no_index: _Flag = ...,
+            no_progress: _Flag = ...,
+            no_python_downloads: _Flag = ...,
+            no_sources: _Flag = ...,
+            no_sources_package: _Value = ...,
+            offline: _Flag = ...,
+            prerelease: Literal[
                 "disallow",
                 "allow",
                 "if-necessary",
                 "explicit",
                 "if-necessary-or-explicit",
             ]
-        ]
-        | None = ...,
-        project: _Value = ...,
-        python: _Value = ...,
-        python_platform: Literal[
-            "windows",
-            "linux",
-            "macos",
-            "x86_64-pc-windows-msvc",
-            "aarch64-pc-windows-msvc",
-            "i686-pc-windows-msvc",
-            "x86_64-unknown-linux-gnu",
-            "aarch64-apple-darwin",
-            "x86_64-apple-darwin",
-            "aarch64-unknown-linux-gnu",
-            "aarch64-unknown-linux-musl",
-            "x86_64-unknown-linux-musl",
-            "riscv64-unknown-linux",
-            "x86_64-manylinux2014",
-            "x86_64-manylinux_2_17",
-            "x86_64-manylinux_2_28",
-            "x86_64-manylinux_2_31",
-            "x86_64-manylinux_2_32",
-            "x86_64-manylinux_2_33",
-            "x86_64-manylinux_2_34",
-            "x86_64-manylinux_2_35",
-            "x86_64-manylinux_2_36",
-            "x86_64-manylinux_2_37",
-            "x86_64-manylinux_2_38",
-            "x86_64-manylinux_2_39",
-            "x86_64-manylinux_2_40",
-            "aarch64-manylinux2014",
-            "aarch64-manylinux_2_17",
-            "aarch64-manylinux_2_28",
-            "aarch64-manylinux_2_31",
-            "aarch64-manylinux_2_32",
-            "aarch64-manylinux_2_33",
-            "aarch64-manylinux_2_34",
-            "aarch64-manylinux_2_35",
-            "aarch64-manylinux_2_36",
-            "aarch64-manylinux_2_37",
-            "aarch64-manylinux_2_38",
-            "aarch64-manylinux_2_39",
-            "aarch64-manylinux_2_40",
-            "aarch64-linux-android",
-            "x86_64-linux-android",
-            "wasm32-pyodide2024",
-            "wasm32-pyodide2025",
-            "arm64-apple-ios",
-            "arm64-apple-ios-simulator",
-            "x86_64-apple-ios-simulator",
-        ]
-        | Sequence[
-            Literal[
+            | Sequence[
+                Literal[
+                    "disallow",
+                    "allow",
+                    "if-necessary",
+                    "explicit",
+                    "if-necessary-or-explicit",
+                ]
+            ]
+            | None = ...,
+            project: _Value = ...,
+            python: _Value = ...,
+            python_platform: Literal[
                 "windows",
                 "linux",
                 "macos",
@@ -2315,110 +2339,162 @@ class UvTool(Tool):
                 "arm64-apple-ios-simulator",
                 "x86_64-apple-ios-simulator",
             ]
-        ]
-        | None = ...,
-        quiet: _Flag = ...,
-        reinstall: _Flag = ...,
-        reinstall_package: _Value = ...,
-        resolution: Literal["highest", "lowest", "lowest-direct"]
-        | Sequence[Literal["highest", "lowest", "lowest-direct"]]
-        | None = ...,
-        system_certs: _Flag = ...,
-        verbose: _Flag = ...,
-        **flags: Any,
-    ) -> Result:
-        """Upgrade installed tools
+            | Sequence[
+                Literal[
+                    "windows",
+                    "linux",
+                    "macos",
+                    "x86_64-pc-windows-msvc",
+                    "aarch64-pc-windows-msvc",
+                    "i686-pc-windows-msvc",
+                    "x86_64-unknown-linux-gnu",
+                    "aarch64-apple-darwin",
+                    "x86_64-apple-darwin",
+                    "aarch64-unknown-linux-gnu",
+                    "aarch64-unknown-linux-musl",
+                    "x86_64-unknown-linux-musl",
+                    "riscv64-unknown-linux",
+                    "x86_64-manylinux2014",
+                    "x86_64-manylinux_2_17",
+                    "x86_64-manylinux_2_28",
+                    "x86_64-manylinux_2_31",
+                    "x86_64-manylinux_2_32",
+                    "x86_64-manylinux_2_33",
+                    "x86_64-manylinux_2_34",
+                    "x86_64-manylinux_2_35",
+                    "x86_64-manylinux_2_36",
+                    "x86_64-manylinux_2_37",
+                    "x86_64-manylinux_2_38",
+                    "x86_64-manylinux_2_39",
+                    "x86_64-manylinux_2_40",
+                    "aarch64-manylinux2014",
+                    "aarch64-manylinux_2_17",
+                    "aarch64-manylinux_2_28",
+                    "aarch64-manylinux_2_31",
+                    "aarch64-manylinux_2_32",
+                    "aarch64-manylinux_2_33",
+                    "aarch64-manylinux_2_34",
+                    "aarch64-manylinux_2_35",
+                    "aarch64-manylinux_2_36",
+                    "aarch64-manylinux_2_37",
+                    "aarch64-manylinux_2_38",
+                    "aarch64-manylinux_2_39",
+                    "aarch64-manylinux_2_40",
+                    "aarch64-linux-android",
+                    "x86_64-linux-android",
+                    "wasm32-pyodide2024",
+                    "wasm32-pyodide2025",
+                    "arm64-apple-ios",
+                    "arm64-apple-ios-simulator",
+                    "x86_64-apple-ios-simulator",
+                ]
+            ]
+            | None = ...,
+            quiet: _Flag = ...,
+            reinstall: _Flag = ...,
+            reinstall_package: _Value = ...,
+            resolution: Literal["highest", "lowest", "lowest-direct"]
+            | Sequence[Literal["highest", "lowest", "lowest-direct"]]
+            | None = ...,
+            system_certs: _Flag = ...,
+            verbose: _Flag = ...,
+            **flags: Any,
+        ) -> _Result:
+            """Upgrade installed tools
 
-        Args:
-            all: Upgrade all tools.
-            allow_insecure_host: Allow insecure connections to a host.
-            cache_dir: Path to the cache directory.
-            color: Control the use of color in output.
-            compile_bytecode: Compile Python files to bytecode after installation.
-            config_file: The path to a `uv.toml` file to use for configuration.
-            config_setting: Settings to pass to the PEP 517 build backend, specified
-                as `KEY=VALUE` pairs.
-            config_setting_package: Settings to pass to the PEP 517 build backend
-                for a specific package, specified as `PACKAGE:KEY=VALUE` pairs.
-            default_index: The URL of the default package index (by default:
-                <https://pypi.org/simple>).
-            directory: Change to the given directory prior to running the command.
-            exclude_newer: Limit candidate packages to those that were uploaded
-                prior to the given date.
-            exclude_newer_package: Limit candidate packages for specific packages to
-                those that were uploaded prior to the given date.
-            extra_index_url: (Deprecated: use `--index` instead) Extra URLs of
-                package indexes to use, in addition to `--index-url`.
-            find_links: Locations to search for candidate distributions, in addition
-                to those found in the registry indexes.
-            fork_strategy: The strategy to use when selecting multiple versions of a
-                given package across Python versions and platforms.
-            index: The URLs to use when resolving dependencies, in addition to the
-                default index.
-            index_strategy: The strategy to use when resolving against multiple
-                index URLs.
-            index_url: (Deprecated: use `--default-index` instead) The URL of the
-                Python package index (by default: <https://pypi.org/simple>).
-            keyring_provider: Attempt to use `keyring` for authentication for index
-                URLs.
-            link_mode: The method to use when installing packages from the global
-                cache.
-            managed_python: Require use of uv-managed Python versions.
-                `managed_python=off` emits `--no-managed-python`.
-            no_binary: Don't install pre-built wheels.
-            no_binary_package: Don't install pre-built wheels for a specific
-                package.
-            no_build: Don't build source distributions.
-            no_build_isolation: Disable isolation when building source
-                distributions.
-            no_build_isolation_package: Disable isolation when building source
-                distributions for a specific package.
-            no_build_package: Don't build source distributions for a specific
-                package.
-            no_cache: Avoid reading from or writing to the cache, instead using a
-                temporary directory for the duration of the operation.
-            no_config: Avoid discovering configuration files (`pyproject.toml`,
-                `uv.toml`).
-            no_index: Ignore the registry index (e.g., PyPI), instead relying on
-                direct URL dependencies and those provided via `--find-links`.
-            no_progress: Hide all progress outputs.
-            no_python_downloads: Disable automatic downloads of Python.
-            no_sources: Ignore the `tool.uv.sources` table when resolving
-                dependencies.
-            no_sources_package: Don't use sources from the `tool.uv.sources` table
-                for the specified packages.
-            offline: Disable network access.
-            prerelease: The strategy to use when considering pre-release versions.
-            project: Discover a project in the given directory.
-            python: Upgrade a tool, and specify it to use the given Python
-                interpreter to build its environment.
-            python_platform: The platform for which requirements should be
-                installed.
-            quiet: Use quiet output.
-            reinstall: Reinstall all packages, regardless of whether they're already
-                installed.
-            reinstall_package: Reinstall a specific package, regardless of whether
-                it's already installed.
-            resolution: The strategy to use when selecting between the different
-                compatible versions for a given package requirement.
-            system_certs: Whether to load TLS certificates from the platform's
-                native certificate store.
-            verbose: Use verbose output.
-        """
-        ...
-    def flags(
-        self,
-        **flags: Any,
-    ) -> UvTool:
-        """Bind tool-level global options before the subcommand.
+            Args:
+                all: Upgrade all tools.
+                allow_insecure_host: Allow insecure connections to a host.
+                cache_dir: Path to the cache directory.
+                color: Control the use of color in output.
+                compile_bytecode: Compile Python files to bytecode after
+                    installation.
+                config_file: The path to a `uv.toml` file to use for configuration.
+                config_setting: Settings to pass to the PEP 517 build backend,
+                    specified as `KEY=VALUE` pairs.
+                config_setting_package: Settings to pass to the PEP 517 build
+                    backend for a specific package, specified as `PACKAGE:KEY=VALUE`
+                    pairs.
+                default_index: The URL of the default package index (by default:
+                    <https://pypi.org/simple>).
+                directory: Change to the given directory prior to running the
+                    command.
+                exclude_newer: Limit candidate packages to those that were uploaded
+                    prior to the given date.
+                exclude_newer_package: Limit candidate packages for specific
+                    packages to those that were uploaded prior to the given date.
+                extra_index_url: (Deprecated: use `--index` instead) Extra URLs of
+                    package indexes to use, in addition to `--index-url`.
+                find_links: Locations to search for candidate distributions, in
+                    addition to those found in the registry indexes.
+                fork_strategy: The strategy to use when selecting multiple versions
+                    of a given package across Python versions and platforms.
+                index: The URLs to use when resolving dependencies, in addition to
+                    the default index.
+                index_strategy: The strategy to use when resolving against multiple
+                    index URLs.
+                index_url: (Deprecated: use `--default-index` instead) The URL of
+                    the Python package index (by default:
+                    <https://pypi.org/simple>).
+                keyring_provider: Attempt to use `keyring` for authentication for
+                    index URLs.
+                link_mode: The method to use when installing packages from the
+                    global cache.
+                managed_python: Require use of uv-managed Python versions.
+                    `managed_python=off` emits `--no-managed-python`.
+                no_binary: Don't install pre-built wheels.
+                no_binary_package: Don't install pre-built wheels for a specific
+                    package.
+                no_build: Don't build source distributions.
+                no_build_isolation: Disable isolation when building source
+                    distributions.
+                no_build_isolation_package: Disable isolation when building source
+                    distributions for a specific package.
+                no_build_package: Don't build source distributions for a specific
+                    package.
+                no_cache: Avoid reading from or writing to the cache, instead using
+                    a temporary directory for the duration of the operation.
+                no_config: Avoid discovering configuration files (`pyproject.toml`,
+                    `uv.toml`).
+                no_index: Ignore the registry index (e.g., PyPI), instead relying on
+                    direct URL dependencies and those provided via `--find-links`.
+                no_progress: Hide all progress outputs.
+                no_python_downloads: Disable automatic downloads of Python.
+                no_sources: Ignore the `tool.uv.sources` table when resolving
+                    dependencies.
+                no_sources_package: Don't use sources from the `tool.uv.sources`
+                    table for the specified packages.
+                offline: Disable network access.
+                prerelease: The strategy to use when considering pre-release
+                    versions.
+                project: Discover a project in the given directory.
+                python: Upgrade a tool, and specify it to use the given Python
+                    interpreter to build its environment.
+                python_platform: The platform for which requirements should be
+                    installed.
+                quiet: Use quiet output.
+                reinstall: Reinstall all packages, regardless of whether they're
+                    already installed.
+                reinstall_package: Reinstall a specific package, regardless of
+                    whether it's already installed.
+                resolution: The strategy to use when selecting between the different
+                    compatible versions for a given package requirement.
+                system_certs: Whether to load TLS certificates from the platform's
+                    native certificate store.
+                verbose: Use verbose output.
+            """
+            ...
+        def flags(
+            self,
+            **flags: Any,
+        ) -> Self:
+            """Bind tool-level global options before the subcommand.
 
-        `tools.docker.flags(host=...)` puts a tool's own
-        options ahead of the verb, where they belong."""
-        ...
+            `tools.docker.flags(host=...)` puts a tool's own
+            options ahead of the verb, where they belong."""
+            ...
 
-class Uv(Tool):
-    pip: UvPip
-    tool: UvTool
+    tool: Tool
     def __call__(  # type: ignore[override]
         self,
         *args: str,
@@ -2440,7 +2516,7 @@ class Uv(Tool):
         system_certs: _Flag = ...,
         verbose: _Flag = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """An extremely fast Python package manager.
 
         Args:
@@ -2570,7 +2646,7 @@ class Uv(Tool):
         verbose: _Flag = ...,
         workspace: _Flag = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """Add dependencies to the project
 
         Args:
@@ -2771,7 +2847,7 @@ class Uv(Tool):
         verbose: _Flag = ...,
         wheel: _Flag = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """Build Python packages into source distributions and wheels
 
         Args:
@@ -2972,7 +3048,7 @@ class Uv(Tool):
         upgrade_package: _Value = ...,
         verbose: _Flag = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """Export the project's lockfile to an alternate format
 
         Args:
@@ -3170,7 +3246,7 @@ class Uv(Tool):
         upgrade_package: _Value = ...,
         verbose: _Flag = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """Update the project's lockfile
 
         Args:
@@ -3290,7 +3366,7 @@ class Uv(Tool):
         username: _Value = ...,
         verbose: _Flag = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """Upload distributions to an index
 
         Args:
@@ -3414,7 +3490,7 @@ class Uv(Tool):
         upgrade_package: _Value = ...,
         verbose: _Flag = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """Remove dependencies from the project
 
         Args:
@@ -3718,7 +3794,7 @@ class Uv(Tool):
         with_editable: _Value = ...,
         with_requirements: _Value = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """Run a command or script
 
         Args:
@@ -4043,7 +4119,7 @@ class Uv(Tool):
         upgrade_package: _Value = ...,
         verbose: _Flag = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """Update the project's environment
 
         Args:
@@ -4356,7 +4432,7 @@ class Uv(Tool):
         upgrade_package: _Value = ...,
         verbose: _Flag = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """Display the project's dependency tree
 
         Args:
@@ -4508,7 +4584,7 @@ class Uv(Tool):
         system_site_packages: _Flag = ...,
         verbose: _Flag = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """Create a virtual environment
 
         Args:
@@ -4675,7 +4751,7 @@ class Uv(Tool):
         upgrade_package: _Value = ...,
         verbose: _Flag = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """Read or update the project's version
 
         Args:
@@ -4791,7 +4867,7 @@ class Uv(Tool):
         system_certs: _Flag = ...,
         verbose: _Flag = ...,
         **flags: Any,
-    ) -> Uv:
+    ) -> Self:
         """Bind tool-level global options before the subcommand.
 
         `tools.docker.flags(host=...)` puts a tool's own

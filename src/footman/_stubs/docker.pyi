@@ -3,329 +3,334 @@
 # Read from docker 29.6.2 on macOS. In-process: no.
 # Every verb ends in `**flags: Any`: the stub suggests what this tool
 # accepts, and can never forbid what the bridge would happily pass.
-from typing import Any
+from typing import Any, Self
 
-from footman.tools import Result, Tool, _Flag, _Value
+from footman.tools import Result as _Result
+from footman.tools import Tool as _Tool
+from footman.tools import _Flag, _Value
 
-class DockerCompose(Tool):
-    def build(
-        self,
-        *args: str,
-        build_arg: _Value = ...,
-        builder: _Value = ...,
-        check: _Flag = ...,
-        dry_run: _Flag = ...,
-        memory: _Value = ...,
-        no_cache: _Flag = ...,
-        print: _Flag = ...,
-        provenance: _Value = ...,
-        pull: _Flag = ...,
-        push: _Flag = ...,
-        quiet: _Flag = ...,
-        sbom: _Value = ...,
-        ssh: _Value = ...,
-        with_dependencies: _Flag = ...,
-        **flags: Any,
-    ) -> Result:
-        """Build or rebuild services
+class Docker(_Tool):
+    class Compose(_Tool):
+        def build(
+            self,
+            *args: str,
+            build_arg: _Value = ...,
+            builder: _Value = ...,
+            check: _Flag = ...,
+            dry_run: _Flag = ...,
+            memory: _Value = ...,
+            no_cache: _Flag = ...,
+            print: _Flag = ...,
+            provenance: _Value = ...,
+            pull: _Flag = ...,
+            push: _Flag = ...,
+            quiet: _Flag = ...,
+            sbom: _Value = ...,
+            ssh: _Value = ...,
+            with_dependencies: _Flag = ...,
+            **flags: Any,
+        ) -> _Result:
+            """Build or rebuild services
 
-        Args:
-            build_arg: Set build-time variables for services. May be repeated: a
-                list emits the flag once per item.
-            builder: Set builder to use.
-            check: Check build configuration.
-            dry_run: Execute command in dry run mode.
-            memory: Set memory limit for the build container.
-            no_cache: Do not use cache when building the image.
-            print: Print equivalent bake file.
-            provenance: Add a provenance attestation.
-            pull: Always attempt to pull a newer version of the image.
-            push: Push service images.
-            quiet: Suppress the build output.
-            sbom: Add a SBOM attestation.
-            ssh: Set SSH authentications used when building service images.
-            with_dependencies: Also build dependencies (transitively).
-        """
-        ...
-    def down(
-        self,
-        *args: str,
-        dry_run: _Flag = ...,
-        remove_orphans: _Flag = ...,
-        rmi: _Value = ...,
-        timeout: _Value = ...,
-        volumes: _Flag = ...,
-        **flags: Any,
-    ) -> Result:
-        """Stop and remove containers, networks
+            Args:
+                build_arg: Set build-time variables for services. May be repeated: a
+                    list emits the flag once per item.
+                builder: Set builder to use.
+                check: Check build configuration.
+                dry_run: Execute command in dry run mode.
+                memory: Set memory limit for the build container.
+                no_cache: Do not use cache when building the image.
+                print: Print equivalent bake file.
+                provenance: Add a provenance attestation.
+                pull: Always attempt to pull a newer version of the image.
+                push: Push service images.
+                quiet: Suppress the build output.
+                sbom: Add a SBOM attestation.
+                ssh: Set SSH authentications used when building service images.
+                with_dependencies: Also build dependencies (transitively).
+            """
+            ...
+        def down(
+            self,
+            *args: str,
+            dry_run: _Flag = ...,
+            remove_orphans: _Flag = ...,
+            rmi: _Value = ...,
+            timeout: _Value = ...,
+            volumes: _Flag = ...,
+            **flags: Any,
+        ) -> _Result:
+            """Stop and remove containers, networks
 
-        Args:
-            dry_run: Execute command in dry run mode.
-            remove_orphans: Remove containers for services not defined in the
-                Compose file.
-            rmi: Remove images used by services.
-            timeout: Specify a shutdown timeout in seconds.
-            volumes: Remove named volumes declared in the "volumes" section of the
-                Compose file and anonymous volumes attached to containers.
-        """
-        ...
-    def exec(
-        self,
-        service: str,
-        /,
-        *args: str,
-        detach: _Flag = ...,
-        dry_run: _Flag = ...,
-        env: _Value = ...,
-        index: _Value = ...,
-        no_tty: _Flag = ...,
-        privileged: _Flag = ...,
-        user: _Value = ...,
-        workdir: _Value = ...,
-        **flags: Any,
-    ) -> Result:
-        """Execute a command in a running container
+            Args:
+                dry_run: Execute command in dry run mode.
+                remove_orphans: Remove containers for services not defined in the
+                    Compose file.
+                rmi: Remove images used by services.
+                timeout: Specify a shutdown timeout in seconds.
+                volumes: Remove named volumes declared in the "volumes" section of
+                    the Compose file and anonymous volumes attached to containers.
+            """
+            ...
+        def exec(
+            self,
+            service: str,
+            /,
+            *args: str,
+            detach: _Flag = ...,
+            dry_run: _Flag = ...,
+            env: _Value = ...,
+            index: _Value = ...,
+            no_tty: _Flag = ...,
+            privileged: _Flag = ...,
+            user: _Value = ...,
+            workdir: _Value = ...,
+            **flags: Any,
+        ) -> _Result:
+            """Execute a command in a running container
 
-        Args:
-            detach: Detached mode: Run command in the background.
-            dry_run: Execute command in dry run mode.
-            env: Set environment variables. May be repeated: a list emits the flag
-                once per item.
-            index: Index of the container if service has multiple replicas.
-            no_tty: Disable pseudo-TTY allocation. Defaults to `True`.
-            privileged: Give extended privileges to the process.
-            user: Run the command as this user.
-            workdir: Path to workdir directory for this command.
-        """
-        ...
-    def logs(
-        self,
-        *args: str,
-        dry_run: _Flag = ...,
-        follow: _Flag = ...,
-        index: _Value = ...,
-        no_color: _Flag = ...,
-        no_log_prefix: _Flag = ...,
-        since: _Value = ...,
-        tail: _Value = ...,
-        timestamps: _Flag = ...,
-        until: _Value = ...,
-        **flags: Any,
-    ) -> Result:
-        """View output from containers
+            Args:
+                detach: Detached mode: Run command in the background.
+                dry_run: Execute command in dry run mode.
+                env: Set environment variables. May be repeated: a list emits the
+                    flag once per item.
+                index: Index of the container if service has multiple replicas.
+                no_tty: Disable pseudo-TTY allocation. Defaults to `True`.
+                privileged: Give extended privileges to the process.
+                user: Run the command as this user.
+                workdir: Path to workdir directory for this command.
+            """
+            ...
+        def logs(
+            self,
+            *args: str,
+            dry_run: _Flag = ...,
+            follow: _Flag = ...,
+            index: _Value = ...,
+            no_color: _Flag = ...,
+            no_log_prefix: _Flag = ...,
+            since: _Value = ...,
+            tail: _Value = ...,
+            timestamps: _Flag = ...,
+            until: _Value = ...,
+            **flags: Any,
+        ) -> _Result:
+            """View output from containers
 
-        Args:
-            dry_run: Execute command in dry run mode.
-            follow: Follow log output.
-            index: index of the container if service has multiple replicas.
-            no_color: Produce monochrome output.
-            no_log_prefix: Don't print prefix in logs.
-            since: Show logs since timestamp (e.g.
-            tail: Number of lines to show from the end of the logs for each
-                container. Defaults to `all`.
-            timestamps: Show timestamps.
-            until: Show logs before a timestamp (e.g.
-        """
-        ...
-    def ps(
-        self,
-        *args: str,
-        all: _Flag = ...,
-        dry_run: _Flag = ...,
-        filter: _Value = ...,
-        format: _Value = ...,
-        no_trunc: _Flag = ...,
-        orphans: _Flag = ...,
-        quiet: _Flag = ...,
-        services: _Flag = ...,
-        status: _Value = ...,
-        **flags: Any,
-    ) -> Result:
-        """List containers
+            Args:
+                dry_run: Execute command in dry run mode.
+                follow: Follow log output.
+                index: index of the container if service has multiple replicas.
+                no_color: Produce monochrome output.
+                no_log_prefix: Don't print prefix in logs.
+                since: Show logs since timestamp (e.g.
+                tail: Number of lines to show from the end of the logs for each
+                    container. Defaults to `all`.
+                timestamps: Show timestamps.
+                until: Show logs before a timestamp (e.g.
+            """
+            ...
+        def ps(
+            self,
+            *args: str,
+            all: _Flag = ...,
+            dry_run: _Flag = ...,
+            filter: _Value = ...,
+            format: _Value = ...,
+            no_trunc: _Flag = ...,
+            orphans: _Flag = ...,
+            quiet: _Flag = ...,
+            services: _Flag = ...,
+            status: _Value = ...,
+            **flags: Any,
+        ) -> _Result:
+            """List containers
 
-        Args:
-            all: Show all stopped containers (including those created by the run
-                command).
-            dry_run: Execute command in dry run mode.
-            filter: Filter services by a property (supported filters: status).
-            format: Format output using a custom template: 'table': Print output in
-                table format with column headers (default) 'table TEMPLATE': Print
-                output in table format using the given Go template 'json': Print in
-                JSON format 'TEMPLATE': Print output using the given Go template.
-                Defaults to `table`.
-            no_trunc: Don't truncate output.
-            orphans: Include orphaned services (not declared by project). Defaults
-                to `True`.
-            quiet: Only display IDs.
-            services: Display services.
-            status: Filter services by status. May be repeated: a list emits the
-                flag once per item.
-        """
-        ...
-    def run(
-        self,
-        service: str,
-        /,
-        *args: str,
-        build: _Flag = ...,
-        cap_add: _Value = ...,
-        cap_drop: _Value = ...,
-        detach: _Flag = ...,
-        dry_run: _Flag = ...,
-        entrypoint: _Value = ...,
-        env: _Value = ...,
-        env_from_file: _Value = ...,
-        interactive: _Flag = ...,
-        label: _Value = ...,
-        name: _Value = ...,
-        no_deps: _Flag = ...,
-        no_tty: _Flag = ...,
-        publish: _Value = ...,
-        pull: _Value = ...,
-        quiet: _Flag = ...,
-        quiet_build: _Flag = ...,
-        quiet_pull: _Flag = ...,
-        remove_orphans: _Flag = ...,
-        rm: _Flag = ...,
-        service_ports: _Flag = ...,
-        use_aliases: _Flag = ...,
-        user: _Value = ...,
-        volume: _Value = ...,
-        workdir: _Value = ...,
-        **flags: Any,
-    ) -> Result:
-        """Run a one-off command on a service
+            Args:
+                all: Show all stopped containers (including those created by the run
+                    command).
+                dry_run: Execute command in dry run mode.
+                filter: Filter services by a property (supported filters: status).
+                format: Format output using a custom template: 'table': Print output
+                    in table format with column headers (default) 'table TEMPLATE':
+                    Print output in table format using the given Go template 'json':
+                    Print in JSON format 'TEMPLATE': Print output using the given Go
+                    template. Defaults to `table`.
+                no_trunc: Don't truncate output.
+                orphans: Include orphaned services (not declared by project).
+                    Defaults to `True`.
+                quiet: Only display IDs.
+                services: Display services.
+                status: Filter services by status. May be repeated: a list emits the
+                    flag once per item.
+            """
+            ...
+        def run(
+            self,
+            service: str,
+            /,
+            *args: str,
+            build: _Flag = ...,
+            cap_add: _Value = ...,
+            cap_drop: _Value = ...,
+            detach: _Flag = ...,
+            dry_run: _Flag = ...,
+            entrypoint: _Value = ...,
+            env: _Value = ...,
+            env_from_file: _Value = ...,
+            interactive: _Flag = ...,
+            label: _Value = ...,
+            name: _Value = ...,
+            no_deps: _Flag = ...,
+            no_tty: _Flag = ...,
+            publish: _Value = ...,
+            pull: _Value = ...,
+            quiet: _Flag = ...,
+            quiet_build: _Flag = ...,
+            quiet_pull: _Flag = ...,
+            remove_orphans: _Flag = ...,
+            rm: _Flag = ...,
+            service_ports: _Flag = ...,
+            use_aliases: _Flag = ...,
+            user: _Value = ...,
+            volume: _Value = ...,
+            workdir: _Value = ...,
+            **flags: Any,
+        ) -> _Result:
+            """Run a one-off command on a service
 
-        Args:
-            build: Build image before starting container.
-            cap_add: Add Linux capabilities.
-            cap_drop: Drop Linux capabilities.
-            detach: Run container in background and print container ID.
-            dry_run: Execute command in dry run mode.
-            entrypoint: Override the entrypoint of the image.
-            env: Set environment variables. May be repeated: a list emits the flag
-                once per item.
-            env_from_file: Set environment variables from file. May be repeated: a
-                list emits the flag once per item.
-            interactive: Keep STDIN open even if not attached. Defaults to `True`.
-            label: Add or override a label. May be repeated: a list emits the flag
-                once per item.
-            name: Assign a name to the container.
-            no_deps: Don't start linked services.
-            no_tty: Disable pseudo-TTY allocation.
-            publish: Publish a container's port(s) to the host. May be repeated: a
-                list emits the flag once per item.
-            pull: Pull image before running ("always"|"missing"|"never"). Defaults
-                to `policy`.
-            quiet: Don't print anything to STDOUT.
-            quiet_build: Suppress progress output from the build process.
-            quiet_pull: Pull without printing progress information.
-            remove_orphans: Remove containers for services not defined in the
-                Compose file.
-            rm: Automatically remove the container when it exits.
-            service_ports: Run command with all service's ports enabled and mapped
-                to the host.
-            use_aliases: Use the service's network useAliases in the network(s) the
-                container connects to.
-            user: Run as specified username or uid.
-            volume: Bind mount a volume. May be repeated: a list emits the flag once
-                per item.
-            workdir: Working directory inside the container.
-        """
-        ...
-    def up(
-        self,
-        *args: str,
-        abort_on_container_exit: _Flag = ...,
-        abort_on_container_failure: _Flag = ...,
-        always_recreate_deps: _Flag = ...,
-        attach: _Value = ...,
-        attach_dependencies: _Flag = ...,
-        build: _Flag = ...,
-        detach: _Flag = ...,
-        dry_run: _Flag = ...,
-        exit_code_from: _Value = ...,
-        force_recreate: _Flag = ...,
-        menu: _Flag = ...,
-        no_attach: _Value = ...,
-        no_color: _Flag = ...,
-        no_deps: _Flag = ...,
-        no_log_prefix: _Flag = ...,
-        no_recreate: _Flag = ...,
-        no_start: _Flag = ...,
-        pull: _Value = ...,
-        quiet_build: _Flag = ...,
-        quiet_pull: _Flag = ...,
-        remove_orphans: _Flag = ...,
-        renew_anon_volumes: _Flag = ...,
-        scale: _Value = ...,
-        timeout: _Value = ...,
-        timestamps: _Flag = ...,
-        wait: _Flag = ...,
-        wait_timeout: _Value = ...,
-        watch: _Flag = ...,
-        yes: _Flag = ...,
-        **flags: Any,
-    ) -> Result:
-        """Create and start containers
+            Args:
+                build: Build image before starting container.
+                cap_add: Add Linux capabilities.
+                cap_drop: Drop Linux capabilities.
+                detach: Run container in background and print container ID.
+                dry_run: Execute command in dry run mode.
+                entrypoint: Override the entrypoint of the image.
+                env: Set environment variables. May be repeated: a list emits the
+                    flag once per item.
+                env_from_file: Set environment variables from file. May be repeated:
+                    a list emits the flag once per item.
+                interactive: Keep STDIN open even if not attached. Defaults to
+                    `True`.
+                label: Add or override a label. May be repeated: a list emits the
+                    flag once per item.
+                name: Assign a name to the container.
+                no_deps: Don't start linked services.
+                no_tty: Disable pseudo-TTY allocation.
+                publish: Publish a container's port(s) to the host. May be repeated:
+                    a list emits the flag once per item.
+                pull: Pull image before running ("always"|"missing"|"never").
+                    Defaults to `policy`.
+                quiet: Don't print anything to STDOUT.
+                quiet_build: Suppress progress output from the build process.
+                quiet_pull: Pull without printing progress information.
+                remove_orphans: Remove containers for services not defined in the
+                    Compose file.
+                rm: Automatically remove the container when it exits.
+                service_ports: Run command with all service's ports enabled and
+                    mapped to the host.
+                use_aliases: Use the service's network useAliases in the network(s)
+                    the container connects to.
+                user: Run as specified username or uid.
+                volume: Bind mount a volume. May be repeated: a list emits the flag
+                    once per item.
+                workdir: Working directory inside the container.
+            """
+            ...
+        def up(
+            self,
+            *args: str,
+            abort_on_container_exit: _Flag = ...,
+            abort_on_container_failure: _Flag = ...,
+            always_recreate_deps: _Flag = ...,
+            attach: _Value = ...,
+            attach_dependencies: _Flag = ...,
+            build: _Flag = ...,
+            detach: _Flag = ...,
+            dry_run: _Flag = ...,
+            exit_code_from: _Value = ...,
+            force_recreate: _Flag = ...,
+            menu: _Flag = ...,
+            no_attach: _Value = ...,
+            no_color: _Flag = ...,
+            no_deps: _Flag = ...,
+            no_log_prefix: _Flag = ...,
+            no_recreate: _Flag = ...,
+            no_start: _Flag = ...,
+            pull: _Value = ...,
+            quiet_build: _Flag = ...,
+            quiet_pull: _Flag = ...,
+            remove_orphans: _Flag = ...,
+            renew_anon_volumes: _Flag = ...,
+            scale: _Value = ...,
+            timeout: _Value = ...,
+            timestamps: _Flag = ...,
+            wait: _Flag = ...,
+            wait_timeout: _Value = ...,
+            watch: _Flag = ...,
+            yes: _Flag = ...,
+            **flags: Any,
+        ) -> _Result:
+            """Create and start containers
 
-        Args:
-            abort_on_container_exit: Stops all containers if any container was
-                stopped.
-            abort_on_container_failure: Stops all containers if any container exited
-                with failure.
-            always_recreate_deps: Recreate dependent containers.
-            attach: Restrict attaching to the specified services. May be repeated: a
-                list emits the flag once per item.
-            attach_dependencies: Automatically attach to log output of dependent
-                services.
-            build: Build images before starting containers. `build=off` emits
-                `--no-build`.
-            detach: Detached mode: Run containers in the background.
-            dry_run: Execute command in dry run mode.
-            exit_code_from: Return the exit code of the selected service container.
-            force_recreate: Recreate containers even if their configuration and
-                image haven't changed.
-            menu: Enable interactive shortcuts when running attached.
-            no_attach: Do not attach (stream logs) to the specified services. May be
-                repeated: a list emits the flag once per item.
-            no_color: Produce monochrome output.
-            no_deps: Don't start linked services.
-            no_log_prefix: Don't print prefix in logs.
-            no_recreate: If containers already exist, don't recreate them.
-            no_start: Don't start the services after creating them.
-            pull: Pull image before running ("always"|"missing"|"never"). Defaults
-                to `policy`.
-            quiet_build: Suppress the build output.
-            quiet_pull: Pull without printing progress information.
-            remove_orphans: Remove containers for services not defined in the
-                Compose file.
-            renew_anon_volumes: Recreate anonymous volumes instead of retrieving
-                data from the previous containers.
-            scale: Scale SERVICE to NUM instances.
-            timeout: Use this timeout in seconds for container shutdown when
-                attached or when containers are already running.
-            timestamps: Show timestamps.
-            wait: Wait for services to be running|healthy.
-            wait_timeout: Maximum duration in seconds to wait for the project to be
-                running|healthy.
-            watch: Watch source code and rebuild/refresh containers when files are
-                updated.
-            yes: Assume "yes" as answer to all prompts and run non-interactively.
-        """
-        ...
-    def flags(
-        self,
-        **flags: Any,
-    ) -> DockerCompose:
-        """Bind tool-level global options before the subcommand.
+            Args:
+                abort_on_container_exit: Stops all containers if any container was
+                    stopped.
+                abort_on_container_failure: Stops all containers if any container
+                    exited with failure.
+                always_recreate_deps: Recreate dependent containers.
+                attach: Restrict attaching to the specified services. May be
+                    repeated: a list emits the flag once per item.
+                attach_dependencies: Automatically attach to log output of dependent
+                    services.
+                build: Build images before starting containers. `build=off` emits
+                    `--no-build`.
+                detach: Detached mode: Run containers in the background.
+                dry_run: Execute command in dry run mode.
+                exit_code_from: Return the exit code of the selected service
+                    container.
+                force_recreate: Recreate containers even if their configuration and
+                    image haven't changed.
+                menu: Enable interactive shortcuts when running attached.
+                no_attach: Do not attach (stream logs) to the specified services.
+                    May be repeated: a list emits the flag once per item.
+                no_color: Produce monochrome output.
+                no_deps: Don't start linked services.
+                no_log_prefix: Don't print prefix in logs.
+                no_recreate: If containers already exist, don't recreate them.
+                no_start: Don't start the services after creating them.
+                pull: Pull image before running ("always"|"missing"|"never").
+                    Defaults to `policy`.
+                quiet_build: Suppress the build output.
+                quiet_pull: Pull without printing progress information.
+                remove_orphans: Remove containers for services not defined in the
+                    Compose file.
+                renew_anon_volumes: Recreate anonymous volumes instead of retrieving
+                    data from the previous containers.
+                scale: Scale SERVICE to NUM instances.
+                timeout: Use this timeout in seconds for container shutdown when
+                    attached or when containers are already running.
+                timestamps: Show timestamps.
+                wait: Wait for services to be running|healthy.
+                wait_timeout: Maximum duration in seconds to wait for the project to
+                    be running|healthy.
+                watch: Watch source code and rebuild/refresh containers when files
+                    are updated.
+                yes: Assume "yes" as answer to all prompts and run
+                    non-interactively.
+            """
+            ...
+        def flags(
+            self,
+            **flags: Any,
+        ) -> Self:
+            """Bind tool-level global options before the subcommand.
 
-        `tools.docker.flags(host=...)` puts a tool's own
-        options ahead of the verb, where they belong."""
-        ...
+            `tools.docker.flags(host=...)` puts a tool's own
+            options ahead of the verb, where they belong."""
+            ...
 
-class Docker(Tool):
-    compose: DockerCompose
+    compose: Compose
     def __call__(  # type: ignore[override]
         self,
         *args: str,
@@ -340,7 +345,7 @@ class Docker(Tool):
         tlskey: _Value = ...,
         tlsverify: _Flag = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """A self-sufficient runtime for containers
 
         Args:
@@ -406,7 +411,7 @@ class Docker(Tool):
         target: _Value = ...,
         ulimit: _Value = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """Start a build
 
         Args:
@@ -492,7 +497,7 @@ class Docker(Tool):
         user: _Value = ...,
         workdir: _Value = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """Execute a command in a running container
 
         Args:
@@ -518,7 +523,7 @@ class Docker(Tool):
         quiet: _Flag = ...,
         tree: _Flag = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """List images
 
         Args:
@@ -546,7 +551,7 @@ class Docker(Tool):
         timestamps: _Flag = ...,
         until: _Value = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """Fetch the logs of a container
 
         Args:
@@ -571,7 +576,7 @@ class Docker(Tool):
         quiet: _Flag = ...,
         size: _Flag = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """List containers
 
         Args:
@@ -598,7 +603,7 @@ class Docker(Tool):
         platform: _Value = ...,
         quiet: _Flag = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """Download an image from a registry
 
         Args:
@@ -616,7 +621,7 @@ class Docker(Tool):
         platform: _Value = ...,
         quiet: _Flag = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """Upload an image to a registry
 
         Args:
@@ -729,7 +734,7 @@ class Docker(Tool):
         volumes_from: _Value = ...,
         workdir: _Value = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """Create and run a new container from an image
 
         Args:
@@ -867,7 +872,7 @@ class Docker(Tool):
         tlskey: _Value = ...,
         tlsverify: _Flag = ...,
         **flags: Any,
-    ) -> Docker:
+    ) -> Self:
         """Bind tool-level global options before the subcommand.
 
         `tools.docker.flags(host=...)` puts a tool's own

@@ -4,16 +4,18 @@
 # Every verb ends in `**flags: Any`: the stub suggests what this tool
 # accepts, and can never forbid what the bridge would happily pass.
 from collections.abc import Sequence
-from typing import Any, Literal
+from typing import Any, Literal, Self
 
-from footman.tools import Result, Tool, _Flag, _Value
+from footman.tools import Result as _Result
+from footman.tools import Tool as _Tool
+from footman.tools import _Flag, _Value
 
-class Ty(Tool):
+class Ty(_Tool):
     def __call__(  # type: ignore[override]
         self,
         *args: str,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """An extremely fast Python type checker."""
         ...
     def check(
@@ -55,7 +57,7 @@ class Ty(Tool):
         warn: _Value = ...,
         watch: _Flag = ...,
         **flags: Any,
-    ) -> Result:
+    ) -> _Result:
         """Check a project for type errors
 
         Args:
@@ -104,7 +106,7 @@ class Ty(Tool):
     def flags(
         self,
         **flags: Any,
-    ) -> Ty:
+    ) -> Self:
         """Bind tool-level global options before the subcommand.
 
         `tools.docker.flags(host=...)` puts a tool's own
