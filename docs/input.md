@@ -79,10 +79,11 @@ at run time, the case a flag can't cover. Two globals cover the rest: `--yes`
 auto-answers every confirm, and `--no-input` refuses to prompt (a required
 prompt errors instead).
 
-Because it owns the terminal, an interactive task can't share it with parallel
-siblings: **a run that contains one goes fully sequential** — every task, one at
-a time — and the live status line steps aside so its repaints can't scribble
-over a prompt. (It also can't run under `--json`.)
+Owning the terminal is a *lane*, not a lockdown: the interactive task runs
+on the real stdio while the parallel pool keeps working around it,
+captured — a sibling that finishes mid-prompt has its output held until
+the terminal frees, and the live status line suspends for exactly the
+ownership window, so nothing scribbles over a prompt.
 
 ![Animated: fm scaffold prompts for a project name, then a numbered what-kind menu picked by number](_generated/shots/interactive-cast.svg)
 
