@@ -11,7 +11,7 @@ import pytest
 from footman import manifest
 from footman._complete import complete
 from footman.coerce import peel
-from footman.executor import run_chain
+from footman.executor import EX_USAGE, run_chain
 from footman.params import (
     Arg,
     Exists,
@@ -411,7 +411,7 @@ def test_invalid_custom_value_fails_cleanly():
     results = run(tasks, "build --id not-a-uuid")
     assert results[0].ok is False
     assert isinstance(results[0].error, ValueError)
-    assert results[0].code == 2  # a binding-time refusal, not a task failure
+    assert results[0].code == EX_USAGE  # a binding-time refusal, not a task failure
 
 
 # --- dynamic completion (suggest) --------------------------------------------

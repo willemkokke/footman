@@ -640,7 +640,7 @@ fm --json --dry-run deploy prod  # parse-check a line without running it
 fm --json deploy prod            # one envelope: results, output, returned
 ```
 
-A refusal is machine-readable too — `{"error": {"code": 2, "message":
+A refusal is machine-readable too — `{"error": {"code": 64, "message":
 "…did you mean 'prod'?"}}` — so an agent can read the fix out of the
 message the same way a human does. Two hooks close the loop for Claude
 Code (this repo runs both on the agent that builds footman itself): an

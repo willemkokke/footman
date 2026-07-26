@@ -43,7 +43,7 @@ form a chain, and independent tasks run in parallel (output never
 interleaves). Everything after `--` passes through to the task's
 `*args`.
 
-Exit codes: 0 all ok · 1 a task raised · N a task exited N · 2 footman
+Exit codes: 0 all ok · 1 a task raised · N a task exited N · 64 footman
 refused the line (the stderr message states the fix) · 130 interrupted.
 
 To add or change tasks, edit `tasks.py` — the signature is the CLI.
@@ -55,7 +55,11 @@ Never edit the completion cache under `~/.cache/footman/`; it's derived.
 Two recipes for `.claude/settings.json`. The mechanics in one sentence: a
 hook's **stderr plus exit code 2** is fed back to Claude as something to
 fix; anything else is display-only — so route footman's output to stderr
-and let the exit code do the talking.
+and let the exit code do the talking. One code must pass through
+untouched: footman's own refusal — a typo'd flag, an unknown task — exits
+64, and 64 is a wiring problem for the human who edited the hook, not a
+verdict for the model. Blocking needs exit 2 specifically, so map every
+failure *except* 64 to 2:
 
 **Format and lint after every edit** — the tree stays clean as the agent
 works, and lint failures land straight back in its context:
@@ -67,7 +71,7 @@ works, and lint failures land straight back in its context:
       {
         "matcher": "Edit|Write",
         "hooks": [
-          { "type": "command", "command": "uv run fm format lint 1>&2 || exit 2" }
+          { "type": "command", "command": "uv run fm format lint 1>&2 || { c=$?; [ $c -eq 64 ] || c=2; exit $c; }" }
         ]
       }
     ]
@@ -87,7 +91,7 @@ the session end red. `stop_hook_active` is the loop guard: when this stop
         "hooks": [
           {
             "type": "command",
-            "command": "jq -e '.stop_hook_active' >/dev/null && exit 0; uv run fm check 1>&2 || exit 2"
+            "command": "jq -e '.stop_hook_active' >/dev/null && exit 0; uv run fm check 1>&2 || { c=$?; [ $c -eq 64 ] || c=2; exit $c; }"
           }
         ]
       }

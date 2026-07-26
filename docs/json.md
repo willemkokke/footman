@@ -94,7 +94,7 @@ $ fm --json chekc
 {
   "schema": 1,
   "error": {
-    "code": 2,
+    "code": 64,
     "message": "expected a task name, got 'chekc' — did you mean 'check'? (know: docs, lint, test, check)"
   },
   "results": []
@@ -178,10 +178,10 @@ The process exit code tells the same story as the envelope:
 | 0 | everything ran and succeeded |
 | 1 | a task raised an exception |
 | N | a task returned N / its `run()` command exited N — first failure wins |
-| 2 | footman refused before or while binding: parse, tasks-file, config, availability |
+| 64 | footman refused before or while binding: parse, tasks-file, config, availability |
 | 130 | interrupted (Ctrl-C) |
 
-Exit 2 before anything runs is a feature in CI: a typo'd workflow fails in
+Exit 64 before anything runs is a feature in CI: a typo'd workflow fails in
 milliseconds with a taught message, not after twenty minutes of setup.
 
 ## Recipes

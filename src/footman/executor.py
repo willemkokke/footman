@@ -41,6 +41,15 @@ from footman.params import Secret
 from footman.registry import Group, Task
 from footman.split import ChainError, Segment
 
+EX_USAGE = 64
+"""The refusal exit code — footman did not understand the command line.
+
+`EX_USAGE` from BSD's `sysexits.h`: an unknown task, an unknown flag, a
+malformed chain, a value that will not coerce, an unavailable task. Distinct
+from anything a task says on purpose, so a caller can tell a broken
+invocation from a real verdict; the low codes (1, 2, …) belong to tasks and
+their subprocesses. Interrupt stays 130."""
+
 
 @dataclass
 class TaskResult:
@@ -613,13 +622,15 @@ def run_task(
     # `@requires` availability is re-checked live at the moment of execution —
     # the manifest's cached answer is only ever a listing annotation.
     if (reason := registry.availability(fn)) is not None:
-        return TaskResult(task=seg.task, ok=False, code=2, error=Unavailable(reason))
+        return TaskResult(
+            task=seg.task, ok=False, code=EX_USAGE, error=Unavailable(reason)
+        )
     try:
         args, kwargs = bind(seg, fn, ctx, forwarded)
     except ChainError:
         raise  # e.g. passthrough with no *args — reported by the app layer
     except Exception as exc:  # a coercion failure (e.g. a custom-type constructor)
-        return _result(seg, 2, None, exc, 0.0)
+        return _result(seg, EX_USAGE, None, exc, 0.0)
 
     if context_param_name(resolved_signature(fn)):
         args = [ctx, *args]  # ctx is the first positional parameter
@@ -631,7 +642,7 @@ def run_task(
         try:
             ctx.cwd, ctx.cwd_unmanaged = resolve_cwd(fn, ctx)
         except ValueError as exc:  # e.g. rel= under an unmanaged config default
-            return _result(seg, 2, None, exc, 0.0)
+            return _result(seg, EX_USAGE, None, exc, 0.0)
 
     # The arbiter lane is a *scheduling* declaration, acquired here at the
     # task boundary — never mid-body, which is what keeps it deadlock-free.
@@ -677,8 +688,9 @@ def _result(
     return TaskResult(
         task=seg.task,
         ok=error is None and code == 0,
-        # Honor an explicit non-zero code (run_task passes 2 for bind/coercion
-        # refusals); only synthesize 1 when an error carries no code of its own.
+        # Honor an explicit non-zero code (run_task passes EX_USAGE for
+        # bind/coercion refusals); only synthesize 1 when an error carries no
+        # code of its own.
         code=code if code != 0 else (1 if error is not None else 0),
         returned=returned,
         error=error,

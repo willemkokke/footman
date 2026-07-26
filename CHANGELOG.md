@@ -64,6 +64,20 @@ versions may include breaking changes.
 
 ### Changed
 
+- **BREAKING: refusals exit 64 (`EX_USAGE`), not 2.** Exit 2 used to mean
+  four different things — an unknown task or flag, a value that would not
+  coerce, a task saying `fail(code=2)`, and a `run()` subprocess exiting 2 —
+  so a caller could not tell a broken invocation from a real verdict, and a
+  harness reading 2 as "blocking error" acted on refusals as if they were
+  results. Now every refusal — parse, binding, tasks-file, config,
+  availability, `--where`, the completion installers — exits 64, on the
+  process and inside the `--json` envelope (`error.code`, `results[].code`)
+  alike. Interrupt stays 130. The low codes belong to tasks again: exit 2
+  from a task now means exactly what the task said. Anyone keying on 2 for
+  footman's own errors must key on 64; hook recipes that flattened every
+  failure to one code now pass 64 through untouched (`docs/agents.md` shows
+  the shape).
+
 - **`--tree` draws a tree.** It used to print every task at its full dotted
   address under an indented group header, which made it the `--list` output
   with worse alignment. It now draws branches (`├─`, `└─`, `│`) and names

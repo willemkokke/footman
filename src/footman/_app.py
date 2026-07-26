@@ -33,6 +33,7 @@ from footman import (
     split,
 )
 from footman.app import DEFAULT_BRAND, Brand
+from footman.executor import EX_USAGE
 from footman.split import Segment
 
 # The brand (names + version) in effect for the current invocation. Set at the
@@ -85,10 +86,12 @@ def _error(message: str) -> None:
     sys.stderr.write(f"{prog}: {message}\n")
 
 
-def _refuse(json_mode: bool, message: str, code: int = 2) -> int:
+def _refuse(json_mode: bool, message: str, code: int = EX_USAGE) -> int:
     """Report a refusal on stderr — and when `--json` promised an envelope,
     keep stdout a single JSON document describing the same refusal, so a
-    machine consumer never has to parse two formats."""
+    machine consumer never has to parse two formats. Refusals exit
+    `EX_USAGE` (64), never a code a task could mean on purpose; the one
+    non-refusal caller passes 130 for interrupt."""
     _error(message)
     if json_mode:
         envelope = {"schema": 1, "error": {"code": code, "message": message}}
@@ -557,7 +560,7 @@ def _help_targets(
 def _print_help(tree: dict, argv: list[str]) -> int:
     """`--help` alone covers fm itself; with names, the named groups/tasks.
 
-    A name that matches nothing is a refusal (exit 2) with a suggestion —
+    A name that matches nothing is a refusal (exit EX_USAGE) with a suggestion —
     silently degrading to the global listing looked like an answer while
     teaching nothing. With at least one real target found, extra bare words
     stay lenient: they are argument values, not typos.
@@ -670,7 +673,7 @@ def _where(root: registry.Group, tree: dict, dotted: str) -> int:
     except (KeyError, IndexError):
         names = split.flat_addresses(tree)
         _error(f"--where: unknown task {dotted!r}{split._did_you_mean(dotted, names)}")
-        return 2
+        return EX_USAGE
     chain = discover.shadow_chain(fn)
     lines = []
     for index, member in enumerate(chain):
@@ -683,7 +686,7 @@ def _where(root: registry.Group, tree: dict, dotted: str) -> int:
         lines.append(where if index == 0 else f"{where}   (shadowed)")
     if not lines:
         _error(f"--where: cannot locate source for {dotted!r}")
-        return 2
+        return EX_USAGE
     print("\n".join(lines))
     return 0
 
@@ -825,14 +828,14 @@ def _install_completion(shell: object) -> int:
 
     name = _resolve_shell(shell, "--install-completion")
     if name is None:
-        return 2
+        return EX_USAGE
     if shell is True:
         print(f"detected shell: {name}")
     try:
         lines = _shellcomp.install(name, _brand.prog)
     except _shellcomp.InstallError as exc:
         _error(f"--install-completion {name}: {exc}")
-        return 2
+        return EX_USAGE
     for line in lines:
         print(line)
     return 0
@@ -843,14 +846,14 @@ def _uninstall_completion(shell: object) -> int:
 
     name = _resolve_shell(shell, "--uninstall-completion")
     if name is None:
-        return 2
+        return EX_USAGE
     if shell is True:
         print(f"detected shell: {name}")
     try:
         lines = _shellcomp.uninstall(name, _brand.prog)
     except _shellcomp.InstallError as exc:
         _error(f"--uninstall-completion {name}: {exc}")
-        return 2
+        return EX_USAGE
     for line in lines:
         print(line)
     return 0
@@ -867,7 +870,7 @@ def _setup_completion(shell: object) -> int:
 
     name = _resolve_shell(shell, "--setup-completion")
     if name is None:
-        return 2
+        return EX_USAGE
     if shell is True:
         print(f"detected shell: {name}", file=sys.stderr)
     print(_shellcomp.script_for(name, _brand.prog))

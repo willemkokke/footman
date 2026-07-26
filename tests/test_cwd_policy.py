@@ -9,6 +9,7 @@ import pytest
 
 from footman import _app, _paths, context, discover, executor, registry
 from footman.context import Context, current, use_context
+from footman.executor import EX_USAGE
 
 # --- helpers -----------------------------------------------------------------
 
@@ -279,6 +280,6 @@ def test_config_cwd_rejects_a_relative_value(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
     monkeypatch.chdir(tmp_path)
 
-    assert _app.run(["hi"]) == 2
+    assert _app.run(["hi"]) == EX_USAGE
     err = capsys.readouterr().err
     assert "policy token" in err and "rel=" in err

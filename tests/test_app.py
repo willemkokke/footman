@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from footman import _app, _paths, _progress
+from footman.executor import EX_USAGE
 from footman.split import Segment
 
 TASKS = '''
@@ -236,7 +237,7 @@ def test_fail_reason_reaches_json(project, capsys):
 
 
 def test_unknown_task_is_teaching_error(project, capsys):
-    assert _app.run(["nope"]) == 2
+    assert _app.run(["nope"]) == EX_USAGE
     assert "expected a task name" in capsys.readouterr().err
 
 
@@ -267,14 +268,14 @@ def test_bare_fm_no_tasks_file_is_soft(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
     assert _app.run([]) == 0
     assert "No tasks file found" in capsys.readouterr().out
-    assert _app.run(["hi"]) == 2  # a named task still errors
+    assert _app.run(["hi"]) == EX_USAGE  # a named task still errors
 
 
 def test_missing_tasks_file(tmp_path, monkeypatch, capsys):
     (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
-    assert _app.run(["hi"]) == 2
+    assert _app.run(["hi"]) == EX_USAGE
     assert "no tasks file found" in capsys.readouterr().err
 
 
@@ -342,9 +343,9 @@ def test_help_example_no_arg_task_has_no_junk(project, capsys):
     assert examples == ["Example: fm crash"]
 
 
-def test_binding_refusals_exit_2_end_to_end(tmp_path, monkeypatch):
+def test_binding_refusals_exit_usage_end_to_end(tmp_path, monkeypatch):
     # F54: a coercion refusal (custom type) and a bounds refusal both surface as
-    # exit 2 through the real CLI path — not a task-failure 1.
+    # exit EX_USAGE through the real CLI path — not a task-failure 1.
     (tmp_path / "pyproject.toml").write_text('[project]\nname="x"\n')
     (tmp_path / "tasks.py").write_text(
         "import uuid\n"
@@ -358,18 +359,18 @@ def test_binding_refusals_exit_2_end_to_end(tmp_path, monkeypatch):
     )
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
-    assert _app.run(["ident", "not-a-uuid"]) == 2  # UUID coercion refusal
+    assert _app.run(["ident", "not-a-uuid"]) == EX_USAGE  # UUID coercion refusal
     monkeypatch.setenv("N", "99")
-    assert _app.run(["bounded"]) == 2  # env value out of bounds
+    assert _app.run(["bounded"]) == EX_USAGE  # env value out of bounds
 
 
 def test_install_completion_unknown_shell_teaches(project, capsys):
-    assert _app.run(["--install-completion", "tcsh"]) == 2
+    assert _app.run(["--install-completion", "tcsh"]) == EX_USAGE
     assert "bash|zsh|fish" in capsys.readouterr().err
 
 
 def test_directory_bad(project, capsys):
-    assert _app.run(["-C", str(project / "nope"), "hi"]) == 2
+    assert _app.run(["-C", str(project / "nope"), "hi"]) == EX_USAGE
     assert "-C" in capsys.readouterr().err
 
 
@@ -405,7 +406,7 @@ def test_directory_restores_cwd(project):
 
 
 def test_unknown_global(project, capsys):
-    assert _app.run(["--nope"]) == 2
+    assert _app.run(["--nope"]) == EX_USAGE
     assert "unknown global option" in capsys.readouterr().err
 
 
@@ -416,12 +417,12 @@ def test_passthrough_without_varargs_is_accepted(project, capsys):
 
 def test_where_unknown_suggests(project, capsys):
     # 11.1: --where routes its not-found through the same _did_you_mean helper.
-    assert _app.run(["--where", "hii"]) == 2
+    assert _app.run(["--where", "hii"]) == EX_USAGE
     assert "did you mean 'hi'?" in capsys.readouterr().err
 
 
 def test_where_unknown(project, capsys):
-    assert _app.run(["--where", "nope"]) == 2
+    assert _app.run(["--where", "nope"]) == EX_USAGE
     assert "unknown task" in capsys.readouterr().err
 
 
@@ -477,7 +478,7 @@ def test_tasks_import_failure(tmp_path, monkeypatch, capsys):
     (tmp_path / "tasks.py").write_text("raise RuntimeError('boom on import')\n")
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
-    assert _app.run(["hi"]) == 2
+    assert _app.run(["hi"]) == EX_USAGE
     assert "failed to import" in capsys.readouterr().err
 
 
@@ -554,18 +555,18 @@ def test_help_shows_positionals_and_types(project, capsys):
 def test_help_unknown_target_refuses(project, capsys):
     # `--help nonexistnt` used to degrade to the global listing with exit 0 —
     # the one place the error discipline leaked. Now: a taught refusal.
-    assert _app.run(["--help", "nope"]) == 2
+    assert _app.run(["--help", "nope"]) == EX_USAGE
     err = capsys.readouterr().err
     assert "unknown task or group 'nope'" in err
 
 
 def test_help_unknown_target_suggests(project, capsys):
-    assert _app.run(["--help", "hii"]) == 2
+    assert _app.run(["--help", "hii"]) == EX_USAGE
     assert "did you mean 'hi'?" in capsys.readouterr().err
 
 
 def test_help_unknown_target_suggests_groups(project, capsys):
-    assert _app.run(["--help", "tols"]) == 2
+    assert _app.run(["--help", "tols"]) == EX_USAGE
     assert "did you mean 'tools'?" in capsys.readouterr().err
 
 
@@ -588,7 +589,7 @@ def test_help_takes_the_dotted_address(project, capsys):
 def test_help_space_path_is_taught_dotted(project, capsys):
     # `fm --help "tools echo"` — the space form is no longer an address, and
     # the refusal suggests the dotted spelling instead of shrugging.
-    assert _app.run(["--help", "tools echo"]) == 2
+    assert _app.run(["--help", "tools echo"]) == EX_USAGE
     err = capsys.readouterr().err
     assert "unknown task or group 'tools echo'" in err
     assert "did you mean 'tools.echo'?" in err
@@ -602,7 +603,7 @@ def test_help_resolves_before_a_passthrough_boundary(project, capsys):
 
 
 def test_help_unknown_address_suggests_a_real_neighbour(project, capsys):
-    assert _app.run(["--help", "tools.ecko"]) == 2
+    assert _app.run(["--help", "tools.ecko"]) == EX_USAGE
     err = capsys.readouterr().err
     assert "unknown task or group 'tools.ecko'" in err
     assert "did you mean 'tools.echo'?" in err
@@ -616,7 +617,7 @@ def test_help_alone_shows_the_global_options(project, capsys):
 
 
 def test_help_anywhere_on_the_line_wins(project, capsys):
-    # `fm boom --help` must be help, not an execution of `boom` (exit 2) and
+    # `fm boom --help` must be help, not an execution of `boom` (a refusal) and
     # not an "unknown option" error.
     assert _app.run(["boom", "--help"]) == 0
     assert "Fail on purpose." in capsys.readouterr().out
@@ -646,7 +647,7 @@ def test_tasks_import_failure_names_the_file(tmp_path, monkeypatch, capsys):
     (tmp_path / "tasks.py").write_text("raise RuntimeError('boom on import')\n")
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
-    assert _app.run(["hi"]) == 2
+    assert _app.run(["hi"]) == EX_USAGE
     err = capsys.readouterr().err
     assert "failed to import" in err and "tasks.py" in err
 
@@ -656,7 +657,7 @@ def test_tasks_syntax_error_reported_cleanly(tmp_path, monkeypatch, capsys):
     (tmp_path / "tasks.py").write_text("def broken(:\n")
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
-    assert _app.run(["hi"]) == 2
+    assert _app.run(["hi"]) == EX_USAGE
     err = capsys.readouterr().err
     assert "SyntaxError" in err and "tasks.py" in err
 
@@ -672,7 +673,7 @@ def test_duplicate_task_name_is_a_user_error(tmp_path, monkeypatch, capsys):
     )
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
-    assert _app.run(["build"]) == 2
+    assert _app.run(["build"]) == EX_USAGE
     err = capsys.readouterr().err
     assert "already has a task named 'build'" in err and "tasks.py" in err
     assert "failed to import" not in err  # a duplicate name, not a crash
@@ -692,14 +693,14 @@ def test_malformed_cascade_config_warns_and_continues(project, capsys):
 
 def test_malformed_explicit_config_is_an_error(project, capsys):
     (project / "bad.toml").write_text("this is = not [valid toml\n")
-    assert _app.run(["--config", "bad.toml", "hi"]) == 2
+    assert _app.run(["--config", "bad.toml", "hi"]) == EX_USAGE
     err = capsys.readouterr().err
     assert "--config" in err and "bad.toml" in err
 
 
 def test_missing_explicit_config_is_an_error(project, capsys):
     # F15: a typo'd --config (prod.tmol) must be loud, not silently ignored.
-    assert _app.run(["--config", "prod.tmol", "hi"]) == 2
+    assert _app.run(["--config", "prod.tmol", "hi"]) == EX_USAGE
     err = capsys.readouterr().err
     assert "--config" in err and "no such file" in err and "prod.tmol" in err
 
@@ -777,9 +778,9 @@ def test_config_progress_false_turns_it_off_permanently(project, capsys):
 
 
 def test_jobs_flag_validates_and_runs(project, capsys):
-    assert _app.run(["--jobs", "0", "hi"]) == 2
+    assert _app.run(["--jobs", "0", "hi"]) == EX_USAGE
     assert "positive integer" in capsys.readouterr().err
-    assert _app.run(["-j", "abc", "hi"]) == 2
+    assert _app.run(["-j", "abc", "hi"]) == EX_USAGE
     assert "positive integer" in capsys.readouterr().err
     assert _app.run(["-j", "2", "hi"]) == 0
     assert "hello world" in capsys.readouterr().out
@@ -817,11 +818,11 @@ def test_json_refusal_envelope(project, capsys):
     # A pre-run refusal used to leave stdout empty in --json mode; now the
     # taught error lands in both channels — text for humans, one envelope
     # for machines.
-    assert _app.run(["--json", "nope"]) == 2
+    assert _app.run(["--json", "nope"]) == EX_USAGE
     captured = capsys.readouterr()
     payload = json.loads(captured.out)
     assert payload["schema"] == 1
-    assert payload["error"]["code"] == 2
+    assert payload["error"]["code"] == EX_USAGE
     assert "expected a task name" in payload["error"]["message"]
     assert payload["results"] == []
     assert "expected a task name" in captured.err  # stderr keeps the human copy
@@ -829,7 +830,7 @@ def test_json_refusal_envelope(project, capsys):
 
 def test_json_refusal_on_unknown_global(project, capsys):
     # The parse fails *at* --nope, but --json already promised an envelope.
-    assert _app.run(["--json", "--nope", "hi"]) == 2
+    assert _app.run(["--json", "--nope", "hi"]) == EX_USAGE
     payload = json.loads(capsys.readouterr().out)
     assert "unknown global option" in payload["error"]["message"]
 
@@ -839,7 +840,7 @@ def test_json_refusal_on_import_failure(tmp_path, monkeypatch, capsys):
     (tmp_path / "tasks.py").write_text("raise RuntimeError('boom on import')\n")
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
-    assert _app.run(["--json", "hi"]) == 2
+    assert _app.run(["--json", "hi"]) == EX_USAGE
     payload = json.loads(capsys.readouterr().out)
     assert "failed to import" in payload["error"]["message"]
 
@@ -847,7 +848,7 @@ def test_json_refusal_on_import_failure(tmp_path, monkeypatch, capsys):
 def test_json_help_refusal_still_envelopes(project, capsys):
     # Help's *success* output is the one human-only surface; its refusal is a
     # refusal like any other and honours the envelope.
-    assert _app.run(["--json", "--help", "nope"]) == 2
+    assert _app.run(["--json", "--help", "nope"]) == EX_USAGE
     payload = json.loads(capsys.readouterr().out)
     assert "unknown task or group 'nope'" in payload["error"]["message"]
 
@@ -882,7 +883,7 @@ def test_json_no_tasks_file(tmp_path, monkeypatch, capsys):
     assert _app.run(["--json"]) == 0  # warm empty state: an honest empty tree
     payload = json.loads(capsys.readouterr().out)
     assert payload["tree"]["tasks"] == {} and payload["tree"]["groups"] == {}
-    assert _app.run(["--json", "hi"]) == 2  # a named task still refuses
+    assert _app.run(["--json", "hi"]) == EX_USAGE  # a named task still refuses
     payload = json.loads(capsys.readouterr().out)
     assert "no tasks file found" in payload["error"]["message"]
 
@@ -1056,7 +1057,7 @@ def test_dry_run_plan_paints(project, monkeypatch):
 
 def test_error_prefix_is_red_on_a_tty(project, monkeypatch):
     _, err = _tty_streams(monkeypatch)
-    assert _app.run(["nosuchtask"]) == 2
+    assert _app.run(["nosuchtask"]) == EX_USAGE
     assert "\033[31mfm\033[0m:" in err.getvalue()
 
 
@@ -1099,7 +1100,7 @@ def test_color_never_is_byte_clean_on_a_tty(project, monkeypatch):
 
 
 def test_color_rejects_an_unknown_value(project, capsys):
-    assert _app.run(["--color=technicolor", "--list"]) == 2
+    assert _app.run(["--color=technicolor", "--list"]) == EX_USAGE
     assert "--color expects one of auto|always|never" in capsys.readouterr().err
 
 
@@ -1265,7 +1266,7 @@ def test_where_takes_the_dotted_address(project, capsys):
 
 def test_where_is_strict_about_empty_segments(project, capsys):
     # The shared resolver never silently normalises a malformed address.
-    assert _app.run(["--where", "tools..echo"]) == 2
+    assert _app.run(["--where", "tools..echo"]) == EX_USAGE
     assert "unknown task 'tools..echo'" in capsys.readouterr().err
 
 
@@ -1343,7 +1344,7 @@ def test_sort_orders_the_json_catalog(unsorted_project, capsys):
 
 def test_sort_must_be_a_boolean(unsorted_project, capsys):
     unsorted_project("sort = 'yes'")
-    assert _app.run(["--list"]) == 2
+    assert _app.run(["--list"]) == EX_USAGE
     assert "`sort` expects true" in capsys.readouterr().err
 
 
@@ -1362,7 +1363,7 @@ def test_sort_flag_orders_one_invocation(unsorted_project, capsys):
 
 def test_sort_flag_never_masks_a_broken_config_value(unsorted_project, capsys):
     unsorted_project("sort = 'yes'")
-    assert _app.run(["--sort", "--list"]) == 2
+    assert _app.run(["--sort", "--list"]) == EX_USAGE
     assert "`sort` expects true" in capsys.readouterr().err
 
 

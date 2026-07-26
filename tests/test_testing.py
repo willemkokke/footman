@@ -11,6 +11,7 @@ from typing import Literal
 
 from footman import Context, run, use_context
 from footman.app import App
+from footman.executor import EX_USAGE
 from footman.registry import Group
 from footman.testing import Runner, recording
 
@@ -92,7 +93,7 @@ def test_runner_group_failure_is_returned_not_raised():
 
 def test_runner_group_chain_error_teaches():
     result = Runner().invoke("nope", tasks=_demo_group())
-    assert result.exit_code == 2
+    assert result.exit_code == EX_USAGE
     assert "expected a task name" in result.stderr
 
 
@@ -226,7 +227,7 @@ def test_runner_branded_app_prefixes_errors(tmp_path):
     (tmp_path / "tasks.py").write_text(TASKS)
     acme = Runner(App(name="Acme", prog="acme", version="9.9.9"))
     result = acme.invoke("nope", cwd=tmp_path)
-    assert result.exit_code == 2
+    assert result.exit_code == EX_USAGE
     assert result.stderr.startswith("acme:")
     version = acme.invoke("--version", cwd=tmp_path)
     assert "Acme 9.9.9" in version.stdout

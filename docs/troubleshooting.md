@@ -17,7 +17,7 @@ The shape is always `prog: task: what — hint`. The prefix is the brand
 (`fm`, or your own CLI's name), so in a chain of tools you know who's
 talking.
 
-## Parse errors — exit 2, nothing has run
+## Parse errors — exit 64, nothing has run
 
 The splitter validates the whole command line against the manifest before
 executing anything, so a typo never half-runs a chain.
@@ -88,7 +88,7 @@ and your cwd must not brick every invocation:
 fm: ignoring malformed config: /repo/footman.toml: Expected '=' after a key in a key/value pair (at line 1, column 5)
 ```
 
-A file you named **explicitly** with `--config` is a hard error (exit 2) when
+A file you named **explicitly** with `--config` is a hard error (exit 64) when
 it's malformed, unreadable, or missing — you asked for that file on purpose, so
 a typo like `--config prod.tmol` is reported (`--config: prod.tmol: no such
 file`), never silently ignored.
