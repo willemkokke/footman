@@ -233,16 +233,24 @@ def _release(prefix: Path, driver: Driver, *, host: str) -> Outcome:
 
 def _latest_assets(host: str, repo: str) -> list[tuple[str, str]]:
     """`[(asset name, download url)]` for *repo*'s latest release."""
+    return assets_for(host, repo)
+
+
+def assets_for(host: str, repo: str, tag: str = "") -> list[tuple[str, str]]:
+    """`[(asset name, download url)]` for one release — latest when *tag* is
+    empty, and a specific tag when priming a tool's history."""
     if not repo:
         raise ProvisionError("no repo to fetch from")
     if host == "github":
-        data = _get_json(f"https://api.github.com/repos/{repo}/releases/latest")
+        where = f"tags/{tag}" if tag else "latest"
+        data = _get_json(f"https://api.github.com/repos/{repo}/releases/{where}")
         assets = data.get("assets", [])
         return [(a["name"], a["browser_download_url"]) for a in assets]
     if host == "gitlab":
         quoted = urllib.parse.quote(repo, safe="")
+        where = urllib.parse.quote(tag, safe="") if tag else "permalink/latest"
         data = _get_json(
-            f"https://gitlab.com/api/v4/projects/{quoted}/releases/permalink/latest"
+            f"https://gitlab.com/api/v4/projects/{quoted}/releases/{where}"
         )
         links = data.get("assets", {}).get("links", [])
         return [(a["name"], a.get("direct_asset_url") or a["url"]) for a in links]

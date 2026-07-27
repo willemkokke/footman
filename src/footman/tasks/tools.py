@@ -658,8 +658,9 @@ def prime(
             if doc is None:
                 skipped.append(f"{driver.key} (no history — run `sync` first)")
                 continue
-            added = _prime_one(driver, doc, count, scratch, _toolfetch)
-            read.append(f"{driver.key} +{added} (from {doc['observed_from']})")
+            added, stopped = _prime_one(driver, doc, count, scratch, _toolfetch)
+            note = f" — stopped at {stopped}" if stopped else ""
+            read.append(f"{driver.key} +{added} (from {doc['observed_from']}){note}")
     finally:
         if not keep:
             shutil.rmtree(scratch, ignore_errors=True)
@@ -669,13 +670,18 @@ def prime(
         print(f"skipped: {', '.join(skipped)}")
 
 
-def _prime_one(driver, doc: dict, count: int, scratch: Path, fetch) -> int:
+def _prime_one(driver, doc: dict, count: int, scratch: Path, fetch) -> tuple[int, str]:
     """Read up to *count* releases older than the chain's floor, oldest last.
 
-    A release that will not install, or whose binary will not describe
-    itself, ends this tool's walk rather than leaving a hole: the chain is
-    contiguous by construction, and `observed_from` would otherwise claim a
-    reach the file does not have.
+    Returns what was added and, when the walk ended early, the release it
+    stopped at. A release that will not install, or whose binary will not
+    describe itself, ends this tool's walk rather than leaving a hole: the
+    chain is contiguous by construction, and `observed_from` would otherwise
+    claim a reach the file does not have.
+
+    Reporting *why* it stopped matters more than it looks: a scheduled job
+    reading "+0" cannot tell "nothing left to read" from "this machine has no
+    bun, so the npm tier fetched nothing".
     """
     known = set(_toolhistory.observed(doc))
     floor = doc["observed_from"]
@@ -685,14 +691,18 @@ def _prime_one(driver, doc: dict, count: int, scratch: Path, fetch) -> int:
         if release.version not in known and release.date <= _date_of(doc, floor)
     ][:count]
     added = 0
+    stopped = ""
     for release in wanted:
         bindir = fetch.install(driver, release.version, scratch / release.version)
         if bindir is None:
+            stopped = f"{release.version} (could not install)"
             break
         with _on_path(bindir.parent):
             spec = _drivers.extract(driver)
         if not spec.verbs:
-            break  # a binary that will not describe itself is not an observation
+            # a binary that will not describe itself is not an observation
+            stopped = f"{release.version} (no help to read)"
+            break
         if _toolhistory.extend(
             doc,
             version=release.version,
@@ -708,7 +718,7 @@ def _prime_one(driver, doc: dict, count: int, scratch: Path, fetch) -> int:
         # stub is a rendering of the record, so it is rewritten here rather
         # than waiting for someone to remember a `sync`.
         _stub_path(driver.key).write_text(_stub_from(driver, doc), encoding="utf-8")
-    return added
+    return added, stopped
 
 
 def _date_of(doc: dict, version: str) -> str:

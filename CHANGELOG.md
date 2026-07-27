@@ -7,6 +7,23 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- **Priming reads four tiers, not one.** PyPI, npm, and release assets from
+  GitHub and GitLab — which covers bun's own releases too. Each tier brings
+  its own index (`time` maps on npm, `published_at` on GitHub,
+  `released_at` on GitLab) and its own install shape, and a forge tag is
+  normalised to what the binary reports: a tag is `v2.96.0` on one project
+  and `2.96.0` on the next, while the history keys on the version the tool
+  prints, or a primed release never matches the base it belongs under.
+
+  What stays unlistable is the `system` tier — git and docker are read from
+  the host and have no fetch source wired — and provisioned interpreters,
+  which are not tool releases. Those are named and skipped. A walk that ends
+  early now says why: `cspell +0 (from 10.0.1) — stopped at 10.0.0 (could not
+  install)` distinguishes "nothing left to read" from "this machine has no
+  bun", which a bare `+0` could not.
+
 ## [0.23.0] — 2026-07-27
 
 ### Added
