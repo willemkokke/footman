@@ -250,3 +250,32 @@ def test_source_reading_survives_the_handle():
     assert registry.fans_out(default)  # the source read still works
     view = registry.Tasks(reg)["default"]
     assert view.source_file is not None and view.source_file.endswith(".py")
+
+
+def test_the_source_hash_ignores_formatting_but_not_edits():
+    # A tripwire for "the body moved": normalised through the AST, so a
+    # reformat does not move it (this repo's own gate runs `ruff format`, which
+    # would otherwise look like every task changed) while a real edit does.
+    import ast
+    import hashlib
+    import textwrap
+
+    def digest(src: str) -> str:
+        shape = ast.dump(ast.parse(textwrap.dedent(src)), include_attributes=False)
+        return hashlib.sha256(shape.encode("utf-8")).hexdigest()
+
+    tight = "def build():\n    x = 1\n    return x\n"
+    spaced = "def build():\n\n    x = 1  # a comment\n\n    return x\n"
+    edited = "def build():\n    x = 2\n    return x\n"
+    assert digest(tight) == digest(spaced)  # formatting and comments are free
+    assert digest(tight) != digest(edited)  # a real change moves it
+
+    reg = Group("root")
+
+    @reg.task
+    def real():
+        """Docstring."""
+        return 1
+
+    assert registry.task_source_hash(real) == digest(registry.task_source(real))
+    assert registry.task_source_hash(lambda: 1) is not None  # readable source
