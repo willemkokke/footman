@@ -7,8 +7,6 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
-## [0.25.0] — 2026-07-27
-
 ### Added
 
 - **Writing plugins — the provider's guide.** One page for the whole
@@ -17,6 +15,8 @@ versions may include breaking changes.
   `[tool.footman."<entry-point-name>"]` configuration convention, the two
   optional-dependency patterns, the determinism rule, and testing through
   the real pull path.
+
+## [0.25.0] — 2026-07-27
 
 ### Added
 
