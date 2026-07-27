@@ -1,7 +1,7 @@
 {
  "schema": 1,
  "tool": "gh",
- "observed_from": "2.96.0",
+ "observed_from": "2.94.0",
  "base": {
   "version": "2.96.0",
   "date": "2026-07-27",
@@ -2503,5 +2503,44 @@
    }
   }
  },
- "deltas": {}
+ "deltas": {
+  "2.95.0": {
+   "date": "2026-06-17",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
+  },
+  "2.94.0": {
+   "date": "2026-06-10",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1,
+   "revert": {
+    "issue.list\tauthor": {
+     "flags": [
+      "--author",
+      "-A"
+     ],
+     "negation": "",
+     "help": "Filter by author",
+     "type": "str",
+     "default": null,
+     "choices": []
+    },
+    "pr.list\tauthor": {
+     "flags": [
+      "--author",
+      "-A"
+     ],
+     "negation": "",
+     "help": "Filter by author",
+     "type": "str",
+     "default": null,
+     "choices": []
+    }
+   }
+  }
+ }
 }

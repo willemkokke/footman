@@ -501,3 +501,150 @@ def test_an_older_reading_never_becomes_the_head(tmp_path, monkeypatch):
     assert doc["base"]["version"] == "0.6.0"
     assert list(doc["deltas"]) == ["0.5.0", "0.4.0"]
     assert _toolhistory.observed(doc) == ["0.6.0", "0.5.0", "0.4.0"]
+
+
+# --- the tiers a prime can read ---------------------------------------------
+
+
+def _index(monkeypatch, payload):
+    """Serve *payload* as the registry's JSON, whatever URL is asked for."""
+    import io
+    import json as _json
+
+    from footman import _toolfetch
+
+    monkeypatch.setattr(
+        _toolfetch.urllib.request,
+        "urlopen",
+        lambda *a, **k: io.BytesIO(_json.dumps(payload).encode()),
+    )
+
+
+def test_npm_releases_come_from_the_time_map(monkeypatch):
+    """npm keeps publication dates in `time`, alongside two entries that are
+    not versions at all."""
+    from footman import _drivers, _toolfetch
+
+    _index(
+        monkeypatch,
+        {
+            "versions": {"9.0.0": {}, "10.0.0": {}, "10.0.1": {}},
+            "time": {
+                "created": "2020-01-01T00:00:00Z",
+                "modified": "2026-05-31T00:00:00Z",
+                "9.0.0": "2026-01-05T00:00:00Z",
+                "10.0.0": "2026-05-30T00:00:00Z",
+                "10.0.1": "2026-05-31T00:00:00Z",
+                "10.0.2": "2026-06-01T00:00:00Z",  # in `time`, not in `versions`
+            },
+        },
+    )
+    driver = _drivers.find("cspell")
+    assert driver is not None
+    got = _toolfetch.releases(driver)
+    assert [r.version for r in got] == ["10.0.1", "10.0.0", "9.0.0"]
+    assert got[0].date == "2026-05-31"
+
+
+def test_github_releases_normalise_the_tag_and_drop_the_unreleased(monkeypatch):
+    """A tag is `v2.96.0` on one project and `2.96.0` on the next, while the
+    binary reports the bare number — and the history keys on what the binary
+    says, or a primed release never matches the base it belongs under."""
+    from footman import _drivers, _toolfetch
+
+    _index(
+        monkeypatch,
+        [
+            {"tag_name": "v2.96.0", "published_at": "2026-07-02T00:00:00Z"},
+            {"tag_name": "v2.95.0", "published_at": "2026-06-01T00:00:00Z"},
+            {
+                "tag_name": "v3.0.0-rc1",
+                "published_at": "2026-07-20T00:00:00Z",
+                "prerelease": True,
+            },
+            {
+                "tag_name": "v2.97.0",
+                "published_at": "2026-07-10T00:00:00Z",
+                "draft": True,
+            },
+        ],
+    )
+    driver = _drivers.find("gh")
+    assert driver is not None
+    assert [r.version for r in _toolfetch.releases(driver)] == ["2.96.0", "2.95.0"]
+
+
+def test_gitlab_releases_read_their_own_field_names(monkeypatch):
+    from footman import _drivers, _toolfetch
+
+    _index(
+        monkeypatch,
+        [
+            {"tag_name": "v0.6.0-wk.5", "released_at": "2026-07-07T00:00:00Z"},
+            {"tag_name": "v0.6.0-wk.4", "released_at": "2026-06-07T00:00:00Z"},
+        ],
+    )
+    driver = _drivers.find("eclint")
+    assert driver is not None
+    got = _toolfetch.releases(driver)
+    assert [r.version for r in got] == ["0.6.0-wk.5", "0.6.0-wk.4"]
+
+
+def test_an_unreadable_index_is_empty_not_an_error(monkeypatch):
+    """A prime that cannot reach one registry skips that tool; it does not
+    fail the run and leave the others unprimed."""
+    from footman import _drivers, _toolfetch
+
+    def boom(*a, **k):
+        raise _toolfetch.urllib.error.URLError("no network")
+
+    monkeypatch.setattr(_toolfetch.urllib.request, "urlopen", boom)
+    driver = _drivers.find("prek")
+    assert driver is not None
+    assert _toolfetch.releases(driver) == []
+
+
+def test_which_tiers_can_be_listed():
+    """`system` is absent because git and docker are read from the host with
+    no fetch source, and a hand-written stub has nothing to read at all."""
+    from footman import _drivers, _toolfetch
+
+    expected = {
+        "prek": True,  # uv
+        "cspell": True,  # node
+        "gh": True,  # github
+        "eclint": True,  # gitlab
+        "bun": True,  # bun's own releases
+        "git": False,  # system
+        "docker": False,  # system
+        "bash": False,  # manual stub
+        "python": False,  # an interpreter, not a tool release
+    }
+    for key, listable in expected.items():
+        driver = _drivers.find(key)
+        assert driver is not None, key
+        assert _toolfetch.can_list(driver) is listable, key
+        if not listable:
+            assert _toolfetch.releases(driver) == [], key
+
+
+def test_installing_an_unlistable_tier_declines(tmp_path):
+    from footman import _drivers, _toolfetch
+
+    driver = _drivers.find("git")
+    assert driver is not None
+    assert _toolfetch.install(driver, "2.50.0", tmp_path / "git") is None
+
+
+def test_the_npm_tier_needs_bun_and_says_so(tmp_path, monkeypatch):
+    """bun is how the node tier is provisioned, so priming borrows it. Without
+    it the walk stops — and reports why, because a scheduled job reading '+0'
+    cannot tell that from 'nothing left to read'."""
+    import shutil
+
+    from footman import _drivers, _toolfetch
+
+    monkeypatch.setattr(shutil, "which", lambda _name: None)
+    driver = _drivers.find("cspell")
+    assert driver is not None
+    assert _toolfetch.install(driver, "10.0.0", tmp_path / "cspell") is None
