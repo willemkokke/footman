@@ -457,10 +457,52 @@ binding: hook code and validator code answer to the same rules a body does
 an interactive task is refused), while footman's own prompts — `ask()`
 menus, `confirm=` — use the real terminal and are never caught.
 
+### One generator instead of a pair: `@wrap_task` and `@wrap_bind`
+
+When the pre and the post are two halves of one thought — open a span, close
+it; start a clock, log it — a wrapper says it in one place, with locals
+instead of `task.state` and `try/finally` doing the pairing:
+
+```python
+@footman.wrap_task
+def span(inv, task):
+    s = tracer.start(task.name, dict(task.args))
+    result = yield                 # the body runs here
+    s.end(ok=result.ok, took=result.duration)
+```
+
+`wrap_task` is sugar over the pair — it enters at the `pre_task` moment and
+is resumed with the `ResultView` — so every rule above is its rule too: per
+request (a request satisfied by an execution the run already performed is
+resumed with its `shared` row), reverse unwinding, a raising half failing
+the task, named. The family grammar: `pre_X` runs *before* moment X,
+`wrap_X` *enters at* X and rides to the end.
+
+The one thing `wrap_task` cannot see is a task that failed to **bind** — its
+anchor moment never fires, so there is no generator to unwind. `wrap_bind`
+enters at the bind boundary, takes two yields, and closes even then:
+
+```python
+@footman.wrap_bind
+def audit(inv, task):
+    started = clock()
+    try:
+        bound = yield              # after binding: the real values
+        result = yield             # after the body: the outcome
+    finally:
+        log(task.name, clock() - started)
+```
+
+A failed bind arrives as the failure raised at the first yield, so the
+`try/finally` (or an `except`) around it observes it and still closes.
+Yield-count violations are taught, naming the wrapper: `wrap_task` takes
+exactly one, `wrap_bind` exactly two.
+
 One more contract, stated for the future: a pre hook's **return value is
 reserved** — the moment where a pre supplies the task's result and the body
 is skipped belongs to a later cache. Today a returned value gets a note and
-is ignored; state belongs on `task.state`.
+is ignored; state belongs on `task.state`. (A wrapper never touches the
+channel: its `yield` is the moment itself.)
 
 ## The caching contract, stated once
 

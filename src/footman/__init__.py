@@ -80,6 +80,8 @@ if TYPE_CHECKING:
     from footman.registry import requires_env as requires_env
     from footman.registry import requires_tool as requires_tool
     from footman.registry import task as task
+    from footman.registry import wrap_bind as wrap_bind
+    from footman.registry import wrap_task as wrap_task
     from footman.testing import Runner as Runner
     from footman.testing import recording as recording
 
@@ -153,6 +155,8 @@ __all__ = [
     "tools",
     "track",
     "use_context",
+    "wrap_bind",
+    "wrap_task",
 ]
 
 
@@ -182,6 +186,8 @@ def __getattr__(name: str) -> object:
         "pre_bind",
         "pre_task",
         "post_task",
+        "wrap_task",
+        "wrap_bind",
         "Tasks",
         "TaskView",
         "requires",
@@ -263,6 +269,8 @@ def __getattr__(name: str) -> object:
         "Failed",
         "fail",
         "use_context",
+        "wrap_bind",
+        "wrap_task",
     ):
         from footman import context
 
