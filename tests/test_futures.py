@@ -702,7 +702,15 @@ def test_a_node_reuses_what_a_body_call_already_did():
     assert result.ok, result.stderr
     assert len(runs) == 1
     states = [(r.task, executor.reported_state(r)) for r in result.results]
-    assert states == [("early", "ok"), ("survey", "ok"), ("survey", "shared")]
+    # `early` and the survey execution race on parallel workers, so only the
+    # invariants are asserted: one execution, one share, and the share
+    # concluded after the execution it joined — never their order vs `early`.
+    assert sorted(states) == [
+        ("early", "ok"),
+        ("survey", "ok"),
+        ("survey", "shared"),
+    ]
+    assert states.index(("survey", "ok")) < states.index(("survey", "shared"))
 
 
 def test_a_different_policy_is_different_work_and_runs():
