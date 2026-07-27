@@ -418,25 +418,61 @@ def _ask_confirm(message: str, *, no_input: bool) -> bool:
 
 def _gate_confirms(
     root: Group, segments: list[Segment], ctx_config: dict[str, Any] | None
-) -> tuple[list[Segment], list[executor.TaskResult]]:
+) -> tuple[list[Segment], list[executor.TaskResult], dict[Any, bool]]:
     """Resolve each invoked task's `@task(confirm=)` before the DAG is built —
     asked in invocation order, before any prerequisite runs. A confirmed task
     is kept; a denied one is dropped (so its exclusive pre-deps are pruned with
     it) and reported as a failed 'not confirmed' result, so the run exits
-    non-zero. `--yes` auto-confirms every gate."""
+    non-zero. `--yes` auto-confirms every gate. One reference, one question:
+    the answers come back so the node-level gate (prerequisites, fan-out
+    members) never re-asks what the invocation already answered."""
     cfg = ctx_config or {}
     assume_yes = bool(cfg.get("assume_yes"))
     no_input = bool(cfg.get("no_input"))
     kept: list[Segment] = []
     denied: list[executor.TaskResult] = []
+    answers: dict[Any, bool] = {}
     for seg in segments:
         fn = executor.resolve(root, seg.path)
         message = task_confirm(fn)
-        if not message or assume_yes or _ask_confirm(message, no_input=no_input):
+        if not message:
+            kept.append(seg)
+            continue
+        key = _dep_key(fn)
+        if key not in answers:
+            answers[key] = assume_yes or _ask_confirm(message, no_input=no_input)
+        if answers[key]:
             kept.append(seg)
         else:
             denied.append(_not_confirmed(seg))
-    return kept, denied
+    return kept, denied, answers
+
+
+def _gate_node_confirms(
+    nodes: list[_Node],
+    ctx_config: dict[str, Any] | None,
+    answers: dict[Any, bool],
+) -> None:
+    """Ask the plan's remaining `@task(confirm=)` gates — prerequisites and
+    fan-out members — up front, in dependency order: a task that asks for
+    confirmation gets it however it was reached. One reference, one question;
+    an answer given for a segment covers every node resolving to the same
+    reference. A denial becomes the node's result before anything runs, so
+    the node never launches and its dependents skip with the denial as their
+    cause."""
+    cfg = ctx_config or {}
+    assume_yes = bool(cfg.get("assume_yes"))
+    no_input = bool(cfg.get("no_input"))
+    for n in _toposort(nodes):
+        message = task_confirm(n.fn)
+        if not message or n.result is not None:
+            continue
+        key = _dep_key(n.fn)
+        if key not in answers:
+            answers[key] = assume_yes or _ask_confirm(message, no_input=no_input)
+        if not answers[key]:
+            n.result = _not_confirmed(n.seg)
+            n.state = "done"
 
 
 def _not_confirmed(seg: Segment) -> executor.TaskResult:
@@ -538,9 +574,10 @@ def _run_plan(
     jobs: int = 0,
 ) -> list[executor.TaskResult]:
     context.reset_abort()  # clear any latched fail-fast from a previous run
-    segments, denied = _gate_confirms(root, segments, ctx_config)
+    segments, denied, answers = _gate_confirms(root, segments, ctx_config)
     nodes = _build_dag(root, segments)
     _check_cycles(nodes)
+    _gate_node_confirms(nodes, ctx_config, answers)
     _scope_keep_going(nodes, keep_going)  # per-node failure policy (tri-state + scope)
     # Ask-serial, run-parallel — as early as correct: every promptable ask()
     # across the DAG answers up front (confirms were gated above), so the
@@ -551,6 +588,8 @@ def _run_plan(
     ask_ctx = context.Context(**(ctx_config or {}))
     try:
         for n in _toposort(nodes):
+            if n.result is not None:  # denied its confirm: it will not run
+                continue
             executor.resolve_asks(n.fn, n.seg, ask_ctx)
     except ValueError as exc:
         raise ChainError(str(exc)) from exc
@@ -614,7 +653,7 @@ def _run_plan(
             else None
         )
         if status is not None:
-            status.unit_added(len(nodes))
+            status.unit_added(sum(1 for n in nodes if n.result is None))
             context.set_status(status)  # parallel() and the routers find it
             status.open()
         try:
@@ -718,6 +757,10 @@ def _run_sequential(nodes, real, capture, ctx_config, status, err=None) -> None:
     failed = False
     width = max((len(n.seg.task) for n in nodes), default=0)
     for node in _toposort(nodes):
+        if node.result is not None:  # answered before the run: a denied confirm
+            done[node.key] = node.result.ok
+            failed = failed or not node.result.ok
+            continue
         if any(not done.get(d) for d in node.deps) or (failed and not node.keep_going):
             node.state = "skipped"
             if status is not None:
@@ -777,7 +820,8 @@ def _make_status(
 def _run_parallel(nodes, real, err, capture, ctx_config, status, jobs) -> None:
     by_key = {n.key: n for n in nodes}
     lock = threading.Lock()
-    failed = False
+    # A confirm denied before the run is already a failure on the board.
+    failed = any(n.result is not None and not n.result.ok for n in nodes)
     width = max((len(n.seg.task) for n in nodes), default=0)
 
     def dep_ok(n: _Node) -> bool:

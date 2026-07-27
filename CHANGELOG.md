@@ -7,6 +7,18 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A prerequisite's `confirm=` is asked.** The documented rule — a task
+  that asks for confirmation gets it however it is reached — held for a
+  command-line segment (asked up front) and a body call (asked at the
+  call), but a task pulled in via `pre=`/`post=` ran unasked. Every gate in
+  the plan is now asked up front, in dependency order; one reference is one
+  question, however many segments and prerequisites reach it (a repeated
+  gated segment also stops asking twice). A denial becomes the task's
+  result before anything runs, so it never launches and its dependents skip
+  with the denial as their cause.
+
 ## [0.24.0] — 2026-07-27
 
 ### Added
