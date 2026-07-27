@@ -481,11 +481,25 @@ def _rebase(spec: ToolSpec, base: tuple[str, ...]) -> ToolSpec:
 
 
 def _from_click(driver: Driver) -> ToolSpec | None:
-    """A spec from the tool's click command, when it is a click tool."""
+    """A spec from the tool's click command, when it is a click tool.
+
+    Only when the importable package and the PATH binary are the **same
+    release**. The entry point loads from this process's environment while
+    the binary comes from `PATH`, and nothing ties the two together: a prime
+    reading mkdocs 1.4.0 from a throwaway venv would import *this* venv's
+    1.6.1 and record its surface under 1.4.0's label — which is exactly what
+    happened, nine empty deltas in a row, before this guard. A mismatch (or
+    a binary whose version cannot be read) falls through to the help path,
+    which always asks the binary itself.
+    """
     from footman import tools
 
     entry = tools._console_entrypoint(driver.name)
     if entry is None:
+        return None
+    packaged = getattr(getattr(entry, "dist", None), "version", "") or ""
+    binary = version(driver.name)
+    if not binary or binary != packaged:
         return None
     try:
         command = entry.load()

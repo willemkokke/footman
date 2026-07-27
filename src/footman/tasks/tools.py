@@ -25,9 +25,10 @@ from __future__ import annotations
 
 import re as _re
 import sys
+import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Annotated, Literal
 
@@ -676,22 +677,19 @@ def prime(
     keep: Annotated[bool, doc("leave the throwaway environments behind")] = False,
     prefix: Annotated[str, doc("drive the tiers from this prefix's bin/")] = "",
 ):
-    """Read past releases into the option history, newest first.
+    """Read past releases into the option history, deepening each chain.
 
-    Walks backwards from the release the history already holds, installing
-    one version at a time into a throwaway environment and appending a delta
-    for each. Nothing already written is touched, and a release the chain
-    already has is skipped — so a prime interrupted by a rate limit is
-    resumed by running it again.
+    Reaches below each tool's floor, up to `--count` releases further back.
+    Nothing already written is touched, and a release the chain already has
+    is skipped — so a prime interrupted by a rate limit is resumed by
+    running it again.
 
-    `--count` is how far back to reach *this run*; run it again to go
-    deeper. The floor a tool actually reached is recorded as
-    `observed_from`, which is a fact about what was read rather than a policy
-    about what we meant to read: an option present in the oldest release read
-    is "at or before" that version, never "since" it.
-
-    A tool footman cannot list is named and skipped rather than left looking
-    like a tool with no history.
+    The releases are gathered **in parallel**, a bounded wave at a time —
+    installing a release and reading its `--help` depends on no other
+    release, and the chain assembles whatever order the observations arrive
+    in. A release that will not install, or whose binary will not describe
+    itself, is a **hole**: named in the report, filled by a later run, and
+    never the end of the tool's walk.
 
     `--prefix` points at a `fm tools.provision` directory, and the tiers are
     driven from *its* binaries. That is not the same nicety it is on `sync`:
@@ -703,35 +701,50 @@ def prime(
 
     from footman import _toolfetch
 
+    _bounce_bare_call("prime")
     scratch = Path(tempfile.mkdtemp(prefix="footman-prime-"))
-    read: list[str] = []
-    skipped: list[str] = []
+    lines: list[str] = []
     try:
         with _on_path(prefix), _sandboxed(scratch):
-            for driver in _drivers.DRIVERS:
-                if only and driver.key != only:
+            drivers, skipped = _curated(only, _toolfetch)
+            listings, unreachable = _list_phase(drivers, _toolfetch)
+            skipped += [f"{key} ({why})" for key, why in sorted(unreachable.items())]
+
+            plans: dict[str, list] = {}
+            docs: dict[str, dict] = {}
+            for driver in drivers:
+                if driver.key not in listings:
                     continue
-                if not _toolfetch.can_list(driver):
-                    skipped.append(f"{driver.key} ({driver.provision.kind} tier)")
-                    continue
-                doc = _toolhistory.load(_history_path(driver.key))
-                if doc is None:
+                doc_ = _toolhistory.load(_history_path(driver.key))
+                if doc_ is None:
                     skipped.append(f"{driver.key} (no history — run `sync` first)")
                     continue
-                try:
-                    added, stopped = _prime_one(driver, doc, count, scratch, _toolfetch)
-                except _toolfetch.Unreachable as unreachable:
-                    # Not "nothing left to read" — nobody read anything.
-                    skipped.append(f"{driver.key} ({unreachable})")
+                planned, refused = _plan_prime(doc_, listings[driver.key], count)
+                if refused:
+                    lines.append(
+                        f"{driver.key} +0 (from {doc_['observed_from']}) — {refused}"
+                    )
                     continue
-                note = f" — stopped at {stopped}" if stopped else ""
-                read.append(
-                    f"{driver.key} +{added} (from {doc['observed_from']}){note}"
+                docs[driver.key] = doc_
+                plans[driver.key] = planned
+
+            work = [(d, r) for d in drivers if d.key in plans for r in plans[d.key]]
+            surfaces = _gather(work, scratch)
+            for driver in drivers:
+                if driver.key not in plans:
+                    continue
+                fresh, holes = _assemble(
+                    driver, docs[driver.key], plans[driver.key], surfaces
+                )
+                note = f" — holes: {', '.join(holes)}" if holes else ""
+                lines.append(
+                    f"{driver.key} +{len(fresh)}"
+                    f" (from {docs[driver.key]['observed_from']}){note}"
                 )
     finally:
         if not keep:
             shutil.rmtree(scratch, ignore_errors=True)
-    for line in read:
+    for line in lines:
         print(line)
     if skipped:
         print(f"skipped: {', '.join(skipped)}")
@@ -755,6 +768,12 @@ class Refreshed:
     nothing new — see `_toolfetch.Unreachable`."""
     skipped: list[str]
     """Tools with no index to read, or no history to add to."""
+    holes: dict[str, list[str]] = field(default_factory=dict)
+    """Releases that were listed but could not be observed — an install that
+    failed, a binary that would not describe itself. A hole is not an error:
+    the chain stays contiguous by construction, a later run fills it via
+    `insert`, and until then a change the missing release carried reads as
+    arriving at the next release actually read."""
     wrote_changelog: bool = False
     """Whether the events reached `CHANGELOG.md`. False with nothing to say,
     and false when the file has no `[Unreleased]` section to write into —
@@ -774,16 +793,22 @@ def refresh(
 ) -> Refreshed:
     """Read every release published since the history was last updated.
 
-    The forward walk, and the one a release job runs. `prime` goes backwards
-    from the floor to deepen a history; this goes forwards from the base to
-    catch it up, installing **every** release in between rather than jumping
-    to the newest — a flag that arrived in 0.16.1 is attributed to 0.16.1,
-    not to whatever happened to be latest the day the job ran. A release that
-    changed nothing records an empty delta, which is a real observation and
-    not the same as never having looked.
+    The forward walk, and the one a release job runs. Every release between
+    each tool's base and its index's newest is observed — not just the
+    newest, so a flag that arrived in 0.16.1 is attributed to 0.16.1 rather
+    than to whatever happened to be latest the day the job ran. A release
+    that changed nothing records an empty delta, which is a real observation
+    and not the same as never having looked.
 
-    Nothing new anywhere means nothing to release, and that is the whole exit
-    condition. So an index that would not answer is reported and exits
+    Three phases. The listings are fetched concurrently; the releases are
+    observed **in parallel**, a bounded wave at a time, each observation a
+    task of its own so it owns its environment; the chains are assembled
+    single-threaded from whatever arrived, in whatever order it arrived —
+    which is what lets a failed install be a reported *hole* rather than the
+    end of a tool's walk.
+
+    Nothing new anywhere means nothing to release, and that is the whole
+    exit condition. So an index that would not answer is reported and exits
     non-zero rather than counting as "nothing new": a rename or a moved repo
     would otherwise make a tool silently untracked while the job kept
     reporting success.
@@ -793,37 +818,51 @@ def refresh(
 
     from footman import _toolfetch
 
+    _bounce_bare_call("refresh")
     scratch = Path(tempfile.mkdtemp(prefix="footman-refresh-"))
     read: dict[str, list[str]] = {}
     events: dict[str, list[str]] = {}
-    unreachable: dict[str, str] = {}
-    skipped: list[str] = []
+    holes: dict[str, list[str]] = {}
     try:
         with _on_path(prefix), _sandboxed(scratch):
-            for driver in _drivers.DRIVERS:
-                if only and driver.key != only:
+            drivers, skipped = _curated(only, _toolfetch)
+            listings, unreachable = _list_phase(drivers, _toolfetch)
+
+            plans: dict[str, list] = {}
+            docs: dict[str, dict] = {}
+            for driver in drivers:
+                if driver.key not in listings:
                     continue
-                if not _toolfetch.can_list(driver):
-                    skipped.append(f"{driver.key} ({driver.provision.kind} tier)")
-                    continue
-                history = _toolhistory.load(_history_path(driver.key))
-                if history is None:
+                doc_ = _toolhistory.load(_history_path(driver.key))
+                if doc_ is None:
                     skipped.append(f"{driver.key} (no history — run `sync` first)")
                     continue
-                try:
-                    seen, changed = _refresh_one(driver, history, scratch, _toolfetch)
-                except _toolfetch.Unreachable as blocked:
-                    unreachable[driver.key] = str(blocked)
+                docs[driver.key] = doc_
+                plans[driver.key] = _plan_refresh(doc_, listings[driver.key])
+
+            work = [(d, r) for d in drivers if d.key in plans for r in plans[d.key]]
+            surfaces = _gather(work, scratch)
+            for driver in drivers:
+                if driver.key not in plans:
                     continue
-                if seen:
-                    read[driver.key] = seen
-                if changed:
-                    events[driver.key] = changed
+                fresh, missing = _assemble(
+                    driver, docs[driver.key], plans[driver.key], surfaces
+                )
+                if fresh:
+                    read[driver.key] = fresh
+                if missing:
+                    holes[driver.key] = missing
+                if moved := _events_of(docs[driver.key], fresh):
+                    events[driver.key] = moved
     finally:
         shutil.rmtree(scratch, ignore_errors=True)
 
     found = Refreshed(
-        read=read, events=events, unreachable=unreachable, skipped=skipped
+        read=read,
+        events=events,
+        unreachable=unreachable,
+        skipped=skipped,
+        holes=holes,
     )
     if changelog and events:
         entries = [
@@ -1004,56 +1043,256 @@ def _report_refresh(found: Refreshed) -> None:
     if not found.read:
         print("nothing new")
     print(f"release warranted: {'yes' if found.release else 'no'}")
+    for key, missing in sorted(found.holes.items()):
+        print(f"holes in {key}: {', '.join(missing)} — a later run fills them")
     for key, why in sorted(found.unreachable.items()):
         print(f"could not read {key}: {why}")
     if found.skipped:
         print(f"skipped: {', '.join(found.skipped)}")
 
 
-def _refresh_one(
-    driver, doc: dict, scratch: Path, fetch
-) -> tuple[list[str], list[str]]:
-    """Catch one tool's history up to its index, oldest release first.
+def _bounce_bare_call(task: str) -> None:
+    """Refuse to gather outside a run, with directions rather than a race.
 
-    Returns what was read and which of those changed the surface. Oldest
-    first because each release is promoted in turn, and a delta is only
-    meaningful against the release that actually preceded it.
+    Every isolation property the parallel gather leans on — the environ
+    router, the per-call env copy at the task boundary, the subprocess env
+    injection — belongs to a run. Called bare, all three are absent: the
+    observations would share the one real environment across threads, which
+    is exactly the cross-contamination this engine exists to remove. One
+    implementation, and a bouncer — never a degraded twin.
+    """
+    from footman import _globals, fail
+
+    if not _globals.active():
+        fail(
+            f"tools.{task} gathers releases in parallel and needs a run — "
+            f"invoke `fm tools.{task}`, or drive it with "
+            "footman.testing.Runner in tests"
+        )
+
+
+def _curated(only: str, fetch) -> tuple[list, list[str]]:
+    """The drivers a walk can work on, and the ones it names as skipped."""
+    chosen, skipped = [], []
+    for driver in _drivers.DRIVERS:
+        if only and driver.key != only:
+            continue
+        if not fetch.can_list(driver):
+            skipped.append(f"{driver.key} ({driver.provision.kind} tier)")
+            continue
+        chosen.append(driver)
+    return chosen, skipped
+
+
+def _list_phase(drivers: list, fetch) -> tuple[dict[str, list], dict[str, str]]:
+    """Every tool's release listing, fetched concurrently.
+
+    Network-bound and environment-free, so plain thunks are enough.
+    `Unreachable` is collected per tool rather than aborting the sweep — the
+    tools that could be read still deserve their walk, and the caller
+    decides what an unreadable index costs.
+    """
+    from footman import parallel
+
+    listings: dict[str, list] = {}
+    unreachable: dict[str, str] = {}
+    lock = threading.Lock()
+
+    def look(driver):
+        def call():
+            try:
+                found = fetch.releases(driver)
+            except fetch.Unreachable as blocked:
+                with lock:
+                    unreachable[driver.key] = str(blocked)
+                return
+            with lock:
+                listings[driver.key] = found
+
+        call.__name__ = f"list:{driver.key}"
+        return call
+
+    calls = [look(driver) for driver in drivers]
+    if calls:
+        parallel(*calls, keep_going=True)
+    return listings, unreachable
+
+
+def _plan_refresh(doc: dict, listing: list) -> list:
+    """Every listed release the chain does not hold, down to its floor.
+
+    Not just the ones above the base: an interior gap — a hole a previous
+    gather reported — is this walk's to fill too, or nobody fills it. Below
+    the floor stays `prime`'s business, because depth is a budget and a
+    refresh must not silently spend it.
     """
     known = set(_toolhistory.observed(doc))
-    base = doc["base"]["version"]
-    newer = [
+    floor = doc["observed_from"]
+    return [
         release
-        for release in reversed(fetch.releases(driver))  # oldest first
+        for release in listing
         if release.version not in known
-        and _version_tuple(release.version) > _version_tuple(base)
+        and _version_tuple(release.version) >= _version_tuple(floor)
     ]
-    seen: list[str] = []
-    changed: list[str] = []
-    for release in newer:
-        bindir = fetch.install(driver, release, scratch / release.version)
-        if bindir is None:
-            break  # a hole here would attribute the next release's changes wrongly
+
+
+def _plan_prime(doc: dict, listing: list, count: int) -> tuple[list, str]:
+    """Up to *count* releases below the floor — the backward walk's work.
+
+    The floor is positioned in the *listing*, never compared by date: a base
+    carries the date it was observed, so on a first prime a date test admits
+    every release ever published. A floor the listing cannot place refuses
+    the tool with directions rather than guessing where it belongs.
+    """
+    known = set(_toolhistory.observed(doc))
+    floor = doc["observed_from"]
+    below = [index for index, release in enumerate(listing) if release.version == floor]
+    if listing and not below:
+        return [], f"{floor} is not among the listed releases (sync it forward first)"
+    start = below[0] + 1 if below else 0
+    return [release for release in listing[start:] if release.version not in known][
+        :count
+    ], ""
+
+
+@tasks.task(hidden=True)
+def observe(
+    tool: str,
+    version: str,
+    tag: str = "",
+    date: str = "",
+    scratch: str = "",
+) -> dict | None:
+    """Install one release, read what it accepts, and throw it away.
+
+    The unit of the gather, pure in (tool, version): requests for the same
+    release dedupe on the futures work key, and arrival order is nobody's
+    business — `_toolhistory.insert` assembles the chain from whatever order
+    these finish in.
+
+    A real task deliberately, not a helper. The task boundary is what buys
+    each observation its own environment: a body call copies the caller's
+    overlay, so the `PATH` written around extraction here is this
+    observation's alone, while the sandbox variables and prefix `PATH` the
+    caller set flow in — and on into every subprocess the tiers spawn.
+
+    `None` — a release that would not install, or a binary that would not
+    describe itself — is a hole for the caller to report, never an error:
+    the chain stays contiguous by construction, and a later run fills it.
+    """
+    from footman import _toolfetch
+
+    driver = _drivers.find(tool)
+    if driver is None or not scratch:  # pragma: no cover - engine-supplied
+        return None
+    release = _toolfetch.Release(version=version, tag=tag, date=date)
+    bindir = _toolfetch.install(driver, release, Path(scratch) / f"{tool}-{version}")
+    if bindir is None:
+        return None
+    try:
         with _on_path(bindir.parent):
             spec = _drivers.extract(driver)
+    finally:
         _discard(bindir)
-        if not spec.verbs:
-            break  # a binary that will not describe itself is not an observation
-        moved = _toolhistory.promote(
+    if not spec.verbs:
+        return None  # a binary that will not describe itself is no observation
+    return _toolhistory.surface_of(spec)
+
+
+def _gather(work: list, scratch: Path) -> dict[str, dict[str, dict | None]]:
+    """Observe every (driver, release) in *work*, a bounded wave at a time.
+
+    Each observation is a body call into `observe` — the task boundary is
+    the isolation — and the wave width caps concurrent downloads and peak
+    disk in one number: at most that many releases exist on disk at any
+    moment. Results land keyed by tool and version, in whatever order the
+    pool finishes; an observation that crashes outright simply never
+    reports, which reads as a hole exactly like a release that would not
+    install, with the traceback in the wave's output.
+    """
+    from footman import parallel
+    from footman.context import current
+
+    surfaces: dict[str, dict[str, dict | None]] = {}
+    lock = threading.Lock()
+
+    def observing(driver, release):
+        def call():
+            surface = observe(
+                tool=driver.key,
+                version=release.version,
+                tag=release.tag,
+                date=release.date,
+                scratch=str(scratch),
+            )
+            with lock:
+                surfaces.setdefault(driver.key, {})[release.version] = surface
+
+        call.__name__ = f"{driver.key}=={release.version}"
+        return call
+
+    calls = [observing(driver, release) for driver, release in work]
+    width = current().jobs or 8
+    for start in range(0, len(calls), width):
+        parallel(*calls[start : start + width], keep_going=True)
+    return surfaces
+
+
+def _assemble(
+    driver, doc: dict, planned: list, surfaces: dict
+) -> tuple[list[str], list[str]]:
+    """Insert whatever the gather brought home; say what is missing.
+
+    Single-threaded on purpose: the arithmetic is microseconds against the
+    installs, the doc is mutated in place, and one writer per file means the
+    atomic save needs no coordination. Returns the fresh releases oldest
+    first — the order a reader tells the story in — and the holes.
+    """
+    observed_here = surfaces.get(driver.key, {})
+    fresh: list[str] = []
+    holes: list[str] = []
+    for release in planned:
+        surface = observed_here.get(release.version)
+        if surface is None:
+            holes.append(release.version)
+            continue
+        if _toolhistory.insert(
             doc,
             version=release.version,
             date=release.date,
-            surface=_toolhistory.surface_of(spec),
+            surface=surface,
             platforms=[_platform()],
-        )
-        seen.append(release.version)
-        if moved:
-            changed.append(release.version)
-    if seen:
+        ):
+            fresh.append(release.version)
+    if fresh:
+        chain = _toolhistory.observed(doc)  # newest first
+        fresh.sort(key=chain.index, reverse=True)  # oldest first
         _toolhistory.save(doc, _history_path(driver.key))
         # The stub is a rendering of the record, so it follows the record
         # rather than waiting for someone to remember a `sync`.
         _stub_path(driver.key).write_text(_stub_from(driver, doc), encoding="utf-8")
-    return seen, changed
+    return fresh, holes
+
+
+def _events_of(doc: dict, fresh: list[str]) -> list[str]:
+    """Which of *fresh* changed the tool's surface — the release decision.
+
+    Answered from the assembled chain rather than remembered from arrival
+    order: a release's own changes live in the delta keyed by its
+    predecessor, the step back *from* it. A hole just below a release makes
+    that delta span the gap, so the change is attributed to the release
+    actually read — the chain's standing imprecision, reported as the hole.
+    """
+    chain = _toolhistory.observed(doc)  # newest first
+    changed: list[str] = []
+    for version in fresh:
+        spot = chain.index(version)
+        if spot + 1 >= len(chain):
+            continue  # the floor: nothing below to have changed from
+        step = doc["deltas"][chain[spot + 1]]
+        if any(key not in ("date", "platforms", "extractor") for key in step):
+            changed.append(version)
+    return changed
 
 
 def _discard(bindir: Path) -> None:
@@ -1073,70 +1312,6 @@ def _discard(bindir: Path) -> None:
     import shutil
 
     shutil.rmtree(bindir.parent, ignore_errors=True)
-
-
-def _prime_one(driver, doc: dict, count: int, scratch: Path, fetch) -> tuple[int, str]:
-    """Read up to *count* releases older than the chain's floor, oldest last.
-
-    Returns what was added and, when the walk ended early, the release it
-    stopped at. A release that will not install, or whose binary will not
-    describe itself, ends this tool's walk rather than leaving a hole: the
-    chain is contiguous by construction, and `observed_from` would otherwise
-    claim a reach the file does not have.
-
-    Reporting *why* it stopped matters more than it looks: a scheduled job
-    reading "+0" cannot tell "nothing left to read" from "this machine has no
-    bun, so the npm tier fetched nothing".
-
-    What counts as older is the *source's* own ordering, not a date this file
-    holds: a base carries the date it was observed, so on a first prime the
-    floor is dated today and a date test admits every release ever published.
-    That was invisible while every base happened to be the newest release —
-    and wrong the moment one is not, which is a stub synced from an outdated
-    binary. Positioning the floor in the listing instead compares like with
-    like, and a floor the listing cannot place stops the walk rather than
-    guessing where it belongs.
-    """
-    known = set(_toolhistory.observed(doc))
-    floor = doc["observed_from"]
-    listed = fetch.releases(driver)
-    below = [index for index, release in enumerate(listed) if release.version == floor]
-    if listed and not below:
-        return 0, f"{floor} is not among the listed releases (sync it forward first)"
-    start = below[0] + 1 if below else 0
-    wanted = [release for release in listed[start:] if release.version not in known][
-        :count
-    ]
-    added = 0
-    stopped = ""
-    for release in wanted:
-        bindir = fetch.install(driver, release, scratch / release.version)
-        if bindir is None:
-            stopped = f"{release.version} (could not install)"
-            break
-        with _on_path(bindir.parent):
-            spec = _drivers.extract(driver)
-        _discard(bindir)
-        if not spec.verbs:
-            # a binary that will not describe itself is not an observation
-            stopped = f"{release.version} (no help to read)"
-            break
-        if _toolhistory.extend(
-            doc,
-            version=release.version,
-            date=release.date,
-            surface=_toolhistory.surface_of(spec),
-            platforms=[_platform()],
-        ):
-            added += 1
-    if added:
-        _toolhistory.save(doc, _history_path(driver.key))
-        # A deeper history changes what the stub may say — an option that
-        # looked original at the old floor may now be one that arrived. The
-        # stub is a rendering of the record, so it is rewritten here rather
-        # than waiting for someone to remember a `sync`.
-        _stub_path(driver.key).write_text(_stub_from(driver, doc), encoding="utf-8")
-    return added, stopped
 
 
 @tasks.task
