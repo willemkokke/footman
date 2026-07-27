@@ -42,6 +42,9 @@ versions may include breaking changes.
   the provisioned uv's own — uv carries it inside the binary, so `fm
   tools.prime` gained a `--prefix` and drives the tiers from there: a stale uv
   reports a stale newest python and the walk starts too low without saying so.
+- **The python stub tracks the newest CPython** instead of a pinned 3.13. Its
+  history now reaches 3.14.6 back to 3.8.20, so `-P` is documented as added in
+  3.11 — which is when it arrived.
 - **A tool may declare that its release line is a minor series**
   (`Driver.releases`). CPython keeps several alive at once, so publication
   date alone cannot order it — five series ship on one day, and a walk down
@@ -83,6 +86,11 @@ versions may include breaking changes.
   wrong the moment one is not, which is any stub synced from an outdated
   binary. The walk now positions the floor in the source's own ordering, and
   a floor that ordering cannot place stops the walk and says so.
+- **The CPython listing no longer depends on what the machine has installed.**
+  `uv python list` replaces a version's download entry with a local path once
+  it is installed, dropping the URL its publication date is read from — so
+  each primed release vanished from the index the next prime reads. It now
+  asks for downloads only.
 
 - **A `ctx`-declaring task now keys its body calls on the caller's
   arguments.** The work key bound a call's arguments against the declared
