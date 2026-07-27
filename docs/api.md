@@ -75,14 +75,17 @@ it can't run. Every gate is evaluated live, and all failures are collected.
 
 ::: footman.registry.capture
 
-## Editing the discovered tree
+## The invocation, and editing the discovered tree
 
-`@finalize` runs a hook over the fully-merged cascade at discovery — see
-[Composing tasks](composing.md#editing-the-discovered-tree). The hook is
-handed a `Tasks` view; iterating or indexing it yields a `TaskView` that reads
-and edits one task.
+`@pre_tasks` runs a hook once per invocation, over the fully-merged cascade and
+before anything else — see
+[Composing tasks](composing.md#editing-the-discovered-tree). It is handed the
+`Invocation`, whose `tasks` is a `Tasks` view; iterating or indexing that yields
+a `TaskView` that reads and edits one task.
 
-::: footman.registry.finalize
+::: footman.registry.pre_tasks
+
+::: footman.invocation.Invocation
 
 ::: footman.registry.Tasks
 

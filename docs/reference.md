@@ -19,7 +19,7 @@ can't use — it would map to `--help`, which is always intercepted (see
 ## Decorator surface
 
 ```python
-from footman import task, group, finalize
+from footman import task, group, pre_tasks
 
 @task                       # bare
 def build(): ...
@@ -61,7 +61,7 @@ release = group("release", help="Cut a release")
 @release.task
 def wheel(): ...
 
-@finalize                   # edit the merged task tree at discovery
+@pre_tasks                  # the invocation, before anything runs
 def gate(tasks):            # (see Monorepos & config)
     for t in tasks:
         t.add_pre(tasks["audit"])

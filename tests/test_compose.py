@@ -432,16 +432,16 @@ def test_include_memoises_per_module(provider):
     assert set(a.tasks) == {"lint"} and set(b.tasks) == {"fmt"}
 
 
-def test_include_carries_a_providers_finalize_to_the_merged_tree(tmp_path, monkeypatch):
-    # An included provider's `@finalize` must run over the *merged* tree — the
+def test_include_carries_a_providers_hook_to_the_merged_tree(tmp_path, monkeypatch):
+    # An included provider's `@pre_tasks` must run over the *merged* tree — the
     # env-guard pattern the cascade relies on. include() moves the provider's
-    # finalizers onto the live root that discovery collects and runs, so they are
+    # hooks onto the live root that discovery collects and runs, so they are
     # not stranded on the forked subtree.
     #
     # Assert on the merged TREE, never a provider module-global: include() imports
     # the provider under capture() as a distinct instance, and `_evict_siblings`
     # drops it from sys.modules — so a re-`import` of it sees a stale copy the
-    # grafted finalizer never touched (the module-aliasing trap).
+    # grafted hook never touched (the module-aliasing trap).
     from footman import discover
 
     monkeypatch.setattr(compose, "_module_trees", {})
@@ -450,16 +450,16 @@ def test_include_carries_a_providers_finalize_to_the_merged_tree(tmp_path, monke
     (tmp_path / "guard_tasks.py").write_text(
         textwrap.dedent(
             """
-            from footman import task, finalize
+            from footman import task, pre_tasks
 
             @task
             def shared_audit(): ...
 
-            @finalize
-            def gate(tasks):
-                for t in tasks:
+            @pre_tasks
+            def gate(inv):
+                for t in inv.tasks:
                     if t.name.startswith("deploy"):
-                        t.add_pre(tasks["shared-audit"])
+                        t.add_pre(inv.tasks["shared-audit"])
             """
         )
     )
@@ -477,7 +477,7 @@ def test_include_carries_a_providers_finalize_to_the_merged_tree(tmp_path, monke
         )
     )
     view = registry.Tasks(discover.load_tree([root]))
-    # the provider's finalizer edited a ROOT task, proving it saw the merged tree.
+    # the provider's hook edited a ROOT task, proving it saw the merged tree.
     assert view["shared-audit"].fn in view["deploy-web"].pre
 
 
@@ -794,13 +794,13 @@ def test_plugin_claimed_by_two_distributions_teaches(monkeypatch):
         compose.plugin("twice")
 
 
-# --- _fork carries every Group field (F: default_task/finalizers were dropped) --
+# --- _fork carries every Group field (F: default_task/hooks were dropped) -----
 
 
 def test_fork_copies_every_group_field():
     # A structural census: _fork must carry EVERY Group field, or a composed
     # group silently loses it — which is exactly how `@group.default` and
-    # `@finalize` hooks vanished across include(). This fails the moment a field
+    # lifecycle hooks vanished across include(). This fails the moment a field
     # is added to Group.__init__ without teaching _fork (and this test) to copy
     # it, so a new field can't be dropped in silence.
     # `default_task` is no longer a field: the default is the child task
@@ -819,7 +819,7 @@ def test_fork_copies_every_group_field():
     assert set(Group("x").contributions) == set(registry.CONTRIBUTION_KINDS)
 
 
-def test_fork_preserves_default_and_finalizers():
+def test_fork_preserves_default_and_hooks():
     src = Group("release", "Release tasks")
 
     @src.task
@@ -830,13 +830,13 @@ def test_fork_preserves_default_and_finalizers():
 
     def sentinel(tasks): ...
 
-    src.contributions["finalize"].append(sentinel)
+    src.contributions["pre_tasks"].append(sentinel)
 
     fork = compose._fork(src)
     assert fork.default_task is src.default_task  # shared fn, like the task fns
-    assert fork.contributions["finalize"] == [sentinel]
+    assert fork.contributions["pre_tasks"] == [sentinel]
     # fresh buckets — no memo leak
-    assert fork.contributions["finalize"] is not src.contributions["finalize"]
+    assert fork.contributions["pre_tasks"] is not src.contributions["pre_tasks"]
 
 
 @pytest.fixture
@@ -892,22 +892,22 @@ def test_included_group_default_runs_end_to_end(default_provider, tmp_path):
     assert "release armed=True" in result.stdout
 
 
-def test_include_runs_provider_finalizers(tmp_path, monkeypatch):
-    # A provider's @finalize hook edits the whole tree; include() must surface it
+def test_include_runs_provider_hooks(tmp_path, monkeypatch):
+    # A provider's @pre_tasks hook edits the whole tree; include() must surface it
     # on the live root so discovery collects and runs it — it was dropped before.
     (tmp_path / "finmod.py").write_text(
         textwrap.dedent(
             """
-            from footman import task, finalize
+            from footman import task, pre_tasks
 
             @task
             def build():
                 "Build it."
                 print("build")
 
-            @finalize
-            def note(tasks):
-                tasks["build"].disable("finalizer ran")
+            @pre_tasks
+            def note(inv):
+                inv.tasks["build"].disable("the hook ran")
             """
         )
     )
@@ -923,7 +923,7 @@ def test_include_runs_provider_finalizers(tmp_path, monkeypatch):
     )
     listing = Runner().invoke("--list", cwd=project)
     assert listing.ok
-    assert "finalizer ran" in listing.stdout  # the hook ran and disabled the task
+    assert "the hook ran" in listing.stdout  # the hook ran and disabled the task
 
 
 def test_include_of_a_hooks_only_module_is_a_valid_pull(tmp_path, monkeypatch):
@@ -933,11 +933,11 @@ def test_include_of_a_hooks_only_module_is_a_valid_pull(tmp_path, monkeypatch):
     (tmp_path / "hooks_only.py").write_text(
         textwrap.dedent(
             """
-            from footman import finalize
+            from footman import pre_tasks
 
-            @finalize
-            def gate(tasks):
-                tasks["deploy"].disable("gated by hooks_only")
+            @pre_tasks
+            def gate(inv):
+                inv.tasks["deploy"].disable("gated by hooks_only")
             """
         )
     )
@@ -966,22 +966,22 @@ def test_plugin_of_a_hooks_only_provider_is_a_valid_pull(tmp_path, monkeypatch):
         monkeypatch,
         "hooks_only_plugin",
         """
-        from footman import finalize
+        from footman import pre_tasks
 
-        @finalize
-        def gate(tasks): ...
+        @pre_tasks
+        def gate(inv): ...
         """,
         "hooksonly = hooks_only_plugin",
     )
     with registry.capture() as captured:
         compose.plugin("hooksonly")
-    assert captured.contributions["finalize"]
+    assert captured.contributions["pre_tasks"]
     assert not captured.tasks and not captured.groups
     # A second pull re-forks the memoised tree: the graft must drain the
     # fork's buckets, never the memo's, or the hook arrives only once.
     with registry.capture() as again:
         compose.plugin("hooksonly")
-    assert again.contributions["finalize"]
+    assert again.contributions["pre_tasks"]
 
 
 def test_plugin_entry_point_of_the_wrong_type_teaches(monkeypatch):

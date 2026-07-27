@@ -1,13 +1,16 @@
-"""The `@finalize` discovery hook: edit the merged command tree at discovery."""
+"""The `pre_tasks` lifecycle hook: the invocation, before anything runs."""
 
 from __future__ import annotations
 
+import json
 import textwrap
 from pathlib import Path
 
 import pytest
 
 from footman import discover, manifest, registry
+from footman.registry import Group, RegistrationError
+from footman.testing import Runner
 
 
 def _write(path: Path, body: str) -> Path:
@@ -29,10 +32,10 @@ def test_finalize_edits_the_merged_tree(tmp_path):
         @task
         def deploy_web(): ...
 
-        @footman.finalize
-        def gate(tasks):
-            audit = tasks["audit"]
-            for t in tasks:
+        @footman.pre_tasks
+        def gate(inv):
+            audit = inv.tasks["audit"]
+            for t in inv.tasks:
                 if t.name.startswith("deploy"):
                     t.add_pre(audit)
         """,
@@ -53,10 +56,10 @@ def test_finalize_reaches_a_subfolder_task(tmp_path):
         @task
         def audit(): ...
 
-        @footman.finalize
-        def gate(tasks):
-            if "ship" in tasks:
-                tasks["ship"].add_pre(tasks["audit"])
+        @footman.pre_tasks
+        def gate(inv):
+            if "ship" in inv.tasks:
+                inv.tasks["ship"].add_pre(inv.tasks["audit"])
         """,
     )
     sub = _write(
@@ -84,9 +87,9 @@ def test_finalize_runs_in_cascade_order_specific_last(tmp_path):
         @task
         def x(): ...
 
-        @footman.finalize
-        def f(tasks):
-            fn = tasks["x"].fn
+        @footman.pre_tasks
+        def f(inv):
+            fn = inv.tasks["x"].fn
             fn._order = [*getattr(fn, "_order", []), "root"]
         """,
     )
@@ -95,9 +98,9 @@ def test_finalize_runs_in_cascade_order_specific_last(tmp_path):
         """
         import footman
 
-        @footman.finalize
-        def f(tasks):
-            fn = tasks["x"].fn
+        @footman.pre_tasks
+        def f(inv):
+            fn = inv.tasks["x"].fn
             fn._order = [*getattr(fn, "_order", []), "svc"]
         """,
     )
@@ -111,12 +114,12 @@ def test_finalize_that_raises_is_named(tmp_path):
         """
         import footman
 
-        @footman.finalize
-        def boom(tasks):
+        @footman.pre_tasks
+        def boom(inv):
             raise ValueError("nope")
         """,
     )
-    with pytest.raises(discover.FinalizeError, match="boom"):
+    with pytest.raises(discover.HookError, match="boom"):
         discover.load_tree([bad])
 
 
@@ -151,9 +154,9 @@ def test_finalize_disable_reaches_the_manifest(tmp_path):
         @task
         def x(): ...
 
-        @footman.finalize
-        def off(tasks):
-            tasks["x"].disable("off by policy")
+        @footman.pre_tasks
+        def off(inv):
+            inv.tasks["x"].disable("off by policy")
         """,
     )
     tree = discover.load_tree([src])
@@ -174,9 +177,9 @@ def test_task_view_add_post_and_read_post(tmp_path):
         @task
         def notify(): ...
 
-        @footman.finalize
-        def wire(tasks):
-            tasks["deploy"].add_post(tasks["notify"])
+        @footman.pre_tasks
+        def wire(inv):
+            inv.tasks["deploy"].add_post(inv.tasks["notify"])
         """,
     )
     view = registry.Tasks(discover.load_tree([src]))
@@ -199,9 +202,9 @@ def test_task_view_disabled_reads_the_reason(tmp_path):
         @task
         def b(): ...
 
-        @footman.finalize
-        def off(tasks):
-            tasks["a"].disable("off by policy")
+        @footman.pre_tasks
+        def off(inv):
+            inv.tasks["a"].disable("off by policy")
         """,
     )
     view = registry.Tasks(discover.load_tree([src]))
@@ -330,9 +333,9 @@ def test_task_view_set_opts_is_permanent(tmp_path):
         @task
         def x(): ...
 
-        @footman.finalize
-        def policy(tasks):
-            tasks["x"].set_opts(keep_going=False, atomic=True)
+        @footman.pre_tasks
+        def policy(inv):
+            inv.tasks["x"].set_opts(keep_going=False, atomic=True)
         """,
     )
     view = registry.Tasks(discover.load_tree([src]))
@@ -352,14 +355,14 @@ def test_task_view_set_opts_rejects_a_task_parameter(tmp_path):
         @task
         def x(): ...
 
-        @footman.finalize
-        def bad(tasks):
-            tasks["x"].set_opts(fix=True)  # a task parameter, not a policy option
+        @footman.pre_tasks
+        def bad(inv):
+            inv.tasks["x"].set_opts(fix=True)  # a task parameter, not a policy option
         """,
     )
     # `set_opts` reuses `.opts()`'s validation, so a stray parameter is a taught
     # error surfaced (named) through the finalizer.
-    with pytest.raises(discover.FinalizeError, match="bad"):
+    with pytest.raises(discover.HookError, match="bad"):
         discover.load_tree([src])
 
 
@@ -375,10 +378,10 @@ def test_finalize_uses_defining_dir_for_a_cascade_decision(tmp_path):
         @task
         def audit(): ...
 
-        @footman.finalize
-        def gate_infra(tasks):
-            audit = tasks["audit"]
-            for t in tasks:
+        @footman.pre_tasks
+        def gate_infra(inv):
+            audit = inv.tasks["audit"]
+            for t in inv.tasks:
                 if (t.defining_dir or "").endswith("infra"):
                     t.add_pre(audit)
         """,
@@ -394,3 +397,102 @@ def test_finalize_uses_defining_dir_for_a_cascade_decision(tmp_path):
     )
     view = registry.Tasks(discover.load_tree([root, infra]))
     assert view["audit"].fn in view["deploy"].pre
+
+
+# --- what the invocation adds over the tree view it replaced ------------------
+
+
+def test_a_hook_sets_the_environment_every_task_sees(tmp_path, monkeypatch):
+    # The moment is pre-DAG and single-threaded, so os.environ is ordinary code
+    # here — and it lands before availability gates, which is the point: a
+    # requires_env task is available because a hook supplied the variable.
+    monkeypatch.delenv("LIFECYCLE_TOKEN", raising=False)
+    (tmp_path / "pyproject.toml").write_text('[project]\nname="x"\n')
+    (tmp_path / "tasks.py").write_text(
+        textwrap.dedent(
+            """
+            import os
+            import footman
+            from footman import task, requires_env
+
+            @footman.pre_tasks
+            def supply(inv):
+                os.environ["LIFECYCLE_TOKEN"] = "from-the-hook"
+
+            @task
+            @requires_env("LIFECYCLE_TOKEN", reason="needs a token")
+            def publish():
+                print("token:", os.environ["LIFECYCLE_TOKEN"])
+            """
+        )
+    )
+    result = Runner().invoke("publish", cwd=tmp_path)
+    assert result.ok, result.stderr
+    assert "token: from-the-hook" in result.stdout
+
+
+def test_the_invocation_carries_what_the_line_asked(tmp_path):
+    seen: dict[str, object] = {}
+    (tmp_path / "pyproject.toml").write_text('[project]\nname="x"\n')
+    (tmp_path / "tasks.py").write_text(
+        textwrap.dedent(
+            """
+            import json, pathlib
+            import footman
+            from footman import task
+
+            @footman.pre_tasks
+            def record(inv):
+                pathlib.Path("seen.json").write_text(json.dumps({
+                    "keep_going": inv.cli.get("keep_going"),
+                    "cwd_is_set": bool(inv.cwd),
+                    "root_is_set": bool(inv.root),
+                    "task_names": sorted(t.name for t in inv.tasks),
+                }))
+
+            @task
+            def build(): ...
+            """
+        )
+    )
+    result = Runner().invoke("-k build", cwd=tmp_path)
+    assert result.ok, result.stderr
+    seen = json.loads((tmp_path / "seen.json").read_text())
+    assert seen["keep_going"] is True  # the line's own globals
+    assert seen["cwd_is_set"] and seen["root_is_set"]
+    assert seen["task_names"] == ["build"]
+
+
+def test_a_hook_with_the_wrong_arity_is_refused_at_registration():
+    # The lifecycle names its moments and they differ by arity, so a typo is a
+    # taught error naming the hook rather than a TypeError at the first task.
+    reg = Group("root")
+
+    with pytest.raises(RegistrationError, match=r"pre_tasks is handed 1"):
+
+        @reg.pre_tasks
+        def no_args(): ...
+
+    with pytest.raises(RegistrationError, match=r"takes 2 argument"):
+
+        @reg.pre_tasks
+        def too_many(inv, extra): ...
+
+
+def test_finalize_is_retired_with_a_pointer():
+    reg = Group("root")
+
+    with pytest.raises(RegistrationError, match=r"@finalize is retired"):
+
+        @reg.finalize
+        def gate(tasks): ...
+
+
+def test_the_invocation_refuses_writes_once_frozen():
+    from footman.invocation import Frozen, Invocation
+
+    inv = Invocation(cwd="/tmp")
+    inv.root = "/tmp"  # editable at pre_tasks
+    inv.freeze()
+    with pytest.raises(Frozen, match=r"editable only at pre_tasks"):
+        inv.root = "/elsewhere"

@@ -36,15 +36,15 @@ from pathlib import Path
 from typing import Any, ParamSpec, Protocol, TypeVar, cast, overload
 
 Task = Callable[..., Any]
-Finalizer = Callable[["Tasks"], object]
-"""A `@finalize` hook: edits the merged command tree in place at discovery."""
+Hook = Callable[..., object]
+"""A lifecycle hook. `pre_tasks` takes the `Invocation` and nothing else."""
 
 # The hook kinds a provider module can contribute alongside (or instead of)
 # tasks. Each kind is one bucket in `Group.contributions`, and the whole
 # carriage — `capture()`/`reset()` here, `_fork`/`_pull` in compose,
 # `load_tree`'s collection in discover — walks the dict generically, so a
 # future hook kind is one entry here plus its own run semantics.
-CONTRIBUTION_KINDS: tuple[str, ...] = ("finalize",)
+CONTRIBUTION_KINDS: tuple[str, ...] = ("pre_tasks",)
 
 # A task stays a plain function; its metadata rides as `_footman_*` attributes.
 # These name every key in one place, so the strings appear once and the read
@@ -125,6 +125,37 @@ def cli_name(name: str) -> str:
     keeps the two from drifting apart again.
     """
     return name.rstrip("_").replace("_", "-")
+
+
+def _check_hook_arity(kind: str, fn: Hook, wanted: int) -> None:
+    """Refuse a hook whose signature cannot be called, at registration.
+
+    The lifecycle names its moments, and the moments differ by *arity* —
+    `pre_tasks(inv)` against a later `post_task(inv, task, result)`. Checked
+    here so a typo is a taught error naming the hook, not a `TypeError` from
+    inside the framework at the first task an hour into a run.
+    """
+    import inspect
+
+    try:
+        params = list(inspect.signature(fn).parameters.values())
+    except (TypeError, ValueError):
+        return  # not introspectable (a builtin, a C callable): let it try
+    if any(p.kind is p.VAR_POSITIONAL for p in params):
+        return
+    positional = [
+        p
+        for p in params
+        if p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD)
+        and p.default is p.empty
+    ]
+    if len(positional) != wanted:
+        name = getattr(fn, "__name__", repr(fn))
+        shape = "inv" if wanted == 1 else ", ".join(["inv", "task", "result"][:wanted])
+        raise RegistrationError(
+            f"@{kind} {name!r} takes {len(positional)} argument(s); {kind} is "
+            f"handed {wanted}: def {name}({shape})"
+        )
 
 
 def _empty_body(fn: object) -> bool:
@@ -745,29 +776,53 @@ class Group:
         self.groups[key] = sub
         return sub
 
-    def finalize(self, fn: Finalizer) -> Finalizer:
-        """Register a hook that edits the discovered command tree in place.
+    def pre_tasks(self, fn: Hook) -> Hook:
+        """Register the once-per-invocation hook, run before anything else.
 
-        Every `@finalize` function runs once, after the whole `tasks.py` cascade
-        is assembled but before dispatch, handed a `Tasks` view of the merged
-        tree. Its edits are part of the plan, never a runtime surprise: an added
-        `pre` runs and shows in `--dry-run`, a disabled task drops from listings
-        and completion. It is footman's `collection_modifyitems`.
+        It happens after the whole `tasks.py` cascade is assembled and *before*
+        availability gates, the manifest, and any task — the one single-threaded
+        moment where the invocation is still editable. It is handed the
+        `Invocation`:
 
-        Finalizers run in cascade order — root's first, the folder nearest your
-        cwd last, each seeing the previous ones' edits — the same "local overrides
-        global" precedence the task cascade itself uses. Read and edit each task
-        through the `TaskView` surface, never the private `_footman_*` attributes.
-
-            @footman.finalize
-            def gate_deploys(tasks):
-                audit = tasks["audit"]
-                for t in tasks:
+            @footman.pre_tasks
+            def gate_deploys(inv):
+                audit = inv.tasks["audit"]
+                for t in inv.tasks:
                     if t.name.startswith("deploy"):
                         t.add_pre(audit)
+
+        Its edits are part of the plan, never a runtime surprise: an added `pre`
+        runs and shows in `--dry-run`, a disabled task drops out of listings and
+        completion. Setting `os.environ` here is ordinary code — it is pre-DAG
+        and single-threaded, so everything downstream sees it, including
+        `requires_env` gates and `env()` parameter fallbacks. (Per-*task*
+        environment is a different lane: `ctx.env`.)
+
+        Hooks run in cascade order — root's first, the folder nearest your cwd
+        last, each seeing the previous ones' edits — the same "local overrides
+        global" precedence the task cascade uses. Read and edit each task
+        through `TaskView`, never the private `_footman_*` attributes.
+
+        It also runs in the detached child that rebuilds the completion
+        manifest, so a gate that depends on what a hook sets is baked into
+        completion too. That is why it must be **quick and quiet**, and why
+        tree edits derive from files, config and environment — never from
+        `inv.cli`, which the child does not have.
         """
-        self.contributions["finalize"].append(fn)
+        _check_hook_arity("pre_tasks", fn, 1)
+        self.contributions["pre_tasks"].append(fn)
         return fn
+
+    def finalize(self, fn: Hook) -> Hook:
+        """Retired: `@finalize` is `@pre_tasks`, which is handed the whole
+        invocation rather than only the tree."""
+        raise RegistrationError(
+            f"@finalize is retired — use @pre_tasks, which gets the whole "
+            f"invocation: `def {getattr(fn, '__name__', 'hook')}(inv)` and "
+            f"`inv.tasks` where the tree view used to arrive. It runs at the "
+            f"same moment, in the same cascade order, and can also set the "
+            f"environment every task will see."
+        )
 
     @overload
     def default(self, fn: Callable[_P, _R_co]) -> TaskFn[_P, _R_co]: ...
@@ -913,7 +968,8 @@ class Group:
 root = Group("root")
 task = root.task
 group = root.group
-finalize = root.finalize
+pre_tasks = root.pre_tasks
+finalize = root.finalize  # retired: raises, pointing at pre_tasks
 
 
 def reset() -> None:
@@ -940,12 +996,12 @@ def _importable(module: str) -> bool:
         return False
 
 
-def pre_tasks(fn: Task) -> list[Task]:
+def pre_deps(fn: Task) -> list[Task]:
     """The prerequisites declared to run before *fn* (`@task(pre=…)`)."""
     return getattr(fn, _PRE, [])
 
 
-def post_tasks(fn: Task) -> list[Task]:
+def post_deps(fn: Task) -> list[Task]:
     """The tasks declared to run after *fn* (`@task(post=…)`)."""
     return getattr(fn, _POST, [])
 
@@ -1196,12 +1252,12 @@ class TaskView:
     @property
     def pre(self) -> tuple[Task, ...]:
         """The prerequisites that run before this task."""
-        return tuple(pre_tasks(self.fn))
+        return tuple(pre_deps(self.fn))
 
     @property
     def post(self) -> tuple[Task, ...]:
         """The tasks that run after this one."""
-        return tuple(post_tasks(self.fn))
+        return tuple(post_deps(self.fn))
 
     @property
     def disabled(self) -> str | None:
@@ -1289,7 +1345,7 @@ class TaskView:
 
     def add_pre(self, *tasks: TaskView | Task) -> None:
         """Prepend prerequisites (views or functions), skipping any already set."""
-        have = list(pre_tasks(self.fn))
+        have = list(pre_deps(self.fn))
         setattr(
             self.fn,
             _PRE,
@@ -1298,7 +1354,7 @@ class TaskView:
 
     def add_post(self, *tasks: TaskView | Task) -> None:
         """Append post-tasks (views or functions), skipping any already set."""
-        have = list(post_tasks(self.fn))
+        have = list(post_deps(self.fn))
         setattr(
             self.fn,
             _POST,

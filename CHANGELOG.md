@@ -7,6 +7,38 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- **`@pre_tasks` — the first lifecycle moment, and the `Invocation`.** A hook
+  registered with `@footman.pre_tasks` runs once per invocation, after the
+  whole `tasks.py` cascade is assembled and *before* availability gates, the
+  manifest, and any task. It is handed the **`Invocation`**: what this `fm`
+  line is doing — `inv.cli`, `inv.config`, `inv.root`, `inv.cwd`, and
+  `inv.tasks`, the same tree view `@finalize` used to receive.
+
+  Because it lands before the gates, setting `os.environ` there is ordinary
+  code that everything downstream sees, including `requires_env` gates and
+  `env()` parameter fallbacks — the moment a plugin needs to supply an
+  environment. It also runs in the detached child that rebuilds the
+  completion manifest, so a gate that depends on what a hook sets is baked
+  into completion too; that child is given an invocation with **no** `cli`,
+  which turns "tree edits must not depend on the command line" into something
+  the code enforces rather than something the docs ask for.
+
+  A hook whose signature cannot be called is refused at registration, naming
+  the hook — the lifecycle's moments differ by arity, so a typo should not
+  become a `TypeError` an hour into a run.
+
+### Removed
+
+- **BREAKING: `@finalize` is retired in favour of `@pre_tasks`.** It raises,
+  pointing at the replacement. The migration is mechanical: take `inv` instead
+  of `tasks`, and read `inv.tasks` where the tree view used to arrive. It runs
+  at the same moment, in the same cascade order, and can now also set the
+  environment every task will see. Internally the readers for a task's
+  declared prerequisites are `registry.pre_deps` / `post_deps`, leaving
+  `pre_tasks` / `post_tasks` to name the lifecycle moments.
+
 ## [0.23.0] — 2026-07-27
 
 ### Added
