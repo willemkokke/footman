@@ -14,9 +14,10 @@ Both rebuild exactly as a real run would and are strictly fire-and-forget: they
 print nothing and never raise.
 
 A tasks file that carries its own PEP 723 dependencies is rebuilt from inside
-its script environment — but only when that environment already exists, since
-a keystroke must never reach for the network. Before the first real run there
-is nothing to complete from, which is the honest answer.
+its script environment — but only when uv can reach one without the network,
+since a keystroke must never download anything. Otherwise the rebuild happens
+here, in place, exactly as it always did: often enough to answer, because a
+tasks file's *module-level* imports are usually just the runner.
 """
 
 from __future__ import annotations
@@ -27,11 +28,12 @@ import contextlib
 def _maybe_reexec(files: list, entry: str, *args: str) -> None:
     """Continue this rebuild inside a script file's own environment.
 
-    Only for a single file that declares dependencies, and only when its
-    environment already exists (`_script.child_python` never builds one) —
-    otherwise this returns and the child rebuilds in place, exactly as it
-    always did. The re-executed child runs the same one-liner *entry*, so
-    the two spawn shapes stay identical apart from the interpreter.
+    Only for a single file that declares dependencies, and only when uv can
+    reach that environment offline (`_script.child_python` never touches the
+    network) — otherwise this returns and the child rebuilds in place,
+    exactly as it always did. The re-executed child runs the same one-liner
+    *entry*, so the two spawn shapes stay identical apart from the
+    interpreter.
     """
     if len(files) != 1:
         return  # a cascade has no single environment to be right about

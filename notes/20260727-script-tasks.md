@@ -27,10 +27,17 @@ needs the environment is *already* a spawned argv→stdout filter, so the
 handoff composes as a command prefix rather than a design. The TAB hot
 path itself never needed anything: it reads baked JSON.
 
-The rule the children follow is **never build, only enter**: a keystroke
-must not reach for the network, so `child_python` syncs `--offline` and a
-miss simply means "not yet". Before the first real run, completion for a
-script file is honestly empty.
+The rule the children follow is **never touch the network**: `child_python`
+syncs `--offline`, so an environment already built (or one whose wheels are
+all in uv's cache) is entered, and anything else means "not yet" — the
+child then rebuilds in place, exactly as it always did.
+
+That fallback turned out to matter more than expected. A tasks file's
+*module-level* imports are usually just the runner — third-party imports
+live inside task bodies — so the in-place rebuild very often produces a
+correct manifest anyway. Completion is only empty when the file needs its
+own dependencies to import at all *and* uv's cache is cold. The first
+real run fixes both.
 
 ## Native uv, not reconstruction
 

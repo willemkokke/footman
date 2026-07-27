@@ -132,13 +132,15 @@ def find_uv() -> str | None:
 
 
 def child_python(file: Path) -> str | None:
-    """The interpreter of *file*'s script environment — if it already exists.
+    """The interpreter of *file*'s script environment — if uv can produce
+    one without the network.
 
-    The completion children's half of the script rule. It never builds an
-    environment from the network: a keystroke that downloaded the world
-    would be a broken keystroke, so the sync runs `--offline` and a miss
-    simply means "not yet" — the first real run materialises it, and the
-    TAB after that is accurate.
+    The completion children's half of the script rule. A keystroke that
+    downloaded the world would be a broken keystroke, so the sync runs
+    `--offline`: an environment already built answers instantly, one whose
+    wheels are all in uv's cache is built there and then (no network, so
+    it is still honest), and anything else simply means "not yet" — the
+    first real run materialises it, and the TAB after that is accurate.
 
     `None` means "carry on in this process", which is always safe: the
     child either completes from what it can import, or (as it always has)
