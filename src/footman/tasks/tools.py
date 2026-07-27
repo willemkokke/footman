@@ -89,24 +89,60 @@ def _on_path(prefix: str | Path) -> Iterator[None]:
         return
     import os
 
+    bindir = Path(prefix).expanduser().resolve() / "bin"
+    inherited = os.environ.get("PATH", "")
+    with _overlay(PATH=f"{bindir}{os.pathsep}{inherited}"):
+        yield
+
+
+@contextmanager
+def _overlay(**values: str) -> Iterator[None]:
+    """Set environment variables for the duration, then put them back.
+
+    Inside a run the overlay goes through `ctx.env`, which scopes it to this
+    task and its children: a sibling's environment is untouched, and footman
+    has no reason to draw its own note about a raw `os.environ` write. Called
+    bare — from a test, or a script importing the task — there is no router
+    to serve that overlay, so it patches `os.environ` and restores it, the
+    same bare-call fallback `context._process_state` makes.
+    """
+    import os
+
     from footman import _globals
 
-    bindir = Path(prefix).expanduser().resolve() / "bin"
-    if _globals.active():
-        ctx = current()
-        saved = ctx.env.get("PATH", os.environ.get("PATH", ""))
-        ctx.env["PATH"] = f"{bindir}{os.pathsep}{saved}"
-        try:
-            yield
-        finally:
-            ctx.env["PATH"] = saved
-        return
-    saved = os.environ.get("PATH", "")
-    os.environ["PATH"] = f"{bindir}{os.pathsep}{saved}"
+    target = current().env if _globals.active() else os.environ
+    saved = {key: target.get(key) for key in values}
+    target.update(values)
     try:
         yield
     finally:
-        os.environ["PATH"] = saved
+        for key, was in saved.items():
+            if was is None:
+                target.pop(key, None)
+            else:
+                target[key] = was
+
+
+@contextmanager
+def _sandboxed(scratch: Path) -> Iterator[None]:
+    """Keep everything a prime downloads inside *scratch*.
+
+    uv writes to two places of its own accord, and neither is ours to fill:
+    a wheel cache, and the store its managed interpreters live in — the one
+    holding the pythons this machine actually runs. A prime of CPython's
+    releases put 90 interpreters in that store and left them there, because
+    nothing in this file had reason to think it owned them.
+
+    Pointing both inside the scratch directory makes the cleanup structural
+    rather than a rule someone has to remember: one `rmtree` at the end
+    removes every byte the walk caused, and the interpreter you develop
+    against is never a candidate for deletion in the first place.
+    """
+    with _overlay(
+        UV_CACHE_DIR=str(scratch / "cache"),
+        UV_PYTHON_INSTALL_DIR=str(scratch / "pythons"),
+    ):
+        yield
 
 
 def _platform() -> str:
@@ -671,7 +707,7 @@ def prime(
     read: list[str] = []
     skipped: list[str] = []
     try:
-        with _on_path(prefix):
+        with _on_path(prefix), _sandboxed(scratch):
             for driver in _drivers.DRIVERS:
                 if only and driver.key != only:
                     continue
@@ -763,7 +799,7 @@ def refresh(
     unreachable: dict[str, str] = {}
     skipped: list[str] = []
     try:
-        with _on_path(prefix):
+        with _on_path(prefix), _sandboxed(scratch):
             for driver in _drivers.DRIVERS:
                 if only and driver.key != only:
                     continue
@@ -999,6 +1035,7 @@ def _refresh_one(
             break  # a hole here would attribute the next release's changes wrongly
         with _on_path(bindir.parent):
             spec = _drivers.extract(driver)
+        _discard(bindir)
         if not spec.verbs:
             break  # a binary that will not describe itself is not an observation
         moved = _toolhistory.promote(
@@ -1017,6 +1054,25 @@ def _refresh_one(
         # rather than waiting for someone to remember a `sync`.
         _stub_path(driver.key).write_text(_stub_from(driver, doc), encoding="utf-8")
     return seen, changed
+
+
+def _discard(bindir: Path) -> None:
+    """Delete one release once its surface has been read.
+
+    The walk needs the surface, not the binary, and the surface is in hand by
+    the time this is called. Without it a prime holds every release it has
+    ever fetched until the run ends — ruff alone would stand up 416
+    environments at once — so this is the difference between peak disk being
+    one release and being all of them.
+
+    Safe only because `_sandboxed` has put uv's interpreter store inside the
+    scratch directory: *bindir*`.parent` is that release's own directory in
+    every tier, and for the python tier that would otherwise be an
+    interpreter this machine actually uses.
+    """
+    import shutil
+
+    shutil.rmtree(bindir.parent, ignore_errors=True)
 
 
 def _prime_one(driver, doc: dict, count: int, scratch: Path, fetch) -> tuple[int, str]:
@@ -1060,6 +1116,7 @@ def _prime_one(driver, doc: dict, count: int, scratch: Path, fetch) -> tuple[int
             break
         with _on_path(bindir.parent):
             spec = _drivers.extract(driver)
+        _discard(bindir)
         if not spec.verbs:
             # a binary that will not describe itself is not an observation
             stopped = f"{release.version} (no help to read)"

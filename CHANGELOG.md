@@ -89,6 +89,16 @@ versions may include breaking changes.
   if the body moved and nobody said so" and wrong as a cache key. Exposed to
   hooks as `task.source_hash`.
 
+- **A prime no longer leaves its downloads on the machine.** uv writes to two
+  places of its own accord — a wheel cache, and the store holding the
+  interpreters this machine actually runs — and priming CPython's releases put
+  90 interpreters in that store and left them there, around 7 GB. Both now
+  point inside the prime's scratch directory, so one cleanup removes every
+  byte the walk caused and the python you develop against is never a candidate
+  for deletion. Each release is also discarded as soon as its surface has been
+  read, which is the difference between peak disk being one release and being
+  all of them: a full prime of ruff would otherwise stand up 416 environments
+  at once.
 - **A refresh writes its own release note.** The events it found become a
   `### Changed` bullet per tool under `[Unreleased]`, naming the options added
   and dropped by their command-line spellings and counting the descriptions
