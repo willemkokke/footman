@@ -38,8 +38,9 @@ class Release:
 
     version: str
     date: str
-    """`YYYY-MM-DD`, from the index — the ordering key, because version
-    strings across the curated set cannot order themselves (`0.6.0-wk.5`)."""
+    """`YYYY-MM-DD`, from the index. Not the ordering key — the version is —
+    but what breaks a tie between two builds of one base (`0.6.0-wk.5`),
+    which is the one comparison a version cannot make."""
 
 
 LISTABLE = ("uv", "node", "github", "gitlab", "bun", "python")
@@ -55,9 +56,13 @@ def can_list(driver: Driver) -> bool:
 def releases(driver: Driver) -> list[Release]:
     """Every published release, **newest first**, whatever the tier.
 
-    A tier that cannot be listed returns nothing rather than raising: the
-    caller names it as skipped, and a tool with no listable index is not a
-    tool with no history — it is one nobody can read yet.
+    A tier with no index at all returns nothing: the caller names it as
+    skipped, and a tool nobody can list is not a tool with no history.
+
+    An index that *exists* and could not be read raises `Unreachable`
+    instead. The two used to share the empty list, which is the wrong shape
+    for the question a release job asks — "is there anything new" answered
+    "no" by a throttled registry ends the job with "nothing to release".
     """
     if not can_list(driver):
         # Not just the unlistable tiers: a hand-written stub carries the
@@ -116,14 +121,29 @@ def _order(found: list[Release]) -> list[Release]:
     return sorted(found, key=lambda r: (version_tuple(r.version), r.date), reverse=True)
 
 
+class Unreachable(Exception):
+    """An index that could not be read at all.
+
+    Raised rather than returned as an empty listing, because the two are
+    opposite answers that used to share a value. A release job asks "is
+    there anything new" and stops when the answer is no; a throttled
+    registry answering `{}` would end that job with "nothing new, nothing to
+    release" when the truth is that nobody looked. An exception is the shape
+    that cannot be read past by accident.
+    """
+
+    def __init__(self, source: str, cause: object) -> None:
+        super().__init__(f"cannot read {source}: {cause}")
+        self.source = source
+
+
 def _index(url: str) -> dict:
-    """A registry's JSON, or `{}` when it cannot be read — a prime that
-    cannot list a tool skips it rather than failing the run."""
+    """A registry's JSON. Raises `Unreachable` when it cannot be read."""
     try:
         with urllib.request.urlopen(url, timeout=TIMEOUT) as response:
             return json.load(response)
-    except (urllib.error.URLError, TimeoutError, ValueError, OSError):
-        return {}
+    except (urllib.error.URLError, TimeoutError, ValueError, OSError) as cause:
+        raise Unreachable(url, cause) from cause
 
 
 def _npm(driver: Driver) -> list[Release]:
@@ -193,29 +213,30 @@ def _uv_python() -> list[Release]:
     The date is python-build-standalone's build date, read out of the
     download URL. It is not CPython's own release date, but it is when the
     artifact we install was published, and it is the only date the index
-    carries. Several series share one build date, which `_order` breaks by
-    version — and after `_per_minor` there is one entry per series anyway.
+    carries. Several series share one build date, which `_order` breaks on
+    the version.
     """
+    listing = _capture(
+        [
+            "uv",
+            "python",
+            "list",
+            "--all-versions",
+            # Downloads only, or the index answers differently on every
+            # machine: installing a version *replaces* its download entry
+            # with the local path and drops the URL, so a prime would erase
+            # releases from the very listing it walks.
+            "--only-downloads",
+            "--output-format",
+            "json",
+        ]
+    )
     try:
-        entries = json.loads(
-            _capture(
-                [
-                    "uv",
-                    "python",
-                    "list",
-                    "--all-versions",
-                    # Downloads only, or the index answers differently on every
-                    # machine: installing a version *replaces* its download
-                    # entry with the local path and drops the URL, so a prime
-                    # would erase releases from the very listing it walks.
-                    "--only-downloads",
-                    "--output-format",
-                    "json",
-                ]
-            )
-        )
-    except ValueError:
-        return []
+        entries = json.loads(listing)
+    except ValueError as cause:
+        # No uv, or a uv that would not answer. Not "CPython has no
+        # releases" — see `Unreachable`.
+        raise Unreachable("uv python list", cause) from cause
     found: dict[str, Release] = {}
     for entry in entries if isinstance(entries, list) else ():
         version = str(entry.get("version", ""))

@@ -227,6 +227,45 @@ def extend(
     return True
 
 
+def promote(
+    doc: dict,
+    *,
+    version: str,
+    date: str,
+    surface: dict[str, Any],
+    platforms: list[str] | None = None,
+) -> bool:
+    """Make *version* the new base, demoting the old one to a delta.
+
+    The forward counterpart of `extend`, and the other half of why the deltas
+    point backwards: a newer release touches exactly two entries, the new
+    base and the one it displaces, whatever the chain's length.
+
+    Returns **whether anything changed** — which is the release gate's whole
+    question. An empty delta means this release was observed and altered
+    nothing, so there is a new version to record and nothing to release for.
+    """
+    previous = doc["base"]
+    step = delta(surface, previous["surface"])
+    doc["deltas"] = {
+        previous["version"]: {
+            "date": previous["date"],
+            "platforms": previous.get("platforms", []),
+            "extractor": previous["extractor"],
+            **step,
+        },
+        **doc["deltas"],
+    }
+    doc["base"] = {
+        "version": version,
+        "date": date,
+        "platforms": sorted(platforms or []),
+        "extractor": EXTRACTOR,
+        "surface": surface,
+    }
+    return bool(step)
+
+
 def at(doc: dict, version: str) -> dict[str, Any] | None:
     """The surface of *version*, replayed from the base. `None` when that
     release was never observed — which a caller must not read as "empty"."""

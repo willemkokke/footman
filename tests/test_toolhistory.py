@@ -590,9 +590,17 @@ def test_gitlab_releases_read_their_own_field_names(monkeypatch):
     assert [r.version for r in got] == ["0.6.0-wk.5", "0.6.0-wk.4"]
 
 
-def test_an_unreadable_index_is_empty_not_an_error(monkeypatch):
-    """A prime that cannot reach one registry skips that tool; it does not
-    fail the run and leave the others unprimed."""
+def test_an_unreadable_index_is_not_an_empty_one(monkeypatch):
+    """The distinction the release gate rests on.
+
+    "Is there anything new" is answered "no" by a throttled registry exactly
+    as it is by a tool that has genuinely not moved — and one of those means
+    stop, while the other means nobody looked. Sharing the empty list would
+    let a rate limit read as "nothing to release".
+
+    A prime still skips such a tool rather than failing the run, but it has
+    to *choose* to, which is the point of raising.
+    """
     from footman import _drivers, _toolfetch
 
     def boom(*a, **k):
@@ -601,7 +609,8 @@ def test_an_unreadable_index_is_empty_not_an_error(monkeypatch):
     monkeypatch.setattr(_toolfetch.urllib.request, "urlopen", boom)
     driver = _drivers.find("prek")
     assert driver is not None
-    assert _toolfetch.releases(driver) == []
+    with pytest.raises(_toolfetch.Unreachable):
+        _toolfetch.releases(driver)
 
 
 def test_which_tiers_can_be_listed():
@@ -709,16 +718,16 @@ def test_the_python_listing_asks_only_for_downloads(monkeypatch):
     assert "--only-downloads" in seen[0]
 
 
-def test_an_unreadable_uv_lists_no_pythons(monkeypatch):
-    """uv carries the index inside itself, so 'no uv' is 'nothing seen' — not
-    'CPython has no releases'. The caller names it skipped, as with any tier
-    it could not read."""
+def test_a_uv_that_will_not_answer_is_unreachable_not_empty(monkeypatch):
+    """uv carries the index inside itself, so "no uv" is "nothing seen" — and
+    emphatically not "CPython has no releases"."""
     from footman import _drivers, _toolfetch
 
     monkeypatch.setattr(_toolfetch, "_capture", lambda _argv: "")
     driver = _drivers.find("python")
     assert driver is not None
-    assert _toolfetch.releases(driver) == []
+    with pytest.raises(_toolfetch.Unreachable):
+        _toolfetch.releases(driver)
 
 
 def test_a_prime_never_appends_a_release_newer_than_the_floor(tmp_path, monkeypatch):
@@ -851,3 +860,138 @@ def test_a_tie_the_comparator_cannot_break_leaves_the_base_alone(tmp_path, monke
     stored = _toolhistory.load(tmp_path / "eclint.json")
     assert stored is not None
     assert stored["base"]["version"] == "0.6.0-wk.5"
+
+
+# --- the forward walk: catching a history up to its index --------------------
+
+
+def test_a_refresh_reads_every_release_it_missed_not_just_the_newest(
+    tmp_path, monkeypatch
+):
+    """Attribution is the whole point of the log. If a tool is three releases
+    behind and only the newest is read, a flag that arrived in 0.16.1 is
+    recorded as having arrived in 0.16.3 — and the stub then tells a reader
+    on 0.16.2 that an option they have does not exist yet.
+
+    An unchanged release still gets read, and records an empty delta: that is
+    "observed, changed nothing", which is not the same as never looked.
+    """
+    from footman import _drivers, _toolfetch
+    from footman.tasks import tools
+
+    def surface_with(*names):
+        return _toolhistory.surface_of(
+            _spec(
+                verbs=(
+                    Verb(
+                        name="",
+                        options=tuple(Option(n, (f"--{n}",)) for n in names),
+                    ),
+                )
+            )
+        )
+
+    by_version = {
+        "0.16.0": surface_with("quiet"),
+        "0.16.1": surface_with("quiet", "fix"),  # the event
+        "0.16.2": surface_with("quiet", "fix"),  # nothing changed
+        "0.16.3": surface_with("quiet", "fix"),  # nor here
+    }
+    doc = _toolhistory.new(
+        "ruff", version="0.16.0", date="2026-01-01", surface=by_version["0.16.0"]
+    )
+    monkeypatch.setattr(tools, "_HISTORY", tmp_path)
+    monkeypatch.setattr(tools, "_STUBS", tmp_path)
+    _toolhistory.save(doc, tmp_path / "ruff.json")
+
+    monkeypatch.setattr(
+        _toolfetch,
+        "releases",
+        lambda _d: [
+            _toolfetch.Release(version=v, date=f"2026-02-0{i}")
+            for i, v in enumerate(["0.16.3", "0.16.2", "0.16.1", "0.16.0"], start=1)
+        ],
+    )
+    monkeypatch.setattr(_toolfetch, "install", lambda _d, _v, into: into)
+
+    installed: list[str] = []
+
+    def extract(driver):
+        version = installed[-1]
+        return _toolhistory.spec_from(by_version[version], name=driver.name)
+
+    def install(_driver, version, into):
+        installed.append(version)
+        return into
+
+    monkeypatch.setattr(_toolfetch, "install", install)
+    monkeypatch.setattr(_drivers, "extract", extract)
+
+    found = tools.refresh(only="ruff")
+
+    # every missed release, oldest first — not a jump to the newest
+    assert installed == ["0.16.1", "0.16.2", "0.16.3"]
+    assert found.read["ruff"] == ["0.16.1", "0.16.2", "0.16.3"]
+    # ...and only the one that moved the surface counts as an event
+    assert found.events["ruff"] == ["0.16.1"]
+    assert found.release is True
+
+    stored = _toolhistory.load(tmp_path / "ruff.json")
+    assert stored is not None
+    assert stored["base"]["version"] == "0.16.3"
+    assert stored["base"]["date"] == "2026-02-01"  # the index's date, not today's
+    assert _toolhistory.observed(stored) == ["0.16.3", "0.16.2", "0.16.1", "0.16.0"]
+    # the two quiet releases are recorded as observed-and-unchanged
+    assert not any(
+        k not in ("date", "platforms", "extractor") for k in stored["deltas"]["0.16.2"]
+    )
+
+
+def test_a_refresh_with_nothing_new_warrants_no_release(tmp_path, monkeypatch):
+    """The exit condition. A tool that has not released is not a tool that
+    changed nothing — there is simply nothing to look at."""
+    from footman import _toolfetch
+    from footman.tasks import tools
+
+    surface = _toolhistory.surface_of(_spec(verbs=(Verb(name=""),)))
+    doc = _toolhistory.new("ruff", version="0.16.3", date="2026-02-01", surface=surface)
+    monkeypatch.setattr(tools, "_HISTORY", tmp_path)
+    monkeypatch.setattr(tools, "_STUBS", tmp_path)
+    _toolhistory.save(doc, tmp_path / "ruff.json")
+    monkeypatch.setattr(
+        _toolfetch,
+        "releases",
+        lambda _d: [_toolfetch.Release(version="0.16.3", date="2026-02-01")],
+    )
+
+    found = tools.refresh(only="ruff")
+    assert found.read == {} and found.events == {}
+    assert found.release is False
+
+
+def test_a_refresh_that_could_not_look_does_not_report_nothing_new(
+    tmp_path, monkeypatch
+):
+    """The two answers a release job must never confuse. An index that would
+    not answer is recorded as unreachable and the task fails, so a rename or
+    a moved repo surfaces instead of making a tool silently untracked while
+    the job keeps reporting success."""
+    from footman import _toolfetch
+    from footman.context import Failed
+    from footman.tasks import tools
+
+    surface = _toolhistory.surface_of(_spec(verbs=(Verb(name=""),)))
+    doc = _toolhistory.new("ruff", version="0.16.3", date="2026-02-01", surface=surface)
+    monkeypatch.setattr(tools, "_HISTORY", tmp_path)
+    monkeypatch.setattr(tools, "_STUBS", tmp_path)
+    _toolhistory.save(doc, tmp_path / "ruff.json")
+
+    def throttled(_driver):
+        raise _toolfetch.Unreachable("https://pypi.org/pypi/ruff/json", "429")
+
+    monkeypatch.setattr(_toolfetch, "releases", throttled)
+
+    with pytest.raises(Failed) as failed:
+        tools.refresh(only="ruff")
+    assert failed.value.code == 75  # EX_TEMPFAIL: look again, not "nothing to do"
+    assert "ruff" in failed.value.reason
