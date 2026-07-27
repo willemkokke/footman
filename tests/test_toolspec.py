@@ -1473,8 +1473,13 @@ def test_every_installed_driver_reports_a_readable_version(capsys):
         if _drivers._resolve(driver.name) is None:
             absent.append(driver.key)
             continue
-        found = _drivers.version(driver.name)
-        (read if found else unreadable).append(f"{driver.key} ({found or '—'})")
+        found, why = _drivers._read_version(driver.name)
+        if found:
+            read.append(f"{driver.key} ({found})")
+        else:
+            # The diagnosis is the whole point: a bare em-dash here left
+            # every hypothesis standing when this tripped on CI.
+            unreadable.append(f"{driver.key}: {why}")
 
     with capsys.disabled():
         print(f"\n  version read from {len(read)}/{len(_drivers.DRIVERS)} drivers")

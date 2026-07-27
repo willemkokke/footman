@@ -35,6 +35,14 @@ versions may include breaking changes.
 
 ### Fixed
 
+- **A version scrape never touches the network, and an empty read names its
+  cause.** The tool-driver version read now runs with gh's update check
+  disabled (`GH_NO_UPDATE_NOTIFIER=1` — every other tool ignores the
+  variable), and distinguishes its three failure shapes — spawn failed,
+  spawn timed out, output carried no version token — so the CI check that
+  guards version-keyed history teaches which one happened instead of
+  reporting an em-dash.
+
 - **A prerequisite's `confirm=` is asked.** The documented rule — a task
   that asks for confirmation gets it however it is reached — held for a
   command-line segment (asked up front) and a body call (asked at the
