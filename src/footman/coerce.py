@@ -164,7 +164,23 @@ def peel(ann: Any) -> Peeled:
                         mark if isinstance(mark, _stdin_marker) else _stdin_marker()
                     )
                 elif callable(mark) and not isinstance(mark, type):
-                    completer = suggest(mark)  # a bare callable == suggest(fn)
+                    # A bare callable used to mean `suggest(fn)`. One spelling
+                    # per concept won: `suggest()` says what it does, and the
+                    # guess quietly swallowed anything callable — a plugin's
+                    # own marker became a mystery completer with no error
+                    # either way. Refused rather than ignored, because this
+                    # shape *did* work: silence would break it invisibly.
+                    # Unknown metadata that is not callable stays ignored, so
+                    # a plugin marker (the house pattern is a non-callable
+                    # instance) still rides through untouched.
+                    from footman.manifest import SpecError  # circular at import
+
+                    name = getattr(mark, "__name__", type(mark).__name__)
+                    raise SpecError(
+                        f"Annotated[…, {name}]: a bare callable is not a "
+                        f"marker — wrap it to say what it means: "
+                        f"suggest({name})"
+                    )
             ann, changed = base, True
         elif _is_union(ann):
             members = _strip_none(list(typing.get_args(ann)))

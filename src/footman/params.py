@@ -71,7 +71,9 @@ class suggest:
     `list_projects() -> list[str]` returns the candidate values. footman runs
     it on the execution path — refreshing a cache the completion hot path serves
     — and, when *strict* (the default), validates the supplied value against a
-    fresh call. A bare callable in `Annotated` is treated as `suggest(fn)`.
+    fresh call. The wrapper is required: a bare callable in `Annotated` is
+    refused, so a marker that happens to be callable can never be mistaken
+    for a completer.
     """
 
     __slots__ = ("fn", "strict")
