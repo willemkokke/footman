@@ -83,7 +83,7 @@ choice *is* "descend vs run":
   **nospace**, and offer only what it exposes. `foo<TAB>` → `footman.`;
   `footman.<TAB>` → `footman.docs.`, `footman.tools.` (children that are
   themselves namespace groups keep their dot — see *Mechanics*).
-- **Runnable group** (has a default — hse's `lint`, which lints everything) →
+- **Runnable group** (has a default — a `lint` that lints everything) →
   complete the token to `lint` (append **nothing**, `nospace`) and offer **both**:
   a trailing **space** (run `lint`'s default, ready for `--fix`) *and* `.python`,
   `.markdown`, … (a `.` descends to one surface). `li<TAB>` → `lint`, then
@@ -91,9 +91,10 @@ choice *is* "descend vs run":
 - **Task** (runnable leaf) → **terminal**: complete it, add a trailing **space**,
   ready for args. `footman.tools.sy<TAB>` → `footman.tools.sync `.
 
-This runnable-group case is **common**, not hypothetical — `lint`/`format` in hse
-have defaults. The point: the `.`-vs-`space` distinction lets the completer offer
-"stop or keep going" as one in-word choice, which the space grammar can't — once
+This runnable-group case is **common**, not hypothetical — the `lint`/`format`
+groups in the projects this came from have defaults. The point: the
+`.`-vs-`space` distinction lets the completer offer "stop or keep going" as
+one in-word choice, which the space grammar can't — once
 the shell breaks at ` `, `fm lint ⇥` has already committed to "inside lint."
 
 A full descent reads `foo<TAB>` → `footman.` → `<TAB>` → `footman.tools.` →
@@ -573,7 +574,8 @@ no-match.
 
 ## Migration & the teaching error
 
-Pre-1.0, single user — the one-time rewrite of hse/package-template addresses is
+Pre-1.0, single user — the one-time rewrite of the consuming projects'
+addresses is
 a find-replace, not an event. `fm docs serve` → `fm docs.serve`; flat usage
 unchanged.
 

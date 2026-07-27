@@ -24,7 +24,8 @@ be a great project runner.** Core owns what a task runner owns: typed
 CLIs, the DAG, completion, the cascade. Everything a *project* runner
 adds — environment stacks, toolchain provisioning, setup flows, telemetry,
 a branded entry point — arrives through plugins, and footman never knows
-its caller. Acceptance test: **hse could be built purely as plugins.**
+its caller. Acceptance test: **a real project runner could be built purely
+as plugins.**
 
 ## The model
 
@@ -599,9 +600,9 @@ default; no config key (activation by authoring keeps the tree
 self-describing; supersedes v1's config-key idea). init reads `.env` from
 the invocation cwd (D12), existing-environment-wins, minimal dialect
 (`KEY=value`, comments, quotes; no substitution — core never learns file
-semantics, D13). Declares `--env-file=PATH` as its one option. hse's
-plugin does the same with its own stack loader — three lines, zero hse
-conventions in footman.
+semantics, D13). Declares `--env-file=PATH` as its one option. A
+consumer's plugin does the same with its own stack loader — three lines,
+zero consumer conventions in footman.
 
 ## Build phases (refined 2026-07-26 — the build order)
 
@@ -1066,7 +1067,7 @@ its prerequisites run and the human answers everything in one sitting.
   (`App`/`Brand`) inherits fm's grammar, which is the point of
   branding.
 - **D20 — SETTLED (Willem, 2026-07-26): names + count, by reuse.**
-  `env: hse_env set 7 keys: GITEA_TOKEN, HSE_HOME, …` through the
+  `env: dotenv set 7 keys: API_TOKEN, APP_HOME, …` through the
   existing `-v` advisory channel (config's on_note lane);
   values-never-print is already law via Secret/`_describe.redact` — no
   new display machinery.
