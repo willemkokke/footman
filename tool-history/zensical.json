@@ -5,6 +5,9 @@
  "base": {
   "version": "0.0.51",
   "date": "2026-07-27",
+  "platforms": [
+   "macOS"
+  ],
   "extractor": 1,
   "surface": {
    "help": "Zensical - A modern static site generator.",
@@ -110,8 +113,7 @@
      }
     }
    }
-  },
-  "platform": "macOS"
+  }
  },
  "deltas": {}
 }

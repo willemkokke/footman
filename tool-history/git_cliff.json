@@ -5,6 +5,9 @@
  "base": {
   "version": "2.13.1",
   "date": "2026-07-27",
+  "platforms": [
+   "macOS"
+  ],
   "extractor": 1,
   "surface": {
    "help": "git-cliff 2.13.1",
@@ -468,8 +471,7 @@
      }
     }
    }
-  },
-  "platform": "macOS"
+  }
  },
  "deltas": {}
 }

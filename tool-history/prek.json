@@ -1,11 +1,13 @@
 {
  "schema": 1,
  "tool": "prek",
- "observed_from": "0.3.5",
+ "observed_from": "0.3.4",
  "base": {
   "version": "0.4.11",
   "date": "2026-07-27",
-  "platform": "macOS",
+  "platforms": [
+   "macOS"
+  ],
   "extractor": 1,
   "surface": {
    "help": "A fast Git hook manager written in Rust, designed as a drop-in alternative to pre-commit, reimagined.",
@@ -1150,7 +1152,9 @@
  "deltas": {
   "0.4.10": {
    "date": "2026-07-16",
-   "platform": "macOS",
+   "platforms": [
+    "macOS"
+   ],
    "extractor": 1,
    "drop": [
     "\tglob",
@@ -1225,22 +1229,30 @@
   },
   "0.4.9": {
    "date": "2026-07-11",
-   "platform": "macOS",
+   "platforms": [
+    "macOS"
+   ],
    "extractor": 1
   },
   "0.4.8": {
    "date": "2026-07-04",
-   "platform": "macOS",
+   "platforms": [
+    "macOS"
+   ],
    "extractor": 1
   },
   "0.4.7": {
    "date": "2026-07-04",
-   "platform": "macOS",
+   "platforms": [
+    "macOS"
+   ],
    "extractor": 1
   },
   "0.4.6": {
    "date": "2026-07-01",
-   "platform": "macOS",
+   "platforms": [
+    "macOS"
+   ],
    "extractor": 1,
    "verbs": {
     "autoupdate": {
@@ -1250,17 +1262,23 @@
   },
   "0.4.5": {
    "date": "2026-06-15",
-   "platform": "macOS",
+   "platforms": [
+    "macOS"
+   ],
    "extractor": 1
   },
   "0.4.4": {
    "date": "2026-06-04",
-   "platform": "macOS",
+   "platforms": [
+    "macOS"
+   ],
    "extractor": 1
   },
   "0.4.3": {
    "date": "2026-05-27",
-   "platform": "macOS",
+   "platforms": [
+    "macOS"
+   ],
    "extractor": 1,
    "drop": [
     "\tgroup",
@@ -1271,32 +1289,44 @@
   },
   "0.4.2": {
    "date": "2026-05-26",
-   "platform": "macOS",
+   "platforms": [
+    "macOS"
+   ],
    "extractor": 1
   },
   "0.4.1": {
    "date": "2026-05-20",
-   "platform": "macOS",
+   "platforms": [
+    "macOS"
+   ],
    "extractor": 1
   },
   "0.4.0": {
    "date": "2026-05-14",
-   "platform": "macOS",
+   "platforms": [
+    "macOS"
+   ],
    "extractor": 1
   },
   "0.3.13": {
    "date": "2026-05-05",
-   "platform": "macOS",
+   "platforms": [
+    "macOS"
+   ],
    "extractor": 1
   },
   "0.3.12": {
    "date": "2026-05-05",
-   "platform": "macOS",
+   "platforms": [
+    "macOS"
+   ],
    "extractor": 1
   },
   "0.3.11": {
    "date": "2026-04-27",
-   "platform": "macOS",
+   "platforms": [
+    "macOS"
+   ],
    "extractor": 1,
    "revert": {
     "autoupdate\tcooldown_days": {
@@ -1313,7 +1343,9 @@
   },
   "0.3.10": {
    "date": "2026-04-21",
-   "platform": "macOS",
+   "platforms": [
+    "macOS"
+   ],
    "extractor": 1,
    "drop": [
     "autoupdate\texclude_repo",
@@ -1344,12 +1376,16 @@
   },
   "0.3.9": {
    "date": "2026-04-13",
-   "platform": "macOS",
+   "platforms": [
+    "macOS"
+   ],
    "extractor": 1
   },
   "0.3.8": {
    "date": "2026-03-23",
-   "platform": "macOS",
+   "platforms": [
+    "macOS"
+   ],
    "extractor": 1,
    "drop": [
     "autoupdate\tcheck",
@@ -1367,7 +1403,9 @@
   },
   "0.3.6": {
    "date": "2026-03-16",
-   "platform": "macOS",
+   "platforms": [
+    "macOS"
+   ],
    "extractor": 1,
    "drop": [
     "uninstall\tall"
@@ -1375,7 +1413,9 @@
   },
   "0.3.5": {
    "date": "2026-03-09",
-   "platform": "macOS",
+   "platforms": [
+    "macOS"
+   ],
    "extractor": 1,
    "drop": [
     "install\tprepare_hooks"
@@ -1467,6 +1507,16 @@
      "help": "Uninstall prek from git hooks"
     }
    }
+  },
+  "0.3.4": {
+   "date": "2026-02-28",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1,
+   "drop": [
+    "install\tgit_dir"
+   ]
   }
  }
 }

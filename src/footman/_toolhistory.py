@@ -48,12 +48,14 @@ producing different words for the same tool.
 # tool publish a console-script entry point), not about the release — both are
 # supplied at render time instead.
 #
-# The *platform* is neither: it is a fact about the observation, like its
-# date, and it rides beside the surface. It is what will let a later
-# multi-platform refresh say "absent on Windows, and Windows was read" —
-# an exclusion — rather than leaving every option looking universal because
-# only one machine ever looked. Until then it records the honest thing: which
-# OS this reading came from.
+# The *platforms* are neither: they are a fact about the observation, like
+# its date, and ride beside the surface. A list rather than one name, because
+# a release read on three platforms is **one** observation of a merged
+# surface — storing it three times would triple a store whose options are
+# nearly all universal, to carry the rare one that is not. The list says who
+# looked; a per-option `not_on` will later say who disagreed, which is the
+# efficient way round. Until a refresh runs a matrix there is one name in it,
+# and that is the honest record: only this OS ever looked.
 
 
 def surface_of(spec: ToolSpec) -> dict[str, Any]:
@@ -121,7 +123,12 @@ def spec_from(
 
 
 def new(
-    tool: str, *, version: str, date: str, surface: dict[str, Any], platform: str = ""
+    tool: str,
+    *,
+    version: str,
+    date: str,
+    surface: dict[str, Any],
+    platforms: list[str] | None = None,
 ) -> dict:
     """A history of one release. A short history is a valid history — which is
     what lets the store ship before anything has been primed."""
@@ -132,7 +139,7 @@ def new(
         "base": {
             "version": version,
             "date": date,
-            "platform": platform,
+            "platforms": sorted(platforms or []),
             "extractor": EXTRACTOR,
             "surface": surface,
         },
@@ -194,7 +201,7 @@ def extend(
     version: str,
     date: str,
     surface: dict[str, Any],
-    platform: str = "",
+    platforms: list[str] | None = None,
 ) -> bool:
     """Append an *older* release to the end of the chain.
 
@@ -212,7 +219,7 @@ def extend(
         raise ValueError(f"{oldest} is not in the chain")
     doc["deltas"][version] = {
         "date": date,
-        "platform": platform,
+        "platforms": sorted(platforms or []),
         "extractor": EXTRACTOR,
         **delta(previous, surface),
     }

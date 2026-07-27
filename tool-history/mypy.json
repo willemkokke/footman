@@ -5,6 +5,9 @@
  "base": {
   "version": "2.3.0",
   "date": "2026-07-27",
+  "platforms": [
+   "macOS"
+  ],
   "extractor": 1,
   "surface": {
    "help": "[-m MODULE] [-p PACKAGE] [-c PROGRAM_TEXT] [files ...]",
@@ -963,8 +966,7 @@
      }
     }
    }
-  },
-  "platform": "macOS"
+  }
  },
  "deltas": {}
 }

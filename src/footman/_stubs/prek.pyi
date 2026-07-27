@@ -251,7 +251,7 @@ class Prek(_Tool):
             color: Whether to use color in output. Defaults to `auto`.
             config: Path to alternate config file.
             git_dir: Install Git shims into the `hooks` subdirectory of the given
-                git directory (`<GIT_DIR>/hooks/`).
+                git directory (`<GIT_DIR>/hooks/`). Added in 0.3.5.
             hook_type: Which Git shim(s) to install.
             install_hooks: Create environments for all hooks used in the config
                 file. Gone since 0.3.6.

@@ -411,24 +411,36 @@ def test_a_history_of_one_release_claims_nothing():
     assert not any(o.since or o.until for v in spec.verbs for o in v.options)
 
 
-def test_an_observation_records_the_platform_that_read_it():
+def test_an_observation_records_which_platforms_read_it():
     """A fact about the observation, like its date — and the groundwork for
     exclusions: "absent on Windows, and Windows was read" is an exclusion,
-    while "absent on Windows, which never ran" is silence. Without this the
-    second is indistinguishable from the first."""
+    while "absent on Windows, which never ran" is silence.
+
+    A *list*, because a release read on three platforms is one observation of
+    a merged surface. Storing it three times would triple a store whose
+    options are nearly all universal, to carry the rare one that is not.
+    """
     surface = _toolhistory.surface_of(_spec())
     doc = _toolhistory.new(
-        "demo", version="2.0.0", date="2026-02-01", surface=surface, platform="Linux"
+        "demo",
+        version="2.0.0",
+        date="2026-02-01",
+        surface=surface,
+        platforms=["Linux", "macOS"],
     )
-    assert doc["base"]["platform"] == "Linux"
+    assert doc["base"]["platforms"] == ["Linux", "macOS"]  # sorted, one entry
 
     _toolhistory.extend(
-        doc, version="1.0.0", date="2026-01-01", surface=surface, platform="Windows"
+        doc,
+        version="1.0.0",
+        date="2026-01-01",
+        surface=surface,
+        platforms=["Windows"],
     )
-    assert doc["deltas"]["1.0.0"]["platform"] == "Windows"
+    assert doc["deltas"]["1.0.0"]["platforms"] == ["Windows"]
 
 
-def test_every_checked_in_observation_names_its_platform():
+def test_every_checked_in_observation_names_its_platforms():
     """The store must not grow observations that cannot say where they came
     from; a later multi-platform refresh reads this to decide what is an
     exclusion and what was simply never looked at."""
@@ -439,9 +451,9 @@ def test_every_checked_in_observation_names_its_platform():
         doc = _toolhistory.load(tools_tasks._history_path(driver.key))
         if doc is None:
             continue
-        assert doc["base"].get("platform"), f"{driver.key} base"
+        assert doc["base"].get("platforms"), f"{driver.key} base"
         for version, step in doc["deltas"].items():
-            assert step.get("platform"), f"{driver.key} {version}"
+            assert step.get("platforms"), f"{driver.key} {version}"
 
 
 def test_priming_rewrites_the_stub_it_invalidates(monkeypatch, tmp_path):

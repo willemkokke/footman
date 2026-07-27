@@ -130,7 +130,7 @@ def _stub_from(driver: _drivers.Driver, doc: dict, *, in_process: bool = False) 
     return _formatted(
         _stubgen.render(
             spec,
-            platform=base.get("platform") or _platform(),
+            platform=(base.get("platforms") or [_platform()])[0],
             class_name=_class_name(driver.key),
             in_process=_mode(driver, spec),
         )
@@ -155,12 +155,14 @@ def _observe(driver: _drivers.Driver, spec: _toolspec.ToolSpec) -> dict:
             version=version,
             date=_today(),
             surface=surface,
-            platform=_platform(),
+            platforms=[_platform()],
         )
     elif doc["base"]["version"] == version:
         doc["base"]["surface"] = surface
         doc["base"]["extractor"] = _toolhistory.EXTRACTOR
-        doc["base"]["platform"] = _platform()
+        doc["base"]["platforms"] = sorted(
+            {*doc["base"].get("platforms", []), _platform()}
+        )
     elif _version_tuple(version) < _version_tuple(doc["base"]["version"]):
         # An *older* reading is an older observation, not a new head. Demoting
         # on any change let a machine with a stale tool rewrite the base and
@@ -171,7 +173,7 @@ def _observe(driver: _drivers.Driver, spec: _toolspec.ToolSpec) -> dict:
             version=version,
             date=_today(),
             surface=surface,
-            platform=_platform(),
+            platforms=[_platform()],
         )
     else:
         previous = doc["base"]
@@ -186,7 +188,7 @@ def _observe(driver: _drivers.Driver, spec: _toolspec.ToolSpec) -> dict:
         doc["base"] = {
             "version": version,
             "date": _today(),
-            "platform": _platform(),
+            "platforms": [_platform()],
             "extractor": _toolhistory.EXTRACTOR,
             "surface": surface,
         }
@@ -696,7 +698,7 @@ def _prime_one(driver, doc: dict, count: int, scratch: Path, fetch) -> int:
             version=release.version,
             date=release.date,
             surface=_toolhistory.surface_of(spec),
-            platform=_platform(),
+            platforms=[_platform()],
         ):
             added += 1
     if added:

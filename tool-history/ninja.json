@@ -5,6 +5,9 @@
  "base": {
   "version": "1.13.0.git.kitware.jobserver-pipe-1",
   "date": "2026-07-27",
+  "platforms": [
+   "macOS"
+  ],
   "extractor": 1,
   "surface": {
    "help": "if targets are unspecified, builds the 'default' target (see manual).",
@@ -129,8 +132,7 @@
      }
     }
    }
-  },
-  "platform": "macOS"
+  }
  },
  "deltas": {}
 }

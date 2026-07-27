@@ -5,6 +5,9 @@
  "base": {
   "version": "1.42.3",
   "date": "2026-07-27",
+  "platforms": [
+   "macOS"
+  ],
   "extractor": 1,
   "surface": {
    "help": "djLint · HTML template linter and formatter.",
@@ -481,8 +484,7 @@
      }
     }
    }
-  },
-  "platform": "macOS"
+  }
  },
  "deltas": {}
 }

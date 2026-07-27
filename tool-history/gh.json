@@ -5,6 +5,9 @@
  "base": {
   "version": "2.96.0",
   "date": "2026-07-27",
+  "platforms": [
+   "macOS"
+  ],
   "extractor": 1,
   "surface": {
    "help": "Work seamlessly with GitHub from the command line.",
@@ -2498,8 +2501,7 @@
      }
     }
    }
-  },
-  "platform": "macOS"
+  }
  },
  "deltas": {}
 }

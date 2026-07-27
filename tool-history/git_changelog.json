@@ -5,6 +5,9 @@
  "base": {
   "version": "2.9.4",
   "date": "2026-07-27",
+  "platforms": [
+   "macOS"
+  ],
   "extractor": 1,
   "surface": {
    "help": "[-s SECTIONS] [-a] [-t TEMPLATE] [-T] [-E] [-Z] [-F RANGE] [-j KEY=VALUE] [-V] [--debug-info]",
@@ -271,8 +274,7 @@
      }
     }
    }
-  },
-  "platform": "macOS"
+  }
  },
  "deltas": {}
 }

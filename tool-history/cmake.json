@@ -5,6 +5,9 @@
  "base": {
   "version": "4.4.0",
   "date": "2026-07-27",
+  "platforms": [
+   "macOS"
+  ],
   "extractor": 1,
   "surface": {
    "help": "cmake [options] <path-to-source>",
@@ -720,8 +723,7 @@
      }
     }
    }
-  },
-  "platform": "macOS"
+  }
  },
  "deltas": {}
 }

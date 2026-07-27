@@ -5,7 +5,9 @@
  "base": {
   "version": "0.16.0",
   "date": "2026-07-27",
-  "platform": "macOS",
+  "platforms": [
+   "macOS"
+  ],
   "extractor": 1,
   "surface": {
    "help": "Ruff: An extremely fast Python linter and code formatter.",
