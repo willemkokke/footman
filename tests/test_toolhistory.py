@@ -590,9 +590,17 @@ def test_gitlab_releases_read_their_own_field_names(monkeypatch):
     assert [r.version for r in got] == ["0.6.0-wk.5", "0.6.0-wk.4"]
 
 
-def test_an_unreadable_index_is_empty_not_an_error(monkeypatch):
-    """A prime that cannot reach one registry skips that tool; it does not
-    fail the run and leave the others unprimed."""
+def test_an_unreadable_index_is_not_an_empty_one(monkeypatch):
+    """The distinction the release gate rests on.
+
+    "Is there anything new" is answered "no" by a throttled registry exactly
+    as it is by a tool that has genuinely not moved — and one of those means
+    stop, while the other means nobody looked. Sharing the empty list would
+    let a rate limit read as "nothing to release".
+
+    A prime still skips such a tool rather than failing the run, but it has
+    to *choose* to, which is the point of raising.
+    """
     from footman import _drivers, _toolfetch
 
     def boom(*a, **k):
@@ -601,7 +609,8 @@ def test_an_unreadable_index_is_empty_not_an_error(monkeypatch):
     monkeypatch.setattr(_toolfetch.urllib.request, "urlopen", boom)
     driver = _drivers.find("prek")
     assert driver is not None
-    assert _toolfetch.releases(driver) == []
+    with pytest.raises(_toolfetch.Unreachable):
+        _toolfetch.releases(driver)
 
 
 def test_which_tiers_can_be_listed():
@@ -709,16 +718,16 @@ def test_the_python_listing_asks_only_for_downloads(monkeypatch):
     assert "--only-downloads" in seen[0]
 
 
-def test_an_unreadable_uv_lists_no_pythons(monkeypatch):
-    """uv carries the index inside itself, so 'no uv' is 'nothing seen' — not
-    'CPython has no releases'. The caller names it skipped, as with any tier
-    it could not read."""
+def test_a_uv_that_will_not_answer_is_unreachable_not_empty(monkeypatch):
+    """uv carries the index inside itself, so "no uv" is "nothing seen" — and
+    emphatically not "CPython has no releases"."""
     from footman import _drivers, _toolfetch
 
     monkeypatch.setattr(_toolfetch, "_capture", lambda _argv: "")
     driver = _drivers.find("python")
     assert driver is not None
-    assert _toolfetch.releases(driver) == []
+    with pytest.raises(_toolfetch.Unreachable):
+        _toolfetch.releases(driver)
 
 
 def test_a_prime_never_appends_a_release_newer_than_the_floor(tmp_path, monkeypatch):

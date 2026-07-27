@@ -690,7 +690,12 @@ def prime(
                 if doc is None:
                     skipped.append(f"{driver.key} (no history — run `sync` first)")
                     continue
-                added, stopped = _prime_one(driver, doc, count, scratch, _toolfetch)
+                try:
+                    added, stopped = _prime_one(driver, doc, count, scratch, _toolfetch)
+                except _toolfetch.Unreachable as unreachable:
+                    # Not "nothing left to read" — nobody read anything.
+                    skipped.append(f"{driver.key} ({unreachable})")
+                    continue
                 note = f" — stopped at {stopped}" if stopped else ""
                 read.append(
                     f"{driver.key} +{added} (from {doc['observed_from']}){note}"
