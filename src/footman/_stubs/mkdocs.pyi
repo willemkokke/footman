@@ -11,6 +11,23 @@ from footman.tools import Tool as _Tool
 from footman.tools import _Flag, _Value
 
 class Mkdocs(_Tool):
+    def __call__(  # type: ignore[override]
+        self,
+        *args: str,
+        color: _Flag = ...,
+        quiet: _Flag = ...,
+        verbose: _Flag = ...,
+        **flags: Any,
+    ) -> _Result:
+        """MkDocs - Project documentation with Markdown.
+
+        Args:
+            color: Force enable or disable color and wrapping for the output. Gone
+                since 1.6.1.
+            quiet: Silence warnings. Gone since 1.6.1.
+            verbose: Enable verbose output. Gone since 1.6.1.
+        """
+        ...
     def build(
         self,
         *,
@@ -136,15 +153,16 @@ class Mkdocs(_Tool):
 
         Args:
             clean: Build the site without any effects of `mkdocs serve` - pure
-                `mkdocs build`, then serve.
+                `mkdocs build`, then serve. Added in 1.5.0.
             config_file: Provide a specific MkDocs config. This can be a file name,
                 or '-' to read from stdin.
             dev_addr: IP address and port to serve documentation locally (default:
                 localhost:8000).
-            dirty: Only re-build files that have changed.
+            dirty: Only re-build files that have changed. Added in 1.5.0.
             no_livereload: Disable the live reloading in the development server.
+                Added in 1.5.0.
             open: Open the website in a Web browser after the initial build
-                finishes.
+                finishes. Added in 1.6.0.
             quiet: Silence warnings.
             strict: Enable strict mode. This will cause MkDocs to abort the build on
                 any warnings. `strict=off` emits `--no-strict`.
@@ -161,6 +179,10 @@ class Mkdocs(_Tool):
         ...
     def flags(
         self,
+        *,
+        color: _Flag = ...,
+        quiet: _Flag = ...,
+        verbose: _Flag = ...,
         **flags: Any,
     ) -> Self:
         """Bind tool-level global options before the subcommand.
