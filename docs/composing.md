@@ -557,6 +557,28 @@ dependency in the manifest for help and agents; an undeclared read still
 works, with a note naming the fix. Names collide loudly: with footman's own
 globals naming footman, between two plugins naming both owners.
 
+## The built-in: `footman.env_files`
+
+The funnel plugin — one pull, one visible behaviour, a working example of
+everything above (a lifecycle hook, a `GlobalOption`, an optional
+dependency):
+
+```python
+from footman.compose import plugin
+
+plugin("footman.env_files")
+```
+
+Pulled, it loads `.env` from the invocation's directory at the run's
+single-threaded moment — before availability gates, so `@requires_env` sees
+it — with **env wins**: a key the real environment already carries is never
+overwritten, so a checkout cannot surprise a shell. `--env-file=PATH` names
+another file (path-typed, so <kbd>Tab</kbd> offers files); a missing *named*
+file is a refusal, a missing default is nothing to do. Values are read by
+python-dotenv — an optional dependency the plugin imports lazily and teaches
+by name when absent — with interpolation off: a value is the text on its
+line. Unpulled, none of this exists, not even the option.
+
 ## The caching contract, stated once
 
 Hiding, `include()`, `plugin()`, and `@pre_tasks` all resolve at
