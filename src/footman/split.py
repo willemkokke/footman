@@ -283,23 +283,43 @@ def _expects_value(
     return f"{prefix}{given} expects a value, attached: {given}={hint}"
 
 
-def _parse_globals(argv: list[str], i: int) -> tuple[list[str], int]:
+def _parse_globals(
+    argv: list[str],
+    i: int,
+    *,
+    plugin: dict[str, str] | None = None,
+    lenient: bool = False,
+) -> tuple[list[str], int]:
     """Consume the leading globals — purely lexical: every dash token is
     self-contained (a value is `=`-attached), and the first bare word starts
-    the task chain."""
+    the task chain.
+
+    *plugin* maps a pulled plugin's long options (`--env-file`) to their
+    kinds, making them ordinary globals here. *lenient* carries an unknown
+    dash token through untouched instead of refusing — the pre-discovery
+    walk cannot know the plugins yet, so the authoritative post-discovery
+    parse is the one that teaches.
+    """
+    known: dict[str, str] = dict(_GLOBAL_KIND)
+    if plugin:
+        known.update(plugin)
     globals_: list[str] = []
     while i < len(argv) and argv[i].startswith("-") and argv[i] != "--":
         name = argv[i].split("=", 1)[0]
-        if name not in _GLOBAL_KIND:
+        if name not in known:
+            if lenient:
+                globals_.append(argv[i])
+                i += 1
+                continue
             raise ChainError(
                 f"unknown global option {name} "
                 f"(global options go before the first task)"
             )
         canon = _CANON.get(name, name)
-        if _GLOBAL_KIND[name] == "flag" and "=" in argv[i]:
+        if known[name] == "flag" and "=" in argv[i]:
             raise ChainError(f"{canon} is a flag and takes no value")
         if (
-            _GLOBAL_KIND[name] == "option"
+            known[name] == "option"
             and "=" not in argv[i]
             and canon not in _VALUE_OPTIONAL
         ):
@@ -519,7 +539,8 @@ def _default_notes(
 
 def split_chain(tree: dict, argv: list[str]) -> tuple[list[str], list[Segment]]:
     """Split *argv* into leading globals and a list of resolved segments."""
-    globals_, i = _parse_globals(argv, 0)
+    plugin = {"--" + g["name"]: g["kind"] for g in tree.get("globals", ())}
+    globals_, i = _parse_globals(argv, 0, plugin=plugin)
     segments: list[Segment] = []
     prev_group: tuple[str, dict] | None = None
 

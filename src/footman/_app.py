@@ -525,7 +525,7 @@ def _help_targets(
     dotted addresses only and skips every other token (option-shaped tokens
     and, once a target is found, its argument values).
     """
-    _, i = split._parse_globals(argv, 0)
+    _, i = split._parse_globals(argv, 0, lenient=True)
     targets: list[tuple[str, list[str]]] = []
     strays: list[str] = []
     for tok in argv[i:]:
@@ -1084,7 +1084,7 @@ def _run(
     global _brand
     _brand = brand
     try:
-        pre_globals, after = split._parse_globals(argv, 0)
+        pre_globals, after = split._parse_globals(argv, 0, lenient=True)
     except split.ChainError as exc:
         return _refuse(_wants_json(argv), str(exc))
     g = _globals_to_dict(pre_globals)
@@ -1154,7 +1154,7 @@ def _execute(
     """
     # "Bare" means no chain was asked for — globals-only lines (`fm --json`,
     # `fm -k`) are listing-shaped, exactly like they are when tasks exist.
-    _, after_globals = split._parse_globals(argv, 0)
+    _, after_globals = split._parse_globals(argv, 0, lenient=True)
     found = _discover(g, wants_help, bare=after_globals >= len(argv))
     if isinstance(found, int):
         return found
@@ -1197,6 +1197,10 @@ def _execute(
             json_mode,
             f"failed to import the task cascade: {type(exc).__name__}: {exc}",
         )
+    if (
+        clash := registry.validate_global_options(reg.contributions["globals"])
+    ) is not None:
+        return _refuse(json_mode, clash)
 
     try:
         if g.get("tasks_file"):
@@ -1236,6 +1240,7 @@ def _execute(
         code = _run_tree(reg, tree, argv, cfg, collect, root_dir=root_dir)
     finally:
         executor.clear_lifecycle()
+        registry.release_global_options(reg.contributions["globals"])
     # After the run, so it never adds latency before the user's command —
     # and after the uv handoff by construction (the handoff replaced this
     # process back in _run), so a pinned project's own footman collects.
@@ -1257,7 +1262,7 @@ def _run_tree(
     so both honour `--help`/`--version`/`--list`/`--tree`/`--json` identically.
     Globals are re-derived from `argv` (already validated upstream).
     """
-    g = _globals_to_dict(split._parse_globals(argv, 0)[0])
+    g = _globals_to_dict(split._parse_globals(argv, 0, lenient=True)[0])
     json_mode = bool(g.get("json"))
 
     cli_color = g.get("color")
@@ -1464,6 +1469,14 @@ def _run_tree(
     if g.get("fail_fast"):
         cli_keep_going = False
 
+    # A pulled plugin's globals bind now — after every listing/dry-run exit,
+    # before anything runs — and freeze for the run; `.value` answers from
+    # here. Released by the caller's finally, so an outside-a-run read goes
+    # back to teaching.
+    if (
+        bad := executor.bind_global_options(reg.contributions["globals"], globals_)
+    ) is not None:
+        return _refuse(json_mode, bad)
     start = time.perf_counter()
     try:
         results = schedule.run_plan(
@@ -1551,7 +1564,7 @@ def run_group(
     global _brand
     _brand = brand
     try:
-        pre_globals, _ = split._parse_globals(argv, 0)
+        pre_globals, _ = split._parse_globals(argv, 0, lenient=True)
     except split.ChainError as exc:
         return _refuse(_wants_json(argv), str(exc))
     g = _globals_to_dict(pre_globals)
@@ -1566,8 +1579,13 @@ def run_group(
     # (there is no cascade here), so the invocation arrives already frozen.
     inv = invocation.Invocation(cli=g, cwd=os.getcwd(), tasks=registry.Tasks(root))
     inv.freeze()
+    if (
+        clash := registry.validate_global_options(root.contributions["globals"])
+    ) is not None:
+        return _refuse(bool(g.get("json")), clash)
     executor.install_lifecycle(inv, root.contributions)
     try:
         return _run_tree(root, tree, argv, {}, collect)
     finally:
         executor.clear_lifecycle()
+        registry.release_global_options(root.contributions["globals"])

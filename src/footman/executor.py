@@ -994,6 +994,39 @@ def _serial_globals(ctx: Context) -> Iterator[None]:
         ctx.serial_active = False
 
 
+def bind_global_options(options: Sequence[Any], tokens: Sequence[str]) -> str | None:
+    """Deliver the parsed leading globals to their owning plugin options.
+
+    Every option gets a value for the run — a flag's presence, an option's
+    coerced `=`-attached value, or its default — and freezes, so `.value`
+    answers anywhere in-run. The value string runs the same coercion,
+    bounds, choices and `check(fn)` pipeline a task parameter's would.
+    Returns the teaching message for a value that will not coerce.
+    """
+    by_flag: dict[str, Any] = {}
+    for opt in options:
+        by_flag.setdefault("--" + opt.name, opt)
+    values: dict[str, Any] = {}
+    for tok in tokens:
+        name, _, raw = tok.partition("=")
+        opt = by_flag.get(name)
+        if opt is None:
+            continue
+        if opt.annotation is bool:
+            values[opt.name] = True
+            continue
+        peeled = coerce.peel(opt.annotation)
+        try:
+            values[opt.name] = _coerce_extra(raw, peeled, name)
+        except ValueError as exc:
+            return str(exc)
+    for opt in by_flag.values():
+        fallback = False if opt.annotation is bool else opt.default
+        opt._value = values.get(opt.name, fallback)
+        opt._frozen = True
+    return None
+
+
 # --- the per-task lifecycle: pre_task / post_task ----------------------------
 
 

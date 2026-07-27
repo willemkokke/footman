@@ -51,7 +51,153 @@ CONTRIBUTION_KINDS: tuple[str, ...] = (
     "pre_task",
     "post_task",
     "post_tasks",
+    "globals",
 )
+
+
+class GlobalOption:
+    """A plugin's own global option — `--env-file=PATH` beside `--jobs=N`.
+
+    Constructing one **is** registering it: a module-level singleton in the
+    provider, stamped with the module that defined it, riding the same
+    carriage as lifecycle hooks — so it reaches a run only when its owner is
+    pulled, and an unpulled owner's option is an unknown option, taught.
+    Long-form only, and the value is `=`-attached like every option's.
+
+        ENV_FILE = GlobalOption("env-file", Path, help="load this .env file")
+
+    A `bool` annotation makes it a flag; anything else takes a value, coerced
+    and validated through the same pipeline as a task parameter — `Literal`
+    choices, `Path` file completion, `Annotated[..., suggest(...)]` all work,
+    because the manifest describes it with the same machinery. Read it
+    anywhere in-run as `OPT.value` (frozen after parse); cross-plugin use is
+    an ordinary import of the singleton.
+    """
+
+    __slots__ = (
+        "_frozen",
+        "_reads",
+        "_value",
+        "annotation",
+        "default",
+        "help",
+        "name",
+        "owner",
+    )
+
+    def __init__(
+        self,
+        name: str,
+        annotation: Any = bool,
+        *,
+        default: Any = None,
+        help: str = "",  # matches the manifest's vocabulary
+    ) -> None:
+        if name.startswith("-"):
+            raise RegistrationError(
+                f"GlobalOption({name!r}): give the bare name — the dashes are "
+                f"the grammar's (and plugin globals are long-form only)"
+            )
+        self.name = cli_name(name)
+        self.annotation = annotation
+        self.default = default if annotation is not bool else bool(default)
+        self.help = help
+        # The DEFINING module, never the importing capture: what a collision
+        # names, what pairing and provenance key on.
+        import sys as _sys
+
+        frame = _sys._getframe(1)
+        self.owner = frame.f_globals.get("__name__", "<unknown>")
+        self._value: Any = _UNBOUND
+        self._frozen = False
+        self._reads: set[str] = set()
+        root.contributions["globals"].append(self)
+
+    @property
+    def value(self) -> Any:
+        """The parsed value for this run — the flag's presence, the option's
+        coerced value, or the default when the line didn't carry it. Frozen
+        after parse; reading it outside a run is a taught error, because
+        there is no invocation to have carried it."""
+        if not self._frozen:
+            raise RuntimeError(
+                f"--{self.name} has no value here — a global option is parsed "
+                f"from the command line, so read {type(self).__name__}.value "
+                f"inside a task or lifecycle hook, during a run"
+            )
+        self._mark_read()
+        return self._value
+
+    def _mark_read(self) -> None:
+        # Read-marking for the notes lane: an in-task read is attributed to
+        # the task; a task that never declared `uses=` gets a taught note
+        # (once), because help and provenance can only describe what is said.
+        from footman import context
+
+        ctx = context._current.get()
+        if ctx is None or not ctx.in_task or ctx.fn is None:
+            return
+        self._reads.add(ctx.task or "?")
+        if any(u is self for u in task_uses(ctx.fn)):
+            return
+        from footman import _globals
+
+        _globals._note(
+            f"global-read:{self.name}",
+            f"task {ctx.task or '?'} reads --{self.name} without declaring "
+            f"it — say @task(uses=[...]) so its help and provenance show it",
+        )
+
+    def __repr__(self) -> str:
+        state = repr(self._value) if self._frozen else "unbound"
+        return f"<GlobalOption --{self.name} from {self.owner}: {state}>"
+
+
+_UNBOUND = object()
+
+_USES = "_footman_uses"
+
+
+def task_uses(fn: Task) -> tuple[GlobalOption, ...]:
+    """The global options *fn* declared it reads — `@task(uses=[OPT])`."""
+    return tuple(getattr(fn, _USES, ()))
+
+
+def validate_global_options(options: Sequence[GlobalOption]) -> str | None:
+    """The collision law for plugin globals, applied to the merged tree.
+
+    A name owned by footman itself is refused naming footman; two plugins
+    claiming one name are refused naming both. The same singleton reached
+    through two pulls is one option, not a clash. Returns the teaching
+    message, or `None` when the set is sound."""
+    from footman.split import _GLOBAL_KIND
+
+    seen: dict[str, GlobalOption] = {}
+    for opt in options:
+        flag = f"--{opt.name}"
+        if flag in _GLOBAL_KIND:
+            return (
+                f"{flag} (from {opt.owner}) collides with footman's own "
+                f"global option — plugin globals need their own names"
+            )
+        other = seen.get(opt.name)
+        if other is not None and other is not opt:
+            return (
+                f"--{opt.name} is claimed by both {other.owner} and "
+                f"{opt.owner} — two plugins, one name; rename one, or pull "
+                f"only one of them"
+            )
+        seen[opt.name] = opt
+    return None
+
+
+def release_global_options(options: Sequence[GlobalOption]) -> None:
+    """Unfreeze after the run: an outside-a-run read goes back to teaching."""
+    for opt in options:
+        opt._frozen = False
+        opt._value = _UNBOUND
+        opt._reads.clear()
+
 
 # A task stays a plain function; its metadata rides as `_footman_*` attributes.
 # These name every key in one place, so the strings appear once and the read
@@ -547,7 +693,9 @@ class Group:
         self.groups: dict[str, Group] = {}
         # Lifecycle contributions, one bucket per hook kind (root registry
         # only). `pre_tasks` hooks are the only kind today.
-        self.contributions: dict[str, list[Callable[..., object]]] = {
+        # Hook kinds hold callables; the `globals` kind holds
+        # `GlobalOption` singletons — one generic carriage, typed loosely.
+        self.contributions: dict[str, list[Any]] = {
             kind: [] for kind in CONTRIBUTION_KINDS
         }
         # Provenance: the plugin identity that pulled this group in, or None
@@ -635,6 +783,7 @@ class Group:
         serial: bool = False,
         exclusive: bool = False,
         hidden: bool | None = None,
+        uses: Sequence[GlobalOption] = (),
     ) -> Callable[[Callable[_P, _R_co]], TaskFn[_P, _R_co]]: ...
 
     def task(
@@ -656,6 +805,7 @@ class Group:
         serial: bool = False,
         exclusive: bool = False,
         hidden: bool | None = None,
+        uses: Sequence[GlobalOption] = (),
     ) -> Task | Callable[[Task], Task]:
         """Register a function as a task.
 
@@ -774,6 +924,14 @@ class Group:
                 exclusive=exclusive,
                 hidden=hidden,
             )
+            if uses:
+                for used in uses:
+                    if not isinstance(used, GlobalOption):
+                        raise RegistrationError(
+                            f"@task(uses=...) on {key!r} takes GlobalOption "
+                            f"singletons — got {type(used).__name__}"
+                        )
+                setattr(task, _USES, tuple(uses))
             self.tasks[key] = task
             return cast("TaskFn[_P, _R_co]", task)
 

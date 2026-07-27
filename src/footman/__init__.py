@@ -66,6 +66,7 @@ if TYPE_CHECKING:
     from footman.params import stdin as stdin
     from footman.params import stdout as stdout
     from footman.params import suggest as suggest
+    from footman.registry import GlobalOption as GlobalOption
     from footman.registry import Group as Group
     from footman.registry import Tasks as Tasks
     from footman.registry import TaskView as TaskView
@@ -96,6 +97,7 @@ __all__ = [
     "Failed",
     "FetchError",
     "Forward",
+    "GlobalOption",
     "Group",
     "Invocation",
     "IsDir",
@@ -184,6 +186,7 @@ def __getattr__(name: str) -> object:
         "group",
         "Group",
         "capture",
+        "GlobalOption",
         "pre_tasks",
         "pre_bind",
         "pre_task",
