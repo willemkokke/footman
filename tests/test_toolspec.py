@@ -1474,6 +1474,13 @@ def test_every_installed_driver_reports_a_readable_version(capsys):
             absent.append(driver.key)
             continue
         found, why = _drivers._read_version(driver.name)
+        if not found and why == "timed out after 30s":
+            # Convicted on CI: gh --version hangs past 30s on a fresh
+            # Windows runner with its update check disabled — Defender's
+            # first-touch scan of a large binary, not a scrape failure. The
+            # scan caches, so the second spawn answers; a tool that times
+            # out twice has genuinely earned the failure.
+            found, why = _drivers._read_version(driver.name)
         if found:
             read.append(f"{driver.key} ({found})")
         else:
