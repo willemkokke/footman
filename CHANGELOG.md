@@ -21,14 +21,15 @@ versions may include breaking changes.
   `task.source_hash` (the body digest, a tripwire, `None` when unreadable).
   `result` reads everything and writes one thing: `set_returned(value)`,
   which rewrites the *reported* value — the summary and `--json` — never
-  what a dependent or a body caller received. Hooks compose like a stack of
-  context managers: pres in plugin order, posts unwinding in reverse; a
-  plugin's post fires when its own pre fired (a post-only plugin observes
-  every execution that ran), a raising pre fails the task like a failed
-  prerequisite, a raising post fails an otherwise-green task, and both
-  failures name the plugin. Nothing fires under `--dry-run` or for a
-  `shared` row. A `pre_task`'s return value is **reserved** for a future
-  "supply the result, skip the body" power — today it is noted and ignored.
+  what a dependent or a body caller received. Pres run in plugin order and
+  posts unwind in reverse; the post is the task-finished event, firing for
+  every execution that reached the body stage whatever the outcome —
+  irrespective of which pres a plugin registered or how they fared. A
+  raising pre fails the task like a failed prerequisite, a raising post
+  fails an otherwise-green task, and both failures name the plugin. Nothing
+  fires under `--dry-run` or for a `shared` row. A `pre_task`'s return value
+  is **reserved** for a future "supply the result, skip the body" power —
+  today it is noted and ignored.
 - **`registry.task_source_hash()` — a digest of a task's own body.** Normalised
   through the AST rather than taken over the text, so reformatting and comments
   do not move it while a real edit does; decorator lines count, so a changed

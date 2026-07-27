@@ -1157,45 +1157,37 @@ def _reserved_note(ctx: Context, plugin: str, hook: Task) -> None:
     )
 
 
-def _enter_task_hooks(
-    life: _Lifecycle, handle: TaskHandle
-) -> tuple[list[_HookPlugin], BaseException | None]:
+def _enter_task_hooks(life: _Lifecycle, handle: TaskHandle) -> BaseException | None:
     """Run every plugin's `pre_task` hooks, in plugin order.
 
-    Returns the plugins whose posts may fire — context-manager stack
-    semantics: a plugin enters when any of its pres fired, or trivially when
-    it has none to fire; a raising pre stops the walk, fails the task, and
-    leaves the already-entered plugins to unwind.
+    The first failure stops the walk and fails the task — the body will not
+    run. It does not gate the posts: a post is the task-finished event, so
+    once an execution reached this moment, every registered `post_task`
+    fires when it concludes, irrespective of which pres its plugin
+    registered or how any of them fared.
     """
-    entered: list[_HookPlugin] = []
     for plugin in life.plugins:
-        fired = False
         for hook in plugin.pre:
             token = _hook_owner.set(plugin.name)
             try:
                 value = hook(life.inv, handle)
             except Exception as exc:
-                if fired:
-                    entered.append(plugin)
                 failure = HookFailed(
                     f"pre_task hook {getattr(hook, '__name__', '?')!r} from "
                     f"{plugin.name} failed for task {handle.name!r}: "
                     f"{type(exc).__name__}: {exc}"
                 )
                 failure.__cause__ = exc
-                return entered, failure
+                return failure
             finally:
                 _hook_owner.reset(token)
-            fired = True
             if value is not None:
                 _reserved_note(handle._ctx, plugin.name, hook)
-        entered.append(plugin)
-    return entered, None
+    return None
 
 
 def _exit_task_hooks(
     life: _Lifecycle,
-    entered: list[_HookPlugin],
     handle: TaskHandle,
     result: TaskResult,
 ) -> BaseException | None:
@@ -1206,7 +1198,7 @@ def _exit_task_hooks(
     """
     view = ResultView(result)
     first: BaseException | None = None
-    for plugin in reversed(entered):
+    for plugin in reversed(life.plugins):
         for hook in plugin.post:
             token = _hook_owner.set(plugin.name)
             try:
@@ -1309,14 +1301,13 @@ def run_bound(
     started = start  # the report's ordering key: when this task actually began
     life = _lifecycle
     handle: TaskHandle | None = None
-    entered: list[_HookPlugin] = []
     hook_error: BaseException | None = None
     if life is not None:
         # Built from the pre-injection arguments: ctx is machinery, not a
         # value a hook should read back as one of the task's own. Pre hooks
         # run inside the timed span, so their cost is the task's cost.
         handle = TaskHandle(fn, seg, ctx, plain_args, kwargs)
-        entered, hook_error = _enter_task_hooks(life, handle)
+        hook_error = _enter_task_hooks(life, handle)
     try:
         if hook_error is not None:
             # A raising pre fails the task like a failed prerequisite: the
@@ -1338,7 +1329,7 @@ def run_bound(
     result = _result(seg, code, returned, error, duration, output, ctx.steps)
     result.started = started
     if life is not None and handle is not None:
-        post_error = _exit_task_hooks(life, entered, handle, result)
+        post_error = _exit_task_hooks(life, handle, result)
         if post_error is not None and result.ok:
             # A reporter that crashed must not pass silently: the task fails,
             # named, exactly as a raising pre would have failed it.

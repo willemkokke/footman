@@ -404,12 +404,13 @@ rewrites the **reported** value (the summary and the `--json` envelope),
 never what a dependent or a body caller received. A `shared` row likewise
 reports what its requester was actually handed.
 
-The pair composes like a stack of context managers. Pres run in plugin
-order and posts unwind in reverse, so the first plugin in speaks last; a
-plugin's post fires when its own pre fired (a plugin with no `pre_task`
-observes every execution that ran), and a raising pre gets no post while the
-plugins already entered still unwind. Failures are loud and named: a raising
-`pre_task` fails the task like a failed prerequisite, and a raising
+Pres run in plugin order and posts unwind in reverse, so the first plugin in
+speaks last. The post is the **task-finished event**: once an execution
+reaches the body stage, every registered `post_task` fires when it concludes
+— whether or not that plugin registered a `pre_task`, and however any pre
+fared — so a span opened in a pre always closes, even when another plugin's
+pre killed the task. Failures are loud and named: a raising `pre_task` fails
+the task like a failed prerequisite (the body never runs), and a raising
 `post_task` fails an otherwise-green task — a reporter that crashed must not
 pass silently. Under `--dry-run` nothing executes, so neither hook fires; a
 request satisfied by an execution the run already performed is a `shared`

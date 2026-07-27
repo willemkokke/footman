@@ -870,10 +870,10 @@ class Group:
     def post_task(self, fn: Hook) -> Hook:
         """Register the after-each-task hook: `post_task(inv, task, result)`.
 
-        The paired closing moment: it fires for an execution your plugin's
-        `pre_task` observed — after the body, whatever the outcome — and posts
-        unwind in reverse plugin order, so the first plugin in speaks last.
-        A plugin with no `pre_task` observes every execution that ran.
+        The task-finished event: it fires for every execution that reached
+        the body stage, whatever the outcome — whether or not your plugin
+        registered a `pre_task`, and however any pre fared. Posts unwind in
+        reverse plugin order, so the first plugin in speaks last.
 
         `result` reads everything (`ok`, `code`, `returned`, `error`,
         `duration`, `output`, `steps`) and writes one thing: `set_returned`,

@@ -584,9 +584,11 @@ def test_task_state_is_private_to_the_plugin_and_the_execution():
 
 
 def test_a_raising_pre_fails_the_task_and_skips_the_body():
-    # Context-manager stack semantics: the raiser's own post never fires, an
-    # earlier plugin's post still does, and the body never runs. The failure
-    # names the plugin and the hook.
+    # A raising pre fails the task and the body never runs — but a post is
+    # the task-finished event: once the execution reached the body stage,
+    # every registered post fires when it concludes, the raiser's own
+    # included, irrespective of how any pre fared. The failure names the
+    # plugin and the hook.
     reg = Group("root")
     log: list[str] = []
     ran: list[str] = []
@@ -601,7 +603,7 @@ def test_a_raising_pre_fails_the_task_and_skips_the_body():
         raise ValueError("no thanks")
 
     def b_post(inv, task, result):
-        log.append("b:post")  # must not fire
+        log.append(f"b:post ok={result.ok}")  # fires: its span still closes
 
     for fn in (a_pre, a_post):
         fn.__module__ = "plugin_a"
@@ -619,7 +621,7 @@ def test_a_raising_pre_fails_the_task_and_skips_the_body():
     result = Runner().invoke("build", tasks=reg)
     assert not result.ok
     assert ran == []  # a raising pre fails the task like a failed pre-dep
-    assert log == ["a:pre", "a:post ok=False"]
+    assert log == ["a:pre", "b:post ok=False", "a:post ok=False"]
     assert "pre_task hook 'b_pre' from plugin_b failed" in result.stderr
     assert "ValueError: no thanks" in result.stderr
 
