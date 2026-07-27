@@ -1136,7 +1136,9 @@ def uv_project(project, monkeypatch):
     (project / "uv.lock").write_text(_UV_LOCK, encoding="utf-8")
     monkeypatch.delenv("FOOTMAN_UV_REEXEC", raising=False)
     monkeypatch.delenv("FOOTMAN_NO_UV", raising=False)
-    monkeypatch.setattr(_app.shutil, "which", lambda n: "/fake/uv")
+    # The one lookup both handoffs use — footman's own environment first,
+    # then PATH; faked here so no test depends on a real uv anywhere.
+    monkeypatch.setattr(_app, "_find_uv", lambda: "/fake/uv")
     return project
 
 
@@ -1257,6 +1259,246 @@ def test_handoff_windows_waits_and_carries_the_code(uv_project, monkeypatch):
     with pytest.raises(SystemExit) as excinfo:
         _app.run(["hi"])
     assert excinfo.value.code == 7
+
+
+# --- the script handoff (PEP 723) --------------------------------------------
+# A tasks file that declares its own dependencies carries its own world: uv
+# builds it, and the invocation continues inside it. These pin the rule's
+# edges — especially the ones where it must NOT fire, because a file that
+# works today has to keep working.
+
+_SCRIPT_BLOCK = '''\
+# /// script
+# dependencies = ["footman", "cowsay"]
+# ///
+from footman import task
+
+@task
+def hi(name: str = "world"):
+    """Say hello."""
+    print(f"hello {name}")
+'''
+
+
+@pytest.fixture
+def script_project(project, monkeypatch):
+    """A tasks file carrying script metadata, and a fake uv that answers."""
+    (project / "tasks.py").write_text(_SCRIPT_BLOCK, encoding="utf-8")
+    monkeypatch.delenv("FOOTMAN_UV_REEXEC", raising=False)
+    monkeypatch.delenv("FOOTMAN_NO_UV", raising=False)
+    monkeypatch.setattr(_app, "_find_uv", lambda: "/fake/uv")
+    return project
+
+
+def _fake_uv(monkeypatch, *, sync_code: int = 0, python: str = "/env/bin/python"):
+    """Stand in for the two uv calls the script handoff makes."""
+    ran: list[list[str]] = []
+
+    class Done:
+        def __init__(self, code, out=""):
+            self.returncode, self.stdout = code, out
+
+    def fake_run(cmd, **kwargs):
+        ran.append(list(cmd))
+        if cmd[1] == "sync":
+            return Done(sync_code)
+        return Done(0, python + "\n")
+
+    monkeypatch.setattr(_app.subprocess, "run", fake_run)
+    return ran
+
+
+def test_script_handoff_execs_the_scripts_own_interpreter(script_project, monkeypatch):
+    calls = _capture_exec(monkeypatch)
+    ran = _fake_uv(monkeypatch)
+    with pytest.raises(SystemExit):
+        _app.run(["hi", "--name=x"])
+    # uv materialises the environment, then names its interpreter...
+    assert ran[0][:3] == ["/fake/uv", "sync", "--script"]
+    assert "--quiet" in ran[0]  # silent unless asked
+    assert ran[1][:4] == ["/fake/uv", "python", "find", "--script"]
+    # ...and the invocation continues inside it, argv verbatim.
+    assert calls == [["/env/bin/python", "-m", "footman", "hi", "--name=x"]]
+
+
+def test_script_handoff_is_quiet_but_teaches_under_verbose(script_project, monkeypatch):
+    _capture_exec(monkeypatch)
+    ran = _fake_uv(monkeypatch)
+    with pytest.raises(SystemExit):
+        _app.run(["-v", "hi"])
+    assert "--quiet" not in ran[0]  # -v lets uv's own progress through
+
+
+def test_a_pinned_project_ignores_the_block_entirely(script_project, monkeypatch):
+    # Willem's rule: a portable file checked into a project is not a
+    # problem to be reported. The project pins the runner, so the block is
+    # simply not this run's business — no warning, no refusal.
+    (script_project / "uv.lock").write_text(_UV_LOCK, encoding="utf-8")
+    calls = _capture_exec(monkeypatch)
+    ran = _fake_uv(monkeypatch)
+    with pytest.raises(SystemExit):
+        _app.run(["hi"])
+    assert ran == []  # no script environment was built
+    assert calls == [["/fake/uv", "run", "--project", str(script_project), "fm", "hi"]]
+
+
+def test_a_pinned_project_notes_the_ignored_block_under_verbose(
+    script_project, monkeypatch, capsys
+):
+    (script_project / "uv.lock").write_text(_UV_LOCK, encoding="utf-8")
+    (script_project / ".venv").mkdir()
+    monkeypatch.setattr(_app.sys, "prefix", str(script_project / ".venv"))
+    _fake_uv(monkeypatch)
+    assert _app.run(["hi"]) == 0  # ran here: already the project's environment
+    assert "declares script dependencies" not in capsys.readouterr().err
+    assert _app.run(["-v", "hi"]) == 0
+    err = capsys.readouterr().err
+    assert "declares script dependencies" in err and "ignored here" in err
+
+
+def test_script_handoff_skips_every_optout(script_project, monkeypatch, capsys):
+    calls = _capture_exec(monkeypatch)
+    ran = _fake_uv(monkeypatch)
+    for setup in (
+        lambda: monkeypatch.setenv("FOOTMAN_UV_REEXEC", "1"),
+        lambda: monkeypatch.setenv("FOOTMAN_NO_UV", "1"),
+        lambda: (script_project / "pyproject.toml").write_text(
+            "[project]\nname='x'\n[tool.footman]\nuv = false\n"
+        ),
+    ):
+        setup()
+        assert _app.run(["hi"]) == 0  # ran here, in this process
+        assert "hello world" in capsys.readouterr().out
+        monkeypatch.delenv("FOOTMAN_UV_REEXEC", raising=False)
+        monkeypatch.delenv("FOOTMAN_NO_UV", raising=False)
+    assert calls == [] and ran == []
+
+
+def test_no_uv_runs_in_place_rather_than_refusing(script_project, monkeypatch, capsys):
+    # Environmental facts are never refusals: without uv the file runs
+    # exactly as it did before this rule existed.
+    monkeypatch.setattr(_app, "_find_uv", lambda: None)
+    calls = _capture_exec(monkeypatch)
+    assert _app.run(["hi"]) == 0
+    assert "hello world" in capsys.readouterr().out
+    assert calls == []
+
+
+def test_a_cascade_of_several_files_is_not_a_script(project, monkeypatch, capsys):
+    # A script environment can only be *the* environment; two files have no
+    # single answer, so the rule stays out of it.
+    (project / "pyproject.toml").write_text("[project]\nname='x'\n")
+    nested = project / "sub"
+    nested.mkdir()
+    (nested / "tasks.py").write_text(_SCRIPT_BLOCK, encoding="utf-8")
+    monkeypatch.chdir(nested)
+    monkeypatch.setattr(_app, "_find_uv", lambda: "/fake/uv")
+    calls = _capture_exec(monkeypatch)
+    ran = _fake_uv(monkeypatch)
+    assert _app.run(["hi"]) == 0
+    assert "hello world" in capsys.readouterr().out
+    assert calls == [] and ran == []
+
+
+def test_a_block_without_the_runner_is_refused(script_project, monkeypatch, capsys):
+    # The one refusal: an environment that provably cannot import the
+    # runner. Named, with the fix.
+    (script_project / "tasks.py").write_text(
+        _SCRIPT_BLOCK.replace('["footman", "cowsay"]', '["cowsay"]'), encoding="utf-8"
+    )
+    calls = _capture_exec(monkeypatch)
+    ran = _fake_uv(monkeypatch)
+    assert _app.run(["hi"]) == EX_USAGE
+    err = capsys.readouterr().err
+    assert "declares script dependencies but not 'footman'" in err
+    assert calls == [] and ran == []
+
+
+def test_a_block_with_no_dependencies_asks_for_no_world(script_project, monkeypatch):
+    (script_project / "tasks.py").write_text(
+        '# /// script\n# requires-python = ">=3.11"\n# ///\n'
+        'from footman import task\n\n@task\ndef hi(name: str = "world"):\n'
+        '    """Say hello."""\n    print(f"hello {name}")\n',
+        encoding="utf-8",
+    )
+    calls = _capture_exec(monkeypatch)
+    ran = _fake_uv(monkeypatch)
+    assert _app.run(["hi"]) == 0
+    assert calls == [] and ran == []
+
+
+def test_a_malformed_block_warns_once_and_runs_anyway(
+    script_project, monkeypatch, capsys
+):
+    (script_project / "tasks.py").write_text(
+        "# /// script\n# dependencies = [oops\n# ///\n"
+        'from footman import task\n\n@task\ndef hi(name: str = "world"):\n'
+        '    """Say hello."""\n    print(f"hello {name}")\n',
+        encoding="utf-8",
+    )
+    calls = _capture_exec(monkeypatch)
+    assert _app.run(["hi"]) == 0
+    captured = capsys.readouterr()
+    assert "warning:" in captured.err and "running without it" in captured.err
+    assert "hello world" in captured.out
+    assert calls == []
+
+
+def test_a_failing_sync_carries_uvs_own_exit_code(script_project, monkeypatch):
+    _capture_exec(monkeypatch)
+    _fake_uv(monkeypatch, sync_code=2)
+    # uv already said why on its own stderr; footman doesn't paraphrase it,
+    # it just carries the code out.
+    assert _app.run(["hi"]) == 2
+
+
+def test_script_handoff_takes_the_dash_f_file(project, tmp_path_factory, monkeypatch):
+    elsewhere = tmp_path_factory.mktemp("elsewhere")
+    script = elsewhere / "deploy.py"
+    script.write_text(_SCRIPT_BLOCK, encoding="utf-8")
+    monkeypatch.delenv("FOOTMAN_UV_REEXEC", raising=False)
+    monkeypatch.setattr(_app, "_find_uv", lambda: "/fake/uv")
+    calls = _capture_exec(monkeypatch)
+    ran = _fake_uv(monkeypatch)
+    with pytest.raises(SystemExit):
+        _app.run([f"-f={script}", "hi"])
+    assert ran[0][3] == str(script)  # that file's environment, not the cwd's
+    assert calls == [["/env/bin/python", "-m", "footman", f"-f={script}", "hi"]]
+
+
+def test_a_failed_script_import_teaches_where_the_environment_went(
+    script_project, monkeypatch, capsys
+):
+    # No uv, so no environment was built — and the file's own import of a
+    # declared dependency fails. The refusal says why, and how out.
+    (script_project / "tasks.py").write_text(
+        _SCRIPT_BLOCK.replace(
+            "from footman import task", "import cowsay\nfrom footman import task"
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(_app, "_find_uv", lambda: None)
+    assert _app.run(["hi"]) == EX_USAGE
+    err = capsys.readouterr().err
+    assert "declares script dependencies" in err
+    assert "install uv" in err and "-f" in err
+
+
+def test_an_ordinary_import_failure_gains_no_script_hint(project, capsys):
+    (project / "tasks.py").write_text("import nosuchmodule\n", encoding="utf-8")
+    assert _app.run(["hi"]) == EX_USAGE
+    assert "script dependencies" not in capsys.readouterr().err
+
+
+def test_a_branded_cli_without_a_dist_stays_out_of_it(script_project, monkeypatch):
+    # footman cannot know which distribution ships someone else's runner,
+    # so it never guesses one into an environment.
+    from footman.app import App
+
+    calls = _capture_exec(monkeypatch)
+    ran = _fake_uv(monkeypatch)
+    assert App(name="acme", prog="acme").run(["hi"]) == 0
+    assert calls == [] and ran == []
 
 
 def test_where_takes_the_dotted_address(project, capsys):

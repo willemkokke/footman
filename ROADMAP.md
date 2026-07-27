@@ -88,7 +88,8 @@ Not gating anything, carried forward minus the entries that shipped
   footman applies unbidden.
 - **Handoffs for other package managers** (poetry, pdm) — if there's a
   want. uv shipped first because `uv.lock` makes the fire-rule
-  unambiguous; each manager needs an equally sharp rule of its own.
+  unambiguous, and its native script support carries the PEP 723 rule
+  too; each manager needs an equally sharp rule of its own.
 - From the typing table's "post-1.0" rows: hidden parameters, and fixed-arity
   `tuple[X, Y]` in comma form (`--size 800,600`).
 

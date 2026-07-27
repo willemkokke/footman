@@ -45,12 +45,19 @@ class Brand:
     the short command name (the error prefix and hints); `version` is *your*
     version string; `tasks_file` is the filename your users write tasks in
     (config `tasks` still overrides it per project).
+
+    `dist` is the distribution that ships your CLI — the name a user would
+    `pip install`. It is what the handoffs reason about: which package a
+    project's lockfile must pin, and which one a tasks file carrying its
+    own PEP 723 dependencies must declare. Left `None` (the default for a
+    custom brand), both handoffs simply stay out of your way.
     """
 
     name: str = "footman"
     prog: str = "fm"
     version: str = __version__
     tasks_file: str = "tasks.py"
+    dist: str | None = "footman"
 
 
 DEFAULT_BRAND = Brand()
@@ -65,12 +72,18 @@ class App:
         prog: str = "fm",
         version: str | None = None,
         tasks_file: str = "tasks.py",
+        dist: str | None = None,
     ) -> None:
+        # `dist` is opt-in for a branded CLI: footman cannot guess which
+        # distribution ships someone else's runner, and a wrong guess would
+        # hand a user's invocation to an environment without it. Unset, the
+        # handoffs stay out of the way (documented in custom-cli.md).
         self.brand = Brand(
             name=name,
             prog=prog,
             version=version or __version__,
             tasks_file=tasks_file,
+            dist=dist,
         )
 
     def run(self, argv: list[str] | None = None) -> int:

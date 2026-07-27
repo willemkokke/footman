@@ -467,6 +467,63 @@ root's. A deep folder can adjust behaviour with a two-line
 `footman.toml` — the [configuration ladder](configuration.md) reaches
 everywhere the cascade does.
 
+### A tasks file that carries its own dependencies
+
+A tasks file can declare what it needs, inline, with a
+[PEP 723](https://peps.python.org/pep-0723/) header. Then it needs no
+project at all — drop it in any folder and run it:
+
+```python
+# /// script
+# requires-python = ">=3.11"
+# dependencies = ["footman", "httpx"]
+# ///
+from footman import task
+
+@task
+def health(url: str = "https://example.com"):
+    "Check a deployment is up."
+    import httpx
+    print(httpx.get(url).status_code)
+```
+
+`fm health` builds that environment once (uv does the work) and runs
+inside it; every later run is a warm cache hit. Name any file with
+`-f=deploy.py` and the same rule applies to that file's header. Because
+uv reads the block natively, everything it understands works — a
+`requires-python`, a `[tool.uv.sources]` pointing a dependency at a git
+ref or a local path.
+
+List footman itself among the dependencies: the file imports it, so the
+environment has to contain it. That is also the one thing footman
+refuses, because the environment provably could not run the file.
+
+Two touches make it a command in its own right:
+
+```python
+#!/usr/bin/env -S uv run --script
+# /// script
+# dependencies = ["footman", "httpx"]
+# ///
+import footman
+from footman import task
+
+@task
+def health(url: str = "https://example.com"): ...
+
+if __name__ == "__main__":
+    footman.main(__file__)
+```
+
+`chmod +x deploy.py`, and `./deploy.py health --url=…` runs from any
+directory — the same tasks, the same options, the same `--help`, with no
+runner installed at all.
+
+Checked into a project, nothing changes for people working in it: a
+project whose lockfile pins footman owns its runs, so the header is
+simply ignored there (`-v` mentions it). The file is portable *and* at
+home in the repo.
+
 ### Extend an inherited task instead of replacing it
 
 Overriding by name usually means *and also*, not *instead of*.
@@ -580,7 +637,7 @@ def vendor():
 A second run revalidates with the server (ETag / `If-None-Match`)
 instead of re-downloading; a `304` costs one round trip and keeps
 "cached" honest. `sha256=` refuses anything that arrived wrong, which is
-what makes the build reproducible. And a fetch *is a step*: `--dry-run`
+what makes the task reproducible. And a fetch *is a step*: `--dry-run`
 prints it without touching the network, `recording()` asserts on it in
 tests, `--json` carries it, and it appears in the step lines beside your
 `run()` calls. Byte counts feed the progress bar for free.

@@ -9,6 +9,30 @@ versions may include breaking changes.
 
 ### Added
 
+- **A tasks file can carry its own dependencies.** A file with a
+  [PEP 723](https://peps.python.org/pep-0723/) header (`# /// script`)
+  declares what it needs inline; uv builds that environment and the run
+  continues inside it, so one portable file works in any folder with no
+  project at all. `-f=deploy.py` applies the same rule to any named file.
+  uv reads the block natively, so `requires-python` and `[tool.uv]` tables
+  (sources, indexes) work as written. The file must list the runner it
+  imports — the one refusal, because that environment provably could not
+  run it. A project whose lockfile pins footman still owns its runs: the
+  header is ignored there, mentioned only under `-v`, so a portable file
+  is equally at home checked into a repo. Everything else stays soft: no
+  uv, several cascading files, or an unreadable block just run as before,
+  and an import that then fails says where the environment went.
+- **`footman.main(__file__)` makes a tasks file its own command.** Paired
+  with a `#!/usr/bin/env -S uv run --script` shebang, `./deploy.py build`
+  runs the file's own tasks from any directory — same options, same
+  `--help` — with no runner installed. An explicit `-f` still wins.
+- **`pip install footman[uv]`** bundles uv beside the `fm` script, so a
+  globally-installed runner carries the tool both handoffs need. Nothing
+  imports it; it is found on disk, this runner's environment before PATH.
+- **`App(dist=...)`** tells a branded CLI which distribution ships it —
+  what a lockfile pins, and what a script header must declare. Unset,
+  both handoffs stay out of a branded runner's way.
+
 - **`_toolhistory.insert` — a release can arrive at any position.** `extend`
   appends below the floor and `promote` replaces the head; this is the third
   case the format was designed for, a release belonging *between* two the

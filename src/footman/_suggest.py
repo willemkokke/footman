@@ -21,6 +21,23 @@ import sys
 from typing import Any
 
 
+def _maybe_reexec(files: list) -> None:
+    """Continue in a script file's own environment, when it already exists.
+
+    A completer on a tasks file that carries its own dependencies needs
+    that file's world to import at all. Same rule as the refresh child:
+    never build one here (a keystroke must not reach for the network), and
+    when there is nothing to re-exec into, carry on in place.
+    """
+    if len(files) != 1:
+        return
+    from footman import _script
+
+    python = _script.child_python(files[0])
+    if python is not None:
+        _script.reexec_child(python, ["-m", "footman._suggest", *sys.argv[1:]])
+
+
 def _fresh(completer: Any) -> list[str]:
     """Run *completer* with its own stdout/stderr muted, so its chatter can't
     leak into the value channel the hot path reads."""
@@ -44,6 +61,7 @@ def _values(param: str, path: list[str], g: dict[str, object]) -> list[str]:
     files, _cfg = _app.resolve_task_files(g, on_warning=lambda *a: None, on_note=None)
     if not files or not path:
         return []
+    _maybe_reexec(files)  # before any user code is imported
     # Plugin pulls are authored in the tasks files, so discovery alone
     # rebuilds the whole tree — a completer on a pulled task included.
     base = registry.Group("root")
@@ -80,6 +98,7 @@ def _global_values(name: str, g: dict[str, object]) -> list[str]:
     files, _cfg = _app.resolve_task_files(g, on_warning=lambda *a: None, on_note=None)
     if not files:
         return []
+    _maybe_reexec(files)  # before any user code is imported
     base = registry.Group("root")
     root = discover.load_tree(files, base=base)
     for opt in root.contributions.get("globals", ()):

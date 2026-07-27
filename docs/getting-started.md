@@ -9,16 +9,29 @@ uv add --dev footman        # or: pip install footman
 footman requires Python 3.11+ and has zero runtime dependencies. Installing it
 puts two console scripts on your `PATH`: `footman` and the two-letter `fm`.
 
-You can also install it once, globally (`uv tool install footman`), and
-still type plain `fm` inside uv projects: when a project's `uv.lock` pins
-footman and you aren't already inside its environment, `fm` hands the
-invocation to `uv run` — the project's own footman runs, at the project's
-pinned version, with the project's tools on PATH. One rule, no magic: the
-lockfile declaring footman is what makes it fire. Purists opt out with
-`uv = false` under `[tool.footman]` (or `FOOTMAN_NO_UV=1`), and TAB
-completion is untouched either way — it never enters an environment at
-all. uv only for now: its lockfile makes the rule unambiguous. If a
-poetry or pdm handoff would serve you, open an issue.
+You can also install it once, globally (`uv tool install "footman[uv]"` —
+the extra bundles uv itself, so the runner carries the one tool it hands
+off with), and still type plain `fm` everywhere. Two rules decide whose
+environment a run belongs to:
+
+- **A project that pins footman owns it.** When a `uv.lock` above you
+  names footman and you aren't already inside its environment, `fm` hands
+  the invocation to `uv run` — the project's own footman runs, at the
+  project's pinned version, with the project's tools on PATH.
+- **Otherwise, a tasks file may declare its own.** A file carrying a
+  [PEP 723](https://peps.python.org/pep-0723/) header lists what it needs
+  inline; uv builds that environment and the run continues inside it. One
+  file, no project — see
+  [a tasks file that carries its own dependencies](cookbook.md#a-tasks-file-that-carries-its-own-dependencies).
+
+The project rule wins where both could apply, so a portable file checked
+into a repo simply runs on the repo's dependencies; `-v` says so. One
+rule each, no magic: a lockfile that names footman, or a file that names
+its own world. Purists opt out with `uv = false` under `[tool.footman]`
+(or `FOOTMAN_NO_UV=1`), and TAB completion is untouched either way — it
+never enters an environment at all. uv only for now: its lockfile and its
+script support make both rules unambiguous. If a poetry or pdm handoff
+would serve you, open an issue.
 
 ## Write a tasks file
 

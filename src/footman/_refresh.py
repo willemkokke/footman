@@ -12,11 +12,36 @@ The completion hot path spawns this detached, two ways:
 
 Both rebuild exactly as a real run would and are strictly fire-and-forget: they
 print nothing and never raise.
+
+A tasks file that carries its own PEP 723 dependencies is rebuilt from inside
+its script environment — but only when uv can reach one without the network,
+since a keystroke must never download anything. Otherwise the rebuild happens
+here, in place, exactly as it always did: often enough to answer, because a
+tasks file's *module-level* imports are usually just the runner.
 """
 
 from __future__ import annotations
 
 import contextlib
+
+
+def _maybe_reexec(files: list, entry: str, *args: str) -> None:
+    """Continue this rebuild inside a script file's own environment.
+
+    Only for a single file that declares dependencies, and only when uv can
+    reach that environment offline (`_script.child_python` never touches the
+    network) — otherwise this returns and the child rebuilds in place,
+    exactly as it always did. The re-executed child runs the same one-liner
+    *entry*, so the two spawn shapes stay identical apart from the
+    interpreter.
+    """
+    if len(files) != 1:
+        return  # a cascade has no single environment to be right about
+    from footman import _script
+
+    python = _script.child_python(files[0])
+    if python is not None:
+        _script.reexec_child(python, ["-c", entry, *args])
 
 
 def refresh_cwd() -> None:
@@ -45,6 +70,7 @@ def _rebuild() -> None:
     files = _paths.task_files(cwd, ceiling, name)
     if not files:
         return
+    _maybe_reexec(files, "from footman import _refresh; _refresh.refresh_cwd()")
 
     # Mirror the app layer's cwd cascade build; plugin pulls are authored in
     # the tasks files themselves, so discovery alone rebuilds the whole tree.
@@ -71,6 +97,12 @@ def _rebuild_source(tasks_file: str) -> None:
     if not one.is_file():
         return  # a typed-but-missing -f value: nothing to build
     cwd = Path.cwd()
+    _maybe_reexec(
+        [one],
+        "import sys; from footman import _refresh; "
+        "_refresh.refresh_source(sys.argv[1])",
+        tasks_file,  # the entry reads it back off argv
+    )
 
     # Mirror a real `-f` run (see _app._run): one file, no cascade, cached
     # under the (cwd, file) key with max_age=0 — no background refresh,

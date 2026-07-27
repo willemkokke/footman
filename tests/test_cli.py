@@ -221,6 +221,47 @@ def test_main_dispatches_version(monkeypatch, capsys):
     assert "footman" in capsys.readouterr().out
 
 
+def test_main_takes_its_own_file_as_the_tasks_file(tmp_path, monkeypatch, capsys):
+    # The shebang pattern: a tasks file ending in `footman.main(__file__)`
+    # is its own command, and reads its own tasks whatever the directory.
+    script = tmp_path / "deploy.py"
+    script.write_text(
+        'from footman import task\n\n@task\ndef ship():\n    """Ship."""\n'
+        '    print("shipped")\n',
+        encoding="utf-8",
+    )
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.chdir(elsewhere)
+    monkeypatch.setenv("FOOTMAN_NO_UV", "1")  # this is about argv, not handoffs
+    monkeypatch.setattr(sys, "argv", ["deploy.py", "ship"])
+    with pytest.raises(SystemExit) as exc:
+        footman.main(str(script))
+    assert exc.value.code == 0
+    assert "shipped" in capsys.readouterr().out
+
+
+def test_an_explicit_tasks_file_still_wins(tmp_path, monkeypatch, capsys):
+    theirs = tmp_path / "theirs.py"
+    theirs.write_text(
+        'from footman import task\n\n@task\ndef ship():\n    """Ship."""\n'
+        '    print("theirs")\n',
+        encoding="utf-8",
+    )
+    mine = tmp_path / "mine.py"
+    mine.write_text(
+        'from footman import task\n\n@task\ndef ship():\n    """Ship."""\n'
+        '    print("mine")\n',
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FOOTMAN_NO_UV", "1")
+    monkeypatch.setattr(sys, "argv", ["mine.py", f"-f={theirs}", "ship"])
+    with pytest.raises(SystemExit):
+        footman.main(str(mine))
+    assert "theirs" in capsys.readouterr().out
+
+
 def test_lazy_reexports():
     # F56: every __all__ entry must resolve (via __getattr__ or as a real attr)
     # — a permanent drift guard for the lazy public surface.

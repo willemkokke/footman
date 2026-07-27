@@ -30,6 +30,14 @@ classifiers = [
 # and the execution path builds its CLI from function signatures directly.
 dependencies = []
 
+# One optional extra, and it is not a library: `pip install footman[uv]`
+# (or `uv tool install "footman[uv]"`) puts a uv binary in the same scripts
+# directory as `fm` itself, so a globally-installed runner carries the tool
+# both handoffs need — the project one, and the environment a tasks file
+# declares for itself. Nothing imports it; it is found on disk.
+[project.optional-dependencies]
+uv = ["uv>=0.6"]
+
 [project.urls]
 Homepage = "https://github.com/willemkokke/footman"
 Documentation = "https://willemkokke.github.io/footman/"
