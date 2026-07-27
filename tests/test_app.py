@@ -1464,3 +1464,18 @@ def test_tree_draws_branches_and_skips_hidden(hidden_project, capsys):
     # The nested leaf shows its own name; the address lives in --list.
     assert "ops.deploy" not in out
     assert "machine-only" not in out and "cleanup" not in out
+
+
+def test_tree_aligns_the_description_column(project, capsys):
+    # The two-band layout --list draws: every description starts at one
+    # column, whatever depth its name sits at — and no separator glyph,
+    # exactly like --list.
+    assert _app.run(["--tree"]) == 0
+    out = capsys.readouterr().out
+    assert "—" not in out
+    columns = set()
+    for line in out.splitlines():
+        for help_text in ("Say hello.", "Extra tools", "Echo words."):
+            if help_text in line:
+                columns.add(line.index(help_text))
+    assert len(columns) == 1

@@ -1027,6 +1027,22 @@ def bind_global_options(options: Sequence[Any], tokens: Sequence[str]) -> str | 
     return None
 
 
+def _advise_unread_uses(ctx: Context, fn: Task) -> None:
+    """`-v` only: a task that declared `uses=[OPT]` but finished without
+    reading `.value` gets an advisory — a stale declaration misleads help
+    and provenance, but quietly, so it never nags an ordinary run."""
+    if not ctx.verbose:
+        return
+    for opt in registry.task_uses(fn):
+        if (ctx.task or "?") not in opt._reads:
+            _globals._note(
+                f"global-unread:{opt.name}",
+                f"task {ctx.task or '?'} declares --{opt.name} in uses= but "
+                f"never read it this run — prune the declaration if it is "
+                f"stale",
+            )
+
+
 # --- the per-task lifecycle: pre_task / post_task ----------------------------
 
 
@@ -1532,6 +1548,9 @@ def run_bound(
                         code, returned, error = _call(fn, args, kwargs, as_call)
                 else:
                     code, returned, error = _call(fn, args, kwargs, as_call)
+        if error is None:
+            # The body finished and had every chance to read what it declared.
+            _advise_unread_uses(ctx, fn)
     finally:
         _current.reset(token)
         worker.name = born

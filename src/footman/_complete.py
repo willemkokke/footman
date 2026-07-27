@@ -348,6 +348,9 @@ def complete(tree: dict, words: list[str]) -> list[str]:
             # same shapes a task parameter bakes, answered the same way.
             if "path" in entry.get("types", []):
                 return [_FILES]
+            if entry.get("dynamic"):  # recompute fresh, never the baked snapshot
+                prefix = "" if bash_split else f"{optname}="
+                return [_DYNAMIC, valpart, prefix, entry["name"]]
             choices = [c for c in entry.get("choices", ()) if c.startswith(valpart)]
             return choices if bash_split else [f"{optname}={c}" for c in choices]
         choices = [c for c in _GLOBAL_CHOICES.get(optname, ()) if c.startswith(valpart)]
@@ -642,11 +645,17 @@ def _fresh_dynamic(param: str, path: list[str], args: list[str]) -> list[str] | 
 
     Isolated on purpose: the subprocess imports the framework and the user's
     code, which the hot path must never do. A timeout or non-zero exit returns
-    None, and the caller shows nothing rather than a stale snapshot.
+    None, and the caller shows nothing rather than a stale snapshot. An empty
+    *path* addresses a plugin's global option by name — a task parameter
+    always rides with the segment path that reached it.
     """
-    cmd = [sys.executable, "-m", "footman._suggest", "--param", param]
-    for name in path:
-        cmd += ["--path", name]
+    cmd = [sys.executable, "-m", "footman._suggest"]
+    if path:
+        cmd += ["--param", param]
+        for name in path:
+            cmd += ["--path", name]
+    else:
+        cmd += ["--global", param]
     prior = args[:-1]
     if (tf := _leading_global_value(prior, ("-f", "--tasks-file"))) is not None:
         cmd += ["--tasks-file", tf]
