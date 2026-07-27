@@ -42,6 +42,7 @@ if TYPE_CHECKING:
     from footman.context import select as select
     from footman.context import track as track
     from footman.context import use_context as use_context
+    from footman.invocation import Invocation as Invocation
     from footman.params import Arg as Arg
     from footman.params import Exists as Exists
     from footman.params import Forward as Forward
@@ -71,6 +72,7 @@ if TYPE_CHECKING:
     from footman.registry import capture as capture
     from footman.registry import finalize as finalize
     from footman.registry import group as group
+    from footman.registry import pre_tasks as pre_tasks
     from footman.registry import requires as requires
     from footman.registry import requires_dep as requires_dep
     from footman.registry import requires_env as requires_env
@@ -90,6 +92,7 @@ __all__ = [
     "FetchError",
     "Forward",
     "Group",
+    "Invocation",
     "IsDir",
     "IsFile",
     "Many",
@@ -129,6 +132,7 @@ __all__ = [
     "parallel",
     "passthrough",
     "plugin",
+    "pre_tasks",
     "progress",
     "prompt",
     "recording",
@@ -171,6 +175,7 @@ def __getattr__(name: str) -> object:
         "Group",
         "capture",
         "finalize",
+        "pre_tasks",
         "Tasks",
         "TaskView",
         "requires",
@@ -260,4 +265,8 @@ def __getattr__(name: str) -> object:
         from footman import app
 
         return getattr(app, name)
+    if name == "Invocation":
+        from footman import invocation
+
+        return invocation.Invocation
     raise AttributeError(f"module 'footman' has no attribute {name!r}")

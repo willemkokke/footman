@@ -28,6 +28,7 @@ from footman import (
     context,
     discover,
     executor,
+    invocation,
     manifest,
     registry,
     schedule,
@@ -1149,8 +1150,17 @@ def _execute(
             "(footman.compose.plugin; see the composing docs)",
         )
 
+    inv = invocation.Invocation(
+        cli=g,
+        config=cfg,
+        root=str(files[0].parent) if files else "",
+        cwd=os.getcwd(),
+    )
     try:
-        reg = discover.load_tree(files, base=base)
+        reg = discover.load_tree(files, base=base, inv=inv)
+    except discover.HookError as exc:
+        # A hook that raised is a refusal, named — nothing has run yet.
+        return _refuse(json_mode, str(exc))
     except discover.TasksImportError as exc:
         if isinstance(exc.original, registry.RegistrationError):
             # a user mistake, not a crash

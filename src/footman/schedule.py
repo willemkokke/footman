@@ -33,8 +33,8 @@ from footman.registry import (
     is_infinite,
     is_interactive,
     keeps_going,
-    post_tasks,
-    pre_tasks,
+    post_deps,
+    pre_deps,
     sharing,
     task_confirm,
     wants_progress,
@@ -202,7 +202,7 @@ def _build_dag(root: Group, segments: list[Segment]) -> list[_Node]:
         """Attach *node*'s prerequisites, propagating its sharing policy down:
         a freshly-requested task's inputs are freshly requested too, or
         "fresh" would be a half-truth."""
-        pre = list(pre_tasks(node.fn))
+        pre = list(pre_deps(node.fn))
         # An empty-body group default fans out the group's own tasks: they become
         # implicit prerequisites, so the scheduler runs them (in parallel) and the
         # default's forward-marked values thread into the ones that declare them.
@@ -217,7 +217,7 @@ def _build_dag(root: Group, segments: list[Segment]) -> list[_Node]:
             d = add_dep(_as_task(dep), _owner_of(dep), asked_by=node.shared)
             node.deps.add(d.key)
             node.forward_targets.append(d)  # forwarding threaded in a later pass
-        for dep in post_tasks(node.fn):
+        for dep in post_deps(node.fn):
             d = add_dep(_as_task(dep), _owner_of(dep), asked_by=node.shared)
             d.deps.add(node.key)
             node.forward_targets.append(d)

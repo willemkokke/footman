@@ -13,7 +13,7 @@ from footman.registry import (
     is_atomic,
     is_interactive,
     keeps_going,
-    pre_tasks,
+    pre_deps,
     task_confirm,
 )
 from footman.split import ChainError, split_chain
@@ -260,7 +260,7 @@ def test_bare_default_still_registers_with_no_options():
 
     assert reg.groups["lint"].default_task is lint_all
     assert keeps_going(lint_all) is None
-    assert pre_tasks(lint_all) == []
+    assert pre_deps(lint_all) == []
 
 
 def test_interactive_on_an_empty_body_default_is_rejected():

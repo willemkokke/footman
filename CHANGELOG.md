@@ -9,20 +9,17 @@ versions may include breaking changes.
 
 ### Added
 
-- **Priming reads four tiers, not one.** PyPI, npm, and release assets from
-  GitHub and GitLab — which covers bun's own releases too. Each tier brings
-  its own index (`time` maps on npm, `published_at` on GitHub,
-  `released_at` on GitLab) and its own install shape, and a forge tag is
-  normalised to what the binary reports: a tag is `v2.96.0` on one project
-  and `2.96.0` on the next, while the history keys on the version the tool
-  prints, or a primed release never matches the base it belongs under.
 
-  What stays unlistable is the `system` tier — git and docker are read from
-  the host and have no fetch source wired — and provisioned interpreters,
-  which are not tool releases. Those are named and skipped. A walk that ends
-  early now says why: `cspell +0 (from 10.0.1) — stopped at 10.0.0 (could not
-  install)` distinguishes "nothing left to read" from "this machine has no
-  bun", which a bare `+0` could not.
+
+### Removed
+
+- **BREAKING: `@finalize` is retired in favour of `@pre_tasks`.** It raises,
+  pointing at the replacement. The migration is mechanical: take `inv` instead
+  of `tasks`, and read `inv.tasks` where the tree view used to arrive. It runs
+  at the same moment, in the same cascade order, and can now also set the
+  environment every task will see. Internally the readers for a task's
+  declared prerequisites are `registry.pre_deps` / `post_deps`, leaving
+  `pre_tasks` / `post_tasks` to name the lifecycle moments.
 
 ## [0.23.0] — 2026-07-27
 

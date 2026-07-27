@@ -20,6 +20,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from footman import registry
+from footman.invocation import Invocation
 from footman.registry import Group, Task
 
 # Attribute stamped on every task fn: the directory of the file that defined
@@ -37,13 +38,22 @@ class TasksImportError(Exception):
         super().__init__(f"{path}: {type(original).__name__}: {original}")
 
 
-class FinalizeError(Exception):
-    """A `@finalize` hook raised while editing the discovered tree."""
+class HookError(Exception):
+    """A lifecycle hook raised; the message names the hook, never a bare
+    traceback. A deliberate stop (`fail("…")`) renders as its reason."""
 
-    def __init__(self, name: str, original: BaseException) -> None:
+    def __init__(self, kind: str, name: str, original: BaseException) -> None:
+        self.kind = kind
         self.name = name
         self.original = original
-        super().__init__(f"@finalize {name!r}: {type(original).__name__}: {original}")
+        from footman import context
+
+        detail = (
+            str(original) or f"{type(original).__name__}"
+            if context._is_deliberate_stop(original)
+            else f"{type(original).__name__}: {original}"
+        )
+        super().__init__(f"@{kind} {name!r}: {detail}")
 
 
 def _import_file(path: Path, index: int) -> Group:
@@ -125,7 +135,9 @@ def _overlay(base: Group, overlay: Group, directory: str) -> None:
             base.groups[name] = sub
 
 
-def load_tree(files: list[Path], base: Group | None = None) -> Group:
+def load_tree(
+    files: list[Path], base: Group | None = None, inv: Invocation | None = None
+) -> Group:
     """Import each file (root first) and overlay them into one merged tree.
 
     *base* seeds the tree (config-mounted plugin groups go there), so
@@ -149,15 +161,23 @@ def load_tree(files: list[Path], base: Group | None = None) -> Group:
         # and then raised, which would otherwise strand ghost tasks in
         # registry.root for the rest of the process (F62).
         registry.reset()
-    # Run the hooks on the fully-merged tree, cascade order (root first, the
-    # folder nearest cwd last), each seeing the previous edits — so a subfolder
-    # refines what root did. Discovery-time, so the edits reach the manifest.
-    view = registry.Tasks(merged)
-    for run in contributions["finalize"]:
+    # The first lifecycle moment, run here so *every* path gets it: a real
+    # invocation, the completion refresh child, and `_suggest`. Cascade order
+    # (root first, the folder nearest cwd last), each hook seeing the previous
+    # edits — so a subfolder refines what root did. Discovery-time, before
+    # availability gates and the manifest, so an edit reaches both.
+    if inv is None:
+        # No invocation supplied means no command line to read — the refresh
+        # child's situation, and the reason a tree edit may not depend on one.
+        inv = Invocation(cwd=str(Path.cwd()))
+    inv.tasks = registry.Tasks(merged)
+    for run in contributions["pre_tasks"]:
         try:
-            run(view)
+            run(inv)
         except Exception as exc:  # a bad hook names itself, never a bare traceback
-            raise FinalizeError(getattr(run, "__name__", repr(run)), exc) from exc
+            raise HookError(
+                "pre_tasks", getattr(run, "__name__", repr(run)), exc
+            ) from exc
     return merged
 
 
