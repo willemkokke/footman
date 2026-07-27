@@ -190,11 +190,12 @@ def fmt_secs(t: float) -> str:
 class StatusLine:
     """The one live line for a run, drawn on the real stderr.
 
-    Fed by *both* parallel engines — scheduler nodes and `parallel()`
-    children are the same kind of unit — so a chain and a task-body
-    fan-out present identically. Determinate runs fill a bar against the
-    estimate's p90 (clamped at 98% until the run truly ends); anything
-    else pulses, with elapsed time either way.
+    Fed by every engine that runs a request — scheduler nodes, `parallel()`
+    children, and body calls through the futures layer are the same kind of
+    unit — so a chain, a task-body fan-out and an inline `build()` present
+    identically. Determinate runs fill a bar against the estimate's p90
+    (clamped at 98% until the run truly ends); anything else pulses, with
+    elapsed time either way.
 
     Coexistence contract: the output routers report every real-terminal
     write via `notify()`, which clears a painted line first and tracks

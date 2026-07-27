@@ -1572,6 +1572,14 @@ def task_body(fn: Task) -> Task:
     return fn
 
 
+def is_task_handle(obj: Any) -> bool:
+    """Whether *obj* is a task reference whose call routes through the
+    body-call machinery — the `@task` handle, or an `.opts()` reference
+    around one. What `parallel()` asks so a task child is counted on the
+    live status line once, by the machinery, never twice."""
+    return isinstance(obj, (_TaskFn, _Opted))
+
+
 def declared_hidden(fn: Task) -> bool | None:
     """*fn*'s own answer to "list me?", or `None` when it never said.
 

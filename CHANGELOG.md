@@ -34,6 +34,10 @@ versions may include breaking changes.
   separator — `--list`, `--tree` and group help now draw their two-band
   layout through one shared renderer, so a rule about one is true of all
   three (group help gains description wrapping in the bargain).
+- **Body calls are units on the live status line.** An inline `build()` —
+  fresh, or satisfied by sharing — counts and shows as running exactly
+  like a scheduler node or a `parallel()` child. A task handed to
+  `parallel()` is counted once, by the body-call machinery, never twice.
 
 ## [0.25.0] — 2026-07-27
 

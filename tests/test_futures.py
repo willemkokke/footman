@@ -982,3 +982,109 @@ def test_a_required_ask_parameter_off_a_terminal_fails_the_caller():
     result = drive(reg, "go")
     assert not result.ok
     assert "--name is required" in result.stderr
+
+
+# --- body calls on the live status line ---------------------------------------
+
+
+class _FakeStatus:
+    """Collects unit events the way the real StatusLine receives them."""
+
+    def __init__(self):
+        self.events: list[tuple] = []
+        self.total = 0
+
+    def unit_added(self, count: int = 1) -> None:
+        self.total += count
+        self.events.append(("added", count))
+
+    def unit_started(self, name: str) -> None:
+        self.events.append(("started", name))
+
+    def unit_finished(self, name: str, ok: bool) -> None:
+        self.events.append(("finished", name, ok))
+
+    def unit_skipped(self, name: str) -> None:
+        self.events.append(("skipped", name))
+
+    def unit_counted(self, name: str, done: int, total: int) -> None:
+        pass
+
+    def notify(self, s: str) -> None:
+        pass
+
+    def paint(self) -> None:
+        pass
+
+
+def _with_status(reg: Group, line: str) -> _FakeStatus:
+    """Drive *line* with a fake status installed; the scheduler builds no
+    line of its own off a terminal, so the fake stays the run's status and
+    collects exactly what the futures layer feeds it."""
+    from footman import context
+
+    status = _FakeStatus()
+    context.set_status(status)
+    try:
+        result = drive(reg, line)
+        assert result.ok, result.stderr
+    finally:
+        context.set_status(None)
+    return status
+
+
+def test_a_body_call_is_a_unit_on_the_status_line():
+    reg = Group("root")
+
+    @reg.task
+    def build() -> str:
+        return "dist/app"
+
+    @reg.task
+    def publish():
+        build()
+
+    status = _with_status(reg, "publish")
+    assert ("started", "build") in status.events
+    assert ("finished", "build", True) in status.events
+    assert status.total == 1  # the call; the scheduler's node fed no fake
+
+
+def test_a_shared_body_call_is_a_unit_too():
+    # The request satisfied by the prerequisite's execution still counts —
+    # a scheduler node satisfied by sharing counts, so a call does too.
+    reg = Group("root")
+
+    @reg.task
+    def build() -> str:
+        return "dist/app"
+
+    @reg.task(pre=[build])
+    def publish():
+        build()  # shared with the prerequisite's execution
+
+    status = _with_status(reg, "publish")
+    assert ("started", "build") in status.events
+    assert ("finished", "build", True) in status.events
+
+
+def test_parallel_task_children_count_once():
+    # parallel(build) is one request: the machinery counts it; parallel()
+    # counts only children it alone can see (plain thunks).
+    from footman import parallel
+
+    reg = Group("root")
+
+    @reg.task
+    def compile() -> int:
+        return 0
+
+    @reg.task
+    def fanout():
+        parallel(compile, lambda: 0)
+
+    status = _with_status(reg, "fanout")
+    started = [e for e in status.events if e[0] == "started"]
+    assert started.count(("started", "compile")) == 1
+    assert ("started", "…") in started  # the lambda: parallel()'s own unit
+    assert status.total == 2  # one task request + one anonymous thunk

@@ -300,13 +300,26 @@ def call(task: Any, args: tuple[Any, ...], kwargs: dict[str, Any]) -> Any:
             with run.lock:
                 run.waits.pop(me, None)
             raise hook_error
+    # The waiting request is a unit like any other — a scheduler node
+    # satisfied by sharing counts, so a body call satisfied by sharing does
+    # too, and the caller's block on the share is visible on the line.
+    status = context.active_status()
+    if status is not None:
+        status.unit_added(1)
+        status.unit_started(label)
     try:
         # A finished cell answers instantly (the memo); a live one blocks until
         # the thread that claimed it is done, and both hand back one value.
         value = cell.future.result()
+    except BaseException:
+        if status is not None:
+            status.unit_finished(label, False)
+        raise
     finally:
         with run.lock:
             run.waits.pop(me, None)
+    if status is not None:
+        status.unit_finished(label, True)
     row = _shared_result(cell.label, value)
     if life is not None and handle is not None:
         post_error = _executor._exit_task_hooks(life, handle, row)
@@ -527,9 +540,23 @@ def _run_now(
     # Unsharedness propagates: what this callee asks for is asked the same
     # way, unless that task declares its own answer.
     child.shared = parent.shared and shared
-    result = executor.run_bound(
-        task, seg, child, list(args), dict(kwargs), as_call=True, handle=handle
-    )
+    # A body call is a request like a scheduler node or a parallel() child:
+    # a unit on the live status line, counted the moment it becomes real
+    # work (a confirm= denial above never was one).
+    status = context.active_status()
+    if status is not None:
+        status.unit_added(1)
+        status.unit_started(label)
+    try:
+        result = executor.run_bound(
+            task, seg, child, list(args), dict(kwargs), as_call=True, handle=handle
+        )
+    except BaseException:
+        if status is not None:
+            status.unit_finished(label, False)
+        raise
+    if status is not None:
+        status.unit_finished(label, result.ok)
     _record(result)
     if parent.sink is not None and (text := buf.getvalue()):
         parent.sink.write(text)  # the callee's output belongs to the run, not /dev/null
