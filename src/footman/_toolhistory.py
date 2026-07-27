@@ -267,6 +267,199 @@ def promote(
     return bool(step)
 
 
+PLATFORM_PRIORITY = ("Linux", "macOS", "Windows")
+"""Whose words to keep when two platforms describe one option differently.
+
+A tie-break, and nothing more. The store keeps one copy of an option's text,
+so without a fixed, order-independent pick, alternating matrix legs would
+flip a divergent help string every week — and every flip is a `revert` in a
+store whose whole question is "did anything change". Fixed and explicit
+because `sorted()` is not it: ASCII puts `macOS` after `Windows`.
+"""
+
+
+def entry_of(doc: dict, version: str) -> dict[str, Any] | None:
+    """The stored record for *version* — the base, or one of the deltas.
+
+    The record, not the surface: `at()` replays a surface, while this is the
+    entry itself, carrying who observed the release and what they missed.
+    """
+    if version == doc["base"]["version"]:
+        return doc["base"]
+    return doc["deltas"].get(version)
+
+
+def absent_at(doc: dict, version: str) -> dict[str, list[str]]:
+    """Who looked at *version* and did not find each option.
+
+    A **sidecar** beside the surface, keyed `verb\toption` the way deltas
+    key their own moves (a bare `verb\t` marks a whole subcommand missing).
+    Kept out of the surface deliberately: an absence is a fact about an
+    *observation*, not about the release, so it never enters a delta, never
+    lands in a `revert` payload, and can never make platform coverage look
+    like the tool changing.
+
+    Only ever what was *seen* to be missing — the invariant is
+    `absent[key] ⊆ entry["platforms"]`. Nothing here is inferred; a claim
+    about a platform that did not look is derived at render time, where it
+    can be revised, rather than written down where it would harden.
+    """
+    entry = entry_of(doc, version) or {}
+    return entry.get("absent", {})
+
+
+def _set_absent(entry: dict, missing: dict[str, list[str]]) -> None:
+    """Record the sidecar, or drop it when there is nothing to say."""
+    tidy = {key: sorted(set(who)) for key, who in sorted(missing.items()) if who}
+    if tidy:
+        entry["absent"] = tidy
+    else:
+        entry.pop("absent", None)
+
+
+def fold(readings: dict[str, dict[str, Any]]) -> tuple[dict[str, Any], dict]:
+    """One release seen by several platforms → one surface and its sidecar.
+
+    *readings* maps platform to that platform's surface for a single
+    release. Folding before the chain is touched is what keeps a matrix run
+    from writing churn into history: an option only Linux has would
+    otherwise be inserted, then dropped by macOS, then resurrected by
+    Windows, each step a real delta. Folded first, the chain sees one
+    finished surface and one sidecar.
+
+    An option any platform saw is in the surface — the union, so nothing
+    observed is lost — and the platforms that looked without finding it are
+    the sidecar. Divergent text is settled by `PLATFORM_PRIORITY`.
+    """
+    looked = list(readings)
+    surface: dict[str, Any] = {"help": "", "verbs": {}}
+    missing: dict[str, list[str]] = {}
+
+    def rank(platform: str) -> int:
+        order = PLATFORM_PRIORITY
+        return order.index(platform) if platform in order else len(order)
+
+    for platform in sorted(looked, key=rank):  # best last: it overwrites
+        surface["help"] = readings[platform].get("help", "") or surface["help"]
+    for platform in sorted(looked, key=rank):
+        for verb_name, verb in readings[platform].get("verbs", {}).items():
+            held = surface["verbs"].setdefault(verb_name, _empty_verb())
+            held.update({k: v for k, v in verb.items() if k != "options"})
+            held["options"].update(verb.get("options", {}))
+
+    for verb_name, verb in surface["verbs"].items():
+        for platform in looked:
+            seen = readings[platform].get("verbs", {})
+            if verb_name not in seen:
+                missing.setdefault(f"{verb_name}\t", []).append(platform)
+                continue
+            for option_name in verb["options"]:
+                if option_name not in seen[verb_name].get("options", {}):
+                    missing.setdefault(f"{verb_name}\t{option_name}", []).append(
+                        platform
+                    )
+    # A whole verb nobody found on a platform is said once, not per option.
+    for verb_name in surface["verbs"]:
+        for platform in missing.get(f"{verb_name}\t", []):
+            for key in list(missing):
+                if key.startswith(f"{verb_name}\t") and key != f"{verb_name}\t":
+                    missing[key] = [p for p in missing[key] if p != platform]
+    return {"help": surface["help"], "verbs": _ordered(surface["verbs"])}, {
+        key: who for key, who in missing.items() if who
+    }
+
+
+def merge(
+    doc: dict,
+    *,
+    version: str,
+    surface: dict[str, Any],
+    platforms: list[str],
+    absent: dict[str, list[str]] | None = None,
+) -> bool:
+    """Fold another platform's reading into a release the chain already has.
+
+    The third way a release reaches the store, beside `insert` and `extend`,
+    and the one the matrix needs: a version observed on macOS in May and on
+    Windows in July is **one** release with two witnesses, not two records.
+
+    Merging never removes an option — an absence is recorded in the sidecar,
+    where it says who failed to find it rather than that it stopped
+    existing. So the surface only grows, and the delta either side of this
+    release moves only when the *tool* differs, never when coverage does.
+
+    Returns whether the stored **surface** changed, which is the caller's
+    signal that the two entries referencing it need recomputing. A merge
+    that only widened coverage returns False and costs the chain nothing.
+    """
+    entry = entry_of(doc, version)
+    if entry is None:
+        return False
+    observers = sorted({*entry.get("platforms", []), *platforms})
+    before = json.dumps(entry["surface"], sort_keys=True) if "surface" in entry else ""
+
+    known = _flat(entry["surface"]) if "surface" in entry else {}
+    incoming = _flat(surface)
+    missing = {key: list(who) for key, who in entry.get("absent", {}).items()}
+    merged = json.loads(json.dumps(entry.get("surface", {"help": "", "verbs": {}})))
+
+    for key, option in incoming.items():
+        verb_name, _, option_name = key.partition("\t")
+        verb = merged.setdefault("verbs", {}).setdefault(verb_name, _empty_verb())
+        if key not in known:
+            # Nobody who looked before found it, or it would be stored.
+            missing[key] = [p for p in entry.get("platforms", []) if p not in platforms]
+        verb["options"][option_name] = _preferred(
+            known.get(key), option, entry.get("platforms", []), platforms, missing, key
+        )
+    for key in known:
+        if key not in incoming:
+            missing.setdefault(key, [])
+            missing[key] = sorted({*missing[key], *platforms})
+    for key in list(missing):
+        if key in incoming:
+            missing[key] = [p for p in missing[key] if p not in platforms]
+    for key, who in (absent or {}).items():
+        missing[key] = sorted({*missing.get(key, []), *who})
+
+    entry["surface"] = {
+        "help": surface.get("help", "") or merged.get("help", ""),
+        "verbs": _ordered(merged.get("verbs", {})),
+    }
+    entry["platforms"] = observers
+    _set_absent(
+        entry,
+        {key: [p for p in who if p in observers] for key, who in missing.items()},
+    )
+    return json.dumps(entry["surface"], sort_keys=True) != before
+
+
+def _preferred(
+    stored: dict | None,
+    incoming: dict,
+    was: list[str],
+    now: list[str],
+    missing: dict[str, list[str]],
+    key: str,
+) -> dict:
+    """Whose words to keep for one option, independent of merge order.
+
+    The stored text belongs to the highest-priority platform that had the
+    option; the incoming text to whoever is merging. The higher rank wins,
+    and a platform re-reading its own contribution always wins — so a week
+    of legs arriving in any order settles on the same answer.
+    """
+    if stored is None:
+        return incoming
+
+    def rank(platforms: list[str]) -> int:
+        holders = [p for p in platforms if p not in missing.get(key, [])]
+        ranks = [PLATFORM_PRIORITY.index(p) for p in holders if p in PLATFORM_PRIORITY]
+        return min(ranks) if ranks else len(PLATFORM_PRIORITY)
+
+    return incoming if rank(now) <= rank(was) else stored
+
+
 def insert(
     doc: dict,
     *,
@@ -378,6 +571,7 @@ def union(doc: dict, *, name: str, in_process: bool = False) -> ToolSpec:
     chain = observed(doc)  # newest first
     floor = chain[-1]
     surfaces = {version: at(doc, version) for version in chain}
+    verdicts = _verdicts(doc, chain, surfaces)
 
     verbs: dict[str, dict[str, Any]] = {}
     first: dict[tuple[str, str], str] = {}
@@ -418,15 +612,23 @@ def union(doc: dict, *, name: str, in_process: bool = False) -> ToolSpec:
                 wraps=verb.wraps,
                 positional=verb.positional,
                 lead=verb.lead,
+                not_on=verdicts.get(f"{verb.name}\t", ()),
                 options=tuple(
                     Option(
                         **{
                             **option.__dict__,
+                            "not_on": verdicts.get(f"{verb.name}\t{option.name}", ()),
                             "since": ""
                             if first[(verb.name, option.name)] == floor
+                            or _only_here(
+                                doc, first[(verb.name, option.name)], verb.name, option
+                            )
                             else first[(verb.name, option.name)],
                             "until": newer.get(last[(verb.name, option.name)], "")
                             if last[(verb.name, option.name)] != chain[0]
+                            and _corroborated(
+                                doc, last[(verb.name, option.name)], verb.name, option
+                            )
                             else "",
                         }
                     )
@@ -436,6 +638,94 @@ def union(doc: dict, *, name: str, in_process: bool = False) -> ToolSpec:
             for verb in spec.verbs
         ),
     )
+
+
+def _verdicts(
+    doc: dict, chain: list[str], surfaces: dict
+) -> dict[str, tuple[str, ...]]:
+    """Which platforms currently lack each option — derived, never stored.
+
+    The store writes only what a platform saw at the release it looked at.
+    The standing claim ("Windows does not have `--fork`") is this: for each
+    platform, the newest release it observed that has anything to say about
+    the option. Present there, the claim is dropped; missing there, it
+    stands; never observed, it was never made.
+
+    Derived for the same reason `since` and `until` are: a claim written
+    into a younger release hardens into a fact nobody rechecks, and one
+    later sighting on that platform would have to chase it back down the
+    chain. Walked newest-first, so the first verdict found wins.
+    """
+    settled: dict[str, dict[str, bool]] = {}
+    for version in chain:  # newest first
+        entry = entry_of(doc, version) or {}
+        missing = entry.get("absent", {})
+        surface = surfaces.get(version) or {}
+        here = set(_flat(surface))
+        for verb_name, verb in surface.get("verbs", {}).items():
+            here.add(f"{verb_name}\t")
+            for option_name in verb.get("options", {}):
+                here.add(f"{verb_name}\t{option_name}")
+        for platform in entry.get("platforms", []):
+            for key in here:
+                lacked = platform in missing.get(key, ())
+                settled.setdefault(key, {}).setdefault(platform, lacked)
+    return {
+        key: tuple(sorted(p for p, lacked in who.items() if lacked))
+        for key, who in settled.items()
+        if any(who.values())
+    }
+
+
+def _holders(doc: dict, version: str, verb: str, option: Option) -> list[str]:
+    """The platforms that observed *version* and found this option."""
+    entry = entry_of(doc, version) or {}
+    missing = entry.get("absent", {}).get(f"{verb}\t{option.name}", ())
+    return [p for p in entry.get("platforms", []) if p not in missing]
+
+
+def _only_here(doc: dict, first: str, verb: str, option: Option) -> bool:
+    """Whether a `since` at *first* would out-run the evidence.
+
+    An option first seen where only one platform's floor reaches is not
+    "added" there — the older releases were never read on that platform, so
+    nobody could have seen it earlier. The same honesty as the chain's own
+    floor rule, one level down: at or before *this platform's* floor is not
+    a since.
+    """
+    chain = observed(doc)
+    below = chain[chain.index(first) + 1 :]
+    holders = set(_holders(doc, first, verb, option))
+    for older in below:
+        entry = entry_of(doc, older) or {}
+        was_read_by = entry.get("platforms", [])
+        if not was_read_by or holders.intersection(was_read_by):
+            # Either a holder did read further back, or nobody recorded who
+            # read it — and unknown coverage is not evidence of absence.
+            return False
+    return bool(holders)
+
+
+def _corroborated(doc: dict, last: str, verb: str, option: Option) -> bool:
+    """Whether "gone since" is a claim the observations support.
+
+    A platform that never held the option cannot witness its removal, and a
+    release read only by such a platform is silence rather than evidence.
+    """
+    chain = observed(doc)
+    spot = chain.index(last)
+    if spot == 0:
+        return False
+    holders = set(_holders(doc, last, verb, option))
+    dropped_at = entry_of(doc, chain[spot - 1]) or {}
+    witnesses = dropped_at.get("platforms", [])
+    if not holders or not witnesses:
+        # No platform evidence either way — a single-platform history, or a
+        # chain built before anyone recorded who looked. The guard exists to
+        # stop one platform speaking for another, and there is no other
+        # platform here to speak for.
+        return True
+    return bool(holders.intersection(witnesses))
 
 
 def changes(doc: dict, *, since: str, until: str = "") -> dict[str, Any]:

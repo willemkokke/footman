@@ -62,6 +62,12 @@ class Option:
     """The release this option stopped appearing in, when it has gone. A
     removed option stays in the stub — completion should work against any
     version the reader might be running — and this is what says so."""
+    not_on: tuple[str, ...] = ()
+    """The platforms observed to lack this, when any have been. Empty means
+    nothing contradicts it — either every platform that looked found it, or
+    only one ever looked. Derived from the history at render time like
+    `since`/`until`: the store records what each platform saw at the release
+    it read, and the standing claim is whatever its newest verdict says."""
 
 
 @dataclass(frozen=True)
@@ -71,6 +77,10 @@ class Verb:
     name: str
     help: str = ""
     options: tuple[Option, ...] = ()
+    not_on: tuple[str, ...] = ()
+    """The platforms observed to lack this whole subcommand. Said once here
+    rather than on each of its options, which is both smaller and what a
+    reader wants: the command is missing, not forty flags."""
     wraps: bool = False
     """Whether the verb runs *another* command — `uv run`, `docker exec`,
     `coverage run`. Its usage trails a `[COMMAND] [ARG...]` (or "program

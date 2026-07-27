@@ -1595,3 +1595,282 @@ def test_a_bare_call_is_refused_with_directions(tmp_path, monkeypatch):
         tools.refresh(only="ruff")
     with pytest.raises(Failed, match=r"needs a run"):
         tools.prime(only="ruff")
+
+
+# --- cross-platform observations ---------------------------------------------
+#
+# One observation comes from one platform. Observations merge; the store
+# records only what a platform SAW (`absent` beside the surface, never inside
+# it), and every standing claim — who lacks an option now, since, until — is
+# derived at render time from those verdicts.
+
+
+def _reading(*options, verb="", help_of=None):
+    """One platform's surface for one release."""
+    help_of = help_of or {}
+    return _toolhistory.surface_of(
+        _spec(
+            verbs=(
+                Verb(
+                    name=verb,
+                    options=tuple(
+                        Option(n, (f"--{n}",), help=help_of.get(n, f"The {n}."))
+                        for n in options
+                    ),
+                ),
+            )
+        )
+    )
+
+
+def test_folding_keeps_every_option_and_names_who_missed_it():
+    """A matrix run folds before it touches the chain. Otherwise an option
+    only Linux has would be inserted, dropped by macOS, resurrected by
+    Windows — three real deltas for one release nobody changed."""
+    surface, absent = _toolhistory.fold(
+        {
+            "Linux": _reading("quiet", "fork"),
+            "macOS": _reading("quiet", "fork"),
+            "Windows": _reading("quiet"),
+        }
+    )
+    assert sorted(surface["verbs"][""]["options"]) == ["fork", "quiet"]
+    assert absent == {"\tfork": ["Windows"]}  # the exception, and only it
+
+
+def test_a_verb_missing_whole_is_said_once_not_per_option():
+    """`docker compose` absent on a platform is one fact about the command,
+    not forty about its flags — smaller, and what a reader wants."""
+    surface, absent = _toolhistory.fold(
+        {
+            "Linux": {
+                "help": "",
+                "verbs": {"up": _reading("build", "detach", verb="up")["verbs"]["up"]},
+            },
+            "Windows": {"help": "", "verbs": {}},
+        }
+    )
+    assert absent == {"up\t": ["Windows"]}
+    assert sorted(surface["verbs"]["up"]["options"]) == ["build", "detach"]
+
+
+def test_a_merge_widening_coverage_costs_the_chain_nothing():
+    """The sidecar never enters a delta, so a platform looking for the first
+    time cannot make the tool look like it changed — no recompute, no event,
+    no changelog line."""
+    doc = _toolhistory.new(
+        "demo",
+        version="2.0.0",
+        date="2026-01-02",
+        surface=_reading("quiet", "fork"),
+        platforms=["macOS"],
+    )
+    _toolhistory.extend(
+        doc,
+        version="1.0.0",
+        date="2026-01-01",
+        surface=_reading("quiet"),
+        platforms=["macOS"],
+    )
+    before = json.dumps(doc["deltas"], sort_keys=True)
+
+    moved = _toolhistory.merge(
+        doc,
+        version="2.0.0",
+        surface=_reading("quiet"),  # Windows lacks --fork
+        platforms=["Windows"],
+    )
+    assert moved is False  # the surface did not change; nothing to recompute
+    assert json.dumps(doc["deltas"], sort_keys=True) == before
+    assert doc["base"]["platforms"] == ["Windows", "macOS"]
+    assert doc["base"]["absent"] == {"\tfork": ["Windows"]}
+    assert "absent" not in json.dumps(doc["deltas"])  # never in a delta
+
+
+def test_a_merge_bringing_an_option_records_who_had_looked_without_it():
+    """An option only the newcomer sees was, by construction, missing for
+    everyone who looked before — that is an observed absence, and it is the
+    only reason the store may tag them."""
+    doc = _toolhistory.new(
+        "demo",
+        version="2.0.0",
+        date="2026-01-02",
+        surface=_reading("quiet"),
+        platforms=["macOS"],
+    )
+    _toolhistory.merge(
+        doc,
+        version="2.0.0",
+        surface=_reading("quiet", "winonly"),
+        platforms=["Windows"],
+    )
+    assert doc["base"]["absent"] == {"\twinonly": ["macOS"]}
+    assert "winonly" in doc["base"]["surface"]["verbs"][""]["options"]
+    # ...and never the merging platform itself, which is what saw it.
+    assert "Windows" not in json.dumps(doc["base"]["absent"])
+
+
+def test_the_store_records_only_absences_that_were_observed():
+    """The invariant the whole design rests on: `absent ⊆ platforms`. A
+    claim about a platform that never looked is derived at render time,
+    where a later sighting revises it — never written down, where it would
+    harden into a fact nobody rechecks."""
+    doc = _toolhistory.new(
+        "demo",
+        version="2.0.0",
+        date="2026-01-02",
+        surface=_reading("quiet", "fork"),
+        platforms=["macOS"],
+    )
+    _toolhistory.merge(
+        doc, version="2.0.0", surface=_reading("quiet"), platforms=["Windows"]
+    )
+    for version in _toolhistory.observed(doc):
+        entry = _toolhistory.entry_of(doc, version) or {}
+        looked = set(entry.get("platforms", []))
+        for key, who in entry.get("absent", {}).items():
+            assert set(who) <= looked, f"{version} {key} claims an unobserved absence"
+
+
+def test_a_sighting_on_a_platform_clears_its_standing_absence():
+    """Nothing means cross-platform. Windows lacked `--fork` at 1.0.0 and
+    has it at 2.0.0, so the claim is dropped — derived from the newest
+    verdict rather than chased back through the chain."""
+    doc = _toolhistory.new(
+        "demo",
+        version="2.0.0",
+        date="2026-01-02",
+        surface=_reading("quiet", "fork"),
+        platforms=["Windows", "macOS"],
+    )
+    _toolhistory.extend(
+        doc,
+        version="1.0.0",
+        date="2026-01-01",
+        surface=_reading("quiet", "fork"),
+        platforms=["Windows", "macOS"],
+    )
+    doc["deltas"]["1.0.0"]["absent"] = {"\tfork": ["Windows"]}  # the old verdict
+
+    options = {
+        o.name: o for v in _toolhistory.union(doc, name="demo").verbs for o in v.options
+    }
+    assert options["fork"].not_on == ()  # the newer sighting wins
+    assert options["quiet"].not_on == ()
+
+
+def test_an_absence_stands_until_that_platform_looks_again():
+    """A Linux-only week can neither set nor clear a Windows claim: the
+    verdict is per platform, and silence is not evidence."""
+    doc = _toolhistory.new(
+        "demo",
+        version="2.0.0",
+        date="2026-01-02",
+        surface=_reading("quiet", "fork"),
+        platforms=["Linux"],  # only Linux looked at the newer release
+    )
+    _toolhistory.extend(
+        doc,
+        version="1.0.0",
+        date="2026-01-01",
+        surface=_reading("quiet", "fork"),
+        platforms=["Linux", "Windows"],
+    )
+    doc["deltas"]["1.0.0"]["absent"] = {"\tfork": ["Windows"]}
+
+    options = {
+        o.name: o for v in _toolhistory.union(doc, name="demo").verbs for o in v.options
+    }
+    assert options["fork"].not_on == ("Windows",)  # still standing, still honest
+
+
+def test_a_platforms_own_floor_is_not_a_since():
+    """An option first seen where only one platform's coverage reaches was
+    not "added" there — the older releases were never read on that platform.
+    The chain's floor rule, one level down."""
+    doc = _toolhistory.new(
+        "demo",
+        version="2.0.0",
+        date="2026-01-02",
+        surface=_reading("quiet", "winonly"),
+        platforms=["Windows", "macOS"],
+    )
+    doc["base"]["absent"] = {"\twinonly": ["macOS"]}
+    _toolhistory.extend(
+        doc,
+        version="1.0.0",
+        date="2026-01-01",
+        surface=_reading("quiet"),
+        platforms=["macOS"],  # Windows never read this far back
+    )
+
+    options = {
+        o.name: o for v in _toolhistory.union(doc, name="demo").verbs for o in v.options
+    }
+    assert options["winonly"].since == ""  # Windows' floor is 2.0.0, not a since
+    assert options["winonly"].not_on == ("macOS",)
+
+
+def test_divergent_words_settle_the_same_whichever_leg_arrives_first():
+    """One copy of the text is stored, so the pick must not depend on merge
+    order — or two legs would flip a divergent help string every week, each
+    flip a delta in a store whose question is "did anything change"."""
+    words = {"Linux": {"quiet": "Hush, penguin."}, "Windows": {"quiet": "Hush, PC."}}
+
+    def built(order):
+        doc = _toolhistory.new(
+            "demo",
+            version="1.0.0",
+            date="2026-01-01",
+            surface=_reading("quiet", help_of=words[order[0]]),
+            platforms=[order[0]],
+        )
+        _toolhistory.merge(
+            doc,
+            version="1.0.0",
+            surface=_reading("quiet", help_of=words[order[1]]),
+            platforms=[order[1]],
+        )
+        return doc["base"]["surface"]["verbs"][""]["options"]["quiet"]["help"]
+
+    assert built(("Linux", "Windows")) == built(("Windows", "Linux"))
+    assert built(("Linux", "Windows")) == "Hush, penguin."  # priority, not order
+
+
+def test_a_merged_surface_change_recomputes_exactly_the_two_entries_that_saw_it():
+    """A merge that genuinely widens the surface is local, like a midfill:
+    the entry itself and the one below reference that surface, and nothing
+    else in the chain does."""
+    doc = _toolhistory.new(
+        "demo", version="3.0.0", date="2026-01-03", surface=_reading("quiet")
+    )
+    for version, surface in (
+        ("2.0.0", _reading("quiet")),
+        ("1.0.0", _reading("quiet")),
+    ):
+        _toolhistory.extend(
+            doc,
+            version=version,
+            date="2026-01-01",
+            surface=surface,
+            platforms=["macOS"],
+        )
+    doc["base"]["platforms"] = ["macOS"]
+    untouched = {v: json.dumps(d, sort_keys=True) for v, d in doc["deltas"].items()}
+
+    moved = _toolhistory.merge(
+        doc,
+        version="3.0.0",
+        surface=_reading("quiet", "winonly"),
+        platforms=["Windows"],
+    )
+    assert moved is True  # the surface grew, so the chain must be told
+    doc["deltas"]["2.0.0"] = {
+        **doc["deltas"]["2.0.0"],
+        **_toolhistory.delta(
+            doc["base"]["surface"], _toolhistory.at(doc, "2.0.0") or {}
+        ),
+    }
+    assert json.dumps(doc["deltas"]["1.0.0"], sort_keys=True) == untouched["1.0.0"]
+    for version in _toolhistory.observed(doc):
+        assert _toolhistory.at(doc, version) is not None, version
