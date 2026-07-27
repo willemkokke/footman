@@ -5,6 +5,9 @@
  "base": {
   "version": "0.16.0",
   "date": "2026-07-27",
+  "platforms": [
+   "macOS"
+  ],
   "extractor": 1,
   "surface": {
    "help": "Run the Ruff formatter on the given files or directories",

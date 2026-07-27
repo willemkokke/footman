@@ -109,14 +109,32 @@ def _generate(driver: _drivers.Driver) -> str:
     """
     spec = _drivers.extract(driver)
     doc = _observe(driver, spec)
+    return _stub_from(driver, doc, in_process=spec.in_process)
+
+
+def _stub_from(driver: _drivers.Driver, doc: dict, *, in_process: bool = False) -> str:
+    """The stub text for a tool's history.
+
+    Rendered from the *union*, not the newest release: a flag the tool has
+    since dropped stays completable, because the reader may be running a
+    version that still has it, and its docstring says when it went. With a
+    history of one release the union is that release, so nothing is claimed
+    that has not been observed.
+
+    The header reports the base observation's own platform rather than this
+    machine's — the file says what was read, and a prime run elsewhere must
+    not rewrite that claim.
+    """
     base = doc["base"]
-    recorded = _toolhistory.spec_from(
-        base["surface"],
-        name=spec.name,
-        version=base["version"],
-        in_process=spec.in_process,
+    spec = _toolhistory.union(doc, name=driver.name, in_process=in_process)
+    return _formatted(
+        _stubgen.render(
+            spec,
+            platform=(base.get("platforms") or [_platform()])[0],
+            class_name=_class_name(driver.key),
+            in_process=_mode(driver, spec),
+        )
     )
-    return _formatted(_render(driver, recorded))
 
 
 def _observe(driver: _drivers.Driver, spec: _toolspec.ToolSpec) -> dict:
@@ -133,11 +151,30 @@ def _observe(driver: _drivers.Driver, spec: _toolspec.ToolSpec) -> dict:
     doc = _toolhistory.load(path)
     if doc is None:
         doc = _toolhistory.new(
-            driver.key, version=version, date=_today(), surface=surface
+            driver.key,
+            version=version,
+            date=_today(),
+            surface=surface,
+            platforms=[_platform()],
         )
     elif doc["base"]["version"] == version:
         doc["base"]["surface"] = surface
         doc["base"]["extractor"] = _toolhistory.EXTRACTOR
+        doc["base"]["platforms"] = sorted(
+            {*doc["base"].get("platforms", []), _platform()}
+        )
+    elif _version_tuple(version) < _version_tuple(doc["base"]["version"]):
+        # An *older* reading is an older observation, not a new head. Demoting
+        # on any change let a machine with a stale tool rewrite the base and
+        # push the newer release down the chain as though it came first — the
+        # base only ever moves forward, exactly as a snapshot does.
+        _toolhistory.extend(
+            doc,
+            version=version,
+            date=_today(),
+            surface=surface,
+            platforms=[_platform()],
+        )
     else:
         previous = doc["base"]
         doc["deltas"] = {
@@ -151,6 +188,7 @@ def _observe(driver: _drivers.Driver, spec: _toolspec.ToolSpec) -> dict:
         doc["base"] = {
             "version": version,
             "date": _today(),
+            "platforms": [_platform()],
             "extractor": _toolhistory.EXTRACTOR,
             "surface": surface,
         }
@@ -660,10 +698,16 @@ def _prime_one(driver, doc: dict, count: int, scratch: Path, fetch) -> int:
             version=release.version,
             date=release.date,
             surface=_toolhistory.surface_of(spec),
+            platforms=[_platform()],
         ):
             added += 1
     if added:
         _toolhistory.save(doc, _history_path(driver.key))
+        # A deeper history changes what the stub may say — an option that
+        # looked original at the old floor may now be one that arrived. The
+        # stub is a rendering of the record, so it is rewritten here rather
+        # than waiting for someone to remember a `sync`.
+        _stub_path(driver.key).write_text(_stub_from(driver, doc), encoding="utf-8")
     return added
 
 

@@ -228,7 +228,11 @@ events *are* the changelog entry ("prek 0.4.11 adds `--glob`").
    its docstring. This inverts nothing: a stub already suggests without
    forbidding (`**flags: Any`), and the tool remains the only judge of what it
    accepts. An `exact(version)` variant falls out of the same file later.
-7. **Platforms merge coverage-style**, and **absence is never removal** — a
+7. **Platforms are a list on the observation, and exclusions go per option.**
+   A release read on three platforms is one observation of a merged surface —
+   storing it per platform would triple a store whose options are almost all
+   universal. The observation says who looked; a per-option `not_on` says who
+   disagreed. Merge coverage-style**, and **absence is never removal** — a
    platform that did not run observed nothing; only a platform that ran and no
    longer sees a flag it had may narrow that flag's platform set. Help text is
    always the latest, resolved linux > macos > windows when they differ.
@@ -268,8 +272,15 @@ same-day releases are common, so the sort is (date, version) rather than
 date alone; resolved by index order the walk skipped 0.4.8 and would have
 appended it below its own successor on the next run.
 
+**Rendering the union landed the same day**: stubs carry every option ever,
+annotated `Added in X` / `Gone since Y` where the chain can prove it, and the
+reference pages inherit it because they render from the stub docstrings. An
+option present at the floor carries no `since` — the honesty rule, enforced
+in code rather than remembered.
+
 What remains: the other tiers (bun/node, GitHub, GitLab release assets), the
-per-tool budget as a driver field, and the scheduled refresh itself.
+per-tool budget as a driver field, the release gate reading the deltas, and
+the scheduled refresh itself.
 
 Not the prime — it is the expensive, network-bound, most-likely-to-stall part.
 Start where the data already exists:

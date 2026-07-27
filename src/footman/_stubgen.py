@@ -342,6 +342,15 @@ def _arg_lines(option: Option, depth: int = 0) -> list[str]:
         text = f"{text}. {lead}`{option.name}=off` emits `{option.negation}`"
     elif option.default not in (None, "", False):
         text = f"{text}. Defaults to `{option.default}`"
+    # What the history knows, and only what it knows: an option already
+    # present at the oldest release read carries no `since`, because the
+    # chain never looked far enough back to claim one. A removed option is
+    # still rendered — the reader may be on a version that has it — and this
+    # is the line that says otherwise.
+    if option.until:
+        text = f"{text}. Gone since {option.until}"
+    elif option.since:
+        text = f"{text}. Added in {option.since}"
     wrapped = textwrap.wrap(
         f"{_safe(option.name)}: {text}.".replace("  ", " "),
         width=84 - 4 * depth,

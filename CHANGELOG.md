@@ -128,6 +128,22 @@ versions may include breaking changes.
   reported by its *address* (`import_` shows as `import`) — the spelling you
   could actually type.
 
+### Removed
+
+- **BREAKING: a bare callable in `Annotated` is no longer a completer.** It
+  used to mean `suggest(fn)`, which read as a convenience and behaved as a
+  guess: the branch swallowed *anything* callable that was not a class, so a
+  marker of the wrong shape — a plain function, or an instance with
+  `__call__` — silently became a shell-completion function. The marker
+  vanished, a mystery completer appeared, and nothing said a word either
+  way. `suggest(fn)` is now the only spelling, the way one spelling per
+  concept goes everywhere else in footman.
+
+  The bare form is **refused**, not ignored, because it used to work:
+  `Annotated[str, my_fn]` teaches `suggest(my_fn)`. Unrecognised metadata
+  that is *not* callable is still passed over in silence, which is what lets
+  a parameter carry a marker footman has never heard of.
+
 ### Fixed
 
 - **A called task passes the same gates a declared one does.** A body call used

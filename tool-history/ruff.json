@@ -5,6 +5,9 @@
  "base": {
   "version": "0.16.0",
   "date": "2026-07-27",
+  "platforms": [
+   "macOS"
+  ],
   "extractor": 1,
   "surface": {
    "help": "Ruff: An extremely fast Python linter and code formatter.",
@@ -863,38 +866,5 @@
    }
   }
  },
- "deltas": {
-  "0.15.21": {
-   "date": "2026-07-27",
-   "extractor": 1,
-   "revert": {
-    "check\tadd_ignore": {
-     "flags": [
-      "--add-ignore"
-     ],
-     "negation": "",
-     "help": "Enable automatic additions of `ruff:ignore` comments to failing lines",
-     "type": "optvalue",
-     "default": null,
-     "choices": []
-    }
-   }
-  },
-  "0.16.0": {
-   "date": "2026-07-27",
-   "extractor": 1,
-   "revert": {
-    "check\tadd_ignore": {
-     "flags": [
-      "--add-ignore"
-     ],
-     "negation": "",
-     "help": "Enable automatic additions of `ruff: ignore` comments to failing lines",
-     "type": "optvalue",
-     "default": null,
-     "choices": []
-    }
-   }
-  }
- }
+ "deltas": {}
 }

@@ -5,6 +5,9 @@
  "base": {
   "version": "0.11.32",
   "date": "2026-07-27",
+  "platforms": [
+   "macOS"
+  ],
   "extractor": 1,
   "surface": {
    "help": "An extremely fast Python package manager.",
