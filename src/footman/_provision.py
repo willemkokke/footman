@@ -149,6 +149,22 @@ def _uv_tier(prefix: Path, drivers: list[Driver]) -> list[Outcome]:
 # --- python tier (an interpreter to read `--help` from) ----------------------
 
 
+def _newest_python(driver: Driver) -> str:
+    """The newest release the option history's own index reports.
+
+    Asked of that index rather than left to `uv python install 3`, for two
+    reasons. Inside a project uv resolves a loose request against the active
+    environment first — `find 3` here answers with the venv's 3.13 — so the
+    snapshot would quietly describe whatever interpreter the checkout uses.
+    And the provisioned head must be a release the listing can place, or a
+    prime cannot position the floor it is walking back from.
+    """
+    from footman import _toolfetch
+
+    found = _toolfetch.releases(driver)
+    return found[0].version if found else "3"
+
+
 def _python_tier(prefix: Path, drivers: list[Driver]) -> list[Outcome]:
     """`uv python install` each requested interpreter, linked into the prefix.
 
@@ -160,7 +176,7 @@ def _python_tier(prefix: Path, drivers: list[Driver]) -> list[Outcome]:
     """
     outcomes: list[Outcome] = []
     for driver in drivers:
-        version = driver.provision.package or "3"
+        version = driver.provision.package or _newest_python(driver)
         if not _run(["uv", "python", "install", version], env=dict(os.environ)):
             outcomes.append(
                 Outcome(driver.key, "python", "fail", f"uv python install {version}")

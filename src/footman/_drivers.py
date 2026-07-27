@@ -20,6 +20,7 @@ from the installed tool, every time the stubs are regenerated.
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -295,7 +296,7 @@ DRIVERS: tuple[Driver, ...] = (
     ),
     Driver(
         "python",
-        provision=Provision(kind="python", package="3.13"),
+        provision=Provision(kind="python"),  # unpinned: whatever uv calls newest
         url="https://docs.python.org/3/using/cmdline.html",
     ),
     # The shells footman autocompletes for. Their stubs are hand-written (a
@@ -374,7 +375,26 @@ def version(name: str) -> str:
         )
     except (OSError, subprocess.SubprocessError):
         return ""
-    return tools.read_version(done.stdout or done.stderr)
+    return _without_build_tail(tools.read_version(done.stdout or done.stderr))
+
+
+_BUILD_TAIL = re.compile(r"\.(?!post\d)[A-Za-z].*$")
+
+
+def _without_build_tail(version: str) -> str:
+    """A vendored build tail dropped, so the reading names a real release.
+
+    PyPI ships `ninja` 1.13.0; the binary in it answers
+    `1.13.0.git.kitware.jobserver-pipe-1`. The history keys on what was read,
+    so that string became the base — and nothing in the index matches it, so
+    ninja could not be primed at all.
+
+    Only a *dot-attached* alphabetic tail goes, which is what a vendored
+    build looks like. `0.6.0-wk.5` keeps its hyphenated series, because that
+    is eclint's own release identity rather than a build of something else,
+    and `.post1` is spared because it names a real published release.
+    """
+    return _BUILD_TAIL.sub("", version)
 
 
 def in_process_capable(name: str) -> bool:

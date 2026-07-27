@@ -1382,6 +1382,12 @@ def test_version_tuple_reads_the_leading_integers_and_stops():
     A build tail says nothing about which flags exist, and scraping its
     digits answers the question backwards: `0.6.0-wk.5` is a fork build *of*
     0.6.0, so `(0, 6, 0, 5)` would sort it *after* its own base.
+
+    The price is that two builds of one base compare **equal**, and the point
+    of pinning it is that equality is a real answer here, not a bug to route
+    around: a caller must say what it does with a tie rather than read it as
+    "not newer". The chain breaks the tie on publication date; the snapshot
+    guard, which has no second date to consult, declines to move.
     """
     from footman.tools import version_tuple
 
@@ -1389,6 +1395,7 @@ def test_version_tuple_reads_the_leading_integers_and_stops():
     assert version_tuple("0.6.0-wk.5") == (0, 6, 0)  # the tail is anybody's grammar
     assert version_tuple("1.13.0.git.kitware.jobserver-1") == (1, 13, 0)
     assert version_tuple("0.6.0-wk.5") <= version_tuple("0.6.0")  # never "newer"
+    assert version_tuple("0.6.0-wk.3") == version_tuple("0.6.0-wk.5")  # a real tie
     assert version_tuple("") == ()  # unreadable: the caller must not skip on it
     assert version_tuple("nightly") == ()
 

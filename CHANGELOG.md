@@ -38,6 +38,12 @@ versions may include breaking changes.
   if the body moved and nobody said so" and wrong as a cache key. Exposed to
   hooks as `task.source_hash`.
 
+- **CPython's releases can be primed into the option history.** The index is
+  the provisioned uv's own — uv carries it inside the binary, so `fm
+  tools.prime` gained a `--prefix` and drives the tiers from there: a stale uv
+  reports a stale newest python and the walk starts too low without saying so.
+- **The python stub tracks the newest CPython** instead of a pinned 3.13.
+
 ### Changed
 
 - **A body call binds like a segment.** A parameter the caller leaves out now
@@ -62,6 +68,38 @@ versions may include breaking changes.
   checker polices those.
 
 ### Fixed
+
+- **A prime could append a release newer than the one it was walking back
+  from.** It asked whether a release predated the chain's floor by date, but a
+  base carries the date it was *observed*, not the date it was published — so
+  on a first prime the floor is dated today and every release ever published
+  passes. Invisible while every base happened to be the newest release, and
+  wrong the moment one is not, which is any stub synced from an outdated
+  binary. The walk now positions the floor in the source's own ordering, and
+  a floor that ordering cannot place stops the walk and says so.
+- **A release chain is ordered by version, not by publication date.** Three
+  curated tools keep more than one series alive at once — cmake 3.31.x beside
+  4.x, pytest's 4.6 LTS beside 5.x, CPython's five — so the most recently
+  published release is not the newest one. Ordered by date, a walk back from
+  CPython 3.14.6 stepped to 3.13.14 and read every 3.14 option as dropped and
+  then re-added, making every interval derived from it wrong. Pre-releases are
+  also excluded from chains: an alpha is not something to say a flag arrived
+  in, and two tools only *looked* like they shipped series in parallel because
+  one sorted as though it were final.
+- **A version the comparator cannot separate no longer moves the base.** Two
+  builds of one base — eclint's `0.6.0-wk.3` against its `-wk.5` — compare
+  equal, and "not older" was read as "newer", so a stale checkout could
+  promote the older build and push the newer one down the chain. That is the
+  rewrite the guard exists to refuse; it now declines and names the tool.
+- **A vendored build tail no longer keeps a tool out of its own index.** PyPI
+  ships `ninja` 1.13.0 and the binary in it answers
+  `1.13.0.git.kitware.jobserver-pipe-1`, which matched no release, so ninja
+  could not be primed at all.
+- **The CPython listing no longer depends on what the machine has installed.**
+  `uv python list` replaces a version's download entry with a local path once
+  it is installed, dropping the URL its publication date is read from — so
+  each primed release vanished from the index the next prime reads. It now
+  asks for downloads only.
 
 - **A `ctx`-declaring task now keys its body calls on the caller's
   arguments.** The work key bound a call's arguments against the declared
