@@ -271,27 +271,53 @@ def work_of(task: Any, args: Any, kwargs: dict[str, Any]) -> Any | None:
     return _key(task, tuple(args), kwargs)
 
 
-def answered(key: Any) -> tuple[bool, Any]:
-    """`(hit, value)` — whether the run already holds this work's result.
+def claim(key: Any, label: str) -> tuple[bool, Any]:
+    """Take this work, or hand back the cell that already holds it.
 
-    Read-only: claims nothing, creates nothing. The scheduler asks before
-    running a node, so work an earlier body call performed answers this request
-    too — sharing means the same thing whichever way a task was reached.
+    `(claimed, cell)` — `claimed` means the caller must perform the work and
+    then `resolve` the cell. Otherwise the cell is someone else's: `join` it.
+    `(True, None)` when there is no run to share within, so the caller simply
+    proceeds.
+
+    A node comes through here exactly as a body call does. Peeking would not do:
+    it can only see a *finished* cell, so two independent requests racing each
+    other would both run — the duplication the cell exists to prevent, and
+    unpredictable because it depends on which one started first.
     """
     run = _active
     if run is None or key is None:
-        return False, None
-    with run.lock:
-        cell = run.cells.get(key)
-        if cell is None or not cell.future.done():
-            return False, None
-        return True, cell.future.result()
+        return True, None
+    return _claim(run, key, threading.get_ident(), label)
 
 
-def remember(key: Any, label: str, value: Any) -> None:
-    """Record a shared execution's result as the run's answer for this work."""
-    if key is not None:
-        _fill(key, label, value)
+def join(cell: Any) -> Any:
+    """Wait for the execution that holds this cell, and return its value.
+
+    Raises whatever the work raised, so a request answered by a failed
+    execution fails too. Occupies this thread while it waits, bounded by
+    `jobs`, exactly as a waiting body call does.
+    """
+    me = threading.get_ident()
+    try:
+        return cell.future.result()
+    finally:
+        if (run := _active) is not None:
+            with run.lock:
+                run.waits.pop(me, None)
+
+
+def resolve(cell: Any, value: Any, error: BaseException | None) -> None:
+    """Hand this claimed cell its outcome, so anyone waiting is answered.
+
+    Always called for a claimed cell, on every path out — an unresolved cell
+    would leave a waiter blocked for the rest of the run.
+    """
+    if cell is None or cell.future.done():
+        return
+    if error is not None:
+        cell.future.set_exception(error)
+    else:
+        cell.future.set_result(value)
 
 
 def shared_result(label: str, value: Any) -> TaskResult:

@@ -862,17 +862,23 @@ def run_bound(
     re-bound from a command line, yet still deserves the full task treatment —
     its own context, its own lane decision, its own `TaskResult`.
     """
-    # Computed here, before `ctx` joins the arguments, so the context can never
+    # Sharing means the same thing whichever way a task was reached, so this
+    # request joins the same protocol a body call uses: claim the work, or wait
+    # for whoever already holds it and report the answer as `shared`. A request
+    # declared `shared=False` never joins — `ctx` carries that answer. The key
+    # is computed before `ctx` joins the arguments, so the context can never
     # become part of the work's identity.
-    work = _futures.work_of(fn, args, kwargs) if ctx.shared else None
-    if work is not None:
-        # Sharing means the same thing whichever way the task was reached, so a
-        # node asks before it runs: work an earlier body call already performed
-        # answers this request too, and is reported rather than repeated. A
-        # request declared `shared=False` never asks — `ctx` carries that.
-        hit, value = _futures.answered(work)
-        if hit:
-            return _futures.shared_result(seg.task, value)
+    # `as_call` means the cell layer is already holding this work's cell (it
+    # claimed before delegating here) and will resolve it — claiming again from
+    # the same thread would read as this task waiting on itself.
+    work = _futures.work_of(fn, args, kwargs) if ctx.shared and not as_call else None
+    claimed, cell = _futures.claim(work, seg.task)
+    if not claimed:
+        try:
+            value = _futures.join(cell)
+        except BaseException as exc:  # the execution we waited on failed
+            return _result(seg, 1, None, exc, 0.0)
+        return _futures.shared_result(seg.task, value)
 
     if context_param_name(resolved_signature(fn)):
         args = [ctx, *args]  # ctx is the first positional parameter
@@ -884,6 +890,7 @@ def run_bound(
         try:
             ctx.cwd, ctx.cwd_unmanaged = resolve_cwd(fn, ctx)
         except ValueError as exc:  # e.g. rel= under an unmanaged config default
+            _futures.resolve(cell, None, exc)  # never leave a waiter blocked
             return _result(seg, EX_USAGE, None, exc, 0.0)
 
     # The arbiter lane is a *scheduling* declaration, acquired here at the
@@ -911,13 +918,12 @@ def run_bound(
         _current.reset(token)
     duration = time.perf_counter() - start
     output = ctx.sink.getvalue() if isinstance(ctx.sink, io.StringIO) else ""
-    if error is None and work is not None:
-        # The pristine return, snapshotted the moment the body handed it over:
-        # what a dependent or a body-caller receives is what the annotation
-        # promised, whatever a reporter later does to the *reported* result.
-        # Only a shared execution becomes the run's answer (`work` is None
-        # otherwise), so what a run reuses never depends on scheduling order.
-        _futures.remember(work, seg.task, returned)
+    # The pristine return, snapshotted the moment the body handed it over: what
+    # a dependent or a body-caller receives is what the annotation promised,
+    # whatever a reporter later does to the *reported* result. Only a shared
+    # execution holds a cell (`claim` gives an unshared one none), so what a run
+    # reuses never depends on scheduling order.
+    _futures.resolve(cell, returned, error)
     result = _result(seg, code, returned, error, duration, output, ctx.steps)
     result.started = started
     # A task that failed while fail-fast was already aborting the run wasn't a

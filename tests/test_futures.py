@@ -743,3 +743,29 @@ def test_an_unshared_execution_is_not_the_runs_answer():
     # `own` unshares its subtree, so it compiles for itself; `plain` gets a
     # shared compile. Two, in either scheduling order.
     assert len(runs) == 2
+
+
+def test_two_racing_requests_are_one_execution_whichever_starts_first():
+    # The reason a node joins the cell protocol rather than peeking at it: a
+    # peek can only see a *finished* cell, so an independent node and a body
+    # call racing each other both ran — duplicated work, and unpredictable
+    # because it depended on which started first. Whoever arrives second waits.
+    reg = Group("root")
+    runs: list[int] = []
+
+    @reg.task
+    def survey() -> str:
+        runs.append(1)
+        threading.Event().wait(0.05)  # wide enough for the other to arrive
+        return "measured"
+
+    @reg.task
+    def early():
+        assert survey() == "measured"
+
+    for line in ("early survey", "survey early"):  # both orders, same answer
+        runs.clear()
+        result = drive(reg, line)
+        assert result.ok, result.stderr
+        assert len(runs) == 1, f"{line}: ran {len(runs)} times"
+        assert [executor.reported_state(r) for r in result.results].count("shared") == 1
