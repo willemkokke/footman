@@ -75,9 +75,9 @@ def test_sequential_flag_does_not_run_concurrently():
 
     results = drive(tasks, "a b", sequential=True)
     # Load-independent: true sequential runs a alone (it times out at the
-    # barrier), then skips b — one result. A regressed parallel path would
-    # submit both up front and yield two, however loaded the runner is.
-    assert len(results) == 1
+    # barrier), then skips b — which reports as skipped, never as run. A
+    # regressed parallel path would run both and yield two real results.
+    assert [(r.task, r.state) for r in results] == [("a", ""), ("b", "skipped")]
     assert results[0].ok is False  # a timed out at the barrier by itself
 
 
@@ -176,8 +176,10 @@ def test_failed_pre_skips_dependent():
             raise AssertionError("must not run")
 
     results = drive(tasks, "check")
-    assert [r.task for r in results] == ["bad"]  # check skipped
+    # The dependent never runs — and says so: a `skipped` row, blamed.
+    assert [(r.task, r.state) for r in results] == [("bad", ""), ("check", "skipped")]
     assert results[0].ok is False
+    assert results[1].blocked_by == "bad"
 
 
 def test_keep_going_runs_independent_branches():

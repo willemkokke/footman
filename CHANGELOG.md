@@ -9,6 +9,24 @@ versions may include breaking changes.
 
 ### Added
 
+- **`@post_tasks` — the run report's moment.** The closing bookend to
+  `@pre_tasks`: once per invocation, on the main thread, after every task
+  concluded and before the summary or the `--json` envelope prints. The
+  invocation carries the whole story — `inv.results` (every row,
+  chronological, as result views), `inv.skipped` (the subset that never
+  ran), `inv.total_ms` — so a run-level reporter finally sees what a
+  `post_task`-only reporter cannot: the nodes that never started. Under
+  `--json` a hook's stdout is rerouted to stderr (the envelope owns
+  stdout); hooks run in cascade order, and a raising hook is named and
+  fails the invocation.
+- **Skipped nodes are reported, not silently absent.** A node the run never
+  started — its prerequisite failed, or the run stopped reaching for new
+  work — gets a row: `state: "skipped"`, `blocked_by` naming what prevented
+  it, seated directly after that cause in the chronological report. The
+  summary prints it (`skip build (blocked by lint)`), the `--json` envelope
+  carries it (with `blocked_by`), and the exit code never takes it as the
+  headline — the cause already owns that. `state` is an open set; consumers
+  should tolerate values they don't know.
 - **Tasks wear their names on the thread, and the report says where they
   ran.** While a task executes, its worker thread is named after it —
   `fm:build`, badged `[serial]`/`[exclusive]` under a lane hold — so a

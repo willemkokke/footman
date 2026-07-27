@@ -1012,6 +1012,7 @@ class _HookPlugin:
 class _Lifecycle:
     inv: Any  # the frozen Invocation
     plugins: tuple[_HookPlugin, ...]
+    finish: tuple[Task, ...] = ()  # post_tasks hooks, cascade order
 
 
 # The run's per-task hooks, installed by the app layer for the duration of one
@@ -1034,6 +1035,7 @@ def install_lifecycle(inv: Any, contributions: Mapping[str, Sequence[Task]]) -> 
         for hook in contributions.get(kind, ()):
             owner = getattr(hook, "__module__", None) or "<unknown>"
             grouped.setdefault(owner, ([], [], []))[slot].append(hook)
+    finish = tuple(contributions.get("post_tasks", ()))
     _lifecycle = (
         _Lifecycle(
             inv,
@@ -1041,8 +1043,9 @@ def install_lifecycle(inv: Any, contributions: Mapping[str, Sequence[Task]]) -> 
                 _HookPlugin(name, tuple(bind_pre), tuple(pre), tuple(post))
                 for name, (bind_pre, pre, post) in grouped.items()
             ),
+            finish,
         )
-        if grouped
+        if grouped or finish
         else None
     )
 
@@ -1050,6 +1053,51 @@ def install_lifecycle(inv: Any, contributions: Mapping[str, Sequence[Task]]) -> 
 def clear_lifecycle() -> None:
     global _lifecycle
     _lifecycle = None
+
+
+def run_post_tasks(
+    results: Sequence[TaskResult], total: float, json_mode: bool
+) -> BaseException | None:
+    """Fire the run's `post_tasks` hooks, main thread, before the report.
+
+    The invocation is handed the whole story — every row as a result view,
+    the `skipped` subset, and the wall-clock — written past the freeze by
+    the run itself (hooks still cannot write). Under `--json` a hook's
+    stdout is rerouted to stderr: the envelope owns stdout. Every hook runs;
+    the first failure is kept, named, and fails the invocation.
+    """
+    life = _lifecycle
+    if life is None or not life.finish:
+        return None
+    inv = life.inv
+    views = tuple(ResultView(r) for r in results)
+    skipped = tuple(
+        v for r, v in zip(results, views, strict=True) if reported_state(r) == "skipped"
+    )
+    object.__setattr__(inv, "results", views)
+    object.__setattr__(inv, "skipped", skipped)
+    object.__setattr__(inv, "total_ms", round(total * 1000, 3))
+    redirect = (
+        contextlib.redirect_stdout(context.real_stderr())
+        if json_mode
+        else contextlib.nullcontext()
+    )
+    first: BaseException | None = None
+    with redirect:
+        for hook in life.finish:
+            try:
+                hook(inv)
+            except Exception as exc:
+                if first is None:
+                    failure = HookFailed(
+                        f"post_tasks hook "
+                        f"{getattr(hook, '__name__', '?')!r} from "
+                        f"{getattr(hook, '__module__', '?')} failed: "
+                        f"{type(exc).__name__}: {exc}"
+                    )
+                    failure.__cause__ = exc
+                    first = failure
+    return first
 
 
 class TaskHandle:

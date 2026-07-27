@@ -457,6 +457,29 @@ binding: hook code and validator code answer to the same rules a body does
 an interactive task is refused), while footman's own prompts — `ask()`
 menus, `confirm=` — use the real terminal and are never caught.
 
+### After the run: `@post_tasks`
+
+The closing bookend to `@pre_tasks`: once per invocation, on the main
+thread, after every task has concluded and *before* the summary or the
+`--json` envelope prints — so a rewrite a hook makes through a result view
+is what gets reported. The invocation now carries the whole story:
+
+```python
+@footman.post_tasks
+def digest(inv):
+    failed = [r for r in inv.results if not r.ok]
+    slack.post(f"{len(failed)} failed of {len(inv.results)}, "
+               f"{inv.total_ms:.0f} ms")
+```
+
+`inv.results` is every row, chronological — executions, `shared` rows,
+refusals, and `skipped` nodes (`inv.skipped` is that subset). This is the
+moment that sees what never ran: a `post_task` reporter only meets requests
+whose ladder opened, so the run-level view is where "what didn't happen"
+becomes visible. Under `--json` anything a hook prints goes to stderr — the
+envelope owns stdout. Hooks run in cascade order; a raising hook is named
+and fails the invocation, exactly as a crashing reporter should.
+
 ### One generator instead of a pair: `@wrap_task` and `@wrap_bind`
 
 When the pre and the post are two halves of one thought — open a span, close

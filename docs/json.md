@@ -12,8 +12,8 @@ links here.
 
 ## The results envelope
 
-A run prints one entry per executed task, in dependency order (a task
-skipped because its prerequisite failed doesn't appear):
+A run prints one entry per request, in the order things happened — a node
+that never started sits directly after whatever prevented it:
 
 ```console
 $ fm --json check
@@ -43,7 +43,12 @@ Top-level, `total_ms` is wall-clock for the whole run — the human summary's
 captured text), `error` (`null`, or the exception as a string), `steps` —
 one entry per [`run()` or tool](tools.md) call, each with `command`,
 `code`, `duration_ms`, `output` — and, when the task returns a value,
-`returned`. A row that executed carries `thread` and `thread_id` — the
+`returned`. `state` is the one word for what happened — `ok`, `failed`,
+`cancelled`, `shared`, `skipped` — and it is an **open set**: tolerate values
+you don't know. A node the run never started is a `skipped` row with
+`blocked_by` naming what prevented it, seated directly after that cause — so
+the envelope accounts for every node the plan had, not only the ones that
+ran. A row that executed carries `thread` and `thread_id` — the
 worker's stable name and its OS thread id, the correlation keys a profiler's
 timeline uses; while a task runs, its worker wears the task's name
 (`fm:build`, badged `[serial]`/`[exclusive]` under a lane hold), so a
