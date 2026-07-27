@@ -687,6 +687,22 @@ def _run_plan(
     # reaching for new work: either way it never began, so it has no moment
     # of its own and `_chronological` seats it after its cause. A node whose
     # confirm was denied already has its refusal row.
+    for n in ordered:
+        # Launch latency, derivable after the fact: a node became eligible
+        # the moment its last prerequisite finished — same monotonic clock
+        # `started` reads, so `started - eligible` is the time it sat
+        # waiting for a worker. Roots have no prerequisites and no latency.
+        if n.result is None or n.result.started is None or not n.deps:
+            continue
+        finishes = [
+            m.result.started + m.result.duration
+            for d in n.deps
+            if (m := by_key.get(d)) is not None
+            and m.result is not None
+            and m.result.started is not None
+        ]
+        if finishes:
+            n.result.eligible = max(finishes)
     skipped = [
         executor.TaskResult(
             task=n.seg.task, ok=False, state="skipped", blocked_by=_blocked_by(n)

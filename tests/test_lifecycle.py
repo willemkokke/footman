@@ -1498,3 +1498,50 @@ def test_post_tasks_arity_is_taught():
 
         @reg.post_tasks
         def wide(inv, extra): ...
+
+
+def test_a_request_that_waited_on_a_failure_is_blamed_on_it():
+    # Sequential repeat of a failing task: the second request joins the
+    # first's (failed) cell — genuine prevention, so blocked_by names it and
+    # the report seats the consequence after its cause.
+    reg = Group("root")
+
+    @reg.task
+    def boom():
+        raise ValueError("no")
+
+    result = Runner().invoke("--sequential -k boom boom", tasks=reg)
+    assert not result.ok
+    rows = list(result.results)
+    assert [r.blocked_by for r in rows] == ["", "boom"]
+    assert rows[1].started is None  # never began: a hole, blamed
+
+
+def test_launch_latency_is_recorded_and_reported():
+    import json as json_mod
+    import time as time_mod
+
+    reg = Group("root")
+
+    @reg.task
+    def slow():
+        time_mod.sleep(0.05)
+
+    @reg.task(pre=[slow])
+    def after(): ...
+
+    @reg.task
+    def root_task(): ...
+
+    result = Runner().invoke("--json after root-task", tasks=reg)
+    assert result.ok, result.stderr
+    rows = {r.task: r for r in result.results}
+    dependent = rows["after"]
+    assert dependent.eligible is not None
+    assert dependent.started is not None
+    assert dependent.started >= dependent.eligible  # waited, never time-travelled
+    assert rows["root_task" if "root_task" in rows else "root-task"].eligible is None
+    envelope = json_mod.loads(result.stdout)
+    by_name = {e["task"]: e for e in envelope["results"]}
+    assert "queued_ms" in by_name["after"]
+    assert "queued_ms" not in by_name["root-task"]  # roots have no latency

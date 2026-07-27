@@ -89,6 +89,12 @@ class TaskResult:
     thread_id: int = 0
     """The OS thread id (`threading.get_native_id`) of that worker, the key a
     profiler's timeline uses. `0` when nothing executed."""
+    eligible: float | None = None
+    """When this node could first have started — its last prerequisite's
+    finish, on the run's monotonic clock. `started - eligible` is launch
+    latency: time spent waiting for a free worker, never attributed to the
+    task's own `duration`. `None` for a node with no prerequisites, and for
+    anything that never ran."""
 
 
 def reported_state(result: TaskResult) -> str:
@@ -1412,6 +1418,9 @@ def run_bound(
             value = _futures.join(cell)
         except BaseException as exc:  # the execution we waited on failed
             result = _result(seg, 1, None, exc, 0.0)
+            # Genuine prevention: the failure this request waited on is why
+            # it has no answer — named, so the report seats it after it.
+            result.blocked_by = cell.label
         else:
             result = _futures.shared_result(seg.task, value)
         if life is not None and handle is not None:

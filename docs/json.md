@@ -48,7 +48,11 @@ one entry per [`run()` or tool](tools.md) call, each with `command`,
 you don't know. A node the run never started is a `skipped` row with
 `blocked_by` naming what prevented it, seated directly after that cause — so
 the envelope accounts for every node the plan had, not only the ones that
-ran. A row that executed carries `thread` and `thread_id` — the
+ran; a `shared` row carries none of that blame — nothing blocked it, it
+was answered, and it seats at the moment it was. A row whose node waited on
+prerequisites also carries `queued_ms`: how long it sat ready after its last
+prerequisite finished, waiting for a worker — launch latency, never part of
+`duration_ms`. A row that executed carries `thread` and `thread_id` — the
 worker's stable name and its OS thread id, the correlation keys a profiler's
 timeline uses; while a task runs, its worker wears the task's name
 (`fm:build`, badged `[serial]`/`[exclusive]` under a lane hold), so a

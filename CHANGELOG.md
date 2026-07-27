@@ -26,7 +26,18 @@ versions may include breaking changes.
   summary prints it (`skip build (blocked by lint)`), the `--json` envelope
   carries it (with `blocked_by`), and the exit code never takes it as the
   headline — the cause already owns that. `state` is an open set; consumers
-  should tolerate values they don't know.
+  should tolerate values they don't know. `blocked_by` means prevention and
+  nothing else: a `shared` row carries none — nothing blocked it, it was
+  answered — and instead has its own `started`, the instant the request
+  concluded, so it seats in the report where it actually happened; a
+  request that waited on an execution that *failed* is blamed on it.
+- **`queued_ms` — launch latency, on the row and in the envelope.** A node
+  with prerequisites records when it became eligible (its last
+  prerequisite's finish); `started - eligible` is how long it sat ready,
+  waiting for a worker — reported as `queued_ms`, never folded into
+  `duration_ms`, because the task wasn't running. Roots have no latency and
+  no field. A `skipped` row still records no time at all, only its cause:
+  a node that never launched never waited anywhere a clock runs.
 - **Tasks wear their names on the thread, and the report says where they
   ran.** While a task executes, its worker thread is named after it —
   `fm:build`, badged `[serial]`/`[exclusive]` under a lane hold — so a

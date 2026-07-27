@@ -437,12 +437,15 @@ def _shared_result(label: str, value: Any) -> TaskResult:
 
     Recorded rather than left invisible: the work happened, and a reader (or a
     journal) should see that a second request for it was answered instead of
-    silently vanishing. It never began, so it carries no start and is placed by
-    cause — `blocked_by` names the task whose own run satisfied it, which is
-    itself, so the ordering rule lands it directly after that execution. `ok`
-    is true because the work did succeed, just earlier, so the run's exit code
-    is untouched.
+    silently vanishing. Nothing blocked it — it was answered, instantly or
+    after a wait — so it carries no blame; `blocked_by` belongs to rows that
+    are holes. The *request* has a real moment, the instant it concluded, and
+    that is its `started`: the report seats it where it actually happened,
+    exactly as an executed body-callee seats after its caller. `ok` is true
+    because the work did succeed, just earlier, so the exit code is untouched.
     """
+    import time
+
     from footman.executor import TaskResult
 
     return TaskResult(
@@ -450,7 +453,7 @@ def _shared_result(label: str, value: Any) -> TaskResult:
         ok=True,
         returned=value,
         state="shared",
-        blocked_by=label,
+        started=time.perf_counter(),
     )
 
 

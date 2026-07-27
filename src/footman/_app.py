@@ -805,6 +805,11 @@ def _print_json(results: list[executor.TaskResult], *, total: float) -> None:
         }
         if r.blocked_by:
             entry["blocked_by"] = r.blocked_by
+        if r.eligible is not None and r.started is not None:
+            # Launch latency: how long the node sat ready, waiting for a
+            # worker, after its last prerequisite finished. Never part of
+            # `duration_ms` — the task wasn't running.
+            entry["queued_ms"] = round(max(r.started - r.eligible, 0.0) * 1000, 3)
         if r.thread:
             # Where it ran: the worker's stable name and OS thread id — the
             # correlation keys a profiler's timeline uses. Absent for a row
