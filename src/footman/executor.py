@@ -27,7 +27,7 @@ from pathlib import Path, PurePath
 from types import MappingProxyType
 from typing import Any
 
-from footman import _binder, _globals, coerce, context, registry
+from footman import _binder, _futures, _globals, coerce, context, registry
 from footman.context import (
     Context,
     Failed,
@@ -65,6 +65,35 @@ class TaskResult:
     output: str = ""
     steps: list[Result] = field(default_factory=list)
     cancelled: bool = False  # failed only because fail-fast killed it mid-run
+    started: float | None = None
+    """When this task began, on the run's monotonic clock — the ordering key of
+    the report. `None` for something that never began (an unavailable task, a
+    denied confirm), which is why the report places those by cause instead."""
+    state: str = ""
+    """What happened, when `ok`/`code` do not say it: `"shared"` for a request
+    an execution of this run had already satisfied. Empty means "read it from
+    `ok`" — `reported_state` is the one place that resolves the parts into a
+    single word, so a new outcome is a new value here rather than another
+    boolean beside it. A cross-run cache (a plugin's business) would add
+    `"cached"`; the two axes keep one word each."""
+    blocked_by: str = ""
+    """The task whose outcome meant this one never ran, when there was one. The
+    report reads as cause then consequence: a non-run sits directly after
+    whatever prevented it."""
+
+
+def reported_state(result: TaskResult) -> str:
+    """The one word for what happened, resolved from the parts.
+
+    `ok` and `code` stay the exit-code channel; this is the *reported*
+    spelling, so a new outcome (skipped, unavailable, a cross-run cache hit)
+    becomes another value here instead of another boolean on the result.
+    """
+    if result.state:
+        return result.state
+    if result.cancelled:
+        return "cancelled"
+    return "ok" if result.ok else "failed"
 
 
 def resolve(root: Group, path: list[str]) -> Task:
@@ -658,10 +687,12 @@ def forward_map(
 
 
 def _call(
-    fn: Task, args: list[Any], kwargs: dict[str, Any]
+    fn: Task, args: list[Any], kwargs: dict[str, Any], as_call: bool = False
 ) -> tuple[int, Any, BaseException | None]:
     try:
-        returned = fn(*args, **kwargs)
+        # The task's own body — never the handle, whose call is the body-call
+        # machinery that would route this invocation straight back here.
+        returned = registry.task_body(fn)(*args, **kwargs)
     except SystemExit as exc:
         # A non-int, non-None code is Python's `sys.exit("message")` idiom: the
         # object is the reason the interpreter would print to stderr. Carry it as
@@ -681,11 +712,13 @@ def _call(
         return (exc.result.code or 1), None, exc
     except Exception as exc:  # a failed task must not crash the runner
         return 1, None, exc
-    if isinstance(returned, int) and not isinstance(returned, bool):
+    if isinstance(returned, int) and not isinstance(returned, bool) and not as_call:
         # An int return is the exit-code channel — unless the signature
         # declares `Stdout[int]`, in which case the number is the document
         # (a filter like wordcount could not exist otherwise). Declaration
-        # wins; a bare `-> int` keeps its long-standing meaning.
+        # wins; a bare `-> int` keeps its long-standing meaning. It is a
+        # *segment's* channel, though: a body call asked for the value, and
+        # `n = measure()` has always handed the number over.
         declares, _ = coerce.emitted(resolved_signature(fn).return_annotation)
         if not declares:
             return returned, returned, None
@@ -694,6 +727,28 @@ def _call(
 
 class Unavailable(Exception):
     """A `@requires`-gated task was asked to run; the message is the reason."""
+
+
+def unavailable(fn: Task, seg: Segment) -> TaskResult | None:
+    """The refusal for a `@requires`-gated task, or `None` when it may run.
+
+    Availability is re-checked live at the moment of execution — the manifest's
+    cached answer is only ever a listing annotation — and it is checked before
+    binding, so an unavailable task refuses for the reason it is unavailable
+    rather than for whatever its arguments would have done. Every way of asking
+    a task to run comes through here, so a body call refuses exactly as a
+    prerequisite does.
+    """
+    reason = registry.availability(fn)
+    if reason is None:
+        return None
+    return TaskResult(
+        task=seg.task,
+        ok=False,
+        code=EX_USAGE,
+        error=Unavailable(reason),
+        started=time.perf_counter(),
+    )
 
 
 def resolve_cwd(fn: Task, ctx: Context) -> tuple[Path | None, bool]:
@@ -779,18 +834,51 @@ def run_task(
     caller's job via `ctx.sink`; here we just capture its final value.
     *forwarded* carries `forward`-marked values from a dispatching task.
     """
-    # `@requires` availability is re-checked live at the moment of execution —
-    # the manifest's cached answer is only ever a listing annotation.
-    if (reason := registry.availability(fn)) is not None:
-        return TaskResult(
-            task=seg.task, ok=False, code=EX_USAGE, error=Unavailable(reason)
-        )
+    if (refusal := unavailable(fn, seg)) is not None:
+        return refusal
     try:
         args, kwargs = bind(seg, fn, ctx, forwarded)
     except ChainError:
         raise  # e.g. passthrough with no *args — reported by the app layer
     except Exception as exc:  # a coercion failure (e.g. a custom-type constructor)
         return _result(seg, EX_USAGE, None, exc, 0.0)
+    return run_bound(fn, seg, ctx, args, kwargs)
+
+
+def run_bound(
+    fn: Task,
+    seg: Segment,
+    ctx: Context,
+    args: list[Any],
+    kwargs: dict[str, Any],
+    *,
+    as_call: bool = False,
+) -> TaskResult:
+    """Run *fn* with arguments already resolved — everything after binding.
+
+    The half of `run_task` that owns a task's *execution*: the context wiring,
+    the arbiter lane, the body, and the result. Split out because a body call
+    (`artifact = build()`) arrives with real Python arguments and must not be
+    re-bound from a command line, yet still deserves the full task treatment —
+    its own context, its own lane decision, its own `TaskResult`.
+    """
+    # Sharing means the same thing whichever way a task was reached, so this
+    # request joins the same protocol a body call uses: claim the work, or wait
+    # for whoever already holds it and report the answer as `shared`. A request
+    # declared `shared=False` never joins — `ctx` carries that answer. The key
+    # is computed before `ctx` joins the arguments, so the context can never
+    # become part of the work's identity.
+    # `as_call` means the cell layer is already holding this work's cell (it
+    # claimed before delegating here) and will resolve it — claiming again from
+    # the same thread would read as this task waiting on itself.
+    work = _futures.work_of(fn, args, kwargs) if ctx.shared and not as_call else None
+    claimed, cell = _futures.claim(work, seg.task)
+    if not claimed:
+        try:
+            value = _futures.join(cell)
+        except BaseException as exc:  # the execution we waited on failed
+            return _result(seg, 1, None, exc, 0.0)
+        return _futures.shared_result(seg.task, value)
 
     if context_param_name(resolved_signature(fn)):
         args = [ctx, *args]  # ctx is the first positional parameter
@@ -802,6 +890,7 @@ def run_task(
         try:
             ctx.cwd, ctx.cwd_unmanaged = resolve_cwd(fn, ctx)
         except ValueError as exc:  # e.g. rel= under an unmanaged config default
+            _futures.resolve(cell, None, exc)  # never leave a waiter blocked
             return _result(seg, EX_USAGE, None, exc, 0.0)
 
     # The arbiter lane is a *scheduling* declaration, acquired here at the
@@ -815,20 +904,28 @@ def run_task(
     token = _current.set(ctx)
     ctx.in_task = True  # a mid-body prompt()/confirm()/select() is now guarded
     start = time.perf_counter()
+    started = start  # the report's ordering key: when this task actually began
     try:
         with _globals.lane(
             lane_policy, name=seg.task, inherited=inherited, console=console
         ):
             if lane_policy is not None:
                 with _serial_globals(ctx):
-                    code, returned, error = _call(fn, args, kwargs)
+                    code, returned, error = _call(fn, args, kwargs, as_call)
             else:
-                code, returned, error = _call(fn, args, kwargs)
+                code, returned, error = _call(fn, args, kwargs, as_call)
     finally:
         _current.reset(token)
     duration = time.perf_counter() - start
     output = ctx.sink.getvalue() if isinstance(ctx.sink, io.StringIO) else ""
+    # The pristine return, snapshotted the moment the body handed it over: what
+    # a dependent or a body-caller receives is what the annotation promised,
+    # whatever a reporter later does to the *reported* result. Only a shared
+    # execution holds a cell (`claim` gives an unshared one none), so what a run
+    # reuses never depends on scheduling order.
+    _futures.resolve(cell, returned, error)
     result = _result(seg, code, returned, error, duration, output, ctx.steps)
+    result.started = started
     # A task that failed while fail-fast was already aborting the run wasn't a
     # genuine failure — it was cut off. Report that honestly, not as "failed".
     if not result.ok and context._aborting.is_set():

@@ -28,6 +28,7 @@ completion hot path never imports either.
 from __future__ import annotations
 
 import contextlib
+import functools
 import os
 import shutil
 from collections.abc import Callable, Iterator, Sequence
@@ -53,6 +54,7 @@ _POST = "_footman_post"
 _KEEP_GOING = "_footman_keep_going"
 _ATOMIC = "_footman_atomic"
 _INFINITE = "_footman_infinite"
+_SHARED = "_footman_shared"
 _HIDDEN = "_footman_hidden"
 _INTERACTIVE = "_footman_interactive"
 _PROGRESS = "_footman_progress"
@@ -134,11 +136,10 @@ def _empty_body(fn: object) -> bool:
     treated as one we must run.
     """
     import ast
-    import inspect
     import textwrap
 
     try:
-        src = textwrap.dedent(inspect.getsource(fn))  # type: ignore[arg-type]
+        src = textwrap.dedent(task_source(fn))
         mod = ast.parse(src)
     except (OSError, TypeError, SyntaxError):
         return False
@@ -167,11 +168,32 @@ _OPTS_ATTRS = {
     "progress": _PROGRESS,
     "confirm": _CONFIRM,
     "infinite": _INFINITE,
+    "shared": _SHARED,
     "cwd": _CWD,
     "rel": _REL,
     "serial": _SERIAL,
     "exclusive": _EXCLUSIVE,
 }
+
+
+def work_key(fn: Task) -> tuple[int, frozenset[tuple[str, Any]]]:
+    """The identity of the *work* a reference names: the task and its policy,
+    with sharing left out.
+
+    Nearly the DAG's dedup key (`schedule._dep_key`), and for the same reason —
+    a different policy is a genuinely different invocation, so a bare reference
+    and an `.opts(atomic=True)` one are two pieces of work and both run. The one
+    override deliberately excluded is `shared` itself: it says "do not reuse an
+    answer", not "this is different work", and folding it in would put an
+    unshared request in a bucket of its own where no later request could ever
+    find its result.
+    """
+    if isinstance(fn, _Opted):
+        base = object.__getattribute__(fn, "_opted_base")
+        overrides = object.__getattribute__(fn, "_opted_overrides")
+        work = {k: v for k, v in overrides.items() if k != _SHARED}
+        return (id(base), frozenset(work.items()))
+    return (id(fn), frozenset())
 
 
 def _opts_overrides(kwargs: dict[str, Any]) -> dict[str, Any]:
@@ -234,6 +256,15 @@ class _Opted:
         return getattr(object.__getattribute__(self, "_opted_base"), name)
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        # Route as *this reference*, not the bare task: the overrides are part
+        # of the request (`build.opts(shared=False)()` asks for its own run).
+        from footman import _futures
+
+        return _futures.call(self, args, kwargs)
+
+    def _plain_call(self, args: tuple[Any, ...], kwargs: dict[str, Any]) -> Any:
+        """A direct call with no run around it: today's behaviour, kept for the
+        outside-a-run path where there is no task boundary to apply policy."""
         base = object.__getattribute__(self, "_opted_base")
         overrides = object.__getattribute__(self, "_opted_overrides")
         if _CWD in overrides or _REL in overrides:
@@ -276,6 +307,82 @@ class _Opted:
         return (id(base), frozenset(overrides.items()))
 
 
+class _TaskFn:
+    """The object `@task` returns — and the very same object it registers.
+
+    A task's metadata rides as `_footman_*` attributes, and the framework keys
+    a great deal on the *identity* of the task object: the DAG's dedup key
+    (`schedule._dep_key`), the cascade's "am I shadowing myself?" test, the
+    provenance and defining-directory stamps. So there is exactly **one**
+    handle per decoration, and it is both registered and returned — a second
+    handle over the same function would read as a different task.
+
+    It is deliberately thin. Attribute reads fall through to the function, so
+    a marker stamped *before* wrapping (`@requires` written below `@task`) is
+    still read back; `functools.update_wrapper` gives it the function's name,
+    docstring, and `__wrapped__`, so `inspect.signature`, `inspect.getdoc` and
+    `inspect.unwrap` all answer about the function. The two `inspect` readers
+    that don't follow `__wrapped__` are wrapped once in `task_source` /
+    `task_source_file` below, so no call site carries the caveat.
+    """
+
+    def __init__(self, fn: Callable[..., Any]) -> None:
+        # Copies __name__/__qualname__/__doc__/__module__/__annotations__ and
+        # the function's __dict__ (markers stamped below @task), and sets
+        # __wrapped__ — the seam every unwrapping reader follows.
+        functools.update_wrapper(self, fn)
+
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        # A call from a task body is a piece of the run: it dedups against the
+        # DAG, waits on a copy already running, or runs here with a real task
+        # boundary. Outside a run it is the plain function call it looks like.
+        # Lazy import: `_futures` reaches back into the executor.
+        from footman import _futures
+
+        return _futures.call(self, args, kwargs)
+
+    def __getattr__(self, name: str) -> Any:
+        # Reached only for what neither the instance nor the class carries:
+        # the function's own dunders (`__code__`, `__globals__`) and any
+        # attribute set on it after wrapping. Read `__wrapped__` out of the
+        # instance dict directly — going through `self` would recurse here
+        # while `__init__` is still running.
+        try:
+            fn = object.__getattribute__(self, "__dict__")["__wrapped__"]
+        except KeyError:
+            raise AttributeError(name) from None
+        return getattr(fn, name)
+
+    def opts(self, **overrides: Any) -> _Opted:
+        """Per-use option overrides — `lint.opts(keep_going=True)`. The base is
+        this handle, so an opted reference and a bare one agree about which
+        task they name (the DAG's dedup key reads `id(base)`)."""
+        return _Opted(self, _opts_overrides(overrides))
+
+    def __repr__(self) -> str:
+        return f"<task {getattr(self, '__name__', '?')}>"
+
+
+# `inspect`, told about task handles. Everything else in `inspect` follows
+# `__wrapped__` on its own; these two resolve a *file and line*, which a
+# handle doesn't have, so they unwrap to the function first. Wrapped here so
+# reading a task's source stays a one-liner wherever it's needed.
+
+
+def task_source(fn: Any) -> str:
+    """The source text of the function behind *fn* (decorators included)."""
+    import inspect
+
+    return inspect.getsource(inspect.unwrap(fn))
+
+
+def task_source_file(fn: Any) -> str | None:
+    """The file the function behind *fn* is defined in, if it has one."""
+    import inspect
+
+    return inspect.getsourcefile(inspect.unwrap(fn))
+
+
 def _apply_policy(
     fn: Task,
     *,
@@ -283,6 +390,7 @@ def _apply_policy(
     post: Sequence[Task],
     progress: bool,
     infinite: bool,
+    shared: bool | None,
     confirm: str,
     interactive: bool,
     keep_going: bool | None,
@@ -307,6 +415,8 @@ def _apply_policy(
         setattr(fn, _PROGRESS, False)
     if infinite:
         setattr(fn, _INFINITE, True)
+    if shared is not None:
+        setattr(fn, _SHARED, shared)
     if hidden is not None:
         # Tri-state on purpose: unset inherits the enclosing group's answer,
         # so `hidden=False` on a child of a hidden group is a real override
@@ -444,6 +554,7 @@ class Group:
         post: Sequence[Task] = (),
         progress: bool = True,
         infinite: bool = False,
+        shared: bool | None = None,
         confirm: str = "",
         interactive: bool = False,
         keep_going: bool | None = None,
@@ -464,6 +575,7 @@ class Group:
         post: Sequence[Task] = (),
         progress: bool = True,
         infinite: bool = False,
+        shared: bool | None = None,
         confirm: str = "",
         interactive: bool = False,
         keep_going: bool | None = None,
@@ -520,6 +632,28 @@ class Group:
         run swaps the status line for a one-time hint that Ctrl-C is how
         this ends. Listings and help carry the same note.
 
+        `shared=False` says this task is **never shared**: every request for
+        it runs. A run normally performs one execution per task and arguments,
+        whoever asks — `pre=[build]` then `build()` in a body is one build —
+        which is wrong for work whose whole point is to happen again, like a
+        notification or a timestamp. One rule covers every spelling, so nobody
+        has to remember whether a task was reached by declaration or by call:
+        two dependents each get their own run, just as two calls do.
+
+        Sharing is a property of the **request**, resolved by a ladder: this
+        reference's own `.opts(shared=…)`, then the task's declaration, then
+        whatever asked for it, then shared. It propagates *down* — an unshared
+        request asks unshared for everything it needs, or the promise would be
+        a half-truth — which is worth knowing before reaching for it, because
+        one `shared=False` unshares that task's whole subtree. A step that
+        genuinely is reusable pins itself with `shared=True`, which beats an
+        inherited answer.
+
+        `.opts(shared=False)` asks for one unshared run without changing the
+        task, on a call or on a declared edge alike. Such a run gets its own
+        value but never rewrites what the run already remembers: the first
+        result stands, so later shared requests stay stable.
+
         `confirm="…"` gates the task on a yes/no answer asked *before* the
         task and its prerequisites run — deny and the task (and its
         subtree) is skipped; `--yes` auto-answers it. `interactive=True`
@@ -546,17 +680,19 @@ class Group:
             key = cli_name(name or fn.__name__)
             self._shadow_pulled(key)
             self._claim(key)
+            task = _TaskFn(fn)  # one handle: registered *and* returned
             if key == "default":
                 # The name *is* the mechanism: any task named `default` is its
                 # group's default action — `@group.default` is sugar for this.
                 # One validation path, so there are no second-class defaults.
-                self._stamp_default(fn, interactive)
+                self._stamp_default(task, interactive)
             _apply_policy(
-                fn,
+                task,
                 pre=pre,
                 post=post,
                 progress=progress,
                 infinite=infinite,
+                shared=shared,
                 confirm=confirm,
                 interactive=interactive,
                 keep_going=keep_going,
@@ -567,9 +703,8 @@ class Group:
                 exclusive=exclusive,
                 hidden=hidden,
             )
-            fn.opts = lambda **o: _Opted(fn, _opts_overrides(o))  # type: ignore[attr-defined]
-            self.tasks[key] = fn
-            return cast("TaskFn[_P, _R_co]", fn)
+            self.tasks[key] = task
+            return cast("TaskFn[_P, _R_co]", task)
 
         return register(fn) if fn is not None else register
 
@@ -645,6 +780,7 @@ class Group:
         post: Sequence[Task] = (),
         progress: bool = True,
         infinite: bool = False,
+        shared: bool | None = None,
         confirm: str = "",
         interactive: bool = False,
         keep_going: bool | None = None,
@@ -664,6 +800,7 @@ class Group:
         post: Sequence[Task] = (),
         progress: bool = True,
         infinite: bool = False,
+        shared: bool | None = None,
         confirm: str = "",
         interactive: bool = False,
         keep_going: bool | None = None,
@@ -705,13 +842,15 @@ class Group:
 
         def register(fn: Callable[_P, _R_co]) -> TaskFn[_P, _R_co]:
             self._claim("default")
-            self._stamp_default(fn, interactive)
+            task = _TaskFn(fn)  # one handle: registered *and* returned
+            self._stamp_default(task, interactive)
             _apply_policy(
-                fn,
+                task,
                 pre=pre,
                 post=post,
                 progress=progress,
                 infinite=infinite,
+                shared=shared,
                 confirm=confirm,
                 interactive=interactive,
                 keep_going=keep_going,
@@ -722,9 +861,8 @@ class Group:
                 exclusive=exclusive,
                 hidden=hidden,
             )
-            fn.opts = lambda **o: _Opted(fn, _opts_overrides(o))  # type: ignore[attr-defined]
-            self.tasks["default"] = fn
-            return cast("TaskFn[_P, _R_co]", fn)
+            self.tasks["default"] = task
+            return cast("TaskFn[_P, _R_co]", task)
 
         return register(fn) if fn is not None else register
 
@@ -850,6 +988,39 @@ def wants_progress(fn: Task) -> bool:
 def is_infinite(fn: Task) -> bool:
     """Whether *fn* runs until stopped: `@task(infinite=True)`."""
     return getattr(fn, _INFINITE, False) is True
+
+
+def sharing(fn: Task) -> bool | None:
+    """*fn*'s declared sharing policy: `@task(shared=True/False)`, or `None`
+    when it left the choice to whoever asks for it.
+
+    Sharing is a property of a *request*, resolved by a ladder — the request's
+    own `.opts(shared=…)`, then the task's declaration, then whatever it was
+    requested by (it propagates down a dependency subtree), then shared. This
+    reader is the declaration rung; `schedule` resolves the rest, exactly as it
+    does for `keep_going`.
+    """
+    return getattr(fn, _SHARED, None)
+
+
+def task_body(fn: Task) -> Task:
+    """The callable that runs *fn*'s own body — never the machinery.
+
+    A task is a handle whose `__call__` *is* the body-call machinery, so the
+    executor asks for this instead: the author's function, reached through the
+    handle and through any `.opts()` reference around it (whose policy the
+    executor has already applied at the task boundary). Calling the handle here
+    would route the scheduler's own invocation back into the memo it is meant
+    to be filling.
+    """
+    if isinstance(fn, _Opted):
+        base = object.__getattribute__(fn, "_opted_base")
+        if isinstance(base, Group):
+            base = base.default_task
+        return task_body(cast("Task", base))
+    if isinstance(fn, _TaskFn):
+        return cast("Task", fn.__wrapped__)
+    return fn
 
 
 def declared_hidden(fn: Task) -> bool | None:
@@ -1111,10 +1282,8 @@ class TaskView:
     def source_file(self) -> str | None:
         """The file the task's function is defined in, or `None` when it can't
         be located (a built-in or dynamically constructed function)."""
-        import inspect
-
         try:
-            return inspect.getsourcefile(self.fn)
+            return task_source_file(self.fn)
         except TypeError:
             return None
 

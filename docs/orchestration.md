@@ -173,9 +173,9 @@ have their own page: [Asking for input](input.md).
 
 ## Dependencies with `pre` / `post`
 
-Declare prerequisites and follow-ups on the task; footman schedules them
-(deduping shared deps, so a prerequisite pulled in twice runs once) and skips a
-task whose prerequisite failed:
+Declare prerequisites and follow-ups on the task; footman schedules them (a
+prerequisite pulled in twice runs once) and skips a task whose prerequisite
+failed:
 
 ```python
 @task(pre=[fmt, lint, typecheck, test])   # all four run before check
@@ -361,6 +361,86 @@ and runs to completion before the next statement; reach for `pre=`, a chain, or
 `parallel()` when you want prerequisites or concurrency. The declarative
 `pre=[lint]` form above is usually cleaner — a body call is for when you need
 real control flow.
+
+### One execution per request, however it was asked for
+
+A run performs a task's work **once per task and arguments**, and every way of
+asking counts the same: a prerequisite, a chain segment, a body call. So
+`fm check check` runs `check` once and reports the second mention as `shared`,
+exactly as two `check()` calls in a body would, and exactly as two tasks that
+both declare `pre=[check]` do. Nothing about how you reached a task changes how
+often it runs.
+
+Different arguments are different work and run — `fm build web build api` builds
+twice. A different policy is a different invocation too, so
+`pre=[build.opts(atomic=True)]` does not reuse a plain `build`. And a task (or
+one reference to it) that declares [`shared=False`](#work-that-is-never-shared-sharedfalse)
+runs for every request, which is how you say "this must happen again".
+
+### A call is part of the run
+
+Calling a task is not a shortcut around footman: the callee gets a real task
+boundary — its own context and working directory, its `@requires` and `confirm`
+gates, its own entry in the report — and the run performs its work **once per
+task and arguments**, whoever asks for it. So a prerequisite you also call hands
+back what it already produced, which is how a task reads a value `pre=` cannot
+pass:
+
+```python
+@task
+def build() -> str:
+    ...
+    return "dist/app.tar"
+
+@task(pre=[build])
+def publish():
+    artifact = build()      # the build that already ran, not a second one
+    run(f"./upload {artifact}")
+```
+
+Whether a task was reached by declaration or by a call makes no difference to
+how often it runs, so you never have to hold that distinction in your head. The
+same rules follow from it: different arguments are different work and run;
+calling a task that is running on another thread waits for that run rather than
+starting a second; and a call that could never return — a task calling itself,
+or two tasks calling each other — is refused by name instead of hanging.
+
+Two calls footman refuses outright, because a call has nowhere to put them: a
+`serial=`/`exclusive=` task (its lane is taken at the task boundary, never
+mid-body, which is what keeps the arbiter deadlock-free) and an `infinite` task
+(a call that never returns). Declare those with `pre=` instead.
+
+### Work that is never shared: `shared=False`
+
+Some work exists to happen again — a notification, a timestamp, a scratch
+clean. `@task(shared=False)` says exactly that: every request for the task
+runs, whether the request is a call, a chain segment, or a `pre=` edge. One
+rule, so the spelling you used never changes the answer.
+
+Sharing is a property of the *request*, resolved in this order: the reference's
+own `.opts(shared=…)`, then the task's declaration, then whatever asked for it,
+then shared. `.opts(shared=False)` asks for one unshared run without changing
+the task — on a call or on a declared edge alike:
+
+```python
+@task
+def deploy():
+    stamp()                       # shared: the run's one stamp
+    stamp.opts(shared=False)()    # this one runs, whatever came before
+```
+
+An unshared run gets its own value but never rewrites what the run already
+remembers: the first result stands, so later shared requests stay stable. A
+request answered by an earlier execution is reported as `shared`, so the run
+never looks like it did less than you asked.
+
+!!! warning "Unsharing propagates down the subtree"
+
+    An unshared request asks unshared for everything it needs — otherwise the
+    promise would be a half-truth — so one `shared=False` unshares that task's
+    **whole dependency subtree**. A `compile` shared by two unshared builds
+    runs twice, and a deep tree multiplies. Pin anything that genuinely is
+    reusable with `shared=True`, which beats an inherited answer.
 
 ## Progress & the live status line
 

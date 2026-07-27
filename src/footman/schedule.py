@@ -16,16 +16,18 @@ import io
 import os
 import sys
 import threading
+import time
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from dataclasses import dataclass, field
 from itertools import count
 from typing import Any, TextIO
 
-from footman import _describe, _globals, _progress, context, executor
+from footman import _describe, _futures, _globals, _progress, context, executor
 from footman.registry import (
     Group,
     Task,
     _Opted,
+    cli_name,
     default_group,
     fans_out,
     is_infinite,
@@ -33,6 +35,7 @@ from footman.registry import (
     keeps_going,
     post_tasks,
     pre_tasks,
+    sharing,
     task_confirm,
     wants_progress,
 )
@@ -50,6 +53,7 @@ class _Node:
     forwarded: dict[str, Any] = field(default_factory=dict)  # `forward`ed values in
     forward_targets: list[_Node] = field(default_factory=list)  # …and out
     keep_going: bool = False  # resolved failure policy for THIS node (per-subtree)
+    shared: bool = True  # resolved sharing policy: may an earlier run satisfy it?
     # The group this default action was *reached through*, when known.
     # Default-ness is parent-relative: a provider's default pulled into a
     # consumer group must fan out the group it landed in, not the one it was
@@ -59,7 +63,12 @@ class _Node:
 
 
 def _default_seg(fn: Task) -> Segment:
-    return Segment(task=fn.__name__, path=[fn.__name__])
+    """The synthetic segment for a task reached by reference rather than typed —
+    a bare `pre=`/`post=` dependency, or a body call. Named the way the task is
+    *addressed* (`import_` is `fm import`), so a report never shows a spelling
+    you could not type."""
+    name = cli_name(fn.__name__)
+    return Segment(task=name, path=[name])
 
 
 def _dep_key(fn: Task) -> tuple[int, frozenset[tuple[str, Any]]]:
@@ -71,6 +80,18 @@ def _dep_key(fn: Task) -> tuple[int, frozenset[tuple[str, Any]]]:
     prerequisite still runs once); a genuinely different policy is a distinct
     node. The override identity itself lives in `_Opted._dedup_key`."""
     return fn._dedup_key() if isinstance(fn, _Opted) else (id(fn), frozenset())
+
+
+def resolve_inherited(declared: bool | None, inherited: bool) -> bool:
+    """One rung-walk for a property that flows down the dependency subtree.
+
+    Own declaration (or `.opts()` override) beats what the requester passed
+    down, and unset means "whoever asks decides". Sharing is the first user;
+    a later property wanting the same shape — propagate to what a task needs,
+    let a task pin its own answer — passes its own reader through here rather
+    than copying the ladder.
+    """
+    return declared if declared is not None else inherited
 
 
 def _as_task(dep: Task | Group | _Opted) -> Task:
@@ -114,26 +135,45 @@ def _segment_group(root: Group, seg: Segment) -> Group | None:
 def _build_dag(root: Group, segments: list[Segment]) -> list[_Node]:
     """Nodes for the chain plus their transitive pre/post deps.
 
-    Explicit chain segments each get their own node — repeating a task in the
-    chain (`build web build api`) runs it once per mention. Only shared
-    pre/post prerequisites are deduped, by task identity, so a prerequisite
-    pulled in twice still runs once. Node keys are serial ints; `dep_nodes`
-    maps a task to the node its bare deps resolve to.
+    Explicit chain segments each get their own node, so each mention is its own
+    request (`build web build api` builds twice — different arguments, different
+    work). Shared pre/post prerequisites dedupe by task identity, so a
+    prerequisite pulled in twice is one node. Two requests that resolve to the
+    same work are one execution whether they are two nodes, a node and a body
+    call, or two calls: the second is answered by the first and reported as
+    `shared`, unless the task (or the reference) declared `shared=False`. Node
+    keys are serial ints; `dep_nodes` maps a task to the node its bare deps
+    resolve to.
     """
     nodes: list[_Node] = []
     dep_nodes: dict[object, _Node] = {}
     counter = count()
     seen_explicit: set[object] = set()
 
-    def new_node(fn: Task, seg: Segment) -> _Node:
+    def new_node(fn: Task, seg: Segment, shared: bool) -> _Node:
         node = _Node(fn, seg, next(counter))
+        node.shared = shared
         nodes.append(node)
         return node
 
-    def add_dep(fn: Task, owner: Group | None = None) -> _Node:
+    def add_dep(
+        fn: Task, owner: Group | None = None, *, asked_by: bool = False
+    ) -> _Node:
+        # The sharing ladder, resolved here rather than in a pass of its own:
+        # unlike `keep_going`, sharing decides node *identity*, and identity
+        # has to be settled while the node is being made. Own declaration (or
+        # `.opts()` override) wins over what the requester passed down.
+        shared = resolve_inherited(sharing(fn), asked_by)
+        if not shared:
+            # Unshared, by definition: its own node per requester, and never
+            # registered as the one a later dependency lookup could reuse.
+            node = new_node(fn, _default_seg(fn), False)
+            node.group = owner
+            _link(node)
+            return node
         node = dep_nodes.get(_dep_key(fn))
         if node is None:
-            node = new_node(fn, _default_seg(fn))
+            node = new_node(fn, _default_seg(fn), True)
             node.group = owner
             dep_nodes[_dep_key(fn)] = node
             _link(node)
@@ -159,6 +199,9 @@ def _build_dag(root: Group, segments: list[Segment]) -> list[_Node]:
             dep.forwarded[name] = value
 
     def _link(node: _Node) -> None:
+        """Attach *node*'s prerequisites, propagating its sharing policy down:
+        a freshly-requested task's inputs are freshly requested too, or
+        "fresh" would be a half-truth."""
         pre = list(pre_tasks(node.fn))
         # An empty-body group default fans out the group's own tasks: they become
         # implicit prerequisites, so the scheduler runs them (in parallel) and the
@@ -171,27 +214,30 @@ def _build_dag(root: Group, segments: list[Segment]) -> list[_Node]:
                 *pre,
             ]
         for dep in pre:
-            d = add_dep(_as_task(dep), _owner_of(dep))
+            d = add_dep(_as_task(dep), _owner_of(dep), asked_by=node.shared)
             node.deps.add(d.key)
             node.forward_targets.append(d)  # forwarding threaded in a later pass
         for dep in post_tasks(node.fn):
-            d = add_dep(_as_task(dep), _owner_of(dep))
+            d = add_dep(_as_task(dep), _owner_of(dep), asked_by=node.shared)
             d.deps.add(node.key)
             node.forward_targets.append(d)
 
     for seg in segments:
         fn = executor.resolve(root, seg.path)
         key = _dep_key(fn)
-        existing = dep_nodes.get(key)
+        # A chain segment is a root: nothing asked for it, so only its own
+        # declaration can make it unshared.
+        shared = resolve_inherited(sharing(fn), inherited=True)
+        existing = dep_nodes.get(key) if shared else None
         if existing is not None and key not in seen_explicit:
             # First explicit mention of a task already pulled in as a bare dep:
             # adopt this segment's args instead of creating a duplicate.
             existing.seg = seg
             seen_explicit.add(key)
             continue
-        node = new_node(fn, seg)
+        node = new_node(fn, seg, shared)
         node.group = _segment_group(root, seg)
-        if existing is None:
+        if existing is None and node.shared:
             dep_nodes[key] = node
         seen_explicit.add(key)
         _link(node)
@@ -279,9 +325,13 @@ def _make_ctx(
     real: TextIO,
     name_width: int = 0,
     keep_going: bool = False,
+    shared: bool = True,
 ) -> context.Context:
     ctx = context.Context(**(ctx_config or {}), passthrough=list(seg.passthrough or []))
     ctx.keep_going = keep_going  # per-subtree policy; tags this task's subprocesses
+    # The sharing policy this node resolved to, carried so anything its body
+    # asks for inherits it: an unshared request asks unshared too.
+    ctx.shared = shared
     # One buffer for both streams at task level: the atomic flush keeps this
     # task's stdout/stderr in order, while a run() inside it still splits the
     # step's streams via a temporary swap of the two.
@@ -380,16 +430,68 @@ def _gate_confirms(
     kept: list[Segment] = []
     denied: list[executor.TaskResult] = []
     for seg in segments:
-        message = task_confirm(executor.resolve(root, seg.path))
+        fn = executor.resolve(root, seg.path)
+        message = task_confirm(fn)
         if not message or assume_yes or _ask_confirm(message, no_input=no_input):
             kept.append(seg)
         else:
-            denied.append(
-                executor.TaskResult(
-                    task=seg.task, ok=False, code=1, error=NotConfirmed(seg.task)
-                )
-            )
+            denied.append(_not_confirmed(seg))
     return kept, denied
+
+
+def _not_confirmed(seg: Segment) -> executor.TaskResult:
+    # Denied at a moment (before the run for a segment, at the call for a call),
+    # so it carries that moment and needs no special placement.
+    return executor.TaskResult(
+        task=seg.task,
+        ok=False,
+        code=1,
+        error=NotConfirmed(seg.task),
+        started=time.perf_counter(),
+    )
+
+
+def _chronological(results: list[executor.TaskResult]) -> list[executor.TaskResult]:
+    """The run's results in the order the run happened.
+
+    Chronological is the only ordering that has a place for everything: a task
+    reached by a body call has no slot in a dependency listing, but it has a
+    moment. Sequential runs are unchanged, since running in dependency order
+    *is* chronological; only independent tasks in a parallel run move, to
+    wherever they actually ran.
+
+    Something that never began has no moment of its own, so it sits directly
+    after whatever prevented it — the report reads as cause, then consequence.
+    With nothing to blame (a gate answered before any task ran) it comes first.
+    """
+    ran = sorted(
+        (r for r in results if r.started is not None),
+        key=lambda r: r.started or 0.0,
+    )
+    never: list[executor.TaskResult] = [r for r in results if r.started is None]
+    ordered = [r for r in never if not r.blocked_by] + ran
+    for result in (r for r in never if r.blocked_by):
+        after = [i for i, r in enumerate(ordered) if r.task == result.blocked_by]
+        ordered.insert(after[-1] + 1 if after else len(ordered), result)
+    return ordered
+
+
+def confirm_gate(
+    fn: Task, seg: Segment, ctx: context.Context
+) -> executor.TaskResult | None:
+    """Ask *fn*'s `@task(confirm=)` gate now; a denial is the refusal to report.
+
+    The scheduler resolves a segment's gate before the run starts, so the human
+    answers everything up front. A body call cannot be known that early, so it
+    asks at the moment of the call instead — the gate itself is the same, and a
+    task that asks for confirmation gets it however it was reached.
+    """
+    message = task_confirm(fn)
+    if not message or ctx.assume_yes:
+        return None
+    if _ask_confirm(message, no_input=ctx.no_input):
+        return None
+    return _not_confirmed(seg)
 
 
 def run_plan(
@@ -405,6 +507,36 @@ def run_plan(
     jobs: int = 0,
 ) -> list[executor.TaskResult]:
     """Build and run the DAG; return results in dependency order."""
+    with _futures.session():
+        results = _run_plan(
+            root,
+            segments,
+            sequential=sequential,
+            keep_going=keep_going,
+            capture=capture,
+            ctx_config=ctx_config,
+            estimate=estimate,
+            progress=progress,
+            jobs=jobs,
+        )
+        # A task reached by a body call ran as a real task, so its result joins
+        # the run's. Every execution the run performed is reported, however it
+        # was reached — and the whole report reads in the order it happened.
+        return _chronological([*results, *_futures.collected()])
+
+
+def _run_plan(
+    root: Group,
+    segments: list[Segment],
+    *,
+    sequential: bool = False,
+    keep_going: bool | None = None,
+    capture: bool = False,
+    ctx_config: dict[str, Any] | None = None,
+    estimate: _progress.Estimate | None = None,
+    progress: bool = True,
+    jobs: int = 0,
+) -> list[executor.TaskResult]:
     context.reset_abort()  # clear any latched fail-fast from a previous run
     segments, denied = _gate_confirms(root, segments, ctx_config)
     nodes = _build_dag(root, segments)
@@ -540,6 +672,7 @@ def _run_sequential(nodes, real, capture, ctx_config, status, err=None) -> None:
             real=real,
             name_width=width,
             keep_going=node.keep_going,
+            shared=node.shared,
         )
         if status is not None:
             status.unit_started(node.seg.task)
@@ -612,6 +745,7 @@ def _run_parallel(nodes, real, err, capture, ctx_config, status, jobs) -> None:
             real=real,
             name_width=width,
             keep_going=n.keep_going,
+            shared=n.shared,
         )
         if is_interactive(n.fn) and not capture:
             # A console owner runs on the real terminal even inside the

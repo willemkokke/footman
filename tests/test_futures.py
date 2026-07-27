@@ -1,0 +1,771 @@
+"""Body calls as run-scoped futures: sharing, waiting, refusals, reporting."""
+
+from __future__ import annotations
+
+import threading
+
+import pytest
+
+from footman import executor, registry
+from footman.registry import Group
+from footman.split import ChainError
+from footman.testing import Runner
+
+
+def drive(reg: Group, line: str):
+    """Run *line* against *reg* through the in-process CLI."""
+    return Runner().invoke(line, tasks=reg)
+
+
+def test_a_body_call_shares_the_runs_execution():
+    # `pre=[build]` then `build()` in the body is ONE build: the prerequisite's
+    # pristine return is memoised under (task, arguments), so the call is a
+    # cache hit rather than a second execution.
+    reg = Group("root")
+    runs: list[str] = []
+
+    @reg.task
+    def build() -> str:
+        runs.append("build")
+        return "dist/app"
+
+    @reg.task(pre=[build])
+    def publish():
+        artifact = build()  # the value pre= could never hand over
+        print(f"published {artifact}")
+
+    result = drive(reg, "publish")
+    assert result.ok, result.stderr
+    assert runs == ["build"]  # once, not twice
+    assert "published dist/app" in result.stdout
+
+
+def test_a_body_call_without_the_task_in_the_plan_runs_it():
+    # No prerequisite: the call is the first execution, so it happens — and
+    # returns its value like a plain call always did.
+    reg = Group("root")
+    runs: list[str] = []
+
+    @reg.task
+    def measure() -> int:
+        runs.append("measure")
+        return 7
+
+    @reg.task
+    def report():
+        print(f"got {measure()}")
+
+    result = drive(reg, "report")
+    assert result.ok, result.stderr
+    assert runs == ["measure"] and "got 7" in result.stdout
+
+
+def test_the_memo_keys_on_arguments_not_just_the_task():
+    # Same task, different arguments, is different work; the same arguments
+    # spelled positionally or by keyword is the same work.
+    reg = Group("root")
+    seen: list[str] = []
+
+    @reg.task
+    def render(target: str = "web") -> str:
+        seen.append(target)
+        return target.upper()
+
+    @reg.task
+    def build_all():
+        assert render("web") == "WEB"
+        assert render(target="web") == "WEB"  # same work, other spelling
+        assert render("api") == "API"  # different work
+        assert render() == "WEB"  # the default is the same work as "web"
+
+    assert drive(reg, "build-all").ok
+    assert seen == ["web", "api"]
+
+
+def test_an_unshared_task_runs_on_every_call():
+    reg = Group("root")
+    runs: list[int] = []
+
+    @reg.task(shared=False)
+    def notify() -> None:
+        runs.append(1)
+
+    @reg.task
+    def ship():
+        notify()
+        notify()
+        notify()
+
+    assert drive(reg, "ship").ok
+    assert len(runs) == 3
+
+
+def test_an_unshared_prerequisite_is_never_shared():
+    # `shared=False` is one rule for every spelling:
+    # two dependents each get their own run, exactly as two calls would. No
+    # one has to remember whether they reached the task by declaration or by
+    # call.
+    reg = Group("root")
+    runs: list[int] = []
+
+    @reg.task(shared=False)
+    def stamp() -> None:
+        runs.append(1)
+
+    @reg.task(pre=[stamp])
+    def build_web(): ...
+
+    @reg.task(pre=[stamp])
+    def build_api(): ...
+
+    assert drive(reg, "build-web build-api").ok
+    assert len(runs) == 2  # one per requester
+
+
+def test_unsharedness_propagates_down_the_subtree():
+    # "Give me a fresh build" has to mean its inputs are fresh too, or fresh
+    # is a half-truth: the property flows from a requester into what it needs.
+    reg = Group("root")
+    runs: list[str] = []
+
+    @reg.task
+    def compile_() -> None:
+        runs.append("compile")
+
+    @reg.task(pre=[compile_])
+    def bundle() -> None:
+        runs.append("bundle")
+
+    @reg.task(shared=False, pre=[bundle])
+    def release_() -> None:
+        runs.append("release")
+
+    @reg.task(pre=[bundle])
+    def preview() -> None:
+        runs.append("preview")
+
+    assert drive(reg, "release preview").ok  # `release_` addresses as `release`
+    # `release-` was requested freshly, so its bundle (and that bundle's
+    # compile) are its own; `preview` gets the shared pair.
+    assert runs.count("bundle") == 2
+    assert runs.count("compile") == 2
+
+
+def test_an_own_declaration_beats_an_inherited_one():
+    # The pin for an expensive step that genuinely is reusable: declaring
+    # shared=True keeps it shared even under an unshared parent.
+    reg = Group("root")
+    runs: list[str] = []
+
+    @reg.task(shared=True)
+    def fetch_deps() -> None:
+        runs.append("fetch")
+
+    @reg.task(shared=False, pre=[fetch_deps])
+    def build_web() -> None: ...
+
+    @reg.task(shared=False, pre=[fetch_deps])
+    def build_api() -> None: ...
+
+    assert drive(reg, "build-web build-api").ok
+    assert runs.count("fetch") == 1  # shared despite two unshared parents
+
+
+def test_a_per_call_override_asks_for_one_unshared_run():
+    # `.opts(shared=False)` is the per-request spelling, and works on a
+    # declared edge just as well as on a call.
+    reg = Group("root")
+    runs: list[int] = []
+
+    @reg.task
+    def stamp() -> int:
+        runs.append(1)
+        return len(runs)
+
+    @reg.task
+    def go():
+        first = stamp()  # runs, and fills the cell
+        again = stamp()  # shared: the cell answers
+        own = stamp.opts(shared=False)()  # asked unshared: runs again
+        assert (first, again, own) == (1, 1, 2)
+
+    assert drive(reg, "go").ok
+    assert len(runs) == 2
+
+
+def test_the_first_result_is_the_one_the_run_remembers():
+    # First-write-wins: an unshared re-run gets its own value, but never
+    # rewrites what the run already remembers, so a later request is stable.
+    reg = Group("root")
+    runs: list[int] = []
+
+    @reg.task
+    def stamp() -> int:
+        runs.append(1)
+        return len(runs)
+
+    @reg.task
+    def go():
+        assert stamp() == 1
+        assert stamp.opts(shared=False)() == 2  # its own, unshared value
+        assert stamp() == 1  # …and the remembered first result stands
+
+    assert drive(reg, "go").ok
+    assert len(runs) == 2
+
+
+def test_a_failing_callee_raises_in_the_caller():
+    reg = Group("root")
+
+    @reg.task
+    def flaky() -> None:
+        raise RuntimeError("boom")
+
+    @reg.task
+    def caller():
+        flaky()
+
+    result = drive(reg, "caller")
+    assert not result.ok
+    assert "boom" in result.stderr
+
+
+def test_a_body_call_is_reported_as_its_own_unit():
+    # The body-call hole in the result table closes: the callee ran as a real
+    # task, so it has a TaskResult of its own.
+    reg = Group("root")
+
+    @reg.task
+    def inner() -> str:
+        return "v1"
+
+    @reg.task
+    def outer():
+        inner()
+
+    result = drive(reg, "outer")
+    assert result.ok, result.stderr
+    assert [r.task for r in result.results] == ["outer", "inner"]
+    assert next(r for r in result.results if r.task == "inner").returned == "v1"
+
+
+def test_self_recursion_is_a_taught_refusal():
+    # Today this is a stack overflow; as a future it is a wait on itself,
+    # caught and named.
+    reg = Group("root")
+
+    @reg.task
+    def loop():
+        loop()
+
+    result = drive(reg, "loop")
+    assert not result.ok
+    assert "can never return" in result.stderr and "loop" in result.stderr
+
+
+def test_a_call_cycle_between_two_tasks_is_taught():
+    reg = Group("root")
+
+    @reg.task
+    def ping():
+        pong()
+
+    @reg.task
+    def pong():
+        ping()
+
+    result = drive(reg, "ping")
+    assert not result.ok
+    assert "can never return" in result.stderr
+
+
+def test_calling_a_serial_task_from_a_body_is_refused():
+    # The arbiter lane is acquired at the task boundary, never mid-body —
+    # the invariant that keeps it deadlock-free. The refusal names the fix.
+    reg = Group("root")
+
+    @reg.task(serial=True)
+    def migrate(): ...
+
+    @reg.task
+    def deploy():
+        migrate()
+
+    result = drive(reg, "deploy")
+    assert not result.ok
+    assert "serial/exclusive lane" in result.stderr
+    assert "pre=[migrate]" in result.stderr
+
+
+def test_calling_an_infinite_task_from_a_body_is_refused():
+    reg = Group("root")
+
+    @reg.task(infinite=True)
+    def serve(): ...
+
+    @reg.task
+    def dev():
+        serve()
+
+    result = drive(reg, "dev")
+    assert not result.ok
+    assert "infinite task" in result.stderr
+
+
+def test_a_call_outside_a_run_is_a_plain_call():
+    # Importing a tasks file and calling a function must keep working: no run,
+    # no machinery, no context — just the function.
+    reg = Group("root")
+
+    @reg.task
+    def double(n: int = 2) -> int:
+        return n * 2
+
+    assert double(21) == 42
+
+
+def test_unhashable_arguments_run_rather_than_pretend_to_be_cached():
+    # A value with no frozen form can't key a cell. The call runs — honest
+    # work every time — instead of guessing at a cache hit.
+    reg = Group("root")
+    runs: list[int] = []
+
+    class Opaque:
+        __hash__ = None  # type: ignore[assignment]
+
+    @reg.task
+    def consume(thing: object = None) -> None:
+        runs.append(1)
+
+    @reg.task
+    def go():
+        blob = Opaque()
+        consume(blob)
+        consume(blob)
+
+    assert drive(reg, "go").ok
+    assert len(runs) == 2
+
+
+def test_list_arguments_key_by_value():
+    # Collections get a frozen shape, so the same list contents are the same
+    # work — the common case for a `list[str]` parameter.
+    reg = Group("root")
+    runs: list[int] = []
+
+    @reg.task
+    def lint(paths: list[str] | None = None) -> int:
+        runs.append(1)
+        return len(paths or [])
+
+    @reg.task
+    def gate():
+        assert lint(["a", "b"]) == 2
+        assert lint(["a", "b"]) == 2  # same contents: the memo answers
+
+    assert drive(reg, "gate").ok
+    assert len(runs) == 1
+
+
+def test_two_threads_calling_one_task_share_a_single_execution():
+    # The second caller blocks on the first's future rather than duplicating
+    # the work; both see the same value.
+    reg = Group("root")
+    runs: list[int] = []
+    seen: list[str] = []
+
+    @reg.task
+    def slow() -> str:
+        runs.append(1)
+        threading.Event().wait(0.05)
+        return "once"
+
+    @reg.task
+    def fan():
+        from footman import parallel
+
+        def one() -> None:
+            seen.append(slow())
+
+        parallel(one, one, one)
+
+    assert drive(reg, "fan").ok
+    assert len(runs) == 1
+    assert seen == ["once", "once", "once"]
+
+
+def test_sharing_is_a_tri_state():
+    # Unset is a third state, not False: it means "whoever asks decides", which
+    # is what lets the property propagate and what makes shared=True a
+    # deliberate pin rather than a no-op.
+    reg = Group("root")
+
+    @reg.task(shared=False)
+    def always(): ...
+
+    @reg.task(shared=True)
+    def never(): ...
+
+    @reg.task
+    def unset(): ...
+
+    assert registry.sharing(always) is False
+    assert registry.sharing(never) is True
+    assert registry.sharing(unset) is None
+    # `.opts()` overrides the declaration for one request.
+    assert registry.sharing(unset.opts(shared=False)) is False
+    assert registry.sharing(always.opts(shared=True)) is True
+
+
+def test_the_machinery_refuses_before_it_memoises():
+    # A refusal is not an execution: nothing is cached, so the second call
+    # teaches the same lesson rather than silently returning None.
+    reg = Group("root")
+
+    @reg.task(serial=True)
+    def locked(): ...
+
+    with pytest.raises(ChainError):
+        from footman import _futures
+
+        with _futures.session():
+            _futures.call(locked, (), {})
+
+
+# --- one gate, however the task was reached -----------------------------------
+# Nobody should have to know whether a task arrived through the declared DAG or
+# the runtime one, so every gate a prerequisite passes, a call passes too.
+
+
+def test_an_unavailable_task_refuses_a_body_call():
+    reg = Group("root")
+
+    @reg.task
+    @registry.requires(lambda: False, reason="no toolchain here")
+    def compile_(): ...
+
+    @reg.task
+    def build():
+        compile_()
+
+    result = drive(reg, "build")
+    assert not result.ok
+    assert "no toolchain here" in result.stderr
+    # …and the refusal is reported, not swallowed into the caller's failure.
+    assert any("compile" in r.task and not r.ok for r in result.results)
+
+
+def test_an_unavailable_task_refuses_a_prerequisite_the_same_way():
+    reg = Group("root")
+
+    @reg.task
+    @registry.requires(lambda: False, reason="no toolchain here")
+    def compile_(): ...
+
+    @reg.task(pre=[compile_])
+    def build(): ...
+
+    result = drive(reg, "build")
+    assert not result.ok
+    assert "no toolchain here" in result.stderr
+
+
+def test_a_confirm_gate_is_asked_at_a_body_call():
+    # The scheduler asks a segment's gate up front; a call can't be known that
+    # early, so it asks at the call — but it does ask.
+    reg = Group("root")
+    ran: list[int] = []
+
+    @reg.task(confirm="Really deploy?")
+    def deploy() -> None:
+        ran.append(1)
+
+    @reg.task
+    def release_():
+        deploy()
+
+    denied = drive(reg, "release")
+    assert not denied.ok  # no terminal, no input: the gate cannot be answered
+    assert not ran
+    confirmed = Runner().invoke("--yes release", tasks=reg)  # a global, so it leads
+    assert confirmed.ok, confirmed.stderr
+    assert ran == [1]  # --yes answers it, exactly as it does for a segment
+
+
+# --- the report reads in the order the run happened ---------------------------
+
+
+def test_results_are_chronological_and_a_call_lands_where_it_ran():
+    # A dependency listing has no slot for a task reached by a body call; a
+    # chronological one does, because the call had a moment.
+    reg = Group("root")
+
+    @reg.task
+    def setup_() -> str:
+        return "ready"
+
+    @reg.task
+    def probe() -> str:
+        return "probed"
+
+    @reg.task(pre=[setup_])
+    def deploy():
+        probe()  # runs here, between deploy's start and its end
+
+    result = drive(reg, "deploy")
+    assert result.ok, result.stderr
+    assert [r.task for r in result.results] == ["setup", "deploy", "probe"]
+    stamps = [r.started for r in result.results]
+    assert all(s is not None for s in stamps)
+    timed = [s for s in stamps if s is not None]
+    assert timed == sorted(timed)  # ordered by when they began
+
+
+def test_a_refusal_lands_at_the_moment_it_refused():
+    # An unavailable task never ran, but it *was* asked at a point in time, so
+    # it needs no placement rule — it carries that moment and sorts by it.
+    # Ordered by dependency here on purpose: between two INDEPENDENT tasks a
+    # chronological report is only as deterministic as the run was, and
+    # asserting an order there would be asserting the thread scheduler.
+    reg = Group("root")
+
+    @reg.task
+    def first_() -> None: ...
+
+    @reg.task(pre=[first_])
+    @registry.requires(lambda: False, reason="not here")
+    def second() -> None: ...
+
+    @reg.task(pre=[second])
+    def both(): ...
+
+    result = drive(reg, "both")
+    assert not result.ok
+    refusal = next(r for r in result.results if r.task == "second")
+    assert refusal.started is not None  # it had a moment of its own
+    assert not refusal.blocked_by  # nothing prevented it; it refused itself
+    order = [r.task for r in result.results]
+    assert order.index("first") < order.index("second")  # causally ordered
+
+
+def test_something_that_never_began_sits_after_what_prevented_it():
+    # The placement rule, on its own: with no moment of its own, a result goes
+    # directly after the one it blames, so the report reads cause then
+    # consequence. (Skipped nodes become results in their own right with the
+    # post_tasks hook; the ordering contract is here and pinned now.)
+    from footman import schedule
+    from footman.executor import TaskResult
+
+    ran_first = TaskResult(task="build", ok=False, code=1, started=1.0)
+    ran_later = TaskResult(task="notify", ok=True, started=2.0)
+    skipped = TaskResult(task="publish", ok=False, blocked_by="build")
+    denied = TaskResult(task="deploy", ok=False)  # nothing to blame: it leads
+
+    ordered = schedule._chronological([ran_later, skipped, ran_first, denied])
+    assert [r.task for r in ordered] == ["deploy", "build", "publish", "notify"]
+
+
+# --- a request the run had already satisfied is reported, not invisible -------
+
+
+def test_a_memo_hit_is_reported_as_shared():
+    # The work happened once; the second request was answered rather than
+    # performed, and the report says so instead of the request vanishing.
+    reg = Group("root")
+    runs: list[int] = []
+
+    @reg.task
+    def build() -> str:
+        runs.append(1)
+        return "dist/app"
+
+    @reg.task(pre=[build])
+    def publish():
+        build()  # answered from the run's own earlier execution
+
+    result = drive(reg, "publish")
+    assert result.ok, result.stderr
+    assert len(runs) == 1
+    states = [(r.task, executor.reported_state(r)) for r in result.results]
+    assert states == [("build", "ok"), ("build", "shared"), ("publish", "ok")]
+    hit = result.results[1]
+    assert hit.returned == "dist/app"  # it carries the value it answered with
+    assert hit.ok and hit.started is None  # succeeded earlier; never began here
+    assert hit.blocked_by == "build"  # placed right after the run that satisfied it
+
+
+def test_a_shared_entry_does_not_change_the_exit_code():
+    reg = Group("root")
+
+    @reg.task
+    def probe() -> int:
+        return 3  # an int return is a segment's exit code, a call's value
+
+    @reg.task
+    def gate():
+        assert probe() == 3
+        assert probe() == 3  # the second is answered by the first
+
+    result = drive(reg, "gate")
+    assert result.ok and result.exit_code == 0
+    assert [executor.reported_state(r) for r in result.results] == [
+        "ok",
+        "ok",
+        "shared",
+    ]
+
+
+def test_reported_state_resolves_one_word_from_the_parts():
+    # `ok`/`code` stay the exit-code channel; this is the reported spelling, so
+    # a new outcome becomes another value here rather than another boolean.
+    from footman.executor import TaskResult
+
+    assert executor.reported_state(TaskResult(task="a", ok=True)) == "ok"
+    assert executor.reported_state(TaskResult(task="a", ok=False)) == "failed"
+    assert (
+        executor.reported_state(TaskResult(task="a", ok=False, cancelled=True))
+        == "cancelled"
+    )
+    assert (
+        executor.reported_state(TaskResult(task="a", ok=True, state="shared"))
+        == "shared"
+    )
+
+
+def test_the_ladder_resolver_is_shared():
+    # Sharing is the first user of the down-the-subtree ladder; a later
+    # property (a cross-run "never cached") reuses this rather than copying it.
+    from footman import schedule
+
+    assert schedule.resolve_inherited(True, False) is True  # own wins
+    assert schedule.resolve_inherited(False, True) is False  # even over a parent
+    assert schedule.resolve_inherited(None, True) is True  # else inherited
+    assert schedule.resolve_inherited(None, False) is False  # else shared
+
+
+# --- one rule, whichever way the task was reached ------------------------------
+
+
+def test_a_repeated_chain_segment_is_one_execution_when_shared():
+    # Each mention is its own request, and identical requests to a shared task
+    # are one execution — the same rule a prerequisite and a body call follow.
+    reg = Group("root")
+    runs: list[int] = []
+
+    @reg.task
+    def check() -> None:
+        runs.append(1)
+
+    result = drive(reg, "check check")
+    assert result.ok, result.stderr
+    assert len(runs) == 1
+    assert [executor.reported_state(r) for r in result.results] == ["ok", "shared"]
+
+
+def test_a_repeated_chain_segment_runs_twice_when_unshared():
+    # …and `shared=False` makes every mention run, predictably.
+    reg = Group("root")
+    runs: list[int] = []
+
+    @reg.task(shared=False)
+    def notify() -> None:
+        runs.append(1)
+
+    result = drive(reg, "notify notify")
+    assert result.ok, result.stderr
+    assert len(runs) == 2
+    assert [executor.reported_state(r) for r in result.results] == ["ok", "ok"]
+
+
+def test_a_node_reuses_what_a_body_call_already_did():
+    # The mirror of `pre=[build]` plus `build()`: here the call comes first and
+    # the node second, and it still happens once. Nobody has to know which way
+    # round a task was reached.
+    reg = Group("root")
+    runs: list[int] = []
+
+    @reg.task
+    def survey() -> str:
+        runs.append(1)
+        return "measured"
+
+    @reg.task
+    def early():
+        assert survey() == "measured"  # the first execution, from a body
+
+    result = drive(reg, "early survey")  # …then survey as a segment of its own
+    assert result.ok, result.stderr
+    assert len(runs) == 1
+    states = [(r.task, executor.reported_state(r)) for r in result.results]
+    assert states == [("early", "ok"), ("survey", "ok"), ("survey", "shared")]
+
+
+def test_a_different_policy_is_different_work_and_runs():
+    # A policy override makes a genuinely different invocation, so it is never
+    # answered by the shared one — the sharing flag is the only override left
+    # out of the work's identity, because it says "do not reuse", not
+    # "this is different".
+    reg = Group("root")
+    runs: list[int] = []
+
+    @reg.task
+    def step() -> None:
+        runs.append(1)
+
+    @reg.task(pre=[step])
+    def plain(): ...
+
+    @reg.task(pre=[step.opts(atomic=True)])
+    def guarded(): ...
+
+    assert drive(reg, "plain guarded").ok
+    assert len(runs) == 2
+
+
+def test_an_unshared_execution_is_not_the_runs_answer():
+    # An unshared run neither reads a cell nor becomes one. Otherwise whether a
+    # shared request reused would depend on which node the scheduler started
+    # first, and how much work a run does would stop being predictable.
+    reg = Group("root")
+    runs: list[int] = []
+
+    @reg.task
+    def compile_() -> None:
+        runs.append(1)
+
+    @reg.task(shared=False, pre=[compile_])
+    def own(): ...
+
+    @reg.task(pre=[compile_])
+    def plain(): ...
+
+    assert drive(reg, "own plain").ok
+    # `own` unshares its subtree, so it compiles for itself; `plain` gets a
+    # shared compile. Two, in either scheduling order.
+    assert len(runs) == 2
+
+
+def test_two_racing_requests_are_one_execution_whichever_starts_first():
+    # The reason a node joins the cell protocol rather than peeking at it: a
+    # peek can only see a *finished* cell, so an independent node and a body
+    # call racing each other both ran — duplicated work, and unpredictable
+    # because it depended on which started first. Whoever arrives second waits.
+    reg = Group("root")
+    runs: list[int] = []
+
+    @reg.task
+    def survey() -> str:
+        runs.append(1)
+        threading.Event().wait(0.05)  # wide enough for the other to arrive
+        return "measured"
+
+    @reg.task
+    def early():
+        assert survey() == "measured"
+
+    for line in ("early survey", "survey early"):  # both orders, same answer
+        runs.clear()
+        result = drive(reg, line)
+        assert result.ok, result.stderr
+        assert len(runs) == 1, f"{line}: ran {len(runs)} times"
+        assert [executor.reported_state(r) for r in result.results].count("shared") == 1

@@ -7,22 +7,6 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
-### Removed
-
-- **BREAKING: a bare callable in `Annotated` is no longer a completer.** It
-  used to mean `suggest(fn)`, which read as a convenience and behaved as a
-  guess: the branch swallowed *anything* callable that was not a class, so a
-  marker of the wrong shape — a plain function, or an instance with
-  `__call__` — silently became a shell-completion function. The marker
-  vanished, a mystery completer appeared, and nothing said a word either
-  way. `suggest(fn)` is now the only spelling, the way one spelling per
-  concept goes everywhere else in footman.
-
-  The bare form is **refused**, not ignored, because it used to work:
-  `Annotated[str, my_fn]` teaches `suggest(my_fn)`. Unrecognised metadata
-  that is *not* callable is still passed over in silence, which is what lets
-  a parameter carry a marker footman has never heard of.
-
 ### Added
 
 - **The stubs are rendered from a record, not from a reading.** Each curated
@@ -63,32 +47,111 @@ versions may include breaking changes.
   own successor. Only the PyPI tier can be listed today; every other tool is
   named and skipped rather than left looking like a tool with no history.
 
-- **Stubs render the union, and say when an option arrived or went.** A
-  generated stub is now every option the tool has *ever* had, not the newest
-  release alone: a flag the tool has since dropped stays completable, because
-  the reader may be running a version that still has it, and its docstring
-  says `Gone since 0.5.0`. An option that arrived within the primed history
-  says `Added in 0.4.11`. Because the reference pages render from the stub
-  docstrings, both surfaces get it from one change — prek's page carries four
-  such notes today, derived from ten real releases with nothing hand-written.
+### Changed
 
-  What a stub may claim is bounded by what was read: an option already
-  present at the oldest release in the chain carries **no** `since`, because
-  "at or before the floor" is not a since. A tool with a history of one
-  release claims nothing at all, which is the seeded state for 25 of the 26.
+- **BREAKING: calling a task from a task body is part of the run.** It used to
+  be a plain function call: it ran the task again even if the run had just run
+  it, on the caller's thread, with no context of its own and no result anywhere
+  — the one execution path footman could not see. A call now gets a real task
+  boundary (its own context and working directory, its `@requires` and
+  `confirm` gates, its own entry in the report), and the run performs a task's
+  work **once per task and arguments**, whoever asks. So a prerequisite you
+  also call hands back what it already produced, which is how a task finally
+  reads a value `pre=` cannot pass:
 
-  Each observation also records **which platforms read it** — a fact about
-  the observation, like its date. It is the groundwork for cross-platform
-  exclusions: "absent on Windows, and Windows was read" is an exclusion,
-  while "absent on Windows, which never ran" is silence, and without this the
-  two are indistinguishable.
+  ```python
+  @task(pre=[build])
+  def publish():
+      artifact = build()      # the build that already ran, not a second one
+  ```
 
-  A *list*, because a release read on three platforms is **one** observation
-  of a merged surface. Storing it once per platform would triple a store
-  whose options are almost all universal, to carry the rare one that is not;
-  the list says who looked, and a per-option `not_on` will say who disagreed.
-  Exclusions themselves wait for a refresh that runs a matrix, since one
-  runner cannot observe what it is not.
+  Whether a task was reached by declaration or by a call makes no difference to
+  how often it runs. Calling a task that is running on another thread waits for
+  that run; a call that could never return (a task calling itself, or two
+  calling each other) is refused by name instead of hanging, where
+  self-recursion used to be a stack overflow. Two calls are refused outright: a
+  `serial=`/`exclusive=` task, whose lane is taken at the task boundary and
+  never mid-body, and an `infinite` task. A call outside a run is still the
+  plain call it looks like, so importing a tasks file and calling a function
+  keeps working. An `int` return remains a segment's exit code, while a call
+  gets the number as a value.
+
+- **`@task(shared=False)` — work that is never shared.** Some work exists to
+  happen again: a notification, a timestamp, a scratch clean. Every request for
+  such a task runs, whether that request is a call, a chain segment, or a
+  `pre=` edge — one rule, so the spelling never changes the answer. Sharing is
+  a property of the request: `.opts(shared=…)` first, then the task's
+  declaration, then whatever asked for it, then shared. It propagates down the
+  dependency subtree, because an unshared request asks unshared for what it
+  needs, so `shared=True` is the pin for a step that genuinely is reusable. An
+  unshared run never rewrites what the run already remembers — the first result
+  stands.
+
+- **BREAKING: a run performs a task's work once per request, however the task
+  was asked for.** Two tasks declaring `pre=[build]` shared one build already;
+  now a chain segment, a body call and a prerequisite all count the same, so
+  `fm check check` runs `check` once and reports the second mention as
+  `shared`. Repeating a task in a chain used to run it once per mention. What
+  still runs twice: different arguments (`fm build web build api`), a different
+  policy (`pre=[build.opts(atomic=True)]` is a different invocation), and
+  anything declared `shared=False`.
+
+  An unshared execution is nobody else's answer: it neither reuses a result nor
+  becomes one. Otherwise whether a shared request reused would depend on which
+  of two nodes the scheduler happened to start first, and how much work a run
+  performs would stop being predictable.
+
+- **A request the run had already satisfied is reported as `shared`.** A body
+  call that finds its work already done returns the memoised value — and used
+  to leave no trace, so the second request simply vanished from the report. It
+  now appears, marked `shared`: dimmed in the summary with "already run this
+  run" where a duration would be, and carrying `state: "shared"` in the
+  `--json` envelope. It never began, so it has no start of its own and the
+  ordering rule places it directly after the execution that satisfied it; it
+  is `ok`, since the work succeeded just earlier, so the run's exit code is
+  untouched.
+
+  `state` is the reported spelling of what happened — `ok` / `failed` /
+  `cancelled` / `shared` — resolved in one place. `ok` and `code` stay the
+  exit-code channel, so a future outcome is another value of `state` rather
+  than another boolean beside it. Sharing within a run and caching across runs
+  are two axes, and each keeps one word.
+
+- **The run's report reads in the order the run happened.** A dependency
+  listing has no place for a task reached by a call; a chronological one does.
+  Sequential runs are unchanged, since dependency order already is
+  chronological, and a prerequisite still precedes its dependent; only
+  independent tasks in a parallel run move, to wherever they actually ran.
+  Anything that never began sits directly after whatever prevented it, so the
+  report reads as cause then consequence. `TaskResult` carries `started` and
+  `blocked_by` for this. A task reached by reference rather than typed is now
+  reported by its *address* (`import_` shows as `import`) — the spelling you
+  could actually type.
+
+### Removed
+
+- **BREAKING: a bare callable in `Annotated` is no longer a completer.** It
+  used to mean `suggest(fn)`, which read as a convenience and behaved as a
+  guess: the branch swallowed *anything* callable that was not a class, so a
+  marker of the wrong shape — a plain function, or an instance with
+  `__call__` — silently became a shell-completion function. The marker
+  vanished, a mystery completer appeared, and nothing said a word either
+  way. `suggest(fn)` is now the only spelling, the way one spelling per
+  concept goes everywhere else in footman.
+
+  The bare form is **refused**, not ignored, because it used to work:
+  `Annotated[str, my_fn]` teaches `suggest(my_fn)`. Unrecognised metadata
+  that is *not* callable is still passed over in silence, which is what lets
+  a parameter carry a marker footman has never heard of.
+
+### Fixed
+
+- **A called task passes the same gates a declared one does.** A body call used
+  to slip past `@requires` availability (an unavailable task *ran* when called,
+  though the same task as a prerequisite refuses) and never asked a
+  `@task(confirm=)` gate. Both now hold however the task was reached; the
+  confirm is asked at the call, since a call cannot be known before the run the
+  way a chain segment can.
 
 ## [0.22.0] — 2026-07-27
 
