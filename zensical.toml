@@ -12,6 +12,7 @@ Copyright &copy; 2026 Willem Kokke — MIT licensed
 nav = [
   { "Home" = "index.md" },
   { "Getting started" = "getting-started.md" },
+  { "Playground" = "playground.md" },
   { "Guide" = [
     { "Typed signatures" = "typing.md" },
     { "Chaining & parallelism" = "orchestration.md" },
@@ -106,6 +107,13 @@ nav = [
     { "zsh" = "_generated/tools/zsh.md" },
     # tools-nav:end
   ] },
+]
+
+# The playground: Pyodide-backed live editor + per-example "run it there"
+# links. One module script on every page; it no-ops where nothing applies.
+extra_css = ["assets/playground.css"]
+extra_javascript = [
+  { path = "assets/playground.js", type = "module", defer = true },
 ]
 
 [project.plugins.mkdocstrings.handlers.python]
