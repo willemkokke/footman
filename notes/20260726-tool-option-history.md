@@ -256,6 +256,13 @@ extractions (§1), so the first commit is the seeding step in §8.
 
 ## 8. Where to start
 
+**Steps 1 and 2 landed 2026-07-27.** `_toolhistory.py` holds the format
+(surface serialisation, delta, replay, load/save); `tools.sync` records its
+reading and renders the stub from the history; all 26 stubs regenerate
+byte-identical through the round-trip. The store sits in `tool-history/`,
+outside `src/`, and the built wheel was checked to confirm it does not ship.
+Step 3 — the fetchers that walk backwards — is what remains.
+
 Not the prime — it is the expensive, network-bound, most-likely-to-stall part.
 Start where the data already exists:
 

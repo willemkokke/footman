@@ -30,7 +30,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Annotated, Literal
 
-from footman import _drivers, _stubgen, _toolspec
+from footman import _drivers, _stubgen, _toolhistory, _toolspec
 from footman._describe import bold, cyan, wants_color
 from footman.context import current
 from footman.params import doc
@@ -40,10 +40,19 @@ from footman.tools import version_tuple as _version_tuple
 tasks = Group("tools", help="Keep the tools.* stubs honest")
 
 _STUBS = Path(__file__).resolve().parent.parent / "_stubs"
+# Repo-only, deliberately outside `src/`: generation reads the history and
+# generation is a maintainer task run from a checkout, while users read the
+# stubs — which already carry everything the log is for. Shipping it would
+# make every install pay for history nobody reads.
+_HISTORY = Path(__file__).resolve().parents[3] / "tool-history"
 
 
 def _stub_path(key: str) -> Path:
     return _STUBS / f"{key}.pyi"
+
+
+def _history_path(key: str) -> Path:
+    return _HISTORY / f"{key}.json"
 
 
 @contextmanager
@@ -92,9 +101,69 @@ def _platform() -> str:
 
 
 def _generate(driver: _drivers.Driver) -> str:
-    """The stub text for one installed tool, formatted the way ruff would."""
+    """The stub text for one installed tool, formatted the way ruff would.
+
+    The reading goes into the history first, and the stub is rendered from
+    *that* — so what ships is a view of the record rather than a second
+    record that can disagree with it.
+    """
     spec = _drivers.extract(driver)
-    return _formatted(_render(driver, spec))
+    doc = _observe(driver, spec)
+    base = doc["base"]
+    recorded = _toolhistory.spec_from(
+        base["surface"],
+        name=spec.name,
+        version=base["version"],
+        in_process=spec.in_process,
+    )
+    return _formatted(_render(driver, recorded))
+
+
+def _observe(driver: _drivers.Driver, spec: _toolspec.ToolSpec) -> dict:
+    """Record this reading in the tool's history, and return the history.
+
+    Three cases, and the third is the one the format exists for: a first
+    reading opens the file; re-reading the release the base already holds
+    updates it in place; a *newer* release becomes the base and demotes the
+    old one to a delta — one entry rewritten, the rest untouched.
+    """
+    path = _history_path(driver.key)
+    surface = _toolhistory.surface_of(spec)
+    version = spec.version or "unknown"
+    doc = _toolhistory.load(path)
+    if doc is None:
+        doc = _toolhistory.new(
+            driver.key, version=version, date=_today(), surface=surface
+        )
+    elif doc["base"]["version"] == version:
+        doc["base"]["surface"] = surface
+        doc["base"]["extractor"] = _toolhistory.EXTRACTOR
+    else:
+        previous = doc["base"]
+        doc["deltas"] = {
+            previous["version"]: {
+                "date": previous["date"],
+                "extractor": previous["extractor"],
+                **_toolhistory.delta(surface, previous["surface"]),
+            },
+            **doc["deltas"],
+        }
+        doc["base"] = {
+            "version": version,
+            "date": _today(),
+            "extractor": _toolhistory.EXTRACTOR,
+            "surface": surface,
+        }
+    _toolhistory.save(doc, path)
+    return doc
+
+
+def _today() -> str:
+    """The observation date. A release's own date belongs to the release, and
+    the fetchers will carry it; a live reading only knows when it looked."""
+    import datetime
+
+    return datetime.date.today().isoformat()
 
 
 def _render(driver: _drivers.Driver, spec: _toolspec.ToolSpec) -> str:
