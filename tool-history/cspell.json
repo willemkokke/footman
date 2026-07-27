@@ -5,6 +5,9 @@
  "base": {
   "version": "10.0.1",
   "date": "2026-07-27",
+  "platforms": [
+   "macOS"
+  ],
   "extractor": 1,
   "surface": {
    "help": "Spelling Checker for Code",

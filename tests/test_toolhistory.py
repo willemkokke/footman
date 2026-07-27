@@ -226,9 +226,9 @@ def test_the_checked_in_history_regenerates_its_stub(key):
     )
 
     rendered = _stubgen.render(
-        _toolhistory.spec_from(
-            base["surface"], name=key.replace("_", "-"), version=version
-        ),
+        # The union, as generation renders it: every option the tool has ever
+        # had, so a flag it later dropped stays completable.
+        _toolhistory.union(doc, name=key.replace("_", "-")),
         platform=platform.strip("()"),
         class_name=_stubgen._class_name(key),
         in_process=mode,
@@ -332,3 +332,172 @@ def test_the_primed_history_ships_a_contiguous_chain():
     for version in chain:
         assert _toolhistory.at(doc, version) is not None, version
     assert doc["observed_from"] == chain[-1]
+
+
+def test_the_union_carries_intervals_the_history_can_prove():
+    """What a stub may say about an option's life, and what it may not.
+
+    An option already present at the oldest release read has no `since` — the
+    chain never looked far enough back to claim one, and "at or before the
+    floor" is not a `since`. An option the tool has dropped keeps its entry
+    and gains an `until`, because a reader may be running a version that
+    still has it.
+    """
+    old = _toolhistory.surface_of(
+        _spec(
+            verbs=(
+                Verb(
+                    name="build",
+                    options=(
+                        Option("ancient", ("--ancient",)),
+                        Option("doomed", ("--doomed",)),
+                    ),
+                ),
+            )
+        )
+    )
+    middle = _toolhistory.surface_of(
+        _spec(
+            verbs=(
+                Verb(
+                    name="build",
+                    options=(
+                        Option("ancient", ("--ancient",)),
+                        Option("doomed", ("--doomed",)),
+                        Option("fresh", ("--fresh",)),
+                    ),
+                ),
+            )
+        )
+    )
+    newest = _toolhistory.surface_of(
+        _spec(
+            verbs=(
+                Verb(
+                    name="build",
+                    options=(
+                        Option("ancient", ("--ancient",)),
+                        Option("fresh", ("--fresh",)),
+                    ),
+                ),
+            )
+        )
+    )
+    doc = _toolhistory.new("demo", version="3.0.0", date="2026-03-01", surface=newest)
+    _toolhistory.extend(doc, version="2.0.0", date="2026-02-01", surface=middle)
+    _toolhistory.extend(doc, version="1.0.0", date="2026-01-01", surface=old)
+
+    options = {
+        o.name: o for v in _toolhistory.union(doc, name="demo").verbs for o in v.options
+    }
+    assert set(options) == {"ancient", "doomed", "fresh"}  # every option ever
+    assert options["ancient"].since == ""  # there at the floor: nothing provable
+    assert options["fresh"].since == "2.0.0"  # arrived, and the chain saw it
+    assert options["doomed"].until == "3.0.0"  # the release it stopped appearing in
+    assert options["doomed"].since == ""
+
+
+def test_a_history_of_one_release_claims_nothing():
+    """The seeded state: no chain, so no interval is provable and the stub
+    says only what the tool says."""
+    doc = _toolhistory.new(
+        "demo",
+        version="1.0.0",
+        date="2026-01-01",
+        surface=_toolhistory.surface_of(_spec()),
+    )
+    spec = _toolhistory.union(doc, name="demo")
+    assert spec.verbs, "the union of one release is that release"
+    assert not any(o.since or o.until for v in spec.verbs for o in v.options)
+
+
+def test_an_observation_records_which_platforms_read_it():
+    """A fact about the observation, like its date — and the groundwork for
+    exclusions: "absent on Windows, and Windows was read" is an exclusion,
+    while "absent on Windows, which never ran" is silence.
+
+    A *list*, because a release read on three platforms is one observation of
+    a merged surface. Storing it three times would triple a store whose
+    options are nearly all universal, to carry the rare one that is not.
+    """
+    surface = _toolhistory.surface_of(_spec())
+    doc = _toolhistory.new(
+        "demo",
+        version="2.0.0",
+        date="2026-02-01",
+        surface=surface,
+        platforms=["Linux", "macOS"],
+    )
+    assert doc["base"]["platforms"] == ["Linux", "macOS"]  # sorted, one entry
+
+    _toolhistory.extend(
+        doc,
+        version="1.0.0",
+        date="2026-01-01",
+        surface=surface,
+        platforms=["Windows"],
+    )
+    assert doc["deltas"]["1.0.0"]["platforms"] == ["Windows"]
+
+
+def test_every_checked_in_observation_names_its_platforms():
+    """The store must not grow observations that cannot say where they came
+    from; a later multi-platform refresh reads this to decide what is an
+    exclusion and what was simply never looked at."""
+    from footman import _drivers
+    from footman.tasks import tools as tools_tasks
+
+    for driver in _drivers.DRIVERS:
+        doc = _toolhistory.load(tools_tasks._history_path(driver.key))
+        if doc is None:
+            continue
+        assert doc["base"].get("platforms"), f"{driver.key} base"
+        for version, step in doc["deltas"].items():
+            assert step.get("platforms"), f"{driver.key} {version}"
+
+
+def test_priming_rewrites_the_stub_it_invalidates(monkeypatch, tmp_path):
+    """A deeper history changes what a stub may say — an option that looked
+    original at the old floor may turn out to have arrived. The stub is a
+    rendering of the record, so extending the record rewrites it rather than
+    waiting for someone to remember a `sync`."""
+    from footman.tasks import tools as tools_tasks
+
+    doc = _toolhistory.load(tools_tasks._history_path("prek"))
+    assert doc is not None
+    chain = _toolhistory.observed(doc)
+    assert len(chain) > 5, "prek is the primed tool; this test needs its chain"
+
+    stub = tools_tasks._stub_path("prek").read_text(encoding="utf-8")
+    assert "Added in" in stub, "a primed tool's stub carries what the chain proved"
+    # ...and only versions the chain actually holds.
+    import re
+
+    for claimed in set(re.findall(r"Added in ([0-9][^.\s]*(?:\.[^.\s]+)*)\.", stub)):
+        assert claimed in chain, claimed
+
+
+def test_an_older_reading_never_becomes_the_head(tmp_path, monkeypatch):
+    """A machine with a stale tool must not rewrite the base and push the
+    newer release down the chain as though it came first. Recording on any
+    change did exactly that: ruff's history ended up with 0.16.0 as both the
+    base and one of its own ancestors."""
+    from footman import _drivers
+    from footman.tasks import tools as tools_tasks
+
+    monkeypatch.setattr(tools_tasks, "_HISTORY", tmp_path)
+    driver = _drivers.find("prek")
+    assert driver is not None
+
+    def spec_at(version: str):
+        return ToolSpec(name="prek", version=version, verbs=_spec().verbs)
+
+    tools_tasks._observe(driver, spec_at("0.5.0"))
+    doc = tools_tasks._observe(driver, spec_at("0.4.0"))  # a laggard machine
+    assert doc["base"]["version"] == "0.5.0"  # the head stands
+    assert list(doc["deltas"]) == ["0.4.0"]  # ...and the older read is history
+
+    doc = tools_tasks._observe(driver, spec_at("0.6.0"))  # a newer release
+    assert doc["base"]["version"] == "0.6.0"
+    assert list(doc["deltas"]) == ["0.5.0", "0.4.0"]
+    assert _toolhistory.observed(doc) == ["0.6.0", "0.5.0", "0.4.0"]

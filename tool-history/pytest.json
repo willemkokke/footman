@@ -5,6 +5,9 @@
  "base": {
   "version": "9.1.1",
   "date": "2026-07-27",
+  "platforms": [
+   "macOS"
+  ],
   "extractor": 1,
   "surface": {
    "help": "",

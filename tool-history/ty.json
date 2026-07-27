@@ -5,6 +5,9 @@
  "base": {
   "version": "0.0.63",
   "date": "2026-07-27",
+  "platforms": [
+   "macOS"
+  ],
   "extractor": 1,
   "surface": {
    "help": "An extremely fast Python type checker.",

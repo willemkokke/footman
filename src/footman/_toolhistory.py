@@ -21,6 +21,7 @@ about what was read rather than a policy about what we meant to read.
 
 from __future__ import annotations
 
+import itertools
 import json
 from pathlib import Path
 from typing import Any
@@ -46,6 +47,15 @@ producing different words for the same tool.
 # keyed it, and `in_process` is a fact about the machine that looked (does the
 # tool publish a console-script entry point), not about the release — both are
 # supplied at render time instead.
+#
+# The *platforms* are neither: they are a fact about the observation, like
+# its date, and ride beside the surface. A list rather than one name, because
+# a release read on three platforms is **one** observation of a merged
+# surface — storing it three times would triple a store whose options are
+# nearly all universal, to carry the rare one that is not. The list says who
+# looked; a per-option `not_on` will later say who disagreed, which is the
+# efficient way round. Until a refresh runs a matrix there is one name in it,
+# and that is the honest record: only this OS ever looked.
 
 
 def surface_of(spec: ToolSpec) -> dict[str, Any]:
@@ -112,7 +122,14 @@ def spec_from(
 # --- the chain ---------------------------------------------------------------
 
 
-def new(tool: str, *, version: str, date: str, surface: dict[str, Any]) -> dict:
+def new(
+    tool: str,
+    *,
+    version: str,
+    date: str,
+    surface: dict[str, Any],
+    platforms: list[str] | None = None,
+) -> dict:
     """A history of one release. A short history is a valid history — which is
     what lets the store ship before anything has been primed."""
     return {
@@ -122,6 +139,7 @@ def new(tool: str, *, version: str, date: str, surface: dict[str, Any]) -> dict:
         "base": {
             "version": version,
             "date": date,
+            "platforms": sorted(platforms or []),
             "extractor": EXTRACTOR,
             "surface": surface,
         },
@@ -177,7 +195,14 @@ def apply(surface: dict[str, Any], step: dict[str, Any]) -> dict[str, Any]:
     return {"help": out.get("help", ""), "verbs": _ordered(out["verbs"])}
 
 
-def extend(doc: dict, *, version: str, date: str, surface: dict[str, Any]) -> bool:
+def extend(
+    doc: dict,
+    *,
+    version: str,
+    date: str,
+    surface: dict[str, Any],
+    platforms: list[str] | None = None,
+) -> bool:
     """Append an *older* release to the end of the chain.
 
     This is what priming does, and why the deltas point backwards: the new
@@ -194,6 +219,7 @@ def extend(doc: dict, *, version: str, date: str, surface: dict[str, Any]) -> bo
         raise ValueError(f"{oldest} is not in the chain")
     doc["deltas"][version] = {
         "date": date,
+        "platforms": sorted(platforms or []),
         "extractor": EXTRACTOR,
         **delta(previous, surface),
     }
@@ -213,6 +239,82 @@ def at(doc: dict, version: str) -> dict[str, Any] | None:
         if older == version:
             return surface
     return None
+
+
+def union(doc: dict, *, name: str, in_process: bool = False) -> ToolSpec:
+    """Every option the tool has *ever* had, each with its interval.
+
+    The stub renders this rather than the newest release alone: a removed
+    flag stays completable, because the reader may be running a version that
+    still has it, and its docstring says when it went. An option's properties
+    come from the newest release that had it — the most recent word the tool
+    said about itself.
+
+    `since` is left empty for anything already present at the oldest release
+    read. The history reaches only as far as it was primed, and "at or before
+    the floor" is not a `since`.
+    """
+    chain = observed(doc)  # newest first
+    floor = chain[-1]
+    surfaces = {version: at(doc, version) for version in chain}
+
+    verbs: dict[str, dict[str, Any]] = {}
+    first: dict[tuple[str, str], str] = {}
+    last: dict[tuple[str, str], str] = {}
+    for version in reversed(chain):  # oldest first, so "first" means first
+        surface = surfaces[version] or {}
+        for verb_name, verb in surface.get("verbs", {}).items():
+            verbs.setdefault(verb_name, verb)
+            merged = {
+                **verbs[verb_name].get("options", {}),
+                **verb.get("options", {}),
+            }
+            # Sorted, so the stub does not reorder itself as the history
+            # deepens: merged oldest-first, insertion order would otherwise
+            # mean "which release mentioned it first".
+            verbs[verb_name] = {**verb, "options": dict(sorted(merged.items()))}
+            for option_name in verb.get("options", {}):
+                key = (verb_name, option_name)
+                first.setdefault(key, version)
+                last[key] = version
+
+    newer = {older: new for new, older in itertools.pairwise(chain)}
+    spec = spec_from(
+        {"help": (surfaces[chain[0]] or {}).get("help", ""), "verbs": verbs},
+        name=name,
+        version=chain[0],
+        in_process=in_process,
+    )
+    return ToolSpec(
+        name=spec.name,
+        help=spec.help,
+        version=spec.version,
+        in_process=spec.in_process,
+        verbs=tuple(
+            Verb(
+                name=verb.name,
+                help=verb.help,
+                wraps=verb.wraps,
+                positional=verb.positional,
+                lead=verb.lead,
+                options=tuple(
+                    Option(
+                        **{
+                            **option.__dict__,
+                            "since": ""
+                            if first[(verb.name, option.name)] == floor
+                            else first[(verb.name, option.name)],
+                            "until": newer.get(last[(verb.name, option.name)], "")
+                            if last[(verb.name, option.name)] != chain[0]
+                            else "",
+                        }
+                    )
+                    for option in verb.options
+                ),
+            )
+            for verb in spec.verbs
+        ),
+    )
 
 
 def observed(doc: dict) -> list[str]:

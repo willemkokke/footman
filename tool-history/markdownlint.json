@@ -5,6 +5,9 @@
  "base": {
   "version": "0.23.1",
   "date": "2026-07-27",
+  "platforms": [
+   "macOS"
+  ],
   "extractor": 1,
   "surface": {
    "help": "markdownlint-cli2 v0.23.1 (markdownlint v0.41.1)",

@@ -47,6 +47,33 @@ versions may include breaking changes.
   own successor. Only the PyPI tier can be listed today; every other tool is
   named and skipped rather than left looking like a tool with no history.
 
+- **Stubs render the union, and say when an option arrived or went.** A
+  generated stub is now every option the tool has *ever* had, not the newest
+  release alone: a flag the tool has since dropped stays completable, because
+  the reader may be running a version that still has it, and its docstring
+  says `Gone since 0.5.0`. An option that arrived within the primed history
+  says `Added in 0.4.11`. Because the reference pages render from the stub
+  docstrings, both surfaces get it from one change — prek's page carries four
+  such notes today, derived from ten real releases with nothing hand-written.
+
+  What a stub may claim is bounded by what was read: an option already
+  present at the oldest release in the chain carries **no** `since`, because
+  "at or before the floor" is not a since. A tool with a history of one
+  release claims nothing at all, which is the seeded state for 25 of the 26.
+
+  Each observation also records **which platforms read it** — a fact about
+  the observation, like its date. It is the groundwork for cross-platform
+  exclusions: "absent on Windows, and Windows was read" is an exclusion,
+  while "absent on Windows, which never ran" is silence, and without this the
+  two are indistinguishable.
+
+  A *list*, because a release read on three platforms is **one** observation
+  of a merged surface. Storing it once per platform would triple a store
+  whose options are almost all universal, to carry the rare one that is not;
+  the list says who looked, and a per-option `not_on` will say who disagreed.
+  Exclusions themselves wait for a refresh that runs a matrix, since one
+  runner cannot observe what it is not.
+
 ## [0.22.0] — 2026-07-27
 
 ### Changed
