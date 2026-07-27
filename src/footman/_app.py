@@ -314,6 +314,8 @@ def _print_list(tree: dict) -> None:
 
 
 def _print_tree(node: dict) -> None:
+    import textwrap
+
     rows = list(_describe.walk(node))
     if not rows:
         # Mirror _print_list rather than printing zero bytes and exiting 0.
@@ -321,24 +323,43 @@ def _print_tree(node: dict) -> None:
         return
     dash = _describe.dim("—", _color_out)
     last = _last_of_each_branch(rows)
+    # Leaf names under a drawn branch, not repeated dotted addresses:
+    # `--list` is the flat, copy-paste view, and a `--tree` that only
+    # indented the same addresses was that listing with worse alignment.
+    # Top level carries no connector: those names *are* the root, and a
+    # branch drawn from nothing reads as a stray glyph.
+    leads: list[str] = []  # per row: stem + joint, plain
     trunk: list[bool] = []  # per ancestor depth: was it its branch's last child?
-    for i, (depth, _address, leaf, help_text, kind) in enumerate(rows):
+    for i, (depth, _address, _leaf, _help_text, _kind) in enumerate(rows):
         del trunk[depth:]
         trunk.append(last[i])
-        # Leaf names under a drawn branch, not repeated dotted addresses:
-        # `--list` is the flat, copy-paste view, and a `--tree` that only
-        # indented the same addresses was that listing with worse alignment.
-        # Top level carries no connector: those names *are* the root, and a
-        # branch drawn from nothing reads as a stray glyph.
         stem = "".join("   " if up else "│  " for up in trunk[1:-1])
-        joint = "" if depth == 0 else ("└─ " if last[i] else "├─ ")
-        label = f"  {dash} {_styled_help(help_text)}" if help_text else ""
+        leads.append(stem + ("" if depth == 0 else ("└─ " if last[i] else "├─ ")))
+
+    def plain_len(i: int) -> int:
+        _depth, _address, leaf, _help_text, kind = rows[i]
+        return len(leads[i]) + len(leaf) + (kind != "task")  # groups carry a dot
+
+    # Descriptions align into one column, wrapped with a hanging indent —
+    # the same two-band layout `--list` draws, behind a drawn trunk.
+    width = max(plain_len(i) for i in range(len(rows)))
+    desc_col = width + 4  # two spaces, the dash, its trailing space
+    avail = max(24, shutil.get_terminal_size().columns - desc_col)
+    for i, (_depth, _address, leaf, help_text, kind) in enumerate(rows):
         name = (
             _describe.bold(leaf, _color_out)
             if kind == "task"
             else _describe.bold_cyan(f"{leaf}.", _color_out)
         )
-        print(f"{_describe.dim(stem + joint, _color_out)}{name}{label}".rstrip())
+        lead = _describe.dim(leads[i], _color_out)
+        if not help_text:
+            print(f"{lead}{name}".rstrip())
+            continue
+        pad = " " * (width - plain_len(i))
+        pieces = textwrap.wrap(help_text, avail) or [""]
+        print(f"{lead}{name}{pad}  {dash} {_styled_help(pieces[0])}".rstrip())
+        for cont in pieces[1:]:
+            print(f"{' ' * desc_col}{_styled_help(cont)}".rstrip())
 
 
 def _last_of_each_branch(rows: list[tuple]) -> list[bool]:

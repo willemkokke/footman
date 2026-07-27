@@ -27,6 +27,12 @@ versions may include breaking changes.
   discovery; a task that declared a global in `uses=` but finished without
   reading it is an advisory under `--verbose`.
 
+### Changed
+
+- **`--tree` aligns its descriptions.** One description column whatever
+  depth a name sits at, wrapped with a hanging indent — the same two-band
+  layout `--list` draws, behind the drawn trunk.
+
 ## [0.25.0] — 2026-07-27
 
 ### Added
