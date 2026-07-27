@@ -270,7 +270,8 @@
      }
     }
    }
-  }
+  },
+  "platform": "macOS"
  },
  "deltas": {}
 }

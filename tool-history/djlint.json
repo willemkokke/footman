@@ -481,7 +481,8 @@
      }
     }
    }
-  }
+  },
+  "platform": "macOS"
  },
  "deltas": {}
 }

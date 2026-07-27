@@ -963,7 +963,8 @@
      }
     }
    }
-  }
+  },
+  "platform": "macOS"
  },
  "deltas": {}
 }

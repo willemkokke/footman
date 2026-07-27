@@ -61,6 +61,13 @@ versions may include breaking changes.
   "at or before the floor" is not a since. A tool with a history of one
   release claims nothing at all, which is the seeded state for 25 of the 26.
 
+  Each observation also records **which platform read it** — a fact about the
+  observation, like its date. It is the groundwork for cross-platform
+  exclusions: "absent on Windows, and Windows was read" is an exclusion,
+  while "absent on Windows, which never ran" is silence, and without this the
+  two are indistinguishable. Exclusions themselves wait for a refresh that
+  runs a matrix, since one runner cannot observe what it is not.
+
 ## [0.22.0] — 2026-07-27
 
 ### Changed

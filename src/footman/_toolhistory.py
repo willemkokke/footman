@@ -47,6 +47,13 @@ producing different words for the same tool.
 # keyed it, and `in_process` is a fact about the machine that looked (does the
 # tool publish a console-script entry point), not about the release — both are
 # supplied at render time instead.
+#
+# The *platform* is neither: it is a fact about the observation, like its
+# date, and it rides beside the surface. It is what will let a later
+# multi-platform refresh say "absent on Windows, and Windows was read" —
+# an exclusion — rather than leaving every option looking universal because
+# only one machine ever looked. Until then it records the honest thing: which
+# OS this reading came from.
 
 
 def surface_of(spec: ToolSpec) -> dict[str, Any]:
@@ -113,7 +120,9 @@ def spec_from(
 # --- the chain ---------------------------------------------------------------
 
 
-def new(tool: str, *, version: str, date: str, surface: dict[str, Any]) -> dict:
+def new(
+    tool: str, *, version: str, date: str, surface: dict[str, Any], platform: str = ""
+) -> dict:
     """A history of one release. A short history is a valid history — which is
     what lets the store ship before anything has been primed."""
     return {
@@ -123,6 +132,7 @@ def new(tool: str, *, version: str, date: str, surface: dict[str, Any]) -> dict:
         "base": {
             "version": version,
             "date": date,
+            "platform": platform,
             "extractor": EXTRACTOR,
             "surface": surface,
         },
@@ -178,7 +188,14 @@ def apply(surface: dict[str, Any], step: dict[str, Any]) -> dict[str, Any]:
     return {"help": out.get("help", ""), "verbs": _ordered(out["verbs"])}
 
 
-def extend(doc: dict, *, version: str, date: str, surface: dict[str, Any]) -> bool:
+def extend(
+    doc: dict,
+    *,
+    version: str,
+    date: str,
+    surface: dict[str, Any],
+    platform: str = "",
+) -> bool:
     """Append an *older* release to the end of the chain.
 
     This is what priming does, and why the deltas point backwards: the new
@@ -195,6 +212,7 @@ def extend(doc: dict, *, version: str, date: str, surface: dict[str, Any]) -> bo
         raise ValueError(f"{oldest} is not in the chain")
     doc["deltas"][version] = {
         "date": date,
+        "platform": platform,
         "extractor": EXTRACTOR,
         **delta(previous, surface),
     }

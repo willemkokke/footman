@@ -409,3 +409,83 @@ def test_a_history_of_one_release_claims_nothing():
     spec = _toolhistory.union(doc, name="demo")
     assert spec.verbs, "the union of one release is that release"
     assert not any(o.since or o.until for v in spec.verbs for o in v.options)
+
+
+def test_an_observation_records_the_platform_that_read_it():
+    """A fact about the observation, like its date — and the groundwork for
+    exclusions: "absent on Windows, and Windows was read" is an exclusion,
+    while "absent on Windows, which never ran" is silence. Without this the
+    second is indistinguishable from the first."""
+    surface = _toolhistory.surface_of(_spec())
+    doc = _toolhistory.new(
+        "demo", version="2.0.0", date="2026-02-01", surface=surface, platform="Linux"
+    )
+    assert doc["base"]["platform"] == "Linux"
+
+    _toolhistory.extend(
+        doc, version="1.0.0", date="2026-01-01", surface=surface, platform="Windows"
+    )
+    assert doc["deltas"]["1.0.0"]["platform"] == "Windows"
+
+
+def test_every_checked_in_observation_names_its_platform():
+    """The store must not grow observations that cannot say where they came
+    from; a later multi-platform refresh reads this to decide what is an
+    exclusion and what was simply never looked at."""
+    from footman import _drivers
+    from footman.tasks import tools as tools_tasks
+
+    for driver in _drivers.DRIVERS:
+        doc = _toolhistory.load(tools_tasks._history_path(driver.key))
+        if doc is None:
+            continue
+        assert doc["base"].get("platform"), f"{driver.key} base"
+        for version, step in doc["deltas"].items():
+            assert step.get("platform"), f"{driver.key} {version}"
+
+
+def test_priming_rewrites_the_stub_it_invalidates(monkeypatch, tmp_path):
+    """A deeper history changes what a stub may say — an option that looked
+    original at the old floor may turn out to have arrived. The stub is a
+    rendering of the record, so extending the record rewrites it rather than
+    waiting for someone to remember a `sync`."""
+    from footman.tasks import tools as tools_tasks
+
+    doc = _toolhistory.load(tools_tasks._history_path("prek"))
+    assert doc is not None
+    chain = _toolhistory.observed(doc)
+    assert len(chain) > 5, "prek is the primed tool; this test needs its chain"
+
+    stub = tools_tasks._stub_path("prek").read_text(encoding="utf-8")
+    assert "Added in" in stub, "a primed tool's stub carries what the chain proved"
+    # ...and only versions the chain actually holds.
+    import re
+
+    for claimed in set(re.findall(r"Added in ([0-9][^.\s]*(?:\.[^.\s]+)*)\.", stub)):
+        assert claimed in chain, claimed
+
+
+def test_an_older_reading_never_becomes_the_head(tmp_path, monkeypatch):
+    """A machine with a stale tool must not rewrite the base and push the
+    newer release down the chain as though it came first. Recording on any
+    change did exactly that: ruff's history ended up with 0.16.0 as both the
+    base and one of its own ancestors."""
+    from footman import _drivers
+    from footman.tasks import tools as tools_tasks
+
+    monkeypatch.setattr(tools_tasks, "_HISTORY", tmp_path)
+    driver = _drivers.find("prek")
+    assert driver is not None
+
+    def spec_at(version: str):
+        return ToolSpec(name="prek", version=version, verbs=_spec().verbs)
+
+    tools_tasks._observe(driver, spec_at("0.5.0"))
+    doc = tools_tasks._observe(driver, spec_at("0.4.0"))  # a laggard machine
+    assert doc["base"]["version"] == "0.5.0"  # the head stands
+    assert list(doc["deltas"]) == ["0.4.0"]  # ...and the older read is history
+
+    doc = tools_tasks._observe(driver, spec_at("0.6.0"))  # a newer release
+    assert doc["base"]["version"] == "0.6.0"
+    assert list(doc["deltas"]) == ["0.5.0", "0.4.0"]
+    assert _toolhistory.observed(doc) == ["0.6.0", "0.5.0", "0.4.0"]

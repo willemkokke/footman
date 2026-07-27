@@ -136,7 +136,7 @@ class Prek(_Tool):
             bleeding_edge: Update to the bleeding edge of the default branch instead
                 of the latest tagged version.
             cd: Change to directory before running.
-            check: Alias of `--dry-run --exit-code`.
+            check: Alias of `--dry-run --exit-code`. Added in 0.3.9.
             color: Whether to use color in output. Defaults to `auto`.
             config: Path to alternate config file.
             cooldown_days: Minimum release age (in days) required for a version to
@@ -144,13 +144,13 @@ class Prek(_Tool):
             dry_run: Do not write changes to the config file, only display what
                 would be changed.
             exclude_repo: Do not update this repository. May be repeated: a list
-                emits the flag once per item.
+                emits the flag once per item. Added in 0.3.11.
             exclude_tag: Ignore tags matching this glob pattern. May be repeated: a
-                list emits the flag once per item.
-            exit_code: Exit with status 1 if updates are available.
+                list emits the flag once per item. Added in 0.3.11.
+            exit_code: Exit with status 1 if updates are available. Added in 0.3.11.
             freeze: Store "frozen" hashes in `rev` instead of tag names.
             include_tag: Only consider tags matching this glob pattern. May be
-                repeated: a list emits the flag once per item.
+                repeated: a list emits the flag once per item. Added in 0.3.11.
             jobs: Number of threads to use. Defaults to `0`.
             log_file: Write trace logs to the specified file.
             no_progress: Hide all progress outputs.
@@ -160,10 +160,10 @@ class Prek(_Tool):
                 flag once per item.
             repo_exclude_tag: Ignore tags matching this glob pattern for a
                 repository (`<repo>=<pattern>`). May be repeated: a list emits the
-                flag once per item.
+                flag once per item. Added in 0.3.11.
             repo_include_tag: Only consider tags matching this glob pattern for a
                 repository (`<repo>=<pattern>`). May be repeated: a list emits the
-                flag once per item.
+                flag once per item. Added in 0.3.11.
             verbose: Use verbose output.
         """
         ...
@@ -232,6 +232,7 @@ class Prek(_Tool):
             ]
         ]
         | None = ...,
+        install_hooks: _Flag = ...,
         log_file: _Value = ...,
         no_progress: _Flag = ...,
         overwrite: _Flag = ...,
@@ -252,11 +253,13 @@ class Prek(_Tool):
             git_dir: Install Git shims into the `hooks` subdirectory of the given
                 git directory (`<GIT_DIR>/hooks/`).
             hook_type: Which Git shim(s) to install.
+            install_hooks: Create environments for all hooks used in the config
+                file. Gone since 0.3.6.
             log_file: Write trace logs to the specified file.
             no_progress: Hide all progress outputs.
             overwrite: Overwrite existing Git shims.
             prepare_hooks: Also prepare environments for all hooks used in the
-                config file.
+                config file. Added in 0.3.6.
             quiet: Use quiet output.
             refresh: Refresh all cached data.
             skip: Skip the specified hooks or projects.
@@ -399,12 +402,12 @@ class Prek(_Tool):
         """Uninstall prek Git shims
 
         Args:
-            all: Uninstall all prek-managed Git shims.
+            all: Uninstall all prek-managed Git shims. Added in 0.3.8.
             cd: Change to directory before running.
             color: Whether to use color in output. Defaults to `auto`.
             config: Path to alternate config file.
             git_dir: Uninstall Git shims from the `hooks` subdirectory of the given
-                git directory (`<GIT_DIR>/hooks/`).
+                git directory (`<GIT_DIR>/hooks/`). Added in 0.3.9.
             hook_type: Which Git shim(s) to uninstall.
             log_file: Write trace logs to the specified file.
             no_progress: Hide all progress outputs.
