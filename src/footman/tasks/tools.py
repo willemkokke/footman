@@ -579,6 +579,102 @@ def _color_docs_table(results: dict) -> str:
 
 
 @tasks.task
+def prime(
+    only: Annotated[str, doc("prime just this tool")] = "",
+    count: Annotated[int, doc("how many releases back to read")] = 20,
+    keep: Annotated[bool, doc("leave the throwaway environments behind")] = False,
+):
+    """Read past releases into the option history, newest first.
+
+    Walks backwards from the release the history already holds, installing
+    one version at a time into a throwaway environment and appending a delta
+    for each. Nothing already written is touched, and a release the chain
+    already has is skipped — so a prime interrupted by a rate limit is
+    resumed by running it again.
+
+    `--count` is how far back to reach *this run*; run it again to go
+    deeper. The floor a tool actually reached is recorded as
+    `observed_from`, which is a fact about what was read rather than a policy
+    about what we meant to read: an option present in the oldest release read
+    is "at or before" that version, never "since" it.
+
+    Only the PyPI tier can be listed today. Every other tool is named and
+    skipped rather than left looking like a tool with no history.
+    """
+    import shutil
+    import tempfile
+
+    from footman import _toolfetch
+
+    scratch = Path(tempfile.mkdtemp(prefix="footman-prime-"))
+    read: list[str] = []
+    skipped: list[str] = []
+    try:
+        for driver in _drivers.DRIVERS:
+            if only and driver.key != only:
+                continue
+            if not _toolfetch.can_list(driver):
+                skipped.append(f"{driver.key} ({driver.provision.kind} tier)")
+                continue
+            doc = _toolhistory.load(_history_path(driver.key))
+            if doc is None:
+                skipped.append(f"{driver.key} (no history — run `sync` first)")
+                continue
+            added = _prime_one(driver, doc, count, scratch, _toolfetch)
+            read.append(f"{driver.key} +{added} (from {doc['observed_from']})")
+    finally:
+        if not keep:
+            shutil.rmtree(scratch, ignore_errors=True)
+    for line in read:
+        print(line)
+    if skipped:
+        print(f"skipped: {', '.join(skipped)}")
+
+
+def _prime_one(driver, doc: dict, count: int, scratch: Path, fetch) -> int:
+    """Read up to *count* releases older than the chain's floor, oldest last.
+
+    A release that will not install, or whose binary will not describe
+    itself, ends this tool's walk rather than leaving a hole: the chain is
+    contiguous by construction, and `observed_from` would otherwise claim a
+    reach the file does not have.
+    """
+    known = set(_toolhistory.observed(doc))
+    floor = doc["observed_from"]
+    wanted = [
+        release
+        for release in fetch.releases(driver)
+        if release.version not in known and release.date <= _date_of(doc, floor)
+    ][:count]
+    added = 0
+    for release in wanted:
+        bindir = fetch.install(driver, release.version, scratch / release.version)
+        if bindir is None:
+            break
+        with _on_path(bindir.parent):
+            spec = _drivers.extract(driver)
+        if not spec.verbs:
+            break  # a binary that will not describe itself is not an observation
+        if _toolhistory.extend(
+            doc,
+            version=release.version,
+            date=release.date,
+            surface=_toolhistory.surface_of(spec),
+        ):
+            added += 1
+    if added:
+        _toolhistory.save(doc, _history_path(driver.key))
+    return added
+
+
+def _date_of(doc: dict, version: str) -> str:
+    """When *version* was published, as the history records it."""
+    if doc["base"]["version"] == version:
+        return doc["base"]["date"]
+    return doc["deltas"].get(version, {}).get("date", "9999-12-31")
+
+
+@tasks.task
 def provision(
     only: Annotated[str, doc("provision just this tool")] = "",
     prefix: Annotated[Path, doc("directory to materialise the binaries into")] = Path(

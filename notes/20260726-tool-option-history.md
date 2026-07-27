@@ -261,7 +261,15 @@ extractions (§1), so the first commit is the seeding step in §8.
 reading and renders the stub from the history; all 26 stubs regenerate
 byte-identical through the round-trip. The store sits in `tool-history/`,
 outside `src/`, and the built wheel was checked to confirm it does not ship.
-Step 3 — the fetchers that walk backwards — is what remains.
+**Step 3 landed 2026-07-27** for the PyPI tier: `fm tools.prime` walks
+backwards, resumably, and prek's checked-in history carries ten real
+releases. Ordering needed one refinement the plan did not anticipate —
+same-day releases are common, so the sort is (date, version) rather than
+date alone; resolved by index order the walk skipped 0.4.8 and would have
+appended it below its own successor on the next run.
+
+What remains: the other tiers (bun/node, GitHub, GitLab release assets), the
+per-tool budget as a driver field, and the scheduled refresh itself.
 
 Not the prime — it is the expensive, network-bound, most-likely-to-stall part.
 Start where the data already exists:

@@ -177,6 +177,30 @@ def apply(surface: dict[str, Any], step: dict[str, Any]) -> dict[str, Any]:
     return {"help": out.get("help", ""), "verbs": _ordered(out["verbs"])}
 
 
+def extend(doc: dict, *, version: str, date: str, surface: dict[str, Any]) -> bool:
+    """Append an *older* release to the end of the chain.
+
+    This is what priming does, and why the deltas point backwards: the new
+    entry is a delta from the current oldest release to this one, and nothing
+    already written moves. Returns whether anything was added — a release the
+    chain already holds is skipped, which is what makes a prime resumable
+    against a rate limit.
+    """
+    if version in observed(doc):
+        return False
+    oldest = doc["observed_from"]
+    previous = at(doc, oldest)
+    if previous is None:  # pragma: no cover — observed_from is always in the chain
+        raise ValueError(f"{oldest} is not in the chain")
+    doc["deltas"][version] = {
+        "date": date,
+        "extractor": EXTRACTOR,
+        **delta(previous, surface),
+    }
+    doc["observed_from"] = version
+    return True
+
+
 def at(doc: dict, version: str) -> dict[str, Any] | None:
     """The surface of *version*, replayed from the base. `None` when that
     release was never observed — which a caller must not read as "empty"."""
