@@ -340,7 +340,7 @@ def docs_build(check: bool = False):  # pragma: no cover — see below
     # as SVGs — the pages show footman exactly as a terminal does, and a
     # rebuild regenerates them, so they cannot drift either.
     shot = Path("docs/_generated/shots")
-    taskdocs_shots("--list", out=shot / "list.svg", width=100)
+    taskdocs_shots("--tree", out=shot / "tree.svg", width=100)
     taskdocs_shots("--help", out=shot / "help.svg", width=100)
     taskdocs_shots("format", "lint", out=shot / "run.svg", width=72)
     # The animated one: a real zsh session — TAB menu, prefix-complete,
