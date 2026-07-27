@@ -1,7 +1,7 @@
 {
  "schema": 1,
  "tool": "cspell",
- "observed_from": "9.8.0",
+ "observed_from": "9.3.1",
  "base": {
   "version": "10.0.1",
   "date": "2026-07-27",
@@ -796,6 +796,88 @@
   },
   "9.8.0": {
    "date": "2026-04-05",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
+  },
+  "9.7.0": {
+   "date": "2026-02-23",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
+  },
+  "9.6.4": {
+   "date": "2026-02-04",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
+  },
+  "9.6.3": {
+   "date": "2026-02-02",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1,
+   "drop": [
+    "trace\tno_dictionary"
+   ]
+  },
+  "9.6.2": {
+   "date": "2026-01-26",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
+  },
+  "9.6.1": {
+   "date": "2026-01-26",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
+  },
+  "9.6.0": {
+   "date": "2026-01-12",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
+  },
+  "9.4.0": {
+   "date": "2025-12-01",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
+  },
+  "9.3.2": {
+   "date": "2025-11-15",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1,
+   "drop": [
+    "lint\tmax_file_size"
+   ],
+   "revert": {
+    "lint\tverbose": {
+     "flags": [
+      "--verbose",
+      "-v"
+     ],
+     "negation": "",
+     "help": "Display more information about the files being checked and the configuration",
+     "type": "bool",
+     "default": null,
+     "choices": []
+    }
+   }
+  },
+  "9.3.1": {
+   "date": "2025-11-12",
    "platforms": [
     "macOS"
    ],

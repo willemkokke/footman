@@ -1,7 +1,7 @@
 {
  "schema": 1,
  "tool": "pytest",
- "observed_from": "9.1.1",
+ "observed_from": "8.3.5",
  "base": {
   "version": "9.1.1",
   "date": "2026-07-27",
@@ -1043,5 +1043,133 @@
    }
   }
  },
- "deltas": {}
+ "deltas": {
+  "9.1.0": {
+   "date": "2026-06-13",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
+  },
+  "9.0.3": {
+   "date": "2026-04-07",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1,
+   "drop": [
+    "\tmax_warnings",
+    "\treport_chars"
+   ],
+   "add": {
+    "\tr": {
+     "flags": [
+      "-r"
+     ],
+     "negation": "",
+     "help": "Show extra test summary info as specified by chars: (f)ailed, (E)rror, (s)kipped, (x)failed, (X)passed, (p)assed, (P)assed with output, (a)ll except passed (p/P), or (A)ll",
+     "type": "list[str]",
+     "default": "fE",
+     "choices": []
+    }
+   }
+  },
+  "9.0.2": {
+   "date": "2025-12-06",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
+  },
+  "9.0.1": {
+   "date": "2025-11-12",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
+  },
+  "9.0.0": {
+   "date": "2025-11-08",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
+  },
+  "8.4.2": {
+   "date": "2025-09-04",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1,
+   "revert": {
+    "\toverride_ini": {
+     "flags": [
+      "--override-ini",
+      "-o"
+     ],
+     "negation": "",
+     "help": "Override ini option with \"option=value\" style, e.g. `-o xfail_strict=True -o cache_dir=cache`",
+     "type": "str",
+     "default": null,
+     "choices": []
+    },
+    "\tstrict": {
+     "flags": [
+      "--strict"
+     ],
+     "negation": "",
+     "help": "(Deprecated) alias to --strict-markers",
+     "type": "bool",
+     "default": null,
+     "choices": []
+    },
+    "\tstrict_config": {
+     "flags": [
+      "--strict-config"
+     ],
+     "negation": "",
+     "help": "Any warnings encountered while parsing the `pytest` section of the configuration file raise errors",
+     "type": "bool",
+     "default": null,
+     "choices": []
+    },
+    "\tstrict_markers": {
+     "flags": [
+      "--strict-markers"
+     ],
+     "negation": "",
+     "help": "Markers not registered in the `markers` section of the configuration file raise errors",
+     "type": "bool",
+     "default": null,
+     "choices": []
+    }
+   }
+  },
+  "8.4.1": {
+   "date": "2025-06-18",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
+  },
+  "8.4.0": {
+   "date": "2025-06-02",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
+  },
+  "8.3.5": {
+   "date": "2025-03-02",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1,
+   "drop": [
+    "\tdisable_plugin_autoload",
+    "\tforce_short_summary",
+    "\tsw_reset"
+   ]
+  }
+ }
 }

@@ -1,7 +1,7 @@
 {
  "schema": 1,
  "tool": "gh",
- "observed_from": "2.94.0",
+ "observed_from": "2.87.2",
  "base": {
   "version": "2.96.0",
   "date": "2026-07-27",
@@ -2541,6 +2541,79 @@
      "choices": []
     }
    }
+  },
+  "2.93.0": {
+   "date": "2026-05-27",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1,
+   "drop": [
+    "issue.create\tblocked_by",
+    "issue.create\tblocking",
+    "issue.create\tparent",
+    "issue.create\ttype",
+    "issue.list\ttype"
+   ]
+  },
+  "2.92.0": {
+   "date": "2026-04-28",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
+  },
+  "2.91.0": {
+   "date": "2026-04-22",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
+  },
+  "2.90.0": {
+   "date": "2026-04-16",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
+  },
+  "2.89.0": {
+   "date": "2026-03-26",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
+  },
+  "2.88.1": {
+   "date": "2026-03-12",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
+  },
+  "2.88.0": {
+   "date": "2026-03-10",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
+  },
+  "2.87.3": {
+   "date": "2026-02-23",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1,
+   "drop": [
+    "repo.clone\tno_upstream"
+   ]
+  },
+  "2.87.2": {
+   "date": "2026-02-20",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
   }
  }
 }

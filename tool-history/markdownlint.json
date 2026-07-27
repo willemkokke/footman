@@ -1,7 +1,7 @@
 {
  "schema": 1,
  "tool": "markdownlint",
- "observed_from": "0.23.1",
+ "observed_from": "0.18.0",
  "base": {
   "version": "0.23.1",
   "date": "2026-07-27",
@@ -74,5 +74,129 @@
    }
   }
  },
- "deltas": {}
+ "deltas": {
+  "0.23.0": {
+   "date": "2026-07-01",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1,
+   "verbs": {
+    "": {
+     "help": "markdownlint-cli2 v0.23.0 (markdownlint v0.41.0)"
+    }
+   },
+   "help": "markdownlint-cli2 v0.23.0 (markdownlint v0.41.0)"
+  },
+  "0.22.1": {
+   "date": "2026-04-22",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1,
+   "verbs": {
+    "": {
+     "help": "markdownlint-cli2 v0.22.1 (markdownlint v0.40.0)"
+    }
+   },
+   "help": "markdownlint-cli2 v0.22.1 (markdownlint v0.40.0)"
+  },
+  "0.22.0": {
+   "date": "2026-03-22",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1,
+   "verbs": {
+    "": {
+     "help": "markdownlint-cli2 v0.22.0 (markdownlint v0.40.0)"
+    }
+   },
+   "help": "markdownlint-cli2 v0.22.0 (markdownlint v0.40.0)"
+  },
+  "0.21.0": {
+   "date": "2026-02-15",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1,
+   "drop": [
+    "\tconfigPointer"
+   ],
+   "verbs": {
+    "": {
+     "help": "markdownlint-cli2 v0.21.0 (markdownlint v0.40.0)"
+    }
+   },
+   "help": "markdownlint-cli2 v0.21.0 (markdownlint v0.40.0)"
+  },
+  "0.20.0": {
+   "date": "2025-12-07",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1,
+   "verbs": {
+    "": {
+     "help": "markdownlint-cli2 v0.20.0 (markdownlint v0.40.0)"
+    }
+   },
+   "help": "markdownlint-cli2 v0.20.0 (markdownlint v0.40.0)"
+  },
+  "0.19.1": {
+   "date": "2025-11-22",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1,
+   "verbs": {
+    "": {
+     "help": "markdownlint-cli2 v0.19.1 (markdownlint v0.39.0)"
+    }
+   },
+   "help": "markdownlint-cli2 v0.19.1 (markdownlint v0.39.0)"
+  },
+  "0.19.0": {
+   "date": "2025-11-13",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1,
+   "verbs": {
+    "": {
+     "help": "markdownlint-cli2 v0.19.0 (markdownlint v0.39.0)"
+    }
+   },
+   "help": "markdownlint-cli2 v0.19.0 (markdownlint v0.39.0)"
+  },
+  "0.18.1": {
+   "date": "2025-05-15",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1,
+   "drop": [
+    "\tformat"
+   ],
+   "verbs": {
+    "": {
+     "help": "markdownlint-cli2 v0.18.1 (markdownlint v0.38.0)"
+    }
+   },
+   "help": "markdownlint-cli2 v0.18.1 (markdownlint v0.38.0)"
+  },
+  "0.18.0": {
+   "date": "2025-05-11",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1,
+   "verbs": {
+    "": {
+     "help": "markdownlint-cli2 v0.18.0 (markdownlint v0.38.0)"
+    }
+   },
+   "help": "markdownlint-cli2 v0.18.0 (markdownlint v0.38.0)"
+  }
+ }
 }

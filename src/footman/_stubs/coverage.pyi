@@ -41,7 +41,7 @@ class Coverage(_Tool):
             include: Include only files whose paths match one of these patterns. May
                 be repeated: a list emits the flag once per item.
             keep_combined: Keep original coverage files, otherwise they are deleted
-                after combining.
+                after combining. Added in 7.15.0.
             omit: Omit files whose paths match one of these patterns. May be
                 repeated: a list emits the flag once per item.
             rcfile: Specify configuration file.
@@ -123,7 +123,7 @@ class Coverage(_Tool):
             include: Include only files whose paths match one of these patterns. May
                 be repeated: a list emits the flag once per item.
             keep_combined: Keep original coverage files, otherwise they are deleted
-                after combining.
+                after combining. Added in 7.15.0.
             omit: Omit files whose paths match one of these patterns. May be
                 repeated: a list emits the flag once per item.
             precision: Number of digits after the decimal point to display for
@@ -168,7 +168,7 @@ class Coverage(_Tool):
             include: Include only files whose paths match one of these patterns. May
                 be repeated: a list emits the flag once per item.
             keep_combined: Keep original coverage files, otherwise they are deleted
-                after combining.
+                after combining. Added in 7.15.0.
             o: Write the JSON report to this file.
             omit: Omit files whose paths match one of these patterns. May be
                 repeated: a list emits the flag once per item.
@@ -212,7 +212,7 @@ class Coverage(_Tool):
             include: Include only files whose paths match one of these patterns. May
                 be repeated: a list emits the flag once per item.
             keep_combined: Keep original coverage files, otherwise they are deleted
-                after combining.
+                after combining. Added in 7.15.0.
             omit: Omit files whose paths match one of these patterns. May be
                 repeated: a list emits the flag once per item.
             precision: Number of digits after the decimal point to display for
@@ -303,7 +303,7 @@ class Coverage(_Tool):
             include: Include only files whose paths match one of these patterns. May
                 be repeated: a list emits the flag once per item.
             keep_combined: Keep original coverage files, otherwise they are deleted
-                after combining.
+                after combining. Added in 7.15.0.
             o: Write the XML report to this file.
             omit: Omit files whose paths match one of these patterns. May be
                 repeated: a list emits the flag once per item.

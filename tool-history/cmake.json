@@ -1,7 +1,7 @@
 {
  "schema": 1,
  "tool": "cmake",
- "observed_from": "4.4.0",
+ "observed_from": "4.1.2",
  "base": {
   "version": "4.4.0",
   "date": "2026-07-27",
@@ -725,5 +725,161 @@
    }
   }
  },
- "deltas": {}
+ "deltas": {
+  "4.3.4": {
+   "date": "2026-06-20",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1,
+   "drop": [
+    "\tW",
+    "\tWno_",
+    "\thelp_diagnostic",
+    "\thelp_diagnostic_list",
+    "\thelp_diagnostics",
+    "\tpresets_file"
+   ],
+   "add": {
+    "\tWdeprecated": {
+     "flags": [
+      "-Wdeprecated"
+     ],
+     "negation": "",
+     "help": "= Enable deprecation warnings",
+     "type": "bool",
+     "default": null,
+     "choices": []
+    },
+    "\tWdev": {
+     "flags": [
+      "-Wdev"
+     ],
+     "negation": "",
+     "help": "= Enable developer warnings",
+     "type": "bool",
+     "default": null,
+     "choices": []
+    },
+    "\tWno_deprecated": {
+     "flags": [
+      "-Wno-deprecated"
+     ],
+     "negation": "",
+     "help": "= Suppress deprecation warnings",
+     "type": "bool",
+     "default": null,
+     "choices": []
+    },
+    "\tWno_dev": {
+     "flags": [
+      "-Wno-dev"
+     ],
+     "negation": "",
+     "help": "= Suppress developer warnings",
+     "type": "bool",
+     "default": null,
+     "choices": []
+    },
+    "\tno_warn_unused_cli": {
+     "flags": [
+      "--no-warn-unused-cli"
+     ],
+     "negation": "",
+     "help": "= Don't warn about command line options",
+     "type": "bool",
+     "default": null,
+     "choices": []
+    },
+    "\twarn_uninitialized": {
+     "flags": [
+      "--warn-uninitialized"
+     ],
+     "negation": "",
+     "help": "= Warn about uninitialized values",
+     "type": "bool",
+     "default": null,
+     "choices": []
+    }
+   },
+   "revert": {
+    "\tWerror": {
+     "flags": [
+      "-Werror"
+     ],
+     "negation": "",
+     "help": "= Make developer warnings errors",
+     "type": "str",
+     "default": null,
+     "choices": []
+    },
+    "\tWno_error": {
+     "flags": [
+      "-Wno-error"
+     ],
+     "negation": "",
+     "help": "= Make developer warnings not errors",
+     "type": "str",
+     "default": null,
+     "choices": []
+    }
+   }
+  },
+  "4.3.2": {
+   "date": "2026-04-23",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
+  },
+  "4.3.1": {
+   "date": "2026-03-28",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
+  },
+  "4.3.0": {
+   "date": "2026-03-23",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
+  },
+  "4.2.3": {
+   "date": "2026-02-28",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
+  },
+  "4.2.1": {
+   "date": "2025-12-21",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
+  },
+  "4.2.0": {
+   "date": "2025-11-21",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
+  },
+  "4.1.3": {
+   "date": "2025-11-19",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
+  },
+  "4.1.2": {
+   "date": "2025-10-23",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
+  }
+ }
 }

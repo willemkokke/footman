@@ -117,7 +117,8 @@ class Djlint(_Tool):
             reformat: Reformat the file(s).
             require_pragma: Only format or lint files that starts with a comment
                 with the text 'djlint:on'.
-            rules: Path to custom rules file in .djlint_rules.yaml format.
+            rules: Path to custom rules file in .djlint_rules.yaml format. Added in
+                1.41.0.
             single_attribute_per_line: When an opening tag wraps, put each attribute
                 on its own line.
             statistics: Count the number of occurrences of each error/warning code.

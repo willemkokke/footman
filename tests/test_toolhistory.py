@@ -642,7 +642,8 @@ def test_installing_an_unlistable_tier_declines(tmp_path):
 
     driver = _drivers.find("git")
     assert driver is not None
-    assert _toolfetch.install(driver, "2.50.0", tmp_path / "git") is None
+    release = _toolfetch.Release("2.50.0")
+    assert _toolfetch.install(driver, release, tmp_path / "git") is None
 
 
 def test_the_npm_tier_needs_bun_and_says_so(tmp_path, monkeypatch):
@@ -656,7 +657,8 @@ def test_the_npm_tier_needs_bun_and_says_so(tmp_path, monkeypatch):
     monkeypatch.setattr(shutil, "which", lambda _name: None)
     driver = _drivers.find("cspell")
     assert driver is not None
-    assert _toolfetch.install(driver, "10.0.0", tmp_path / "cspell") is None
+    release = _toolfetch.Release("10.0.0")
+    assert _toolfetch.install(driver, release, tmp_path / "cspell") is None
 
 
 # --- CPython: a tool with more than one release line at a time ---------------
@@ -762,7 +764,9 @@ def test_a_prime_never_appends_a_release_newer_than_the_floor(tmp_path, monkeypa
     )
     installed: list[str] = []
     monkeypatch.setattr(
-        _toolfetch, "install", lambda _d, version, _into: installed.append(version)
+        _toolfetch,
+        "install",
+        lambda _d, release, _into: installed.append(release.version),
     )
 
     added, stopped = tools._prime_one(
@@ -913,7 +917,7 @@ def test_a_refresh_reads_every_release_it_missed_not_just_the_newest(
             for i, v in enumerate(["0.16.3", "0.16.2", "0.16.1", "0.16.0"], start=1)
         ],
     )
-    monkeypatch.setattr(_toolfetch, "install", lambda _d, _v, into: into)
+    monkeypatch.setattr(_toolfetch, "install", lambda _d, _r, into: into)
 
     installed: list[str] = []
 
@@ -921,8 +925,8 @@ def test_a_refresh_reads_every_release_it_missed_not_just_the_newest(
         version = installed[-1]
         return _toolhistory.spec_from(by_version[version], name=driver.name)
 
-    def install(_driver, version, into):
-        installed.append(version)
+    def install(_driver, release, into):
+        installed.append(release.version)
         return into
 
     monkeypatch.setattr(_toolfetch, "install", install)
@@ -1173,7 +1177,7 @@ def test_a_refresh_writes_its_own_events_into_the_changelog(tmp_path, monkeypatc
     monkeypatch.setattr(
         _toolfetch,
         "install",
-        lambda _d, version, into: (installed.append(version), into)[1],
+        lambda _d, release, into: (installed.append(release.version), into)[1],
     )
     monkeypatch.setattr(
         _drivers,
@@ -1337,7 +1341,7 @@ def test_a_prime_does_not_hold_every_release_it_fetched(tmp_path, monkeypatch):
 
     live: list[int] = []
 
-    def install(_driver, version, into):
+    def install(_driver, _release, into):
         (into / "bin").mkdir(parents=True, exist_ok=True)
         (into / "bin" / "ruff").write_text("x" * 1000)
         live.append(len(list(into.parent.iterdir())))

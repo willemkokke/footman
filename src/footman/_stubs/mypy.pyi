@@ -47,6 +47,7 @@ class Mypy(_Tool):
         explicit_package_bases: _Flag = ...,
         extra_checks: _Flag = ...,
         find_occurrences: _Value = ...,
+        fixed_format_cache: _Flag = ...,
         follow_imports: _Flag = ...,
         follow_untyped_imports: _Flag = ...,
         hide_error_codes: _Flag = ...,
@@ -94,6 +95,7 @@ class Mypy(_Tool):
         skip_version_check: _Flag = ...,
         sqlite_cache: _Flag = ...,
         strict: _Flag = ...,
+        strict_bytes: _Flag = ...,
         strict_equality: _Flag = ...,
         strict_equality_for_none: _Flag = ...,
         txt_report: _Value = ...,
@@ -118,6 +120,7 @@ class Mypy(_Tool):
                 (inverse: --disallow-redefinition-new).
             allow_redefinition_old: Allow restricted, unconditional variable
                 redefinition with a new type (inverse: --disallow-redefinition-old).
+                Added in 1.20.0.
             allow_untyped_globals: Suppress toplevel errors caused by missing
                 annotations (inverse: --disallow-untyped-globals).
             always_false: Additional variable to be considered False (may be
@@ -174,6 +177,8 @@ class Mypy(_Tool):
             extra_checks: Enable additional checks that are technically correct but
                 may be impractical in real code.
             find_occurrences: Print out all usages of a class member (experimental).
+            fixed_format_cache: Use new fast and compact fixed format cache. Gone
+                since 1.20.0.
             follow_imports: How to treat imports.
             follow_untyped_imports: Typecheck modules without stubs or py.typed
                 marker.
@@ -189,13 +194,13 @@ class Mypy(_Tool):
                 results to the given file.
             module: Type-check module; can repeat for more modules.
             native_parser: Enable faster parser that parses directly to mypy AST
-                (inverse: --no-native-parser).
+                (inverse: --no-native-parser). Added in 2.0.0.
             no_color_output: Do not colorize error messages (inverse:
                 --color-output).
             no_error_summary: Do not show error stats summary (inverse:
                 --error-summary).
             no_fixed_format_cache: Do not use new fixed format cache (inverse:
-                --fixed-format-cache).
+                --fixed-format-cache). Added in 1.20.0.
             no_implicit_reexport: Treat imports as private unless aliased (inverse:
                 --implicit-reexport).
             no_incremental: Disable module cache (inverse: --incremental).
@@ -206,7 +211,7 @@ class Mypy(_Tool):
             no_site_packages: Do not search for installed PEP 561 compliant
                 packages.
             no_strict_bytes: Treat bytearray and memoryview as subtypes of bytes
-                (inverse: --strict-bytes).
+                (inverse: --strict-bytes). Added in 2.0.0.
             no_strict_optional: Disable strict Optional checks (inverse:
                 --strict-optional).
             no_warn_no_return: Do not warn about functions that end without
@@ -214,6 +219,7 @@ class Mypy(_Tool):
             non_interactive: Install stubs without asking for confirmation and hide
                 errors, with --install-types (inverse: --interactive).
             num_workers: Number of separate mypy worker processes (experimental).
+                Added in 2.0.0.
             package: Type-check package recursively; can be repeated. May be
                 repeated: a list emits the flag once per item.
             pdb: Invoke pdb on fatal error.
@@ -255,6 +261,8 @@ class Mypy(_Tool):
                 --disallow-untyped-decorators, --warn-redundant-casts,
                 --warn-unused-ignores, --warn-return-any, --no-implicit-reexport,
                 --strict-equality, --extra-checks.
+            strict_bytes: Disable treating bytearray and memoryview as subtypes of
+                bytes (inverse: --no-strict-bytes). Gone since 2.0.0.
             strict_equality: Prohibit equality, identity, and container checks for
                 non-overlapping types (except `None`) (inverse:
                 --no-strict-equality).

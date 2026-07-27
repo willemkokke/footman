@@ -1,7 +1,7 @@
 {
  "schema": 1,
  "tool": "mypy",
- "observed_from": "2.3.0",
+ "observed_from": "1.18.2",
  "base": {
   "version": "2.3.0",
   "date": "2026-07-27",
@@ -968,5 +968,190 @@
    }
   }
  },
- "deltas": {}
+ "deltas": {
+  "2.2.0": {
+   "date": "2026-07-08",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
+  },
+  "2.1.0": {
+   "date": "2026-05-11",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
+  },
+  "2.0.0": {
+   "date": "2026-05-06",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
+  },
+  "1.20.2": {
+   "date": "2026-04-21",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1,
+   "drop": [
+    "\tnative_parser",
+    "\tno_strict_bytes",
+    "\tnum_workers"
+   ],
+   "add": {
+    "\tstrict_bytes": {
+     "flags": [
+      "--strict-bytes"
+     ],
+     "negation": "",
+     "help": "Disable treating bytearray and memoryview as subtypes of bytes (inverse: --no-strict-bytes)",
+     "type": "bool",
+     "default": null,
+     "choices": []
+    }
+   },
+   "revert": {
+    "\tallow_redefinition": {
+     "flags": [
+      "--allow-redefinition"
+     ],
+     "negation": "",
+     "help": "Alias to --allow-redefinition-old; will point to --allow-redefinition-new in v2.0 (inverse: --disallow-redefinition)",
+     "type": "bool",
+     "default": null,
+     "choices": []
+    },
+    "\tallow_redefinition_new": {
+     "flags": [
+      "--allow-redefinition-new"
+     ],
+     "negation": "",
+     "help": "Allow more flexible variable redefinition semantics (inverse: --disallow-redefinition-new)",
+     "type": "bool",
+     "default": null,
+     "choices": []
+    },
+    "\tstrict": {
+     "flags": [
+      "--strict"
+     ],
+     "negation": "",
+     "help": "Strict mode; enables the following flags: --disallow-any-generics, --disallow-subclassing-any, --disallow-untyped-calls, --disallow-untyped-defs, --disallow-incomplete- defs, --check-untyped-defs, --disallow-untyped-decorators, --warn-redundant-casts, --warn-unused-ignores, --warn-return-any, --no-implicit-reexport, --strict-equality, --strict-bytes, --extra-checks",
+     "type": "bool",
+     "default": null,
+     "choices": []
+    }
+   }
+  },
+  "1.20.1": {
+   "date": "2026-04-13",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
+  },
+  "1.20.0": {
+   "date": "2026-03-31",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1,
+   "revert": {
+    "\tstrict": {
+     "flags": [
+      "--strict"
+     ],
+     "negation": "",
+     "help": "Strict mode; enables the following flags: --warn-unused-configs, --disallow-any-generics, --disallow-subclassing-any, --disallow-untyped-calls, --disallow-untyped-defs, --disallow-incomplete-defs, --check-untyped-defs, --disallow-untyped-decorators, --warn-redundant-casts, --warn-unused-ignores, --warn-return-any, --no-implicit-reexport, --strict-equality, --strict-bytes, --extra-checks",
+     "type": "bool",
+     "default": null,
+     "choices": []
+    }
+   }
+  },
+  "1.19.1": {
+   "date": "2025-12-15",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1,
+   "drop": [
+    "\tallow_redefinition_old",
+    "\tno_fixed_format_cache"
+   ],
+   "add": {
+    "\tfixed_format_cache": {
+     "flags": [
+      "--fixed-format-cache"
+     ],
+     "negation": "",
+     "help": "Use new fast and compact fixed format cache",
+     "type": "bool",
+     "default": null,
+     "choices": []
+    }
+   },
+   "revert": {
+    "\tallow_redefinition": {
+     "flags": [
+      "--allow-redefinition"
+     ],
+     "negation": "",
+     "help": "Allow restricted, unconditional variable redefinition with a new type (inverse: --disallow-redefinition)",
+     "type": "bool",
+     "default": null,
+     "choices": []
+    },
+    "\tallow_redefinition_new": {
+     "flags": [
+      "--allow-redefinition-new"
+     ],
+     "negation": "",
+     "help": "Allow more flexible variable redefinition semantics (experimental) (inverse: --disallow-redefinition-new)",
+     "type": "bool",
+     "default": null,
+     "choices": []
+    }
+   }
+  },
+  "1.19.0": {
+   "date": "2025-11-28",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
+  },
+  "1.18.2": {
+   "date": "2025-09-19",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1,
+   "revert": {
+    "\tfixed_format_cache": {
+     "flags": [
+      "--fixed-format-cache"
+     ],
+     "negation": "",
+     "help": "Use experimental fast and compact fixed format cache",
+     "type": "bool",
+     "default": null,
+     "choices": []
+    },
+    "\tjunit_xml": {
+     "flags": [
+      "--junit-xml"
+     ],
+     "negation": "",
+     "help": "Write junit.xml to the given file",
+     "type": "str",
+     "default": null,
+     "choices": []
+    }
+   }
+  }
+ }
 }

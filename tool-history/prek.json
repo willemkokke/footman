@@ -1,7 +1,7 @@
 {
  "schema": 1,
  "tool": "prek",
- "observed_from": "0.3.4",
+ "observed_from": "0.2.27",
  "base": {
   "version": "0.4.11",
   "date": "2026-07-27",
@@ -1517,6 +1517,145 @@
    "drop": [
     "install\tgit_dir"
    ]
+  },
+  "0.3.3": {
+   "date": "2026-02-15",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
+  },
+  "0.3.2": {
+   "date": "2026-02-06",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
+  },
+  "0.3.1": {
+   "date": "2026-01-31",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1,
+   "revert": {
+    "install\tallow_missing_config": {
+     "flags": [
+      "--allow-missing-config"
+     ],
+     "negation": "",
+     "help": "Allow a missing `pre-commit` configuration file",
+     "type": "bool",
+     "default": null,
+     "choices": []
+    },
+    "install\tinstall_hooks": {
+     "flags": [
+      "--install-hooks"
+     ],
+     "negation": "",
+     "help": "Create hook environments for all hooks used in the config file",
+     "type": "bool",
+     "default": null,
+     "choices": []
+    }
+   },
+   "verbs": {
+    "install": {
+     "help": "Install the prek git hook"
+    },
+    "uninstall": {
+     "help": "Uninstall the prek git hook"
+    },
+    "autoupdate": {
+     "help": "Auto-update pre-commit config to the latest repos' versions"
+    }
+   }
+  },
+  "0.3.0": {
+   "date": "2026-01-22",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
+  },
+  "0.2.30": {
+   "date": "2026-01-18",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1,
+   "drop": [
+    "\tstage",
+    "run\tstage"
+   ],
+   "add": {
+    "\thook_stage": {
+     "flags": [
+      "--hook-stage"
+     ],
+     "negation": "",
+     "help": "The stage during which the hook is fired",
+     "type": "choice",
+     "default": null,
+     "choices": [
+      "manual",
+      "commit-msg",
+      "post-checkout",
+      "post-commit",
+      "post-merge",
+      "post-rewrite",
+      "pre-commit",
+      "pre-merge-commit",
+      "pre-push",
+      "pre-rebase",
+      "prepare-commit-msg"
+     ]
+    },
+    "run\thook_stage": {
+     "flags": [
+      "--hook-stage"
+     ],
+     "negation": "",
+     "help": "The stage during which the hook is fired",
+     "type": "choice",
+     "default": null,
+     "choices": [
+      "manual",
+      "commit-msg",
+      "post-checkout",
+      "post-commit",
+      "post-merge",
+      "post-rewrite",
+      "pre-commit",
+      "pre-merge-commit",
+      "pre-push",
+      "pre-rebase",
+      "prepare-commit-msg"
+     ]
+    }
+   }
+  },
+  "0.2.29": {
+   "date": "2026-01-16",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
+  },
+  "0.2.28": {
+   "date": "2026-01-13",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
+  },
+  "0.2.27": {
+   "date": "2026-01-07",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
   }
  }
 }

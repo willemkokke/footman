@@ -30,14 +30,15 @@ class Build(_Tool):
         """Run this verb.
 
         Args:
-            config_json: settings to pass to the backend as a JSON object.
+            config_json: settings to pass to the backend as a JSON object. Added in
+                1.3.0.
             config_setting: settings to pass to the backend.
             dependency_constraints_txt: constrain build dependencies using a
-                constraints.txt when installing dependencies.
+                constraints.txt when installing dependencies. Added in 1.4.1.
             installer: Python package installer to use (defaults to pip).
-            metadata: print out a wheel's metadata in JSON format.
+            metadata: print out a wheel's metadata in JSON format. Added in 1.4.0.
             outdir: output directory (defaults to {srcdir}/dist).
-            quiet: reduce verbosity.
+            quiet: reduce verbosity. Added in 1.4.0.
             sdist: build a source distribution (disables the default behavior).
             skip_dependency_check: do not check that build dependencies are
                 installed.

@@ -114,7 +114,7 @@ class Cspell(_Tool):
             issue_template: Use a custom issue template.
             language_id: Force programming language for unknown extensions.
             locale: Set language locales.
-            max_file_size: Prevent checking large files.
+            max_file_size: Prevent checking large files. Added in 9.4.0.
             no_config_search: Disable automatic searching for additional
                 configuration files in parent directories.
             no_default_configuration: Do not load the default configuration and
@@ -220,7 +220,7 @@ class Cspell(_Tool):
             no_default_configuration: Do not load the default configuration and
                 dictionaries.
             no_dictionary: Disable a dictionary by name. May be repeated: a list
-                emits the flag once per item.
+                emits the flag once per item. Added in 9.6.4.
             only_found: Show only dictionaries that have the words.
             stdin: Read words from stdin.
         """

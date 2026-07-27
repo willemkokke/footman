@@ -184,8 +184,8 @@ Two things the job depends on that were not in the sketch:
   one release and being all of them — a full prime of ruff would otherwise
   stand up 416 environments at once.
 
-Cadence is still open (§7); weekly costs little and shortens the window in
-which the docs are behind.
+**Cadence: weekly** (Willem, 2026-07-27). It costs little on a public repo
+and shortens the window in which the docs are behind.
 
 ## 4. The release gate: new events, not new versions
 
@@ -321,16 +321,22 @@ events *are* the changelog entry ("prek 0.4.11 adds `--glob`").
 
 Nothing blocking, and all of it configuration rather than design:
 
-1. **Refresh cadence** — config, not design (Willem, 2026-07-26). Decide it
-   when the workflow is written.
-2. **Per-tool budget values** — a data edit on the drivers. Now answerable
-   with numbers: CPython's 111 releases took 2m28s to prime and 24 KB to
-   store, of which 110 entries are a date and an extractor generation,
-   because only ten releases in six years changed what the interpreter
-   accepts.
-3. **The workflow file itself**, which nothing has written yet.
-4. **The `system` tier** — git and docker still read the host and have no
+1. **The workflow file itself**, which nothing has written yet. Cadence is
+   settled — weekly (§3).
+2. **The `system` tier** — git and docker still read the host and have no
    fetch source, so they are the two tools a refresh cannot speak for.
+
+**Budget: ten releases per tool, pre-primed** (Willem, 2026-07-27), and not
+revisited until the workflow is actually running in CI — a budget tuned
+against a laptop's timings would be tuned against the wrong machine. Ten is
+enough to make the interval rendering mean something without a prime being an
+afternoon. The two tools that already reach further keep what they have:
+depth is a fact about what was read, and there is nothing to gain by throwing
+it away to meet a number.
+
+Whether that number wants to differ per tool is exactly what a running job
+will answer. The scale it has to answer against, from PyPI: ruff 416
+releases, uv 297, djlint 202, pytest 192, mypy 139, prek 77.
 
 Two known imprecisions, both looked at and left alone:
 

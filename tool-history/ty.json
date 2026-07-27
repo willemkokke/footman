@@ -1,7 +1,7 @@
 {
  "schema": 1,
  "tool": "ty",
- "observed_from": "0.0.63",
+ "observed_from": "0.0.54",
  "base": {
   "version": "0.0.63",
   "date": "2026-07-27",
@@ -304,5 +304,69 @@
    }
   }
  },
- "deltas": {}
+ "deltas": {
+  "0.0.62": {
+   "date": "2026-07-22",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
+  },
+  "0.0.61": {
+   "date": "2026-07-18",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
+  },
+  "0.0.60": {
+   "date": "2026-07-16",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
+  },
+  "0.0.59": {
+   "date": "2026-07-12",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
+  },
+  "0.0.58": {
+   "date": "2026-07-10",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
+  },
+  "0.0.57": {
+   "date": "2026-07-08",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
+  },
+  "0.0.56": {
+   "date": "2026-07-01",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
+  },
+  "0.0.55": {
+   "date": "2026-06-27",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
+  },
+  "0.0.54": {
+   "date": "2026-06-25",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
+  }
+ }
 }

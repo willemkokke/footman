@@ -1,7 +1,7 @@
 {
  "schema": 1,
  "tool": "bun",
- "observed_from": "1.3.14",
+ "observed_from": "1.3.5",
  "base": {
   "version": "1.3.14",
   "date": "2026-07-27",
@@ -3488,5 +3488,213 @@
    }
   }
  },
- "deltas": {}
+ "deltas": {
+  "1.3.13": {
+   "date": "2026-04-20",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1,
+   "drop": [
+    "\texperimental_http2_fetch",
+    "\texperimental_http3_fetch",
+    "\tno_orphans",
+    "run\texperimental_http2_fetch",
+    "run\texperimental_http3_fetch",
+    "run\tno_orphans",
+    "test\tno_orphans"
+   ],
+   "verbs": {
+    "": {
+     "help": "Bun is a fast JavaScript runtime, package manager, bundler, and test runner. (1.3.13+bf2e2cecf)"
+    }
+   },
+   "help": "Bun is a fast JavaScript runtime, package manager, bundler, and test runner. (1.3.13+bf2e2cecf)"
+  },
+  "1.3.12": {
+   "date": "2026-04-10",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1,
+   "drop": [
+    "test\tchanged",
+    "test\tisolate",
+    "test\tparallel",
+    "test\tparallel_delay",
+    "test\tshard",
+    "test\ttest_worker"
+   ],
+   "revert": {
+    "add\tconcurrent_scripts": {
+     "flags": [
+      "--concurrent-scripts"
+     ],
+     "negation": "",
+     "help": "Maximum number of concurrent jobs for lifecycle scripts",
+     "type": "str",
+     "default": "5",
+     "choices": []
+    },
+    "install\tconcurrent_scripts": {
+     "flags": [
+      "--concurrent-scripts"
+     ],
+     "negation": "",
+     "help": "Maximum number of concurrent jobs for lifecycle scripts",
+     "type": "str",
+     "default": "5",
+     "choices": []
+    },
+    "remove\tconcurrent_scripts": {
+     "flags": [
+      "--concurrent-scripts"
+     ],
+     "negation": "",
+     "help": "Maximum number of concurrent jobs for lifecycle scripts",
+     "type": "str",
+     "default": "5",
+     "choices": []
+    }
+   },
+   "verbs": {
+    "": {
+     "help": "Bun is a fast JavaScript runtime, package manager, bundler, and test runner. (1.3.12+700fc117a)"
+    }
+   },
+   "help": "Bun is a fast JavaScript runtime, package manager, bundler, and test runner. (1.3.12+700fc117a)"
+  },
+  "1.3.11": {
+   "date": "2026-03-18",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1,
+   "verbs": {
+    "": {
+     "help": "Bun is a fast JavaScript runtime, package manager, bundler, and test runner. (1.3.11+af24e281e)"
+    }
+   },
+   "help": "Bun is a fast JavaScript runtime, package manager, bundler, and test runner. (1.3.11+af24e281e)"
+  },
+  "1.3.10": {
+   "date": "2026-02-26",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1,
+   "drop": [
+    "\tcron_period",
+    "\tcron_title",
+    "build\tallow_unresolved",
+    "build\treject_unresolved",
+    "run\tcron_period",
+    "run\tcron_title",
+    "test\tpath_ignore_patterns"
+   ],
+   "verbs": {
+    "": {
+     "help": "Bun is a fast JavaScript runtime, package manager, bundler, and test runner. (1.3.10+30e609e08)"
+    }
+   },
+   "help": "Bun is a fast JavaScript runtime, package manager, bundler, and test runner. (1.3.10+30e609e08)"
+  },
+  "1.3.9": {
+   "date": "2026-02-08",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1,
+   "drop": [
+    "test\tretry"
+   ],
+   "verbs": {
+    "": {
+     "help": "Bun is a fast JavaScript runtime, package manager, bundler, and test runner. (1.3.9+cf6cdbbba)"
+    }
+   },
+   "help": "Bun is a fast JavaScript runtime, package manager, bundler, and test runner. (1.3.9+cf6cdbbba)"
+  },
+  "1.3.8": {
+   "date": "2026-01-29",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1,
+   "drop": [
+    "\tcpu_prof_interval",
+    "\tno_exit_on_error",
+    "\tparallel",
+    "\tsequential",
+    "run\tcpu_prof_interval",
+    "run\tno_exit_on_error",
+    "run\tparallel",
+    "run\tsequential"
+   ],
+   "verbs": {
+    "": {
+     "help": "Bun is a fast JavaScript runtime, package manager, bundler, and test runner. (1.3.8+b64edcb49)"
+    }
+   },
+   "help": "Bun is a fast JavaScript runtime, package manager, bundler, and test runner. (1.3.8+b64edcb49)"
+  },
+  "1.3.7": {
+   "date": "2026-01-27",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1,
+   "drop": [
+    "build\tmetafile_md"
+   ],
+   "verbs": {
+    "": {
+     "help": "Bun is a fast JavaScript runtime, package manager, bundler, and test runner. (1.3.7+ba426210c)"
+    }
+   },
+   "help": "Bun is a fast JavaScript runtime, package manager, bundler, and test runner. (1.3.7+ba426210c)"
+  },
+  "1.3.6": {
+   "date": "2026-01-13",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1,
+   "drop": [
+    "\tcpu_prof_md",
+    "\theap_prof",
+    "\theap_prof_dir",
+    "\theap_prof_md",
+    "\theap_prof_name",
+    "run\tcpu_prof_md",
+    "run\theap_prof",
+    "run\theap_prof_dir",
+    "run\theap_prof_md",
+    "run\theap_prof_name"
+   ],
+   "verbs": {
+    "": {
+     "help": "Bun is a fast JavaScript runtime, package manager, bundler, and test runner. (1.3.6+d530ed993)"
+    }
+   },
+   "help": "Bun is a fast JavaScript runtime, package manager, bundler, and test runner. (1.3.6+d530ed993)"
+  },
+  "1.3.5": {
+   "date": "2025-12-17",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1,
+   "drop": [
+    "build\tcompile_executable_path",
+    "build\tmetafile"
+   ],
+   "verbs": {
+    "": {
+     "help": "Bun is a fast JavaScript runtime, package manager, bundler, and test runner. (1.3.5+1e86cebd7)"
+    }
+   },
+   "help": "Bun is a fast JavaScript runtime, package manager, bundler, and test runner. (1.3.5+1e86cebd7)"
+  }
+ }
 }
