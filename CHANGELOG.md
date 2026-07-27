@@ -7,6 +7,16 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Fixed
+
+- **GitHub API calls carry the environment's token.** Provisioning and the
+  release-index fetchers called `api.github.com` anonymously — sixty
+  requests an hour, shared with everyone behind the same address, which on
+  a CI runner is a crowd. `GH_TOKEN`/`GITHUB_TOKEN` now rides as a Bearer
+  header when the environment carries one — what Actions provides and what
+  gh itself reads — and never leaks to any other host. Absent, nothing
+  changes.
+
 ## [0.25.0] — 2026-07-27
 
 ### Added

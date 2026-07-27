@@ -335,8 +335,14 @@ def _pick_asset(assets: list[tuple[str, str]]) -> tuple[str, str]:
 
 
 def _get_json(url: str) -> dict:
-    """A JSON API response — GitHub/GitLab both want a User-Agent."""
-    request = urllib.request.Request(url, headers={"User-Agent": "footman-provision"})
+    """A JSON API response — GitHub/GitLab both want a User-Agent, and a
+    GitHub call carries `GH_TOKEN`/`GITHUB_TOKEN` when the environment has
+    one: anonymous api.github.com calls share sixty an hour per IP, which a
+    CI runner's shared address spends on other people's traffic."""
+    from footman._toolfetch import _api_headers
+
+    headers = {"User-Agent": "footman-provision", **_api_headers(url)}
+    request = urllib.request.Request(url, headers=headers)
     try:
         with urllib.request.urlopen(request, timeout=30) as response:
             return json.loads(response.read().decode("utf-8"))

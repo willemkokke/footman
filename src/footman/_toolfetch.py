@@ -139,11 +139,28 @@ class Unreachable(Exception):
 
 def _index(url: str) -> dict:
     """A registry's JSON. Raises `Unreachable` when it cannot be read."""
+    request = urllib.request.Request(url, headers=_api_headers(url))
     try:
-        with urllib.request.urlopen(url, timeout=TIMEOUT) as response:
+        with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
             return json.load(response)
     except (urllib.error.URLError, TimeoutError, ValueError, OSError) as cause:
         raise Unreachable(url, cause) from cause
+
+
+def _api_headers(url: str) -> dict[str, str]:
+    """A User-Agent always; a GitHub token when the environment carries one.
+
+    Anonymous GitHub API calls share sixty requests an hour per IP — an IP a
+    CI runner shares with the world, so the scheduled refresh would flake on
+    other people's traffic. `GH_TOKEN`/`GITHUB_TOKEN` is what Actions
+    provides and what gh itself reads; absent, behaviour is unchanged.
+    """
+    headers = {"User-Agent": "footman"}
+    if "api.github.com" in url:
+        token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+    return headers
 
 
 def _npm(driver: Driver) -> list[Release]:

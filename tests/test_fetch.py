@@ -213,3 +213,19 @@ def test_fetch_reports_byte_progress(server, monkeypatch):
 def test_cache_lives_where_footman_caches(server, tmp_path):
     assert _fetch.cache_dir().is_relative_to(_paths.footman_cache_dir())
     assert Path(_fetch.fetch(server)).is_relative_to(_paths.footman_cache_dir())
+
+
+def test_github_api_calls_carry_the_environments_token(monkeypatch):
+    from footman._toolfetch import _api_headers
+
+    monkeypatch.delenv("GH_TOKEN", raising=False)
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    assert "Authorization" not in _api_headers("https://api.github.com/x")
+
+    monkeypatch.setenv("GITHUB_TOKEN", "t0ken")
+    assert _api_headers("https://api.github.com/x")["Authorization"] == "Bearer t0ken"
+    # A token never leaks to another host.
+    assert "Authorization" not in _api_headers("https://registry.npmjs.org/x")
+
+    monkeypatch.setenv("GH_TOKEN", "gh-wins")
+    assert _api_headers("https://api.github.com/x")["Authorization"] == "Bearer gh-wins"
