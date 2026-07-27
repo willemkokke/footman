@@ -248,3 +248,87 @@ def test_the_checked_in_history_regenerates_its_stub(key):
         )
 
     assert classes(rendered) == classes(stub.read_text(encoding="utf-8"))
+
+
+# --- priming: walking backwards, resumably ----------------------------------
+
+
+def test_extend_appends_older_and_skips_what_it_has():
+    """The prime's whole write pattern: append-only, and a release already in
+    the chain is skipped — which is what makes an interrupted run resumable
+    rather than duplicative."""
+    surface = _toolhistory.surface_of(_spec())
+    doc = _toolhistory.new("demo", version="1.2.0", date="2026-02-01", surface=surface)
+
+    older = _toolhistory.surface_of(
+        _spec(verbs=(Verb(name="build", help="Older.", options=()),))
+    )
+    assert _toolhistory.extend(doc, version="1.1.0", date="2026-01-01", surface=older)
+    assert doc["observed_from"] == "1.1.0"
+    assert _toolhistory.at(doc, "1.1.0") == older
+    assert _toolhistory.at(doc, "1.2.0") == surface  # the base did not move
+
+    # A second pass over the same release adds nothing.
+    assert not _toolhistory.extend(
+        doc, version="1.1.0", date="2026-01-01", surface=older
+    )
+    assert _toolhistory.observed(doc) == ["1.2.0", "1.1.0"]
+
+
+def test_releases_break_a_same_day_tie_by_version(monkeypatch):
+    """Two releases on one day are common — prek shipped 0.4.7 and 0.4.8
+    together. Resolved by dict order the walk skips one and a later prime
+    appends it *below* its own successor, which corrupts the chain."""
+    import io
+    import json as _json
+
+    from footman import _drivers, _toolfetch
+
+    index = {
+        "releases": {
+            "0.4.7": [{"upload_time": "2026-07-04T10:00:00"}],
+            "0.4.8": [{"upload_time": "2026-07-04T18:00:00"}],
+            "0.4.9": [{"upload_time": "2026-07-11T09:00:00"}],
+            "0.4.6": [],  # no files: not installable, so not a release to read
+        }
+    }
+    monkeypatch.setattr(
+        _toolfetch.urllib.request,
+        "urlopen",
+        lambda *a, **k: io.BytesIO(_json.dumps(index).encode()),
+    )
+    driver = _drivers.find("prek")
+    assert driver is not None
+    assert [r.version for r in _toolfetch.releases(driver)] == [
+        "0.4.9",
+        "0.4.8",
+        "0.4.7",
+    ]
+
+
+def test_only_listable_tiers_are_primed():
+    """A tool footman cannot enumerate is named and skipped, never treated as
+    a tool with no history."""
+    from footman import _drivers, _toolfetch
+
+    uv_tier = _drivers.find("prek")
+    system_tier = _drivers.find("git")
+    manual = _drivers.find("bash")
+    assert uv_tier and system_tier and manual
+    assert _toolfetch.can_list(uv_tier)
+    assert not _toolfetch.can_list(system_tier)  # git is read from the host
+    assert not _toolfetch.can_list(manual)  # hand-written stub, nothing to read
+
+
+def test_the_primed_history_ships_a_contiguous_chain():
+    """What is checked in must replay end to end — a hole would mean a delta
+    computed against a release that is not its neighbour."""
+    from footman.tasks import tools as tools_tasks
+
+    doc = _toolhistory.load(tools_tasks._history_path("prek"))
+    assert doc is not None
+    chain = _toolhistory.observed(doc)
+    assert len(chain) > 1, "prek's history was primed; it should carry deltas"
+    for version in chain:
+        assert _toolhistory.at(doc, version) is not None, version
+    assert doc["observed_from"] == chain[-1]

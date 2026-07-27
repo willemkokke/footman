@@ -31,6 +31,22 @@ versions may include breaking changes.
   from a checkout, and users read the stubs, which already carry everything
   the log is for.
 
+- **`fm tools.prime` reads a tool's past releases into its history.** Walks
+  backwards from the release the history already holds, installing one
+  version at a time into a throwaway environment and appending a delta for
+  each — so nothing already written is touched, and a release the chain
+  already has is skipped. A prime stopped by a rate limit is resumed by
+  running it again. `--count` is how far back to reach *this* run, and the
+  floor a tool actually reached is recorded as `observed_from`: an option
+  present in the oldest release read is "at or before" that version, never
+  "since" it.
+
+  Releases are ordered by publication date, with the version breaking a
+  same-day tie — prek shipped 0.4.7 and 0.4.8 on one day, and a tie resolved
+  by index order let the walk skip one and a later run append it *below* its
+  own successor. Only the PyPI tier can be listed today; every other tool is
+  named and skipped rather than left looking like a tool with no history.
+
 ## [0.22.0] — 2026-07-27
 
 ### Changed

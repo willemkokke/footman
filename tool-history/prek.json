@@ -1,7 +1,7 @@
 {
  "schema": 1,
  "tool": "prek",
- "observed_from": "0.4.11",
+ "observed_from": "0.4.2",
  "base": {
   "version": "0.4.11",
   "date": "2026-07-27",
@@ -1146,5 +1146,123 @@
    }
   }
  },
- "deltas": {}
+ "deltas": {
+  "0.4.10": {
+   "date": "2026-07-16",
+   "extractor": 1,
+   "drop": [
+    "\tglob",
+    "run\tglob"
+   ],
+   "revert": {
+    "\tall_files": {
+     "flags": [
+      "--all-files",
+      "-a"
+     ],
+     "negation": "",
+     "help": "Run on all files in the repo",
+     "type": "bool",
+     "default": null,
+     "choices": []
+    },
+    "\tdirectory": {
+     "flags": [
+      "--directory",
+      "-d"
+     ],
+     "negation": "",
+     "help": "Run hooks on all files in the specified directories",
+     "type": "str",
+     "default": null,
+     "choices": []
+    },
+    "\tfiles": {
+     "flags": [
+      "--files"
+     ],
+     "negation": "",
+     "help": "Specific filenames to run hooks on",
+     "type": "list[str]",
+     "default": null,
+     "choices": []
+    },
+    "run\tall_files": {
+     "flags": [
+      "--all-files",
+      "-a"
+     ],
+     "negation": "",
+     "help": "Run on all files in the repo",
+     "type": "bool",
+     "default": null,
+     "choices": []
+    },
+    "run\tdirectory": {
+     "flags": [
+      "--directory",
+      "-d"
+     ],
+     "negation": "",
+     "help": "Run hooks on all files in the specified directories",
+     "type": "str",
+     "default": null,
+     "choices": []
+    },
+    "run\tfiles": {
+     "flags": [
+      "--files"
+     ],
+     "negation": "",
+     "help": "Specific filenames to run hooks on",
+     "type": "list[str]",
+     "default": null,
+     "choices": []
+    }
+   }
+  },
+  "0.4.9": {
+   "date": "2026-07-11",
+   "extractor": 1
+  },
+  "0.4.8": {
+   "date": "2026-07-04",
+   "extractor": 1
+  },
+  "0.4.7": {
+   "date": "2026-07-04",
+   "extractor": 1
+  },
+  "0.4.6": {
+   "date": "2026-07-01",
+   "extractor": 1,
+   "verbs": {
+    "autoupdate": {
+     "help": "Auto-update the `rev` field of repositories in the config file to the latest version"
+    }
+   }
+  },
+  "0.4.5": {
+   "date": "2026-06-15",
+   "extractor": 1
+  },
+  "0.4.4": {
+   "date": "2026-06-04",
+   "extractor": 1
+  },
+  "0.4.3": {
+   "date": "2026-05-27",
+   "extractor": 1,
+   "drop": [
+    "\tgroup",
+    "\tno_group",
+    "run\tgroup",
+    "run\tno_group"
+   ]
+  },
+  "0.4.2": {
+   "date": "2026-05-26",
+   "extractor": 1
+  }
+ }
 }
