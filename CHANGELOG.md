@@ -42,16 +42,7 @@ versions may include breaking changes.
   the provisioned uv's own — uv carries it inside the binary, so `fm
   tools.prime` gained a `--prefix` and drives the tiers from there: a stale uv
   reports a stale newest python and the walk starts too low without saying so.
-- **The python stub tracks the newest CPython** instead of a pinned 3.13. Its
-  history now reaches 3.14.6 back to 3.8.20, so `-P` is documented as added in
-  3.11 — which is when it arrived.
-- **A tool may declare that its release line is a minor series**
-  (`Driver.releases`). CPython keeps several alive at once, so publication
-  date alone cannot order it — five series ship on one day, and a walk down
-  that list would read every 3.14 option as dropped and re-added. Such a tool
-  is observed once per series at its newest patch, and its intervals say
-  `Added in 3.14`: no new features land in a CPython patch release, so the
-  series is the accurate claim rather than a rounded-off one.
+- **The python stub tracks the newest CPython** instead of a pinned 3.13.
 
 ### Changed
 
@@ -86,6 +77,24 @@ versions may include breaking changes.
   wrong the moment one is not, which is any stub synced from an outdated
   binary. The walk now positions the floor in the source's own ordering, and
   a floor that ordering cannot place stops the walk and says so.
+- **A release chain is ordered by version, not by publication date.** Three
+  curated tools keep more than one series alive at once — cmake 3.31.x beside
+  4.x, pytest's 4.6 LTS beside 5.x, CPython's five — so the most recently
+  published release is not the newest one. Ordered by date, a walk back from
+  CPython 3.14.6 stepped to 3.13.14 and read every 3.14 option as dropped and
+  then re-added, making every interval derived from it wrong. Pre-releases are
+  also excluded from chains: an alpha is not something to say a flag arrived
+  in, and two tools only *looked* like they shipped series in parallel because
+  one sorted as though it were final.
+- **A version the comparator cannot separate no longer moves the base.** Two
+  builds of one base — eclint's `0.6.0-wk.3` against its `-wk.5` — compare
+  equal, and "not older" was read as "newer", so a stale checkout could
+  promote the older build and push the newer one down the chain. That is the
+  rewrite the guard exists to refuse; it now declines and names the tool.
+- **A vendored build tail no longer keeps a tool out of its own index.** PyPI
+  ships `ninja` 1.13.0 and the binary in it answers
+  `1.13.0.git.kitware.jobserver-pipe-1`, which matched no release, so ninja
+  could not be primed at all.
 - **The CPython listing no longer depends on what the machine has installed.**
   `uv python list` replaces a version's download entry with a local path once
   it is installed, dropping the URL its publication date is read from — so

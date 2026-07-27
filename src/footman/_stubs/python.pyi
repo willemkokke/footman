@@ -51,7 +51,7 @@ class Python(_Tool):
             OO: do -O changes and also discard docstrings; add .opt-2 before .pyc
                 extension.
             P: don't prepend a potentially unsafe path to sys.path; also
-                PYTHONSAFEPATH. Added in 3.11.
+                PYTHONSAFEPATH.
             S: don't imply 'import site' on initialization.
             V: print the Python version number and exit (also --version) when given
                 twice, print more information about the build.

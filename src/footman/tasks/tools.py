@@ -47,6 +47,18 @@ _STUBS = Path(__file__).resolve().parent.parent / "_stubs"
 _HISTORY = Path(__file__).resolve().parents[3] / "tool-history"
 
 
+class _Ambiguous(Exception):
+    """Two readings whose versions the comparator cannot separate.
+
+    Raised rather than resolved, because every resolution would be a guess:
+    see `_observe`. The caller names the tool and leaves its stub alone.
+    """
+
+    def __init__(self, key: str, reading: str, base: str) -> None:
+        super().__init__(f"{key}: cannot tell {reading} from the recorded {base}")
+        self.key, self.reading, self.base = key, reading, base
+
+
 def _stub_path(key: str) -> Path:
     return _STUBS / f"{key}.pyi"
 
@@ -126,12 +138,7 @@ def _stub_from(driver: _drivers.Driver, doc: dict, *, in_process: bool = False) 
     not rewrite that claim.
     """
     base = doc["base"]
-    spec = _toolhistory.union(
-        doc,
-        name=driver.name,
-        in_process=in_process,
-        granularity=driver.releases,
-    )
+    spec = _toolhistory.union(doc, name=driver.name, in_process=in_process)
     return _formatted(
         _stubgen.render(
             spec,
@@ -168,6 +175,15 @@ def _observe(driver: _drivers.Driver, spec: _toolspec.ToolSpec) -> dict:
         doc["base"]["platforms"] = sorted(
             {*doc["base"].get("platforms", []), _platform()}
         )
+    elif _version_tuple(version) == _version_tuple(doc["base"]["version"]):
+        # Two builds of one base — eclint's `0.6.0-wk.3` against its
+        # `-wk.5`. The comparator cannot separate them and the dates cannot
+        # help, because an incoming reading is stamped today whatever build
+        # it holds. Ordering a chain breaks such a tie on publication date;
+        # here there is no such date, so the base does not move. Declining is
+        # the only answer that cannot be wrong, and it is what "a snapshot
+        # only ever moves forward" means when forward is unknowable.
+        raise _Ambiguous(driver.key, version, doc["base"]["version"])
     elif _version_tuple(version) < _version_tuple(doc["base"]["version"]):
         # An *older* reading is an older observation, not a new head. Demoting
         # on any change let a machine with a stale tool rewrite the base and
@@ -413,7 +429,11 @@ def _sync(only: str, root: Path | None = None) -> None:
             # the checked-in one leaves the stub exactly as it is.
             skipped.append(f"{driver.key} ({reason})")
             continue
-        text = _generate(driver)
+        try:
+            text = _generate(driver)
+        except _Ambiguous as ambiguous:
+            skipped.append(f"{driver.key} ({ambiguous.reading} vs {ambiguous.base})")
+            continue
         path = _stub_path(driver.key)
         if not path.exists() or path.read_text(encoding="utf-8") != text:
             path.write_text(text, encoding="utf-8")

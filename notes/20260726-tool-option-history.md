@@ -218,8 +218,8 @@ events *are* the changelog entry ("prek 0.4.11 adds `--glob`").
    for the docs. That is what ends "every bump is a diff": the stub header
    stops being state.
 5. **Ordering is by version, with the date breaking a tie.** *Reversed
-   2026-07-27; the original decision is below, because the reasoning for it
-   was sound and the data was not.*
+   2026-07-27; the original is kept below, because its reasoning was sound and
+   only its premise was wrong.*
 
    It first read: order by release date, because version strings cannot order
    themselves across this set — `version_tuple` truncates at build tags, so
@@ -238,13 +238,13 @@ events *are* the changelog entry ("prek 0.4.11 adds `--glob`").
 
    The premise about version strings was also narrower than it looked.
    Measured across all 24 listable tools, 3,195 of 3,385 version strings are
-   plain numeric; 165 are pre-releases, which are excluded from chains because
-   an alpha is not something to say a flag arrived in; 21 are `.postN`; and
-   **four** are anything else — all of them eclint's `-wk.N`, a fork build
-   series that appears in no other index. Ordering by `(version_tuple, date)`
-   is total across the whole set: the version separates every real comparison,
-   and the date separates two builds of one base, which is exactly the case
-   `version_tuple` folds together.
+   plain numeric; 165 are pre-releases, now excluded from chains because an
+   alpha is not something to say a flag arrived in; 21 are `.postN`; and
+   **four** are anything else — all of them eclint's `-wk.N`, a fork series
+   that appears in no other index and never beside a plain `0.6.0`. Ordering
+   by `(version_tuple, date)` is total across the whole set: the version
+   separates every real comparison, and the date separates two builds of one
+   base, which is exactly what `version_tuple` folds together.
 
    The one caller with no date to fall back on is the "a snapshot only ever
    moves forward" guard, since a fresh reading is stamped today whatever build
@@ -252,8 +252,13 @@ events *are* the changelog entry ("prek 0.4.11 adds `--glob`").
    bug, where a tie read as "not older" let a stale checkout promote eclint's
    `wk.3` over the recorded `wk.5`.
 
-   The version is still what a reader knows, so it is still what the docstring
-   says, and the prime must still capture a date for every release it fetches.
+   Two consequences worth stating, since decision 3 makes help text state.
+   Patch granularity is now real rather than aspirational: CPython's `-I`
+   help text changed in **3.13.3**, a patch release, and the chain records it.
+   And a reading whose version names no release — ninja's binary answers
+   `1.13.0.git.kitware.jobserver-pipe-1` where PyPI ships `1.13.0` — has its
+   build tail trimmed, or it matches nothing in its own index and the tool
+   cannot be primed at all.
 6. **Stubs are the union, never pruned.** A removed option stays in the stub so
    completion works against any version ever; `added in` / `removed in` live in
    its docstring. This inverts nothing: a stub already suggests without

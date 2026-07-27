@@ -241,24 +241,7 @@ def at(doc: dict, version: str) -> dict[str, Any] | None:
     return None
 
 
-def _label(version: str, granularity: str) -> str:
-    """How an interval names *version* — see `Driver.releases`.
-
-    A tool observed once per minor series has been read at that series' newest
-    patch, and only the series is a claim the reading supports: CPython admits
-    no new features in a patch release, so `-P` arrived in 3.11, and saying
-    "3.11.15" would be precision the observation does not have.
-    """
-    if granularity != "minor":
-        return version
-    major, _, rest = version.partition(".")
-    minor, _, _patch = rest.partition(".")
-    return f"{major}.{minor}" if minor else version
-
-
-def union(
-    doc: dict, *, name: str, in_process: bool = False, granularity: str = "patch"
-) -> ToolSpec:
+def union(doc: dict, *, name: str, in_process: bool = False) -> ToolSpec:
     """Every option the tool has *ever* had, each with its interval.
 
     The stub renders this rather than the newest release alone: a removed
@@ -318,16 +301,10 @@ def union(
                     Option(
                         **{
                             **option.__dict__,
-                            # Compared against the stored versions, labelled
-                            # only once the answer is known: the floor is a
-                            # fact about the chain, not about how it reads.
                             "since": ""
                             if first[(verb.name, option.name)] == floor
-                            else _label(first[(verb.name, option.name)], granularity),
-                            "until": _label(
-                                newer.get(last[(verb.name, option.name)], ""),
-                                granularity,
-                            )
+                            else first[(verb.name, option.name)],
+                            "until": newer.get(last[(verb.name, option.name)], "")
                             if last[(verb.name, option.name)] != chain[0]
                             else "",
                         }

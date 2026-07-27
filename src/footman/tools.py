@@ -92,9 +92,14 @@ def version_tuple(version: str) -> tuple[int, ...]:
     enough* — because a build tail says nothing about which flags exist.
     Scraping its digits would answer it backwards: `0.6.0-wk.5` is a fork
     build *of* 0.6.0, which every version grammar sorts at or before it,
-    while `(0, 6, 0, 5)` sorts after. The cost is that two builds of one base
-    compare equal; when the build itself matters, keep the string from
-    `read_version`.
+    while `(0, 6, 0, 5)` sorts after.
+
+    So two builds of one base compare **equal**, and every caller has to say
+    what it does with that rather than read equality as an answer. Ordering a
+    release chain breaks the tie on publication date, which separates a `wk`
+    series correctly without this having to know what `wk` means. The
+    snapshot guard cannot — an incoming reading is dated today whatever it
+    holds — so it declines to move rather than guess.
 
     An unreadable version yields `()`, which compares lower than everything —
     "can't tell" must never read as "newer".

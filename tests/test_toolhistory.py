@@ -674,35 +674,6 @@ def _cpython(version, day, **over):
     }
 
 
-def test_python_is_observed_once_per_minor_at_its_newest_patch(monkeypatch):
-    """CPython keeps several series alive at once, so publication date alone
-    cannot order it: five live series share one build date, and a walk down
-    that list would step from 3.14.6 to 3.13.14 and read every 3.14 option as
-    dropped. One entry per series, newest patch, restores a single line.
-    """
-    from footman import _drivers, _toolfetch
-
-    _uv_listing(
-        monkeypatch,
-        [
-            _cpython("3.14.6", "20260718"),
-            _cpython("3.14.5", "20260611"),
-            _cpython("3.13.14", "20260718"),
-            _cpython("3.13.9", "20251120"),
-            _cpython("3.9.25", "20251031"),
-        ],
-    )
-    driver = _drivers.find("python")
-    assert driver is not None
-    assert driver.releases == "minor"
-
-    found = _toolfetch.releases(driver)
-    assert [r.version for r in found] == ["3.14.6", "3.13.14", "3.9.25"]
-    # 3.14.6 and 3.13.14 share a build date; the version breaks the tie, or
-    # the newest series would not sort to the head of the chain.
-    assert found[0].date == found[1].date == "2026-07-18"
-
-
 def test_the_python_listing_keeps_only_what_is_a_release(monkeypatch):
     """A pre-release is not something to claim an option arrived in, a
     free-threaded build is a build of a release rather than one of its own,
@@ -821,37 +792,62 @@ def _drivers_find(key):
     return driver
 
 
-def test_a_minor_series_tool_states_its_interval_without_the_patch():
-    """The history stores what was read — 3.14.6, a fact — while the interval
-    says 3.14, which is the whole of what the reading supports: CPython admits
-    no new features in a patch release, so `-P` arrived in 3.11 and naming a
-    patch would be precision the observation does not have.
+def test_a_chain_is_ordered_by_version_not_by_publication_date(monkeypatch):
+    """Three curated tools keep more than one series alive at once — cmake
+    3.31.x beside 4.x, pytest's 4.6 LTS beside 5.x, CPython's five — so the
+    newest release is not the most recently published one.
+
+    Ordered by date, a walk back from 3.14.6 steps to 3.13.14 and records
+    every 3.14 option as dropped, then re-adds them lower down; every
+    interval derived from that chain is then wrong. The history answers a
+    version question, so version is what orders it.
     """
-    without = _toolhistory.surface_of(
-        _spec(verbs=(Verb(name="", options=(Option("quiet", ("-q",)),)),))
+    from footman import _drivers, _toolfetch
+
+    _uv_listing(
+        monkeypatch,
+        [
+            _cpython("3.13.14", "20260718"),  # same build date as 3.14.6...
+            _cpython("3.14.6", "20260718"),
+            _cpython("3.12.13", "20260718"),
+            _cpython("3.14.5", "20260611"),  # ...and published before 3.13.14
+        ],
     )
-    with_p = _toolhistory.surface_of(
-        _spec(
-            verbs=(
-                Verb(
-                    name="",
-                    options=(Option("quiet", ("-q",)), Option("safe_path", ("-P",))),
-                ),
-            )
-        )
+    driver = _drivers.find("python")
+    assert driver is not None
+    found = [r.version for r in _toolfetch.releases(driver)]
+    assert found == ["3.14.6", "3.14.5", "3.13.14", "3.12.13"]
+
+
+def test_a_tie_the_comparator_cannot_break_leaves_the_base_alone(tmp_path, monkeypatch):
+    """`0.6.0-wk.3` and `0.6.0-wk.5` are two builds of one base, and the
+    comparator reduces both to `(0, 6, 0)` — a build tail says nothing about
+    which flags exist. A chain breaks that tie on publication date, but a
+    fresh reading is stamped today whatever build it holds, so the snapshot
+    guard has nothing to break it with.
+
+    It must therefore decline. Treating the tie as "not older" is what let a
+    stale checkout promote `wk.3` over the recorded `wk.5` and push the newer
+    build down the chain — the exact rewrite the guard exists to refuse.
+    """
+    from footman.tasks import tools
+
+    surface = _toolhistory.surface_of(
+        _spec(verbs=(Verb(name="", options=(Option("fix", ("--fix",)),)),))
     )
     doc = _toolhistory.new(
-        "python", version="3.14.6", date="2026-07-18", surface=with_p
+        "eclint", version="0.6.0-wk.5", date="2026-07-01", surface=surface
     )
-    _toolhistory.extend(doc, version="3.11.15", date="2026-07-18", surface=with_p)
-    _toolhistory.extend(doc, version="3.10.20", date="2026-07-18", surface=without)
+    monkeypatch.setattr(tools, "_HISTORY", tmp_path)
+    _toolhistory.save(doc, tmp_path / "eclint.json")
 
-    def intervals(**over):
-        spec = _toolhistory.union(doc, name="python", **over)
-        return {o.name: (o.since, o.until) for v in spec.verbs for o in v.options}
-
-    assert intervals(granularity="minor")["safe_path"] == ("3.11", "")
-    assert intervals()["safe_path"] == ("3.11.15", "")  # every other tool
-    # Present at the floor either way: the chain cannot prove a `since`, and
-    # rounding the label must not invent one.
-    assert intervals(granularity="minor")["quiet"] == ("", "")
+    driver = _drivers_find("eclint")
+    spec = _toolhistory.spec_from(surface, name="eclint", version="0.6.0-wk.3")
+    with pytest.raises(tools._Ambiguous) as raised:
+        tools._observe(driver, spec)
+    assert raised.value.reading == "0.6.0-wk.3"
+    assert raised.value.base == "0.6.0-wk.5"
+    # and the file is untouched
+    stored = _toolhistory.load(tmp_path / "eclint.json")
+    assert stored is not None
+    assert stored["base"]["version"] == "0.6.0-wk.5"
