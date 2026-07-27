@@ -1805,15 +1805,26 @@ def parallel(*calls: Callable[[], Any], keep_going: bool = False) -> list[int]:
     """
     from concurrent.futures import ThreadPoolExecutor
 
+    from footman import registry as _registry
+
     parent = current()
     dest = parent.sink or real_stdout()
     dest_is_real = parent.sink is None
     lock = threading.Lock()
+
+    def _machinery_counted(call: Callable[[], Any]) -> bool:
+        # A task handle's call routes through the body-call machinery, which
+        # counts the request on the status line itself — counting it here too
+        # would show one piece of work as two.
+        target = call.func if isinstance(call, functools.partial) else call
+        return _registry.is_task_handle(target)
+
     # parallel() children are units on the live status line, exactly like
     # scheduler nodes — a chain and a task-body fan-out present identically.
+    # Task children are counted by the machinery; only the rest count here.
     status = _status
     if status is not None:
-        status.unit_added(len(calls))
+        status.unit_added(sum(1 for c in calls if not _machinery_counted(c)))
 
     def _call_name(call: Callable[[], Any]) -> str:
         if isinstance(call, functools.partial):  # partial(fmt, check=True)
@@ -1826,7 +1837,8 @@ def parallel(*calls: Callable[[], Any], keep_going: bool = False) -> list[int]:
 
     def invoke(call: Callable[[], Any]) -> tuple[int, BaseException | None]:
         name = _call_name(call)
-        if status is not None:
+        own_unit = not _machinery_counted(call)
+        if status is not None and own_unit:
             status.unit_started(name)
         # One buffer for both streams at task level, so the atomic flush keeps
         # this child's stdout/stderr in order; a run() inside it still splits the
@@ -1894,7 +1906,7 @@ def parallel(*calls: Callable[[], Any], keep_going: bool = False) -> list[int]:
             # Surface the child's run() steps on the parent, in completion order,
             # so they appear in `--json` and `recording()` (F12).
             parent.steps.extend(child.steps)
-        if status is not None:
+        if status is not None and own_unit:
             status.unit_finished(name, error is None)
         return code, error
 
