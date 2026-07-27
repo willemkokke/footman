@@ -70,7 +70,7 @@ src/footman/
   tools.py/.pyi   the tools.* bridge + its typing stub
   testing.py      Runner (in-process CLI) + recording()
 docs/             Zensical (mkdocs-like) site
-notes/            design plans, `YYYYMMDD-` prefixed (see below)
+notes/            design plans, `YYYYMMDD-` prefixed — tracked, never published
 tasks.py          footman's own tasks — the gate is `fm check`
 ```
 
@@ -80,7 +80,8 @@ tasks.py          footman's own tasks — the gate is `fm check`
 why, what was measured before choosing, and which questions are still open.
 The docs say what footman *is*; a note says how it got there and what it
 nearly was instead. They are tracked, so a plan outlives the laptop it was
-written on.
+written on, but they are **not published**: the site builds from `docs/` with
+an explicit nav, so nothing in `notes/` reaches the website or `llms-full.txt`.
 
 **Name them `YYYYMMDD-<slug>.md`, dated the day the note was started**, so the
 directory sorts into the order the thinking happened
