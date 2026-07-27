@@ -126,7 +126,16 @@ testpaths = ["tests"]
 # `-n auto` fans the suite across cores (pytest-xdist). It is test-bound, so
 # this roughly halves both the local gate and every CI pytest job. To debug a
 # single test serially (live `-s`, `--pdb`, `-x` ordering), override with `-n0`.
-addopts = "-q -n auto"
+#
+# `worksteal` rather than xdist's default `load`, because this suite's test
+# durations are wildly uneven: test_shellcomp drives five real shells, the
+# toolspec and provision tests shell out to real binaries, and everything
+# else is microseconds. `load` hands out chunks up front, so one worker holds
+# the slow tail while the rest idle; `worksteal` moves work to whoever is
+# free. Measured here, twice each: 20s load, 15s worksteal, 32s loadfile —
+# loadfile being worst because it pins whole files, and the heavy files are
+# exactly what needs splitting.
+addopts = "-q -n auto --dist=worksteal"
 
 [tool.basedpyright]
 # First-party code only. comparison/ exercises third-party runners (duty,
