@@ -22,6 +22,7 @@ nav = [
     { "The tools bridge" = "tools-bridge.md" },
     { "Monorepos & config" = "monorepos.md" },
     { "Composing tasks" = "composing.md" },
+    { "Writing plugins" = "plugins.md" },
     { "Testing your tasks" = "testing.md" },
     { "Your tasks, documented" = "taskdocs.md" },
     { "Cookbook" = "cookbook.md" },
