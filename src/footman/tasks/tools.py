@@ -27,6 +27,7 @@ import re as _re
 import sys
 from collections.abc import Iterator
 from contextlib import contextmanager
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated, Literal
 
@@ -197,22 +198,13 @@ def _observe(driver: _drivers.Driver, spec: _toolspec.ToolSpec) -> dict:
             platforms=[_platform()],
         )
     else:
-        previous = doc["base"]
-        doc["deltas"] = {
-            previous["version"]: {
-                "date": previous["date"],
-                "extractor": previous["extractor"],
-                **_toolhistory.delta(surface, previous["surface"]),
-            },
-            **doc["deltas"],
-        }
-        doc["base"] = {
-            "version": version,
-            "date": _today(),
-            "platforms": [_platform()],
-            "extractor": _toolhistory.EXTRACTOR,
-            "surface": surface,
-        }
+        _toolhistory.promote(
+            doc,
+            version=version,
+            date=_today(),
+            surface=surface,
+            platforms=[_platform()],
+        )
     _toolhistory.save(doc, path)
     return doc
 
@@ -707,6 +699,161 @@ def prime(
         print(line)
     if skipped:
         print(f"skipped: {', '.join(skipped)}")
+
+
+@dataclass(frozen=True)
+class Refreshed:
+    """What a refresh found — the release decision, as data.
+
+    Returned rather than printed, so `fm --json tools.refresh` hands a
+    scheduled job the same answer a person reads.
+    """
+
+    read: dict[str, list[str]]
+    """Releases newly observed, per tool, oldest first."""
+    events: dict[str, list[str]]
+    """The subset of those that *changed* the tool's surface. This is the
+    release decision and the CHANGELOG line at once."""
+    unreachable: dict[str, str]
+    """Indexes that would not answer, and why. Not the same as a tool with
+    nothing new — see `_toolfetch.Unreachable`."""
+    skipped: list[str]
+    """Tools with no index to read, or no history to add to."""
+
+    @property
+    def release(self) -> bool:
+        """Whether any tool's surface moved — decision 4, in one line."""
+        return any(self.events.values())
+
+
+@tasks.task
+def refresh(
+    only: Annotated[str, doc("refresh just this tool")] = "",
+    prefix: Annotated[str, doc("drive the tiers from this prefix's bin/")] = "",
+) -> Refreshed:
+    """Read every release published since the history was last updated.
+
+    The forward walk, and the one a release job runs. `prime` goes backwards
+    from the floor to deepen a history; this goes forwards from the base to
+    catch it up, installing **every** release in between rather than jumping
+    to the newest — a flag that arrived in 0.16.1 is attributed to 0.16.1,
+    not to whatever happened to be latest the day the job ran. A release that
+    changed nothing records an empty delta, which is a real observation and
+    not the same as never having looked.
+
+    Nothing new anywhere means nothing to release, and that is the whole exit
+    condition. So an index that would not answer is reported and exits
+    non-zero rather than counting as "nothing new": a rename or a moved repo
+    would otherwise make a tool silently untracked while the job kept
+    reporting success.
+    """
+    import shutil
+    import tempfile
+
+    from footman import _toolfetch
+
+    scratch = Path(tempfile.mkdtemp(prefix="footman-refresh-"))
+    read: dict[str, list[str]] = {}
+    events: dict[str, list[str]] = {}
+    unreachable: dict[str, str] = {}
+    skipped: list[str] = []
+    try:
+        with _on_path(prefix):
+            for driver in _drivers.DRIVERS:
+                if only and driver.key != only:
+                    continue
+                if not _toolfetch.can_list(driver):
+                    skipped.append(f"{driver.key} ({driver.provision.kind} tier)")
+                    continue
+                history = _toolhistory.load(_history_path(driver.key))
+                if history is None:
+                    skipped.append(f"{driver.key} (no history — run `sync` first)")
+                    continue
+                try:
+                    seen, changed = _refresh_one(driver, history, scratch, _toolfetch)
+                except _toolfetch.Unreachable as blocked:
+                    unreachable[driver.key] = str(blocked)
+                    continue
+                if seen:
+                    read[driver.key] = seen
+                if changed:
+                    events[driver.key] = changed
+    finally:
+        shutil.rmtree(scratch, ignore_errors=True)
+
+    found = Refreshed(
+        read=read, events=events, unreachable=unreachable, skipped=skipped
+    )
+    _report_refresh(found)
+    if unreachable:
+        from footman import fail
+
+        fail(
+            f"{len(unreachable)} index(es) would not answer: "
+            f"{', '.join(sorted(unreachable))}",
+            code=75,  # EX_TEMPFAIL: try again, rather than "nothing to do"
+        )
+    return found
+
+
+def _report_refresh(found: Refreshed) -> None:
+    """The human-readable half of what `Refreshed` carries."""
+    for key, versions in found.read.items():
+        moved = found.events.get(key, [])
+        note = f" — events in {', '.join(moved)}" if moved else " — no change"
+        print(f"{key} +{len(versions)} ({', '.join(versions)}){note}")
+    if not found.read:
+        print("nothing new")
+    print(f"release warranted: {'yes' if found.release else 'no'}")
+    for key, why in sorted(found.unreachable.items()):
+        print(f"could not read {key}: {why}")
+    if found.skipped:
+        print(f"skipped: {', '.join(found.skipped)}")
+
+
+def _refresh_one(
+    driver, doc: dict, scratch: Path, fetch
+) -> tuple[list[str], list[str]]:
+    """Catch one tool's history up to its index, oldest release first.
+
+    Returns what was read and which of those changed the surface. Oldest
+    first because each release is promoted in turn, and a delta is only
+    meaningful against the release that actually preceded it.
+    """
+    known = set(_toolhistory.observed(doc))
+    base = doc["base"]["version"]
+    newer = [
+        release
+        for release in reversed(fetch.releases(driver))  # oldest first
+        if release.version not in known
+        and _version_tuple(release.version) > _version_tuple(base)
+    ]
+    seen: list[str] = []
+    changed: list[str] = []
+    for release in newer:
+        bindir = fetch.install(driver, release.version, scratch / release.version)
+        if bindir is None:
+            break  # a hole here would attribute the next release's changes wrongly
+        with _on_path(bindir.parent):
+            spec = _drivers.extract(driver)
+        if not spec.verbs:
+            break  # a binary that will not describe itself is not an observation
+        moved = _toolhistory.promote(
+            doc,
+            version=release.version,
+            date=release.date,
+            surface=_toolhistory.surface_of(spec),
+            platforms=[_platform()],
+        )
+        seen.append(release.version)
+        if moved:
+            changed.append(release.version)
+    if seen:
+        _toolhistory.save(doc, _history_path(driver.key))
+        # The stub is a rendering of the record, so it follows the record
+        # rather than waiting for someone to remember a `sync`.
+        _stub_path(driver.key).write_text(_stub_from(driver, doc), encoding="utf-8")
+    return seen, changed
 
 
 def _prime_one(driver, doc: dict, count: int, scratch: Path, fetch) -> tuple[int, str]:
