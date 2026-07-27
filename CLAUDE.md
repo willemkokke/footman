@@ -70,8 +70,28 @@ src/footman/
   tools.py/.pyi   the tools.* bridge + its typing stub
   testing.py      Runner (in-process CLI) + recording()
 docs/             Zensical (mkdocs-like) site
+notes/            design plans, `YYYYMMDD-` prefixed (see below)
 tasks.py          footman's own tasks — the gate is `fm check`
 ```
+
+## Notes
+
+`notes/` holds the design plans — what was decided, what was rejected and
+why, what was measured before choosing, and which questions are still open.
+The docs say what footman *is*; a note says how it got there and what it
+nearly was instead. They are tracked, so a plan outlives the laptop it was
+written on.
+
+**Name them `YYYYMMDD-<slug>.md`, dated the day the note was started**, so the
+directory sorts into the order the thinking happened
+(`20260726-tool-option-history.md`). Same-day collisions sort arbitrarily and
+that is fine. Keep the date of the *first* draft when a note grows — the
+prefix records when the thread opened, not when it was last touched; a plan
+that turns into a different plan gets a new note and links back.
+
+A note that has landed says so at the top rather than being deleted: the
+CHANGELOG carries what shipped, the note carries the reasoning that never
+reaches a docs page.
 
 ## Testing conventions
 
