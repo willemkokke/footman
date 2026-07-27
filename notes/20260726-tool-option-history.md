@@ -1,9 +1,15 @@
 # Tool option history → scheduled refresh → honest auto-release
 
-**Parked 2026-07-26.** Unifies two plans that were never separate: a JSON
-history of every tool's option surface, and the scheduled job that keeps it
-current and decides when a release is warranted. The audit groundwork landed
-(#77, #79); everything below is unwritten.
+**Largely landed 2026-07-27.** Unifies two plans that were never separate: a
+JSON history of every tool's option surface, and the scheduled job that keeps
+it current and decides when a release is warranted.
+
+Shipped: the format and its chain, five listable tiers including CPython, the
+backward walk (`fm tools.prime`), the forward walk (`fm tools.refresh`), and
+the release note the events write. What remains is configuration rather than
+design — see §7. Decision 5 was **reversed** in the building; its reasoning is
+kept in place rather than deleted, because the way it was wrong is the useful
+part.
 
 The thesis: **a stub stops being a snapshot and becomes a rendering.** Today a
 stub *is* the record — read from one binary, on one machine, at one moment, and
@@ -137,20 +143,49 @@ that guesses attribution is worse than one that admits a floor.
 
 ## 3. The scheduled refresh
 
-A CI job that re-provisions the latest of every curated tool, extracts, and
-**appends any new events** to the JSON. Public repo, so the minutes are free.
-Cadence was written as monthly in the original sketch and weekly in the later
-one — pick one; weekly costs little and shortens the window in which the docs
-are behind.
+**Shipped as `fm tools.refresh`** (2026-07-27). The sketch below described
+this in terms of `tools.audit`, which only ever answered *is a newer version
+out*; the job needs *what did it change*, so the walk reads releases rather
+than comparing version strings.
 
 ```sh
-fm tools.provision                              # into .tools-latest, no --clean
-fm --json tools.audit --prefix .tools-latest    # {"checked","behind","skipped","resnapshotted"}
+fm tools.provision                                # into .tools-latest, no --clean
+fm --json tools.refresh --prefix=.tools-latest    # {"read","events","unreachable","release"}
 ```
 
-`--prefix` is not optional: without it both tasks read the runner instead of
-the provisioned set. Locally that was 8 "behind" against the host PATH versus
-3 against the prefix — the host number was mostly noise about one laptop.
+It reads **every** release published since each tool's base, oldest first, and
+promotes each in turn. Not a jump to the newest: reading only the last of
+three attributes all three releases' changes to it, so a flag that arrived in
+0.16.1 would be recorded as arriving in 0.16.3, and the stub would tell a
+reader on 0.16.2 that an option they have does not exist. An unchanged release
+is still read and records an empty delta.
+
+`--prefix` is not optional, and it matters more here than on `sync`: uv
+carries CPython's download index *inside the binary*, so a stale uv reports a
+stale newest python and the walk starts too low without saying so. Measured —
+uv 0.11.1 tops out at 3.14.3 where 0.11.31 sees 3.14.6. The prefix must
+therefore hold **uv itself**, not only the tools; a prefix without it falls
+back to the host's uv silently.
+
+Two things the job depends on that were not in the sketch:
+
+- **An index that cannot be read raises** rather than returning an empty
+  listing. "Is there anything new" is the exit condition, and a throttled
+  registry answering "no" would end the run with "nothing to release". For one
+  run that is a week's delay; for a renamed package it is *forever*, while the
+  job keeps reporting success over a tool nobody is tracking. It exits 75
+  (`EX_TEMPFAIL`), and does not abort a release the tools it *could* read
+  justify.
+- **A prime keeps its downloads inside its own scratch directory.**
+  `UV_CACHE_DIR` and `UV_PYTHON_INSTALL_DIR` point there, so cleanup is
+  structural rather than a rule to remember, and the interpreters the machine
+  actually runs are never candidates for deletion. Each release is discarded
+  once its surface is read, which is the difference between peak disk being
+  one release and being all of them — a full prime of ruff would otherwise
+  stand up 416 environments at once.
+
+Cadence is still open (§7); weekly costs little and shortens the window in
+which the docs are behind.
 
 ## 4. The release gate: new events, not new versions
 
@@ -284,15 +319,30 @@ events *are* the changelog entry ("prek 0.4.11 adds `--glob`").
 
 ## 7. Still open
 
-Nothing blocking. Two things deliberately deferred:
+Nothing blocking, and all of it configuration rather than design:
 
 1. **Refresh cadence** — config, not design (Willem, 2026-07-26). Decide it
    when the workflow is written.
-2. **Per-tool budget values** — a data edit on the drivers, best chosen once
-   the prime has been run wide enough to know what a tool costs.
+2. **Per-tool budget values** — a data edit on the drivers. Now answerable
+   with numbers: CPython's 111 releases took 2m28s to prime and 24 KB to
+   store, of which 110 entries are a date and an extractor generation,
+   because only ten releases in six years changed what the interpreter
+   accepts.
+3. **The workflow file itself**, which nothing has written yet.
+4. **The `system` tier** — git and docker still read the host and have no
+   fetch source, so they are the two tools a refresh cannot speak for.
 
-Everything else is decided (§6) and the file shape is worked out against real
-extractions (§1), so the first commit is the seeding step in §8.
+Two known imprecisions, both looked at and left alone:
+
+- **A gap inside a chain reads as a `since`.** The floor rule refuses to
+  claim a `since` for an option present at the oldest release read; the same
+  reasoning applies to a hole *mid-chain* and does not. python-build-standalone
+  publishes no 3.11.0, so `-P` renders as "Added in 3.11.1" where it in fact
+  arrived in 3.11.0. One release's overclaim, on one tool, at the two points
+  an index has a hole (Willem, 2026-07-27: not worth fixing).
+- **A tool with no `[Unreleased]` section** gets no release note, and the
+  refresh reports that it wrote none rather than inventing somewhere to put
+  it.
 
 ## 8. Where to start
 
