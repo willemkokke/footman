@@ -267,6 +267,87 @@ def promote(
     return bool(step)
 
 
+def insert(
+    doc: dict,
+    *,
+    version: str,
+    date: str,
+    surface: dict[str, Any],
+    platforms: list[str] | None = None,
+) -> bool:
+    """Place a release at its own position in the chain, wherever that is.
+
+    `extend` appends below the floor and `promote` replaces the head; this is
+    the third case the format was designed for and the one neither covers — a
+    release that belongs *between* two the chain already holds. Exactly one
+    entry is recomputed, the inserted release's successor, because that is the
+    only delta whose starting point moved. Nothing else is touched, however
+    long the chain.
+
+    What it buys is that **gathering need not be ordered**. Installing a
+    release and reading its `--help` does not depend on any other release
+    having been read; only the arithmetic afterwards does, and that is a dict
+    diff over surfaces already in hand. So a walk can fetch in whatever order
+    it likes — in parallel, or across several runs — and assemble as results
+    arrive. It also means a release that would not install stops being fatal
+    to a tool's whole walk: the gap is filled by a later run.
+
+    A gap costs precision until it is filled, not correctness. An option that
+    arrived in the missing release reads as arriving at the next release that
+    *was* read, which is the same honest imprecision the chain already carries
+    wherever an index has no build to offer.
+
+    Returns whether the release was added; a release the chain already holds
+    is left exactly as it is.
+    """
+    from footman.tools import version_tuple
+
+    if version in observed(doc):
+        return False
+    chain = observed(doc)  # newest first
+
+    def placed(name: str) -> tuple[tuple[int, ...], str]:
+        entry = doc["base"] if name == doc["base"]["version"] else doc["deltas"][name]
+        return version_tuple(name), entry.get("date", "")
+
+    mine = (version_tuple(version), date)
+    if mine > placed(chain[0]):
+        promote(doc, version=version, date=date, surface=surface, platforms=platforms)
+        return True
+    if mine < placed(chain[-1]):
+        return extend(
+            doc, version=version, date=date, surface=surface, platforms=platforms
+        )
+
+    older = next(name for name in chain if placed(name) < mine)
+    newer = chain[chain.index(older) - 1]
+    before, after = at(doc, newer), at(doc, older)
+    if before is None or after is None:  # pragma: no cover — both are in the chain
+        raise ValueError(f"{newer} or {older} is not in the chain")
+
+    rebuilt: dict[str, Any] = {}
+    for name, entry in doc["deltas"].items():
+        if name == older:
+            rebuilt[version] = {
+                "date": date,
+                "platforms": sorted(platforms or []),
+                "extractor": EXTRACTOR,
+                **delta(before, surface),
+            }
+            # The one recomputed entry: `older` used to step back from
+            # `newer`, and now steps back from the release between them.
+            rebuilt[name] = {
+                "date": entry.get("date", ""),
+                "platforms": entry.get("platforms", []),
+                "extractor": entry.get("extractor", EXTRACTOR),
+                **delta(surface, after),
+            }
+        else:
+            rebuilt[name] = entry
+    doc["deltas"] = rebuilt
+    return True
+
+
 def at(doc: dict, version: str) -> dict[str, Any] | None:
     """The surface of *version*, replayed from the base. `None` when that
     release was never observed — which a caller must not read as "empty"."""

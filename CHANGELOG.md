@@ -9,6 +9,17 @@ versions may include breaking changes.
 
 ### Added
 
+- **`_toolhistory.insert` — a release can arrive at any position.** `extend`
+  appends below the floor and `promote` replaces the head; this is the third
+  case the format was designed for, a release belonging *between* two the
+  chain already holds. Exactly one entry is recomputed — the inserted
+  release's successor — however long the chain. What it buys is that
+  gathering need not be ordered: installing a release and reading its
+  `--help` depends on no other release, so a walk can fetch in any order,
+  in parallel or across runs, and assemble as results arrive. A release that
+  will not install stops being fatal to a tool's whole walk; the gap is
+  filled later, and until then costs precision rather than correctness.
+
 - **Writing plugins — the provider's guide.** One page for the whole
   authoring story: the worked provider, the `footman.tasks` entry point
   (lifecycle-only modules included), pull semantics, the

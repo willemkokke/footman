@@ -1361,3 +1361,117 @@ def test_a_prime_does_not_hold_every_release_it_fetched(tmp_path, monkeypatch):
     # One at a time: the directory never holds a second release.
     assert max(live) == 1
     assert list(scratch.iterdir()) == []
+
+
+# --- insert: a release arriving at any position ------------------------------
+
+
+def _surface_at(n: int) -> dict:
+    """A surface that differs at every release, so a wrong delta cannot pass."""
+    return _toolhistory.surface_of(
+        _spec(
+            verbs=(
+                Verb(
+                    name="",
+                    help=f"Release {n}.",
+                    options=tuple(
+                        Option(f"opt{i}", (f"--opt{i}",), help=f"Option {i} at {n}.")
+                        for i in range(n + 1)
+                    ),
+                ),
+            )
+        )
+    )
+
+
+def test_a_release_can_arrive_at_any_position_and_the_chain_still_replays():
+    """The property the whole format was chosen for, and the one that lets
+    gathering be unordered: releases inserted in a shuffled order must build
+    the same chain as releases inserted newest-first.
+
+    Every observed release is replayed and compared against the surface it was
+    built from — a delta computed against the wrong neighbour reconstructs
+    something plausible, so only replaying all of them catches it.
+    """
+    surfaces = {f"1.0.{n}": _surface_at(n) for n in range(8)}
+    dates = {v: f"2026-01-{n + 1:02d}" for n, v in enumerate(surfaces)}
+
+    # Deliberately not in order: newest, oldest, then the middle scattered.
+    arrival = ["1.0.7", "1.0.0", "1.0.4", "1.0.2", "1.0.6", "1.0.1", "1.0.5", "1.0.3"]
+    doc = _toolhistory.new(
+        "demo", version="1.0.7", date=dates["1.0.7"], surface=surfaces["1.0.7"]
+    )
+    for version in arrival[1:]:
+        assert _toolhistory.insert(
+            doc, version=version, date=dates[version], surface=surfaces[version]
+        )
+
+    assert _toolhistory.observed(doc) == sorted(surfaces, reverse=True)
+    for version, expected in surfaces.items():
+        assert _toolhistory.at(doc, version) == expected, version
+
+
+def test_inserting_a_release_the_chain_already_holds_changes_nothing():
+    """What makes an interrupted gather resumable: run it again and the
+    releases already recorded are skipped rather than rewritten."""
+    doc = _toolhistory.new(
+        "demo", version="1.0.2", date="2026-01-03", surface=_surface_at(2)
+    )
+    _toolhistory.insert(doc, version="1.0.0", date="2026-01-01", surface=_surface_at(0))
+    before = json.dumps(doc, sort_keys=True)
+
+    assert not _toolhistory.insert(
+        doc, version="1.0.0", date="2026-01-01", surface=_surface_at(0)
+    )
+    assert json.dumps(doc, sort_keys=True) == before
+
+
+def test_a_midfill_recomputes_exactly_one_entry():
+    """§1's claim, checked: local, never cascading. Inserting into a long
+    chain must leave every delta below the insertion byte-identical, or the
+    format's cost argument does not hold.
+    """
+    surfaces = {f"1.0.{n}": _surface_at(n) for n in range(8)}
+    doc = _toolhistory.new(
+        "demo", version="1.0.7", date="2026-01-08", surface=surfaces["1.0.7"]
+    )
+    for n in (6, 5, 3, 2, 1, 0):  # 1.0.4 deliberately missing
+        _toolhistory.extend(
+            doc,
+            version=f"1.0.{n}",
+            date=f"2026-01-{n + 1:02d}",
+            surface=surfaces[f"1.0.{n}"],
+        )
+    untouched = {v: json.dumps(d, sort_keys=True) for v, d in doc["deltas"].items()}
+
+    _toolhistory.insert(
+        doc, version="1.0.4", date="2026-01-05", surface=surfaces["1.0.4"]
+    )
+
+    # 1.0.3 is the inserted release's successor and is the only one recomputed.
+    changed = [
+        v
+        for v, before in untouched.items()
+        if json.dumps(doc["deltas"][v], sort_keys=True) != before
+    ]
+    assert changed == ["1.0.3"]
+    for version, expected in surfaces.items():
+        assert _toolhistory.at(doc, version) == expected, version
+
+
+def test_a_gap_costs_precision_and_not_correctness():
+    """Until a missing release is filled, an option it introduced reads as
+    arriving at the next release actually read — the same honest imprecision
+    the chain already carries where an index has no build to offer."""
+    doc = _toolhistory.new(
+        "demo", version="1.0.2", date="2026-01-03", surface=_surface_at(2)
+    )
+    _toolhistory.extend(doc, version="1.0.0", date="2026-01-01", surface=_surface_at(0))
+    spec = _toolhistory.union(doc, name="demo")
+    arrived = {o.name: o.since for v in spec.verbs for o in v.options}
+    assert arrived["opt2"] == "1.0.2"  # 1.0.1 unread: attributed to what was seen
+
+    _toolhistory.insert(doc, version="1.0.1", date="2026-01-02", surface=_surface_at(1))
+    spec = _toolhistory.union(doc, name="demo")
+    arrived = {o.name: o.since for v in spec.verbs for o in v.options}
+    assert arrived["opt1"] == "1.0.1"  # filled, and now attributed exactly
