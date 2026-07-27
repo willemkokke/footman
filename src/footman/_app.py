@@ -1206,7 +1206,14 @@ def _execute(
 
     # The `root` policy token's target: the highest cascade file's directory.
     root_dir = str(files[0].parent) if files else ""
-    code = _run_tree(reg, tree, argv, cfg, collect, root_dir=root_dir)
+    # Arm the per-task lifecycle for exactly this run: every execution —
+    # segment, prerequisite, fan-out member, body call — reaches the same
+    # ladder through `run_bound`, and the frozen invocation rides along.
+    executor.install_lifecycle(inv, reg.contributions)
+    try:
+        code = _run_tree(reg, tree, argv, cfg, collect, root_dir=root_dir)
+    finally:
+        executor.clear_lifecycle()
     # After the run, so it never adds latency before the user's command —
     # and after the uv handoff by construction (the handoff replaced this
     # process back in _run), so a pinned project's own footman collects.
@@ -1521,4 +1528,13 @@ def run_group(
         return _print_version(bool(g.get("json")))
 
     tree = manifest.build_manifest(root)["tree"]
-    return _run_tree(root, tree, argv, {}, collect)
+    # An in-memory tree still gets the per-task lifecycle — its hooks live on
+    # the Group's own contributions. `pre_tasks` stays a discovery-time moment
+    # (there is no cascade here), so the invocation arrives already frozen.
+    inv = invocation.Invocation(cli=g, cwd=os.getcwd(), tasks=registry.Tasks(root))
+    inv.freeze()
+    executor.install_lifecycle(inv, root.contributions)
+    try:
+        return _run_tree(root, tree, argv, {}, collect)
+    finally:
+        executor.clear_lifecycle()

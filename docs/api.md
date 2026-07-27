@@ -81,9 +81,15 @@ it can't run. Every gate is evaluated live, and all failures are collected.
 before anything else — see
 [Composing tasks](composing.md#editing-the-discovered-tree). It is handed the
 `Invocation`, whose `tasks` is a `Tasks` view; iterating or indexing that yields
-a `TaskView` that reads and edits one task.
+a `TaskView` that reads and edits one task. The per-task pair — `@pre_task` and
+`@post_task` — runs around every execution; see
+[Around every task](composing.md#around-every-task-pre_task-and-post_task).
 
 ::: footman.registry.pre_tasks
+
+::: footman.registry.pre_task
+
+::: footman.registry.post_task
 
 ::: footman.invocation.Invocation
 

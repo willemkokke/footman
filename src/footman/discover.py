@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import importlib.util
 import sys
-from collections.abc import Callable
 from pathlib import Path
 
 from footman import registry
@@ -145,17 +144,16 @@ def load_tree(
     exactly as nearer cascade files win over farther ones.
     """
     merged = base if base is not None else Group("root")
-    contributions: dict[str, list[Callable[..., object]]] = {
-        kind: [] for kind in registry.CONTRIBUTION_KINDS
-    }
     try:
         for index, path in enumerate(files):
             tree = _import_file(path, index)
             _overlay(merged, tree, str(path.parent))
             # Collect each file's lifecycle contributions in cascade order,
-            # before the next _import_file resets the registry.
+            # before the next _import_file resets the registry. They live on
+            # the merged tree from here on, so the run can fire the per-task
+            # moments later without re-walking the cascade.
             for kind, bucket in tree.contributions.items():
-                contributions[kind].extend(bucket)
+                merged.contributions[kind].extend(bucket)
     finally:
         # Leave no global state behind — even when a file registered some tasks
         # and then raised, which would otherwise strand ghost tasks in
@@ -171,13 +169,16 @@ def load_tree(
         # child's situation, and the reason a tree edit may not depend on one.
         inv = Invocation(cwd=str(Path.cwd()))
     inv.tasks = registry.Tasks(merged)
-    for run in contributions["pre_tasks"]:
+    for run in merged.contributions["pre_tasks"]:
         try:
             run(inv)
         except Exception as exc:  # a bad hook names itself, never a bare traceback
             raise HookError(
                 "pre_tasks", getattr(run, "__name__", repr(run)), exc
             ) from exc
+    # The single-threaded moment is over: every later reader — a per-task hook
+    # on a pool thread, a body call — sees the same invocation, unwritable.
+    inv.freeze()
     return merged
 
 

@@ -7,6 +7,37 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- **`@pre_task` / `@post_task` — the per-task lifecycle pair.** Where
+  `@pre_tasks` runs once over the plan, this pair runs around every
+  *execution* — a chain segment, a prerequisite, a fan-out member, a body
+  call all count the same. `pre_task(inv, task)` fires after binding and
+  reads the bound arguments (`task.args`, defaults included, read-only);
+  `post_task(inv, task, result)` fires after the body, whatever the outcome.
+  The `task` handle also carries `task.state` (scratch private to the plugin
+  and the execution, delivered from pre to post), `task.env` (the task's own
+  environment overlay — the one sanctioned lane for per-task env), and
+  `task.source_hash` (the body digest, a tripwire, `None` when unreadable).
+  `result` reads everything and writes one thing: `set_returned(value)`,
+  which rewrites the *reported* value — the summary and `--json` — never
+  what a dependent or a body caller received. Pres run in plugin order and
+  posts unwind in reverse; the post is the task-finished event, firing for
+  every execution that reached the body stage whatever the outcome —
+  irrespective of which pres a plugin registered or how they fared. A
+  raising pre fails the task like a failed prerequisite, a raising post
+  fails an otherwise-green task, and both failures name the plugin. Nothing
+  fires under `--dry-run` or for a `shared` row. A `pre_task`'s return value
+  is **reserved** for a future "supply the result, skip the body" power —
+  today it is noted and ignored.
+- **`registry.task_source_hash()` — a digest of a task's own body.** Normalised
+  through the AST rather than taken over the text, so reformatting and comments
+  do not move it while a real edit does; decorator lines count, so a changed
+  `pre=` shows up. Deliberately a **tripwire, not an identity**: it covers the
+  function's own source and nothing it calls, which makes it right for "warn me
+  if the body moved and nobody said so" and wrong as a cache key. Exposed to
+  hooks as `task.source_hash`.
+
 ### Changed
 
 - **A body call binds like a segment.** A parameter the caller leaves out now
@@ -39,17 +70,6 @@ versions may include breaking changes.
   the same key, and the second call wrongly shared the first's result. Calls
   now bind against the signature a Python caller actually sees, with the
   context parameter stripped.
-
-### Added
-
-- **`registry.task_source_hash()` — a digest of a task's own body.** Normalised
-  through the AST rather than taken over the text, so reformatting and comments
-  do not move it while a real edit does; decorator lines count, so a changed
-  `pre=` shows up. Deliberately a **tripwire, not an identity**: it covers the
-  function's own source and nothing it calls, which makes it right for "warn me
-  if the body moved and nobody said so" and wrong as a cache key.
-
-
 
 ### Removed
 

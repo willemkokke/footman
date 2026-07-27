@@ -498,3 +498,339 @@ def test_the_invocation_refuses_writes_once_frozen():
     inv.freeze()
     with pytest.raises(Frozen, match=r"editable only at pre_tasks"):
         inv.root = "/elsewhere"
+
+
+# --- the per-task ladder: pre_task / post_task -------------------------------
+
+
+def test_pre_and_post_fire_around_every_execution():
+    # A chain segment, a prerequisite and a body call are all executions, and
+    # each gets the pair. pre_task fires post-bind, so `task.args` holds what
+    # the body receives — defaults included.
+    reg = Group("root")
+    log: list[tuple] = []
+
+    @reg.pre_task
+    def opened(inv, task):
+        log.append(("pre", task.name, dict(task.args)))
+
+    @reg.post_task
+    def closed(inv, task, result):
+        log.append(("post", task.name, result.ok))
+
+    @reg.task
+    def build(target: str = "web") -> str:
+        return target.upper()
+
+    @reg.task(pre=[build])
+    def publish():
+        build()  # the shared execution: no second pair
+
+    result = Runner().invoke("publish", tasks=reg)
+    assert result.ok, result.stderr
+    assert log == [
+        ("pre", "build", {"target": "web"}),
+        ("post", "build", True),
+        ("pre", "publish", {}),
+        ("post", "publish", True),
+    ]
+
+
+def test_task_state_is_private_to_the_plugin_and_the_execution():
+    # Two plugins each get their own namespace on the same execution, and the
+    # same plugin gets a fresh one per execution — nothing leaks sideways or
+    # forward.
+    reg = Group("root")
+    seen: list[tuple] = []
+
+    def a_pre(inv, task):
+        assert not vars(task.state)  # fresh per execution
+        task.state.token = f"a:{task.name}"
+
+    def a_post(inv, task, result):
+        seen.append(("a", task.name, task.state.token, vars(task.state)))
+
+    def b_pre(inv, task):
+        assert not vars(task.state)  # b never sees a's writes
+        task.state.token = f"b:{task.name}"
+
+    def b_post(inv, task, result):
+        seen.append(("b", task.name, task.state.token))
+
+    for fn in (a_pre, a_post):
+        fn.__module__ = "plugin_a"
+    for fn in (b_pre, b_post):
+        fn.__module__ = "plugin_b"
+    reg.pre_task(a_pre)
+    reg.post_task(a_post)
+    reg.pre_task(b_pre)
+    reg.post_task(b_post)
+
+    @reg.task
+    def one(): ...
+
+    @reg.task
+    def two(): ...
+
+    result = Runner().invoke("--sequential one two", tasks=reg)
+    assert result.ok, result.stderr
+    # Posts unwind in reverse plugin order: b speaks first, a last.
+    assert seen == [
+        ("b", "one", "b:one"),
+        ("a", "one", "a:one", {"token": "a:one"}),
+        ("b", "two", "b:two"),
+        ("a", "two", "a:two", {"token": "a:two"}),
+    ]
+
+
+def test_a_raising_pre_fails_the_task_and_skips_the_body():
+    # A raising pre fails the task and the body never runs — but a post is
+    # the task-finished event: once the execution reached the body stage,
+    # every registered post fires when it concludes, the raiser's own
+    # included, irrespective of how any pre fared. The failure names the
+    # plugin and the hook.
+    reg = Group("root")
+    log: list[str] = []
+    ran: list[str] = []
+
+    def a_pre(inv, task):
+        log.append("a:pre")
+
+    def a_post(inv, task, result):
+        log.append(f"a:post ok={result.ok}")
+
+    def b_pre(inv, task):
+        raise ValueError("no thanks")
+
+    def b_post(inv, task, result):
+        log.append(f"b:post ok={result.ok}")  # fires: its span still closes
+
+    for fn in (a_pre, a_post):
+        fn.__module__ = "plugin_a"
+    for fn in (b_pre, b_post):
+        fn.__module__ = "plugin_b"
+    reg.pre_task(a_pre)
+    reg.post_task(a_post)
+    reg.pre_task(b_pre)
+    reg.post_task(b_post)
+
+    @reg.task
+    def build():
+        ran.append("body")
+
+    result = Runner().invoke("build", tasks=reg)
+    assert not result.ok
+    assert ran == []  # a raising pre fails the task like a failed pre-dep
+    assert log == ["a:pre", "b:post ok=False", "a:post ok=False"]
+    assert "pre_task hook 'b_pre' from plugin_b failed" in result.stderr
+    assert "ValueError: no thanks" in result.stderr
+
+
+def test_a_raising_post_fails_a_green_task():
+    reg = Group("root")
+
+    @reg.pre_task
+    def opened(inv, task): ...
+
+    @reg.post_task
+    def crash(inv, task, result):
+        raise RuntimeError("reporter went down")
+
+    @reg.task
+    def build() -> str:
+        return "fine"
+
+    result = Runner().invoke("build", tasks=reg)
+    assert not result.ok  # a reporter that crashed must not pass silently
+    assert "post_task hook 'crash'" in result.stderr
+    assert "reporter went down" in result.stderr
+
+
+def test_a_post_failure_never_masks_the_bodys_own():
+    # Context-manager semantics: a cleanup error during an exception loses to
+    # the original.
+    reg = Group("root")
+
+    @reg.post_task
+    def crash(inv, task, result):
+        raise RuntimeError("reporter went down")
+
+    @reg.task
+    def build():
+        raise ValueError("the real failure")
+
+    result = Runner().invoke("build", tasks=reg)
+    assert not result.ok
+    assert "the real failure" in result.stderr
+
+
+def test_set_returned_rewrites_the_report_never_the_value():
+    # The pristine return was snapshotted at the body's exit: a dependent's
+    # body call still receives it, while the report and `--json` carry the
+    # rewrite.
+    reg = Group("root")
+
+    @reg.post_task
+    def redact(inv, task, result):
+        if task.name == "build":
+            result.set_returned("[redacted]")
+
+    @reg.task
+    def build() -> str:
+        return "secret-artifact"
+
+    @reg.task(pre=[build])
+    def publish():
+        assert build() == "secret-artifact"  # the value, not the report
+
+    result = Runner().invoke("publish", tasks=reg)
+    assert result.ok, result.stderr
+    build_rows = [r.returned for r in result.results if r.task == "build"]
+    # The execution's report carries the rewrite. The `shared` row that the
+    # body call added reports what its requester actually received — the
+    # pristine value, deliberately: sharing hands over the real object, and
+    # the row records that handover rather than the reporter's edit.
+    assert build_rows == ["[redacted]", "secret-artifact"]
+
+
+def test_a_pre_returning_a_value_is_noted_as_reserved():
+    # The return channel is reserved for a future "supply the result, skip
+    # the body" power — today it is a note, never a failure.
+    reg = Group("root")
+
+    @reg.pre_task
+    def eager(inv, task):
+        return "something"
+
+    @reg.task
+    def build(): ...
+
+    result = Runner().invoke("build", tasks=reg)
+    assert result.ok, result.stderr
+    text = result.stdout + result.stderr
+    assert "reserved" in text
+    assert "task.state" in text
+
+
+def test_env_written_in_pre_reaches_the_body():
+    # task.env is the task's own overlay: the environ router serves it to
+    # in-body reads, and it never touches the process globals.
+    import os as real_os
+
+    reg = Group("root")
+
+    @reg.pre_task
+    def inject(inv, task):
+        task.env["HOOKED_VALUE"] = "from-pre"
+
+    @reg.task
+    def build():
+        import os
+
+        print(os.environ.get("HOOKED_VALUE", "missing"))
+
+    result = Runner().invoke("build", tasks=reg)
+    assert result.ok, result.stderr
+    assert "from-pre" in result.stdout
+    assert "HOOKED_VALUE" not in real_os.environ
+
+
+def test_dry_run_fires_no_hooks():
+    reg = Group("root")
+    fired: list[str] = []
+
+    @reg.pre_task
+    def opened(inv, task):
+        fired.append(task.name)
+
+    @reg.task
+    def build(): ...
+
+    result = Runner().invoke("--dry-run build", tasks=reg)
+    assert result.ok, result.stderr
+    assert fired == []
+
+
+def test_a_post_only_plugin_observes_every_execution():
+    # A plugin with no pre has nothing to pair with, so its post rides the
+    # moment itself: it fires for every execution that ran.
+    reg = Group("root")
+    seen: list[tuple] = []
+
+    @reg.post_task
+    def report(inv, task, result):
+        seen.append((task.name, result.ok))
+
+    @reg.task
+    def build(): ...
+
+    result = Runner().invoke("build", tasks=reg)
+    assert result.ok, result.stderr
+    assert seen == [("build", True)]
+
+
+def test_hook_arity_is_taught_at_registration():
+    reg = Group("root")
+    with pytest.raises(RegistrationError, match=r"def lonely\(inv, task\)"):
+
+        @reg.pre_task
+        def lonely(inv): ...
+
+    with pytest.raises(RegistrationError, match=r"def eager\(inv, task, result\)"):
+
+        @reg.post_task
+        def eager(inv, task): ...
+
+
+def test_the_handle_is_read_only_where_it_should_be():
+    reg = Group("root")
+    probed: list[str] = []
+
+    @reg.pre_task
+    def probe(inv, task):
+        with pytest.raises(AttributeError, match="read-only"):
+            task.name = "renamed"
+        with pytest.raises(TypeError):
+            task.args["x"] = 1  # a mapping proxy, not a dict
+        assert task.source_hash is not None  # the tripwire, exposed
+        probed.append(task.name)
+
+    @reg.post_task
+    def probe_result(inv, task, result):
+        with pytest.raises(AttributeError, match="set_returned"):
+            result.ok = True
+        probed.append("post")
+
+    @reg.task
+    def build(target: str = "web"): ...
+
+    result = Runner().invoke("build", tasks=reg)
+    assert result.ok, result.stderr
+    assert probed == ["build", "post"]
+
+
+def test_the_ladder_reaches_a_cascade_file(tmp_path):
+    # The disk path: hooks in a tasks.py ride the merged tree's contributions
+    # into the run — the same ladder the in-memory path fires.
+    src = _write(
+        tmp_path / "tasks.py",
+        """
+        import footman
+        from footman import task
+
+        @footman.pre_task
+        def opened(inv, task):
+            print(f"pre {task.name}")
+
+        @footman.post_task
+        def closed(inv, task, result):
+            print(f"post {task.name} ok={result.ok}")
+
+        @task
+        def build(): ...
+        """,
+    )
+    result = Runner().invoke("build", tasks=src)
+    assert result.ok, result.stderr
+    assert "pre build" in result.stdout
+    assert "post build ok=True" in result.stdout

@@ -217,12 +217,43 @@ events *are* the changelog entry ("prek 0.4.11 adds `--glob`").
    release; the version rides along and is stored as the latest actual version
    for the docs. That is what ends "every bump is a diff": the stub header
    stops being state.
-5. **Ordering is by release date, labelled by version, indexed both.** Version
-   strings cannot order themselves across this set — `version_tuple` truncates
-   at build tags, so `0.6.0-wk.5` and `0.6.0` compare equal — while every
-   source publishes a date. The version is what a reader knows, so it is what
-   the docstring says; the date is what sorts. The prime must therefore capture
-   a date for every historical release it fetches.
+5. **Ordering is by version, with the date breaking a tie.** *Reversed
+   2026-07-27; the original decision is below, because the reasoning for it
+   was sound and the data was not.*
+
+   It first read: order by release date, because version strings cannot order
+   themselves across this set — `version_tuple` truncates at build tags, so
+   `0.6.0-wk.5` and `0.6.0` compare equal — while every source publishes a
+   date.
+
+   The flaw is that a date orders *publication*, and this file answers a
+   **version** question: does the build in front of me carry this flag. Three
+   curated tools keep more than one series alive at once — cmake 3.31.x beside
+   4.x, pytest's 4.6 LTS beside 5.x, and CPython's five, which ship five
+   patches on one day. For those the two orders genuinely differ, and a
+   date-ordered walk back from 3.14.6 steps to 3.13.14, records every 3.14
+   option as dropped, and re-adds them a few entries later. Every interval
+   derived from that chain is then wrong: `-X tlbc` would read *added in
+   3.14.0, gone since 3.13.12*.
+
+   The premise about version strings was also narrower than it looked.
+   Measured across all 24 listable tools, 3,195 of 3,385 version strings are
+   plain numeric; 165 are pre-releases, which are excluded from chains because
+   an alpha is not something to say a flag arrived in; 21 are `.postN`; and
+   **four** are anything else — all of them eclint's `-wk.N`, a fork build
+   series that appears in no other index. Ordering by `(version_tuple, date)`
+   is total across the whole set: the version separates every real comparison,
+   and the date separates two builds of one base, which is exactly the case
+   `version_tuple` folds together.
+
+   The one caller with no date to fall back on is the "a snapshot only ever
+   moves forward" guard, since a fresh reading is stamped today whatever build
+   it holds. It declines to move rather than guess — which also fixes a live
+   bug, where a tie read as "not older" let a stale checkout promote eclint's
+   `wk.3` over the recorded `wk.5`.
+
+   The version is still what a reader knows, so it is still what the docstring
+   says, and the prime must still capture a date for every release it fetches.
 6. **Stubs are the union, never pruned.** A removed option stays in the stub so
    completion works against any version ever; `added in` / `removed in` live in
    its docstring. This inverts nothing: a stub already suggests without

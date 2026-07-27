@@ -362,6 +362,65 @@ the folder nearest your cwd last, each seeing the previous edits — the same
 "local overrides global" precedence the cascade itself uses, so a subfolder
 refines what root did.
 
+## Around every task: `@pre_task` and `@post_task`
+
+Where `@pre_tasks` runs once over the plan, the per-task pair runs around
+every **execution** — a chain segment, a prerequisite, a fan-out member, a
+body call all count the same. `pre_task(inv, task)` fires after binding, so
+it sees the arguments the body actually receives; `post_task(inv, task,
+result)` fires after the body, whatever the outcome. Both run on the task's
+worker thread, in parallel across tasks:
+
+```python
+import footman
+
+@footman.pre_task
+def open_span(inv, task):
+    task.state.span = tracer.start(task.name, dict(task.args))
+
+@footman.post_task
+def close_span(inv, task, result):
+    task.state.span.end(ok=result.ok, took=result.duration)
+```
+
+The `task` handle carries the execution's facts and the two lanes a hook may
+write through:
+
+- **`task.name`** — the address the task was reached through; **`task.args`**
+  — the bound arguments, defaults included, read-only; **`task.source_hash`**
+  — a digest of the task's own body (a tripwire, not an identity: `None` when
+  the source can't be read, and shallow — it covers nothing the body calls).
+- **`task.state`** — scratch private to *your plugin and this execution*,
+  delivered back to your `post_task`. Another plugin's hooks cannot see it,
+  and the next execution starts clean.
+- **`task.env`** — the task's own environment overlay: `run()` merges it into
+  every subprocess, and in-body `os.environ` reads see it. Never write
+  `os.environ` from a per-task hook — that is shared with every parallel
+  sibling; `inv` is frozen here for the same reason.
+
+`result` reads everything — `ok`, `code`, `returned`, `error`, `duration`,
+`output`, `steps` — and writes one thing: `set_returned(value)`, which
+rewrites the **reported** value (the summary and the `--json` envelope),
+never what a dependent or a body caller received. A `shared` row likewise
+reports what its requester was actually handed.
+
+Pres run in plugin order and posts unwind in reverse, so the first plugin in
+speaks last. The post is the **task-finished event**: once an execution
+reaches the body stage, every registered `post_task` fires when it concludes
+— whether or not that plugin registered a `pre_task`, and however any pre
+fared — so a span opened in a pre always closes, even when another plugin's
+pre killed the task. Failures are loud and named: a raising `pre_task` fails
+the task like a failed prerequisite (the body never runs), and a raising
+`post_task` fails an otherwise-green task — a reporter that crashed must not
+pass silently. Under `--dry-run` nothing executes, so neither hook fires; a
+request satisfied by an execution the run already performed is a `shared`
+row, not a second execution, so it fires no hooks either.
+
+One more contract, stated for the future: a `pre_task`'s **return value is
+reserved** — the moment where a pre supplies the task's result and the body
+is skipped belongs to a later cache. Today a returned value gets a note and
+is ignored; state belongs on `task.state`.
+
 ## The caching contract, stated once
 
 Hiding, `include()`, `plugin()`, and `@pre_tasks` all resolve at
