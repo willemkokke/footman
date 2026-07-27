@@ -196,17 +196,36 @@ def test_save_writes_atomically_and_leaves_no_temp(tmp_path):
 def test_the_checked_in_history_regenerates_its_stub(key):
     """The seeding claim, checked against what ships: rendering from the
     history reproduces the checked-in stub byte for byte. If it ever does
-    not, the store lost something the renderer needs."""
-    from footman import _drivers
+    not, the store lost something the renderer needs.
+
+    The header is *render-time* input, not history — it stamps the platform
+    that looked and whether that machine could import the tool — so it is
+    supplied from the stub's own header rather than from this machine. The
+    body, which is everything the store is responsible for, must match
+    exactly anywhere.
+    """
+    from footman import _stubgen
     from footman.tasks import tools as tools_tasks
 
+    stub = tools_tasks._stub_path(key)
     doc = _toolhistory.load(tools_tasks._history_path(key))
     assert doc is not None, f"{key} has no history"
-    driver = _drivers.find(key)
-    assert driver is not None
+
+    recorded, mode = tools_tasks._header(stub)
+    version, _, platform = recorded.partition(" ")
     base = doc["base"]
-    spec = _toolhistory.spec_from(
-        base["surface"], name=driver.name, version=base["version"]
+    assert base["version"] == version, (
+        "the history and the stub disagree on the release"
     )
-    rendered = tools_tasks._formatted(tools_tasks._render(driver, spec))
-    assert rendered == tools_tasks._stub_path(key).read_text(encoding="utf-8")
+
+    rendered = tools_tasks._formatted(
+        _stubgen.render(
+            _toolhistory.spec_from(
+                base["surface"], name=key.replace("_", "-"), version=version
+            ),
+            platform=platform.strip("()"),
+            class_name=_stubgen._class_name(key),
+            in_process=mode,
+        )
+    )
+    assert rendered == stub.read_text(encoding="utf-8")
