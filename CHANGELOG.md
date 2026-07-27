@@ -16,6 +16,18 @@ versions may include breaking changes.
   optional-dependency patterns, the determinism rule, and testing through
   the real pull path.
 
+- **Every curated tool's history reaches ten releases**, so the stubs can say
+  when an option arrived rather than only what exists today — 102 new `Added
+  in` claims across the set. eclint reaches four, because four is all that
+  has been published; prek and python already reached further and keep it.
+
+### Fixed
+
+- **A release asset is fetched by the tag the listing recorded, not one
+  derived from the version.** bun tags `bun-v1.3.13` for a binary answering
+  `1.3.13`, so deriving the tag made its entire history unreachable — listing
+  worked, and only installing failed, which is why nothing looked wrong.
+
 ## [0.25.0] — 2026-07-27
 
 ### Added
