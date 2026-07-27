@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import itertools
 import json
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
@@ -354,6 +355,44 @@ def union(doc: dict, *, name: str, in_process: bool = False) -> ToolSpec:
             for verb in spec.verbs
         ),
     )
+
+
+def changes(doc: dict, *, since: str, until: str = "") -> dict[str, Any]:
+    """What changed between two observed releases, as one step.
+
+    The *net* effect, not a concatenation of the steps between: an option a
+    tool added and then withdrew across the span cancels out, which is what
+    someone reading a release note wants to know. Computed by replaying both
+    ends and taking one delta, so it cannot disagree with the chain.
+
+    Returned in the same shape as `delta` and read the same way round —
+    `drop` is what the newer release *added*, `add` is what it removed —
+    because it is a step back from *until* to *since*.
+    """
+    newer = at(doc, until or doc["base"]["version"])
+    older = at(doc, since)
+    if newer is None or older is None:
+        return {}
+    return delta(newer, older)
+
+
+def spellings(doc: dict, version: str, keys: Iterable[str]) -> dict[str, str]:
+    """How *version* spells each option key on the command line.
+
+    A delta records the option's Python-side name, which is what the surface
+    is keyed by; a reader of a release note recognises `--all-files`. The
+    flags live in the surface, so the spelling is a lookup rather than
+    something the delta has to carry.
+    """
+    surface = at(doc, version) or {}
+    found: dict[str, str] = {}
+    for key in keys:
+        verb, _, option = key.partition("\t")
+        entry = surface.get("verbs", {}).get(verb, {}).get("options", {}).get(option)
+        flags = (entry or {}).get("flags") or []
+        # The long spelling when there is one: `--all-files` over `-a`.
+        found[key] = max(flags, key=len) if flags else option
+    return found
 
 
 def observed(doc: dict) -> list[str]:

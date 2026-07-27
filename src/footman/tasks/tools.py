@@ -27,7 +27,7 @@ import re as _re
 import sys
 from collections.abc import Iterator
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Annotated, Literal
 
@@ -719,6 +719,10 @@ class Refreshed:
     nothing new — see `_toolfetch.Unreachable`."""
     skipped: list[str]
     """Tools with no index to read, or no history to add to."""
+    wrote_changelog: bool = False
+    """Whether the events reached `CHANGELOG.md`. False with nothing to say,
+    and false when the file has no `[Unreleased]` section to write into —
+    which a caller should notice rather than assume the notes got written."""
 
     @property
     def release(self) -> bool:
@@ -730,6 +734,7 @@ class Refreshed:
 def refresh(
     only: Annotated[str, doc("refresh just this tool")] = "",
     prefix: Annotated[str, doc("drive the tiers from this prefix's bin/")] = "",
+    changelog: Annotated[bool, doc("write the events into CHANGELOG.md")] = True,
 ) -> Refreshed:
     """Read every release published since the history was last updated.
 
@@ -784,6 +789,12 @@ def refresh(
     found = Refreshed(
         read=read, events=events, unreachable=unreachable, skipped=skipped
     )
+    if changelog and events:
+        entries = [
+            _entry_for(key, _toolhistory.load(_history_path(key)) or {}, versions)
+            for key, versions in sorted(events.items())
+        ]
+        found = replace(found, wrote_changelog=_write_changelog(entries))
     _report_refresh(found)
     if unreachable:
         from footman import fail
@@ -794,6 +805,158 @@ def refresh(
             code=75,  # EX_TEMPFAIL: try again, rather than "nothing to do"
         )
     return found
+
+
+_CHANGELOG = _HISTORY.parent / "CHANGELOG.md"
+
+
+def _entry_for(key: str, doc: dict, versions: list[str]) -> str:
+    """One CHANGELOG bullet for one tool's refresh.
+
+    Per tool rather than per release: a reader cares that prek gained
+    `--glob`, not which patch carried it, and a tool that moved three times
+    would otherwise take three bullets to say one thing.
+
+    The span runs from the release *before* the earliest change to the
+    newest — a release compared against itself is empty by construction, so
+    the predecessor is what makes the first change visible.
+
+    Added and dropped options are named, because they are few and they are
+    what someone acts on. Rewordings are counted rather than listed: a
+    release can reword half a dozen descriptions without changing what the
+    tool accepts, and spelling those out would make the entry a diff dump.
+    """
+    since = _predecessor(doc, versions[0])
+    span = _toolhistory.changes(doc, since=since, until=versions[-1])
+    newest = versions[-1]
+    # Two keys can share a spelling — a flag on the bare command and on one
+    # of its verbs — and a reader wants to be told about `--glob` once.
+    added = sorted(
+        set(_toolhistory.spellings(doc, newest, span.get("drop", ())).values())
+    )
+    dropped = sorted(
+        set(_toolhistory.spellings(doc, since, span.get("add", {})).values())
+    )
+    # `None` means the newer release added the verb. Anything else is a verb
+    # the step back restores or amends, and which of those it is says so in
+    # the newer surface rather than in the shape of the payload.
+    now = (_toolhistory.at(doc, newest) or {}).get("verbs", {})
+    gained, lost, amended = [], [], 0
+    for name, moved in span.get("verbs", {}).items():
+        if moved is None:
+            gained.append(name)
+        elif name not in now:
+            lost.append(name)
+        else:
+            amended += 1
+    reworded = len(span.get("revert", {})) + amended
+
+    said: list[str] = []
+    if added:
+        said.append(f"adds {_names(added)}")
+    if dropped:
+        said.append(f"drops {_names(dropped)}")
+    if gained:
+        said.append(
+            f"gains the {_names(sorted(gained))} {_plural('command', len(gained))}"
+        )
+    if lost:
+        said.append(
+            f"withdraws the {_names(sorted(lost))} {_plural('command', len(lost))}"
+        )
+    if reworded:
+        said.append(f"rewords {reworded} {_plural('description', reworded)}")
+    if "help" in span:
+        said.append("restates its own description")
+    if not said:  # pragma: no cover - only versions with events are offered
+        said.append("changes its option surface")
+
+    over = "" if len(versions) == 1 else f", over {len(versions)} releases"
+    rest = f" It also {_and(said[1:])}." if len(said) > 1 else ""
+    return f"- **{key} {newest}** {said[0]}{over}.{rest}"
+
+
+def _predecessor(doc: dict, version: str) -> str:
+    """The observed release just older than *version*, or the oldest there is."""
+    chain = _toolhistory.observed(doc)  # newest first
+    if version in chain and chain.index(version) + 1 < len(chain):
+        return chain[chain.index(version) + 1]
+    return chain[-1]
+
+
+def _plural(word: str, count: int) -> str:
+    return word if count == 1 else f"{word}s"
+
+
+def _names(items: list[str]) -> str:
+    """`a`, `a` and `b`, `a`, `b` and `c` — with the flags in code spans."""
+    quoted = [f"`{item}`" for item in items]
+    if len(quoted) == 1:
+        return quoted[0]
+    return f"{', '.join(quoted[:-1])} and {quoted[-1]}"
+
+
+def _and(clauses: list[str]) -> str:
+    if len(clauses) == 1:
+        return clauses[0]
+    return f"{', '.join(clauses[:-1])} and {clauses[-1]}"
+
+
+def _write_changelog(entries: list[str], path: Path | None = None) -> bool:
+    """Put *entries* under `[Unreleased]` → `### Changed`, in place.
+
+    Written rather than printed because the refresh already edits
+    `tool-history/` and the stubs and has to land through a PR either way —
+    a scheduled job that emitted release notes to stdout would be producing
+    them for nobody. `### Changed` because a tool gaining a flag changes
+    footman's *stub*; footman itself added nothing.
+    """
+    path = path or _CHANGELOG
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return False
+    lines = text.split("\n")
+    try:
+        start = next(
+            i for i, line in enumerate(lines) if line.startswith("## [Unreleased]")
+        )
+    except StopIteration:
+        return False
+    # The next release heading bounds the section; the file may hold only one.
+    end = next(
+        (
+            i
+            for i, line in enumerate(lines[start + 1 :], start + 1)
+            if line.startswith("## ")
+        ),
+        len(lines),
+    )
+    changed = next(
+        (
+            i
+            for i, line in enumerate(lines[start:end], start)
+            if line.strip() == "### Changed"
+        ),
+        -1,
+    )
+    if changed == -1:
+        # Keep a Changelog's order, so a new section lands where a reader
+        # expects it rather than at whichever end is easiest to append to.
+        after = next(
+            (
+                i
+                for i, line in enumerate(lines[start:end], start)
+                if line.strip()
+                in ("### Deprecated", "### Removed", "### Fixed", "### Security")
+            ),
+            end,
+        )
+        lines[after:after] = ["### Changed", "", *entries, ""]
+    else:
+        lines[changed + 2 : changed + 2] = entries
+    path.write_text("\n".join(lines), encoding="utf-8")
+    return True
 
 
 def _report_refresh(found: Refreshed) -> None:
