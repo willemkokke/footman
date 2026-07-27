@@ -653,11 +653,20 @@ def _run_plan(
     context.reset_abort()
     ordered = _toposort(nodes)
     by_key = {n.key: n for n in ordered}
+    already = {r.task for r in denied}
 
     def _lost(key: int) -> bool:
+        # Judged on final states, after the run: a dependency is the cause
+        # whether it failed having completed, was cancelled mid-flight, was
+        # itself skipped — or never ran under a name the run denied (its
+        # refusal is a pre-run row, so its node reads as merely pending;
+        # the result-None guard keeps a same-named node that *did* run from
+        # being blamed for it).
         m = by_key.get(key)
         return m is not None and (
-            m.state == "skipped" or (m.result is not None and not m.result.ok)
+            m.state == "skipped"
+            or (m.result is None and m.seg.task in already)
+            or (m.result is not None and not m.result.ok)
         )
 
     def _blocked_by(n: _Node) -> str:
@@ -678,7 +687,6 @@ def _run_plan(
     # reaching for new work: either way it never began, so it has no moment
     # of its own and `_chronological` seats it after its cause. A node whose
     # confirm was denied already has its refusal row.
-    already = {r.task for r in denied}
     skipped = [
         executor.TaskResult(
             task=n.seg.task, ok=False, state="skipped", blocked_by=_blocked_by(n)
