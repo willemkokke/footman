@@ -1545,3 +1545,71 @@ def test_launch_latency_is_recorded_and_reported():
     by_name = {e["task"]: e for e in envelope["results"]}
     assert "queued_ms" in by_name["after"]
     assert "queued_ms" not in by_name["root-task"]  # roots have no latency
+
+
+# --- confirm=, however the task is reached -----------------------------------
+
+
+def test_a_prerequisites_confirm_is_asked_and_a_denial_blocks_dependents():
+    # The documented rule made true for the third reach-path: a segment asks
+    # up front, a body call asks at the call, and now a prerequisite asks up
+    # front too. Denied, it never runs — and its dependent skips, blamed.
+    reg = Group("root")
+
+    @reg.task(confirm="really wipe?")
+    def wipe():
+        raise AssertionError("must not run")
+
+    @reg.task(pre=[wipe])
+    def rebuild():
+        raise AssertionError("must not run either")
+
+    result = Runner().invoke("--no-input rebuild", tasks=reg)
+    assert not result.ok
+    rows = {r.task: r for r in result.results}
+    assert "not confirmed" in str(rows["wipe"].error)
+    assert executor.reported_state(rows["rebuild"]) == "skipped"
+    assert rows["rebuild"].blocked_by == "wipe"
+
+
+def test_one_reference_is_asked_once_however_many_ways_it_is_reached(monkeypatch):
+    from footman import schedule
+
+    asked: list[str] = []
+
+    def fake_ask(message, *, no_input):
+        asked.append(message)
+        return True
+
+    monkeypatch.setattr(schedule, "_ask_confirm", fake_ask)
+    reg = Group("root")
+
+    @reg.task(confirm="deploy?")
+    def deploy(): ...
+
+    @reg.task(pre=[deploy])
+    def web(): ...
+
+    @reg.task(pre=[deploy])
+    def api(): ...
+
+    result = Runner().invoke("deploy web api", tasks=reg)
+    assert result.ok, result.stderr
+    assert asked == ["deploy?"]  # one question covered segment and prereq
+
+
+def test_yes_auto_confirms_a_prerequisite():
+    reg = Group("root")
+    ran: list[str] = []
+
+    @reg.task(confirm="really?")
+    def gated():
+        ran.append("gated")
+
+    @reg.task(pre=[gated])
+    def top():
+        ran.append("top")
+
+    result = Runner().invoke("--yes top", tasks=reg)
+    assert result.ok, result.stderr
+    assert ran == ["gated", "top"]

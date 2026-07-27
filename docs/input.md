@@ -106,9 +106,16 @@ A yes/no question asked *before* the task and its prerequisites run:
 def deploy(): ...
 ```
 
-Deny it and the task is skipped and the run exits non-zero. `--yes` auto-answers
-it (for CI and scripts), and off a terminal without `--yes` the answer is no —
-footman never proceeds unasked.
+Deny it and the task never runs, the run exits non-zero, and anything that
+depended on it skips, blamed on the denial. `--yes` auto-answers it (for CI
+and scripts), and off a terminal without `--yes` the answer is no — footman
+never proceeds unasked.
+
+A task that asks for confirmation gets it **however it is reached**: named on
+the command line or pulled in as a `pre=`/`post=` prerequisite, the question
+comes up front with the run's other questions — one reference, one question,
+however many ways the plan reaches it. A body call is the one reach that
+cannot be known up front, so it asks at the moment of the call.
 
 ![Animated: fm deploy asks Deploy to production, answered yes, then deploys](_generated/shots/confirm-cast.svg)
 
