@@ -523,23 +523,29 @@ def test_results_are_chronological_and_a_call_lands_where_it_ran():
 
 def test_a_refusal_lands_at_the_moment_it_refused():
     # An unavailable task never ran, but it *was* asked at a point in time, so
-    # it needs no placement rule — it sorts by that moment like anything else.
+    # it needs no placement rule — it carries that moment and sorts by it.
+    # Ordered by dependency here on purpose: between two INDEPENDENT tasks a
+    # chronological report is only as deterministic as the run was, and
+    # asserting an order there would be asserting the thread scheduler.
     reg = Group("root")
 
     @reg.task
     def first_() -> None: ...
 
-    @reg.task
+    @reg.task(pre=[first_])
     @registry.requires(lambda: False, reason="not here")
     def second() -> None: ...
 
-    @reg.task(pre=[first_, second])
+    @reg.task(pre=[second])
     def both(): ...
 
     result = drive(reg, "both")
     assert not result.ok
+    refusal = next(r for r in result.results if r.task == "second")
+    assert refusal.started is not None  # it had a moment of its own
+    assert not refusal.blocked_by  # nothing prevented it; it refused itself
     order = [r.task for r in result.results]
-    assert order.index("first") < order.index("second")
+    assert order.index("first") < order.index("second")  # causally ordered
 
 
 def test_something_that_never_began_sits_after_what_prevented_it():
