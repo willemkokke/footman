@@ -7,6 +7,30 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- **The stubs are rendered from a record, not from a reading.** Each curated
+  tool gets a file under `tool-history/` holding what it accepted, release by
+  release: the newest observed release stored whole, and — once the fetchers
+  land — every older one as a delta describing how to step back to it.
+  `fm tools.sync` now records its reading there first and renders the stub
+  from *that*, so what ships is a view of the record rather than a second
+  record that can disagree with it. All 26 stubs regenerate byte-identical
+  through the round-trip, which is the proof the store loses nothing.
+
+  Deltas point **backwards** because that is the shape of the work: priming
+  older releases is pure append, the current version costs no replay (it is
+  the base), midfill rewrites exactly one entry, and "did this release change
+  anything" is "is its delta non-empty" — the question a release job asks,
+  answered without comparing surfaces. An empty delta means *observed and
+  unchanged*, which is not the same as a release nobody looked at; those are
+  simply absent.
+
+  The store is tracked but **not shipped**: it lives outside `src/`, so no
+  install pays for history nobody reads. Generation is a maintainer task run
+  from a checkout, and users read the stubs, which already carry everything
+  the log is for.
+
 ## [0.22.0] — 2026-07-27
 
 ### Changed

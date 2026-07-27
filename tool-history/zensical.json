@@ -1,0 +1,116 @@
+{
+ "schema": 1,
+ "tool": "zensical",
+ "observed_from": "0.0.51",
+ "base": {
+  "version": "0.0.51",
+  "date": "2026-07-27",
+  "extractor": 1,
+  "surface": {
+   "help": "Zensical - A modern static site generator.",
+   "verbs": {
+    "build": {
+     "help": "Build a project.",
+     "wraps": false,
+     "positional": "none",
+     "lead": "",
+     "options": {
+      "clean": {
+       "flags": [
+        "--clean",
+        "-c"
+       ],
+       "negation": "",
+       "help": "Clean cache.",
+       "type": "bool",
+       "default": false,
+       "choices": []
+      },
+      "config_file": {
+       "flags": [
+        "--config-file",
+        "-f"
+       ],
+       "negation": "",
+       "help": "Path to config file.",
+       "type": "str",
+       "default": null,
+       "choices": []
+      },
+      "strict": {
+       "flags": [
+        "--strict",
+        "-s"
+       ],
+       "negation": "",
+       "help": "Enable strict mode - abort the build on warnings.",
+       "type": "bool",
+       "default": false,
+       "choices": []
+      }
+     }
+    },
+    "new": {
+     "help": "Create a new template project in the current or given directory.",
+     "wraps": false,
+     "positional": "any",
+     "lead": "",
+     "options": {}
+    },
+    "serve": {
+     "help": "Build and serve a project.",
+     "wraps": false,
+     "positional": "none",
+     "lead": "",
+     "options": {
+      "config_file": {
+       "flags": [
+        "--config-file",
+        "-f"
+       ],
+       "negation": "",
+       "help": "Path to config file.",
+       "type": "str",
+       "default": null,
+       "choices": []
+      },
+      "dev_addr": {
+       "flags": [
+        "--dev-addr",
+        "-a"
+       ],
+       "negation": "",
+       "help": "IP address and port (default: localhost:8000).",
+       "type": "str",
+       "default": null,
+       "choices": []
+      },
+      "open": {
+       "flags": [
+        "--open",
+        "-o"
+       ],
+       "negation": "",
+       "help": "Open preview in default browser.",
+       "type": "bool",
+       "default": false,
+       "choices": []
+      },
+      "strict": {
+       "flags": [
+        "--strict",
+        "-s"
+       ],
+       "negation": "",
+       "help": "Strict mode (currently unsupported).",
+       "type": "bool",
+       "default": false,
+       "choices": []
+      }
+     }
+    }
+   }
+  }
+ },
+ "deltas": {}
+}

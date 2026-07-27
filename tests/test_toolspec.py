@@ -656,10 +656,17 @@ def test_every_curated_tool_has_a_checked_in_stub(key):
 
 @pytest.fixture
 def stubs(tmp_path, monkeypatch):
-    """Point the tasks at a scratch stub directory, not the package's."""
+    """Point the tasks at scratch directories, not the checked-in ones.
+
+    Both of them: generating a stub also records the reading in the option
+    history, so a fixture that isolated only `_STUBS` would let a test write
+    this machine's tool versions into the repo's history — which is exactly
+    what happened the first time this fixture forgot.
+    """
     from footman.tasks import tools as tools_tasks
 
     monkeypatch.setattr(tools_tasks, "_STUBS", tmp_path)
+    monkeypatch.setattr(tools_tasks, "_HISTORY", tmp_path / "history")
     return tmp_path
 
 
