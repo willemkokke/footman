@@ -11,6 +11,15 @@ versions may include breaking changes.
 
 ### Added
 
+- **Writing plugins — the provider's guide.** One page for the whole
+  authoring story: the worked provider, the `footman.tasks` entry point
+  (lifecycle-only modules included), pull semantics, the
+  `[tool.footman."<entry-point-name>"]` configuration convention, the two
+  optional-dependency patterns, the determinism rule, and testing through
+  the real pull path.
+
+### Added
+
 - **`footman.env_files` — the .env built-in.** `plugin("footman.env_files")`
   loads `.env` from the invocation's directory at the run's single-threaded
   moment — before availability gates, so `@requires_env` sees it — with
