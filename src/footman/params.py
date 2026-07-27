@@ -254,7 +254,9 @@ class env:
     Precedence is CLI > `$DEPLOY_ENV` > default. The env value flows through
     the same coercion and validation as a command-line token. Only valid on a
     parameter with a default — an env fallback *makes* it optional, so it
-    needs somewhere to fall.
+    needs somewhere to fall. A body call that omits the parameter reads the
+    same ladder; a value passed explicitly wins over env, however the task
+    was asked for.
     """
 
     __slots__ = ("var",)

@@ -410,6 +410,37 @@ Two calls footman refuses outright, because a call has nowhere to put them: a
 mid-body, which is what keeps the arbiter deadlock-free) and an `infinite` task
 (a call that never returns). Declare those with `pre=` instead.
 
+### A call binds like a segment
+
+A parameter the caller leaves out consults the same sources an absent option
+does — stdin, then its `env()` variable, then the default, with a defaultless
+`ask()` prompting as the last resort — so a task behaves the same however it is
+asked for:
+
+```python
+@task
+def build(target: Annotated[str, env("DEPLOY_ENV")] = "dev") -> str: ...
+
+@task
+def release():
+    build()         # $DEPLOY_ENV if set, "dev" otherwise — exactly like `fm build`
+    build("dev")    # explicit, so env is never consulted
+```
+
+footman sees the call before Python fills in defaults, so leaving a parameter
+out is not the same request as passing the default's value yourself: an
+explicit value wins over env, exactly as a value on the command line does. And
+because resolution happens before the work is keyed, a segment, a prerequisite
+and a call that resolve to the same values are one piece of work.
+
+An explicit value runs the annotation's validators — choices, bounds, path
+requirements, `check(fn)` — because the annotation is the contract wherever
+the value comes from. It is never *coerced*, though: a Python caller passes
+real values under the signature's types, and the type checker polices those;
+coercion exists because the command line only has strings. Outside a run, a
+task is the plain function it looks like: a unit test that calls it gets
+Python's own semantics, nothing more.
+
 ### Work that is never shared: `shared=False`
 
 Some work exists to happen again — a notification, a timestamp, a scratch

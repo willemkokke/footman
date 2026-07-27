@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import threading
+from typing import Annotated, Literal
 
 import pytest
 
 from footman import executor, registry
+from footman.params import ask, between, env, stdin
 from footman.registry import Group
 from footman.split import ChainError
 from footman.testing import Runner
@@ -769,3 +771,203 @@ def test_two_racing_requests_are_one_execution_whichever_starts_first():
         assert result.ok, result.stderr
         assert len(runs) == 1, f"{line}: ran {len(runs)} times"
         assert [executor.reported_state(r) for r in result.results].count("shared") == 1
+
+
+# --- a call binds like a segment ---------------------------------------------
+
+
+def test_a_ctx_tasks_call_keys_on_the_callers_arguments():
+    # `ctx` is injected at the task boundary, never passed by a caller, so a
+    # call's arguments bind against the signature *without* it. Before that,
+    # the first positional value landed in the `ctx` slot and every call keyed
+    # on the defaults — `render("api")` memo-hit `render("web")`.
+    reg = Group("root")
+    seen: list[str] = []
+
+    @reg.task
+    def render(ctx, target: str = "web") -> str:
+        seen.append(target)
+        return target.upper()
+
+    @reg.task
+    def build_all():
+        assert render("web") == "WEB"
+        assert render("api") == "API"  # different work, not a stale hit
+        # ctx is injected, never passed — the static signature still lists it
+        assert render() == "WEB"  # type: ignore[call-arg]
+
+    assert drive(reg, "build-all").ok
+    assert seen == ["web", "api"]
+
+
+def test_a_call_reads_the_env_fallback_when_the_parameter_is_omitted(monkeypatch):
+    # An omitted parameter consults the same ladder binding would: the env
+    # string is coerced and validated exactly as a CLI token is.
+    monkeypatch.setenv("FUTURES_JOBS", "4")
+    reg = Group("root")
+    got: list[int] = []
+
+    @reg.task
+    def build(jobs: Annotated[int, env("FUTURES_JOBS")] = 1) -> int:
+        got.append(jobs)
+        return jobs
+
+    @reg.task
+    def go():
+        assert build() == 4
+
+    assert drive(reg, "go").ok
+    assert got == [4]  # the int the env string coerced to, not the default
+
+
+def test_an_explicit_value_beats_env_even_when_it_equals_the_default(monkeypatch):
+    # The handle sees the call before Python applies defaults, so passing the
+    # default's value explicitly is not the same request as omitting it.
+    monkeypatch.setenv("FUTURES_TARGET", "prod")
+    reg = Group("root")
+    seen: list[str] = []
+
+    @reg.task
+    def build(target: Annotated[str, env("FUTURES_TARGET")] = "dev") -> str:
+        seen.append(target)
+        return target
+
+    @reg.task
+    def go():
+        assert build("dev") == "dev"  # explicit: env never consulted
+        assert build() == "prod"  # omitted: env wins over the default
+
+    assert drive(reg, "go").ok
+    assert seen == ["dev", "prod"]
+
+
+def test_a_segment_and_a_call_that_resolve_the_same_values_share(monkeypatch):
+    # Resolution happens before the work key is computed, so a prerequisite
+    # bound from env and a body call that omits the parameter are one work.
+    monkeypatch.setenv("FUTURES_TARGET", "prod")
+    reg = Group("root")
+    runs: list[str] = []
+
+    @reg.task
+    def build(target: Annotated[str, env("FUTURES_TARGET")] = "dev") -> str:
+        runs.append(target)
+        return target
+
+    @reg.task(pre=[build])
+    def deploy():
+        assert build() == "prod"  # the prerequisite's execution, not a second
+
+    assert drive(reg, "deploy").ok
+    assert runs == ["prod"]
+
+
+def test_an_explicit_value_runs_the_annotations_checks():
+    # The annotation is the contract however the task is asked for: a value
+    # the constraints refuse on the command line is refused at a call too,
+    # taught with the call's own shape.
+    reg = Group("root")
+
+    @reg.task
+    def scale(replicas: Annotated[int, between(1, 10)] = 1) -> int:
+        return replicas
+
+    @reg.task
+    def grow():
+        scale(20)
+
+    result = drive(reg, "grow")
+    assert not result.ok
+    assert "scale(replicas=…) must be between 1 and 10 (got 20)" in result.stderr
+
+
+def test_a_choices_annotation_refuses_a_wrong_explicit_value():
+    reg = Group("root")
+
+    @reg.task
+    def deploy(target: Literal["dev", "prod"] = "dev") -> str:
+        return target
+
+    @reg.task
+    def go():
+        deploy("staging")  # type: ignore[arg-type]  # deliberately wrong
+
+    result = drive(reg, "go")
+    assert not result.ok
+    assert "deploy(target=…) must be one of dev|prod" in result.stderr
+
+
+def test_an_explicit_value_is_validated_but_never_coerced():
+    # A Python caller passed a real value under the signature's types; the
+    # static contract polices those, so no string-to-type coercion happens.
+    reg = Group("root")
+    got: list[object] = []
+
+    @reg.task
+    def build(jobs: Annotated[int, env("FUTURES_UNSET_VAR")] = 1) -> None:
+        got.append(jobs)
+
+    @reg.task
+    def go():
+        build("5")  # type: ignore[arg-type]  # deliberately wrong, stays a str
+
+    assert drive(reg, "go").ok
+    assert got == ["5"] and type(got[0]) is str
+
+
+def test_a_bad_env_value_fails_the_caller_with_the_env_label(monkeypatch):
+    # The env string flows through the same coercion and bounds a CLI token
+    # gets, and the refusal names the variable it came from.
+    monkeypatch.setenv("FUTURES_JOBS", "40")
+    reg = Group("root")
+
+    @reg.task
+    def build(jobs: Annotated[int, env("FUTURES_JOBS"), between(1, 10)] = 1) -> None:
+        raise AssertionError("never runs")
+
+    @reg.task
+    def go():
+        build()
+
+    result = drive(reg, "go")
+    assert not result.ok
+    assert "from $FUTURES_JOBS" in result.stderr
+    assert "must be between 1 and 10" in result.stderr
+
+
+def test_a_call_reads_stdin_for_an_omitted_parameter():
+    # CLI beats stdin beats env, and the boundary payload serves a body call
+    # exactly as it serves a prerequisite.
+    reg = Group("root")
+    got: list[str] = []
+
+    @reg.task
+    def ingest(name: Annotated[str, stdin("name")] = "anon") -> str:
+        got.append(name)
+        return name
+
+    @reg.task
+    def go():
+        assert ingest() == "piped"
+
+    result = Runner().invoke("go", tasks=reg, stdin='{"name": "piped"}')
+    assert result.ok, result.stderr
+    assert got == ["piped"]
+
+
+def test_a_required_ask_parameter_off_a_terminal_fails_the_caller():
+    # A required parameter nothing filled would prompt at the call — the same
+    # internal lane `confirm=` uses. Off a terminal it is the same taught
+    # refusal the CLI path gives.
+    reg = Group("root")
+
+    @reg.task
+    def name_it(name: Annotated[str, ask(prompt="Name?")]) -> str:
+        return name
+
+    @reg.task
+    def go():
+        name_it()  # type: ignore[call-arg]  # nothing filled it: the refusal under test
+
+    result = drive(reg, "go")
+    assert not result.ok
+    assert "--name is required" in result.stderr

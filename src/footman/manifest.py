@@ -73,6 +73,21 @@ def resolved_signature(fn: Any) -> inspect.Signature:
         return inspect.signature(fn)
 
 
+def call_signature(fn: Any) -> inspect.Signature:
+    """The signature a Python caller binds against: the declared one minus the
+    context parameter. A body call never passes `ctx` — `run_bound` injects it
+    at the task boundary — so binding a call's arguments against the declared
+    signature would land the first positional value in the `ctx` slot.
+    """
+    sig = resolved_signature(fn)
+    name = context_param_name(sig)
+    if name is None:
+        return sig
+    return sig.replace(
+        parameters=[p for p in sig.parameters.values() if p.name != name]
+    )
+
+
 def param_spec(param: inspect.Parameter) -> dict[str, Any]:
     """Map one function parameter to its CLI shape (one manifest entry).
 
