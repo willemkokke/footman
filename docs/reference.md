@@ -66,6 +66,9 @@ def gate(inv):              # (see Composing tasks)
     for t in inv.tasks:
         t.add_pre(inv.tasks["audit"])
 
+@pre_bind                   # before binding: task.env reaches env() fallbacks
+def creds(inv, task): ...
+
 @pre_task                   # around every execution, on its worker thread
 def opened(inv, task): ...  # post-bind: task.args, task.state, task.env
 

@@ -9,6 +9,24 @@ versions may include breaking changes.
 
 ### Added
 
+- **`@pre_bind` — the moment before parameters exist.** It fires before the
+  task's parameters are bound, so what it writes into `task.env` is what
+  `env()` fallbacks resolve, what coercion sees, and what `check(fn)`
+  validators read — the one moment a plugin can influence what the body will
+  be handed. A body call binds like a segment, so its binding sees the same
+  injected environment. `task.args` is not readable here (nothing is bound
+  yet — read values in `pre_task`); the same handle carries through the whole
+  ladder, so state set at `pre_bind` is there at `post_task`. Binding happens
+  per request while execution happens per work, so `pre_bind` may fire for a
+  request whose row ends up `shared`; a bind failure still fires the posts —
+  the attempt concluded — with the refusal as the result.
+- **The task's managed window opens before binding.** Hook code and the user
+  code binding runs — `check(fn)` validators, custom constructors — now
+  answer to the same rules a body does: an `os.environ` write is captured
+  into the task's own overlay instead of leaking to parallel siblings, and a
+  prompt outside an interactive task is refused. footman's own prompts —
+  `ask()` questions and menus, `confirm=` — read the real terminal and are
+  never caught by those guards, wherever they fire.
 - **`@pre_task` / `@post_task` — the per-task lifecycle pair.** Where
   `@pre_tasks` runs once over the plan, this pair runs around every
   *execution* — a chain segment, a prerequisite, a fan-out member, a body

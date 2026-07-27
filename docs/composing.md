@@ -416,7 +416,42 @@ pass silently. Under `--dry-run` nothing executes, so neither hook fires; a
 request satisfied by an execution the run already performed is a `shared`
 row, not a second execution, so it fires no hooks either.
 
-One more contract, stated for the future: a `pre_task`'s **return value is
+### Before binding: `@pre_bind`
+
+One moment sits earlier still. `pre_bind(inv, task)` fires before the task's
+parameters are bound, so what it writes into `task.env` is what `env()`
+fallbacks resolve, what coercion sees, and what `check(fn)` validators read —
+the one moment a plugin can influence what the body will be handed:
+
+```python
+@footman.pre_bind
+def credentials(inv, task):
+    task.env["DEPLOY_TOKEN"] = vault.read("deploy")
+
+@task
+def deploy(token: Annotated[str, env("DEPLOY_TOKEN")] = ""): ...
+```
+
+Nothing is bound yet, so `task.args` is not readable here — read values in
+`pre_task`, the post-bind moment. The same handle carries through the whole
+ladder (`pre_bind → bind → pre_task → body → post_task`), so state set at
+`pre_bind` is there at `post_task`. A body call binds like a segment, and its
+binding sees the same injected environment.
+
+Two boundary facts, stated plainly. **Binding happens per request; execution
+per work** — a request that then joins work the run already performed still
+bound first, so `pre_bind` may fire for a request whose row ends up `shared`
+(which fires no posts: nothing of it executed). And **a bind failure still
+fires the posts** — the attempt concluded, a bind-time span needs closing —
+with the refusal as the result.
+
+The window the ladder runs in is the task's managed window, opened before
+binding: hook code and validator code answer to the same rules a body does
+(an `os.environ` write is captured into the task's overlay, a prompt outside
+an interactive task is refused), while footman's own prompts — `ask()`
+menus, `confirm=` — use the real terminal and are never caught.
+
+One more contract, stated for the future: a pre hook's **return value is
 reserved** — the moment where a pre supplies the task's result and the body
 is skipped belongs to a later cache. Today a returned value gets a note and
 is ignored; state belongs on `task.state`.

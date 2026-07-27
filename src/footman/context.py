@@ -604,6 +604,17 @@ def real_stderr() -> TextIO:
     return _err_router.real if _err_router is not None else sys.stderr
 
 
+def real_stdin() -> Any:
+    """The underlying stdin, bypassing the guard proxy.
+
+    The framework's own prompts read here — they already write through
+    `real_stderr()` — because the guard exists for *task-body* reads, and the
+    managed window now opens before binding, where `ask()` legitimately asks.
+    """
+    real = getattr(sys.stdin, "_real", None)
+    return real if real is not None else sys.stdin
+
+
 _UNSET: Any = object()  # "no default given" — None is a valid default/value
 
 _prompt_lock = threading.Lock()
@@ -709,7 +720,7 @@ def _prompt_core(
         else:
             err.write(message)
             err.flush()
-            line = sys.stdin.readline()
+            line = real_stdin().readline()
             if line == "":  # EOF: a re-ask loop would spin on it forever
                 raise RuntimeError(closed)
             value = line.rstrip("\n")
@@ -809,12 +820,28 @@ def select(
     raises if none was given.
     """
     ctx = _guard_interactive("select()")
+    return _select_core(
+        message, options, multiple=multiple, default=default, no_input=ctx.no_input
+    )
+
+
+def _select_core(
+    message: str,
+    options: Sequence[Any],
+    *,
+    multiple: bool = False,
+    default: Any = _UNSET,
+    no_input: bool = False,
+) -> Any:
+    """The menu mechanics, unguarded — the framework's `ask()` menus call this
+    directly; user code goes through the guarded `select()`. Reads the real
+    stream, like every framework prompt."""
     opts = list(options)
     if not opts:
         raise ValueError("select(): no options to choose from")
     labels = [o[0] if isinstance(o, tuple) and len(o) == 2 else str(o) for o in opts]
     values = [o[1] if isinstance(o, tuple) and len(o) == 2 else o for o in opts]
-    if ctx.no_input or not _stdin_is_tty():
+    if no_input or not _stdin_is_tty():
         if default is not _UNSET:
             return default
         raise RuntimeError(
@@ -832,7 +859,7 @@ def select(
         hint = "numbers, comma-separated; 'all'; 'none'" if multiple else "a number"
         err.write(f"select ({hint}): ")
         err.flush()
-        line = sys.stdin.readline().strip()
+        line = real_stdin().readline().strip()
         if status is not None:
             status.notify("\n")
     if line == "" and default is not _UNSET:

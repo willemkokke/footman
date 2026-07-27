@@ -5,10 +5,12 @@ from __future__ import annotations
 import json
 import textwrap
 from pathlib import Path
+from typing import Annotated
 
 import pytest
 
 from footman import discover, manifest, registry
+from footman.params import between, check, env
 from footman.registry import Group, RegistrationError
 from footman.testing import Runner
 
@@ -834,3 +836,197 @@ def test_the_ladder_reaches_a_cascade_file(tmp_path):
     assert result.ok, result.stderr
     assert "pre build" in result.stdout
     assert "post build ok=True" in result.stdout
+
+
+# --- pre_bind: the bind boundary ---------------------------------------------
+
+
+def test_pre_bind_env_reaches_env_fallbacks():
+    # The headline: the managed window opens before binding, so what pre_bind
+    # writes into task.env is what env() fallbacks resolve — the one moment a
+    # plugin can influence what the body is handed.
+    import os as real_os
+
+    reg = Group("root")
+
+    @reg.pre_bind
+    def creds(inv, task):
+        task.env["LADDER_TOKEN"] = f"tok-{task.name}"
+
+    @reg.task
+    def deploy(
+        token: Annotated[str, env("LADDER_TOKEN")] = "anon",
+    ) -> str:
+        print(token)
+        return token
+
+    result = Runner().invoke("deploy", tasks=reg)
+    assert result.ok, result.stderr
+    assert "tok-deploy" in result.stdout
+    assert "LADDER_TOKEN" not in real_os.environ  # scoped, never global
+
+
+def test_pre_bind_env_reaches_a_body_calls_binding():
+    # A body call binds like a segment, so its omitted parameters see the
+    # same pre_bind-injected environment the declared path sees.
+    reg = Group("root")
+
+    @reg.pre_bind
+    def creds(inv, task):
+        task.env["CALL_TOKEN"] = f"tok-{task.name}"
+
+    @reg.task
+    def build(token: Annotated[str, env("CALL_TOKEN")] = "anon") -> str:
+        return token
+
+    @reg.task
+    def release():
+        assert build() == "tok-build"
+
+    result = Runner().invoke("release", tasks=reg)
+    assert result.ok, result.stderr
+
+
+def test_task_args_is_guarded_at_pre_bind_and_readable_at_pre_task():
+    reg = Group("root")
+    seen: list[object] = []
+
+    @reg.pre_bind
+    def early(inv, task):
+        with pytest.raises(RuntimeError, match="pre_task, the post-bind moment"):
+            task.args
+
+    @reg.pre_task
+    def later(inv, task):
+        seen.append(dict(task.args))
+
+    @reg.task
+    def build(target: str = "web"): ...
+
+    result = Runner().invoke("build", tasks=reg)
+    assert result.ok, result.stderr
+    assert seen == [{"target": "web"}]
+
+
+def test_a_bind_failure_still_fires_the_posts():
+    # The attempt concluded — a bind-time span needs closing — so the posts
+    # fire with the refusal result, exactly as the finished-event rule says.
+    reg = Group("root")
+    closed: list[tuple] = []
+
+    @reg.pre_bind
+    def poison(inv, task):
+        task.env["LADDER_JOBS"] = "40"  # out of bounds: binding will refuse
+
+    @reg.post_task
+    def observe(inv, task, result):
+        closed.append((task.name, result.ok, result.code))
+
+    @reg.task
+    def build(
+        jobs: Annotated[int, env("LADDER_JOBS"), between(1, 10)] = 1,
+    ):
+        raise AssertionError("never runs")
+
+    result = Runner().invoke("build", tasks=reg)
+    assert not result.ok
+    assert "must be between 1 and 10" in result.stderr
+    assert closed == [("build", False, 64)]  # EX_USAGE: a refusal, observed
+
+
+def test_a_raising_pre_bind_fails_the_task_before_binding():
+    reg = Group("root")
+    closed: list[str] = []
+
+    @reg.pre_bind
+    def refuse(inv, task):
+        raise ValueError("vault is sealed")
+
+    @reg.post_task
+    def observe(inv, task, result):
+        closed.append(task.name)
+
+    @reg.task
+    def build():
+        raise AssertionError("never runs")
+
+    result = Runner().invoke("build", tasks=reg)
+    assert not result.ok
+    assert "pre_bind hook 'refuse'" in result.stderr
+    assert "vault is sealed" in result.stderr
+    assert closed == ["build"]  # the attempt concluded: the post still fired
+
+
+def test_pre_bind_fires_per_request_a_shared_row_pairs_nothing():
+    # Binding happens per request, before sharing is decided; execution
+    # happens per work. So a body call whose row ends up `shared` bound —
+    # and fired pre_bind — while the execution pair fired exactly once.
+    reg = Group("root")
+    log: list[str] = []
+
+    @reg.pre_bind
+    def bound(inv, task):
+        log.append(f"bind:{task.name}")
+
+    @reg.pre_task
+    def opened(inv, task):
+        log.append(f"pre:{task.name}")
+
+    @reg.post_task
+    def closed(inv, task, result):
+        log.append(f"post:{task.name}")
+
+    @reg.task
+    def build() -> str:
+        return "dist"
+
+    @reg.task(pre=[build])
+    def publish():
+        build()  # shared: binds (pre_bind fires), runs nothing
+
+    result = Runner().invoke("publish", tasks=reg)
+    assert result.ok, result.stderr
+    assert log == [
+        "bind:build",
+        "pre:build",
+        "post:build",
+        "bind:publish",
+        "pre:publish",
+        "bind:build",  # the call's request bound; its row is `shared`
+        "post:publish",
+    ]
+
+
+def _bind_stamp(value):
+    # module-level: eval_str resolves annotation names in module globals
+    import os
+
+    os.environ["BIND_STAMP"] = "set-by-validator"
+
+
+def test_an_environ_write_during_bind_is_scoped_not_global():
+    # The widened window covers user code that binding runs — a check(fn)
+    # validator writing os.environ is captured into the task's overlay, so a
+    # parallel sibling never sees it.
+    import os as real_os
+
+    reg = Group("root")
+
+    @reg.task
+    def build(target: Annotated[str, check(_bind_stamp)] = "web"):
+        import os
+
+        print(os.environ.get("BIND_STAMP", "missing"))
+
+    result = Runner().invoke("build --target=web", tasks=reg)
+    assert result.ok, result.stderr
+    assert "set-by-validator" in result.stdout
+    assert "BIND_STAMP" not in real_os.environ
+
+
+def test_pre_bind_arity_is_taught_at_registration():
+    reg = Group("root")
+    with pytest.raises(RegistrationError, match=r"def alone\(inv, task\)"):
+
+        @reg.pre_bind
+        def alone(inv): ...
