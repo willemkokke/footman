@@ -1257,3 +1257,103 @@ def test_a_bullet_joins_several_names_and_clauses_readably():
     assert tools._and(["one", "two", "three"]) == "one, two and three"
     assert tools._plural("release", 1) == "release"
     assert tools._plural("release", 2) == "releases"
+
+
+# --- what a prime leaves behind ----------------------------------------------
+
+
+def test_a_prime_keeps_uv_downloads_inside_its_own_scratch(tmp_path):
+    """uv writes to two places of its own accord — a wheel cache, and the
+    store holding the interpreters this machine actually runs. Neither is a
+    prime's to fill, and a walk of CPython's releases put 90 interpreters in
+    that store and left them there.
+
+    Pointed inside the scratch directory, the cleanup is structural: one
+    rmtree removes every byte the walk caused, and the python you develop
+    against is never a candidate for deletion.
+    """
+    import os
+
+    from footman.tasks import tools
+
+    was = {k: os.environ.get(k) for k in ("UV_CACHE_DIR", "UV_PYTHON_INSTALL_DIR")}
+    with tools._sandboxed(tmp_path):
+        assert os.environ["UV_CACHE_DIR"].startswith(str(tmp_path))
+        assert os.environ["UV_PYTHON_INSTALL_DIR"].startswith(str(tmp_path))
+    assert {k: os.environ.get(k) for k in was} == was  # and put back
+
+
+def test_an_overlay_restores_a_variable_that_was_not_set(tmp_path):
+    """Restoring must remove what it added, not write an empty string —
+    an empty `UV_CACHE_DIR` is a cache directory, not the absence of one."""
+    import os
+
+    from footman.tasks import tools
+
+    os.environ.pop("FOOTMAN_TEST_ABSENT", None)
+    with tools._overlay(FOOTMAN_TEST_ABSENT="x"):
+        assert os.environ["FOOTMAN_TEST_ABSENT"] == "x"
+    assert "FOOTMAN_TEST_ABSENT" not in os.environ
+
+
+def test_a_release_is_discarded_once_its_surface_is_read(tmp_path):
+    """Peak disk is one release rather than all of them. Without this a prime
+    holds everything it ever fetched until the run ends — ruff alone would
+    stand up 416 environments at once."""
+    from footman.tasks import tools
+
+    release = tmp_path / "1.2.3"
+    (release / "bin").mkdir(parents=True)
+    (release / "bin" / "tool").write_text("x")
+    tools._discard(release / "bin")
+    assert not release.exists()
+    tools._discard(release / "bin")  # gone already: not an error
+
+
+def test_a_prime_does_not_hold_every_release_it_fetched(tmp_path, monkeypatch):
+    """The claim measured rather than asserted: at no point does more than one
+    release exist on disk."""
+    from footman import _drivers, _toolfetch
+    from footman.tasks import tools
+
+    monkeypatch.setattr(tools, "_HISTORY", tmp_path / "history")
+    monkeypatch.setattr(tools, "_STUBS", tmp_path / "stubs")
+    (tmp_path / "history").mkdir()
+    (tmp_path / "stubs").mkdir()
+
+    surface = _toolhistory.surface_of(_spec(verbs=(Verb(name="", options=()),)))
+    doc = _toolhistory.new("ruff", version="1.0.9", date="2026-02-09", surface=surface)
+    _toolhistory.save(doc, tmp_path / "history" / "ruff.json")
+
+    # newest first, as every tier returns them
+    monkeypatch.setattr(
+        _toolfetch,
+        "releases",
+        lambda _d: [
+            _toolfetch.Release(version=f"1.0.{n}", date=f"2026-02-0{n}")
+            for n in range(9, -1, -1)
+        ],
+    )
+
+    live: list[int] = []
+
+    def install(_driver, version, into):
+        (into / "bin").mkdir(parents=True, exist_ok=True)
+        (into / "bin" / "ruff").write_text("x" * 1000)
+        live.append(len(list(into.parent.iterdir())))
+        return into / "bin"
+
+    monkeypatch.setattr(_toolfetch, "install", install)
+    monkeypatch.setattr(
+        _drivers, "extract", lambda d: _toolhistory.spec_from(surface, name=d.name)
+    )
+
+    scratch = tmp_path / "scratch"
+    scratch.mkdir()
+    added, _stopped = tools._prime_one(
+        _drivers_find("ruff"), doc, 9, scratch, _toolfetch
+    )
+    assert added == 9
+    # One at a time: the directory never holds a second release.
+    assert max(live) == 1
+    assert list(scratch.iterdir()) == []
