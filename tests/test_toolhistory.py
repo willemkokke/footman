@@ -226,9 +226,9 @@ def test_the_checked_in_history_regenerates_its_stub(key):
     )
 
     rendered = _stubgen.render(
-        _toolhistory.spec_from(
-            base["surface"], name=key.replace("_", "-"), version=version
-        ),
+        # The union, as generation renders it: every option the tool has ever
+        # had, so a flag it later dropped stays completable.
+        _toolhistory.union(doc, name=key.replace("_", "-")),
         platform=platform.strip("()"),
         class_name=_stubgen._class_name(key),
         in_process=mode,
@@ -332,3 +332,80 @@ def test_the_primed_history_ships_a_contiguous_chain():
     for version in chain:
         assert _toolhistory.at(doc, version) is not None, version
     assert doc["observed_from"] == chain[-1]
+
+
+def test_the_union_carries_intervals_the_history_can_prove():
+    """What a stub may say about an option's life, and what it may not.
+
+    An option already present at the oldest release read has no `since` — the
+    chain never looked far enough back to claim one, and "at or before the
+    floor" is not a `since`. An option the tool has dropped keeps its entry
+    and gains an `until`, because a reader may be running a version that
+    still has it.
+    """
+    old = _toolhistory.surface_of(
+        _spec(
+            verbs=(
+                Verb(
+                    name="build",
+                    options=(
+                        Option("ancient", ("--ancient",)),
+                        Option("doomed", ("--doomed",)),
+                    ),
+                ),
+            )
+        )
+    )
+    middle = _toolhistory.surface_of(
+        _spec(
+            verbs=(
+                Verb(
+                    name="build",
+                    options=(
+                        Option("ancient", ("--ancient",)),
+                        Option("doomed", ("--doomed",)),
+                        Option("fresh", ("--fresh",)),
+                    ),
+                ),
+            )
+        )
+    )
+    newest = _toolhistory.surface_of(
+        _spec(
+            verbs=(
+                Verb(
+                    name="build",
+                    options=(
+                        Option("ancient", ("--ancient",)),
+                        Option("fresh", ("--fresh",)),
+                    ),
+                ),
+            )
+        )
+    )
+    doc = _toolhistory.new("demo", version="3.0.0", date="2026-03-01", surface=newest)
+    _toolhistory.extend(doc, version="2.0.0", date="2026-02-01", surface=middle)
+    _toolhistory.extend(doc, version="1.0.0", date="2026-01-01", surface=old)
+
+    options = {
+        o.name: o for v in _toolhistory.union(doc, name="demo").verbs for o in v.options
+    }
+    assert set(options) == {"ancient", "doomed", "fresh"}  # every option ever
+    assert options["ancient"].since == ""  # there at the floor: nothing provable
+    assert options["fresh"].since == "2.0.0"  # arrived, and the chain saw it
+    assert options["doomed"].until == "3.0.0"  # the release it stopped appearing in
+    assert options["doomed"].since == ""
+
+
+def test_a_history_of_one_release_claims_nothing():
+    """The seeded state: no chain, so no interval is provable and the stub
+    says only what the tool says."""
+    doc = _toolhistory.new(
+        "demo",
+        version="1.0.0",
+        date="2026-01-01",
+        surface=_toolhistory.surface_of(_spec()),
+    )
+    spec = _toolhistory.union(doc, name="demo")
+    assert spec.verbs, "the union of one release is that release"
+    assert not any(o.since or o.until for v in spec.verbs for o in v.options)

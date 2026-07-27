@@ -109,13 +109,12 @@ def _generate(driver: _drivers.Driver) -> str:
     """
     spec = _drivers.extract(driver)
     doc = _observe(driver, spec)
-    base = doc["base"]
-    recorded = _toolhistory.spec_from(
-        base["surface"],
-        name=spec.name,
-        version=base["version"],
-        in_process=spec.in_process,
-    )
+    # The *union*, not the newest release: a flag the tool has since dropped
+    # stays completable, because the reader may be running a version that
+    # still has it, and its docstring says when it went. With a history of
+    # one release the union is that release, so nothing is claimed that has
+    # not been observed.
+    recorded = _toolhistory.union(doc, name=spec.name, in_process=spec.in_process)
     return _formatted(_render(driver, recorded))
 
 

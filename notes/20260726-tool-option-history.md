@@ -268,8 +268,15 @@ same-day releases are common, so the sort is (date, version) rather than
 date alone; resolved by index order the walk skipped 0.4.8 and would have
 appended it below its own successor on the next run.
 
+**Rendering the union landed the same day**: stubs carry every option ever,
+annotated `Added in X` / `Gone since Y` where the chain can prove it, and the
+reference pages inherit it because they render from the stub docstrings. An
+option present at the floor carries no `since` — the honesty rule, enforced
+in code rather than remembered.
+
 What remains: the other tiers (bun/node, GitHub, GitLab release assets), the
-per-tool budget as a driver field, and the scheduled refresh itself.
+per-tool budget as a driver field, the release gate reading the deltas, and
+the scheduled refresh itself.
 
 Not the prime — it is the expensive, network-bound, most-likely-to-stall part.
 Start where the data already exists:

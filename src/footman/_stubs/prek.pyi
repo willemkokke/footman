@@ -84,10 +84,12 @@ class Prek(_Tool):
                 emits the flag once per item.
             from_ref: The original ref in a `<from_ref>...<to_ref>` diff expression.
             glob: Run hooks on tracked files matching the specified glob pattern.
-            group: Run hooks belonging to the specified group.
+                Added in 0.4.11.
+            group: Run hooks belonging to the specified group. Added in 0.4.4.
             last_commit: Run hooks against the last commit.
             log_file: Write trace logs to the specified file.
-            no_group: Do not run hooks belonging to the specified group.
+            no_group: Do not run hooks belonging to the specified group. Added in
+                0.4.4.
             no_progress: Hide all progress outputs.
             quiet: Use quiet output.
             refresh: Refresh all cached data.
@@ -333,10 +335,12 @@ class Prek(_Tool):
                 emits the flag once per item.
             from_ref: The original ref in a `<from_ref>...<to_ref>` diff expression.
             glob: Run hooks on tracked files matching the specified glob pattern.
-            group: Run hooks belonging to the specified group.
+                Added in 0.4.11.
+            group: Run hooks belonging to the specified group. Added in 0.4.4.
             last_commit: Run hooks against the last commit.
             log_file: Write trace logs to the specified file.
-            no_group: Do not run hooks belonging to the specified group.
+            no_group: Do not run hooks belonging to the specified group. Added in
+                0.4.4.
             no_progress: Hide all progress outputs.
             quiet: Use quiet output.
             refresh: Refresh all cached data.

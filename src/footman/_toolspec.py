@@ -52,6 +52,16 @@ class Option:
     choices: tuple[str, ...] = ()
     """The closed set of values the tool accepts, when it names one — the
     stub declares these as a `Literal`, so an IDE offers them."""
+    since: str = ""
+    """The release this option first appears in, when the history knows.
+
+    Empty when it was already there at the oldest release read — the file
+    must not claim a `since` it never looked back far enough to see. Derived
+    from the history at render time, never stored per release."""
+    until: str = ""
+    """The release this option stopped appearing in, when it has gone. A
+    removed option stays in the stub — completion should work against any
+    version the reader might be running — and this is what says so."""
 
 
 @dataclass(frozen=True)
