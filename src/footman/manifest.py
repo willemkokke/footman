@@ -35,7 +35,7 @@ from footman.context import context_param_name
 from footman.params import suggest
 from footman.registry import Group
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 class ManifestError(Exception):
@@ -86,6 +86,37 @@ def call_signature(fn: Any) -> inspect.Signature:
     return sig.replace(
         parameters=[p for p in sig.parameters.values() if p.name != name]
     )
+
+
+def _unique_globals(root: Group) -> list[Any]:
+    """The tree's plugin globals, deduped by identity, contribution order.
+
+    The same singleton pulled through two routes is one option; a name clash
+    between two different singletons was refused at discovery, before the
+    manifest could bake either."""
+    seen: list[Any] = []
+    for opt in root.contributions.get("globals", ()):
+        if not any(o is opt for o in seen):
+            seen.append(opt)
+    return seen
+
+
+def _global_spec(opt: Any, memo: dict[int, list[str]]) -> dict[str, Any]:
+    """One manifest entry for a plugin's global option — described by the
+    same machinery as a task parameter, so choices, path-typed file
+    completion and `suggest()` come along by construction."""
+    synthetic = inspect.Parameter(
+        opt.name.replace("-", "_"),
+        inspect.Parameter.KEYWORD_ONLY,
+        annotation=opt.annotation,
+        default=opt.default if opt.annotation is not bool else bool(opt.default),
+    )
+    spec = _finish(param_spec(synthetic), memo)
+    spec["name"] = opt.name  # the cli spelling is the identity
+    if opt.help:
+        spec["help"] = opt.help
+    spec["owner"] = opt.owner
+    return spec
 
 
 def param_spec(param: inspect.Parameter) -> dict[str, Any]:
@@ -541,6 +572,10 @@ def build_manifest(
     path can decide whether to trigger a background refresh without reading config.
     """
     tree = _node(root, {})
+    memo: dict[int, list[str]] = {}
+    tree["globals"] = [
+        _global_spec(opt, memo) for opt in _unique_globals(root)
+    ]
     return {
         "schema": SCHEMA_VERSION,
         "hash": tree_hash(tree),
