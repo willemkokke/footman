@@ -7,6 +7,8 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+## [0.24.0] — 2026-07-27
+
 ### Added
 
 - **`@post_tasks` — the run report's moment.** The closing bookend to
@@ -175,6 +177,19 @@ versions may include breaking changes.
   Python caller passes real values under the signature's types, and the type
   checker polices those.
 
+### Removed
+
+- **BREAKING: `@finalize` is gone, replaced by `@pre_tasks`.** Removed
+  outright rather than left as a refusing alias: the lifecycle has one name
+  per moment, and a retired second name for the same moment is exactly the
+  duplication the rest of this design keeps removing. The migration is
+  mechanical — take `inv` instead of `tasks`, and read `inv.tasks` where the
+  tree view used to arrive. It runs at the same moment, in the same cascade
+  order, and can now also set the environment every task will see. Internally
+  the readers for a task's declared prerequisites are `registry.pre_deps` /
+  `post_deps`, leaving `pre_tasks` / `post_tasks` to name the lifecycle
+  moments.
+
 ### Fixed
 
 - **A prime could append a release newer than the one it was walking back
@@ -223,19 +238,6 @@ versions may include breaking changes.
   the same key, and the second call wrongly shared the first's result. Calls
   now bind against the signature a Python caller actually sees, with the
   context parameter stripped.
-
-### Removed
-
-- **BREAKING: `@finalize` is gone, replaced by `@pre_tasks`.** Removed
-  outright rather than left as a refusing alias: the lifecycle has one name
-  per moment, and a retired second name for the same moment is exactly the
-  duplication the rest of this design keeps removing. The migration is
-  mechanical — take `inv` instead of `tasks`, and read `inv.tasks` where the
-  tree view used to arrive. It runs at the same moment, in the same cascade
-  order, and can now also set the environment every task will see. Internally
-  the readers for a task's declared prerequisites are `registry.pre_deps` /
-  `post_deps`, leaving `pre_tasks` / `post_tasks` to name the lifecycle
-  moments.
 
 ## [0.23.0] — 2026-07-27
 
@@ -2434,7 +2436,8 @@ versions may include breaking changes.
 
 - Placeholder release claiming the `footman` name on PyPI. Not tagged in git.
 
-[Unreleased]: https://github.com/willemkokke/footman/compare/v0.23.0...HEAD
+[Unreleased]: https://github.com/willemkokke/footman/compare/v0.24.0...HEAD
+[0.24.0]: https://github.com/willemkokke/footman/compare/v0.23.0...v0.24.0
 [0.23.0]: https://github.com/willemkokke/footman/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/willemkokke/footman/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/willemkokke/footman/compare/v0.20.0...v0.21.0
