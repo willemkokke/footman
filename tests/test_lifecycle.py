@@ -1221,3 +1221,168 @@ def test_a_pre_bind_returning_a_value_is_noted_as_reserved():
     assert result.ok, result.stderr
     text = result.stdout + result.stderr
     assert "pre_bind" in text and "reserved" in text
+
+
+# --- the wrappers: one generator instead of a pair ---------------------------
+
+
+def test_wrap_task_spans_every_request_shared_included():
+    # One yield: pre half, body, post half — locals carry the state, and the
+    # wrapper enters per request, so a call satisfied by the prerequisite's
+    # execution still opens and closes, resumed with its `shared` row.
+    reg = Group("root")
+    log: list[str] = []
+
+    @reg.wrap_task
+    def span(inv, task):
+        log.append(f"open:{task.name}")
+        result = yield
+        log.append(f"close:{task.name}:{executor.reported_state(result)}")
+
+    @reg.task
+    def build() -> str:
+        return "dist"
+
+    @reg.task(pre=[build])
+    def publish():
+        build()
+
+    result = Runner().invoke("publish", tasks=reg)
+    assert result.ok, result.stderr
+    assert log == [
+        "open:build",
+        "close:build:ok",
+        "open:publish",
+        "open:build",
+        "close:build:shared",
+        "close:publish:ok",
+    ]
+
+
+def test_wrap_task_never_sees_a_bind_failure_but_a_post_does():
+    # The wrapper anchors at pre_task, which a bind failure never reaches —
+    # its generator never starts, so there is nothing to unwind. The
+    # explicit post still observes the refusal; wrap_bind is the wrapper
+    # that enters early enough to see it.
+    reg = Group("root")
+    log: list[str] = []
+
+    @reg.pre_bind
+    def poison(inv, task):
+        task.env["WRAPBIND_N"] = "40"
+
+    @reg.wrap_task
+    def span(inv, task):
+        log.append("open")
+        yield
+        log.append("close")
+
+    @reg.post_task
+    def observe(inv, task, result):
+        log.append(f"post:{result.code}")
+
+    @reg.task
+    def build(n: Annotated[int, env("WRAPBIND_N"), between(1, 10)] = 1): ...
+
+    result = Runner().invoke("build", tasks=reg)
+    assert not result.ok
+    assert log == ["post:64"]  # the span never opened; the refusal observed
+
+
+def test_wrap_task_with_zero_yields_is_taught():
+    reg = Group("root")
+
+    @reg.wrap_task
+    def eager(inv, task):
+        if False:
+            yield  # a generator function that returns before yielding
+
+    @reg.task
+    def build(): ...
+
+    result = Runner().invoke("build", tasks=reg)
+    assert not result.ok
+    assert "returned without yielding" in result.stderr
+
+
+def test_wrap_task_with_a_second_yield_fails_the_task():
+    reg = Group("root")
+
+    @reg.wrap_task
+    def greedy(inv, task):
+        yield
+        yield  # one too many
+
+    @reg.task
+    def build(): ...
+
+    result = Runner().invoke("build", tasks=reg)
+    assert not result.ok
+    assert "yielded a second time" in result.stderr
+
+
+def test_wrap_bind_spans_bind_and_body_and_closes_on_a_bind_failure():
+    reg = Group("root")
+    log: list[str] = []
+
+    @reg.pre_bind
+    def poison(inv, task):
+        if task.name == "bad":
+            task.env["WRAPSPAN_N"] = "40"
+
+    @reg.wrap_bind
+    def audit(inv, task):
+        try:
+            bound = yield
+            log.append(f"bound:{task.name}:{dict(bound)}")
+            result = yield
+            log.append(f"done:{task.name}:{executor.reported_state(result)}")
+        except ValueError as exc:
+            log.append(f"bindfail:{task.name}:{'between 1 and 10' in str(exc)}")
+        finally:
+            log.append(f"closed:{task.name}")
+
+    @reg.task
+    def build(target: str = "web") -> str:
+        return target
+
+    @reg.task
+    def bad(n: Annotated[int, env("WRAPSPAN_N"), between(1, 10)] = 1): ...
+
+    result = Runner().invoke("build", tasks=reg)
+    assert result.ok, result.stderr
+    assert log == ["bound:build:{'target': 'web'}", "done:build:ok", "closed:build"]
+
+    log.clear()
+    result = Runner().invoke("bad", tasks=reg)
+    assert not result.ok
+    # The failure arrived at the first yield; except saw it, finally closed.
+    assert log == ["bindfail:bad:True", "closed:bad"]
+
+
+def test_wrap_bind_that_stops_after_one_yield_is_taught():
+    reg = Group("root")
+
+    @reg.wrap_bind
+    def short(inv, task):
+        yield  # takes the bound arguments, then stops
+
+    @reg.task
+    def build(): ...
+
+    result = Runner().invoke("build", tasks=reg)
+    assert not result.ok
+    assert "finished after one yield" in result.stderr
+
+
+def test_a_wrapper_must_be_a_generator_function():
+    reg = Group("root")
+    with pytest.raises(RegistrationError, match="must be a generator function"):
+
+        @reg.wrap_task
+        def plain(inv, task): ...
+
+    with pytest.raises(RegistrationError, match="must be a generator function"):
+
+        @reg.wrap_bind
+        def flat(inv, task): ...
