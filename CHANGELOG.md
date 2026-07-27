@@ -9,6 +9,20 @@ versions may include breaking changes.
 
 ### Added
 
+- **Tasks wear their names on the thread, and the report says where they
+  ran.** While a task executes, its worker thread is named after it —
+  `fm:build`, badged `[serial]`/`[exclusive]` under a lane hold — so a
+  sampling profiler's timeline (py-spy, viztracer, an OTel exporter reading
+  thread names) shows tasks and lane occupancy instead of
+  `ThreadPoolExecutor-0_1`; the name is restored afterwards, and a body call
+  nests naturally. The pools themselves are named `fm-worker` and
+  `fm-parallel`. Each executed row records `thread` (the worker's stable
+  name) and `thread_id` (the OS id, `threading.get_native_id`) — the
+  correlation keys a profiler dump uses — and both ride into the `--json`
+  envelope. A row that executed nothing (a `shared` row, a refusal) records
+  neither. Thread names are Python-level: samplers that read the
+  interpreter see them; a native profiler attributing by OS thread name
+  will not.
 - **`@pre_bind` — the moment before parameters exist.** It fires before the
   task's parameters are bound, so what it writes into `task.env` is what
   `env()` fallbacks resolve, what coercion sees, and what `check(fn)`

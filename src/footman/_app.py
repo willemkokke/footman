@@ -794,6 +794,12 @@ def _print_json(results: list[executor.TaskResult], *, total: float) -> None:
             ],
             "error": None if r.error is None else str(r.error),
         }
+        if r.thread:
+            # Where it ran: the worker's stable name and OS thread id — the
+            # correlation keys a profiler's timeline uses. Absent for a row
+            # that executed nothing (a `shared` row, a refusal).
+            entry["thread"] = r.thread
+            entry["thread_id"] = r.thread_id
         value = r.returned
         # An int return is the exit-code channel (duty's contract), not data;
         # None is "nothing to say". Everything else — bools included — is data.

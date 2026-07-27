@@ -43,7 +43,11 @@ Top-level, `total_ms` is wall-clock for the whole run — the human summary's
 captured text), `error` (`null`, or the exception as a string), `steps` —
 one entry per [`run()` or tool](tools.md) call, each with `command`,
 `code`, `duration_ms`, `output` — and, when the task returns a value,
-`returned`.
+`returned`. A row that executed carries `thread` and `thread_id` — the
+worker's stable name and its OS thread id, the correlation keys a profiler's
+timeline uses; while a task runs, its worker wears the task's name
+(`fm:build`, badged `[serial]`/`[exclusive]` under a lane hold), so a
+sampling profiler reads as tasks rather than pool threads.
 
 ## `returned`: a task's own data
 
