@@ -27,6 +27,13 @@ from footman.params import (
 from footman.registry import Group
 from footman.split import ChainError, split_chain
 
+
+class _StandInMarker:
+    """A plugin-shaped marker: an instance, deliberately not callable."""
+
+
+_PluginMarker = _StandInMarker()
+
 # A module-level completer so `eval_str` can resolve it from a tasks file that
 # uses `from __future__ import annotations` (real completers live at module top).
 _DEDUP_CALLS: list[int] = []
@@ -581,15 +588,36 @@ def test_dynamic_did_you_mean():
         run(tasks, "build myprojet")
 
 
-def test_bare_callable_is_treated_as_suggest():
+def test_a_bare_callable_is_refused():
+    # A bare callable used to mean `suggest(fn)`. One spelling per concept won:
+    # the guess swallowed *anything* callable, so a marker of the wrong shape
+    # became a mystery completer with no error either way. Refused rather than
+    # ignored, because this shape did work — silence would break it invisibly.
     def tasks(reg):
         @reg.task
         def build(project: Annotated[str, (lambda: ["x"])]): ...
 
+    with pytest.raises(manifest.SpecError, match=r"a bare callable is not a marker"):
+        build_tree(tasks)
+    # The message names the fix, not just the problem.
+    with pytest.raises(manifest.SpecError, match=r"suggest\(<lambda>\)"):
+        build_tree(tasks)
+
+
+def test_an_unrecognised_non_callable_marker_is_left_alone():
+    # The door a plugin's own markers come through: unknown metadata that is
+    # not callable rides along untouched, so `Annotated[Path, hashed]` is a
+    # plugin's business and footman never has to learn the word. (The house
+    # pattern for a marker is a non-callable instance, which is exactly why
+    # refusing the callable shape above costs plugins nothing.)
+    def tasks(reg):
+        @reg.task
+        def clean(src: Annotated[str, _PluginMarker] = "x"): ...
+
     _, tree = build_tree(tasks)
-    spec = tree["tasks"]["build"]["params"][0]
-    assert spec["choices"] == ["x"]
-    assert spec["dynamic"] == {"strict": True}
+    spec = tree["tasks"]["clean"]["params"][0]
+    assert spec["name"] == "src"
+    assert "dynamic" not in spec and "choices" not in spec
 
 
 def test_completer_deduped_per_build():
