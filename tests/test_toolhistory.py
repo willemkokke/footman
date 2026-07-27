@@ -195,15 +195,22 @@ def test_save_writes_atomically_and_leaves_no_temp(tmp_path):
 @pytest.mark.parametrize("key", ["prek", "docker", "ruff"])
 def test_the_checked_in_history_regenerates_its_stub(key):
     """The seeding claim, checked against what ships: rendering from the
-    history reproduces the checked-in stub byte for byte. If it ever does
-    not, the store lost something the renderer needs.
+    history reproduces the checked-in stub.
 
-    The header is *render-time* input, not history — it stamps the platform
-    that looked and whether that machine could import the tool — so it is
-    supplied from the stub's own header rather than from this machine. The
-    body, which is everything the store is responsible for, must match
-    exactly anywhere.
+    Compared as parsed source, not as bytes. Two things in a stub file are
+    nobody's business but the machine that wrote it — the header stamps which
+    platform looked and whether it could import the tool, and the layout is
+    the formatter's, whose isort splits an aliased import on some platforms
+    and joins it on others. Neither is information the store holds. What the
+    store owes is every verb, option, flag, negation, default and choice set,
+    and an AST comparison is exactly that claim.
+
+    (Byte-identity is checked where it means something: `fm tools.sync`
+    rewrites a stub only when the text differs, and after this landed it
+    rewrote none of the 26.)
     """
+    import ast
+
     from footman import _stubgen
     from footman.tasks import tools as tools_tasks
 
@@ -215,17 +222,29 @@ def test_the_checked_in_history_regenerates_its_stub(key):
     version, _, platform = recorded.partition(" ")
     base = doc["base"]
     assert base["version"] == version, (
-        "the history and the stub disagree on the release"
+        "the history and the stub disagree about which release was read"
     )
 
-    rendered = tools_tasks._formatted(
-        _stubgen.render(
-            _toolhistory.spec_from(
-                base["surface"], name=key.replace("_", "-"), version=version
-            ),
-            platform=platform.strip("()"),
-            class_name=_stubgen._class_name(key),
-            in_process=mode,
-        )
+    rendered = _stubgen.render(
+        _toolhistory.spec_from(
+            base["surface"], name=key.replace("_", "-"), version=version
+        ),
+        platform=platform.strip("()"),
+        class_name=_stubgen._class_name(key),
+        in_process=mode,
     )
-    assert rendered == stub.read_text(encoding="utf-8")
+
+    def classes(source: str) -> str:
+        """The class tree alone — every verb, option, flag, negation, default
+        and choice set. The import block is derived from the body and laid out
+        by the formatter, which splits an aliased import on some platforms and
+        joins it on others; that is layout, not content."""
+        parsed = ast.parse(source)
+        return ast.dump(
+            ast.Module(
+                body=[n for n in parsed.body if isinstance(n, ast.ClassDef)],
+                type_ignores=[],
+            )
+        )
+
+    assert classes(rendered) == classes(stub.read_text(encoding="utf-8"))
