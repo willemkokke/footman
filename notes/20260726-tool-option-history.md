@@ -143,7 +143,34 @@ that guesses attribution is worse than one that admits a floor.
 
 ## 3. The scheduled refresh
 
-**Shipped as `fm tools.refresh`** (2026-07-27). The sketch below described
+**Shipped as `fm tools.refresh`** (2026-07-27), and rebuilt the same day as
+a **parallel gather on footman's own runtime**. Three phases: listings
+fetched concurrently; every (tool, release) observed in parallel through a
+hidden `tools.observe` task, a bounded wave at a time; chains assembled
+single-threaded from whatever arrived, in whatever order — `insert` makes
+arrival order meaningless. Each observation is a real task deliberately: the
+task boundary copies the caller's env overlay, so the PATH written around
+one extraction is that observation's alone, and the sandbox variables flow
+into every subprocess through the same injection every task body gets. No
+environment was threaded by hand; the engine leans on what the runtime
+already guarantees. (`@pre_task` itself was considered and declined: its
+"supply the result, skip the body" channel is reserved and inert, so the
+lifecycle feature used here is the per-task env lane, plus `parallel()`,
+`fail()`, the futures work-key and the `--json` envelope.) A release that
+will not install is a reported **hole**, never the end of a walk — refresh
+plans every unobserved release down to the floor, so it fills its own holes
+on the next run. A bare call is refused with directions; the tests drive the
+engine through `footman.testing.Runner`.
+
+The rebuild also caught an observation-correctness bug: click extraction
+imported the tool from the *running process's* environment and stamped it
+with the PATH binary's version, so a primed mkdocs 1.4.0 recorded our 1.6.x
+surface under 1.4.0's label — nine empty deltas, twice over, for exactly the
+two drivers importable in this venv. `_from_click` now requires the entry
+point's distribution version to match the binary's; re-primed, mkdocs shows
+three real events and zensical two where there had been none.
+
+The sketch below described
 this in terms of `tools.audit`, which only ever answered *is a newer version
 out*; the job needs *what did it change*, so the walk reads releases rather
 than comparing version strings.
@@ -321,8 +348,10 @@ events *are* the changelog entry ("prek 0.4.11 adds `--glob`").
 
 Nothing blocking, and all of it configuration rather than design:
 
-1. **The workflow file itself**, which nothing has written yet. Cadence is
-   settled — weekly (§3).
+1. ~~The workflow file itself~~ — written: `.github/workflows/refresh.yml`,
+   weekly (Mondays 06:00 UTC) + manual dispatch. Green-and-silent when
+   nothing changed; a PR (pushed with the `REFRESH_TOKEN` PAT, so CI runs on
+   it) when events were appended; a loud failure on an unreachable index.
 2. **The `system` tier** — git and docker still read the host and have no
    fetch source, so they are the two tools a refresh cannot speak for.
 

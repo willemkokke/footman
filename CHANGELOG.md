@@ -33,6 +33,24 @@ versions may include breaking changes.
   what a lockfile pins, and what a script header must declare. Unset,
   both handoffs stay out of a branded runner's way.
 
+- **The tool walks gather in parallel, on footman's own runtime.** Each
+  (tool, release) observation is a task of its own, fanned out with
+  `parallel()` in bounded waves — the task boundary gives every observation
+  its own environment, listings fetch concurrently, and the chains assemble
+  from whatever order the pool finishes in. A release that will not install
+  is a reported *hole* rather than the end of a tool's walk: `refresh` plans
+  every unobserved release down to the floor, so it fills its own holes on a
+  later run. Nine mkdocs releases primed in 27 seconds.
+- **`fm --json tools.refresh` answers the release question in one field.**
+  The `refresh` row's `returned` carries `release` — were any events
+  appended — beside `read`, `events`, `holes`, `unreachable` and
+  `wrote_changelog`, which is everything the weekly job reads.
+- **The weekly refresh workflow.** Mondays 06:00 UTC (and on demand):
+  provision the latest tools, refresh the histories, and open a PR only when
+  something changed a command-line surface — carrying the CHANGELOG entry
+  the events wrote. An index that would not answer fails the run loudly.
+  The PR is pushed with a fine-grained PAT (`REFRESH_TOKEN`) so CI runs on
+  it; without the secret the job refuses with directions.
 - **`_toolhistory.insert` — a release can arrive at any position.** `extend`
   appends below the floor and `promote` replaces the head; this is the third
   case the format was designed for, a release belonging *between* two the
@@ -87,7 +105,25 @@ versions may include breaking changes.
   in` claims across the set. eclint reaches four, because four is all that
   has been published; prek and python already reached further and keep it.
 
+### Changed
+
+- **build 1.5.1** adds `--env-dir`, `--report` and `--sdist-extract-dir`. It also rewords 3 descriptions.
+- **djlint 1.43.0** adds `--stdin-filename`.
+- **markdownlint 0.23.2** rewords 1 description. It also restates its own description.
+- **ty 0.0.64** adds `--exclude-scripts`.
+
 ### Fixed
+
+- **Click extraction no longer mistakes this environment for the binary.**
+  The entry point imports from the running process while the binary comes
+  from `PATH`, and nothing tied the two together — so priming a click tool
+  that also lives in footman's own venv recorded *our* surface under the
+  *release's* label: nine empty deltas in a row for mkdocs and zensical, the
+  exact two drivers importable here. `_from_click` now requires the entry
+  point's distribution version to match the binary's, and falls to the help
+  path — which asks the binary itself — on any disagreement. Both chains are
+  re-primed: mkdocs turns out to have changed surface in 1.6.0, 1.5.3 and
+  1.4.3, zensical in 0.0.50 and 0.0.48.
 
 - **A release asset is fetched by the tag the listing recorded, not one
   derived from the version.** bun tags `bun-v1.3.13` for a binary answering

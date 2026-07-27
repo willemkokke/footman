@@ -3,7 +3,7 @@
  "tool": "ty",
  "observed_from": "0.0.54",
  "base": {
-  "version": "0.0.63",
+  "version": "0.0.64",
   "date": "2026-07-27",
   "platforms": [
    "macOS"
@@ -97,6 +97,16 @@
        "negation": "",
        "help": "Glob patterns for files to exclude from type checking",
        "type": "str",
+       "default": null,
+       "choices": []
+      },
+      "exclude_scripts": {
+       "flags": [
+        "--exclude-scripts"
+       ],
+       "negation": "--include-scripts",
+       "help": "Exclude files containing PEP 723 inline script metadata unless passed explicitly",
+       "type": "bool",
        "default": null,
        "choices": []
       },
@@ -305,6 +315,16 @@
   }
  },
  "deltas": {
+  "0.0.63": {
+   "date": "2026-07-27",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1,
+   "drop": [
+    "check\texclude_scripts"
+   ]
+  },
   "0.0.62": {
    "date": "2026-07-22",
    "platforms": [

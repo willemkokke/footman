@@ -3,7 +3,7 @@
  "tool": "djlint",
  "observed_from": "1.40.6",
  "base": {
-  "version": "1.42.3",
+  "version": "1.43.0",
   "date": "2026-07-27",
   "platforms": [
    "macOS"
@@ -461,6 +461,16 @@
        "default": null,
        "choices": []
       },
+      "stdin_filename": {
+       "flags": [
+        "--stdin-filename"
+       ],
+       "negation": "",
+       "help": "Filename to use for per-file-ignores and messages when reading from stdin",
+       "type": "str",
+       "default": "-",
+       "choices": []
+      },
       "use_gitignore": {
        "flags": [
         "--use-gitignore"
@@ -487,6 +497,16 @@
   }
  },
  "deltas": {
+  "1.42.3": {
+   "date": "2026-07-27",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1,
+   "drop": [
+    "\tstdin_filename"
+   ]
+  },
   "1.42.2": {
    "date": "2026-07-22",
    "platforms": [

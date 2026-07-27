@@ -3,17 +3,17 @@
  "tool": "markdownlint",
  "observed_from": "0.18.0",
  "base": {
-  "version": "0.23.1",
+  "version": "0.23.2",
   "date": "2026-07-27",
   "platforms": [
    "macOS"
   ],
   "extractor": 1,
   "surface": {
-   "help": "markdownlint-cli2 v0.23.1 (markdownlint v0.41.1)",
+   "help": "markdownlint-cli2 v0.23.2 (markdownlint v0.41.1)",
    "verbs": {
     "": {
-     "help": "markdownlint-cli2 v0.23.1 (markdownlint v0.41.1)",
+     "help": "markdownlint-cli2 v0.23.2 (markdownlint v0.41.1)",
      "wraps": false,
      "positional": "any",
      "lead": "",
@@ -75,6 +75,19 @@
   }
  },
  "deltas": {
+  "0.23.1": {
+   "date": "2026-07-27",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1,
+   "verbs": {
+    "": {
+     "help": "markdownlint-cli2 v0.23.1 (markdownlint v0.41.1)"
+    }
+   },
+   "help": "markdownlint-cli2 v0.23.1 (markdownlint v0.41.1)"
+  },
   "0.23.0": {
    "date": "2026-07-01",
    "platforms": [

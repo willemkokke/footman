@@ -778,11 +778,14 @@ class Refreshed:
     """Whether the events reached `CHANGELOG.md`. False with nothing to say,
     and false when the file has no `[Unreleased]` section to write into —
     which a caller should notice rather than assume the notes got written."""
+    release: bool = False
+    """Whether any tool's surface moved — decision 4, in one line. A field
+    rather than a property, and recomputed from `events` on construction:
+    `dataclasses.asdict` serialises fields only, and this is the one value
+    the scheduled job reads out of `fm --json tools.refresh`."""
 
-    @property
-    def release(self) -> bool:
-        """Whether any tool's surface moved — decision 4, in one line."""
-        return any(self.events.values())
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "release", any(self.events.values()))
 
 
 @tasks.task

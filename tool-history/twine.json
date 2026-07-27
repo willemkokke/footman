@@ -3,7 +3,7 @@
  "tool": "twine",
  "observed_from": "4.0.0",
  "base": {
-  "version": "6.2.0",
+  "version": "7.0.0",
   "date": "2026-07-27",
   "platforms": [
    "macOS"
@@ -226,6 +226,13 @@
   }
  },
  "deltas": {
+  "6.2.0": {
+   "date": "2026-07-27",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
+  },
   "6.1.0": {
    "date": "2025-01-21",
    "platforms": [

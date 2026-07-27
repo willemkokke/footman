@@ -3,8 +3,8 @@
  "tool": "build",
  "observed_from": "1.2.1",
  "base": {
-  "version": "1.5.0",
-  "date": "2026-07-27",
+  "version": "1.5.1",
+  "date": "2026-07-09",
   "platforms": [
    "macOS"
   ],
@@ -20,10 +20,15 @@
      "options": {
       "config_json": {
        "flags": [
-        "--config-json"
+        "--dependency-constraints-txt",
+        "--skip-dependency-check",
+        "--no-isolation",
+        "--config-json",
+        "--installer",
+        "--env-dir"
        ],
        "negation": "",
-       "help": "settings to pass to the backend as a JSON object",
+       "help": "",
        "type": "str",
        "default": null,
        "choices": []
@@ -49,6 +54,16 @@
        "default": null,
        "choices": []
       },
+      "env_dir": {
+       "flags": [
+        "--env-dir"
+       ],
+       "negation": "",
+       "help": "create the isolated build environment at this location instead of a temporary directory",
+       "type": "str",
+       "default": null,
+       "choices": []
+      },
       "installer": {
        "flags": [
         "--installer"
@@ -64,20 +79,19 @@
         "--metadata"
        ],
        "negation": "",
-       "help": "print out a wheel's metadata in JSON format",
+       "help": "print out a wheel's metadata in JSON format, building it first unless the source argument is already a .whl",
        "type": "bool",
        "default": null,
        "choices": []
       },
       "no_isolation": {
        "flags": [
-        "--dependency-constraints-txt",
-        "--skip-dependency-check",
-        "--no-isolation"
+        "--no-isolation",
+        "-n"
        ],
        "negation": "",
-       "help": "",
-       "type": "str",
+       "help": "disable building the project in an isolated virtual environment",
+       "type": "bool",
        "default": null,
        "choices": []
       },
@@ -103,6 +117,16 @@
        "default": null,
        "choices": []
       },
+      "report": {
+       "flags": [
+        "--report"
+       ],
+       "negation": "",
+       "help": "write a machine-readable JSON report of the built artifacts (name, path, kind, size and SHA-256 hash) to this path",
+       "type": "str",
+       "default": null,
+       "choices": []
+      },
       "sdist": {
        "flags": [
         "--sdist",
@@ -111,6 +135,16 @@
        "negation": "",
        "help": "build a source distribution (disables the default behavior)",
        "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "sdist_extract_dir": {
+       "flags": [
+        "--sdist-extract-dir"
+       ],
+       "negation": "",
+       "help": "extract the intermediate sdist to PATH (created if missing and kept afterwards) instead of a random temporary directory; reusing it across rebuilds gives compiler caches such as ccache/sccache a stable source path",
+       "type": "str",
        "default": null,
        "choices": []
       },
@@ -153,6 +187,52 @@
   }
  },
  "deltas": {
+  "1.5.0": {
+   "date": "2026-07-27",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1,
+   "drop": [
+    "\tenv_dir",
+    "\treport",
+    "\tsdist_extract_dir"
+   ],
+   "revert": {
+    "\tconfig_json": {
+     "flags": [
+      "--config-json"
+     ],
+     "negation": "",
+     "help": "settings to pass to the backend as a JSON object",
+     "type": "str",
+     "default": null,
+     "choices": []
+    },
+    "\tmetadata": {
+     "flags": [
+      "--metadata"
+     ],
+     "negation": "",
+     "help": "print out a wheel's metadata in JSON format",
+     "type": "bool",
+     "default": null,
+     "choices": []
+    },
+    "\tno_isolation": {
+     "flags": [
+      "--dependency-constraints-txt",
+      "--skip-dependency-check",
+      "--no-isolation"
+     ],
+     "negation": "",
+     "help": "",
+     "type": "str",
+     "default": null,
+     "choices": []
+    }
+   }
+  },
   "1.4.4": {
    "date": "2026-04-22",
    "platforms": [
