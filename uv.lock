@@ -290,6 +290,11 @@ name = "footman"
 version = "0.25.0"
 source = { editable = "." }
 
+[package.optional-dependencies]
+uv = [
+    { name = "uv" },
+]
+
 [package.dev-dependencies]
 comparison = [
     { name = "duty" },
@@ -320,6 +325,8 @@ shots = [
 ]
 
 [package.metadata]
+requires-dist = [{ name = "uv", marker = "extra == 'uv'", specifier = ">=0.6" }]
+provides-extras = ["uv"]
 
 [package.metadata.requires-dev]
 comparison = [

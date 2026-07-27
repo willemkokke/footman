@@ -164,18 +164,37 @@ __all__ = [
 ]
 
 
-def main() -> None:
-    """Console-script entry for `footman` and `fm`."""
+def main(tasks_file: str | None = None) -> None:
+    """Console-script entry for `footman` and `fm`.
+
+    `tasks_file` makes a tasks file its own command. Ending a file with
+
+        if __name__ == "__main__":
+            footman.main(__file__)
+
+    turns it into a runnable script — `./deploy.py build` — reading its own
+    tasks whatever the directory, which is what pairs with a PEP 723
+    header and a `#!/usr/bin/env -S uv run --script` shebang. An explicit
+    `-f` on the command line still wins.
+    """
     import sys
 
     argv = sys.argv[1:]
     if argv and argv[0] == "--complete":
+        # Still first: the hot path answers before anything else is decided.
         from footman._complete import complete_cli
 
         raise SystemExit(complete_cli(argv[1:]))
+    if tasks_file is not None and not any(
+        a.startswith(("-f=", "--tasks-file=")) for a in argv
+    ):
+        argv = [f"--tasks-file={tasks_file}", *argv]
     from footman.app import App
 
-    raise SystemExit(App().run(argv))
+    # `dist` names the distribution this console script ships in — what a
+    # project's lockfile pins, and what a tasks file carrying its own
+    # dependencies must declare. A branded CLI passes its own.
+    raise SystemExit(App(dist="footman").run(argv))
 
 
 def __getattr__(name: str) -> object:

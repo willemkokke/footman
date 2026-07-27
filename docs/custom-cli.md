@@ -79,3 +79,18 @@ project's `uv.lock` pins footman and you aren't inside its environment,
 the handoff re-execs the *(branded)* footman you invoked — `acme` hands
 off to the project's own `acme`, never to `fm`. The prog you typed is the
 prog that runs; only the version moves.
+
+The second rule — a tasks file that declares its own dependencies — needs
+one thing more, because it has to know which distribution ships *your*
+runner:
+
+```python
+app = App(name="Acme", prog="acme", version="1.4.0", dist="acme-cli")
+```
+
+With `dist` set, a tasks file carrying a
+[PEP 723](https://peps.python.org/pep-0723/) header runs in its own
+environment under `acme` too — and must list `acme-cli` among its
+dependencies, the way a footman one lists `footman`. Left unset, footman
+never guesses a distribution into an environment: the rule stays out of
+your way, and your users' tasks files run exactly where they already did.

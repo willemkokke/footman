@@ -23,6 +23,7 @@ from footman import (
     _describe,
     _paths,
     _progress,
+    _script,
     coerce,
     config,
     context,
@@ -141,6 +142,7 @@ def resolve_task_files(
     *,
     on_warning: Callable[[str], None] | None = None,
     on_note: Callable[[str], None] | None = None,
+    cwd: Path | None = None,
 ) -> tuple[list[Path], dict[str, object]]:
     """The task files and merged config for the cwd + globals — the pure core of
     `_discover`, shared with the completion subprocess (`_suggest`) so both
@@ -155,8 +157,12 @@ def resolve_task_files(
     bad `--config` or an unknown cascade mode (`config.CascadeError`); an
     empty file list means nothing matched. The caller owns how either
     outcome is surfaced.
+
+    *cwd* answers from somewhere other than the process directory: the
+    handoff resolves against its `-C` probe *before* the chdir happens, and
+    must see exactly what the run will.
     """
-    cwd = Path.cwd()
+    cwd = cwd or Path.cwd()
     mode = config.cascade_mode(g.get("config"))  # type: ignore[arg-type]
     if mode == "none":
         ceiling = cwd
@@ -174,6 +180,8 @@ def resolve_task_files(
     override = g.get("tasks_file")
     if override:
         one = Path(str(override)).expanduser()
+        if not one.is_absolute():
+            one = cwd / one  # identical to the plain relative read when cwd is the cwd
         files = [one] if one.is_file() else []
     else:
         filename = cfg.get("tasks")
@@ -1027,23 +1035,231 @@ def _spawn_gc(cache: Path, skip_stem: str) -> None:
         return  # a background collector must never break a run
 
 
-def _uv_handoff(argv: list[str], g: dict[str, object]) -> None:
-    """Hand a globally-installed invocation to the project's own footman.
+def _find_uv() -> str | None:
+    """The uv both handoffs use — this runner's own environment, then PATH.
 
-    The rule, one sentence: when the project's `uv.lock` pins footman and
-    this interpreter is not already inside the project's environment, the
-    invocation belongs to `uv run` — the project has declared what `fm`
+    Lives in `_script` so the completion children, which never import this
+    module, resolve uv exactly the same way.
+    """
+    return _script.find_uv()
+
+
+def _reexec(cmd: list[str]) -> None:
+    """Replace this invocation with *cmd* — the tail every handoff shares.
+
+    On POSIX the process is replaced (`execvp`: tty, signals, stdin and the
+    exit code all belong to the child). Windows `exec*` lies — the parent
+    exits while the child runs on — so there it spawns and waits,
+    swallowing its own Ctrl-C (the console already delivered it to the
+    child, which will exit 130 on its own terms).
+    """
+    sys.stdout.flush()
+    sys.stderr.flush()
+    if _WINDOWS:
+        proc = subprocess.Popen(cmd)
+        while True:
+            try:
+                raise SystemExit(proc.wait())
+            except KeyboardInterrupt:
+                continue
+    os.execvp(cmd[0], cmd)
+
+
+def _script_hint(exc: object) -> str:
+    """The sentence a failed import of a *script* tasks file earns.
+
+    A file that declares its own dependencies and still failed to import
+    is almost always one whose environment never got built — no uv, or a
+    cascade that made the script rule inapplicable. Say so where the
+    failure is read, rather than leaving a bare ImportError.
+    """
+    path = getattr(exc, "path", None)
+    if path is None or not isinstance(getattr(exc, "original", None), ImportError):
+        return ""
+    meta, _warning = _script.read_block(Path(str(path)))
+    if meta is None or not meta.get("dependencies"):
+        return ""
+    return (
+        f" — {Path(str(path)).name} declares script dependencies, so it "
+        f"expects its own environment: install uv, name the file alone with "
+        f"-f, or add the dependencies to this project"
+    )
+
+
+def _inside(venv: Path) -> bool:
+    """Whether this interpreter is already running out of *venv*."""
+    with contextlib.suppress(OSError):
+        return venv.is_dir() and Path(sys.prefix).resolve().is_relative_to(
+            venv.resolve()
+        )
+    return False
+
+
+def _pinning_project(probe: Path) -> Path | None:
+    """The nearest ancestor whose `uv.lock` pins footman, or None.
+
+    This is the question "has a project declared what the runner means
+    here?" — the uv.lock handoff's own precondition, and the thing that
+    makes a tasks file's script block none of this run's business.
+    """
+    root = next((p for p in (probe, *probe.parents) if (p / "uv.lock").is_file()), None)
+    if root is None:
+        return None
+    try:
+        with open(root / "uv.lock", "rb") as fh:
+            lock = tomllib.load(fh)
+    except (OSError, tomllib.TOMLDecodeError):
+        return None
+    dist = _brand.dist or "footman"
+    return root if any(p.get("name") == dist for p in lock.get("package", [])) else None
+
+
+def _note_ignored_block(g: dict[str, object], probe: Path) -> None:
+    """Under `-v` only: say that a script block is being ignored here.
+
+    A tasks file may carry `# /// script` metadata and still live inside a
+    project that pins the runner — a portable file checked into a repo is
+    exactly that. The project wins, and the block is a non-event: worth
+    seeing when you asked to see everything, never worth a warning.
+    """
+    if not g.get("verbose"):
+        return
+    source = _script_source(g, probe)
+    if source is None:
+        return
+    meta, _warning = _script.read_block(source)
+    if meta is None or not meta.get("dependencies"):
+        return
+    print(
+        f"{_brand.prog}: {source.name} declares script dependencies; this "
+        f"project pins the runner, so they are ignored here",
+        file=sys.stderr,
+    )
+
+
+def _script_source(g: dict[str, object], probe: Path) -> Path | None:
+    """The single tasks file this invocation would load, or None.
+
+    A script's environment can only be *the* environment, so the rule is
+    single-file: an explicit `-f`, or a cascade that found exactly one
+    file. Resolved through `resolve_task_files` against the `-C` probe —
+    the same walk the run will do, so the handoff can never disagree with
+    it — and quiet, because the real run repeats every warning.
+    """
+    try:
+        files, _cfg = resolve_task_files(g, on_warning=lambda _: None, cwd=probe)
+    except (config.ConfigError, config.CascadeError):
+        return None  # the real run reports these properly
+    return files[0] if len(files) == 1 else None
+
+
+def _script_handoff(
+    argv: list[str], g: dict[str, object], probe: Path, uv: str | None
+) -> int | None:
+    """Hand off to a tasks file's own PEP 723 script environment.
+
+    A tasks file that declares `dependencies` carries its own world: uv
+    materialises it (`uv sync --script`), and this invocation continues
+    inside it (`uv python find --script` → `python -m footman …`). One
+    portable file then runs anywhere the runner is installed, no project
+    needed. Returns `None` to say "not my business, carry on"; an exit code
+    when this invocation is over — a refusal, or uv's own failure.
+
+    Never a hard refusal for anything environmental: no uv, a cascade of
+    several files, an unreadable block — all fall through to running the
+    file as-is, exactly as before this rule existed. The import that then
+    fails carries the teaching (`_execute`). The one refusal is a file
+    that declares dependencies but not the runner it imports, because that
+    environment provably cannot run it.
+    """
+    if os.environ.get("FOOTMAN_UV_REEXEC") or os.environ.get("FOOTMAN_NO_UV"):
+        return None
+    source = _script_source(g, probe)
+    if source is None:
+        return None
+    meta, warning = _script.read_block(source)
+    if warning is not None:
+        _error(f"warning: {warning}")
+        return None
+    if meta is None or not meta.get("dependencies"):
+        return None  # not a script, or a block that asks for no world
+    try:
+        cfg = config.load_config(
+            probe,
+            _paths.find_repo_root(probe),
+            str(g["config"]) if g.get("config") else None,
+            on_warning=lambda _: None,  # the real run repeats any warning
+        )
+    except config.ConfigError:
+        return None  # the real run reports the broken --config properly
+    if cfg.get("uv") is False:
+        return None
+    if _brand.dist is None:
+        # A branded runner can't know which distribution ships it, so it
+        # can't tell whether the script's environment would contain it.
+        return None
+    if not _script.declares(meta, _brand.dist):
+        _error(
+            f"{source.name} declares script dependencies but not "
+            f"{_brand.dist!r} — the environment it asks for cannot import "
+            f"the runner. Add {_brand.dist!r} to its dependencies, or drop "
+            f"the script block and run inside a project."
+        )
+        return EX_USAGE
+    if uv is None:
+        return None  # nothing to build the environment with: run as-is
+    verbose = bool(g.get("verbose"))
+    if verbose:
+        print(
+            f"{_brand.prog}: handing off to the script environment of "
+            f"{source.name} (uv)",
+            file=sys.stderr,
+        )
+    # A script environment is deliberately not the active one: an unrelated
+    # VIRTUAL_ENV (a project shell, a `uv run` above us) would only draw a
+    # warning from uv and confuse anything the tasks spawn, so it leaves
+    # the picture — here and in the child.
+    os.environ.pop("VIRTUAL_ENV", None)
+    try:
+        synced = subprocess.run(_script.sync_argv(uv, source, quiet=not verbose))
+        if synced.returncode != 0:
+            return synced.returncode  # uv already said why; don't paraphrase it
+        found = subprocess.run(
+            _script.find_argv(uv, source), capture_output=True, text=True
+        )
+    except OSError:
+        return None  # uv wouldn't start: run as-is rather than refuse
+    python = found.stdout.strip()
+    if found.returncode != 0 or not python:
+        return None
+    os.environ["FOOTMAN_UV_REEXEC"] = "1"
+    _reexec([python, "-m", "footman", *argv])
+    return None  # unreachable: _reexec replaces or exits this process
+
+
+def _uv_handoff(argv: list[str], g: dict[str, object]) -> int | None:
+    """Hand this invocation to the environment that owns it.
+
+    Two rules, one order. A project whose `uv.lock` pins the runner has
+    already declared what `fm` means there, so it wins — and a tasks file's
+    own script metadata is simply not that run's business. Only where no
+    project has spoken may a tasks file declare its world for itself
+    (`_script_handoff`).
+
+    Returns `None` when nothing applied and the caller carries on, or an
+    exit code when the invocation is over.
+
+    The lock rule, one sentence: when the project's `uv.lock` pins footman
+    and this interpreter is not already inside the project's environment,
+    the invocation belongs to `uv run` — the project has declared what `fm`
     means there, version and all. Reached only where tasks would be
     imported: `--version`, completion management, and the TAB hot path
     never arrive here. Opt out with `uv = false` in `[tool.footman]` or
     `FOOTMAN_NO_UV=1`. The child carries `FOOTMAN_UV_REEXEC` as a loop
     belt for projects whose environment lives outside `.venv`.
 
-    On POSIX the process is replaced (`execvp`: tty, signals, and exit
-    code all belong to the child). Windows `exec*` lies — the parent
-    exits while the child runs on — so there it spawns and waits,
-    swallowing its own Ctrl-C (the console already delivered it to the
-    child, which will exit 130 on its own terms).
+    The process is replaced through `_reexec`, which owns the POSIX /
+    Windows difference.
     """
     if os.environ.get("FOOTMAN_UV_REEXEC") or os.environ.get("FOOTMAN_NO_UV"):
         return
@@ -1051,22 +1267,19 @@ def _uv_handoff(argv: list[str], g: dict[str, object]) -> None:
         probe = Path(str(g.get("directory") or Path.cwd())).resolve(strict=True)
     except OSError:
         return  # a missing -C target: _run's own error path reports it
-    root = next((p for p in (probe, *probe.parents) if (p / "uv.lock").is_file()), None)
+    uv = _find_uv()
+    root = _pinning_project(probe)
     if root is None:
-        return
-    venv = root / ".venv"
-    with contextlib.suppress(OSError):
-        if venv.is_dir() and Path(sys.prefix).resolve().is_relative_to(venv.resolve()):
-            return  # already the project's environment
-    uv = shutil.which("uv")
+        # Nobody has declared what the runner means here, so a tasks file
+        # may declare it for itself.
+        return _script_handoff(argv, g, probe, uv)
+    # A pinned project has already declared what the runner means here, so
+    # a tasks file's own script block is simply not this run's business —
+    # not a warning, not a refusal; visible under -v and nowhere else.
+    _note_ignored_block(g, probe)
+    if _inside(root / ".venv"):
+        return  # already the project's environment
     if uv is None:
-        return
-    try:
-        with open(root / "uv.lock", "rb") as fh:
-            lock = tomllib.load(fh)
-    except (OSError, tomllib.TOMLDecodeError):
-        return
-    if not any(p.get("name") == "footman" for p in lock.get("package", [])):
         return
     try:
         cfg = config.load_config(
@@ -1085,17 +1298,7 @@ def _uv_handoff(argv: list[str], g: dict[str, object]) -> None:
             file=sys.stderr,
         )
     os.environ["FOOTMAN_UV_REEXEC"] = "1"
-    cmd = [uv, "run", "--project", str(root), _brand.prog, *argv]
-    if _WINDOWS:
-        proc = subprocess.Popen(cmd)
-        while True:
-            try:
-                raise SystemExit(proc.wait())
-            except KeyboardInterrupt:
-                continue
-    sys.stdout.flush()
-    sys.stderr.flush()
-    os.execvp(uv, cmd)
+    _reexec([uv, "run", "--project", str(root), _brand.prog, *argv])
 
 
 def _run(
@@ -1144,8 +1347,10 @@ def _run(
     # inside a host process (pytest — possibly a pytest-xdist worker whose
     # stdio IS the test-protocol channel), and an execvp there replaces the
     # host itself. An embedded invocation must always run in-process.
-    if handoff:
-        _uv_handoff(argv, g)
+    if handoff and (code := _uv_handoff(argv, g)) is not None:
+        # A handoff that neither replaced this process nor stayed out of the
+        # way has ended the invocation: a refusal, or uv's own failure.
+        return code
 
     if not g.get("directory"):
         return _execute(argv, g, wants_help, collect)
@@ -1214,7 +1419,8 @@ def _execute(
         return _refuse(
             json_mode,
             f"failed to import {exc.path}: "
-            f"{type(exc.original).__name__}: {exc.original}",
+            f"{type(exc.original).__name__}: {exc.original}"
+            f"{_script_hint(exc)}",
         )
     except Exception as exc:  # report import failures cleanly, don't crash
         return _refuse(

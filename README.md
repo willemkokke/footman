@@ -70,6 +70,35 @@ fm: deploy: <target> must be one of dev|staging|prod (got 'produ') — did you m
 $ fm --install-completion               # detects your shell; TAB answers in ~25 ms
 ```
 
+### One file, dependencies included
+
+A tasks file can declare what it needs inline
+([PEP 723](https://peps.python.org/pep-0723/)), and then it needs no
+project at all — drop it in any folder and run it:
+
+```python
+#!/usr/bin/env -S uv run --script
+# /// script
+# dependencies = ["footman", "httpx"]
+# ///
+import footman
+from footman import task
+
+@task
+def health(url: str = "https://example.com"):
+    "Check a deployment is up."
+    import httpx
+    print(httpx.get(url).status_code)
+
+if __name__ == "__main__":
+    footman.main(__file__)
+```
+
+`fm health` builds that environment once and runs inside it; `chmod +x`
+and `./deploy.py health` works with no runner installed at all. Checked
+into a project that pins footman, the header is simply ignored and the
+file runs on the project's dependencies — portable and at home.
+
 ## Learn more
 
 **[Documentation](https://willemkokke.github.io/footman/)** — start with
