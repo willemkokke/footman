@@ -686,6 +686,154 @@ def forward_map(
     return out
 
 
+@dataclass(frozen=True)
+class _PlanParam:
+    param: inspect.Parameter
+    peeled: coerce.Peeled
+    validates: bool  # choices / bounds / path requirement / check(fn) to enforce
+    sources: bool  # stdin / env / a required ask() to consult when absent
+
+
+@dataclass(frozen=True)
+class _CallPlan:
+    sig: inspect.Signature  # the caller's signature: ctx already stripped
+    entries: tuple[_PlanParam, ...]  # in signature order
+
+
+# Keyed by the body's id — one entry per decoration, alive for the process
+# because the registry holds every task. Two threads racing on a first call
+_CALL_PLAN = "_footman_call_plan"
+
+
+def _call_plan(fn: Task) -> _CallPlan:
+    """The per-task plan a bare call binds through, built on the first body
+    call and memoised — a task never called from Python never pays for it.
+
+    Stamped on the body function itself (the `_footman_*` house pattern), so
+    the plan lives and dies with its function — an id-keyed module cache
+    would hand a recycled id another function's plan. Two threads racing on
+    a first call both build the same plan; the last write wins, harmlessly.
+    """
+    from footman.manifest import call_signature
+
+    body = registry.task_body(fn)
+    plan: _CallPlan | None = getattr(body, _CALL_PLAN, None)
+    if plan is not None:
+        return plan
+    sig = call_signature(fn)
+    empty = inspect.Parameter.empty
+    entries: list[_PlanParam] = []
+    for param in sig.parameters.values():
+        if param.annotation is empty or param.kind is inspect.Parameter.VAR_KEYWORD:
+            continue
+        peeled = coerce.peel(param.annotation)
+        validates = bool(
+            peeled.checks
+            or peeled.bounds is not None
+            or peeled.path_req is not None
+            or coerce.all_choices(peeled.element) is not None
+        )
+        sources = param.kind is not inspect.Parameter.VAR_POSITIONAL and (
+            peeled.stdin is not None
+            or peeled.env is not None
+            or (peeled.ask is not None and param.default is empty)
+        )
+        if validates or sources:
+            entries.append(_PlanParam(param, peeled, validates, sources))
+    plan = _CallPlan(sig, tuple(entries))
+    setattr(body, _CALL_PLAN, plan)
+    return plan
+
+
+def _validate_explicit(
+    value: Any, peeled: coerce.Peeled, label: str, siblings: dict[str, Any]
+) -> None:
+    """Validate a Python value a caller passed explicitly — the annotation is
+    the contract however the task was asked for — without coercing it: the
+    static signature already polices the types, and coercion exists because
+    the command line only has strings."""
+
+    def one(v: Any) -> None:
+        if v is None:  # an Optional's explicit None: nothing to check
+            return
+        _run_checks(_validate_value(v, peeled, label), peeled, label, siblings)
+
+    if peeled.mapping and isinstance(value, dict):
+        for v in value.values():
+            if peeled.value_multiple and isinstance(v, (list, tuple)):
+                for element in v:
+                    one(element)
+            else:
+                one(v)
+    elif peeled.multiple and isinstance(value, (list, tuple)):
+        for element in value:
+            one(element)
+    else:
+        one(value)
+
+
+def bind_call(
+    fn: Task, args: tuple[Any, ...], kwargs: dict[str, Any]
+) -> tuple[tuple[Any, ...], dict[str, Any]]:
+    """A body call's arguments through the same ladder `bind` runs.
+
+    The handle sees the call before Python applies defaults, so an omitted
+    parameter is distinguishable from its default passed explicitly: absence
+    consults the sources binding would — stdin, then env, then (for a
+    defaultless parameter) an `ask()` prompt — and an explicit value wins over
+    all of them, exactly as a CLI value does. Explicit values run the
+    annotation's validators but are never coerced.
+
+    Called before the work key is computed, so identity reads the values the
+    body will actually receive: a segment, a prerequisite and a body call
+    that resolve to the same values are one piece of work.
+    """
+    plan = _call_plan(fn)
+    if not plan.entries:
+        return args, kwargs
+    try:
+        bound = plan.sig.bind_partial(*args, **kwargs)
+    except TypeError:
+        return args, kwargs  # won't bind: let the call raise where it is made
+    name = getattr(fn, "__name__", str(fn))
+    empty = inspect.Parameter.empty
+    for entry in plan.entries:
+        param, peeled = entry.param, entry.peeled
+        if param.kind is inspect.Parameter.VAR_POSITIONAL:
+            if entry.validates:
+                label = f"{name}(*{param.name})"
+                siblings = _left_siblings(plan.sig, param, bound.arguments)
+                for element in bound.arguments.get(param.name, ()):
+                    _validate_explicit(element, peeled, label, siblings)
+            continue
+        if param.name in bound.arguments:
+            if entry.validates:
+                label = f"{name}({param.name}=…)"
+                siblings = _left_siblings(plan.sig, param, bound.arguments)
+                _validate_explicit(bound.arguments[param.name], peeled, label, siblings)
+            continue
+        if not entry.sources:
+            continue
+        siblings = _left_siblings(plan.sig, param, bound.arguments)
+        if peeled.stdin is not None:
+            value = _stdin_value(param, peeled, siblings)
+            if value is not _MISSING:
+                bound.arguments[param.name] = value
+                continue
+        if peeled.env is not None:
+            value = _env_value(param, peeled, siblings)
+            if value is not _MISSING:
+                bound.arguments[param.name] = value
+                continue
+        if peeled.ask is not None and param.default is empty:
+            cli = registry.cli_name(param.name)
+            _, bound.arguments[param.name] = _prompt_param(
+                cli, peeled, context._current.get(), siblings
+            )
+    bound.apply_defaults()
+    return bound.args, dict(bound.kwargs)
+
+
 def _call(
     fn: Task, args: list[Any], kwargs: dict[str, Any], as_call: bool = False
 ) -> tuple[int, Any, BaseException | None]:

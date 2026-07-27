@@ -7,6 +7,39 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Changed
+
+- **A body call binds like a segment.** A parameter the caller leaves out now
+  consults the same sources an absent option does — stdin, then its `env()`
+  variable, then the default, with a defaultless `ask()` prompting as the last
+  resort — so `build()` under `DEPLOY_ENV=prod` builds what `fm build` builds
+  instead of silently taking the Python default. footman sees the call before
+  Python fills in defaults, so omitting a parameter and passing the default's
+  value explicitly are different requests: an explicit value wins over env,
+  exactly as a command-line value does. Resolution happens before the work is
+  keyed, so a segment, a prerequisite and a call that resolve to the same
+  values are one piece of work. The ladder is consulted through a per-task
+  plan built on the first call — a task never called from Python pays
+  nothing. Outside a run, a call is still the plain function call it looks
+  like.
+- **Explicit call values run the annotation's validators.** Choices, bounds,
+  path requirements and `check(fn)` now refuse at a body call exactly what
+  they refuse on the command line — `scale(20)` against `between(1, 10)` is a
+  taught error naming the call — because the annotation is the contract
+  wherever the value comes from. Values are validated, never coerced: a
+  Python caller passes real values under the signature's types, and the type
+  checker polices those.
+
+### Fixed
+
+- **A `ctx`-declaring task now keys its body calls on the caller's
+  arguments.** The work key bound a call's arguments against the declared
+  signature, where the first positional value landed in the injected `ctx`
+  slot and was then discarded — so `render("web")` and `render("api")` were
+  the same key, and the second call wrongly shared the first's result. Calls
+  now bind against the signature a Python caller actually sees, with the
+  context parameter stripped.
+
 ### Added
 
 - **`registry.task_source_hash()` — a digest of a task's own body.** Normalised

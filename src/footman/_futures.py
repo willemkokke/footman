@@ -153,16 +153,16 @@ def _key(task: Any, args: Any, kwargs: dict[str, Any]) -> Any | None:
     """
     from footman import manifest
 
+    # The caller's signature: `ctx` is injected at the task boundary, so it is
+    # stripped before binding — binding against the declared signature would
+    # put the first positional value in the `ctx` slot and key every call on
+    # the wrong arguments.
     try:
-        bound = manifest.resolved_signature(task).bind(*args, **kwargs)
+        bound = manifest.call_signature(task).bind(*args, **kwargs)
     except TypeError:
         return None  # a call that won't bind: let it raise where it is made
     bound.apply_defaults()
-    frozen = tuple(
-        (name, _freeze(value))
-        for name, value in bound.arguments.items()
-        if name != "ctx"  # injected, never part of the work's identity
-    )
+    frozen = tuple((name, _freeze(value)) for name, value in bound.arguments.items())
     if any(value is _UNKEYABLE for _, value in frozen):
         return None
     return (registry.work_key(task), frozen)
@@ -208,6 +208,13 @@ def call(task: Any, args: tuple[Any, ...], kwargs: dict[str, Any]) -> Any:
             return task._plain_call(args, kwargs)
         return registry.task_body(task)(*args, **kwargs)
     _refuse_unrunnable(task)
+    # A call binds like a segment: omitted parameters consult the same sources
+    # binding would (stdin, env, a required `ask()`), explicit values are
+    # validated against their annotation, and resolution happens before the
+    # key is computed so identity reads the values the body will receive.
+    from footman import executor as _executor
+
+    args, kwargs = _executor.bind_call(task, args, kwargs)
     key = _key(task, args, kwargs)
     if key is None:  # arguments with no frozen form: honest work every time
         return _run_now(task, args, kwargs)
