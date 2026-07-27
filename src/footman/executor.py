@@ -65,6 +65,14 @@ class TaskResult:
     output: str = ""
     steps: list[Result] = field(default_factory=list)
     cancelled: bool = False  # failed only because fail-fast killed it mid-run
+    started: float | None = None
+    """When this task began, on the run's monotonic clock — the ordering key of
+    the report. `None` for something that never began (an unavailable task, a
+    denied confirm), which is why the report places those by cause instead."""
+    blocked_by: str = ""
+    """The task whose outcome meant this one never ran, when there was one. The
+    report reads as cause then consequence: a non-run sits directly after
+    whatever prevented it."""
 
 
 def resolve(root: Group, path: list[str]) -> Task:
@@ -713,7 +721,13 @@ def unavailable(fn: Task, seg: Segment) -> TaskResult | None:
     reason = registry.availability(fn)
     if reason is None:
         return None
-    return TaskResult(task=seg.task, ok=False, code=EX_USAGE, error=Unavailable(reason))
+    return TaskResult(
+        task=seg.task,
+        ok=False,
+        code=EX_USAGE,
+        error=Unavailable(reason),
+        started=time.perf_counter(),
+    )
 
 
 def resolve_cwd(fn: Task, ctx: Context) -> tuple[Path | None, bool]:
@@ -850,6 +864,7 @@ def run_bound(
     token = _current.set(ctx)
     ctx.in_task = True  # a mid-body prompt()/confirm()/select() is now guarded
     start = time.perf_counter()
+    started = start  # the report's ordering key: when this task actually began
     try:
         with _globals.lane(
             lane_policy, name=seg.task, inherited=inherited, console=console
@@ -869,6 +884,7 @@ def run_bound(
         # promised, whatever a reporter later does to the *reported* result.
         _futures.publish(fn, args, kwargs, returned)
     result = _result(seg, code, returned, error, duration, output, ctx.steps)
+    result.started = started
     # A task that failed while fail-fast was already aborting the run wasn't a
     # genuine failure — it was cut off. Report that honestly, not as "failed".
     if not result.ok and context._aborting.is_set():

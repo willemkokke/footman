@@ -16,6 +16,7 @@ import io
 import os
 import sys
 import threading
+import time
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from dataclasses import dataclass, field
 from itertools import count
@@ -26,6 +27,7 @@ from footman.registry import (
     Group,
     Task,
     _Opted,
+    cli_name,
     default_group,
     fans_out,
     is_infinite,
@@ -61,7 +63,12 @@ class _Node:
 
 
 def _default_seg(fn: Task) -> Segment:
-    return Segment(task=fn.__name__, path=[fn.__name__])
+    """The synthetic segment for a task reached by reference rather than typed —
+    a bare `pre=`/`post=` dependency, or a body call. Named the way the task is
+    *addressed* (`import_` is `fm import`), so a report never shows a spelling
+    you could not type."""
+    name = cli_name(fn.__name__)
+    return Segment(task=name, path=[name])
 
 
 def _dep_key(fn: Task) -> tuple[int, frozenset[tuple[str, Any]]]:
@@ -416,9 +423,40 @@ def _gate_confirms(
 
 
 def _not_confirmed(seg: Segment) -> executor.TaskResult:
+    # Denied at a moment (before the run for a segment, at the call for a call),
+    # so it carries that moment and needs no special placement.
     return executor.TaskResult(
-        task=seg.task, ok=False, code=1, error=NotConfirmed(seg.task)
+        task=seg.task,
+        ok=False,
+        code=1,
+        error=NotConfirmed(seg.task),
+        started=time.perf_counter(),
     )
+
+
+def _chronological(results: list[executor.TaskResult]) -> list[executor.TaskResult]:
+    """The run's results in the order the run happened.
+
+    Chronological is the only ordering that has a place for everything: a task
+    reached by a body call has no slot in a dependency listing, but it has a
+    moment. Sequential runs are unchanged, since running in dependency order
+    *is* chronological; only independent tasks in a parallel run move, to
+    wherever they actually ran.
+
+    Something that never began has no moment of its own, so it sits directly
+    after whatever prevented it — the report reads as cause, then consequence.
+    With nothing to blame (a gate answered before any task ran) it comes first.
+    """
+    ran = sorted(
+        (r for r in results if r.started is not None),
+        key=lambda r: r.started or 0.0,
+    )
+    never: list[executor.TaskResult] = [r for r in results if r.started is None]
+    ordered = [r for r in never if not r.blocked_by] + ran
+    for result in (r for r in never if r.blocked_by):
+        after = [i for i, r in enumerate(ordered) if r.task == result.blocked_by]
+        ordered.insert(after[-1] + 1 if after else len(ordered), result)
+    return ordered
 
 
 def confirm_gate(
@@ -465,9 +503,9 @@ def run_plan(
             jobs=jobs,
         )
         # A task reached by a body call ran as a real task, so its result joins
-        # the run's — after the nodes, since that is when it was asked for.
-        # Every execution the run performed is reported, however it was reached.
-        return [*results, *_futures.collected()]
+        # the run's. Every execution the run performed is reported, however it
+        # was reached — and the whole report reads in the order it happened.
+        return _chronological([*results, *_futures.collected()])
 
 
 def _run_plan(

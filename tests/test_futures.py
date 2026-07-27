@@ -490,3 +490,70 @@ def test_a_confirm_gate_is_asked_at_a_body_call():
     confirmed = Runner().invoke("--yes release", tasks=reg)  # a global, so it leads
     assert confirmed.ok, confirmed.stderr
     assert ran == [1]  # --yes answers it, exactly as it does for a segment
+
+
+# --- the report reads in the order the run happened ---------------------------
+
+
+def test_results_are_chronological_and_a_call_lands_where_it_ran():
+    # A dependency listing has no slot for a task reached by a body call; a
+    # chronological one does, because the call had a moment.
+    reg = Group("root")
+
+    @reg.task
+    def setup_() -> str:
+        return "ready"
+
+    @reg.task
+    def probe() -> str:
+        return "probed"
+
+    @reg.task(pre=[setup_])
+    def deploy():
+        probe()  # runs here, between deploy's start and its end
+
+    result = drive(reg, "deploy")
+    assert result.ok, result.stderr
+    assert [r.task for r in result.results] == ["setup", "deploy", "probe"]
+    stamps = [r.started for r in result.results]
+    assert all(s is not None for s in stamps)
+    timed = [s for s in stamps if s is not None]
+    assert timed == sorted(timed)  # ordered by when they began
+
+
+def test_a_refusal_lands_at_the_moment_it_refused():
+    # An unavailable task never ran, but it *was* asked at a point in time, so
+    # it needs no placement rule — it sorts by that moment like anything else.
+    reg = Group("root")
+
+    @reg.task
+    def first_() -> None: ...
+
+    @reg.task
+    @registry.requires(lambda: False, reason="not here")
+    def second() -> None: ...
+
+    @reg.task(pre=[first_, second])
+    def both(): ...
+
+    result = drive(reg, "both")
+    assert not result.ok
+    order = [r.task for r in result.results]
+    assert order.index("first") < order.index("second")
+
+
+def test_something_that_never_began_sits_after_what_prevented_it():
+    # The placement rule, on its own: with no moment of its own, a result goes
+    # directly after the one it blames, so the report reads cause then
+    # consequence. (Skipped nodes become results in their own right with the
+    # post_tasks hook; the ordering contract is here and pinned now.)
+    from footman import schedule
+    from footman.executor import TaskResult
+
+    ran_first = TaskResult(task="build", ok=False, code=1, started=1.0)
+    ran_later = TaskResult(task="notify", ok=True, started=2.0)
+    skipped = TaskResult(task="publish", ok=False, blocked_by="build")
+    denied = TaskResult(task="deploy", ok=False)  # nothing to blame: it leads
+
+    ordered = schedule._chronological([ran_later, skipped, ran_first, denied])
+    assert [r.task for r in ordered] == ["deploy", "build", "publish", "notify"]
