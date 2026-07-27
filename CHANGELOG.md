@@ -13,13 +13,16 @@ versions may include breaking changes.
 
 ### Removed
 
-- **BREAKING: `@finalize` is retired in favour of `@pre_tasks`.** It raises,
-  pointing at the replacement. The migration is mechanical: take `inv` instead
-  of `tasks`, and read `inv.tasks` where the tree view used to arrive. It runs
-  at the same moment, in the same cascade order, and can now also set the
-  environment every task will see. Internally the readers for a task's
-  declared prerequisites are `registry.pre_deps` / `post_deps`, leaving
-  `pre_tasks` / `post_tasks` to name the lifecycle moments.
+- **BREAKING: `@finalize` is gone, replaced by `@pre_tasks`.** Removed
+  outright rather than left as a refusing alias: the lifecycle has one name
+  per moment, and a retired second name for the same moment is exactly the
+  duplication the rest of this design keeps removing. The migration is
+  mechanical — take `inv` instead of `tasks`, and read `inv.tasks` where the
+  tree view used to arrive. It runs at the same moment, in the same cascade
+  order, and can now also set the environment every task will see. Internally
+  the readers for a task's declared prerequisites are `registry.pre_deps` /
+  `post_deps`, leaving `pre_tasks` / `post_tasks` to name the lifecycle
+  moments.
 
 ## [0.23.0] — 2026-07-27
 
