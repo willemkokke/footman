@@ -75,7 +75,7 @@ def check():
     cov_file = os.path.join(tempfile.mkdtemp(prefix="fm-check-cov-"), "coverage")
 
     def covered():
-        run("pytest --cov=footman --cov-report=", env={"COVERAGE_FILE": cov_file})
+        run("pytest --cov --cov-report=", env={"COVERAGE_FILE": cov_file})
 
     # partial, not a lambda: it keeps the callee's name, so the live line
     # and step column say "format" instead of "…"; `covered` borrows the
@@ -283,12 +283,21 @@ def serve():
 @docs.task
 def coverage():
     """Generate the coverage HTML report into docs/htmlcov (embedded in the site)."""
-    run("pytest --cov=footman --cov-report=html:docs/htmlcov -q")
+    run("pytest --cov --cov-report=html:docs/htmlcov -q")
 
 
 @docs.task(name="build")
-def docs_build(check: bool = False):
+def docs_build(check: bool = False):  # pragma: no cover — see below
     """Build the docs site into ./site; regenerates llms.txt and docs/tasks/.
+
+    Not unit-tested, and deliberately: the body is orchestration over
+    zensical, a pty screenshotter and five real shells, so a test could only
+    stub twenty collaborators and assert the call order back — a change
+    detector that passes while the site breaks. Its real test is CI's
+    strict docs build, which runs the whole thing against the actual tools.
+    The pieces with logic of their own — the llms.txt generator, the cast
+    guard, the scratch projects — are tested separately, where a test can
+    say something true.
 
     Args:
         check: build strictly (what CI runs)
