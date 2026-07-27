@@ -573,9 +573,7 @@ def build_manifest(
     """
     tree = _node(root, {})
     memo: dict[int, list[str]] = {}
-    tree["globals"] = [
-        _global_spec(opt, memo) for opt in _unique_globals(root)
-    ]
+    tree["globals"] = [_global_spec(opt, memo) for opt in _unique_globals(root)]
     return {
         "schema": SCHEMA_VERSION,
         "hash": tree_hash(tree),

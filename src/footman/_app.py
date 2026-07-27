@@ -1197,6 +1197,10 @@ def _execute(
             json_mode,
             f"failed to import the task cascade: {type(exc).__name__}: {exc}",
         )
+    if (
+        clash := registry.validate_global_options(reg.contributions["globals"])
+    ) is not None:
+        return _refuse(json_mode, clash)
 
     try:
         if g.get("tasks_file"):
@@ -1236,6 +1240,7 @@ def _execute(
         code = _run_tree(reg, tree, argv, cfg, collect, root_dir=root_dir)
     finally:
         executor.clear_lifecycle()
+        registry.release_global_options(reg.contributions["globals"])
     # After the run, so it never adds latency before the user's command —
     # and after the uv handoff by construction (the handoff replaced this
     # process back in _run), so a pinned project's own footman collects.
@@ -1464,6 +1469,14 @@ def _run_tree(
     if g.get("fail_fast"):
         cli_keep_going = False
 
+    # A pulled plugin's globals bind now — after every listing/dry-run exit,
+    # before anything runs — and freeze for the run; `.value` answers from
+    # here. Released by the caller's finally, so an outside-a-run read goes
+    # back to teaching.
+    if (
+        bad := executor.bind_global_options(reg.contributions["globals"], globals_)
+    ) is not None:
+        return _refuse(json_mode, bad)
     start = time.perf_counter()
     try:
         results = schedule.run_plan(
@@ -1566,8 +1579,13 @@ def run_group(
     # (there is no cascade here), so the invocation arrives already frozen.
     inv = invocation.Invocation(cli=g, cwd=os.getcwd(), tasks=registry.Tasks(root))
     inv.freeze()
+    if (
+        clash := registry.validate_global_options(root.contributions["globals"])
+    ) is not None:
+        return _refuse(bool(g.get("json")), clash)
     executor.install_lifecycle(inv, root.contributions)
     try:
         return _run_tree(root, tree, argv, {}, collect)
     finally:
         executor.clear_lifecycle()
+        registry.release_global_options(root.contributions["globals"])
