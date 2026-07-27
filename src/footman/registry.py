@@ -133,6 +133,13 @@ def cli_name(name: str) -> str:
     return name.rstrip("_").replace("_", "-")
 
 
+def _isgeneratorfunction(fn: Hook) -> bool:
+    """Whether *fn* is a generator function, through any wrapping."""
+    import inspect
+
+    return inspect.isgeneratorfunction(inspect.unwrap(fn))
+
+
 def _check_hook_arity(kind: str, fn: Hook, wanted: int) -> None:
     """Refuse a hook whose signature cannot be called, at registration.
 
@@ -867,6 +874,162 @@ class Group:
         self.contributions["pre_bind"].append(fn)
         return fn
 
+    def wrap_task(self, fn: Hook) -> Hook:
+        """Register a one-yield wrapper around the body: sugar over the pair.
+
+        Write the pre half, `result = yield`, then the post half — locals
+        carry your state, and a `try/finally` around the yield closes even
+        when the task fails:
+
+            @footman.wrap_task
+            def span(inv, task):
+                s = tracer.start(task.name, dict(task.args))
+                result = yield
+                s.end(ok=result.ok)
+
+        It enters at the `pre_task` moment and is resumed with the
+        `ResultView` at `post_task` — one engine, both spellings, so the
+        rules are the pair's rules: per request (a request satisfied by an
+        execution the run already performed is resumed with its `shared`
+        row), unwound in reverse plugin order, a raising half failing the
+        task, named. The one thing it never sees is a task that failed to
+        **bind** — its anchor moment never fires; observe the bind boundary
+        with `@wrap_bind`, which enters there.
+        """
+        name = getattr(fn, "__name__", repr(fn))
+        if not _isgeneratorfunction(fn):
+            raise RegistrationError(
+                f"@wrap_task {name!r} must be a generator function — write "
+                f"`result = yield` where the body runs (a plain pair of "
+                f"functions is @pre_task + @post_task)"
+            )
+        _check_hook_arity("wrap_task", fn, 2)
+        key = f"__wrap_task_{name}"
+
+        @functools.wraps(fn)
+        def _pre(inv: object, task: Any) -> None:
+            gen: Any = fn(inv, task)
+            try:
+                next(gen)  # the pre half, up to the yield
+            except StopIteration:
+                raise RuntimeError(
+                    f"@wrap_task {name!r} returned without yielding — exactly "
+                    f"one `result = yield` marks where the body runs"
+                ) from None
+            setattr(task.state, key, gen)
+
+        @functools.wraps(fn)
+        def _post(inv: object, task: Any, result: Any) -> None:
+            gen = getattr(task.state, key, None)
+            if gen is None:
+                return  # the anchor never fired (a bind failure): no span open
+            try:
+                gen.send(result)  # the post half, to the end
+            except StopIteration:
+                return
+            raise RuntimeError(
+                f"@wrap_task {name!r} yielded a second time — one yield "
+                f"exactly; @wrap_bind is the two-yield wrapper that enters at "
+                f"the bind boundary"
+            )
+
+        self.contributions["pre_task"].append(_pre)
+        self.contributions["post_task"].append(_post)
+        return fn
+
+    def wrap_bind(self, fn: Hook) -> Hook:
+        """Register a two-yield wrapper spanning bind, body and all: sugar
+        over `pre_bind` + `pre_task` + `post_task`, one generator per request.
+
+        The first yield sits at the bind boundary and receives the bound
+        arguments; the second sits around the body and receives the
+        `ResultView`:
+
+            @footman.wrap_bind
+            def audit(inv, task):
+                started = clock()
+                try:
+                    bound = yield      # after binding: the real values
+                    result = yield     # after the body: the outcome
+                finally:
+                    log(task.name, clock() - started)
+
+        A failed **bind** arrives as the failure raised at the first yield,
+        so a `try/finally` (or `except`) around it closes the span even
+        then — the one span `wrap_task` cannot close. Everything else is the
+        pair's rules, per request.
+        """
+        name = getattr(fn, "__name__", repr(fn))
+        if not _isgeneratorfunction(fn):
+            raise RegistrationError(
+                f"@wrap_bind {name!r} must be a generator function — write "
+                f"`bound = yield` then `result = yield` (a plain trio of "
+                f"functions is @pre_bind + @pre_task + @post_task)"
+            )
+        _check_hook_arity("wrap_bind", fn, 2)
+        key = f"__wrap_bind_{name}"
+
+        @functools.wraps(fn)
+        def _bind_pre(inv: object, task: Any) -> None:
+            gen: Any = fn(inv, task)
+            try:
+                next(gen)  # up to the bind boundary
+            except StopIteration:
+                raise RuntimeError(
+                    f"@wrap_bind {name!r} returned without yielding — it "
+                    f"takes two: `bound = yield`, then `result = yield`"
+                ) from None
+            setattr(task.state, key, (gen, "binding"))
+
+        @functools.wraps(fn)
+        def _pre(inv: object, task: Any) -> None:
+            pair = getattr(task.state, key, None)
+            if pair is None:
+                return
+            gen, _ = pair
+            try:
+                gen.send(task.args)  # binding done: hand over the values
+            except StopIteration:
+                raise RuntimeError(
+                    f"@wrap_bind {name!r} finished after one yield — it "
+                    f"takes two: `bound = yield`, then `result = yield`"
+                ) from None
+            setattr(task.state, key, (gen, "running"))
+
+        @functools.wraps(fn)
+        def _post(inv: object, task: Any, result: Any) -> None:
+            pair = getattr(task.state, key, None)
+            if pair is None:
+                return
+            gen, phase = pair
+            try:
+                if phase == "binding":
+                    # Binding never completed: the failure arrives at the
+                    # first yield, so the author's try/finally closes the
+                    # span. Whatever propagates back out is the same failure
+                    # the task already reported.
+                    error = result.error
+                    if error is None:
+                        error = RuntimeError("binding never completed")
+                    gen.throw(error)
+                else:
+                    gen.send(result)  # the closing half, to the end
+            except StopIteration:
+                return
+            except BaseException:
+                if phase == "binding":
+                    return  # the thrown failure resurfacing: span closed
+                raise
+            raise RuntimeError(
+                f"@wrap_bind {name!r} yielded again after the result — two "
+                f"yields exactly"
+            )
+
+        self.contributions["pre_bind"].append(_bind_pre)
+        self.contributions["pre_task"].append(_pre)
+        self.contributions["post_task"].append(_post)
+        return fn
+
     def pre_task(self, fn: Hook) -> Hook:
         """Register the before-each-task hook: `pre_task(inv, task)`.
 
@@ -1071,6 +1234,8 @@ pre_tasks = root.pre_tasks
 pre_bind = root.pre_bind
 pre_task = root.pre_task
 post_task = root.post_task
+wrap_task = root.wrap_task
+wrap_bind = root.wrap_bind
 
 
 def reset() -> None:

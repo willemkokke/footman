@@ -74,6 +74,10 @@ def opened(inv, task): ...  # post-bind: task.args, task.state, task.env
 
 @post_task
 def closed(inv, task, result): ...  # result.ok/returned + set_returned()
+
+@wrap_task                  # the pair as one generator
+def span(inv, task):
+    result = yield          # (wrap_bind: two yields, enters at bind)
 ```
 
 ## Runtime helpers

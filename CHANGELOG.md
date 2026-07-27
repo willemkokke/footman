@@ -9,6 +9,21 @@ versions may include breaking changes.
 
 ### Added
 
+- **`@wrap_task` and `@wrap_bind` — the pair as one generator.** When the
+  pre and the post are two halves of one thought, a wrapper says it in one
+  place: locals instead of `task.state`, `try/finally` doing the pairing.
+  `wrap_task` takes exactly one yield — pre half, `result = yield`, post
+  half — enters at the `pre_task` moment and is resumed with the
+  `ResultView`, so every pair rule is its rule too: per request (a `shared`
+  row resumes it), reverse unwinding, a raising half failing the task,
+  named. `wrap_bind` takes exactly two yields, enters at the bind boundary
+  (`bound = yield` receives the bound arguments), and closes even when
+  binding fails — the failure arrives raised at the first yield, where a
+  `try/finally` observes it. The one asymmetry, stated plainly: `wrap_task`
+  never sees a task that failed to bind (its anchor moment never fires);
+  observing the bind boundary is what `wrap_bind` is for. Both desugar at
+  registration into the same engine as the explicit hooks — one engine, two
+  spellings — and yield-count violations are taught, naming the wrapper.
 - **`@pre_bind` — the moment before parameters exist.** It fires before the
   task's parameters are bound, so what it writes into `task.env` is what
   `env()` fallbacks resolve, what coercion sees, and what `check(fn)`
