@@ -126,7 +126,12 @@ def _stub_from(driver: _drivers.Driver, doc: dict, *, in_process: bool = False) 
     not rewrite that claim.
     """
     base = doc["base"]
-    spec = _toolhistory.union(doc, name=driver.name, in_process=in_process)
+    spec = _toolhistory.union(
+        doc,
+        name=driver.name,
+        in_process=in_process,
+        granularity=driver.releases,
+    )
     return _formatted(
         _stubgen.render(
             spec,
@@ -621,6 +626,7 @@ def prime(
     only: Annotated[str, doc("prime just this tool")] = "",
     count: Annotated[int, doc("how many releases back to read")] = 20,
     keep: Annotated[bool, doc("leave the throwaway environments behind")] = False,
+    prefix: Annotated[str, doc("drive the tiers from this prefix's bin/")] = "",
 ):
     """Read past releases into the option history, newest first.
 
@@ -636,8 +642,13 @@ def prime(
     about what we meant to read: an option present in the oldest release read
     is "at or before" that version, never "since" it.
 
-    Only the PyPI tier can be listed today. Every other tool is named and
-    skipped rather than left looking like a tool with no history.
+    A tool footman cannot list is named and skipped rather than left looking
+    like a tool with no history.
+
+    `--prefix` points at a `fm tools.provision` directory, and the tiers are
+    driven from *its* binaries. That is not the same nicety it is on `sync`:
+    uv carries CPython's download index inside itself, so a stale uv reports
+    a stale newest python and the walk silently starts too low.
     """
     import shutil
     import tempfile
@@ -648,19 +659,22 @@ def prime(
     read: list[str] = []
     skipped: list[str] = []
     try:
-        for driver in _drivers.DRIVERS:
-            if only and driver.key != only:
-                continue
-            if not _toolfetch.can_list(driver):
-                skipped.append(f"{driver.key} ({driver.provision.kind} tier)")
-                continue
-            doc = _toolhistory.load(_history_path(driver.key))
-            if doc is None:
-                skipped.append(f"{driver.key} (no history — run `sync` first)")
-                continue
-            added, stopped = _prime_one(driver, doc, count, scratch, _toolfetch)
-            note = f" — stopped at {stopped}" if stopped else ""
-            read.append(f"{driver.key} +{added} (from {doc['observed_from']}){note}")
+        with _on_path(prefix):
+            for driver in _drivers.DRIVERS:
+                if only and driver.key != only:
+                    continue
+                if not _toolfetch.can_list(driver):
+                    skipped.append(f"{driver.key} ({driver.provision.kind} tier)")
+                    continue
+                doc = _toolhistory.load(_history_path(driver.key))
+                if doc is None:
+                    skipped.append(f"{driver.key} (no history — run `sync` first)")
+                    continue
+                added, stopped = _prime_one(driver, doc, count, scratch, _toolfetch)
+                note = f" — stopped at {stopped}" if stopped else ""
+                read.append(
+                    f"{driver.key} +{added} (from {doc['observed_from']}){note}"
+                )
     finally:
         if not keep:
             shutil.rmtree(scratch, ignore_errors=True)
@@ -682,14 +696,26 @@ def _prime_one(driver, doc: dict, count: int, scratch: Path, fetch) -> tuple[int
     Reporting *why* it stopped matters more than it looks: a scheduled job
     reading "+0" cannot tell "nothing left to read" from "this machine has no
     bun, so the npm tier fetched nothing".
+
+    What counts as older is the *source's* own ordering, not a date this file
+    holds: a base carries the date it was observed, so on a first prime the
+    floor is dated today and a date test admits every release ever published.
+    That was invisible while every base happened to be the newest release —
+    and wrong the moment one is not, which is a stub synced from an outdated
+    binary. Positioning the floor in the listing instead compares like with
+    like, and a floor the listing cannot place stops the walk rather than
+    guessing where it belongs.
     """
     known = set(_toolhistory.observed(doc))
     floor = doc["observed_from"]
-    wanted = [
-        release
-        for release in fetch.releases(driver)
-        if release.version not in known and release.date <= _date_of(doc, floor)
-    ][:count]
+    listed = fetch.releases(driver)
+    below = [index for index, release in enumerate(listed) if release.version == floor]
+    if listed and not below:
+        return 0, f"{floor} is not among the listed releases (sync it forward first)"
+    start = below[0] + 1 if below else 0
+    wanted = [release for release in listed[start:] if release.version not in known][
+        :count
+    ]
     added = 0
     stopped = ""
     for release in wanted:
@@ -719,13 +745,6 @@ def _prime_one(driver, doc: dict, count: int, scratch: Path, fetch) -> tuple[int
         # than waiting for someone to remember a `sync`.
         _stub_path(driver.key).write_text(_stub_from(driver, doc), encoding="utf-8")
     return added, stopped
-
-
-def _date_of(doc: dict, version: str) -> str:
-    """When *version* was published, as the history records it."""
-    if doc["base"]["version"] == version:
-        return doc["base"]["date"]
-    return doc["deltas"].get(version, {}).get("date", "9999-12-31")
 
 
 @tasks.task

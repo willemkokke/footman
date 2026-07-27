@@ -6,17 +6,19 @@ environment, read once and thrown away — walking backwards from the newest
 because the current version is the one that matters most, and because a
 backward walk appends to the history rather than rewriting it.
 
-Four tiers can be listed: PyPI (`uv`), npm (`node`), and release assets from
-GitHub and GitLab — which covers bun's own releases too. What remains
-unlistable is the `system` tier (git, docker read from the host, with no
-fetch source wired yet) and provisioned interpreters. A tool footman cannot
-list is named and skipped rather than silently treated as having no history —
-the same doctrine `audit` follows.
+Five tiers can be listed: PyPI (`uv`), npm (`node`), release assets from
+GitHub and GitLab — which covers bun's own releases too — and CPython, whose
+index is the provisioned uv's own. What remains unlistable is the `system`
+tier (git, docker read from the host, with no fetch source wired yet). A tool
+footman cannot list is named and skipped rather than silently treated as
+having no history — the same doctrine `audit` follows.
 """
 
 from __future__ import annotations
 
 import json
+import os
+import re
 import subprocess
 import urllib.error
 import urllib.parse
@@ -40,11 +42,9 @@ class Release:
     strings across the curated set cannot order themselves (`0.6.0-wk.5`)."""
 
 
-LISTABLE = ("uv", "node", "github", "gitlab", "bun")
+LISTABLE = ("uv", "node", "github", "gitlab", "bun", "python")
 """The tiers with a release index footman can read. `system` is absent
-because git and docker are read from the host and have no fetch source; a
-provisioned interpreter is absent because a python release is not a tool
-release."""
+because git and docker are read from the host and have no fetch source."""
 
 
 def can_list(driver: Driver) -> bool:
@@ -67,12 +67,36 @@ def releases(driver: Driver) -> list[Release]:
         return []
     kind = driver.provision.kind
     if kind == "uv":
-        return _pypi(driver)
-    if kind == "node":
-        return _npm(driver)
-    if kind in ("github", "gitlab", "bun"):
-        return _forge(driver, "gitlab" if kind == "gitlab" else "github")
-    return []
+        found = _pypi(driver)
+    elif kind == "node":
+        found = _npm(driver)
+    elif kind in ("github", "gitlab", "bun"):
+        found = _forge(driver, "gitlab" if kind == "gitlab" else "github")
+    elif kind == "python":
+        found = _uv_python()
+    else:
+        return []
+    return _per_minor(found) if driver.releases == "minor" else found
+
+
+def _per_minor(found: list[Release]) -> list[Release]:
+    """One release per minor series, the newest patch of each.
+
+    For a tool with parallel maintained series (see `Driver.releases`), the
+    series is the release line and its newest patch is the whole of what that
+    line currently says. Ordering survives the collapse: the newest patches
+    of the live series share a publication date, and `_order`'s version
+    tie-break puts 3.14.3 above 3.13.12 where the date alone could not.
+    """
+    from footman.tools import version_tuple
+
+    newest: dict[tuple[int, ...], Release] = {}
+    for release in found:
+        series = version_tuple(release.version)[:2]
+        held = newest.get(series)
+        if held is None or version_tuple(release.version) > version_tuple(held.version):
+            newest[series] = release
+    return _order(list(newest.values()))
 
 
 def _order(found: list[Release]) -> list[Release]:
@@ -144,6 +168,54 @@ def _forge(driver: Driver, host: str) -> list[Release]:
     return _order([r for r in found if r.version and r.date[:1].isdigit()])
 
 
+_PBS_DATE = re.compile(r"/download/(\d{8})/")
+_STABLE = re.compile(r"\d+\.\d+\.\d+")
+
+
+def _uv_python() -> list[Release]:
+    """CPython's releases, from uv's own download index.
+
+    uv ships that index *inside the binary*, so the reading is only as
+    current as the uv doing it — which is why the prime puts a provisioned
+    prefix on `PATH` rather than trusting whatever uv a machine happens to
+    have. A stale uv silently reports a stale newest python.
+
+    The date is python-build-standalone's build date, read out of the
+    download URL. It is not CPython's own release date, but it is when the
+    artifact we install was published, and it is the only date the index
+    carries. Several series share one build date, which `_order` breaks by
+    version — and after `_per_minor` there is one entry per series anyway.
+    """
+    try:
+        entries = json.loads(
+            _capture(
+                ["uv", "python", "list", "--all-versions", "--output-format", "json"]
+            )
+        )
+    except ValueError:
+        return []
+    found: dict[str, Release] = {}
+    for entry in entries if isinstance(entries, list) else ():
+        version = str(entry.get("version", ""))
+        if entry.get("implementation") != "cpython":
+            continue  # pypy and graalpy are not this stub's tool
+        if entry.get("variant") != "default":
+            continue  # free-threaded is a build of a release, not a release
+        if not _STABLE.fullmatch(version):
+            continue  # 3.15.0a7 is not something to claim an option arrived in
+        stamp = _PBS_DATE.search(str(entry.get("url") or ""))
+        # An interpreter already installed on this machine is listed with a
+        # path and no URL. The same version appears again as a download, and
+        # that is the entry carrying a date — so a machine's own pythons
+        # neither add nor hide releases.
+        if stamp and version not in found:
+            day = stamp.group(1)
+            found[version] = Release(
+                version=version, date=f"{day[:4]}-{day[4:6]}-{day[6:]}"
+            )
+    return _order(list(found.values()))
+
+
 def _pypi(driver: Driver) -> list[Release]:
     """PyPI's index, minus the versions with no files.
 
@@ -176,7 +248,28 @@ def install(driver: Driver, version: str, into: Path) -> Path | None:
         return _install_npm(driver, version, into)
     if kind in ("github", "gitlab", "bun"):
         return _install_asset(driver, version, into)
+    if kind == "python":
+        return _install_python(version)
     return None
+
+
+def _install_python(version: str) -> Path | None:
+    """`uv python install` this exact patch, and read where it landed.
+
+    Unlike every other tier this ignores the throwaway directory: uv keeps
+    its interpreters in one managed store, so the install is shared and
+    already-cached versions cost nothing on a re-run. The store is uv's to
+    clean (`uv python uninstall`), not the prime's.
+
+    The directory uv reports already holds a plain `python` alongside the
+    versioned name, which is what the extractor invokes.
+    """
+    if not _run(["uv", "python", "install", version]):
+        return None
+    found = _capture(["uv", "python", "find", version]).strip()
+    if not found or not Path(found).exists():
+        return None
+    return Path(found).parent
 
 
 def _install_pypi(driver: Driver, version: str, into: Path) -> Path | None:
@@ -203,7 +296,6 @@ def _install_npm(driver: Driver, version: str, into: Path) -> Path | None:
     adding a second package manager. Without bun on PATH there is nothing to
     install with, and the walk stops.
     """
-    import os
     import shutil
 
     if shutil.which("bun") is None:
@@ -242,6 +334,28 @@ def _install_asset(driver: Driver, version: str, into: Path) -> Path | None:
             return None
         return bindir
     return None
+
+
+def _capture(argv: list[str]) -> str:
+    """What a command printed, or empty when it could not be run.
+
+    Empty is not "nothing to report": the callers treat a tool they cannot
+    read as one they have not looked at, the same as an unreachable index.
+    """
+    try:
+        done = subprocess.run(
+            argv,
+            capture_output=True,
+            text=True,
+            timeout=TIMEOUT,
+            # Passed rather than inherited, so footman reads the spawn as
+            # deliberate — and so the prefix `prime` puts on `PATH` is what
+            # picks the uv that carries the index.
+            env=dict(os.environ),
+        )
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    return done.stdout if done.returncode == 0 else ""
 
 
 def _run(argv: list[str], env: dict[str, str] | None = None) -> bool:

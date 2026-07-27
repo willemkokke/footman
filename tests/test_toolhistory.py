@@ -615,10 +615,10 @@ def test_which_tiers_can_be_listed():
         "gh": True,  # github
         "eclint": True,  # gitlab
         "bun": True,  # bun's own releases
+        "python": True,  # uv carries CPython's own download index
         "git": False,  # system
         "docker": False,  # system
         "bash": False,  # manual stub
-        "python": False,  # an interpreter, not a tool release
     }
     for key, listable in expected.items():
         driver = _drivers.find(key)
@@ -648,3 +648,199 @@ def test_the_npm_tier_needs_bun_and_says_so(tmp_path, monkeypatch):
     driver = _drivers.find("cspell")
     assert driver is not None
     assert _toolfetch.install(driver, "10.0.0", tmp_path / "cspell") is None
+
+
+# --- CPython: a tool with more than one release line at a time ---------------
+
+
+def _uv_listing(monkeypatch, entries):
+    """Serve *entries* as `uv python list --output-format json` would."""
+    import json as _json
+
+    from footman import _toolfetch
+
+    monkeypatch.setattr(_toolfetch, "_capture", lambda _argv: _json.dumps(entries))
+
+
+def _cpython(version, day, **over):
+    """One entry of uv's listing, defaulting to a downloadable stable build."""
+    return {
+        "version": version,
+        "implementation": "cpython",
+        "variant": "default",
+        "path": None,
+        "url": f"https://example.invalid/releases/download/{day}/cpython-{version}.tar.gz",
+        **over,
+    }
+
+
+def test_python_is_observed_once_per_minor_at_its_newest_patch(monkeypatch):
+    """CPython keeps several series alive at once, so publication date alone
+    cannot order it: five live series share one build date, and a walk down
+    that list would step from 3.14.6 to 3.13.14 and read every 3.14 option as
+    dropped. One entry per series, newest patch, restores a single line.
+    """
+    from footman import _drivers, _toolfetch
+
+    _uv_listing(
+        monkeypatch,
+        [
+            _cpython("3.14.6", "20260718"),
+            _cpython("3.14.5", "20260611"),
+            _cpython("3.13.14", "20260718"),
+            _cpython("3.13.9", "20251120"),
+            _cpython("3.9.25", "20251031"),
+        ],
+    )
+    driver = _drivers.find("python")
+    assert driver is not None
+    assert driver.releases == "minor"
+
+    found = _toolfetch.releases(driver)
+    assert [r.version for r in found] == ["3.14.6", "3.13.14", "3.9.25"]
+    # 3.14.6 and 3.13.14 share a build date; the version breaks the tie, or
+    # the newest series would not sort to the head of the chain.
+    assert found[0].date == found[1].date == "2026-07-18"
+
+
+def test_the_python_listing_keeps_only_what_is_a_release(monkeypatch):
+    """A pre-release is not something to claim an option arrived in, a
+    free-threaded build is a build of a release rather than one of its own,
+    and pypy is a different tool. An interpreter already installed here is
+    listed with a path and no URL — and appears again as a download, which is
+    the entry carrying the date, so a machine's own pythons neither add
+    releases nor hide them."""
+    from footman import _drivers, _toolfetch
+
+    _uv_listing(
+        monkeypatch,
+        [
+            {**_cpython("3.14.6", "20260718"), "url": None, "path": "/usr/bin/python3"},
+            _cpython("3.14.6", "20260718"),
+            _cpython("3.15.0a7", "20260801"),
+            _cpython("3.13.14", "20260718", variant="freethreaded"),
+            _cpython("3.12.0", "20231002", implementation="pypy"),
+        ],
+    )
+    driver = _drivers.find("python")
+    assert driver is not None
+    assert [r.version for r in _toolfetch.releases(driver)] == ["3.14.6"]
+
+
+def test_an_unreadable_uv_lists_no_pythons(monkeypatch):
+    """uv carries the index inside itself, so 'no uv' is 'nothing seen' — not
+    'CPython has no releases'. The caller names it skipped, as with any tier
+    it could not read."""
+    from footman import _drivers, _toolfetch
+
+    monkeypatch.setattr(_toolfetch, "_capture", lambda _argv: "")
+    driver = _drivers.find("python")
+    assert driver is not None
+    assert _toolfetch.releases(driver) == []
+
+
+def test_a_prime_never_appends_a_release_newer_than_the_floor(tmp_path, monkeypatch):
+    """The walk goes backwards, so a newer release must never land below the
+    floor — it would record the new surface as the old one and invert every
+    interval derived from it.
+
+    A base carries the date it was *observed*, not the date it was published,
+    so on a first prime the floor is dated today and no date test can order
+    it against the index. The listing's own order can.
+    """
+    from footman import _toolfetch
+    from footman.tasks import tools
+
+    surface = _toolhistory.surface_of(
+        _spec(verbs=(Verb(name="", options=(Option("quiet", ("-q",)),)),))
+    )
+    doc = _toolhistory.new(
+        "demo", version="3.13.1", date=tools._today(), surface=surface
+    )
+    monkeypatch.setattr(
+        _toolfetch,
+        "releases",
+        lambda _driver: [
+            _toolfetch.Release(version=v, date=d)
+            for v, d in [
+                ("3.14.6", "2026-07-18"),  # newer than the base, and published
+                ("3.13.1", "2026-01-05"),  # older than "today" by every measure
+                ("3.12.13", "2026-07-18"),
+            ]
+        ],
+    )
+    installed: list[str] = []
+    monkeypatch.setattr(
+        _toolfetch, "install", lambda _d, version, _into: installed.append(version)
+    )
+
+    added, stopped = tools._prime_one(
+        _drivers_find("python"), doc, 10, tmp_path, _toolfetch
+    )
+    assert added == 0 and stopped  # install returned None: the walk stops there
+    assert installed == ["3.12.13"]  # never 3.14.6, which sits above the floor
+
+
+def test_a_floor_the_index_cannot_place_stops_the_walk(tmp_path, monkeypatch):
+    """A stub synced from an outdated binary leaves a floor no listing holds.
+    Priming from the top of the index would append the newest release as the
+    oldest, so it says so instead of guessing."""
+    from footman import _toolfetch
+    from footman.tasks import tools
+
+    surface = _toolhistory.surface_of(_spec(verbs=(Verb(name=""),)))
+    doc = _toolhistory.new("demo", version="3.13.1", date="2026-07-27", surface=surface)
+    monkeypatch.setattr(
+        _toolfetch,
+        "releases",
+        lambda _driver: [_toolfetch.Release(version="3.14.6", date="2026-07-18")],
+    )
+    added, stopped = tools._prime_one(
+        _drivers_find("python"), doc, 10, tmp_path, _toolfetch
+    )
+    assert added == 0
+    assert "3.13.1" in stopped and "sync" in stopped
+
+
+def _drivers_find(key):
+    from footman import _drivers
+
+    driver = _drivers.find(key)
+    assert driver is not None, key
+    return driver
+
+
+def test_a_minor_series_tool_states_its_interval_without_the_patch():
+    """The history stores what was read — 3.14.6, a fact — while the interval
+    says 3.14, which is the whole of what the reading supports: CPython admits
+    no new features in a patch release, so `-P` arrived in 3.11 and naming a
+    patch would be precision the observation does not have.
+    """
+    without = _toolhistory.surface_of(
+        _spec(verbs=(Verb(name="", options=(Option("quiet", ("-q",)),)),))
+    )
+    with_p = _toolhistory.surface_of(
+        _spec(
+            verbs=(
+                Verb(
+                    name="",
+                    options=(Option("quiet", ("-q",)), Option("safe_path", ("-P",))),
+                ),
+            )
+        )
+    )
+    doc = _toolhistory.new(
+        "python", version="3.14.6", date="2026-07-18", surface=with_p
+    )
+    _toolhistory.extend(doc, version="3.11.15", date="2026-07-18", surface=with_p)
+    _toolhistory.extend(doc, version="3.10.20", date="2026-07-18", surface=without)
+
+    def intervals(**over):
+        spec = _toolhistory.union(doc, name="python", **over)
+        return {o.name: (o.since, o.until) for v in spec.verbs for o in v.options}
+
+    assert intervals(granularity="minor")["safe_path"] == ("3.11", "")
+    assert intervals()["safe_path"] == ("3.11.15", "")  # every other tool
+    # Present at the floor either way: the chain cannot prove a `since`, and
+    # rounding the label must not invent one.
+    assert intervals(granularity="minor")["quiet"] == ("", "")

@@ -97,6 +97,18 @@ class Driver:
     stub-generation time, so the man-page dependency never reaches a user."""
     provision: Provision = field(default_factory=Provision)
     """How to fetch the latest binary — the default is a PyPI `uv` install."""
+    releases: str = "patch"
+    """The granularity of this tool's release line. `"patch"` treats every
+    published release as its own observation, which is right for a tool whose
+    releases supersede each other absolutely: prek 0.4.11 replaces 0.4.10.
+
+    `"minor"` is for a tool that maintains several series in parallel, where
+    that is false — CPython 3.13.12 does not supersede 3.14.0, and a walk
+    ordered by publication date would interleave five live series and read
+    every 3.14 option as dropped and re-added. Such a tool is observed once
+    per series, at its newest patch, and its intervals are stated at that
+    granularity: CPython forbids new features in a patch release, so "added
+    in 3.14" is the accurate claim rather than a rounded-off guess."""
 
     @property
     def key(self) -> str:
@@ -296,6 +308,7 @@ DRIVERS: tuple[Driver, ...] = (
     Driver(
         "python",
         provision=Provision(kind="python", package="3.13"),
+        releases="minor",  # 3.13.12 does not supersede 3.14.0
         url="https://docs.python.org/3/using/cmdline.html",
     ),
     # The shells footman autocompletes for. Their stubs are hand-written (a

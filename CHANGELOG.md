@@ -38,6 +38,18 @@ versions may include breaking changes.
   if the body moved and nobody said so" and wrong as a cache key. Exposed to
   hooks as `task.source_hash`.
 
+- **CPython's releases can be primed into the option history.** The index is
+  the provisioned uv's own — uv carries it inside the binary, so `fm
+  tools.prime` gained a `--prefix` and drives the tiers from there: a stale uv
+  reports a stale newest python and the walk starts too low without saying so.
+- **A tool may declare that its release line is a minor series**
+  (`Driver.releases`). CPython keeps several alive at once, so publication
+  date alone cannot order it — five series ship on one day, and a walk down
+  that list would read every 3.14 option as dropped and re-added. Such a tool
+  is observed once per series at its newest patch, and its intervals say
+  `Added in 3.14`: no new features land in a CPython patch release, so the
+  series is the accurate claim rather than a rounded-off one.
+
 ### Changed
 
 - **A body call binds like a segment.** A parameter the caller leaves out now
@@ -62,6 +74,15 @@ versions may include breaking changes.
   checker polices those.
 
 ### Fixed
+
+- **A prime could append a release newer than the one it was walking back
+  from.** It asked whether a release predated the chain's floor by date, but a
+  base carries the date it was *observed*, not the date it was published — so
+  on a first prime the floor is dated today and every release ever published
+  passes. Invisible while every base happened to be the newest release, and
+  wrong the moment one is not, which is any stub synced from an outdated
+  binary. The walk now positions the floor in the source's own ordering, and
+  a floor that ordering cannot place stops the walk and says so.
 
 - **A `ctx`-declaring task now keys its body calls on the caller's
   arguments.** The work key bound a call's arguments against the declared
