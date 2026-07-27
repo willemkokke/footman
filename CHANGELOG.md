@@ -38,6 +38,15 @@ versions may include breaking changes.
   if the body moved and nobody said so" and wrong as a cache key. Exposed to
   hooks as `task.source_hash`.
 
+- **`fm tools.refresh` — read every release published since the history was
+  last updated, and say whether that warrants a release.** `prime` walks
+  backwards to deepen a history; this walks forwards to catch one up,
+  installing **every** release in between rather than jumping to the newest, so
+  a flag that arrived in 0.16.1 is attributed to 0.16.1 and not to whatever
+  was latest the day the job ran. A release that changed nothing still records
+  an empty delta. `fm --json tools.refresh` returns what was read, which of
+  those carried events, what could not be read, and whether a release is
+  warranted — and the events are the CHANGELOG line.
 - **CPython's releases can be primed into the option history.** The index is
   the provisioned uv's own — uv carries it inside the binary, so `fm
   tools.prime` gained a `--prefix` and drives the tiers from there: a stale uv
@@ -77,6 +86,13 @@ versions may include breaking changes.
   wrong the moment one is not, which is any stub synced from an outdated
   binary. The walk now positions the floor in the source's own ordering, and
   a floor that ordering cannot place stops the walk and says so.
+- **An index that cannot be read is no longer an empty one.** Every network
+  error, timeout and malformed body was swallowed into `{}`, so a throttled
+  registry and a tool that had genuinely not released were the same answer.
+  That is the one distinction a release job cannot afford: "is there anything
+  new" answered "no" by a rate limit would end the job with "nothing to
+  release", and a renamed package would answer it that way forever while the
+  job kept reporting success.
 - **A release chain is ordered by version, not by publication date.** Three
   curated tools keep more than one series alive at once — cmake 3.31.x beside
   4.x, pytest's 4.6 LTS beside 5.x, CPython's five — so the most recently
