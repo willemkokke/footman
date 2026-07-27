@@ -18,6 +18,7 @@ can't use — it would map to `--help`, which is always intercepted (see
 
 ## Decorator surface
 
+<!-- example: fragment -->
 ```python
 from footman import task, group, pre_tasks
 

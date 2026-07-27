@@ -162,9 +162,12 @@ from typing import Annotated
 from footman import task
 from footman.params import check
 
+def current_version(name: str) -> str: ...          # your lookup (pyproject, git…)
+def newer(version: str, current: str) -> bool: ...  # your comparison — none bundled
+
 def newer_than_current(version, params):
-    current = current_version(params["name"])   # your lookup (pyproject, git…)
-    if not newer(version, current):             # your comparison — none bundled
+    current = current_version(params["name"])
+    if not newer(version, current):
         raise ValueError(f"{version} is not newer than {current}")
 
 @task
@@ -587,6 +590,10 @@ bar fills from the truth:
 ```python
 from footman import task, track, progress
 
+def load_records() -> list: ...   # your own work, whatever shape it takes
+def apply(record): ...
+def build_index(path): ...
+
 @task
 def migrate():
     "Apply pending migrations."
@@ -712,6 +719,7 @@ Tasks are plain functions, so plain calls already work. `recording()`
 asserts *which commands would run* without running them, and the pytest
 fixtures scaffold whole projects:
 
+<!-- example: fragment -->
 ```python
 from footman import recording
 from tasks import deploy

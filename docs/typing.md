@@ -49,6 +49,8 @@ value wins (`int` → `float` → `Path` → `str`, with `str` as the universal
 fallback):
 
 ```python
+from footman import task
+
 @task
 def scale(factor: int | float): ...
 ```
@@ -127,6 +129,8 @@ Eager, taught validation is the whole pitch, so constraints ride in
 from pathlib import Path
 from typing import Annotated
 from footman import task, between, check, doc, env, isfile
+
+def semver(value: str) -> None: ...  # your validator: raise ValueError to refuse
 
 @task
 def deploy(

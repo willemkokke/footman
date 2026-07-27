@@ -102,6 +102,8 @@ commands to know:
 environment works naturally:
 
 ```python
+from footman import requires_env, task
+
 @task
 @requires_env("CI")
 def publish_coverage(): ...

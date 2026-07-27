@@ -16,6 +16,8 @@ names the task anyway:
 and a human never types: a CI entry point, a step another task drives.
 
 ```python
+from footman import task
+
 @task(hidden=True)
 def ci_publish(): ...
 ```
@@ -32,6 +34,8 @@ something the listings won't offer.
 declaration hides a whole subtree, and a child can still come back.
 
 ```python
+from footman import group
+
 internal = group("internal", hidden=True)   # the whole subtree, one word
 
 @internal.task
@@ -51,6 +55,9 @@ list. Reach for it when the task is *meaningless* here, not merely
 uninteresting to type.
 
 ```python
+import sys
+from pathlib import Path
+
 if sys.platform == "darwin":
     @task
     def notarize(app: Path): ...
@@ -110,6 +117,7 @@ silent skip — silently dropping `lint` from `check` on the wrong machine is
 how CI learns to lie. When you want the optional-dependency flow, compose the
 list instead:
 
+<!-- example: fragment -->
 ```python
 @task(pre=[fmt, lint] + ([docker_up] if shutil.which("docker") else []))
 def check(): ...
@@ -136,6 +144,7 @@ imported-vs-imported clashes are loud.
 
 ## Pulling from your own modules — `include()`
 
+<!-- example: fragment -->
 ```python
 from footman import include
 
@@ -249,6 +258,7 @@ def deploy(version: str): ...
 
 And a project **opts in** with a pull line in its tasks file:
 
+<!-- example: fragment -->
 ```python
 from footman import plugin
 
@@ -371,6 +381,7 @@ it sees the arguments the body actually receives; `post_task(inv, task,
 result)` fires after the body, whatever the outcome. Both run on the task's
 worker thread, in parallel across tasks:
 
+<!-- example: fragment -->
 ```python
 import footman
 
@@ -431,6 +442,7 @@ parameters are bound, so what it writes into `task.env` is what `env()`
 fallbacks resolve, what coercion sees, and what `check(fn)` validators read —
 the one moment a plugin can influence what the body will be handed:
 
+<!-- example: fragment -->
 ```python
 @footman.pre_bind
 def credentials(inv, task):
@@ -464,6 +476,7 @@ thread, after every task has concluded and *before* the summary or the
 `--json` envelope prints — so a rewrite a hook makes through a result view
 is what gets reported. The invocation now carries the whole story:
 
+<!-- example: fragment -->
 ```python
 @footman.post_tasks
 def digest(inv):
@@ -486,6 +499,7 @@ When the pre and the post are two halves of one thought — open a span, close
 it; start a clock, log it — a wrapper says it in one place, with locals
 instead of `task.state` and `try/finally` doing the pairing:
 
+<!-- example: fragment -->
 ```python
 @footman.wrap_task
 def span(inv, task):
@@ -505,6 +519,7 @@ The one thing `wrap_task` cannot see is a task that failed to **bind** — its
 anchor moment never fires, so there is no generator to unwind. `wrap_bind`
 enters at the bind boundary, takes two yields, and closes even then:
 
+<!-- example: fragment -->
 ```python
 @footman.wrap_bind
 def audit(inv, task):
