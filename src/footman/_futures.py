@@ -16,9 +16,9 @@ So `pre=[build]` plus `build()` in the body is a cache hit, not a second build,
 and the callee gets full task treatment: its own context, its own lane
 decision, its own reported result.
 
-Sharing is a property of the *request*, not of this layer: a request resolved
-volatile (`@task(volatile=…)`, `.opts(volatile=…)`, or inherited from the task
-that asked) never reads a cell. It still fills an empty one, because what a run
+Sharing is a property of the *request*, not of this layer: an unshared request
+(`@task(shared=False)`, `.opts(shared=False)`, or inherited from the task that
+asked) never reads a cell. It still fills an empty one, because what a run
 remembers is the first result it produced, and a later shared request can reuse
 it. `schedule` resolves the same ladder for DAG nodes, so a declared request and
 a called one behave the same.
@@ -128,21 +128,21 @@ def _freeze(value: Any) -> Any:
     return value
 
 
-def wants_fresh(task: Any) -> bool:
-    """Whether *this request* must execute rather than reuse an execution.
+def unshared(task: Any) -> bool:
+    """Whether *this request* must run rather than reuse an execution.
 
-    The sharing ladder for a call: the reference's own `.opts(volatile=…)` or
-    the task's declaration, then what the calling task inherited (`ctx.volatile`
-    — a freshly-requested task asks freshly for everything it needs), then
-    shared. The scheduler resolves the same ladder for a node.
+    The sharing ladder for a call: the reference's own `.opts(shared=…)` or the
+    task's declaration, then what the calling task inherited (`ctx.shared` — an
+    unshared request asks unshared for everything it needs), then shared. The
+    scheduler resolves the same ladder for a node.
     """
     from footman import context
 
-    own = registry.volatility(task)
+    own = registry.sharing(task)
     if own is not None:
-        return own
+        return not own
     ctx = context._current.get()
-    return ctx is not None and ctx.volatile
+    return ctx is not None and not ctx.shared
 
 
 def _key(task: Any, args: Any, kwargs: dict[str, Any]) -> Any | None:
@@ -211,8 +211,8 @@ def call(task: Any, args: tuple[Any, ...], kwargs: dict[str, Any]) -> Any:
     key = _key(task, args, kwargs)
     if key is None:  # arguments with no frozen form: honest work every time
         return _run_now(task, args, kwargs)
-    if wants_fresh(task):
-        # Asked for freshly: never read a cell. It still *fills* an empty one,
+    if unshared(task):
+        # Asked for unshared: never read a cell. It still *fills* an empty one,
         # because the first result of a run is the one the run remembers — a
         # later shared request can reuse it.
         value = _run_now(task, args, kwargs)
@@ -236,7 +236,7 @@ def call(task: Any, args: tuple[Any, ...], kwargs: dict[str, Any]) -> Any:
     finally:
         with run.lock:
             run.waits.pop(me, None)
-    _record(_cached_result(cell.label, value))
+    _record(_shared_result(cell.label, value))
     return value
 
 
@@ -303,7 +303,7 @@ def _record(result: TaskResult) -> None:
         run.results.append(result)
 
 
-def _cached_result(label: str, value: Any) -> TaskResult:
+def _shared_result(label: str, value: Any) -> TaskResult:
     """The report entry for a request the run had already satisfied.
 
     Recorded rather than left invisible: the work happened, and a reader (or a
@@ -320,7 +320,7 @@ def _cached_result(label: str, value: Any) -> TaskResult:
         task=label,
         ok=True,
         returned=value,
-        state="cached",
+        state="shared",
         blocked_by=label,
     )
 

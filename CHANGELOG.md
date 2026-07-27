@@ -76,31 +76,32 @@ versions may include breaking changes.
   keeps working. An `int` return remains a segment's exit code, while a call
   gets the number as a value.
 
-- **`@task(volatile=True)` — work that is never shared.** Some work exists to
+- **`@task(shared=False)` — work that is never shared.** Some work exists to
   happen again: a notification, a timestamp, a scratch clean. Every request for
-  a volatile task runs, whether that request is a call, a chain segment, or a
+  such a task runs, whether that request is a call, a chain segment, or a
   `pre=` edge — one rule, so the spelling never changes the answer. Sharing is
-  a property of the request: `.opts(volatile=…)` first, then the task's
+  a property of the request: `.opts(shared=…)` first, then the task's
   declaration, then whatever asked for it, then shared. It propagates down the
-  dependency subtree, because a freshly requested task asks freshly for what it
-  needs, so `volatile=False` is the pin for a step that genuinely is reusable.
-  A fresh run never rewrites what the run already remembers — the first result
+  dependency subtree, because an unshared request asks unshared for what it
+  needs, so `shared=True` is the pin for a step that genuinely is reusable. An
+  unshared run never rewrites what the run already remembers — the first result
   stands.
 
-- **A request the run had already satisfied is reported as a cache hit.** A
-  body call that finds its work already done returns the memoised value —
-  and used to leave no trace, so the second request simply vanished from the
-  report. It now appears, marked `cached`: dimmed in the summary with
-  "already run this run" where a duration would be, and carrying
-  `state: "cached"` in the `--json` envelope. It never began, so it has no
-  start of its own and the ordering rule places it directly after the
-  execution that satisfied it; it is `ok`, since the work succeeded just
-  earlier, so the run's exit code is untouched.
+- **A request the run had already satisfied is reported as `shared`.** A body
+  call that finds its work already done returns the memoised value — and used
+  to leave no trace, so the second request simply vanished from the report. It
+  now appears, marked `shared`: dimmed in the summary with "already run this
+  run" where a duration would be, and carrying `state: "shared"` in the
+  `--json` envelope. It never began, so it has no start of its own and the
+  ordering rule places it directly after the execution that satisfied it; it
+  is `ok`, since the work succeeded just earlier, so the run's exit code is
+  untouched.
 
   `state` is the reported spelling of what happened — `ok` / `failed` /
-  `cancelled` / `cached` — resolved in one place. `ok` and `code` stay the
+  `cancelled` / `shared` — resolved in one place. `ok` and `code` stay the
   exit-code channel, so a future outcome is another value of `state` rather
-  than another boolean beside it.
+  than another boolean beside it. Sharing within a run and caching across runs
+  are two axes, and each keeps one word.
 
 - **The run's report reads in the order the run happened.** A dependency
   listing has no place for a task reached by a call; a chronological one does.

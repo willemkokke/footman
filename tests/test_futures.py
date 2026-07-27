@@ -1,4 +1,4 @@
-"""Body calls as run-scoped futures: memo, waiting, refusals, `volatile`."""
+"""Body calls as run-scoped futures: sharing, waiting, refusals, reporting."""
 
 from __future__ import annotations
 
@@ -82,11 +82,11 @@ def test_the_memo_keys_on_arguments_not_just_the_task():
     assert seen == ["web", "api"]
 
 
-def test_a_volatile_task_executes_on_every_call():
+def test_an_unshared_task_runs_on_every_call():
     reg = Group("root")
     runs: list[int] = []
 
-    @reg.task(volatile=True)
+    @reg.task(shared=False)
     def notify() -> None:
         runs.append(1)
 
@@ -100,15 +100,15 @@ def test_a_volatile_task_executes_on_every_call():
     assert len(runs) == 3
 
 
-def test_a_volatile_prerequisite_is_never_shared():
-    # Volatile means "not shared", and that is one rule for every spelling:
+def test_an_unshared_prerequisite_is_never_shared():
+    # `shared=False` is one rule for every spelling:
     # two dependents each get their own run, exactly as two calls would. No
     # one has to remember whether they reached the task by declaration or by
     # call.
     reg = Group("root")
     runs: list[int] = []
 
-    @reg.task(volatile=True)
+    @reg.task(shared=False)
     def stamp() -> None:
         runs.append(1)
 
@@ -122,7 +122,7 @@ def test_a_volatile_prerequisite_is_never_shared():
     assert len(runs) == 2  # one per requester
 
 
-def test_volatility_propagates_down_the_subtree():
+def test_unsharedness_propagates_down_the_subtree():
     # "Give me a fresh build" has to mean its inputs are fresh too, or fresh
     # is a half-truth: the property flows from a requester into what it needs.
     reg = Group("root")
@@ -136,7 +136,7 @@ def test_volatility_propagates_down_the_subtree():
     def bundle() -> None:
         runs.append("bundle")
 
-    @reg.task(volatile=True, pre=[bundle])
+    @reg.task(shared=False, pre=[bundle])
     def release_() -> None:
         runs.append("release")
 
@@ -153,27 +153,27 @@ def test_volatility_propagates_down_the_subtree():
 
 def test_an_own_declaration_beats_an_inherited_one():
     # The pin for an expensive step that genuinely is reusable: declaring
-    # volatile=False keeps it shared even under a freshly-requested parent.
+    # shared=True keeps it shared even under an unshared parent.
     reg = Group("root")
     runs: list[str] = []
 
-    @reg.task(volatile=False)
+    @reg.task(shared=True)
     def fetch_deps() -> None:
         runs.append("fetch")
 
-    @reg.task(volatile=True, pre=[fetch_deps])
+    @reg.task(shared=False, pre=[fetch_deps])
     def build_web() -> None: ...
 
-    @reg.task(volatile=True, pre=[fetch_deps])
+    @reg.task(shared=False, pre=[fetch_deps])
     def build_api() -> None: ...
 
     assert drive(reg, "build-web build-api").ok
-    assert runs.count("fetch") == 1  # shared despite two volatile parents
+    assert runs.count("fetch") == 1  # shared despite two unshared parents
 
 
-def test_a_per_call_override_asks_for_one_fresh_run():
-    # `.opts(volatile=True)` is the per-request spelling — it replaces the
-    # `fresh()` idea, and works on a declared edge just as well as on a call.
+def test_a_per_call_override_asks_for_one_unshared_run():
+    # `.opts(shared=False)` is the per-request spelling, and works on a
+    # declared edge just as well as on a call.
     reg = Group("root")
     runs: list[int] = []
 
@@ -186,16 +186,16 @@ def test_a_per_call_override_asks_for_one_fresh_run():
     def go():
         first = stamp()  # runs, and fills the cell
         again = stamp()  # shared: the cell answers
-        fresh = stamp.opts(volatile=True)()  # asked freshly: runs again
-        assert (first, again, fresh) == (1, 1, 2)
+        own = stamp.opts(shared=False)()  # asked unshared: runs again
+        assert (first, again, own) == (1, 1, 2)
 
     assert drive(reg, "go").ok
     assert len(runs) == 2
 
 
 def test_the_first_result_is_the_one_the_run_remembers():
-    # First-write-wins: a fresh re-run gets its own value, but never rewrites
-    # what the run already remembers, so a later shared request is stable.
+    # First-write-wins: an unshared re-run gets its own value, but never
+    # rewrites what the run already remembers, so a later request is stable.
     reg = Group("root")
     runs: list[int] = []
 
@@ -207,7 +207,7 @@ def test_the_first_result_is_the_one_the_run_remembers():
     @reg.task
     def go():
         assert stamp() == 1
-        assert stamp.opts(volatile=True)() == 2  # its own, fresh value
+        assert stamp.opts(shared=False)() == 2  # its own, unshared value
         assert stamp() == 1  # …and the remembered first result stands
 
     assert drive(reg, "go").ok
@@ -394,27 +394,27 @@ def test_two_threads_calling_one_task_share_a_single_execution():
     assert seen == ["once", "once", "once"]
 
 
-def test_volatility_is_a_tri_state():
+def test_sharing_is_a_tri_state():
     # Unset is a third state, not False: it means "whoever asks decides", which
-    # is what lets the property propagate and what makes volatile=False a
+    # is what lets the property propagate and what makes shared=True a
     # deliberate pin rather than a no-op.
     reg = Group("root")
 
-    @reg.task(volatile=True)
+    @reg.task(shared=False)
     def always(): ...
 
-    @reg.task(volatile=False)
+    @reg.task(shared=True)
     def never(): ...
 
     @reg.task
     def unset(): ...
 
-    assert registry.volatility(always) is True
-    assert registry.volatility(never) is False
-    assert registry.volatility(unset) is None
+    assert registry.sharing(always) is False
+    assert registry.sharing(never) is True
+    assert registry.sharing(unset) is None
     # `.opts()` overrides the declaration for one request.
-    assert registry.volatility(unset.opts(volatile=True)) is True
-    assert registry.volatility(always.opts(volatile=False)) is False
+    assert registry.sharing(unset.opts(shared=False)) is False
+    assert registry.sharing(always.opts(shared=True)) is True
 
 
 def test_the_machinery_refuses_before_it_memoises():
@@ -568,7 +568,7 @@ def test_something_that_never_began_sits_after_what_prevented_it():
 # --- a request the run had already satisfied is reported, not invisible -------
 
 
-def test_a_memo_hit_is_reported_as_cached():
+def test_a_memo_hit_is_reported_as_shared():
     # The work happened once; the second request was answered rather than
     # performed, and the report says so instead of the request vanishing.
     reg = Group("root")
@@ -587,14 +587,14 @@ def test_a_memo_hit_is_reported_as_cached():
     assert result.ok, result.stderr
     assert len(runs) == 1
     states = [(r.task, executor.reported_state(r)) for r in result.results]
-    assert states == [("build", "ok"), ("build", "cached"), ("publish", "ok")]
+    assert states == [("build", "ok"), ("build", "shared"), ("publish", "ok")]
     hit = result.results[1]
     assert hit.returned == "dist/app"  # it carries the value it answered with
     assert hit.ok and hit.started is None  # succeeded earlier; never began here
     assert hit.blocked_by == "build"  # placed right after the run that satisfied it
 
 
-def test_a_cached_entry_does_not_change_the_exit_code():
+def test_a_shared_entry_does_not_change_the_exit_code():
     reg = Group("root")
 
     @reg.task
@@ -604,14 +604,14 @@ def test_a_cached_entry_does_not_change_the_exit_code():
     @reg.task
     def gate():
         assert probe() == 3
-        assert probe() == 3  # the second is a cache hit
+        assert probe() == 3  # the second is answered by the first
 
     result = drive(reg, "gate")
     assert result.ok and result.exit_code == 0
     assert [executor.reported_state(r) for r in result.results] == [
         "ok",
         "ok",
-        "cached",
+        "shared",
     ]
 
 
@@ -627,14 +627,14 @@ def test_reported_state_resolves_one_word_from_the_parts():
         == "cancelled"
     )
     assert (
-        executor.reported_state(TaskResult(task="a", ok=True, state="cached"))
-        == "cached"
+        executor.reported_state(TaskResult(task="a", ok=True, state="shared"))
+        == "shared"
     )
 
 
 def test_the_ladder_resolver_is_shared():
-    # `volatile` is the first user of the down-the-subtree ladder; a later
-    # property reuses this rather than copying it.
+    # Sharing is the first user of the down-the-subtree ladder; a later
+    # property (a cross-run "never cached") reuses this rather than copying it.
     from footman import schedule
 
     assert schedule.resolve_inherited(True, False) is True  # own wins

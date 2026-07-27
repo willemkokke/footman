@@ -723,7 +723,7 @@ def _print_summary(
         cancelled = result.cancelled
         state = executor.reported_state(result)
         if color:
-            if state == "cached":
+            if state == "shared":
                 # Dimmed, not green: nothing ran, the run already had it.
                 mark = "\033[2m·\033[0m"
             elif ok:
@@ -735,11 +735,11 @@ def _print_summary(
             name = f"\033[1;36m{result.task:<{width}}\033[0m"
         else:
             word = "ok" if ok else ("cut" if cancelled else "FAIL")
-            if state == "cached":
-                word = "hit"
+            if state == "shared":
+                word = "same"
             mark = f"{word:<4}"
             name = f"{result.task:<{width}}"
-        if state == "cached":
+        if state == "shared":
             timing = "(already run this run)"
         elif timings:
             timing = f"({result.duration * 1000:.0f} ms)"

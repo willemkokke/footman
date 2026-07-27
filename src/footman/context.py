@@ -199,11 +199,12 @@ class Context:
     """This task's resolved (per-subtree) failure policy, tagged onto the
     subprocesses it spawns so a fail-fast failure elsewhere reaps only the
     fail-fast trees in a mixed run, sparing a keep-going task's."""
-    volatile: bool = False
-    """This task was requested *freshly*: nothing already run satisfies it, and
-    every task it asks for inherits the same unless that task declares its own
-    answer. Resolved per node by the scheduler and per call by the cell layer —
-    the sharing twin of `keep_going`'s per-subtree policy."""
+    shared: bool = True
+    """Whether an execution the run has already performed may satisfy this
+    request. `False` means it gets its own run, and so does everything it asks
+    for, unless that task declares its own answer. Resolved per node by the
+    scheduler and per call by the cell layer — the sharing twin of
+    `keep_going`'s per-subtree policy."""
     in_task: bool = False
     """True while a task *body* runs (the scheduler sets it around the call),
     so the interactive primitives tell a guarded mid-body call from the

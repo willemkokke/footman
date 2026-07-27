@@ -106,12 +106,11 @@ personality is built against. Consequences if it is ever built:
   someone deleted `dist/` must be a miss.
 - Nondeterministic outputs (a timestamp in the file) never re-verify;
   needs a recorded-but-not-verified mode or existence-only checking.
-- The escape hatch wants `volatile`'s shape. Phase 3 made volatile a
-  tree-propagating property of the *request* with the ladder
-  `.opts(volatile=)` → declaration → inherited → shared. "Never shared" and
-  "never cached" want that identical propagation. **Open naming question:
-  one word or two** — worth settling before more surface accretes on
-  `volatile`.
+- The escape hatch wants sharing's shape. Phase 3 made it a tree-propagating
+  property of the *request* with the ladder `.opts(shared=)` → declaration →
+  inherited → shared. "Never shared" and "never cached" want that identical
+  propagation. **Settled: two words, one shared resolver** — the flag landed
+  as `shared=` (see below), leaving `cached` free for the across-runs axis.
 
 ## Two things not to do
 
@@ -138,7 +137,7 @@ Walked against the phase 4/5 hook surface as planned:
 | Write a cross-run journal | yes — `post_tasks` (`inv.results` + `inv.skipped`) |
 | Read it back next run | yes — `pre_tasks` |
 | `--no-cache`, cache dir config | yes — phase 5 `GlobalOption`, `[tool.footman.<name>]` (D14) |
-| Escape hatch per task/subtree | yes — `volatile`'s ladder |
+| Escape hatch per task/subtree | yes — the `shared=` ladder |
 | **Skip the body, supply the result** | **no — the one missing primitive** |
 | Which env vars the task actually read | no — the router observes it, nothing exposes it |
 | Stable hash of the task's source | partly — `task_source` exists but is core-internal |
@@ -253,9 +252,10 @@ not lying to you.
    → *Being done.* Structure was already right (`_call` has one caller pair
    in `run_bound`); only the reserving wording is needed.
 2. Does `volatile` absorb "do not cache", or are they separate words?
-   → **Still Willem's call.** The implementing agent recommends separate
-   words sharing one resolver, on the argument that the axes differ ("never
-   shared" is within a run, "never cached" is across runs) and
+   → **Settled: separate words, one shared resolver.** The flag is `shared=`
+   and the in-run report state is `shared`; `cached` stays unspent for the
+   across-runs axis. The original argument, for the record: the axes differ
+   ("never shared" is within a run, "never cached" is across runs) and
    shared-but-never-cached is an ordinary combination — expensive and
    nondeterministic. Good argument, not yet a decision.
 3. Does resume-from-failure ship as its own small feature ahead of any
@@ -293,11 +293,14 @@ Beyond the four above:
   stay the internal exit-code channel. Adding a field keeps `schema: 1`
   compatible where changing `ok` would not. Docs must tell consumers to
   tolerate unknown state values, or "open" is only true on our side.
-- **Volatility resolver** — was *not* already extracted: inlined at
+- **Sharing resolver** — was *not* already extracted: inlined at
   schedule.py:150 (dependencies) and schedule.py:213 (chain segments), and
-  the two spellings differ — the segment site drops the inherited rung,
-  correctly but implicitly. Extraction unifies them; being made generic
-  over the marker so a later property reuses it unchanged.
+  the two spellings differed — the segment site dropped the inherited rung,
+  correctly but implicitly. **Done:** `schedule.resolve_inherited(declared,
+  inherited)`, named for the mechanism rather than either axis, so the
+  across-runs property reuses it unchanged. Extracting it also made the
+  segment case explicit (a chain segment is a root, so nothing asked for
+  it).
 - **`markers` passthrough on the peeled spec** — must be runtime-only and
   provably absent from the manifest, which is JSON on disk read by the
   import-free hot path; arbitrary marker objects are not serialisable.
@@ -395,7 +398,7 @@ Which makes `volatile` the word to retire — see below. The report state is
 the more urgent half: the flag is one API surface, the state string is what
 every user reads on every run.
 
-## `volatile` is the mis-named one
+## `volatile` is the mis-named one — LANDED as `shared=`
 
 Its own documentation never uses it to explain itself
 (`docs/orchestration.md`, the futures branch): the section header says
@@ -423,8 +426,23 @@ non-volatile, durable storage — is precisely about surviving a restart,
 which is the *other* axis; two words from one family for two orthogonal
 axes reads worse than two unrelated words.
 
-**Timing:** `volatile` is in PR #93, unmerged — ~70 occurrences across
-`registry.py`, `schedule.py`, `_futures.py`, `context.py`, the docs,
-CHANGELOG and `test_futures.py`, all in the branch that introduced them.
-Renaming after merge is a second breaking change to a flag introduced one
-release earlier.
+**Timing:** taken while `volatile` was still unmerged in PR #93, so nothing
+published ever carried the word. Renaming after the merge would have been a
+second breaking change to a flag introduced one release earlier.
+
+**Done** (in #93, before merge): `@task(shared=…)`, `.opts(shared=…)`,
+`registry.sharing()` for the tri-state read, `ctx.shared` / `_Node.shared`
+carrying the resolved answer (defaulting to `True` now that the positive
+reading is the default), `_futures.unshared()` for the per-call ladder, and
+the report state `shared`. The docs section is retitled "Work that is never
+shared: `shared=False`" and the admonition "Unsharing propagates down the
+subtree", so the prose stopped translating.
+
+One point of evidence the proposal did not use, and the strongest of them:
+`shared` was **already** the codebase's word for this concept, in core
+docstrings written long before the futures branch — `schedule._dep_key` says
+"a shared prerequisite still runs once" and `docs/orchestration.md` says
+"deduping shared deps". So this was a reunification rather than a rename;
+`volatile` was the newcomer that did not fit the vocabulary already in use.
+`docs/testing.md`'s "filter the volatile fields" is the English word about
+values that vary between runs, and was deliberately left alone.

@@ -70,10 +70,12 @@ class TaskResult:
     the report. `None` for something that never began (an unavailable task, a
     denied confirm), which is why the report places those by cause instead."""
     state: str = ""
-    """What happened, when `ok`/`code` do not say it: `"cached"` for a request
-    the run had already satisfied. Empty means "read it from `ok`" — `reported`
-    below is the one place that resolves the two into a single word, so a new
-    outcome is a new value here rather than another boolean beside it."""
+    """What happened, when `ok`/`code` do not say it: `"shared"` for a request
+    an execution of this run had already satisfied. Empty means "read it from
+    `ok`" — `reported_state` is the one place that resolves the parts into a
+    single word, so a new outcome is a new value here rather than another
+    boolean beside it. A cross-run cache (a plugin's business) would add
+    `"cached"`; the two axes keep one word each."""
     blocked_by: str = ""
     """The task whose outcome meant this one never ran, when there was one. The
     report reads as cause then consequence: a non-run sits directly after
@@ -84,8 +86,8 @@ def reported_state(result: TaskResult) -> str:
     """The one word for what happened, resolved from the parts.
 
     `ok` and `code` stay the exit-code channel; this is the *reported*
-    spelling, so a new outcome (skipped, unavailable, a cache hit) becomes
-    another value here instead of another boolean on the result.
+    spelling, so a new outcome (skipped, unavailable, a cross-run cache hit)
+    becomes another value here instead of another boolean on the result.
     """
     if result.state:
         return result.state

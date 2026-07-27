@@ -395,35 +395,37 @@ Two calls footman refuses outright, because a call has nowhere to put them: a
 mid-body, which is what keeps the arbiter deadlock-free) and an `infinite` task
 (a call that never returns). Declare those with `pre=` instead.
 
-### Asking for fresh work: `volatile`
+### Work that is never shared: `shared=False`
 
 Some work exists to happen again — a notification, a timestamp, a scratch
-clean. `@task(volatile=True)` says the task is **never shared**: every request
-for it runs, whether that request is a call, a chain segment, or a `pre=` edge.
-One rule, so the spelling you used never changes the answer.
+clean. `@task(shared=False)` says exactly that: every request for the task
+runs, whether the request is a call, a chain segment, or a `pre=` edge. One
+rule, so the spelling you used never changes the answer.
 
 Sharing is a property of the *request*, resolved in this order: the reference's
-own `.opts(volatile=…)`, then the task's declaration, then whatever asked for
-it, then shared. `.opts(volatile=True)` asks for one fresh run without changing
+own `.opts(shared=…)`, then the task's declaration, then whatever asked for it,
+then shared. `.opts(shared=False)` asks for one unshared run without changing
 the task — on a call or on a declared edge alike:
 
 ```python
 @task
 def deploy():
-    stamp()                          # shared: the run's one stamp
-    stamp.opts(volatile=True)()      # this one runs, whatever came before
+    stamp()                       # shared: the run's one stamp
+    stamp.opts(shared=False)()    # this one runs, whatever came before
 ```
 
-A fresh run gets its own value but never rewrites what the run already
-remembers: the first result stands, so later shared requests stay stable.
+An unshared run gets its own value but never rewrites what the run already
+remembers: the first result stands, so later shared requests stay stable. A
+request answered by an earlier execution is reported as `shared`, so the run
+never looks like it did less than you asked.
 
-!!! warning "Volatile propagates down the subtree"
+!!! warning "Unsharing propagates down the subtree"
 
-    A freshly requested task asks freshly for everything it needs — otherwise
-    "fresh" would be a half-truth — so marking one task volatile unshares its
-    **whole dependency subtree**. A `compile` shared by two volatile builds
+    An unshared request asks unshared for everything it needs — otherwise the
+    promise would be a half-truth — so one `shared=False` unshares that task's
+    **whole dependency subtree**. A `compile` shared by two unshared builds
     runs twice, and a deep tree multiplies. Pin anything that genuinely is
-    reusable with `volatile=False`, which beats an inherited answer.
+    reusable with `shared=True`, which beats an inherited answer.
 
 ## Progress & the live status line
 

@@ -54,7 +54,7 @@ _POST = "_footman_post"
 _KEEP_GOING = "_footman_keep_going"
 _ATOMIC = "_footman_atomic"
 _INFINITE = "_footman_infinite"
-_VOLATILE = "_footman_volatile"
+_SHARED = "_footman_shared"
 _HIDDEN = "_footman_hidden"
 _INTERACTIVE = "_footman_interactive"
 _PROGRESS = "_footman_progress"
@@ -168,7 +168,7 @@ _OPTS_ATTRS = {
     "progress": _PROGRESS,
     "confirm": _CONFIRM,
     "infinite": _INFINITE,
-    "volatile": _VOLATILE,
+    "shared": _SHARED,
     "cwd": _CWD,
     "rel": _REL,
     "serial": _SERIAL,
@@ -261,7 +261,7 @@ class _Opted:
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         # Route as *this reference*, not the bare task: the overrides are part
-        # of the request (`build.opts(volatile=True)()` asks for a fresh build).
+        # of the request (`build.opts(shared=False)()` asks for its own run).
         from footman import _futures
 
         return _futures.call(self, args, kwargs)
@@ -394,7 +394,7 @@ def _apply_policy(
     post: Sequence[Task],
     progress: bool,
     infinite: bool,
-    volatile: bool | None,
+    shared: bool | None,
     confirm: str,
     interactive: bool,
     keep_going: bool | None,
@@ -419,8 +419,8 @@ def _apply_policy(
         setattr(fn, _PROGRESS, False)
     if infinite:
         setattr(fn, _INFINITE, True)
-    if volatile is not None:
-        setattr(fn, _VOLATILE, volatile)
+    if shared is not None:
+        setattr(fn, _SHARED, shared)
     if hidden is not None:
         # Tri-state on purpose: unset inherits the enclosing group's answer,
         # so `hidden=False` on a child of a hidden group is a real override
@@ -558,7 +558,7 @@ class Group:
         post: Sequence[Task] = (),
         progress: bool = True,
         infinite: bool = False,
-        volatile: bool | None = None,
+        shared: bool | None = None,
         confirm: str = "",
         interactive: bool = False,
         keep_going: bool | None = None,
@@ -579,7 +579,7 @@ class Group:
         post: Sequence[Task] = (),
         progress: bool = True,
         infinite: bool = False,
-        volatile: bool | None = None,
+        shared: bool | None = None,
         confirm: str = "",
         interactive: bool = False,
         keep_going: bool | None = None,
@@ -636,26 +636,25 @@ class Group:
         run swaps the status line for a one-time hint that Ctrl-C is how
         this ends. Listings and help carry the same note.
 
-        `volatile=True` says this task is **never shared**: every request for
-        it executes. A run normally performs one execution per task and
-        arguments, whoever asks — `pre=[build]` then `build()` in a body is
-        one build — which is wrong for work whose whole point is to happen
-        again, like a notification or a timestamp. One rule covers every
-        spelling, so nobody has to remember whether a task was reached by
-        declaration or by call: two dependents each get their own run, just
-        as two calls do.
+        `shared=False` says this task is **never shared**: every request for
+        it runs. A run normally performs one execution per task and arguments,
+        whoever asks — `pre=[build]` then `build()` in a body is one build —
+        which is wrong for work whose whole point is to happen again, like a
+        notification or a timestamp. One rule covers every spelling, so nobody
+        has to remember whether a task was reached by declaration or by call:
+        two dependents each get their own run, just as two calls do.
 
         Sharing is a property of the **request**, resolved by a ladder: this
-        reference's own `.opts(volatile=…)`, then the task's declaration, then
-        whatever asked for it, then shared. It propagates *down* — a freshly
-        requested task asks freshly for everything it needs, or "fresh" would
-        be a half-truth — which is worth knowing before you reach for it,
-        because marking one task volatile unshares its whole subtree. A step
-        that genuinely is reusable pins itself with `volatile=False`, which
-        beats an inherited answer.
+        reference's own `.opts(shared=…)`, then the task's declaration, then
+        whatever asked for it, then shared. It propagates *down* — an unshared
+        request asks unshared for everything it needs, or the promise would be
+        a half-truth — which is worth knowing before reaching for it, because
+        one `shared=False` unshares that task's whole subtree. A step that
+        genuinely is reusable pins itself with `shared=True`, which beats an
+        inherited answer.
 
-        `.opts(volatile=True)` asks for one fresh run without changing the
-        task, on a call or on a declared edge alike. A fresh run gets its own
+        `.opts(shared=False)` asks for one unshared run without changing the
+        task, on a call or on a declared edge alike. Such a run gets its own
         value but never rewrites what the run already remembers: the first
         result stands, so later shared requests stay stable.
 
@@ -697,7 +696,7 @@ class Group:
                 post=post,
                 progress=progress,
                 infinite=infinite,
-                volatile=volatile,
+                shared=shared,
                 confirm=confirm,
                 interactive=interactive,
                 keep_going=keep_going,
@@ -785,7 +784,7 @@ class Group:
         post: Sequence[Task] = (),
         progress: bool = True,
         infinite: bool = False,
-        volatile: bool | None = None,
+        shared: bool | None = None,
         confirm: str = "",
         interactive: bool = False,
         keep_going: bool | None = None,
@@ -805,7 +804,7 @@ class Group:
         post: Sequence[Task] = (),
         progress: bool = True,
         infinite: bool = False,
-        volatile: bool | None = None,
+        shared: bool | None = None,
         confirm: str = "",
         interactive: bool = False,
         keep_going: bool | None = None,
@@ -855,7 +854,7 @@ class Group:
                 post=post,
                 progress=progress,
                 infinite=infinite,
-                volatile=volatile,
+                shared=shared,
                 confirm=confirm,
                 interactive=interactive,
                 keep_going=keep_going,
@@ -995,17 +994,17 @@ def is_infinite(fn: Task) -> bool:
     return getattr(fn, _INFINITE, False) is True
 
 
-def volatility(fn: Task) -> bool | None:
-    """*fn*'s declared sharing policy: `@task(volatile=True/False)`, or `None`
+def sharing(fn: Task) -> bool | None:
+    """*fn*'s declared sharing policy: `@task(shared=True/False)`, or `None`
     when it left the choice to whoever asks for it.
 
-    Volatility is a property of a *request*, resolved by a ladder — the
-    request's own `.opts(volatile=…)`, then the task's declaration, then
-    whatever it was requested by (it propagates down a dependency subtree),
-    then shared. This reader is the declaration rung; `schedule` resolves the
-    rest, exactly as it does for `keep_going`.
+    Sharing is a property of a *request*, resolved by a ladder — the request's
+    own `.opts(shared=…)`, then the task's declaration, then whatever it was
+    requested by (it propagates down a dependency subtree), then shared. This
+    reader is the declaration rung; `schedule` resolves the rest, exactly as it
+    does for `keep_going`.
     """
-    return getattr(fn, _VOLATILE, None)
+    return getattr(fn, _SHARED, None)
 
 
 def task_body(fn: Task) -> Task:
