@@ -334,9 +334,35 @@ def _pick_asset(assets: list[tuple[str, str]]) -> tuple[str, str]:
 # --- download + unpack -------------------------------------------------------
 
 
+def api_headers(url: str) -> dict[str, str]:
+    """What to send an index — a User-Agent, and a token when one is offered.
+
+    GitHub allows 60 unauthenticated API calls an hour *per IP* and 5,000 with
+    a token. Sixty sounds ample for a set with two forge-hosted tools until
+    the IP is a shared CI runner, where the budget is spent by whoever else is
+    on it; a prime that walks ten releases each is then throttled by strangers.
+
+    Read from the environment rather than fetched from `gh`, so nothing here
+    depends on a CLI being installed: `GH_TOKEN=$(gh auth token)` locally, and
+    `secrets.GITHUB_TOKEN` in Actions. Absent, everything still works — just
+    against the smaller budget.
+
+    Sent to GitHub's **API host only**. urllib carries headers across
+    redirects, and a release asset redirects to a CDN that has no business
+    seeing a credential.
+    """
+    import os
+
+    headers = {"User-Agent": "footman-provision"}
+    token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
+    if token and url.startswith("https://api.github.com/"):
+        headers["Authorization"] = f"Bearer {token}"
+    return headers
+
+
 def _get_json(url: str) -> dict:
     """A JSON API response — GitHub/GitLab both want a User-Agent."""
-    request = urllib.request.Request(url, headers={"User-Agent": "footman-provision"})
+    request = urllib.request.Request(url, headers=api_headers(url))
     try:
         with urllib.request.urlopen(request, timeout=30) as response:
             return json.loads(response.read().decode("utf-8"))

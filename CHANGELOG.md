@@ -16,6 +16,14 @@ versions may include breaking changes.
   optional-dependency patterns, the determinism rule, and testing through
   the real pull path.
 
+- **A GitHub token is used when one is offered.** `GH_TOKEN` or
+  `GITHUB_TOKEN` in the environment raises the API budget from 60 calls an
+  hour to 5,000 — which matters less for footman's own volume than for a
+  shared CI runner, where the unauthenticated allowance is spent by whoever
+  else is on that IP. Sent to `api.github.com` only, never to an asset
+  download: urllib carries headers across redirects, and the CDN behind a
+  release asset has no business seeing a credential. Absent, everything still
+  works on the smaller budget.
 - **Every curated tool's history reaches ten releases**, so the stubs can say
   when an option arrived rather than only what exists today — 102 new `Added
   in` claims across the set. eclint reaches four, because four is all that

@@ -144,8 +144,11 @@ class Unreachable(Exception):
 
 def _index(url: str) -> dict:
     """A registry's JSON. Raises `Unreachable` when it cannot be read."""
+    from footman._provision import api_headers
+
+    request = urllib.request.Request(url, headers=api_headers(url))
     try:
-        with urllib.request.urlopen(url, timeout=TIMEOUT) as response:
+        with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
             return json.load(response)
     except (urllib.error.URLError, TimeoutError, ValueError, OSError) as cause:
         raise Unreachable(url, cause) from cause
