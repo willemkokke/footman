@@ -1,6 +1,7 @@
 # Interactive input in footman — problem-space map
 
-Where this came from: migrating the `hse` duties onto footman surfaced bare
+Where this came from: migrating a private project's duties onto footman
+surfaced bare
 `input()` in task bodies, which the capture model swallows (the prompt goes to
 the buffered stdout and is never seen; the task looks hung). A `prompt()` /
 `confirm()` primitive is already prototyped in the tree (see §7). This map is
@@ -30,8 +31,9 @@ you to confirm or overrule:
    exists: a `Literal[...]` param prompted becomes a typed single-select,
    `Many[Literal[...]]` a multi-select. Runtime `select(options)` (options not
    known until the task runs) is the only piece that needs new surface — and the
-   `hse` scan found **zero** runtime multi-selects. **Lean: ship the free static
-   case; defer runtime `select()` until a real dynamic case appears.**
+   scan of the consuming project found **zero** runtime multi-selects.
+   **Lean: ship the free static case; defer runtime `select()` until a real
+   dynamic case appears.**
 4. **Bless inbound stdin piping?** tox's precedent is elegant: stdin reaches the
    command **only on a real TTY** (`USER if isatty() else OFF`) — never hangs a
    pipe/CI. **Lean: don't forbid it, gate it on a TTY (the same `isatty()` gate

@@ -59,7 +59,7 @@ The blessed idiom is a **function**, `footman.fail(reason="", *, code=1)`, not a
 ## Why a function, not `raise Fail(...)`
 
 This is a **consumer-lint** decision. `footman.fail()` is *called* from tasks that
-live in a user's repo (`hse`, package-template, …), under *their* ruff. A
+live in a user's repo, under *their* ruff. A
 `raise SomeError("a literal message")` trips two popular strict rules **at the
 call site, in the user's code**:
 
