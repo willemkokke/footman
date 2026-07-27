@@ -1339,11 +1339,33 @@ def run_bound(
     work = _futures.work_of(fn, args, kwargs) if ctx.shared and not as_call else None
     claimed, cell = _futures.claim(work, seg.task)
     if not claimed:
+        # The pair is per request — only the body is shared. The pre fires
+        # here, post-bind and before the wait, so a span honestly covers it;
+        # the post closes the request with its row, and `result.state` says
+        # whether this request executed or was satisfied by another.
+        life = _lifecycle
+        if life is not None:
+            if handle is None:
+                handle = TaskHandle(fn, seg, ctx)
+            handle._bind(args, kwargs)
+            if (hook_error := _enter_task_hooks(life, handle)) is not None:
+                result = _result(seg, 1, None, hook_error, 0.0)
+                _exit_task_hooks(life, handle, result)
+                return result
         try:
             value = _futures.join(cell)
         except BaseException as exc:  # the execution we waited on failed
-            return _result(seg, 1, None, exc, 0.0)
-        return _futures.shared_result(seg.task, value)
+            result = _result(seg, 1, None, exc, 0.0)
+        else:
+            result = _futures.shared_result(seg.task, value)
+        if life is not None and handle is not None:
+            post_error = _exit_task_hooks(life, handle, result)
+            if post_error is not None and result.ok:
+                result.ok = False
+                result.code = 1
+                result.error = post_error
+                result.state = ""  # it no longer reads as a clean share
+        return result
 
     plain_args = args  # the caller-visible arguments, before ctx is injected
     if context_param_name(resolved_signature(fn)):

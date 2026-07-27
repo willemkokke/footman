@@ -401,8 +401,10 @@ write through:
 `result` reads everything — `ok`, `code`, `returned`, `error`, `duration`,
 `output`, `steps` — and writes one thing: `set_returned(value)`, which
 rewrites the **reported** value (the summary and the `--json` envelope),
-never what a dependent or a body caller received. A `shared` row likewise
-reports what its requester was actually handed.
+never what a dependent or a body caller received. A `shared` row starts out
+reporting what its requester was actually handed — and since the posts fire
+on it too, a reporter that rewrites the execution's row can rewrite the
+shares the same way.
 
 Pres run in plugin order and posts unwind in reverse, so the first plugin in
 speaks last. The post is the **task-finished event**: once an execution
@@ -412,9 +414,15 @@ fared — so a span opened in a pre always closes, even when another plugin's
 pre killed the task. Failures are loud and named: a raising `pre_task` fails
 the task like a failed prerequisite (the body never runs), and a raising
 `post_task` fails an otherwise-green task — a reporter that crashed must not
-pass silently. Under `--dry-run` nothing executes, so neither hook fires; a
-request satisfied by an execution the run already performed is a `shared`
-row, not a second execution, so it fires no hooks either.
+pass silently. Under `--dry-run` nothing executes, so nothing fires.
+
+**The pair is per request; only the body is shared.** A request satisfied by
+an execution the run already performed still gets the whole ladder — its
+`pre_task` fires post-bind, before the wait, and its `post_task` closes it
+with the `shared` row — so pairing never depends on sharing, and a span
+opened for a request always closes. `result.state == "shared"` is how a
+reporter that cares tells a share from a run; one that doesn't care never
+has to think about it.
 
 ### Before binding: `@pre_bind`
 
@@ -438,12 +446,10 @@ ladder (`pre_bind → bind → pre_task → body → post_task`), so state set a
 `pre_bind` is there at `post_task`. A body call binds like a segment, and its
 binding sees the same injected environment.
 
-Two boundary facts, stated plainly. **Binding happens per request; execution
-per work** — a request that then joins work the run already performed still
-bound first, so `pre_bind` may fire for a request whose row ends up `shared`
-(which fires no posts: nothing of it executed). And **a bind failure still
-fires the posts** — the attempt concluded, a bind-time span needs closing —
-with the refusal as the result.
+One boundary fact, stated plainly: **a bind failure still fires the posts**
+— the attempt concluded, a bind-time span needs closing — with the refusal
+as the result. Everything else follows the one rule above: the ladder is per
+request, only the body is shared.
 
 The window the ladder runs in is the task's managed window, opened before
 binding: hook code and validator code answer to the same rules a body does

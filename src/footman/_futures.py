@@ -287,6 +287,19 @@ def call(task: Any, args: tuple[Any, ...], kwargs: dict[str, Any]) -> Any:
             raise
         cell.future.set_result(value)
         return value
+    # The pair is per request — only the body is shared. The pre fires before
+    # the wait, so a span honestly covers it; the post closes the request
+    # with its `shared` row. A crashing hook must not pass silently here
+    # either: it fails this request, at the call site.
+    if life is not None and handle is not None:
+        handle._bind(args, kwargs)
+        if (hook_error := _executor._enter_task_hooks(life, handle)) is not None:
+            row = _executor._result(seg, 1, None, hook_error, 0.0)
+            _executor._exit_task_hooks(life, handle, row)
+            _record(row)
+            with run.lock:
+                run.waits.pop(me, None)
+            raise hook_error
     try:
         # A finished cell answers instantly (the memo); a live one blocks until
         # the thread that claimed it is done, and both hand back one value.
@@ -294,7 +307,17 @@ def call(task: Any, args: tuple[Any, ...], kwargs: dict[str, Any]) -> Any:
     finally:
         with run.lock:
             run.waits.pop(me, None)
-    _record(_shared_result(cell.label, value))
+    row = _shared_result(cell.label, value)
+    if life is not None and handle is not None:
+        post_error = _executor._exit_task_hooks(life, handle, row)
+        if post_error is not None:
+            row.ok = False
+            row.code = 1
+            row.error = post_error
+            row.state = ""  # it no longer reads as a clean share
+            _record(row)
+            raise post_error
+    _record(row)
     return value
 
 

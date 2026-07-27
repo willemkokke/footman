@@ -870,10 +870,14 @@ class Group:
     def pre_task(self, fn: Hook) -> Hook:
         """Register the before-each-task hook: `pre_task(inv, task)`.
 
-        Runs on the task's worker thread — in parallel across tasks, for every
-        execution of the run: a chain segment, a prerequisite, a fan-out
-        member, a body call. It fires after binding, so `task.args` holds the
-        real values the body will receive:
+        Runs on the task's worker thread — in parallel across tasks, for
+        every *request*: a chain segment, a prerequisite, a fan-out member, a
+        body call. Only the body is shared: a request satisfied by an
+        execution the run already performed still gets the pair, opened here
+        and closed by `post_task` with its `shared` row — so pairing never
+        depends on sharing, and only a reporter that cares reads
+        `result.state`. It fires after binding, so `task.args` holds the
+        real values the body would receive:
 
             @footman.pre_task
             def open_span(inv, task):
@@ -897,9 +901,11 @@ class Group:
     def post_task(self, fn: Hook) -> Hook:
         """Register the after-each-task hook: `post_task(inv, task, result)`.
 
-        The task-finished event: it fires for every execution that reached
-        the body stage, whatever the outcome — whether or not your plugin
-        registered a `pre_task`, and however any pre fared. Posts unwind in
+        The task-finished event: once a request's ladder opened, it fires
+        when the request concludes — an execution whatever its outcome, a
+        bind refusal, or a request satisfied by an execution the run already
+        performed (`result.state == "shared"`). It fires whether or not your
+        plugin registered a pre, and however any pre fared. Posts unwind in
         reverse plugin order, so the first plugin in speaks last.
 
         `result` reads everything (`ok`, `code`, `returned`, `error`,
