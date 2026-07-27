@@ -1165,6 +1165,13 @@ def test_a_gap_costs_precision_and_not_correctness():
 
 
 def _tools_run(line):
+    """Drive the real CLI in-process.
+
+    A list of arguments is passed through unsplit — a Windows path in a
+    command *string* would be shlex-split and lose its backslashes, which is
+    a fine way to make a cross-platform feature fail only on the platform it
+    is about.
+    """
     from footman.tasks.tools import tasks as tools_group
     from footman.testing import Runner
 
@@ -1237,7 +1244,11 @@ def test_a_refresh_reads_every_release_it_missed_not_just_the_newest(
     _isolate(tools, monkeypatch, tmp_path)
     _toolhistory.save(
         _toolhistory.new(
-            "ruff", version="1.0.0", date="2026-02-01", surface=_with_flags("quiet")
+            "ruff",
+            version="1.0.0",
+            date="2026-02-01",
+            surface=_with_flags("quiet"),
+            platforms=[tools._platform()],
         ),
         tmp_path / "history" / "ruff.json",
     )
@@ -1281,7 +1292,11 @@ def test_a_release_that_will_not_install_is_a_hole_not_a_dead_walk(
     _isolate(tools, monkeypatch, tmp_path)
     _toolhistory.save(
         _toolhistory.new(
-            "ruff", version="1.0.0", date="2026-02-01", surface=_with_flags("quiet")
+            "ruff",
+            version="1.0.0",
+            date="2026-02-01",
+            surface=_with_flags("quiet"),
+            platforms=[tools._platform()],
         ),
         tmp_path / "history" / "ruff.json",
     )
@@ -1330,7 +1345,11 @@ def test_a_refresh_with_nothing_new_warrants_no_release(tmp_path, monkeypatch):
     _isolate(tools, monkeypatch, tmp_path)
     _toolhistory.save(
         _toolhistory.new(
-            "ruff", version="1.0.3", date="2026-02-04", surface=_with_flags("quiet")
+            "ruff",
+            version="1.0.3",
+            date="2026-02-04",
+            surface=_with_flags("quiet"),
+            platforms=[tools._platform()],
         ),
         tmp_path / "history" / "ruff.json",
     )
@@ -1355,7 +1374,11 @@ def test_a_refresh_that_could_not_look_does_not_report_nothing_new(
     _isolate(tools, monkeypatch, tmp_path)
     _toolhistory.save(
         _toolhistory.new(
-            "ruff", version="1.0.3", date="2026-02-04", surface=_with_flags("quiet")
+            "ruff",
+            version="1.0.3",
+            date="2026-02-04",
+            surface=_with_flags("quiet"),
+            platforms=[tools._platform()],
         ),
         tmp_path / "history" / "ruff.json",
     )
@@ -1377,7 +1400,11 @@ def test_a_refresh_writes_its_own_events_into_the_changelog(tmp_path, monkeypatc
     _isolate(tools, monkeypatch, tmp_path)
     _toolhistory.save(
         _toolhistory.new(
-            "ruff", version="1.0.0", date="2026-02-01", surface=_with_flags("quiet")
+            "ruff",
+            version="1.0.0",
+            date="2026-02-01",
+            surface=_with_flags("quiet"),
+            platforms=[tools._platform()],
         ),
         tmp_path / "history" / "ruff.json",
     )
@@ -1404,7 +1431,11 @@ def test_a_refresh_with_no_events_writes_no_note(tmp_path, monkeypatch):
     _isolate(tools, monkeypatch, tmp_path)
     _toolhistory.save(
         _toolhistory.new(
-            "ruff", version="1.0.0", date="2026-02-01", surface=_with_flags("quiet")
+            "ruff",
+            version="1.0.0",
+            date="2026-02-01",
+            surface=_with_flags("quiet"),
+            platforms=[tools._platform()],
         ),
         tmp_path / "history" / "ruff.json",
     )
@@ -1434,7 +1465,11 @@ def test_a_prime_reaches_below_the_floor_and_only_below_it(tmp_path, monkeypatch
     _isolate(tools, monkeypatch, tmp_path)
     _toolhistory.save(
         _toolhistory.new(
-            "ruff", version="1.0.2", date="2026-02-03", surface=_with_flags("quiet")
+            "ruff",
+            version="1.0.2",
+            date="2026-02-03",
+            surface=_with_flags("quiet"),
+            platforms=[tools._platform()],
         ),
         tmp_path / "history" / "ruff.json",
     )
@@ -1469,7 +1504,11 @@ def test_a_floor_the_index_cannot_place_refuses_the_tool(tmp_path, monkeypatch):
     _isolate(tools, monkeypatch, tmp_path)
     _toolhistory.save(
         _toolhistory.new(
-            "ruff", version="0.9.9", date="2026-01-01", surface=_with_flags("quiet")
+            "ruff",
+            version="0.9.9",
+            date="2026-01-01",
+            surface=_with_flags("quiet"),
+            platforms=[tools._platform()],
         ),
         tmp_path / "history" / "ruff.json",
     )
@@ -1496,7 +1535,11 @@ def test_parallel_observations_each_own_their_environment(tmp_path, monkeypatch)
     _isolate(tools, monkeypatch, tmp_path)
     _toolhistory.save(
         _toolhistory.new(
-            "ruff", version="1.0.0", date="2026-02-01", surface=_with_flags("quiet")
+            "ruff",
+            version="1.0.0",
+            date="2026-02-01",
+            surface=_with_flags("quiet"),
+            platforms=[tools._platform()],
         ),
         tmp_path / "history" / "ruff.json",
     )
@@ -1595,3 +1638,535 @@ def test_a_bare_call_is_refused_with_directions(tmp_path, monkeypatch):
         tools.refresh(only="ruff")
     with pytest.raises(Failed, match=r"needs a run"):
         tools.prime(only="ruff")
+
+
+# --- cross-platform observations ---------------------------------------------
+#
+# One observation comes from one platform. Observations merge; the store
+# records only what a platform SAW (`absent` beside the surface, never inside
+# it), and every standing claim — who lacks an option now, since, until — is
+# derived at render time from those verdicts.
+
+
+def _reading(*options, verb="", help_of=None):
+    """One platform's surface for one release."""
+    help_of = help_of or {}
+    return _toolhistory.surface_of(
+        _spec(
+            verbs=(
+                Verb(
+                    name=verb,
+                    options=tuple(
+                        Option(n, (f"--{n}",), help=help_of.get(n, f"The {n}."))
+                        for n in options
+                    ),
+                ),
+            )
+        )
+    )
+
+
+def test_folding_keeps_every_option_and_names_who_missed_it():
+    """A matrix run folds before it touches the chain. Otherwise an option
+    only Linux has would be inserted, dropped by macOS, resurrected by
+    Windows — three real deltas for one release nobody changed."""
+    surface, absent = _toolhistory.fold(
+        {
+            "Linux": _reading("quiet", "fork"),
+            "macOS": _reading("quiet", "fork"),
+            "Windows": _reading("quiet"),
+        }
+    )
+    assert sorted(surface["verbs"][""]["options"]) == ["fork", "quiet"]
+    assert absent == {"\tfork": ["Windows"]}  # the exception, and only it
+
+
+def test_a_verb_missing_whole_is_said_once_not_per_option():
+    """`docker compose` absent on a platform is one fact about the command,
+    not forty about its flags — smaller, and what a reader wants."""
+    surface, absent = _toolhistory.fold(
+        {
+            "Linux": {
+                "help": "",
+                "verbs": {"up": _reading("build", "detach", verb="up")["verbs"]["up"]},
+            },
+            "Windows": {"help": "", "verbs": {}},
+        }
+    )
+    assert absent == {"up\t": ["Windows"]}
+    assert sorted(surface["verbs"]["up"]["options"]) == ["build", "detach"]
+
+
+def test_a_merge_widening_coverage_costs_the_chain_nothing():
+    """The sidecar never enters a delta, so a platform looking for the first
+    time cannot make the tool look like it changed — no recompute, no event,
+    no changelog line."""
+    doc = _toolhistory.new(
+        "demo",
+        version="2.0.0",
+        date="2026-01-02",
+        surface=_reading("quiet", "fork"),
+        platforms=["macOS"],
+    )
+    _toolhistory.extend(
+        doc,
+        version="1.0.0",
+        date="2026-01-01",
+        surface=_reading("quiet"),
+        platforms=["macOS"],
+    )
+    before = json.dumps(doc["deltas"], sort_keys=True)
+
+    moved = _toolhistory.merge(
+        doc,
+        version="2.0.0",
+        surface=_reading("quiet"),  # Windows lacks --fork
+        platforms=["Windows"],
+    )
+    assert moved is False  # the surface did not change; nothing to recompute
+    assert json.dumps(doc["deltas"], sort_keys=True) == before
+    assert doc["base"]["platforms"] == ["Windows", "macOS"]
+    assert doc["base"]["absent"] == {"\tfork": ["Windows"]}
+    assert "absent" not in json.dumps(doc["deltas"])  # never in a delta
+
+
+def test_a_merge_bringing_an_option_records_who_had_looked_without_it():
+    """An option only the newcomer sees was, by construction, missing for
+    everyone who looked before — that is an observed absence, and it is the
+    only reason the store may tag them."""
+    doc = _toolhistory.new(
+        "demo",
+        version="2.0.0",
+        date="2026-01-02",
+        surface=_reading("quiet"),
+        platforms=["macOS"],
+    )
+    _toolhistory.merge(
+        doc,
+        version="2.0.0",
+        surface=_reading("quiet", "winonly"),
+        platforms=["Windows"],
+    )
+    assert doc["base"]["absent"] == {"\twinonly": ["macOS"]}
+    assert "winonly" in doc["base"]["surface"]["verbs"][""]["options"]
+    # ...and never the merging platform itself, which is what saw it.
+    assert "Windows" not in json.dumps(doc["base"]["absent"])
+
+
+def test_the_store_records_only_absences_that_were_observed():
+    """The invariant the whole design rests on: `absent ⊆ platforms`. A
+    claim about a platform that never looked is derived at render time,
+    where a later sighting revises it — never written down, where it would
+    harden into a fact nobody rechecks."""
+    doc = _toolhistory.new(
+        "demo",
+        version="2.0.0",
+        date="2026-01-02",
+        surface=_reading("quiet", "fork"),
+        platforms=["macOS"],
+    )
+    _toolhistory.merge(
+        doc, version="2.0.0", surface=_reading("quiet"), platforms=["Windows"]
+    )
+    for version in _toolhistory.observed(doc):
+        entry = _toolhistory.entry_of(doc, version) or {}
+        looked = set(entry.get("platforms", []))
+        for key, who in entry.get("absent", {}).items():
+            assert set(who) <= looked, f"{version} {key} claims an unobserved absence"
+
+
+def test_a_sighting_on_a_platform_clears_its_standing_absence():
+    """Nothing means cross-platform. Windows lacked `--fork` at 1.0.0 and
+    has it at 2.0.0, so the claim is dropped — derived from the newest
+    verdict rather than chased back through the chain."""
+    doc = _toolhistory.new(
+        "demo",
+        version="2.0.0",
+        date="2026-01-02",
+        surface=_reading("quiet", "fork"),
+        platforms=["Windows", "macOS"],
+    )
+    _toolhistory.extend(
+        doc,
+        version="1.0.0",
+        date="2026-01-01",
+        surface=_reading("quiet", "fork"),
+        platforms=["Windows", "macOS"],
+    )
+    doc["deltas"]["1.0.0"]["absent"] = {"\tfork": ["Windows"]}  # the old verdict
+
+    options = {
+        o.name: o for v in _toolhistory.union(doc, name="demo").verbs for o in v.options
+    }
+    assert options["fork"].not_on == ()  # the newer sighting wins
+    assert options["quiet"].not_on == ()
+
+
+def test_an_absence_stands_until_that_platform_looks_again():
+    """A Linux-only week can neither set nor clear a Windows claim: the
+    verdict is per platform, and silence is not evidence."""
+    doc = _toolhistory.new(
+        "demo",
+        version="2.0.0",
+        date="2026-01-02",
+        surface=_reading("quiet", "fork"),
+        platforms=["Linux"],  # only Linux looked at the newer release
+    )
+    _toolhistory.extend(
+        doc,
+        version="1.0.0",
+        date="2026-01-01",
+        surface=_reading("quiet", "fork"),
+        platforms=["Linux", "Windows"],
+    )
+    doc["deltas"]["1.0.0"]["absent"] = {"\tfork": ["Windows"]}
+
+    options = {
+        o.name: o for v in _toolhistory.union(doc, name="demo").verbs for o in v.options
+    }
+    assert options["fork"].not_on == ("Windows",)  # still standing, still honest
+
+
+def test_a_platforms_own_floor_is_not_a_since():
+    """An option first seen where only one platform's coverage reaches was
+    not "added" there — the older releases were never read on that platform.
+    The chain's floor rule, one level down."""
+    doc = _toolhistory.new(
+        "demo",
+        version="2.0.0",
+        date="2026-01-02",
+        surface=_reading("quiet", "winonly"),
+        platforms=["Windows", "macOS"],
+    )
+    doc["base"]["absent"] = {"\twinonly": ["macOS"]}
+    _toolhistory.extend(
+        doc,
+        version="1.0.0",
+        date="2026-01-01",
+        surface=_reading("quiet"),
+        platforms=["macOS"],  # Windows never read this far back
+    )
+
+    options = {
+        o.name: o for v in _toolhistory.union(doc, name="demo").verbs for o in v.options
+    }
+    assert options["winonly"].since == ""  # Windows' floor is 2.0.0, not a since
+    assert options["winonly"].not_on == ("macOS",)
+
+
+def test_divergent_words_settle_the_same_whichever_leg_arrives_first():
+    """One copy of the text is stored, so the pick must not depend on merge
+    order — or two legs would flip a divergent help string every week, each
+    flip a delta in a store whose question is "did anything change"."""
+    words = {"Linux": {"quiet": "Hush, penguin."}, "Windows": {"quiet": "Hush, PC."}}
+
+    def built(order):
+        doc = _toolhistory.new(
+            "demo",
+            version="1.0.0",
+            date="2026-01-01",
+            surface=_reading("quiet", help_of=words[order[0]]),
+            platforms=[order[0]],
+        )
+        _toolhistory.merge(
+            doc,
+            version="1.0.0",
+            surface=_reading("quiet", help_of=words[order[1]]),
+            platforms=[order[1]],
+        )
+        return doc["base"]["surface"]["verbs"][""]["options"]["quiet"]["help"]
+
+    assert built(("Linux", "Windows")) == built(("Windows", "Linux"))
+    assert built(("Linux", "Windows")) == "Hush, penguin."  # priority, not order
+
+
+def test_a_merged_surface_change_recomputes_exactly_the_two_entries_that_saw_it():
+    """A merge that genuinely widens the surface is local, like a midfill:
+    the entry itself and the one below reference that surface, and nothing
+    else in the chain does."""
+    doc = _toolhistory.new(
+        "demo", version="3.0.0", date="2026-01-03", surface=_reading("quiet")
+    )
+    for version, surface in (
+        ("2.0.0", _reading("quiet")),
+        ("1.0.0", _reading("quiet")),
+    ):
+        _toolhistory.extend(
+            doc,
+            version=version,
+            date="2026-01-01",
+            surface=surface,
+            platforms=["macOS"],
+        )
+    doc["base"]["platforms"] = ["macOS"]
+    untouched = {v: json.dumps(d, sort_keys=True) for v, d in doc["deltas"].items()}
+
+    moved = _toolhistory.merge(
+        doc,
+        version="3.0.0",
+        surface=_reading("quiet", "winonly"),
+        platforms=["Windows"],
+    )
+    assert moved is True  # the surface grew, so the chain must be told
+    doc["deltas"]["2.0.0"] = {
+        **doc["deltas"]["2.0.0"],
+        **_toolhistory.delta(
+            doc["base"]["surface"], _toolhistory.at(doc, "2.0.0") or {}
+        ),
+    }
+    assert json.dumps(doc["deltas"]["1.0.0"], sort_keys=True) == untouched["1.0.0"]
+    for version in _toolhistory.observed(doc):
+        assert _toolhistory.at(doc, version) is not None, version
+
+
+def _elsewhere() -> str:
+    """A platform name that is never the one running the suite.
+
+    The tests run on all three, so "a platform that has not looked" cannot
+    be spelled with a literal — on the Linux runner, `"Linux"` is the host.
+    """
+    from footman.tasks import tools
+
+    return next(p for p in ("Linux", "Windows", "macOS") if p != tools._platform())
+
+
+def test_gather_writes_a_document_another_machine_can_fold(tmp_path, monkeypatch):
+    """The two halves are split because a Linux box cannot tell you what a
+    tool's `--help` says on Windows. So the observation travels as a
+    self-describing document — copied off that machine by hand if that is
+    how the week goes — and the assembler folds it wherever the store is."""
+    from footman import _toolfetch
+    from footman.tasks import tools
+
+    _isolate(tools, monkeypatch, tmp_path)
+    _toolhistory.save(
+        _toolhistory.new(
+            "ruff",
+            version="1.0.0",
+            date="2026-02-01",
+            surface=_with_flags("quiet"),
+            platforms=[tools._platform()],
+        ),
+        tmp_path / "history" / "ruff.json",
+    )
+    listings = {
+        "ruff": [
+            _toolfetch.Release(version="1.0.1", date="2026-02-02"),
+            _toolfetch.Release(version="1.0.0", date="2026-02-01"),
+        ]
+    }
+    _serve(monkeypatch, listings, {("ruff", "1.0.1"): _with_flags("quiet", "fix")})
+
+    out = tmp_path / "obs.json"
+    result = _tools_run(["gather", "--only=ruff", f"--out={out}"])
+    assert result.ok, result.stderr
+
+    document = json.loads(out.read_text(encoding="utf-8"))
+    assert document["schema"] == tools.OBSERVATION_SCHEMA
+    assert document["platform"] == tools._platform()
+    assert list(document["observations"]["ruff"]) == ["1.0.1"]
+    # the store is untouched: gathering writes nothing but the document
+    stored = _toolhistory.load(tmp_path / "history" / "ruff.json")
+    assert stored is not None
+    assert _toolhistory.observed(stored) == ["1.0.0"]
+
+    result = _tools_run(["assemble", str(out), "--no-changelog"])
+    assert result.ok, result.stderr
+    stored = _toolhistory.load(tmp_path / "history" / "ruff.json")
+    assert stored is not None
+    assert _toolhistory.observed(stored) == ["1.0.1", "1.0.0"]
+
+
+def test_two_platforms_fold_into_one_release_with_the_exception_named(
+    tmp_path, monkeypatch
+):
+    """The whole point: one release, two witnesses, one record — and the
+    option only one of them has is the exception the store keeps."""
+    from footman.tasks import tools
+
+    _isolate(tools, monkeypatch, tmp_path)
+    _toolhistory.save(
+        _toolhistory.new(
+            "ruff",
+            version="1.0.0",
+            date="2026-02-01",
+            surface=_with_flags("quiet"),
+            platforms=["Linux", "Windows"],
+        ),
+        tmp_path / "history" / "ruff.json",
+    )
+
+    def document(platform, *options):
+        path = tmp_path / f"obs-{platform}.json"
+        path.write_text(
+            json.dumps(
+                {
+                    "schema": tools.OBSERVATION_SCHEMA,
+                    "platform": platform,
+                    "observations": {
+                        "ruff": {
+                            "1.0.1": {
+                                "date": "2026-02-02",
+                                "tag": "",
+                                "surface": _with_flags(*options),
+                            }
+                        }
+                    },
+                    "holes": {},
+                    "unreachable": {},
+                    "skipped": [],
+                }
+            ),
+            encoding="utf-8",
+        )
+        return path
+
+    linux = document("Linux", "quiet", "fork")
+    windows = document("Windows", "quiet")
+
+    result = _tools_run(["assemble", str(linux), str(windows), "--no-changelog"])
+    assert result.ok, result.stderr
+
+    stored = _toolhistory.load(tmp_path / "history" / "ruff.json")
+    assert stored is not None
+    entry = _toolhistory.entry_of(stored, "1.0.1")
+    assert entry is not None
+    assert entry["platforms"] == ["Linux", "Windows"]
+    assert entry["absent"] == {"\tfork": ["Windows"]}
+    # folded once: the option is in the surface, and no drop/resurrect churn
+    assert "fork" in entry["surface"]["verbs"][""]["options"]
+    assert "absent" not in json.dumps(stored["deltas"])
+
+    spec = _toolhistory.union(stored, name="ruff")
+    options = {o.name: o for v in spec.verbs for o in v.options}
+    assert options["fork"].not_on == ("Windows",)
+    assert options["quiet"].not_on == ()
+
+
+def test_a_platform_new_to_a_tool_backfills_the_version_people_run(
+    tmp_path, monkeypatch
+):
+    """A platform that has never looked at a tool starts with the base —
+    otherwise its coverage would begin at whatever ships next, and the
+    version everyone is actually running would stay unaccounted for."""
+    from footman import _toolfetch
+    from footman.tasks import tools
+
+    _isolate(tools, monkeypatch, tmp_path)
+    _toolhistory.save(
+        _toolhistory.new(
+            "ruff",
+            version="1.0.0",
+            date="2026-02-01",
+            surface=_with_flags("quiet", "fork"),
+            # Somebody, and never this machine — the test is about a
+            # platform's first look, so the fixture must not accidentally
+            # name the runner it happens to be running on.
+            platforms=[_elsewhere()],
+        ),
+        tmp_path / "history" / "ruff.json",
+    )
+    listings = {"ruff": [_toolfetch.Release(version="1.0.0", date="2026-02-01")]}
+    installed = _serve(monkeypatch, listings, {("ruff", "1.0.0"): _with_flags("quiet")})
+
+    result = _tools_run("refresh --only=ruff --no-changelog")
+    assert result.ok, result.stderr
+    assert installed == [("ruff", "1.0.0")]  # the base, backfilled
+
+    stored = _toolhistory.load(tmp_path / "history" / "ruff.json")
+    assert stored is not None
+    assert stored["base"]["platforms"] == sorted([_elsewhere(), tools._platform()])
+    assert stored["base"]["absent"] == {"\tfork": [tools._platform()]}
+    assert "release warranted: no" in result.stdout  # coverage is not an event
+
+
+# --- rolling a release the way the runbook does ------------------------------
+
+
+def _repo(tmp_path, version="1.2.3", entries=("- **A thing.** It happened.",)):
+    """A miniature checkout: the two files that must agree, and the docs
+    references a drift test guards."""
+    (tmp_path / "src" / "footman").mkdir(parents=True)
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "pyproject.toml").write_text(
+        f'[project]\nname = "footman"\nversion = "{version}"\n', encoding="utf-8"
+    )
+    (tmp_path / "src" / "footman" / "__init__.py").write_text(
+        f'__version__ = "{version}"\n', encoding="utf-8"
+    )
+    (tmp_path / "docs" / "json.md").write_text(
+        f'{{"schema": 1, "name": "footman", "version": "{version}"}}\n'
+        f"Pin the minor with `footman~=1.2.0` if you build on it.\n",
+        encoding="utf-8",
+    )
+    repo = "https://github.com/willemkokke/footman"
+    (tmp_path / "CHANGELOG.md").write_text(
+        "# Changelog\n\n## [Unreleased]\n\n### Changed\n\n"
+        + "\n".join(entries)
+        + f"\n\n## [{version}] — 2026-07-01\n\n- Older.\n\n"
+        f"[Unreleased]: {repo}/compare/v{version}...HEAD\n",
+        encoding="utf-8",
+    )
+    return tmp_path
+
+
+def test_a_stub_only_release_is_a_patch_and_moves_what_must_agree(
+    tmp_path, monkeypatch
+):
+    """The tools moved, footman did not — decision 9. Two files must agree
+    or the release workflow refuses the tag, and the JSON page's `--version`
+    example is drift-tested against every release."""
+    from footman.tasks import tools
+
+    root = _repo(tmp_path)
+    monkeypatch.setattr(tools, "_HISTORY", root / "tool-history")
+
+    prepared = tools.prepare_release()
+    assert (prepared.previous, prepared.version, prepared.entries) == (
+        "1.2.3",
+        "1.2.4",
+        1,
+    )
+    assert 'version = "1.2.4"' in (root / "pyproject.toml").read_text(encoding="utf-8")
+    assert '__version__ = "1.2.4"' in (
+        root / "src" / "footman" / "__init__.py"
+    ).read_text(encoding="utf-8")
+
+    page = (root / "docs" / "json.md").read_text(encoding="utf-8")
+    assert '"version": "1.2.4"' in page
+    # ...and the minor pin stays put: it tracks the minor, not the patch.
+    assert "footman~=1.2.0" in page
+
+
+def test_rolling_the_changelog_dates_the_release_and_repoints_the_links(
+    tmp_path, monkeypatch
+):
+    from footman.tasks import tools
+
+    root = _repo(tmp_path)
+    monkeypatch.setattr(tools, "_HISTORY", root / "tool-history")
+    tools.prepare_release()
+
+    text = (root / "CHANGELOG.md").read_text(encoding="utf-8")
+    assert "## [1.2.4] — " in text
+    assert "- **A thing.** It happened." in text.split("## [1.2.4]")[1]
+    assert "## [Unreleased]" in text.split("## [1.2.4]")[0]  # kept, and empty
+    assert "compare/v1.2.4...HEAD" in text
+    assert (
+        "[1.2.4]: https://github.com/willemkokke/footman/compare/v1.2.3...v1.2.4"
+        in text
+    )
+
+
+def test_a_release_is_refused_when_there_is_nothing_to_release(tmp_path, monkeypatch):
+    """A tag on an empty section is a release that says nothing — refused
+    rather than cut, which is what stops an automatic path from shipping
+    noise every week it finds none."""
+    from footman.context import Failed
+    from footman.tasks import tools
+
+    root = _repo(tmp_path, entries=())
+    monkeypatch.setattr(tools, "_HISTORY", root / "tool-history")
+    with pytest.raises(Failed, match=r"nothing under \[Unreleased\]"):
+        tools.prepare_release()
+    assert 'version = "1.2.3"' in (root / "pyproject.toml").read_text(encoding="utf-8")

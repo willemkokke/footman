@@ -326,14 +326,42 @@ events *are* the changelog entry ("prek 0.4.11 adds `--glob`").
    its docstring. This inverts nothing: a stub already suggests without
    forbidding (`**flags: Any`), and the tool remains the only judge of what it
    accepts. An `exact(version)` variant falls out of the same file later.
-7. **Platforms are a list on the observation, and exclusions go per option.**
-   A release read on three platforms is one observation of a merged surface —
+7. **Platforms are a list on the observation, and exclusions are the
+   exception.** *Refined into an algebra 2026-07-27, when it was built.*
+
+   A release read on three platforms is one observation of a merged surface;
    storing it per platform would triple a store whose options are almost all
-   universal. The observation says who looked; a per-option `not_on` says who
-   disagreed. Merge coverage-style**, and **absence is never removal** — a
-   platform that did not run observed nothing; only a platform that ran and no
-   longer sees a flag it had may narrow that flag's platform set. Help text is
-   always the latest, resolved linux > macos > windows when they differ.
+   universal. The observation says who looked — and what the store keeps
+   beside it is a **sidecar**, `absent`, keyed `verb\toption` the way deltas
+   key their moves, naming the platforms that looked at *that release* and
+   did not find each option. The invariant is `absent ⊆ platforms`: observed
+   absences only, never inferred ones. Nothing recorded means nothing
+   contradicts the option.
+
+   Beside the surface rather than inside it, and that is load-bearing. A tag
+   never enters a delta, so platform coverage cannot masquerade as the tool
+   changing — the release gate and the changelog stay honest with no
+   strip-before-compare anywhere. It also makes a verb-level tag safe:
+   `_verb_delta` compares a fixed field tuple, so a tag inside the surface
+   would vanish from every delta and replay would stop reproducing what was
+   observed.
+
+   Every standing claim is **derived**, exactly as `since` and `until`
+   already are. `union()` walks each platform's newest verdict per option:
+   present there, the claim drops; missing there, it stands; never observed,
+   it was never made. So a sighting clears an absence — nothing means
+   cross-platform — a Linux-only week can neither set nor clear a Windows
+   claim, and `since`/`until` are withheld where the observations cannot
+   support them: a platform's own floor is not a since, and a platform that
+   never held an option cannot witness its removal.
+
+   Divergent help text still resolves Linux > macOS > Windows, now against
+   *derived* provenance so legs arriving in any order reach the same store —
+   a tie-break against weekly churn, nothing more. And `fold()` folds a
+   release's several readings before the chain is touched: otherwise an
+   option only Linux has would be inserted, dropped when macOS's turn came
+   and resurrected by Windows, three real deltas for a release nobody
+   changed.
 8. **The history lives in the repo, not the wheel.** Generation is a maintainer
    action run from a checkout, and users read the stubs, which already carry
    everything the log is for. Later, and probably after the toolgen quartet is
@@ -348,10 +376,14 @@ events *are* the changelog entry ("prek 0.4.11 adds `--glob`").
 
 Nothing blocking, and all of it configuration rather than design:
 
-1. ~~The workflow file itself~~ — written: `.github/workflows/refresh.yml`,
-   weekly (Mondays 06:00 UTC) + manual dispatch. Green-and-silent when
-   nothing changed; a PR (pushed with the `REFRESH_TOKEN` PAT, so CI runs on
-   it) when events were appended; a loud failure on an unreachable index.
+1. ~~The workflow file itself~~ — written, and now a matrix:
+   `.github/workflows/refresh.yml` gathers on ubuntu, macOS and Windows and
+   assembles on one runner. The PR (pushed with the `REFRESH_TOKEN` PAT, so
+   CI runs on it) opens on any tree change and **auto-merges** once the gate
+   passes — the gate is the reviewer. Auto-release is built and gated on
+   `vars.AUTO_RELEASE`, default off. Rollout is local-first: gather on a real
+   Windows and Linux machine, copy the documents back, assemble here, before
+   cron is trusted.
 2. **The `system` tier** — git and docker still read the host and have no
    fetch source, so they are the two tools a refresh cannot speak for.
 

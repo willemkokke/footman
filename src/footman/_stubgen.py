@@ -239,6 +239,13 @@ def _unique(options: tuple[Option, ...]) -> list[Option]:
     return list(seen.values())
 
 
+def _listed(names: tuple[str, ...]) -> str:
+    """`Windows`, `macOS and Windows`, `Linux, macOS and Windows`."""
+    if len(names) == 1:
+        return names[0]
+    return f"{', '.join(names[:-1])} and {names[-1]}"
+
+
 def _safe(name: str) -> str:
     """A flag whose name is a Python keyword takes footman's trailing `_`."""
     import keyword
@@ -351,6 +358,11 @@ def _arg_lines(option: Option, depth: int = 0) -> list[str]:
         text = f"{text}. Gone since {option.until}"
     elif option.since:
         text = f"{text}. Added in {option.since}"
+    # Said only where a platform looked and did not find it: nothing here
+    # means nothing contradicts the option, which is the common case and the
+    # reason the store keeps only the exceptions.
+    if option.not_on:
+        text = f"{text}. Not available on {_listed(option.not_on)}"
     wrapped = textwrap.wrap(
         f"{_safe(option.name)}: {text}.".replace("  ", " "),
         width=84 - 4 * depth,

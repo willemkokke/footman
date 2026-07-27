@@ -198,11 +198,38 @@ def _python_tier(prefix: Path, drivers: list[Driver]) -> list[Outcome]:
                 Outcome(driver.key, "python", "fail", f"no python {version} found")
             )
             continue
-        link = bin_dir(prefix) / "python"
-        link.unlink(missing_ok=True)
-        link.symlink_to(path)
+        placed = _place_interpreter(bin_dir(prefix), path)
+        if placed is None:
+            outcomes.append(
+                Outcome(driver.key, "python", "fail", f"could not place {version}")
+            )
+            continue
         outcomes.append(Outcome(driver.key, "python", "ok", f"{version} ({path})"))
     return outcomes
+
+
+def _place_interpreter(bindir: Path, target: Path) -> Path | None:
+    """Put *target* on the prefix's PATH as `python`, however this OS allows.
+
+    A symlink where symlinks are free. Windows grants them only with
+    developer mode or elevation, so there it falls back to a one-line
+    launcher — a copy would be a broken interpreter, since CPython finds its
+    standard library relative to the real executable and a lone copied
+    `python.exe` finds nothing.
+    """
+    bindir.mkdir(parents=True, exist_ok=True)
+    link = bindir / ("python.exe" if os.name == "nt" else "python")
+    link.unlink(missing_ok=True)
+    try:
+        link.symlink_to(target)
+        return link
+    except (OSError, NotImplementedError):
+        pass
+    if os.name != "nt":  # pragma: no cover - POSIX symlinks do not fail
+        return None
+    shim = bindir / "python.cmd"
+    shim.write_text(f'@echo off\r\n"{target}" %*\r\n', encoding="utf-8")
+    return shim
 
 
 # --- node tier (through the provisioned bun) ---------------------------------
