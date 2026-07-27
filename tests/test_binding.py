@@ -144,7 +144,10 @@ def test_failure_stops_chain():
     assert ran == ["a"]
     assert results[0].ok is False
     assert isinstance(results[0].error, RuntimeError)
-    assert len(results) == 1
+    # The stopped segment is accounted for, not silently absent: a `skipped`
+    # row, blamed on the failure that stopped the chain.
+    assert [(r.task, r.state) for r in results] == [("a", ""), ("b", "skipped")]
+    assert results[1].blocked_by == "a"
 
 
 def test_keep_going_runs_everything():

@@ -9,6 +9,35 @@ versions may include breaking changes.
 
 ### Added
 
+- **`@post_tasks` — the run report's moment.** The closing bookend to
+  `@pre_tasks`: once per invocation, on the main thread, after every task
+  concluded and before the summary or the `--json` envelope prints. The
+  invocation carries the whole story — `inv.results` (every row,
+  chronological, as result views), `inv.skipped` (the subset that never
+  ran), `inv.total_ms` — so a run-level reporter finally sees what a
+  `post_task`-only reporter cannot: the nodes that never started. Under
+  `--json` a hook's stdout is rerouted to stderr (the envelope owns
+  stdout); hooks run in cascade order, and a raising hook is named and
+  fails the invocation.
+- **Skipped nodes are reported, not silently absent.** A node the run never
+  started — its prerequisite failed, or the run stopped reaching for new
+  work — gets a row: `state: "skipped"`, `blocked_by` naming what prevented
+  it, seated directly after that cause in the chronological report. The
+  summary prints it (`skip build (blocked by lint)`), the `--json` envelope
+  carries it (with `blocked_by`), and the exit code never takes it as the
+  headline — the cause already owns that. `state` is an open set; consumers
+  should tolerate values they don't know. `blocked_by` means prevention and
+  nothing else: a `shared` row carries none — nothing blocked it, it was
+  answered — and instead has its own `started`, the instant the request
+  concluded, so it seats in the report where it actually happened; a
+  request that waited on an execution that *failed* is blamed on it.
+- **`queued_ms` — launch latency, on the row and in the envelope.** A node
+  with prerequisites records when it became eligible (its last
+  prerequisite's finish); `started - eligible` is how long it sat ready,
+  waiting for a worker — reported as `queued_ms`, never folded into
+  `duration_ms`, because the task wasn't running. Roots have no latency and
+  no field. A `skipped` row still records no time at all, only its cause:
+  a node that never launched never waited anywhere a clock runs.
 - **Tasks wear their names on the thread, and the report says where they
   ran.** While a task executes, its worker thread is named after it —
   `fm:build`, badged `[serial]`/`[exclusive]` under a lane hold — so a

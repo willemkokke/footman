@@ -651,7 +651,66 @@ def _run_plan(
     # Ctrl-C/internal-error path unwinds by exception and keeps the latch,
     # which the interrupted-reporting above this layer still reads.
     context.reset_abort()
-    return denied + [n.result for n in _toposort(nodes) if n.result is not None]
+    ordered = _toposort(nodes)
+    by_key = {n.key: n for n in ordered}
+    already = {r.task for r in denied}
+
+    def _lost(key: int) -> bool:
+        # Judged on final states, after the run: a dependency is the cause
+        # whether it failed having completed, was cancelled mid-flight, was
+        # itself skipped — or never ran under a name the run denied (its
+        # refusal is a pre-run row, so its node reads as merely pending;
+        # the result-None guard keeps a same-named node that *did* run from
+        # being blamed for it).
+        m = by_key.get(key)
+        return m is not None and (
+            m.state == "skipped"
+            or (m.result is None and m.seg.task in already)
+            or (m.result is not None and not m.result.ok)
+        )
+
+    def _blocked_by(n: _Node) -> str:
+        for dep in n.deps:
+            if _lost(dep):
+                return by_key[dep].seg.task
+        # A fail-fast sweep: nothing of its own was lost — blame the run's
+        # first genuine failure, the same cause the exit code reports.
+        for m in ordered:
+            if m.result is not None and not m.result.ok:
+                return m.seg.task
+        return ""
+
+    # A node the run never started still gets a row — `skipped`, blamed on
+    # what prevented it — so the report and the `--json` envelope account
+    # for every node the plan had, not only the ones that ran. Marked
+    # `skipped` by a sweep, or simply left pending when the run stopped
+    # reaching for new work: either way it never began, so it has no moment
+    # of its own and `_chronological` seats it after its cause. A node whose
+    # confirm was denied already has its refusal row.
+    for n in ordered:
+        # Launch latency, derivable after the fact: a node became eligible
+        # the moment its last prerequisite finished — same monotonic clock
+        # `started` reads, so `started - eligible` is the time it sat
+        # waiting for a worker. Roots have no prerequisites and no latency.
+        if n.result is None or n.result.started is None or not n.deps:
+            continue
+        finishes = [
+            m.result.started + m.result.duration
+            for d in n.deps
+            if (m := by_key.get(d)) is not None
+            and m.result is not None
+            and m.result.started is not None
+        ]
+        if finishes:
+            n.result.eligible = max(finishes)
+    skipped = [
+        executor.TaskResult(
+            task=n.seg.task, ok=False, state="skipped", blocked_by=_blocked_by(n)
+        )
+        for n in ordered
+        if n.result is None and n.seg.task not in already
+    ]
+    return denied + [n.result for n in ordered if n.result is not None] + skipped
 
 
 def _run_sequential(nodes, real, capture, ctx_config, status, err=None) -> None:

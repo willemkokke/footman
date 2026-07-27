@@ -727,6 +727,9 @@ def _print_summary(
             if state == "shared":
                 # Dimmed, not green: nothing ran, the run already had it.
                 mark = "\033[2m·\033[0m"
+            elif state == "skipped":
+                # Dimmed too: nothing ran, and the cause is the story.
+                mark = "\033[2m-\033[0m"
             elif ok:
                 mark = "\033[32m✓\033[0m"
             elif cancelled:
@@ -738,10 +741,15 @@ def _print_summary(
             word = "ok" if ok else ("cut" if cancelled else "FAIL")
             if state == "shared":
                 word = "same"
+            elif state == "skipped":
+                word = "skip"
             mark = f"{word:<4}"
             name = f"{result.task:<{width}}"
         if state == "shared":
             timing = "(already run this run)"
+        elif state == "skipped":
+            cause = result.blocked_by
+            timing = f"(blocked by {cause})" if cause else "(skipped)"
         elif timings:
             timing = f"({result.duration * 1000:.0f} ms)"
         else:
@@ -762,7 +770,8 @@ def _print_summary(
             else:
                 detail = f"{type(err).__name__}: {err}"
             _error(f"{result.task}: {detail}")
-        elif not result.ok:
+        elif not result.ok and state != "skipped":
+            # A skipped row's whole story is its cause, already on the line.
             _error(f"{result.task}: exited with code {result.code}")
     if len(results) > 1:  # one task's receipt already carries the total
         took = f"took {_progress.fmt_secs(total)}"
@@ -794,6 +803,13 @@ def _print_json(results: list[executor.TaskResult], *, total: float) -> None:
             ],
             "error": None if r.error is None else str(r.error),
         }
+        if r.blocked_by:
+            entry["blocked_by"] = r.blocked_by
+        if r.eligible is not None and r.started is not None:
+            # Launch latency: how long the node sat ready, waiting for a
+            # worker, after its last prerequisite finished. Never part of
+            # `duration_ms` — the task wasn't running.
+            entry["queued_ms"] = round(max(r.started - r.eligible, 0.0) * 1000, 3)
         if r.thread:
             # Where it ran: the worker's stable name and OS thread id — the
             # correlation keys a profiler's timeline uses. Absent for a row
@@ -1469,6 +1485,9 @@ def _run_tree(
 
     if collect is not None:
         collect.extend(results)
+    # The run report's moment: every row is in, nothing has printed. A
+    # rewrite a hook makes through its result view is what gets reported.
+    post_error = executor.run_post_tasks(results, total, json_mode)
     if predictable and times_key and results and all(r.ok for r in results):
         # Green runs teach: the duration, and the step-alignment width.
         _progress.record(Path.cwd(), times_key, total, cmd_width=context.cmd_width())
@@ -1499,12 +1518,20 @@ def _run_tree(
                 _emit_document(doc_result.returned, doc_inner)
 
     # The exit code is the first genuine failure's — a cancelled task carries
-    # only a kill signal, so it's the fallback, not the headline.
+    # only a kill signal and a skipped node only a cause, so those are the
+    # fallback, never the headline.
+    if post_error is not None:
+        # A reporter that crashed must not pass silently: named, non-zero.
+        print(f"{_brand.prog}: {post_error}", file=sys.stderr)
     failed = [r for r in results if not r.ok]
-    genuine = next((r.code or 1 for r in failed if not r.cancelled), None)
+    genuine = next(
+        (r.code or 1 for r in failed if not r.cancelled and r.state != "skipped"),
+        None,
+    )
     if genuine is not None:
         return genuine
-    return next((r.code or 1 for r in failed), 0)
+    code = next((r.code or 1 for r in failed), 0)
+    return code or (1 if post_error is not None else 0)
 
 
 def run_group(

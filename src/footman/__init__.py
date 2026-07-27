@@ -72,6 +72,7 @@ if TYPE_CHECKING:
     from footman.registry import capture as capture
     from footman.registry import group as group
     from footman.registry import post_task as post_task
+    from footman.registry import post_tasks as post_tasks
     from footman.registry import pre_bind as pre_bind
     from footman.registry import pre_task as pre_task
     from footman.registry import pre_tasks as pre_tasks
@@ -136,6 +137,7 @@ __all__ = [
     "passthrough",
     "plugin",
     "post_task",
+    "post_tasks",
     "pre_bind",
     "pre_task",
     "pre_tasks",
@@ -186,6 +188,7 @@ def __getattr__(name: str) -> object:
         "pre_bind",
         "pre_task",
         "post_task",
+        "post_tasks",
         "wrap_task",
         "wrap_bind",
         "Tasks",

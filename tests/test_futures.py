@@ -589,11 +589,14 @@ def test_a_memo_hit_is_reported_as_shared():
     assert result.ok, result.stderr
     assert len(runs) == 1
     states = [(r.task, executor.reported_state(r)) for r in result.results]
-    assert states == [("build", "ok"), ("build", "shared"), ("publish", "ok")]
-    hit = result.results[1]
+    # The request has its own moment — the instant it was answered, mid-way
+    # through publish's body — so it seats exactly where an executed
+    # body-callee would: after the caller that made it.
+    assert states == [("build", "ok"), ("publish", "ok"), ("build", "shared")]
+    hit = result.results[2]
     assert hit.returned == "dist/app"  # it carries the value it answered with
-    assert hit.ok and hit.started is None  # succeeded earlier; never began here
-    assert hit.blocked_by == "build"  # placed right after the run that satisfied it
+    assert hit.ok and hit.started is not None  # answered at a real moment
+    assert not hit.blocked_by  # nothing blocked it: blame belongs to holes
 
 
 def test_a_shared_entry_does_not_change_the_exit_code():

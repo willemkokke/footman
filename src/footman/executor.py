@@ -89,6 +89,12 @@ class TaskResult:
     thread_id: int = 0
     """The OS thread id (`threading.get_native_id`) of that worker, the key a
     profiler's timeline uses. `0` when nothing executed."""
+    eligible: float | None = None
+    """When this node could first have started — its last prerequisite's
+    finish, on the run's monotonic clock. `started - eligible` is launch
+    latency: time spent waiting for a free worker, never attributed to the
+    task's own `duration`. `None` for a node with no prerequisites, and for
+    anything that never ran."""
 
 
 def reported_state(result: TaskResult) -> str:
@@ -1012,6 +1018,7 @@ class _HookPlugin:
 class _Lifecycle:
     inv: Any  # the frozen Invocation
     plugins: tuple[_HookPlugin, ...]
+    finish: tuple[Task, ...] = ()  # post_tasks hooks, cascade order
 
 
 # The run's per-task hooks, installed by the app layer for the duration of one
@@ -1034,6 +1041,7 @@ def install_lifecycle(inv: Any, contributions: Mapping[str, Sequence[Task]]) -> 
         for hook in contributions.get(kind, ()):
             owner = getattr(hook, "__module__", None) or "<unknown>"
             grouped.setdefault(owner, ([], [], []))[slot].append(hook)
+    finish = tuple(contributions.get("post_tasks", ()))
     _lifecycle = (
         _Lifecycle(
             inv,
@@ -1041,8 +1049,9 @@ def install_lifecycle(inv: Any, contributions: Mapping[str, Sequence[Task]]) -> 
                 _HookPlugin(name, tuple(bind_pre), tuple(pre), tuple(post))
                 for name, (bind_pre, pre, post) in grouped.items()
             ),
+            finish,
         )
-        if grouped
+        if grouped or finish
         else None
     )
 
@@ -1050,6 +1059,51 @@ def install_lifecycle(inv: Any, contributions: Mapping[str, Sequence[Task]]) -> 
 def clear_lifecycle() -> None:
     global _lifecycle
     _lifecycle = None
+
+
+def run_post_tasks(
+    results: Sequence[TaskResult], total: float, json_mode: bool
+) -> BaseException | None:
+    """Fire the run's `post_tasks` hooks, main thread, before the report.
+
+    The invocation is handed the whole story — every row as a result view,
+    the `skipped` subset, and the wall-clock — written past the freeze by
+    the run itself (hooks still cannot write). Under `--json` a hook's
+    stdout is rerouted to stderr: the envelope owns stdout. Every hook runs;
+    the first failure is kept, named, and fails the invocation.
+    """
+    life = _lifecycle
+    if life is None or not life.finish:
+        return None
+    inv = life.inv
+    views = tuple(ResultView(r) for r in results)
+    skipped = tuple(
+        v for r, v in zip(results, views, strict=True) if reported_state(r) == "skipped"
+    )
+    object.__setattr__(inv, "results", views)
+    object.__setattr__(inv, "skipped", skipped)
+    object.__setattr__(inv, "total_ms", round(total * 1000, 3))
+    redirect = (
+        contextlib.redirect_stdout(context.real_stderr())
+        if json_mode
+        else contextlib.nullcontext()
+    )
+    first: BaseException | None = None
+    with redirect:
+        for hook in life.finish:
+            try:
+                hook(inv)
+            except Exception as exc:
+                if first is None:
+                    failure = HookFailed(
+                        f"post_tasks hook "
+                        f"{getattr(hook, '__name__', '?')!r} from "
+                        f"{getattr(hook, '__module__', '?')} failed: "
+                        f"{type(exc).__name__}: {exc}"
+                    )
+                    failure.__cause__ = exc
+                    first = failure
+    return first
 
 
 class TaskHandle:
@@ -1364,6 +1418,9 @@ def run_bound(
             value = _futures.join(cell)
         except BaseException as exc:  # the execution we waited on failed
             result = _result(seg, 1, None, exc, 0.0)
+            # Genuine prevention: the failure this request waited on is why
+            # it has no answer — named, so the report seats it after it.
+            result.blocked_by = cell.label
         else:
             result = _futures.shared_result(seg.task, value)
         if life is not None and handle is not None:

@@ -38,7 +38,17 @@ class Invocation:
     writes refused, so what a task-time hook reads is what the run decided.
     """
 
-    __slots__ = ("_frozen", "cli", "config", "cwd", "root", "tasks")
+    __slots__ = (
+        "_frozen",
+        "cli",
+        "config",
+        "cwd",
+        "results",
+        "root",
+        "skipped",
+        "tasks",
+        "total_ms",
+    )
 
     def __init__(
         self,
@@ -64,6 +74,16 @@ class Invocation:
         """The merged command tree, as a `Tasks` view — the same surface a
         `TaskView` edit uses. Editable at `pre_tasks`, when a hook may disable a
         task, add a prerequisite, or read provenance."""
+        self.results: tuple[Any, ...] = ()
+        """The run's rows, chronological, as result views — filled for
+        `post_tasks` (the run itself writes past the freeze; hooks read).
+        Executions, `shared` rows, refusals and `skipped` nodes alike."""
+        self.skipped: tuple[Any, ...] = ()
+        """The `skipped` subset of `results` — what never ran because
+        something it needed failed."""
+        self.total_ms: float = 0.0
+        """Wall-clock for the whole run, the envelope's `total_ms` — filled
+        for `post_tasks`."""
 
     def freeze(self) -> None:
         """Close the invocation for writes — called once, before tasks run."""

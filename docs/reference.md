@@ -75,6 +75,9 @@ def opened(inv, task): ...  # post-bind: task.args, task.state, task.env
 @post_task
 def closed(inv, task, result): ...  # result.ok/returned + set_returned()
 
+@post_tasks                 # once per invocation, after the run
+def digest(inv): ...        # inv.results / inv.skipped / inv.total_ms
+
 @wrap_task                  # the pair as one generator
 def span(inv, task):
     result = yield          # (wrap_bind: two yields, enters at bind)

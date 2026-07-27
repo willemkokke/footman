@@ -1386,3 +1386,162 @@ def test_a_wrapper_must_be_a_generator_function():
 
         @reg.wrap_bind
         def flat(inv, task): ...
+
+
+# --- post_tasks: the run report's moment -------------------------------------
+
+
+def test_post_tasks_receives_the_whole_story():
+    reg = Group("root")
+    story: dict = {}
+
+    @reg.post_tasks
+    def digest(inv):
+        story["rows"] = [
+            (r.task, executor.reported_state(r), r.blocked_by) for r in inv.results
+        ]
+        story["skipped"] = [r.task for r in inv.skipped]
+        story["total"] = inv.total_ms
+        with pytest.raises(Exception):
+            inv.cwd = "elsewhere"  # still frozen: hooks read, never write
+
+    @reg.task
+    def lint():
+        raise ValueError("broken")
+
+    @reg.task(pre=[lint])
+    def build(): ...
+
+    result = Runner().invoke("-k build", tasks=reg)
+    assert not result.ok
+    assert story["rows"] == [("lint", "failed", ""), ("build", "skipped", "lint")]
+    assert story["skipped"] == ["build"]
+    assert story["total"] >= 0
+
+
+def test_post_tasks_rewrite_reaches_the_report():
+    # It fires before anything prints, so a set_returned lands in the
+    # envelope — the run-level twin of a post_task rewrite.
+    import json as json_mod
+
+    reg = Group("root")
+
+    @reg.post_tasks
+    def redact(inv):
+        for r in inv.results:
+            if r.returned is not None:
+                r.set_returned("[redacted]")
+
+    @reg.task
+    def build() -> str:
+        return "secret"
+
+    result = Runner().invoke("--json build", tasks=reg)
+    assert result.ok, result.stderr
+    envelope = json_mod.loads(result.stdout)
+    assert envelope["results"][0]["returned"] == "[redacted]"
+
+
+def test_post_tasks_stdout_goes_to_stderr_under_json():
+    import json as json_mod
+
+    reg = Group("root")
+
+    @reg.post_tasks
+    def chatty(inv):
+        print("summary: fine")  # must not corrupt the envelope
+
+    @reg.task
+    def build(): ...
+
+    result = Runner().invoke("--json build", tasks=reg)
+    assert result.ok
+    json_mod.loads(result.stdout)  # stdout is still one valid document
+    assert "summary: fine" in result.stderr
+
+
+def test_a_raising_post_tasks_fails_a_green_invocation():
+    reg = Group("root")
+
+    @reg.post_tasks
+    def crash(inv):
+        raise RuntimeError("reporter went down")
+
+    @reg.task
+    def build(): ...
+
+    result = Runner().invoke("build", tasks=reg)
+    assert result.exit_code == 1  # must not pass silently
+    assert "post_tasks hook 'crash'" in result.stderr
+    assert "reporter went down" in result.stderr
+
+
+def test_a_skipped_row_never_headlines_the_exit_code():
+    from footman import context as fm_context
+
+    reg = Group("root")
+
+    @reg.task
+    def lint():
+        fm_context.fail("broken", code=3)
+
+    @reg.task(pre=[lint])
+    def build(): ...
+
+    result = Runner().invoke("-k build", tasks=reg)
+    assert result.exit_code == 3  # the cause's code, not the skip's
+
+
+def test_post_tasks_arity_is_taught():
+    reg = Group("root")
+    with pytest.raises(RegistrationError, match=r"def wide\(inv\)"):
+
+        @reg.post_tasks
+        def wide(inv, extra): ...
+
+
+def test_a_request_that_waited_on_a_failure_is_blamed_on_it():
+    # Sequential repeat of a failing task: the second request joins the
+    # first's (failed) cell — genuine prevention, so blocked_by names it and
+    # the report seats the consequence after its cause.
+    reg = Group("root")
+
+    @reg.task
+    def boom():
+        raise ValueError("no")
+
+    result = Runner().invoke("--sequential -k boom boom", tasks=reg)
+    assert not result.ok
+    rows = list(result.results)
+    assert [r.blocked_by for r in rows] == ["", "boom"]
+    assert rows[1].started is None  # never began: a hole, blamed
+
+
+def test_launch_latency_is_recorded_and_reported():
+    import json as json_mod
+    import time as time_mod
+
+    reg = Group("root")
+
+    @reg.task
+    def slow():
+        time_mod.sleep(0.05)
+
+    @reg.task(pre=[slow])
+    def after(): ...
+
+    @reg.task
+    def root_task(): ...
+
+    result = Runner().invoke("--json after root-task", tasks=reg)
+    assert result.ok, result.stderr
+    rows = {r.task: r for r in result.results}
+    dependent = rows["after"]
+    assert dependent.eligible is not None
+    assert dependent.started is not None
+    assert dependent.started >= dependent.eligible  # waited, never time-travelled
+    assert rows["root_task" if "root_task" in rows else "root-task"].eligible is None
+    envelope = json_mod.loads(result.stdout)
+    by_name = {e["task"]: e for e in envelope["results"]}
+    assert "queued_ms" in by_name["after"]
+    assert "queued_ms" not in by_name["root-task"]  # roots have no latency

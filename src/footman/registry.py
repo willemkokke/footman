@@ -50,6 +50,7 @@ CONTRIBUTION_KINDS: tuple[str, ...] = (
     "pre_bind",
     "pre_task",
     "post_task",
+    "post_tasks",
 )
 
 # A task stays a plain function; its metadata rides as `_footman_*` attributes.
@@ -874,6 +875,32 @@ class Group:
         self.contributions["pre_bind"].append(fn)
         return fn
 
+    def post_tasks(self, fn: Hook) -> Hook:
+        """Register the once-per-invocation closing hook: `post_tasks(inv)`.
+
+        The run report's moment, on the main thread, after every task has
+        concluded and before the summary or the `--json` envelope prints —
+        so a rewrite a hook makes through a result view is what gets
+        reported. The invocation now carries the whole story:
+
+            @footman.post_tasks
+            def digest(inv):
+                failed = [r for r in inv.results if not r.ok]
+                slack.post(f"{len(failed)} failed of {len(inv.results)}, "
+                           f"{inv.total_ms:.0f} ms")
+
+        `inv.results` is every row, chronological, as result views —
+        executions, `shared` rows, refusals, and `skipped` nodes
+        (`inv.skipped` is that subset; a `post_task`-only reporter never
+        sees what never ran, which is why this moment exists). Under
+        `--json` anything a hook prints goes to stderr — the envelope owns
+        stdout. Hooks run in cascade order; a raising hook is named and
+        fails the invocation rather than passing silently.
+        """
+        _check_hook_arity("post_tasks", fn, 1)
+        self.contributions["post_tasks"].append(fn)
+        return fn
+
     def wrap_task(self, fn: Hook) -> Hook:
         """Register a one-yield wrapper around the body: sugar over the pair.
 
@@ -1231,6 +1258,7 @@ root = Group("root")
 task = root.task
 group = root.group
 pre_tasks = root.pre_tasks
+post_tasks = root.post_tasks
 pre_bind = root.pre_bind
 pre_task = root.pre_task
 post_task = root.post_task
