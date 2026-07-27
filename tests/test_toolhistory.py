@@ -902,6 +902,7 @@ def test_a_refresh_reads_every_release_it_missed_not_just_the_newest(
     )
     monkeypatch.setattr(tools, "_HISTORY", tmp_path)
     monkeypatch.setattr(tools, "_STUBS", tmp_path)
+    monkeypatch.setattr(tools, "_CHANGELOG", tmp_path / "CHANGELOG.md")
     _toolhistory.save(doc, tmp_path / "ruff.json")
 
     monkeypatch.setattr(
@@ -957,6 +958,7 @@ def test_a_refresh_with_nothing_new_warrants_no_release(tmp_path, monkeypatch):
     doc = _toolhistory.new("ruff", version="0.16.3", date="2026-02-01", surface=surface)
     monkeypatch.setattr(tools, "_HISTORY", tmp_path)
     monkeypatch.setattr(tools, "_STUBS", tmp_path)
+    monkeypatch.setattr(tools, "_CHANGELOG", tmp_path / "CHANGELOG.md")
     _toolhistory.save(doc, tmp_path / "ruff.json")
     monkeypatch.setattr(
         _toolfetch,
@@ -984,6 +986,7 @@ def test_a_refresh_that_could_not_look_does_not_report_nothing_new(
     doc = _toolhistory.new("ruff", version="0.16.3", date="2026-02-01", surface=surface)
     monkeypatch.setattr(tools, "_HISTORY", tmp_path)
     monkeypatch.setattr(tools, "_STUBS", tmp_path)
+    monkeypatch.setattr(tools, "_CHANGELOG", tmp_path / "CHANGELOG.md")
     _toolhistory.save(doc, tmp_path / "ruff.json")
 
     def throttled(_driver):
@@ -995,3 +998,262 @@ def test_a_refresh_that_could_not_look_does_not_report_nothing_new(
         tools.refresh(only="ruff")
     assert failed.value.code == 75  # EX_TEMPFAIL: look again, not "nothing to do"
     assert "ruff" in failed.value.reason
+
+
+# --- the CHANGELOG entry the events write ------------------------------------
+
+
+def _chain(*surfaces):
+    """A history built newest-last, the way a refresh promotes into one."""
+    versions = [f"1.0.{n}" for n in range(len(surfaces))]
+    doc = _toolhistory.new(
+        "demo", version=versions[0], date="2026-01-01", surface=surfaces[0]
+    )
+    for n, surface in enumerate(surfaces[1:], start=1):
+        _toolhistory.promote(
+            doc, version=versions[n], date=f"2026-01-0{n + 1}", surface=surface
+        )
+    return doc, versions
+
+
+def _with(*options, verb=""):
+    return _toolhistory.surface_of(
+        _spec(
+            verbs=(
+                Verb(
+                    name=verb,
+                    options=tuple(
+                        Option(n, (f"-{n[0]}", f"--{n.replace('_', '-')}"))
+                        for n in options
+                    ),
+                ),
+            )
+        )
+    )
+
+
+def test_an_entry_names_what_changed_and_counts_what_it_will_not_list():
+    """Added and dropped options are what a reader acts on, so they are named
+    — by their command-line spelling, which is what they recognise, and not
+    by the Python-side key the surface happens to store them under.
+
+    Rewordings are counted. A release can restate half a dozen descriptions
+    without changing what the tool accepts, and listing those turns a release
+    note into a diff dump.
+    """
+    from footman.tasks import tools
+
+    doc, versions = _chain(
+        _with("quiet", "install_hooks"),
+        _with("quiet", "prepare_hooks"),  # one added, one dropped
+    )
+    entry = tools._entry_for("prek", doc, versions[1:])
+
+    assert entry.startswith("- **prek 1.0.1**")
+    assert "`--prepare-hooks`" in entry  # the spelling, not `prepare_hooks`
+    assert "drops `--install-hooks`" in entry
+
+
+def test_an_entry_spans_from_the_release_before_the_first_change():
+    """A release compared against itself is empty by construction, so the
+    span has to start one earlier or the first change is invisible — which
+    is exactly what a bullet saying "changes its option surface" looked
+    like."""
+    from footman.tasks import tools
+
+    doc, versions = _chain(_with("quiet"), _with("quiet", "fix"))
+    assert "adds `--fix`" in tools._entry_for("demo", doc, [versions[1]])
+
+
+def test_an_entry_names_a_flag_once_however_many_verbs_carry_it():
+    """The same flag on the bare command and on one of its verbs is two keys
+    in the surface and one thing to tell a reader about."""
+    from footman.tasks import tools
+
+    def both(*names):
+        return _toolhistory.surface_of(
+            _spec(
+                verbs=tuple(
+                    Verb(
+                        name=verb,
+                        options=tuple(Option(n, (f"--{n}",)) for n in names),
+                    )
+                    for verb in ("", "run")
+                )
+            )
+        )
+
+    doc, versions = _chain(both("quiet"), both("quiet", "glob"))
+    entry = tools._entry_for("prek", doc, [versions[1]])
+    assert entry.count("`--glob`") == 1
+
+
+def test_the_entry_lands_under_unreleased_changed(tmp_path):
+    """`### Changed`, because a tool gaining a flag changes footman's *stub*
+    — footman itself added nothing. And under `[Unreleased]`, never the
+    released section above it, which is where a careless insert lands."""
+    from footman.tasks import tools
+
+    path = tmp_path / "CHANGELOG.md"
+    path.write_text(
+        "# Changelog\n\n## [Unreleased]\n\n### Added\n\n- Something.\n\n"
+        "### Fixed\n\n- Something else.\n\n## [0.23.0] — 2026-07-27\n\n"
+        "### Changed\n\n- Already released.\n",
+        encoding="utf-8",
+    )
+    assert tools._write_changelog(["- **prek 0.4.11** adds `--glob`."], path) is True
+
+    written = path.read_text(encoding="utf-8")
+    unreleased, released = written.split("## [0.23.0]")
+    assert "- **prek 0.4.11** adds `--glob`." in unreleased
+    assert "- **prek 0.4.11**" not in released  # not swept into a shipped version
+    # Keep a Changelog's order: Changed sits above Fixed, not appended anywhere.
+    assert unreleased.index("### Changed") < unreleased.index("### Fixed")
+
+
+def test_an_entry_joins_a_changed_section_that_already_exists(tmp_path):
+    from footman.tasks import tools
+
+    path = tmp_path / "CHANGELOG.md"
+    path.write_text(
+        "# Changelog\n\n## [Unreleased]\n\n### Changed\n\n- An earlier note.\n",
+        encoding="utf-8",
+    )
+    assert tools._write_changelog(["- **ruff 0.16.1** adds `--fix`."], path) is True
+    written = path.read_text(encoding="utf-8")
+    assert written.count("### Changed") == 1
+    assert "- **ruff 0.16.1** adds `--fix`." in written
+    assert "- An earlier note." in written
+
+
+def test_a_changelog_with_nowhere_to_write_says_so(tmp_path):
+    """Reported rather than guessed at: a caller must not read "no entry
+    written" as "there was nothing to write"."""
+    from footman.tasks import tools
+
+    path = tmp_path / "CHANGELOG.md"
+    path.write_text("# Changelog\n\n## [0.23.0]\n\n- Released.\n", encoding="utf-8")
+    assert tools._write_changelog(["- **prek 0.4.11** adds `--glob`."], path) is False
+    assert tools._write_changelog(["- x"], tmp_path / "absent.md") is False
+
+
+def test_a_refresh_writes_its_own_events_into_the_changelog(tmp_path, monkeypatch):
+    """The job edits `tool-history/` and the stubs and lands through a PR
+    either way, so the release note rides along in the same diff. A
+    scheduled run that printed notes to stdout would be producing them for
+    nobody."""
+    from footman import _drivers, _toolfetch
+    from footman.tasks import tools
+
+    _, versions = _chain(_with("quiet"), _with("quiet", "fix"))
+    monkeypatch.setattr(tools, "_HISTORY", tmp_path)
+    monkeypatch.setattr(tools, "_STUBS", tmp_path)
+    changelog = tmp_path / "CHANGELOG.md"
+    changelog.write_text("# Changelog\n\n## [Unreleased]\n", encoding="utf-8")
+    monkeypatch.setattr(tools, "_CHANGELOG", changelog)
+
+    surfaces = dict(zip(versions, [_with("quiet"), _with("quiet", "fix")]))
+    _toolhistory.save(
+        _toolhistory.new(
+            "ruff",
+            version=versions[0],
+            date="2026-01-01",
+            surface=surfaces[versions[0]],
+        ),
+        tmp_path / "ruff.json",
+    )
+    monkeypatch.setattr(
+        _toolfetch,
+        "releases",
+        lambda _d: [
+            _toolfetch.Release(version=v, date="2026-01-02") for v in reversed(versions)
+        ],
+    )
+    installed: list[str] = []
+    monkeypatch.setattr(
+        _toolfetch,
+        "install",
+        lambda _d, version, into: (installed.append(version), into)[1],
+    )
+    monkeypatch.setattr(
+        _drivers,
+        "extract",
+        lambda d: _toolhistory.spec_from(surfaces[installed[-1]], name=d.name),
+    )
+
+    found = tools.refresh(only="ruff")
+    assert found.release is True
+    assert found.wrote_changelog is True
+    assert "adds `--fix`" in changelog.read_text(encoding="utf-8")
+
+
+def test_a_refresh_with_no_events_writes_no_note(tmp_path, monkeypatch):
+    """No events, no release, and nothing to say about one."""
+    from footman import _toolfetch
+    from footman.tasks import tools
+
+    surface = _with("quiet")
+    monkeypatch.setattr(tools, "_HISTORY", tmp_path)
+    monkeypatch.setattr(tools, "_STUBS", tmp_path)
+    changelog = tmp_path / "CHANGELOG.md"
+    changelog.write_text("# Changelog\n\n## [Unreleased]\n", encoding="utf-8")
+    monkeypatch.setattr(tools, "_CHANGELOG", changelog)
+    _toolhistory.save(
+        _toolhistory.new("ruff", version="1.0.0", date="2026-01-01", surface=surface),
+        tmp_path / "ruff.json",
+    )
+    monkeypatch.setattr(
+        _toolfetch,
+        "releases",
+        lambda _d: [_toolfetch.Release(version="1.0.0", date="2026-01-01")],
+    )
+
+    found = tools.refresh(only="ruff")
+    assert found.release is False and found.wrote_changelog is False
+    assert "###" not in changelog.read_text(encoding="utf-8")
+
+
+def test_an_entry_tells_commands_apart_from_their_descriptions():
+    """Three things hide in one delta field. A verb the newer release added
+    steps back as `None`; one it withdrew steps back as a whole verb; one
+    whose description merely moved steps back as a couple of fields. Only the
+    first two are news — the third is a rewording, and counting it as a lost
+    command would be a lie in both directions.
+    """
+    from footman.tasks import tools
+
+    def tree(*verbs):
+        return _toolhistory.surface_of(
+            _spec(
+                verbs=tuple(
+                    Verb(name=name, help=help_, options=()) for name, help_ in verbs
+                )
+            )
+        )
+
+    doc, versions = _chain(
+        tree(("", "The tool."), ("run", "Run it."), ("clean", "Clean up.")),
+        tree(
+            ("", "The tool."),
+            ("run", "Run the hooks."),  # reworded, not lost
+            ("autoupdate", "Update."),  # gained
+        ),  # `clean` withdrawn
+    )
+    entry = tools._entry_for("prek", doc, versions[1:])
+
+    assert "gains the `autoupdate` command" in entry
+    assert "withdraws the `clean` command" in entry
+    assert "rewords 1 description" in entry
+    assert "`run`" not in entry  # a reworded verb is not a lost one
+
+
+def test_a_bullet_joins_several_names_and_clauses_readably():
+    from footman.tasks import tools
+
+    assert tools._names(["--a"]) == "`--a`"
+    assert tools._names(["--a", "--b"]) == "`--a` and `--b`"
+    assert tools._names(["--a", "--b", "--c"]) == "`--a`, `--b` and `--c`"
+    assert tools._and(["one"]) == "one"
+    assert tools._and(["one", "two", "three"]) == "one, two and three"
+    assert tools._plural("release", 1) == "release"
+    assert tools._plural("release", 2) == "releases"

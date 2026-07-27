@@ -658,15 +658,19 @@ def test_every_curated_tool_has_a_checked_in_stub(key):
 def stubs(tmp_path, monkeypatch):
     """Point the tasks at scratch directories, not the checked-in ones.
 
-    Both of them: generating a stub also records the reading in the option
-    history, so a fixture that isolated only `_STUBS` would let a test write
-    this machine's tool versions into the repo's history — which is exactly
-    what happened the first time this fixture forgot.
+    All three: generating a stub also records the reading in the option
+    history, and a refresh writes its events into the CHANGELOG. A fixture
+    that isolated only `_STUBS` would let a test write this machine's tool
+    versions into the repo's history — which is exactly what happened the
+    first time this fixture forgot, and again when the CHANGELOG gained a
+    writer. Every new write path belongs here in the same commit that adds
+    it.
     """
     from footman.tasks import tools as tools_tasks
 
     monkeypatch.setattr(tools_tasks, "_STUBS", tmp_path)
     monkeypatch.setattr(tools_tasks, "_HISTORY", tmp_path / "history")
+    monkeypatch.setattr(tools_tasks, "_CHANGELOG", tmp_path / "CHANGELOG.md")
     return tmp_path
 
 
