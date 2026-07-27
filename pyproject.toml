@@ -132,9 +132,16 @@ testpaths = ["tests"]
 # toolspec and provision tests shell out to real binaries, and everything
 # else is microseconds. `load` hands out chunks up front, so one worker holds
 # the slow tail while the rest idle; `worksteal` moves work to whoever is
-# free. Measured here, twice each: 20s load, 15s worksteal, 32s loadfile —
+# free. Measured locally, twice each: 20s load, 15s worksteal, 32s loadfile —
 # loadfile being worst because it pins whole files, and the heavy files are
 # exactly what needs splitting.
+#
+# The gain is a *developer machine* one, and that is the point: the gate runs
+# many times per change here and once per push in CI. On CI it is a wash — one
+# run each way moved the pytest step +2% overall (ubuntu -10%, windows +13%),
+# inside the runners' own variance. Plausibly because those runners have 2-4
+# cores, so there are few workers and little imbalance to exploit, while
+# worksteal's rebalancing is not free. Do not expect this to show up there.
 addopts = "-q -n auto --dist=worksteal"
 
 [tool.basedpyright]
