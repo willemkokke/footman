@@ -364,18 +364,44 @@ def version(name: str) -> str:
     The parsing is shared with `tools.Tool.installed_version` so only the
     choice of binary can ever differ, never the grammar.
     """
+    return _read_version(name)[0]
+
+
+def _read_version(name: str) -> tuple[str, str]:
+    """`(version, diagnosis)` — the second names *why* the first is empty.
+
+    An empty version has three very different causes — the spawn failed, the
+    spawn hung, the output carried no version token — and a check that can't
+    say which teaches nothing when it trips (the CI flake that motivated
+    this reported `gh (—)` and left every hypothesis standing).
+    """
     from footman import tools
 
     binary = _resolve(name)
     if binary is None:
-        return ""
+        return "", "not on PATH"
+    # A version read must never touch the network: gh runs its update check
+    # from any command — a banner, a state write, a remote call — unless
+    # told not to. The variable is gh's own; every other tool ignores it.
+    env = {**os.environ, "GH_NO_UPDATE_NOTIFIER": "1"}
     try:
         done = subprocess.run(
-            [binary, "--version"], capture_output=True, text=True, timeout=30
+            [binary, "--version"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            env=env,
         )
-    except (OSError, subprocess.SubprocessError):
-        return ""
-    return _without_build_tail(tools.read_version(done.stdout or done.stderr))
+    except subprocess.TimeoutExpired:
+        return "", "timed out after 30s"
+    except (OSError, subprocess.SubprocessError) as exc:
+        return "", f"spawn failed: {type(exc).__name__}: {exc}"
+    found = _without_build_tail(tools.read_version(done.stdout or done.stderr))
+    if found:
+        return found, ""
+    lines = (done.stdout or done.stderr).strip().splitlines()
+    head = lines[0][:80] if lines else "<no output>"
+    return "", f"no version token (exit {done.returncode}): {head!r}"
 
 
 _BUILD_TAIL = re.compile(r"\.(?!post\d)[A-Za-z].*$")
