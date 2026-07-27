@@ -23,6 +23,8 @@ be worse than no check.
 
 from __future__ import annotations
 
+import dataclasses
+import json
 import re as _re
 import sys
 import threading
@@ -208,11 +210,20 @@ def _observe(driver: _drivers.Driver, spec: _toolspec.ToolSpec) -> dict:
             platforms=[_platform()],
         )
     elif doc["base"]["version"] == version:
-        doc["base"]["surface"] = surface
+        # A reading of the release the base already holds — a re-sync on this
+        # machine, or another platform's first look. Merged, never written
+        # over: overwriting replaced a multi-platform base with one
+        # platform's reading, erasing every recorded absence while
+        # `platforms` went on claiming those platforms had looked. It also
+        # left the first delta describing a step from a surface that no
+        # longer existed, so everything below replayed wrong — silently, and
+        # already possible today whenever an extractor improvement changed
+        # the words.
         doc["base"]["extractor"] = _toolhistory.EXTRACTOR
-        doc["base"]["platforms"] = sorted(
-            {*doc["base"].get("platforms", []), _platform()}
-        )
+        if _toolhistory.merge(
+            doc, version=version, surface=surface, platforms=[_platform()]
+        ):
+            _restitch(doc, version)
     elif _version_tuple(version) == _version_tuple(doc["base"]["version"]):
         # Two builds of one base — eclint's `0.6.0-wk.3` against its
         # `-wk.5`. The comparator cannot separate them and the dates cannot
@@ -244,6 +255,32 @@ def _observe(driver: _drivers.Driver, spec: _toolspec.ToolSpec) -> dict:
         )
     _toolhistory.save(doc, path)
     return doc
+
+
+def _restitch(doc: dict, version: str) -> None:
+    """Recompute the deltas that describe a release whose surface moved.
+
+    A surface is referenced by exactly two entries — the one keyed at the
+    release itself (the step down *to* it) and the one below it (the step
+    *from* it) — so a merge that widened a surface is as local as a midfill,
+    however long the chain. Everything else stays byte-identical.
+    """
+    chain = _toolhistory.observed(doc)
+    spot = chain.index(version)
+    for newer, older in ((chain[spot - 1] if spot else "", version), (version, "")):
+        older = older or (chain[spot + 1] if spot + 1 < len(chain) else "")
+        if not newer or not older:
+            continue
+        above, below = _toolhistory.at(doc, newer), _toolhistory.at(doc, older)
+        if above is None or below is None:  # pragma: no cover - both observed
+            continue
+        entry = doc["deltas"][older]
+        keep = {
+            k: entry[k]
+            for k in ("date", "platforms", "extractor", "absent")
+            if k in entry
+        }
+        doc["deltas"][older] = {**keep, **_toolhistory.delta(above, below)}
 
 
 def _today() -> str:
@@ -750,6 +787,306 @@ def prime(
         print(f"skipped: {', '.join(skipped)}")
 
 
+OBSERVATION_SCHEMA = 1
+"""The observation document's shape. Bumped when a reader must know."""
+
+
+@dataclass(frozen=True)
+class Gathered:
+    """What one platform saw, as data — the document a matrix leg hands on.
+
+    Deliberately portable rather than a CI internal: written by
+    `fm tools.gather --out=…`, copied off a Windows box by hand if that is
+    how the week goes, and folded by `fm tools.assemble` wherever the store
+    lives. Self-describing, because the machine that reads it is not the
+    machine that wrote it.
+    """
+
+    platform: str
+    """Who looked — the one fact every observation in this document shares."""
+    observations: dict[str, dict[str, dict]]
+    """`tool -> version -> {date, tag, surface}`: what this platform found."""
+    holes: dict[str, list[str]] = dataclasses.field(default_factory=dict)
+    """Releases this platform meant to read and could not. Carried rather
+    than dropped: the assembler reports them, a later run fills them."""
+    unreachable: dict[str, str] = dataclasses.field(default_factory=dict)
+    """Indexes that would not answer here. Carried so the assembler can tell
+    "this leg saw nothing new" from "this leg could not look"."""
+    skipped: list[str] = dataclasses.field(default_factory=list)
+    """Tools with no index, or no history to add to, on this platform."""
+
+    def document(self) -> dict:
+        return {"schema": OBSERVATION_SCHEMA, **dataclasses.asdict(self)}
+
+
+@tasks.task
+def gather(
+    only: Annotated[str, doc("gather just this tool")] = "",
+    prefix: Annotated[str, doc("drive the tiers from this prefix's bin/")] = "",
+    out: Annotated[str, doc("write the observation document here")] = "",
+    count: Annotated[int, doc("also reach this many releases below the floor")] = 0,
+) -> Gathered:
+    """Observe every release this platform has not yet accounted for.
+
+    Half of a refresh, and the half that must happen *on* the platform: a
+    Linux box cannot tell you what a tool's `--help` says on Windows. It
+    writes no store — only a document saying what this machine saw — so the
+    three platforms of a matrix can run at once and nothing races for the
+    files.
+
+    What it observes: every release newer than each tool's base, every hole
+    the chain reports, and the base itself when this platform has not looked
+    at it yet — that last one is what makes a new platform's coverage
+    converge on the versions people are actually running, in one pass.
+    `--count` also reaches below the floor, for deepening a platform's
+    history the way `prime` does.
+
+    `--out` writes the document for another machine to fold; without it the
+    document is returned (and printed under `--json`), which is what
+    `refresh` uses when both halves run in one process.
+    """
+    import shutil
+    import tempfile
+
+    from footman import _toolfetch
+
+    _bounce_bare_call("gather")
+    scratch = Path(tempfile.mkdtemp(prefix="footman-gather-"))
+    observations: dict[str, dict[str, dict]] = {}
+    holes: dict[str, list[str]] = {}
+    try:
+        with _on_path(prefix), _sandboxed(scratch):
+            drivers, skipped = _curated(only, _toolfetch)
+            listings, unreachable = _list_phase(drivers, _toolfetch)
+            work, docs = [], {}
+            for driver in drivers:
+                if driver.key not in listings:
+                    continue
+                doc_ = _toolhistory.load(_history_path(driver.key))
+                if doc_ is None:
+                    skipped.append(f"{driver.key} (no history — run `sync` first)")
+                    continue
+                docs[driver.key] = doc_
+                work += [
+                    (driver, r) for r in _plan_gather(doc_, listings[driver.key], count)
+                ]
+            surfaces = _gather(work, scratch)
+            for driver, release in work:
+                surface = surfaces.get(driver.key, {}).get(release.version)
+                if surface is None:
+                    holes.setdefault(driver.key, []).append(release.version)
+                    continue
+                observations.setdefault(driver.key, {})[release.version] = {
+                    "date": release.date,
+                    "tag": release.tag,
+                    "surface": surface,
+                }
+    finally:
+        shutil.rmtree(scratch, ignore_errors=True)
+
+    found = Gathered(
+        platform=_platform(),
+        observations=observations,
+        holes={key: sorted(v) for key, v in holes.items()},
+        unreachable=unreachable,
+        skipped=skipped,
+    )
+    if out:
+        target = Path(out).expanduser()
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(
+            json.dumps(found.document(), indent=1, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+        counted = sum(len(v) for v in observations.values())
+        print(f"wrote {target} — {counted} observations")
+    return found
+
+
+def _plan_gather(doc: dict, listing: list, count: int) -> list:
+    """Everything this platform still owes an answer on, newest first.
+
+    Three kinds, and the third is what a new platform needs: releases the
+    chain has never seen, releases it has seen but *this* platform has not
+    (the base above all, since that is the version people run), and — when
+    asked — releases below the floor, the way `prime` reaches back.
+    """
+    here = _platform()
+    known = set(_toolhistory.observed(doc))
+    floor = doc["observed_from"]
+    wanted = [
+        release
+        for release in listing
+        if release.version not in known
+        and _version_tuple(release.version) >= _version_tuple(floor)
+    ]
+    for release in listing:
+        entry = _toolhistory.entry_of(doc, release.version)
+        if entry is not None and here not in entry.get("platforms", []):
+            wanted.append(release)
+    if count:
+        wanted += _plan_prime(doc, listing, count)[0]
+    seen, unique = set(), []
+    for release in wanted:
+        if release.version not in seen:
+            seen.add(release.version)
+            unique.append(release)
+    return unique
+
+
+@tasks.task
+def assemble(
+    documents: Annotated[list[str], doc("observation documents to fold in")],
+    changelog: Annotated[bool, doc("write the events into CHANGELOG.md")] = True,
+) -> Refreshed:
+    """Fold gathered observations into the store — the single-writer half.
+
+    Every platform's reading of one release is folded into one surface and
+    one sidecar *before* the chain is touched, so a matrix run never writes
+    the churn of an option being inserted, dropped and resurrected as each
+    leg's turn comes. Then releases go in oldest first, and a release the
+    chain already holds is merged rather than replaced.
+
+    One process, one owner per file. Three machines committing to
+    `tool-history/` on their own would be three whole-file conflicts a week:
+    git is not a merge engine for this, and the algebra is.
+    """
+    return _finish(
+        _assemble_documents([_read_document(name) for name in documents]), changelog
+    )
+
+
+def _finish(found: Refreshed, changelog: bool) -> Refreshed:
+    """Write the note, say what happened, and refuse to call ignorance news.
+
+    Shared by `assemble` and `refresh` rather than one calling the other: a
+    nested task buffers its own output, and the report belongs to whichever
+    of the two the caller actually asked for.
+    """
+    if changelog and found.events:
+        entries = [
+            _entry_for(key, _toolhistory.load(_history_path(key)) or {}, versions)
+            for key, versions in sorted(found.events.items())
+        ]
+        found = replace(found, wrote_changelog=_write_changelog(entries))
+    _report_refresh(found)
+    if found.unreachable:
+        from footman import fail
+
+        fail(
+            f"{len(found.unreachable)} index(es) would not answer: "
+            f"{', '.join(sorted(found.unreachable))}",
+            code=75,  # EX_TEMPFAIL: try again, rather than "nothing to do"
+        )
+    return found
+
+
+def _read_document(name: str) -> dict:
+    """One observation document, refused rather than guessed at when wrong."""
+    from footman import fail
+
+    try:
+        payload = json.loads(Path(name).expanduser().read_text(encoding="utf-8"))
+    except (OSError, ValueError) as bad:
+        fail(f"{name}: not a readable observation document ({bad})", code=64)
+    if payload.get("schema") != OBSERVATION_SCHEMA or not payload.get("platform"):
+        fail(f"{name}: not an observation document this footman understands", code=64)
+    return payload
+
+
+def _assemble_documents(documents: list[dict]) -> Refreshed:
+    """The fold-then-insert core, shared by `assemble` and `refresh`."""
+    by_release: dict[str, dict[str, dict[str, dict]]] = {}
+    meta: dict[str, dict[str, dict]] = {}
+    unreachable: dict[str, str] = {}
+    skipped: list[str] = []
+    holes: dict[str, list[str]] = {}
+    for document in documents:
+        platform = document["platform"]
+        unreachable.update(document.get("unreachable", {}))
+        for tool, missing in document.get("holes", {}).items():
+            holes[tool] = sorted({*holes.get(tool, []), *missing})
+        skipped += [s for s in document.get("skipped", []) if s not in skipped]
+        for tool, versions in document.get("observations", {}).items():
+            for version, seen in versions.items():
+                by_release.setdefault(tool, {}).setdefault(version, {})[platform] = (
+                    seen["surface"]
+                )
+                meta.setdefault(tool, {})[version] = seen
+
+    read: dict[str, list[str]] = {}
+    events: dict[str, list[str]] = {}
+    for tool, versions in sorted(by_release.items()):
+        driver = _drivers.find(tool)
+        doc_ = _toolhistory.load(_history_path(tool))
+        if driver is None or doc_ is None:
+            skipped.append(f"{tool} (no history — run `sync` first)")
+            continue
+        fresh, touched = _fold_into(doc_, tool, versions, meta[tool])
+        if fresh:
+            read[tool] = fresh
+        if touched:
+            # Saved for a widened coverage too, not only a new release: a
+            # week where three platforms merely agreed about what they see
+            # is exactly the week whose findings would otherwise be
+            # recomputed from scratch every Monday.
+            _toolhistory.save(doc_, _history_path(tool))
+            _stub_path(tool).write_text(_stub_from(driver, doc_), encoding="utf-8")
+        if moved := _events_of(doc_, fresh):
+            events[tool] = moved
+    return Refreshed(
+        read=read,
+        events=events,
+        unreachable=unreachable,
+        skipped=skipped,
+        holes=holes,
+    )
+
+
+def _fold_into(
+    doc: dict, tool: str, versions: dict[str, dict[str, dict]], meta: dict[str, dict]
+) -> tuple[list[str], bool]:
+    """Fold every platform's reading of each release into one chain.
+
+    Oldest first, so a release's delta is computed against the release that
+    actually precedes it. Returns what the chain *gained* and whether
+    anything moved at all: widened coverage is not news — it must never read
+    as a new release — but it is still a finding, and a finding that is not
+    written down is one every Monday pays for again.
+    """
+    order = sorted(versions, key=lambda v: (_version_tuple(v), v))
+    fresh: list[str] = []
+    touched = False
+    for version in order:
+        surface, absent = _toolhistory.fold(versions[version])
+        platforms = sorted(versions[version])
+        if (entry := _toolhistory.entry_of(doc, version)) is not None:
+            was = json.dumps(entry, sort_keys=True)
+            if _toolhistory.merge(
+                doc,
+                version=version,
+                surface=surface,
+                platforms=platforms,
+                absent=absent,
+            ):
+                _restitch(doc, version)
+            touched = touched or json.dumps(entry, sort_keys=True) != was
+            continue
+        if _toolhistory.insert(
+            doc,
+            version=version,
+            date=meta[version]["date"],
+            surface=surface,
+            platforms=platforms,
+        ):
+            placed = _toolhistory.entry_of(doc, version) or {}
+            if absent:
+                placed["absent"] = absent
+            fresh.append(version)
+            touched = True
+    return fresh, touched
+
+
 @dataclass(frozen=True)
 class Refreshed:
     """What a refresh found — the release decision, as data.
@@ -794,95 +1131,22 @@ def refresh(
     prefix: Annotated[str, doc("drive the tiers from this prefix's bin/")] = "",
     changelog: Annotated[bool, doc("write the events into CHANGELOG.md")] = True,
 ) -> Refreshed:
-    """Read every release published since the history was last updated.
+    """Observe what is new on this platform, and fold it into the store.
 
-    The forward walk, and the one a release job runs. Every release between
-    each tool's base and its index's newest is observed — not just the
-    newest, so a flag that arrived in 0.16.1 is attributed to 0.16.1 rather
-    than to whatever happened to be latest the day the job ran. A release
-    that changed nothing records an empty delta, which is a real observation
-    and not the same as never having looked.
-
-    Three phases. The listings are fetched concurrently; the releases are
-    observed **in parallel**, a bounded wave at a time, each observation a
-    task of its own so it owns its environment; the chains are assembled
-    single-threaded from whatever arrived, in whatever order it arrived —
-    which is what lets a failed install be a reported *hole* rather than the
-    end of a tool's walk.
+    `gather` then `assemble`, in one process — the whole job when one
+    machine is the whole matrix, and exactly the two halves the weekly
+    workflow runs on three machines and one assembler. There is no third
+    code path: what runs locally is what runs in CI, with the document
+    handed across a function call instead of an artifact.
 
     Nothing new anywhere means nothing to release, and that is the whole
-    exit condition. So an index that would not answer is reported and exits
+    exit condition. An index that would not answer is reported and exits
     non-zero rather than counting as "nothing new": a rename or a moved repo
     would otherwise make a tool silently untracked while the job kept
     reporting success.
     """
-    import shutil
-    import tempfile
-
-    from footman import _toolfetch
-
-    _bounce_bare_call("refresh")
-    scratch = Path(tempfile.mkdtemp(prefix="footman-refresh-"))
-    read: dict[str, list[str]] = {}
-    events: dict[str, list[str]] = {}
-    holes: dict[str, list[str]] = {}
-    try:
-        with _on_path(prefix), _sandboxed(scratch):
-            drivers, skipped = _curated(only, _toolfetch)
-            listings, unreachable = _list_phase(drivers, _toolfetch)
-
-            plans: dict[str, list] = {}
-            docs: dict[str, dict] = {}
-            for driver in drivers:
-                if driver.key not in listings:
-                    continue
-                doc_ = _toolhistory.load(_history_path(driver.key))
-                if doc_ is None:
-                    skipped.append(f"{driver.key} (no history — run `sync` first)")
-                    continue
-                docs[driver.key] = doc_
-                plans[driver.key] = _plan_refresh(doc_, listings[driver.key])
-
-            work = [(d, r) for d in drivers if d.key in plans for r in plans[d.key]]
-            surfaces = _gather(work, scratch)
-            for driver in drivers:
-                if driver.key not in plans:
-                    continue
-                fresh, missing = _assemble(
-                    driver, docs[driver.key], plans[driver.key], surfaces
-                )
-                if fresh:
-                    read[driver.key] = fresh
-                if missing:
-                    holes[driver.key] = missing
-                if moved := _events_of(docs[driver.key], fresh):
-                    events[driver.key] = moved
-    finally:
-        shutil.rmtree(scratch, ignore_errors=True)
-
-    found = Refreshed(
-        read=read,
-        events=events,
-        unreachable=unreachable,
-        skipped=skipped,
-        holes=holes,
-    )
-    if changelog and events:
-        entries = [
-            _entry_for(key, _toolhistory.load(_history_path(key)) or {}, versions)
-            for key, versions in sorted(events.items())
-        ]
-        found = replace(found, wrote_changelog=_write_changelog(entries))
-    _report_refresh(found)
-    if unreachable:
-        from footman import fail
-
-        fail(
-            f"{len(unreachable)} index(es) would not answer: "
-            f"{', '.join(sorted(unreachable))}",
-            code=75,  # EX_TEMPFAIL: try again, rather than "nothing to do"
-        )
-    return found
+    found = gather(only=only, prefix=prefix)
+    return _finish(_assemble_documents([found.document()]), changelog)
 
 
 _CHANGELOG = _HISTORY.parent / "CHANGELOG.md"

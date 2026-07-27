@@ -1237,7 +1237,11 @@ def test_a_refresh_reads_every_release_it_missed_not_just_the_newest(
     _isolate(tools, monkeypatch, tmp_path)
     _toolhistory.save(
         _toolhistory.new(
-            "ruff", version="1.0.0", date="2026-02-01", surface=_with_flags("quiet")
+            "ruff",
+            version="1.0.0",
+            date="2026-02-01",
+            surface=_with_flags("quiet"),
+            platforms=[tools._platform()],
         ),
         tmp_path / "history" / "ruff.json",
     )
@@ -1281,7 +1285,11 @@ def test_a_release_that_will_not_install_is_a_hole_not_a_dead_walk(
     _isolate(tools, monkeypatch, tmp_path)
     _toolhistory.save(
         _toolhistory.new(
-            "ruff", version="1.0.0", date="2026-02-01", surface=_with_flags("quiet")
+            "ruff",
+            version="1.0.0",
+            date="2026-02-01",
+            surface=_with_flags("quiet"),
+            platforms=[tools._platform()],
         ),
         tmp_path / "history" / "ruff.json",
     )
@@ -1330,7 +1338,11 @@ def test_a_refresh_with_nothing_new_warrants_no_release(tmp_path, monkeypatch):
     _isolate(tools, monkeypatch, tmp_path)
     _toolhistory.save(
         _toolhistory.new(
-            "ruff", version="1.0.3", date="2026-02-04", surface=_with_flags("quiet")
+            "ruff",
+            version="1.0.3",
+            date="2026-02-04",
+            surface=_with_flags("quiet"),
+            platforms=[tools._platform()],
         ),
         tmp_path / "history" / "ruff.json",
     )
@@ -1355,7 +1367,11 @@ def test_a_refresh_that_could_not_look_does_not_report_nothing_new(
     _isolate(tools, monkeypatch, tmp_path)
     _toolhistory.save(
         _toolhistory.new(
-            "ruff", version="1.0.3", date="2026-02-04", surface=_with_flags("quiet")
+            "ruff",
+            version="1.0.3",
+            date="2026-02-04",
+            surface=_with_flags("quiet"),
+            platforms=[tools._platform()],
         ),
         tmp_path / "history" / "ruff.json",
     )
@@ -1377,7 +1393,11 @@ def test_a_refresh_writes_its_own_events_into_the_changelog(tmp_path, monkeypatc
     _isolate(tools, monkeypatch, tmp_path)
     _toolhistory.save(
         _toolhistory.new(
-            "ruff", version="1.0.0", date="2026-02-01", surface=_with_flags("quiet")
+            "ruff",
+            version="1.0.0",
+            date="2026-02-01",
+            surface=_with_flags("quiet"),
+            platforms=[tools._platform()],
         ),
         tmp_path / "history" / "ruff.json",
     )
@@ -1404,7 +1424,11 @@ def test_a_refresh_with_no_events_writes_no_note(tmp_path, monkeypatch):
     _isolate(tools, monkeypatch, tmp_path)
     _toolhistory.save(
         _toolhistory.new(
-            "ruff", version="1.0.0", date="2026-02-01", surface=_with_flags("quiet")
+            "ruff",
+            version="1.0.0",
+            date="2026-02-01",
+            surface=_with_flags("quiet"),
+            platforms=[tools._platform()],
         ),
         tmp_path / "history" / "ruff.json",
     )
@@ -1434,7 +1458,11 @@ def test_a_prime_reaches_below_the_floor_and_only_below_it(tmp_path, monkeypatch
     _isolate(tools, monkeypatch, tmp_path)
     _toolhistory.save(
         _toolhistory.new(
-            "ruff", version="1.0.2", date="2026-02-03", surface=_with_flags("quiet")
+            "ruff",
+            version="1.0.2",
+            date="2026-02-03",
+            surface=_with_flags("quiet"),
+            platforms=[tools._platform()],
         ),
         tmp_path / "history" / "ruff.json",
     )
@@ -1469,7 +1497,11 @@ def test_a_floor_the_index_cannot_place_refuses_the_tool(tmp_path, monkeypatch):
     _isolate(tools, monkeypatch, tmp_path)
     _toolhistory.save(
         _toolhistory.new(
-            "ruff", version="0.9.9", date="2026-01-01", surface=_with_flags("quiet")
+            "ruff",
+            version="0.9.9",
+            date="2026-01-01",
+            surface=_with_flags("quiet"),
+            platforms=[tools._platform()],
         ),
         tmp_path / "history" / "ruff.json",
     )
@@ -1496,7 +1528,11 @@ def test_parallel_observations_each_own_their_environment(tmp_path, monkeypatch)
     _isolate(tools, monkeypatch, tmp_path)
     _toolhistory.save(
         _toolhistory.new(
-            "ruff", version="1.0.0", date="2026-02-01", surface=_with_flags("quiet")
+            "ruff",
+            version="1.0.0",
+            date="2026-02-01",
+            surface=_with_flags("quiet"),
+            platforms=[tools._platform()],
         ),
         tmp_path / "history" / "ruff.json",
     )
@@ -1874,3 +1910,150 @@ def test_a_merged_surface_change_recomputes_exactly_the_two_entries_that_saw_it(
     assert json.dumps(doc["deltas"]["1.0.0"], sort_keys=True) == untouched["1.0.0"]
     for version in _toolhistory.observed(doc):
         assert _toolhistory.at(doc, version) is not None, version
+
+
+def test_gather_writes_a_document_another_machine_can_fold(tmp_path, monkeypatch):
+    """The two halves are split because a Linux box cannot tell you what a
+    tool's `--help` says on Windows. So the observation travels as a
+    self-describing document — copied off that machine by hand if that is
+    how the week goes — and the assembler folds it wherever the store is."""
+    from footman import _toolfetch
+    from footman.tasks import tools
+
+    _isolate(tools, monkeypatch, tmp_path)
+    _toolhistory.save(
+        _toolhistory.new(
+            "ruff",
+            version="1.0.0",
+            date="2026-02-01",
+            surface=_with_flags("quiet"),
+            platforms=[tools._platform()],
+        ),
+        tmp_path / "history" / "ruff.json",
+    )
+    listings = {
+        "ruff": [
+            _toolfetch.Release(version="1.0.1", date="2026-02-02"),
+            _toolfetch.Release(version="1.0.0", date="2026-02-01"),
+        ]
+    }
+    _serve(monkeypatch, listings, {("ruff", "1.0.1"): _with_flags("quiet", "fix")})
+
+    out = tmp_path / "obs.json"
+    result = _tools_run(f"gather --only=ruff --out={out}")
+    assert result.ok, result.stderr
+
+    document = json.loads(out.read_text(encoding="utf-8"))
+    assert document["schema"] == tools.OBSERVATION_SCHEMA
+    assert document["platform"] == tools._platform()
+    assert list(document["observations"]["ruff"]) == ["1.0.1"]
+    # the store is untouched: gathering writes nothing but the document
+    stored = _toolhistory.load(tmp_path / "history" / "ruff.json")
+    assert stored is not None
+    assert _toolhistory.observed(stored) == ["1.0.0"]
+
+    result = _tools_run(f"assemble {out} --no-changelog")
+    assert result.ok, result.stderr
+    stored = _toolhistory.load(tmp_path / "history" / "ruff.json")
+    assert stored is not None
+    assert _toolhistory.observed(stored) == ["1.0.1", "1.0.0"]
+
+
+def test_two_platforms_fold_into_one_release_with_the_exception_named(
+    tmp_path, monkeypatch
+):
+    """The whole point: one release, two witnesses, one record — and the
+    option only one of them has is the exception the store keeps."""
+    from footman.tasks import tools
+
+    _isolate(tools, monkeypatch, tmp_path)
+    _toolhistory.save(
+        _toolhistory.new(
+            "ruff",
+            version="1.0.0",
+            date="2026-02-01",
+            surface=_with_flags("quiet"),
+            platforms=["Linux", "Windows"],
+        ),
+        tmp_path / "history" / "ruff.json",
+    )
+
+    def document(platform, *options):
+        path = tmp_path / f"obs-{platform}.json"
+        path.write_text(
+            json.dumps(
+                {
+                    "schema": tools.OBSERVATION_SCHEMA,
+                    "platform": platform,
+                    "observations": {
+                        "ruff": {
+                            "1.0.1": {
+                                "date": "2026-02-02",
+                                "tag": "",
+                                "surface": _with_flags(*options),
+                            }
+                        }
+                    },
+                    "holes": {},
+                    "unreachable": {},
+                    "skipped": [],
+                }
+            ),
+            encoding="utf-8",
+        )
+        return path
+
+    linux = document("Linux", "quiet", "fork")
+    windows = document("Windows", "quiet")
+
+    result = _tools_run(f"assemble {linux} {windows} --no-changelog")
+    assert result.ok, result.stderr
+
+    stored = _toolhistory.load(tmp_path / "history" / "ruff.json")
+    assert stored is not None
+    entry = _toolhistory.entry_of(stored, "1.0.1")
+    assert entry is not None
+    assert entry["platforms"] == ["Linux", "Windows"]
+    assert entry["absent"] == {"\tfork": ["Windows"]}
+    # folded once: the option is in the surface, and no drop/resurrect churn
+    assert "fork" in entry["surface"]["verbs"][""]["options"]
+    assert "absent" not in json.dumps(stored["deltas"])
+
+    spec = _toolhistory.union(stored, name="ruff")
+    options = {o.name: o for v in spec.verbs for o in v.options}
+    assert options["fork"].not_on == ("Windows",)
+    assert options["quiet"].not_on == ()
+
+
+def test_a_platform_new_to_a_tool_backfills_the_version_people_run(
+    tmp_path, monkeypatch
+):
+    """A platform that has never looked at a tool starts with the base —
+    otherwise its coverage would begin at whatever ships next, and the
+    version everyone is actually running would stay unaccounted for."""
+    from footman import _toolfetch
+    from footman.tasks import tools
+
+    _isolate(tools, monkeypatch, tmp_path)
+    _toolhistory.save(
+        _toolhistory.new(
+            "ruff",
+            version="1.0.0",
+            date="2026-02-01",
+            surface=_with_flags("quiet", "fork"),
+            platforms=["Linux"],  # this machine has never looked
+        ),
+        tmp_path / "history" / "ruff.json",
+    )
+    listings = {"ruff": [_toolfetch.Release(version="1.0.0", date="2026-02-01")]}
+    installed = _serve(monkeypatch, listings, {("ruff", "1.0.0"): _with_flags("quiet")})
+
+    result = _tools_run("refresh --only=ruff --no-changelog")
+    assert result.ok, result.stderr
+    assert installed == [("ruff", "1.0.0")]  # the base, backfilled
+
+    stored = _toolhistory.load(tmp_path / "history" / "ruff.json")
+    assert stored is not None
+    assert stored["base"]["platforms"] == sorted(["Linux", tools._platform()])
+    assert stored["base"]["absent"] == {"\tfork": [tools._platform()]}
+    assert "release warranted: no" in result.stdout  # coverage is not an event
