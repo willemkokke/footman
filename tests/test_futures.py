@@ -6,7 +6,7 @@ import threading
 
 import pytest
 
-from footman import registry
+from footman import executor, registry
 from footman.registry import Group
 from footman.split import ChainError
 from footman.testing import Runner
@@ -563,3 +563,81 @@ def test_something_that_never_began_sits_after_what_prevented_it():
 
     ordered = schedule._chronological([ran_later, skipped, ran_first, denied])
     assert [r.task for r in ordered] == ["deploy", "build", "publish", "notify"]
+
+
+# --- a request the run had already satisfied is reported, not invisible -------
+
+
+def test_a_memo_hit_is_reported_as_cached():
+    # The work happened once; the second request was answered rather than
+    # performed, and the report says so instead of the request vanishing.
+    reg = Group("root")
+    runs: list[int] = []
+
+    @reg.task
+    def build() -> str:
+        runs.append(1)
+        return "dist/app"
+
+    @reg.task(pre=[build])
+    def publish():
+        build()  # answered from the run's own earlier execution
+
+    result = drive(reg, "publish")
+    assert result.ok, result.stderr
+    assert len(runs) == 1
+    states = [(r.task, executor.reported_state(r)) for r in result.results]
+    assert states == [("build", "ok"), ("build", "cached"), ("publish", "ok")]
+    hit = result.results[1]
+    assert hit.returned == "dist/app"  # it carries the value it answered with
+    assert hit.ok and hit.started is None  # succeeded earlier; never began here
+    assert hit.blocked_by == "build"  # placed right after the run that satisfied it
+
+
+def test_a_cached_entry_does_not_change_the_exit_code():
+    reg = Group("root")
+
+    @reg.task
+    def probe() -> int:
+        return 3  # an int return is a segment's exit code, a call's value
+
+    @reg.task
+    def gate():
+        assert probe() == 3
+        assert probe() == 3  # the second is a cache hit
+
+    result = drive(reg, "gate")
+    assert result.ok and result.exit_code == 0
+    assert [executor.reported_state(r) for r in result.results] == [
+        "ok",
+        "ok",
+        "cached",
+    ]
+
+
+def test_reported_state_resolves_one_word_from_the_parts():
+    # `ok`/`code` stay the exit-code channel; this is the reported spelling, so
+    # a new outcome becomes another value here rather than another boolean.
+    from footman.executor import TaskResult
+
+    assert executor.reported_state(TaskResult(task="a", ok=True)) == "ok"
+    assert executor.reported_state(TaskResult(task="a", ok=False)) == "failed"
+    assert (
+        executor.reported_state(TaskResult(task="a", ok=False, cancelled=True))
+        == "cancelled"
+    )
+    assert (
+        executor.reported_state(TaskResult(task="a", ok=True, state="cached"))
+        == "cached"
+    )
+
+
+def test_the_ladder_resolver_is_shared():
+    # `volatile` is the first user of the down-the-subtree ladder; a later
+    # property reuses this rather than copying it.
+    from footman import schedule
+
+    assert schedule.resolve_inherited(True, False) is True  # own wins
+    assert schedule.resolve_inherited(False, True) is False  # even over a parent
+    assert schedule.resolve_inherited(None, True) is True  # else inherited
+    assert schedule.resolve_inherited(None, False) is False  # else shared

@@ -232,10 +232,12 @@ def call(task: Any, args: tuple[Any, ...], kwargs: dict[str, Any]) -> Any:
     try:
         # A finished cell answers instantly (the memo); a live one blocks until
         # the thread that claimed it is done, and both hand back one value.
-        return cell.future.result()
+        value = cell.future.result()
     finally:
         with run.lock:
             run.waits.pop(me, None)
+    _record(_cached_result(cell.label, value))
+    return value
 
 
 def _claim(run: _Session, key: Any, me: int, label: str) -> tuple[bool, _Cell]:
@@ -295,9 +297,32 @@ def _fill(key: Any, label: str, value: Any) -> None:
 
 
 def _record(result: TaskResult) -> None:
-    """Add a called task's outcome to the run's report — ran, refused, denied."""
+    """Add a called task's outcome to the run's report — ran, refused, denied,
+    or satisfied by an execution the run had already performed."""
     if (run := _active) is not None:
         run.results.append(result)
+
+
+def _cached_result(label: str, value: Any) -> TaskResult:
+    """The report entry for a request the run had already satisfied.
+
+    Recorded rather than left invisible: the work happened, and a reader (or a
+    journal) should see that a second request for it was answered instead of
+    silently vanishing. It never began, so it carries no start and is placed by
+    cause — `blocked_by` names the task whose own run satisfied it, which is
+    itself, so the ordering rule lands it directly after that execution. `ok`
+    is true because the work did succeed, just earlier, so the run's exit code
+    is untouched.
+    """
+    from footman.executor import TaskResult
+
+    return TaskResult(
+        task=label,
+        ok=True,
+        returned=value,
+        state="cached",
+        blocked_by=label,
+    )
 
 
 def _refuse_unrunnable(task: Any) -> None:

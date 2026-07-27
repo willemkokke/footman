@@ -47,6 +47,21 @@ versions may include breaking changes.
   A fresh run never rewrites what the run already remembers — the first result
   stands.
 
+- **A request the run had already satisfied is reported as a cache hit.** A
+  body call that finds its work already done returns the memoised value —
+  and used to leave no trace, so the second request simply vanished from the
+  report. It now appears, marked `cached`: dimmed in the summary with
+  "already run this run" where a duration would be, and carrying
+  `state: "cached"` in the `--json` envelope. It never began, so it has no
+  start of its own and the ordering rule places it directly after the
+  execution that satisfied it; it is `ok`, since the work succeeded just
+  earlier, so the run's exit code is untouched.
+
+  `state` is the reported spelling of what happened — `ok` / `failed` /
+  `cancelled` / `cached` — resolved in one place. `ok` and `code` stay the
+  exit-code channel, so a future outcome is another value of `state` rather
+  than another boolean beside it.
+
 - **The run's report reads in the order the run happened.** A dependency
   listing has no place for a task reached by a call; a chronological one does.
   Sequential runs are unchanged, since dependency order already is

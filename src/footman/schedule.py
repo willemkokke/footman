@@ -82,6 +82,18 @@ def _dep_key(fn: Task) -> tuple[int, frozenset[tuple[str, Any]]]:
     return fn._dedup_key() if isinstance(fn, _Opted) else (id(fn), frozenset())
 
 
+def resolve_inherited(declared: bool | None, inherited: bool) -> bool:
+    """One rung-walk for a property that flows down the dependency subtree.
+
+    Own declaration (or `.opts()` override) beats what the requester passed
+    down, and unset means "whoever asks decides". `volatile` is the first user;
+    a later property wanting the same shape — propagate to what a task needs,
+    let a task pin its own answer — passes its own reader through here rather
+    than copying the ladder.
+    """
+    return declared if declared is not None else inherited
+
+
 def _as_task(dep: Task | Group | _Opted) -> Task:
     """A `pre`/`post` dependency may name a runnable group; resolve it to the
     group's default action so it runs (and fans out) like any other task. An
@@ -147,8 +159,7 @@ def _build_dag(root: Group, segments: list[Segment]) -> list[_Node]:
         # unlike `keep_going`, volatility decides node *identity*, and identity
         # has to be settled while the node is being made. Own declaration (or
         # `.opts()` override) wins over what the requester passed down.
-        own = volatility(fn)
-        volatile = own if own is not None else asked_by
+        volatile = resolve_inherited(volatility(fn), asked_by)
         if volatile:
             # Not shared, by definition: a fresh node per requester, and never
             # registered as the one a later dependency lookup could reuse.
@@ -210,7 +221,9 @@ def _build_dag(root: Group, segments: list[Segment]) -> list[_Node]:
     for seg in segments:
         fn = executor.resolve(root, seg.path)
         key = _dep_key(fn)
-        own = volatility(fn)
+        # A chain segment is a root: nothing asked for it, so only its own
+        # declaration can make it volatile.
+        own = resolve_inherited(volatility(fn), inherited=False)
         existing = None if own else dep_nodes.get(key)
         if existing is not None and key not in seen_explicit:
             # First explicit mention of a task already pulled in as a bare dep:

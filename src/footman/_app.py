@@ -721,8 +721,12 @@ def _print_summary(
     for result in results:
         ok = result.ok
         cancelled = result.cancelled
+        state = executor.reported_state(result)
         if color:
-            if ok:
+            if state == "cached":
+                # Dimmed, not green: nothing ran, the run already had it.
+                mark = "\033[2m·\033[0m"
+            elif ok:
                 mark = "\033[32m✓\033[0m"
             elif cancelled:
                 mark = "\033[33m○\033[0m"  # cut off by fail-fast, not a failure
@@ -731,13 +735,16 @@ def _print_summary(
             name = f"\033[1;36m{result.task:<{width}}\033[0m"
         else:
             word = "ok" if ok else ("cut" if cancelled else "FAIL")
+            if state == "cached":
+                word = "hit"
             mark = f"{word:<4}"
             name = f"{result.task:<{width}}"
-        timing = (
-            f"({result.duration * 1000:.0f} ms)"
-            if timings
-            else f"({_progress.fmt_secs(result.duration)})"
-        )
+        if state == "cached":
+            timing = "(already run this run)"
+        elif timings:
+            timing = f"({result.duration * 1000:.0f} ms)"
+        else:
+            timing = f"({_progress.fmt_secs(result.duration)})"
         if color:
             timing = f"\033[36m{timing}\033[0m"
         print(f"{mark} {name}  {timing}", file=sys.stderr)
@@ -769,6 +776,7 @@ def _print_json(results: list[executor.TaskResult], *, total: float) -> None:
         entry: dict[str, object] = {
             "task": r.task,
             "ok": r.ok,
+            "state": executor.reported_state(r),
             "cancelled": r.cancelled,
             "code": r.code,
             "duration_ms": round(r.duration * 1000, 3),
