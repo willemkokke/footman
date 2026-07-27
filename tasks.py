@@ -75,7 +75,7 @@ def check():
     cov_file = os.path.join(tempfile.mkdtemp(prefix="fm-check-cov-"), "coverage")
 
     def covered():
-        run("pytest --cov=footman --cov-report=", env={"COVERAGE_FILE": cov_file})
+        run("pytest --cov --cov-report=", env={"COVERAGE_FILE": cov_file})
 
     # partial, not a lambda: it keeps the callee's name, so the live line
     # and step column say "format" instead of "…"; `covered` borrows the
@@ -283,12 +283,21 @@ def serve():
 @docs.task
 def coverage():
     """Generate the coverage HTML report into docs/htmlcov (embedded in the site)."""
-    run("pytest --cov=footman --cov-report=html:docs/htmlcov -q")
+    run("pytest --cov --cov-report=html:docs/htmlcov -q")
 
 
 @docs.task(name="build")
-def docs_build(check: bool = False):
+def docs_build(check: bool = False):  # pragma: no cover — see below
     """Build the docs site into ./site; regenerates llms.txt and docs/tasks/.
+
+    Not unit-tested, and deliberately: the body is orchestration over
+    zensical, a pty screenshotter and five real shells, so a test could only
+    stub twenty collaborators and assert the call order back — a change
+    detector that passes while the site breaks. Its real test is CI's
+    strict docs build, which runs the whole thing against the actual tools.
+    The pieces with logic of their own — the llms.txt generator, the cast
+    guard, the scratch projects — are tested separately, where a test can
+    say something true.
 
     Args:
         check: build strictly (what CI runs)
@@ -474,11 +483,52 @@ class ToolInput:
 class HookEvent:
     tool_input: ToolInput = dataclasses.field(default_factory=ToolInput)
     stop_hook_active: bool = False
+    session_id: str = ""
+
+
+def _worktree(path: str) -> Path | None:
+    """The checkout *path* belongs to — a git worktree root, or `None`.
+
+    A worktree's `.git` is a file rather than a directory, so `exists` is the
+    test and not `is_dir`.
+    """
+    from pathlib import Path
+
+    if not path:
+        return None
+    start = Path(path).expanduser().resolve()
+    for candidate in (start, *start.parents):
+        if (candidate / ".git").exists():
+            return candidate
+    return None
+
+
+def _gate_dir(session: str) -> Path:
+    """Where a session records the checkout its edits landed in.
+
+    A hook runs in the session's *shell* directory, which is not reliably the
+    checkout being worked on: `cd` somewhere outside the workspace and the
+    harness resets it to the project root. Several agents share this repo
+    through worktrees, so a stop hook that ran wherever the shell finished
+    would gate one session's work on another's half-finished tree — which it
+    did, reporting a failure in a branch this session had never touched.
+
+    So the edits say where the work is, and the file keys on the session so
+    two agents cannot answer for each other.
+    """
+    import tempfile
+    from pathlib import Path
+
+    return Path(tempfile.gettempdir()) / f"footman-gate-{session or 'unknown'}"
 
 
 @hooks.task
 def post_edit(event: Annotated[HookEvent, stdin]) -> None:
     """Format and lint a Python file the agent just edited."""
+    # Every edit, not only the Python ones: `stop` needs to know which
+    # checkout this session is working in whatever it touched last.
+    if root := _worktree(event.tool_input.file_path):
+        _gate_dir(event.session_id).write_text(str(root), encoding="utf-8")
     if not event.tool_input.file_path.endswith(".py"):
         return
     try:
@@ -493,10 +543,25 @@ def stop(event: Annotated[HookEvent, stdin]) -> None:
     """Refuse to let a session end on a red gate."""
     if event.stop_hook_active:
         return  # this stop already is the retry — never ping-pong
+    from pathlib import Path
+
+    here = _worktree(str(Path.cwd()))
     try:
-        check()
+        recorded = _gate_dir(event.session_id).read_text(encoding="utf-8").strip()
+    except OSError:
+        recorded = ""  # nothing was edited, or the note is gone: gate here
+    target = _worktree(recorded)
+    try:
+        if target is None or target == here:
+            check()
+        else:
+            # Another checkout entirely, so the gate runs there — as a
+            # subprocess, because that tree has its own environment and its
+            # own footman, and this one has no business standing in for it.
+            run(["uv", "run", "fm", "check"], cwd=target)
     except RunFailed:
-        fail("the gate is red — fix it before stopping", code=2)
+        where = "" if target is None or target == here else f" in {target.name}"
+        fail(f"the gate is red{where} — fix it before stopping", code=2)
 
 
 dist = group("dist", help="Build and publish")

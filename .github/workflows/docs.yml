@@ -81,7 +81,7 @@ jobs:
             echo "merged coverage report from CI run $rid"
           else
             echo "no CI artifact reachable — measuring this environment only"
-            uv run pytest --cov=footman --cov-report=html:docs/htmlcov -q
+            uv run pytest --cov --cov-report=html:docs/htmlcov -q
           fi
       - name: Build site
         # The same task devs run — regenerates llms.txt, then builds strictly.

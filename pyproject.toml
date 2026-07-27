@@ -156,7 +156,7 @@ reportMissingModuleSource = false
 
 [tool.coverage.run]
 branch = true
-source = ["footman"]
+source = ["footman", "tasks"]
 # Subprocess measurement: footman spawns real children — the completion
 # hot path every shell hook invokes, the detached refresh and cache
 # collector, the uv handoff, the `fm` inside every docs cast. They run
