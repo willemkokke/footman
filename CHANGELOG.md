@@ -9,6 +9,13 @@ versions may include breaking changes.
 
 ### Added
 
+- **`registry.task_source_hash()` — a digest of a task's own body.** Normalised
+  through the AST rather than taken over the text, so reformatting and comments
+  do not move it while a real edit does; decorator lines count, so a changed
+  `pre=` shows up. Deliberately a **tripwire, not an identity**: it covers the
+  function's own source and nothing it calls, which makes it right for "warn me
+  if the body moved and nobody said so" and wrong as a cache key.
+
 
 
 ### Removed

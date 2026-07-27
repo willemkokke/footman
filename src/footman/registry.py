@@ -407,6 +407,32 @@ def task_source(fn: Any) -> str:
     return inspect.getsource(inspect.unwrap(fn))
 
 
+def task_source_hash(fn: Any) -> str | None:
+    """A digest of the task's own body, or `None` when its source can't be read.
+
+    Normalised through the AST rather than taken over the text, so reformatting
+    and comments do not move it while a real edit does — `ruff format` sweeping
+    the repo must not look like every task changed. Decorator lines are part of
+    it, so a changed `pre=` shows up.
+
+    It is a **tripwire, not an identity**: it covers this function's own source
+    and nothing it calls, so a helper changing underneath leaves it untouched.
+    Good for "warn me if the body moved and nobody said so"; wrong as a cache
+    key, which is why nothing here uses it as one.
+    """
+    import ast
+    import hashlib
+    import textwrap
+
+    try:
+        tree = ast.parse(textwrap.dedent(task_source(fn)))
+    except (OSError, TypeError, SyntaxError):
+        return None
+    # No attributes: line and column numbers would make whitespace significant.
+    shape = ast.dump(tree, annotate_fields=True, include_attributes=False)
+    return hashlib.sha256(shape.encode("utf-8")).hexdigest()
+
+
 def task_source_file(fn: Any) -> str | None:
     """The file the function behind *fn* is defined in, if it has one."""
     import inspect
