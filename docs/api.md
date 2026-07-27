@@ -87,6 +87,8 @@ a `TaskView` that reads and edits one task. The per-task pair — `@pre_task` an
 
 ::: footman.registry.pre_tasks
 
+::: footman.registry.pre_bind
+
 ::: footman.registry.pre_task
 
 ::: footman.registry.post_task

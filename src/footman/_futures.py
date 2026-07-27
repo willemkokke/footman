@@ -208,33 +208,98 @@ def call(task: Any, args: tuple[Any, ...], kwargs: dict[str, Any]) -> Any:
             return task._plain_call(args, kwargs)
         return registry.task_body(task)(*args, **kwargs)
     _refuse_unrunnable(task)
+    from footman import context, schedule
+    from footman import executor as _executor
+
+    label = _label(task)
+    seg = schedule._default_seg(task)
+    # Availability is a per-request gate on the declared path (`run_task`
+    # checks it before the window opens), so a call checks it in the same
+    # place: before any hook fires.
+    if (refusal := _executor.unavailable(task, seg)) is not None:
+        _record(refusal)
+        raise refusal.error or ChainError(f"{label} is unavailable")
+
     # A call binds like a segment: omitted parameters consult the same sources
     # binding would (stdin, env, a required `ask()`), explicit values are
     # validated against their annotation, and resolution happens before the
     # key is computed so identity reads the values the body will receive.
-    from footman import executor as _executor
-
-    args, kwargs = _executor.bind_call(task, args, kwargs)
+    # With a lifecycle armed, the callee's context is born first and made
+    # current around binding, so a `pre_bind` hook's `task.env` writes reach
+    # `env()` fallbacks here exactly as they do on the declared path.
+    life = _executor._lifecycle
+    child: Any = None
+    handle: Any = None
+    if life is not None:
+        parent = context.current()
+        buf = io.StringIO()
+        child = dataclasses.replace(
+            parent,
+            fn=task,
+            env=dict(parent.env),
+            cwd=None,  # let the callee's own cwd policy resolve
+            sink=buf,
+            err_sink=buf,
+            steps=[],
+            task=label,
+            shared=parent.shared,  # refined per branch below
+        )
+        handle = _executor.TaskHandle(task, seg, child)
+        if (err := _executor._enter_bind_hooks(life, handle)) is not None:
+            # The attempt concluded before binding: the posts fire, the row
+            # is recorded, and the failure raises at the call site.
+            result = _executor._result(seg, 1, None, err, 0.0)
+            _executor._exit_task_hooks(life, handle, result)
+            _record(result)
+            raise err
+        token = context._current.set(child)
+        child.in_task = True
+        try:
+            args, kwargs = _executor.bind_call(task, args, kwargs)
+        except Exception as exc:
+            result = _executor._result(seg, _executor.EX_USAGE, None, exc, 0.0)
+            _executor._exit_task_hooks(life, handle, result)
+            _record(result)
+            raise
+        finally:
+            context._current.reset(token)
+    else:
+        args, kwargs = _executor.bind_call(task, args, kwargs)
     key = _key(task, args, kwargs)
     if key is None:  # arguments with no frozen form: honest work every time
-        return _run_now(task, args, kwargs)
+        return _run_now(task, args, kwargs, seg=seg, child=child, handle=handle)
     if unshared(task):
         # Asked for unshared: it neither reads a cell nor becomes one. Its
         # result is its own — the run's answer is only ever an execution that
         # was itself shareable, so how much work a run does cannot depend on
         # which of two nodes the scheduler happened to start first.
-        return _run_now(task, args, kwargs, shared=False)
+        return _run_now(
+            task, args, kwargs, shared=False, seg=seg, child=child, handle=handle
+        )
 
     me = threading.get_ident()
-    claimed, cell = _claim(run, key, me, _label(task))
+    claimed, cell = _claim(run, key, me, label)
     if claimed:  # nobody had run it: this thread owns it, inline, right here
         try:
-            value = _run_now(task, args, kwargs)
+            value = _run_now(task, args, kwargs, seg=seg, child=child, handle=handle)
         except BaseException as exc:
             cell.future.set_exception(exc)
             raise
         cell.future.set_result(value)
         return value
+    # The pair is per request — only the body is shared. The pre fires before
+    # the wait, so a span honestly covers it; the post closes the request
+    # with its `shared` row. A crashing hook must not pass silently here
+    # either: it fails this request, at the call site.
+    if life is not None and handle is not None:
+        handle._bind(args, kwargs)
+        if (hook_error := _executor._enter_task_hooks(life, handle)) is not None:
+            row = _executor._result(seg, 1, None, hook_error, 0.0)
+            _executor._exit_task_hooks(life, handle, row)
+            _record(row)
+            with run.lock:
+                run.waits.pop(me, None)
+            raise hook_error
     try:
         # A finished cell answers instantly (the memo); a live one blocks until
         # the thread that claimed it is done, and both hand back one value.
@@ -242,7 +307,17 @@ def call(task: Any, args: tuple[Any, ...], kwargs: dict[str, Any]) -> Any:
     finally:
         with run.lock:
             run.waits.pop(me, None)
-    _record(_shared_result(cell.label, value))
+    row = _shared_result(cell.label, value)
+    if life is not None and handle is not None:
+        post_error = _executor._exit_task_hooks(life, handle, row)
+        if post_error is not None:
+            row.ok = False
+            row.code = 1
+            row.error = post_error
+            row.state = ""  # it no longer reads as a clean share
+            _record(row)
+            raise post_error
+    _record(row)
     return value
 
 
@@ -402,7 +477,14 @@ def _refuse_unrunnable(task: Any) -> None:
 
 
 def _run_now(
-    task: Any, args: tuple[Any, ...], kwargs: dict[str, Any], *, shared: bool = True
+    task: Any,
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+    *,
+    shared: bool = True,
+    seg: Any = None,
+    child: Any = None,
+    handle: Any = None,
 ) -> Any:
     """Run *task* here and now with full task semantics, and return its value.
 
@@ -410,38 +492,40 @@ def _run_now(
     the callee's own `TaskResult` still joins the run's report, so the work is
     visible even though the value came back through Python.
 
-    Every gate a declared task passes, a called one passes too: `@requires`
-    availability, and `@task(confirm=)`. The confirm is the one gate that
-    cannot be resolved up front the way the scheduler resolves a segment's —
-    a call is not knowable before the run — so it is asked here, at the call.
+    Availability was checked in `call()`, before any hook fired; `confirm=`
+    is the one gate that cannot be resolved up front the way the scheduler
+    resolves a segment's — a call is not knowable before the run — so it is
+    asked here, at the moment of execution (a request the run has already
+    answered never re-asks).
     """
     from footman import context, executor, schedule
 
     parent = context.current()
     label = _label(task)
-    seg = schedule._default_seg(task)
-    if (refusal := executor.unavailable(task, seg)) is not None:
-        _record(refusal)
-        raise refusal.error or ChainError(f"{label} is unavailable")
+    if seg is None:
+        seg = schedule._default_seg(task)
     if (denial := schedule.confirm_gate(task, seg, parent)) is not None:
         _record(denial)
         raise denial.error or ChainError(f"{label} was not confirmed")
-    buf = io.StringIO()
-    child = dataclasses.replace(
-        parent,
-        fn=task,
-        env=dict(parent.env),
-        cwd=None,  # let the callee's own cwd policy resolve
-        sink=buf,
-        err_sink=buf,
-        steps=[],
-        task=label,
-        # Unsharedness propagates: what this callee asks for is asked the same
-        # way, unless that task declares its own answer.
-        shared=parent.shared and shared,
-    )
+    if child is None:
+        buf = io.StringIO()
+        child = dataclasses.replace(
+            parent,
+            fn=task,
+            env=dict(parent.env),
+            cwd=None,  # let the callee's own cwd policy resolve
+            sink=buf,
+            err_sink=buf,
+            steps=[],
+            task=label,
+        )
+    else:
+        buf = child.sink
+    # Unsharedness propagates: what this callee asks for is asked the same
+    # way, unless that task declares its own answer.
+    child.shared = parent.shared and shared
     result = executor.run_bound(
-        task, seg, child, list(args), dict(kwargs), as_call=True
+        task, seg, child, list(args), dict(kwargs), as_call=True, handle=handle
     )
     _record(result)
     if parent.sink is not None and (text := buf.getvalue()):

@@ -9,6 +9,25 @@ versions may include breaking changes.
 
 ### Added
 
+- **`@pre_bind` — the moment before parameters exist.** It fires before the
+  task's parameters are bound, so what it writes into `task.env` is what
+  `env()` fallbacks resolve, what coercion sees, and what `check(fn)`
+  validators read — the one moment a plugin can influence what the body will
+  be handed. A body call binds like a segment, so its binding sees the same
+  injected environment. `task.args` is not readable here (nothing is bound
+  yet — read values in `pre_task`); the same handle carries through the whole
+  ladder, so state set at `pre_bind` is there at `post_task`. Binding happens
+  per request while execution happens per work, so `pre_bind` may fire for a
+  request whose row ends up `shared` — the whole ladder does, because the
+  pair is per request and only the body is shared; a bind failure still
+  fires the posts — the attempt concluded — with the refusal as the result.
+- **The task's managed window opens before binding.** Hook code and the user
+  code binding runs — `check(fn)` validators, custom constructors — now
+  answer to the same rules a body does: an `os.environ` write is captured
+  into the task's own overlay instead of leaking to parallel siblings, and a
+  prompt outside an interactive task is refused. footman's own prompts —
+  `ask()` questions and menus, `confirm=` — read the real terminal and are
+  never caught by those guards, wherever they fire.
 - **`@pre_task` / `@post_task` — the per-task lifecycle pair.** Where
   `@pre_tasks` runs once over the plan, this pair runs around every
   *execution* — a chain segment, a prerequisite, a fan-out member, a body
@@ -22,14 +41,17 @@ versions may include breaking changes.
   `result` reads everything and writes one thing: `set_returned(value)`,
   which rewrites the *reported* value — the summary and `--json` — never
   what a dependent or a body caller received. Pres run in plugin order and
-  posts unwind in reverse; the post is the task-finished event, firing for
-  every execution that reached the body stage whatever the outcome —
+  posts unwind in reverse; the pair is **per request** — only the body is
+  shared, so a request satisfied by an execution the run already performed
+  still gets the whole ladder, closed with its `shared` row
+  (`result.state`) — and the post is the task-finished event: once a
+  request's ladder opened, it fires when the request concludes,
   irrespective of which pres a plugin registered or how they fared. A
   raising pre fails the task like a failed prerequisite, a raising post
   fails an otherwise-green task, and both failures name the plugin. Nothing
-  fires under `--dry-run` or for a `shared` row. A `pre_task`'s return value
-  is **reserved** for a future "supply the result, skip the body" power —
-  today it is noted and ignored.
+  fires under `--dry-run`. A `pre_task`'s return value is **reserved** for a
+  future "supply the result, skip the body" power — today it is noted and
+  ignored.
 - **`registry.task_source_hash()` — a digest of a task's own body.** Normalised
   through the AST rather than taken over the text, so reformatting and comments
   do not move it while a real edit does; decorator lines count, so a changed

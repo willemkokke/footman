@@ -383,7 +383,14 @@ def _prompt_param(
             label = marker.prompt or f"{cli}:"
             while True:
                 try:
-                    chosen = context.select(label, options, multiple=peeled.multiple)
+                    # The unguarded core: this is the framework's own prompt,
+                    # and bind now runs inside the managed window.
+                    chosen = context._select_core(
+                        label,
+                        options,
+                        multiple=peeled.multiple,
+                        no_input=bool(ctx is not None and ctx.no_input),
+                    )
                 except RuntimeError as exc:  # a bad number: say so, re-show
                     note(f"  {exc}")
                     continue
@@ -988,6 +995,7 @@ class HookFailed(RuntimeError):
 @dataclass(frozen=True)
 class _HookPlugin:
     name: str  # the defining module: what a failure names, what state keys on
+    bind_pre: tuple[Task, ...]  # pre_bind hooks — before parameters exist
     pre: tuple[Task, ...]
     post: tuple[Task, ...]
 
@@ -1013,17 +1021,17 @@ def install_lifecycle(inv: Any, contributions: Mapping[str, Sequence[Task]]) -> 
     contribution (cascade order); posts unwind in reverse.
     """
     global _lifecycle
-    grouped: dict[str, tuple[list[Task], list[Task]]] = {}
-    for kind, slot in (("pre_task", 0), ("post_task", 1)):
+    grouped: dict[str, tuple[list[Task], list[Task], list[Task]]] = {}
+    for kind, slot in (("pre_bind", 0), ("pre_task", 1), ("post_task", 2)):
         for hook in contributions.get(kind, ()):
             owner = getattr(hook, "__module__", None) or "<unknown>"
-            grouped.setdefault(owner, ([], []))[slot].append(hook)
+            grouped.setdefault(owner, ([], [], []))[slot].append(hook)
     _lifecycle = (
         _Lifecycle(
             inv,
             tuple(
-                _HookPlugin(name, tuple(pre), tuple(post))
-                for name, (pre, post) in grouped.items()
+                _HookPlugin(name, tuple(bind_pre), tuple(pre), tuple(post))
+                for name, (bind_pre, pre, post) in grouped.items()
             ),
         )
         if grouped
@@ -1046,21 +1054,19 @@ class TaskHandle:
 
     __slots__ = ("_bound", "_ctx", "_fn", "_kwargs", "_raw_args", "_states", "name")
 
-    def __init__(
-        self,
-        fn: Task,
-        seg: Segment,
-        ctx: Context,
-        args: list[Any],
-        kwargs: dict[str, Any],
-    ) -> None:
+    def __init__(self, fn: Task, seg: Segment, ctx: Context) -> None:
         object.__setattr__(self, "_fn", fn)
         object.__setattr__(self, "_ctx", ctx)
-        object.__setattr__(self, "_raw_args", tuple(args))
-        object.__setattr__(self, "_kwargs", dict(kwargs))
+        object.__setattr__(self, "_raw_args", None)
+        object.__setattr__(self, "_kwargs", None)
         object.__setattr__(self, "_bound", None)
         object.__setattr__(self, "_states", {})
         object.__setattr__(self, "name", seg.task)
+
+    def _bind(self, args: Sequence[Any], kwargs: dict[str, Any]) -> None:
+        """Hand the handle its bound arguments — binding just happened."""
+        object.__setattr__(self, "_raw_args", tuple(args))
+        object.__setattr__(self, "_kwargs", dict(kwargs))
 
     def __setattr__(self, name: str, value: Any) -> None:
         raise AttributeError(
@@ -1072,9 +1078,16 @@ class TaskHandle:
     def args(self) -> Mapping[str, Any]:
         """The bound arguments — what the body actually receives, defaults
         included, read-only. Mutation would let a plugin silently break the
-        typed contract the framework exists to enforce."""
+        typed contract the framework exists to enforce. Not readable at
+        `pre_bind`, which runs before values exist."""
         bound: Mapping[str, Any] | None = self._bound
         if bound is None:
+            if self._raw_args is None:
+                raise RuntimeError(
+                    "task.args is not readable at pre_bind — nothing is "
+                    "bound yet; read the values in pre_task, the post-bind "
+                    "moment"
+                )
             from footman.manifest import call_signature
 
             try:
@@ -1148,13 +1161,42 @@ class ResultView:
         object.__getattribute__(self, "_result").returned = value
 
 
-def _reserved_note(ctx: Context, plugin: str, hook: Task) -> None:
+def _reserved_note(
+    ctx: Context, plugin: str, hook: Task, kind: str = "pre_task"
+) -> None:
     sink = ctx.err_sink if ctx.err_sink is not None else context.real_stderr()
     sink.write(
-        f"note: {plugin} pre_task {getattr(hook, '__name__', '?')!r} returned "
-        f"a value; a pre_task's return channel is reserved (for a pre that "
+        f"note: {plugin} {kind} {getattr(hook, '__name__', '?')!r} returned "
+        f"a value; a pre hook's return channel is reserved (for a pre that "
         f"supplies the task's result) — keep per-task state on task.state\n"
     )
+
+
+def _enter_bind_hooks(life: _Lifecycle, handle: TaskHandle) -> BaseException | None:
+    """Run every plugin's `pre_bind` hooks, in plugin order, before binding.
+
+    The first failure stops the walk and fails the task — binding never
+    happens, the body never runs, and the posts still fire when the attempt
+    concludes.
+    """
+    for plugin in life.plugins:
+        for hook in plugin.bind_pre:
+            token = _hook_owner.set(plugin.name)
+            try:
+                value = hook(life.inv, handle)
+            except Exception as exc:
+                failure = HookFailed(
+                    f"pre_bind hook {getattr(hook, '__name__', '?')!r} from "
+                    f"{plugin.name} failed for task {handle.name!r}: "
+                    f"{type(exc).__name__}: {exc}"
+                )
+                failure.__cause__ = exc
+                return failure
+            finally:
+                _hook_owner.reset(token)
+            if value is not None:
+                _reserved_note(handle._ctx, plugin.name, hook, kind="pre_bind")
+    return None
 
 
 def _enter_task_hooks(life: _Lifecycle, handle: TaskHandle) -> BaseException | None:
@@ -1229,13 +1271,42 @@ def run_task(
     """
     if (refusal := unavailable(fn, seg)) is not None:
         return refusal
+    # The managed window opens before binding: with `ctx` current and
+    # `in_task` set, a `pre_bind` hook's `task.env` writes reach `env()`
+    # fallbacks, coercion and `check(fn)` validators through the environ
+    # router — `_env_value` reads `os.environ`, and the router serves the
+    # merged view. The guards ride the same window, so hook code answers to
+    # the same rules a body does; the framework's own prompts use the real
+    # stream and are never caught.
+    token = _current.set(ctx)
+    ctx.in_task = True
+    life = _lifecycle
+    handle = TaskHandle(fn, seg, ctx) if life is not None else None
     try:
-        args, kwargs = bind(seg, fn, ctx, forwarded)
-    except ChainError:
-        raise  # e.g. passthrough with no *args — reported by the app layer
-    except Exception as exc:  # a coercion failure (e.g. a custom-type constructor)
-        return _result(seg, EX_USAGE, None, exc, 0.0)
-    return run_bound(fn, seg, ctx, args, kwargs)
+        if (
+            life is not None
+            and handle is not None
+            and (hook_error := _enter_bind_hooks(life, handle)) is not None
+        ):
+            # A raising pre_bind fails the task; binding never happens, the
+            # body never runs — but the attempt concluded, so the posts fire.
+            result = _result(seg, 1, None, hook_error, 0.0)
+            _exit_task_hooks(life, handle, result)
+            return result
+        try:
+            args, kwargs = bind(seg, fn, ctx, forwarded)
+        except ChainError:
+            raise  # e.g. passthrough with no *args — reported by the app layer
+        except Exception as exc:  # a coercion failure (custom-type constructor)
+            result = _result(seg, EX_USAGE, None, exc, 0.0)
+            if life is not None and handle is not None:
+                # A bind failure still concluded the attempt: the posts fire
+                # (a bind-time span needs closing), with the refusal result.
+                _exit_task_hooks(life, handle, result)
+            return result
+        return run_bound(fn, seg, ctx, args, kwargs, handle=handle)
+    finally:
+        _current.reset(token)
 
 
 def run_bound(
@@ -1246,6 +1317,7 @@ def run_bound(
     kwargs: dict[str, Any],
     *,
     as_call: bool = False,
+    handle: TaskHandle | None = None,
 ) -> TaskResult:
     """Run *fn* with arguments already resolved — everything after binding.
 
@@ -1267,11 +1339,33 @@ def run_bound(
     work = _futures.work_of(fn, args, kwargs) if ctx.shared and not as_call else None
     claimed, cell = _futures.claim(work, seg.task)
     if not claimed:
+        # The pair is per request — only the body is shared. The pre fires
+        # here, post-bind and before the wait, so a span honestly covers it;
+        # the post closes the request with its row, and `result.state` says
+        # whether this request executed or was satisfied by another.
+        life = _lifecycle
+        if life is not None:
+            if handle is None:
+                handle = TaskHandle(fn, seg, ctx)
+            handle._bind(args, kwargs)
+            if (hook_error := _enter_task_hooks(life, handle)) is not None:
+                result = _result(seg, 1, None, hook_error, 0.0)
+                _exit_task_hooks(life, handle, result)
+                return result
         try:
             value = _futures.join(cell)
         except BaseException as exc:  # the execution we waited on failed
-            return _result(seg, 1, None, exc, 0.0)
-        return _futures.shared_result(seg.task, value)
+            result = _result(seg, 1, None, exc, 0.0)
+        else:
+            result = _futures.shared_result(seg.task, value)
+        if life is not None and handle is not None:
+            post_error = _exit_task_hooks(life, handle, result)
+            if post_error is not None and result.ok:
+                result.ok = False
+                result.code = 1
+                result.error = post_error
+                result.state = ""  # it no longer reads as a clean share
+        return result
 
     plain_args = args  # the caller-visible arguments, before ctx is injected
     if context_param_name(resolved_signature(fn)):
@@ -1300,14 +1394,19 @@ def run_bound(
     start = time.perf_counter()
     started = start  # the report's ordering key: when this task actually began
     life = _lifecycle
-    handle: TaskHandle | None = None
     hook_error: BaseException | None = None
     if life is not None:
-        # Built from the pre-injection arguments: ctx is machinery, not a
-        # value a hook should read back as one of the task's own. Pre hooks
-        # run inside the timed span, so their cost is the task's cost.
-        handle = TaskHandle(fn, seg, ctx, plain_args, kwargs)
+        # The handle rides in from run_task (declared path) or the futures
+        # layer (a body call); a direct run_bound caller gets a fresh one.
+        # Its arguments are the pre-injection values: ctx is machinery, not
+        # a value a hook should read back as one of the task's own. Pre
+        # hooks run inside the timed span, so their cost is the task's cost.
+        if handle is None:
+            handle = TaskHandle(fn, seg, ctx)
+        handle._bind(plain_args, kwargs)
         hook_error = _enter_task_hooks(life, handle)
+    else:
+        handle = None
     try:
         if hook_error is not None:
             # A raising pre fails the task like a failed prerequisite: the

@@ -5,10 +5,12 @@ from __future__ import annotations
 import json
 import textwrap
 from pathlib import Path
+from typing import Annotated
 
 import pytest
 
-from footman import discover, manifest, registry
+from footman import discover, executor, manifest, registry
+from footman.params import between, check, env
 from footman.registry import Group, RegistrationError
 from footman.testing import Runner
 
@@ -516,7 +518,7 @@ def test_pre_and_post_fire_around_every_execution():
 
     @reg.post_task
     def closed(inv, task, result):
-        log.append(("post", task.name, result.ok))
+        log.append(("post", task.name, executor.reported_state(result)))
 
     @reg.task
     def build(target: str = "web") -> str:
@@ -524,15 +526,19 @@ def test_pre_and_post_fire_around_every_execution():
 
     @reg.task(pre=[build])
     def publish():
-        build()  # the shared execution: no second pair
+        build()  # satisfied by the prerequisite: a `shared` post, no pre
 
     result = Runner().invoke("publish", tasks=reg)
     assert result.ok, result.stderr
     assert log == [
         ("pre", "build", {"target": "web"}),
-        ("post", "build", True),
+        ("post", "build", "ok"),
         ("pre", "publish", {}),
-        ("post", "publish", True),
+        # The pair is per request, only the body is shared: the call's
+        # request gets its own pre and closes with the `shared` row.
+        ("pre", "build", {"target": "web"}),
+        ("post", "build", "shared"),
+        ("post", "publish", "ok"),
     ]
 
 
@@ -686,11 +692,11 @@ def test_set_returned_rewrites_the_report_never_the_value():
     result = Runner().invoke("publish", tasks=reg)
     assert result.ok, result.stderr
     build_rows = [r.returned for r in result.results if r.task == "build"]
-    # The execution's report carries the rewrite. The `shared` row that the
-    # body call added reports what its requester actually received — the
-    # pristine value, deliberately: sharing hands over the real object, and
-    # the row records that handover rather than the reporter's edit.
-    assert build_rows == ["[redacted]", "secret-artifact"]
+    # The caller's body received the real value; the report — the execution's
+    # row AND the `shared` row the body call added — carries the rewrite,
+    # because the finished event fires on shares too. A redaction covers
+    # every row that would have leaked the secret.
+    assert build_rows == ["[redacted]", "[redacted]"]
 
 
 def test_a_pre_returning_a_value_is_noted_as_reserved():
@@ -834,3 +840,384 @@ def test_the_ladder_reaches_a_cascade_file(tmp_path):
     assert result.ok, result.stderr
     assert "pre build" in result.stdout
     assert "post build ok=True" in result.stdout
+
+
+# --- pre_bind: the bind boundary ---------------------------------------------
+
+
+def test_pre_bind_env_reaches_env_fallbacks():
+    # The headline: the managed window opens before binding, so what pre_bind
+    # writes into task.env is what env() fallbacks resolve — the one moment a
+    # plugin can influence what the body is handed.
+    import os as real_os
+
+    reg = Group("root")
+
+    @reg.pre_bind
+    def creds(inv, task):
+        task.env["LADDER_TOKEN"] = f"tok-{task.name}"
+
+    @reg.task
+    def deploy(
+        token: Annotated[str, env("LADDER_TOKEN")] = "anon",
+    ) -> str:
+        print(token)
+        return token
+
+    result = Runner().invoke("deploy", tasks=reg)
+    assert result.ok, result.stderr
+    assert "tok-deploy" in result.stdout
+    assert "LADDER_TOKEN" not in real_os.environ  # scoped, never global
+
+
+def test_pre_bind_env_reaches_a_body_calls_binding():
+    # A body call binds like a segment, so its omitted parameters see the
+    # same pre_bind-injected environment the declared path sees.
+    reg = Group("root")
+
+    @reg.pre_bind
+    def creds(inv, task):
+        task.env["CALL_TOKEN"] = f"tok-{task.name}"
+
+    @reg.task
+    def build(token: Annotated[str, env("CALL_TOKEN")] = "anon") -> str:
+        return token
+
+    @reg.task
+    def release():
+        assert build() == "tok-build"
+
+    result = Runner().invoke("release", tasks=reg)
+    assert result.ok, result.stderr
+
+
+def test_task_args_is_guarded_at_pre_bind_and_readable_at_pre_task():
+    reg = Group("root")
+    seen: list[object] = []
+
+    @reg.pre_bind
+    def early(inv, task):
+        with pytest.raises(RuntimeError, match="pre_task, the post-bind moment"):
+            task.args
+
+    @reg.pre_task
+    def later(inv, task):
+        seen.append(dict(task.args))
+
+    @reg.task
+    def build(target: str = "web"): ...
+
+    result = Runner().invoke("build", tasks=reg)
+    assert result.ok, result.stderr
+    assert seen == [{"target": "web"}]
+
+
+def test_a_bind_failure_still_fires_the_posts():
+    # The attempt concluded — a bind-time span needs closing — so the posts
+    # fire with the refusal result, exactly as the finished-event rule says.
+    reg = Group("root")
+    closed: list[tuple] = []
+
+    @reg.pre_bind
+    def poison(inv, task):
+        task.env["LADDER_JOBS"] = "40"  # out of bounds: binding will refuse
+
+    @reg.post_task
+    def observe(inv, task, result):
+        closed.append((task.name, result.ok, result.code))
+
+    @reg.task
+    def build(
+        jobs: Annotated[int, env("LADDER_JOBS"), between(1, 10)] = 1,
+    ):
+        raise AssertionError("never runs")
+
+    result = Runner().invoke("build", tasks=reg)
+    assert not result.ok
+    assert "must be between 1 and 10" in result.stderr
+    assert closed == [("build", False, 64)]  # EX_USAGE: a refusal, observed
+
+
+def test_a_raising_pre_bind_fails_the_task_before_binding():
+    reg = Group("root")
+    closed: list[str] = []
+
+    @reg.pre_bind
+    def refuse(inv, task):
+        raise ValueError("vault is sealed")
+
+    @reg.post_task
+    def observe(inv, task, result):
+        closed.append(task.name)
+
+    @reg.task
+    def build():
+        raise AssertionError("never runs")
+
+    result = Runner().invoke("build", tasks=reg)
+    assert not result.ok
+    assert "pre_bind hook 'refuse'" in result.stderr
+    assert "vault is sealed" in result.stderr
+    assert closed == ["build"]  # the attempt concluded: the post still fired
+
+
+def test_the_ladder_is_per_request_only_the_body_is_shared():
+    # A body call whose row ends up `shared` still gets the whole ladder —
+    # pre_bind, pre_task, post_task — closed with the `shared` row. Only the
+    # body itself is shared, so pairing never depends on sharing.
+    reg = Group("root")
+    log: list[str] = []
+
+    @reg.pre_bind
+    def bound(inv, task):
+        log.append(f"bind:{task.name}")
+
+    @reg.pre_task
+    def opened(inv, task):
+        log.append(f"pre:{task.name}")
+
+    @reg.post_task
+    def closed(inv, task, result):
+        log.append(f"post:{task.name}:{executor.reported_state(result)}")
+
+    @reg.task
+    def build() -> str:
+        return "dist"
+
+    @reg.task(pre=[build])
+    def publish():
+        build()  # satisfied by the prerequisite's execution
+
+    result = Runner().invoke("publish", tasks=reg)
+    assert result.ok, result.stderr
+    assert log == [
+        "bind:build",
+        "pre:build",
+        "post:build:ok",
+        "bind:publish",
+        "pre:publish",
+        "bind:build",  # the call's own request: the full ladder…
+        "pre:build",
+        "post:build:shared",  # …closed with its `shared` row
+        "post:publish:ok",
+    ]
+
+
+def _bind_stamp(value):
+    # module-level: eval_str resolves annotation names in module globals
+    import os
+
+    os.environ["BIND_STAMP"] = "set-by-validator"
+
+
+def test_an_environ_write_during_bind_is_scoped_not_global():
+    # The widened window covers user code that binding runs — a check(fn)
+    # validator writing os.environ is captured into the task's overlay, so a
+    # parallel sibling never sees it.
+    import os as real_os
+
+    reg = Group("root")
+
+    @reg.task
+    def build(target: Annotated[str, check(_bind_stamp)] = "web"):
+        import os
+
+        print(os.environ.get("BIND_STAMP", "missing"))
+
+    result = Runner().invoke("build --target=web", tasks=reg)
+    assert result.ok, result.stderr
+    assert "set-by-validator" in result.stdout
+    assert "BIND_STAMP" not in real_os.environ
+
+
+def test_pre_bind_arity_is_taught_at_registration():
+    reg = Group("root")
+    with pytest.raises(RegistrationError, match=r"def alone\(inv, task\)"):
+
+        @reg.pre_bind
+        def alone(inv): ...
+
+
+def test_a_declared_repeat_gets_the_pair_with_its_shared_row():
+    # `fm build build`: the second segment's request is satisfied by the
+    # first — and still gets the pair, closed with its `shared` row.
+    reg = Group("root")
+    log: list[str] = []
+
+    @reg.pre_task
+    def opened(inv, task):
+        log.append(f"pre:{task.name}")
+
+    @reg.post_task
+    def closed(inv, task, result):
+        log.append(f"post:{task.name}:{executor.reported_state(result)}")
+
+    @reg.task
+    def build() -> str:
+        return "dist"
+
+    result = Runner().invoke("--sequential build build", tasks=reg)
+    assert result.ok, result.stderr
+    assert log == [
+        "pre:build",
+        "post:build:ok",
+        "pre:build",
+        "post:build:shared",
+    ]
+
+
+def test_a_raising_pre_on_a_satisfied_request_fails_only_that_request():
+    # The pair is per request, and so are its failures: a pre that flakes on
+    # the second request fails that request — the execution it would have
+    # shared stays green.
+    reg = Group("root")
+    seen = {"build": 0}
+
+    def flaky(inv, task):
+        if task.name == "build":
+            seen["build"] += 1
+            if seen["build"] > 1:
+                raise ValueError("flaked on the repeat")
+
+    flaky.__module__ = "plugin_flaky"
+    reg.pre_task(flaky)
+
+    @reg.task
+    def build() -> str:
+        return "dist"
+
+    @reg.task(pre=[build])
+    def publish():
+        build()  # this request's pre flakes; the caller fails
+
+    result = Runner().invoke("publish", tasks=reg)
+    assert not result.ok
+    assert "flaked on the repeat" in result.stderr
+    states = [(r.task, executor.reported_state(r)) for r in result.results]
+    assert ("build", "ok") in states  # the execution itself stayed green
+
+
+def test_a_crashing_post_on_a_shared_request_fails_the_caller():
+    reg = Group("root")
+
+    @reg.post_task
+    def report(inv, task, result):
+        if executor.reported_state(result) == "shared":
+            raise RuntimeError("reporter tripped on the share")
+
+    @reg.task
+    def build() -> str:
+        return "dist"
+
+    @reg.task(pre=[build])
+    def publish():
+        build()
+
+    result = Runner().invoke("publish", tasks=reg)
+    assert not result.ok
+    assert "reporter tripped on the share" in result.stderr
+
+
+def test_a_raising_pre_on_a_repeated_segment_fails_that_segment_only():
+    reg = Group("root")
+    seen = {"n": 0}
+
+    def flaky(inv, task):
+        seen["n"] += 1
+        if seen["n"] > 1:
+            raise ValueError("second request refused")
+
+    flaky.__module__ = "plugin_flaky"
+    reg.pre_task(flaky)
+
+    @reg.task
+    def build() -> str:
+        return "dist"
+
+    # Sequential, so which request is "second" is deterministic; parallel
+    # segments would race for the claim. (Row order is the report's business
+    # — a request that never began sorts by cause, not by clock.)
+    result = Runner().invoke("--sequential build build", tasks=reg)
+    assert not result.ok
+    states = [(r.task, executor.reported_state(r)) for r in result.results]
+    assert ("build", "ok") in states  # the execution itself stayed green
+    assert ("build", "failed") in states  # the refused second request
+
+
+def test_a_raising_pre_bind_on_a_body_call_fails_the_caller():
+    reg = Group("root")
+    closed: list[str] = []
+
+    def sealed(inv, task):
+        if task.name == "build":
+            raise ValueError("vault is sealed")
+
+    sealed.__module__ = "plugin_vault"
+    reg.pre_bind(sealed)
+
+    @reg.post_task
+    def observe(inv, task, result):
+        closed.append(f"{task.name}:{executor.reported_state(result)}")
+
+    @reg.task
+    def build() -> str:
+        return "dist"
+
+    @reg.task
+    def publish():
+        build()
+
+    result = Runner().invoke("publish", tasks=reg)
+    assert not result.ok
+    assert "pre_bind hook 'sealed' from plugin_vault" in result.stderr
+    # The call's attempt concluded before binding — its post fired — and the
+    # caller failed with the named hook error.
+    assert "build:failed" in closed
+    assert "publish:failed" in closed
+
+
+def test_a_bind_failure_on_a_body_call_fires_the_posts():
+    reg = Group("root")
+    closed: list[tuple] = []
+
+    def poison(inv, task):
+        if task.name == "build":
+            task.env["CALLBIND_JOBS"] = "40"  # out of bounds: binding refuses
+
+    poison.__module__ = "plugin_poison"
+    reg.pre_bind(poison)
+
+    @reg.post_task
+    def observe(inv, task, result):
+        closed.append((task.name, result.code))
+
+    @reg.task
+    def build(
+        jobs: Annotated[int, env("CALLBIND_JOBS"), between(1, 10)] = 1,
+    ):
+        raise AssertionError("never runs")
+
+    @reg.task
+    def publish():
+        build()
+
+    result = Runner().invoke("publish", tasks=reg)
+    assert not result.ok
+    assert "must be between 1 and 10" in result.stderr
+    assert ("build", 64) in closed  # EX_USAGE: the refusal, observed
+
+
+def test_a_pre_bind_returning_a_value_is_noted_as_reserved():
+    reg = Group("root")
+
+    @reg.pre_bind
+    def eager(inv, task):
+        return "something"
+
+    @reg.task
+    def build(): ...
+
+    result = Runner().invoke("build", tasks=reg)
+    assert result.ok, result.stderr
+    text = result.stdout + result.stderr
+    assert "pre_bind" in text and "reserved" in text

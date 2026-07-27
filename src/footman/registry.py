@@ -45,7 +45,12 @@ Hook = Callable[..., object]
 # carriage — `capture()`/`reset()` here, `_fork`/`_pull` in compose,
 # `load_tree`'s collection in discover — walks the dict generically, so a
 # future hook kind is one entry here plus its own run semantics.
-CONTRIBUTION_KINDS: tuple[str, ...] = ("pre_tasks", "pre_task", "post_task")
+CONTRIBUTION_KINDS: tuple[str, ...] = (
+    "pre_tasks",
+    "pre_bind",
+    "pre_task",
+    "post_task",
+)
 
 # A task stays a plain function; its metadata rides as `_footman_*` attributes.
 # These name every key in one place, so the strings appear once and the read
@@ -840,13 +845,39 @@ class Group:
         self.contributions["pre_tasks"].append(fn)
         return fn
 
+    def pre_bind(self, fn: Hook) -> Hook:
+        """Register the before-binding hook: `pre_bind(inv, task)`.
+
+        The earliest per-task moment: it fires before the task's parameters
+        are bound, so what it writes into `task.env` reaches `env()`
+        fallbacks, coercion, and `check(fn)` validators — the one moment a
+        plugin can influence what the body will be handed:
+
+            @footman.pre_bind
+            def credentials(inv, task):
+                task.env["DEPLOY_TOKEN"] = vault.read("deploy")
+
+        Because nothing is bound yet, `task.args` is not readable here —
+        read the values in `pre_task`, the post-bind moment. Binding happens
+        once per *request*: a request that then joins work the run already
+        performed still bound first, so `pre_bind` may fire for a request
+        whose row ends up `shared`.
+        """
+        _check_hook_arity("pre_bind", fn, 2)
+        self.contributions["pre_bind"].append(fn)
+        return fn
+
     def pre_task(self, fn: Hook) -> Hook:
         """Register the before-each-task hook: `pre_task(inv, task)`.
 
-        Runs on the task's worker thread — in parallel across tasks, for every
-        execution of the run: a chain segment, a prerequisite, a fan-out
-        member, a body call. It fires after binding, so `task.args` holds the
-        real values the body will receive:
+        Runs on the task's worker thread — in parallel across tasks, for
+        every *request*: a chain segment, a prerequisite, a fan-out member, a
+        body call. Only the body is shared: a request satisfied by an
+        execution the run already performed still gets the pair, opened here
+        and closed by `post_task` with its `shared` row — so pairing never
+        depends on sharing, and only a reporter that cares reads
+        `result.state`. It fires after binding, so `task.args` holds the
+        real values the body would receive:
 
             @footman.pre_task
             def open_span(inv, task):
@@ -870,9 +901,11 @@ class Group:
     def post_task(self, fn: Hook) -> Hook:
         """Register the after-each-task hook: `post_task(inv, task, result)`.
 
-        The task-finished event: it fires for every execution that reached
-        the body stage, whatever the outcome — whether or not your plugin
-        registered a `pre_task`, and however any pre fared. Posts unwind in
+        The task-finished event: once a request's ladder opened, it fires
+        when the request concludes — an execution whatever its outcome, a
+        bind refusal, or a request satisfied by an execution the run already
+        performed (`result.state == "shared"`). It fires whether or not your
+        plugin registered a pre, and however any pre fared. Posts unwind in
         reverse plugin order, so the first plugin in speaks last.
 
         `result` reads everything (`ok`, `code`, `returned`, `error`,
@@ -1035,6 +1068,7 @@ root = Group("root")
 task = root.task
 group = root.group
 pre_tasks = root.pre_tasks
+pre_bind = root.pre_bind
 pre_task = root.pre_task
 post_task = root.post_task
 
