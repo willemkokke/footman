@@ -8,8 +8,10 @@ replays into a surface nobody notices is wrong, and an empty delta read as
 
 from __future__ import annotations
 
+import contextlib
 import itertools
 import json
+import pathlib
 
 import pytest
 
@@ -732,71 +734,6 @@ def test_a_uv_that_will_not_answer_is_unreachable_not_empty(monkeypatch):
         _toolfetch.releases(driver)
 
 
-def test_a_prime_never_appends_a_release_newer_than_the_floor(tmp_path, monkeypatch):
-    """The walk goes backwards, so a newer release must never land below the
-    floor — it would record the new surface as the old one and invert every
-    interval derived from it.
-
-    A base carries the date it was *observed*, not the date it was published,
-    so on a first prime the floor is dated today and no date test can order
-    it against the index. The listing's own order can.
-    """
-    from footman import _toolfetch
-    from footman.tasks import tools
-
-    surface = _toolhistory.surface_of(
-        _spec(verbs=(Verb(name="", options=(Option("quiet", ("-q",)),)),))
-    )
-    doc = _toolhistory.new(
-        "demo", version="3.13.1", date=tools._today(), surface=surface
-    )
-    monkeypatch.setattr(
-        _toolfetch,
-        "releases",
-        lambda _driver: [
-            _toolfetch.Release(version=v, date=d)
-            for v, d in [
-                ("3.14.6", "2026-07-18"),  # newer than the base, and published
-                ("3.13.1", "2026-01-05"),  # older than "today" by every measure
-                ("3.12.13", "2026-07-18"),
-            ]
-        ],
-    )
-    installed: list[str] = []
-    monkeypatch.setattr(
-        _toolfetch,
-        "install",
-        lambda _d, release, _into: installed.append(release.version),
-    )
-
-    added, stopped = tools._prime_one(
-        _drivers_find("python"), doc, 10, tmp_path, _toolfetch
-    )
-    assert added == 0 and stopped  # install returned None: the walk stops there
-    assert installed == ["3.12.13"]  # never 3.14.6, which sits above the floor
-
-
-def test_a_floor_the_index_cannot_place_stops_the_walk(tmp_path, monkeypatch):
-    """A stub synced from an outdated binary leaves a floor no listing holds.
-    Priming from the top of the index would append the newest release as the
-    oldest, so it says so instead of guessing."""
-    from footman import _toolfetch
-    from footman.tasks import tools
-
-    surface = _toolhistory.surface_of(_spec(verbs=(Verb(name=""),)))
-    doc = _toolhistory.new("demo", version="3.13.1", date="2026-07-27", surface=surface)
-    monkeypatch.setattr(
-        _toolfetch,
-        "releases",
-        lambda _driver: [_toolfetch.Release(version="3.14.6", date="2026-07-18")],
-    )
-    added, stopped = tools._prime_one(
-        _drivers_find("python"), doc, 10, tmp_path, _toolfetch
-    )
-    assert added == 0
-    assert "3.13.1" in stopped and "sync" in stopped
-
-
 def _drivers_find(key):
     from footman import _drivers
 
@@ -867,141 +804,6 @@ def test_a_tie_the_comparator_cannot_break_leaves_the_base_alone(tmp_path, monke
 
 
 # --- the forward walk: catching a history up to its index --------------------
-
-
-def test_a_refresh_reads_every_release_it_missed_not_just_the_newest(
-    tmp_path, monkeypatch
-):
-    """Attribution is the whole point of the log. If a tool is three releases
-    behind and only the newest is read, a flag that arrived in 0.16.1 is
-    recorded as having arrived in 0.16.3 — and the stub then tells a reader
-    on 0.16.2 that an option they have does not exist yet.
-
-    An unchanged release still gets read, and records an empty delta: that is
-    "observed, changed nothing", which is not the same as never looked.
-    """
-    from footman import _drivers, _toolfetch
-    from footman.tasks import tools
-
-    def surface_with(*names):
-        return _toolhistory.surface_of(
-            _spec(
-                verbs=(
-                    Verb(
-                        name="",
-                        options=tuple(Option(n, (f"--{n}",)) for n in names),
-                    ),
-                )
-            )
-        )
-
-    by_version = {
-        "0.16.0": surface_with("quiet"),
-        "0.16.1": surface_with("quiet", "fix"),  # the event
-        "0.16.2": surface_with("quiet", "fix"),  # nothing changed
-        "0.16.3": surface_with("quiet", "fix"),  # nor here
-    }
-    doc = _toolhistory.new(
-        "ruff", version="0.16.0", date="2026-01-01", surface=by_version["0.16.0"]
-    )
-    monkeypatch.setattr(tools, "_HISTORY", tmp_path)
-    monkeypatch.setattr(tools, "_STUBS", tmp_path)
-    monkeypatch.setattr(tools, "_CHANGELOG", tmp_path / "CHANGELOG.md")
-    _toolhistory.save(doc, tmp_path / "ruff.json")
-
-    monkeypatch.setattr(
-        _toolfetch,
-        "releases",
-        lambda _d: [
-            _toolfetch.Release(version=v, date=f"2026-02-0{i}")
-            for i, v in enumerate(["0.16.3", "0.16.2", "0.16.1", "0.16.0"], start=1)
-        ],
-    )
-    monkeypatch.setattr(_toolfetch, "install", lambda _d, _r, into: into)
-
-    installed: list[str] = []
-
-    def extract(driver):
-        version = installed[-1]
-        return _toolhistory.spec_from(by_version[version], name=driver.name)
-
-    def install(_driver, release, into):
-        installed.append(release.version)
-        return into
-
-    monkeypatch.setattr(_toolfetch, "install", install)
-    monkeypatch.setattr(_drivers, "extract", extract)
-
-    found = tools.refresh(only="ruff")
-
-    # every missed release, oldest first — not a jump to the newest
-    assert installed == ["0.16.1", "0.16.2", "0.16.3"]
-    assert found.read["ruff"] == ["0.16.1", "0.16.2", "0.16.3"]
-    # ...and only the one that moved the surface counts as an event
-    assert found.events["ruff"] == ["0.16.1"]
-    assert found.release is True
-
-    stored = _toolhistory.load(tmp_path / "ruff.json")
-    assert stored is not None
-    assert stored["base"]["version"] == "0.16.3"
-    assert stored["base"]["date"] == "2026-02-01"  # the index's date, not today's
-    assert _toolhistory.observed(stored) == ["0.16.3", "0.16.2", "0.16.1", "0.16.0"]
-    # the two quiet releases are recorded as observed-and-unchanged
-    assert not any(
-        k not in ("date", "platforms", "extractor") for k in stored["deltas"]["0.16.2"]
-    )
-
-
-def test_a_refresh_with_nothing_new_warrants_no_release(tmp_path, monkeypatch):
-    """The exit condition. A tool that has not released is not a tool that
-    changed nothing — there is simply nothing to look at."""
-    from footman import _toolfetch
-    from footman.tasks import tools
-
-    surface = _toolhistory.surface_of(_spec(verbs=(Verb(name=""),)))
-    doc = _toolhistory.new("ruff", version="0.16.3", date="2026-02-01", surface=surface)
-    monkeypatch.setattr(tools, "_HISTORY", tmp_path)
-    monkeypatch.setattr(tools, "_STUBS", tmp_path)
-    monkeypatch.setattr(tools, "_CHANGELOG", tmp_path / "CHANGELOG.md")
-    _toolhistory.save(doc, tmp_path / "ruff.json")
-    monkeypatch.setattr(
-        _toolfetch,
-        "releases",
-        lambda _d: [_toolfetch.Release(version="0.16.3", date="2026-02-01")],
-    )
-
-    found = tools.refresh(only="ruff")
-    assert found.read == {} and found.events == {}
-    assert found.release is False
-
-
-def test_a_refresh_that_could_not_look_does_not_report_nothing_new(
-    tmp_path, monkeypatch
-):
-    """The two answers a release job must never confuse. An index that would
-    not answer is recorded as unreachable and the task fails, so a rename or
-    a moved repo surfaces instead of making a tool silently untracked while
-    the job keeps reporting success."""
-    from footman import _toolfetch
-    from footman.context import Failed
-    from footman.tasks import tools
-
-    surface = _toolhistory.surface_of(_spec(verbs=(Verb(name=""),)))
-    doc = _toolhistory.new("ruff", version="0.16.3", date="2026-02-01", surface=surface)
-    monkeypatch.setattr(tools, "_HISTORY", tmp_path)
-    monkeypatch.setattr(tools, "_STUBS", tmp_path)
-    monkeypatch.setattr(tools, "_CHANGELOG", tmp_path / "CHANGELOG.md")
-    _toolhistory.save(doc, tmp_path / "ruff.json")
-
-    def throttled(_driver):
-        raise _toolfetch.Unreachable("https://pypi.org/pypi/ruff/json", "429")
-
-    monkeypatch.setattr(_toolfetch, "releases", throttled)
-
-    with pytest.raises(Failed) as failed:
-        tools.refresh(only="ruff")
-    assert failed.value.code == 75  # EX_TEMPFAIL: look again, not "nothing to do"
-    assert "ruff" in failed.value.reason
 
 
 # --- the CHANGELOG entry the events write ------------------------------------
@@ -1141,82 +943,6 @@ def test_a_changelog_with_nowhere_to_write_says_so(tmp_path):
     assert tools._write_changelog(["- x"], tmp_path / "absent.md") is False
 
 
-def test_a_refresh_writes_its_own_events_into_the_changelog(tmp_path, monkeypatch):
-    """The job edits `tool-history/` and the stubs and lands through a PR
-    either way, so the release note rides along in the same diff. A
-    scheduled run that printed notes to stdout would be producing them for
-    nobody."""
-    from footman import _drivers, _toolfetch
-    from footman.tasks import tools
-
-    _, versions = _chain(_with("quiet"), _with("quiet", "fix"))
-    monkeypatch.setattr(tools, "_HISTORY", tmp_path)
-    monkeypatch.setattr(tools, "_STUBS", tmp_path)
-    changelog = tmp_path / "CHANGELOG.md"
-    changelog.write_text("# Changelog\n\n## [Unreleased]\n", encoding="utf-8")
-    monkeypatch.setattr(tools, "_CHANGELOG", changelog)
-
-    surfaces = dict(zip(versions, [_with("quiet"), _with("quiet", "fix")]))
-    _toolhistory.save(
-        _toolhistory.new(
-            "ruff",
-            version=versions[0],
-            date="2026-01-01",
-            surface=surfaces[versions[0]],
-        ),
-        tmp_path / "ruff.json",
-    )
-    monkeypatch.setattr(
-        _toolfetch,
-        "releases",
-        lambda _d: [
-            _toolfetch.Release(version=v, date="2026-01-02") for v in reversed(versions)
-        ],
-    )
-    installed: list[str] = []
-    monkeypatch.setattr(
-        _toolfetch,
-        "install",
-        lambda _d, release, into: (installed.append(release.version), into)[1],
-    )
-    monkeypatch.setattr(
-        _drivers,
-        "extract",
-        lambda d: _toolhistory.spec_from(surfaces[installed[-1]], name=d.name),
-    )
-
-    found = tools.refresh(only="ruff")
-    assert found.release is True
-    assert found.wrote_changelog is True
-    assert "adds `--fix`" in changelog.read_text(encoding="utf-8")
-
-
-def test_a_refresh_with_no_events_writes_no_note(tmp_path, monkeypatch):
-    """No events, no release, and nothing to say about one."""
-    from footman import _toolfetch
-    from footman.tasks import tools
-
-    surface = _with("quiet")
-    monkeypatch.setattr(tools, "_HISTORY", tmp_path)
-    monkeypatch.setattr(tools, "_STUBS", tmp_path)
-    changelog = tmp_path / "CHANGELOG.md"
-    changelog.write_text("# Changelog\n\n## [Unreleased]\n", encoding="utf-8")
-    monkeypatch.setattr(tools, "_CHANGELOG", changelog)
-    _toolhistory.save(
-        _toolhistory.new("ruff", version="1.0.0", date="2026-01-01", surface=surface),
-        tmp_path / "ruff.json",
-    )
-    monkeypatch.setattr(
-        _toolfetch,
-        "releases",
-        lambda _d: [_toolfetch.Release(version="1.0.0", date="2026-01-01")],
-    )
-
-    found = tools.refresh(only="ruff")
-    assert found.release is False and found.wrote_changelog is False
-    assert "###" not in changelog.read_text(encoding="utf-8")
-
-
 def test_an_entry_tells_commands_apart_from_their_descriptions():
     """Three things hide in one delta field. A verb the newer release added
     steps back as `None`; one it withdrew steps back as a whole verb; one
@@ -1312,55 +1038,6 @@ def test_a_release_is_discarded_once_its_surface_is_read(tmp_path):
     tools._discard(release / "bin")
     assert not release.exists()
     tools._discard(release / "bin")  # gone already: not an error
-
-
-def test_a_prime_does_not_hold_every_release_it_fetched(tmp_path, monkeypatch):
-    """The claim measured rather than asserted: at no point does more than one
-    release exist on disk."""
-    from footman import _drivers, _toolfetch
-    from footman.tasks import tools
-
-    monkeypatch.setattr(tools, "_HISTORY", tmp_path / "history")
-    monkeypatch.setattr(tools, "_STUBS", tmp_path / "stubs")
-    (tmp_path / "history").mkdir()
-    (tmp_path / "stubs").mkdir()
-
-    surface = _toolhistory.surface_of(_spec(verbs=(Verb(name="", options=()),)))
-    doc = _toolhistory.new("ruff", version="1.0.9", date="2026-02-09", surface=surface)
-    _toolhistory.save(doc, tmp_path / "history" / "ruff.json")
-
-    # newest first, as every tier returns them
-    monkeypatch.setattr(
-        _toolfetch,
-        "releases",
-        lambda _d: [
-            _toolfetch.Release(version=f"1.0.{n}", date=f"2026-02-0{n}")
-            for n in range(9, -1, -1)
-        ],
-    )
-
-    live: list[int] = []
-
-    def install(_driver, _release, into):
-        (into / "bin").mkdir(parents=True, exist_ok=True)
-        (into / "bin" / "ruff").write_text("x" * 1000)
-        live.append(len(list(into.parent.iterdir())))
-        return into / "bin"
-
-    monkeypatch.setattr(_toolfetch, "install", install)
-    monkeypatch.setattr(
-        _drivers, "extract", lambda d: _toolhistory.spec_from(surface, name=d.name)
-    )
-
-    scratch = tmp_path / "scratch"
-    scratch.mkdir()
-    added, _stopped = tools._prime_one(
-        _drivers_find("ruff"), doc, 9, scratch, _toolfetch
-    )
-    assert added == 9
-    # One at a time: the directory never holds a second release.
-    assert max(live) == 1
-    assert list(scratch.iterdir()) == []
 
 
 # --- insert: a release arriving at any position ------------------------------
@@ -1475,3 +1152,446 @@ def test_a_gap_costs_precision_and_not_correctness():
     spec = _toolhistory.union(doc, name="demo")
     arrived = {o.name: o.since for v in spec.verbs for o in v.options}
     assert arrived["opt1"] == "1.0.1"  # filled, and now attributed exactly
+
+
+# --- the walks, driven through footman's own runner --------------------------
+#
+# The gather runs releases in parallel and leans on the run infrastructure —
+# the environ router, the per-call env copy at the task boundary — so these
+# tests drive the real thing: `footman.testing.Runner` is an in-process run,
+# routers installed, and the result rows include every `observe` the engine
+# fanned out. A bare call is refused (tested last), so there is no sequential
+# twin for tests to accidentally exercise instead.
+
+
+def _tools_run(line):
+    from footman.tasks.tools import tasks as tools_group
+    from footman.testing import Runner
+
+    return Runner().invoke(line, tasks=tools_group)
+
+
+def _isolate(tools, monkeypatch, tmp_path):
+    monkeypatch.setattr(tools, "_HISTORY", tmp_path / "history")
+    monkeypatch.setattr(tools, "_STUBS", tmp_path / "stubs")
+    monkeypatch.setattr(tools, "_CHANGELOG", tmp_path / "CHANGELOG.md")
+    (tmp_path / "history").mkdir()
+    (tmp_path / "stubs").mkdir()
+    (tmp_path / "CHANGELOG.md").write_text(
+        "# Changelog\n\n## [Unreleased]\n", encoding="utf-8"
+    )
+
+
+def _serve(monkeypatch, listings, surfaces, installed=None):
+    """The fake tiers: a listing per tool, a surface per (tool, version).
+
+    Called from worker threads, so mutation is `list.append`-shaped. An
+    absent (tool, version) makes the install fail — a hole.
+    """
+    from footman import _drivers, _toolfetch
+
+    installed = installed if installed is not None else []
+    monkeypatch.setattr(
+        _toolfetch, "releases", lambda driver: list(listings[driver.key])
+    )
+
+    def install(driver, release, into):
+        installed.append((driver.key, release.version))
+        if surfaces.get((driver.key, release.version)) is None:
+            return None
+        (into / "bin").mkdir(parents=True, exist_ok=True)
+        (into / "bin" / driver.name).write_text("x")
+        return into / "bin"
+
+    monkeypatch.setattr(_toolfetch, "install", install)
+
+    def extract(driver):
+        import os
+
+        spot = os.environ.get("PATH", "").split(os.pathsep)[0]
+        version = pathlib.Path(spot).parent.name.split("==")[-1].rsplit("-", 1)[-1]
+        return _toolhistory.spec_from(surfaces[(driver.key, version)], name=driver.name)
+
+    monkeypatch.setattr(_drivers, "extract", extract)
+    return installed
+
+
+def _with_flags(*names):
+    return _toolhistory.surface_of(
+        _spec(
+            verbs=(Verb(name="", options=tuple(Option(n, (f"--{n}",)) for n in names)),)
+        )
+    )
+
+
+def test_a_refresh_reads_every_release_it_missed_not_just_the_newest(
+    tmp_path, monkeypatch
+):
+    """Attribution is the whole point of the log: three releases behind means
+    three observations, and the flag that arrived in 1.0.1 is recorded there,
+    not at 1.0.3. The observations run in parallel and land in whatever order
+    the pool finishes; the chain assembles the same either way."""
+    from footman import _toolfetch
+    from footman.tasks import tools
+
+    _isolate(tools, monkeypatch, tmp_path)
+    _toolhistory.save(
+        _toolhistory.new(
+            "ruff", version="1.0.0", date="2026-02-01", surface=_with_flags("quiet")
+        ),
+        tmp_path / "history" / "ruff.json",
+    )
+    listings = {
+        "ruff": [
+            _toolfetch.Release(version=f"1.0.{n}", date=f"2026-02-0{n + 1}")
+            for n in (3, 2, 1, 0)
+        ]
+    }
+    surfaces = {
+        ("ruff", "1.0.1"): _with_flags("quiet", "fix"),  # the event
+        ("ruff", "1.0.2"): _with_flags("quiet", "fix"),
+        ("ruff", "1.0.3"): _with_flags("quiet", "fix"),
+    }
+    installed = _serve(monkeypatch, listings, surfaces)
+
+    result = _tools_run("refresh --only=ruff --no-changelog")
+    assert result.ok, result.stderr
+
+    assert sorted(installed) == [("ruff", f"1.0.{n}") for n in (1, 2, 3)]
+    stored = _toolhistory.load(tmp_path / "history" / "ruff.json")
+    assert stored is not None
+    assert _toolhistory.observed(stored) == ["1.0.3", "1.0.2", "1.0.1", "1.0.0"]
+    assert stored["base"]["date"] == "2026-02-04"  # the index's date, not today's
+    assert "adds `--fix`" not in result.stdout  # changelog was off
+    assert "release warranted: yes" in result.stdout
+    # every observation is a row in the run's own report — the audit trail
+    assert sum(1 for row in result.results if row.task == "observe") == 3
+
+
+def test_a_release_that_will_not_install_is_a_hole_not_a_dead_walk(
+    tmp_path, monkeypatch
+):
+    """The break-on-hole rule is gone: the releases beyond a failed install
+    are still observed, the hole is named in the report, and a later run
+    fills it through `insert` — at which point its changes are attributed
+    exactly."""
+    from footman import _toolfetch
+    from footman.tasks import tools
+
+    _isolate(tools, monkeypatch, tmp_path)
+    _toolhistory.save(
+        _toolhistory.new(
+            "ruff", version="1.0.0", date="2026-02-01", surface=_with_flags("quiet")
+        ),
+        tmp_path / "history" / "ruff.json",
+    )
+    listings = {
+        "ruff": [
+            _toolfetch.Release(version=f"1.0.{n}", date=f"2026-02-0{n + 1}")
+            for n in (3, 2, 1, 0)
+        ]
+    }
+    surfaces = {
+        ("ruff", "1.0.1"): None,  # will not install
+        ("ruff", "1.0.2"): _with_flags("quiet", "fix"),
+        ("ruff", "1.0.3"): _with_flags("quiet", "fix"),
+    }
+    _serve(monkeypatch, listings, surfaces)
+
+    result = _tools_run("refresh --only=ruff --no-changelog")
+    assert result.ok, result.stderr
+    assert "holes in ruff: 1.0.1" in result.stdout
+
+    stored = _toolhistory.load(tmp_path / "history" / "ruff.json")
+    assert stored is not None
+    assert _toolhistory.observed(stored) == ["1.0.3", "1.0.2", "1.0.0"]
+    # the gap costs precision, not correctness: --fix reads as arriving at
+    # the release actually read...
+    spec = _toolhistory.union(stored, name="ruff")
+    arrived = {o.name: o.since for v in spec.verbs for o in v.options}
+    assert arrived["fix"] == "1.0.2"
+
+    # ...and the next run fills the hole and sharpens the claim.
+    surfaces[("ruff", "1.0.1")] = _with_flags("quiet", "fix")
+    result = _tools_run("refresh --only=ruff --no-changelog")
+    assert result.ok, result.stderr
+    stored = _toolhistory.load(tmp_path / "history" / "ruff.json")
+    assert stored is not None
+    assert _toolhistory.observed(stored) == ["1.0.3", "1.0.2", "1.0.1", "1.0.0"]
+    spec = _toolhistory.union(stored, name="ruff")
+    arrived = {o.name: o.since for v in spec.verbs for o in v.options}
+    assert arrived["fix"] == "1.0.1"
+
+
+def test_a_refresh_with_nothing_new_warrants_no_release(tmp_path, monkeypatch):
+    from footman import _toolfetch
+    from footman.tasks import tools
+
+    _isolate(tools, monkeypatch, tmp_path)
+    _toolhistory.save(
+        _toolhistory.new(
+            "ruff", version="1.0.3", date="2026-02-04", surface=_with_flags("quiet")
+        ),
+        tmp_path / "history" / "ruff.json",
+    )
+    listings = {"ruff": [_toolfetch.Release(version="1.0.3", date="2026-02-04")]}
+    installed = _serve(monkeypatch, listings, {})
+
+    result = _tools_run("refresh --only=ruff")
+    assert result.ok, result.stderr
+    assert installed == []
+    assert "release warranted: no" in result.stdout
+
+
+def test_a_refresh_that_could_not_look_does_not_report_nothing_new(
+    tmp_path, monkeypatch
+):
+    """The two answers a release job must never confuse: an index that would
+    not answer exits 75 (EX_TEMPFAIL) and names the tool, instead of reading
+    as a tool with nothing new."""
+    from footman import _toolfetch
+    from footman.tasks import tools
+
+    _isolate(tools, monkeypatch, tmp_path)
+    _toolhistory.save(
+        _toolhistory.new(
+            "ruff", version="1.0.3", date="2026-02-04", surface=_with_flags("quiet")
+        ),
+        tmp_path / "history" / "ruff.json",
+    )
+
+    def throttled(_driver):
+        raise _toolfetch.Unreachable("https://pypi.org/pypi/ruff/json", "429")
+
+    monkeypatch.setattr(_toolfetch, "releases", throttled)
+
+    result = _tools_run("refresh --only=ruff")
+    assert result.exit_code == 75
+    assert "ruff" in result.stderr
+
+
+def test_a_refresh_writes_its_own_events_into_the_changelog(tmp_path, monkeypatch):
+    from footman import _toolfetch
+    from footman.tasks import tools
+
+    _isolate(tools, monkeypatch, tmp_path)
+    _toolhistory.save(
+        _toolhistory.new(
+            "ruff", version="1.0.0", date="2026-02-01", surface=_with_flags("quiet")
+        ),
+        tmp_path / "history" / "ruff.json",
+    )
+    listings = {
+        "ruff": [
+            _toolfetch.Release(version="1.0.1", date="2026-02-02"),
+            _toolfetch.Release(version="1.0.0", date="2026-02-01"),
+        ]
+    }
+    _serve(monkeypatch, listings, {("ruff", "1.0.1"): _with_flags("quiet", "fix")})
+
+    result = _tools_run("refresh --only=ruff")
+    assert result.ok, result.stderr
+    written = (tmp_path / "CHANGELOG.md").read_text(encoding="utf-8")
+    assert "adds `--fix`" in written
+
+
+def test_a_refresh_with_no_events_writes_no_note(tmp_path, monkeypatch):
+    """A new release that changed nothing is recorded — an empty delta — and
+    warrants neither a release nor a line about one."""
+    from footman import _toolfetch
+    from footman.tasks import tools
+
+    _isolate(tools, monkeypatch, tmp_path)
+    _toolhistory.save(
+        _toolhistory.new(
+            "ruff", version="1.0.0", date="2026-02-01", surface=_with_flags("quiet")
+        ),
+        tmp_path / "history" / "ruff.json",
+    )
+    listings = {
+        "ruff": [
+            _toolfetch.Release(version="1.0.1", date="2026-02-02"),
+            _toolfetch.Release(version="1.0.0", date="2026-02-01"),
+        ]
+    }
+    _serve(monkeypatch, listings, {("ruff", "1.0.1"): _with_flags("quiet")})
+
+    result = _tools_run("refresh --only=ruff")
+    assert result.ok, result.stderr
+    assert "release warranted: no" in result.stdout
+    assert "###" not in (tmp_path / "CHANGELOG.md").read_text(encoding="utf-8")
+    stored = _toolhistory.load(tmp_path / "history" / "ruff.json")
+    assert stored is not None
+    assert _toolhistory.observed(stored) == ["1.0.1", "1.0.0"]  # observed, unchanged
+
+
+def test_a_prime_reaches_below_the_floor_and_only_below_it(tmp_path, monkeypatch):
+    """The backward walk: newer releases are the refresh's business, and a
+    prime must never lift the head — only deepen the tail, up to its count."""
+    from footman import _toolfetch
+    from footman.tasks import tools
+
+    _isolate(tools, monkeypatch, tmp_path)
+    _toolhistory.save(
+        _toolhistory.new(
+            "ruff", version="1.0.2", date="2026-02-03", surface=_with_flags("quiet")
+        ),
+        tmp_path / "history" / "ruff.json",
+    )
+    listings = {
+        "ruff": [
+            _toolfetch.Release(version=f"1.0.{n}", date=f"2026-02-0{n + 1}")
+            for n in (4, 3, 2, 1, 0)
+        ]
+    }
+    surfaces = {
+        ("ruff", "1.0.0"): _with_flags("quiet"),
+        ("ruff", "1.0.1"): _with_flags("quiet"),
+    }
+    installed = _serve(monkeypatch, listings, surfaces)
+
+    result = _tools_run("prime --only=ruff --count=1")
+    assert result.ok, result.stderr
+    assert installed == [("ruff", "1.0.1")]  # one below the floor; never 1.0.3+
+
+    stored = _toolhistory.load(tmp_path / "history" / "ruff.json")
+    assert stored is not None
+    assert stored["base"]["version"] == "1.0.2"  # the head did not move
+    assert stored["observed_from"] == "1.0.1"
+
+
+def test_a_floor_the_index_cannot_place_refuses_the_tool(tmp_path, monkeypatch):
+    """A stub synced from an outdated binary leaves a floor no listing holds;
+    priming from the top would file the newest release as the oldest."""
+    from footman import _toolfetch
+    from footman.tasks import tools
+
+    _isolate(tools, monkeypatch, tmp_path)
+    _toolhistory.save(
+        _toolhistory.new(
+            "ruff", version="0.9.9", date="2026-01-01", surface=_with_flags("quiet")
+        ),
+        tmp_path / "history" / "ruff.json",
+    )
+    listings = {"ruff": [_toolfetch.Release(version="1.0.3", date="2026-02-04")]}
+    installed = _serve(monkeypatch, listings, {})
+
+    result = _tools_run("prime --only=ruff")
+    assert result.ok, result.stderr
+    assert installed == []
+    assert "sync it forward first" in result.stdout
+
+
+def test_parallel_observations_each_own_their_environment(tmp_path, monkeypatch):
+    """The reason each observation is a task: the PATH written around one
+    extraction is that observation's alone. Two releases are held at the
+    barrier until both are inside their extract, then each asserts it sees
+    its own binary first on PATH and the sibling's nowhere."""
+    import os
+    import threading
+
+    from footman import _drivers, _toolfetch
+    from footman.tasks import tools
+
+    _isolate(tools, monkeypatch, tmp_path)
+    _toolhistory.save(
+        _toolhistory.new(
+            "ruff", version="1.0.0", date="2026-02-01", surface=_with_flags("quiet")
+        ),
+        tmp_path / "history" / "ruff.json",
+    )
+    listings = {
+        "ruff": [
+            _toolfetch.Release(version="1.0.2", date="2026-02-03"),
+            _toolfetch.Release(version="1.0.1", date="2026-02-02"),
+            _toolfetch.Release(version="1.0.0", date="2026-02-01"),
+        ]
+    }
+    surface = _with_flags("quiet", "fix")
+    monkeypatch.setattr(
+        _toolfetch, "releases", lambda driver: list(listings[driver.key])
+    )
+
+    def install(driver, release, into):
+        (into / "bin").mkdir(parents=True, exist_ok=True)
+        return into / "bin"
+
+    monkeypatch.setattr(_toolfetch, "install", install)
+
+    both_inside = threading.Barrier(2)
+    seen: list[tuple[str, str]] = []
+
+    def extract(driver):
+        with contextlib.suppress(threading.BrokenBarrierError):
+            both_inside.wait(timeout=10)  # overlap for real, or say so
+        head = os.environ.get("PATH", "").split(os.pathsep)[0]
+        seen.append((head, os.environ.get("PATH", "")))
+        return _toolhistory.spec_from(surface, name=driver.name)
+
+    monkeypatch.setattr(_drivers, "extract", extract)
+
+    result = _tools_run("refresh --only=ruff --no-changelog")
+    assert result.ok, result.stderr
+    assert len(seen) == 2
+    heads = {head for head, _ in seen}
+    assert len(heads) == 2  # two different bindirs won the front of PATH
+    for head, path in seen:
+        other = next(h for h in heads if h != head)
+        assert other not in path  # and the sibling's never leaked in
+
+
+def test_the_same_release_is_observed_once_per_run(tmp_path, monkeypatch):
+    """Observations are work-keyed by footman's futures layer: a second
+    request for the same (tool, version) joins the first execution and is
+    reported as a shared row, not re-installed."""
+    from footman import _toolfetch
+    from footman.registry import Group
+    from footman.tasks import tools
+    from footman.testing import Runner
+
+    _isolate(tools, monkeypatch, tmp_path)
+    installed: list[str] = []
+
+    def install(driver, release, into):
+        installed.append(release.version)
+        (into / "bin").mkdir(parents=True, exist_ok=True)
+        return into / "bin"
+
+    monkeypatch.setattr(_toolfetch, "install", install)
+    from footman import _drivers
+
+    monkeypatch.setattr(
+        _drivers,
+        "extract",
+        lambda driver: _toolhistory.spec_from(_with_flags("quiet"), name=driver.name),
+    )
+
+    demo = Group("demo")
+
+    @demo.task
+    def twice():
+        first = tools.observe(
+            tool="ruff", version="1.0.1", scratch=str(tmp_path / "scratch")
+        )
+        second = tools.observe(
+            tool="ruff", version="1.0.1", scratch=str(tmp_path / "scratch")
+        )
+        assert first == second
+
+    result = Runner().invoke("twice", tasks=demo)
+    assert result.ok, result.stderr
+    assert installed == ["1.0.1"]  # one execution; the second request joined it
+
+
+def test_a_bare_call_is_refused_with_directions(tmp_path, monkeypatch):
+    """No sequential twin: outside a run the isolation the gather leans on
+    does not exist, so the walk refuses and says how to run it instead of
+    degrading into the exact race it was built to remove."""
+    from footman.context import Failed
+    from footman.tasks import tools
+
+    _isolate(tools, monkeypatch, tmp_path)
+    with pytest.raises(Failed, match=r"footman\.testing\.Runner"):
+        tools.refresh(only="ruff")
+    with pytest.raises(Failed, match=r"needs a run"):
+        tools.prime(only="ruff")

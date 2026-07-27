@@ -491,11 +491,19 @@ def load(path: Path) -> dict | None:
 
 
 def save(doc: dict, path: Path) -> None:
-    """Write *doc* atomically, formatted for a diff a human reads."""
+    """Write *doc* atomically, formatted for a diff a human reads.
+
+    The temp name carries the thread id beside the pid: assembly is
+    single-threaded by design, but a rule enforced by a filename is cheaper
+    than one enforced by remembering, and two threads that ever do write one
+    tool's file will each replace whole documents instead of corrupting a
+    shared temp.
+    """
     import os
+    import threading
 
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+    tmp = path.with_name(f"{path.name}.{os.getpid()}-{threading.get_ident()}.tmp")
     tmp.write_text(json.dumps(doc, indent=1, ensure_ascii=False) + "\n", "utf-8")
     os.replace(tmp, path)
 

@@ -1554,3 +1554,30 @@ def test_index_verbs_are_dotted_so_they_read_as_they_are_called():
     assert "compose.up" in docker and "up" not in docker
     # `flags` is footman's own typed-globals accessor, not a verb of the tool.
     assert not any(v.endswith("flags") for v in uv + docker)
+
+
+def test_click_extraction_requires_the_import_and_the_binary_to_agree(monkeypatch):
+    """The entry point loads from this process's environment; the binary
+    comes from PATH; nothing ties the two together. During a prime that
+    difference is the whole point — the release venv's mkdocs 1.4.0 on PATH,
+    ours importable — and the click path used to record OUR surface under
+    the RELEASE's label: nine empty deltas in a row, twice over, before the
+    guard. A mismatch falls to the help path, which asks the binary itself.
+    """
+    from types import SimpleNamespace
+
+    from footman import tools as bridge
+
+    driver = _drivers.find("mkdocs")
+    assert driver is not None
+
+    entry = SimpleNamespace(
+        dist=SimpleNamespace(version="1.6.1"),
+        load=lambda: pytest.fail("a mismatched click tool must not be imported"),
+    )
+    monkeypatch.setattr(bridge, "_console_entrypoint", lambda _name: entry)
+    monkeypatch.setattr(_drivers, "version", lambda _name: "1.4.0")
+    assert _drivers._from_click(driver) is None  # mismatch: the help path's turn
+
+    monkeypatch.setattr(_drivers, "version", lambda _name: "")
+    assert _drivers._from_click(driver) is None  # unreadable binary: same answer

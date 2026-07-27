@@ -12,6 +12,13 @@
   "surface": {
    "help": "Zensical - A modern static site generator.",
    "verbs": {
+    "": {
+     "help": "Zensical - A modern static site generator.",
+     "wraps": false,
+     "positional": "any",
+     "lead": "",
+     "options": {}
+    },
     "build": {
      "help": "Build a project.",
      "wraps": false,
@@ -24,9 +31,9 @@
         "-c"
        ],
        "negation": "",
-       "help": "Clean cache.",
+       "help": "Clean cache",
        "type": "bool",
-       "default": false,
+       "default": null,
        "choices": []
       },
       "config_file": {
@@ -35,7 +42,7 @@
         "-f"
        ],
        "negation": "",
-       "help": "Path to config file.",
+       "help": "Path to config file",
        "type": "str",
        "default": null,
        "choices": []
@@ -46,19 +53,12 @@
         "-s"
        ],
        "negation": "",
-       "help": "Enable strict mode - abort the build on warnings.",
+       "help": "Enable strict mode - abort the build on warnings",
        "type": "bool",
-       "default": false,
+       "default": null,
        "choices": []
       }
      }
-    },
-    "new": {
-     "help": "Create a new template project in the current or given directory.",
-     "wraps": false,
-     "positional": "any",
-     "lead": "",
-     "options": {}
     },
     "serve": {
      "help": "Build and serve a project.",
@@ -72,7 +72,7 @@
         "-f"
        ],
        "negation": "",
-       "help": "Path to config file.",
+       "help": "Path to config file",
        "type": "str",
        "default": null,
        "choices": []
@@ -83,9 +83,9 @@
         "-a"
        ],
        "negation": "",
-       "help": "IP address and port (default: localhost:8000).",
+       "help": "IP address and port",
        "type": "str",
-       "default": null,
+       "default": "localhost:8000",
        "choices": []
       },
       "open": {
@@ -94,9 +94,9 @@
         "-o"
        ],
        "negation": "",
-       "help": "Open preview in default browser.",
+       "help": "Open preview in default browser",
        "type": "bool",
-       "default": false,
+       "default": null,
        "choices": []
       },
       "strict": {
@@ -105,12 +105,19 @@
         "-s"
        ],
        "negation": "",
-       "help": "Strict mode (currently unsupported).",
+       "help": "Strict mode (currently unsupported)",
        "type": "bool",
-       "default": false,
+       "default": null,
        "choices": []
       }
      }
+    },
+    "new": {
+     "help": "Create a new template project in the current or given directory.",
+     "wraps": false,
+     "positional": "any",
+     "lead": "",
+     "options": {}
     }
    }
   }
@@ -121,14 +128,183 @@
    "platforms": [
     "macOS"
    ],
-   "extractor": 1
+   "extractor": 1,
+   "revert": {
+    "build\tclean": {
+     "flags": [
+      "--clean",
+      "-c"
+     ],
+     "negation": "",
+     "help": "Clean cache.",
+     "type": "bool",
+     "default": false,
+     "choices": []
+    },
+    "build\tconfig_file": {
+     "flags": [
+      "--config-file",
+      "-f"
+     ],
+     "negation": "",
+     "help": "Path to config file.",
+     "type": "str",
+     "default": null,
+     "choices": []
+    },
+    "build\tstrict": {
+     "flags": [
+      "--strict",
+      "-s"
+     ],
+     "negation": "",
+     "help": "Enable strict mode - abort the build on warnings.",
+     "type": "bool",
+     "default": false,
+     "choices": []
+    },
+    "serve\tconfig_file": {
+     "flags": [
+      "--config-file",
+      "-f"
+     ],
+     "negation": "",
+     "help": "Path to config file.",
+     "type": "str",
+     "default": null,
+     "choices": []
+    },
+    "serve\tdev_addr": {
+     "flags": [
+      "--dev-addr",
+      "-a"
+     ],
+     "negation": "",
+     "help": "IP address and port (default: localhost:8000).",
+     "type": "str",
+     "default": null,
+     "choices": []
+    },
+    "serve\topen": {
+     "flags": [
+      "--open",
+      "-o"
+     ],
+     "negation": "",
+     "help": "Open preview in default browser.",
+     "type": "bool",
+     "default": false,
+     "choices": []
+    },
+    "serve\tstrict": {
+     "flags": [
+      "--strict",
+      "-s"
+     ],
+     "negation": "",
+     "help": "Strict mode (currently unsupported).",
+     "type": "bool",
+     "default": false,
+     "choices": []
+    }
+   },
+   "verbs": {
+    "": null
+   }
   },
   "0.0.48": {
    "date": "2026-07-09",
    "platforms": [
     "macOS"
    ],
-   "extractor": 1
+   "extractor": 1,
+   "revert": {
+    "build\tclean": {
+     "flags": [
+      "--clean",
+      "-c"
+     ],
+     "negation": "",
+     "help": "Clean cache",
+     "type": "bool",
+     "default": null,
+     "choices": []
+    },
+    "build\tconfig_file": {
+     "flags": [
+      "--config-file",
+      "-f"
+     ],
+     "negation": "",
+     "help": "Path to config file",
+     "type": "str",
+     "default": null,
+     "choices": []
+    },
+    "build\tstrict": {
+     "flags": [
+      "--strict",
+      "-s"
+     ],
+     "negation": "",
+     "help": "Enable strict mode - abort the build on warnings",
+     "type": "bool",
+     "default": null,
+     "choices": []
+    },
+    "serve\tconfig_file": {
+     "flags": [
+      "--config-file",
+      "-f"
+     ],
+     "negation": "",
+     "help": "Path to config file",
+     "type": "str",
+     "default": null,
+     "choices": []
+    },
+    "serve\tdev_addr": {
+     "flags": [
+      "--dev-addr",
+      "-a"
+     ],
+     "negation": "",
+     "help": "IP address and port",
+     "type": "str",
+     "default": "localhost:8000",
+     "choices": []
+    },
+    "serve\topen": {
+     "flags": [
+      "--open",
+      "-o"
+     ],
+     "negation": "",
+     "help": "Open preview in default browser",
+     "type": "bool",
+     "default": null,
+     "choices": []
+    },
+    "serve\tstrict": {
+     "flags": [
+      "--strict",
+      "-s"
+     ],
+     "negation": "",
+     "help": "Strict mode (currently unsupported)",
+     "type": "bool",
+     "default": null,
+     "choices": []
+    }
+   },
+   "verbs": {
+    "": {
+     "help": "Zensical - A modern static site generator.",
+     "wraps": false,
+     "positional": "any",
+     "lead": ""
+    }
+   }
   },
   "0.0.47": {
    "date": "2026-07-05",

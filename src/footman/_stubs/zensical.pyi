@@ -10,6 +10,13 @@ from footman.tools import Tool as _Tool
 from footman.tools import _Flag, _Value
 
 class Zensical(_Tool):
+    def __call__(  # type: ignore[override]
+        self,
+        *args: str,
+        **flags: Any,
+    ) -> _Result:
+        """Zensical - A modern static site generator."""
+        ...
     def build(
         self,
         *,
@@ -46,7 +53,7 @@ class Zensical(_Tool):
 
         Args:
             config_file: Path to config file.
-            dev_addr: IP address and port (default: localhost:8000).
+            dev_addr: IP address and port. Defaults to `localhost:8000`.
             open: Open preview in default browser.
             strict: Strict mode (currently unsupported).
         """

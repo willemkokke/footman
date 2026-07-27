@@ -1,0 +1,91 @@
+# The weekly tool refresh: observe every release the curated tools have
+# published since the histories were last updated, and open a PR only when
+# something actually changed a command-line surface.
+#
+# The release decision is `fm --json tools.refresh` — "were any events
+# appended", never "did a version move". Three outcomes:
+#   * nothing new / nothing changed  -> green run, no PR, no noise
+#   * events                         -> a PR with histories + stubs + the
+#                                       CHANGELOG entry the events wrote
+#   * an index that would not answer -> the job FAILS (exit 75): a renamed
+#     package answers "nothing new" forever, and that must never read as
+#     success.
+#
+# Deliberately not part of ci.yml's `gate` — the PR this opens runs the full
+# gate like any other PR, and Willem merges by hand. The push and the PR use
+# a fine-grained PAT (`REFRESH_TOKEN`: contents + pull-requests write),
+# because a PR created with the default GITHUB_TOKEN never triggers CI and
+# the required gate would sit unrun. API reads during the refresh use the
+# default token — 5,000/hour is ample, and hosted runners share their
+# unauthenticated allowance with strangers.
+name: refresh
+
+on:
+  schedule:
+    - cron: "0 6 * * 1" # Mondays 06:00 UTC — weekly, per the plan's cadence
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: refuse to run without the PAT
+        env:
+          REFRESH_TOKEN: ${{ secrets.REFRESH_TOKEN }}
+        run: |
+          if [ -z "$REFRESH_TOKEN" ]; then
+            echo "::error::secrets.REFRESH_TOKEN is unset. Create a fine-grained PAT" \
+                 "(this repo; contents: write, pull-requests: write) and store it as" \
+                 "REFRESH_TOKEN — a PR opened with the default GITHUB_TOKEN never" \
+                 "triggers CI, so the required gate would sit unrun."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v7
+        with:
+          token: ${{ secrets.REFRESH_TOKEN }}
+
+      - uses: astral-sh/setup-uv@v7
+
+      - name: sync the environment
+        run: uv sync
+
+      - name: provision the latest tools
+        # Into .tools-latest — including uv itself: uv carries CPython's
+        # download index inside the binary, so a stale uv silently reports a
+        # stale newest python. bun lands here too, which the npm tier needs.
+        run: uv run fm tools.provision
+
+      - name: refresh the histories
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          uv run fm --json tools.refresh --prefix=.tools-latest \
+            > "$RUNNER_TEMP/refresh.json"
+          jq -r '.results[] | select(.task | endswith("refresh"))
+                 | .returned | "release=\(.release)"' \
+            "$RUNNER_TEMP/refresh.json" >> "$GITHUB_ENV"
+
+      - name: open the PR the events wrote
+        if: env.release == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.REFRESH_TOKEN }}
+        run: |
+          branch="chore/tool-refresh-$(date -u +%Y%m%d)"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          git add tool-history src/footman/_stubs CHANGELOG.md
+          git commit -m "chore(tools): weekly refresh — the events wrote the note"
+          git push origin "$branch"
+          gh pr create --base main --head "$branch" \
+            --title "chore(tools): weekly tool refresh" \
+            --body "$(printf 'Opened by the weekly refresh: at least one curated tool changed its command-line surface. The CHANGELOG entry in this diff was written from the events themselves.\n\nSummary from the run:\n\n```\n%s\n```' \
+              "$(jq -r '.results[] | select(.task | endswith("refresh")) | .output' "$RUNNER_TEMP/refresh.json")")"
