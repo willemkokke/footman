@@ -15,6 +15,17 @@ versions may include breaking changes.
   `[tool.footman."<entry-point-name>"]` configuration convention, the two
   optional-dependency patterns, the determinism rule, and testing through
   the real pull path.
+- **A `GlobalOption` completes dynamically.** A `suggest()`-marked global
+  recomputes its choices fresh at <kbd>Tab</kbd>, exactly as a task
+  parameter's completer does — the completion subprocess now addresses an
+  option by name alongside a parameter by path.
+- **Task help shows the declared globals.** A task with `@task(uses=[OPT])`
+  ends its `--help` with `reads --env-file (from footman.env_files)` — the
+  dependency named where the option will be typed.
+- **The wiring advisories.** An option nothing is wired to read — its owner
+  contributes no lifecycle hook and no task declares it — draws a warning at
+  discovery; a task that declared a global in `uses=` but finished without
+  reading it is an advisory under `--verbose`.
 
 ## [0.25.0] — 2026-07-27
 

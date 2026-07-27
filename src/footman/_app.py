@@ -393,6 +393,9 @@ def _print_task_help(tree: dict, path: list[str]) -> None:
         for label, detail in rows:
             pad = " " * (width - len(label))
             print(f"  {_describe.bold(label, on)}{pad}  {detail}".rstrip())
+    if uses := _describe.uses_line(task, tree):
+        # The globals this task declared (`uses=`): mechanics, so dimmed.
+        print(_describe.dim(f"\n  {uses}", on))
     example = _describe.paint_cli(_describe.example_parts(path, task, _brand.prog), on)
     print(f"\n{_describe.dim('Example:', on)} {example}")
     if (shadows := task.get("shadows")) is not None:
@@ -1201,6 +1204,8 @@ def _execute(
         clash := registry.validate_global_options(reg.contributions["globals"])
     ) is not None:
         return _refuse(json_mode, clash)
+    for orphan in registry.orphan_global_options(reg):
+        _error(f"warning: {orphan}")
 
     try:
         if g.get("tasks_file"):
@@ -1583,6 +1588,8 @@ def run_group(
         clash := registry.validate_global_options(root.contributions["globals"])
     ) is not None:
         return _refuse(bool(g.get("json")), clash)
+    for orphan in registry.orphan_global_options(root):
+        _error(f"warning: {orphan}")
     executor.install_lifecycle(inv, root.contributions)
     try:
         return _run_tree(root, tree, argv, {}, collect)

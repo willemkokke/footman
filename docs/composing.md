@@ -546,16 +546,22 @@ AUDIT = GlobalOption("audit", help="report, change nothing")   # bool → a flag
 
 The value is `=`-attached like every option's, long-form only, coerced and
 validated through the same pipeline as a task parameter — `Literal` choices,
-`Path` file completion and bounds all work, because the manifest describes it
-with the same machinery and <kbd>Tab</kbd> answers from that. Read it
-anywhere in-run as `ENV_FILE.value` (parsed once, frozen for the run; outside
-a run the read is a taught error). Cross-plugin use is an ordinary import of
-the singleton.
+`Path` file completion, bounds and dynamic `suggest()` choices all work,
+because the manifest describes it with the same machinery and <kbd>Tab</kbd>
+answers from that (a dynamic completer is recomputed fresh at the keystroke,
+exactly as a task parameter's is). Read it anywhere in-run as
+`ENV_FILE.value` (parsed once, frozen for the run; outside a run the read is
+a taught error). Cross-plugin use is an ordinary import of the singleton.
 
 A task that reads one says so — `@task(uses=[ENV_FILE])` — which puts the
-dependency in the manifest for help and agents; an undeclared read still
-works, with a note naming the fix. Names collide loudly: with footman's own
-globals naming footman, between two plugins naming both owners.
+dependency in the manifest for help and agents: the task's `--help` ends
+with `reads --env-file (from footman.env_files)`. An undeclared read still
+works, with a note naming the fix; a declared option the task finished
+without reading is an advisory under `--verbose`. And an option nothing is
+wired to read at all — no lifecycle hook from its owner, no declaring task —
+draws a warning at discovery, because a switch nobody answers to is dead
+weight. Names collide loudly: with footman's own globals naming footman,
+between two plugins naming both owners.
 
 ## The built-in: `footman.env_files`
 

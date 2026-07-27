@@ -18,6 +18,17 @@ import contextlib
 import inspect
 import io
 import sys
+from typing import Any
+
+
+def _fresh(completer: Any) -> list[str]:
+    """Run *completer* with its own stdout/stderr muted, so its chatter can't
+    leak into the value channel the hot path reads."""
+    with (
+        contextlib.redirect_stdout(io.StringIO()),
+        contextlib.redirect_stderr(io.StringIO()),
+    ):
+        return [str(v) for v in completer.fn()]
 
 
 def _values(param: str, path: list[str], g: dict[str, object]) -> list[str]:
@@ -53,18 +64,37 @@ def _values(param: str, path: list[str], g: dict[str, object]) -> list[str]:
         completer = coerce.peel(p.annotation).completer
         if completer is None:
             return []
-        # Mute the completer's own stdout/stderr so its chatter can't leak into
-        # the value channel the hot path reads.
-        with (
-            contextlib.redirect_stdout(io.StringIO()),
-            contextlib.redirect_stderr(io.StringIO()),
-        ):
-            return [str(v) for v in completer.fn()]
+        return _fresh(completer)
+    return []
+
+
+def _global_values(name: str, g: dict[str, object]) -> list[str]:
+    """The fresh output of the completer on the plugin global *name*.
+
+    The globals ride the tree's contributions, so the same discovery that
+    finds a task's completer finds an option's: rediscover, match the cli
+    name, peel the annotation, run what it carries. Any miss — no tasks
+    file, an unpulled owner, a plain option — is an empty list."""
+    from footman import _app, coerce, discover, registry
+
+    files, _cfg = _app.resolve_task_files(g, on_warning=lambda *a: None, on_note=None)
+    if not files:
+        return []
+    base = registry.Group("root")
+    root = discover.load_tree(files, base=base)
+    for opt in root.contributions.get("globals", ()):
+        if opt.name != name:
+            continue
+        completer = coerce.peel(opt.annotation).completer
+        if completer is None:
+            return []
+        return _fresh(completer)
     return []
 
 
 def main(argv: list[str]) -> int:
     param: str | None = None
+    globopt: str | None = None
     path: list[str] = []
     g: dict[str, object] = {}
     i = 0
@@ -72,6 +102,8 @@ def main(argv: list[str]) -> int:
         arg = argv[i]
         if arg == "--param" and i + 1 < len(argv):
             param, i = argv[i + 1], i + 2
+        elif arg == "--global" and i + 1 < len(argv):
+            globopt, i = argv[i + 1], i + 2
         elif arg == "--path" and i + 1 < len(argv):
             path.append(argv[i + 1])
             i += 2
@@ -81,10 +113,13 @@ def main(argv: list[str]) -> int:
             g["config"], i = argv[i + 1], i + 2
         else:
             i += 1
-    if param is None:
-        return 0
     try:
-        values = _values(param, path, g)
+        if globopt is not None:
+            values = _global_values(globopt, g)
+        elif param is not None:
+            values = _values(param, path, g)
+        else:
+            return 0
     except Exception:
         return 0  # any failure → no candidates; the hot path falls back to empty
     if values:

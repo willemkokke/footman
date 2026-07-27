@@ -199,6 +199,47 @@ def release_global_options(options: Sequence[GlobalOption]) -> None:
         opt._reads.clear()
 
 
+def orphan_global_options(root: Group) -> list[str]:
+    """Warnings for globals nothing is wired to read, one per orphan.
+
+    An option is consumed through a lifecycle hook or a declaring task.
+    When its owner contributes no hook and no task in the tree says
+    `uses=[...]`, nothing can be seen to read it — a warning, never a
+    refusal: an undeclared `.value` read still works (and is noted at run
+    time), and a hook in *another* module may read an imported singleton.
+    """
+    hook_owners = {
+        getattr(hook, "__module__", None)
+        for kind in CONTRIBUTION_KINDS
+        if kind != "globals"
+        for hook in root.contributions.get(kind, ())
+    }
+    declared: set[int] = set()
+
+    def _walk(group: Group) -> None:
+        for fn in group.tasks.values():
+            for opt in task_uses(fn):
+                declared.add(id(opt))
+        for sub in group.groups.values():
+            _walk(sub)
+
+    _walk(root)
+    out: list[str] = []
+    seen: list[GlobalOption] = []
+    for opt in root.contributions.get("globals", ()):
+        if any(o is opt for o in seen):
+            continue  # the same singleton pulled twice is one option
+        seen.append(opt)
+        if opt.owner in hook_owners or id(opt) in declared:
+            continue
+        out.append(
+            f"--{opt.name} (from {opt.owner}) has no reader in sight — "
+            f"{opt.owner} contributes no lifecycle hook, and no task "
+            f"declares it with @task(uses=[...])"
+        )
+    return out
+
+
 # A task stays a plain function; its metadata rides as `_footman_*` attributes.
 # These name every key in one place, so the strings appear once and the read
 # accessors below are the one way the rest of the framework touches them.

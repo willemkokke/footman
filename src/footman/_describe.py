@@ -160,6 +160,20 @@ def _mechanics(p: dict) -> str:
     return "; ".join(bits)
 
 
+def uses_line(task: dict, tree: dict) -> str:
+    """The globals a task declared it reads (`@task(uses=[...])`), with
+    provenance — the dependency shown where the option will be typed."""
+    names = task.get("uses")
+    if not names:
+        return ""
+    owners = {g["name"]: g.get("owner") for g in tree.get("globals", ())}
+    bits = [
+        f"--{name}" + (f" (from {owner})" if (owner := owners.get(name)) else "")
+        for name in names
+    ]
+    return "reads " + ", ".join(bits)
+
+
 def sample_value(p: dict) -> str:
     """A realistic value for a param in a synthesised example: its first choice
     when it has one, else an `<name>` placeholder."""
