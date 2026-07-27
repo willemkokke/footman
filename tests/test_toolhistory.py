@@ -1165,6 +1165,13 @@ def test_a_gap_costs_precision_and_not_correctness():
 
 
 def _tools_run(line):
+    """Drive the real CLI in-process.
+
+    A list of arguments is passed through unsplit — a Windows path in a
+    command *string* would be shlex-split and lose its backslashes, which is
+    a fine way to make a cross-platform feature fail only on the platform it
+    is about.
+    """
     from footman.tasks.tools import tasks as tools_group
     from footman.testing import Runner
 
@@ -1912,6 +1919,17 @@ def test_a_merged_surface_change_recomputes_exactly_the_two_entries_that_saw_it(
         assert _toolhistory.at(doc, version) is not None, version
 
 
+def _elsewhere() -> str:
+    """A platform name that is never the one running the suite.
+
+    The tests run on all three, so "a platform that has not looked" cannot
+    be spelled with a literal — on the Linux runner, `"Linux"` is the host.
+    """
+    from footman.tasks import tools
+
+    return next(p for p in ("Linux", "Windows", "macOS") if p != tools._platform())
+
+
 def test_gather_writes_a_document_another_machine_can_fold(tmp_path, monkeypatch):
     """The two halves are split because a Linux box cannot tell you what a
     tool's `--help` says on Windows. So the observation travels as a
@@ -1940,7 +1958,7 @@ def test_gather_writes_a_document_another_machine_can_fold(tmp_path, monkeypatch
     _serve(monkeypatch, listings, {("ruff", "1.0.1"): _with_flags("quiet", "fix")})
 
     out = tmp_path / "obs.json"
-    result = _tools_run(f"gather --only=ruff --out={out}")
+    result = _tools_run(["gather", "--only=ruff", f"--out={out}"])
     assert result.ok, result.stderr
 
     document = json.loads(out.read_text(encoding="utf-8"))
@@ -1952,7 +1970,7 @@ def test_gather_writes_a_document_another_machine_can_fold(tmp_path, monkeypatch
     assert stored is not None
     assert _toolhistory.observed(stored) == ["1.0.0"]
 
-    result = _tools_run(f"assemble {out} --no-changelog")
+    result = _tools_run(["assemble", str(out), "--no-changelog"])
     assert result.ok, result.stderr
     stored = _toolhistory.load(tmp_path / "history" / "ruff.json")
     assert stored is not None
@@ -2006,7 +2024,7 @@ def test_two_platforms_fold_into_one_release_with_the_exception_named(
     linux = document("Linux", "quiet", "fork")
     windows = document("Windows", "quiet")
 
-    result = _tools_run(f"assemble {linux} {windows} --no-changelog")
+    result = _tools_run(["assemble", str(linux), str(windows), "--no-changelog"])
     assert result.ok, result.stderr
 
     stored = _toolhistory.load(tmp_path / "history" / "ruff.json")
@@ -2041,7 +2059,10 @@ def test_a_platform_new_to_a_tool_backfills_the_version_people_run(
             version="1.0.0",
             date="2026-02-01",
             surface=_with_flags("quiet", "fork"),
-            platforms=["Linux"],  # this machine has never looked
+            # Somebody, and never this machine — the test is about a
+            # platform's first look, so the fixture must not accidentally
+            # name the runner it happens to be running on.
+            platforms=[_elsewhere()],
         ),
         tmp_path / "history" / "ruff.json",
     )
@@ -2054,7 +2075,7 @@ def test_a_platform_new_to_a_tool_backfills_the_version_people_run(
 
     stored = _toolhistory.load(tmp_path / "history" / "ruff.json")
     assert stored is not None
-    assert stored["base"]["platforms"] == sorted(["Linux", tools._platform()])
+    assert stored["base"]["platforms"] == sorted([_elsewhere(), tools._platform()])
     assert stored["base"]["absent"] == {"\tfork": [tools._platform()]}
     assert "release warranted: no" in result.stdout  # coverage is not an event
 
