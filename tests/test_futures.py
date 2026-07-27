@@ -641,3 +641,105 @@ def test_the_ladder_resolver_is_shared():
     assert schedule.resolve_inherited(False, True) is False  # even over a parent
     assert schedule.resolve_inherited(None, True) is True  # else inherited
     assert schedule.resolve_inherited(None, False) is False  # else shared
+
+
+# --- one rule, whichever way the task was reached ------------------------------
+
+
+def test_a_repeated_chain_segment_is_one_execution_when_shared():
+    # Each mention is its own request, and identical requests to a shared task
+    # are one execution — the same rule a prerequisite and a body call follow.
+    reg = Group("root")
+    runs: list[int] = []
+
+    @reg.task
+    def check() -> None:
+        runs.append(1)
+
+    result = drive(reg, "check check")
+    assert result.ok, result.stderr
+    assert len(runs) == 1
+    assert [executor.reported_state(r) for r in result.results] == ["ok", "shared"]
+
+
+def test_a_repeated_chain_segment_runs_twice_when_unshared():
+    # …and `shared=False` makes every mention run, predictably.
+    reg = Group("root")
+    runs: list[int] = []
+
+    @reg.task(shared=False)
+    def notify() -> None:
+        runs.append(1)
+
+    result = drive(reg, "notify notify")
+    assert result.ok, result.stderr
+    assert len(runs) == 2
+    assert [executor.reported_state(r) for r in result.results] == ["ok", "ok"]
+
+
+def test_a_node_reuses_what_a_body_call_already_did():
+    # The mirror of `pre=[build]` plus `build()`: here the call comes first and
+    # the node second, and it still happens once. Nobody has to know which way
+    # round a task was reached.
+    reg = Group("root")
+    runs: list[int] = []
+
+    @reg.task
+    def survey() -> str:
+        runs.append(1)
+        return "measured"
+
+    @reg.task
+    def early():
+        assert survey() == "measured"  # the first execution, from a body
+
+    result = drive(reg, "early survey")  # …then survey as a segment of its own
+    assert result.ok, result.stderr
+    assert len(runs) == 1
+    states = [(r.task, executor.reported_state(r)) for r in result.results]
+    assert states == [("early", "ok"), ("survey", "ok"), ("survey", "shared")]
+
+
+def test_a_different_policy_is_different_work_and_runs():
+    # A policy override makes a genuinely different invocation, so it is never
+    # answered by the shared one — the sharing flag is the only override left
+    # out of the work's identity, because it says "do not reuse", not
+    # "this is different".
+    reg = Group("root")
+    runs: list[int] = []
+
+    @reg.task
+    def step() -> None:
+        runs.append(1)
+
+    @reg.task(pre=[step])
+    def plain(): ...
+
+    @reg.task(pre=[step.opts(atomic=True)])
+    def guarded(): ...
+
+    assert drive(reg, "plain guarded").ok
+    assert len(runs) == 2
+
+
+def test_an_unshared_execution_is_not_the_runs_answer():
+    # An unshared run neither reads a cell nor becomes one. Otherwise whether a
+    # shared request reused would depend on which node the scheduler started
+    # first, and how much work a run does would stop being predictable.
+    reg = Group("root")
+    runs: list[int] = []
+
+    @reg.task
+    def compile_() -> None:
+        runs.append(1)
+
+    @reg.task(shared=False, pre=[compile_])
+    def own(): ...
+
+    @reg.task(pre=[compile_])
+    def plain(): ...
+
+    assert drive(reg, "own plain").ok
+    # `own` unshares its subtree, so it compiles for itself; `plain` gets a
+    # shared compile. Two, in either scheduling order.
+    assert len(runs) == 2

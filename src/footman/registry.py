@@ -176,26 +176,22 @@ _OPTS_ATTRS = {
 }
 
 
-# `.opts()` overrides that change *what the work is* rather than how it runs:
-# a different directory can mean a different result, so it belongs in the
-# identity of the work. Everything else — failure policy, atomicity, progress,
-# sharing — governs the run and leaves the work itself alone.
-_WORK_OPTS = (_CWD, _REL)
-
-
 def work_key(fn: Task) -> tuple[int, frozenset[tuple[str, Any]]]:
-    """The identity of the *work* a reference names.
+    """The identity of the *work* a reference names: the task and its policy,
+    with sharing left out.
 
-    Unlike the DAG's dedup key (`schedule._dep_key`), which separates nodes by
-    any difference in policy, this asks only "is this the same work?" — the task
-    itself plus the overrides that change what the work is. So a freshly
-    requested `build` and a shared one name one piece of work and can share its
-    first result, while the same task rooted at a different directory does not.
+    Nearly the DAG's dedup key (`schedule._dep_key`), and for the same reason —
+    a different policy is a genuinely different invocation, so a bare reference
+    and an `.opts(atomic=True)` one are two pieces of work and both run. The one
+    override deliberately excluded is `shared` itself: it says "do not reuse an
+    answer", not "this is different work", and folding it in would put an
+    unshared request in a bucket of its own where no later request could ever
+    find its result.
     """
     if isinstance(fn, _Opted):
         base = object.__getattribute__(fn, "_opted_base")
         overrides = object.__getattribute__(fn, "_opted_overrides")
-        work = {k: v for k, v in overrides.items() if k in _WORK_OPTS}
+        work = {k: v for k, v in overrides.items() if k != _SHARED}
         return (id(base), frozenset(work.items()))
     return (id(fn), frozenset())
 

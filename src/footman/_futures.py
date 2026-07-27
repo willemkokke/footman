@@ -212,12 +212,11 @@ def call(task: Any, args: tuple[Any, ...], kwargs: dict[str, Any]) -> Any:
     if key is None:  # arguments with no frozen form: honest work every time
         return _run_now(task, args, kwargs)
     if unshared(task):
-        # Asked for unshared: never read a cell. It still *fills* an empty one,
-        # because the first result of a run is the one the run remembers — a
-        # later shared request can reuse it.
-        value = _run_now(task, args, kwargs)
-        _fill(key, _label(task), value)
-        return value
+        # Asked for unshared: it neither reads a cell nor becomes one. Its
+        # result is its own — the run's answer is only ever an execution that
+        # was itself shareable, so how much work a run does cannot depend on
+        # which of two nodes the scheduler happened to start first.
+        return _run_now(task, args, kwargs, shared=False)
 
     me = threading.get_ident()
     claimed, cell = _claim(run, key, me, _label(task))
@@ -267,15 +266,37 @@ def _claim(run: _Session, key: Any, me: int, label: str) -> tuple[bool, _Cell]:
         return False, cell
 
 
-def publish(task: Any, args: Any, kwargs: dict[str, Any], value: Any) -> None:
-    """Record a task's pristine return so a later request can reuse it.
+def work_of(task: Any, args: Any, kwargs: dict[str, Any]) -> Any | None:
+    """This request's cell key, or `None` when it cannot have one."""
+    return _key(task, tuple(args), kwargs)
 
-    Called by the executor for every task it runs, which is what makes
-    `pre=[build]` followed by `build()` in the body one build.
+
+def answered(key: Any) -> tuple[bool, Any]:
+    """`(hit, value)` — whether the run already holds this work's result.
+
+    Read-only: claims nothing, creates nothing. The scheduler asks before
+    running a node, so work an earlier body call performed answers this request
+    too — sharing means the same thing whichever way a task was reached.
     """
-    key = _key(task, tuple(args), kwargs)
+    run = _active
+    if run is None or key is None:
+        return False, None
+    with run.lock:
+        cell = run.cells.get(key)
+        if cell is None or not cell.future.done():
+            return False, None
+        return True, cell.future.result()
+
+
+def remember(key: Any, label: str, value: Any) -> None:
+    """Record a shared execution's result as the run's answer for this work."""
     if key is not None:
-        _fill(key, _label(task), value)
+        _fill(key, label, value)
+
+
+def shared_result(label: str, value: Any) -> TaskResult:
+    """The report entry for a request an earlier execution satisfied."""
+    return _shared_result(label, value)
 
 
 def _fill(key: Any, label: str, value: Any) -> None:
@@ -347,7 +368,9 @@ def _refuse_unrunnable(task: Any) -> None:
         )
 
 
-def _run_now(task: Any, args: tuple[Any, ...], kwargs: dict[str, Any]) -> Any:
+def _run_now(
+    task: Any, args: tuple[Any, ...], kwargs: dict[str, Any], *, shared: bool = True
+) -> Any:
     """Run *task* here and now with full task semantics, and return its value.
 
     A failure raises in the caller, exactly as a direct call always did — and
@@ -380,6 +403,9 @@ def _run_now(task: Any, args: tuple[Any, ...], kwargs: dict[str, Any]) -> Any:
         err_sink=buf,
         steps=[],
         task=label,
+        # Unsharedness propagates: what this callee asks for is asked the same
+        # way, unless that task declares its own answer.
+        shared=parent.shared and shared,
     )
     result = executor.run_bound(
         task, seg, child, list(args), dict(kwargs), as_call=True

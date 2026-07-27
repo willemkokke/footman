@@ -87,6 +87,20 @@ versions may include breaking changes.
   unshared run never rewrites what the run already remembers — the first result
   stands.
 
+- **BREAKING: a run performs a task's work once per request, however the task
+  was asked for.** Two tasks declaring `pre=[build]` shared one build already;
+  now a chain segment, a body call and a prerequisite all count the same, so
+  `fm check check` runs `check` once and reports the second mention as
+  `shared`. Repeating a task in a chain used to run it once per mention. What
+  still runs twice: different arguments (`fm build web build api`), a different
+  policy (`pre=[build.opts(atomic=True)]` is a different invocation), and
+  anything declared `shared=False`.
+
+  An unshared execution is nobody else's answer: it neither reuses a result nor
+  becomes one. Otherwise whether a shared request reused would depend on which
+  of two nodes the scheduler happened to start first, and how much work a run
+  performs would stop being predictable.
+
 - **A request the run had already satisfied is reported as `shared`.** A body
   call that finds its work already done returns the memoised value — and used
   to leave no trace, so the second request simply vanished from the report. It

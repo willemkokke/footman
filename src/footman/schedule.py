@@ -135,11 +135,15 @@ def _segment_group(root: Group, seg: Segment) -> Group | None:
 def _build_dag(root: Group, segments: list[Segment]) -> list[_Node]:
     """Nodes for the chain plus their transitive pre/post deps.
 
-    Explicit chain segments each get their own node — repeating a task in the
-    chain (`build web build api`) runs it once per mention. Only shared
-    pre/post prerequisites are deduped, by task identity, so a prerequisite
-    pulled in twice still runs once. Node keys are serial ints; `dep_nodes`
-    maps a task to the node its bare deps resolve to.
+    Explicit chain segments each get their own node, so each mention is its own
+    request (`build web build api` builds twice — different arguments, different
+    work). Shared pre/post prerequisites dedupe by task identity, so a
+    prerequisite pulled in twice is one node. Two requests that resolve to the
+    same work are one execution whether they are two nodes, a node and a body
+    call, or two calls: the second is answered by the first and reported as
+    `shared`, unless the task (or the reference) declared `shared=False`. Node
+    keys are serial ints; `dep_nodes` maps a task to the node its bare deps
+    resolve to.
     """
     nodes: list[_Node] = []
     dep_nodes: dict[object, _Node] = {}

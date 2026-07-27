@@ -862,6 +862,18 @@ def run_bound(
     re-bound from a command line, yet still deserves the full task treatment —
     its own context, its own lane decision, its own `TaskResult`.
     """
+    # Computed here, before `ctx` joins the arguments, so the context can never
+    # become part of the work's identity.
+    work = _futures.work_of(fn, args, kwargs) if ctx.shared else None
+    if work is not None:
+        # Sharing means the same thing whichever way the task was reached, so a
+        # node asks before it runs: work an earlier body call already performed
+        # answers this request too, and is reported rather than repeated. A
+        # request declared `shared=False` never asks — `ctx` carries that.
+        hit, value = _futures.answered(work)
+        if hit:
+            return _futures.shared_result(seg.task, value)
+
     if context_param_name(resolved_signature(fn)):
         args = [ctx, *args]  # ctx is the first positional parameter
 
@@ -899,11 +911,13 @@ def run_bound(
         _current.reset(token)
     duration = time.perf_counter() - start
     output = ctx.sink.getvalue() if isinstance(ctx.sink, io.StringIO) else ""
-    if error is None:
+    if error is None and work is not None:
         # The pristine return, snapshotted the moment the body handed it over:
         # what a dependent or a body-caller receives is what the annotation
         # promised, whatever a reporter later does to the *reported* result.
-        _futures.publish(fn, args, kwargs, returned)
+        # Only a shared execution becomes the run's answer (`work` is None
+        # otherwise), so what a run reuses never depends on scheduling order.
+        _futures.remember(work, seg.task, returned)
     result = _result(seg, code, returned, error, duration, output, ctx.steps)
     result.started = started
     # A task that failed while fail-fast was already aborting the run wasn't a
