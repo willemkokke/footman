@@ -525,7 +525,7 @@ def _help_targets(
     dotted addresses only and skips every other token (option-shaped tokens
     and, once a target is found, its argument values).
     """
-    _, i = split._parse_globals(argv, 0)
+    _, i = split._parse_globals(argv, 0, lenient=True)
     targets: list[tuple[str, list[str]]] = []
     strays: list[str] = []
     for tok in argv[i:]:
@@ -1084,7 +1084,7 @@ def _run(
     global _brand
     _brand = brand
     try:
-        pre_globals, after = split._parse_globals(argv, 0)
+        pre_globals, after = split._parse_globals(argv, 0, lenient=True)
     except split.ChainError as exc:
         return _refuse(_wants_json(argv), str(exc))
     g = _globals_to_dict(pre_globals)
@@ -1154,7 +1154,7 @@ def _execute(
     """
     # "Bare" means no chain was asked for — globals-only lines (`fm --json`,
     # `fm -k`) are listing-shaped, exactly like they are when tasks exist.
-    _, after_globals = split._parse_globals(argv, 0)
+    _, after_globals = split._parse_globals(argv, 0, lenient=True)
     found = _discover(g, wants_help, bare=after_globals >= len(argv))
     if isinstance(found, int):
         return found
@@ -1257,7 +1257,7 @@ def _run_tree(
     so both honour `--help`/`--version`/`--list`/`--tree`/`--json` identically.
     Globals are re-derived from `argv` (already validated upstream).
     """
-    g = _globals_to_dict(split._parse_globals(argv, 0)[0])
+    g = _globals_to_dict(split._parse_globals(argv, 0, lenient=True)[0])
     json_mode = bool(g.get("json"))
 
     cli_color = g.get("color")
@@ -1551,7 +1551,7 @@ def run_group(
     global _brand
     _brand = brand
     try:
-        pre_globals, _ = split._parse_globals(argv, 0)
+        pre_globals, _ = split._parse_globals(argv, 0, lenient=True)
     except split.ChainError as exc:
         return _refuse(_wants_json(argv), str(exc))
     g = _globals_to_dict(pre_globals)
