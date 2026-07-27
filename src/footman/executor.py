@@ -21,6 +21,7 @@ import inspect
 import io
 import json
 import os
+import threading
 import time
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -81,6 +82,13 @@ class TaskResult:
     """The task whose outcome meant this one never ran, when there was one. The
     report reads as cause then consequence: a non-run sits directly after
     whatever prevented it."""
+    thread: str = ""
+    """The worker the execution ran on — the pool thread's own stable name
+    (`fm-worker_2`), not the task-shaped name it wore while running. Empty for
+    a row that executed nothing (a `shared` row, a refusal)."""
+    thread_id: int = 0
+    """The OS thread id (`threading.get_native_id`) of that worker, the key a
+    profiler's timeline uses. `0` when nothing executed."""
 
 
 def reported_state(result: TaskResult) -> str:
@@ -1389,6 +1397,19 @@ def run_bound(
     lane_policy = None if inherited else registry.task_lane(fn)
     console = not inherited and registry.is_interactive(fn)
 
+    # Wear the task's name while it runs, so a sampling profiler's timeline
+    # reads as tasks rather than `fm-worker_3`; a serial/exclusive hold is
+    # badged, so lane occupancy shows. Restored in the finally below; a body
+    # call nests naturally (the callee's name while the callee runs). The
+    # worker's own stable name and OS id land on the result, the correlation
+    # keys a profiler dump uses.
+    worker = threading.current_thread()
+    born = worker.name
+    badge = {"serial": " [serial]", "exclusive": " [exclusive]"}.get(
+        lane_policy or "", ""
+    )
+    worker.name = f"fm:{seg.task}{badge}"
+
     token = _current.set(ctx)
     ctx.in_task = True  # a mid-body prompt()/confirm()/select() is now guarded
     start = time.perf_counter()
@@ -1423,10 +1444,13 @@ def run_bound(
                     code, returned, error = _call(fn, args, kwargs, as_call)
     finally:
         _current.reset(token)
+        worker.name = born
     duration = time.perf_counter() - start
     output = ctx.sink.getvalue() if isinstance(ctx.sink, io.StringIO) else ""
     result = _result(seg, code, returned, error, duration, output, ctx.steps)
     result.started = started
+    result.thread = born
+    result.thread_id = threading.get_native_id()
     if life is not None and handle is not None:
         post_error = _exit_task_hooks(life, handle, result)
         if post_error is not None and result.ok:

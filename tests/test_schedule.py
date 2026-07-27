@@ -612,3 +612,70 @@ def test_infinite_hint_respects_quiet(monkeypatch):
 
     drive(tasks, "serve", ctx_config={"quiet": True})
     assert "Ctrl-C" not in err_fake.getvalue()
+
+
+# --- tasks wear their names: threads for profilers ---------------------------
+
+
+def test_a_task_wears_its_name_while_it_runs():
+    from footman.testing import Runner
+
+    reg = Group("root")
+    seen: dict[str, str] = {}
+
+    @reg.task
+    def build():
+        seen["build"] = threading.current_thread().name
+
+    @reg.task(serial=True)
+    def migrate():
+        seen["migrate"] = threading.current_thread().name
+
+    result = Runner().invoke("build migrate", tasks=reg)
+    assert result.ok, result.stderr
+    assert seen["build"] == "fm:build"
+    assert seen["migrate"] == "fm:migrate [serial]"  # lane occupancy, visible
+
+
+def test_the_worker_is_recorded_on_the_result():
+    from footman.testing import Runner
+
+    reg = Group("root")
+
+    @reg.task
+    def build() -> str:
+        return "dist"
+
+    @reg.task(pre=[build])
+    def publish():
+        build()
+
+    result = Runner().invoke("publish", tasks=reg)
+    assert result.ok, result.stderr
+    rows = {(r.task, r.state): r for r in result.results}
+    ran = rows[("build", "")]
+    assert ran.thread.startswith("fm-worker")  # the stable name, not fm:build
+    assert ran.thread_id != 0
+    shared = rows[("build", "shared")]
+    assert shared.thread == ""  # nothing of it executed
+    assert shared.thread_id == 0
+
+
+def test_the_name_is_restored_after_the_body():
+    from footman.testing import Runner
+
+    reg = Group("root")
+    names: list[str] = []
+
+    @reg.task
+    def build() -> str:
+        return "x"
+
+    @reg.task
+    def report():
+        build()  # the callee wears its own name, then hands the thread back
+        names.append(threading.current_thread().name)
+
+    result = Runner().invoke("report", tasks=reg)
+    assert result.ok, result.stderr
+    assert names == ["fm:report"]  # not fm:build — the call restored it

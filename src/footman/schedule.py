@@ -765,7 +765,9 @@ def _run_parallel(nodes, real, err, capture, ctx_config, status, jobs) -> None:
                 real.write(blob)
                 real.flush()
 
-    with ThreadPoolExecutor(max_workers=jobs if jobs > 0 else None) as pool:
+    with ThreadPoolExecutor(
+        max_workers=jobs if jobs > 0 else None, thread_name_prefix="fm-worker"
+    ) as pool:
         futures: dict[Any, _Node] = {}
         try:
             while True:

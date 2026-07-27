@@ -1909,7 +1909,12 @@ def parallel(*calls: Callable[[], Any], keep_going: bool = False) -> list[int]:
     # Parked for the pool wait: this body is blocked in footman code and
     # cannot touch globals, so an exclusive drain may exempt it (the
     # ancestry exemption — its own children still count on their own).
-    with _globals.parked(), ThreadPoolExecutor(max_workers=workers) as pool:
+    with (
+        _globals.parked(),
+        ThreadPoolExecutor(
+            max_workers=workers, thread_name_prefix="fm-parallel"
+        ) as pool,
+    ):
         outcomes = list(pool.map(invoke, calls))
 
     if not keep_going:
