@@ -7,6 +7,8 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+## [0.23.0] — 2026-07-27
+
 ### Added
 
 - **The stubs are rendered from a record, not from a reading.** Each curated
@@ -2202,7 +2204,8 @@ versions may include breaking changes.
 
 - Placeholder release claiming the `footman` name on PyPI. Not tagged in git.
 
-[Unreleased]: https://github.com/willemkokke/footman/compare/v0.22.0...HEAD
+[Unreleased]: https://github.com/willemkokke/footman/compare/v0.23.0...HEAD
+[0.23.0]: https://github.com/willemkokke/footman/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/willemkokke/footman/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/willemkokke/footman/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/willemkokke/footman/compare/v0.19.0...v0.20.0
