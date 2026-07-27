@@ -168,11 +168,36 @@ _OPTS_ATTRS = {
     "progress": _PROGRESS,
     "confirm": _CONFIRM,
     "infinite": _INFINITE,
+    "volatile": _VOLATILE,
     "cwd": _CWD,
     "rel": _REL,
     "serial": _SERIAL,
     "exclusive": _EXCLUSIVE,
 }
+
+
+# `.opts()` overrides that change *what the work is* rather than how it runs:
+# a different directory can mean a different result, so it belongs in the
+# identity of the work. Everything else — failure policy, atomicity, progress,
+# sharing — governs the run and leaves the work itself alone.
+_WORK_OPTS = (_CWD, _REL)
+
+
+def work_key(fn: Task) -> tuple[int, frozenset[tuple[str, Any]]]:
+    """The identity of the *work* a reference names.
+
+    Unlike the DAG's dedup key (`schedule._dep_key`), which separates nodes by
+    any difference in policy, this asks only "is this the same work?" — the task
+    itself plus the overrides that change what the work is. So a freshly
+    requested `build` and a shared one name one piece of work and can share its
+    first result, while the same task rooted at a different directory does not.
+    """
+    if isinstance(fn, _Opted):
+        base = object.__getattribute__(fn, "_opted_base")
+        overrides = object.__getattribute__(fn, "_opted_overrides")
+        work = {k: v for k, v in overrides.items() if k in _WORK_OPTS}
+        return (id(base), frozenset(work.items()))
+    return (id(fn), frozenset())
 
 
 def _opts_overrides(kwargs: dict[str, Any]) -> dict[str, Any]:
@@ -235,6 +260,15 @@ class _Opted:
         return getattr(object.__getattribute__(self, "_opted_base"), name)
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        # Route as *this reference*, not the bare task: the overrides are part
+        # of the request (`build.opts(volatile=True)()` asks for a fresh build).
+        from footman import _futures
+
+        return _futures.call(self, args, kwargs)
+
+    def _plain_call(self, args: tuple[Any, ...], kwargs: dict[str, Any]) -> Any:
+        """A direct call with no run around it: today's behaviour, kept for the
+        outside-a-run path where there is no task boundary to apply policy."""
         base = object.__getattribute__(self, "_opted_base")
         overrides = object.__getattribute__(self, "_opted_overrides")
         if _CWD in overrides or _REL in overrides:
@@ -360,7 +394,7 @@ def _apply_policy(
     post: Sequence[Task],
     progress: bool,
     infinite: bool,
-    volatile: bool,
+    volatile: bool | None,
     confirm: str,
     interactive: bool,
     keep_going: bool | None,
@@ -385,8 +419,8 @@ def _apply_policy(
         setattr(fn, _PROGRESS, False)
     if infinite:
         setattr(fn, _INFINITE, True)
-    if volatile:
-        setattr(fn, _VOLATILE, True)
+    if volatile is not None:
+        setattr(fn, _VOLATILE, volatile)
     if hidden is not None:
         # Tri-state on purpose: unset inherits the enclosing group's answer,
         # so `hidden=False` on a child of a hidden group is a real override
@@ -524,7 +558,7 @@ class Group:
         post: Sequence[Task] = (),
         progress: bool = True,
         infinite: bool = False,
-        volatile: bool = False,
+        volatile: bool | None = None,
         confirm: str = "",
         interactive: bool = False,
         keep_going: bool | None = None,
@@ -545,7 +579,7 @@ class Group:
         post: Sequence[Task] = (),
         progress: bool = True,
         infinite: bool = False,
-        volatile: bool = False,
+        volatile: bool | None = None,
         confirm: str = "",
         interactive: bool = False,
         keep_going: bool | None = None,
@@ -602,15 +636,28 @@ class Group:
         run swaps the status line for a one-time hint that Ctrl-C is how
         this ends. Listings and help carry the same note.
 
-        `volatile=True` says every **call** of this task executes. Calling a
-        task from a body normally shares the run's one execution for those
-        arguments — `pre=[build]` then `build()` is a cache hit — which is
-        wrong for a task whose whole point is to happen again (a
-        notification, a timestamp, a scratch clean). It changes calls only,
-        never the plan: as a prerequisite a volatile task is still one node
-        that runs once, because `pre=` declares *"after this has run"* while
-        a call says *"run this"* — a volatile `clean` shared by two builds
-        must not run between them.
+        `volatile=True` says this task is **never shared**: every request for
+        it executes. A run normally performs one execution per task and
+        arguments, whoever asks — `pre=[build]` then `build()` in a body is
+        one build — which is wrong for work whose whole point is to happen
+        again, like a notification or a timestamp. One rule covers every
+        spelling, so nobody has to remember whether a task was reached by
+        declaration or by call: two dependents each get their own run, just
+        as two calls do.
+
+        Sharing is a property of the **request**, resolved by a ladder: this
+        reference's own `.opts(volatile=…)`, then the task's declaration, then
+        whatever asked for it, then shared. It propagates *down* — a freshly
+        requested task asks freshly for everything it needs, or "fresh" would
+        be a half-truth — which is worth knowing before you reach for it,
+        because marking one task volatile unshares its whole subtree. A step
+        that genuinely is reusable pins itself with `volatile=False`, which
+        beats an inherited answer.
+
+        `.opts(volatile=True)` asks for one fresh run without changing the
+        task, on a call or on a declared edge alike. A fresh run gets its own
+        value but never rewrites what the run already remembers: the first
+        result stands, so later shared requests stay stable.
 
         `confirm="…"` gates the task on a yes/no answer asked *before* the
         task and its prerequisites run — deny and the task (and its
@@ -738,7 +785,7 @@ class Group:
         post: Sequence[Task] = (),
         progress: bool = True,
         infinite: bool = False,
-        volatile: bool = False,
+        volatile: bool | None = None,
         confirm: str = "",
         interactive: bool = False,
         keep_going: bool | None = None,
@@ -758,7 +805,7 @@ class Group:
         post: Sequence[Task] = (),
         progress: bool = True,
         infinite: bool = False,
-        volatile: bool = False,
+        volatile: bool | None = None,
         confirm: str = "",
         interactive: bool = False,
         keep_going: bool | None = None,
@@ -948,15 +995,17 @@ def is_infinite(fn: Task) -> bool:
     return getattr(fn, _INFINITE, False) is True
 
 
-def is_volatile(fn: Task) -> bool:
-    """Whether every *call* of *fn* executes: `@task(volatile=True)`.
+def volatility(fn: Task) -> bool | None:
+    """*fn*'s declared sharing policy: `@task(volatile=True/False)`, or `None`
+    when it left the choice to whoever asks for it.
 
-    Opts out of memoisation, never out of the plan: as a prerequisite a
-    volatile task is still one node running once (dependency-graph semantics,
-    not caching — a volatile `clean` shared by two builds must not run between
-    them). It is calls that stop being shared.
+    Volatility is a property of a *request*, resolved by a ladder — the
+    request's own `.opts(volatile=…)`, then the task's declaration, then
+    whatever it was requested by (it propagates down a dependency subtree),
+    then shared. This reader is the declaration rung; `schedule` resolves the
+    rest, exactly as it does for `keep_going`.
     """
-    return getattr(fn, _VOLATILE, False) is True
+    return getattr(fn, _VOLATILE, None)
 
 
 def task_body(fn: Task) -> Task:

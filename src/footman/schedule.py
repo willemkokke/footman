@@ -34,6 +34,7 @@ from footman.registry import (
     post_tasks,
     pre_tasks,
     task_confirm,
+    volatility,
     wants_progress,
 )
 from footman.split import ChainError, Segment
@@ -50,6 +51,7 @@ class _Node:
     forwarded: dict[str, Any] = field(default_factory=dict)  # `forward`ed values in
     forward_targets: list[_Node] = field(default_factory=list)  # …and out
     keep_going: bool = False  # resolved failure policy for THIS node (per-subtree)
+    volatile: bool = False  # resolved sharing policy: was this asked for freshly?
     # The group this default action was *reached through*, when known.
     # Default-ness is parent-relative: a provider's default pulled into a
     # consumer group must fan out the group it landed in, not the one it was
@@ -125,15 +127,31 @@ def _build_dag(root: Group, segments: list[Segment]) -> list[_Node]:
     counter = count()
     seen_explicit: set[object] = set()
 
-    def new_node(fn: Task, seg: Segment) -> _Node:
+    def new_node(fn: Task, seg: Segment, volatile: bool) -> _Node:
         node = _Node(fn, seg, next(counter))
+        node.volatile = volatile
         nodes.append(node)
         return node
 
-    def add_dep(fn: Task, owner: Group | None = None) -> _Node:
+    def add_dep(
+        fn: Task, owner: Group | None = None, *, asked_by: bool = False
+    ) -> _Node:
+        # The sharing ladder, resolved here rather than in a pass of its own:
+        # unlike `keep_going`, volatility decides node *identity*, and identity
+        # has to be settled while the node is being made. Own declaration (or
+        # `.opts()` override) wins over what the requester passed down.
+        own = volatility(fn)
+        volatile = own if own is not None else asked_by
+        if volatile:
+            # Not shared, by definition: a fresh node per requester, and never
+            # registered as the one a later dependency lookup could reuse.
+            node = new_node(fn, _default_seg(fn), True)
+            node.group = owner
+            _link(node)
+            return node
         node = dep_nodes.get(_dep_key(fn))
         if node is None:
-            node = new_node(fn, _default_seg(fn))
+            node = new_node(fn, _default_seg(fn), False)
             node.group = owner
             dep_nodes[_dep_key(fn)] = node
             _link(node)
@@ -159,6 +177,9 @@ def _build_dag(root: Group, segments: list[Segment]) -> list[_Node]:
             dep.forwarded[name] = value
 
     def _link(node: _Node) -> None:
+        """Attach *node*'s prerequisites, propagating its sharing policy down:
+        a freshly-requested task's inputs are freshly requested too, or
+        "fresh" would be a half-truth."""
         pre = list(pre_tasks(node.fn))
         # An empty-body group default fans out the group's own tasks: they become
         # implicit prerequisites, so the scheduler runs them (in parallel) and the
@@ -171,27 +192,28 @@ def _build_dag(root: Group, segments: list[Segment]) -> list[_Node]:
                 *pre,
             ]
         for dep in pre:
-            d = add_dep(_as_task(dep), _owner_of(dep))
+            d = add_dep(_as_task(dep), _owner_of(dep), asked_by=node.volatile)
             node.deps.add(d.key)
             node.forward_targets.append(d)  # forwarding threaded in a later pass
         for dep in post_tasks(node.fn):
-            d = add_dep(_as_task(dep), _owner_of(dep))
+            d = add_dep(_as_task(dep), _owner_of(dep), asked_by=node.volatile)
             d.deps.add(node.key)
             node.forward_targets.append(d)
 
     for seg in segments:
         fn = executor.resolve(root, seg.path)
         key = _dep_key(fn)
-        existing = dep_nodes.get(key)
+        own = volatility(fn)
+        existing = None if own else dep_nodes.get(key)
         if existing is not None and key not in seen_explicit:
             # First explicit mention of a task already pulled in as a bare dep:
             # adopt this segment's args instead of creating a duplicate.
             existing.seg = seg
             seen_explicit.add(key)
             continue
-        node = new_node(fn, seg)
+        node = new_node(fn, seg, bool(own))
         node.group = _segment_group(root, seg)
-        if existing is None:
+        if existing is None and not node.volatile:
             dep_nodes[key] = node
         seen_explicit.add(key)
         _link(node)
@@ -279,9 +301,13 @@ def _make_ctx(
     real: TextIO,
     name_width: int = 0,
     keep_going: bool = False,
+    volatile: bool = False,
 ) -> context.Context:
     ctx = context.Context(**(ctx_config or {}), passthrough=list(seg.passthrough or []))
     ctx.keep_going = keep_going  # per-subtree policy; tags this task's subprocesses
+    # The sharing policy this node resolved to, carried so anything its body
+    # asks for inherits it: a freshly-requested task requests freshly too.
+    ctx.volatile = volatile
     # One buffer for both streams at task level: the atomic flush keeps this
     # task's stdout/stderr in order, while a run() inside it still splits the
     # step's streams via a temporary swap of the two.
@@ -570,6 +596,7 @@ def _run_sequential(nodes, real, capture, ctx_config, status, err=None) -> None:
             real=real,
             name_width=width,
             keep_going=node.keep_going,
+            volatile=node.volatile,
         )
         if status is not None:
             status.unit_started(node.seg.task)
@@ -642,6 +669,7 @@ def _run_parallel(nodes, real, err, capture, ctx_config, status, jobs) -> None:
             real=real,
             name_width=width,
             keep_going=n.keep_going,
+            volatile=n.volatile,
         )
         if is_interactive(n.fn) and not capture:
             # A console owner runs on the real terminal even inside the

@@ -100,26 +100,118 @@ def test_a_volatile_task_executes_on_every_call():
     assert len(runs) == 3
 
 
-def test_volatile_changes_calls_not_the_plan():
-    # A volatile prerequisite shared by two tasks is still ONE node running
-    # once: pre= declares "after this has run", and DAG dedup is
-    # dependency-graph semantics, not caching. A volatile `clean` between two
-    # builds would be a disaster.
+def test_a_volatile_prerequisite_is_never_shared():
+    # Volatile means "not shared", and that is one rule for every spelling:
+    # two dependents each get their own run, exactly as two calls would. No
+    # one has to remember whether they reached the task by declaration or by
+    # call.
     reg = Group("root")
     runs: list[int] = []
 
     @reg.task(volatile=True)
-    def clean() -> None:
+    def stamp() -> None:
         runs.append(1)
 
-    @reg.task(pre=[clean])
+    @reg.task(pre=[stamp])
     def build_web(): ...
 
-    @reg.task(pre=[clean])
+    @reg.task(pre=[stamp])
     def build_api(): ...
 
     assert drive(reg, "build-web build-api").ok
-    assert len(runs) == 1
+    assert len(runs) == 2  # one per requester
+
+
+def test_volatility_propagates_down_the_subtree():
+    # "Give me a fresh build" has to mean its inputs are fresh too, or fresh
+    # is a half-truth: the property flows from a requester into what it needs.
+    reg = Group("root")
+    runs: list[str] = []
+
+    @reg.task
+    def compile_() -> None:
+        runs.append("compile")
+
+    @reg.task(pre=[compile_])
+    def bundle() -> None:
+        runs.append("bundle")
+
+    @reg.task(volatile=True, pre=[bundle])
+    def release_() -> None:
+        runs.append("release")
+
+    @reg.task(pre=[bundle])
+    def preview() -> None:
+        runs.append("preview")
+
+    assert drive(reg, "release preview").ok  # `release_` addresses as `release`
+    # `release-` was requested freshly, so its bundle (and that bundle's
+    # compile) are its own; `preview` gets the shared pair.
+    assert runs.count("bundle") == 2
+    assert runs.count("compile") == 2
+
+
+def test_an_own_declaration_beats_an_inherited_one():
+    # The pin for an expensive step that genuinely is reusable: declaring
+    # volatile=False keeps it shared even under a freshly-requested parent.
+    reg = Group("root")
+    runs: list[str] = []
+
+    @reg.task(volatile=False)
+    def fetch_deps() -> None:
+        runs.append("fetch")
+
+    @reg.task(volatile=True, pre=[fetch_deps])
+    def build_web() -> None: ...
+
+    @reg.task(volatile=True, pre=[fetch_deps])
+    def build_api() -> None: ...
+
+    assert drive(reg, "build-web build-api").ok
+    assert runs.count("fetch") == 1  # shared despite two volatile parents
+
+
+def test_a_per_call_override_asks_for_one_fresh_run():
+    # `.opts(volatile=True)` is the per-request spelling — it replaces the
+    # `fresh()` idea, and works on a declared edge just as well as on a call.
+    reg = Group("root")
+    runs: list[int] = []
+
+    @reg.task
+    def stamp() -> int:
+        runs.append(1)
+        return len(runs)
+
+    @reg.task
+    def go():
+        first = stamp()  # runs, and fills the cell
+        again = stamp()  # shared: the cell answers
+        fresh = stamp.opts(volatile=True)()  # asked freshly: runs again
+        assert (first, again, fresh) == (1, 1, 2)
+
+    assert drive(reg, "go").ok
+    assert len(runs) == 2
+
+
+def test_the_first_result_is_the_one_the_run_remembers():
+    # First-write-wins: a fresh re-run gets its own value, but never rewrites
+    # what the run already remembers, so a later shared request is stable.
+    reg = Group("root")
+    runs: list[int] = []
+
+    @reg.task
+    def stamp() -> int:
+        runs.append(1)
+        return len(runs)
+
+    @reg.task
+    def go():
+        assert stamp() == 1
+        assert stamp.opts(volatile=True)() == 2  # its own, fresh value
+        assert stamp() == 1  # …and the remembered first result stands
+
+    assert drive(reg, "go").ok
+    assert len(runs) == 2
 
 
 def test_a_failing_callee_raises_in_the_caller():
@@ -302,17 +394,27 @@ def test_two_threads_calling_one_task_share_a_single_execution():
     assert seen == ["once", "once", "once"]
 
 
-def test_volatile_is_read_through_the_marker_accessor():
+def test_volatility_is_a_tri_state():
+    # Unset is a third state, not False: it means "whoever asks decides", which
+    # is what lets the property propagate and what makes volatile=False a
+    # deliberate pin rather than a no-op.
     reg = Group("root")
 
     @reg.task(volatile=True)
     def always(): ...
 
-    @reg.task
-    def normal(): ...
+    @reg.task(volatile=False)
+    def never(): ...
 
-    assert registry.is_volatile(always) is True
-    assert registry.is_volatile(normal) is False
+    @reg.task
+    def unset(): ...
+
+    assert registry.volatility(always) is True
+    assert registry.volatility(never) is False
+    assert registry.volatility(unset) is None
+    # `.opts()` overrides the declaration for one request.
+    assert registry.volatility(unset.opts(volatile=True)) is True
+    assert registry.volatility(always.opts(volatile=False)) is False
 
 
 def test_the_machinery_refuses_before_it_memoises():

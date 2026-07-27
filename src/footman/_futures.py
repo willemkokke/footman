@@ -16,11 +16,17 @@ So `pre=[build]` plus `build()` in the body is a cache hit, not a second build,
 and the callee gets full task treatment: its own context, its own lane
 decision, its own reported result.
 
-Three things are deliberately *not* here. A call outside a run is a plain call
-— importing a tasks file and calling a function must keep working. Lane
+Sharing is a property of the *request*, not of this layer: a request resolved
+volatile (`@task(volatile=…)`, `.opts(volatile=…)`, or inherited from the task
+that asked) never reads a cell. It still fills an empty one, because what a run
+remembers is the first result it produced, and a later shared request can reuse
+it. `schedule` resolves the same ladder for DAG nodes, so a declared request and
+a called one behave the same.
+
+Two things are deliberately *not* here. A call outside a run is a plain call —
+importing a tasks file and calling a function must keep working. And lane
 acquisition stays at the task boundary, so a body call to a `serial=`/
-`exclusive=` task is refused rather than deadlocking mid-body. And a
-`volatile=True` task never memoises: every call executes.
+`exclusive=` task is refused rather than deadlocking mid-body.
 """
 
 from __future__ import annotations
@@ -122,16 +128,31 @@ def _freeze(value: Any) -> Any:
     return value
 
 
-def _key(task: Any, args: Any, kwargs: dict[str, Any]) -> Any | None:
-    """The cell key: the task's dedup identity plus its arguments in the same
-    normal form binding produces — so a DAG node and a body call that resolve
-    to the same arguments name one piece of work. `None` when the arguments
-    can't be frozen, or the task opted out with `volatile=True`.
-    """
-    from footman import manifest, schedule
+def wants_fresh(task: Any) -> bool:
+    """Whether *this request* must execute rather than reuse an execution.
 
-    if registry.is_volatile(task):
-        return None
+    The sharing ladder for a call: the reference's own `.opts(volatile=…)` or
+    the task's declaration, then what the calling task inherited (`ctx.volatile`
+    — a freshly-requested task asks freshly for everything it needs), then
+    shared. The scheduler resolves the same ladder for a node.
+    """
+    from footman import context
+
+    own = registry.volatility(task)
+    if own is not None:
+        return own
+    ctx = context._current.get()
+    return ctx is not None and ctx.volatile
+
+
+def _key(task: Any, args: Any, kwargs: dict[str, Any]) -> Any | None:
+    """The cell key for this work: the task's dedup identity plus its arguments
+    in the same normal form binding produces, so a DAG node and a body call that
+    resolve to the same arguments name one piece of work. `None` when the
+    arguments have no frozen form.
+    """
+    from footman import manifest
+
     try:
         bound = manifest.resolved_signature(task).bind(*args, **kwargs)
     except TypeError:
@@ -144,7 +165,7 @@ def _key(task: Any, args: Any, kwargs: dict[str, Any]) -> Any | None:
     )
     if any(value is _UNKEYABLE for _, value in frozen):
         return None
-    return (schedule._dep_key(task), frozen)
+    return (registry.work_key(task), frozen)
 
 
 def _deadlock(run: _Session, key: Any, me: int) -> list[str] | None:
@@ -183,11 +204,20 @@ def call(task: Any, args: tuple[Any, ...], kwargs: dict[str, Any]) -> Any:
     """
     run = _active
     if run is None:
+        if isinstance(task, registry._Opted):
+            return task._plain_call(args, kwargs)
         return registry.task_body(task)(*args, **kwargs)
     _refuse_unrunnable(task)
     key = _key(task, args, kwargs)
-    if key is None:  # volatile, or arguments with no frozen form: just run it
+    if key is None:  # arguments with no frozen form: honest work every time
         return _run_now(task, args, kwargs)
+    if wants_fresh(task):
+        # Asked for freshly: never read a cell. It still *fills* an empty one,
+        # because the first result of a run is the one the run remembers — a
+        # later shared request can reuse it.
+        value = _run_now(task, args, kwargs)
+        _fill(key, _label(task), value)
+        return value
 
     me = threading.get_ident()
     claimed, cell = _claim(run, key, me, _label(task))
@@ -236,22 +266,30 @@ def _claim(run: _Session, key: Any, me: int, label: str) -> tuple[bool, _Cell]:
 
 
 def publish(task: Any, args: Any, kwargs: dict[str, Any], value: Any) -> None:
-    """Record a task's pristine return so a later body call is a cache hit.
+    """Record a task's pristine return so a later request can reuse it.
 
     Called by the executor for every task it runs, which is what makes
-    `pre=[build]` followed by `build()` in the body one build. A cell the
-    machinery already owns is left alone — its claimant resolves it.
+    `pre=[build]` followed by `build()` in the body one build.
+    """
+    key = _key(task, tuple(args), kwargs)
+    if key is not None:
+        _fill(key, _label(task), value)
+
+
+def _fill(key: Any, label: str, value: Any) -> None:
+    """Remember *value* for *key* — the first result to arrive, and only it.
+
+    First-write-wins: what the run remembers is the first execution's result,
+    so a freshly-requested re-run never rewrites history, and a cell the
+    machinery already owns is left for its claimant to resolve.
     """
     run = _active
     if run is None:
         return
-    key = _key(task, tuple(args), kwargs)
-    if key is None:
-        return
     with run.lock:
         if key in run.cells:
-            return  # the machinery owns this one
-        cell = _Cell(threading.get_ident(), _label(task))
+            return
+        cell = _Cell(threading.get_ident(), label)
         cell.future.set_result(value)
         run.cells[key] = cell
 
