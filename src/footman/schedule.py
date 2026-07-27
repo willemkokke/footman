@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 from itertools import count
 from typing import Any, TextIO
 
-from footman import _describe, _globals, _progress, context, executor
+from footman import _describe, _futures, _globals, _progress, context, executor
 from footman.registry import (
     Group,
     Task,
@@ -405,6 +405,36 @@ def run_plan(
     jobs: int = 0,
 ) -> list[executor.TaskResult]:
     """Build and run the DAG; return results in dependency order."""
+    with _futures.session():
+        results = _run_plan(
+            root,
+            segments,
+            sequential=sequential,
+            keep_going=keep_going,
+            capture=capture,
+            ctx_config=ctx_config,
+            estimate=estimate,
+            progress=progress,
+            jobs=jobs,
+        )
+        # A task reached by a body call ran as a real task, so its result joins
+        # the run's — after the nodes, since that is when it was asked for.
+        # Every execution the run performed is reported, however it was reached.
+        return [*results, *_futures.collected()]
+
+
+def _run_plan(
+    root: Group,
+    segments: list[Segment],
+    *,
+    sequential: bool = False,
+    keep_going: bool | None = None,
+    capture: bool = False,
+    ctx_config: dict[str, Any] | None = None,
+    estimate: _progress.Estimate | None = None,
+    progress: bool = True,
+    jobs: int = 0,
+) -> list[executor.TaskResult]:
     context.reset_abort()  # clear any latched fail-fast from a previous run
     segments, denied = _gate_confirms(root, segments, ctx_config)
     nodes = _build_dag(root, segments)

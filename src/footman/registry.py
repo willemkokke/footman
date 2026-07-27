@@ -54,6 +54,7 @@ _POST = "_footman_post"
 _KEEP_GOING = "_footman_keep_going"
 _ATOMIC = "_footman_atomic"
 _INFINITE = "_footman_infinite"
+_VOLATILE = "_footman_volatile"
 _HIDDEN = "_footman_hidden"
 _INTERACTIVE = "_footman_interactive"
 _PROGRESS = "_footman_progress"
@@ -302,7 +303,13 @@ class _TaskFn:
         functools.update_wrapper(self, fn)
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
-        return self.__wrapped__(*args, **kwargs)
+        # A call from a task body is a piece of the run: it dedups against the
+        # DAG, waits on a copy already running, or runs here with a real task
+        # boundary. Outside a run it is the plain function call it looks like.
+        # Lazy import: `_futures` reaches back into the executor.
+        from footman import _futures
+
+        return _futures.call(self, args, kwargs)
 
     def __getattr__(self, name: str) -> Any:
         # Reached only for what neither the instance nor the class carries:
@@ -353,6 +360,7 @@ def _apply_policy(
     post: Sequence[Task],
     progress: bool,
     infinite: bool,
+    volatile: bool,
     confirm: str,
     interactive: bool,
     keep_going: bool | None,
@@ -377,6 +385,8 @@ def _apply_policy(
         setattr(fn, _PROGRESS, False)
     if infinite:
         setattr(fn, _INFINITE, True)
+    if volatile:
+        setattr(fn, _VOLATILE, True)
     if hidden is not None:
         # Tri-state on purpose: unset inherits the enclosing group's answer,
         # so `hidden=False` on a child of a hidden group is a real override
@@ -514,6 +524,7 @@ class Group:
         post: Sequence[Task] = (),
         progress: bool = True,
         infinite: bool = False,
+        volatile: bool = False,
         confirm: str = "",
         interactive: bool = False,
         keep_going: bool | None = None,
@@ -534,6 +545,7 @@ class Group:
         post: Sequence[Task] = (),
         progress: bool = True,
         infinite: bool = False,
+        volatile: bool = False,
         confirm: str = "",
         interactive: bool = False,
         keep_going: bool | None = None,
@@ -590,6 +602,16 @@ class Group:
         run swaps the status line for a one-time hint that Ctrl-C is how
         this ends. Listings and help carry the same note.
 
+        `volatile=True` says every **call** of this task executes. Calling a
+        task from a body normally shares the run's one execution for those
+        arguments — `pre=[build]` then `build()` is a cache hit — which is
+        wrong for a task whose whole point is to happen again (a
+        notification, a timestamp, a scratch clean). It changes calls only,
+        never the plan: as a prerequisite a volatile task is still one node
+        that runs once, because `pre=` declares *"after this has run"* while
+        a call says *"run this"* — a volatile `clean` shared by two builds
+        must not run between them.
+
         `confirm="…"` gates the task on a yes/no answer asked *before* the
         task and its prerequisites run — deny and the task (and its
         subtree) is skipped; `--yes` auto-answers it. `interactive=True`
@@ -628,6 +650,7 @@ class Group:
                 post=post,
                 progress=progress,
                 infinite=infinite,
+                volatile=volatile,
                 confirm=confirm,
                 interactive=interactive,
                 keep_going=keep_going,
@@ -715,6 +738,7 @@ class Group:
         post: Sequence[Task] = (),
         progress: bool = True,
         infinite: bool = False,
+        volatile: bool = False,
         confirm: str = "",
         interactive: bool = False,
         keep_going: bool | None = None,
@@ -734,6 +758,7 @@ class Group:
         post: Sequence[Task] = (),
         progress: bool = True,
         infinite: bool = False,
+        volatile: bool = False,
         confirm: str = "",
         interactive: bool = False,
         keep_going: bool | None = None,
@@ -783,6 +808,7 @@ class Group:
                 post=post,
                 progress=progress,
                 infinite=infinite,
+                volatile=volatile,
                 confirm=confirm,
                 interactive=interactive,
                 keep_going=keep_going,
@@ -920,6 +946,37 @@ def wants_progress(fn: Task) -> bool:
 def is_infinite(fn: Task) -> bool:
     """Whether *fn* runs until stopped: `@task(infinite=True)`."""
     return getattr(fn, _INFINITE, False) is True
+
+
+def is_volatile(fn: Task) -> bool:
+    """Whether every *call* of *fn* executes: `@task(volatile=True)`.
+
+    Opts out of memoisation, never out of the plan: as a prerequisite a
+    volatile task is still one node running once (dependency-graph semantics,
+    not caching — a volatile `clean` shared by two builds must not run between
+    them). It is calls that stop being shared.
+    """
+    return getattr(fn, _VOLATILE, False) is True
+
+
+def task_body(fn: Task) -> Task:
+    """The callable that runs *fn*'s own body — never the machinery.
+
+    A task is a handle whose `__call__` *is* the body-call machinery, so the
+    executor asks for this instead: the author's function, reached through the
+    handle and through any `.opts()` reference around it (whose policy the
+    executor has already applied at the task boundary). Calling the handle here
+    would route the scheduler's own invocation back into the memo it is meant
+    to be filling.
+    """
+    if isinstance(fn, _Opted):
+        base = object.__getattribute__(fn, "_opted_base")
+        if isinstance(base, Group):
+            base = base.default_task
+        return task_body(cast("Task", base))
+    if isinstance(fn, _TaskFn):
+        return cast("Task", fn.__wrapped__)
+    return fn
 
 
 def declared_hidden(fn: Task) -> bool | None:

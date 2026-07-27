@@ -27,7 +27,7 @@ from pathlib import Path, PurePath
 from types import MappingProxyType
 from typing import Any
 
-from footman import _binder, _globals, coerce, context, registry
+from footman import _binder, _futures, _globals, coerce, context, registry
 from footman.context import (
     Context,
     Failed,
@@ -658,10 +658,12 @@ def forward_map(
 
 
 def _call(
-    fn: Task, args: list[Any], kwargs: dict[str, Any]
+    fn: Task, args: list[Any], kwargs: dict[str, Any], as_call: bool = False
 ) -> tuple[int, Any, BaseException | None]:
     try:
-        returned = fn(*args, **kwargs)
+        # The task's own body — never the handle, whose call is the body-call
+        # machinery that would route this invocation straight back here.
+        returned = registry.task_body(fn)(*args, **kwargs)
     except SystemExit as exc:
         # A non-int, non-None code is Python's `sys.exit("message")` idiom: the
         # object is the reason the interpreter would print to stderr. Carry it as
@@ -681,11 +683,13 @@ def _call(
         return (exc.result.code or 1), None, exc
     except Exception as exc:  # a failed task must not crash the runner
         return 1, None, exc
-    if isinstance(returned, int) and not isinstance(returned, bool):
+    if isinstance(returned, int) and not isinstance(returned, bool) and not as_call:
         # An int return is the exit-code channel — unless the signature
         # declares `Stdout[int]`, in which case the number is the document
         # (a filter like wordcount could not exist otherwise). Declaration
-        # wins; a bare `-> int` keeps its long-standing meaning.
+        # wins; a bare `-> int` keeps its long-standing meaning. It is a
+        # *segment's* channel, though: a body call asked for the value, and
+        # `n = measure()` has always handed the number over.
         declares, _ = coerce.emitted(resolved_signature(fn).return_annotation)
         if not declares:
             return returned, returned, None
@@ -791,7 +795,26 @@ def run_task(
         raise  # e.g. passthrough with no *args — reported by the app layer
     except Exception as exc:  # a coercion failure (e.g. a custom-type constructor)
         return _result(seg, EX_USAGE, None, exc, 0.0)
+    return run_bound(fn, seg, ctx, args, kwargs)
 
+
+def run_bound(
+    fn: Task,
+    seg: Segment,
+    ctx: Context,
+    args: list[Any],
+    kwargs: dict[str, Any],
+    *,
+    as_call: bool = False,
+) -> TaskResult:
+    """Run *fn* with arguments already resolved — everything after binding.
+
+    The half of `run_task` that owns a task's *execution*: the context wiring,
+    the arbiter lane, the body, and the result. Split out because a body call
+    (`artifact = build()`) arrives with real Python arguments and must not be
+    re-bound from a command line, yet still deserves the full task treatment —
+    its own context, its own lane decision, its own `TaskResult`.
+    """
     if context_param_name(resolved_signature(fn)):
         args = [ctx, *args]  # ctx is the first positional parameter
 
@@ -821,13 +844,18 @@ def run_task(
         ):
             if lane_policy is not None:
                 with _serial_globals(ctx):
-                    code, returned, error = _call(fn, args, kwargs)
+                    code, returned, error = _call(fn, args, kwargs, as_call)
             else:
-                code, returned, error = _call(fn, args, kwargs)
+                code, returned, error = _call(fn, args, kwargs, as_call)
     finally:
         _current.reset(token)
     duration = time.perf_counter() - start
     output = ctx.sink.getvalue() if isinstance(ctx.sink, io.StringIO) else ""
+    if error is None:
+        # The pristine return, snapshotted the moment the body handed it over:
+        # what a dependent or a body-caller receives is what the annotation
+        # promised, whatever a reporter later does to the *reported* result.
+        _futures.publish(fn, args, kwargs, returned)
     result = _result(seg, code, returned, error, duration, output, ctx.steps)
     # A task that failed while fail-fast was already aborting the run wasn't a
     # genuine failure — it was cut off. Report that honestly, not as "failed".

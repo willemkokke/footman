@@ -433,11 +433,17 @@ def inherited() -> Any:
         # Point the context at the task being called, so an `inherited()`
         # inside *it* walks one level further up instead of resolving to
         # itself — a three-deep cascade would otherwise recurse forever.
+        from footman import registry
+
         ctx = current()
         saved = ctx.fn
         ctx.fn = previous
         try:
-            return previous(*args, **kwargs)
+            # The shadowed *body*, run inside this task: an override chain, the
+            # way `super()` is — not a second task. It shares this task's
+            # context, result, and reported duration, and never becomes a unit
+            # of the run in its own right.
+            return registry.task_body(previous)(*args, **kwargs)
         finally:
             ctx.fn = saved
 
