@@ -362,6 +362,69 @@ and runs to completion before the next statement; reach for `pre=`, a chain, or
 `pre=[lint]` form above is usually cleaner — a body call is for when you need
 real control flow.
 
+### A call is part of the run
+
+Calling a task is not a shortcut around footman: the callee gets a real task
+boundary — its own context and working directory, its `@requires` and `confirm`
+gates, its own entry in the report — and the run performs its work **once per
+task and arguments**, whoever asks for it. So a prerequisite you also call hands
+back what it already produced, which is how a task reads a value `pre=` cannot
+pass:
+
+```python
+@task
+def build() -> str:
+    ...
+    return "dist/app.tar"
+
+@task(pre=[build])
+def publish():
+    artifact = build()      # the build that already ran, not a second one
+    run(f"./upload {artifact}")
+```
+
+Whether a task was reached by declaration or by a call makes no difference to
+how often it runs, so you never have to hold that distinction in your head. The
+same rules follow from it: different arguments are different work and run;
+calling a task that is running on another thread waits for that run rather than
+starting a second; and a call that could never return — a task calling itself,
+or two tasks calling each other — is refused by name instead of hanging.
+
+Two calls footman refuses outright, because a call has nowhere to put them: a
+`serial=`/`exclusive=` task (its lane is taken at the task boundary, never
+mid-body, which is what keeps the arbiter deadlock-free) and an `infinite` task
+(a call that never returns). Declare those with `pre=` instead.
+
+### Asking for fresh work: `volatile`
+
+Some work exists to happen again — a notification, a timestamp, a scratch
+clean. `@task(volatile=True)` says the task is **never shared**: every request
+for it runs, whether that request is a call, a chain segment, or a `pre=` edge.
+One rule, so the spelling you used never changes the answer.
+
+Sharing is a property of the *request*, resolved in this order: the reference's
+own `.opts(volatile=…)`, then the task's declaration, then whatever asked for
+it, then shared. `.opts(volatile=True)` asks for one fresh run without changing
+the task — on a call or on a declared edge alike:
+
+```python
+@task
+def deploy():
+    stamp()                          # shared: the run's one stamp
+    stamp.opts(volatile=True)()      # this one runs, whatever came before
+```
+
+A fresh run gets its own value but never rewrites what the run already
+remembers: the first result stands, so later shared requests stay stable.
+
+!!! warning "Volatile propagates down the subtree"
+
+    A freshly requested task asks freshly for everything it needs — otherwise
+    "fresh" would be a half-truth — so marking one task volatile unshares its
+    **whole dependency subtree**. A `compile` shared by two volatile builds
+    runs twice, and a deep tree multiplies. Pin anything that genuinely is
+    reusable with `volatile=False`, which beats an inherited answer.
+
 ## Progress & the live status line
 
 Both parallel engines — the scheduler and a `parallel()` inside a task body —

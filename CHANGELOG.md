@@ -7,6 +7,66 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING: calling a task from a task body is part of the run.** It used to
+  be a plain function call: it ran the task again even if the run had just run
+  it, on the caller's thread, with no context of its own and no result anywhere
+  — the one execution path footman could not see. A call now gets a real task
+  boundary (its own context and working directory, its `@requires` and
+  `confirm` gates, its own entry in the report), and the run performs a task's
+  work **once per task and arguments**, whoever asks. So a prerequisite you
+  also call hands back what it already produced, which is how a task finally
+  reads a value `pre=` cannot pass:
+
+  ```python
+  @task(pre=[build])
+  def publish():
+      artifact = build()      # the build that already ran, not a second one
+  ```
+
+  Whether a task was reached by declaration or by a call makes no difference to
+  how often it runs. Calling a task that is running on another thread waits for
+  that run; a call that could never return (a task calling itself, or two
+  calling each other) is refused by name instead of hanging, where
+  self-recursion used to be a stack overflow. Two calls are refused outright: a
+  `serial=`/`exclusive=` task, whose lane is taken at the task boundary and
+  never mid-body, and an `infinite` task. A call outside a run is still the
+  plain call it looks like, so importing a tasks file and calling a function
+  keeps working. An `int` return remains a segment's exit code, while a call
+  gets the number as a value.
+
+- **`@task(volatile=True)` — work that is never shared.** Some work exists to
+  happen again: a notification, a timestamp, a scratch clean. Every request for
+  a volatile task runs, whether that request is a call, a chain segment, or a
+  `pre=` edge — one rule, so the spelling never changes the answer. Sharing is
+  a property of the request: `.opts(volatile=…)` first, then the task's
+  declaration, then whatever asked for it, then shared. It propagates down the
+  dependency subtree, because a freshly requested task asks freshly for what it
+  needs, so `volatile=False` is the pin for a step that genuinely is reusable.
+  A fresh run never rewrites what the run already remembers — the first result
+  stands.
+
+- **The run's report reads in the order the run happened.** A dependency
+  listing has no place for a task reached by a call; a chronological one does.
+  Sequential runs are unchanged, since dependency order already is
+  chronological, and a prerequisite still precedes its dependent; only
+  independent tasks in a parallel run move, to wherever they actually ran.
+  Anything that never began sits directly after whatever prevented it, so the
+  report reads as cause then consequence. `TaskResult` carries `started` and
+  `blocked_by` for this. A task reached by reference rather than typed is now
+  reported by its *address* (`import_` shows as `import`) — the spelling you
+  could actually type.
+
+### Fixed
+
+- **A called task passes the same gates a declared one does.** A body call used
+  to slip past `@requires` availability (an unavailable task *ran* when called,
+  though the same task as a prerequisite refuses) and never asked a
+  `@task(confirm=)` gate. Both now hold however the task was reached; the
+  confirm is asked at the call, since a call cannot be known before the run the
+  way a chain segment can.
+
 ## [0.22.0] — 2026-07-27
 
 ### Changed
