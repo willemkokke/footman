@@ -278,7 +278,12 @@ reference pages inherit it because they render from the stub docstrings. An
 option present at the floor carries no `since` — the honesty rule, enforced
 in code rather than remembered.
 
-What remains: the other tiers (bun/node, GitHub, GitLab release assets), the
+**The tiers landed 2026-07-27**: PyPI, npm, GitHub and GitLab (which covers
+bun). Real chains on all four — prek 21 releases, cspell 3, gh 3, eclint 3.
+`system` (git, docker) stays unlistable until their real sources are wired,
+and provisioned interpreters are not tool releases.
+
+What remains: the
 per-tool budget as a driver field, the release gate reading the deltas, and
 the scheduled refresh itself.
 

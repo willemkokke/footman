@@ -1,7 +1,7 @@
 {
  "schema": 1,
  "tool": "eclint",
- "observed_from": "0.6.0-wk.5",
+ "observed_from": "0.6.0-wk.3",
  "base": {
   "version": "0.6.0-wk.5",
   "date": "2026-07-27",
@@ -133,5 +133,20 @@
    }
   }
  },
- "deltas": {}
+ "deltas": {
+  "0.6.0-wk.4": {
+   "date": "2026-07-07",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
+  },
+  "0.6.0-wk.3": {
+   "date": "2026-03-18",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
+  }
+ }
 }
