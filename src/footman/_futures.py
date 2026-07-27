@@ -294,6 +294,12 @@ def _fill(key: Any, label: str, value: Any) -> None:
         run.cells[key] = cell
 
 
+def _record(result: TaskResult) -> None:
+    """Add a called task's outcome to the run's report — ran, refused, denied."""
+    if (run := _active) is not None:
+        run.results.append(result)
+
+
 def _refuse_unrunnable(task: Any) -> None:
     """Refuse the two body calls that cannot be given a task boundary.
 
@@ -322,11 +328,23 @@ def _run_now(task: Any, args: tuple[Any, ...], kwargs: dict[str, Any]) -> Any:
     A failure raises in the caller, exactly as a direct call always did — and
     the callee's own `TaskResult` still joins the run's report, so the work is
     visible even though the value came back through Python.
+
+    Every gate a declared task passes, a called one passes too: `@requires`
+    availability, and `@task(confirm=)`. The confirm is the one gate that
+    cannot be resolved up front the way the scheduler resolves a segment's —
+    a call is not knowable before the run — so it is asked here, at the call.
     """
     from footman import context, executor, schedule
 
     parent = context.current()
     label = _label(task)
+    seg = schedule._default_seg(task)
+    if (refusal := executor.unavailable(task, seg)) is not None:
+        _record(refusal)
+        raise refusal.error or ChainError(f"{label} is unavailable")
+    if (denial := schedule.confirm_gate(task, seg, parent)) is not None:
+        _record(denial)
+        raise denial.error or ChainError(f"{label} was not confirmed")
     buf = io.StringIO()
     child = dataclasses.replace(
         parent,
@@ -339,15 +357,9 @@ def _run_now(task: Any, args: tuple[Any, ...], kwargs: dict[str, Any]) -> Any:
         task=label,
     )
     result = executor.run_bound(
-        task,
-        schedule._default_seg(task),
-        child,
-        list(args),
-        dict(kwargs),
-        as_call=True,
+        task, seg, child, list(args), dict(kwargs), as_call=True
     )
-    if (run := _active) is not None:
-        run.results.append(result)
+    _record(result)
     if parent.sink is not None and (text := buf.getvalue()):
         parent.sink.write(text)  # the callee's output belongs to the run, not /dev/null
     if result.error is not None:

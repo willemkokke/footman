@@ -430,3 +430,63 @@ def test_the_machinery_refuses_before_it_memoises():
 
         with _futures.session():
             _futures.call(locked, (), {})
+
+
+# --- one gate, however the task was reached -----------------------------------
+# Nobody should have to know whether a task arrived through the declared DAG or
+# the runtime one, so every gate a prerequisite passes, a call passes too.
+
+
+def test_an_unavailable_task_refuses_a_body_call():
+    reg = Group("root")
+
+    @reg.task
+    @registry.requires(lambda: False, reason="no toolchain here")
+    def compile_(): ...
+
+    @reg.task
+    def build():
+        compile_()
+
+    result = drive(reg, "build")
+    assert not result.ok
+    assert "no toolchain here" in result.stderr
+    # …and the refusal is reported, not swallowed into the caller's failure.
+    assert any("compile" in r.task and not r.ok for r in result.results)
+
+
+def test_an_unavailable_task_refuses_a_prerequisite_the_same_way():
+    reg = Group("root")
+
+    @reg.task
+    @registry.requires(lambda: False, reason="no toolchain here")
+    def compile_(): ...
+
+    @reg.task(pre=[compile_])
+    def build(): ...
+
+    result = drive(reg, "build")
+    assert not result.ok
+    assert "no toolchain here" in result.stderr
+
+
+def test_a_confirm_gate_is_asked_at_a_body_call():
+    # The scheduler asks a segment's gate up front; a call can't be known that
+    # early, so it asks at the call — but it does ask.
+    reg = Group("root")
+    ran: list[int] = []
+
+    @reg.task(confirm="Really deploy?")
+    def deploy() -> None:
+        ran.append(1)
+
+    @reg.task
+    def release_():
+        deploy()
+
+    denied = drive(reg, "release")
+    assert not denied.ok  # no terminal, no input: the gate cannot be answered
+    assert not ran
+    confirmed = Runner().invoke("--yes release", tasks=reg)  # a global, so it leads
+    assert confirmed.ok, confirmed.stderr
+    assert ran == [1]  # --yes answers it, exactly as it does for a segment

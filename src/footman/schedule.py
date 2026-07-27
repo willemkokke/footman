@@ -406,16 +406,37 @@ def _gate_confirms(
     kept: list[Segment] = []
     denied: list[executor.TaskResult] = []
     for seg in segments:
-        message = task_confirm(executor.resolve(root, seg.path))
+        fn = executor.resolve(root, seg.path)
+        message = task_confirm(fn)
         if not message or assume_yes or _ask_confirm(message, no_input=no_input):
             kept.append(seg)
         else:
-            denied.append(
-                executor.TaskResult(
-                    task=seg.task, ok=False, code=1, error=NotConfirmed(seg.task)
-                )
-            )
+            denied.append(_not_confirmed(seg))
     return kept, denied
+
+
+def _not_confirmed(seg: Segment) -> executor.TaskResult:
+    return executor.TaskResult(
+        task=seg.task, ok=False, code=1, error=NotConfirmed(seg.task)
+    )
+
+
+def confirm_gate(
+    fn: Task, seg: Segment, ctx: context.Context
+) -> executor.TaskResult | None:
+    """Ask *fn*'s `@task(confirm=)` gate now; a denial is the refusal to report.
+
+    The scheduler resolves a segment's gate before the run starts, so the human
+    answers everything up front. A body call cannot be known that early, so it
+    asks at the moment of the call instead — the gate itself is the same, and a
+    task that asks for confirmation gets it however it was reached.
+    """
+    message = task_confirm(fn)
+    if not message or ctx.assume_yes:
+        return None
+    if _ask_confirm(message, no_input=ctx.no_input):
+        return None
+    return _not_confirmed(seg)
 
 
 def run_plan(

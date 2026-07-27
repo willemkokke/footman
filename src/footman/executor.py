@@ -700,6 +700,22 @@ class Unavailable(Exception):
     """A `@requires`-gated task was asked to run; the message is the reason."""
 
 
+def unavailable(fn: Task, seg: Segment) -> TaskResult | None:
+    """The refusal for a `@requires`-gated task, or `None` when it may run.
+
+    Availability is re-checked live at the moment of execution — the manifest's
+    cached answer is only ever a listing annotation — and it is checked before
+    binding, so an unavailable task refuses for the reason it is unavailable
+    rather than for whatever its arguments would have done. Every way of asking
+    a task to run comes through here, so a body call refuses exactly as a
+    prerequisite does.
+    """
+    reason = registry.availability(fn)
+    if reason is None:
+        return None
+    return TaskResult(task=seg.task, ok=False, code=EX_USAGE, error=Unavailable(reason))
+
+
 def resolve_cwd(fn: Task, ctx: Context) -> tuple[Path | None, bool]:
     """The task's working directory under the policy ladder, resolved once.
 
@@ -783,12 +799,8 @@ def run_task(
     caller's job via `ctx.sink`; here we just capture its final value.
     *forwarded* carries `forward`-marked values from a dispatching task.
     """
-    # `@requires` availability is re-checked live at the moment of execution —
-    # the manifest's cached answer is only ever a listing annotation.
-    if (reason := registry.availability(fn)) is not None:
-        return TaskResult(
-            task=seg.task, ok=False, code=EX_USAGE, error=Unavailable(reason)
-        )
+    if (refusal := unavailable(fn, seg)) is not None:
+        return refusal
     try:
         args, kwargs = bind(seg, fn, ctx, forwarded)
     except ChainError:
