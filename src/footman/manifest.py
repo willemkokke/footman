@@ -476,6 +476,11 @@ def _task_node(fn: Any, memo: dict[int, list[str]]) -> dict[str, Any]:
             stacklevel=2,
         )
     node: dict[str, Any] = {"help": parsed.summary, "params": params}
+    used = registry.task_uses(fn)
+    if used:
+        # The globals this task declares it reads — help, the catalog and
+        # agents see the dependency without running anything.
+        node["uses"] = [opt.name for opt in used]
     if (previous := discover.shadowed(fn)) is not None:
         # Additive, and only for the rare overridden task: the options of
         # the task this one shadows, so `--help` can show the call

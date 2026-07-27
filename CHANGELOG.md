@@ -7,6 +7,23 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- **`GlobalOption` — a plugin's own global option.** Constructing one is
+  registering it: a module-level singleton in the provider, stamped with the
+  defining module, riding the contributions carriage — so `--env-file=…`
+  exists exactly when its owner is pulled, and an unpulled owner's option is
+  an unknown option, taught. Long-form only, `=`-attached; a `bool`
+  annotation is a flag, anything else takes a value coerced and validated
+  through the same pipeline as a task parameter, which is also what makes
+  completion work by construction — choices, `Path` file handoff — from a
+  new `globals` section in the manifest (schema 2; stale completion caches
+  refresh themselves). Read `OPT.value` anywhere in-run (frozen after
+  parse; outside a run the read is taught). `@task(uses=[OPT])` declares
+  the dependency into the manifest and task metadata; an undeclared in-task
+  read still works, with a note naming the fix. Collisions are loud: a core
+  name names footman, two plugins on one name names both owners.
+
 ## [0.24.0] — 2026-07-27
 
 ### Added

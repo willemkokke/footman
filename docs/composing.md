@@ -527,6 +527,36 @@ is skipped belongs to a later cache. Today a returned value gets a note and
 is ignored; state belongs on `task.state`. (A wrapper never touches the
 channel: its `yield` is the moment itself.)
 
+## A plugin's own globals: `GlobalOption`
+
+A plugin whose behaviour is invocation-wide wants an invocation-wide switch —
+`--env-file=…` beside `--jobs=…`, not a flag repeated on every task.
+Constructing a `GlobalOption` **is** registering it: a module-level singleton
+in the provider, stamped with the module that defined it, riding the same
+carriage as lifecycle hooks — so it reaches a run only when its owner is
+pulled, and an unpulled owner's option is an unknown option, taught.
+
+```python
+from pathlib import Path
+from footman import GlobalOption
+
+ENV_FILE = GlobalOption("env-file", Path, help="load this .env file first")
+AUDIT = GlobalOption("audit", help="report, change nothing")   # bool → a flag
+```
+
+The value is `=`-attached like every option's, long-form only, coerced and
+validated through the same pipeline as a task parameter — `Literal` choices,
+`Path` file completion and bounds all work, because the manifest describes it
+with the same machinery and <kbd>Tab</kbd> answers from that. Read it
+anywhere in-run as `ENV_FILE.value` (parsed once, frozen for the run; outside
+a run the read is a taught error). Cross-plugin use is an ordinary import of
+the singleton.
+
+A task that reads one says so — `@task(uses=[ENV_FILE])` — which puts the
+dependency in the manifest for help and agents; an undeclared read still
+works, with a note naming the fix. Names collide loudly: with footman's own
+globals naming footman, between two plugins naming both owners.
+
 ## The caching contract, stated once
 
 Hiding, `include()`, `plugin()`, and `@pre_tasks` all resolve at

@@ -163,7 +163,7 @@ def task_uses(fn: Task) -> tuple[GlobalOption, ...]:
     return tuple(getattr(fn, _USES, ()))
 
 
-def validate_global_options(options: list[GlobalOption]) -> str | None:
+def validate_global_options(options: Sequence[GlobalOption]) -> str | None:
     """The collision law for plugin globals, applied to the merged tree.
 
     A name owned by footman itself is refused naming footman; two plugins
@@ -191,7 +191,7 @@ def validate_global_options(options: list[GlobalOption]) -> str | None:
     return None
 
 
-def release_global_options(options: list[GlobalOption]) -> None:
+def release_global_options(options: Sequence[GlobalOption]) -> None:
     """Unfreeze after the run: an outside-a-run read goes back to teaching."""
     for opt in options:
         opt._frozen = False
@@ -693,7 +693,9 @@ class Group:
         self.groups: dict[str, Group] = {}
         # Lifecycle contributions, one bucket per hook kind (root registry
         # only). `pre_tasks` hooks are the only kind today.
-        self.contributions: dict[str, list[Callable[..., object]]] = {
+        # Hook kinds hold callables; the `globals` kind holds
+        # `GlobalOption` singletons — one generic carriage, typed loosely.
+        self.contributions: dict[str, list[Any]] = {
             kind: [] for kind in CONTRIBUTION_KINDS
         }
         # Provenance: the plugin identity that pulled this group in, or None
@@ -781,6 +783,7 @@ class Group:
         serial: bool = False,
         exclusive: bool = False,
         hidden: bool | None = None,
+        uses: Sequence[GlobalOption] = (),
     ) -> Callable[[Callable[_P, _R_co]], TaskFn[_P, _R_co]]: ...
 
     def task(
@@ -802,6 +805,7 @@ class Group:
         serial: bool = False,
         exclusive: bool = False,
         hidden: bool | None = None,
+        uses: Sequence[GlobalOption] = (),
     ) -> Task | Callable[[Task], Task]:
         """Register a function as a task.
 
@@ -920,6 +924,14 @@ class Group:
                 exclusive=exclusive,
                 hidden=hidden,
             )
+            if uses:
+                for used in uses:
+                    if not isinstance(used, GlobalOption):
+                        raise RegistrationError(
+                            f"@task(uses=...) on {key!r} takes GlobalOption "
+                            f"singletons — got {type(used).__name__}"
+                        )
+                setattr(task, _USES, tuple(uses))
             self.tasks[key] = task
             return cast("TaskFn[_P, _R_co]", task)
 

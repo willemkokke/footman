@@ -339,6 +339,17 @@ def complete(tree: dict, words: list[str]) -> list[str]:
         optname, _, valpart = partial.partition("=")
         if optname in _GLOBAL_FILES:
             return [_FILES]  # hand the value part to the shell's file completion
+        entry = next(
+            (g for g in tree.get("globals", ()) if "--" + g["name"] == optname),
+            None,
+        )
+        if entry is not None:
+            # A pulled plugin's global completes from its baked entry — the
+            # same shapes a task parameter bakes, answered the same way.
+            if "path" in entry.get("types", []):
+                return [_FILES]
+            choices = [c for c in entry.get("choices", ()) if c.startswith(valpart)]
+            return choices if bash_split else [f"{optname}={c}" for c in choices]
         choices = [c for c in _GLOBAL_CHOICES.get(optname, ()) if c.startswith(valpart)]
         return choices if bash_split else [f"{optname}={c}" for c in choices]
 
@@ -419,6 +430,11 @@ def complete(tree: dict, words: list[str]) -> list[str]:
         # noise there.
         if not prior and partial.startswith("-"):
             out += [g for g in sorted(_GLOBALS) if g.startswith(partial)]
+            out += [
+                flag
+                for g in tree.get("globals", ())
+                if (flag := "--" + g["name"]).startswith(partial)
+            ]
         return out
 
     # An attached `--opt=value` partial: the one value position the grammar
