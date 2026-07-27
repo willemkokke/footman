@@ -274,12 +274,11 @@ def _print_footer() -> None:
     print(f"\n{_describe.dim(footer, _color_out)}")
 
 
-def _styled_name(name: str, width: int) -> str:
-    """A task address for a listing: dim group prefix, bold leaf, padded."""
-    pad = " " * (width - len(name))
+def _styled_name(name: str) -> str:
+    """A task address for a listing: dim group prefix, bold leaf."""
     prefix, _, leaf = name.rpartition(".")
     lead = _describe.dim(f"{prefix}.", _color_out) if prefix else ""
-    return f"{lead}{_describe.bold(leaf, _color_out)}{pad}"
+    return f"{lead}{_describe.bold(leaf, _color_out)}"
 
 
 def _styled_help(help_text: str) -> str:
@@ -291,37 +290,55 @@ def _styled_help(help_text: str) -> str:
     return help_text
 
 
-def _print_list(tree: dict) -> None:
+def _print_two_band(rows: list[tuple[str, int, str]]) -> None:
+    """The one two-band layout every listing draws: painted name cells on
+    the left, descriptions aligned into a single wrapped column on the
+    right. Rows are `(cell, cell's plain width, help)` — `--list`, `--tree`
+    and group help differ only in how they paint the cell.
+
+    Long descriptions wrap with a hanging indent to the description
+    column — the terminal's own wrap would drop continuations to column 0,
+    shearing the two-band layout apart.
+    """
     import textwrap
 
-    rows = list(_describe.iter_tasks(tree))
-    if not rows:
-        print("No tasks defined.")
-        return
-    width = max(len(name) for name, _ in rows)
-    # Wrap long descriptions with a hanging indent to the description
-    # column — the terminal's own wrap would drop continuations to column
-    # 0, shearing the two-column layout apart.
-    desc_col = 2 + width + 2
+    width = max(plain for _, plain, _ in rows)
+    desc_col = width + 2
     avail = max(24, shutil.get_terminal_size().columns - desc_col)
-    print(_describe.bold("Tasks:", _color_out))
-    for name, help_text in rows:
+    for cell, plain, help_text in rows:
+        if not help_text:
+            print(cell.rstrip())
+            continue
         pieces = textwrap.wrap(help_text, avail) or [""]
-        line = f"  {_styled_name(name, width)}  {_styled_help(pieces[0])}"
-        print(line.rstrip())
+        pad = " " * (width - plain)
+        print(f"{cell}{pad}  {_styled_help(pieces[0])}".rstrip())
         for cont in pieces[1:]:
             print(f"{' ' * desc_col}{_styled_help(cont)}".rstrip())
 
 
-def _print_tree(node: dict) -> None:
-    import textwrap
+def _address_band(rows: list[tuple[str, str]]) -> list[tuple[str, int, str]]:
+    """Two-band rows for a flat address listing (`--list`, group help)."""
+    return [
+        (f"  {_styled_name(name)}", 2 + len(name), help_text)
+        for name, help_text in rows
+    ]
 
+
+def _print_list(tree: dict) -> None:
+    rows = list(_describe.iter_tasks(tree))
+    if not rows:
+        print("No tasks defined.")
+        return
+    print(_describe.bold("Tasks:", _color_out))
+    _print_two_band(_address_band(rows))
+
+
+def _print_tree(node: dict) -> None:
     rows = list(_describe.walk(node))
     if not rows:
         # Mirror _print_list rather than printing zero bytes and exiting 0.
         print("No tasks defined.")
         return
-    dash = _describe.dim("—", _color_out)
     last = _last_of_each_branch(rows)
     # Leaf names under a drawn branch, not repeated dotted addresses:
     # `--list` is the flat, copy-paste view, and a `--tree` that only
@@ -335,31 +352,17 @@ def _print_tree(node: dict) -> None:
         trunk.append(last[i])
         stem = "".join("   " if up else "│  " for up in trunk[1:-1])
         leads.append(stem + ("" if depth == 0 else ("└─ " if last[i] else "├─ ")))
-
-    def plain_len(i: int) -> int:
-        _depth, _address, leaf, _help_text, kind = rows[i]
-        return len(leads[i]) + len(leaf) + (kind != "task")  # groups carry a dot
-
-    # Descriptions align into one column, wrapped with a hanging indent —
-    # the same two-band layout `--list` draws, behind a drawn trunk.
-    width = max(plain_len(i) for i in range(len(rows)))
-    desc_col = width + 4  # two spaces, the dash, its trailing space
-    avail = max(24, shutil.get_terminal_size().columns - desc_col)
+    band: list[tuple[str, int, str]] = []
     for i, (_depth, _address, leaf, help_text, kind) in enumerate(rows):
         name = (
             _describe.bold(leaf, _color_out)
             if kind == "task"
             else _describe.bold_cyan(f"{leaf}.", _color_out)
         )
-        lead = _describe.dim(leads[i], _color_out)
-        if not help_text:
-            print(f"{lead}{name}".rstrip())
-            continue
-        pad = " " * (width - plain_len(i))
-        pieces = textwrap.wrap(help_text, avail) or [""]
-        print(f"{lead}{name}{pad}  {dash} {_styled_help(pieces[0])}".rstrip())
-        for cont in pieces[1:]:
-            print(f"{' ' * desc_col}{_styled_help(cont)}".rstrip())
+        cell = f"{_describe.dim(leads[i], _color_out)}{name}"
+        plain = len(leads[i]) + len(leaf) + (kind != "task")  # groups carry a dot
+        band.append((cell, plain, help_text))
+    _print_two_band(band)
 
 
 def _last_of_each_branch(rows: list[tuple]) -> list[bool]:
@@ -452,11 +455,8 @@ def _print_group_help(tree: dict, path: list[str]) -> None:
         # described by its default action (docstring, or generated).
         rows.insert(0, (dotted, _describe.default_line(node)))
     if rows:
-        width = max(len(name) for name, _ in rows)
         print(f"\n{_describe.bold('tasks:', on)}")
-        for name, help_text in rows:
-            line = f"  {_styled_name(name, width)}  {_styled_help(help_text)}"
-            print(line.rstrip())
+        _print_two_band(_address_band(rows))
     params = default["params"] if default else []
     options = [p for p in params if p["kind"] in ("flag", "option")]
     if options:

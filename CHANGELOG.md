@@ -30,8 +30,10 @@ versions may include breaking changes.
 ### Changed
 
 - **`--tree` aligns its descriptions.** One description column whatever
-  depth a name sits at, wrapped with a hanging indent — the same two-band
-  layout `--list` draws, behind the drawn trunk.
+  depth a name sits at, wrapped with a hanging indent, and no `—`
+  separator — `--list`, `--tree` and group help now draw their two-band
+  layout through one shared renderer, so a rule about one is true of all
+  three (group help gains description wrapping in the bargain).
 
 ## [0.25.0] — 2026-07-27
 

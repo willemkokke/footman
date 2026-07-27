@@ -1468,8 +1468,14 @@ def test_tree_draws_branches_and_skips_hidden(hidden_project, capsys):
 
 def test_tree_aligns_the_description_column(project, capsys):
     # The two-band layout --list draws: every description starts at one
-    # column, whatever depth its name sits at.
+    # column, whatever depth its name sits at — and no separator glyph,
+    # exactly like --list.
     assert _app.run(["--tree"]) == 0
     out = capsys.readouterr().out
-    columns = {line.index("—") for line in out.splitlines() if "—" in line}
+    assert "—" not in out
+    columns = set()
+    for line in out.splitlines():
+        for help_text in ("Say hello.", "Extra tools", "Echo words."):
+            if help_text in line:
+                columns.add(line.index(help_text))
     assert len(columns) == 1
