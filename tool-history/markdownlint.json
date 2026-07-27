@@ -1,0 +1,75 @@
+{
+ "schema": 1,
+ "tool": "markdownlint",
+ "observed_from": "0.23.1",
+ "base": {
+  "version": "0.23.1",
+  "date": "2026-07-27",
+  "extractor": 1,
+  "surface": {
+   "help": "markdownlint-cli2 v0.23.1 (markdownlint v0.41.1)",
+   "verbs": {
+    "": {
+     "help": "markdownlint-cli2 v0.23.1 (markdownlint v0.41.1)",
+     "wraps": false,
+     "positional": "any",
+     "lead": "",
+     "options": {
+      "config": {
+       "flags": [
+        "--config"
+       ],
+       "negation": "",
+       "help": "specifies the path to a configuration file to define the base configuration",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "configPointer": {
+       "flags": [
+        "--configPointer",
+        "--config"
+       ],
+       "negation": "",
+       "help": "",
+       "type": "str",
+       "default": null,
+       "choices": []
+      },
+      "fix": {
+       "flags": [
+        "--fix"
+       ],
+       "negation": "",
+       "help": "updates files to resolve fixable issues (can be overridden in configuration)",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "format": {
+       "flags": [
+        "--format"
+       ],
+       "negation": "",
+       "help": "reads standard input (stdin), applies fixes, writes standard output (stdout)",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "no_globs": {
+       "flags": [
+        "--no-globs"
+       ],
+       "negation": "",
+       "help": "ignores the \"globs\" property if present in the top-level options object",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      }
+     }
+    }
+   }
+  }
+ },
+ "deltas": {}
+}

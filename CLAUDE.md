@@ -70,8 +70,29 @@ src/footman/
   tools.py/.pyi   the tools.* bridge + its typing stub
   testing.py      Runner (in-process CLI) + recording()
 docs/             Zensical (mkdocs-like) site
+notes/            design plans, `YYYYMMDD-` prefixed — tracked, never published
 tasks.py          footman's own tasks — the gate is `fm check`
 ```
+
+## Notes
+
+`notes/` holds the design plans — what was decided, what was rejected and
+why, what was measured before choosing, and which questions are still open.
+The docs say what footman *is*; a note says how it got there and what it
+nearly was instead. They are tracked, so a plan outlives the laptop it was
+written on, but they are **not published**: the site builds from `docs/` with
+an explicit nav, so nothing in `notes/` reaches the website or `llms-full.txt`.
+
+**Name them `YYYYMMDD-<slug>.md`, dated the day the note was started**, so the
+directory sorts into the order the thinking happened
+(`20260726-tool-option-history.md`). Same-day collisions sort arbitrarily and
+that is fine. Keep the date of the *first* draft when a note grows — the
+prefix records when the thread opened, not when it was last touched; a plan
+that turns into a different plan gets a new note and links back.
+
+A note that has landed says so at the top rather than being deleted: the
+CHANGELOG carries what shipped, the note carries the reasoning that never
+reaches a docs page.
 
 ## Testing conventions
 
@@ -89,7 +110,8 @@ tasks.py          footman's own tasks — the gate is `fm check`
 - ruff nits that fail the gate: line length 88; RUF043 (regex metachars in
   `pytest.raises(match=…)` → raw string, escape `.`/`|`); RUF003 (en-dash in
   comments → hyphen); I001 import order; RUF022 (`__all__` sort). Fix fast with
-  `uv run ruff check --fix src tests && uv run ruff format src tests`.
+  `uv run ruff check --fix . && uv run ruff format .` (the whole repo, as CI
+  lints it — `notes/` and `comparison/` are tracked too).
 
 ## Commits & identity
 

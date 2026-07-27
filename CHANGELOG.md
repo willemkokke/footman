@@ -7,6 +7,46 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- **The stubs are rendered from a record, not from a reading.** Each curated
+  tool gets a file under `tool-history/` holding what it accepted, release by
+  release: the newest observed release stored whole, and — once the fetchers
+  land — every older one as a delta describing how to step back to it.
+  `fm tools.sync` now records its reading there first and renders the stub
+  from *that*, so what ships is a view of the record rather than a second
+  record that can disagree with it. All 26 stubs regenerate byte-identical
+  through the round-trip, which is the proof the store loses nothing.
+
+  Deltas point **backwards** because that is the shape of the work: priming
+  older releases is pure append, the current version costs no replay (it is
+  the base), midfill rewrites exactly one entry, and "did this release change
+  anything" is "is its delta non-empty" — the question a release job asks,
+  answered without comparing surfaces. An empty delta means *observed and
+  unchanged*, which is not the same as a release nobody looked at; those are
+  simply absent.
+
+  The store is tracked but **not shipped**: it lives outside `src/`, so no
+  install pays for history nobody reads. Generation is a maintainer task run
+  from a checkout, and users read the stubs, which already carry everything
+  the log is for.
+
+- **`fm tools.prime` reads a tool's past releases into its history.** Walks
+  backwards from the release the history already holds, installing one
+  version at a time into a throwaway environment and appending a delta for
+  each — so nothing already written is touched, and a release the chain
+  already has is skipped. A prime stopped by a rate limit is resumed by
+  running it again. `--count` is how far back to reach *this* run, and the
+  floor a tool actually reached is recorded as `observed_from`: an option
+  present in the oldest release read is "at or before" that version, never
+  "since" it.
+
+  Releases are ordered by publication date, with the version breaking a
+  same-day tie — prek shipped 0.4.7 and 0.4.8 on one day, and a tie resolved
+  by index order let the walk skip one and a later run append it *below* its
+  own successor. Only the PyPI tier can be listed today; every other tool is
+  named and skipped rather than left looking like a tool with no history.
+
 ### Changed
 
 - **BREAKING: calling a task from a task body is part of the run.** It used to

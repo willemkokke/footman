@@ -1,0 +1,153 @@
+{
+ "schema": 1,
+ "tool": "build",
+ "observed_from": "1.5.0",
+ "base": {
+  "version": "1.5.0",
+  "date": "2026-07-27",
+  "extractor": 1,
+  "surface": {
+   "help": "",
+   "verbs": {
+    "": {
+     "help": "",
+     "wraps": false,
+     "positional": "any",
+     "lead": "",
+     "options": {
+      "config_json": {
+       "flags": [
+        "--config-json"
+       ],
+       "negation": "",
+       "help": "settings to pass to the backend as a JSON object",
+       "type": "str",
+       "default": null,
+       "choices": []
+      },
+      "config_setting": {
+       "flags": [
+        "--config-setting",
+        "-C"
+       ],
+       "negation": "",
+       "help": "settings to pass to the backend",
+       "type": "str",
+       "default": null,
+       "choices": []
+      },
+      "dependency_constraints_txt": {
+       "flags": [
+        "--dependency-constraints-txt"
+       ],
+       "negation": "",
+       "help": "constrain build dependencies using a constraints.txt when installing dependencies",
+       "type": "str",
+       "default": null,
+       "choices": []
+      },
+      "installer": {
+       "flags": [
+        "--installer"
+       ],
+       "negation": "",
+       "help": "Python package installer to use (defaults to pip)",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "metadata": {
+       "flags": [
+        "--metadata"
+       ],
+       "negation": "",
+       "help": "print out a wheel's metadata in JSON format",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "no_isolation": {
+       "flags": [
+        "--dependency-constraints-txt",
+        "--skip-dependency-check",
+        "--no-isolation"
+       ],
+       "negation": "",
+       "help": "",
+       "type": "str",
+       "default": null,
+       "choices": []
+      },
+      "outdir": {
+       "flags": [
+        "--outdir",
+        "-o"
+       ],
+       "negation": "",
+       "help": "output directory (defaults to {srcdir}/dist)",
+       "type": "str",
+       "default": null,
+       "choices": []
+      },
+      "quiet": {
+       "flags": [
+        "--quiet",
+        "-q"
+       ],
+       "negation": "",
+       "help": "reduce verbosity",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "sdist": {
+       "flags": [
+        "--sdist",
+        "-s"
+       ],
+       "negation": "",
+       "help": "build a source distribution (disables the default behavior)",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "skip_dependency_check": {
+       "flags": [
+        "--skip-dependency-check",
+        "-x"
+       ],
+       "negation": "",
+       "help": "do not check that build dependencies are installed",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "verbose": {
+       "flags": [
+        "--verbose",
+        "-v"
+       ],
+       "negation": "",
+       "help": "increase verbosity",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "wheel": {
+       "flags": [
+        "--wheel",
+        "-w"
+       ],
+       "negation": "",
+       "help": "build a wheel (disables the default behavior)",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      }
+     }
+    }
+   }
+  }
+ },
+ "deltas": {}
+}

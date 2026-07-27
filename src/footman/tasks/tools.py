@@ -30,7 +30,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Annotated, Literal
 
-from footman import _drivers, _stubgen, _toolspec
+from footman import _drivers, _stubgen, _toolhistory, _toolspec
 from footman._describe import bold, cyan, wants_color
 from footman.context import current
 from footman.params import doc
@@ -40,10 +40,19 @@ from footman.tools import version_tuple as _version_tuple
 tasks = Group("tools", help="Keep the tools.* stubs honest")
 
 _STUBS = Path(__file__).resolve().parent.parent / "_stubs"
+# Repo-only, deliberately outside `src/`: generation reads the history and
+# generation is a maintainer task run from a checkout, while users read the
+# stubs — which already carry everything the log is for. Shipping it would
+# make every install pay for history nobody reads.
+_HISTORY = Path(__file__).resolve().parents[3] / "tool-history"
 
 
 def _stub_path(key: str) -> Path:
     return _STUBS / f"{key}.pyi"
+
+
+def _history_path(key: str) -> Path:
+    return _HISTORY / f"{key}.json"
 
 
 @contextmanager
@@ -92,9 +101,69 @@ def _platform() -> str:
 
 
 def _generate(driver: _drivers.Driver) -> str:
-    """The stub text for one installed tool, formatted the way ruff would."""
+    """The stub text for one installed tool, formatted the way ruff would.
+
+    The reading goes into the history first, and the stub is rendered from
+    *that* — so what ships is a view of the record rather than a second
+    record that can disagree with it.
+    """
     spec = _drivers.extract(driver)
-    return _formatted(_render(driver, spec))
+    doc = _observe(driver, spec)
+    base = doc["base"]
+    recorded = _toolhistory.spec_from(
+        base["surface"],
+        name=spec.name,
+        version=base["version"],
+        in_process=spec.in_process,
+    )
+    return _formatted(_render(driver, recorded))
+
+
+def _observe(driver: _drivers.Driver, spec: _toolspec.ToolSpec) -> dict:
+    """Record this reading in the tool's history, and return the history.
+
+    Three cases, and the third is the one the format exists for: a first
+    reading opens the file; re-reading the release the base already holds
+    updates it in place; a *newer* release becomes the base and demotes the
+    old one to a delta — one entry rewritten, the rest untouched.
+    """
+    path = _history_path(driver.key)
+    surface = _toolhistory.surface_of(spec)
+    version = spec.version or "unknown"
+    doc = _toolhistory.load(path)
+    if doc is None:
+        doc = _toolhistory.new(
+            driver.key, version=version, date=_today(), surface=surface
+        )
+    elif doc["base"]["version"] == version:
+        doc["base"]["surface"] = surface
+        doc["base"]["extractor"] = _toolhistory.EXTRACTOR
+    else:
+        previous = doc["base"]
+        doc["deltas"] = {
+            previous["version"]: {
+                "date": previous["date"],
+                "extractor": previous["extractor"],
+                **_toolhistory.delta(surface, previous["surface"]),
+            },
+            **doc["deltas"],
+        }
+        doc["base"] = {
+            "version": version,
+            "date": _today(),
+            "extractor": _toolhistory.EXTRACTOR,
+            "surface": surface,
+        }
+    _toolhistory.save(doc, path)
+    return doc
+
+
+def _today() -> str:
+    """The observation date. A release's own date belongs to the release, and
+    the fetchers will carry it; a live reading only knows when it looked."""
+    import datetime
+
+    return datetime.date.today().isoformat()
 
 
 def _render(driver: _drivers.Driver, spec: _toolspec.ToolSpec) -> str:
@@ -507,6 +576,102 @@ def _color_docs_table(results: dict) -> str:
         )
         lines.append(f"| `{key}` | {on} | {off} |")
     return "\n".join(lines) + "\n"
+
+
+@tasks.task
+def prime(
+    only: Annotated[str, doc("prime just this tool")] = "",
+    count: Annotated[int, doc("how many releases back to read")] = 20,
+    keep: Annotated[bool, doc("leave the throwaway environments behind")] = False,
+):
+    """Read past releases into the option history, newest first.
+
+    Walks backwards from the release the history already holds, installing
+    one version at a time into a throwaway environment and appending a delta
+    for each. Nothing already written is touched, and a release the chain
+    already has is skipped — so a prime interrupted by a rate limit is
+    resumed by running it again.
+
+    `--count` is how far back to reach *this run*; run it again to go
+    deeper. The floor a tool actually reached is recorded as
+    `observed_from`, which is a fact about what was read rather than a policy
+    about what we meant to read: an option present in the oldest release read
+    is "at or before" that version, never "since" it.
+
+    Only the PyPI tier can be listed today. Every other tool is named and
+    skipped rather than left looking like a tool with no history.
+    """
+    import shutil
+    import tempfile
+
+    from footman import _toolfetch
+
+    scratch = Path(tempfile.mkdtemp(prefix="footman-prime-"))
+    read: list[str] = []
+    skipped: list[str] = []
+    try:
+        for driver in _drivers.DRIVERS:
+            if only and driver.key != only:
+                continue
+            if not _toolfetch.can_list(driver):
+                skipped.append(f"{driver.key} ({driver.provision.kind} tier)")
+                continue
+            doc = _toolhistory.load(_history_path(driver.key))
+            if doc is None:
+                skipped.append(f"{driver.key} (no history — run `sync` first)")
+                continue
+            added = _prime_one(driver, doc, count, scratch, _toolfetch)
+            read.append(f"{driver.key} +{added} (from {doc['observed_from']})")
+    finally:
+        if not keep:
+            shutil.rmtree(scratch, ignore_errors=True)
+    for line in read:
+        print(line)
+    if skipped:
+        print(f"skipped: {', '.join(skipped)}")
+
+
+def _prime_one(driver, doc: dict, count: int, scratch: Path, fetch) -> int:
+    """Read up to *count* releases older than the chain's floor, oldest last.
+
+    A release that will not install, or whose binary will not describe
+    itself, ends this tool's walk rather than leaving a hole: the chain is
+    contiguous by construction, and `observed_from` would otherwise claim a
+    reach the file does not have.
+    """
+    known = set(_toolhistory.observed(doc))
+    floor = doc["observed_from"]
+    wanted = [
+        release
+        for release in fetch.releases(driver)
+        if release.version not in known and release.date <= _date_of(doc, floor)
+    ][:count]
+    added = 0
+    for release in wanted:
+        bindir = fetch.install(driver, release.version, scratch / release.version)
+        if bindir is None:
+            break
+        with _on_path(bindir.parent):
+            spec = _drivers.extract(driver)
+        if not spec.verbs:
+            break  # a binary that will not describe itself is not an observation
+        if _toolhistory.extend(
+            doc,
+            version=release.version,
+            date=release.date,
+            surface=_toolhistory.surface_of(spec),
+        ):
+            added += 1
+    if added:
+        _toolhistory.save(doc, _history_path(driver.key))
+    return added
+
+
+def _date_of(doc: dict, version: str) -> str:
+    """When *version* was published, as the history records it."""
+    if doc["base"]["version"] == version:
+        return doc["base"]["date"]
+    return doc["deltas"].get(version, {}).get("date", "9999-12-31")
 
 
 @tasks.task
