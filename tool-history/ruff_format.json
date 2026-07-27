@@ -1,7 +1,7 @@
 {
  "schema": 1,
  "tool": "ruff_format",
- "observed_from": "0.16.0",
+ "observed_from": "0.15.14",
  "base": {
   "version": "0.16.0",
   "date": "2026-07-27",
@@ -274,5 +274,72 @@
    }
   }
  },
- "deltas": {}
+ "deltas": {
+  "0.15.22": {
+   "date": "2026-07-16",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
+  },
+  "0.15.21": {
+   "date": "2026-07-09",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
+  },
+  "0.15.20": {
+   "date": "2026-06-25",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1,
+   "drop": [
+    "\textend_exclude"
+   ]
+  },
+  "0.15.19": {
+   "date": "2026-06-24",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
+  },
+  "0.15.18": {
+   "date": "2026-06-18",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
+  },
+  "0.15.17": {
+   "date": "2026-06-11",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
+  },
+  "0.15.16": {
+   "date": "2026-06-04",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
+  },
+  "0.15.15": {
+   "date": "2026-05-28",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
+  },
+  "0.15.14": {
+   "date": "2026-05-21",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
+  }
+ }
 }

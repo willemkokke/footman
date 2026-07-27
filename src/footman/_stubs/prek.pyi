@@ -27,6 +27,35 @@ class Prek(_Tool):
         from_ref: _Value = ...,
         glob: _Value = ...,
         group: _Value = ...,
+        hook_stage: Literal[
+            "manual",
+            "commit-msg",
+            "post-checkout",
+            "post-commit",
+            "post-merge",
+            "post-rewrite",
+            "pre-commit",
+            "pre-merge-commit",
+            "pre-push",
+            "pre-rebase",
+            "prepare-commit-msg",
+        ]
+        | Sequence[
+            Literal[
+                "manual",
+                "commit-msg",
+                "post-checkout",
+                "post-commit",
+                "post-merge",
+                "post-rewrite",
+                "pre-commit",
+                "pre-merge-commit",
+                "pre-push",
+                "pre-rebase",
+                "prepare-commit-msg",
+            ]
+        ]
+        | None = ...,
         last_commit: _Flag = ...,
         log_file: _Value = ...,
         no_group: _Value = ...,
@@ -86,6 +115,7 @@ class Prek(_Tool):
             glob: Run hooks on tracked files matching the specified glob pattern.
                 Added in 0.4.11.
             group: Run hooks belonging to the specified group. Added in 0.4.4.
+            hook_stage: The stage during which the hook is fired. Gone since 0.3.0.
             last_commit: Run hooks against the last commit.
             log_file: Write trace logs to the specified file.
             no_group: Do not run hooks belonging to the specified group. Added in
@@ -96,7 +126,7 @@ class Prek(_Tool):
             show_diff_on_failure: When hooks fail, run `git diff` directly
                 afterward.
             skip: Skip the specified hooks or projects.
-            stage: The stage during which the hook is fired.
+            stage: The stage during which the hook is fired. Added in 0.3.0.
             to_ref: The destination ref in a `from_ref...to_ref` diff expression.
             verbose: Use verbose output.
         """
@@ -282,6 +312,35 @@ class Prek(_Tool):
         from_ref: _Value = ...,
         glob: _Value = ...,
         group: _Value = ...,
+        hook_stage: Literal[
+            "manual",
+            "commit-msg",
+            "post-checkout",
+            "post-commit",
+            "post-merge",
+            "post-rewrite",
+            "pre-commit",
+            "pre-merge-commit",
+            "pre-push",
+            "pre-rebase",
+            "prepare-commit-msg",
+        ]
+        | Sequence[
+            Literal[
+                "manual",
+                "commit-msg",
+                "post-checkout",
+                "post-commit",
+                "post-merge",
+                "post-rewrite",
+                "pre-commit",
+                "pre-merge-commit",
+                "pre-push",
+                "pre-rebase",
+                "prepare-commit-msg",
+            ]
+        ]
+        | None = ...,
         last_commit: _Flag = ...,
         log_file: _Value = ...,
         no_group: _Value = ...,
@@ -340,6 +399,7 @@ class Prek(_Tool):
             glob: Run hooks on tracked files matching the specified glob pattern.
                 Added in 0.4.11.
             group: Run hooks belonging to the specified group. Added in 0.4.4.
+            hook_stage: The stage during which the hook is fired. Gone since 0.3.0.
             last_commit: Run hooks against the last commit.
             log_file: Write trace logs to the specified file.
             no_group: Do not run hooks belonging to the specified group. Added in
@@ -350,7 +410,7 @@ class Prek(_Tool):
             show_diff_on_failure: When hooks fail, run `git diff` directly
                 afterward.
             skip: Skip the specified hooks or projects.
-            stage: The stage during which the hook is fired.
+            stage: The stage during which the hook is fired. Added in 0.3.0.
             to_ref: The destination ref in a `from_ref...to_ref` diff expression.
             verbose: Use verbose output.
         """
@@ -432,6 +492,35 @@ class Prek(_Tool):
         from_ref: _Value = ...,
         glob: _Value = ...,
         group: _Value = ...,
+        hook_stage: Literal[
+            "manual",
+            "commit-msg",
+            "post-checkout",
+            "post-commit",
+            "post-merge",
+            "post-rewrite",
+            "pre-commit",
+            "pre-merge-commit",
+            "pre-push",
+            "pre-rebase",
+            "prepare-commit-msg",
+        ]
+        | Sequence[
+            Literal[
+                "manual",
+                "commit-msg",
+                "post-checkout",
+                "post-commit",
+                "post-merge",
+                "post-rewrite",
+                "pre-commit",
+                "pre-merge-commit",
+                "pre-push",
+                "pre-rebase",
+                "prepare-commit-msg",
+            ]
+        ]
+        | None = ...,
         last_commit: _Flag = ...,
         log_file: _Value = ...,
         no_group: _Value = ...,

@@ -33,7 +33,7 @@ class Twine(_Tool):
         """Run this verb.
 
         Args:
-            strict: Fail on warnings.
+            strict: Fail on warnings. Added in 5.0.0.
         """
         ...
     def upload(
@@ -63,7 +63,8 @@ class Twine(_Tool):
         path] [--verbose] [--disable-progress-bar]
 
         Args:
-            attestations: Upload each file's associated attestations.
+            attestations: Upload each file's associated attestations. Added in
+                5.1.1.
             cert: Path to alternate CA bundle (can also be set via TWINE_CERT
                 environment variable).
             client_cert: Path to SSL client certificate, a single file containing

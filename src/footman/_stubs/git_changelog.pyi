@@ -53,6 +53,7 @@ class GitChangelog(_Tool):
             filter_commits: The Git revision-range filter to use (e.g.
             in_place: Insert new entries (versions missing from changelog) in-place.
             include_all: Include all commits, even those without a recognized type.
+                Added in 2.7.0.
             input: Read from given file when creating release notes.
             jinja_context: Pass additional key/value pairs to the template. May be
                 repeated: a list emits the flag once per item.

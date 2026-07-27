@@ -27,8 +27,12 @@ class Cmake(_Tool):
         T: _Value = ...,
         U: _Value = ...,
         W: _Flag = ...,
+        Wdeprecated: _Flag = ...,
+        Wdev: _Flag = ...,
         Werror: _Value = ...,
         Wno_: _Flag = ...,
+        Wno_deprecated: _Flag = ...,
+        Wno_dev: _Flag = ...,
         Wno_error: _Value = ...,
         build: _Value = ...,
         check_system_vars: _Flag = ...,
@@ -68,6 +72,7 @@ class Cmake(_Tool):
         list_presets: _ValuedFlag = ...,
         log_context: _Flag = ...,
         log_level: _Value = ...,
+        no_warn_unused_cli: _Flag = ...,
         open: _Value = ...,
         preset: _Value = ...,
         presets_file: _Value = ...,
@@ -82,6 +87,7 @@ class Cmake(_Tool):
         trace_format: _Value = ...,
         trace_redirect: _Value = ...,
         trace_source: _Value = ...,
+        warn_uninitialized: _Flag = ...,
         workflow: _Value = ...,
         **flags: Any,
     ) -> _Result:
@@ -101,9 +107,13 @@ class Cmake(_Tool):
             S: = Explicitly specify a source directory.
             T: = Specify toolset name if supported by generator.
             U: = Remove matching entries from CMake cache.
-            W: = Enable the specified category of warnings.
+            W: = Enable the specified category of warnings. Added in 4.4.0.
+            Wdeprecated: = Enable deprecation warnings. Gone since 4.4.0.
+            Wdev: = Enable developer warnings. Gone since 4.4.0.
             Werror: = Make the specified category of warnings errors.
-            Wno_: = Suppress the specified category of warnings.
+            Wno_: = Suppress the specified category of warnings. Added in 4.4.0.
+            Wno_deprecated: = Suppress deprecation warnings. Gone since 4.4.0.
+            Wno_dev: = Suppress developer warnings. Gone since 4.4.0.
             Wno_error: = Make the specified category of warnings not errors.
             build: = Build a CMake-generated project binary tree.
             check_system_vars: = Find problems with variable usage in system files.
@@ -120,9 +130,12 @@ class Cmake(_Tool):
             graphviz: = Generate graphviz of dependencies, see
                 CMakeGraphVizOptions.cmake for more.
             help_commands: = Print cmake-commands manual and exit.
-            help_diagnostic: = Print help for one diagnostic and exit.
+            help_diagnostic: = Print help for one diagnostic and exit. Added in
+                4.4.0.
             help_diagnostic_list: = List diagnostics with help available and exit.
-            help_diagnostics: = Print cmake-diagnostics manual and exit.
+                Added in 4.4.0.
+            help_diagnostics: = Print cmake-diagnostics manual and exit. Added in
+                4.4.0.
             help_full: = Print all help manuals and exit.
             help_manual_list: = List help manuals available and exit.
             help_module_list: = List modules with help available and exit.
@@ -141,9 +154,11 @@ class Cmake(_Tool):
                 bare flag, or pass one.
             log_context: = Prepend log messages with context, if given.
             log_level: = Set the verbosity of messages from CMake files.
+            no_warn_unused_cli: = Don't warn about command line options. Gone since
+                4.4.0.
             open: = Open generated project in the associated application.
             preset: = Specify a configure preset.
-            presets_file: = Specify the path to a presets file.
+            presets_file: = Specify the path to a presets file. Added in 4.4.0.
             print_config_dir: = Print CMake config directory for user-wide FileAPI
                 queries.
             profiling_format: = Output data for profiling CMake scripts.
@@ -157,6 +172,7 @@ class Cmake(_Tool):
             trace_format: = Set the output format of the trace.
             trace_redirect: = Redirect trace output to a file instead of stderr.
             trace_source: = Trace only this CMake file/module.
+            warn_uninitialized: = Warn about uninitialized values. Gone since 4.4.0.
             workflow: = Run a workflow preset.
         """
         ...

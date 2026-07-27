@@ -1,7 +1,7 @@
 {
  "schema": 1,
  "tool": "eclint",
- "observed_from": "0.6.0-wk.3",
+ "observed_from": "0.5.2-wk.1",
  "base": {
   "version": "0.6.0-wk.5",
   "date": "2026-07-27",
@@ -147,6 +147,16 @@
     "macOS"
    ],
    "extractor": 1
+  },
+  "0.5.2-wk.1": {
+   "date": "2026-03-10",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1,
+   "drop": [
+    "\tno_gitignore"
+   ]
   }
  }
 }

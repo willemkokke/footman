@@ -111,6 +111,13 @@ comparison = [
 # uv's built-in default; it must be named here to stay in the set. `comparison`
 # stays opt-in — heavy, only for comparison/.
 default-groups = ["dev", "shots", "docs"]
+# Never bind an environment to whatever python happens to be on PATH. A venv
+# built on a python.org framework build has no CA bundle wired up — its
+# `ssl.get_default_verify_paths().cafile` is None — so every registry the
+# option history reads becomes unreachable, and only the tiers that shell out
+# to uv still work. A uv-managed interpreter ships its certificates sorted, so
+# requiring one turns a per-laptop mystery into a property of the project.
+python-preference = "only-managed"
 
 [tool.ruff]
 line-length = 88

@@ -36,6 +36,7 @@ class Eclint(_Tool):
             fix: enable fixing instead of error reporting.
             memprofile: write mem profile to file.
             no_gitignore: do not respect .gitignore rules when walking directories.
+                Added in 0.6.0-wk.3.
             show_all_errors: display all errors for each file (otherwise 10 are
                 kept).
             show_error_quantity: display only the first n errors (0 means all).

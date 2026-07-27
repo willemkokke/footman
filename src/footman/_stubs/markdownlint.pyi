@@ -28,7 +28,7 @@ class Markdownlint(_Tool):
             fix: updates files to resolve fixable issues (can be overridden in
                 configuration).
             format: reads standard input (stdin), applies fixes, writes standard
-                output (stdout).
+                output (stdout). Added in 0.19.0.
             no_globs: ignores the "globs" property if present in the top-level
                 options object.
         """

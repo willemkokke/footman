@@ -308,3 +308,52 @@ def test_task_clean_removes_prefix(tmp_path, monkeypatch):
     monkeypatch.setattr(_provision, "provision", lambda *a, **k: [])
     tools.provision(prefix=prefix, clean=True)
     assert not prefix.exists()
+
+
+def test_a_token_reaches_the_api_and_nothing_else(monkeypatch):
+    """GitHub allows 60 unauthenticated API calls an hour *per IP* and 5,000
+    with a token. Sixty is ample for two forge-hosted tools until the IP is a
+    shared CI runner, where strangers spend the budget.
+
+    Scoped to the API host deliberately: urllib carries headers across
+    redirects, and a release asset redirects to a CDN that has no business
+    seeing a credential.
+    """
+    from footman._provision import api_headers
+
+    monkeypatch.setenv("GH_TOKEN", "s3cret")
+    assert api_headers("https://api.github.com/repos/cli/cli/releases") == {
+        "User-Agent": "footman-provision",
+        "Authorization": "Bearer s3cret",
+    }
+    for elsewhere in (
+        "https://github.com/oven-sh/bun/releases/download/bun-v1.3.13/bun.zip",
+        "https://objects.githubusercontent.com/whatever",
+        "https://gitlab.com/api/v4/projects/x/releases",
+        "https://pypi.org/pypi/ruff/json",
+        "https://registry.npmjs.org/cspell",
+    ):
+        assert "Authorization" not in api_headers(elsewhere), elsewhere
+
+
+def test_the_older_github_token_spelling_is_accepted(monkeypatch):
+    """Actions exports `GITHUB_TOKEN`; `gh` exports `GH_TOKEN`. Both, so the
+    workflow and a laptop need not disagree."""
+    from footman._provision import api_headers
+
+    monkeypatch.delenv("GH_TOKEN", raising=False)
+    monkeypatch.setenv("GITHUB_TOKEN", "from-actions")
+    url = "https://api.github.com/rate_limit"
+    assert api_headers(url)["Authorization"] == "Bearer from-actions"
+
+
+def test_no_token_still_works_just_on_the_smaller_budget(monkeypatch):
+    """A token is an offer, never a requirement — a fresh clone with no
+    credentials still primes, against 60 calls an hour."""
+    from footman._provision import api_headers
+
+    monkeypatch.delenv("GH_TOKEN", raising=False)
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    assert api_headers("https://api.github.com/rate_limit") == {
+        "User-Agent": "footman-provision"
+    }

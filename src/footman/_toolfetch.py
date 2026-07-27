@@ -37,7 +37,12 @@ class Release:
     """One published release: what to install, and when it was published."""
 
     version: str
-    date: str
+    tag: str = ""
+    """What the *forge* calls this release, when that differs from the version
+    it reports — bun tags `bun-v1.3.13` for a binary answering `1.3.13`.
+    Carried rather than guessed: an install that pattern-matched the tag could
+    only ever cover the spellings someone had already met."""
+    date: str = ""
     """`YYYY-MM-DD`, from the index. Not the ordering key — the version is —
     but what breaks a tie between two builds of one base (`0.6.0-wk.5`),
     which is the one comparison a version cannot make."""
@@ -139,8 +144,11 @@ class Unreachable(Exception):
 
 def _index(url: str) -> dict:
     """A registry's JSON. Raises `Unreachable` when it cannot be read."""
+    from footman._provision import api_headers
+
+    request = urllib.request.Request(url, headers=api_headers(url))
     try:
-        with urllib.request.urlopen(url, timeout=TIMEOUT) as response:
+        with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
             return json.load(response)
     except (urllib.error.URLError, TimeoutError, ValueError, OSError) as cause:
         raise Unreachable(url, cause) from cause
@@ -179,6 +187,7 @@ def _forge(driver: Driver, host: str) -> list[Release]:
         found = [
             Release(
                 version=read_version(e.get("tag_name", "")),
+                tag=str(e.get("tag_name", "")),
                 date=str(e.get("published_at"))[:10],
             )
             for e in entries
@@ -191,6 +200,7 @@ def _forge(driver: Driver, host: str) -> list[Release]:
         found = [
             Release(
                 version=read_version(e.get("tag_name", "")),
+                tag=str(e.get("tag_name", "")),
                 date=str(e.get("released_at"))[:10],
             )
             for e in entries
@@ -271,7 +281,7 @@ def _pypi(driver: Driver) -> list[Release]:
     return _order(found)
 
 
-def install(driver: Driver, version: str, into: Path) -> Path | None:
+def install(driver: Driver, release: Release, into: Path) -> Path | None:
     """Install one release into its own directory; return the `bin` to read.
 
     Per release rather than into a shared prefix, because the point is to read
@@ -282,13 +292,13 @@ def install(driver: Driver, version: str, into: Path) -> Path | None:
     kind = driver.provision.kind
     into.mkdir(parents=True, exist_ok=True)
     if kind == "uv":
-        return _install_pypi(driver, version, into)
+        return _install_pypi(driver, release.version, into)
     if kind == "node":
-        return _install_npm(driver, version, into)
+        return _install_npm(driver, release.version, into)
     if kind in ("github", "gitlab", "bun"):
-        return _install_asset(driver, version, into)
+        return _install_asset(driver, release, into)
     if kind == "python":
-        return _install_python(version)
+        return _install_python(release.version)
     return None
 
 
@@ -350,18 +360,25 @@ def _install_npm(driver: Driver, version: str, into: Path) -> Path | None:
     return into / "bin"
 
 
-def _install_asset(driver: Driver, version: str, into: Path) -> Path | None:
+def _install_asset(driver: Driver, release: Release, into: Path) -> Path | None:
     """Download this release's asset for this platform and unpack it.
 
-    The tag is whatever the forge calls it — `v2.96.0` or `2.96.0` — while the
-    history keys on what the binary reports, so both spellings are tried.
+    Addressed by the tag the listing recorded, not by one derived from the
+    version. A forge tag is `v2.96.0` on one project, `2.96.0` on the next and
+    `bun-v1.3.13` on a third, while the binary answers a bare number in every
+    case — so guessing covered exactly the spellings someone had already met,
+    and bun's whole history was unreachable without anyone noticing, because
+    listing it worked and only installing failed. The version is still tried
+    as a fallback, for a listing that recorded no tag.
     """
     from footman import _provision
 
     host = "gitlab" if driver.provision.kind == "gitlab" else "github"
     bindir = into / "bin"
     bindir.mkdir(parents=True, exist_ok=True)
-    for tag in (version, f"v{version}"):
+    for tag in (release.tag, release.version, f"v{release.version}"):
+        if not tag:
+            continue
         try:
             assets = _provision.assets_for(host, driver.provision.repo, tag)
             _name, url = _provision._pick_asset(assets)

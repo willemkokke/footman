@@ -108,7 +108,7 @@ class RuffFormat(_Tool):
                 were modified via format, even if all files were formatted
                 successfully.
             extend_exclude: Like --exclude, but adds additional files and
-                directories on top of those already excluded.
+                directories on top of those already excluded. Added in 0.15.21.
             extension: List of mappings from file extension to language (one of
                 `python`, `ipynb`, `pyi`).
             force_exclude: Enforce exclusions, even for paths passed to Ruff

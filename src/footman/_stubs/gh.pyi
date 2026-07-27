@@ -101,9 +101,9 @@ class Gh(_Tool):
             Args:
                 assignee: Assign people by their login.
                 blocked_by: Mark the new issue as blocked by these issue numbers or
-                    URLs.
+                    URLs. Added in 2.94.0.
                 blocking: Mark the new issue as blocking these issue numbers or
-                    URLs.
+                    URLs. Added in 2.94.0.
                 body: Supply a body.
                 body_file: Read body text from file (use "-" to read from standard
                     input).
@@ -112,13 +112,13 @@ class Gh(_Tool):
                 label: Add labels by name.
                 milestone: Add the issue to a milestone by name.
                 parent: Add the new issue as a sub-issue of the specified parent
-                    number or URL.
+                    number or URL. Added in 2.94.0.
                 project: Add the issue to projects by title.
                 recover: Recover input from a failed run of create.
                 repo: Select another repository using the [HOST/]OWNER/REPO format.
                 template: Template name to use as starting body text.
                 title: Supply a title.
-                type: Set the issue type by name.
+                type: Set the issue type by name. Added in 2.94.0.
                 web: Open the browser to create an issue.
             """
             ...
@@ -160,7 +160,7 @@ class Gh(_Tool):
                 state: Filter by state: {open|closed|all}. Defaults to `open`.
                 template: Format JSON output using a Go template; see "gh help
                     formatting".
-                type: Filter by issue type name.
+                type: Filter by issue type name. Added in 2.94.0.
                 web: List issues in the web browser.
             """
             ...
@@ -593,6 +593,7 @@ class Gh(_Tool):
 
             Args:
                 no_upstream: Do not add an upstream remote when cloning a fork.
+                    Added in 2.88.0.
                 upstream_remote_name: Upstream remote name when cloning a fork.
                     Defaults to `upstream`.
             """

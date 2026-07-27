@@ -92,6 +92,7 @@ class Pytest(_Tool):
         pyargs: _Flag = ...,
         pythonwarnings: _Value = ...,
         quiet: _Flag = ...,
+        r: _Value = ...,
         report_chars: _Value = ...,
         rootdir: _Value = ...,
         runxfail: _Flag = ...,
@@ -149,7 +150,7 @@ class Pytest(_Tool):
             deselect: Deselect item (via node id prefix) during collection
                 (multi-allowed).
             disable_plugin_autoload: Disable plugin auto-loading through entry point
-                packaging metadata.
+                packaging metadata. Added in 8.4.0.
             disable_warnings: Disable warnings summary.
             doctest_continue_on_failure: For a given doctest, continue to run after
                 the first failure.
@@ -167,7 +168,7 @@ class Pytest(_Tool):
                 with leading '_' are only shown with '-v').
             fixtures_per_test: Show fixtures per test.
             force_short_summary: Force condensed summary output regardless of
-                verbosity level.
+                verbosity level. Added in 8.4.0.
             full_trace: Don't cut any tracebacks.
             ignore: Ignore path during collection (multi-allowed).
             ignore_glob: Ignore path pattern during collection (multi-allowed).
@@ -200,7 +201,7 @@ class Pytest(_Tool):
             m: Only run tests matching given mark expression.
             markers: show markers (builtin, plugin and per-project ones).
             max_warnings: Exit with error if all tests pass but the number of
-                warnings exceeds this threshold.
+                warnings exceeds this threshold. Added in 9.1.0.
             maxfail: Exit after first num failures or errors.
             nf: Run tests from new files first, then the rest of the tests sorted by
                 file mtime.
@@ -222,10 +223,15 @@ class Pytest(_Tool):
             pythonwarnings: Set which warnings to report, see -W option of Python
                 itself.
             quiet: Decrease verbosity.
+            r: Show extra test summary info as specified by chars: (f)ailed,
+                (E)rror, (s)kipped, (x)failed, (X)passed, (p)assed, (P)assed with
+                output, (a)ll except passed (p/P), or (A)ll. May be repeated: a list
+                emits the flag once per item. Defaults to `fE`. Gone since 9.1.0.
             report_chars: Show extra test summary info as specified by chars:
                 (f)ailed, (E)rror, (s)kipped, (x)failed, (X)passed, (p)assed,
                 (P)assed with output, (a)ll except passed (p/P), or (A)ll. May be
                 repeated: a list emits the flag once per item. Defaults to `fE`.
+                Added in 9.1.0.
             rootdir: Define root directory for tests.
             runxfail: Report the results of xfail tests as if they were not marked.
             s: Shortcut for --capture=no.
@@ -241,7 +247,8 @@ class Pytest(_Tool):
             strict_config: Enables the strict_config option.
             strict_markers: Enables the strict_markers option.
             sw: Exit on test failure and continue from last failing test next time.
-            sw_reset: Resets stepwise state, restarting the stepwise workflow.
+            sw_reset: Resets stepwise state, restarting the stepwise workflow. Added
+                in 8.4.0.
             sw_skip: Ignore the first failing test but stop on the next failing
                 test.
             tb: Traceback print mode (auto/long/short/line/native/no).

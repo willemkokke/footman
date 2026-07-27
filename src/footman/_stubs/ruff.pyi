@@ -138,7 +138,7 @@ class Ruff(_Tool):
         Args:
             add_ignore: Enable automatic additions of `ruff: ignore` comments to
                 failing lines. Value optional: `True` for the bare flag, or pass
-                one.
+                one. Added in 0.15.21.
             add_noqa: Enable automatic additions of `noqa` directives to failing
                 lines. Value optional: `True` for the bare flag, or pass one.
             cache_dir: Path to the cache directory.
@@ -334,7 +334,7 @@ class Ruff(_Tool):
                 were modified via format, even if all files were formatted
                 successfully.
             extend_exclude: Like --exclude, but adds additional files and
-                directories on top of those already excluded.
+                directories on top of those already excluded. Added in 0.15.21.
             extension: List of mappings from file extension to language (one of
                 `python`, `ipynb`, `pyi`).
             force_exclude: Enforce exclusions, even for paths passed to Ruff

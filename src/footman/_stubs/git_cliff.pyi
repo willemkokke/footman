@@ -66,15 +66,15 @@ class GitCliff(_Tool):
         """git-cliff 2.13.1
 
         Args:
-            azure_devops_repo: Sets the Azure DevOps repository.
-            azure_devops_token: Sets the Azure DevOps API token.
+            azure_devops_repo: Sets the Azure DevOps repository. Added in 2.11.0.
+            azure_devops_token: Sets the Azure DevOps API token. Added in 2.11.0.
             bitbucket_repo: Sets the Bitbucket repository.
             bitbucket_token: Sets the Bitbucket API token.
             body: Sets the template for the changelog body.
             bump: Bumps the version for unreleased changes.
             bumped_version: Prints bumped version for unreleased changes.
             config: Sets the configuration file. Defaults to `cliff.toml`.
-            config_url: Sets the URL for the configuration file.
+            config_url: Sets the URL for the configuration file. Added in 2.9.1.
             context: Prints changelog context as JSON.
             count_tags: Sets the tags to count in the changelog.
             current: Processes the commits that belong to the current tag.
@@ -93,14 +93,15 @@ class GitCliff(_Tool):
             init: Writes the default configuration file to cliff.toml.
             latest: Processes the commits starting from the latest tag.
             no_exec: Disables the external command execution.
-            offline: Disable network access for remote repositories.
+            offline: Disable network access for remote repositories. Added in
+                2.12.0.
             output: Writes output to the given file.
             prepend: Prepends entries to the given changelog file.
             repository: Sets the git repository. May be repeated: a list emits the
                 flag once per item.
             skip_commit: Sets commits that will be skipped in the changelog. May be
                 repeated: a list emits the flag once per item.
-            skip_tags: Sets the tags to skip in the changelog.
+            skip_tags: Sets the tags to skip in the changelog. Added in 2.12.0.
             sort: Sets sorting of the commits inside sections. Defaults to `oldest`.
             strip: Strips the given parts from the changelog.
             tag: Sets the tag for the latest version.
@@ -110,6 +111,7 @@ class GitCliff(_Tool):
             use_branch_tags: Include only the tags that belong to the current
                 branch.
             use_native_tls: Load TLS certificates from the native certificate store.
+                Added in 2.8.0.
             verbose: Increases the logging verbosity.
             with_commit: Sets custom commit messages to include in the changelog.
                 May be repeated: a list emits the flag once per item.

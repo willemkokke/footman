@@ -4460,7 +4460,7 @@ class Uv(_Tool):
             fork_strategy: The strategy to use when selecting multiple versions of a
                 given package across Python versions and platforms.
             format: The format in which to display the dependency graph. Defaults to
-                `text`.
+                `text`. Added in 0.11.29.
             frozen: Display the requirements without locking the project.
             group: Include dependencies from the specified dependency group.
             index: The URLs to use when resolving dependencies, in addition to the

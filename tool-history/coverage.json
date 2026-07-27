@@ -1,7 +1,7 @@
 {
  "schema": 1,
  "tool": "coverage",
- "observed_from": "7.15.2",
+ "observed_from": "7.13.3",
  "base": {
   "version": "7.15.2",
   "date": "2026-07-27",
@@ -973,5 +973,133 @@
    }
   }
  },
- "deltas": {}
+ "deltas": {
+  "7.15.1": {
+   "date": "2026-07-12",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1,
+   "verbs": {
+    "": {
+     "help": "Coverage.py, version 7.15.1 with C extension"
+    }
+   },
+   "help": "Coverage.py, version 7.15.1 with C extension"
+  },
+  "7.15.0": {
+   "date": "2026-07-02",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1,
+   "verbs": {
+    "": {
+     "help": "Coverage.py, version 7.15.0 with C extension"
+    }
+   },
+   "help": "Coverage.py, version 7.15.0 with C extension"
+  },
+  "7.14.3": {
+   "date": "2026-06-22",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1,
+   "drop": [
+    "annotate\tkeep_combined",
+    "html\tkeep_combined",
+    "json\tkeep_combined",
+    "report\tkeep_combined",
+    "xml\tkeep_combined"
+   ],
+   "verbs": {
+    "": {
+     "help": "Coverage.py, version 7.14.3 with C extension"
+    },
+    "html": {
+     "help": "Create an HTML report of the coverage of the files. Each file gets its own page, with the source decorated to show executed, excluded, and missed lines."
+    }
+   },
+   "help": "Coverage.py, version 7.14.3 with C extension"
+  },
+  "7.14.2": {
+   "date": "2026-06-20",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1,
+   "verbs": {
+    "": {
+     "help": "Coverage.py, version 7.14.2 with C extension"
+    }
+   },
+   "help": "Coverage.py, version 7.14.2 with C extension"
+  },
+  "7.14.1": {
+   "date": "2026-05-26",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1,
+   "verbs": {
+    "": {
+     "help": "Coverage.py, version 7.14.1 with C extension"
+    }
+   },
+   "help": "Coverage.py, version 7.14.1 with C extension"
+  },
+  "7.14.0": {
+   "date": "2026-05-10",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1,
+   "verbs": {
+    "": {
+     "help": "Coverage.py, version 7.14.0 with C extension"
+    }
+   },
+   "help": "Coverage.py, version 7.14.0 with C extension"
+  },
+  "7.13.5": {
+   "date": "2026-03-17",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1,
+   "verbs": {
+    "": {
+     "help": "Coverage.py, version 7.13.5 with C extension"
+    }
+   },
+   "help": "Coverage.py, version 7.13.5 with C extension"
+  },
+  "7.13.4": {
+   "date": "2026-02-09",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1,
+   "verbs": {
+    "": {
+     "help": "Coverage.py, version 7.13.4 with C extension"
+    }
+   },
+   "help": "Coverage.py, version 7.13.4 with C extension"
+  },
+  "7.13.3": {
+   "date": "2026-02-03",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1,
+   "verbs": {
+    "": {
+     "help": "Coverage.py, version 7.13.3 with C extension"
+    }
+   },
+   "help": "Coverage.py, version 7.13.3 with C extension"
+  }
+ }
 }

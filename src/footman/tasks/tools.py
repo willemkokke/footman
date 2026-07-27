@@ -1030,7 +1030,7 @@ def _refresh_one(
     seen: list[str] = []
     changed: list[str] = []
     for release in newer:
-        bindir = fetch.install(driver, release.version, scratch / release.version)
+        bindir = fetch.install(driver, release, scratch / release.version)
         if bindir is None:
             break  # a hole here would attribute the next release's changes wrongly
         with _on_path(bindir.parent):
@@ -1110,7 +1110,7 @@ def _prime_one(driver, doc: dict, count: int, scratch: Path, fetch) -> tuple[int
     added = 0
     stopped = ""
     for release in wanted:
-        bindir = fetch.install(driver, release.version, scratch / release.version)
+        bindir = fetch.install(driver, release, scratch / release.version)
         if bindir is None:
             stopped = f"{release.version} (could not install)"
             break

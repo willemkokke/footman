@@ -1,7 +1,7 @@
 {
  "schema": 1,
  "tool": "git_changelog",
- "observed_from": "2.9.4",
+ "observed_from": "2.6.3",
  "base": {
   "version": "2.9.4",
   "date": "2026-07-27",
@@ -276,5 +276,78 @@
    }
   }
  },
- "deltas": {}
+ "deltas": {
+  "2.9.3": {
+   "date": "2026-03-26",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
+  },
+  "2.9.2": {
+   "date": "2026-03-20",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
+  },
+  "2.9.1": {
+   "date": "2026-03-17",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
+  },
+  "2.9.0": {
+   "date": "2026-03-13",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
+  },
+  "2.8.1": {
+   "date": "2026-03-12",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
+  },
+  "2.8.0": {
+   "date": "2026-03-12",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
+  },
+  "2.7.1": {
+   "date": "2026-01-30",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
+  },
+  "2.7.0": {
+   "date": "2025-11-21",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
+  },
+  "2.6.3": {
+   "date": "2025-09-18",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1,
+   "drop": [
+    "\tinclude_all"
+   ],
+   "verbs": {
+    "": {
+     "help": "[-s SECTIONS] [-t TEMPLATE] [-T] [-E] [-Z] [-F RANGE] [-j KEY=VALUE] [-V] [--debug-info]"
+    }
+   },
+   "help": "[-s SECTIONS] [-t TEMPLATE] [-T] [-E] [-Z] [-F RANGE] [-j KEY=VALUE] [-V] [--debug-info]"
+  }
+ }
 }

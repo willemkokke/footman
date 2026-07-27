@@ -93,29 +93,32 @@ class Bun(_Tool):
             cpu_prof: Start CPU profiler and write profile to disk on exit.
             cpu_prof_dir: Specify the directory where the CPU profile will be saved.
             cpu_prof_interval: Specify the sampling interval in microseconds for CPU
-                profiling. Defaults to `1000`.
+                profiling. Defaults to `1000`. Added in 1.3.9.
             cpu_prof_md: Output CPU profile in markdown format (grep-friendly,
-                designed for LLM analysis).
+                designed for LLM analysis). Added in 1.3.7.
             cpu_prof_name: Specify the name of the CPU profile file.
-            cron_period: Cron period for cron execution mode.
-            cron_title: Title for cron execution mode.
+            cron_period: Cron period for cron execution mode. Added in 1.3.11.
+            cron_title: Title for cron execution mode. Added in 1.3.11.
             cwd: Absolute path to resolve files & entry points from.
             dns_result_order: Set the default order of DNS lookup results.
             elide_lines: Number of lines of script output shown when using --filter
                 . Defaults to `10`.
             env_file: Load environment variables from the specified file(s).
             eval: Evaluate argument as a script.
-            experimental_http2_fetch: Offer h2 in fetch() TLS ALPN.
+            experimental_http2_fetch: Offer h2 in fetch() TLS ALPN. Added in 1.3.14.
             experimental_http3_fetch: Honor Alt-Svc: h3 in fetch() and upgrade to
-                HTTP/3.
+                HTTP/3. Added in 1.3.14.
             expose_gc: Expose gc() on the global object.
             fetch_preconnect: Preconnect to a URL while code is loading.
             filter: Run a script in all workspace packages matching the pattern.
-            heap_prof: Generate V8 heap snapshot on exit (.heapsnapshot).
+            heap_prof: Generate V8 heap snapshot on exit (.heapsnapshot). Added in
+                1.3.7.
             heap_prof_dir: Specify the directory where the heap profile will be
-                saved.
+                saved. Added in 1.3.7.
             heap_prof_md: Generate markdown heap profile on exit (for CLI analysis).
-            heap_prof_name: Specify the name of the heap profile file.
+                Added in 1.3.7.
+            heap_prof_name: Specify the name of the heap profile file. Added in
+                1.3.7.
             hot: Enable auto reload in the Bun runtime, test runner, or bundler.
             i: Auto-install dependencies during execution.
             if_present: Exit without an error if the entrypoint does not exist.
@@ -134,11 +137,12 @@ class Bun(_Tool):
             no_deprecation: Suppress all reporting of the custom deprecation.
             no_env_file: Disable automatic loading of .env files.
             no_exit_on_error: Continue running other scripts when one fails (with
-                --parallel/--sequential).
+                --parallel/--sequential). Added in 1.3.9.
             no_install: Disable auto install in the Bun runtime.
             no_orphans: Exit when the parent process dies, and on exit SIGKILL every
-                descendant.
+                descendant. Added in 1.3.14.
             parallel: Run multiple scripts concurrently with Foreman-style output.
+                Added in 1.3.9.
             port: Set the default port for Bun.serve.
             prefer_latest: Use the latest matching versions of packages in the Bun
                 runtime, always checking npm.
@@ -150,6 +154,7 @@ class Bun(_Tool):
             require: Alias of --preload, for Node.js compatibility.
             revision: Print version with revision and exit.
             sequential: Run multiple scripts sequentially with Foreman-style output.
+                Added in 1.3.9.
             shell: Control the shell used for package.json scripts.
             silent: Don't print the script command.
             smol: Use less memory, but run garbage collection more often.
@@ -329,7 +334,7 @@ class Bun(_Tool):
 
         Args:
             allow_unresolved: Allow unresolved dynamic import()/require() specifiers
-                matching these glob patterns.
+                matching these glob patterns. Added in 1.3.11.
             app: (EXPERIMENTAL) Build a web app for production using Bun Bake.
             asset_naming: Customize asset filenames.
             banner: Add a banner to the bundled output such as "use client"; for a
@@ -354,7 +359,7 @@ class Bun(_Tool):
             compile_exec_argv: Prepend arguments to the standalone executable's
                 execArgv.
             compile_executable_path: Path to a Bun executable to use for
-                cross-compilation instead of downloading.
+                cross-compilation instead of downloading. Added in 1.3.6.
             conditions: Pass custom conditions to resolve.
             css_chunking: Chunk CSS files together to reduce duplicated CSS loaded
                 in a browser.
@@ -366,9 +371,10 @@ class Bun(_Tool):
             footer: Add a footer to the bundled output such as // built with bun!.
             format: Specifies the module format to build to.
             keep_names: Preserve original function and class names when minifying.
-            metafile: Write a JSON file with metadata about the build.
+            metafile: Write a JSON file with metadata about the build. Added in
+                1.3.6.
             metafile_md: Write a markdown file with a visualization of the module
-                graph (LLM-friendly).
+                graph (LLM-friendly). Added in 1.3.8.
             minify: Enable all minification flags.
             minify_identifiers: Minify identifiers.
             minify_syntax: Minify syntax and inline data.
@@ -385,7 +391,7 @@ class Bun(_Tool):
             react_fast_refresh: Enable React Fast Refresh transform (does not emit
                 hot-module code, use this for testing).
             reject_unresolved: Fail the build on any dynamic import()/require()
-                specifier that cannot be resolved at build time.
+                specifier that cannot be resolved at build time. Added in 1.3.11.
             root: Root directory used for multiple entry points.
             server_components: (EXPERIMENTAL) Enable server components.
             sourcemap: Build with sourcemaps - 'linked', 'inline', 'external', or
@@ -692,12 +698,12 @@ class Bun(_Tool):
             cpu_prof: Start CPU profiler and write profile to disk on exit.
             cpu_prof_dir: Specify the directory where the CPU profile will be saved.
             cpu_prof_interval: Specify the sampling interval in microseconds for CPU
-                profiling. Defaults to `1000`.
+                profiling. Defaults to `1000`. Added in 1.3.9.
             cpu_prof_md: Output CPU profile in markdown format (grep-friendly,
-                designed for LLM analysis).
+                designed for LLM analysis). Added in 1.3.7.
             cpu_prof_name: Specify the name of the CPU profile file.
-            cron_period: Cron period for cron execution mode.
-            cron_title: Title for cron execution mode.
+            cron_period: Cron period for cron execution mode. Added in 1.3.11.
+            cron_title: Title for cron execution mode. Added in 1.3.11.
             cwd: Absolute path to resolve files & entry points from.
             define: Substitute K:V while parsing, e.g. --define
                 process.env.NODE_ENV:"development".
@@ -708,20 +714,23 @@ class Bun(_Tool):
                 . Defaults to `10`.
             env_file: Load environment variables from the specified file(s).
             eval: Evaluate argument as a script.
-            experimental_http2_fetch: Offer h2 in fetch() TLS ALPN.
+            experimental_http2_fetch: Offer h2 in fetch() TLS ALPN. Added in 1.3.14.
             experimental_http3_fetch: Honor Alt-Svc: h3 in fetch() and upgrade to
-                HTTP/3.
+                HTTP/3. Added in 1.3.14.
             expose_gc: Expose gc() on the global object.
             extension_order: Defaults to: .tsx,.ts,.jsx,.js,.json.
             feature: Enable a feature flag for dead-code elimination, e.g.
                 --feature=SUPER_SECRET.
             fetch_preconnect: Preconnect to a URL while code is loading.
             filter: Run a script in all workspace packages matching the pattern.
-            heap_prof: Generate V8 heap snapshot on exit (.heapsnapshot).
+            heap_prof: Generate V8 heap snapshot on exit (.heapsnapshot). Added in
+                1.3.7.
             heap_prof_dir: Specify the directory where the heap profile will be
-                saved.
+                saved. Added in 1.3.7.
             heap_prof_md: Generate markdown heap profile on exit (for CLI analysis).
-            heap_prof_name: Specify the name of the heap profile file.
+                Added in 1.3.7.
+            heap_prof_name: Specify the name of the heap profile file. Added in
+                1.3.7.
             hot: Enable auto reload in the Bun runtime, test runner, or bundler.
             i: Auto-install dependencies during execution.
             if_present: Exit without an error if the entrypoint does not exist.
@@ -752,13 +761,14 @@ class Bun(_Tool):
             no_deprecation: Suppress all reporting of the custom deprecation.
             no_env_file: Disable automatic loading of .env files.
             no_exit_on_error: Continue running other scripts when one fails (with
-                --parallel/--sequential).
+                --parallel/--sequential). Added in 1.3.9.
             no_install: Disable auto install in the Bun runtime.
             no_macros: Disable macros from being executed in the bundler, transpiler
                 and runtime.
             no_orphans: Exit when the parent process dies, and on exit SIGKILL every
-                descendant.
+                descendant. Added in 1.3.14.
             parallel: Run multiple scripts concurrently with Foreman-style output.
+                Added in 1.3.9.
             port: Set the default port for Bun.serve.
             prefer_latest: Use the latest matching versions of packages in the Bun
                 runtime, always checking npm.
@@ -772,6 +782,7 @@ class Bun(_Tool):
             redis_preconnect: Preconnect to $REDIS_URL at startup.
             require: Alias of --preload, for Node.js compatibility.
             sequential: Run multiple scripts sequentially with Foreman-style output.
+                Added in 1.3.9.
             shell: Control the shell used for package.json scripts.
             silent: Don't print the script command.
             smol: Use less memory, but run garbage collection more often.
@@ -831,23 +842,26 @@ class Bun(_Tool):
         Args:
             bail: Exit the test suite after <NUMBER> failures.
             changed: Only run test files affected by changed files according to git.
+                Added in 1.3.13.
             concurrent: Treat all tests as `test.concurrent()` tests.
             coverage: Generate a coverage profile.
             coverage_dir: Directory for coverage files.
             coverage_reporter: Report coverage in 'text' and/or 'lcov'.
             dots: Enable dots reporter.
-            isolate: Run each test file in a fresh global object.
+            isolate: Run each test file in a fresh global object. Added in 1.3.13.
             max_concurrency: Maximum number of concurrent tests to execute at once.
             no_orphans: Exit when the parent process dies, and on exit SIGKILL every
-                descendant.
+                descendant. Added in 1.3.14.
             only: Run only tests that are marked with "test.only()" or
                 "describe.only()".
             only_failures: Only display test failures, hiding passing tests.
-            parallel: Run test files in parallel using N worker processes.
+            parallel: Run test files in parallel using N worker processes. Added in
+                1.3.13.
             parallel_delay: Milliseconds the first --parallel worker must be busy
-                before spawning the rest.
+                before spawning the rest. Added in 1.3.13.
             pass_with_no_tests: Exit with code 0 when no tests are found.
-            path_ignore_patterns: Glob patterns for test file paths to ignore.
+            path_ignore_patterns: Glob patterns for test file paths to ignore. Added
+                in 1.3.11.
             randomize: Run tests in random order.
             reporter: Test output reporter format.
             reporter_outfile: Output file path for the reporter format (required
@@ -855,14 +869,14 @@ class Bun(_Tool):
             rerun_each: Re-run each test file <NUMBER> times, helps catch certain
                 bugs.
             retry: Default retry count for all tests, overridden by per-test {
-                retry: N }.
+                retry: N }. Added in 1.3.10.
             seed: Set the random seed for test randomization.
             shard: Run a subset of test files, e.g. '--shard=1/3' runs the first of
-                three shards.
+                three shards. Added in 1.3.13.
             test_name_pattern: Run only tests with a name that matches the given
                 regex.
             test_worker: (internal) Run as a --parallel worker, receiving files over
-                IPC.
+                IPC. Added in 1.3.13.
             timeout: Set the per-test timeout in milliseconds, default is 5000.
             todo: Include tests that are marked with "test.todo()".
             update_snapshots: Update snapshot files.

@@ -35,6 +35,26 @@ versions may include breaking changes.
   layout through one shared renderer, so a rule about one is true of all
   three (group help gains description wrapping in the bargain).
 
+- **A GitHub token is used when one is offered.** `GH_TOKEN` or
+  `GITHUB_TOKEN` in the environment raises the API budget from 60 calls an
+  hour to 5,000 — which matters less for footman's own volume than for a
+  shared CI runner, where the unauthenticated allowance is spent by whoever
+  else is on that IP. Sent to `api.github.com` only, never to an asset
+  download: urllib carries headers across redirects, and the CDN behind a
+  release asset has no business seeing a credential. Absent, everything still
+  works on the smaller budget.
+- **Every curated tool's history reaches ten releases**, so the stubs can say
+  when an option arrived rather than only what exists today — 102 new `Added
+  in` claims across the set. eclint reaches four, because four is all that
+  has been published; prek and python already reached further and keep it.
+
+### Fixed
+
+- **A release asset is fetched by the tag the listing recorded, not one
+  derived from the version.** bun tags `bun-v1.3.13` for a binary answering
+  `1.3.13`, so deriving the tag made its entire history unreachable — listing
+  worked, and only installing failed, which is why nothing looked wrong.
+
 ## [0.25.0] — 2026-07-27
 
 ### Added
