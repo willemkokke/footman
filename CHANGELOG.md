@@ -9,6 +9,15 @@ versions may include breaking changes.
 
 ### Added
 
+- **`footman.env_files` — the .env built-in.** `plugin("footman.env_files")`
+  loads `.env` from the invocation's directory at the run's single-threaded
+  moment — before availability gates, so `@requires_env` sees it — with
+  env-wins semantics: the real environment always beats the file.
+  `--env-file=PATH` names another file (a `GlobalOption`, so it completes as
+  a file and exists only when the plugin is pulled); a missing named file
+  refuses, a missing default is nothing to do. Parsing is python-dotenv's —
+  an optional dependency, imported lazily and taught by name when absent,
+  never a footman requirement — with interpolation off.
 - **`GlobalOption` — a plugin's own global option.** Constructing one is
   registering it: a module-level singleton in the provider, stamped with the
   defining module, riding the contributions carriage — so `--env-file=…`

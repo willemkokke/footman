@@ -55,6 +55,7 @@ footman = "footman.pytest_plugin"
 [project.entry-points."footman.tasks"]
 "footman.docs" = "footman.tasks.docs:tasks"
 "footman.tools" = "footman.tasks.tools:tasks"
+"footman.env_files" = "footman.env_files"
 
 [tool.footman]
 
@@ -66,6 +67,9 @@ dev = [
     # the source of the one-line lockfile churn this removes.
     "uv",
     "pytest>=8.0",
+    # For the env_files plugin's tests only — the plugin itself imports it
+    # lazily and teaches by name when absent; never a runtime dependency.
+    "python-dotenv>=1.0",
     "pytest-cov>=5.0",
     # Parallelise the suite across cores (`-n auto`, wired into addopts). The
     # gate is test-bound, so this roughly halves it; xdist runs workers as
