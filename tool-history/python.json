@@ -1,9 +1,9 @@
 {
  "schema": 1,
  "tool": "python",
- "observed_from": "3.13.1",
+ "observed_from": "3.8.20",
  "base": {
-  "version": "3.13.1",
+  "version": "3.14.6",
   "date": "2026-07-27",
   "platforms": [
    "macOS"
@@ -43,7 +43,7 @@
         "-I"
        ],
        "negation": "",
-       "help": "isolate Python from the user's environment (implies -E and -s)",
+       "help": "isolate Python from the user's environment (implies -E, -P and -s)",
        "type": "bool",
        "default": null,
        "choices": []
@@ -275,5 +275,112 @@
    }
   }
  },
- "deltas": {}
+ "deltas": {
+  "3.13.14": {
+   "date": "2026-07-18",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
+  },
+  "3.12.13": {
+   "date": "2026-07-18",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1
+  },
+  "3.11.15": {
+   "date": "2026-07-18",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1,
+   "revert": {
+    "\tI": {
+     "flags": [
+      "-I"
+     ],
+     "negation": "",
+     "help": "isolate Python from the user's environment (implies -E and -s)",
+     "type": "bool",
+     "default": null,
+     "choices": []
+    }
+   }
+  },
+  "3.10.20": {
+   "date": "2026-07-18",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1,
+   "drop": [
+    "\tP",
+    "\thelp_all",
+    "\thelp_env",
+    "\thelp_xoptions"
+   ],
+   "revert": {
+    "\tb": {
+     "flags": [
+      "-b"
+     ],
+     "negation": "",
+     "help": "issue warnings about str(bytes_instance), str(bytearray_instance) and comparing bytes/bytearray with str",
+     "type": "bool",
+     "default": null,
+     "choices": []
+    },
+    "\ts": {
+     "flags": [
+      "-s"
+     ],
+     "negation": "",
+     "help": "don't add user site directory to sys.path; also PYTHONNOUSERSITE",
+     "type": "bool",
+     "default": null,
+     "choices": []
+    }
+   }
+  },
+  "3.9.25": {
+   "date": "2025-10-31",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1,
+   "revert": {
+    "\th": {
+     "flags": [
+      "-h"
+     ],
+     "negation": "",
+     "help": "print this help message and exit (also --help)",
+     "type": "bool",
+     "default": null,
+     "choices": []
+    }
+   }
+  },
+  "3.8.20": {
+   "date": "2024-10-02",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 1,
+   "revert": {
+    "\td": {
+     "flags": [
+      "-d"
+     ],
+     "negation": "",
+     "help": "debug output from parser; also PYTHONDEBUG=x",
+     "type": "bool",
+     "default": null,
+     "choices": []
+    }
+   }
+  }
+ }
 }

@@ -706,16 +706,12 @@ def test_python_is_observed_once_per_minor_at_its_newest_patch(monkeypatch):
 def test_the_python_listing_keeps_only_what_is_a_release(monkeypatch):
     """A pre-release is not something to claim an option arrived in, a
     free-threaded build is a build of a release rather than one of its own,
-    and pypy is a different tool. An interpreter already installed here is
-    listed with a path and no URL — and appears again as a download, which is
-    the entry carrying the date, so a machine's own pythons neither add
-    releases nor hide them."""
+    and pypy is a different tool."""
     from footman import _drivers, _toolfetch
 
     _uv_listing(
         monkeypatch,
         [
-            {**_cpython("3.14.6", "20260718"), "url": None, "path": "/usr/bin/python3"},
             _cpython("3.14.6", "20260718"),
             _cpython("3.15.0a7", "20260801"),
             _cpython("3.13.14", "20260718", variant="freethreaded"),
@@ -725,6 +721,21 @@ def test_the_python_listing_keeps_only_what_is_a_release(monkeypatch):
     driver = _drivers.find("python")
     assert driver is not None
     assert [r.version for r in _toolfetch.releases(driver)] == ["3.14.6"]
+
+
+def test_the_python_listing_asks_only_for_downloads(monkeypatch):
+    """Installing a version replaces its download entry with the local path
+    and drops the URL the date is read from. Asking for anything but downloads
+    would therefore make the index answer differently on every machine — and a
+    prime would erase releases from the listing it is walking."""
+    from footman import _drivers, _toolfetch
+
+    seen: list[list[str]] = []
+    monkeypatch.setattr(_toolfetch, "_capture", lambda argv: seen.append(argv) or "[]")
+    driver = _drivers.find("python")
+    assert driver is not None
+    _toolfetch.releases(driver)
+    assert "--only-downloads" in seen[0]
 
 
 def test_an_unreadable_uv_lists_no_pythons(monkeypatch):

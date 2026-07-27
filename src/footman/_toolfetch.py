@@ -189,7 +189,19 @@ def _uv_python() -> list[Release]:
     try:
         entries = json.loads(
             _capture(
-                ["uv", "python", "list", "--all-versions", "--output-format", "json"]
+                [
+                    "uv",
+                    "python",
+                    "list",
+                    "--all-versions",
+                    # Downloads only, or the index answers differently on every
+                    # machine: installing a version *replaces* its download
+                    # entry with the local path and drops the URL, so a prime
+                    # would erase releases from the very listing it walks.
+                    "--only-downloads",
+                    "--output-format",
+                    "json",
+                ]
             )
         )
     except ValueError:
@@ -204,10 +216,6 @@ def _uv_python() -> list[Release]:
         if not _STABLE.fullmatch(version):
             continue  # 3.15.0a7 is not something to claim an option arrived in
         stamp = _PBS_DATE.search(str(entry.get("url") or ""))
-        # An interpreter already installed on this machine is listed with a
-        # path and no URL. The same version appears again as a download, and
-        # that is the entry carrying a date — so a machine's own pythons
-        # neither add nor hide releases.
         if stamp and version not in found:
             day = stamp.group(1)
             found[version] = Release(

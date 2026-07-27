@@ -307,7 +307,7 @@ DRIVERS: tuple[Driver, ...] = (
     ),
     Driver(
         "python",
-        provision=Provision(kind="python", package="3.13"),
+        provision=Provision(kind="python"),  # unpinned: whatever uv calls newest
         releases="minor",  # 3.13.12 does not supersede 3.14.0
         url="https://docs.python.org/3/using/cmdline.html",
     ),
