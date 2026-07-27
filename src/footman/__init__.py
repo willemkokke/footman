@@ -71,6 +71,8 @@ if TYPE_CHECKING:
     from footman.registry import TaskView as TaskView
     from footman.registry import capture as capture
     from footman.registry import group as group
+    from footman.registry import post_task as post_task
+    from footman.registry import pre_task as pre_task
     from footman.registry import pre_tasks as pre_tasks
     from footman.registry import requires as requires
     from footman.registry import requires_dep as requires_dep
@@ -130,6 +132,8 @@ __all__ = [
     "parallel",
     "passthrough",
     "plugin",
+    "post_task",
+    "pre_task",
     "pre_tasks",
     "progress",
     "prompt",
@@ -173,6 +177,8 @@ def __getattr__(name: str) -> object:
         "Group",
         "capture",
         "pre_tasks",
+        "pre_task",
+        "post_task",
         "Tasks",
         "TaskView",
         "requires",

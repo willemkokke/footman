@@ -37,14 +37,15 @@ from typing import Any, ParamSpec, Protocol, TypeVar, cast, overload
 
 Task = Callable[..., Any]
 Hook = Callable[..., object]
-"""A lifecycle hook. `pre_tasks` takes the `Invocation` and nothing else."""
+"""A lifecycle hook. The moments differ by arity: `pre_tasks(inv)`,
+`pre_task(inv, task)`, `post_task(inv, task, result)`."""
 
 # The hook kinds a provider module can contribute alongside (or instead of)
 # tasks. Each kind is one bucket in `Group.contributions`, and the whole
 # carriage — `capture()`/`reset()` here, `_fork`/`_pull` in compose,
 # `load_tree`'s collection in discover — walks the dict generically, so a
 # future hook kind is one entry here plus its own run semantics.
-CONTRIBUTION_KINDS: tuple[str, ...] = ("pre_tasks",)
+CONTRIBUTION_KINDS: tuple[str, ...] = ("pre_tasks", "pre_task", "post_task")
 
 # A task stays a plain function; its metadata rides as `_footman_*` attributes.
 # These name every key in one place, so the strings appear once and the read
@@ -839,6 +840,56 @@ class Group:
         self.contributions["pre_tasks"].append(fn)
         return fn
 
+    def pre_task(self, fn: Hook) -> Hook:
+        """Register the before-each-task hook: `pre_task(inv, task)`.
+
+        Runs on the task's worker thread — in parallel across tasks, for every
+        execution of the run: a chain segment, a prerequisite, a fan-out
+        member, a body call. It fires after binding, so `task.args` holds the
+        real values the body will receive:
+
+            @footman.pre_task
+            def open_span(inv, task):
+                task.state.span = tracer.start(task.name, dict(task.args))
+
+        `inv` is the frozen invocation — read it freely, it cannot change under
+        you. Per-plugin scratch goes on `task.state` (private to your plugin,
+        one namespace per execution, delivered back to your `post_task`);
+        per-task environment goes in `task.env` (the task's own overlay —
+        never `os.environ`, which is shared with every parallel sibling).
+        A raising hook fails the task like a failed prerequisite, named.
+
+        The return value is **reserved**: a future power for a pre that
+        supplies the task's result and skips the body. Today a returned value
+        is noted and ignored — state belongs on `task.state`.
+        """
+        _check_hook_arity("pre_task", fn, 2)
+        self.contributions["pre_task"].append(fn)
+        return fn
+
+    def post_task(self, fn: Hook) -> Hook:
+        """Register the after-each-task hook: `post_task(inv, task, result)`.
+
+        The paired closing moment: it fires for an execution your plugin's
+        `pre_task` observed — after the body, whatever the outcome — and posts
+        unwind in reverse plugin order, so the first plugin in speaks last.
+        A plugin with no `pre_task` observes every execution that ran.
+
+        `result` reads everything (`ok`, `code`, `returned`, `error`,
+        `duration`, `output`, `steps`) and writes one thing: `set_returned`,
+        which rewrites the *reported* value — the summary and the `--json`
+        envelope — never what a dependent or a body caller received. A raising
+        hook fails an otherwise-green task, named: a reporter that crashed
+        must not pass silently.
+
+            @footman.post_task
+            def close_span(inv, task, result):
+                task.state.span.end(ok=result.ok)
+        """
+        _check_hook_arity("post_task", fn, 3)
+        self.contributions["post_task"].append(fn)
+        return fn
+
     @overload
     def default(self, fn: Callable[_P, _R_co]) -> TaskFn[_P, _R_co]: ...
     @overload
@@ -984,6 +1035,8 @@ root = Group("root")
 task = root.task
 group = root.group
 pre_tasks = root.pre_tasks
+pre_task = root.pre_task
+post_task = root.post_task
 
 
 def reset() -> None:

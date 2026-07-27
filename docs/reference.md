@@ -61,10 +61,16 @@ release = group("release", help="Cut a release")
 @release.task
 def wheel(): ...
 
-@pre_tasks                  # the invocation, before anything runs
-def gate(tasks):            # (see Monorepos & config)
-    for t in tasks:
-        t.add_pre(tasks["audit"])
+@pre_tasks                  # once per invocation, before anything runs
+def gate(inv):              # (see Composing tasks)
+    for t in inv.tasks:
+        t.add_pre(inv.tasks["audit"])
+
+@pre_task                   # around every execution, on its worker thread
+def opened(inv, task): ...  # post-bind: task.args, task.state, task.env
+
+@post_task
+def closed(inv, task, result): ...  # result.ok/returned + set_returned()
 ```
 
 ## Runtime helpers

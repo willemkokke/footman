@@ -15,16 +15,17 @@ returns a non-zero `int` exit code; failures stop the chain unless
 from __future__ import annotations
 
 import contextlib
+import contextvars
 import enum
 import inspect
 import io
 import json
 import os
 import time
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path, PurePath
-from types import MappingProxyType
+from types import MappingProxyType, SimpleNamespace
 from typing import Any
 
 from footman import _binder, _futures, _globals, coerce, context, registry
@@ -972,6 +973,258 @@ def _serial_globals(ctx: Context) -> Iterator[None]:
         ctx.serial_active = False
 
 
+# --- the per-task lifecycle: pre_task / post_task ----------------------------
+
+
+_hook_owner: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+    "footman_hook_owner", default=None
+)
+
+
+class HookFailed(RuntimeError):
+    """A per-task lifecycle hook raised; the message names the plugin."""
+
+
+@dataclass(frozen=True)
+class _HookPlugin:
+    name: str  # the defining module: what a failure names, what state keys on
+    pre: tuple[Task, ...]
+    post: tuple[Task, ...]
+
+
+@dataclass(frozen=True)
+class _Lifecycle:
+    inv: Any  # the frozen Invocation
+    plugins: tuple[_HookPlugin, ...]
+
+
+# The run's per-task hooks, installed by the app layer for the duration of one
+# invocation. A module global, not a contextvar: every pool thread and body
+# call must see the same ladder. `None` — the common case — is the fast path.
+_lifecycle: _Lifecycle | None = None
+
+
+def install_lifecycle(inv: Any, contributions: Mapping[str, Sequence[Task]]) -> None:
+    """Group the tree's per-task hooks by plugin and arm them for the run.
+
+    A plugin is the module that defined the hook: its `pre_task` and
+    `post_task` pair through that identity, its `task.state` namespace is
+    private to it, and a failure names it. Plugin order is the order of first
+    contribution (cascade order); posts unwind in reverse.
+    """
+    global _lifecycle
+    grouped: dict[str, tuple[list[Task], list[Task]]] = {}
+    for kind, slot in (("pre_task", 0), ("post_task", 1)):
+        for hook in contributions.get(kind, ()):
+            owner = getattr(hook, "__module__", None) or "<unknown>"
+            grouped.setdefault(owner, ([], []))[slot].append(hook)
+    _lifecycle = (
+        _Lifecycle(
+            inv,
+            tuple(
+                _HookPlugin(name, tuple(pre), tuple(post))
+                for name, (pre, post) in grouped.items()
+            ),
+        )
+        if grouped
+        else None
+    )
+
+
+def clear_lifecycle() -> None:
+    global _lifecycle
+    _lifecycle = None
+
+
+class TaskHandle:
+    """One task execution, as a per-task lifecycle hook sees it.
+
+    Read-only facts — `name`, `args`, `source_hash` — plus the two lanes a
+    hook may write through: `env`, the task's own environment overlay, and
+    `state`, a namespace private to the current plugin and this execution.
+    """
+
+    __slots__ = ("_bound", "_ctx", "_fn", "_kwargs", "_raw_args", "_states", "name")
+
+    def __init__(
+        self,
+        fn: Task,
+        seg: Segment,
+        ctx: Context,
+        args: list[Any],
+        kwargs: dict[str, Any],
+    ) -> None:
+        object.__setattr__(self, "_fn", fn)
+        object.__setattr__(self, "_ctx", ctx)
+        object.__setattr__(self, "_raw_args", tuple(args))
+        object.__setattr__(self, "_kwargs", dict(kwargs))
+        object.__setattr__(self, "_bound", None)
+        object.__setattr__(self, "_states", {})
+        object.__setattr__(self, "name", seg.task)
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        raise AttributeError(
+            f"task.{name} is read-only — per-plugin scratch goes on "
+            f"task.state, per-task environment in task.env"
+        )
+
+    @property
+    def args(self) -> Mapping[str, Any]:
+        """The bound arguments — what the body actually receives, defaults
+        included, read-only. Mutation would let a plugin silently break the
+        typed contract the framework exists to enforce."""
+        bound: Mapping[str, Any] | None = self._bound
+        if bound is None:
+            from footman.manifest import call_signature
+
+            try:
+                b = call_signature(self._fn).bind_partial(
+                    *self._raw_args, **self._kwargs
+                )
+                b.apply_defaults()
+                mapping = dict(b.arguments)
+            except TypeError:  # an unbindable shape: show what was passed
+                mapping = dict(self._kwargs)
+            bound = MappingProxyType(mapping)
+            object.__setattr__(self, "_bound", bound)
+        return bound
+
+    @property
+    def env(self) -> dict[str, str]:
+        """The task's environment overlay: `run()` merges it into every
+        subprocess, in-body `os.environ` reads see it. Never the process
+        globals — a parallel sibling keeps its own."""
+        return self._ctx.env
+
+    @property
+    def state(self) -> SimpleNamespace:
+        """Scratch shared between this plugin's pre and post: one namespace
+        per (plugin, execution), invisible to every other plugin."""
+        owner = _hook_owner.get()
+        if owner is None:
+            raise RuntimeError(
+                "task.state is per-plugin, so it is only reachable inside a "
+                "lifecycle hook"
+            )
+        states: dict[str, SimpleNamespace] = self._states
+        ns = states.get(owner)
+        if ns is None:
+            ns = states[owner] = SimpleNamespace()
+        return ns
+
+    @property
+    def source_hash(self) -> str | None:
+        """`registry.task_source_hash` for this task — a tripwire, not an
+        identity: `None` when the source cannot be read, and shallow by
+        nature (the body's own source, nothing it calls)."""
+        return registry.task_source_hash(self._fn)
+
+
+class ResultView:
+    """A `post_task`'s view of the result: read everything, write one thing.
+
+    `set_returned` rewrites the *reported* value — the summary line and the
+    `--json` envelope — never what a dependent or a body caller received:
+    that was snapshotted the moment the body handed it over.
+    """
+
+    __slots__ = ("_result",)
+
+    def __init__(self, result: TaskResult) -> None:
+        object.__setattr__(self, "_result", result)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(object.__getattribute__(self, "_result"), name)
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        raise AttributeError(
+            f"result.{name} is read-only in post_task — the one write is "
+            f"set_returned(value), which rewrites the reported value only"
+        )
+
+    def set_returned(self, value: Any) -> None:
+        """Rewrite the reported value; the pristine return is already spoken
+        for (dependents, body callers, forwarding)."""
+        object.__getattribute__(self, "_result").returned = value
+
+
+def _reserved_note(ctx: Context, plugin: str, hook: Task) -> None:
+    sink = ctx.err_sink if ctx.err_sink is not None else context.real_stderr()
+    sink.write(
+        f"note: {plugin} pre_task {getattr(hook, '__name__', '?')!r} returned "
+        f"a value; a pre_task's return channel is reserved (for a pre that "
+        f"supplies the task's result) — keep per-task state on task.state\n"
+    )
+
+
+def _enter_task_hooks(
+    life: _Lifecycle, handle: TaskHandle
+) -> tuple[list[_HookPlugin], BaseException | None]:
+    """Run every plugin's `pre_task` hooks, in plugin order.
+
+    Returns the plugins whose posts may fire — context-manager stack
+    semantics: a plugin enters when any of its pres fired, or trivially when
+    it has none to fire; a raising pre stops the walk, fails the task, and
+    leaves the already-entered plugins to unwind.
+    """
+    entered: list[_HookPlugin] = []
+    for plugin in life.plugins:
+        fired = False
+        for hook in plugin.pre:
+            token = _hook_owner.set(plugin.name)
+            try:
+                value = hook(life.inv, handle)
+            except Exception as exc:
+                if fired:
+                    entered.append(plugin)
+                failure = HookFailed(
+                    f"pre_task hook {getattr(hook, '__name__', '?')!r} from "
+                    f"{plugin.name} failed for task {handle.name!r}: "
+                    f"{type(exc).__name__}: {exc}"
+                )
+                failure.__cause__ = exc
+                return entered, failure
+            finally:
+                _hook_owner.reset(token)
+            fired = True
+            if value is not None:
+                _reserved_note(handle._ctx, plugin.name, hook)
+        entered.append(plugin)
+    return entered, None
+
+
+def _exit_task_hooks(
+    life: _Lifecycle,
+    entered: list[_HookPlugin],
+    handle: TaskHandle,
+    result: TaskResult,
+) -> BaseException | None:
+    """Unwind `post_task` hooks in reverse plugin order; every one runs.
+
+    The first failure is kept (it fails an otherwise-green task); later
+    plugins still unwind, context-manager style.
+    """
+    view = ResultView(result)
+    first: BaseException | None = None
+    for plugin in reversed(entered):
+        for hook in plugin.post:
+            token = _hook_owner.set(plugin.name)
+            try:
+                hook(life.inv, handle, view)
+            except Exception as exc:
+                if first is None:
+                    failure = HookFailed(
+                        f"post_task hook {getattr(hook, '__name__', '?')!r} "
+                        f"from {plugin.name} failed for task {handle.name!r}: "
+                        f"{type(exc).__name__}: {exc}"
+                    )
+                    failure.__cause__ = exc
+                    first = failure
+            finally:
+                _hook_owner.reset(token)
+    return first
+
+
 def run_task(
     fn: Task, seg: Segment, ctx: Context, forwarded: dict[str, Any] | None = None
 ) -> TaskResult:
@@ -1028,6 +1281,7 @@ def run_bound(
             return _result(seg, 1, None, exc, 0.0)
         return _futures.shared_result(seg.task, value)
 
+    plain_args = args  # the caller-visible arguments, before ctx is injected
     if context_param_name(resolved_signature(fn)):
         args = [ctx, *args]  # ctx is the first positional parameter
 
@@ -1053,27 +1307,54 @@ def run_bound(
     ctx.in_task = True  # a mid-body prompt()/confirm()/select() is now guarded
     start = time.perf_counter()
     started = start  # the report's ordering key: when this task actually began
+    life = _lifecycle
+    handle: TaskHandle | None = None
+    entered: list[_HookPlugin] = []
+    hook_error: BaseException | None = None
+    if life is not None:
+        # Built from the pre-injection arguments: ctx is machinery, not a
+        # value a hook should read back as one of the task's own. Pre hooks
+        # run inside the timed span, so their cost is the task's cost.
+        handle = TaskHandle(fn, seg, ctx, plain_args, kwargs)
+        entered, hook_error = _enter_task_hooks(life, handle)
     try:
-        with _globals.lane(
-            lane_policy, name=seg.task, inherited=inherited, console=console
-        ):
-            if lane_policy is not None:
-                with _serial_globals(ctx):
+        if hook_error is not None:
+            # A raising pre fails the task like a failed prerequisite: the
+            # body never runs, and the failure names the plugin.
+            code, returned, error = 1, None, hook_error
+        else:
+            with _globals.lane(
+                lane_policy, name=seg.task, inherited=inherited, console=console
+            ):
+                if lane_policy is not None:
+                    with _serial_globals(ctx):
+                        code, returned, error = _call(fn, args, kwargs, as_call)
+                else:
                     code, returned, error = _call(fn, args, kwargs, as_call)
-            else:
-                code, returned, error = _call(fn, args, kwargs, as_call)
     finally:
         _current.reset(token)
     duration = time.perf_counter() - start
     output = ctx.sink.getvalue() if isinstance(ctx.sink, io.StringIO) else ""
-    # The pristine return, snapshotted the moment the body handed it over: what
-    # a dependent or a body-caller receives is what the annotation promised,
-    # whatever a reporter later does to the *reported* result. Only a shared
-    # execution holds a cell (`claim` gives an unshared one none), so what a run
-    # reuses never depends on scheduling order.
-    _futures.resolve(cell, returned, error)
     result = _result(seg, code, returned, error, duration, output, ctx.steps)
     result.started = started
+    if life is not None and handle is not None:
+        post_error = _exit_task_hooks(life, entered, handle, result)
+        if post_error is not None and result.ok:
+            # A reporter that crashed must not pass silently: the task fails,
+            # named, exactly as a raising pre would have failed it.
+            result.ok = False
+            result.code = 1
+            result.error = post_error
+            error = post_error
+    # The pristine return, snapshotted the moment the body handed it over: what
+    # a dependent or a body-caller receives is what the annotation promised,
+    # whatever a reporter later does to the *reported* result. Resolved after
+    # the posts, so a hook-failed task never hands a waiter a green value; a
+    # `set_returned` cannot reach it, because `returned` was captured at
+    # `_call` exit. Only a shared execution holds a cell (`claim` gives an
+    # unshared one none), so what a run reuses never depends on scheduling
+    # order.
+    _futures.resolve(cell, returned, error)
     # A task that failed while fail-fast was already aborting the run wasn't a
     # genuine failure — it was cut off. Report that honestly, not as "failed".
     if not result.ok and context._aborting.is_set():
