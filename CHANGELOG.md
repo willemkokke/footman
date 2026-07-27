@@ -32,6 +32,30 @@ versions may include breaking changes.
 - **`App(dist=...)`** tells a branded CLI which distribution ships it —
   what a lockfile pins, and what a script header must declare. Unset,
   both handoffs stay out of a branded runner's way.
+- **The option history knows which platforms it has looked at.** An
+  observation comes from one platform and says nothing about the others, so
+  each release records who read it and — beside the surface, never inside it
+  — the options they looked for and did not find. Exceptions only: nothing
+  recorded means nothing contradicts the option, so a stub says "Not
+  available on Windows." exactly where somebody checked. A later sighting on
+  that platform clears the claim; a platform that did not run says nothing
+  either way. `since` and `until` are withheld where the observations cannot
+  support them — a platform's own floor is not a since.
+- **`fm tools.gather` and `fm tools.assemble` — observe here, fold there.**
+  A Linux box cannot say what a tool's `--help` prints on Windows, so
+  gathering writes a portable, self-describing document of what one machine
+  saw, and assembling folds any number of them into the store in one
+  process. `fm tools.refresh` is both at once, unchanged for a single
+  machine. Gathering a tool a platform has never read starts at that tool's
+  *base*, so new coverage begins at the version people actually run.
+- **`fm tools.prepare-release`** rolls a release the way the runbook does:
+  the two version files that must agree, the `--version` example the drift
+  test guards, and `[Unreleased]` into a dated section with its compare
+  links. Refuses when there is nothing to release.
+- **The weekly refresh observes on ubuntu, macOS and Windows** and assembles
+  on one runner. Its PR opens on any tree change and auto-merges once the
+  gate is green; auto-release is built and gated on `vars.AUTO_RELEASE`,
+  default off.
 
 - **The tool walks gather in parallel, on footman's own runtime.** Each
   (tool, release) observation is a task of its own, fanned out with
@@ -113,6 +137,17 @@ versions may include breaking changes.
 - **ty 0.0.64** adds `--exclude-scripts`.
 
 ### Fixed
+
+- **Re-reading a release no longer overwrites what other platforms saw.**
+  The same-version path replaced the stored surface outright — erasing every
+  recorded absence while the entry went on claiming those platforms had
+  looked — and never recomputed the delta beneath it, so everything below
+  replayed against a surface that no longer existed. It merges now, and
+  restitches the two entries that reference a surface it changed.
+- **Provisioning survives Windows.** The python tier linked its interpreter
+  with a symlink, which Windows grants only with developer mode or
+  elevation; it falls back to a launcher, since a copied `python.exe` finds
+  no standard library.
 
 - **Click extraction no longer mistakes this environment for the binary.**
   The entry point imports from the running process while the binary comes
