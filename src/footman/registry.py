@@ -506,7 +506,7 @@ class Group:
         self.tasks: dict[str, Task] = {}
         self.groups: dict[str, Group] = {}
         # Lifecycle contributions, one bucket per hook kind (root registry
-        # only). `@finalize` hooks are the only kind today.
+        # only). `pre_tasks` hooks are the only kind today.
         self.contributions: dict[str, list[Callable[..., object]]] = {
             kind: [] for kind in CONTRIBUTION_KINDS
         }
@@ -813,17 +813,6 @@ class Group:
         self.contributions["pre_tasks"].append(fn)
         return fn
 
-    def finalize(self, fn: Hook) -> Hook:
-        """Retired: `@finalize` is `@pre_tasks`, which is handed the whole
-        invocation rather than only the tree."""
-        raise RegistrationError(
-            f"@finalize is retired — use @pre_tasks, which gets the whole "
-            f"invocation: `def {getattr(fn, '__name__', 'hook')}(inv)` and "
-            f"`inv.tasks` where the tree view used to arrive. It runs at the "
-            f"same moment, in the same cascade order, and can also set the "
-            f"environment every task will see."
-        )
-
     @overload
     def default(self, fn: Callable[_P, _R_co]) -> TaskFn[_P, _R_co]: ...
     @overload
@@ -969,7 +958,6 @@ root = Group("root")
 task = root.task
 group = root.group
 pre_tasks = root.pre_tasks
-finalize = root.finalize  # retired: raises, pointing at pre_tasks
 
 
 def reset() -> None:
@@ -1235,7 +1223,7 @@ def _as_fn(t: TaskView | Task) -> Task:
 
 
 class TaskView:
-    """A finalizer's handle on one task: read its wiring, its policy flags, and
+    """A hook's handle on one task: read its wiring, its policy flags, and
     its cascade provenance (where it was defined, what it overrode), and edit it
     here — never through the private `_footman_*` attributes."""
 
@@ -1291,7 +1279,7 @@ class TaskView:
     def hidden(self) -> bool | None:
         """The task's own `hidden=` answer, or `None` when it inherits one.
 
-        Read the *declaration*, not the resolved answer: a finalizer that
+        Read the *declaration*, not the resolved answer: a hook that
         hides a group wants to know whether this task overrode it.
         """
         return declared_hidden(self.fn)
@@ -1307,7 +1295,7 @@ class TaskView:
         """The `@task(confirm="…")` prompt gating the task, or `""` if none."""
         return task_confirm(self.fn)
 
-    # Cascade provenance (read-only) — for finalizers making decisions by
+    # Cascade provenance (read-only) — for hooks making decisions by
     # where a task came from and what it overrode.
 
     @property
@@ -1367,18 +1355,18 @@ class TaskView:
 
     def set_opts(self, **overrides: Any) -> None:
         """Set orchestration options on the task **permanently, for every use** —
-        the finalize-time counterpart to a per-use `.opts()`. Takes the same
+        the discovery-time counterpart to a per-use `.opts()`. Takes the same
         options (`keep_going`, `atomic`, `interactive`, `progress`, `confirm`,
         `infinite`) and rejects a task parameter with the same taught error; the
         difference is that it edits the registered task rather than a per-use
-        proxy, so a finalizer can set a policy across a whole class of tasks. A
+        proxy, so a hook can set a policy across a whole class of tasks. A
         command-line `-k`/`--fail-fast` still wins over a set `keep_going`."""
         for attr, value in _opts_overrides(overrides).items():
             setattr(self.fn, attr, value)
 
 
 class Tasks:
-    """A finalizer's view of the merged command tree: iterate every task, or
+    """A hook's view of the merged command tree: iterate every task, or
     look one up by its command-line name, each as a `TaskView`."""
 
     def __init__(self, root: Group) -> None:

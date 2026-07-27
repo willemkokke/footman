@@ -19,7 +19,7 @@ def _write(path: Path, body: str) -> Path:
     return path
 
 
-def test_finalize_edits_the_merged_tree(tmp_path):
+def test_a_hook_edits_the_merged_tree(tmp_path):
     src = _write(
         tmp_path / "tasks.py",
         """
@@ -44,8 +44,8 @@ def test_finalize_edits_the_merged_tree(tmp_path):
     assert view["audit"].fn in view["deploy-web"].pre
 
 
-def test_finalize_reaches_a_subfolder_task(tmp_path):
-    # A ROOT finalizer edits a task defined in a subfolder's file — the whole
+def test_a_hook_reaches_a_subfolder_task(tmp_path):
+    # A ROOT hook edits a task defined in a subfolder's file — the whole
     # merged tree, not just its own file.
     root = _write(
         tmp_path / "tasks.py",
@@ -75,8 +75,8 @@ def test_finalize_reaches_a_subfolder_task(tmp_path):
     assert view["audit"].fn in view["ship"].pre
 
 
-def test_finalize_runs_in_cascade_order_specific_last(tmp_path):
-    # Root's finalizer runs first, the folder nearest cwd last — the same
+def test_hooks_run_in_cascade_order_specific_last(tmp_path):
+    # Root's hook runs first, the folder nearest cwd last — the same
     # "local overrides global" precedence the task cascade uses.
     root = _write(
         tmp_path / "tasks.py",
@@ -108,7 +108,7 @@ def test_finalize_runs_in_cascade_order_specific_last(tmp_path):
     assert getattr(tree.tasks["x"], "_order") == ["root", "svc"]
 
 
-def test_finalize_that_raises_is_named(tmp_path):
+def test_a_hook_that_raises_is_named(tmp_path):
     bad = _write(
         tmp_path / "tasks.py",
         """
@@ -142,7 +142,7 @@ def test_tasks_view_iterates_nested_tasks(tmp_path):
     assert sorted(t.name for t in view) == ["a", "build"]
 
 
-def test_finalize_disable_reaches_the_manifest(tmp_path):
+def test_a_hook_disable_reaches_the_manifest(tmp_path):
     # Finalizers run at discovery, before the manifest is built — so a
     # `disable()` shows up in the baked node (`disabled`).
     src = _write(
@@ -361,14 +361,14 @@ def test_task_view_set_opts_rejects_a_task_parameter(tmp_path):
         """,
     )
     # `set_opts` reuses `.opts()`'s validation, so a stray parameter is a taught
-    # error surfaced (named) through the finalizer.
+    # error surfaced (named) through the hook.
     with pytest.raises(discover.HookError, match="bad"):
         discover.load_tree([src])
 
 
-def test_finalize_uses_defining_dir_for_a_cascade_decision(tmp_path):
+def test_a_hook_uses_defining_dir_for_a_cascade_decision(tmp_path):
     # The motivating case: gate every task defined under an `infra/` folder,
-    # deciding purely from provenance the finalizer reads off the view.
+    # deciding purely from provenance the hook reads off the view.
     root = _write(
         tmp_path / "tasks.py",
         """
@@ -479,13 +479,15 @@ def test_a_hook_with_the_wrong_arity_is_refused_at_registration():
         def too_many(inv, extra): ...
 
 
-def test_finalize_is_retired_with_a_pointer():
+def test_finalize_is_gone():
+    # Removed outright rather than kept as a refusing shim: the lifecycle has
+    # one name per moment, and a retired alias is a second one.
+    import footman
+
     reg = Group("root")
-
-    with pytest.raises(RegistrationError, match=r"@finalize is retired"):
-
-        @reg.finalize
-        def gate(tasks): ...
+    assert not hasattr(reg, "finalize")
+    assert not hasattr(footman, "finalize")
+    assert "finalize" not in footman.__all__
 
 
 def test_the_invocation_refuses_writes_once_frozen():

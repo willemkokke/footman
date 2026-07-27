@@ -350,10 +350,6 @@ def gate_infra(inv):
             t.add_pre(inv.tasks["audit"])
 ```
 
-`@finalize` was the earlier spelling of this hook, handed only the tree. It is
-retired: it raises, pointing at `@pre_tasks`, whose `inv.tasks` is the same view
-and which can also set the environment every task will see.
-
 Because the hook runs **at discovery**, its edits are part of the plan, not
 a runtime surprise: an added `pre` runs and shows in `fm <task> --dry-run`, and
 a disabled task drops from `--list`, `--help`, and <kbd>Tab</kbd> completion —

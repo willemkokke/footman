@@ -104,7 +104,7 @@ def _import_source(dotted: str, *, allow_empty: bool = False) -> Group:
             ) from exc
     if captured.tasks or captured.groups or any(captured.contributions.values()):
         # Tasks, groups, or lifecycle contributions alone — a hooks-only
-        # provider (a `@finalize` module) is a valid pull with no tree.
+        # provider (a `@pre_tasks` module) is a valid pull with no tree.
         tree = captured
     elif allow_empty:
         tree = captured  # an empty intermediate package: fine, walk on
@@ -137,7 +137,7 @@ def _fork(tree: Group) -> Group:
     for name, sub in tree.groups.items():
         fork.groups[name] = _fork(sub)  # recurse: fresh subgroup objects
     # A faithful copy carries *every* Group field, not only tasks/groups: a
-    # provider's lifecycle contributions (`@finalize` hooks today) ride
+    # provider's lifecycle contributions (`@pre_tasks` hooks today) ride
     # along, provenance survives, and a runnable group keeps its
     # `@group.default` for free — the default *is* the child task named
     # `default`, so the tasks-dict copy above already carried it.
@@ -552,7 +552,7 @@ def _pull(
     _stamp(fork, identity)
     _prune(fork, tuple(only), tuple(exclude), verb)
     # A provider's lifecycle contributions act on the whole merged tree
-    # (a `@finalize` hook edits it in place), so they belong on the live
+    # (a `@pre_tasks` hook edits the tree in place), so they belong on the live
     # root that discovery collects from, never the grafted subtree.
     for kind, bucket in fork.contributions.items():
         registry.root.contributions[kind].extend(bucket)

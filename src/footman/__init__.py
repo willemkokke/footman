@@ -70,7 +70,6 @@ if TYPE_CHECKING:
     from footman.registry import Tasks as Tasks
     from footman.registry import TaskView as TaskView
     from footman.registry import capture as capture
-    from footman.registry import finalize as finalize
     from footman.registry import group as group
     from footman.registry import pre_tasks as pre_tasks
     from footman.registry import requires as requires
@@ -119,7 +118,6 @@ __all__ = [
     "exists",
     "fail",
     "fetch",
-    "finalize",
     "forward",
     "group",
     "include",
@@ -174,7 +172,6 @@ def __getattr__(name: str) -> object:
         "group",
         "Group",
         "capture",
-        "finalize",
         "pre_tasks",
         "Tasks",
         "TaskView",
