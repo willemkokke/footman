@@ -2057,3 +2057,95 @@ def test_a_platform_new_to_a_tool_backfills_the_version_people_run(
     assert stored["base"]["platforms"] == sorted(["Linux", tools._platform()])
     assert stored["base"]["absent"] == {"\tfork": [tools._platform()]}
     assert "release warranted: no" in result.stdout  # coverage is not an event
+
+
+# --- rolling a release the way the runbook does ------------------------------
+
+
+def _repo(tmp_path, version="1.2.3", entries=("- **A thing.** It happened.",)):
+    """A miniature checkout: the two files that must agree, and the docs
+    references a drift test guards."""
+    (tmp_path / "src" / "footman").mkdir(parents=True)
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "pyproject.toml").write_text(
+        f'[project]\nname = "footman"\nversion = "{version}"\n', encoding="utf-8"
+    )
+    (tmp_path / "src" / "footman" / "__init__.py").write_text(
+        f'__version__ = "{version}"\n', encoding="utf-8"
+    )
+    (tmp_path / "docs" / "json.md").write_text(
+        f'{{"schema": 1, "name": "footman", "version": "{version}"}}\n'
+        f"Pin the minor with `footman~=1.2.0` if you build on it.\n",
+        encoding="utf-8",
+    )
+    repo = "https://github.com/willemkokke/footman"
+    (tmp_path / "CHANGELOG.md").write_text(
+        "# Changelog\n\n## [Unreleased]\n\n### Changed\n\n"
+        + "\n".join(entries)
+        + f"\n\n## [{version}] — 2026-07-01\n\n- Older.\n\n"
+        f"[Unreleased]: {repo}/compare/v{version}...HEAD\n",
+        encoding="utf-8",
+    )
+    return tmp_path
+
+
+def test_a_stub_only_release_is_a_patch_and_moves_what_must_agree(
+    tmp_path, monkeypatch
+):
+    """The tools moved, footman did not — decision 9. Two files must agree
+    or the release workflow refuses the tag, and the JSON page's `--version`
+    example is drift-tested against every release."""
+    from footman.tasks import tools
+
+    root = _repo(tmp_path)
+    monkeypatch.setattr(tools, "_HISTORY", root / "tool-history")
+
+    prepared = tools.prepare_release()
+    assert (prepared.previous, prepared.version, prepared.entries) == (
+        "1.2.3",
+        "1.2.4",
+        1,
+    )
+    assert 'version = "1.2.4"' in (root / "pyproject.toml").read_text(encoding="utf-8")
+    assert '__version__ = "1.2.4"' in (
+        root / "src" / "footman" / "__init__.py"
+    ).read_text(encoding="utf-8")
+
+    page = (root / "docs" / "json.md").read_text(encoding="utf-8")
+    assert '"version": "1.2.4"' in page
+    # ...and the minor pin stays put: it tracks the minor, not the patch.
+    assert "footman~=1.2.0" in page
+
+
+def test_rolling_the_changelog_dates_the_release_and_repoints_the_links(
+    tmp_path, monkeypatch
+):
+    from footman.tasks import tools
+
+    root = _repo(tmp_path)
+    monkeypatch.setattr(tools, "_HISTORY", root / "tool-history")
+    tools.prepare_release()
+
+    text = (root / "CHANGELOG.md").read_text(encoding="utf-8")
+    assert "## [1.2.4] — " in text
+    assert "- **A thing.** It happened." in text.split("## [1.2.4]")[1]
+    assert "## [Unreleased]" in text.split("## [1.2.4]")[0]  # kept, and empty
+    assert "compare/v1.2.4...HEAD" in text
+    assert (
+        "[1.2.4]: https://github.com/willemkokke/footman/compare/v1.2.3...v1.2.4"
+        in text
+    )
+
+
+def test_a_release_is_refused_when_there_is_nothing_to_release(tmp_path, monkeypatch):
+    """A tag on an empty section is a release that says nothing — refused
+    rather than cut, which is what stops an automatic path from shipping
+    noise every week it finds none."""
+    from footman.context import Failed
+    from footman.tasks import tools
+
+    root = _repo(tmp_path, entries=())
+    monkeypatch.setattr(tools, "_HISTORY", root / "tool-history")
+    with pytest.raises(Failed, match=r"nothing under \[Unreleased\]"):
+        tools.prepare_release()
+    assert 'version = "1.2.3"' in (root / "pyproject.toml").read_text(encoding="utf-8")

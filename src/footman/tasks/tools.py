@@ -1581,6 +1581,125 @@ def _discard(bindir: Path) -> None:
     shutil.rmtree(bindir.parent, ignore_errors=True)
 
 
+@dataclass(frozen=True)
+class Prepared:
+    """A release rolled, as data — what the tag step needs to know."""
+
+    version: str
+    """The version the tree now claims, `X.Y.Z`."""
+    previous: str
+    """What it claimed before, for the compare link and for a sanity check."""
+    entries: int
+    """How many bullets moved out of `[Unreleased]`."""
+
+
+@tasks.task(name="prepare-release")
+def prepare_release(
+    bump: Annotated[Literal["patch", "minor"], doc("which part to raise")] = "patch",
+) -> Prepared:
+    """Roll the version and the changelog, the way the runbook does by hand.
+
+    A stub-only release is a patch bump — the tools moved, footman did not
+    (decision 9) — which is why `patch` is the default and the automatic
+    path never chooses anything else.
+
+    Two files must agree or the release workflow refuses the tag
+    (`pyproject.toml` and `__init__.__version__`), and the docs carry version
+    references a drift test guards: the `--version` example on the JSON page
+    tracks every release, while the `footman~=X.Y.0` pins in README and the
+    docs home track only the minor — so a patch bump must leave them alone,
+    and this does.
+
+    `[Unreleased]` becomes `[X.Y.Z]` dated today, with the compare links
+    repointed. Refuses rather than guesses when there is nothing to release.
+    """
+    from footman import fail
+
+    root = _HISTORY.parent
+    current = _re.search(
+        r'^version = "([^"]+)"', (root / "pyproject.toml").read_text("utf-8"), _re.M
+    )
+    if current is None:  # pragma: no cover - pyproject always carries one
+        fail("pyproject.toml has no version to raise", code=64)
+    previous = current[1]
+    major, minor, patch = (int(part) for part in previous.split(".")[:3])
+    version = (
+        f"{major}.{minor}.{patch + 1}" if bump == "patch" else f"{major}.{minor + 1}.0"
+    )
+
+    moved = _roll_changelog(root / "CHANGELOG.md", version, previous)
+    if not moved:
+        fail(
+            "nothing under [Unreleased] to release — the tree is already "
+            "where the last tag left it",
+            code=64,
+        )
+    for path, pattern, replacement in (
+        (
+            root / "pyproject.toml",
+            rf'^version = "{previous}"',
+            f'version = "{version}"',
+        ),
+        (
+            root / "src" / "footman" / "__init__.py",
+            rf'^__version__ = "{previous}"',
+            f'__version__ = "{version}"',
+        ),
+        (
+            root / "docs" / "json.md",
+            rf'"version": "{previous}"',
+            f'"version": "{version}"',
+        ),
+    ):
+        text = path.read_text(encoding="utf-8")
+        path.write_text(
+            _re.sub(pattern, replacement, text, count=1, flags=_re.M), "utf-8"
+        )
+    print(f"prepared {previous} -> {version} ({moved} entries)")
+    return Prepared(version=version, previous=previous, entries=moved)
+
+
+def _roll_changelog(path: Path, version: str, previous: str) -> int:
+    """`[Unreleased]` becomes the new release, and the links follow.
+
+    Returns how many bullets moved, so a caller can refuse to cut a release
+    out of an empty section rather than tagging a no-op.
+    """
+    import datetime
+
+    text = path.read_text(encoding="utf-8")
+    lines = text.split("\n")
+    start = next(
+        i for i, line in enumerate(lines) if line.startswith("## [Unreleased]")
+    )
+    end = next(
+        (
+            i
+            for i, line in enumerate(lines[start + 1 :], start + 1)
+            if line.startswith("## [")
+        ),
+        len(lines),
+    )
+    entries = sum(1 for line in lines[start:end] if line.startswith("- "))
+    if not entries:
+        return 0
+    today = datetime.datetime.now(tz=datetime.UTC).date().isoformat()
+    lines[start : start + 1] = [
+        "## [Unreleased]",
+        "",
+        f"## [{version}] — {today}",
+    ]
+    rolled = "\n".join(lines)
+    repo = "https://github.com/willemkokke/footman"
+    rolled = rolled.replace(
+        f"[Unreleased]: {repo}/compare/v{previous}...HEAD",
+        f"[Unreleased]: {repo}/compare/v{version}...HEAD\n"
+        f"[{version}]: {repo}/compare/v{previous}...v{version}",
+    )
+    path.write_text(rolled, encoding="utf-8")
+    return entries
+
+
 @tasks.task
 def provision(
     only: Annotated[str, doc("provision just this tool")] = "",

@@ -357,3 +357,30 @@ def test_no_token_still_works_just_on_the_smaller_budget(monkeypatch):
     assert api_headers("https://api.github.com/rate_limit") == {
         "User-Agent": "footman-provision"
     }
+
+
+def test_the_interpreter_is_placed_however_the_platform_allows(tmp_path, monkeypatch):
+    """Windows grants symlinks only with developer mode or elevation, and a
+    copied `python.exe` is a broken interpreter — CPython finds its standard
+    library relative to the real executable, so a lone copy finds nothing.
+    A launcher is the one fallback that still runs."""
+    import os
+
+    from footman import _provision
+
+    target = tmp_path / "real" / "python"
+    target.parent.mkdir()
+    target.write_text("#!/bin/sh\n")
+
+    placed = _provision._place_interpreter(tmp_path / "bin", target)
+    assert placed is not None and placed.exists()
+    assert placed.resolve() == target.resolve()  # a symlink, where they work
+
+    def refuse(*_a, **_k):
+        raise OSError("a required privilege is not held by the client")
+
+    monkeypatch.setattr(_provision.Path, "symlink_to", refuse)
+    monkeypatch.setattr(os, "name", "nt")
+    placed = _provision._place_interpreter(tmp_path / "win", target)
+    assert placed is not None and placed.name == "python.cmd"
+    assert str(target) in placed.read_text(encoding="utf-8")
