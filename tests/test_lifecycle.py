@@ -1498,4 +1498,3 @@ def test_post_tasks_arity_is_taught():
 
         @reg.post_tasks
         def wide(inv, extra): ...
-
