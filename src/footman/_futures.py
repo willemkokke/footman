@@ -204,6 +204,7 @@ def call(task: Any, args: tuple[Any, ...], kwargs: dict[str, Any]) -> Any:
     """
     run = _active
     if run is None:
+        _refuse_wide_moment(task)
         if isinstance(task, registry._Opted):
             return task._plain_call(args, kwargs)
         return registry.task_body(task)(*args, **kwargs)
@@ -467,6 +468,39 @@ def _shared_result(label: str, value: Any) -> TaskResult:
         returned=value,
         state="shared",
         started=time.perf_counter(),
+    )
+
+
+def _refuse_wide_moment(task: Any) -> None:
+    """Refuse a task call from `pre_tasks` / `post_tasks`.
+
+    Both moments sit outside the run — `pre_tasks` at discovery, `post_tasks`
+    once the plan is finished — so there is no boundary to give a call: no
+    result row, no sharing, no availability gate, and a task declaring `ctx`
+    would take the first argument into that slot. Worse for `pre_tasks`, which
+    also runs in the child that rebuilds the completion manifest: a call there
+    executes the task on a <kbd>Tab</kbd> press.
+
+    A call from *outside footman entirely* (a REPL, an import of the tasks
+    module) is untouched — it is the plain function call it looks like.
+    """
+    from footman.executor import _wide_moment
+
+    moment = _wide_moment.get()
+    if moment is None:
+        return
+    name = _label(task)
+    when = (
+        "runs at discovery — including in the child that rebuilds the "
+        "completion manifest, where it would run on a Tab press"
+        if moment == "pre_tasks"
+        else "runs after the plan is finished, when the report is already built"
+    )
+    raise ChainError(
+        f"{name} cannot be called from @{moment}, which {when}. Edit the tree "
+        f"instead (inv.tasks — say pre=[{name}] on the tasks that need it), or "
+        f"move the call to a per-task moment (@pre_task / @post_task), which "
+        f"runs inside the run and gives the call a real task boundary."
     )
 
 

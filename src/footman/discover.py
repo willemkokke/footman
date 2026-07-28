@@ -169,13 +169,16 @@ def load_tree(
         # child's situation, and the reason a tree edit may not depend on one.
         inv = Invocation(cwd=str(Path.cwd()))
     inv.tasks = registry.Tasks(merged)
-    for run in merged.contributions["pre_tasks"]:
-        try:
-            run(inv)
-        except Exception as exc:  # a bad hook names itself, never a bare traceback
-            raise HookError(
-                "pre_tasks", getattr(run, "__name__", repr(run)), exc
-            ) from exc
+    from footman.executor import wide_moment
+
+    with wide_moment("pre_tasks"):
+        for run in merged.contributions["pre_tasks"]:
+            try:
+                run(inv)
+            except Exception as exc:  # a bad hook names itself, never a traceback
+                raise HookError(
+                    "pre_tasks", getattr(run, "__name__", repr(run)), exc
+                ) from exc
     # The single-threaded moment is over: every later reader — a per-task hook
     # on a pool thread, a body call — sees the same invocation, unwritable.
     inv.freeze()

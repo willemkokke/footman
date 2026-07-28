@@ -155,6 +155,17 @@ versions may include breaking changes.
 
 ### Fixed
 
+- **A task called from `@pre_tasks` or `@post_tasks` is refused, and says
+  why.** Both moments sit outside the run, so such a call quietly became a
+  plain function call — no result row, no sharing, no availability gate, and
+  a task declaring `ctx` took the call's first argument into that slot.
+  `pre_tasks` also runs in the child that rebuilds the completion manifest,
+  where the call executed the task on a <kbd>Tab</kbd> press. The refusal
+  names the moment and both ways out: edit the tree through `inv.tasks`, or
+  move the call to a per-task moment, which runs inside the run and gives it
+  a real task boundary. Calling a task from outside footman entirely — a
+  REPL, an import of the tasks module — is untouched.
+
 - **Re-reading a release no longer overwrites what other platforms saw.**
   The same-version path replaced the stored surface outright — erasing every
   recorded absence while the entry went on claiming those platforms had
