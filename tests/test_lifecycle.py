@@ -1613,3 +1613,155 @@ def test_yes_auto_confirms_a_prerequisite():
     result = Runner().invoke("--yes top", tasks=reg)
     assert result.ok, result.stderr
     assert ran == ["gated", "top"]
+
+
+# --- calling a task from a hook ----------------------------------------------
+
+
+def test_a_task_call_from_pre_tasks_is_refused(tmp_path):
+    # `pre_tasks` runs at discovery — in the manifest child too, where a call
+    # would run the task on a Tab press. Refused, naming the moment.
+    src = _write(
+        tmp_path / "tasks.py",
+        """
+        import footman
+        from footman import task
+
+        @task
+        def helper():
+            print("HELPER RAN")
+
+        @task
+        def main(): ...
+
+        @footman.pre_tasks
+        def wire(inv):
+            helper()
+        """,
+    )
+    result = Runner().invoke("main", tasks=src)
+    assert not result.ok
+    assert "cannot be called from @pre_tasks" in result.stderr
+    assert "Tab press" in result.stderr  # says why, not just that
+    assert "HELPER RAN" not in result.stdout
+
+
+def test_a_task_call_from_post_tasks_is_refused(tmp_path):
+    src = _write(
+        tmp_path / "tasks.py",
+        """
+        import footman
+        from footman import task
+
+        @task
+        def helper():
+            print("HELPER RAN")
+
+        @task
+        def main(): ...
+
+        @footman.post_tasks
+        def report(inv):
+            helper()
+        """,
+    )
+    result = Runner().invoke("main", tasks=src)
+    assert not result.ok
+    assert "cannot be called from @post_tasks" in result.stderr
+    assert "HELPER RAN" not in result.stdout
+
+
+def test_the_refusal_names_a_task_that_declares_ctx(tmp_path):
+    # The old failure was an AttributeError from the first argument landing in
+    # the ctx slot; the refusal must come first, and name the task.
+    src = _write(
+        tmp_path / "tasks.py",
+        """
+        import footman
+        from footman import task
+
+        @task
+        def ctxhelper(ctx, word: str = "plain"): ...
+
+        @task
+        def main(): ...
+
+        @footman.pre_tasks
+        def wire(inv):
+            ctxhelper("prod")
+        """,
+    )
+    result = Runner().invoke("main", tasks=src)
+    assert not result.ok
+    assert "ctxhelper cannot be called from @pre_tasks" in result.stderr
+    assert "AttributeError" not in result.stderr
+
+
+def test_a_manifest_rebuild_never_runs_a_task(tmp_path, monkeypatch):
+    # The hazard the refusal exists for: the refresh child runs `pre_tasks`.
+    from footman import _paths, _refresh
+
+    monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
+    monkeypatch.chdir(tmp_path)
+    _write(
+        tmp_path / "tasks.py",
+        f"""
+        import footman
+        from pathlib import Path
+        from footman import task
+
+        @task
+        def deploy():
+            Path({str(tmp_path / "SIDE_EFFECT")!r}).write_text("ran")
+
+        @footman.pre_tasks
+        def wire(inv):
+            deploy()
+        """,
+    )
+    _refresh.refresh_cwd()  # exactly what a Tab press spawns
+    assert not (tmp_path / "SIDE_EFFECT").exists()
+
+
+def test_the_per_task_moments_still_call_tasks(tmp_path):
+    # The four moments inside the run stay fully supported: the call is a real
+    # request, with its own row in the report.
+    src = _write(
+        tmp_path / "tasks.py",
+        """
+        import footman
+        from footman import task
+
+        @task
+        def helper() -> str:
+            return "helped"
+
+        @task
+        def main(): ...
+
+        @footman.pre_task
+        def before(inv, t):
+            if t.name == "main":
+                assert helper() == "helped"
+
+        @footman.post_task
+        def after(inv, t, result):
+            if t.name == "main":
+                assert helper() == "helped"
+        """,
+    )
+    result = Runner().invoke("main", tasks=src)
+    assert result.ok, result.stderr
+    assert "helper" in result.stderr  # it earned a row, shared between the two
+
+
+def test_a_plain_call_outside_a_run_is_untouched(tmp_path):
+    # The refusal is scoped to the hook moments — importing a tasks module and
+    # calling a task is the plain function call it looks like.
+    reg = Group("root")
+
+    @reg.task
+    def helper() -> str:
+        return "helped"
+
+    assert helper() == "helped"

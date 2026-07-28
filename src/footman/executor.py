@@ -1050,6 +1050,24 @@ _hook_owner: contextvars.ContextVar[str | None] = contextvars.ContextVar(
     "footman_hook_owner", default=None
 )
 
+# The run-wide moments, which sit *outside* the run: `pre_tasks` happens at
+# discovery (the manifest child included) and `post_tasks` after the plan is
+# done. Both are named here while they run, so a task call from one can say
+# which moment it is in rather than degrading to a bare function call.
+_wide_moment: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+    "footman_wide_moment", default=None
+)
+
+
+@contextlib.contextmanager
+def wide_moment(name: str) -> Any:
+    """Mark a run-wide lifecycle moment for the duration of one hook."""
+    token = _wide_moment.set(name)
+    try:
+        yield
+    finally:
+        _wide_moment.reset(token)
+
 
 class HookFailed(RuntimeError):
     """A per-task lifecycle hook raised; the message names the plugin."""
@@ -1138,7 +1156,7 @@ def run_post_tasks(
         else contextlib.nullcontext()
     )
     first: BaseException | None = None
-    with redirect:
+    with redirect, wide_moment("post_tasks"):
         for hook in life.finish:
             try:
                 hook(inv)
