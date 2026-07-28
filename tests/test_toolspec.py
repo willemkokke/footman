@@ -1929,3 +1929,64 @@ def test_an_alternation_is_not_a_value():
     assert got["verbose"].type_name == "bool"
     assert got["installer"].type_name == "str"  # `{pip,uv}`
     assert got["outdir"].type_name == "str"  # `[--outdir PATH]`
+
+
+# --- a manual's prose is not its option list ---------------------------------
+
+# git-branch, rendered wide enough that a sentence wraps onto a line beginning
+# with a flag. The `--merged, only branches …` line is prose from the
+# DESCRIPTION; the blocks below it are the real options.
+MAN_WIDE = """GIT-BRANCH(1)
+
+DESCRIPTION
+       With --contains, shows only the branches that contain the commit. With
+       --merged, only merged branches are listed. With --no-merged the rest.
+
+OPTIONS
+       --merged [<commit>]
+           Only list branches whose tips are reachable from <commit>.
+
+       --no-merged [<commit>]
+           Only list branches whose tips are not reachable from <commit>.
+"""
+
+# The same page narrow: the spelling list itself wraps, leaving a hanging comma.
+MAN_WRAPPED_HEAD = """GIT-LOG(1)
+
+OPTIONS
+       --min-parents=<number>, --max-parents=<number>, --no-min-parents,
+       --no-max-parents
+           Show only commits which have at least that many parent commits.
+
+       --follow
+           Continue listing the history of a file beyond renames.
+"""
+
+
+def test_a_manual_sentence_beginning_with_a_flag_is_not_an_option():
+    """A manual sets options at the same indent as its prose, so a sentence
+    that wraps onto a line starting with a flag is indistinguishable from a
+    block opening — except that a block starts a paragraph.
+
+    Read as a block, `--merged, only branches … With --no-merged …` becomes one
+    option carrying both spellings, pairs them as a negation, and hides the
+    real `--no-merged` below. Where the sentence wraps decides whether that
+    happens, so one manual read at two widths disagreed about what git accepts
+    — on bytes that are identical on every platform.
+    """
+    got = flags(_toolhelp.parse_help(MAN_WIDE, name="git-branch", man=True))
+    assert set(got) == {"merged", "no_merged"}
+    assert got["merged"].help.startswith("Only list branches whose tips are reachable")
+    assert got["no_merged"].help.startswith("Only list branches whose tips are not")
+    assert got["merged"].negation == ""  # the prose did not pair them
+
+
+def test_a_wrapped_spelling_list_is_one_head_not_two():
+    """A stacked spelling continues the block; a spelling list that *wrapped*
+    continues the head, and the hanging comma says which. Read as a head of its
+    own, the remainder splits one option in two — and only at the widths where
+    the line happens to wrap."""
+    got = flags(_toolhelp.parse_help(MAN_WRAPPED_HEAD, name="git-log", man=True))
+    assert "follow" in got
+    assert "no_max_parents" not in got  # a continuation, not a second option
+    assert got["min_parents"].help.startswith("Show only commits")
