@@ -25,11 +25,26 @@
 }
 
 #fm-playground .fmp-label {
-  padding: 0.4rem 0.8rem;
+  display: flex;
+  gap: 0.2rem;
+  padding: 0.25rem 0.5rem 0;
+  border-bottom: 0.05rem solid var(--md-default-fg-color--lightest);
+}
+
+#fm-playground .fmp-tab {
+  padding: 0.25rem 0.6rem;
+  border: 0;
+  border-radius: 0.2rem 0.2rem 0 0;
+  background: transparent;
+  color: var(--md-default-fg-color--light);
   font-family: var(--md-code-font-family);
   font-size: 0.64rem;
-  color: var(--md-default-fg-color--light);
-  border-bottom: 0.05rem solid var(--md-default-fg-color--lightest);
+  cursor: pointer;
+}
+
+#fm-playground .fmp-tab-active {
+  background: var(--md-default-fg-color--lightest);
+  color: var(--md-code-fg-color);
 }
 
 #fm-playground textarea {
@@ -132,15 +147,16 @@
   line-height: 1.5;
 }
 
-#fm-playground pre.fmp-failed {
-  color: var(--md-typeset-del-color, var(--md-code-fg-color));
-}
-
 #fm-playground .fmp-status {
   padding: 0.3rem 0.8rem;
   font-size: 0.6rem;
   color: var(--md-default-fg-color--light);
   border-top: 0.05rem solid var(--md-default-fg-color--lightest);
+}
+
+#fm-playground .fmp-status-failed {
+  color: #e5484d;
+  font-weight: 700;
 }
 
 /* The "run it there" link under every runnable example. */
