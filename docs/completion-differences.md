@@ -54,3 +54,9 @@ anyway — running it answers with the group's tasks, so nothing strands.
 Path-valued positions hand off to each shell's own file completion, so
 path candidates always look native — dirs get `/`, quoting matches your
 shell, and remote/fancy path plugins keep working.
+
+Mid-list in a comma-splitting path value (`--paths=a,<TAB>`), bash, zsh,
+fish, and pwsh complete the segment after the last comma with the typed
+items kept in place. nushell's external-completer protocol has no
+version-stable way to rewrite part of a token, so it completes the first
+item natively and stays silent after a comma.

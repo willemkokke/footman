@@ -34,9 +34,10 @@ def test():
     pytest("-q", "test_demo.py", p=["no:cacheprovider", "no:footman"])
 
 @task
-def deploy(target: Literal["dev", "staging", "prod"]):
+def deploy(target: Literal["dev", "staging", "prod"],
+           regions: list[Literal["eu", "us", "ap"]] | None = None):
     "Ship to an environment."
-    run(f"./rollout.sh {target}")
+    run(f"./rollout.sh {target} --regions={','.join(regions or ['eu'])}")
 
 @task
 def audit():
@@ -152,6 +153,10 @@ if sys.platform == "emscripten" or os.environ.get("_FM_PLAYGROUND_SIM"):
     import subprocess
     import threading
 
+    # Bytecode caches key on mtime+size, and an edit-and-rerun in the page
+    # can land inside one clock tick — never cache, always recompile.
+    sys.dont_write_bytecode = True
+
     # Pyodide's threading has no native thread ids (the API is documented
     # as platform-dependent); footman stamps results with one.
     if not hasattr(threading, "get_native_id"):
@@ -214,7 +219,8 @@ def _fm_invoke(files_json, line, columns=80):
     # shutil.get_terminal_size honours COLUMNS with no tty in sight, so
     # footman's own wrapping and pytest's ruler bars fit the pane.
     os.environ["COLUMNS"] = str(int(columns))
-    for name, content in json.loads(files_json).items():
+    files = json.loads(files_json)
+    for name, content in files.items():
         Path(name).write_text(content, encoding="utf-8")
     try:
         from footman.testing import Runner
@@ -230,6 +236,15 @@ def _fm_invoke(files_json, line, columns=80):
             "stdout": "",
             "stderr": traceback.format_exc(limit=8),
         })
+    finally:
+        # In-process pytest imports the editor's files; evict them so the
+        # next Run collects what the editor says then, not this run's
+        # modules — otherwise a second `fm test` reruns stale code.
+        written = {str(Path(name).resolve()) for name in files}
+        for mod_name, module in list(sys.modules.items()):
+            file = getattr(module, "__file__", None)
+            if file and str(Path(file).resolve()) in written:
+                del sys.modules[mod_name]
 
 _fm_manifest = {"code": None, "tree": None}
 
@@ -255,11 +270,13 @@ def _fm_complete(code, line):
     words = line.split()
     if not line or line.endswith(" "):
         words.append("")
-    candidates = [
-        c for c in complete(_fm_manifest["tree"], words)
-        if not c.startswith(chr(0))  # file/dynamic sentinels need a real shell
-    ]
-    return json.dumps(candidates)
+    out = complete(_fm_manifest["tree"], words)
+    if out and out[0].startswith(chr(0)):
+        # A sentinel answer (file handoff, dynamic recompute) needs a real
+        # shell; the elements after the marker are protocol payload — a
+        # partial and an emission prefix — not candidates.
+        return json.dumps([])
+    return json.dumps(out)
 `;
 
 let pyodideReady = null; // one load per browser tab, kept across instant nav
