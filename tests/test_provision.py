@@ -208,6 +208,18 @@ def test_extract_binary_from_zip(tmp_path):
     assert placed.read_bytes() == b"go-binary" and placed.name == want
 
 
+def test_exe_spells_a_binary_for_its_platform():
+    """One spelling for every tier. Each tier that grew its own copy of the
+    conditional was a separate Windows bug — the placed file gained `.exe`
+    while the tier still reached for the bare name (the docker tier did
+    exactly that, and provisioning died on a `docker` that was `docker.exe`)."""
+    assert _provision.exe("docker", windows=True) == "docker.exe"
+    assert _provision.exe("docker", windows=False) == "docker"
+    assert _provision.exe("docker") == (
+        "docker.exe" if sys.platform == "win32" else "docker"
+    )
+
+
 def test_extract_binary_names_the_exe_on_windows(tmp_path):
     """PATHEXT makes an extensionless PE invisible to `shutil.which`, so the
     placed name carries `.exe` even when the archive member did not. The

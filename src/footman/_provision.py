@@ -69,6 +69,20 @@ def bin_dir(prefix: Path) -> Path:
     return prefix / "bin"
 
 
+def exe(name: str, *, windows: bool | None = None) -> str:
+    """*name* as this platform spells an executable.
+
+    Windows resolves a command through `PATHEXT`, so an extensionless PE is
+    invisible to `shutil.which` and to every reader that follows it. Every
+    tier that names a binary needs the same suffix, and each one that grew
+    its own copy of the conditional was a separate Windows bug — the placed
+    file gained `.exe` while the tier still looked for the bare name.
+    """
+    if windows is None:
+        windows = os.name == "nt"
+    return f"{name}.exe" if windows else name
+
+
 def write_node_shim(into: Path, bun: Path) -> Path | None:
     """A `node` that is really bun, written beside the launchers.
 
@@ -214,9 +228,10 @@ def _docker_tier(prefix: Path, drivers: list[Driver]) -> list[Outcome]:
                 )
             )
             continue
-        target = bin_dir(prefix) / driver.name
+        binary = exe(driver.name)
+        target = bin_dir(prefix) / binary
         target.unlink(missing_ok=True)
-        shutil.copy2(placed / driver.name, target)
+        shutil.copy2(placed / binary, target)
         # The plugins came down beside the staged binary; a reader finds
         # them from the binary it resolves to, which here is the prefix's.
         home = _toolfetch.home_beside(placed)
@@ -337,7 +352,7 @@ def _place_interpreter(bindir: Path, target: Path) -> Path | None:
     `python.exe` finds nothing.
     """
     bindir.mkdir(parents=True, exist_ok=True)
-    link = bindir / ("python.exe" if os.name == "nt" else "python")
+    link = bindir / exe("python")
     link.unlink(missing_ok=True)
     try:
         link.symlink_to(target)
@@ -358,7 +373,7 @@ def _node_tier(prefix: Path, drivers: list[Driver]) -> list[Outcome]:
     """`bun add --global` each package, with bun's install dir the prefix."""
     if not drivers:
         return []
-    bun = bin_dir(prefix) / ("bun.exe" if os.name == "nt" else "bun")
+    bun = bin_dir(prefix) / exe("bun")
     if not bun.exists():
         return [
             Outcome(d.key, "node", "fail", "bun was not provisioned first")
@@ -579,7 +594,7 @@ def _extract_binary(
         windows = os.name == "nt"
     wanted = {tool, f"{tool}.exe"}
     into.mkdir(parents=True, exist_ok=True)
-    dest = into / (f"{tool}.exe" if windows else tool)
+    dest = into / exe(tool, windows=windows)
     if archive.name.lower().endswith((".tar.gz", ".tgz", ".tar.xz", ".tar.bz2")):
         with tarfile.open(archive) as tar:
             member = next(
