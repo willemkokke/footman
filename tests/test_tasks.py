@@ -251,7 +251,14 @@ def test_a_cast_that_lost_its_interaction_fails_the_build(tmp_path):
         (lambda: tasks.lint(), "ruff", (("check", (".",)), {"fix": False})),
         (lambda: tasks.lint(fix=True), "ruff", (("check", (".",)), {"fix": True})),
         (lambda: tasks.format(), "ruff_format", ((None, (".",)), {"check": False})),
-        (lambda: tasks.typecheck(), "basedpyright", ((None, ()), {})),
+        # `warnings=True`: basedpyright exits 0 on warnings, so the gate
+        # would pass over one — and two had been passing over for as long as
+        # they had existed.
+        (
+            lambda: tasks.typecheck(),
+            "basedpyright",
+            ((None, ()), {"warnings": True}),
+        ),
     ],
 )
 def test_a_wrapper_task_calls_its_tool_over_the_whole_repo(
