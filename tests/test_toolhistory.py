@@ -322,6 +322,29 @@ def test_only_listable_tiers_are_primed():
     assert not _toolfetch.can_list(manual)  # hand-written stub, nothing to read
 
 
+def test_walk_caches_nothing_it_will_not_reread(tmp_path):
+    """A walk must not leave behind what it unpacked from.
+
+    `_discard` deletes each release once its surface is read, but uv had
+    already unpacked that release into its cache, where nothing collects it
+    until the run ends: a full gather put 5 GB into `archive-v0` while the
+    interpreter store sat at 110 MB. Peak disk has to scale with how many
+    installs run at once, not with how many the walk performs — the walk is
+    parallel on purpose, so throttling it to save disk pays for the space
+    with wall-clock instead. The cache is inside the scratch directory the
+    walk deletes at the end, so nothing ever reads it twice.
+    """
+    import os
+
+    from footman.tasks.tools import _sandboxed
+
+    with _sandboxed(tmp_path):
+        assert os.environ["UV_NO_CACHE"] == "1"
+        assert os.environ["UV_CACHE_DIR"] == str(tmp_path / "cache")
+        assert os.environ["UV_PYTHON_INSTALL_DIR"] == str(tmp_path / "pythons")
+    assert "UV_NO_CACHE" not in os.environ  # restored, like the other two
+
+
 def test_the_primed_history_ships_a_contiguous_chain():
     """What is checked in must replay end to end — a hole would mean a delta
     computed against a release that is not its neighbour."""
