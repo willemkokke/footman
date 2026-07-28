@@ -6,12 +6,12 @@ environment, read once and thrown away — walking backwards from the newest
 because the current version is the one that matters most, and because a
 backward walk appends to the history rather than rewriting it.
 
-Five tiers can be listed: PyPI (`uv`), npm (`node`), release assets from
-GitHub and GitLab — which covers bun's own releases too — and CPython, whose
-index is the provisioned uv's own. What remains unlistable is the `system`
-tier (git, docker read from the host, with no fetch source wired yet). A tool
-footman cannot list is named and skipped rather than silently treated as
-having no history — the same doctrine `audit` follows.
+The listable tiers: PyPI (`uv`), npm (`node`), release assets from GitHub,
+GitLab and Gitea — which covers bun's own releases too — CPython, whose
+index is the provisioned uv's own, and docker's static-build directory.
+What remains unlistable is the `system` tier (git, read from the host). A
+tool footman cannot list is named and skipped rather than silently treated
+as having no history — the same doctrine `audit` follows.
 """
 
 from __future__ import annotations
@@ -127,7 +127,7 @@ def read_python(requires_python: str = "", date: str = "") -> str:
     return f"3.{max(int(era.split('.')[1]), minimum)}"
 
 
-LISTABLE = ("uv", "node", "github", "gitlab", "bun", "python", "docker")
+LISTABLE = ("uv", "node", "github", "gitlab", "gitea", "bun", "python", "docker")
 """The tiers with a release index footman can read. `system` is absent
 because git and docker are read from the host and have no fetch source."""
 
@@ -159,8 +159,8 @@ def releases(driver: Driver) -> list[Release]:
         found = _pypi(driver)
     elif kind == "node":
         found = _npm(driver)
-    elif kind in ("github", "gitlab", "bun"):
-        found = _forge(driver, "gitlab" if kind == "gitlab" else "github")
+    elif kind in ("github", "gitlab", "gitea", "bun"):
+        found = _forge(driver, kind if kind in ("gitlab", "gitea") else "github")
     elif kind == "python":
         found = _uv_python()
     elif kind == "docker":
@@ -251,7 +251,7 @@ def _npm(driver: Driver) -> list[Release]:
 
 
 def _forge(driver: Driver, host: str, pages: int = 1) -> list[Release]:
-    """GitHub and GitLab releases, with the tag normalised to a version.
+    """GitHub, GitLab and Gitea releases, with the tag normalised to a version.
 
     A tag is `v2.96.0` on one project and `2.96.0` on the next, while the
     binary reports the bare number — and the history keys on what the binary
@@ -269,15 +269,20 @@ def _forge(driver: Driver, host: str, pages: int = 1) -> list[Release]:
     repo = driver.provision.repo
     if not repo:
         return []
-    if host == "github":
+    if host in ("github", "gitea"):
+        # Gitea's release API is GitHub-shaped — same field names, different
+        # base URL and page size — so the two share one reading.
+        base, size = (
+            (f"https://api.github.com/repos/{repo}/releases?per_page=100", 100)
+            if host == "github"
+            else (f"https://gitea.com/api/v1/repos/{repo}/releases?limit=50", 50)
+        )
         entries = []
         for page in range(1, pages + 1):
-            index = _index(
-                f"https://api.github.com/repos/{repo}/releases?per_page=100&page={page}"
-            )
+            index = _index(f"{base}&page={page}")
             got = index if isinstance(index, list) else []
             entries += got
-            if len(got) < 100:
+            if len(got) < size:
                 break
         found = [
             Release(
@@ -589,7 +594,7 @@ def install(driver: Driver, release: Release, into: Path) -> Path | None:
         return _install_pypi(driver, release, into)
     if kind == "node":
         return _install_npm(driver, release.version, into)
-    if kind in ("github", "gitlab", "bun"):
+    if kind in ("github", "gitlab", "gitea", "bun"):
         return _install_asset(driver, release, into)
     if kind == "python":
         return _install_python(release.version, into)
@@ -708,7 +713,8 @@ def _install_asset(driver: Driver, release: Release, into: Path) -> Path | None:
     """
     from footman import _provision
 
-    host = "gitlab" if driver.provision.kind == "gitlab" else "github"
+    kind = driver.provision.kind
+    host = kind if kind in ("gitlab", "gitea") else "github"
     bindir = into / "bin"
     bindir.mkdir(parents=True, exist_ok=True)
     for tag in (release.tag, release.version, f"v{release.version}"):
