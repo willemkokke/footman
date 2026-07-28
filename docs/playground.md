@@ -51,5 +51,6 @@ not just the words: type `deploy prod --regions=eu,` and press
 </div>
 
 Every Python example in these docs has a **run it there** link that brings
-the page's code straight into this editor — the examples are tested against
-every commit, so what you paste is what runs.
+the page's code straight into this editor, the prompt already holding a
+command that runs against it — the examples are tested against every
+commit, so what you paste is what runs.

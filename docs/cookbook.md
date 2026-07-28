@@ -476,6 +476,7 @@ A tasks file can declare what it needs, inline, with a
 [PEP 723](https://peps.python.org/pep-0723/) header. Then it needs no
 project at all — drop it in any folder and run it:
 
+<!-- example: fragment -->
 ```python
 # /// script
 # requires-python = ">=3.11"
@@ -503,6 +504,7 @@ refuses, because the environment provably could not run the file.
 
 Two touches make it a command in its own right:
 
+<!-- example: fragment -->
 ```python
 #!/usr/bin/env -S uv run --script
 # /// script

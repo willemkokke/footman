@@ -122,6 +122,65 @@ function isFragment(block) {
   return false;
 }
 
+/* The prompt a run link opens with. Best effort from a light scan of the
+ * example's signatures: the first task in the linked block that runs bare —
+ * every parameter defaulted (or a variadic tail) — else the first such task
+ * anywhere in the session, else `--list`, which always works and shows what
+ * the example defines. First, not last: a page builds toward its composed
+ * gate, and the composed task tends to reach real pytest (red in a scratch
+ * dir with no tests) where the leaves run simulated and green. */
+
+function splitTopLevel(text, sep) {
+  const parts = [];
+  let depth = 0;
+  let current = "";
+  for (const ch of text) {
+    if ("([{".includes(ch)) depth++;
+    else if (")]}".includes(ch)) depth--;
+    if (ch === sep && depth === 0) {
+      parts.push(current);
+      current = "";
+    } else {
+      current += ch;
+    }
+  }
+  parts.push(current);
+  return parts;
+}
+
+function runsBare(params) {
+  return splitTopLevel(params, ",").every((p) => {
+    const t = p.trim();
+    if (!t || t === "/" || t.startsWith("*")) return true;
+    return splitTopLevel(t, "=").length > 1; // a top-level `=`: has a default
+  });
+}
+
+function bareTasks(code) {
+  const groups = {}; // decorator variable -> the group's CLI name
+  for (const m of code.matchAll(/^(\w+)\s*=\s*group\(\s*["']([^"']+)["']/gm)) {
+    groups[m[1]] = m[2];
+  }
+  const out = [];
+  const def =
+    /^@(?:(\w+)\.)?(task|default)(?:\([^)]*\))?\s*\ndef\s+(\w+)\s*\(([\s\S]*?)\)\s*(?:->[^:]*)?:/gm;
+  for (const m of code.matchAll(def)) {
+    const [, owner, kind, name, params] = m;
+    if (owner && !(owner in groups)) continue; // an owner this scan can't name
+    if (!runsBare(params)) continue;
+    out.push(kind === "default" ? groups[owner] : owner ? `${groups[owner]}.${name}` : name);
+  }
+  return out;
+}
+
+function suggestCommand(session) {
+  for (const source of [session[session.length - 1], session.join("\n\n")]) {
+    const tasks = bareTasks(source);
+    if (tasks.length) return tasks[0];
+  }
+  return "--list";
+}
+
 function addRunLinks() {
   if (document.getElementById("fm-playground")) return; // not on the playground
   const article = document.querySelector("article");
@@ -135,7 +194,11 @@ function addRunLinks() {
     if (block.dataset.fmpLinked) continue; // idempotent re-init
     block.dataset.fmpLinked = "1";
     const href = new URL("playground/", SITE_ROOT);
-    href.hash = "code=" + b64encode(session.join("\n\n") + "\n");
+    href.hash =
+      "code=" +
+      b64encode(session.join("\n\n") + "\n") +
+      "&cmd=" +
+      encodeURIComponent(suggestCommand(session));
     const wrap = document.createElement("div");
     wrap.className = "fmp-runlink";
     const a = document.createElement("a");
