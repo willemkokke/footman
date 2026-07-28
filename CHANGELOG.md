@@ -158,6 +158,17 @@ versions may include breaking changes.
 
 ### Fixed
 
+- **The npm tier no longer needs node on the machine.** It installs through
+  bun, but what bun installs is a launcher beginning `#!/usr/bin/env node` —
+  and bun only stands in for node when bun itself runs a script, while the
+  extractor spawns the launcher as a subprocess where the shebang is resolved
+  by the operating system. A machine without node read every npm-tier release
+  as `No such file or directory`: twelve cspell releases and eleven
+  markdownlint ones, on a Linux box, and on every CI runner it would have been
+  the same two tools lost on every leg, indefinitely. The walk now writes a
+  `node` that forwards to `bun --bun`, inside the scratch directory so it goes
+  when the walk does, and only where bun is present and node is not.
+
 - **A tool's man probe can no longer open a browser.** `git help <verb>`
   honours `help.format`, which Windows defaults to html — so extracting the
   git driver opened the HTML docs in a browser tab per verb, twenty-one at

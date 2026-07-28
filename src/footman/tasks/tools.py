@@ -159,12 +159,62 @@ def _sandboxed(scratch: Path) -> Iterator[None]:
     on purpose and throttling it to save disk would be paying for the same
     space with wall-clock.
     """
-    with _overlay(
-        UV_CACHE_DIR=str(scratch / "cache"),
-        UV_PYTHON_INSTALL_DIR=str(scratch / "pythons"),
-        UV_NO_CACHE="1",
-    ):
+    shims = _node_shim(scratch)
+    values = {
+        "UV_CACHE_DIR": str(scratch / "cache"),
+        "UV_PYTHON_INSTALL_DIR": str(scratch / "pythons"),
+        "UV_NO_CACHE": "1",
+    }
+    if shims is not None:
+        import os
+
+        values["PATH"] = f"{shims}{os.pathsep}{os.environ.get('PATH', '')}"
+    with _overlay(**values):
         yield
+
+
+def _node_shim(scratch: Path) -> Path | None:
+    """A `node` that is really bun, for the duration of the walk.
+
+    The npm tier installs through bun, and bun runs the packages — but what
+    it *installs* is a launcher beginning `#!/usr/bin/env node`. Nothing in a
+    provisioned prefix answers to that name: bun stands in for node when bun
+    itself runs a script, and the extractor spawns the launcher as a
+    subprocess, where the shebang is resolved by the operating system with
+    bun nowhere in the chain.
+
+    So on a machine without node the whole tier reads as prose — a Linux box
+    observed twelve cspell releases and eleven markdownlint releases as
+    `/usr/bin/env: 'node': No such file or directory`. A CI runner has no
+    node either, which would have cost the weekly matrix those two tools on
+    every leg, on every platform, indefinitely.
+
+    The shim lives in the scratch directory, so it goes when the walk does,
+    and it is written only when bun can be found — a machine with real node
+    keeps using it, and one with neither is no worse off than before.
+    """
+    import shutil
+    import stat
+
+    bun = shutil.which("bun")
+    if bun is None or shutil.which("node") is not None:
+        return None
+    shims = scratch / "shims"
+    shims.mkdir(parents=True, exist_ok=True)
+    if _windows():
+        # cmd resolves `node` through PATHEXT, so the shim is a .cmd that
+        # forwards; %* keeps the argument list intact, quotes and all.
+        shim = shims / "node.cmd"
+        shim.write_text(f'@echo off\r\n"{bun}" --bun %*\r\n', encoding="utf-8")
+    else:
+        shim = shims / "node"
+        shim.write_text(f'#!/bin/sh\nexec "{bun}" --bun "$@"\n', encoding="utf-8")
+        shim.chmod(shim.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    return shims
+
+
+def _windows() -> bool:
+    return sys.platform == "win32"
 
 
 def _platform() -> str:

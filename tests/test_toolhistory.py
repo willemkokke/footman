@@ -2193,3 +2193,66 @@ def test_a_release_is_refused_when_there_is_nothing_to_release(tmp_path, monkeyp
     with pytest.raises(Failed, match=r"nothing under \[Unreleased\]"):
         tools.prepare_release()
     assert 'version = "1.2.3"' in (root / "pyproject.toml").read_text(encoding="utf-8")
+
+
+def test_the_walk_answers_to_node_when_only_bun_is_installed(tmp_path, monkeypatch):
+    """The npm tier installs through bun, but what bun *installs* is a
+    launcher beginning `#!/usr/bin/env node`.
+
+    bun stands in for node when bun itself runs a script; the extractor
+    spawns the launcher as a subprocess, where the shebang is resolved by the
+    OS with bun nowhere in the chain. A Linux box without node therefore read
+    twelve cspell releases and eleven markdownlint releases as
+    `No such file or directory` — and a CI runner has no node either, so the
+    weekly matrix would have lost those tools on every leg, forever.
+    """
+    import os
+    import shutil
+
+    from footman.tasks import tools
+
+    fake_bun = tmp_path / "bun"
+    fake_bun.write_text("#!/bin/sh\nexit 0\n")
+    monkeypatch.setattr(
+        shutil, "which", lambda name: str(fake_bun) if name == "bun" else None
+    )
+
+    with tools._sandboxed(tmp_path / "scratch"):
+        head = os.environ["PATH"].split(os.pathsep)[0]
+        assert head.endswith("shims")
+        written = list((tmp_path / "scratch" / "shims").iterdir())
+        assert [p.name for p in written] == ["node.cmd" if tools._windows() else "node"]
+        assert str(fake_bun) in written[0].read_text(encoding="utf-8")
+        assert "--bun" in written[0].read_text(encoding="utf-8")
+
+    # ...and it goes when the walk does — it lives inside scratch.
+    assert os.environ["PATH"].split(os.pathsep)[0] != head
+
+
+def test_a_machine_with_real_node_is_left_alone(tmp_path, monkeypatch):
+    """A shim is for a gap, not a preference: where node exists, the tools
+    run under the runtime they were published for."""
+    import os
+    import shutil
+
+    from footman.tasks import tools
+
+    monkeypatch.setattr(shutil, "which", lambda name: f"/usr/bin/{name}")
+    before = os.environ["PATH"]
+    with tools._sandboxed(tmp_path / "scratch"):
+        assert os.environ["PATH"] == before
+        assert not (tmp_path / "scratch" / "shims").exists()
+
+
+def test_no_bun_and_no_node_is_no_worse_than_before(tmp_path, monkeypatch):
+    """Nothing to forward to, so nothing is written — the tier reports its
+    holes as it would have anyway."""
+    import os
+    import shutil
+
+    from footman.tasks import tools
+
+    monkeypatch.setattr(shutil, "which", lambda _name: None)
+    before = os.environ["PATH"]
+    with tools._sandboxed(tmp_path / "scratch"):
+        assert os.environ["PATH"] == before
