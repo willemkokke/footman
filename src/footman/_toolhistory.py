@@ -32,13 +32,21 @@ from footman._toolspec import Option, ToolSpec, Verb
 SCHEMA = 1
 """Bumped when the on-disk shape changes in a way a reader must know about."""
 
-EXTRACTOR = 1
+EXTRACTOR = 2
 """The extractor generation that produced an observation.
 
 Recorded per release so improving `_toolhelp`/`_toolspec` — or a tool
 flipping between the click and `--help` paths — rewrites state without
 counting as the tool having changed. Bump it when extraction starts
-producing different words for the same tool.
+producing different words for the same tool, and a gather will offer those
+releases again: a reading is only as good as the extractor that took it.
+
+**2** — reading each release in the era it shipped in. Under today's
+dependencies twine 5.1.0 indexes `metadata["home-page"]`, which
+importlib_metadata 8 raises on, so it died before argparse ran and three
+releases were recorded with no options at all. Pinning the resolution and
+the interpreter to the release's own date changes what extraction can see,
+which is exactly what this number is for.
 """
 
 

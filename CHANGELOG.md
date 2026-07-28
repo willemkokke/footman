@@ -179,6 +179,18 @@ versions may include breaking changes.
 
 ### Fixed
 
+- **A reading older than the extractor is read again.** `EXTRACTOR` was
+  recorded against every observation from the start and nothing ever read it,
+  so an extractor that learned to see more had no way to say so. Three twine
+  releases sat in the store with no options at all — recorded when the tool
+  died before argparse ran under today's dependencies — and the only thing
+  that noticed was another platform reading them correctly and appearing to
+  *disagree*, which turns a bug into a divergence report. A gather now offers
+  any release whose reading predates the current generation, so the store
+  heals itself when extraction improves rather than needing the record edited
+  by hand. Reading each release in its own era is generation 2, and every
+  observation taken before it is owed a second look.
+
 - **A body call's output is no longer dropped in an uncaptured run.** A task
   reached by `build()` runs with its own buffer so its output stays one
   block, but that block was only ever handed to a *capturing* parent — under
