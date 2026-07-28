@@ -137,6 +137,18 @@ def driver(key: str) -> _drivers.Driver:
 # --- reading each family --------------------------------------------------
 
 
+def test_run_help_reads_utf8_not_the_locale_codec():
+    """git-cliff's help is UTF-8. Decoded with Windows cp1252 the reader
+    thread died mid-decode, stdout came back None, and ten releases were
+    recorded as holes on a platform where the tool describes itself fine."""
+    code = (
+        "import sys; "
+        "sys.stdout.buffer.write('usage: x [--flag] \\u03cf\\n'.encode('utf-8'))"
+    )
+    text = _toolhelp.run_help([sys.executable, "-c", code])
+    assert "Ϗ" in text  # decoded as UTF-8, crashed nothing
+
+
 def test_clap_options_negations_and_choices():
     verb = _toolhelp.parse_help(CLAP, name="check")
     got = flags(verb)
