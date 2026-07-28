@@ -69,6 +69,44 @@ def bin_dir(prefix: Path) -> Path:
     return prefix / "bin"
 
 
+def write_node_shim(into: Path, bun: Path) -> Path | None:
+    """A `node` that is really bun, written beside the launchers.
+
+    What the npm tier installs is a launcher beginning `#!/usr/bin/env node`.
+    bun stands in for node when bun itself runs a script, but a launcher
+    spawned as a subprocess has its shebang resolved by the operating system,
+    with bun nowhere in the chain. So on a machine without node the tier is
+    unrunnable, and the prefix this writes into is the thing every reader
+    reaches for — `sync`, `audit`, `spec`, and anyone who follows the
+    `export PATH=<prefix>/bin` line provisioning prints.
+
+    Left to the caller to remember, it is forgotten: a `sync` on a node-less
+    machine recorded cspell and markdownlint as version `unknown`, and that
+    reading then sat at the floor of the chain where `prime` could not walk
+    past it — "unknown is not among the listed releases". Re-syncing fixed
+    the base and left the poison underneath, so the cost of the omission
+    outlived its cause. It belongs next to the launchers it exists for.
+
+    Written only where there is no real node, so a machine that has one keeps
+    using it, and one with neither is no worse off than before.
+    """
+    import stat
+
+    if shutil.which("node") is not None:
+        return None
+    into.mkdir(parents=True, exist_ok=True)
+    if os.name == "nt":
+        # cmd resolves `node` through PATHEXT, so the shim is a .cmd that
+        # forwards; %* keeps the argument list intact, quotes and all.
+        shim = into / "node.cmd"
+        shim.write_text(f'@echo off\r\n"{bun}" --bun %*\r\n', encoding="utf-8")
+    else:
+        shim = into / "node"
+        shim.write_text(f'#!/bin/sh\nexec "{bun}" --bun "$@"\n', encoding="utf-8")
+        shim.chmod(shim.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    return shim
+
+
 def provision(
     drivers: tuple[Driver, ...], prefix: Path, *, only: str = ""
 ) -> list[Outcome]:
@@ -326,6 +364,9 @@ def _node_tier(prefix: Path, drivers: list[Driver]) -> list[Outcome]:
             Outcome(d.key, "node", "fail", "bun was not provisioned first")
             for d in drivers
         ]
+    # Beside the launchers, before they are installed: what `bun add` writes
+    # into this directory cannot be run without it.
+    write_node_shim(bin_dir(prefix), bun)
     env = {
         **os.environ,
         "BUN_INSTALL": str(prefix),  # global bin lands in <prefix>/bin

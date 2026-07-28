@@ -99,6 +99,41 @@ def test_node_tier_installs_through_bun(tmp_path, monkeypatch):
     assert all(o.status == "ok" for o in outcomes)
 
 
+def test_node_tier_leaves_a_node_beside_the_launchers(tmp_path, monkeypatch):
+    """The prefix has to be runnable by whoever puts it on PATH.
+
+    `bun add --global` writes launchers beginning `#!/usr/bin/env node`, and a
+    launcher spawned as a subprocess has its shebang resolved by the operating
+    system, with bun nowhere in the chain. Everything that reads the prefix
+    pays for that: `sync` on a node-less machine recorded cspell and
+    markdownlint as version `unknown`, and the reading sat at the floor of the
+    chain where `prime` could not walk past it.
+    """
+    monkeypatch.setattr(_provision.shutil, "which", lambda _: None)  # no real node
+    _provision.bin_dir(tmp_path).mkdir(parents=True)
+    bun_name = "bun.exe" if sys.platform == "win32" else "bun"
+    bun = _provision.bin_dir(tmp_path) / bun_name
+    bun.write_text("#!/bin/sh\n")
+    monkeypatch.setattr(_provision, "_run", lambda argv, env: True)
+    _provision.provision(
+        (Driver("cspell", provision=Provision(kind="node")),), tmp_path
+    )
+
+    shim_name = "node.cmd" if sys.platform == "win32" else "node"
+    shim = _provision.bin_dir(tmp_path) / shim_name
+    assert shim.exists(), "a prefix with node tools must carry a node"
+    assert str(bun) in shim.read_text()
+    assert "--bun" in shim.read_text()
+
+
+def test_no_node_shim_where_a_real_node_exists(tmp_path, monkeypatch):
+    """A machine with node keeps using it — the shim is a stand-in, not a
+    preference, and shadowing the real thing would change what is read."""
+    monkeypatch.setattr(_provision.shutil, "which", lambda _: "/usr/bin/node")
+    assert _provision.write_node_shim(tmp_path, Path("/somewhere/bun")) is None
+    assert not (tmp_path / "node").exists()
+
+
 # --- asset selection ---------------------------------------------------------
 
 
