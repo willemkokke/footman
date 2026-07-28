@@ -1833,8 +1833,13 @@ def _sync_against(prefix: Path, only: str) -> None:
     sync(only=only, prefix=str(prefix))
 
 
+# `platform` is everyone who read the release — "Linux", or "Linux and
+# macOS", or all three — so it matches up to the sentence's full stop rather
+# than a single word. It was one word when only one machine ever looked, and
+# a header naming two silently stopped parsing: every stub read as
+# hand-written, which is what the reference table then published.
 _READ_FROM = _re.compile(
-    r"Read from (?P<tool>\S+) (?P<version>\S+) on (?P<platform>\w+)\."
+    r"Read from (?P<tool>\S+) (?P<version>\S+) on (?P<platform>[^.]+)\."
     r"(?: In-process: (?P<mode>\w+)\.)?"
 )
 

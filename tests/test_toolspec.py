@@ -1581,3 +1581,24 @@ def test_click_extraction_requires_the_import_and_the_binary_to_agree(monkeypatc
 
     monkeypatch.setattr(_drivers, "version", lambda _name: "")
     assert _drivers._from_click(driver) is None  # unreadable binary: same answer
+
+
+def test_a_stub_header_survives_being_read_on_more_than_one_platform():
+    """The header is *parsed*, not just displayed — the reference table and
+    the drift checks read the tool, version and mode back out of it.
+
+    It named one platform for as long as one machine ever looked. The moment
+    a release was observed on two, `on Linux and macOS.` stopped matching a
+    single-word pattern, every stub read as hand-written, and the published
+    table said so.
+    """
+    from footman.tasks import tools
+
+    for platform in ("macOS", "Linux and macOS", "Linux, Windows and macOS"):
+        header = f"Read from ruff 0.16.0 on {platform}. In-process: no."
+        found = tools._READ_FROM.search(header)
+        assert found is not None, platform
+        assert found["tool"] == "ruff"
+        assert found["version"] == "0.16.0"
+        assert found["platform"] == platform
+        assert found["mode"] == "no"

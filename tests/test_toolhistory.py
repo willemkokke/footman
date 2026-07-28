@@ -2256,6 +2256,8 @@ def test_no_bun_and_no_node_is_no_worse_than_before(tmp_path, monkeypatch):
     before = os.environ["PATH"]
     with tools._sandboxed(tmp_path / "scratch"):
         assert os.environ["PATH"] == before
+
+
 def test_a_platform_folding_into_an_older_release_agrees_with_what_is_stored():
     """The case a base-only test cannot reach, and the one a real matrix hits
     on its first run: every release below the newest is stored as a *step*,
