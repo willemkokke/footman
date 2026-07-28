@@ -9,6 +9,16 @@ versions may include breaking changes.
 
 ### Documentation
 
+- **The tool version helpers are documented.** `installed_version()`,
+  `read_version()` and `version_tuple()` were public and typed all along, and
+  no page said so — a downstream project asked for the API in its upgrade
+  report and wrote its own scraper meanwhile. The tools page now covers the
+  question they answer (is the CLI new enough), why `installed_version()`
+  differs from a stub header, and why a build tail ends a comparison instead
+  of becoming extra digits.
+
+### Documentation
+
 - **`shell=True` on Windows is git-bash, and that eats backslashes.** The
   posix policy resolves to git-bash so one pipeline behaves the same
   everywhere, but a POSIX shell reads `\` as an escape — so a command
