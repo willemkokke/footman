@@ -240,7 +240,7 @@ def _node_tier(prefix: Path, drivers: list[Driver]) -> list[Outcome]:
     """`bun add --global` each package, with bun's install dir the prefix."""
     if not drivers:
         return []
-    bun = bin_dir(prefix) / "bun"
+    bun = bin_dir(prefix) / ("bun.exe" if os.name == "nt" else "bun")
     if not bun.exists():
         return [
             Outcome(d.key, "node", "fail", "bun was not provisioned first")
