@@ -79,7 +79,8 @@ def test_node_tier_fails_without_bun(tmp_path):
 
 def test_node_tier_installs_through_bun(tmp_path, monkeypatch):
     _provision.bin_dir(tmp_path).mkdir(parents=True)
-    (_provision.bin_dir(tmp_path) / "bun").write_text("#!/bin/sh\n")
+    bun_name = "bun.exe" if sys.platform == "win32" else "bun"
+    (_provision.bin_dir(tmp_path) / bun_name).write_text("#!/bin/sh\n")
     calls: list = []
     monkeypatch.setattr(
         _provision, "_run", lambda argv, env: calls.append((argv, env)) or True
