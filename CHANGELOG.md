@@ -30,6 +30,19 @@ versions may include breaking changes.
   one version before this; it can now be walked back as far as the index
   goes.
 
+- **Completion continues a comma-separated list.** Mid-list in a
+  comma-splitting value, <kbd>Tab</kbd> completes the segment after the last
+  comma with the typed items kept in place: `--paths=src/a.py,<TAB>`
+  completes the second path (a new resolver exit code, 101, tells the bash,
+  zsh, fish, and pwsh hooks to strip through the comma before the file walk;
+  nushell's completer protocol can't rewrite part of a token, so it keeps
+  completing the first item only). A list with a value set — `Literal`
+  choices or `suggest()` — completes each item after a comma too, minus the
+  values already in the list, and `suggest()` still recomputes fresh with
+  just the tail as the partial. `nosplit` parameters keep their commas
+  literal, in completion as at the prompt. Reinstalled hooks pick this up;
+  an existing hook keeps today's behaviour everywhere else.
+
 ### Fixed
 
 - **A tool's defaults no longer carry the home directory of the machine
@@ -53,6 +66,11 @@ versions may include breaking changes.
   docker ships `docker/docker`; matching a member by name alone found the
   directory first, which failed the tar path outright and wrote a
   zero-byte binary from a zip.
+- **A second playground `fm test` sees your edits.** In-process pytest left
+  the editor's files in `sys.modules`, so rerunning collected the first
+  run's modules until the page was reloaded; the driver now evicts them
+  after every run (and skips bytecode caching, whose mtime granularity
+  could resurrect a stale rewritten test inside one clock tick).
 
 ## [0.26.0] — 2026-07-28
 
@@ -225,6 +243,18 @@ versions may include breaking changes.
 - **ty 0.0.64** adds `--exclude-scripts`.
 
 ### Fixed
+
+- **A reading older than the extractor is read again.** `EXTRACTOR` was
+  recorded against every observation from the start and nothing ever read it,
+  so an extractor that learned to see more had no way to say so. Three twine
+  releases sat in the store with no options at all — recorded when the tool
+  died before argparse ran under today's dependencies — and the only thing
+  that noticed was another platform reading them correctly and appearing to
+  *disagree*, which turns a bug into a divergence report. A gather now offers
+  any release whose reading predates the current generation, so the store
+  heals itself when extraction improves rather than needing the record edited
+  by hand. Reading each release in its own era is generation 2, and every
+  observation taken before it is owed a second look.
 
 - **A body call's output is no longer dropped in an uncaptured run.** A task
   reached by `build()` runs with its own buffer so its output stays one

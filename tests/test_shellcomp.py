@@ -147,6 +147,25 @@ def test_hook_hands_path_values_to_native_file_completion(shell):
     assert _FILE_HANDOFF[shell] in body  # the shell's file-completion primitive
 
 
+# Exit 101 = the same, mid-list in a comma-splitting value: the hook completes
+# the segment after the last comma and re-attaches the typed items. nushell
+# has no version-stable spelling for that yet and defers to its builtin.
+_CSV_HANDOFF = {
+    "bash": "compgen -f",
+    "zsh": "'*[=,]'",
+    "fish": "'^.*[=,]'",
+    "pwsh": "[=,])?",
+    "nushell": "$r.exit_code == 101",
+}
+
+
+@pytest.mark.parametrize("shell", _shellcomp.SHELLS)
+def test_hook_completes_the_tail_of_a_csv_path_value(shell):
+    body = _shellcomp.script_for(shell, "fm")
+    assert "101" in body  # the resolver's "mid-list path value" exit code
+    assert _CSV_HANDOFF[shell] in body  # the comma-aware completion idiom
+
+
 def test_cli_install_end_to_end(home, tmp_path, monkeypatch, capsys):
     (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
     (tmp_path / "tasks.py").write_text(
@@ -366,8 +385,10 @@ def fm_project_dir(home, tmp_path, monkeypatch):
     """A tiny project with a built manifest, plus the venv bin for PATH."""
     (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
     (tmp_path / "tasks.py").write_text(
+        "from pathlib import Path\n"
         "from footman import group, task\n\n"
-        '@task\ndef lint(fix: bool = False):\n    "Lint."\n\n'
+        "@task\ndef lint(fix: bool = False, paths: list[Path] | None = None):\n"
+        '    "Lint."\n\n'
         'docs = group("docs", help="Docs")\n\n'
         '@docs.task\ndef serve():\n    "Serve."\n\n'
         '@docs.task\ndef build():\n    "Build."\n'
@@ -535,6 +556,56 @@ def test_fish_completes_files_after_a_path_flag(home, fm_project_dir):
     )
     assert out.returncode == 0, out.stderr
     assert "tasks.py" in out.stdout
+
+
+@_posix_shell
+@pytest.mark.skipif(shutil.which("fish") is None, reason="fish not installed")
+def test_fish_completes_the_tail_after_a_comma(home, fm_project_dir):
+    """`--paths=tasks.py,py<TAB>`: exit 101 makes the hook complete the
+    segment after the last comma, re-attaching the typed items."""
+    script = home / "completion.fish"
+    script.write_text(_shellcomp.script_for("fish", "fm"), encoding="utf-8")
+    body = (
+        f"set -gx PATH {VENV_BIN} $PATH\n"
+        f'source "{script}"\n'
+        'complete -C "fm lint --paths=tasks.py,py"\n'
+    )
+    out = subprocess.run(
+        ["fish", "-c", body],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        cwd=fm_project_dir,
+    )
+    assert out.returncode == 0, out.stderr
+    assert "tasks.py,pyproject.toml" in out.stdout
+
+
+def test_bash_completes_the_tail_after_a_comma(home, fm_project_dir):
+    """The same mid-list completion through real bash: readline would match
+    the whole word, comma and all, so the hook builds COMPREPLY itself."""
+    if (bash := _bash_exe()) is None:
+        pytest.skip("bash (git-bash on Windows) is not installed")
+    script = home / "completion.bash"
+    script.write_text(_shellcomp.script_for("bash", "fm"), encoding="utf-8")
+    body = (
+        f'PATH="{_shellcomp._bash_path(VENV_BIN)}:$PATH"\n'
+        f'source "{_shellcomp._bash_path(script)}"\n'
+        # bash splits the line at `=` (COMP_WORDBREAKS), so the value is its
+        # own word — the resolver rejoins, the hook completes the tail.
+        'COMP_WORDS=(fm lint --paths = "tasks.py,py"); COMP_CWORD=4\n'
+        "_fm_complete\n"
+        'printf "%s\\n" "${COMPREPLY[@]}"\n'
+    )
+    out = subprocess.run(
+        [bash, "-c", body],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        cwd=fm_project_dir,
+    )
+    assert out.returncode == 0, out.stderr
+    assert "tasks.py,pyproject.toml" in out.stdout.splitlines()
 
 
 # --- bare --install-completion: shell auto-detection -----------------------------
@@ -770,8 +841,10 @@ def test_pwsh_completion_functional(home, tmp_path, monkeypatch):
     """The generated completer, driven by PowerShell's own completion engine."""
     (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
     (tmp_path / "tasks.py").write_text(
+        "from pathlib import Path\n"
         "from footman import group, task\n\n"
-        '@task\ndef lint(fix: bool = False):\n    "Lint."\n\n'
+        "@task\ndef lint(fix: bool = False, paths: list[Path] | None = None):\n"
+        '    "Lint."\n\n'
         'docs = group("docs", help="Docs")\n\n'
         '@docs.task\ndef serve():\n    "Serve."\n\n'
         '@docs.task\ndef build():\n    "Build."\n'
@@ -783,6 +856,7 @@ def test_pwsh_completion_functional(home, tmp_path, monkeypatch):
     script = home / "completion.ps1"
     script.write_text(_shellcomp.script_for("pwsh", "fm"), encoding="utf-8")
     venv_bin = Path(sys.executable).parent
+    csv_line = "fm lint --paths=tasks.py,py"
     ps = (
         f'$env:PATH = "{venv_bin}" + [IO.Path]::PathSeparator + $env:PATH; '
         f". '{script}'; "
@@ -791,6 +865,9 @@ def test_pwsh_completion_functional(home, tmp_path, monkeypatch):
         "$r.CompletionMatches | ForEach-Object CompletionText; "
         "$r = [System.Management.Automation.CommandCompletion]::CompleteInput("
         '"fm docs.", 8, $null); '
+        "$r.CompletionMatches | ForEach-Object CompletionText; "
+        "$r = [System.Management.Automation.CommandCompletion]::CompleteInput("
+        f'"{csv_line}", {len(csv_line)}, $null); '
         "$r.CompletionMatches | ForEach-Object CompletionText"
     )
     out = subprocess.run(
@@ -803,6 +880,12 @@ def test_pwsh_completion_functional(home, tmp_path, monkeypatch):
     assert out.returncode == 0, out.stderr
     assert "lint" in out.stdout.split()
     assert {"docs.serve", "docs.build"} <= set(out.stdout.split())
+    # Mid-list in a comma-splitting path value: the tail completes. How much
+    # of the head PowerShell hands the completer varies with its tokeniser
+    # (a bare comma parses as an array), so pin only the completed tail.
+    assert any(line.endswith("pyproject.toml") for line in out.stdout.splitlines()), (
+        out.stdout
+    )
 
 
 # --- CI guard: prove no functional shell test is silently skipping ---------------

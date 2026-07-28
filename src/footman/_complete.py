@@ -49,6 +49,8 @@ _GLOBALS = frozenset(
 _GLOBAL_FILES = frozenset({"--directory", "-C", "--tasks-file", "-f", "--config"})
 _FILES = "\x00files"  # internal sentinel: complete() -> complete_cli()
 _EXIT_FILES = 100  # complete_cli exit code the hooks read as "complete files"
+_FILES_CSV = "\x00files-csv"  # a comma-splitting path value, mid-list
+_EXIT_FILES_CSV = 101  # "complete files after the last comma" exit code
 _DYNAMIC = "\x00dynamic"  # internal sentinel: a dynamic completer, recompute fresh
 # Mirror of manifest.SCHEMA_VERSION — the hot path can't import manifest.py.
 # A cache written by a different footman gets rebuilt, never walked: the first
@@ -97,6 +99,34 @@ def _rejoin(words: list[str]) -> tuple[list[str], bool]:
         i += 1
         merged_last = False
     return out, merged_last
+
+
+def _csv_head(p: dict, value: str) -> tuple[str, str]:
+    """Split *value* at its last comma when *p* comma-splits.
+
+    A collection value completes one comma-separated item at a time: the
+    typed items stay in place as a head every candidate re-attaches, and
+    matching runs on the tail alone. A scalar or `nosplit` value (commas
+    literal) keeps the whole token — empty head, the value as the tail.
+    """
+    if p.get("multiple") and not p.get("nosplit") and "," in value:
+        head, _, tail = value.rpartition(",")
+        return head + ",", tail
+    return "", value
+
+
+def _choice_tokens(p: dict, partial: str) -> list[str]:
+    """*p*'s choice values as whole completion tokens against *partial*.
+
+    Mid-list in a comma-splitting value, each choice arrives as
+    `head+choice` (minus the items already typed), so the caller's
+    generic startswith filter keeps working on whole tokens.
+    """
+    head, _ = _csv_head(p, partial)
+    if not head:
+        return list(p.get("choices", []))
+    given = partial.split(",")[:-1]
+    return [head + c for c in p.get("choices", []) if c not in given]
 
 
 def _consume_globals(prior: list[str]) -> list[str]:
@@ -345,14 +375,26 @@ def complete(tree: dict, words: list[str]) -> list[str]:
         )
         if entry is not None:
             # A pulled plugin's global completes from its baked entry — the
-            # same shapes a task parameter bakes, answered the same way.
+            # same shapes a task parameter bakes, answered the same way. A
+            # comma-splitting value mid-list completes its tail item alone,
+            # the typed head riding every candidate.
+            head, cur = _csv_head(entry, valpart)
             if "path" in entry.get("types", []):
-                return [_FILES]
+                return [_FILES_CSV] if head else [_FILES]
             if entry.get("dynamic"):  # recompute fresh, never the baked snapshot
-                prefix = "" if bash_split else f"{optname}="
-                return [_DYNAMIC, valpart, prefix, entry["name"]]
-            choices = [c for c in entry.get("choices", ()) if c.startswith(valpart)]
-            return choices if bash_split else [f"{optname}={c}" for c in choices]
+                prefix = head if bash_split else f"{optname}={head}"
+                return [_DYNAMIC, cur, prefix, entry["name"]]
+            given = valpart.split(",")[:-1] if head else []
+            choices = [
+                c
+                for c in entry.get("choices", ())
+                if c.startswith(cur) and c not in given
+            ]
+            return (
+                [head + c for c in choices]
+                if bash_split
+                else [f"{optname}={head}{c}" for c in choices]
+            )
         choices = [c for c in _GLOBAL_CHOICES.get(optname, ()) if c.startswith(valpart)]
         return choices if bash_split else [f"{optname}={c}" for c in choices]
 
@@ -449,13 +491,25 @@ def complete(tree: dict, words: list[str]) -> list[str]:
         optname, _, valpart = partial.partition("=")
         opt = seg.opts.get(optname)
         if opt is not None and opt["kind"] == "option":
+            # A comma-splitting value mid-list completes its tail item
+            # alone; the typed head rides every candidate back.
+            head, cur = _csv_head(opt, valpart)
             if "path" in opt.get("types", []):
-                return [_FILES]
+                return [_FILES_CSV] if head else [_FILES]
             if opt.get("dynamic"):  # recompute fresh, never the baked snapshot
-                prefix = "" if bash_split else f"{optname}="
-                return [_DYNAMIC, valpart, prefix, opt["name"], *path]
-            choices = [c for c in opt.get("choices", []) if c.startswith(valpart)]
-            return choices if bash_split else [f"{optname}={c}" for c in choices]
+                prefix = head if bash_split else f"{optname}={head}"
+                return [_DYNAMIC, cur, prefix, opt["name"], *path]
+            given = valpart.split(",")[:-1] if head else []
+            choices = [
+                c
+                for c in opt.get("choices", [])
+                if c.startswith(cur) and c not in given
+            ]
+            return (
+                [head + c for c in choices]
+                if bash_split
+                else [f"{optname}={head}{c}" for c in choices]
+            )
 
     # A path-typed positional (or trailing consumer): once the partial is a
     # value being typed rather than an option, hand it to native file
@@ -464,10 +518,11 @@ def complete(tree: dict, words: list[str]) -> list[str]:
     if not partial.startswith("-"):
         pending = seg.fixed[seg.filled] if seg.filled < len(seg.fixed) else seg.rest
         if pending is not None:
+            head, cur = _csv_head(pending, partial)
             if "path" in pending.get("types", []):
-                return [_FILES]
+                return [_FILES_CSV] if head else [_FILES]
             if pending.get("dynamic"):  # recompute fresh, never the baked snapshot
-                return [_DYNAMIC, partial, "", pending["name"], *path]
+                return [_DYNAMIC, cur, head, pending["name"], *path]
 
     # Option position: this task's flags/options — minus the ones already
     # given, unless the param legitimately repeats — plus what the next bare
@@ -480,13 +535,13 @@ def complete(tree: dict, words: list[str]) -> list[str]:
     ]
     next_heads: list[str] = []
     if seg.filled < len(seg.fixed):
-        candidates += seg.fixed[seg.filled].get("choices", [])
+        candidates += _choice_tokens(seg.fixed[seg.filled], partial)
         if seg.fixed[seg.filled].get("optional") and not partial.startswith("-"):
             # The boundary documents itself: an optional positional's slot
             # offers `+` — run without it, the next word starts a task.
             candidates.append("+")
     elif seg.rest is not None:
-        candidates += seg.rest.get("choices", [])
+        candidates += _choice_tokens(seg.rest, partial)
     elif not partial.startswith("-"):
         next_heads = _address_candidates(tree, partial)
     seen: dict[str, None] = {}
@@ -742,6 +797,13 @@ def complete_cli(args: list[str]) -> int:
         # A path value: print nothing, and signal the hook to complete files.
         _maybe_refresh(manifest, data)
         return _EXIT_FILES
+    if out == [_FILES_CSV]:
+        # A comma-splitting path value mid-list: signal the hook to complete
+        # files after the last comma. (Only ever raised with a comma already
+        # typed, so a hook from an older install — which knows just 100 —
+        # degrades to the silence it always showed there.)
+        _maybe_refresh(manifest, data)
+        return _EXIT_FILES_CSV
     if out and out[0] == _DYNAMIC:
         # A dynamic completer: recompute it fresh in a subprocess rather than
         # serve the manifest's baked snapshot — a build-critical answer must not

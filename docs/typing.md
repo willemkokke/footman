@@ -9,10 +9,10 @@ parse time, with taught error messages.
 | Signature                       | CLI shape                                            |
 | ------------------------------- | ---------------------------------------------------- |
 | `fix: bool = False`             | flag `--fix` / `--no-fix`                            |
-| `mode: str = "loose"`           | option `--mode VALUE`                               |
+| `mode: str = "loose"`           | option `--mode=VALUE`                               |
 | `mode: Literal["a", "b"]`       | completable, eagerly-validated choices              |
 | `count: int = 100`              | typed option, validated at parse time               |
-| `paths: list[Path] = ()`        | repeatable or comma-separated (`--paths a,b`)       |
+| `paths: list[Path] = ()`        | repeatable or comma-separated (`--paths=a,b`)       |
 | `env: dict[str, int]`           | `--env=KEY=VAL` pairs (repeatable or comma-separated)|
 | `template: Path`                | required positional (consumed by exact count)       |
 | `*cmd: str`                     | variadic trailing passthrough                       |
