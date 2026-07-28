@@ -168,7 +168,14 @@ the value — never re-interpreted as the next task, no name-peeking — and
 capped at one token. To run the task argument-less ahead of another, say so
 with the explicit boundary: `fm files + build`. An `Arg` needs a default
 (absence must mean something), takes at most one token (use a list
-parameter for many), and must trail every required positional."""
+parameter for many), and must trail every required positional.
+
+`Arg` is the one exception to the rule that sorts every other parameter:
+*the default decides* — no default makes a required positional, a default
+makes an option you pass by name. `Arg` says "keep me a positional even
+though I have a default", which is why it needs the greedy-but-capped
+grammar above. The rules it is bending are laid out in the
+[typing guide](https://footman.willem.net/typing/)."""
 
 
 Forward = Annotated[_T, forward]
