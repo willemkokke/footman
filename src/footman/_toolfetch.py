@@ -673,7 +673,13 @@ def _install_npm(driver: Driver, version: str, into: Path) -> Path | None:
     """
     import shutil
 
-    if shutil.which("bun") is None:
+    # Spawned by the path `which` resolved, never the bare name: the task
+    # router's PATH overlay is visible to in-process lookups but not to
+    # Windows CreateProcess, whose executable search reads the real process
+    # environment — so `["bun", ...]` found by `which` still failed to
+    # spawn, and every npm-tier release on the platform read as a hole.
+    bun = shutil.which("bun")
+    if bun is None:
         return None
     package = driver.provision.target(driver.name)
     env = {
@@ -681,7 +687,7 @@ def _install_npm(driver: Driver, version: str, into: Path) -> Path | None:
         "BUN_INSTALL": str(into),
         "PATH": f"{into / 'bin'}{os.pathsep}{os.environ.get('PATH', '')}",
     }
-    if not _run(["bun", "add", "--global", f"{package}@{version}"], env=env):
+    if not _run([bun, "add", "--global", f"{package}@{version}"], env=env):
         return None
     return into / "bin"
 
