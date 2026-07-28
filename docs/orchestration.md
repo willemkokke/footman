@@ -301,6 +301,44 @@ A **plain callable** is honest work and runs happily, but it is not a task, so
 nothing task-shaped happens around it — no result row, no availability gate,
 no `confirm=`. Reach for one when there is genuinely no task to name.
 
+### The block form, when you want the values
+
+Passing arguments through thunks is fine for two or three; past that, writing
+the calls plainly reads better — and it is the only form that hands the
+return values back:
+
+<!-- example: fragment -->
+```python
+@task
+def release():
+    with parallel() as p:
+        build("web")
+        build("api")
+    web, api = p.results
+    publish(web, api)
+```
+
+Inside the block a task call is **queued, not run**, so it has no value
+there — using one is a taught error rather than a silent `None`. Everything
+runs when the block ends, under exactly the rules a call has anywhere else:
+own result row, sharing, hooks, `-s`/`-j`. `p.results` is in the order you
+wrote them; `p` itself is still the list of exit codes `parallel()` returns.
+
+footman only owns *its own* `__call__`, so a call to something that is not
+a task runs where it stands rather than joining the fan-out. When one
+straggler wants to come along, say so — `p.also(fn, *args)` queues it with
+the rest, and its return value lands in `results` in written order:
+
+<!-- example: fragment -->
+```python
+with parallel() as p:
+    build("web")
+    p.also(shutil.rmtree, stale)
+```
+
+The one other difference from a plain call: a queued failure surfaces when
+the block ends, not at the line that queued it.
+
 Unlike `pre`/`post`, a `parallel()` fan-out is **in-body** — footman can't see
 it without running the task. That is the trade: declared deps are static and
 show up in `--dry-run`; an in-body fan-out is dynamic — its shape can depend on
@@ -312,11 +350,11 @@ Reach for declared deps when you want the plan to *see* the work, and
 
     Result data flows *within* a task — `run()` hands back a `Result` (the exit
     code, which the value *is*, plus `.stdout`/`.stderr`), a called function its
-    return — and out of a `parallel()` fan-out through a shared
-    closure the thunks write to (they run in-process, so a captured list just
-    works). `parallel()` itself returns exit *codes*, not values, and the
-    declared graph carries no data between tasks: `pre`/`post` are ordering, not
-    a pipe.
+    return — and out of a `parallel()` fan-out through its block form
+    (`p.results`), or through a shared closure the thunks write to (they run
+    in-process, so a captured list just works). `parallel(*calls)` itself
+    returns exit *codes*, not values, and the declared graph carries no data
+    between tasks: `pre`/`post` are ordering, not a pipe.
 
 ## Runnable groups
 

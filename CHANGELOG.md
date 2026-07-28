@@ -9,6 +9,17 @@ versions may include breaking changes.
 
 ### Added
 
+- **`with parallel()` — a fan-out written as ordinary calls.** Past two or
+  three, threading arguments through thunks reads worse than the calls
+  themselves, and thunks never gave the values back. Inside the block a task
+  call is queued rather than run, so it has no value there (using one is
+  taught, never a silent `None`); everything runs when the block ends, under
+  the rules a call has anywhere else — its own row, sharing, hooks, `-s`/`-j`
+  — and `p.results` hands back what each returned, in the order written. `p`
+  is still the list of exit codes `parallel()` has always returned.
+  `p.also(fn, *args)` brings a straggler that is not a task — a lambda, a
+  plain function — into the same fan-out.
+
 - **The docs have a Playground.** footman runs in the browser: the editor
   is a `tasks.py`, the prompt is `fm`, and the run goes through the same
   in-process `Runner` the testing page teaches. Python arrives via Pyodide
@@ -157,6 +168,14 @@ versions may include breaking changes.
 - **ty 0.0.64** adds `--exclude-scripts`.
 
 ### Fixed
+
+- **`footman.docstrings` and `footman.markdown` resolve for a type-checker.**
+  Both are lazily served by `__getattr__` and both were named in `__all__`,
+  but neither was declared to a type-checker — so the package advertised two
+  names no editor could complete, no definition could be jumped to, and a
+  consumer running a strict check saw footman complain about itself. Declared
+  in the `TYPE_CHECKING` block, which never executes: a bare `import footman`
+  still imports nothing.
 
 - **The npm tier no longer needs node on the machine.** It installs through
   bun, but what bun installs is a launcher beginning `#!/usr/bin/env node` —

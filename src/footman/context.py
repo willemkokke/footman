@@ -1803,15 +1803,166 @@ def run(
 # --- parallel() --------------------------------------------------------------
 
 
-def parallel(*calls: Callable[[], Any], keep_going: bool = False) -> list[int]:
+def _call_name(call: Callable[..., Any]) -> str:
+    """The name a fan-out child shows on the status line and its step lines.
+
+    A `functools.partial` unwraps to what it wraps; a lambda has no honest
+    name of its own, so it shows as an ellipsis rather than `<lambda>`.
+    """
+    if isinstance(call, functools.partial):  # partial(fmt, check=True)
+        call = call.func
+    name = getattr(call, "__name__", "task")
+    return "…" if name == "<lambda>" else name
+
+
+class Pending:
+    """What a task call hands back *inside* a `with parallel()` block.
+
+    The call has been queued, not run, so there is no value yet — and a
+    silent `None` here would be a bug you find much later. Every use is a
+    taught error; the values arrive as `p.results` when the block ends.
+    """
+
+    __slots__ = ("_task",)
+
+    def __init__(self, task: str) -> None:
+        object.__setattr__(self, "_task", task)
+
+    def _refuse(self, *_a: Any, **_k: Any) -> NoReturn:
+        raise RuntimeError(
+            f"{self._task} has not run yet — inside a `with parallel()` block a "
+            f"call is queued, not executed, so it has no value to use there. "
+            f"Read the values from the block's results after it ends."
+        )
+
+    __getattr__ = _refuse
+    __bool__ = _refuse
+    __iter__ = _refuse
+    __len__ = _refuse
+    __str__ = _refuse
+    __int__ = _refuse
+    __float__ = _refuse
+    __eq__ = _refuse
+    __lt__ = _refuse
+    __add__ = _refuse
+    __hash__ = None  # type: ignore[assignment]  # unusable, like every other read
+
+    def __repr__(self) -> str:  # debuggers and tracebacks stay usable
+        return f"<pending {self._task}>"
+
+
+# The queue a `with parallel()` block collects into: a contextvar, so the
+# calls a *queued task* makes when it later runs (on a pool thread, which
+# starts from contextvar defaults) are ordinary calls, never re-collected.
+_collecting: ContextVar[list[tuple[Any, tuple, dict]] | None] = ContextVar(
+    "footman_parallel_block", default=None
+)
+
+
+class Fanout(list):
+    """The `with parallel() as p:` block — task calls inside it are queued,
+    then run together when the block ends.
+
+    A `list` underneath, and empty, so `parallel(*calls)` with nothing to do
+    still answers with the empty list of exit codes it always did.
+    """
+
+    def __init__(self, keep_going: bool = False) -> None:
+        super().__init__()
+        self.keep_going = keep_going
+        self.results: list[Any] = []
+        """What each queued call returned, in the order they were written."""
+        self._queued: list[tuple[Any, tuple, dict]] = []
+        self._token: Any = None
+
+    def __enter__(self) -> Fanout:
+        self._token = _collecting.set(self._queued)
+        return self
+
+    def also(self, call: Callable[..., Any], /, *args: Any, **kwargs: Any) -> Pending:
+        """Queue something that is *not* a task — a lambda, a plain function.
+
+        A task call inside the block queues itself; anything else footman
+        does not own, so it says so out loud and joins the same fan-out:
+
+            with parallel() as p:
+                build("web")
+                p.also(shutil.rmtree, tmp)
+
+        Its return value lands in `results` with the rest, in written order.
+        """
+        if _collecting.get() is not self._queued:
+            raise RuntimeError(
+                "parallel().also(...) queues work for a block, so call it "
+                "inside the `with` — outside one there is nothing to join."
+            )
+        self._queued.append((call, args, kwargs))
+        return Pending(_call_name(call))
+
+    def __exit__(self, exc_type: Any, exc: Any, tb: Any) -> bool:
+        _collecting.reset(self._token)
+        if exc_type is not None:
+            return False  # the block itself failed: nothing to run
+        values: list[Any] = [None] * len(self._queued)
+
+        def thunk(index: int, task: Any, args: tuple, kwargs: dict):
+            def run() -> None:
+                # The value goes to the slot, never through the return: a task
+                # returning an int would read as an exit code out here.
+                values[index] = task(*args, **kwargs)
+
+            run.__name__ = _call_name(task)
+            return run
+
+        codes = parallel(
+            *(thunk(i, t, a, k) for i, (t, a, k) in enumerate(self._queued)),
+            keep_going=self.keep_going,
+        )
+        self.results = values
+        self.extend(codes)  # the block *is* its list of exit codes
+        return False
+
+
+def _queue_call(task: Any, args: tuple[Any, ...], kwargs: dict[str, Any]) -> Any:
+    """Queue a call for the enclosing `with parallel()` block, or `None` when
+    there is none — the one hook `_futures.call` needs."""
+    queue = _collecting.get()
+    if queue is None:
+        return None
+    queue.append((task, args, kwargs))
+    from footman import registry
+
+    return Pending(registry.cli_name(getattr(task, "__name__", "task")))
+
+
+def parallel(*calls: Callable[[], Any], keep_going: bool = False) -> Any:
     """Run task calls / thunks concurrently; wait; fail if any fail.
 
     Each call runs in a child of the current context with its own output buffer,
     flushed atomically on completion so concurrent output never interleaves.
     Pass task functions directly (`parallel(lint, typecheck)`) or thunks for
     arguments (`parallel(lambda: build("web"), lambda: build("api"))`).
+
+    With no arguments it is a **block** instead, and the calls inside it are
+    the fan-out — written as ordinary calls, with their values afterwards:
+
+        with parallel() as p:
+            build("web")
+            build("api")
+        web, api = p.results
+
+    Inside the block a task call is *queued*, so it has no value there (using
+    one is a taught error); everything runs when the block ends, under the
+    same rules — sharing, hooks, `-s`/`-j`. A call to something that is not a
+    task cannot be queued (footman does not own its `__call__`) and runs
+    where it stands.
     """
     from concurrent.futures import ThreadPoolExecutor
+
+    if not calls:
+        # Nothing to run: the block form, which is also an empty list of exit
+        # codes — so `parallel(*thunks)` over an empty sequence is unchanged.
+        return Fanout(keep_going=keep_going)
 
     parent = current()
     dest = parent.sink or real_stdout()
@@ -1829,12 +1980,6 @@ def parallel(*calls: Callable[[], Any], keep_going: bool = False) -> list[int]:
     status = _status
     if status is not None:
         status.unit_added(len(calls))
-
-    def _call_name(call: Callable[[], Any]) -> str:
-        if isinstance(call, functools.partial):  # partial(fmt, check=True)
-            call = call.func
-        name = getattr(call, "__name__", "task")
-        return "…" if name == "<lambda>" else name  # anonymous: no honest name
 
     # Sibling names are known up front, so their step lines can align.
     width = max((len(_call_name(c)) for c in calls), default=0)
