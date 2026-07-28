@@ -39,6 +39,7 @@ import shutil
 import subprocess
 from collections.abc import Sequence
 from dataclasses import replace
+from pathlib import Path
 
 from footman._toolspec import Option, ToolSpec, Verb
 
@@ -620,7 +621,16 @@ def _usage_line(text: str) -> str:
 
 
 def _summary(text: str) -> str:
-    """A tool's one-line self-description: its help's first prose line."""
+    """A tool's one-line self-description: its help's first prose line.
+
+    A manual says it outright, under NAME — `git - the stupid content
+    tracker` — where the first prose line of the page is the running
+    header. Read from the machine's `git -h` this landed on a fragment of
+    the usage line instead, which described nothing at all.
+    """
+    named = _MAN_NAME.search(text)
+    if named:
+        return named.group(1).strip()
     if re.match(r"^Usage of \S", text):
         return ""  # Go's `flag` opens with `Usage of <prog>:` and has no summary
     for line in text.splitlines():
@@ -639,6 +649,9 @@ def _summary(text: str) -> str:
             return ""
         return stripped
     return ""
+
+
+_MAN_NAME = re.compile(r"^NAME\n\s+\S+ - (.+)$", re.M)
 
 
 def subcommands(text: str) -> dict[str, str]:
@@ -674,10 +687,12 @@ def run_help(
     runs only at stub-generation time, never at task time, so its heavier
     footprint (a rendered man page) costs a user nothing.
     """
+    if man:
+        # A manual can be read without the tool: `man` renders the pages a
+        # release shipped, and for a fetched tree there is no binary at all.
+        return _run_man(argv, timeout)
     if shutil.which(argv[0]) is None:
         return ""
-    if man:
-        return _run_man(argv, timeout)
     try:
         # Tool help is UTF-8, never the locale codec: under Windows cp1252 a
         # multi-byte help string kills the reader thread mid-decode and the
@@ -701,8 +716,57 @@ def run_help(
 _OVERSTRIKE = re.compile(r".\x08")
 
 
+def man_version(tree: Path) -> str:
+    """The version a fetched manual belongs to, from its own header.
+
+    `.TH "GIT" "1" "2025-06-15" "Git 2\\&.50\\&.1" "Git Manual"` — the tree
+    says which release it documents, so a reading names its own version
+    the way a binary does, and the guard against describing the wrong
+    release works unchanged.
+    """
+    page = tree / "man1" / "git.1"
+    try:
+        head = page.read_text(encoding="utf-8", errors="replace")[:4000]
+    except OSError:
+        return ""
+    found = re.search(r'^\.TH\s+"[^"]*"\s+"[^"]*"\s+"[^"]*"\s+"([^"]*)"', head, re.M)
+    if not found:  # pragma: no cover - every page carries a .TH line
+        return ""
+    title = found.group(1).replace("\\&", "")
+    number = _VERSION_IN_TITLE.search(title)
+    return number.group(0) if number else ""
+
+
+_VERSION_IN_TITLE = re.compile(r"\d+(?:\.\d+)+")
+
+
+def _fetched_manpath() -> str:
+    """The manual tree an observation pointed us at, if any.
+
+    Set by the walk around one release's pages. Empty means read the
+    machine's own manuals, which is what stub generation did before there
+    was anything else to read.
+    """
+    return os.environ.get("FOOTMAN_MANPATH", "")
+
+
 def _run_man(argv: list[str], timeout: float) -> str:
-    """`<tool> help <verb>`, de-overstruck — the manual as plain text."""
+    """`<tool> help <verb>`, de-overstruck — the manual as plain text.
+
+    Against a fetched tree it is `man -M <tree> <tool>-<verb>` instead:
+    `git help` needs git, and the whole point of reading a manual is that
+    the release it documents never has to be installed.
+    """
+    tree = _fetched_manpath()
+    if tree:
+        # The page is named for the *tool*, not for the binary a caller
+        # resolved: `from_help` passes an absolute path as argv[0], and
+        # `man` would go looking for a page called `/opt/homebrew/…/git-add`.
+        # `git help git` asks for the tool's own page, which is `git`, not
+        # `git-git`.
+        tool = Path(argv[0]).name
+        rest = [part for part in argv[1:] if part != tool]
+        return _render_page(tree, "-".join([tool, *rest]), timeout)
 
     env = {
         **os.environ,
@@ -728,6 +792,33 @@ def _run_man(argv: list[str], timeout: float) -> str:
             errors="replace",
             timeout=timeout,
             env=env,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    return _OVERSTRIKE.sub("", done.stdout or "")
+
+
+def _render_page(tree: str, page: str, timeout: float) -> str:
+    """One page of a fetched manual tree, as plain text."""
+    if shutil.which("man") is None:
+        return ""
+    try:
+        done = subprocess.run(
+            # Absolute: `man -M` given a relative manpath finds nothing and
+            # says so by rendering an empty page rather than failing, which
+            # reads downstream as a release that documented nothing.
+            ["man", "-M", str(Path(tree).resolve()), page],
+            capture_output=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout,
+            env={
+                **os.environ,
+                "MANPAGER": "cat",
+                "PAGER": "cat",
+                "MAN_KEEP_FORMATTING": "",
+                "COLUMNS": "200",
+            },
         )
     except (OSError, subprocess.SubprocessError):
         return ""
@@ -786,7 +877,9 @@ def from_help(
     stays on `--help`, which is where a tool prints its verb list.
     """
     cmd = binary or name
-    root = run_help([cmd], flag=flag)
+    # Against a fetched manual there is no binary to ask for a usage line,
+    # and asking the machine's own would describe a different release.
+    root = run_help([cmd], flag=flag, man=man and bool(_fetched_manpath()))
     if not root:
         return ToolSpec(name=name, version=version)
     root_verb = parse_help(root, name="", shorts=shorts)

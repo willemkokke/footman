@@ -47,8 +47,9 @@ class Provision:
     bun's own GitHub release, provisioned first because the node tier runs
     through it. `github` / `gitlab` / `gitea` — a prebuilt release asset.
     `docker` — a static build from docker's own per-platform index, which is
-    a directory listing rather than an asset list. `system` — already on
-    PATH (git, the uv running this); never provisioned.
+    a directory listing rather than an asset list. `man` — a release's
+    manual pages, for a tool read from its manual rather than its `-h`.
+    `system` — already on PATH (the uv running this); never provisioned.
     `deferred` — parked, `note` saying why (as tea was, until 0.15.0)."""
     package: str = ""
     """The PyPI or npm package, when it differs from the driver's binary name
@@ -192,7 +193,10 @@ DRIVERS: tuple[Driver, ...] = (
     ),
     Driver(
         "git",
-        provision=Provision(kind="system"),
+        # Read from its manual, and a manual is not a binary: kernel.org
+        # publishes the pages per release, so nothing is installed and
+        # nothing is run.
+        provision=Provision(kind="man"),
         url="https://git-scm.com/docs",
         help_flag="-h",
         man=True,
@@ -414,7 +418,11 @@ DRIVERS: tuple[Driver, ...] = (
 
 _HOST_READ = frozenset(d.name for d in DRIVERS if d.provision.kind == "system")
 """Tools read straight off the host, never provisioned into an isolated prefix
-(git, docker, uv) — the only ones for which Homebrew is consulted on macOS."""
+— the only ones for which Homebrew is consulted on macOS.
+
+Empty as it stands: git was the last, and its manuals come from kernel.org
+per release now, so every stub footman ships is read from something it
+fetched itself. The rule is kept for whatever joins that tier next."""
 
 
 def _brew_prefixes() -> tuple[str, ...]:
@@ -546,11 +554,17 @@ def extract(driver: Driver) -> ToolSpec:
     if driver.source in {"auto", "click"}:
         spec = _from_click(driver) or spec
     if not spec.verbs and driver.source in {"auto", "help"}:
+        # A fetched manual names its own release, and there is no binary
+        # to ask: the whole point of reading the pages is that the version
+        # they document never has to be installed.
+        tree = _toolhelp._fetched_manpath() if driver.man else ""
         spec = _toolhelp.from_help(
             driver.name,
             binary=_resolve(driver.name),
             verbs=driver.wanted,
-            version=version(driver.name),
+            version=(
+                _toolhelp.man_version(Path(tree)) if tree else version(driver.name)
+            ),
             in_process=in_process_capable(driver.name),
             flag=driver.help_flag,
             man=driver.man,

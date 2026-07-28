@@ -93,9 +93,16 @@ def _on_path(prefix: str | Path) -> Iterator[None]:
         return
     import os
 
-    bindir = Path(prefix).expanduser().resolve() / "bin"
+    root = Path(prefix).expanduser().resolve()
+    bindir = root / "bin"
     inherited = os.environ.get("PATH", "")
-    with _overlay(PATH=f"{bindir}{os.pathsep}{inherited}"):
+    overlay = {"PATH": f"{bindir}{os.pathsep}{inherited}"}
+    # A provisioned manual is read the way a provisioned binary is: from
+    # the prefix, never from the machine. `man` finds pages by manpath
+    # rather than by `PATH`, so it takes a variable of its own.
+    if (root / "man").is_dir():
+        overlay["FOOTMAN_MANPATH"] = str(root / "man")
+    with _overlay(**overlay):
         yield
 
 
@@ -136,6 +143,24 @@ def _plugin_home(driver: _drivers.Driver) -> Path | None:
     home = _toolfetch.home_beside(Path(binary).parent)
     wanted = {plugin.path for plugin in driver.plugins}
     return home if any((home / path).is_dir() for path in wanted) else None
+
+
+@contextmanager
+def _reading(driver: _drivers.Driver, placed: Path) -> Iterator[None]:
+    """Point the extractor at what the install actually placed.
+
+    Most tiers place binaries, and reading them means putting that one
+    directory first on `PATH`. A manual tier places pages: there is no
+    binary, and `man` finds them by manpath rather than by `PATH`. Same
+    shape either way — the release's own copy is what answers, never the
+    machine's.
+    """
+    if driver.provision.kind == "man":
+        with _overlay(FOOTMAN_MANPATH=str(placed)):
+            yield
+        return
+    with _bin_on_path(placed):
+        yield
 
 
 @contextmanager
@@ -539,20 +564,30 @@ def _ignore(driver: _drivers.Driver, root: Path | None) -> str:
       machine behind the one that took the snapshot. Reading it would
       rewrite the stub *backwards*, losing flags that exist upstream.
     """
-    binary = _drivers._resolve(driver.name)
-    if binary is None:
-        return "not installed"
-    if (
-        root is not None
-        and driver.provision.kind != "system"
-        and not _from_prefix(binary, root)
-    ):
+    from footman import _toolhelp
+
+    manual = _toolhelp._fetched_manpath() if driver.provision.kind == "man" else ""
+    if driver.provision.kind == "man" and root is not None and not manual:
+        # The pages are the reading, so a prefix without them is a prefix
+        # this tool is not in — the same rule every other tier follows.
         return "not in the prefix"
+    binary = _drivers._resolve(driver.name)
+    if not manual:
+        if binary is None:
+            return "not installed"
+        if (
+            root is not None
+            and driver.provision.kind != "system"
+            and not _from_prefix(binary, root)
+        ):
+            return "not in the prefix"
     stub = _stub_path(driver.key)
     if not stub.exists():
         return ""
     recorded = _header(stub)[0].partition(" ")[0]
-    found = _drivers.version(driver.name)
+    found = (
+        _toolhelp.man_version(Path(manual)) if manual else _drivers.version(driver.name)
+    )
     # One comparator, shared with the bridge: only the leading numeric run
     # counts, so a build tail can never read as "newer than its own base".
     here, snapshot = _version_tuple(found), _version_tuple(recorded)
@@ -1508,6 +1543,14 @@ def _curated(only: str, fetch) -> tuple[list, list[str]]:
                 else f"{driver.key} (hand-written)"
             )
             continue
+        if driver.provision.kind == "man" and shutil.which("man") is None:
+            # The pages are the reading, and rendering them takes `man`.
+            # Windows has no such thing, and that is not a hole: a hole
+            # says a release could not be had, where this says the reader
+            # is missing. The pages are the same bytes on every platform,
+            # so a box that skips them loses nothing another box records.
+            skipped.append(f"{driver.key} (no man to read the pages with)")
+            continue
         chosen.append(driver)
     return chosen, skipped
 
@@ -1614,15 +1657,15 @@ def observe(
     if driver is None or not scratch:  # pragma: no cover - engine-supplied
         return None
     release = _toolfetch.Release(version=version, tag=tag, date=date)
-    bindir = _toolfetch.install(driver, release, Path(scratch) / f"{tool}-{version}")
-    if bindir is None:
+    placed = _toolfetch.install(driver, release, Path(scratch) / f"{tool}-{version}")
+    if placed is None:
         _refuse_a_broken_environment(Path(scratch))
         return None
     try:
-        with _bin_on_path(bindir):
+        with _reading(driver, placed):
             spec = _extract(driver)
     finally:
-        _discard(bindir)
+        _discard(placed)
     if not _describes_itself(spec):
         return None
     if spec.version and not _same_release(spec.version, version):

@@ -1475,15 +1475,22 @@ def test_md_safe_touches_only_leading_header_and_quote():
 
 
 def test_resolve_prefers_homebrew_keg_for_host_tool(tmp_path, monkeypatch):
-    # A host-read tool (git) on macOS is read from its Homebrew keg.
+    """A host-read tool on macOS is read from its Homebrew keg.
+
+    Stated against a name rather than a tool: no curated tool is read from
+    the host any more. git was the last one, and its manuals are fetched
+    per release now — so `_HOST_READ` is empty and the rule has nothing
+    real to apply to, until something joins that tier again.
+    """
     monkeypatch.setattr(sys, "platform", "darwin")
+    monkeypatch.setattr(_drivers, "_HOST_READ", frozenset({"hostly"}))
     monkeypatch.setattr(_drivers, "_brew_prefixes", lambda: (str(tmp_path),))
-    keg = tmp_path / "opt" / "git" / "bin"
+    keg = tmp_path / "opt" / "hostly" / "bin"
     keg.mkdir(parents=True)
-    tool = keg / "git"
+    tool = keg / "hostly"
     tool.write_text("#!/bin/sh\n")
     tool.chmod(0o755)
-    assert _drivers._resolve("git") == str(tool)
+    assert _drivers._resolve("hostly") == str(tool)
 
 
 def test_resolve_ignores_homebrew_for_provisioned_tool(tmp_path, monkeypatch):

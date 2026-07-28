@@ -109,6 +109,40 @@ def provision(
     for driver in [d for kind in forges for d in by_kind.get(kind, [])]:
         outcomes.append(_release(prefix, driver, host=driver.provision.kind))
     outcomes += _docker_tier(prefix, by_kind.get("docker", []))
+    outcomes += _man_tier(prefix, by_kind.get("man", []))
+    return outcomes
+
+
+def _man_tier(prefix: Path, drivers: list[Driver]) -> list[Outcome]:
+    """The newest manual, unpacked where a prefix read will find it.
+
+    Nothing is installed and nothing is run: for a tool read from its
+    manual the pages *are* the tool, so provisioning fetches the newest
+    set and `tools.sync` reads those rather than the machine's own git.
+    """
+    from footman import _toolfetch
+
+    outcomes: list[Outcome] = []
+    for driver in drivers:
+        try:
+            found = _toolfetch.releases(driver)
+        except _toolfetch.Unreachable as blocked:
+            outcomes.append(Outcome(driver.key, "man", "fail", str(blocked)))
+            continue
+        if not found:
+            outcomes.append(Outcome(driver.key, "man", "fail", "no manuals listed"))
+            continue
+        newest = found[0]
+        placed = _toolfetch.install(driver, newest, prefix / ".man")
+        if placed is None:
+            outcomes.append(
+                Outcome(driver.key, "man", "fail", f"{newest.version} unavailable")
+            )
+            continue
+        target = prefix / "man"
+        shutil.rmtree(target, ignore_errors=True)
+        shutil.copytree(placed, target)
+        outcomes.append(Outcome(driver.key, "man", "ok", newest.version))
     return outcomes
 
 

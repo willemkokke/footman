@@ -9,6 +9,25 @@ versions may include breaking changes.
 
 ### Added
 
+- **git is read from its manuals, and every release of them is kept.**
+  git's `-h` omits about half its flags, so it has always been read from
+  its manual — and a manual is not a binary. kernel.org publishes the
+  pages per release, so nothing is installed and nothing is run: 343
+  releases back to 2013 read in six minutes for a third of a megabyte,
+  where a binary tier would have had to build or fetch each one. The
+  stub now says when a flag arrived — `Added in 2.41.0` — because the
+  history is finally deep enough to know.
+
+  The pages are also the same bytes everywhere, so two machines reading
+  this tier cannot disagree and the cross-platform tagging simply has
+  nothing to say about git. A machine with no `man` to render them (any
+  Windows box) skips the tool and says so, which is not a hole: a hole
+  means a release could not be had, where this means the reader is
+  missing and another machine already recorded the same bytes.
+
+  With git fetched, **no tool footman ships a stub for is read from the
+  host any more** — every one comes from something it fetched itself.
+
 - **A tool's plugins are fetched and paired, not borrowed from the
   machine.** `docker compose` and `docker build` are not docker: compose
   and buildx are separate projects on their own release lines, found under
@@ -53,6 +72,12 @@ versions may include breaking changes.
   tool means and the one spelling every platform agrees on: without it
   each leg of the cross-platform matrix would overwrite the last and every
   weekly run would report a change nobody made.
+- **A re-reading can now correct a verb's own description.** Merging an
+  observation wrote its options and nothing else, so a verb's summary and
+  its positional shape were frozen at whatever the first reading said —
+  git's root verb kept a fragment of a usage line where its manual says
+  "the stupid content tracker", and no better extractor could replace it.
+  Those fields now settle exactly as options do.
 - **A verb that answers with the tool's own help is no longer recorded as
   that verb.** Asked for a subcommand it does not have, docker prints its
   root help and exits 0 — so the reading looked like a successful one, and

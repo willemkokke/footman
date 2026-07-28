@@ -33,41 +33,44 @@ class Git(_Tool):
         no_replace_objects: _Flag = ...,
         noglob_pathspecs: _Flag = ...,
         paginate: _Flag = ...,
+        super_prefix: _Value = ...,
         work_tree: _Value = ...,
         **flags: Any,
     ) -> _Result:
-        """[--exec-path[=<path>]] [--html-path] [--man-path] [--info-path]
+        """the stupid content tracker
 
         Args:
             attr_source: Read gitattributes from <tree-ish> instead of the worktree.
+                Added in 2.41.0.
             bare: Treat the repository as a bare repository.
             config_env: Like -c <name>=<value>, give configuration variable <name> a
                 value, where <envvar> is the name of an environment variable from
-                which to retrieve the value.
+                which to retrieve the value. Added in 2.31.0.
             exec_path: Path to wherever your core Git programs are installed. Value
                 optional: `True` for the bare flag, or pass one.
             git_dir: Set the path to the repository (".git" directory).
-            glob_pathspecs: Add "glob" magic to all pathspec.
+            glob_pathspecs: Add "glob" magic to all pathspec. Added in 1.8.5.
             html_path: Print the path, without trailing slash, where Git's HTML
                 documentation is installed and exit.
-            icase_pathspecs: Add "icase" magic to all pathspec.
+            icase_pathspecs: Add "icase" magic to all pathspec. Added in 1.8.5.
             info_path: Print the path where the Info files documenting this version
                 of Git are installed and exit.
-            list_cmds: List commands by group.
+            list_cmds: List commands by group. Added in 2.18.0.
             literal_pathspecs: Treat pathspecs literally (i.e.
             man_path: Print the manpath (see man(1)) for the man pages for this
                 version of Git and exit.
             namespace: Set the Git namespace.
-            no_advice: Disable all advice hints from being printed.
+            no_advice: Disable all advice hints from being printed. Added in 2.46.0.
             no_lazy_fetch: Do not fetch missing objects from the promisor remote on
-                demand.
+                demand. Added in 2.45.0.
             no_optional_locks: Do not perform optional operations that require
-                locks.
+                locks. Added in 2.15.0.
             no_pager: Do not pipe Git output into a pager.
             no_replace_objects: Do not use replacement refs to replace Git objects.
-            noglob_pathspecs: Add "literal" magic to all pathspec.
+            noglob_pathspecs: Add "literal" magic to all pathspec. Added in 1.8.5.
             paginate: Pipe all output into less (or if set, $PAGER) if standard
                 output is a terminal.
+            super_prefix: Currently for internal use only. Gone since 2.40.0.
             work_tree: Set the path to the working tree.
         """
         ...
@@ -96,14 +99,13 @@ class Git(_Tool):
         verbose: _Flag = ...,
         **flags: Any,
     ) -> _Result:
-        """GIT-ADD(1)                        Git Manual
-        GIT-ADD(1)
+        """Add file contents to the index
 
         Args:
             all: Update the index not only where the working tree has a file
                 matching <pathspec> but also where the index already has an entry.
                 `all=off` emits `--ignore-removal`.
-            chmod: Override the executable bit of the added files.
+            chmod: Override the executable bit of the added files. Added in 2.10.1.
             dry_run: Don't actually add the file(s), just show if they exist and/or
                 will be ignored.
             edit: Open the diff vs. the index in an editor and let the user edit it.
@@ -115,24 +117,25 @@ class Git(_Tool):
             intent_to_add: Record only the fact that the path will be added later.
             inter_hunk_context: Show the context between diff hunks, up to the
                 specified <number> of lines, thereby fusing hunks that are close to
-                each other.
+                each other. Added in 2.51.0.
             interactive: Add modified contents in the working tree interactively to
                 the index.
             no_warn_embedded_repo: By default, git add will warn when adding an
                 embedded repository to the index without using git submodule add to
-                create an entry in .gitmodules.
+                create an entry in .gitmodules. Added in 2.14.0.
             patch: Interactively choose hunks of patch between the index and the
                 work tree and add them to the index.
-            pathspec_file_nul: Only meaningful with --pathspec-from-file.
+            pathspec_file_nul: Only meaningful with --pathspec-from-file. Added in
+                2.25.0.
             pathspec_from_file: Pathspec is passed in <file> instead of commandline
-                args.
+                args. Added in 2.25.0.
             refresh: Don't add the file(s), but only refresh their stat()
                 information in the index.
             renormalize: Apply the "clean" process freshly to all tracked files to
-                forcibly add them again to the index.
+                forcibly add them again to the index. Added in 2.16.0.
             sparse: Allow updating index entries outside of the sparse-checkout
-                cone.
-            unified: Generate diffs with <n> lines of context.
+                cone. Added in 2.34.0.
+            unified: Generate diffs with <n> lines of context. Added in 2.51.0.
             update: Update the index just where it already has an entry matching
                 <pathspec>.
             verbose: Be verbose.
@@ -175,8 +178,7 @@ class Git(_Tool):
         verbose: _Flag = ...,
         **flags: Any,
     ) -> _Result:
-        """GIT-BRANCH(1)                     Git Manual
-        GIT-BRANCH(1)
+        """List, create, or delete branches
 
         Args:
             abbrev: In the verbose listing that show the commit object name, show
@@ -189,7 +191,8 @@ class Git(_Tool):
                 the bare flag, or pass one.
             contains: Only list branches which contain <commit> (HEAD if not
                 specified).
-            copy: Copy a branch, together with its config and reflog.
+            copy: Copy a branch, together with its config and reflog. Added in
+                2.15.0.
             create_reflog: Create the branch's reflog.
             delete: Delete a branch.
             edit_description: Open an editor and edit the text to explain what the
@@ -197,8 +200,9 @@ class Git(_Tool):
             force: Reset <branch-name> to <start-point>, even if <branch-name>
                 exists already.
             format: A string that interpolates %(fieldname) from a branch ref being
-                shown and the object it points at.
-            ignore_case: Sorting and filtering branches are case insensitive.
+                shown and the object it points at. Added in 2.13.0.
+            ignore_case: Sorting and filtering branches are case insensitive. Added
+                in 2.12.0.
             list: List branches.
             merged: Only list branches whose tips are reachable from <commit> (HEAD
                 if not specified).
@@ -208,26 +212,27 @@ class Git(_Tool):
             no_color: Turn off branch colors, even when the configuration file gives
                 the default to color output.
             no_contains: Only list branches which don't contain <commit> (HEAD if
-                not specified).
+                not specified). Added in 2.13.0.
             no_merged: Only list branches whose tips are not reachable from <commit>
                 (HEAD if not specified).
             no_track: Do not set up "upstream" configuration, even if the
-                branch.autoSetupMerge configuration variable is set.
+                branch.autoSetupMerge configuration variable is set. Added in
+                2.35.0.
             omit_empty: Do not print a newline after formatted refs where the format
-                expands to the empty string.
-            points_at: Only list branches of <object>.
+                expands to the empty string. Added in 2.41.0.
+            points_at: Only list branches of <object>. Added in 2.7.0.
             quiet: Be more quiet when creating or deleting a branch, suppressing
                 non-error messages.
             recurse_submodules: THIS OPTION IS EXPERIMENTAL! Cause the current
                 command to recurse into submodules if submodule.propagateBranches is
-                enabled.
+                enabled. Added in 2.36.0.
             remotes: List or delete (if used with -d) the remote-tracking branches.
             set_upstream: As this option had confusing syntax, it is no longer
                 supported.
             set_upstream_to: Set up <branch-name>'s tracking information so
                 <upstream> is considered <branch-name>'s upstream branch.
-            show_current: Print the name of the current branch.
-            sort: Sort based on <key>.
+            show_current: Print the name of the current branch. Added in 2.22.0.
+            sort: Sort based on <key>. Added in 2.7.0.
             track: When creating a new branch, set up branch.<name>.remote and
                 branch.<name>.merge configuration entries to set "upstream" tracking
                 configuration for the new branch. Value optional: `True` for the
@@ -248,6 +253,7 @@ class Git(_Tool):
         ignore_skip_worktree_bits: _Flag = ...,
         inter_hunk_context: _Value = ...,
         merge: _Flag = ...,
+        no_guess: _Flag = ...,
         no_track: _Flag = ...,
         orphan: _Value = ...,
         ours: _Flag = ...,
@@ -263,8 +269,7 @@ class Git(_Tool):
         unified: _Value = ...,
         **flags: Any,
     ) -> _Result:
-        """GIT-CHECKOUT(1)                   Git Manual
-        GIT-CHECKOUT(1)
+        """Switch branches or restore working tree files
 
         Args:
             conflict: The same as --merge option above, but changes the way the
@@ -282,42 +287,47 @@ class Git(_Tool):
                 of them is named by the checkout.defaultRemote configuration
                 variable, we'll use that one for the purposes of disambiguation,
                 even if the <branch> isn't unique across all remotes. `guess=off`
-                emits `--no-guess`.
+                emits `--no-guess`. Added in 2.23.0.
             ignore_other_worktrees: git checkout refuses when the wanted branch is
-                already checked out or otherwise in use by another worktree.
+                already checked out or otherwise in use by another worktree. Added
+                in 2.5.0.
             ignore_skip_worktree_bits: In sparse checkout mode, git checkout --
                 <path>.
             inter_hunk_context: Show the context between diff hunks, up to the
                 specified <number> of lines, thereby fusing hunks that are close to
-                each other.
+                each other. Added in 2.51.0.
             merge: When switching branches, if you have local modifications to one
                 or more files that are different between the current branch and the
                 branch to which you are switching, the command refuses to switch
                 branches in order to preserve your modifications in context.
+            no_guess: Do not attempt to create a branch if a remote tracking branch
+                of the same name exists. Gone since 2.23.0.
             no_track: Do not set up "upstream" configuration, even if the
-                branch.autoSetupMerge configuration variable is true.
+                branch.autoSetupMerge configuration variable is true. Added in
+                2.52.0.
             orphan: Create a new unborn branch, named <new-branch>, started from
                 <start-point> and switch to it.
             ours: When checking out paths from the index, check out stage #2 (ours)
                 or #3 (theirs) for unmerged paths.
             overlay: In the default overlay mode, git checkout never removes files
-                from the index or the working tree.
+                from the index or the working tree. Added in 2.23.0.
             overwrite_ignore: Silently overwrite ignored files when switching
-                branches.
-            pathspec_file_nul: Only meaningful with --pathspec-from-file.
+                branches. Added in 2.23.0.
+            pathspec_file_nul: Only meaningful with --pathspec-from-file. Added in
+                2.25.0.
             pathspec_from_file: Replace the specified files and/or directories with
                 the version from the given commit or tree and add them to the index
-                (also known as "staging area").
+                (also known as "staging area"). Added in 2.25.0.
             progress: Progress status is reported on the standard error stream by
                 default when it is attached to a terminal, unless --quiet is
-                specified.
+                specified. Added in 2.23.0.
             quiet: Quiet, suppress feedback messages.
             recurse_submodules: Using --recurse-submodules will update the content
                 of all active submodules according to the commit recorded in the
-                superproject.
+                superproject. Added in 2.23.0.
             track: When creating a new branch, set up "upstream" configuration.
                 Value optional: `True` for the bare flag, or pass one.
-            unified: Generate diffs with <n> lines of context.
+            unified: Generate diffs with <n> lines of context. Added in 2.51.0.
         """
         ...
     def clone(
@@ -339,12 +349,15 @@ class Git(_Tool):
         no_checkout: _Flag = ...,
         no_hardlinks: _Flag = ...,
         no_reject_shallow: _Flag = ...,
+        no_tags: _Flag = ...,
         origin: _Value = ...,
         progress: _Flag = ...,
         quiet: _Flag = ...,
         recurse_submodules: _ValuedFlag = ...,
+        recursive: _Flag = ...,
         ref_format: _Value = ...,
         reference: _Value = ...,
+        remote: _Flag = ...,
         remote_submodules: _Flag = ...,
         revision: _Value = ...,
         separate_git_dir: _Value = ...,
@@ -361,17 +374,17 @@ class Git(_Tool):
         verbose: _Flag = ...,
         **flags: Any,
     ) -> _Result:
-        """GIT-CLONE(1)                      Git Manual
-        GIT-CLONE(1)
+        """Clone a repository into a new directory
 
         Args:
             also_filter_submodules: Also apply the partial clone filter to any
-                submodules in the repository.
+                submodules in the repository. Added in 2.36.0.
             bare: Make a bare Git repository.
             branch: Point the newly created HEAD to <name> branch instead of the
                 branch pointed to by the cloned repository's HEAD.
             bundle_uri: Before fetching from the remote, fetch a bundle from the
-                given <uri> and unbundle the data into the local repository.
+                given <uri> and unbundle the data into the local repository. Added
+                in 2.38.0.
             config: Set a configuration variable in the newly-created repository;
                 this takes effect immediately after the repository is initialized,
                 but before the remote history is fetched or any files checked out.
@@ -380,10 +393,11 @@ class Git(_Tool):
             dissociate: Borrow the objects from reference repositories specified
                 with the --reference options only to reduce network transfer, and
                 stop borrowing from them after a clone is made by making necessary
-                local copies of borrowed objects.
+                local copies of borrowed objects. Added in 2.3.0.
             filter: Use the partial clone feature and request that the server sends
                 a subset of reachable objects according to a given object filter.
-            jobs: The number of submodules fetched at the same time.
+                Added in 2.27.0.
+            jobs: The number of submodules fetched at the same time. Added in 2.9.0.
             local: When the repository to clone from is on a local machine, this
                 flag bypasses the normal "Git aware" transport mechanism and clones
                 the repository by making a copy of HEAD and everything under objects
@@ -394,7 +408,10 @@ class Git(_Tool):
                 filesystem to copy the files under the .git/objects directory
                 instead of using hardlinks.
             no_reject_shallow: Fail if the source repository is a shallow
-                repository.
+                repository. Added in 2.54.0.
+            no_tags: Don't clone any tags, and set remote.<remote>.tagOpt=--no-tags
+                in the config, ensuring that future git pull and git fetch
+                operations won't follow any tags. Gone since 2.49.0.
             origin: Instead of using the remote name origin to keep track of the
                 upstream repository, use <name>.
             progress: Report progress status on the standard error stream by default
@@ -402,40 +419,43 @@ class Git(_Tool):
             quiet: Operate quietly.
             recurse_submodules: After the clone is created, initialize and clone
                 submodules within based on the provided <pathspec>. Value optional:
-                `True` for the bare flag, or pass one.
+                `True` for the bare flag, or pass one. Added in 2.13.0.
+            recursive: After the clone is created, initialize all submodules within,
+                using their default settings. Gone since 2.13.0.
             ref_format: Specify the given ref storage format for the repository.
+                Added in 2.44.0.
             reference: If the reference <repository> is on the local machine,
                 automatically setup .git/objects/info/alternates to obtain objects
                 from the reference <repository>.
             remote_submodules: All submodules which are cloned will use the status
                 of the submodule's remote-tracking branch to update the submodule,
-                rather than the superproject's recorded SHA-1.
+                rather than the superproject's recorded SHA-1. Added in 2.52.0.
             revision: Create a new repository, and fetch the history leading to the
                 given revision <rev> (and nothing else), without making any
                 remote-tracking branch, and without making any local branch, and
-                detach HEAD to <rev>.
+                detach HEAD to <rev>. Added in 2.49.0.
             separate_git_dir: Instead of placing the cloned repository where it is
                 supposed to be, place the cloned repository at the specified
                 directory, then make a filesystem-agnostic Git symbolic link to
                 there.
             server_option: Transmit the given string to the server when
-                communicating using protocol version 2.
+                communicating using protocol version 2. Added in 2.22.0.
             shallow_exclude: Create a shallow clone with a history, excluding
                 commits reachable from a specified remote branch or tag. May be
-                repeated: a list emits the flag once per item.
+                repeated: a list emits the flag once per item. Added in 2.11.0.
             shallow_since: Create a shallow clone with a history after the specified
-                time.
+                time. Added in 2.11.0.
             shallow_submodules: All submodules which are cloned will be shallow with
-                a depth of 1.
+                a depth of 1. Added in 2.52.0.
             shared: When the repository to clone is on the local machine, instead of
                 using hard links, automatically setup .git/objects/info/alternates
                 to share the objects with the source repository.
             single_branch: Clone only the history leading to the tip of a single
                 branch, either specified by the --branch option or the primary
-                branch remote's HEAD points at.
+                branch remote's HEAD points at. Added in 2.52.0.
             sparse: Employ a sparse-checkout, with only files in the toplevel
-                directory initially being present.
-            tags: Control whether or not tags will be cloned.
+                directory initially being present. Added in 2.25.0.
+            tags: Control whether or not tags will be cloned. Added in 2.52.0.
             template: Specify the directory from which templates will be used; (See
                 the "TEMPLATE DIRECTORY" section of git-init(1).).
             upload_pack: Specify a non-default path for the command run on the other
@@ -464,7 +484,9 @@ class Git(_Tool):
         interactive: _Flag = ...,
         long: _Flag = ...,
         message: _Value = ...,
+        no_gpg_sign: _Flag = ...,
         no_post_rewrite: _Flag = ...,
+        no_verify: _Flag = ...,
         null: _Flag = ...,
         only: _Flag = ...,
         patch: _Flag = ...,
@@ -487,8 +509,7 @@ class Git(_Tool):
         verify: _Flag = ...,
         **flags: Any,
     ) -> _Result:
-        """GIT-COMMIT(1)                     Git Manual
-        GIT-COMMIT(1)
+        """Record changes to the repository
 
         Args:
             all: Automatically stage files that have been modified and deleted, but
@@ -520,10 +541,14 @@ class Git(_Tool):
                 contents of paths given on the command line as well.
             inter_hunk_context: Show the context between diff hunks, up to the
                 specified <number> of lines, thereby fusing hunks that are close to
-                each other.
+                each other. Added in 2.51.0.
             long: When doing a dry-run, give the output in the long-format.
             message: Use <msg> as the commit message.
+            no_gpg_sign: Countermand commit.gpgSign configuration variable that is
+                set to force each and every commit to be signed. Gone since 2.27.0.
             no_post_rewrite: Bypass the post-rewrite hook.
+            no_verify: This option bypasses the pre-commit and commit-msg hooks.
+                Gone since 2.34.0.
             null: When showing short or porcelain git-status(1) output, print the
                 filename verbatim and terminate the entries with NUL, instead of LF.
             only: Make a commit by taking the updated working tree contents of the
@@ -531,8 +556,10 @@ class Git(_Tool):
                 have been staged for other paths.
             patch: Use the interactive patch selection interface to choose which
                 changes to commit.
-            pathspec_file_nul: Only meaningful with --pathspec-from-file.
+            pathspec_file_nul: Only meaningful with --pathspec-from-file. Added in
+                2.25.0.
             pathspec_from_file: Pass pathspec in <file> instead of commandline args.
+                Added in 2.25.0.
             porcelain: When doing a dry-run, give the output in a porcelain-ready
                 format.
             quiet: Suppress commit summary message.
@@ -556,14 +583,15 @@ class Git(_Tool):
                 contents in <file>. May be repeated: a list emits the flag once per
                 item.
             trailer: Specify a (<token>, <value>) pair that should be applied as a
-                trailer. May be repeated: a list emits the flag once per item.
-            unified: Generate diffs with <n> lines of context.
+                trailer. May be repeated: a list emits the flag once per item. Added
+                in 2.32.0.
+            unified: Generate diffs with <n> lines of context. Added in 2.51.0.
             untracked_files: Show untracked files. Value optional: `True` for the
                 bare flag, or pass one.
             verbose: Show unified diff between the HEAD commit and what would be
                 committed at the bottom of the commit message template to help the
                 user describe the commit by reminding what changes the commit has.
-            verify: Bypass the pre-commit and commit-msg hooks.
+            verify: Bypass the pre-commit and commit-msg hooks. Added in 2.34.0.
         """
         ...
     def describe(
@@ -585,8 +613,7 @@ class Git(_Tool):
         tags: _Flag = ...,
         **flags: Any,
     ) -> _Result:
-        """GIT-DESCRIBE(1)                   Git Manual
-        GIT-DESCRIBE(1)
+        """Give an object a human readable name based on an
 
         Args:
             abbrev: Instead of using the default number of hexadecimal digits (which
@@ -608,9 +635,9 @@ class Git(_Tool):
             exact_match: Only output exact matches (a tag directly references the
                 supplied commit).
             exclude: Do not consider tags matching the given glob(7) pattern,
-                excluding the "refs/tags/" prefix.
+                excluding the "refs/tags/" prefix. Added in 2.13.0.
             first_parent: Follow only the first parent commit upon seeing a merge
-                commit.
+                commit. Added in 1.8.4.
             long: Always output the long format (the tag, the number of commits and
                 the abbreviated commit name) even when it matches a tag.
             match: Only consider tags matching the given glob(7) pattern, excluding
@@ -627,12 +654,15 @@ class Git(_Tool):
         base: _Flag = ...,
         binary: _Flag = ...,
         break_rewrites: _ValuedFlag = ...,
+        cached: _Flag = ...,
+        cc: _Flag = ...,
         check: _Flag = ...,
         color: _ValuedFlag = ...,
         color_moved: _ValuedFlag = ...,
         color_moved_ws: _Value = ...,
         color_words: _ValuedFlag = ...,
         compact_summary: _Flag = ...,
+        compaction_heuristic: _Flag = ...,
         cumulative: _Flag = ...,
         default_prefix: _Flag = ...,
         diff_algorithm: _Flag = ...,
@@ -669,6 +699,7 @@ class Git(_Tool):
         no_color: _Flag = ...,
         no_color_moved: _Flag = ...,
         no_color_moved_ws: _Flag = ...,
+        no_compaction_heuristic: _Flag = ...,
         no_prefix: _Flag = ...,
         no_renames: _Flag = ...,
         numstat: _Flag = ...,
@@ -700,8 +731,7 @@ class Git(_Tool):
         ws_error_highlight: _Value = ...,
         **flags: Any,
     ) -> _Result:
-        """GIT-DIFF(1)                       Git Manual
-        GIT-DIFF(1)
+        """Show changes between commits, commit and working tree, etc
 
         Args:
             abbrev: Instead of showing the full 40-byte hexadecimal object name in
@@ -709,10 +739,11 @@ class Git(_Tool):
                 prefix that is at least <n> hexdigits long that uniquely refers the
                 object. Value optional: `True` for the bare flag, or pass one.
             anchored: Generate a diff using the "anchored diff" algorithm. May be
-                repeated: a list emits the flag once per item.
+                repeated: a list emits the flag once per item. Added in 2.16.0.
             base: Compare the working tree with • the "base" version (stage #1) when
                 using -1 or --base, • "our branch" (stage #2) when using -2 or
                 --ours, or • "their branch" (stage #3) when using -3 or --theirs.
+                Added in 2.13.0.
             binary: In addition to --full-index, output a binary diff that can be
                 applied with git-apply.
             break_rewrites: Break complete rewrite changes into pairs of delete and
@@ -721,20 +752,25 @@ class Git(_Tool):
             color: Show colored diff. Value optional: `True` for the bare flag, or
                 pass one.
             color_moved: Moved lines of code are colored differently. Value
-                optional: `True` for the bare flag, or pass one.
+                optional: `True` for the bare flag, or pass one. Added in 2.15.0.
             color_moved_ws: This configures how whitespace is ignored when
                 performing the move detection for --color-moved. May be repeated: a
-                list emits the flag once per item.
+                list emits the flag once per item. Added in 2.19.0.
             color_words: Equivalent to --word-diff=color plus (if a regex was
                 specified) --word-diff-regex=<regex>. Value optional: `True` for the
                 bare flag, or pass one.
             compact_summary: Output a condensed summary of extended header
                 information such as file creations or deletions ("new" or "gone",
                 optionally +l if it's a symlink) and mode changes (+x or -x for
-                adding or removing executable bit respectively) in diffstat.
-            cumulative: Synonym for --dirstat=cumulative.
+                adding or removing executable bit respectively) in diffstat. Added
+                in 2.17.0.
+            compaction_heuristic: These are to help debugging and tuning an
+                experimental heuristic (which is off by default) that shifts the
+                hunk boundary in an attempt to make the resulting patch easier to
+                read. Gone since 2.11.0.
+            cumulative: Synonym for --dirstat=cumulative. Added in 2.22.0.
             default_prefix: Use the default source and destination prefixes ("a/"
-                and "b/").
+                and "b/"). Added in 2.41.0.
             diff_algorithm: Choose a diff algorithm.
             diff_filter: Select only files that are Added (A), Copied (C), Deleted
                 (D), Modified (M), Renamed (R), have their type (i.e. May be
@@ -743,7 +779,7 @@ class Git(_Tool):
                 sub-directory. Value optional: `True` for the bare flag, or pass
                 one.
             dirstat_by_file: Synonym for --dirstat=files,<param>,. Value optional:
-                `True` for the bare flag, or pass one.
+                `True` for the bare flag, or pass one. Added in 2.22.0.
             dst_prefix: Show the given destination <prefix> instead of "b/".
             exit_code: Make the program exit with codes similar to diff(1).
             ext_diff: Allow an external diff helper to be executed. `ext_diff=off`
@@ -754,7 +790,7 @@ class Git(_Tool):
                 copies only if the original file of the copy was modified in the
                 same changeset.
             find_object: Look for differences that change the number of occurrences
-                of the specified object.
+                of the specified object. Added in 2.17.0.
             find_renames: Detect renames. Value optional: `True` for the bare flag,
                 or pass one.
             full_index: Instead of the first handful of characters, show the full
@@ -763,18 +799,19 @@ class Git(_Tool):
             function_context: Show whole function as context lines for each change.
             histogram: Generate a diff using the "histogram diff" algorithm.
             ignore_all_space: Ignore whitespace when comparing lines.
-            ignore_blank_lines: Ignore changes whose lines are all blank.
+            ignore_blank_lines: Ignore changes whose lines are all blank. Added in
+                1.8.4.
             ignore_cr_at_eol: Ignore carriage-return at the end of line when doing a
-                comparison.
+                comparison. Added in 2.16.0.
             ignore_matching_lines: Ignore changes whose all lines match <regex>. May
-                be repeated: a list emits the flag once per item.
+                be repeated: a list emits the flag once per item. Added in 2.30.0.
             ignore_space_at_eol: Ignore changes in whitespace at EOL.
             ignore_space_change: Ignore changes in amount of whitespace.
             ignore_submodules: Ignore changes to submodules in the diff generation.
                 Value optional: `True` for the bare flag, or pass one.
             indent_heuristic: Enable the heuristic that shifts diff hunk boundaries
                 to make patches easier to read. `indent_heuristic=off` emits
-                `--no-indent-heuristic`.
+                `--no-indent-heuristic`. Added in 2.11.0.
             inter_hunk_context: Show the context between diff hunks, up to the
                 specified <number> of lines, thereby fusing hunks that are close to
                 each other.
@@ -782,28 +819,32 @@ class Git(_Tool):
                 header but not the diff between the preimage and /dev/null.
             ita_invisible_in_index: By default entries added by git add -N appear as
                 an existing empty file in git diff and a new file in git diff
-                --cached.
+                --cached. Added in 2.11.0.
             line_prefix: Prepend an additional <prefix> to every line of output.
+                Added in 2.11.0.
             max_depth: For each pathspec given on command line, descend at most
-                <depth> levels of directories.
+                <depth> levels of directories. Added in 2.52.0.
             minimal: Spend extra time to make sure the smallest possible diff is
                 produced.
             name_only: Show only the name of each changed file in the post-image
                 tree.
             name_status: Show only the name(s) and status of each changed file.
             no_color: Turn off colored diff.
-            no_color_moved: Turn off move detection.
+            no_color_moved: Turn off move detection. Added in 2.21.0.
             no_color_moved_ws: Do not ignore whitespace when performing move
-                detection.
+                detection. Added in 2.21.0.
+            no_compaction_heuristic: These are to help debugging and tuning
+                experimental heuristics (which are off by default) that shift diff
+                hunk boundaries to make patches easier to read. Gone since 2.12.0.
             no_prefix: Do not show any source or destination prefix.
             no_renames: Turn off rename detection, even when the configuration file
                 gives the default to do so.
             numstat: Similar to --stat, but shows number of added and deleted lines
                 in decimal notation and pathname without abbreviation, to make it
                 more machine friendly.
-            output: Output to a specific file instead of stdout.
+            output: Output to a specific file instead of stdout. Added in 2.22.0.
             output_indicator_context: Specify the character used to indicate new,
-                old or context lines in the generated patch.
+                old or context lines in the generated patch. Added in 2.22.0.
             patch: Generate patch (see the section called "GENERATING PATCH TEXT
                 WITH -P"). `patch=off` emits `--no-patch`.
             patch_with_raw: Synonym for -p --raw.
@@ -819,11 +860,13 @@ class Git(_Tool):
                 exclude changes outside the directory and show pathnames relative to
                 it with this option. Value optional: `True` for the bare flag, or
                 pass one.
-            rename_empty: Whether to use empty blobs as rename source.
+            rename_empty: Whether to use empty blobs as rename source. Added in
+                2.52.0.
             shortstat: Output only the last line of the --stat format containing
                 total number of modified files, as well as number of added and
                 deleted lines.
             skip_to: Discard the files before the named <file> from the output (i.e.
+                Added in 2.31.0.
             src_prefix: Show the given source <prefix> instead of "a/".
             stat: Generate a diffstat. Value optional: `True` for the bare flag, or
                 pass one.
@@ -841,7 +884,7 @@ class Git(_Tool):
             word_diff_regex: Use <regex> to decide what a word is, instead of
                 considering runs of non-whitespace to be a word.
             ws_error_highlight: Highlight whitespace errors in the context, old or
-                new lines of the diff.
+                new lines of the diff. Added in 2.5.0.
         """
         ...
     def fetch(
@@ -866,6 +909,7 @@ class Git(_Tool):
         negotiation_restrict: _Flag = ...,
         negotiation_tip: _Flag = ...,
         no_recurse_submodules: _Flag = ...,
+        no_write_fetch_head: _Flag = ...,
         porcelain: _Flag = ...,
         prefetch: _Flag = ...,
         progress: _Flag = ...,
@@ -893,54 +937,55 @@ class Git(_Tool):
         write_fetch_head: _Flag = ...,
         **flags: Any,
     ) -> _Result:
-        """GIT-FETCH(1)                      Git Manual
-        GIT-FETCH(1)
+        """Download objects and refs from another repository
 
         Args:
             all: Fetch all remotes, except for the ones that have the
                 remote.<name>.skipFetchAll configuration variable set.
             append: Append ref names and object names of fetched refs to the
                 existing contents of .git/FETCH_HEAD.
-            atomic: Use an atomic transaction to update local refs.
+            atomic: Use an atomic transaction to update local refs. Added in 2.31.0.
             auto_maintenance: Run git maintenance run --auto at the end to perform
-                automatic repository maintenance if needed.
+                automatic repository maintenance if needed. Added in 2.52.0.
             deepen: Similar to --depth, except it specifies the number of commits
                 from the current shallow boundary instead of from the tip of each
-                remote branch history.
+                remote branch history. Added in 2.11.0.
             depth: Limit fetching to the specified number of commits from the tip of
                 each remote branch history.
             dry_run: Show what would be done, without making any changes.
             filter: Use the partial clone feature and request that the server sends
                 a subset of reachable objects according to a given object filter.
+                Added in 2.54.0.
             force: When git fetch is used with <src>:<dst> refspec, it may refuse to
                 update the local branch as discussed in the <refspec> part below.
-            ipv4: Use IPv4 addresses only, ignoring IPv6 addresses.
-            ipv6: Use IPv6 addresses only, ignoring IPv4 addresses.
-            jobs: Parallelize all forms of fetching up to <n> jobs at a time.
+            ipv4: Use IPv4 addresses only, ignoring IPv6 addresses. Added in 2.8.0.
+            ipv6: Use IPv6 addresses only, ignoring IPv4 addresses. Added in 2.8.0.
+            jobs: Parallelize all forms of fetching up to <n> jobs at a time. Added
+                in 2.8.0.
             keep: Keep downloaded pack.
             multiple: Allow several <repository> and <group> arguments to be
                 specified.
             negotiate_only: Do not fetch anything from the server, and instead print
                 the ancestors of the provided --negotiation-restrict= arguments,
-                which we have in common with the server.
+                which we have in common with the server. Added in 2.33.0.
             negotiation_include: Ensure that the commits at the given tips are
                 always sent as "have" lines during fetch negotiation, regardless of
-                what the negotiation algorithm selects.
+                what the negotiation algorithm selects. Added in 2.55.0.
             negotiation_tip: By default, Git will report, to the server, commits
                 reachable from all local refs to find common commits in an attempt
-                to reduce the size of the to-be-received packfile.
+                to reduce the size of the to-be-received packfile. Added in 2.19.0.
             no_recurse_submodules: Disable recursive fetching of submodules (this
                 has the same effect as using the --recurse-submodules=no option).
             porcelain: Print the output to standard output in an easy-to-parse
-                format for scripts.
+                format for scripts. Added in 2.41.0.
             prefetch: Modify the configured refspec to place all refs into the
-                refs/prefetch/ namespace.
+                refs/prefetch/ namespace. Added in 2.32.0.
             progress: Progress status is reported on the standard error stream by
                 default when it is attached to a terminal, unless -q is specified.
             prune: Before fetching, remove any remote-tracking references that no
                 longer exist on the remote.
             prune_tags: Before fetching, remove any local tags that no longer exist
-                on the remote if --prune is enabled.
+                on the remote if --prune is enabled. Added in 2.17.0.
             quiet: Pass --quiet to git-fetch-pack and silence any other internally
                 used git commands.
             recurse_submodules: Control if and under what conditions new commits of
@@ -951,27 +996,30 @@ class Git(_Tool):
                 --recurse-submodules option.
             refetch: Instead of negotiating with the server to avoid transferring
                 commits and associated objects that are already present locally,
-                this option fetches all objects as a fresh clone would.
+                this option fetches all objects as a fresh clone would. Added in
+                2.36.0.
             refmap: When fetching refs listed on the command line, use the specified
                 refspec (can be given more than once) to map the refs to
                 remote-tracking branches, instead of the values of
                 remote.<name>.fetch configuration variables for the remote
                 repository. May be repeated: a list emits the flag once per item.
+                Added in 2.1.0.
             server_option: Transmit the given string to the server when
-                communicating using protocol version 2.
+                communicating using protocol version 2. Added in 2.18.0.
             set_upstream: If the remote is fetched successfully, add upstream
                 (tracking) reference, used by argument-less git-pull(1) and other
-                commands.
+                commands. Added in 2.24.0.
             shallow_exclude: Deepen or shorten the history of a shallow repository
                 to exclude commits reachable from a specified remote branch or tag.
-                May be repeated: a list emits the flag once per item.
+                May be repeated: a list emits the flag once per item. Added in
+                2.11.0.
             shallow_since: Deepen or shorten the history of a shallow repository to
-                include all reachable commits after <date>.
+                include all reachable commits after <date>. Added in 2.11.0.
             show_forced_updates: By default, git checks if a branch is force-updated
                 during fetch. `show_forced_updates=off` emits
-                `--no-show-forced-updates`.
+                `--no-show-forced-updates`. Added in 2.23.0.
             stdin: Read refspecs, one per line, from stdin in addition to those
-                provided as arguments.
+                provided as arguments. Added in 2.29.0.
             submodule_prefix: Prepend <path> to paths printed in informative
                 messages such as "Fetching submodule foo".
             tags: Fetch all tags from the remote (i.e., fetch remote tags
@@ -984,14 +1032,16 @@ class Git(_Tool):
             update_head_ok: By default git fetch refuses to update the head which
                 corresponds to the current branch.
             update_shallow: By default when fetching from a shallow repository, git
-                fetch refuses refs that require updating .git/shallow.
+                fetch refuses refs that require updating .git/shallow. Added in
+                1.9.0.
             upload_pack: When given, and the repository to fetch from is handled by
                 git fetch-pack, --exec=<upload-pack> is passed to the command to
                 specify non-default path for the command run on the other end.
             verbose: Be verbose.
-            write_commit_graph: Write a commit-graph after fetching.
+            write_commit_graph: Write a commit-graph after fetching. Added in
+                2.52.0.
             write_fetch_head: Write the list of remote refs fetched in the
-                FETCH_HEAD file directly under $GIT_DIR.
+                FETCH_HEAD file directly under $GIT_DIR. Added in 2.52.0.
         """
         ...
     def init(
@@ -1007,18 +1057,18 @@ class Git(_Tool):
         template: _Value = ...,
         **flags: Any,
     ) -> _Result:
-        """GIT-INIT(1)                       Git Manual
-        GIT-INIT(1)
+        """Create an empty Git repository or reinitialize an existing
 
         Args:
             bare: Create a bare repository.
             initial_branch: Use <branch-name> for the initial branch in the newly
-                created repository.
+                created repository. Added in 2.29.0.
             object_format: Specify the given object <format> (hash algorithm) for
-                the repository.
+                the repository. Added in 2.27.0.
             quiet: Only print error and warning messages; all other output will be
                 suppressed.
             ref_format: Specify the given ref storage <format> for the repository.
+                Added in 2.44.0.
             separate_git_dir: Instead of initializing the repository as a directory
                 to either $GIT_DIR or ./.git/, create a text file there containing
                 the path to the actual repository.
@@ -1059,6 +1109,7 @@ class Git(_Tool):
         combined_all_paths: _Flag = ...,
         commit_list_format: _Flag = ...,
         compact_summary: _Flag = ...,
+        compaction_heuristic: _Flag = ...,
         cumulative: _Flag = ...,
         date: _Value = ...,
         date_order: _Flag = ...,
@@ -1078,6 +1129,7 @@ class Git(_Tool):
         exclude: _Value = ...,
         exclude_first_parent_only: _Flag = ...,
         exclude_hidden: _Flag = ...,
+        exclude_promisor_objects: _Flag = ...,
         expand_tabs: _Value = ...,
         ext_diff: _Flag = ...,
         extended_regexp: _Flag = ...,
@@ -1107,6 +1159,7 @@ class Git(_Tool):
         ignore_space_change: _Flag = ...,
         ignore_submodules: _ValuedFlag = ...,
         indent_heuristic: _Flag = ...,
+        indexed_objects: _Flag = ...,
         inter_hunk_context: _Value = ...,
         invert_grep: _Flag = ...,
         irreversible_delete: _Flag = ...,
@@ -1128,6 +1181,8 @@ class Git(_Tool):
         no_color: _Flag = ...,
         no_color_moved: _Flag = ...,
         no_color_moved_ws: _Flag = ...,
+        no_compaction_heuristic: _Flag = ...,
+        no_decorate: _ValuedFlag = ...,
         no_diff_merges: _Flag = ...,
         no_max_parents: _Flag = ...,
         no_notes: _Flag = ...,
@@ -1137,6 +1192,9 @@ class Git(_Tool):
         not_: _Flag = ...,
         notes: _ValuedFlag = ...,
         numstat: _Flag = ...,
+        objects: _Flag = ...,
+        objects_edge: _Flag = ...,
+        objects_edge_aggressive: _Flag = ...,
         oneline: _Flag = ...,
         output: _Value = ...,
         output_indicator_context: _Value = ...,
@@ -1185,16 +1243,18 @@ class Git(_Tool):
         text: _Flag = ...,
         textconv: _Flag = ...,
         topo_order: _Flag = ...,
+        unfold: _Flag = ...,
         unified: _Value = ...,
+        unpacked: _Flag = ...,
         until: _Value = ...,
+        use_mailmap: _Flag = ...,
         walk_reflogs: _Flag = ...,
         word_diff: _ValuedFlag = ...,
         word_diff_regex: _Value = ...,
         ws_error_highlight: _Value = ...,
         **flags: Any,
     ) -> _Result:
-        """GIT-LOG(1)                        Git Manual
-        GIT-LOG(1)
+        """Show commit logs
 
         Args:
             abbrev: Instead of showing the full 40-byte hexadecimal object name in
@@ -1209,15 +1269,17 @@ class Git(_Tool):
             all_match: Limit the commits output to ones that match all given --grep,
                 instead of ones that match at least one.
             alternate_refs: Pretend as if all objects mentioned as ref tips of
-                alternate repositories were listed on the command line.
+                alternate repositories were listed on the command line. Added in
+                2.23.0.
             ancestry_path: When given a range of commits to display (e.g. Value
                 optional: `True` for the bare flag, or pass one.
             anchored: Generate a diff using the "anchored diff" algorithm. May be
-                repeated: a list emits the flag once per item.
+                repeated: a list emits the flag once per item. Added in 2.16.0.
             author: Limit the commits output to ones with author/committer header
                 lines that match the <pattern> regular expression.
             author_date_order: Show no parents before all of its children are shown,
-                but otherwise show commits in the author timestamp order.
+                but otherwise show commits in the author timestamp order. Added in
+                1.8.4.
             basic_regexp: Consider the limiting patterns to be basic regular
                 expressions; this is the default.
             binary: In addition to --full-index, output a binary diff that can be
@@ -1246,49 +1308,56 @@ class Git(_Tool):
                 child...").
             clear_decorations: When specified, this option clears all previous
                 --decorate-refs or --decorate-refs-exclude options and relaxes the
-                default decoration filter to include all references.
+                default decoration filter to include all references. Added in
+                2.38.0.
             color: Show colored diff. Value optional: `True` for the bare flag, or
                 pass one.
             color_moved: Moved lines of code are colored differently. Value
-                optional: `True` for the bare flag, or pass one.
+                optional: `True` for the bare flag, or pass one. Added in 2.15.0.
             color_moved_ws: This configures how whitespace is ignored when
                 performing the move detection for --color-moved. May be repeated: a
-                list emits the flag once per item.
+                list emits the flag once per item. Added in 2.19.0.
             color_words: Equivalent to --word-diff=color plus (if a regex was
                 specified) --word-diff-regex=<regex>. Value optional: `True` for the
                 bare flag, or pass one.
             combined_all_paths: Cause combined diffs (used for merge commits) to
-                list the name of the file from all parents.
+                list the name of the file from all parents. Added in 2.22.0.
             compact_summary: Output a condensed summary of extended header
                 information such as file creations or deletions ("new" or "gone",
                 optionally +l if it's a symlink) and mode changes (+x or -x for
-                adding or removing executable bit respectively) in diffstat.
-            cumulative: Synonym for --dirstat=cumulative.
+                adding or removing executable bit respectively) in diffstat. Added
+                in 2.17.0.
+            compaction_heuristic: These are to help debugging and tuning an
+                experimental heuristic (which is off by default) that shifts the
+                hunk boundary in an attempt to make the resulting patch easier to
+                read. Gone since 2.11.0.
+            cumulative: Synonym for --dirstat=cumulative. Added in 2.22.0.
             date: Only takes effect for dates shown in human-readable format, such
                 as when using --pretty.
             date_order: Show no parents before all of its children are shown, but
                 otherwise show commits in the commit timestamp order.
             dd: Produce diff with respect to first parent for both merge and regular
-                commits.
-            decorate: . `decorate=off` emits `--no-decorate`.
+                commits. Added in 2.43.0.
+            decorate: . `decorate=off` emits `--no-decorate`. Added in 2.54.0.
             decorate_refs: For each candidate reference, do not use it for
                 decoration if it matches any of the <pattern> parameters given to
                 --decorate-refs-exclude or if it doesn't match any of the <pattern>
-                parameters given to --decorate-refs.
+                parameters given to --decorate-refs. Added in 2.16.0.
             default_prefix: Use the default source and destination prefixes ("a/"
-                and "b/").
+                and "b/"). Added in 2.41.0.
             dense: Only the selected commits are shown, plus some to have a
                 meaningful history.
             diff_algorithm: Choose a diff algorithm.
             diff_filter: Select only files that are Added (A), Copied (C), Deleted
                 (D), Modified (M), Renamed (R), have their type (i.e. May be
                 repeated: a list emits the flag once per item.
-            diff_merges: Specify diff format to be used for merge commits.
+            diff_merges: Specify diff format to be used for merge commits. Added in
+                2.29.0.
             dirstat: Output the distribution of relative amount of changes for each
                 sub-directory. Value optional: `True` for the bare flag, or pass
                 one.
             dirstat_by_file: Synonym for --dirstat=files,<param>,. Value optional:
-                `True` for the bare flag, or pass one.
+                `True` for the bare flag, or pass one. Added in 2.22.0.
             do_walk: Overrides a previous --no-walk.
             dst_prefix: Show the given destination <prefix> instead of "b/".
             encoding: Commit objects record the character encoding used for the log
@@ -1298,16 +1367,20 @@ class Git(_Tool):
                 per item.
             exclude: Do not include refs matching <glob-pattern> that the next
                 --all, --branches, --tags, --remotes, or --glob would otherwise
-                consider.
+                consider. Added in 1.9.0.
             exclude_first_parent_only: When finding commits to exclude (with a ^),
                 follow only the first parent commit upon seeing a merge commit.
+                Added in 2.36.0.
             exclude_hidden: Do not include refs that would be hidden by git-fetch,
                 git-receive-pack or git-upload-pack by consulting the appropriate
                 fetch.hideRefs, receive.hideRefs or uploadpack.hideRefs
                 configuration along with transfer.hideRefs (see git-config(1)).
+                Added in 2.39.0.
+            exclude_promisor_objects: (For internal use only.) Prefilter object
+                traversal at promisor boundary. Gone since 2.19.2.
             expand_tabs: Perform a tab expansion (replace each tab with enough
                 spaces to fill to the next display column that is a multiple of <n>)
-                in the log message before showing it in the output.
+                in the log message before showing it in the output. Added in 2.9.0.
             ext_diff: Allow an external diff helper to be executed. `ext_diff=off`
                 emits `--no-ext-diff`.
             extended_regexp: Consider the limiting patterns to be extended regular
@@ -1318,7 +1391,7 @@ class Git(_Tool):
                 copies only if the original file of the copy was modified in the
                 same changeset.
             find_object: Look for differences that change the number of occurrences
-                of the specified object.
+                of the specified object. Added in 2.17.0.
             find_renames: If generating diffs, detect and report renames for each
                 commit. Value optional: `True` for the bare flag, or pass one.
             first_parent: When finding commits to include, follow only the first
@@ -1338,16 +1411,17 @@ class Git(_Tool):
             graph: Draw a text-based graphical representation of the commit history
                 on the left hand side of the output.
             graph_lane_limit: When --graph is used, limit the number of graph lanes
-                to be shown.
+                to be shown. Added in 2.55.0.
             grep_reflog: Limit the commits output to ones with reflog entries that
                 match the <pattern> regular expression.
             histogram: Generate a diff using the "histogram diff" algorithm.
             ignore_all_space: Ignore whitespace when comparing lines.
-            ignore_blank_lines: Ignore changes whose lines are all blank.
+            ignore_blank_lines: Ignore changes whose lines are all blank. Added in
+                1.8.4.
             ignore_cr_at_eol: Ignore carriage-return at the end of line when doing a
-                comparison.
+                comparison. Added in 2.16.0.
             ignore_matching_lines: Ignore changes whose all lines match <regex>. May
-                be repeated: a list emits the flag once per item.
+                be repeated: a list emits the flag once per item. Added in 2.30.0.
             ignore_missing: Upon seeing an invalid object name in the input, pretend
                 as if the bad input was not given.
             ignore_space_at_eol: Ignore changes in whitespace at EOL.
@@ -1356,33 +1430,39 @@ class Git(_Tool):
                 Value optional: `True` for the bare flag, or pass one.
             indent_heuristic: Enable the heuristic that shifts diff hunk boundaries
                 to make patches easier to read. `indent_heuristic=off` emits
-                `--no-indent-heuristic`.
+                `--no-indent-heuristic`. Added in 2.11.0.
+            indexed_objects: Pretend as if all trees and blobs used by the index are
+                listed on the command line. Gone since 2.3.1.
             inter_hunk_context: Show the context between diff hunks, up to the
                 specified <number> of lines, thereby fusing hunks that are close to
                 each other.
             invert_grep: Limit the commits output to ones with a log message that do
-                not match the <pattern> specified with --grep=<pattern>.
+                not match the <pattern> specified with --grep=<pattern>. Added in
+                2.4.0.
             irreversible_delete: Omit the preimage for deletes, i.e. print only the
                 header but not the diff between the preimage and /dev/null.
             ita_invisible_in_index: By default entries added by git add -N appear as
                 an existing empty file in git diff and a new file in git diff
-                --cached.
+                --cached. Added in 2.11.0.
             left_only: List only commits on the respective side of a symmetric
                 difference, i.e. only those which would be marked < resp.
             left_right: Mark which side of a symmetric difference a commit is
                 reachable from.
             line_prefix: Prepend an additional <prefix> to every line of output.
+                Added in 2.11.0.
             log_size: Include a line log size <number> in the output for each
                 commit, where <number> is the length of that commit's message in
                 bytes.
             mailmap: Use mailmap file to map author and committer names and email
-                addresses to canonical real names and email addresses.
+                addresses to canonical real names and email addresses. Added in
+                2.52.0.
             max_count_oldest: Limit the output to the last <number> commits that
-                would be shown.
+                would be shown. Added in 2.55.0.
             max_depth: For each pathspec given on command line, descend at most
-                <depth> levels of directories.
+                <depth> levels of directories. Added in 2.52.0.
             maximal_only: Restrict the output commits to be those that are not
-                reachable from any other commits in the revision range.
+                reachable from any other commits in the revision range. Added in
+                2.54.0.
             merge: Show commits touching conflicted paths in the range
                 HEAD...<other>, where <other> is the first existing pseudoref in
                 MERGE_HEAD, CHERRY_PICK_HEAD, REVERT_HEAD or REBASE_HEAD.
@@ -1393,10 +1473,16 @@ class Git(_Tool):
                 tree.
             name_status: Show only the name(s) and status of each changed file.
             no_color: Turn off colored diff.
-            no_color_moved: Turn off move detection.
+            no_color_moved: Turn off move detection. Added in 2.21.0.
             no_color_moved_ws: Do not ignore whitespace when performing move
-                detection.
-            no_diff_merges: Synonym for --diff-merges=off.
+                detection. Added in 2.21.0.
+            no_compaction_heuristic: These are to help debugging and tuning
+                experimental heuristics (which are off by default) that shift diff
+                hunk boundaries to make patches easier to read. Gone since 2.12.0.
+            no_decorate: Print out the ref names of any commits that are shown.
+                Value optional: `True` for the bare flag, or pass one. Gone since
+                2.54.0.
+            no_diff_merges: Synonym for --diff-merges=off. Added in 2.43.0.
             no_max_parents: Show only commits which have at least (or at most) that
                 many parent commits.
             no_notes: Do not show notes.
@@ -1413,11 +1499,18 @@ class Git(_Tool):
             numstat: Similar to --stat, but shows number of added and deleted lines
                 in decimal notation and pathname without abbreviation, to make it
                 more machine friendly.
+            objects: Print the object IDs of any object referenced by the listed
+                commits. Gone since 2.3.1.
+            objects_edge: Similar to --objects, but also print the IDs of excluded
+                commits prefixed with a "-" character. Gone since 2.3.1.
+            objects_edge_aggressive: Similar to --objects-edge, but it tries harder
+                to find excluded commits at the cost of increased time. Gone since
+                2.3.1.
             oneline: This is a shorthand for --pretty=oneline --abbrev-commit used
                 together.
-            output: Output to a specific file instead of stdout.
+            output: Output to a specific file instead of stdout. Added in 2.22.0.
             output_indicator_context: Specify the character used to indicate new,
-                old or context lines in the generated patch.
+                old or context lines in the generated patch. Added in 2.22.0.
             patch: Generate patch (see the section called "GENERATING PATCH TEXT
                 WITH -P"). `patch=off` emits `--no-patch`.
             patch_with_raw: Synonym for -p --raw.
@@ -1436,7 +1529,7 @@ class Git(_Tool):
             raw: For each commit, show a summary of changes using the raw diff
                 format.
             reflog: Pretend as if all objects mentioned by reflogs are listed on the
-                command line as <commit>.
+                command line as <commit>. Added in 2.2.0.
             regexp_ignore_case: Match the regular expression limiting patterns
                 without regard to letter case.
             relative: When run from a subdirectory of the project, it can be told to
@@ -1444,12 +1537,14 @@ class Git(_Tool):
                 it with this option. Value optional: `True` for the bare flag, or
                 pass one.
             relative_date: Synonym for --date=relative.
-            remerge_diff: Produce remerge-diff output for merge commits.
+            remerge_diff: Produce remerge-diff output for merge commits. Added in
+                2.43.0.
             remotes: Pretend as if all the refs in refs/remotes are listed on the
                 command line as <commit>. Value optional: `True` for the bare flag,
                 or pass one.
             remove_empty: Stop when a given path disappears from the tree.
-            rename_empty: Whether to use empty blobs as rename source.
+            rename_empty: Whether to use empty blobs as rename source. Added in
+                2.52.0.
             reverse: Output the commits chosen to be shown (see Commit Limiting
                 section above) in reverse order.
             shortstat: Output only the last line of the --stat format containing
@@ -1458,14 +1553,14 @@ class Git(_Tool):
             show_linear_break: When --graph is not used, all history branches are
                 flattened which can make it hard to see that the two consecutive
                 commits do not belong to a linear branch. Value optional: `True` for
-                the bare flag, or pass one.
+                the bare flag, or pass one. Added in 2.0.0.
             show_notes: These options are deprecated. Value optional: `True` for the
                 bare flag, or pass one.
             show_notes_by_default: Show the default notes unless options for
-                displaying specific notes are given.
+                displaying specific notes are given. Added in 2.43.0.
             show_pulls: Include all commits from the default mode, but also any
                 merge commits that are not TREESAME to the first parent but are
-                TREESAME to a later parent.
+                TREESAME to a later parent. Added in 2.27.0.
             show_signature: Check the validity of a signed commit object by passing
                 the signature to gpg --verify and show the output.
             simplify_by_decoration: Commits that are referred by some branch or tag
@@ -1473,12 +1568,15 @@ class Git(_Tool):
             simplify_merges: Additional option to --full-history to remove some
                 needless merges from the resulting history, as there are no selected
                 commits contributing to this merge.
-            since_as_filter: Show all commits more recent than <date>.
+            since_as_filter: Show all commits more recent than <date>. Added in
+                2.37.0.
             single_worktree: By default, all working trees will be examined by the
                 following options when there are more than one (see
-                git-worktree(1)): --all, --reflog and --indexed-objects.
+                git-worktree(1)): --all, --reflog and --indexed-objects. Added in
+                2.15.0.
             skip: Skip <number> commits before starting to show the commit output.
             skip_to: Discard the files before the named <file> from the output (i.e.
+                Added in 2.31.0.
             source: Print out the ref name given on the command line by which each
                 commit was reached.
             sparse: All commits in the simplified history are shown.
@@ -1500,7 +1598,12 @@ class Git(_Tool):
             topo_order: Show no parents before all of its children are shown, and
                 avoid showing commits on multiple lines of history intermixed.
             unified: Generate diffs with <n> lines of context.
+            unpacked: Only useful with --objects; print the object IDs that are not
+                in packs. Gone since 2.3.1.
             until: Show commits older than <date>.
+            use_mailmap: Use mailmap file to map author and committer names and
+                email addresses to canonical real names and email addresses. Gone
+                since 2.23.0.
             walk_reflogs: Instead of walking the commit ancestry chain, walk reflog
                 entries from the most recent one to older ones.
             word_diff: By default, words are delimited by whitespace; see
@@ -1509,7 +1612,7 @@ class Git(_Tool):
             word_diff_regex: Use <regex> to decide what a word is, instead of
                 considering runs of non-whitespace to be a word.
             ws_error_highlight: Highlight whitespace errors in the context, old or
-                new lines of the diff.
+                new lines of the diff. Added in 2.5.0.
         """
         ...
     def pull(
@@ -1540,11 +1643,14 @@ class Git(_Tool):
         jobs: _Value = ...,
         keep: _Flag = ...,
         log: _ValuedFlag = ...,
+        merge: _Flag = ...,
         negotiate_only: _Flag = ...,
         negotiation_include: _Flag = ...,
         negotiation_restrict: _Flag = ...,
         negotiation_tip: _Flag = ...,
         no_rebase: _Flag = ...,
+        no_tags: _Flag = ...,
+        no_verify: _Flag = ...,
         porcelain: _Flag = ...,
         prefetch: _Flag = ...,
         progress: _Flag = ...,
@@ -1566,6 +1672,7 @@ class Git(_Tool):
         summary: _Flag = ...,
         tags: _Flag = ...,
         unshallow: _Flag = ...,
+        update_head_ok: _Flag = ...,
         update_shallow: _Flag = ...,
         upload_pack: _Value = ...,
         verbose: _Flag = ...,
@@ -1573,30 +1680,31 @@ class Git(_Tool):
         verify_signatures: _Flag = ...,
         **flags: Any,
     ) -> _Result:
-        """GIT-PULL(1)                       Git Manual
-        GIT-PULL(1)
+        """Fetch from and integrate with another repository or a local
 
         Args:
             all: Fetch all remotes, except for the ones that have the
                 remote.<name>.skipFetchAll configuration variable set.
             allow_unrelated_histories: By default, git merge command refuses to
-                merge histories that do not share a common ancestor.
+                merge histories that do not share a common ancestor. Added in 2.9.0.
             append: Append ref names and object names of fetched refs to the
                 existing contents of .git/FETCH_HEAD.
-            atomic: Use an atomic transaction to update local refs.
+            atomic: Use an atomic transaction to update local refs. Added in 2.31.0.
             autostash: Automatically create a temporary stash entry before the
                 operation begins, record it in the ref MERGE_AUTOSTASH and apply it
-                after the operation ends.
+                after the operation ends. Added in 2.9.0.
             cleanup: This option determines how the merge message will be cleaned up
-                before committing.
+                before committing. Added in 2.22.0.
             commit: Perform the merge and commit the result.
-            compact_summary: Show a compact-summary at the end of the merge.
+            compact_summary: Show a compact-summary at the end of the merge. Added
+                in 2.51.0.
             deepen: Similar to --depth, except it specifies the number of commits
                 from the current shallow boundary instead of from the tip of each
-                remote branch history.
+                remote branch history. Added in 2.11.0.
             depth: Limit fetching to the specified number of commits from the tip of
                 each remote branch history.
-            dry_run: Show what would be done, without making any changes.
+            dry_run: Show what would be done, without making any changes. Added in
+                2.27.0.
             edit: Invoke an editor before committing successful mechanical merge to
                 further edit the auto-generated merge message, so that the user can
                 explain and justify the merge.
@@ -1607,36 +1715,41 @@ class Git(_Tool):
                 history.
             filter: Use the partial clone feature and request that the server sends
                 a subset of reachable objects according to a given object filter.
+                Added in 2.54.0.
             force: When git fetch is used with <src>:<dst> refspec, it may refuse to
                 update the local branch as discussed in the <refspec> part of the
                 git-fetch(1) documentation.
             gpg_sign: GPG-sign the resulting merge commit. Value optional: `True`
-                for the bare flag, or pass one.
-            ipv4: Use IPv4 addresses only, ignoring IPv6 addresses.
-            ipv6: Use IPv6 addresses only, ignoring IPv4 addresses.
-            jobs: Parallelize all forms of fetching up to <n> jobs at a time.
+                for the bare flag, or pass one. Added in 2.15.0.
+            ipv4: Use IPv4 addresses only, ignoring IPv6 addresses. Added in 2.8.0.
+            ipv6: Use IPv6 addresses only, ignoring IPv4 addresses. Added in 2.8.0.
+            jobs: Parallelize all forms of fetching up to <n> jobs at a time. Added
+                in 2.27.0.
             keep: Keep downloaded pack.
             log: In addition to branch names, populate the log message with one-line
                 descriptions from at most <n> actual commits that are being merged.
                 Value optional: `True` for the bare flag, or pass one.
             negotiate_only: Do not fetch anything from the server, and instead print
                 the ancestors of the provided --negotiation-restrict= arguments,
-                which we have in common with the server.
+                which we have in common with the server. Added in 2.33.0.
             negotiation_include: Ensure that the commits at the given tips are
                 always sent as "have" lines during fetch negotiation, regardless of
-                what the negotiation algorithm selects.
+                what the negotiation algorithm selects. Added in 2.55.0.
             negotiation_tip: By default, Git will report, to the server, commits
                 reachable from all local refs to find common commits in an attempt
-                to reduce the size of the to-be-received packfile.
-            no_rebase: This is shorthand for --rebase=false.
+                to reduce the size of the to-be-received packfile. Added in 2.19.0.
+            no_rebase: This is shorthand for --rebase=false. Added in 1.8.5.
+            no_tags: By default, tags that point at objects that are downloaded from
+                the remote repository are fetched and stored locally. Gone since
+                2.27.0.
             porcelain: Print the output to standard output in an easy-to-parse
-                format for scripts.
+                format for scripts. Added in 2.41.0.
             prefetch: Modify the configured refspec to place all refs into the
-                refs/prefetch/ namespace.
+                refs/prefetch/ namespace. Added in 2.32.0.
             progress: Progress status is reported on the standard error stream by
                 default when it is attached to a terminal, unless -q is specified.
             prune: Before fetching, remove any remote-tracking references that no
-                longer exist on the remote.
+                longer exist on the remote. Added in 2.27.0.
             quiet: This is passed to both underlying git-fetch to squelch reporting
                 of during transfer, and underlying git-merge to squelch output
                 during merging.
@@ -1647,27 +1760,29 @@ class Git(_Tool):
                 submodules should be fetched, and if the working trees of active
                 submodules should be updated, too (see git-fetch(1), git-config(1)
                 and gitmodules(5)). Value optional: `True` for the bare flag, or
-                pass one.
+                pass one. Added in 2.52.0.
             refmap: When fetching refs listed on the command line, use the specified
                 refspec (can be given more than once) to map the refs to
                 remote-tracking branches, instead of the values of
                 remote.<name>.fetch configuration variables for the remote
                 repository. May be repeated: a list emits the flag once per item.
+                Added in 2.27.0.
             server_option: Transmit the given string to the server when
-                communicating using protocol version 2.
+                communicating using protocol version 2. Added in 2.18.0.
             set_upstream: If the remote is fetched successfully, add upstream
                 (tracking) reference, used by argument-less git-pull(1) and other
-                commands.
+                commands. Added in 2.27.0.
             shallow_exclude: Deepen or shorten the history of a shallow repository
                 to exclude commits reachable from a specified remote branch or tag.
-                May be repeated: a list emits the flag once per item.
+                May be repeated: a list emits the flag once per item. Added in
+                2.11.0.
             shallow_since: Deepen or shorten the history of a shallow repository to
-                include all reachable commits after <date>.
+                include all reachable commits after <date>. Added in 2.11.0.
             show_forced_updates: By default, git checks if a branch is force-updated
                 during fetch. `show_forced_updates=off` emits
-                `--no-show-forced-updates`.
+                `--no-show-forced-updates`. Added in 2.23.0.
             signoff: Add a Signed-off-by trailer by the committer at the end of the
-                commit log message.
+                commit log message. Added in 2.16.0.
             squash: Produce the working tree and index state as if a real merge
                 happened (except for the merge information), but do not actually
                 make a commit, move the HEAD, or record $GIT_DIR/MERGE_HEAD (to
@@ -1682,17 +1797,21 @@ class Git(_Tool):
             tags: Fetch all tags from the remote (i.e., fetch remote tags
                 refs/tags/* into local tags with the same name), in addition to
                 whatever else would otherwise be fetched. `tags=off` emits
-                `--no-tags`.
+                `--no-tags`. Added in 2.27.0.
             unshallow: If the source repository is complete, convert a shallow
                 repository to a complete one, removing all the limitations imposed
                 by shallow repositories.
+            update_head_ok: By default git fetch refuses to update the head which
+                corresponds to the current branch. Gone since 2.27.0.
             update_shallow: By default when fetching from a shallow repository, git
-                fetch refuses refs that require updating .git/shallow.
+                fetch refuses refs that require updating .git/shallow. Added in
+                1.9.0.
             upload_pack: When given, and the repository to fetch from is handled by
                 git fetch-pack, --exec=<upload-pack> is passed to the command to
                 specify non-default path for the command run on the other end.
             verbose: Pass --verbose to git-fetch and git-merge.
-            verify: By default, the pre-merge and commit-msg hooks are run.
+            verify: By default, the pre-merge and commit-msg hooks are run. Added in
+                2.52.0.
             verify_signatures: Verify that the tip commit of the side branch being
                 merged is signed with a valid key, i.e. a key that has a valid uid:
                 in the default trust model, this means the signing key has been
@@ -1714,12 +1833,14 @@ class Git(_Tool):
         ipv6: _Flag = ...,
         mirror: _Flag = ...,
         no_recurse_submodules: _Flag = ...,
+        no_signed: _Flag = ...,
         porcelain: _Flag = ...,
         progress: _Flag = ...,
         prune: _Flag = ...,
         push_option: _Value = ...,
         quiet: _Flag = ...,
         receive_pack: _Value = ...,
+        recurse_submodules: _Flag = ...,
         repo: _Value = ...,
         set_upstream: _Flag = ...,
         signed: _Flag = ...,
@@ -1729,12 +1850,12 @@ class Git(_Tool):
         verify: _Flag = ...,
         **flags: Any,
     ) -> _Result:
-        """GIT-PUSH(1)                       Git Manual
-        GIT-PUSH(1)
+        """Update remote refs along with associated objects
 
         Args:
             all: Push all branches (i.e.
-            atomic: Use an atomic transaction on the remote side if available.
+            atomic: Use an atomic transaction on the remote side if available. Added
+                in 2.52.0.
             delete: All listed refs are deleted from the remote repository.
             dry_run: Do everything except actually send the updates.
             follow_tags: Push all the refs that would be pushed without this option,
@@ -1745,35 +1866,41 @@ class Git(_Tool):
                 ancestor of the commit being pushed.
             force_if_includes: Force an update only if the tip of the
                 remote-tracking ref has been integrated locally.
-                `force_if_includes=off` emits `--no-force-if-includes`.
-            ipv4: Use IPv4 addresses only, ignoring IPv6 addresses.
-            ipv6: Use IPv6 addresses only, ignoring IPv4 addresses.
+                `force_if_includes=off` emits `--no-force-if-includes`. Added in
+                2.38.0.
+            ipv4: Use IPv4 addresses only, ignoring IPv6 addresses. Added in 2.8.0.
+            ipv6: Use IPv6 addresses only, ignoring IPv4 addresses. Added in 2.8.0.
             mirror: Instead of naming each ref to push, specifies that all refs
                 under refs/ (which includes but is not limited to refs/heads/,
                 refs/remotes/, and refs/tags/) be mirrored to the remote repository.
             no_recurse_submodules: May be used to make sure all submodule commits
                 used by the revisions to be pushed are available on a
-                remote-tracking branch.
+                remote-tracking branch. Added in 2.7.0.
             porcelain: Produce machine-readable output.
             progress: Progress status is reported on the standard error stream by
                 default when it is attached to a terminal, unless -q is specified.
             prune: Remove remote branches that don't have a local counterpart.
             push_option: Transmit the given string to the server, which passes them
-                to the pre-receive as well as the post-receive hook.
+                to the pre-receive as well as the post-receive hook. Added in
+                2.10.0.
             quiet: Suppress all output, including the listing of updated refs,
                 unless an error occurs.
             receive_pack: Path to the git-receive-pack program on the remote end.
+            recurse_submodules: Make sure all submodule commits used by the
+                revisions to be pushed are available on a remote-tracking branch.
+                Gone since 2.7.0.
             repo: This option is equivalent to the <repository> argument.
             set_upstream: For every branch that is up to date or successfully
                 pushed, add upstream (tracking) reference, used by argument-less
                 git-pull(1) and other commands.
             signed: GPG-sign the push request to update refs on the receiving side,
-                to allow it to be checked by the hooks and/or be logged.
+                to allow it to be checked by the hooks and/or be logged. Added in
+                2.2.0.
             tags: All refs under refs/tags are pushed, in addition to refspecs
                 explicitly listed on the command line.
             thin: These options are passed to git-send-pack(1).
             verbose: Run verbosely.
-            verify: Toggle the pre-push hook (see githooks(5)).
+            verify: Toggle the pre-push hook (see githooks(5)). Added in 1.8.3.2.
         """
         ...
     def restore(
@@ -1798,44 +1925,46 @@ class Git(_Tool):
         worktree: _Flag = ...,
         **flags: Any,
     ) -> _Result:
-        """GIT-RESTORE(1)                    Git Manual
-        GIT-RESTORE(1)
+        """Restore working tree files
 
         Args:
             conflict: The same as --merge option above, but changes the way the
                 conflicting hunks are presented, overriding the merge.conflictStyle
-                configuration variable.
+                configuration variable. Added in 2.23.0.
             ignore_skip_worktree_bits: In sparse checkout mode, the default is to
                 only update entries matched by <pathspec> and sparse patterns in
-                $GIT_DIR/info/sparse-checkout.
+                $GIT_DIR/info/sparse-checkout. Added in 2.23.0.
             ignore_unmerged: When restoring files on the working tree from the
                 index, do not abort the operation if there are unmerged entries and
-                neither --ours, --theirs, --merge or --conflict is specified.
+                neither --ours, --theirs, --merge or --conflict is specified. Added
+                in 2.23.0.
             inter_hunk_context: Show the context between diff hunks, up to the
                 specified <number> of lines, thereby fusing hunks that are close to
-                each other.
+                each other. Added in 2.51.0.
             merge: When restoring files on the working tree from the index, recreate
-                the conflicted merge in the unmerged paths.
+                the conflicted merge in the unmerged paths. Added in 2.23.0.
             ours: When restoring files in the working tree from the index, use stage
-                \\#2 (ours) or #3 (theirs) for unmerged paths.
-            overlay: In overlay mode, never remove files when restoring.
+                \\#2 (ours) or #3 (theirs) for unmerged paths. Added in 2.23.0.
+            overlay: In overlay mode, never remove files when restoring. Added in
+                2.23.0.
             patch: Interactively select hunks in the difference between the restore
-                source and the restore location.
-            pathspec_file_nul: Only meaningful with --pathspec-from-file.
+                source and the restore location. Added in 2.23.0.
+            pathspec_file_nul: Only meaningful with --pathspec-from-file. Added in
+                2.25.0.
             pathspec_from_file: Pathspec is passed in <file> instead of commandline
-                args.
+                args. Added in 2.25.0.
             progress: Progress status is reported on the standard error stream by
                 default when it is attached to a terminal, unless --quiet is
-                specified.
-            quiet: Quiet, suppress feedback messages.
+                specified. Added in 2.23.0.
+            quiet: Quiet, suppress feedback messages. Added in 2.23.0.
             recurse_submodules: If <pathspec> names an active submodule and the
                 restore location includes the working tree, the submodule will only
                 be updated if this option is given, in which case its working tree
                 will be restored to the commit recorded in the superproject, and any
-                local modifications overwritten.
+                local modifications overwritten. Added in 2.27.0.
             source: Restore the working tree files with the content from the given
-                tree.
-            unified: Generate diffs with <n> lines of context.
+                tree. Added in 2.23.0.
+            unified: Generate diffs with <n> lines of context. Added in 2.51.0.
         """
         ...
     def rev_parse(
@@ -1844,11 +1973,14 @@ class Git(_Tool):
         abbrev_ref: _ValuedFlag = ...,
         absolute_git_dir: _Flag = ...,
         all: _Flag = ...,
+        bar: _Flag = ...,
+        baz: _Value = ...,
         branches: _ValuedFlag = ...,
         default: _Value = ...,
         disambiguate: _Value = ...,
         exclude: _Value = ...,
         exclude_hidden: _Flag = ...,
+        foo: _Flag = ...,
         git_common_dir: _Flag = ...,
         git_dir: _Flag = ...,
         git_path: _Value = ...,
@@ -1859,6 +1991,7 @@ class Git(_Tool):
         is_shallow_repository: _Flag = ...,
         keep_dashdash: _Flag = ...,
         local_env_vars: _Flag = ...,
+        no_checkout: _Flag = ...,
         no_revs: _Flag = ...,
         not_: _Flag = ...,
         output_object_format: _Flag = ...,
@@ -1866,6 +1999,7 @@ class Git(_Tool):
         path_format: _Flag = ...,
         prefix: _Value = ...,
         quiet: _Flag = ...,
+        qux: _ValuedFlag = ...,
         resolve_git_dir: _Value = ...,
         revs_only: _Flag = ...,
         shared_index_path: _Flag = ...,
@@ -1887,15 +2021,16 @@ class Git(_Tool):
         verify: _Flag = ...,
         **flags: Any,
     ) -> _Result:
-        """GIT-REV-PARSE(1)                  Git Manual
-        GIT-REV-PARSE(1)
+        """Pick out and massage parameters
 
         Args:
             abbrev_ref: A non-ambiguous short name of the objects name. Value
                 optional: `True` for the bare flag, or pass one.
             absolute_git_dir: Like --git-dir, but its output is always the
-                canonicalized absolute path.
+                canonicalized absolute path. Added in 2.13.0.
             all: Show all refs found in refs/.
+            bar: some cool option --bar with an argument. Gone since 2.43.0.
+            baz: another cool option --baz with a named argument. Gone since 2.43.0.
             branches: Show all branches, tags, or remote-tracking branches,
                 respectively (i.e., refs found in refs/heads, refs/tags, or
                 refs/remotes, respectively). Value optional: `True` for the bare
@@ -1904,15 +2039,19 @@ class Git(_Tool):
             disambiguate: Show every object whose name begins with the given prefix.
             exclude: Do not include refs matching <glob-pattern> that the next
                 --all, --branches, --tags, --remotes, or --glob would otherwise
-                consider.
+                consider. Added in 1.9.0.
             exclude_hidden: Do not include refs that would be hidden by git-fetch,
                 git-receive-pack or git-upload-pack by consulting the appropriate
                 fetch.hideRefs, receive.hideRefs or uploadpack.hideRefs
                 configuration along with transfer.hideRefs (see git-config(1)).
-            git_common_dir: Show $GIT_COMMON_DIR if defined, else $GIT_DIR.
+                Added in 2.39.0.
+            foo: some nifty option --foo. Gone since 2.43.0.
+            git_common_dir: Show $GIT_COMMON_DIR if defined, else $GIT_DIR. Added in
+                2.5.0.
             git_dir: Show $GIT_DIR if defined.
             git_path: Resolve "$GIT_DIR/<path>" and takes other path relocation
-                variables such as $GIT_OBJECT_DIRECTORY, $GIT_INDEX_FILE.
+                variables such as $GIT_OBJECT_DIRECTORY, $GIT_INDEX_FILE. Added in
+                2.5.0.
             glob: Show all refs matching the shell glob pattern pattern.
             is_bare_repository: When the repository is bare print "true", otherwise
                 "false".
@@ -1921,7 +2060,7 @@ class Git(_Tool):
             is_inside_work_tree: When the current working directory is inside the
                 work tree of the repository print "true", otherwise "false".
             is_shallow_repository: When the repository is shallow print "true",
-                otherwise "false".
+                otherwise "false". Added in 2.15.0.
             keep_dashdash: Only meaningful in --parseopt mode.
             local_env_vars: List the GIT_* environment variables that are local to
                 the repository (e.g.
@@ -1930,21 +2069,24 @@ class Git(_Tool):
             not_: When showing object names, prefix them with ^ and strip ^ prefix
                 from the object names that already have one.
             output_object_format: Allow oids to be input from any object format that
-                the current repository supports.
+                the current repository supports. Added in 2.45.0.
             parseopt: Use git rev-parse in option parsing mode (see PARSEOPT section
                 below).
-            path_format: Controls the behavior of certain other options.
+            path_format: Controls the behavior of certain other options. Added in
+                2.31.0.
             prefix: Behave as if git rev-parse was invoked from the <arg>
                 subdirectory of the working tree. May be repeated: a list emits the
-                flag once per item.
+                flag once per item. Added in 1.8.4.
             quiet: Only meaningful in --verify mode.
+            qux: qux may take a path argument but has meaning by itself. Value
+                optional: `True` for the bare flag, or pass one. Gone since 2.43.0.
             resolve_git_dir: Check if <path> is a valid repository or a gitfile that
                 points at a valid repository, and print the location of the
                 repository.
             revs_only: Do not output flags and parameters not meant for git rev-list
                 command.
             shared_index_path: Show the path to the shared index file in split index
-                mode, or empty if not in split-index mode.
+                mode, or empty if not in split-index mode. Added in 2.1.0.
             short: Same as --verify but shortens the object name to a unique prefix
                 with at least length characters. Value optional: `True` for the bare
                 flag, or pass one.
@@ -1954,14 +2096,14 @@ class Git(_Tool):
             show_object_format: Show the object format (hash algorithm) used for the
                 repository for storage inside the .git directory, input, output, or
                 compatibility. Value optional: `True` for the bare flag, or pass
-                one.
+                one. Added in 2.25.0.
             show_prefix: When the command is invoked from a subdirectory, show the
                 path of the current directory relative to the top-level directory.
             show_ref_format: Show the reference storage format used for the
-                repository.
+                repository. Added in 2.44.0.
             show_superproject_working_tree: Show the absolute path of the root of
                 the superproject's working tree (if exists) that uses the current
-                repository as its submodule.
+                repository as its submodule. Added in 2.13.0.
             show_toplevel: Show the (by default, absolute) path of the top-level
                 directory of the working tree.
             since: Parse the date string, and output the corresponding --max-age=
@@ -1970,7 +2112,7 @@ class Git(_Tool):
             sq_quote: Use git rev-parse in shell quoting mode (see SQ-QUOTE section
                 below).
             stop_at_non_option: Only meaningful in --parseopt mode.
-            stuck_long: Only meaningful in --parseopt mode.
+            stuck_long: Only meaningful in --parseopt mode. Added in 1.9.0.
             symbolic: Usually the object names are output in SHA-1 form (with
                 possible ^ prefix); this option makes them output in a form as close
                 to the original input as possible.
@@ -1987,11 +2129,13 @@ class Git(_Tool):
         self,
         *args: str,
         all: _Flag = ...,
+        hard: _Flag = ...,
         include_untracked: _Flag = ...,
         index: _Flag = ...,
         inter_hunk_context: _Value = ...,
         keep_index: _Flag = ...,
         label_ours: _Value = ...,
+        no_keep_index: _Flag = ...,
         only_untracked: _Flag = ...,
         patch: _Flag = ...,
         pathspec_file_nul: _Flag = ...,
@@ -2003,29 +2147,40 @@ class Git(_Tool):
         unified: _Value = ...,
         **flags: Any,
     ) -> _Result:
-        """GIT-STASH(1)                      Git Manual
-        GIT-STASH(1)
+        """Stash the changes in a dirty working directory away
 
         Args:
-            all: This option is only valid for push and save commands.
+            all: This option is only valid for push and save commands. Added in
+                2.26.0.
             include_untracked: When used with the push and save commands, all
                 untracked files are also stashed and then cleaned up with git clean.
-            index: This option is only valid for pop and apply commands.
+                Added in 2.26.0.
+            index: This option is only valid for pop and apply commands. Added in
+                2.26.0.
             inter_hunk_context: Show the context between diff hunks, up to the
                 specified <number> of lines, thereby fusing hunks that are close to
-                each other.
-            keep_index: This option is only valid for push and save commands.
-            label_ours: These options are only valid for the apply command.
-            only_untracked: This option is only valid for the show command.
-            patch: This option is only valid for push and save commands.
-            pathspec_file_nul: This option is only valid for push command.
-            pathspec_from_file: This option is only valid for push command.
-            print: This option is only valid for the export command.
+                each other. Added in 2.51.0.
+            keep_index: This option is only valid for push and save commands. Added
+                in 2.26.0.
+            label_ours: These options are only valid for the apply command. Added in
+                2.55.0.
+            only_untracked: This option is only valid for the show command. Added in
+                2.32.0.
+            patch: This option is only valid for push and save commands. Added in
+                2.26.0.
+            pathspec_file_nul: This option is only valid for push command. Added in
+                2.26.0.
+            pathspec_from_file: This option is only valid for push command. Added in
+                2.26.0.
+            print: This option is only valid for the export command. Added in
+                2.51.0.
             quiet: This option is only valid for apply, drop, pop, push, save, store
-                commands.
-            staged: This option is only valid for push and save commands.
-            to_ref: This option is only valid for the export command.
-            unified: Generate diffs with <n> lines of context.
+                commands. Added in 2.26.0.
+            staged: This option is only valid for push and save commands. Added in
+                2.35.0.
+            to_ref: This option is only valid for the export command. Added in
+                2.51.0.
+            unified: Generate diffs with <n> lines of context. Added in 2.51.0.
         """
         ...
     def status(
@@ -2047,18 +2202,17 @@ class Git(_Tool):
         verbose: _Flag = ...,
         **flags: Any,
     ) -> _Result:
-        """GIT-STATUS(1)                     Git Manual
-        GIT-STATUS(1)
+        """Show the working tree status
 
         Args:
             ahead_behind: Display or do not display detailed ahead/behind counts for
-                the branch relative to its upstream branch.
+                the branch relative to its upstream branch. Added in 2.17.0.
             branch: Show the branch and tracking info even in short-format.
             column: Display untracked files in columns. Value optional: `True` for
                 the bare flag, or pass one.
             find_renames: Turn on rename detection, optionally setting the
                 similarity threshold. Value optional: `True` for the bare flag, or
-                pass one.
+                pass one. Added in 2.18.0.
             ignore_submodules: Ignore changes to submodules when looking for
                 changes. Value optional: `True` for the bare flag, or pass one.
             ignored: Show ignored files as well. Value optional: `True` for the bare
@@ -2067,13 +2221,15 @@ class Git(_Tool):
             porcelain: Give the output in an easy-to-parse format for scripts. Value
                 optional: `True` for the bare flag, or pass one.
             renames: Turn on/off rename detection regardless of user configuration.
+                Added in 2.18.0.
             short: Give the output in the short-format.
-            show_stash: Show the number of entries currently stashed away.
+            show_stash: Show the number of entries currently stashed away. Added in
+                2.14.0.
             untracked_files: Show untracked files. Value optional: `True` for the
                 bare flag, or pass one.
             verbose: In addition to the names of files that have been changed, also
                 show the textual changes that are staged to be committed (i.e., like
-                the output of git diff --cached).
+                the output of git diff --cached). Added in 2.4.0.
         """
         ...
     def switch(
@@ -2088,6 +2244,7 @@ class Git(_Tool):
         guess: _Flag = ...,
         ignore_other_worktrees: _Flag = ...,
         merge: _Flag = ...,
+        no_track: _Flag = ...,
         orphan: _Value = ...,
         progress: _Flag = ...,
         quiet: _Flag = ...,
@@ -2095,44 +2252,48 @@ class Git(_Tool):
         track: _Flag = ...,
         **flags: Any,
     ) -> _Result:
-        """GIT-SWITCH(1)                     Git Manual
-        GIT-SWITCH(1)
+        """Switch branches
 
         Args:
             conflict: The same as --merge option above, but changes the way the
                 conflicting hunks are presented, overriding the merge.conflictStyle
-                configuration variable.
+                configuration variable. Added in 2.23.0.
             create: Create a new branch named <new-branch> starting at <start-point>
-                before switching to the branch.
+                before switching to the branch. Added in 2.23.0.
             detach: Switch to a commit for inspection and discardable experiments.
+                Added in 2.23.0.
             discard_changes: Proceed even if the index or the working tree differs
-                from HEAD.
-            force: An alias for --discard-changes.
+                from HEAD. Added in 2.23.0.
+            force: An alias for --discard-changes. Added in 2.23.0.
             force_create: Similar to --create except that if <new-branch> already
-                exists, it will be reset to <start-point>.
+                exists, it will be reset to <start-point>. Added in 2.23.0.
             guess: If <branch> is not found but there does exist a tracking branch
                 in exactly one remote (call it <remote>) with a matching name, treat
                 as equivalent to $ git switch -c <branch> --track <remote>/<branch>
                 If the branch exists in multiple remotes and one of them is named by
                 the checkout.defaultRemote configuration variable, we'll use that
                 one for the purposes of disambiguation, even if the <branch> isn't
-                unique across all remotes. `guess=off` emits `--no-guess`.
+                unique across all remotes. `guess=off` emits `--no-guess`. Added in
+                2.23.0.
             ignore_other_worktrees: git switch refuses when the wanted ref is
-                already checked out by another worktree.
+                already checked out by another worktree. Added in 2.23.0.
             merge: If you have local modifications to one or more files that are
                 different between the current branch and the branch to which you are
                 switching, the command normally refuses to switch branches in order
-                to preserve your modifications in context.
-            orphan: Create a new unborn branch, named <new-branch>.
+                to preserve your modifications in context. Added in 2.23.0.
+            no_track: Do not set up "upstream" configuration, even if the
+                branch.autoSetupMerge configuration variable is true. Gone since
+                2.50.0.
+            orphan: Create a new unborn branch, named <new-branch>. Added in 2.23.0.
             progress: Progress status is reported on the standard error stream by
                 default when it is attached to a terminal, unless --quiet is
-                specified.
-            quiet: Quiet, suppress feedback messages.
+                specified. Added in 2.23.0.
+            quiet: Quiet, suppress feedback messages. Added in 2.23.0.
             recurse_submodules: Using --recurse-submodules will update the content
                 of all active submodules according to the commit recorded in the
-                superproject.
+                superproject. Added in 2.23.0.
             track: When creating a new branch, set up "upstream" configuration.
-                `track=off` emits `--no-track`.
+                `track=off` emits `--no-track`. Added in 2.23.0.
         """
         ...
     def tag(
@@ -2164,43 +2325,44 @@ class Git(_Tool):
         verify: _Flag = ...,
         **flags: Any,
     ) -> _Result:
-        """GIT-TAG(1)                        Git Manual
-        GIT-TAG(1)
+        """Create, list, delete or verify tags
 
         Args:
             annotate: Make an unsigned, annotated tag object.
             cleanup: Set how the tag message is cleaned up.
             color: Respect any colors specified in the --format option. Value
-                optional: `True` for the bare flag, or pass one.
+                optional: `True` for the bare flag, or pass one. Added in 2.14.3.
             column: Display tag listing in columns. Value optional: `True` for the
                 bare flag, or pass one.
             contains: Only list tags which contain <commit> (HEAD if not specified).
-            create_reflog: Create a reflog for the tag.
+            create_reflog: Create a reflog for the tag. Added in 2.6.0.
             delete: Delete existing tags with the given names.
             edit: Let further edit the message taken from file with -F and command
-                line with -m.
+                line with -m. Added in 2.17.0.
             file: Take the tag message from <file>.
             force: Replace an existing tag with the given name (instead of failing).
             format: A string that interpolates %(fieldname) from a tag ref being
-                shown and the object it points at.
-            ignore_case: Sorting and filtering tags are case insensitive.
+                shown and the object it points at. Added in 2.19.2.
+            ignore_case: Sorting and filtering tags are case insensitive. Added in
+                2.12.0.
             list: List tags.
             local_user: Make a cryptographically signed tag using the given key.
             merged: Only list tags whose commits are reachable from <commit> (HEAD
-                if not specified).
+                if not specified). Added in 2.13.0.
             message: Use <msg> (instead of prompting).
             no_contains: Only list tags which don't contain <commit> (HEAD if not
-                specified).
+                specified). Added in 2.13.0.
             no_merged: Only list tags whose commits are not reachable from <commit>
-                (HEAD if not specified).
+                (HEAD if not specified). Added in 2.7.0.
             omit_empty: Do not print a newline after formatted refs where the format
-                expands to the empty string.
+                expands to the empty string. Added in 2.41.0.
             points_at: Only list tags of <object> (HEAD if not specified).
             sign: Make a cryptographically signed tag, using the default signing
                 key. `sign=off` emits `--no-sign`.
-            sort: Sort based on the key given.
+            sort: Sort based on the key given. Added in 2.0.0.
             trailer: Specify a (<token>, <value>) pair that should be applied as a
-                trailer. May be repeated: a list emits the flag once per item.
+                trailer. May be repeated: a list emits the flag once per item. Added
+                in 2.46.0.
             verify: Verify the cryptographic signature of the given tags.
         """
         ...
@@ -2223,38 +2385,42 @@ class Git(_Tool):
         verbose: _Flag = ...,
         **flags: Any,
     ) -> _Result:
-        """GIT-WORKTREE(1)                   Git Manual
-        GIT-WORKTREE(1)
+        """Manage multiple working trees
 
         Args:
             checkout: By default, add checks out <commit-ish>, however,
                 --no-checkout can be used to suppress checkout in order to make
-                customizations, such as configuring sparse-checkout.
-            detach: With add, detach HEAD in the new worktree.
+                customizations, such as configuring sparse-checkout. Added in
+                2.52.0.
+            detach: With add, detach HEAD in the new worktree. Added in 2.5.0.
             dry_run: With prune, do not remove anything; just report what it would
-                remove.
+                remove. Added in 2.5.0.
             expire: With prune, only prune missing worktrees if older than <time>.
+                Added in 2.5.0.
             force: By default, add refuses to create a new worktree when
                 <commit-ish> is a branch name and is already checked out by another
                 worktree, or if <path> is already assigned to some worktree but is
-                missing (for instance, if <path> was deleted manually).
+                missing (for instance, if <path> was deleted manually). Added in
+                2.5.0.
             guess_remote: With worktree add <path>, without <commit-ish>, instead of
                 creating a new branch from HEAD, if there exists a tracking branch
                 in exactly one remote matching the basename of <path>, base the new
                 branch on the remote-tracking branch, and mark the remote-tracking
-                branch as "upstream" from the new branch.
-            lock: Keep the worktree locked after creation.
+                branch as "upstream" from the new branch. Added in 2.52.0.
+            lock: Keep the worktree locked after creation. Added in 2.13.0.
             orphan: With add, make the new worktree and index empty, associating the
-                worktree with a new unborn branch named <new-branch>.
+                worktree with a new unborn branch named <new-branch>. Added in
+                2.42.0.
             porcelain: With list, output in an easy-to-parse format for scripts.
-            quiet: With add, suppress feedback messages.
+                Added in 2.7.0.
+            quiet: With add, suppress feedback messages. Added in 2.19.0.
             reason: With lock or with add --lock, an explanation why the worktree is
-                locked.
+                locked. Added in 2.10.0.
             relative_paths: Link worktrees using relative paths or absolute paths
-                (default).
+                (default). Added in 2.52.0.
             track: When creating a new branch, if <commit-ish> is a branch, mark it
-                as "upstream" from the new branch.
-            verbose: With prune, report all removals.
+                as "upstream" from the new branch. Added in 2.52.0.
+            verbose: With prune, report all removals. Added in 2.5.0.
         """
         ...
     def flags(
@@ -2280,6 +2446,7 @@ class Git(_Tool):
         no_replace_objects: _Flag = ...,
         noglob_pathspecs: _Flag = ...,
         paginate: _Flag = ...,
+        super_prefix: _Value = ...,
         work_tree: _Value = ...,
         **flags: Any,
     ) -> Self:
