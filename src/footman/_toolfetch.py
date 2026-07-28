@@ -310,6 +310,9 @@ def _install_python(version: str) -> Path | None:
     already-cached versions cost nothing on a re-run. The store is uv's to
     clean (`uv python uninstall`), not the prime's.
 
+    What keeps the archive from outliving the interpreter is `UV_NO_CACHE`,
+    set once for the whole walk by `_sandboxed` rather than per tier here.
+
     The directory uv reports already holds a plain `python` alongside the
     versioned name, which is what the extractor invokes.
     """

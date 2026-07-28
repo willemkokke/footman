@@ -140,10 +140,29 @@ def _sandboxed(scratch: Path) -> Iterator[None]:
     rather than a rule someone has to remember: one `rmtree` at the end
     removes every byte the walk caused, and the interpreter you develop
     against is never a candidate for deletion in the first place.
+
+    `UV_NO_CACHE` is the other half, and the half that decides whether a
+    walk fits on the disk at all. `_discard` deletes each release once its
+    surface is read, but uv had already unpacked that release's wheels —
+    and each CPython's tarball — into its cache, where nothing collects
+    them until the run ends. Peak disk then tracked how many releases the
+    walk performed instead of how many it held at once: a full gather put
+    5 GB into `archive-v0` while the interpreter store sat at 110 MB and
+    the venvs churned between 1 MB and 361 MB. That is a wall a CI runner
+    meets sooner than a laptop does.
+
+    A cache buys nothing here in any case. It lives inside *scratch*, which
+    is created for this walk and deleted at the end of it, so no entry
+    written has ever been read by a second run. Turning it off costs the
+    re-download of shared dependencies within a run and bounds peak disk by
+    concurrency — which is the trade to make, because the walk is parallel
+    on purpose and throttling it to save disk would be paying for the same
+    space with wall-clock.
     """
     with _overlay(
         UV_CACHE_DIR=str(scratch / "cache"),
         UV_PYTHON_INSTALL_DIR=str(scratch / "pythons"),
+        UV_NO_CACHE="1",
     ):
         yield
 
