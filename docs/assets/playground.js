@@ -149,6 +149,12 @@ from pathlib import Path
 
 if sys.platform == "emscripten" or os.environ.get("_FM_PLAYGROUND_SIM"):
     import subprocess
+    import threading
+
+    # Pyodide's threading has no native thread ids (the API is documented
+    # as platform-dependent); footman stamps results with one.
+    if not hasattr(threading, "get_native_id"):
+        threading.get_native_id = threading.get_ident
 
     class _SimulatedPopen:
         # The browser cannot spawn processes; every child succeeds and says
