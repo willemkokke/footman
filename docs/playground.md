@@ -23,7 +23,9 @@ walk a shell hook consults, rebuilt from whatever the editor says.
 Press **Run**. The gate fails — one of the tests is wrong on purpose.
 Read pytest's diff, fix `fizzbuzz` (or the test), and run it green. Then
 try `-k check audit` to watch keep-going collect every failure, and
-`deploy produ` to read a taught error.
+`deploy produ` to read a taught error. Completion knows the grammar,
+not just the words: type `deploy prod --regions=eu,` and press
+<kbd>Tab</kbd> to watch a comma-separated list complete item by item.
 
 <div id="fm-playground" markdown="0">
   <div class="fmp-pane fmp-editor-pane">

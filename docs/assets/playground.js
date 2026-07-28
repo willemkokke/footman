@@ -34,9 +34,10 @@ def test():
     pytest("-q", "test_demo.py", p=["no:cacheprovider", "no:footman"])
 
 @task
-def deploy(target: Literal["dev", "staging", "prod"]):
+def deploy(target: Literal["dev", "staging", "prod"],
+           regions: list[Literal["eu", "us", "ap"]] | None = None):
     "Ship to an environment."
-    run(f"./rollout.sh {target}")
+    run(f"./rollout.sh {target} --regions={','.join(regions or ['eu'])}")
 
 @task
 def audit():
