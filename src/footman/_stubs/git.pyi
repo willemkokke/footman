@@ -153,11 +153,13 @@ class Git(_Tool):
         format: _Value = ...,
         ignore_case: _Flag = ...,
         list: _Flag = ...,
-        merged: _Flag = ...,
+        merged: _Value = ...,
         move: _Flag = ...,
         no_abbrev: _Flag = ...,
         no_color: _Flag = ...,
         no_contains: _Value = ...,
+        no_merged: _Value = ...,
+        no_track: _Flag = ...,
         omit_empty: _Flag = ...,
         points_at: _Value = ...,
         quiet: _Flag = ...,
@@ -167,7 +169,7 @@ class Git(_Tool):
         set_upstream_to: _Value = ...,
         show_current: _Flag = ...,
         sort: _Value = ...,
-        track: _Flag = ...,
+        track: _ValuedFlag = ...,
         unset_upstream: _Flag = ...,
         verbose: _Flag = ...,
         **flags: Any,
@@ -196,7 +198,8 @@ class Git(_Tool):
                 shown and the object it points at.
             ignore_case: Sorting and filtering branches are case insensitive.
             list: List branches.
-            merged: . `merged=off` emits `--no-merged`.
+            merged: Only list branches whose tips are reachable from <commit> (HEAD
+                if not specified).
             move: Move/rename a branch, together with its config and reflog.
             no_abbrev: Display the full sha1s in the output listing rather than
                 abbreviating them.
@@ -204,6 +207,10 @@ class Git(_Tool):
                 the default to color output.
             no_contains: Only list branches which don't contain <commit> (HEAD if
                 not specified).
+            no_merged: Only list branches whose tips are not reachable from <commit>
+                (HEAD if not specified).
+            no_track: Do not set up "upstream" configuration, even if the
+                branch.autoSetupMerge configuration variable is set.
             omit_empty: Do not print a newline after formatted refs where the format
                 expands to the empty string.
             points_at: Only list branches of <object>.
@@ -219,7 +226,10 @@ class Git(_Tool):
                 <upstream> is considered <branch-name>'s upstream branch.
             show_current: Print the name of the current branch.
             sort: Sort based on <key>.
-            track: . `track=off` emits `--no-track`.
+            track: When creating a new branch, set up branch.<name>.remote and
+                branch.<name>.merge configuration entries to set "upstream" tracking
+                configuration for the new branch. Value optional: `True` for the
+                bare flag, or pass one.
             unset_upstream: Remove the upstream information for <branch-name>.
             verbose: When in list mode, show sha1 and commit subject line for each
                 head, along with relationship to upstream branch (if any).
@@ -419,7 +429,7 @@ class Git(_Tool):
                 to share the objects with the source repository.
             single_branch: Clone only the history leading to the tip of a single
                 branch, either specified by the --branch option or the primary
-                branch remote's HEAD points at.
+                branch remote's HEAD points at. Added in 2.52.0.
             sparse: Employ a sparse-checkout, with only files in the toplevel
                 directory initially being present.
             tags: Control whether or not tags will be cloned. Added in 2.52.0.
@@ -670,7 +680,6 @@ class Git(_Tool):
         skip_to: _Value = ...,
         src_prefix: _Value = ...,
         stat: _ValuedFlag = ...,
-        static: _Flag = ...,
         submodule: _ValuedFlag = ...,
         summary: _Flag = ...,
         text: _Flag = ...,
@@ -832,7 +841,6 @@ class Git(_Tool):
         append: _Flag = ...,
         atomic: _Flag = ...,
         auto_maintenance: _Flag = ...,
-        contains: _Value = ...,
         deepen: _Value = ...,
         depth: _Value = ...,
         dry_run: _Flag = ...,
@@ -1134,7 +1142,6 @@ class Git(_Tool):
         perl_regexp: _Flag = ...,
         pickaxe_all: _Flag = ...,
         pickaxe_regex: _Flag = ...,
-        pretty: _ValuedFlag = ...,
         raw: _Flag = ...,
         reflog: _Flag = ...,
         regexp_ignore_case: _Flag = ...,
@@ -1162,7 +1169,6 @@ class Git(_Tool):
         sparse: _Flag = ...,
         src_prefix: _Value = ...,
         stat: _ValuedFlag = ...,
-        static: _Flag = ...,
         stdin: _Flag = ...,
         submodule: _ValuedFlag = ...,
         summary: _Flag = ...,
@@ -1421,10 +1427,6 @@ class Git(_Tool):
                 changeset, not just the files that contain the change in <string>.
             pickaxe_regex: Treat the <string> given to -S as an extended POSIX
                 regular expression to match.
-            pretty: Pretty-print the contents of the commit logs in a given format,
-                where <format> can be one of oneline, short, medium, full, fuller,
-                reference, email, raw, format:<string> and tformat:<string>. Value
-                optional: `True` for the bare flag, or pass one.
             raw: For each commit, show a summary of changes using the raw diff
                 format.
             reflog: Pretend as if all objects mentioned by reflogs are listed on the
@@ -1509,13 +1511,11 @@ class Git(_Tool):
     def pull(
         self,
         *args: str,
-        all: _Flag = ...,
         allow_unrelated_histories: _Flag = ...,
         append: _Flag = ...,
         atomic: _Flag = ...,
         autostash: _Flag = ...,
         cleanup: _Value = ...,
-        commit: _Flag = ...,
         compact_summary: _Flag = ...,
         deepen: _Value = ...,
         depth: _Value = ...,
@@ -1524,7 +1524,6 @@ class Git(_Tool):
         ff: _Flag = ...,
         ff_only: _Flag = ...,
         filter: _Value = ...,
-        find_renames: _Flag = ...,
         force: _Flag = ...,
         gpg_sign: _ValuedFlag = ...,
         ipv4: _Flag = ...,
@@ -1568,9 +1567,6 @@ class Git(_Tool):
         """Fetch from and integrate with another repository or a local branch
 
         Args:
-            all: Fetch all remotes, except for the ones that have the
-                remote.<name>.skipFetchAll configuration variable set. Added in
-                2.52.0.
             allow_unrelated_histories: By default, git merge command refuses to
                 merge histories that do not share a common ancestor.
             append: Append ref names and object names of fetched refs to the
@@ -1581,7 +1577,6 @@ class Git(_Tool):
                 after the operation ends.
             cleanup: This option determines how the merge message will be cleaned up
                 before committing.
-            commit: Perform the merge and commit the result.
             compact_summary: Show a compact-summary at the end of the merge. Added
                 in 2.51.0.
             deepen: Similar to --depth, except it specifies the number of commits
@@ -1844,9 +1839,7 @@ class Git(_Tool):
         *args: str,
         abbrev_ref: _ValuedFlag = ...,
         absolute_git_dir: _Flag = ...,
-        all: _Flag = ...,
         branches: _ValuedFlag = ...,
-        default: _Value = ...,
         disambiguate: _Value = ...,
         exclude: _Value = ...,
         exclude_hidden: _Flag = ...,
@@ -1858,8 +1851,6 @@ class Git(_Tool):
         is_inside_git_dir: _Flag = ...,
         is_inside_work_tree: _Flag = ...,
         is_shallow_repository: _Flag = ...,
-        keep_dashdash: _Flag = ...,
-        local_env_vars: _Flag = ...,
         no_revs: _Flag = ...,
         not_: _Flag = ...,
         output_object_format: _Flag = ...,
@@ -1868,7 +1859,6 @@ class Git(_Tool):
         prefix: _Value = ...,
         quiet: _Flag = ...,
         resolve_git_dir: _Value = ...,
-        revs_only: _Flag = ...,
         shared_index_path: _Flag = ...,
         short: _ValuedFlag = ...,
         show_cdup: _Flag = ...,
@@ -1877,7 +1867,6 @@ class Git(_Tool):
         show_ref_format: _Flag = ...,
         show_superproject_working_tree: _Flag = ...,
         show_toplevel: _Flag = ...,
-        since: _Value = ...,
         sq: _Flag = ...,
         sq_quote: _Flag = ...,
         stop_at_non_option: _Flag = ...,
@@ -1895,12 +1884,10 @@ class Git(_Tool):
                 optional: `True` for the bare flag, or pass one.
             absolute_git_dir: Like --git-dir, but its output is always the
                 canonicalized absolute path.
-            all: Show all refs found in refs/.
             branches: Show all branches, tags, or remote-tracking branches,
                 respectively (i.e., refs found in refs/heads, refs/tags, or
                 refs/remotes, respectively). Value optional: `True` for the bare
                 flag, or pass one.
-            default: If there is no parameter given by the user, use <arg> instead.
             disambiguate: Show every object whose name begins with the given prefix.
             exclude: Do not include refs matching <glob-pattern> that the next
                 --all, --branches, --tags, --remotes, or --glob would otherwise
@@ -1922,9 +1909,6 @@ class Git(_Tool):
                 work tree of the repository print "true", otherwise "false".
             is_shallow_repository: When the repository is shallow print "true",
                 otherwise "false".
-            keep_dashdash: Only meaningful in --parseopt mode.
-            local_env_vars: List the GIT_* environment variables that are local to
-                the repository (e.g.
             no_revs: Do not output flags and parameters meant for git rev-list
                 command.
             not_: When showing object names, prefix them with ^ and strip ^ prefix
@@ -1941,8 +1925,6 @@ class Git(_Tool):
             resolve_git_dir: Check if <path> is a valid repository or a gitfile that
                 points at a valid repository, and print the location of the
                 repository.
-            revs_only: Do not output flags and parameters not meant for git rev-list
-                command.
             shared_index_path: Show the path to the shared index file in split index
                 mode, or empty if not in split-index mode.
             short: Same as --verify but shortens the object name to a unique prefix
@@ -1964,8 +1946,6 @@ class Git(_Tool):
                 repository as its submodule.
             show_toplevel: Show the (by default, absolute) path of the top-level
                 directory of the working tree.
-            since: Parse the date string, and output the corresponding --max-age=
-                parameter for git rev-list.
             sq: Usually the output is made one line per flag and parameter.
             sq_quote: Use git rev-parse in shell quoting mode (see SQ-QUOTE section
                 below).
