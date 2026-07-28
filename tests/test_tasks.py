@@ -45,8 +45,53 @@ def _failed_run(command: str = "ruff") -> RunFailed:
 
 def _event(**over):
     """A harness payload, defaulted to the fields the hooks actually read."""
-    tool_input = tasks.ToolInput(file_path=over.pop("file_path", ""))
+    tool_input = tasks.ToolInput(
+        file_path=over.pop("file_path", ""), command=over.pop("command", "")
+    )
     return tasks.HookEvent(tool_input=tool_input, **over)
+
+
+def _refuses(command: str) -> bool:
+    """Whether `hooks.pre-bash` would block *command*."""
+    from footman import Failed
+
+    try:
+        tasks.pre_bash(_event(command=command))
+    except Failed:
+        return True
+    return False
+
+
+BLOCKED = [
+    # What it exists for: the gate's verdict replaced by the filter's.
+    "uv run fm check | tail -4",
+    "uv run fm check 2>&1 | head",
+    "fm check|tail -1",
+    "cd sub && uv run fm check | tail -2",
+]
+
+ALLOWED = [
+    # Bare, or redirected — both keep the exit code.
+    "uv run fm check",
+    "uv run fm check > /tmp/gate.log 2>&1",
+    # A *mention* of footman is not a use of it. A path carrying the name and
+    # an honest pipe blocked a real command before the detector was anchored
+    # to a command position.
+    "git show abc -- src/footman/_provision.py | head -14",
+    'rg "fm check" | head -3',
+    # A gate that decides nothing downstream still stands on its own.
+    "fm check && echo done | tail -1",
+]
+
+
+@pytest.mark.parametrize("command", BLOCKED)
+def test_pre_bash_blocks_a_piped_gate(command):
+    assert _refuses(command)
+
+
+@pytest.mark.parametrize("command", ALLOWED)
+def test_pre_bash_allows_a_mention_or_an_honest_pipe(command):
+    assert not _refuses(command)
 
 
 def test_a_worktree_is_found_from_anywhere_inside_it(tmp_path):
