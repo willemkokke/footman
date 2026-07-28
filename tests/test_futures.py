@@ -1088,3 +1088,120 @@ def test_parallel_task_children_count_once():
     assert started.count(("started", "compile")) == 1
     assert ("started", "…") in started  # the lambda: parallel()'s own unit
     assert status.total == 2  # one task request + one anonymous thunk
+
+
+# --- one piece of work, one unit ---------------------------------------------
+#
+# `parallel()` counts every child it is handed; the first request inside a
+# child claims that unit instead of counting a second one. What the child
+# does cannot be read from the outside — a closure is opaque — so no spelling
+# may count differently from another.
+
+
+def _units(reg: Group, line: str) -> tuple[int, list[str]]:
+    status = _with_status(reg, line)
+    return status.total, [e[1] for e in status.events if e[0] == "started"]
+
+
+def test_every_parallel_spelling_counts_the_same():
+    # The regression this pins: a lambda wrapping a call used to count twice —
+    # once as parallel()'s anonymous thunk, once as the request inside it.
+    import functools
+
+    from footman import parallel
+
+    for label, body in (
+        ("handle", lambda w: parallel(w)),
+        ("partial", lambda w: parallel(functools.partial(w, tag="p"))),
+        ("lambda", lambda w: parallel(lambda: w(tag="l"))),
+    ):
+        reg = Group("root")
+
+        @reg.task
+        def work(tag: str = "plain"): ...
+
+        @reg.task
+        def go():
+            body(work)
+
+        total, _started = _units(reg, "go")
+        assert total == 1, f"{label} counted {total} units for one piece of work"
+
+
+def test_a_plain_thunk_keeps_its_own_unit():
+    # Nothing claims it, so parallel()'s unit stands — a thunk that runs no
+    # task is the only thing on the line for that child.
+    from footman import parallel
+
+    reg = Group("root")
+    ran: list[str] = []
+
+    def plain():
+        ran.append("plain")
+
+    @reg.task
+    def go():
+        parallel(plain)
+
+    total, started = _units(reg, "go")
+    assert (total, started, ran) == (1, ["plain"], ["plain"])
+
+
+def test_a_thunk_that_runs_two_tasks_counts_both():
+    # The claim is one-shot: the first request takes the child's unit, the
+    # second is its own piece of work.
+    from footman import parallel
+
+    reg = Group("root")
+
+    @reg.task
+    def leaf(tag: str = "x"): ...
+
+    @reg.task
+    def go():
+        parallel(lambda: (leaf("a"), leaf("b")))
+
+    total, _started = _units(reg, "go")
+    assert total == 2
+
+
+def test_the_claim_does_not_reach_the_callee():
+    # A parallel child's task claims the unit; the calls that task then makes
+    # are its own requests and count for themselves.
+    from footman import parallel
+
+    reg = Group("root")
+
+    @reg.task
+    def leaf(tag: str = "x"): ...
+
+    @reg.task
+    def mid():
+        leaf("inner-a")
+        leaf("inner-b")
+
+    @reg.task
+    def go():
+        parallel(mid)
+
+    total, started = _units(reg, "go")
+    assert total == 3  # mid claimed the child's unit; its two calls added theirs
+    assert started == ["mid", "leaf", "leaf"]
+
+
+def test_a_shared_request_is_still_its_own_unit():
+    # Two identical calls: one executes, one is satisfied by it. Both are
+    # requests, so both count — the wait is visible.
+    from footman import parallel
+
+    reg = Group("root")
+
+    @reg.task
+    def leaf(tag: str = "x"): ...
+
+    @reg.task
+    def go():
+        parallel(lambda: leaf("same"), lambda: leaf("same"))
+
+    total, _started = _units(reg, "go")
+    assert total == 2

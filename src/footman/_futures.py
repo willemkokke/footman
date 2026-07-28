@@ -244,6 +244,7 @@ def call(task: Any, args: tuple[Any, ...], kwargs: dict[str, Any]) -> Any:
             steps=[],
             task=label,
             shared=parent.shared,  # refined per branch below
+            unit_pending=False,  # the callee's own calls count for themselves
         )
         handle = _executor.TaskHandle(task, seg, child)
         if (err := _executor._enter_bind_hooks(life, handle)) is not None:
@@ -304,10 +305,7 @@ def call(task: Any, args: tuple[Any, ...], kwargs: dict[str, Any]) -> Any:
     # The waiting request is a unit like any other — a scheduler node
     # satisfied by sharing counts, so a body call satisfied by sharing does
     # too, and the caller's block on the share is visible on the line.
-    status = context.active_status()
-    if status is not None:
-        status.unit_added(1)
-        status.unit_started(label)
+    status = _claim_unit(label)
     try:
         # A finished cell answers instantly (the memo); a live one blocks until
         # the thread that claimed it is done, and both hand back one value.
@@ -471,6 +469,33 @@ def _shared_result(label: str, value: Any) -> TaskResult:
     )
 
 
+def _claim_unit(label: str) -> Any:
+    """Start this request's unit on the live status line, or claim the one
+    already counted for it; `None` when no line is running.
+
+    A request is a unit — a scheduler node, a `parallel()` child, a body
+    call. The one thing that must never happen is counting a single piece of
+    work twice, and `parallel()` cannot tell from the outside whether the
+    thunk it was handed is a task call in disguise: a closure is opaque. So
+    it counts every child and hands the unit down (`Context.unit_pending`),
+    and the first request inside takes it over rather than adding its own.
+    Cleared on claim, so a second call in the same thunk — and everything
+    the callee goes on to ask for — counts honestly.
+    """
+    from footman import context
+
+    status = context.active_status()
+    if status is None:
+        return None
+    ctx = context.current()
+    if ctx.unit_pending:
+        ctx.unit_pending = False
+        return None  # counted and displayed by whoever handed it down
+    status.unit_added(1)
+    status.unit_started(label)
+    return status
+
+
 def _refuse_wide_moment(task: Any) -> None:
     """Refuse a task call from `pre_tasks` / `post_tasks`.
 
@@ -568,6 +593,7 @@ def _run_now(
             err_sink=buf,
             steps=[],
             task=label,
+            unit_pending=False,  # the callee's own calls count for themselves
         )
     else:
         buf = child.sink
@@ -577,10 +603,7 @@ def _run_now(
     # A body call is a request like a scheduler node or a parallel() child:
     # a unit on the live status line, counted the moment it becomes real
     # work (a confirm= denial above never was one).
-    status = context.active_status()
-    if status is not None:
-        status.unit_added(1)
-        status.unit_started(label)
+    status = _claim_unit(label)
     try:
         result = executor.run_bound(
             task, seg, child, list(args), dict(kwargs), as_call=True, handle=handle

@@ -281,6 +281,26 @@ def check():
     parallel(lambda: fmt(check=True), lint, typecheck, test)
 ```
 
+Four things can go in, and the difference is worth knowing:
+
+| you pass | it runs as | reported as |
+| --- | --- | --- |
+| `lint` — a task | a full request | its own row, shares, hooks fire |
+| `functools.partial(fmt, check=True)` | a full request | same, under the task's name |
+| `lambda: fmt(check=True)` | a full request | same, but the *line* shows `…` |
+| `lambda: shutil.rmtree(d)` — a thunk | plain Python, in a child context | no row: it is not a task |
+
+A **task** reaching `parallel()` any of the first three ways is a request like
+any other: its own `TaskResult`, sharing with the rest of the run, the
+lifecycle hooks around it. Only the live status line can tell the spellings
+apart, because a lambda is opaque from the outside — it shows as `…` where a
+handle or a `functools.partial` shows the task's name. Counting is not
+affected: one piece of work is one unit whichever way you wrote it.
+
+A **plain callable** is honest work and runs happily, but it is not a task, so
+nothing task-shaped happens around it — no result row, no availability gate,
+no `confirm=`. Reach for one when there is genuinely no task to name.
+
 Unlike `pre`/`post`, a `parallel()` fan-out is **in-body** — footman can't see
 it without running the task. That is the trade: declared deps are static and
 show up in `--dry-run`; an in-body fan-out is dynamic — its shape can depend on
