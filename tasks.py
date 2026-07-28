@@ -43,8 +43,16 @@ def format(check: bool = False):
 
 @task
 def typecheck():
-    """Type-check with basedpyright."""
-    basedpyright()
+    """Type-check with basedpyright — warnings included.
+
+    `--warnings` makes the exit code 1 when anything at all is reported, so
+    a warning fails the gate exactly as an error does. A warning nobody has
+    to act on is a warning everybody stops reading, and the two this started
+    with were real: `__all__` advertised two submodules that no type-checker
+    could resolve, so an editor gave a consumer no completion for them and a
+    strict consumer saw our package complain about itself.
+    """
+    basedpyright(warnings=True)
 
 
 @task

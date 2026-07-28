@@ -169,6 +169,14 @@ versions may include breaking changes.
 
 ### Fixed
 
+- **`footman.docstrings` and `footman.markdown` resolve for a type-checker.**
+  Both are lazily served by `__getattr__` and both were named in `__all__`,
+  but neither was declared to a type-checker — so the package advertised two
+  names no editor could complete, no definition could be jumped to, and a
+  consumer running a strict check saw footman complain about itself. Declared
+  in the `TYPE_CHECKING` block, which never executes: a bare `import footman`
+  still imports nothing.
+
 - **The npm tier no longer needs node on the machine.** It installs through
   bun, but what bun installs is a launcher beginning `#!/usr/bin/env node` —
   and bun only stands in for node when bun itself runs a script, while the

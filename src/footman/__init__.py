@@ -18,6 +18,8 @@ if TYPE_CHECKING:
     # Give type-checkers the real types for the lazily re-exported names below;
     # at runtime these are served by `__getattr__` without importing registry
     # on a bare `import footman` (the completion hot path).
+    from footman import docstrings as docstrings
+    from footman import markdown as markdown
     from footman import tools as tools
     from footman._fetch import FetchError as FetchError
     from footman._fetch import fetch as fetch

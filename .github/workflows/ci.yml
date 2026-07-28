@@ -94,7 +94,8 @@ jobs:
       - name: Ruff (format)
         run: uv run ruff format --check .
       - name: Type-check
-        run: uv run basedpyright
+        # `--warnings` here too, or the rule holds on a laptop and not in CI.
+        run: uv run basedpyright --warnings
 
   test:
     name: py${{ matrix.python }} · ${{ matrix.os }}
