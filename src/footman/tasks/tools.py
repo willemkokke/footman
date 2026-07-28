@@ -273,28 +273,20 @@ def _node_shim(scratch: Path) -> Path | None:
     node either, which would have cost the weekly matrix those two tools on
     every leg, on every platform, indefinitely.
 
-    The shim lives in the scratch directory, so it goes when the walk does,
-    and it is written only when bun can be found — a machine with real node
-    keeps using it, and one with neither is no worse off than before.
+    The shim lives in the scratch directory, so it goes when the walk does.
+    `provision` writes the same one into the prefix it builds, which is what
+    covers the readers that never open a scratch directory at all — `sync`
+    among them, where the omission used to cost a poisoned chain.
     """
     import shutil
-    import stat
+
+    from footman._provision import write_node_shim
 
     bun = shutil.which("bun")
-    if bun is None or shutil.which("node") is not None:
+    if bun is None:
         return None
     shims = scratch / "shims"
-    shims.mkdir(parents=True, exist_ok=True)
-    if _windows():
-        # cmd resolves `node` through PATHEXT, so the shim is a .cmd that
-        # forwards; %* keeps the argument list intact, quotes and all.
-        shim = shims / "node.cmd"
-        shim.write_text(f'@echo off\r\n"{bun}" --bun %*\r\n', encoding="utf-8")
-    else:
-        shim = shims / "node"
-        shim.write_text(f'#!/bin/sh\nexec "{bun}" --bun "$@"\n', encoding="utf-8")
-        shim.chmod(shim.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
-    return shims
+    return shims if write_node_shim(shims, Path(bun)) is not None else None
 
 
 def _windows() -> bool:
