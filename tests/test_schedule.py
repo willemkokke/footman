@@ -21,6 +21,18 @@ def drive(build, line, **kw):
     return schedule.run_plan(reg, segments, **kw)
 
 
+def _echo(text: str) -> str:
+    """A portable `echo <text>` — the suite must not assume coreutils on
+    PATH (Windows has an `echo.exe` only when Git's `usr/bin` is there);
+    the interpreter running the suite always exists."""
+    return f'"{sys.executable}" -c "print(\'{text}\')"'
+
+
+def _exit(code: int) -> str:
+    """A portable `false` (and `true`): exits with *code*, prints nothing."""
+    return f'"{sys.executable}" -c "raise SystemExit({code})"'
+
+
 def test_force_color_survives_a_terminal_but_not_capture(monkeypatch):
     # `--color=always` (force_color) reaches a task's context, but capture
     # (`--json`) strips it — ANSI must never land in the envelope.
@@ -218,7 +230,7 @@ def test_parallel_helper_propagates_failure():
     def tasks(reg):
         @reg.task
         def build():
-            parallel(lambda: run("false"), lambda: run("true"))
+            parallel(lambda: run(_exit(1)), lambda: run(_exit(0)))
 
     results = drive(tasks, "build")
     assert results[0].ok is False
@@ -268,11 +280,11 @@ def test_parallel_child_steps_surface_on_parent():
     def tasks(reg):
         @reg.task
         def build():
-            parallel(lambda: run("echo one"), lambda: run("echo two"))
+            parallel(lambda: run(_echo("one")), lambda: run(_echo("two")))
 
     results = drive(tasks, "build")
     commands = {s.command for s in results[0].steps}
-    assert commands == {"echo one", "echo two"}
+    assert commands == {_echo("one"), _echo("two")}
 
 
 def test_single_node_runs_live(capsys):
@@ -496,7 +508,7 @@ def test_no_color_suppresses_sequential_live_rewrite(monkeypatch):
     def tasks(reg):
         @reg.task
         def build():
-            run("echo hi")
+            run(_echo("hi"))
 
     drive(tasks, "build", sequential=True, ctx_config={"no_color": True})
     out = fake.getvalue()
@@ -531,11 +543,11 @@ def test_buffered_blocks_dress_for_the_terminal(monkeypatch):
     def tasks(reg):
         @reg.task
         def a():
-            run("echo one", title="one")
+            run(_echo("one"), title="one")
 
         @reg.task
         def b():
-            run("echo two", title="two")
+            run(_echo("two"), title="two")
 
     drive(tasks, "a b")
     text = out_fake.getvalue()
@@ -552,11 +564,11 @@ def test_buffered_blocks_stay_plain_when_piped(monkeypatch):
     def tasks(reg):
         @reg.task
         def a():
-            run("echo one", title="one")
+            run(_echo("one"), title="one")
 
         @reg.task
         def b():
-            run("echo two", title="two")
+            run(_echo("two"), title="two")
 
     drive(tasks, "a b")
     text = out_fake.getvalue()
@@ -572,7 +584,7 @@ def test_infinite_task_hints_and_suppresses_the_status_line(monkeypatch):
     def tasks(reg):
         @reg.task(infinite=True)
         def serve():
-            run("echo up", title="up")
+            run(_echo("up"), title="up")
 
     drive(tasks, "serve")
     err = err_fake.getvalue()
@@ -595,7 +607,7 @@ def test_interactive_task_suspends_the_status_line_for_its_body(monkeypatch):
         @reg.task(interactive=True)
         def wizard():
             marks["start"] = err_fake.getvalue()
-            run("echo hi", title="hi")
+            run(_echo("hi"), title="hi")
             marks["end"] = err_fake.getvalue()
 
     drive(tasks, "wizard")

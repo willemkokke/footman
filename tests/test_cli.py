@@ -111,6 +111,13 @@ def test_spawn_refresh_windows_uses_creationflags(monkeypatch):
     )
     _complete._spawn_refresh()
     assert "creationflags" in captured["kw"]
+    if sys.platform == "win32":  # the flag constants exist only on Windows
+        flags = captured["kw"]["creationflags"]
+        # CREATE_NO_WINDOW, never DETACHED_PROCESS: a console-less child is
+        # handed a visible terminal window by the Windows 11 default-terminal
+        # handoff — one popped over the shell per TAB on a stale manifest.
+        assert flags & _complete.subprocess.CREATE_NO_WINDOW
+        assert not flags & _complete.subprocess.DETACHED_PROCESS
 
 
 def test_spawn_refresh_swallows_oserror(monkeypatch):

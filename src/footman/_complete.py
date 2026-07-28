@@ -552,7 +552,13 @@ def _spawn_refresh(override: str | None = None) -> None:
     null = subprocess.DEVNULL
     try:
         if os.name == "nt":
-            flags = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(
+            # Not DETACHED_PROCESS: with Windows Terminal as the default
+            # terminal (Windows 11), a console-less console app is handed a
+            # *visible* terminal window — one per spawn, popping over the
+            # shell mid-completion — and any console grandchild allocates
+            # another. CREATE_NO_WINDOW gives the child a hidden console
+            # instead: nothing shows, and its children inherit the hiding.
+            flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(
                 subprocess, "CREATE_NEW_PROCESS_GROUP", 0
             )
             subprocess.Popen(

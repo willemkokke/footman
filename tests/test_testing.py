@@ -7,6 +7,7 @@ footman's own suite consuming its own plugin is the point.
 from __future__ import annotations
 
 import json
+import sys
 from typing import Literal
 
 from footman import Context, run, use_context
@@ -14,6 +15,18 @@ from footman.app import App
 from footman.executor import EX_USAGE
 from footman.registry import Group
 from footman.testing import Runner, recording
+
+
+def _echo(text: str) -> str:
+    """A portable `echo <text>` — for the one run() here that *executes*.
+
+    The recording() tests keep their `echo`/`git`/`cargo` strings: nothing
+    records more honestly than a command that would run anywhere, and they
+    never execute. `use_context` runs for real, so it must not assume
+    coreutils on PATH (Windows has an `echo.exe` only when Git's `usr/bin`
+    is there); the interpreter running the suite always exists."""
+    return f'"{sys.executable}" -c "print(\'{text}\')"'
+
 
 # --- recording() / use_context ------------------------------------------------
 
@@ -47,11 +60,12 @@ def test_recording_can_override_quiet(capsys):
 
 
 def test_use_context_installs_and_restores():
+    cmd = _echo("hi")
     ctx = Context(env={"MODE": "test"})
     with use_context(ctx) as installed:
         assert installed is ctx
-        run("echo hi", silent=True)
-    assert ctx.steps[0].command == "echo hi"
+        run(cmd, silent=True)
+    assert ctx.steps[0].command == cmd
     # Outside the block a fresh default context applies again.
     with recording() as steps:
         run("echo bye")

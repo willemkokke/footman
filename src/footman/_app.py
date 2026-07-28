@@ -1021,7 +1021,10 @@ def _spawn_gc(cache: Path, skip_stem: str) -> None:
     null = subprocess.DEVNULL
     try:
         if _WINDOWS:
-            flags = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(
+            # CREATE_NO_WINDOW, not DETACHED_PROCESS — see `_spawn_refresh`
+            # in `_complete`: the Windows 11 default-terminal handoff gives
+            # a console-less child a visible terminal window.
+            flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(
                 subprocess, "CREATE_NEW_PROCESS_GROUP", 0
             )
             subprocess.Popen(
