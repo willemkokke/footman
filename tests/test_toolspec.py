@@ -1821,3 +1821,76 @@ def test_a_stub_header_survives_being_read_on_more_than_one_platform():
         assert found["version"] == "0.16.0"
         assert found["platform"] == platform
         assert found["mode"] == "no"
+
+
+# --- arity from the usage grammar --------------------------------------------
+
+# The alignment is load-bearing: `--configPointer` is the longest name, so its
+# description sits one space away while the others get a column of them.
+MARKDOWNLINT = """markdownlint-cli2 v0.23.2 (markdownlint v0.41.1)
+
+Syntax: markdownlint-cli2 glob0 [--config file] [--configPointer pointer] [--fix]
+
+Optional parameters:
+- --config        specifies the path to a configuration file
+- --configPointer specifies a JSON Pointer within the --config file
+- --fix           updates files to resolve fixable issues
+- --no-globs      ignores the "globs" property if present
+"""
+
+BASEDPYRIGHT = """Usage: basedpyright [options] files...
+  Options:
+  --createstub <IMPORT>              Create type stub file(s) for import
+  --dependencies                     Emit import dependency information
+  --outputjson                       Output results in JSON format
+  --watch                            Continue to run and watch for changes
+"""
+
+PYPROJECT_BUILD = """usage: pyproject-build [-h] [--quiet | --verbose] [--outdir PATH]
+                       [--installer {pip,uv} | --no-isolation]
+                       [srcdir]
+
+options:
+  --quiet       do not show logs
+  --verbose     increase verbosity
+  --outdir      output directory
+  --installer   Python package installer to use
+"""
+
+
+def test_a_flag_with_no_metavar_takes_its_arity_from_the_usage_line():
+    """An option block may describe a flag in prose and never name its value.
+
+    markdownlint-cli2 does exactly that, and the usage line — which it calls
+    `Syntax:` — is then the only statement of arity in the document. Read the
+    block alone and `--config` is a switch, so the stub types a path as bool.
+    """
+    got = flags(_toolhelp.parse_help(MARKDOWNLINT, name="markdownlint-cli2"))
+    assert got["config"].type_name == "str"  # `[--config file]`
+    assert got["configPointer"].type_name == "str"  # `[--configPointer pointer]`
+    assert got["fix"].type_name == "bool"  # bracketed alone: a switch
+    assert got["no_globs"].type_name == "bool"  # absent from the usage line
+
+
+def test_a_stitched_options_block_is_not_read_as_usage_grammar():
+    """`_usage_line` joins indented continuations, and a tool whose options
+    block is indented under `Usage:` hands the whole block back as one line.
+    Unbracketed, so the descriptions there are prose and not metavars —
+    otherwise `--dependencies   Emit import dependency information` makes a
+    string of a switch, and nine of basedpyright's did."""
+    got = flags(_toolhelp.parse_help(BASEDPYRIGHT, name="basedpyright"))
+    assert got["dependencies"].type_name == "bool"
+    assert got["outputjson"].type_name == "bool"
+    assert got["watch"].type_name == "bool"
+    assert got["createstub"].type_name == "str"  # its block states the metavar
+
+
+def test_an_alternation_is_not_a_value():
+    """`[--quiet | --verbose]` groups two switches; it does not give --quiet a
+    value of "| --verbose". `[--installer {pip,uv} | --no-isolation]` does both
+    at once — a real value, then an alternative that must not be swallowed."""
+    got = flags(_toolhelp.parse_help(PYPROJECT_BUILD, name="pyproject-build"))
+    assert got["quiet"].type_name == "bool"
+    assert got["verbose"].type_name == "bool"
+    assert got["installer"].type_name == "str"  # `{pip,uv}`
+    assert got["outdir"].type_name == "str"  # `[--outdir PATH]`

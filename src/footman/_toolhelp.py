@@ -446,6 +446,8 @@ def parse_help(
         options = list({o.name: o for o in options}.values())
     if shorts == "all":
         options = _with_short_aliases(options)
+    if not man:
+        options = _arity_from_grammar(options, _usage_line(text))
     positional, lead = _synopsis_shape(text, name) if man else _usage_shape(text)
     return Verb(
         name=name,
@@ -455,6 +457,65 @@ def parse_help(
         lead=lead,
         wraps=_wraps(text),
     )
+
+
+def _arity_from_grammar(options: list[Option], grammar: str) -> list[Option]:
+    """Believe the usage line where the option list said nothing.
+
+    Most dialects state arity twice — `--config FILE` in the option block
+    and `[--config FILE]` in the usage line — and the block is the richer
+    source, so it wins. But a block is free to list a flag with prose and
+    no metavar at all, and then the usage line is the *only* statement of
+    arity in the whole document:
+
+        Syntax: markdownlint-cli2 glob0 [--config file] [--fix]
+
+        Optional parameters:
+        - --config        specifies the path to a configuration file
+        - --fix           updates files to resolve fixable issues
+
+    Read alone, that block makes `--config` a switch, and the stub then
+    types a path as `bool`. Read together, the tool has said plainly that
+    one takes a value and the other does not.
+
+    Only ever *adds* a value to something the block left bare: an option the
+    block described with a metavar, a choice list or a default keeps what it
+    said, because the block knows things the grammar cannot express. So a
+    dialect that omits its options from the usage line loses nothing, and
+    one that abbreviates with `[OPTIONS]` says nothing about any of them.
+    """
+    if not grammar:
+        return options
+    takes_value = set()
+    for match in _GRAMMAR_PAIR.finditer(grammar):
+        takes_value.add(match["flag"])
+    if not takes_value:
+        return options
+    out = []
+    for option in options:
+        bare = option.type_name == "bool" and not option.choices and not option.negation
+        if bare and any(flag in takes_value for flag in option.flags):
+            option = replace(option, type_name="str")
+        out.append(option)
+    return out
+
+
+# `[--config file]`, `[--outdir OUTDIR]`, `[--installer {pip,uv}]` — a flag and
+# its value inside the brackets that mark them optional together.
+#
+# Bracketed only, and that is the whole safety of it. `_usage_line` stitches
+# indented continuation lines onto the usage, and a tool whose options block is
+# indented under `Usage:` hands back the entire block as one line — so
+# basedpyright's `--dependencies    Emit import dependency information` would
+# read "Emit" as a metavar and turn nine real switches into strings. Inside
+# brackets nothing but the grammar survives.
+#
+# The value is one token, and never another flag or an alternation bar: build
+# groups its switches as `[--quiet | --verbose]`, where reading "| --verbose"
+# as --quiet's value makes a string of a switch.
+_GRAMMAR_PAIR = re.compile(
+    r"\[(?P<flag>--[A-Za-z0-9][A-Za-z0-9_-]*)[ \t]+(?![-|])(?P<value>[^\s\[\]|]+)"
+)
 
 
 def _with_short_aliases(options: list[Option]) -> list[Option]:
@@ -589,10 +650,16 @@ def _usage_line(text: str) -> str:
     A wrapped usage (git's spans several indented lines) is stitched back
     together; the program name and any leading subcommands are dropped so
     only the argument grammar remains.
+
+    `Syntax:` is the same line under a different name — markdownlint-cli2
+    spells it that way, and skipping it cost the whole grammar: no usage
+    line meant no arity for `--config`, which the option list states
+    without a metavar.
     """
     lines = text.splitlines()
     for i, line in enumerate(lines):
-        if not line.lower().lstrip().startswith("usage"):
+        head = line.lower().lstrip()
+        if not head.startswith(("usage", "syntax")):
             continue
         collected = [line]
         for cont in lines[i + 1 :]:
