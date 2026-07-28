@@ -152,6 +152,10 @@ if sys.platform == "emscripten" or os.environ.get("_FM_PLAYGROUND_SIM"):
     import subprocess
     import threading
 
+    # Bytecode caches key on mtime+size, and an edit-and-rerun in the page
+    # can land inside one clock tick — never cache, always recompile.
+    sys.dont_write_bytecode = True
+
     # Pyodide's threading has no native thread ids (the API is documented
     # as platform-dependent); footman stamps results with one.
     if not hasattr(threading, "get_native_id"):
@@ -214,7 +218,8 @@ def _fm_invoke(files_json, line, columns=80):
     # shutil.get_terminal_size honours COLUMNS with no tty in sight, so
     # footman's own wrapping and pytest's ruler bars fit the pane.
     os.environ["COLUMNS"] = str(int(columns))
-    for name, content in json.loads(files_json).items():
+    files = json.loads(files_json)
+    for name, content in files.items():
         Path(name).write_text(content, encoding="utf-8")
     try:
         from footman.testing import Runner
@@ -230,6 +235,15 @@ def _fm_invoke(files_json, line, columns=80):
             "stdout": "",
             "stderr": traceback.format_exc(limit=8),
         })
+    finally:
+        # In-process pytest imports the editor's files; evict them so the
+        # next Run collects what the editor says then, not this run's
+        # modules — otherwise a second `fm test` reruns stale code.
+        written = {str(Path(name).resolve()) for name in files}
+        for mod_name, module in list(sys.modules.items()):
+            file = getattr(module, "__file__", None)
+            if file and str(Path(file).resolve()) in written:
+                del sys.modules[mod_name]
 
 _fm_manifest = {"code": None, "tree": None}
 
