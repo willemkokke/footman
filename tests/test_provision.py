@@ -172,14 +172,16 @@ def test_extract_binary_from_zip(tmp_path):
     assert placed.read_bytes() == b"go-binary" and placed.name == want
 
 
-def test_extract_binary_names_the_exe_on_windows(tmp_path, monkeypatch):
+def test_extract_binary_names_the_exe_on_windows(tmp_path):
     """PATHEXT makes an extensionless PE invisible to `shutil.which`, so the
-    placed name carries `.exe` even when the archive member did not.
-    Platform-independent by design — POSIX runners must cover the branch."""
-    monkeypatch.setattr(_provision.os, "name", "nt")
+    placed name carries `.exe` even when the archive member did not. The
+    platform arrives as a parameter (the `_bash_path` idiom) — patching the
+    global `os.name` takes down the whole xdist worker on POSIX 3.11."""
     archive = tmp_path / "eclint_Windows_x86_64.tar.gz"
     _tar_gz(archive, "eclint-0.6/eclint", b"PE-ish")
-    placed = _provision._extract_binary(archive, "eclint", tmp_path / "bin")
+    placed = _provision._extract_binary(
+        archive, "eclint", tmp_path / "bin", windows=True
+    )
     assert placed.name == "eclint.exe" and placed.read_bytes() == b"PE-ish"
 
 

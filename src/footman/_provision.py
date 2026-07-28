@@ -425,7 +425,9 @@ def _download(url: str, prefix: Path) -> Path:
     return dest
 
 
-def _extract_binary(archive: Path, tool: str, into: Path) -> Path:
+def _extract_binary(
+    archive: Path, tool: str, into: Path, *, windows: bool | None = None
+) -> Path:
     """Unpack *archive* and place its `tool` binary in *into*, executable.
 
     Release archives nest the binary under a versioned directory, so the
@@ -434,9 +436,11 @@ def _extract_binary(archive: Path, tool: str, into: Path) -> Path:
     `tool.exe` whatever the archive called it — `shutil.which` resolves
     through `PATHEXT`, and an extensionless PE is invisible to it.
     """
+    if windows is None:
+        windows = os.name == "nt"
     wanted = {tool, f"{tool}.exe"}
     into.mkdir(parents=True, exist_ok=True)
-    dest = into / (f"{tool}.exe" if os.name == "nt" else tool)
+    dest = into / (f"{tool}.exe" if windows else tool)
     if archive.name.lower().endswith((".tar.gz", ".tgz", ".tar.xz", ".tar.bz2")):
         with tarfile.open(archive) as tar:
             member = next(
