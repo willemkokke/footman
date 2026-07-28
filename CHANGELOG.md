@@ -7,6 +7,18 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Documentation
+
+- **`shell=True` on Windows is git-bash, and that eats backslashes.** The
+  posix policy resolves to git-bash so one pipeline behaves the same
+  everywhere, but a POSIX shell reads `\` as an escape — so a command
+  carrying Windows paths lost its separators, with the fix (`shell="native"`)
+  only findable in the config table. The page that teaches `run(shell=…)`
+  now says it where a port will read it.
+- **`Arg[T]` says which rule it is bending.** It is the one parameter that
+  keeps its position despite having a default; its reference entry now names
+  the default-decides rule it departs from and points at the typing guide.
+
 ### Fixed
 
 - **In-process pytest runs in a parallel task again.** pytest sets

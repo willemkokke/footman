@@ -44,6 +44,24 @@ policy (`[tool.footman] shell`), can be hardened (`strict=True` for
 `set -eo pipefail`, `clean=True` to skip startup files), and receives the
 whole string to interpret, punctuation and all.
 
+!!! warning "`shell=True` on Windows means git-bash, and it eats backslashes"
+
+    The default policy is `posix`, which on Windows resolves to git-bash so a
+    pipeline written once behaves the same everywhere. A POSIX shell treats
+    `\` as an escape character, so a command carrying Windows paths —
+    `C:\src\app` — arrives with the separators stripped. When the string must
+    reach a tool as *Windows* text, ask for the platform's own shell:
+
+    ```python
+    from footman import run
+
+    run(r"build.exe --out C:\dist", shell="native")   # cmd, not git-bash
+    ```
+
+    Same choice as the `shell.default` config key, made per call. A command
+    with no paths in it — the pipelines `shell=True` exists for — is
+    unaffected.
+
 The [Running commands guide](tools.md) covers the product surface; the
 principle here is the point: **the shell is an interpreter you opt into,
 never an accident**.
