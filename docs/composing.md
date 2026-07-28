@@ -493,6 +493,33 @@ becomes visible. Under `--json` anything a hook prints goes to stderr — the
 envelope owns stdout. Hooks run in cascade order; a raising hook is named
 and fails the invocation, exactly as a crashing reporter should.
 
+### Which moments may call a task
+
+The four **per-task** moments run inside the run, so a task called from one
+is a request like any other — its own row, sharing with the rest, the same
+refusals a body call gets (a `serial=` task, or one that would wait on
+itself, is taught rather than deadlocked):
+
+<!-- example: fragment -->
+```python
+@footman.pre_task
+def ensure(inv, task):
+    if task.name.startswith("deploy"):
+        build()                     # a real request, reported and shared
+```
+
+The two **run-wide** moments sit outside the run, and calling a task from
+one is a refusal that says so. `@pre_tasks` runs at discovery — including
+inside the child that rebuilds the completion manifest, where a call would
+run the task on a <kbd>Tab</kbd> press — and `@post_tasks` runs once the
+report is already built, with nowhere to put a new row. Say the ordering
+instead (`t.add_pre(...)` on the editable tree), or move the call to a
+per-task moment.
+
+Calling a task from ordinary Python outside a run — a REPL, an import of
+the tasks module — is untouched: it is the plain function call it looks
+like.
+
 ### One generator instead of a pair: `@wrap_task` and `@wrap_bind`
 
 When the pre and the post are two halves of one thought — open a span, close

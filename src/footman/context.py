@@ -209,6 +209,14 @@ class Context:
     """True while a task *body* runs (the scheduler sets it around the call),
     so the interactive primitives tell a guarded mid-body call from the
     framework's own up-front `ask()` resolution."""
+    unit_pending: bool = False
+    """A live-progress unit is already counted for this call, and unclaimed:
+    `parallel()` counts every child it is handed, then the first task request
+    inside that child *claims* the unit instead of counting a second one. A
+    thunk that runs no task keeps it; a thunk that is only a wrapper around
+    one call (the `lambda: build("web")` spelling) shows as the single piece
+    of work it is. Cleared on claim, so the requests after it — and anything
+    the callee itself asks for — count their own."""
     steps: list[Result] = field(default_factory=list)
     """Every `run()` this task made, in order — what `recording()` and
     the `--json` envelope read."""
@@ -1805,26 +1813,22 @@ def parallel(*calls: Callable[[], Any], keep_going: bool = False) -> list[int]:
     """
     from concurrent.futures import ThreadPoolExecutor
 
-    from footman import registry as _registry
-
     parent = current()
     dest = parent.sink or real_stdout()
     dest_is_real = parent.sink is None
     lock = threading.Lock()
 
-    def _machinery_counted(call: Callable[[], Any]) -> bool:
-        # A task handle's call routes through the body-call machinery, which
-        # counts the request on the status line itself — counting it here too
-        # would show one piece of work as two.
-        target = call.func if isinstance(call, functools.partial) else call
-        return _registry.is_task_handle(target)
-
     # parallel() children are units on the live status line, exactly like
     # scheduler nodes — a chain and a task-body fan-out present identically.
-    # Task children are counted by the machinery; only the rest count here.
+    # Every child counts once here, whatever it is: a task, a partial, a
+    # lambda wrapping a call, a plain thunk. What the child *does* can't be
+    # known from the outside — a closure is opaque — so the count can't
+    # depend on reading it. Instead the unit is handed to the child (see
+    # `Context.unit_pending`), and the first task request inside claims it
+    # rather than counting a second one for the same piece of work.
     status = _status
     if status is not None:
-        status.unit_added(sum(1 for c in calls if not _machinery_counted(c)))
+        status.unit_added(len(calls))
 
     def _call_name(call: Callable[[], Any]) -> str:
         if isinstance(call, functools.partial):  # partial(fmt, check=True)
@@ -1837,15 +1841,22 @@ def parallel(*calls: Callable[[], Any], keep_going: bool = False) -> list[int]:
 
     def invoke(call: Callable[[], Any]) -> tuple[int, BaseException | None]:
         name = _call_name(call)
-        own_unit = not _machinery_counted(call)
-        if status is not None and own_unit:
+        if status is not None:
             status.unit_started(name)
         # One buffer for both streams at task level, so the atomic flush keeps
         # this child's stdout/stderr in order; a run() inside it still splits the
         # step's streams via a temporary swap.
         buf = io.StringIO()
         child = replace(
-            parent, sink=buf, err_sink=buf, steps=[], task=name, name_width=width
+            parent,
+            sink=buf,
+            err_sink=buf,
+            steps=[],
+            task=name,
+            name_width=width,
+            # This child's unit is counted above; the first task request
+            # inside claims it instead of counting its own.
+            unit_pending=True,
         )
         token = _current.set(child)
         try:
@@ -1906,7 +1917,7 @@ def parallel(*calls: Callable[[], Any], keep_going: bool = False) -> list[int]:
             # Surface the child's run() steps on the parent, in completion order,
             # so they appear in `--json` and `recording()` (F12).
             parent.steps.extend(child.steps)
-        if status is not None and own_unit:
+        if status is not None:
             status.unit_finished(name, error is None)
         return code, error
 

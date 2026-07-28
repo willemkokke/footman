@@ -202,6 +202,15 @@ versions may include breaking changes.
   alphabetically — a release observed on two platforms credited one and
   quietly disowned the other's evidence.
 
+- **One piece of work is one unit on the live line, whatever the spelling.**
+  `parallel(lambda: build("web"))` counted twice — once as the thunk, once as
+  the request inside it — where `parallel(build)` and a `functools.partial`
+  counted once. `parallel()` now counts every child it is handed and hands
+  that unit down; the first task request inside claims it rather than
+  counting a second one for the same work. The claim is one-shot and never
+  reaches the callee, so a thunk running two tasks counts two, and a plain
+  thunk keeps the unit nobody claimed.
+
 - **A task called from `@pre_tasks` or `@post_tasks` is refused, and says
   why.** Both moments sit outside the run, so such a call quietly became a
   plain function call — no result row, no sharing, no availability gate, and
