@@ -369,6 +369,13 @@ def test_install_completion_unknown_shell_teaches(project, capsys):
     assert "bash|zsh|fish" in capsys.readouterr().err
 
 
+def test_install_completion_detached_value_teaches_the_equals_form(project, capsys):
+    # `--install-completion zsh`: the word never attached, and acting on the
+    # detected shell instead would install a hook for the wrong shell.
+    assert _app.run(["--install-completion", "zsh"]) == EX_USAGE
+    assert "--install-completion=zsh" in capsys.readouterr().err
+
+
 def test_directory_bad(project, capsys):
     assert _app.run([f"-C={project / 'nope'}", "hi"]) == EX_USAGE
     assert "-C" in capsys.readouterr().err
@@ -1386,8 +1393,14 @@ def test_no_uv_runs_in_place_rather_than_refusing(script_project, monkeypatch, c
 
 def test_a_cascade_of_several_files_is_not_a_script(project, monkeypatch, capsys):
     # A script environment can only be *the* environment; two files have no
-    # single answer, so the rule stays out of it.
+    # single answer, so the rule stays out of it. The .git anchors the walk's
+    # ceiling at the project — without it the nearest marker is sub/tasks.py
+    # itself, and whether the cascade spans two files depends on whatever
+    # repo marker happens to sit above the machine's temp directory.
     (project / "pyproject.toml").write_text("[project]\nname='x'\n")
+    (project / ".git").mkdir()
+    monkeypatch.delenv("FOOTMAN_UV_REEXEC", raising=False)
+    monkeypatch.delenv("FOOTMAN_NO_UV", raising=False)
     nested = project / "sub"
     nested.mkdir()
     (nested / "tasks.py").write_text(_SCRIPT_BLOCK, encoding="utf-8")
