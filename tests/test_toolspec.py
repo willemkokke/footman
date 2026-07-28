@@ -138,6 +138,24 @@ def driver(key: str) -> _drivers.Driver:
 # --- reading each family --------------------------------------------------
 
 
+def test_reads_spawn_off_the_callers_console():
+    """A tool that interrogates the terminal at start-up (tea ≤ 0.14.2 sent
+    an OSC theme query) hangs a captured read under a VT-capable terminal —
+    the hang follows whatever window the walk was launched from. A fresh
+    hidden console has default (VT-off) modes and nothing worth
+    interrogating, while console-hosted runtimes keep working — fully
+    detached, pwsh dies at start-up and git-bash goes mute. POSIX passes 0,
+    which subprocess accepts as "no flags"."""
+    import os
+    import subprocess
+
+    want = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+    assert want == _toolhelp.DETACHED
+    # And run_help actually works detached — the read below spawns with it.
+    text = _toolhelp.run_help([sys.executable, "-c", "print('usage: x [--ok]')"])
+    assert "--ok" in text
+
+
 def test_run_help_reads_utf8_not_the_locale_codec():
     """git-cliff's help is UTF-8. Decoded with Windows cp1252 the reader
     thread died mid-decode, stdout came back None, and ten releases were

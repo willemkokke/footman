@@ -497,6 +497,9 @@ def _read_version(name: str) -> tuple[str, str]:
             errors="replace",
             timeout=30,
             env=env,
+            # No console for a version read either — the same start-up
+            # terminal query that wedged help reads runs before --version.
+            creationflags=_toolhelp.DETACHED,
         )
     except subprocess.TimeoutExpired:
         return "", "timed out after 30s"

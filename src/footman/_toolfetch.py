@@ -821,6 +821,8 @@ def _capture(argv: list[str], env: dict[str, str] | None = None) -> str:
     Empty is not "nothing to report": the callers treat a tool they cannot
     read as one they have not looked at, the same as an unreachable index.
     """
+    from footman import _toolhelp
+
     try:
         done = subprocess.run(
             argv,
@@ -832,6 +834,8 @@ def _capture(argv: list[str], env: dict[str, str] | None = None) -> str:
             # deliberate — and so the prefix `prime` puts on `PATH` is what
             # picks the uv that carries the index.
             env=env if env is not None else dict(os.environ),
+            # Off the caller's console too — see _toolhelp.DETACHED.
+            creationflags=_toolhelp.DETACHED,
         )
     except (OSError, subprocess.SubprocessError):
         return ""
