@@ -307,6 +307,7 @@ Passing arguments through thunks is fine for two or three; past that, writing
 the calls plainly reads better — and it is the only form that hands the
 return values back:
 
+<!-- example: fragment -->
 ```python
 @task
 def release():
@@ -328,6 +329,7 @@ a task runs where it stands rather than joining the fan-out. When one
 straggler wants to come along, say so — `p.also(fn, *args)` queues it with
 the rest, and its return value lands in `results` in written order:
 
+<!-- example: fragment -->
 ```python
 with parallel() as p:
     build("web")
