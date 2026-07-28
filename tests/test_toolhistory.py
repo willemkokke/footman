@@ -323,6 +323,89 @@ def test_only_listable_tiers_are_primed():
     assert not _toolfetch.can_list(manual)  # hand-written stub, nothing to read
 
 
+def test_release_is_read_in_the_era_it_shipped_in():
+    """Each release gets the newest CPython that existed when it shipped.
+
+    Not one fixed interpreter: reading everything on the oldest supported
+    Python would drop argparse aliases from releases that really do show
+    them, because 3.13 taught argparse to print every alias. Reading a
+    release in its own era records what it actually printed, and the
+    surface corrects itself as the walk crosses October 2024.
+    """
+    from footman._toolfetch import PYTHON_RELEASES, READ_PYTHON, read_python
+
+    assert read_python(date="2026-06-19") == "3.14"  # pytest 9.1.1, aliases shown
+    assert read_python(date="2025-01-01") == "3.13"  # after 3.13, before 3.14
+    assert read_python(date="2024-05-16") == "3.12"  # twine 5.1.0
+    assert read_python(date="2022-12-01") == "3.11"  # twine 4.0.2
+    assert read_python(date="2022-06-01") == "3.10"  # twine 4.0.1
+    # A boundary belongs to the version that shipped that day, not before it.
+    for version, since in PYTHON_RELEASES:
+        assert read_python(date=since) == version
+    # No date is no era: the newest, which is what an unstamped release meant.
+    assert read_python() == PYTHON_RELEASES[0][0]
+    # Older than every era — filtered by the horizon, but never below the floor.
+    assert read_python(date="2001-01-01") == READ_PYTHON
+    # A tool asking for more than its era offered is read on what it will run on.
+    assert read_python(">=3.13", "2022-06-01") == "3.13"
+    assert read_python(">=3.8", "2022-06-01") == "3.10"  # below the era: the era
+
+
+def test_release_date_cutoff_is_spelled_in_utc(monkeypatch, tmp_path):
+    """The cutoff has to say UTC, or it excludes the release it is pinning.
+
+    The index reports `upload_time` in UTC; a bare date reaches uv as local
+    midnight. East of UTC that lands before the UTC day ends, so a release
+    published in its last hour is filtered out by its own release date — uv
+    0.11.32 went up at 23:05Z against a 23:00Z cutoff in BST, and resolved
+    to "no version of uv==0.11.32". On a UTC CI runner it would have passed.
+    """
+    from footman import _drivers, _toolfetch
+
+    calls: list[list[str]] = []
+    monkeypatch.setattr(
+        _toolfetch, "_run", lambda argv, env=None: calls.append(argv) or True
+    )
+    driver = _drivers.find("prek")
+    assert driver is not None
+    release = _toolfetch.Release(version="0.4.11", date="2026-07-23")
+    _toolfetch._install_pypi(driver, release, tmp_path / "prek")
+    install = next(c for c in calls if "pip" in c)
+    assert "--exclude-newer" in install
+    assert install[install.index("--exclude-newer") + 1] == "2026-07-23T23:59:59Z"
+
+
+def test_releases_older_than_the_interpreter_are_not_offered(monkeypatch):
+    """A release older than `READ_PYTHON` is out of scope, not a hole.
+
+    Nothing was built for an interpreter before it existed, so such a
+    release has no period wheels to resolve against and cannot be read on
+    any interpreter this walk uses. A hole says "this could not be read",
+    which would be a shrug recorded about a release nobody needs.
+    """
+    import io
+    import json as _json
+
+    from footman import _drivers, _toolfetch
+
+    index = {
+        "releases": {
+            # the day READ_PYTHON shipped, and one day either side of it
+            "2.0.0": [{"upload_time": "2021-10-05T00:00:00", "requires_python": ""}],
+            "1.9.0": [{"upload_time": "2021-10-04T00:00:00", "requires_python": ""}],
+            "1.8.0": [{"upload_time": "2021-10-03T00:00:00", "requires_python": ""}],
+        }
+    }
+    monkeypatch.setattr(
+        _toolfetch.urllib.request,
+        "urlopen",
+        lambda *a, **k: io.BytesIO(_json.dumps(index).encode()),
+    )
+    driver = _drivers.find("prek")
+    assert driver is not None
+    assert [r.version for r in _toolfetch.releases(driver)] == ["2.0.0", "1.9.0"]
+
+
 def test_walk_caches_nothing_it_will_not_reread(tmp_path):
     """A walk must not leave behind what it unpacked from.
 
@@ -2555,3 +2638,108 @@ def test_a_re_read_clears_a_claim_the_older_extractor_caused(monkeypatch):
     _toolhistory.merge(doc, version="5.1.0", surface=real, platforms=[here])
     assert not doc["base"].get("absent")  # the claim is withdrawn by evidence
     assert sorted(doc["base"]["platforms"]) == sorted([here, "Elsewhere"])
+
+
+def test_bin_on_path_overlays_the_directory_itself(tmp_path):
+    """A Windows venv keeps binaries in `Scripts` and uv's interpreter store
+    keeps `python.exe` at the store root — the observation must overlay the
+    directory the install actually returned, never a rebuilt `<parent>/bin`."""
+    import os
+
+    from footman.tasks.tools import _bin_on_path
+
+    scripts = tmp_path / "Scripts"
+    scripts.mkdir()
+    with _bin_on_path(scripts):
+        assert os.environ["PATH"].split(os.pathsep)[0] == str(scripts)
+
+
+def test_observe_rejects_a_reading_of_the_wrong_binary(tmp_path, monkeypatch):
+    """The help-path twin of `_from_click`'s guard. With the release's own
+    directory missing from `PATH`, the extractor resolves some ambient
+    binary and faithfully describes it under this release's label — on
+    Windows a whole platform's uv tier read as one tool, no holes to show
+    for it. A reading that names a different version must be a hole."""
+    from footman.tasks import tools as tools_tasks
+
+    bindir = tmp_path / "release" / "bin"
+
+    def fake_install(driver, release, into):
+        bindir.mkdir(parents=True, exist_ok=True)
+        return bindir
+
+    monkeypatch.setattr("footman._toolfetch.install", fake_install)
+    monkeypatch.setattr(
+        tools_tasks._drivers, "extract", lambda driver: _spec(version="0.99.9")
+    )
+    assert tools_tasks.observe("ruff", "0.15.0", scratch=str(tmp_path)) is None
+
+    monkeypatch.setattr(
+        tools_tasks._drivers, "extract", lambda driver: _spec(version="0.15.0")
+    )
+    assert tools_tasks.observe("ruff", "0.15.0", scratch=str(tmp_path)) is not None
+
+
+def test_npm_install_spawns_the_resolved_bun(tmp_path, monkeypatch):
+    """`which` sees the task router's PATH overlay; Windows CreateProcess
+    does not — its executable search reads the real process environment. So
+    a bare `["bun", ...]` that `which` just found still failed to spawn, and
+    every npm-tier release on the platform read as a hole. The spawn must
+    use the path `which` resolved."""
+    from footman import _drivers, _toolfetch
+
+    fake = tmp_path / "bun.exe"
+    calls: list[list[str]] = []
+    monkeypatch.setattr("shutil.which", lambda name: str(fake))
+    monkeypatch.setattr(
+        _toolfetch, "_run", lambda argv, env=None: calls.append(argv) or True
+    )
+    driver = _drivers.find("cspell")
+    assert driver is not None
+    out = _toolfetch._install_npm(driver, "9.8.0", tmp_path / "into")
+    assert out == tmp_path / "into" / "bin"
+    assert calls[0][0] == str(fake)
+    assert calls[0][1:] == ["add", "--global", "cspell@9.8.0"]
+
+
+def test_observe_accepts_a_repack_wheel_version(tmp_path, monkeypatch):
+    """PyPI's ninja 1.11.1.4 wraps a binary that answers `1.11.1` — the
+    repack's own trailing component must not read as a wrong binary. Only a
+    dotted prefix though, and never the reverse: a binary reporting *more*
+    components than its release is some other binary."""
+    from footman.tasks import tools as tools_tasks
+
+    bindir = tmp_path / "release" / "bin"
+
+    def fake_install(driver, release, into):
+        bindir.mkdir(parents=True, exist_ok=True)
+        return bindir
+
+    monkeypatch.setattr("footman._toolfetch.install", fake_install)
+    monkeypatch.setattr(
+        tools_tasks._drivers, "extract", lambda driver: _spec(version="1.11.1")
+    )
+    assert tools_tasks.observe("ninja", "1.11.1.4", scratch=str(tmp_path)) is not None
+    assert tools_tasks.observe("ninja", "1.11.14", scratch=str(tmp_path)) is None
+    monkeypatch.setattr(
+        tools_tasks._drivers, "extract", lambda driver: _spec(version="1.11.1.4")
+    )
+    assert tools_tasks.observe("ninja", "1.11.1", scratch=str(tmp_path)) is None
+
+
+def test_python_find_ignores_the_cwd_project(monkeypatch):
+    """`uv python find` consults the nearest pyproject, and the walk runs
+    inside footman's own checkout — whose `requires-python` has opinions.
+    `--no-project` keeps the answer about the version that was asked."""
+    from footman import _toolfetch
+
+    calls: list[list[str]] = []
+
+    def capture(argv):
+        calls.append(argv)
+        return ""
+
+    monkeypatch.setattr(_toolfetch, "_run", lambda argv, env=None: True)
+    monkeypatch.setattr(_toolfetch, "_capture", capture)
+    assert _toolfetch._install_python("3.10.0") is None
+    assert calls == [["uv", "python", "find", "--no-project", "3.10.0"]]

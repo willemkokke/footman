@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import time
 from pathlib import Path
+
+import pytest
 
 from footman import _app, _gc, _paths
 
@@ -160,3 +163,13 @@ def test_collector_runs_for_real_as_a_detached_child(tmp_path, monkeypatch):
     assert not (cache / "dead.json").exists()  # the child really collected
     assert not (cache / "dead.times.json").exists()
     assert (cache / "keep.json").exists()  # and left the living project alone
+
+
+def test_main_without_a_cache_dir_is_a_quiet_noop(monkeypatch):
+    # A detached child spawned with no argv has nothing to collect from;
+    # it must exit silently rather than guess at a directory.
+    monkeypatch.setattr(sys, "argv", ["footman-gc"])
+    monkeypatch.setattr(
+        _gc, "collect", lambda *a: pytest.fail("collected without a cache dir")
+    )
+    _gc.main()

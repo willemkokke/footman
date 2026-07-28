@@ -388,7 +388,8 @@ def _read_version(name: str) -> tuple[str, str]:
         done = subprocess.run(
             [binary, "--version"],
             capture_output=True,
-            text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=30,
             env=env,
         )

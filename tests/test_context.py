@@ -675,6 +675,8 @@ def test_shell_operator_detection_is_precise():
     assert _shell_operator("echo 'a | b'") is None
     assert _shell_operator("run --from a->b") is None
     assert _shell_operator("ruff check src --fix") is None
+    # A split failure (unbalanced quote) defers to the exec path.
+    assert _shell_operator('echo "unbalanced') is None
 
 
 def test_run_list_form_allows_a_literal_operator():
@@ -773,6 +775,29 @@ def test_resolve_shell_posix_falls_back_to_sh_then_teaches(monkeypatch):
     monkeypatch.setattr("footman.context.shutil.which", lambda n: None)
     with pytest.raises(ValueError, match="needs a POSIX shell"):
         _resolve_shell(True)
+
+
+def test_resolve_shell_windows_cmd_and_native_use_comspec(monkeypatch):
+    """The cmd/native-on-Windows branch, platform-independent by design —
+    a POSIX runner would otherwise leave it dark everywhere but Windows,
+    and the merged coverage would carry a permanently missing line."""
+    from footman.context import _resolve_shell
+
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setenv("COMSPEC", r"C:\WINDOWS\system32\cmd.exe")
+    assert _resolve_shell("cmd") == [r"C:\WINDOWS\system32\cmd.exe", "/c"]
+    assert _resolve_shell("native") == [r"C:\WINDOWS\system32\cmd.exe", "/c"]
+
+
+def test_resolve_shell_named_shell_missing_is_taught(monkeypatch):
+    from footman.context import _resolve_shell
+
+    monkeypatch.setattr("footman.context.os.path.isfile", lambda p: False)  # no hints
+    monkeypatch.setattr("footman.context.shutil.which", lambda n: None)
+    with pytest.raises(ValueError, match="'zsh' was not found on PATH"):
+        _resolve_shell("zsh")
+    with pytest.raises(ValueError, match="'pwsh' was not found on PATH"):
+        _resolve_shell("pwsh")
 
 
 def test_run_shell_true_actually_pipes():

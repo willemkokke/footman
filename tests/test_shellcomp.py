@@ -674,6 +674,24 @@ def test_detect_stops_at_pid_one(monkeypatch):
 # --- nushell -------------------------------------------------------------------
 
 
+def test_nushell_uninstall_removes_script_and_config_line(home, monkeypatch):
+    config = home / "nu-config" / "config.nu"
+    monkeypatch.setattr(_shellcomp, "_nu_config_path", lambda: config)
+    _shellcomp.install("nushell", "fm")
+    _shellcomp.uninstall("nushell", "fm")
+    assert not (home / ".local" / "share" / "fm" / "completion.nu").exists()
+    assert "completion.nu" not in config.read_text()
+
+
+def test_remove_once_unreadable_rc_is_taught(tmp_path):
+    # An rc that exists but cannot be read (here: it is a directory) must
+    # surface as guidance naming the line, never a bare traceback.
+    rc = tmp_path / "rc-is-a-directory"
+    rc.mkdir()
+    with pytest.raises(_shellcomp.InstallError, match="remove this line yourself"):
+        _shellcomp._remove_once(rc, "the line")
+
+
 def test_nushell_install_writes_script_and_config_line(home, monkeypatch):
     config = home / "nu-config" / "config.nu"
     monkeypatch.setattr(_shellcomp, "_nu_config_path", lambda: config)
@@ -929,12 +947,16 @@ def test_detect_shell_windows_reads_the_powershell_tell(monkeypatch):
     POSIX runner, and a Windows-only test would leave it dark everywhere
     else."""
     monkeypatch.setattr(_shellcomp.os, "name", "nt")
+    # The suite itself may be running inside git-bash (an MSYS terminal, an
+    # agent hook) — its exported MSYSTEM would win over the tell under test.
+    monkeypatch.delenv("MSYSTEM", raising=False)
     monkeypatch.setenv("PSModulePath", r"C:\Program Files\PowerShell\Modules")
     assert _shellcomp.detect_shell() == "pwsh"
 
 
 def test_detect_shell_windows_without_the_tell_gives_up(monkeypatch):
     monkeypatch.setattr(_shellcomp.os, "name", "nt")
+    monkeypatch.delenv("MSYSTEM", raising=False)
     monkeypatch.delenv("PSModulePath", raising=False)
     assert _shellcomp.detect_shell() is None
 
@@ -985,6 +1007,10 @@ def test_detection_from_inside_every_real_shell(
         py = Path(py).as_posix()
     command = template.format(py=py, code=_PROBE)
     env = dict(os.environ)
+    # An inherited MSYSTEM (the suite running inside git-bash or an agent
+    # hook) would make every probe answer "bash"; only the git-bash case
+    # below gets it back, deliberately.
+    env.pop("MSYSTEM", None)
     if os.name == "nt" and exe == "bash":
         # A git-bash *session* exports MSYSTEM — that is the launcher's
         # doing, not bash's, so a bare `bash.exe -c` spawned from a Windows
