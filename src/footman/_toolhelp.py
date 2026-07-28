@@ -704,12 +704,23 @@ def run_help(
             errors="replace",
             timeout=timeout,
             env=_wide_env(),
+            creationflags=DETACHED,
         )
     except (OSError, subprocess.SubprocessError):
         return ""
     out, err = done.stdout or "", done.stderr or ""
     return out if len(out) > len(err) else err
 
+
+# A captured read must not expose the *caller's* console: a tool that
+# interrogates the terminal at start-up (tea ≤ 0.14.2 sent an OSC theme
+# query) blocks forever under a VT-capable terminal waiting for a reply no
+# pipe will ever carry — so the hang follows whatever window the walk was
+# launched from. CREATE_NO_WINDOW gives the read a fresh hidden console
+# with default (VT-off) modes instead: nothing worth interrogating, while
+# console-hosted runtimes still get the console they need — fully detached,
+# pwsh dies at start-up and git-bash goes mute.
+DETACHED = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
 
 # Man renders bold/underline as `c\x08c` / `_\x08c` overstrike; dropping the
 # char-then-backspace pair leaves clean text, no `col` binary needed.
@@ -792,6 +803,7 @@ def _run_man(argv: list[str], timeout: float) -> str:
             errors="replace",
             timeout=timeout,
             env=env,
+            creationflags=DETACHED,
         )
     except (OSError, subprocess.SubprocessError):
         return ""
