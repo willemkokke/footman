@@ -674,6 +674,24 @@ def test_detect_stops_at_pid_one(monkeypatch):
 # --- nushell -------------------------------------------------------------------
 
 
+def test_nushell_uninstall_removes_script_and_config_line(home, monkeypatch):
+    config = home / "nu-config" / "config.nu"
+    monkeypatch.setattr(_shellcomp, "_nu_config_path", lambda: config)
+    _shellcomp.install("nushell", "fm")
+    _shellcomp.uninstall("nushell", "fm")
+    assert not (home / ".local" / "share" / "fm" / "completion.nu").exists()
+    assert "completion.nu" not in config.read_text()
+
+
+def test_remove_once_unreadable_rc_is_taught(tmp_path):
+    # An rc that exists but cannot be read (here: it is a directory) must
+    # surface as guidance naming the line, never a bare traceback.
+    rc = tmp_path / "rc-is-a-directory"
+    rc.mkdir()
+    with pytest.raises(_shellcomp.InstallError, match="remove this line yourself"):
+        _shellcomp._remove_once(rc, "the line")
+
+
 def test_nushell_install_writes_script_and_config_line(home, monkeypatch):
     config = home / "nu-config" / "config.nu"
     monkeypatch.setattr(_shellcomp, "_nu_config_path", lambda: config)

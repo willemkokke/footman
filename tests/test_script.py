@@ -31,6 +31,13 @@ def test_a_block_reads_as_metadata(tmp_path):
     assert meta == {"requires-python": ">=3.11", "dependencies": ["footman", "rich"]}
 
 
+def test_find_uv_falls_back_to_path(tmp_path, monkeypatch):
+    # No uv beside this runner's own scripts directory → the PATH answer.
+    monkeypatch.setattr("sysconfig.get_path", lambda name: str(tmp_path))
+    monkeypatch.setattr("shutil.which", lambda name: "/somewhere/uv")
+    assert _script.find_uv() == "/somewhere/uv"
+
+
 def test_no_block_and_no_file_are_both_simply_not_scripts(tmp_path):
     assert _script.read_block(_write(tmp_path, "x = 1\n")) == (None, None)
     assert _script.read_block(tmp_path / "ghost.py") == (None, None)
