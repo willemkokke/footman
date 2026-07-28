@@ -2615,6 +2615,28 @@ def test_observe_rejects_a_reading_of_the_wrong_binary(tmp_path, monkeypatch):
     assert tools_tasks.observe("ruff", "0.15.0", scratch=str(tmp_path)) is not None
 
 
+def test_npm_install_spawns_the_resolved_bun(tmp_path, monkeypatch):
+    """`which` sees the task router's PATH overlay; Windows CreateProcess
+    does not — its executable search reads the real process environment. So
+    a bare `["bun", ...]` that `which` just found still failed to spawn, and
+    every npm-tier release on the platform read as a hole. The spawn must
+    use the path `which` resolved."""
+    from footman import _drivers, _toolfetch
+
+    fake = tmp_path / "bun.exe"
+    calls: list[list[str]] = []
+    monkeypatch.setattr("shutil.which", lambda name: str(fake))
+    monkeypatch.setattr(
+        _toolfetch, "_run", lambda argv, env=None: calls.append(argv) or True
+    )
+    driver = _drivers.find("cspell")
+    assert driver is not None
+    out = _toolfetch._install_npm(driver, "9.8.0", tmp_path / "into")
+    assert out == tmp_path / "into" / "bin"
+    assert calls[0][0] == str(fake)
+    assert calls[0][1:] == ["add", "--global", "cspell@9.8.0"]
+
+
 def test_observe_accepts_a_repack_wheel_version(tmp_path, monkeypatch):
     """PyPI's ninja 1.11.1.4 wraps a binary that answers `1.11.1` — the
     repack's own trailing component must not read as a wrong binary. Only a
