@@ -1551,6 +1551,15 @@ def _curated(only: str, fetch) -> tuple[list, list[str]]:
                 else f"{driver.key} (hand-written)"
             )
             continue
+        if driver.provision.kind == "node" and shutil.which("bun") is None:
+            # The same distinction, one tier over. bun is how the node tier
+            # installs, so without it *every* release of every node tool
+            # fails to install — and each failure was recorded as a hole,
+            # which says those releases could not be had. A macOS gather
+            # reported 23 of them across cspell and markdownlint; with bun
+            # in a prefix the same walk read all 23 with none missing.
+            skipped.append(f"{driver.key} (no bun to install with)")
+            continue
         if driver.provision.kind == "man" and shutil.which("man") is None:
             # The pages are the reading, and rendering them takes `man`.
             # Windows has no such thing, and that is not a hole: a hole
