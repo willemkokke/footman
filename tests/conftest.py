@@ -50,10 +50,16 @@ def _no_cache_override(monkeypatch, tmp_path_factory):
     dogfoods footman — which now pushes one or the other into every child it
     spawns — so a run under `fm check` would otherwise leak an ambient colour
     decision into tests that assume a clean environment (a test that needs one
-    sets it with monkeypatch)."""
+    sets it with monkeypatch). The uv-handoff guards are cleared for a third
+    reason: the handoff paths write FOOTMAN_UV_REEXEC straight into
+    `os.environ` before their exec, so a handoff test poisons every later
+    test in its worker — child_python answered None only when the scheduler
+    happened to run one first, which wore a flake's face for days."""
     monkeypatch.delenv("FOOTMAN_CACHE_DIR", raising=False)
     monkeypatch.delenv("NO_COLOR", raising=False)
     monkeypatch.delenv("FORCE_COLOR", raising=False)
+    monkeypatch.delenv("FOOTMAN_UV_REEXEC", raising=False)
+    monkeypatch.delenv("FOOTMAN_NO_UV", raising=False)
     monkeypatch.setenv(
         "FOOTMAN_CONFIG",
         str(tmp_path_factory.getbasetemp() / "no-global-config.toml"),
