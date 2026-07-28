@@ -957,6 +957,35 @@ def test_gitea_releases_read_the_github_shape(monkeypatch):
     assert got[0].tag == "v0.15.0" and got[0].date == "2026-07-27"
 
 
+def test_observe_carries_every_release_field_through(tmp_path, monkeypatch):
+    """The walk funnels a release through the observe task's parameters, and
+    a field the funnel drops silently reverts its fix inside the walk: the
+    publishing-window cutoff never reached _install_pypi through here, so
+    cmake 4.3.1 kept resolving at the near edge and holing — while the
+    identical install ran clean by hand."""
+    from footman.tasks import tools as tools_tasks
+
+    seen: list = []
+
+    def fake_install(driver, release, into):
+        seen.append(release)
+        return None  # stop before extraction — the release is the assertion
+
+    monkeypatch.setattr("footman._toolfetch.install", fake_install)
+    monkeypatch.setattr(tools_tasks, "_refuse_a_broken_environment", lambda p: None)
+    tools_tasks.observe(
+        "cmake",
+        "4.3.1",
+        date="2026-03-28",
+        published="2026-03-31",
+        requires_python=">=3.8",
+        scratch=str(tmp_path),
+    )
+    assert seen[0].published == "2026-03-31"
+    assert seen[0].requires_python == ">=3.8"
+    assert seen[0].date == "2026-03-28"
+
+
 def test_a_provision_floor_takes_releases_out_of_scope(monkeypatch):
     """Below the floor is not *offered* — not walked, never holes. Unlike
     `deferred` the tool stays curated; its history just starts at the
