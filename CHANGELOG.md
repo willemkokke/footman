@@ -17,6 +17,8 @@ versions may include breaking changes.
   the rules a call has anywhere else — its own row, sharing, hooks, `-s`/`-j`
   — and `p.results` hands back what each returned, in the order written. `p`
   is still the list of exit codes `parallel()` has always returned.
+  `p.also(fn, *args)` brings a straggler that is not a task — a lambda, a
+  plain function — into the same fan-out.
 
 - **The docs have a Playground.** footman runs in the browser: the editor
   is a `tasks.py`, the prompt is `fm`, and the run goes through the same

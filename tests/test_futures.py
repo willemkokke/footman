@@ -1323,3 +1323,35 @@ def test_an_empty_splat_is_still_an_empty_list_of_codes():
     from footman import parallel
 
     assert parallel(*[]) == []
+
+
+def test_also_queues_a_plain_callable_into_the_block():
+    # The straggler case: one lambda or plain function alongside the tasks,
+    # in the same fan-out, its value in the same results list.
+    from footman import parallel
+
+    reg = Group("root")
+    ran: list[str] = []
+
+    @reg.task
+    def build(target: str = "x") -> str:
+        return f"dist/{target}"
+
+    @reg.task
+    def go():
+        with parallel() as p:
+            build("web")
+            p.also(ran.append, "straggler")
+            p.also(lambda: "from a lambda")
+        assert p.results == ["dist/web", None, "from a lambda"]
+
+    result = drive(reg, "go")
+    assert result.ok, result.stderr
+    assert ran == ["straggler"]
+
+
+def test_also_outside_a_block_is_taught():
+    from footman import parallel
+
+    with pytest.raises(RuntimeError, match=r"inside the `with`"):
+        parallel().also(print, "x")

@@ -323,10 +323,19 @@ runs when the block ends, under exactly the rules a call has anywhere else:
 own result row, sharing, hooks, `-s`/`-j`. `p.results` is in the order you
 wrote them; `p` itself is still the list of exit codes `parallel()` returns.
 
-Two things it cannot do, both because footman only owns *its own*
-`__call__`: a call to something that is not a task runs where it stands
-rather than joining the fan-out, and a queued failure surfaces when the
-block ends, not at the line that queued it.
+footman only owns *its own* `__call__`, so a call to something that is not
+a task runs where it stands rather than joining the fan-out. When one
+straggler wants to come along, say so — `p.also(fn, *args)` queues it with
+the rest, and its return value lands in `results` in written order:
+
+```python
+with parallel() as p:
+    build("web")
+    p.also(shutil.rmtree, stale)
+```
+
+The one other difference from a plain call: a queued failure surfaces when
+the block ends, not at the line that queued it.
 
 Unlike `pre`/`post`, a `parallel()` fan-out is **in-body** — footman can't see
 it without running the task. That is the trade: declared deps are static and

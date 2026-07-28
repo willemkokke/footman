@@ -1803,6 +1803,18 @@ def run(
 # --- parallel() --------------------------------------------------------------
 
 
+def _call_name(call: Callable[..., Any]) -> str:
+    """The name a fan-out child shows on the status line and its step lines.
+
+    A `functools.partial` unwraps to what it wraps; a lambda has no honest
+    name of its own, so it shows as an ellipsis rather than `<lambda>`.
+    """
+    if isinstance(call, functools.partial):  # partial(fmt, check=True)
+        call = call.func
+    name = getattr(call, "__name__", "task")
+    return "…" if name == "<lambda>" else name
+
+
 class Pending:
     """What a task call hands back *inside* a `with parallel()` block.
 
@@ -1867,6 +1879,26 @@ class Fanout(list):
         self._token = _collecting.set(self._queued)
         return self
 
+    def also(self, call: Callable[..., Any], /, *args: Any, **kwargs: Any) -> Pending:
+        """Queue something that is *not* a task — a lambda, a plain function.
+
+        A task call inside the block queues itself; anything else footman
+        does not own, so it says so out loud and joins the same fan-out:
+
+            with parallel() as p:
+                build("web")
+                p.also(shutil.rmtree, tmp)
+
+        Its return value lands in `results` with the rest, in written order.
+        """
+        if _collecting.get() is not self._queued:
+            raise RuntimeError(
+                "parallel().also(...) queues work for a block, so call it "
+                "inside the `with` — outside one there is nothing to join."
+            )
+        self._queued.append((call, args, kwargs))
+        return Pending(_call_name(call))
+
     def __exit__(self, exc_type: Any, exc: Any, tb: Any) -> bool:
         _collecting.reset(self._token)
         if exc_type is not None:
@@ -1879,7 +1911,7 @@ class Fanout(list):
                 # returning an int would read as an exit code out here.
                 values[index] = task(*args, **kwargs)
 
-            run.__name__ = getattr(task, "__name__", "task")
+            run.__name__ = _call_name(task)
             return run
 
         codes = parallel(
@@ -1948,12 +1980,6 @@ def parallel(*calls: Callable[[], Any], keep_going: bool = False) -> Any:
     status = _status
     if status is not None:
         status.unit_added(len(calls))
-
-    def _call_name(call: Callable[[], Any]) -> str:
-        if isinstance(call, functools.partial):  # partial(fmt, check=True)
-            call = call.func
-        name = getattr(call, "__name__", "task")
-        return "…" if name == "<lambda>" else name  # anonymous: no honest name
 
     # Sibling names are known up front, so their step lines can align.
     width = max((len(_call_name(c)) for c in calls), default=0)
