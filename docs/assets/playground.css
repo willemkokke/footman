@@ -147,15 +147,16 @@
   line-height: 1.5;
 }
 
-#fm-playground pre.fmp-failed {
-  color: var(--md-typeset-del-color, var(--md-code-fg-color));
-}
-
 #fm-playground .fmp-status {
   padding: 0.3rem 0.8rem;
   font-size: 0.6rem;
   color: var(--md-default-fg-color--light);
   border-top: 0.05rem solid var(--md-default-fg-color--lightest);
+}
+
+#fm-playground .fmp-status-failed {
+  color: #e5484d;
+  font-weight: 700;
 }
 
 /* The "run it there" link under every runnable example. */

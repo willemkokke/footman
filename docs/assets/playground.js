@@ -209,7 +209,11 @@ def _fm_sandbox_line(line):
         return "-s " + line
     return line
 
-def _fm_invoke(files_json, line):
+def _fm_invoke(files_json, line, columns=80):
+    # The pane's measured width, the way a terminal would report it:
+    # shutil.get_terminal_size honours COLUMNS with no tty in sight, so
+    # footman's own wrapping and pytest's ruler bars fit the pane.
+    os.environ["COLUMNS"] = str(int(columns))
     for name, content in json.loads(files_json).items():
         Path(name).write_text(content, encoding="utf-8")
     try:
@@ -364,6 +368,20 @@ function initPlayground() {
   args.addEventListener("input", hideCandidates);
   runBtn.addEventListener("click", run);
 
+  function measureColumns() {
+    // The pane's width in character cells of the actual code font.
+    const probe = document.createElement("span");
+    probe.style.visibility = "hidden";
+    probe.style.whiteSpace = "pre";
+    probe.textContent = "0".repeat(100);
+    out.appendChild(probe);
+    const charWidth = probe.getBoundingClientRect().width / 100;
+    probe.remove();
+    const inner = out.clientWidth - 2 * parseFloat(getComputedStyle(out).paddingLeft);
+    const columns = Math.floor(inner / charWidth);
+    return Math.max(40, Math.min(columns || 80, 200));
+  }
+
   let running = false;
   async function run() {
     if (running) return;
@@ -376,7 +394,7 @@ function initPlayground() {
       if (/\bpytest\b/.test(everything)) await ensurePytest(pyodide, setStatus);
       setStatus("running…");
       const invoke = pyodide.globals.get("_fm_invoke");
-      const raw = invoke(JSON.stringify(files), args.value);
+      const raw = invoke(JSON.stringify(files), args.value, measureColumns());
       invoke.destroy?.();
       const result = JSON.parse(raw);
       out.textContent =
@@ -384,7 +402,7 @@ function initPlayground() {
         (result.stderr ? (result.stdout ? "\n" : "") + result.stderr : "");
       if (!out.textContent.trim()) out.textContent = "(no output)";
       setStatus(`exit code ${result.exit_code}`);
-      out.classList.toggle("fmp-failed", result.exit_code !== 0);
+      status.classList.toggle("fmp-status-failed", result.exit_code !== 0);
     } catch (err) {
       out.textContent = String(err);
       setStatus("the runtime failed to load — check your connection and retry");
