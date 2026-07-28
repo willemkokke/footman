@@ -409,6 +409,62 @@ not a silent no-op. `clean=True` runs the interpreter without the user's
 startup files (`--norc --noprofile` and no `$BASH_ENV` for bash, `-NoProfile`
 for pwsh, `/d` for cmd), so a task's shell behaves the same on every machine.
 
+## Which version am I actually running?
+
+A task that needs a flag only newer builds have — or a checkout that should
+refuse to start on a stale toolchain — asks the tool itself:
+
+```python
+from footman import fail, task
+from footman.tools import git
+
+@task
+def env_check():
+    """Refuse a git too old for the spellings this repo uses."""
+    if git.installed_version() < (2, 23):
+        fail("git 2.23+ required — this repo uses `git switch`")
+```
+
+`installed_version()` asks the executable *this tool runs* (`<tool>
+--version`, or whatever spelling the tool was declared with) and returns
+comparable integers. It caches per process, and deliberately runs outside
+the task context, so `--dry-run` and `recording()` cannot answer for it —
+a guard that a dry run could fake is not a guard.
+
+It is **not** the version in the stub's header. A stub records what
+extraction read, on whatever machine synced it, from whatever binary
+resolved there; the two differ whenever `PATH` and the extractor disagree —
+a Homebrew keg against `/usr/bin/git`, say. The stub's version is
+maintainer bookkeeping; this one answers the end-user question, "what will
+this task actually invoke".
+
+The two halves are public on their own, for output you already hold:
+
+```python
+from footman import run, task
+from footman.tools import read_version, version_tuple
+
+@task
+def report():
+    """Print what a tool calls itself, and what it compares as."""
+    text = run("mytool --version", capture=True).stdout
+    print(read_version(text))                   # "0.6.0-wk.5" — exactly as read
+    print(version_tuple(read_version(text)))    # (0, 6, 0) — comparable
+```
+
+`read_version` keeps the string whole, build tail and all, for anything that
+records *which* build was seen. `version_tuple` reads only the leading
+numeric run, and the first component carrying a build tag ends it — so
+`0.6.0-wk.5` and `1.13.0.git.kitware.jobserver-1` compare as `(0, 6, 0)` and
+`(1, 13, 0)`.
+
+That is the honest answer to the question this gets asked — *is the CLI new
+enough* — because a build tail says nothing about which flags exist, and a
+fork build *of* 0.6.0 sorts at or before it in every version grammar.
+Scraping its digits into `(0, 6, 0, 5)` would sort it after. The cost is
+that two builds of one base compare **equal**, so a caller that cares which
+build it has must say so itself rather than read equality as an answer.
+
 ## Parallelism
 
 Independent tasks run **concurrently as threads** (a `ThreadPoolExecutor`),
