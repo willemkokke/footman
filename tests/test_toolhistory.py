@@ -8,6 +8,7 @@ replays into a surface nobody notices is wrong, and an empty delta read as
 
 from __future__ import annotations
 
+import collections
 import contextlib
 import itertools
 import json
@@ -2396,3 +2397,96 @@ def test_a_reading_must_describe_a_tool_to_count_as_one(help_text, options, verd
         ),
     )
     assert tools._describes_itself(spec) is verdict
+
+
+# --- a run must not report success while observing nothing --------------------
+
+
+def _gathered(observed: int, missed: int, **over):
+    from footman.tasks.tools import Gathered
+
+    return Gathered(
+        platform="Linux",
+        observations={"ruff": {f"1.0.{n}": {} for n in range(observed)}},
+        holes={"ruff": [f"9.0.{n}" for n in range(missed)]} if missed else {},
+        **over,
+    )
+
+
+def test_a_run_whose_holes_outnumber_its_readings_fails(capsys):
+    """`wrote obs-linux.json — 33 observations` was the line a *complete* run
+    printed too, and the exit status was 0 with 330 of 363 releases unread.
+
+    That is worse than failing: the document looks foldable, and folding it
+    records a platform where the tools do not exist. Holes in the majority
+    mean the machine, not the tools.
+    """
+    from footman.context import Failed
+    from footman.tasks import tools
+
+    with pytest.raises(Failed) as failed:
+        tools._report_gather(_gathered(observed=33, missed=330))
+    assert failed.value.code == 75  # EX_TEMPFAIL: look again
+    assert "picture of the machine" in failed.value.reason
+    assert "33 observed, 330 holes" in capsys.readouterr().out
+
+
+def test_an_ordinary_hole_is_not_a_failure(capsys):
+    """One release whose asset has gone is ordinary. Failing on it would
+    teach a weekly job's readers to ignore the exit code, which is the only
+    way the majority case can go unnoticed."""
+    from footman.tasks import tools
+
+    tools._report_gather(_gathered(observed=300, missed=2))  # no raise
+    out = capsys.readouterr().out
+    assert "300 observed, 2 holes" in out
+    assert "holes in ruff:" in out
+
+
+def test_the_counts_are_stated_together(capsys):
+    """Both numbers on one line: a truncated read of a long log still shows
+    what was missed beside what was found."""
+    from footman.tasks import tools
+
+    tools._report_gather(_gathered(observed=5, missed=0))
+    assert "Linux: 5 observed, 0 holes" in capsys.readouterr().out
+
+
+def test_a_disk_with_no_room_stops_the_walk_instead_of_recording_holes(
+    tmp_path, monkeypatch
+):
+    """A hole says *this release* could not be had. A full disk says nothing
+    about any release, and every observation after it fails identically —
+    recorded, that reads as a platform where the tools do not exist.
+
+    The Linux box hit exactly this: a walk that exhausted the disk wrote 330
+    holes, any one of which would have been folded as fact.
+    """
+    import shutil
+
+    from footman.context import Failed
+    from footman.tasks import tools
+
+    Usage = collections.namedtuple("Usage", "total used free")
+    monkeypatch.setattr(shutil, "disk_usage", lambda _p: Usage(1, 1, 4 * 1024 * 1024))
+    with pytest.raises(Failed) as failed:
+        tools._refuse_a_broken_environment(tmp_path)
+    assert failed.value.code == 75
+    assert "4 MB free" in failed.value.reason
+
+    # ...and room enough is simply a hole, as before.
+    monkeypatch.setattr(shutil, "disk_usage", lambda _p: Usage(1, 1, 40 * 1024**3))
+    tools._refuse_a_broken_environment(tmp_path)
+
+
+def test_a_hand_written_stub_is_not_a_uv_tier_tool():
+    """A `source="manual"` driver carries the *default* provision kind, so
+    asking it names the `uv` tier for a shell nobody fetches — six of them in
+    every document's skipped list."""
+    from footman import _toolfetch
+    from footman.tasks.tools import _curated
+
+    _, skipped = _curated("", _toolfetch)
+    assert "bash (hand-written)" in skipped
+    assert "git (system tier)" in skipped
+    assert not any("uv tier" in line for line in skipped)

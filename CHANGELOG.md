@@ -184,6 +184,22 @@ versions may include breaking changes.
   the parent streams, so there was nothing to hand it to and the callee's
   output went nowhere. It now goes to the terminal, the same handoff
   `parallel()` makes for its own children.
+- **A gather that observed almost nothing no longer reports success.** The
+  summary line was the same one a complete run printed, and the exit status
+  was 0 with 330 of 363 releases unread — a document that looks foldable, and
+  folding it records a platform where the tools do not exist. The counts are
+  now stated together, so a truncated read shows what was missed beside what
+  was found, and a run whose holes outnumber its observations exits 75. Not
+  any hole: one release whose asset has gone is ordinary, and failing on it
+  would teach a reader to ignore the exit code.
+- **A full disk stops the walk instead of being recorded as absence.** A hole
+  says *this release* could not be had; a disk with no room says nothing
+  about any release, and every observation after it fails identically. An
+  install failure with under 512 MB free now ends the run with the same
+  "look again" code an unreachable index uses.
+- **A hand-written stub is named as one.** The six shells carry the default
+  provision kind, so a skipped list called them `uv tier` — a tier nobody
+  fetches them from.
 
 - **`footman.docstrings` and `footman.markdown` resolve for a type-checker.**
   Both are lazily served by `__getattr__` and both were named in `__all__`,

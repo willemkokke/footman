@@ -943,9 +943,45 @@ def gather(
             json.dumps(found.document(), indent=1, ensure_ascii=False) + "\n",
             encoding="utf-8",
         )
-        counted = sum(len(v) for v in observations.values())
-        print(f"wrote {target} — {counted} observations")
+        print(f"wrote {target}")
+    _report_gather(found)
     return found
+
+
+def _report_gather(found: Gathered) -> None:
+    """Say what this leg saw, and refuse to call a wreck a result.
+
+    The line used to read `wrote obs-linux.json — 33 observations`, which is
+    the same line a complete run prints, and the exit status was 0 with 330
+    of 363 releases unread. A run that reports success while observing
+    almost nothing is worse than one that fails: the document looks
+    foldable, and folding it would record a platform where the tools do not
+    exist.
+
+    So the counts are always stated together — a truncated read still shows
+    both — and a run whose holes outnumber its observations ends non-zero.
+    Not any hole: one release whose asset has gone is ordinary, and failing
+    on it would teach a weekly job's readers to ignore the exit code. Holes
+    in the majority mean the machine, not the tools.
+    """
+    from footman import fail
+
+    seen = sum(len(v) for v in found.observations.values())
+    missed = sum(len(v) for v in found.holes.values())
+    print(f"{found.platform}: {seen} observed, {missed} holes")
+    for key, versions in sorted(found.holes.items()):
+        print(f"  holes in {key}: {', '.join(versions)}")
+    for key, why in sorted(found.unreachable.items()):
+        print(f"  could not read {key}: {why}")
+    if found.skipped:
+        print(f"  skipped: {', '.join(found.skipped)}")
+    if missed and missed >= seen:
+        fail(
+            f"{missed} of {missed + seen} releases went unread — this is a "
+            "picture of the machine, not of the tools. Fold it and the store "
+            "learns that these releases do not exist here.",
+            code=75,  # EX_TEMPFAIL: look again, as an unreachable index does
+        )
 
 
 def _plan_gather(doc: dict, listing: list, count: int) -> list:
@@ -1389,7 +1425,15 @@ def _curated(only: str, fetch) -> tuple[list, list[str]]:
         if only and driver.key != only:
             continue
         if not fetch.can_list(driver):
-            skipped.append(f"{driver.key} ({driver.provision.kind} tier)")
+            # A hand-written stub carries the *default* provision kind, so
+            # asking it names the `uv` tier for a shell nobody fetches. What
+            # makes it unlistable is that nothing reads it at all.
+            why = "hand-written" if driver.source == "manual" else driver.provision.kind
+            skipped.append(
+                f"{driver.key} ({why} tier)"
+                if why != "hand-written"
+                else f"{driver.key} (hand-written)"
+            )
             continue
         chosen.append(driver)
     return chosen, skipped
@@ -1499,6 +1543,7 @@ def observe(
     release = _toolfetch.Release(version=version, tag=tag, date=date)
     bindir = _toolfetch.install(driver, release, Path(scratch) / f"{tool}-{version}")
     if bindir is None:
+        _refuse_a_broken_environment(Path(scratch))
         return None
     try:
         with _on_path(bindir.parent):
@@ -1508,6 +1553,41 @@ def observe(
     if not _describes_itself(spec):
         return None
     return _toolhistory.surface_of(spec)
+
+
+_ROOM_TO_WORK = 512 * 1024 * 1024
+"""Free space below which an install failure stops meaning anything about
+the release it was trying to fetch."""
+
+
+def _refuse_a_broken_environment(scratch: Path) -> None:
+    """Stop the walk when the machine, not the release, is what failed.
+
+    A hole says something specific: *this* release could not be had — its
+    asset is gone, its wheel will not build. A disk with no room says
+    nothing about any release, and every observation after it fails for the
+    same reason. Recorded as holes, that reads as a platform where the tools
+    do not exist, and folded, it would encode exactly that lie.
+
+    So the run ends where the disk did, with the same exit code an
+    unreachable index uses: try again, rather than believe this.
+    """
+    import shutil as _shutil
+
+    from footman import fail
+
+    try:
+        free = _shutil.disk_usage(scratch).free
+    except OSError:  # pragma: no cover - the path we just wrote to
+        return
+    if free < _ROOM_TO_WORK:
+        fail(
+            f"only {free // (1024 * 1024)} MB free under {scratch} — an install "
+            "failed for want of room, and every release after it would too. "
+            "Nothing was recorded: a hole means a release could not be had, "
+            "not that the disk ran out.",
+            code=75,  # EX_TEMPFAIL, as an unreachable index uses
+        )
 
 
 def _describes_itself(spec) -> bool:
