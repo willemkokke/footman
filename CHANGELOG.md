@@ -155,6 +155,22 @@ versions may include breaking changes.
 
 ### Fixed
 
+- **A tool's man probe can no longer open a browser.** `git help <verb>`
+  honours `help.format`, which Windows defaults to html — so extracting the
+  git driver opened the HTML docs in a browser tab per verb, twenty-one at
+  a time, from what should be a captured read. The probe pins
+  `help.format=man`: a POSIX box reads the same text it always did, and a
+  box with no man viewer fails quietly into the existing empty-text
+  fallback.
+
+- **The detached refresh and collector children stay invisible on Windows
+  11.** With Windows Terminal as the default terminal, a `DETACHED_PROCESS`
+  child is handed a *visible* terminal window — one popped over the shell
+  for every stale-manifest <kbd>Tab</kbd> and every due collection, and a
+  console grandchild allocated another window of its own. They spawn with
+  `CREATE_NO_WINDOW` now: a hidden console instead of none, which their
+  children inherit.
+
 - **A task called from `@pre_tasks` or `@post_tasks` is refused, and says
   why.** Both moments sit outside the run, so such a call quietly became a
   plain function call — no result row, no sharing, no availability gate, and
