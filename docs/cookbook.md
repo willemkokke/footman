@@ -65,6 +65,7 @@ the same command, the same exit codes.
 A `*args` parameter receives everything after `--`, verbatim — no
 quoting gymnastics, no flag collisions with footman's own:
 
+<!-- example: revision -->
 ```python
 @task
 def test(*pytest_args: str):
@@ -121,6 +122,7 @@ Exit code 2, nothing executed, and the fix is in the message.
 Markers stack. Each one validates eagerly — before anything runs — and
 each failure is a taught error, not a traceback:
 
+<!-- example: fresh-session -->
 ```python
 from pathlib import Path
 from typing import Annotated
@@ -262,7 +264,10 @@ fm: bundle: missing required option --out
 `pre` and `post` build a DAG; a dependency shared by several tasks runs
 once per invocation:
 
+<!-- example: fresh-session -->
 ```python
+from footman import run, task
+
 @task
 def proto():
     "Generate protobuf stubs."
@@ -293,7 +298,12 @@ to lie.
 Thunks let you fan the same task over arguments; `keep_going` collects
 every failure instead of stopping at the first:
 
+<!-- example: fresh-session -->
 ```python
+import functools
+
+from footman import parallel, run, task
+
 TARGETS = ("linux-x86_64", "linux-arm64", "darwin-arm64")
 
 @task
@@ -590,6 +600,7 @@ download — and that beats any duration history. Report it and the live
 bar fills from the truth:
 
 ```python
+from pathlib import Path
 from footman import task, track, progress
 
 def load_records() -> list: ...   # your own work, whatever shape it takes
@@ -627,6 +638,7 @@ artifacts for deleted projects clean themselves up.
 
 ```python
 import functools
+from pathlib import Path
 from footman import fetch, parallel, task
 
 TOOLCHAIN = {
