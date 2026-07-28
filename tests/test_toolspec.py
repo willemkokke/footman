@@ -954,6 +954,58 @@ def test_extracting_an_absent_tool_yields_an_empty_spec():
     )
 
 
+def test_extraction_replaces_this_machines_home_with_a_tilde(monkeypatch, tmp_path):
+    """docker reports its config default expanded: the maintainer's own home
+    directory went into the store and shipped inside `docker.pyi` on PyPI.
+
+    It is also the difference that divides every platform — `/home/runner`
+    on Linux, `C:\\Users\\runneradmin` on Windows, for the same option of
+    the same release — so each leg of the matrix would overwrite the last
+    and the weekly run would report a change nobody made."""
+    home = tmp_path / "someone"
+    monkeypatch.setattr(_drivers.Path, "home", classmethod(lambda cls: home))
+    spec = ToolSpec(
+        name="docker",
+        help=f"config in {home}/.docker",
+        verbs=(
+            Verb(
+                name="",
+                help=f"reads {home}/.docker",
+                options=(
+                    Option(
+                        name="config",
+                        help=f"Location of config files (default {home}/.docker)",
+                        default=f"{home}/.docker",
+                    ),
+                    Option(name="debug", default=False),
+                ),
+            ),
+        ),
+    )
+    clean = _drivers._anonymous(spec)
+    option = clean.verbs[0].options[0]
+    assert clean.help == "config in ~/.docker"
+    assert clean.verbs[0].help == "reads ~/.docker"
+    assert option.default == "~/.docker"
+    assert option.help.endswith("(default ~/.docker)")
+    assert clean.verbs[0].options[1].default is False  # not a string, untouched
+
+
+def test_no_stub_carries_a_home_directory():
+    """The invariant the scrub exists to hold, checked against what ships."""
+    import re
+    from pathlib import Path
+
+    looks_like_home = re.compile(r"/Users/[a-z]|/home/[a-z]|C:\\\\Users\\\\[a-z]", re.I)
+    stubs = Path(_drivers.__file__).parent / "_stubs"
+    guilty = {
+        path.name
+        for path in stubs.glob("*.pyi")
+        if looks_like_home.search(path.read_text())
+    }
+    assert guilty == set()
+
+
 def test_rebasing_a_verb_that_is_not_there():
     spec = ToolSpec(name="x", verbs=(Verb(name="check"),))
     assert _drivers._rebase(spec, ("format",)).verbs == ()

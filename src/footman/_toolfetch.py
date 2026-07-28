@@ -20,6 +20,7 @@ import json
 import os
 import re
 import subprocess
+import sys
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -125,7 +126,7 @@ def read_python(requires_python: str = "", date: str = "") -> str:
     return f"3.{max(int(era.split('.')[1]), minimum)}"
 
 
-LISTABLE = ("uv", "node", "github", "gitlab", "bun", "python")
+LISTABLE = ("uv", "node", "github", "gitlab", "bun", "python", "docker")
 """The tiers with a release index footman can read. `system` is absent
 because git and docker are read from the host and have no fetch source."""
 
@@ -161,6 +162,8 @@ def releases(driver: Driver) -> list[Release]:
         found = _forge(driver, "gitlab" if kind == "gitlab" else "github")
     elif kind == "python":
         found = _uv_python()
+    elif kind == "docker":
+        found = _docker_index()
     else:
         return []
     return _stable(found)
@@ -342,6 +345,79 @@ def _uv_python() -> list[Release]:
     return _order(list(found.values()))
 
 
+_DOCKER_INDEX = "https://download.docker.com/{os}/static/stable/{arch}/"
+_DOCKER_FILE = re.compile(
+    r'href="docker-(?P<version>\d+\.\d+\.\d+)\.(?:tgz|zip)"'
+    r".*?(?P<date>\d{4}-\d{2}-\d{2})"
+)
+
+
+def _docker_channel() -> tuple[str, str, str]:
+    """Where this machine's docker archives live, and what they are called.
+
+    Docker publishes static builds per platform and architecture rather than
+    one asset list, so the *index* is chosen here and the version list falls
+    out of it — the inverse of a forge, where one release names many assets.
+    """
+    import platform as _platform_mod
+
+    machine = _platform_mod.machine().lower()
+    arch = "aarch64" if machine in ("arm64", "aarch64") else "x86_64"
+    if _windows():
+        return "win", "x86_64", "zip"  # no arm64 index published
+    if sys.platform == "darwin":
+        return "mac", arch, "tgz"
+    return "linux", arch, "tgz"
+
+
+def _docker_index() -> list[Release]:
+    """Every static docker build this platform can run.
+
+    A directory listing rather than an API, so the version and its
+    publication date are read from the row: `docker-29.6.2.tgz  2026-07-16`.
+
+    The directory holds more than the builds we want, so the pattern spells
+    out the exact `docker-<x.y.z>.<suffix>` shape rather than merely
+    containing it. That deliberately passes over three neighbours:
+    `docker-rootless-extras-*` (a different program), `docker-17.03.0-ce.tgz`
+    (the 2017 spelling, older than any release this walk can read), and
+    `docker-29.4.2-2.tgz` (a rebuild of a version already listed, which
+    would key to the same entry and simply race the original).
+    """
+    os_name, arch, _suffix = _docker_channel()
+    url = _DOCKER_INDEX.format(os=os_name, arch=arch)
+    try:
+        with urllib.request.urlopen(
+            urllib.request.Request(url, headers={"User-Agent": "footman-provision"}),
+            timeout=TIMEOUT,
+        ) as response:
+            listing = response.read().decode("utf-8", "replace")
+    except (urllib.error.URLError, TimeoutError, OSError) as cause:
+        raise Unreachable(url, cause) from cause
+    found = {
+        match["version"]: Release(version=match["version"], date=match["date"])
+        for match in _DOCKER_FILE.finditer(listing)
+    }
+    return _order(list(found.values()))
+
+
+def _install_docker(release: Release, into: Path) -> Path | None:
+    """Fetch one static build and place its binary where the walk reads it."""
+    from footman import _provision
+
+    os_name, arch, suffix = _docker_channel()
+    index = _DOCKER_INDEX.format(os=os_name, arch=arch)
+    url = f"{index}docker-{release.version}.{suffix}"
+    bindir = into / "bin"
+    bindir.mkdir(parents=True, exist_ok=True)
+    try:
+        archive = _provision._download(url, into)
+        _provision._extract_binary(archive, "docker", bindir)
+    except (_provision.ProvisionError, OSError, ValueError):
+        return None
+    return bindir
+
+
 def _pypi(driver: Driver) -> list[Release]:
     """PyPI's index, minus the versions with no files and the ones older
     than the walk's horizon.
@@ -383,6 +459,8 @@ def install(driver: Driver, release: Release, into: Path) -> Path | None:
         return _install_asset(driver, release, into)
     if kind == "python":
         return _install_python(release.version)
+    if kind == "docker":
+        return _install_docker(release, into)
     return None
 
 

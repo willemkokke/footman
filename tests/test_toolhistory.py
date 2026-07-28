@@ -683,6 +683,75 @@ def test_github_releases_normalise_the_tag_and_drop_the_unreleased(monkeypatch):
     assert [r.version for r in _toolfetch.releases(driver)] == ["2.96.0", "2.95.0"]
 
 
+def _listing(monkeypatch, html):
+    """Serve *html* as a directory index, whatever URL is asked for."""
+    import io
+
+    from footman import _toolfetch
+
+    monkeypatch.setattr(
+        _toolfetch.urllib.request,
+        "urlopen",
+        lambda *a, **k: io.BytesIO(html.encode()),
+    )
+
+
+DOCKER_LISTING = """<html><body><pre>
+<a href="../">../</a>
+<a href="sbx/">sbx/</a>
+<a href="docker-17.03.0-ce.tgz">ce</a>            2025-08-06 10:05  44MB
+<a href="docker-rootless-extras-27.5.1.tgz">rl</a>  2025-01-22 09:00  20MB
+<a href="docker-27.5.1.tgz">docker-27.5.1</a>      2025-01-22 09:00  44MB
+<a href="docker-29.4.2.tgz">docker-29.4.2</a>      2026-06-01 10:05  46MB
+<a href="docker-29.4.2-2.tgz">rebuild</a>         2026-06-03 10:05  46MB
+<a href="docker-29.6.2.tgz">docker-29.6.2</a>      2026-07-16 12:00  46MB
+</pre></body></html>"""
+
+
+def test_docker_reads_its_versions_from_a_directory_listing(monkeypatch):
+    """Docker publishes a static build of every release per platform, so the
+    index is a folder rather than an asset list. Three neighbours sit in the
+    same folder and none of them is a docker release: the rootless extras,
+    the 2017 `-ce` spelling, and a `-2` rebuild of a version already there."""
+    from footman import _drivers, _toolfetch
+
+    _listing(monkeypatch, DOCKER_LISTING)
+    driver = _drivers.find("docker")
+    assert driver is not None
+    got = _toolfetch.releases(driver)
+    assert [r.version for r in got] == ["29.6.2", "29.4.2", "27.5.1"]
+    assert got[0].date == "2026-07-16"
+
+
+def test_docker_index_is_chosen_by_platform_and_architecture(monkeypatch):
+    """One index per (os, arch) pair, and Windows publishes no arm64 build —
+    an arm Windows box takes the x86_64 zip and runs it in emulation."""
+    import platform as _platform_mod
+
+    from footman import _toolfetch
+
+    def channel(platform, machine, windows):
+        monkeypatch.setattr(_toolfetch.sys, "platform", platform)
+        monkeypatch.setattr(_toolfetch, "_windows", lambda: windows)
+        monkeypatch.setattr(_platform_mod, "machine", lambda: machine)
+        return _toolfetch._docker_channel()
+
+    assert channel("darwin", "arm64", False) == ("mac", "aarch64", "tgz")
+    assert channel("linux", "x86_64", False) == ("linux", "x86_64", "tgz")
+    assert channel("win32", "ARM64", True) == ("win", "x86_64", "zip")
+
+
+def test_docker_is_fetched_rather_than_read_from_the_host():
+    """It used to be a `system` tool, read from whatever the laptop had
+    installed — so its history could only ever hold one version."""
+    from footman import _drivers, _toolfetch
+
+    driver = _drivers.find("docker")
+    assert driver is not None
+    assert driver.provision.kind == "docker"
+    assert _toolfetch.can_list(driver)
+
+
 def test_gitlab_releases_read_their_own_field_names(monkeypatch):
     from footman import _drivers, _toolfetch
 
@@ -723,8 +792,8 @@ def test_an_unreadable_index_is_not_an_empty_one(monkeypatch):
 
 
 def test_which_tiers_can_be_listed():
-    """`system` is absent because git and docker are read from the host with
-    no fetch source, and a hand-written stub has nothing to read at all."""
+    """`system` is absent because git is read from the host with no fetch
+    source, and a hand-written stub has nothing to read at all."""
     from footman import _drivers, _toolfetch
 
     expected = {
@@ -734,8 +803,8 @@ def test_which_tiers_can_be_listed():
         "eclint": True,  # gitlab
         "bun": True,  # bun's own releases
         "python": True,  # uv carries CPython's own download index
+        "docker": True,  # its own static-build index
         "git": False,  # system
-        "docker": False,  # system
         "bash": False,  # manual stub
     }
     for key, listable in expected.items():

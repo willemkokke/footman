@@ -25,7 +25,7 @@
        "negation": "",
        "help": "Location of client config files",
        "type": "str",
-       "default": "/Users/willem/.docker",
+       "default": "~/.docker",
        "choices": []
       },
       "context": {
@@ -89,7 +89,7 @@
        "negation": "",
        "help": "Trust certs signed only by this CA",
        "type": "str",
-       "default": "/Users/willem/.docker/ca.pem",
+       "default": "~/.docker/ca.pem",
        "choices": []
       },
       "tlscert": {
@@ -99,7 +99,7 @@
        "negation": "",
        "help": "Path to TLS certificate file",
        "type": "str",
-       "default": "/Users/willem/.docker/cert.pem",
+       "default": "~/.docker/cert.pem",
        "choices": []
       },
       "tlskey": {
@@ -109,7 +109,7 @@
        "negation": "",
        "help": "Path to TLS key file",
        "type": "str",
-       "default": "/Users/willem/.docker/key.pem",
+       "default": "~/.docker/key.pem",
        "choices": []
       },
       "tlsverify": {
@@ -503,6 +503,1512 @@
        "help": "Ulimit options",
        "type": "str",
        "default": "[]",
+       "choices": []
+      }
+     }
+    },
+    "compose.build": {
+     "help": "Build or rebuild services",
+     "wraps": false,
+     "positional": "any",
+     "lead": "",
+     "options": {
+      "build_arg": {
+       "flags": [
+        "--build-arg"
+       ],
+       "negation": "",
+       "help": "Set build-time variables for services",
+       "type": "list[str]",
+       "default": null,
+       "choices": []
+      },
+      "builder": {
+       "flags": [
+        "--builder"
+       ],
+       "negation": "",
+       "help": "Set builder to use",
+       "type": "str",
+       "default": null,
+       "choices": []
+      },
+      "check": {
+       "flags": [
+        "--check"
+       ],
+       "negation": "",
+       "help": "Check build configuration",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "dry_run": {
+       "flags": [
+        "--dry-run"
+       ],
+       "negation": "",
+       "help": "Execute command in dry run mode",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "memory": {
+       "flags": [
+        "--memory",
+        "-m"
+       ],
+       "negation": "",
+       "help": "Set memory limit for the build container",
+       "type": "str",
+       "default": null,
+       "choices": []
+      },
+      "no_cache": {
+       "flags": [
+        "--no-cache"
+       ],
+       "negation": "",
+       "help": "Do not use cache when building the image",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "print": {
+       "flags": [
+        "--print"
+       ],
+       "negation": "",
+       "help": "Print equivalent bake file",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "provenance": {
+       "flags": [
+        "--provenance"
+       ],
+       "negation": "",
+       "help": "Add a provenance attestation",
+       "type": "str",
+       "default": null,
+       "choices": []
+      },
+      "pull": {
+       "flags": [
+        "--pull"
+       ],
+       "negation": "",
+       "help": "Always attempt to pull a newer version of the image",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "push": {
+       "flags": [
+        "--push"
+       ],
+       "negation": "",
+       "help": "Push service images",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "quiet": {
+       "flags": [
+        "--quiet",
+        "-q"
+       ],
+       "negation": "",
+       "help": "Suppress the build output",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "sbom": {
+       "flags": [
+        "--sbom"
+       ],
+       "negation": "",
+       "help": "Add a SBOM attestation",
+       "type": "str",
+       "default": null,
+       "choices": []
+      },
+      "ssh": {
+       "flags": [
+        "--ssh"
+       ],
+       "negation": "",
+       "help": "Set SSH authentications used when building service images",
+       "type": "str",
+       "default": null,
+       "choices": []
+      },
+      "with_dependencies": {
+       "flags": [
+        "--with-dependencies"
+       ],
+       "negation": "",
+       "help": "Also build dependencies (transitively)",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      }
+     }
+    },
+    "compose.down": {
+     "help": "Stop and remove containers, networks",
+     "wraps": false,
+     "positional": "any",
+     "lead": "",
+     "options": {
+      "dry_run": {
+       "flags": [
+        "--dry-run"
+       ],
+       "negation": "",
+       "help": "Execute command in dry run mode",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "remove_orphans": {
+       "flags": [
+        "--remove-orphans"
+       ],
+       "negation": "",
+       "help": "Remove containers for services not defined in the Compose file",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "rmi": {
+       "flags": [
+        "--rmi"
+       ],
+       "negation": "",
+       "help": "Remove images used by services",
+       "type": "str",
+       "default": null,
+       "choices": []
+      },
+      "timeout": {
+       "flags": [
+        "--timeout",
+        "-t"
+       ],
+       "negation": "",
+       "help": "Specify a shutdown timeout in seconds",
+       "type": "str",
+       "default": null,
+       "choices": []
+      },
+      "volumes": {
+       "flags": [
+        "--volumes",
+        "-v"
+       ],
+       "negation": "",
+       "help": "Remove named volumes declared in the \"volumes\" section of the Compose file and anonymous volumes attached to containers",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      }
+     }
+    },
+    "compose.exec": {
+     "help": "Execute a command in a running container",
+     "wraps": true,
+     "positional": "required",
+     "lead": "service",
+     "options": {
+      "detach": {
+       "flags": [
+        "--detach",
+        "-d"
+       ],
+       "negation": "",
+       "help": "Detached mode: Run command in the background",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "dry_run": {
+       "flags": [
+        "--dry-run"
+       ],
+       "negation": "",
+       "help": "Execute command in dry run mode",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "env": {
+       "flags": [
+        "--env",
+        "-e"
+       ],
+       "negation": "",
+       "help": "Set environment variables",
+       "type": "list[str]",
+       "default": null,
+       "choices": []
+      },
+      "index": {
+       "flags": [
+        "--index"
+       ],
+       "negation": "",
+       "help": "Index of the container if service has multiple replicas",
+       "type": "str",
+       "default": null,
+       "choices": []
+      },
+      "no_tty": {
+       "flags": [
+        "--no-tty",
+        "-T"
+       ],
+       "negation": "",
+       "help": "Disable pseudo-TTY allocation",
+       "type": "bool",
+       "default": true,
+       "choices": []
+      },
+      "privileged": {
+       "flags": [
+        "--privileged"
+       ],
+       "negation": "",
+       "help": "Give extended privileges to the process",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "user": {
+       "flags": [
+        "--user",
+        "-u"
+       ],
+       "negation": "",
+       "help": "Run the command as this user",
+       "type": "str",
+       "default": null,
+       "choices": []
+      },
+      "workdir": {
+       "flags": [
+        "--workdir",
+        "-w"
+       ],
+       "negation": "",
+       "help": "Path to workdir directory for this command",
+       "type": "str",
+       "default": null,
+       "choices": []
+      }
+     }
+    },
+    "compose.logs": {
+     "help": "View output from containers",
+     "wraps": false,
+     "positional": "any",
+     "lead": "",
+     "options": {
+      "dry_run": {
+       "flags": [
+        "--dry-run"
+       ],
+       "negation": "",
+       "help": "Execute command in dry run mode",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "follow": {
+       "flags": [
+        "--follow",
+        "-f"
+       ],
+       "negation": "",
+       "help": "Follow log output",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "index": {
+       "flags": [
+        "--index"
+       ],
+       "negation": "",
+       "help": "index of the container if service has multiple replicas",
+       "type": "str",
+       "default": null,
+       "choices": []
+      },
+      "no_color": {
+       "flags": [
+        "--no-color"
+       ],
+       "negation": "",
+       "help": "Produce monochrome output",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "no_log_prefix": {
+       "flags": [
+        "--no-log-prefix"
+       ],
+       "negation": "",
+       "help": "Don't print prefix in logs",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "since": {
+       "flags": [
+        "--since"
+       ],
+       "negation": "",
+       "help": "Show logs since timestamp (e.g",
+       "type": "str",
+       "default": null,
+       "choices": []
+      },
+      "tail": {
+       "flags": [
+        "--tail",
+        "-n"
+       ],
+       "negation": "",
+       "help": "Number of lines to show from the end of the logs for each container",
+       "type": "str",
+       "default": "all",
+       "choices": []
+      },
+      "timestamps": {
+       "flags": [
+        "--timestamps",
+        "-t"
+       ],
+       "negation": "",
+       "help": "Show timestamps",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "until": {
+       "flags": [
+        "--until"
+       ],
+       "negation": "",
+       "help": "Show logs before a timestamp (e.g",
+       "type": "str",
+       "default": null,
+       "choices": []
+      }
+     }
+    },
+    "compose.ps": {
+     "help": "List containers",
+     "wraps": false,
+     "positional": "any",
+     "lead": "",
+     "options": {
+      "all": {
+       "flags": [
+        "--all",
+        "-a"
+       ],
+       "negation": "",
+       "help": "Show all stopped containers (including those created by the run command)",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "dry_run": {
+       "flags": [
+        "--dry-run"
+       ],
+       "negation": "",
+       "help": "Execute command in dry run mode",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "filter": {
+       "flags": [
+        "--filter"
+       ],
+       "negation": "",
+       "help": "Filter services by a property (supported filters: status)",
+       "type": "str",
+       "default": null,
+       "choices": []
+      },
+      "format": {
+       "flags": [
+        "--format"
+       ],
+       "negation": "",
+       "help": "Format output using a custom template: 'table': Print output in table format with column headers (default) 'table TEMPLATE': Print output in table format using the given Go template 'json': Print in JSON format 'TEMPLATE': Print output using the given Go template",
+       "type": "str",
+       "default": "table",
+       "choices": []
+      },
+      "no_trunc": {
+       "flags": [
+        "--no-trunc"
+       ],
+       "negation": "",
+       "help": "Don't truncate output",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "orphans": {
+       "flags": [
+        "--orphans"
+       ],
+       "negation": "",
+       "help": "Include orphaned services (not declared by project)",
+       "type": "bool",
+       "default": true,
+       "choices": []
+      },
+      "quiet": {
+       "flags": [
+        "--quiet",
+        "-q"
+       ],
+       "negation": "",
+       "help": "Only display IDs",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "services": {
+       "flags": [
+        "--services"
+       ],
+       "negation": "",
+       "help": "Display services",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "status": {
+       "flags": [
+        "--status"
+       ],
+       "negation": "",
+       "help": "Filter services by status",
+       "type": "list[str]",
+       "default": null,
+       "choices": []
+      }
+     }
+    },
+    "compose.run": {
+     "help": "Run a one-off command on a service",
+     "wraps": true,
+     "positional": "required",
+     "lead": "service",
+     "options": {
+      "build": {
+       "flags": [
+        "--build"
+       ],
+       "negation": "",
+       "help": "Build image before starting container",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "cap_add": {
+       "flags": [
+        "--cap-add"
+       ],
+       "negation": "",
+       "help": "Add Linux capabilities",
+       "type": "str",
+       "default": null,
+       "choices": []
+      },
+      "cap_drop": {
+       "flags": [
+        "--cap-drop"
+       ],
+       "negation": "",
+       "help": "Drop Linux capabilities",
+       "type": "str",
+       "default": null,
+       "choices": []
+      },
+      "detach": {
+       "flags": [
+        "--detach",
+        "-d"
+       ],
+       "negation": "",
+       "help": "Run container in background and print container ID",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "dry_run": {
+       "flags": [
+        "--dry-run"
+       ],
+       "negation": "",
+       "help": "Execute command in dry run mode",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "entrypoint": {
+       "flags": [
+        "--entrypoint"
+       ],
+       "negation": "",
+       "help": "Override the entrypoint of the image",
+       "type": "str",
+       "default": null,
+       "choices": []
+      },
+      "env": {
+       "flags": [
+        "--env",
+        "-e"
+       ],
+       "negation": "",
+       "help": "Set environment variables",
+       "type": "list[str]",
+       "default": null,
+       "choices": []
+      },
+      "env_from_file": {
+       "flags": [
+        "--env-from-file"
+       ],
+       "negation": "",
+       "help": "Set environment variables from file",
+       "type": "list[str]",
+       "default": null,
+       "choices": []
+      },
+      "interactive": {
+       "flags": [
+        "--interactive",
+        "-i"
+       ],
+       "negation": "",
+       "help": "Keep STDIN open even if not attached",
+       "type": "bool",
+       "default": true,
+       "choices": []
+      },
+      "label": {
+       "flags": [
+        "--label",
+        "-l"
+       ],
+       "negation": "",
+       "help": "Add or override a label",
+       "type": "list[str]",
+       "default": null,
+       "choices": []
+      },
+      "name": {
+       "flags": [
+        "--name"
+       ],
+       "negation": "",
+       "help": "Assign a name to the container",
+       "type": "str",
+       "default": null,
+       "choices": []
+      },
+      "no_deps": {
+       "flags": [
+        "--no-deps"
+       ],
+       "negation": "",
+       "help": "Don't start linked services",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "no_tty": {
+       "flags": [
+        "--no-tty",
+        "-T"
+       ],
+       "negation": "",
+       "help": "Disable pseudo-TTY allocation",
+       "type": "bool",
+       "default": false,
+       "choices": []
+      },
+      "publish": {
+       "flags": [
+        "--publish",
+        "-p"
+       ],
+       "negation": "",
+       "help": "Publish a container's port(s) to the host",
+       "type": "list[str]",
+       "default": null,
+       "choices": []
+      },
+      "pull": {
+       "flags": [
+        "--pull"
+       ],
+       "negation": "",
+       "help": "Pull image before running (\"always\"|\"missing\"|\"never\")",
+       "type": "str",
+       "default": "policy",
+       "choices": []
+      },
+      "quiet": {
+       "flags": [
+        "--quiet",
+        "-q"
+       ],
+       "negation": "",
+       "help": "Don't print anything to STDOUT",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "quiet_build": {
+       "flags": [
+        "--quiet-build"
+       ],
+       "negation": "",
+       "help": "Suppress progress output from the build process",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "quiet_pull": {
+       "flags": [
+        "--quiet-pull"
+       ],
+       "negation": "",
+       "help": "Pull without printing progress information",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "remove_orphans": {
+       "flags": [
+        "--remove-orphans"
+       ],
+       "negation": "",
+       "help": "Remove containers for services not defined in the Compose file",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "rm": {
+       "flags": [
+        "--rm"
+       ],
+       "negation": "",
+       "help": "Automatically remove the container when it exits",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "service_ports": {
+       "flags": [
+        "--service-ports",
+        "-P"
+       ],
+       "negation": "",
+       "help": "Run command with all service's ports enabled and mapped to the host",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "use_aliases": {
+       "flags": [
+        "--use-aliases"
+       ],
+       "negation": "",
+       "help": "Use the service's network useAliases in the network(s) the container connects to",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "user": {
+       "flags": [
+        "--user",
+        "-u"
+       ],
+       "negation": "",
+       "help": "Run as specified username or uid",
+       "type": "str",
+       "default": null,
+       "choices": []
+      },
+      "volume": {
+       "flags": [
+        "--volume",
+        "-v"
+       ],
+       "negation": "",
+       "help": "Bind mount a volume",
+       "type": "list[str]",
+       "default": null,
+       "choices": []
+      },
+      "workdir": {
+       "flags": [
+        "--workdir",
+        "-w"
+       ],
+       "negation": "",
+       "help": "Working directory inside the container",
+       "type": "str",
+       "default": null,
+       "choices": []
+      }
+     }
+    },
+    "compose.up": {
+     "help": "Create and start containers",
+     "wraps": false,
+     "positional": "any",
+     "lead": "",
+     "options": {
+      "abort_on_container_exit": {
+       "flags": [
+        "--abort-on-container-exit"
+       ],
+       "negation": "",
+       "help": "Stops all containers if any container was stopped",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "abort_on_container_failure": {
+       "flags": [
+        "--abort-on-container-failure"
+       ],
+       "negation": "",
+       "help": "Stops all containers if any container exited with failure",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "always_recreate_deps": {
+       "flags": [
+        "--always-recreate-deps"
+       ],
+       "negation": "",
+       "help": "Recreate dependent containers",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "attach": {
+       "flags": [
+        "--attach"
+       ],
+       "negation": "",
+       "help": "Restrict attaching to the specified services",
+       "type": "list[str]",
+       "default": null,
+       "choices": []
+      },
+      "attach_dependencies": {
+       "flags": [
+        "--attach-dependencies"
+       ],
+       "negation": "",
+       "help": "Automatically attach to log output of dependent services",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "build": {
+       "flags": [
+        "--build"
+       ],
+       "negation": "--no-build",
+       "help": "Build images before starting containers",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "detach": {
+       "flags": [
+        "--detach",
+        "-d"
+       ],
+       "negation": "",
+       "help": "Detached mode: Run containers in the background",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "dry_run": {
+       "flags": [
+        "--dry-run"
+       ],
+       "negation": "",
+       "help": "Execute command in dry run mode",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "exit_code_from": {
+       "flags": [
+        "--exit-code-from"
+       ],
+       "negation": "",
+       "help": "Return the exit code of the selected service container",
+       "type": "str",
+       "default": null,
+       "choices": []
+      },
+      "force_recreate": {
+       "flags": [
+        "--force-recreate"
+       ],
+       "negation": "",
+       "help": "Recreate containers even if their configuration and image haven't changed",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "menu": {
+       "flags": [
+        "--menu"
+       ],
+       "negation": "",
+       "help": "Enable interactive shortcuts when running attached",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "no_attach": {
+       "flags": [
+        "--no-attach"
+       ],
+       "negation": "",
+       "help": "Do not attach (stream logs) to the specified services",
+       "type": "list[str]",
+       "default": null,
+       "choices": []
+      },
+      "no_color": {
+       "flags": [
+        "--no-color"
+       ],
+       "negation": "",
+       "help": "Produce monochrome output",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "no_deps": {
+       "flags": [
+        "--no-deps"
+       ],
+       "negation": "",
+       "help": "Don't start linked services",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "no_log_prefix": {
+       "flags": [
+        "--no-log-prefix"
+       ],
+       "negation": "",
+       "help": "Don't print prefix in logs",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "no_recreate": {
+       "flags": [
+        "--no-recreate"
+       ],
+       "negation": "",
+       "help": "If containers already exist, don't recreate them",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "no_start": {
+       "flags": [
+        "--no-start"
+       ],
+       "negation": "",
+       "help": "Don't start the services after creating them",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "pull": {
+       "flags": [
+        "--pull"
+       ],
+       "negation": "",
+       "help": "Pull image before running (\"always\"|\"missing\"|\"never\")",
+       "type": "str",
+       "default": "policy",
+       "choices": []
+      },
+      "quiet_build": {
+       "flags": [
+        "--quiet-build"
+       ],
+       "negation": "",
+       "help": "Suppress the build output",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "quiet_pull": {
+       "flags": [
+        "--quiet-pull"
+       ],
+       "negation": "",
+       "help": "Pull without printing progress information",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "remove_orphans": {
+       "flags": [
+        "--remove-orphans"
+       ],
+       "negation": "",
+       "help": "Remove containers for services not defined in the Compose file",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "renew_anon_volumes": {
+       "flags": [
+        "--renew-anon-volumes",
+        "-V"
+       ],
+       "negation": "",
+       "help": "Recreate anonymous volumes instead of retrieving data from the previous containers",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "scale": {
+       "flags": [
+        "--scale"
+       ],
+       "negation": "",
+       "help": "Scale SERVICE to NUM instances",
+       "type": "str",
+       "default": null,
+       "choices": []
+      },
+      "timeout": {
+       "flags": [
+        "--timeout",
+        "-t"
+       ],
+       "negation": "",
+       "help": "Use this timeout in seconds for container shutdown when attached or when containers are already running",
+       "type": "str",
+       "default": null,
+       "choices": []
+      },
+      "timestamps": {
+       "flags": [
+        "--timestamps"
+       ],
+       "negation": "",
+       "help": "Show timestamps",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "wait": {
+       "flags": [
+        "--wait"
+       ],
+       "negation": "",
+       "help": "Wait for services to be running|healthy",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "wait_timeout": {
+       "flags": [
+        "--wait-timeout"
+       ],
+       "negation": "",
+       "help": "Maximum duration in seconds to wait for the project to be running|healthy",
+       "type": "str",
+       "default": null,
+       "choices": []
+      },
+      "watch": {
+       "flags": [
+        "--watch",
+        "-w"
+       ],
+       "negation": "",
+       "help": "Watch source code and rebuild/refresh containers when files are updated",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "yes": {
+       "flags": [
+        "--yes",
+        "-y"
+       ],
+       "negation": "",
+       "help": "Assume \"yes\" as answer to all prompts and run non-interactively",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      }
+     }
+    },
+    "exec": {
+     "help": "Execute a command in a running container",
+     "wraps": true,
+     "positional": "required",
+     "lead": "container",
+     "options": {
+      "detach": {
+       "flags": [
+        "--detach",
+        "-d"
+       ],
+       "negation": "",
+       "help": "Detached mode: run command in the background",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "detach_keys": {
+       "flags": [
+        "--detach-keys"
+       ],
+       "negation": "",
+       "help": "Override the key sequence for detaching a container",
+       "type": "str",
+       "default": null,
+       "choices": []
+      },
+      "env": {
+       "flags": [
+        "--env",
+        "-e"
+       ],
+       "negation": "",
+       "help": "Set environment variables",
+       "type": "str",
+       "default": null,
+       "choices": []
+      },
+      "env_file": {
+       "flags": [
+        "--env-file"
+       ],
+       "negation": "",
+       "help": "Read in a file of environment variables",
+       "type": "str",
+       "default": null,
+       "choices": []
+      },
+      "interactive": {
+       "flags": [
+        "--interactive",
+        "-i"
+       ],
+       "negation": "",
+       "help": "Keep STDIN open even if not attached",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "privileged": {
+       "flags": [
+        "--privileged"
+       ],
+       "negation": "",
+       "help": "Give extended privileges to the command",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "tty": {
+       "flags": [
+        "--tty",
+        "-t"
+       ],
+       "negation": "",
+       "help": "Allocate a pseudo-TTY",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "user": {
+       "flags": [
+        "--user",
+        "-u"
+       ],
+       "negation": "",
+       "help": "Username or UID (format: \"<name|uid>[:<group|gid>]\")",
+       "type": "str",
+       "default": null,
+       "choices": []
+      },
+      "workdir": {
+       "flags": [
+        "--workdir",
+        "-w"
+       ],
+       "negation": "",
+       "help": "Working directory inside the container",
+       "type": "str",
+       "default": null,
+       "choices": []
+      }
+     }
+    },
+    "images": {
+     "help": "List images",
+     "wraps": false,
+     "positional": "any",
+     "lead": "",
+     "options": {
+      "all": {
+       "flags": [
+        "--all",
+        "-a"
+       ],
+       "negation": "",
+       "help": "Show all images",
+       "type": "bool",
+       "default": false,
+       "choices": []
+      },
+      "digests": {
+       "flags": [
+        "--digests"
+       ],
+       "negation": "",
+       "help": "Show digests",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "filter": {
+       "flags": [
+        "--filter",
+        "-f"
+       ],
+       "negation": "",
+       "help": "Filter output based on conditions provided",
+       "type": "str",
+       "default": null,
+       "choices": []
+      },
+      "format": {
+       "flags": [
+        "--format"
+       ],
+       "negation": "",
+       "help": "Format output using a custom template: 'table': Print output in table format with column headers (default) 'table TEMPLATE': Print output in table format using the given Go template 'json': Print in JSON format 'TEMPLATE': Print output using the given Go template",
+       "type": "str",
+       "default": null,
+       "choices": []
+      },
+      "no_trunc": {
+       "flags": [
+        "--no-trunc"
+       ],
+       "negation": "",
+       "help": "Don't truncate output",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "quiet": {
+       "flags": [
+        "--quiet",
+        "-q"
+       ],
+       "negation": "",
+       "help": "Only show image IDs",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "tree": {
+       "flags": [
+        "--tree"
+       ],
+       "negation": "",
+       "help": "List multi-platform images as a tree (EXPERIMENTAL)",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      }
+     }
+    },
+    "logs": {
+     "help": "Fetch the logs of a container",
+     "wraps": false,
+     "positional": "required",
+     "lead": "container",
+     "options": {
+      "details": {
+       "flags": [
+        "--details"
+       ],
+       "negation": "",
+       "help": "Show extra details provided to logs",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "follow": {
+       "flags": [
+        "--follow",
+        "-f"
+       ],
+       "negation": "",
+       "help": "Follow log output",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "since": {
+       "flags": [
+        "--since"
+       ],
+       "negation": "",
+       "help": "Show logs since timestamp (e.g",
+       "type": "str",
+       "default": null,
+       "choices": []
+      },
+      "tail": {
+       "flags": [
+        "--tail",
+        "-n"
+       ],
+       "negation": "",
+       "help": "Number of lines to show from the end of the logs",
+       "type": "str",
+       "default": "all",
+       "choices": []
+      },
+      "timestamps": {
+       "flags": [
+        "--timestamps",
+        "-t"
+       ],
+       "negation": "",
+       "help": "Show timestamps",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "until": {
+       "flags": [
+        "--until"
+       ],
+       "negation": "",
+       "help": "Show logs before a timestamp (e.g",
+       "type": "str",
+       "default": null,
+       "choices": []
+      }
+     }
+    },
+    "ps": {
+     "help": "List containers",
+     "wraps": false,
+     "positional": "none",
+     "lead": "",
+     "options": {
+      "all": {
+       "flags": [
+        "--all",
+        "-a"
+       ],
+       "negation": "",
+       "help": "Show all containers",
+       "type": "bool",
+       "default": false,
+       "choices": []
+      },
+      "filter": {
+       "flags": [
+        "--filter",
+        "-f"
+       ],
+       "negation": "",
+       "help": "Filter output based on conditions provided",
+       "type": "str",
+       "default": null,
+       "choices": []
+      },
+      "format": {
+       "flags": [
+        "--format"
+       ],
+       "negation": "",
+       "help": "Format output using a custom template: 'table': Print output in table format with column headers (default) 'table TEMPLATE': Print output in table format using the given Go template 'json': Print in JSON format 'TEMPLATE': Print output using the given Go template",
+       "type": "str",
+       "default": null,
+       "choices": []
+      },
+      "last": {
+       "flags": [
+        "--last",
+        "-n"
+       ],
+       "negation": "",
+       "help": "Show n last created containers (includes all states)",
+       "type": "str",
+       "default": "-1",
+       "choices": []
+      },
+      "latest": {
+       "flags": [
+        "--latest",
+        "-l"
+       ],
+       "negation": "",
+       "help": "Show the latest created container (includes all states)",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "no_trunc": {
+       "flags": [
+        "--no-trunc"
+       ],
+       "negation": "",
+       "help": "Don't truncate output",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "quiet": {
+       "flags": [
+        "--quiet",
+        "-q"
+       ],
+       "negation": "",
+       "help": "Only display container IDs",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "size": {
+       "flags": [
+        "--size",
+        "-s"
+       ],
+       "negation": "",
+       "help": "Display total file sizes",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      }
+     }
+    },
+    "pull": {
+     "help": "Download an image from a registry",
+     "wraps": false,
+     "positional": "required",
+     "lead": "name",
+     "options": {
+      "all_tags": {
+       "flags": [
+        "--all-tags",
+        "-a"
+       ],
+       "negation": "",
+       "help": "Download all tagged images in the repository",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "platform": {
+       "flags": [
+        "--platform"
+       ],
+       "negation": "",
+       "help": "Set platform if server is multi-platform capable",
+       "type": "str",
+       "default": null,
+       "choices": []
+      },
+      "quiet": {
+       "flags": [
+        "--quiet",
+        "-q"
+       ],
+       "negation": "",
+       "help": "Suppress verbose output",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      }
+     }
+    },
+    "push": {
+     "help": "Upload an image to a registry",
+     "wraps": false,
+     "positional": "required",
+     "lead": "name",
+     "options": {
+      "all_tags": {
+       "flags": [
+        "--all-tags",
+        "-a"
+       ],
+       "negation": "",
+       "help": "Push all tags of an image to the repository",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "platform": {
+       "flags": [
+        "--platform"
+       ],
+       "negation": "",
+       "help": "Push a platform-specific manifest as a single-platform image to the registry",
+       "type": "str",
+       "default": null,
+       "choices": []
+      },
+      "quiet": {
+       "flags": [
+        "--quiet",
+        "-q"
+       ],
+       "negation": "",
+       "help": "Suppress verbose output",
+       "type": "bool",
+       "default": null,
        "choices": []
       }
      }
@@ -1494,1512 +3000,6 @@
        ],
        "negation": "",
        "help": "Working directory inside the container",
-       "type": "str",
-       "default": null,
-       "choices": []
-      }
-     }
-    },
-    "push": {
-     "help": "Upload an image to a registry",
-     "wraps": false,
-     "positional": "required",
-     "lead": "name",
-     "options": {
-      "all_tags": {
-       "flags": [
-        "--all-tags",
-        "-a"
-       ],
-       "negation": "",
-       "help": "Push all tags of an image to the repository",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "platform": {
-       "flags": [
-        "--platform"
-       ],
-       "negation": "",
-       "help": "Push a platform-specific manifest as a single-platform image to the registry",
-       "type": "str",
-       "default": null,
-       "choices": []
-      },
-      "quiet": {
-       "flags": [
-        "--quiet",
-        "-q"
-       ],
-       "negation": "",
-       "help": "Suppress verbose output",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      }
-     }
-    },
-    "pull": {
-     "help": "Download an image from a registry",
-     "wraps": false,
-     "positional": "required",
-     "lead": "name",
-     "options": {
-      "all_tags": {
-       "flags": [
-        "--all-tags",
-        "-a"
-       ],
-       "negation": "",
-       "help": "Download all tagged images in the repository",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "platform": {
-       "flags": [
-        "--platform"
-       ],
-       "negation": "",
-       "help": "Set platform if server is multi-platform capable",
-       "type": "str",
-       "default": null,
-       "choices": []
-      },
-      "quiet": {
-       "flags": [
-        "--quiet",
-        "-q"
-       ],
-       "negation": "",
-       "help": "Suppress verbose output",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      }
-     }
-    },
-    "images": {
-     "help": "List images",
-     "wraps": false,
-     "positional": "any",
-     "lead": "",
-     "options": {
-      "all": {
-       "flags": [
-        "--all",
-        "-a"
-       ],
-       "negation": "",
-       "help": "Show all images",
-       "type": "bool",
-       "default": false,
-       "choices": []
-      },
-      "digests": {
-       "flags": [
-        "--digests"
-       ],
-       "negation": "",
-       "help": "Show digests",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "filter": {
-       "flags": [
-        "--filter",
-        "-f"
-       ],
-       "negation": "",
-       "help": "Filter output based on conditions provided",
-       "type": "str",
-       "default": null,
-       "choices": []
-      },
-      "format": {
-       "flags": [
-        "--format"
-       ],
-       "negation": "",
-       "help": "Format output using a custom template: 'table': Print output in table format with column headers (default) 'table TEMPLATE': Print output in table format using the given Go template 'json': Print in JSON format 'TEMPLATE': Print output using the given Go template",
-       "type": "str",
-       "default": null,
-       "choices": []
-      },
-      "no_trunc": {
-       "flags": [
-        "--no-trunc"
-       ],
-       "negation": "",
-       "help": "Don't truncate output",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "quiet": {
-       "flags": [
-        "--quiet",
-        "-q"
-       ],
-       "negation": "",
-       "help": "Only show image IDs",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "tree": {
-       "flags": [
-        "--tree"
-       ],
-       "negation": "",
-       "help": "List multi-platform images as a tree (EXPERIMENTAL)",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      }
-     }
-    },
-    "ps": {
-     "help": "List containers",
-     "wraps": false,
-     "positional": "none",
-     "lead": "",
-     "options": {
-      "all": {
-       "flags": [
-        "--all",
-        "-a"
-       ],
-       "negation": "",
-       "help": "Show all containers",
-       "type": "bool",
-       "default": false,
-       "choices": []
-      },
-      "filter": {
-       "flags": [
-        "--filter",
-        "-f"
-       ],
-       "negation": "",
-       "help": "Filter output based on conditions provided",
-       "type": "str",
-       "default": null,
-       "choices": []
-      },
-      "format": {
-       "flags": [
-        "--format"
-       ],
-       "negation": "",
-       "help": "Format output using a custom template: 'table': Print output in table format with column headers (default) 'table TEMPLATE': Print output in table format using the given Go template 'json': Print in JSON format 'TEMPLATE': Print output using the given Go template",
-       "type": "str",
-       "default": null,
-       "choices": []
-      },
-      "last": {
-       "flags": [
-        "--last",
-        "-n"
-       ],
-       "negation": "",
-       "help": "Show n last created containers (includes all states)",
-       "type": "str",
-       "default": "-1",
-       "choices": []
-      },
-      "latest": {
-       "flags": [
-        "--latest",
-        "-l"
-       ],
-       "negation": "",
-       "help": "Show the latest created container (includes all states)",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "no_trunc": {
-       "flags": [
-        "--no-trunc"
-       ],
-       "negation": "",
-       "help": "Don't truncate output",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "quiet": {
-       "flags": [
-        "--quiet",
-        "-q"
-       ],
-       "negation": "",
-       "help": "Only display container IDs",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "size": {
-       "flags": [
-        "--size",
-        "-s"
-       ],
-       "negation": "",
-       "help": "Display total file sizes",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      }
-     }
-    },
-    "exec": {
-     "help": "Execute a command in a running container",
-     "wraps": true,
-     "positional": "required",
-     "lead": "container",
-     "options": {
-      "detach": {
-       "flags": [
-        "--detach",
-        "-d"
-       ],
-       "negation": "",
-       "help": "Detached mode: run command in the background",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "detach_keys": {
-       "flags": [
-        "--detach-keys"
-       ],
-       "negation": "",
-       "help": "Override the key sequence for detaching a container",
-       "type": "str",
-       "default": null,
-       "choices": []
-      },
-      "env": {
-       "flags": [
-        "--env",
-        "-e"
-       ],
-       "negation": "",
-       "help": "Set environment variables",
-       "type": "str",
-       "default": null,
-       "choices": []
-      },
-      "env_file": {
-       "flags": [
-        "--env-file"
-       ],
-       "negation": "",
-       "help": "Read in a file of environment variables",
-       "type": "str",
-       "default": null,
-       "choices": []
-      },
-      "interactive": {
-       "flags": [
-        "--interactive",
-        "-i"
-       ],
-       "negation": "",
-       "help": "Keep STDIN open even if not attached",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "privileged": {
-       "flags": [
-        "--privileged"
-       ],
-       "negation": "",
-       "help": "Give extended privileges to the command",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "tty": {
-       "flags": [
-        "--tty",
-        "-t"
-       ],
-       "negation": "",
-       "help": "Allocate a pseudo-TTY",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "user": {
-       "flags": [
-        "--user",
-        "-u"
-       ],
-       "negation": "",
-       "help": "Username or UID (format: \"<name|uid>[:<group|gid>]\")",
-       "type": "str",
-       "default": null,
-       "choices": []
-      },
-      "workdir": {
-       "flags": [
-        "--workdir",
-        "-w"
-       ],
-       "negation": "",
-       "help": "Working directory inside the container",
-       "type": "str",
-       "default": null,
-       "choices": []
-      }
-     }
-    },
-    "logs": {
-     "help": "Fetch the logs of a container",
-     "wraps": false,
-     "positional": "required",
-     "lead": "container",
-     "options": {
-      "details": {
-       "flags": [
-        "--details"
-       ],
-       "negation": "",
-       "help": "Show extra details provided to logs",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "follow": {
-       "flags": [
-        "--follow",
-        "-f"
-       ],
-       "negation": "",
-       "help": "Follow log output",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "since": {
-       "flags": [
-        "--since"
-       ],
-       "negation": "",
-       "help": "Show logs since timestamp (e.g",
-       "type": "str",
-       "default": null,
-       "choices": []
-      },
-      "tail": {
-       "flags": [
-        "--tail",
-        "-n"
-       ],
-       "negation": "",
-       "help": "Number of lines to show from the end of the logs",
-       "type": "str",
-       "default": "all",
-       "choices": []
-      },
-      "timestamps": {
-       "flags": [
-        "--timestamps",
-        "-t"
-       ],
-       "negation": "",
-       "help": "Show timestamps",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "until": {
-       "flags": [
-        "--until"
-       ],
-       "negation": "",
-       "help": "Show logs before a timestamp (e.g",
-       "type": "str",
-       "default": null,
-       "choices": []
-      }
-     }
-    },
-    "compose.up": {
-     "help": "Create and start containers",
-     "wraps": false,
-     "positional": "any",
-     "lead": "",
-     "options": {
-      "abort_on_container_exit": {
-       "flags": [
-        "--abort-on-container-exit"
-       ],
-       "negation": "",
-       "help": "Stops all containers if any container was stopped",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "abort_on_container_failure": {
-       "flags": [
-        "--abort-on-container-failure"
-       ],
-       "negation": "",
-       "help": "Stops all containers if any container exited with failure",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "always_recreate_deps": {
-       "flags": [
-        "--always-recreate-deps"
-       ],
-       "negation": "",
-       "help": "Recreate dependent containers",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "attach": {
-       "flags": [
-        "--attach"
-       ],
-       "negation": "",
-       "help": "Restrict attaching to the specified services",
-       "type": "list[str]",
-       "default": null,
-       "choices": []
-      },
-      "attach_dependencies": {
-       "flags": [
-        "--attach-dependencies"
-       ],
-       "negation": "",
-       "help": "Automatically attach to log output of dependent services",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "build": {
-       "flags": [
-        "--build"
-       ],
-       "negation": "--no-build",
-       "help": "Build images before starting containers",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "detach": {
-       "flags": [
-        "--detach",
-        "-d"
-       ],
-       "negation": "",
-       "help": "Detached mode: Run containers in the background",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "dry_run": {
-       "flags": [
-        "--dry-run"
-       ],
-       "negation": "",
-       "help": "Execute command in dry run mode",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "exit_code_from": {
-       "flags": [
-        "--exit-code-from"
-       ],
-       "negation": "",
-       "help": "Return the exit code of the selected service container",
-       "type": "str",
-       "default": null,
-       "choices": []
-      },
-      "force_recreate": {
-       "flags": [
-        "--force-recreate"
-       ],
-       "negation": "",
-       "help": "Recreate containers even if their configuration and image haven't changed",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "menu": {
-       "flags": [
-        "--menu"
-       ],
-       "negation": "",
-       "help": "Enable interactive shortcuts when running attached",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "no_attach": {
-       "flags": [
-        "--no-attach"
-       ],
-       "negation": "",
-       "help": "Do not attach (stream logs) to the specified services",
-       "type": "list[str]",
-       "default": null,
-       "choices": []
-      },
-      "no_color": {
-       "flags": [
-        "--no-color"
-       ],
-       "negation": "",
-       "help": "Produce monochrome output",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "no_deps": {
-       "flags": [
-        "--no-deps"
-       ],
-       "negation": "",
-       "help": "Don't start linked services",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "no_log_prefix": {
-       "flags": [
-        "--no-log-prefix"
-       ],
-       "negation": "",
-       "help": "Don't print prefix in logs",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "no_recreate": {
-       "flags": [
-        "--no-recreate"
-       ],
-       "negation": "",
-       "help": "If containers already exist, don't recreate them",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "no_start": {
-       "flags": [
-        "--no-start"
-       ],
-       "negation": "",
-       "help": "Don't start the services after creating them",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "pull": {
-       "flags": [
-        "--pull"
-       ],
-       "negation": "",
-       "help": "Pull image before running (\"always\"|\"missing\"|\"never\")",
-       "type": "str",
-       "default": "policy",
-       "choices": []
-      },
-      "quiet_build": {
-       "flags": [
-        "--quiet-build"
-       ],
-       "negation": "",
-       "help": "Suppress the build output",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "quiet_pull": {
-       "flags": [
-        "--quiet-pull"
-       ],
-       "negation": "",
-       "help": "Pull without printing progress information",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "remove_orphans": {
-       "flags": [
-        "--remove-orphans"
-       ],
-       "negation": "",
-       "help": "Remove containers for services not defined in the Compose file",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "renew_anon_volumes": {
-       "flags": [
-        "--renew-anon-volumes",
-        "-V"
-       ],
-       "negation": "",
-       "help": "Recreate anonymous volumes instead of retrieving data from the previous containers",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "scale": {
-       "flags": [
-        "--scale"
-       ],
-       "negation": "",
-       "help": "Scale SERVICE to NUM instances",
-       "type": "str",
-       "default": null,
-       "choices": []
-      },
-      "timeout": {
-       "flags": [
-        "--timeout",
-        "-t"
-       ],
-       "negation": "",
-       "help": "Use this timeout in seconds for container shutdown when attached or when containers are already running",
-       "type": "str",
-       "default": null,
-       "choices": []
-      },
-      "timestamps": {
-       "flags": [
-        "--timestamps"
-       ],
-       "negation": "",
-       "help": "Show timestamps",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "wait": {
-       "flags": [
-        "--wait"
-       ],
-       "negation": "",
-       "help": "Wait for services to be running|healthy",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "wait_timeout": {
-       "flags": [
-        "--wait-timeout"
-       ],
-       "negation": "",
-       "help": "Maximum duration in seconds to wait for the project to be running|healthy",
-       "type": "str",
-       "default": null,
-       "choices": []
-      },
-      "watch": {
-       "flags": [
-        "--watch",
-        "-w"
-       ],
-       "negation": "",
-       "help": "Watch source code and rebuild/refresh containers when files are updated",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "yes": {
-       "flags": [
-        "--yes",
-        "-y"
-       ],
-       "negation": "",
-       "help": "Assume \"yes\" as answer to all prompts and run non-interactively",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      }
-     }
-    },
-    "compose.down": {
-     "help": "Stop and remove containers, networks",
-     "wraps": false,
-     "positional": "any",
-     "lead": "",
-     "options": {
-      "dry_run": {
-       "flags": [
-        "--dry-run"
-       ],
-       "negation": "",
-       "help": "Execute command in dry run mode",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "remove_orphans": {
-       "flags": [
-        "--remove-orphans"
-       ],
-       "negation": "",
-       "help": "Remove containers for services not defined in the Compose file",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "rmi": {
-       "flags": [
-        "--rmi"
-       ],
-       "negation": "",
-       "help": "Remove images used by services",
-       "type": "str",
-       "default": null,
-       "choices": []
-      },
-      "timeout": {
-       "flags": [
-        "--timeout",
-        "-t"
-       ],
-       "negation": "",
-       "help": "Specify a shutdown timeout in seconds",
-       "type": "str",
-       "default": null,
-       "choices": []
-      },
-      "volumes": {
-       "flags": [
-        "--volumes",
-        "-v"
-       ],
-       "negation": "",
-       "help": "Remove named volumes declared in the \"volumes\" section of the Compose file and anonymous volumes attached to containers",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      }
-     }
-    },
-    "compose.build": {
-     "help": "Build or rebuild services",
-     "wraps": false,
-     "positional": "any",
-     "lead": "",
-     "options": {
-      "build_arg": {
-       "flags": [
-        "--build-arg"
-       ],
-       "negation": "",
-       "help": "Set build-time variables for services",
-       "type": "list[str]",
-       "default": null,
-       "choices": []
-      },
-      "builder": {
-       "flags": [
-        "--builder"
-       ],
-       "negation": "",
-       "help": "Set builder to use",
-       "type": "str",
-       "default": null,
-       "choices": []
-      },
-      "check": {
-       "flags": [
-        "--check"
-       ],
-       "negation": "",
-       "help": "Check build configuration",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "dry_run": {
-       "flags": [
-        "--dry-run"
-       ],
-       "negation": "",
-       "help": "Execute command in dry run mode",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "memory": {
-       "flags": [
-        "--memory",
-        "-m"
-       ],
-       "negation": "",
-       "help": "Set memory limit for the build container",
-       "type": "str",
-       "default": null,
-       "choices": []
-      },
-      "no_cache": {
-       "flags": [
-        "--no-cache"
-       ],
-       "negation": "",
-       "help": "Do not use cache when building the image",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "print": {
-       "flags": [
-        "--print"
-       ],
-       "negation": "",
-       "help": "Print equivalent bake file",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "provenance": {
-       "flags": [
-        "--provenance"
-       ],
-       "negation": "",
-       "help": "Add a provenance attestation",
-       "type": "str",
-       "default": null,
-       "choices": []
-      },
-      "pull": {
-       "flags": [
-        "--pull"
-       ],
-       "negation": "",
-       "help": "Always attempt to pull a newer version of the image",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "push": {
-       "flags": [
-        "--push"
-       ],
-       "negation": "",
-       "help": "Push service images",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "quiet": {
-       "flags": [
-        "--quiet",
-        "-q"
-       ],
-       "negation": "",
-       "help": "Suppress the build output",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "sbom": {
-       "flags": [
-        "--sbom"
-       ],
-       "negation": "",
-       "help": "Add a SBOM attestation",
-       "type": "str",
-       "default": null,
-       "choices": []
-      },
-      "ssh": {
-       "flags": [
-        "--ssh"
-       ],
-       "negation": "",
-       "help": "Set SSH authentications used when building service images",
-       "type": "str",
-       "default": null,
-       "choices": []
-      },
-      "with_dependencies": {
-       "flags": [
-        "--with-dependencies"
-       ],
-       "negation": "",
-       "help": "Also build dependencies (transitively)",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      }
-     }
-    },
-    "compose.logs": {
-     "help": "View output from containers",
-     "wraps": false,
-     "positional": "any",
-     "lead": "",
-     "options": {
-      "dry_run": {
-       "flags": [
-        "--dry-run"
-       ],
-       "negation": "",
-       "help": "Execute command in dry run mode",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "follow": {
-       "flags": [
-        "--follow",
-        "-f"
-       ],
-       "negation": "",
-       "help": "Follow log output",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "index": {
-       "flags": [
-        "--index"
-       ],
-       "negation": "",
-       "help": "index of the container if service has multiple replicas",
-       "type": "str",
-       "default": null,
-       "choices": []
-      },
-      "no_color": {
-       "flags": [
-        "--no-color"
-       ],
-       "negation": "",
-       "help": "Produce monochrome output",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "no_log_prefix": {
-       "flags": [
-        "--no-log-prefix"
-       ],
-       "negation": "",
-       "help": "Don't print prefix in logs",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "since": {
-       "flags": [
-        "--since"
-       ],
-       "negation": "",
-       "help": "Show logs since timestamp (e.g",
-       "type": "str",
-       "default": null,
-       "choices": []
-      },
-      "tail": {
-       "flags": [
-        "--tail",
-        "-n"
-       ],
-       "negation": "",
-       "help": "Number of lines to show from the end of the logs for each container",
-       "type": "str",
-       "default": "all",
-       "choices": []
-      },
-      "timestamps": {
-       "flags": [
-        "--timestamps",
-        "-t"
-       ],
-       "negation": "",
-       "help": "Show timestamps",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "until": {
-       "flags": [
-        "--until"
-       ],
-       "negation": "",
-       "help": "Show logs before a timestamp (e.g",
-       "type": "str",
-       "default": null,
-       "choices": []
-      }
-     }
-    },
-    "compose.ps": {
-     "help": "List containers",
-     "wraps": false,
-     "positional": "any",
-     "lead": "",
-     "options": {
-      "all": {
-       "flags": [
-        "--all",
-        "-a"
-       ],
-       "negation": "",
-       "help": "Show all stopped containers (including those created by the run command)",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "dry_run": {
-       "flags": [
-        "--dry-run"
-       ],
-       "negation": "",
-       "help": "Execute command in dry run mode",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "filter": {
-       "flags": [
-        "--filter"
-       ],
-       "negation": "",
-       "help": "Filter services by a property (supported filters: status)",
-       "type": "str",
-       "default": null,
-       "choices": []
-      },
-      "format": {
-       "flags": [
-        "--format"
-       ],
-       "negation": "",
-       "help": "Format output using a custom template: 'table': Print output in table format with column headers (default) 'table TEMPLATE': Print output in table format using the given Go template 'json': Print in JSON format 'TEMPLATE': Print output using the given Go template",
-       "type": "str",
-       "default": "table",
-       "choices": []
-      },
-      "no_trunc": {
-       "flags": [
-        "--no-trunc"
-       ],
-       "negation": "",
-       "help": "Don't truncate output",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "orphans": {
-       "flags": [
-        "--orphans"
-       ],
-       "negation": "",
-       "help": "Include orphaned services (not declared by project)",
-       "type": "bool",
-       "default": true,
-       "choices": []
-      },
-      "quiet": {
-       "flags": [
-        "--quiet",
-        "-q"
-       ],
-       "negation": "",
-       "help": "Only display IDs",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "services": {
-       "flags": [
-        "--services"
-       ],
-       "negation": "",
-       "help": "Display services",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "status": {
-       "flags": [
-        "--status"
-       ],
-       "negation": "",
-       "help": "Filter services by status",
-       "type": "list[str]",
-       "default": null,
-       "choices": []
-      }
-     }
-    },
-    "compose.run": {
-     "help": "Run a one-off command on a service",
-     "wraps": true,
-     "positional": "required",
-     "lead": "service",
-     "options": {
-      "build": {
-       "flags": [
-        "--build"
-       ],
-       "negation": "",
-       "help": "Build image before starting container",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "cap_add": {
-       "flags": [
-        "--cap-add"
-       ],
-       "negation": "",
-       "help": "Add Linux capabilities",
-       "type": "str",
-       "default": null,
-       "choices": []
-      },
-      "cap_drop": {
-       "flags": [
-        "--cap-drop"
-       ],
-       "negation": "",
-       "help": "Drop Linux capabilities",
-       "type": "str",
-       "default": null,
-       "choices": []
-      },
-      "detach": {
-       "flags": [
-        "--detach",
-        "-d"
-       ],
-       "negation": "",
-       "help": "Run container in background and print container ID",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "dry_run": {
-       "flags": [
-        "--dry-run"
-       ],
-       "negation": "",
-       "help": "Execute command in dry run mode",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "entrypoint": {
-       "flags": [
-        "--entrypoint"
-       ],
-       "negation": "",
-       "help": "Override the entrypoint of the image",
-       "type": "str",
-       "default": null,
-       "choices": []
-      },
-      "env": {
-       "flags": [
-        "--env",
-        "-e"
-       ],
-       "negation": "",
-       "help": "Set environment variables",
-       "type": "list[str]",
-       "default": null,
-       "choices": []
-      },
-      "env_from_file": {
-       "flags": [
-        "--env-from-file"
-       ],
-       "negation": "",
-       "help": "Set environment variables from file",
-       "type": "list[str]",
-       "default": null,
-       "choices": []
-      },
-      "interactive": {
-       "flags": [
-        "--interactive",
-        "-i"
-       ],
-       "negation": "",
-       "help": "Keep STDIN open even if not attached",
-       "type": "bool",
-       "default": true,
-       "choices": []
-      },
-      "label": {
-       "flags": [
-        "--label",
-        "-l"
-       ],
-       "negation": "",
-       "help": "Add or override a label",
-       "type": "list[str]",
-       "default": null,
-       "choices": []
-      },
-      "name": {
-       "flags": [
-        "--name"
-       ],
-       "negation": "",
-       "help": "Assign a name to the container",
-       "type": "str",
-       "default": null,
-       "choices": []
-      },
-      "no_deps": {
-       "flags": [
-        "--no-deps"
-       ],
-       "negation": "",
-       "help": "Don't start linked services",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "no_tty": {
-       "flags": [
-        "--no-tty",
-        "-T"
-       ],
-       "negation": "",
-       "help": "Disable pseudo-TTY allocation",
-       "type": "bool",
-       "default": false,
-       "choices": []
-      },
-      "publish": {
-       "flags": [
-        "--publish",
-        "-p"
-       ],
-       "negation": "",
-       "help": "Publish a container's port(s) to the host",
-       "type": "list[str]",
-       "default": null,
-       "choices": []
-      },
-      "pull": {
-       "flags": [
-        "--pull"
-       ],
-       "negation": "",
-       "help": "Pull image before running (\"always\"|\"missing\"|\"never\")",
-       "type": "str",
-       "default": "policy",
-       "choices": []
-      },
-      "quiet": {
-       "flags": [
-        "--quiet",
-        "-q"
-       ],
-       "negation": "",
-       "help": "Don't print anything to STDOUT",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "quiet_build": {
-       "flags": [
-        "--quiet-build"
-       ],
-       "negation": "",
-       "help": "Suppress progress output from the build process",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "quiet_pull": {
-       "flags": [
-        "--quiet-pull"
-       ],
-       "negation": "",
-       "help": "Pull without printing progress information",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "remove_orphans": {
-       "flags": [
-        "--remove-orphans"
-       ],
-       "negation": "",
-       "help": "Remove containers for services not defined in the Compose file",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "rm": {
-       "flags": [
-        "--rm"
-       ],
-       "negation": "",
-       "help": "Automatically remove the container when it exits",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "service_ports": {
-       "flags": [
-        "--service-ports",
-        "-P"
-       ],
-       "negation": "",
-       "help": "Run command with all service's ports enabled and mapped to the host",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "use_aliases": {
-       "flags": [
-        "--use-aliases"
-       ],
-       "negation": "",
-       "help": "Use the service's network useAliases in the network(s) the container connects to",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "user": {
-       "flags": [
-        "--user",
-        "-u"
-       ],
-       "negation": "",
-       "help": "Run as specified username or uid",
-       "type": "str",
-       "default": null,
-       "choices": []
-      },
-      "volume": {
-       "flags": [
-        "--volume",
-        "-v"
-       ],
-       "negation": "",
-       "help": "Bind mount a volume",
-       "type": "list[str]",
-       "default": null,
-       "choices": []
-      },
-      "workdir": {
-       "flags": [
-        "--workdir",
-        "-w"
-       ],
-       "negation": "",
-       "help": "Working directory inside the container",
-       "type": "str",
-       "default": null,
-       "choices": []
-      }
-     }
-    },
-    "compose.exec": {
-     "help": "Execute a command in a running container",
-     "wraps": true,
-     "positional": "required",
-     "lead": "service",
-     "options": {
-      "detach": {
-       "flags": [
-        "--detach",
-        "-d"
-       ],
-       "negation": "",
-       "help": "Detached mode: Run command in the background",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "dry_run": {
-       "flags": [
-        "--dry-run"
-       ],
-       "negation": "",
-       "help": "Execute command in dry run mode",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "env": {
-       "flags": [
-        "--env",
-        "-e"
-       ],
-       "negation": "",
-       "help": "Set environment variables",
-       "type": "list[str]",
-       "default": null,
-       "choices": []
-      },
-      "index": {
-       "flags": [
-        "--index"
-       ],
-       "negation": "",
-       "help": "Index of the container if service has multiple replicas",
-       "type": "str",
-       "default": null,
-       "choices": []
-      },
-      "no_tty": {
-       "flags": [
-        "--no-tty",
-        "-T"
-       ],
-       "negation": "",
-       "help": "Disable pseudo-TTY allocation",
-       "type": "bool",
-       "default": true,
-       "choices": []
-      },
-      "privileged": {
-       "flags": [
-        "--privileged"
-       ],
-       "negation": "",
-       "help": "Give extended privileges to the process",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "user": {
-       "flags": [
-        "--user",
-        "-u"
-       ],
-       "negation": "",
-       "help": "Run the command as this user",
-       "type": "str",
-       "default": null,
-       "choices": []
-      },
-      "workdir": {
-       "flags": [
-        "--workdir",
-        "-w"
-       ],
-       "negation": "",
-       "help": "Path to workdir directory for this command",
        "type": "str",
        "default": null,
        "choices": []

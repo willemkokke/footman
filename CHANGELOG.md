@@ -7,6 +7,30 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- **docker's own release index is a tier.** Docker publishes a static build
+  of every release, per platform and architecture, in a plain directory —
+  so it is fetched like any other tool rather than read from whatever the
+  machine happens to have installed. Its option history could hold exactly
+  one version before this; it can now be walked back as far as the index
+  goes.
+
+### Fixed
+
+- **A tool's defaults no longer carry the home directory of the machine
+  that read them.** docker reports its config path expanded, so
+  `/Users/<name>/.docker` was recorded as docker's documented default —
+  in the option history, and in the `docker.pyi` that ships. Readings are
+  taken with `~` in place of this machine's home, which is both what the
+  tool means and the one spelling every platform agrees on: without it
+  each leg of the cross-platform matrix would overwrite the last and every
+  weekly run would report a change nobody made.
+- **An archive whose top directory is named after the tool now extracts.**
+  docker ships `docker/docker`; matching a member by name alone found the
+  directory first, which failed the tar path outright and wrote a
+  zero-byte binary from a zip.
+
 ## [0.26.0] — 2026-07-28
 
 ### Added
