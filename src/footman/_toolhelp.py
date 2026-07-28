@@ -719,7 +719,9 @@ def run_help(
 # launched from. CREATE_NO_WINDOW gives the read a fresh hidden console
 # with default (VT-off) modes instead: nothing worth interrogating, while
 # console-hosted runtimes still get the console they need — fully detached,
-# pwsh dies at start-up and git-bash goes mute.
+# pwsh dies at start-up and git-bash goes mute. The same choice footman's
+# own detached children make (`_complete`, `_app`), for the sibling
+# reason: console-less, Windows Terminal hands each spawn a visible window.
 DETACHED = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
 
 # Man renders bold/underline as `c\x08c` / `_\x08c` overstrike; dropping the
