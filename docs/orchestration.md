@@ -339,6 +339,30 @@ with parallel() as p:
 The one other difference from a plain call: a queued failure surfaces when
 the block ends, not at the line that queued it.
 
+### Making a task while the run is going
+
+`@task` is ordinary Python, so it also works *inside* a body — the decorator
+runs when the body does, and what it makes is a real task: its own row,
+sharing, hooks, and a place in a `parallel()` block like any other call. It
+lives for the run that made it and is swept when the run ends, because the
+manifest was written before any of it happened and a task no listing can
+show has no business outliving its run.
+
+That makes `task(fn)` the general way to run a plain callable *as a task*,
+in a block or out of one:
+
+<!-- example: fragment -->
+```python
+with parallel() as p:
+    build("web")
+    task(tidy_up)("stale")     # a plain function, run as a real task
+```
+
+Names are the one wrinkle. A duplicate written in a tasks file is a mistake
+and stays a taught error; a duplicate made mid-run is not, so it is
+numbered — `rmtree` then `rmtree-2` — which is what lets a `lambda` in a
+loop, or the same helper used twice, each be their own piece of work.
+
 Unlike `pre`/`post`, a `parallel()` fan-out is **in-body** — footman can't see
 it without running the task. That is the trade: declared deps are static and
 show up in `--dry-run`; an in-body fan-out is dynamic — its shape can depend on

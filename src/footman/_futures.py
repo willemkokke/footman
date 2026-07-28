@@ -71,6 +71,9 @@ class _Session:
         self.cells: dict[Any, _Cell] = {}
         self.waits: dict[int, Any] = {}  # thread -> the key it is blocked on
         self.results: list[TaskResult] = []
+        # Tasks defined *while this run was in flight* — `(group, name, what
+        # was there before)` — put back the way they were when it ends.
+        self.ephemeral: list[tuple[Any, str, Any]] = []
 
 
 _active: _Session | None = None
@@ -92,7 +95,29 @@ def session() -> Iterator[_Session]:
     try:
         yield _active
     finally:
-        _active = None
+        run, _active = _active, None
+        _sweep_ephemeral(run)
+
+
+def active_session() -> _Session | None:
+    """The run's cell registry, or `None` outside a run."""
+    return _active
+
+
+def _sweep_ephemeral(run: _Session) -> None:
+    """Undo the registrations a run made in its own course.
+
+    A `@task` written inside a task body is ordinary Python and makes a real,
+    callable task — but the manifest was written before the run started, so
+    such a task is invisible to every listing and would go on shadowing the
+    tree for the rest of the process. It lives for the run that made it, and
+    the tree it was grafted onto goes back to what it was.
+    """
+    for group, name, previous in reversed(run.ephemeral):
+        if previous is None:
+            group.tasks.pop(name, None)
+        else:
+            group.tasks[name] = previous
 
 
 def collected() -> list[TaskResult]:
@@ -581,7 +606,7 @@ def _run_now(
     asked here, at the moment of execution (a request the run has already
     answered never re-asks).
     """
-    from footman import context, executor, schedule
+    from footman import _globals, context, executor, schedule
 
     parent = context.current()
     label = _label(task)
@@ -623,8 +648,22 @@ def _run_now(
     if status is not None:
         status.unit_finished(label, result.ok)
     _record(result)
-    if parent.sink is not None and (text := buf.getvalue()):
-        parent.sink.write(text)  # the callee's output belongs to the run, not /dev/null
+    if text := buf.getvalue():
+        # The callee ran with its own buffer so its output stays one block.
+        # Where that block goes depends on the caller: a capturing parent
+        # (`--json`, a document run, a `parallel()` child) owns it and takes
+        # it; an uncaptured parent is streaming to the terminal, so it goes
+        # there — the same handoff `parallel()` makes for its children,
+        # status line warned first because this write bypasses the routers.
+        if parent.sink is not None:
+            parent.sink.write(text)
+        else:
+            dest = context.real_stdout()
+            with _globals.console_gate():
+                if status is not None:
+                    status.notify(text)
+                dest.write(text)
+                dest.flush()
     if result.error is not None:
         # A failure raises in the caller, exactly as a direct call always did.
         raise result.error

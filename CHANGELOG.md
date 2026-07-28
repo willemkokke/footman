@@ -19,6 +19,14 @@ versions may include breaking changes.
   is still the list of exit codes `parallel()` has always returned.
   `p.also(fn, *args)` brings a straggler that is not a task — a lambda, a
   plain function — into the same fan-out.
+- **A task can be defined while a run is in flight.** `@task` inside a body
+  is ordinary Python, and what it makes is a real task — own row, sharing,
+  hooks, a place in a `parallel()` block. It lives for the run that made it
+  and is swept when the run ends, so a task no listing can show never
+  outlives its run; `task(fn)(args)` is the general way to run a plain
+  callable as a task. A duplicate name in a tasks file stays a taught error;
+  one made mid-run is numbered (`rmtree`, `rmtree-2`), so a `lambda` in a
+  loop and a helper used twice are each their own work.
 
 - **The docs have a Playground.** footman runs in the browser: the editor
   is a `tasks.py`, the prompt is `fm`, and the run goes through the same
@@ -168,6 +176,14 @@ versions may include breaking changes.
 - **ty 0.0.64** adds `--exclude-scripts`.
 
 ### Fixed
+
+- **A body call's output is no longer dropped in an uncaptured run.** A task
+  reached by `build()` runs with its own buffer so its output stays one
+  block, but that block was only ever handed to a *capturing* parent — under
+  `--json`, a document run, a `parallel()` child. In an ordinary terminal run
+  the parent streams, so there was nothing to hand it to and the callee's
+  output went nowhere. It now goes to the terminal, the same handoff
+  `parallel()` makes for its own children.
 
 - **`footman.docstrings` and `footman.markdown` resolve for a type-checker.**
   Both are lazily served by `__getattr__` and both were named in `__all__`,
