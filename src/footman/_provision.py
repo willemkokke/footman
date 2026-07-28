@@ -36,6 +36,7 @@ from __future__ import annotations
 import json
 import os
 import platform
+import re
 import shutil
 import subprocess
 import tarfile
@@ -336,11 +337,19 @@ def _pick_asset(assets: list[tuple[str, str]]) -> tuple[str, str]:
     """The one asset for this OS and CPU, archives before bare binaries."""
     os_aliases, arch_aliases = _platform_tokens()
 
+    def hit(alias: str, low: str) -> bool:
+        # At a word start only: `win` must find `windows` and `win64` but
+        # never the tail of `darwin` — which is also the *shorter* name, so
+        # the length tiebreak below would prefer the wrong OS forever.
+        return re.search(rf"(?<![a-z]){re.escape(alias)}", low) is not None
+
     def matches(name: str) -> bool:
         low = name.lower()
         if low.endswith(_SIDECARS):
             return False
-        return any(o in low for o in os_aliases) and any(a in low for a in arch_aliases)
+        return any(hit(o, low) for o in os_aliases) and any(
+            hit(a, low) for a in arch_aliases
+        )
 
     candidates = [(name, url) for name, url in assets if matches(name)]
     if not candidates:
@@ -416,16 +425,22 @@ def _download(url: str, prefix: Path) -> Path:
     return dest
 
 
-def _extract_binary(archive: Path, tool: str, into: Path) -> Path:
+def _extract_binary(
+    archive: Path, tool: str, into: Path, *, windows: bool | None = None
+) -> Path:
     """Unpack *archive* and place its `tool` binary in *into*, executable.
 
     Release archives nest the binary under a versioned directory, so the
     whole tree is searched for a file named `tool` (or `tool.exe`); a bare
-    downloaded binary is taken as-is.
+    downloaded binary is taken as-is. On Windows the placed file is named
+    `tool.exe` whatever the archive called it — `shutil.which` resolves
+    through `PATHEXT`, and an extensionless PE is invisible to it.
     """
+    if windows is None:
+        windows = os.name == "nt"
     wanted = {tool, f"{tool}.exe"}
     into.mkdir(parents=True, exist_ok=True)
-    dest = into / tool
+    dest = into / (f"{tool}.exe" if windows else tool)
     if archive.name.lower().endswith((".tar.gz", ".tgz", ".tar.xz", ".tar.bz2")):
         with tarfile.open(archive) as tar:
             member = next(

@@ -929,12 +929,16 @@ def test_detect_shell_windows_reads_the_powershell_tell(monkeypatch):
     POSIX runner, and a Windows-only test would leave it dark everywhere
     else."""
     monkeypatch.setattr(_shellcomp.os, "name", "nt")
+    # The suite itself may be running inside git-bash (an MSYS terminal, an
+    # agent hook) — its exported MSYSTEM would win over the tell under test.
+    monkeypatch.delenv("MSYSTEM", raising=False)
     monkeypatch.setenv("PSModulePath", r"C:\Program Files\PowerShell\Modules")
     assert _shellcomp.detect_shell() == "pwsh"
 
 
 def test_detect_shell_windows_without_the_tell_gives_up(monkeypatch):
     monkeypatch.setattr(_shellcomp.os, "name", "nt")
+    monkeypatch.delenv("MSYSTEM", raising=False)
     monkeypatch.delenv("PSModulePath", raising=False)
     assert _shellcomp.detect_shell() is None
 
@@ -985,6 +989,10 @@ def test_detection_from_inside_every_real_shell(
         py = Path(py).as_posix()
     command = template.format(py=py, code=_PROBE)
     env = dict(os.environ)
+    # An inherited MSYSTEM (the suite running inside git-bash or an agent
+    # hook) would make every probe answer "bash"; only the git-bash case
+    # below gets it back, deliberately.
+    env.pop("MSYSTEM", None)
     if os.name == "nt" and exe == "bash":
         # A git-bash *session* exports MSYSTEM — that is the launcher's
         # doing, not bash's, so a bare `bash.exe -c` spawned from a Windows
