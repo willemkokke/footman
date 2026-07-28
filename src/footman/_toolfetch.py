@@ -31,6 +31,58 @@ from footman._drivers import Driver
 PYPI = "https://pypi.org/pypi/{package}/json"
 TIMEOUT = 30
 
+PYTHON_RELEASES = (
+    ("3.14", "2025-10-07"),
+    ("3.13", "2024-10-07"),
+    ("3.12", "2023-10-02"),
+    ("3.11", "2022-10-24"),
+    ("3.10", "2021-10-04"),
+)
+"""When each CPython arrived, newest first — the eras a release is read in.
+
+A release has to be read in roughly the world it shipped into or it cannot
+be read at all: twine 5.1.0 indexes `metadata["home-page"]` at import, a key
+`importlib_metadata` 8 stopped returning and started raising `KeyError` on,
+so under today's resolution it dies before argparse runs. `--exclude-newer`
+at the release's own date fixes that, and only resolves on an interpreter
+old enough to have wheels from that date — a 2022 `cryptography` has no
+cp314 build and will not compile against one.
+
+So the interpreter is the newest CPython that existed when the release
+shipped, not one fixed version. That is what makes the reading *of its
+era* rather than merely old: a 2026 release is read on 3.14 exactly as it
+is today, and a 2022 release on 3.11, because that is what anyone running
+it then would have seen.
+
+It also settles what a fixed floor could not. Python 3.13 taught argparse
+to print every alias, so pytest reports `--junitxml` alongside
+`--junit-xml` there and only `--junit-xml` below it. Reading everything on
+one old interpreter would have quietly dropped those aliases from releases
+that really do show them; reading each release in its own era records the
+aliases exactly where they appeared, and the surface corrects itself as the
+walk crosses October 2024.
+
+Upstream release days, not the build dates in uv's index — python-build-
+standalone shipped 3.11 in January 2023, three months late, which would
+have read that autumn's releases on 3.10.
+"""
+
+READ_PYTHON, READ_PYTHON_SINCE = PYTHON_RELEASES[-1]
+"""The oldest era, and so the walk's horizon: the oldest CPython still
+receiving fixes, and the day it arrived.
+
+Nothing was ever built for an interpreter before it existed, so a release
+older than this has no period wheels to resolve against and cannot be read
+on anything. Those are not offered rather than walked and recorded as
+holes — a hole says "this could not be read", and the store should not
+carry a shrug about a release that is simply out of scope.
+
+Drop the last row when 3.10 goes end-of-life and the horizon slides with
+it, taking the releases it could read out of scope by the same rule.
+"""
+
+_MIN_PYTHON = re.compile(r">=\s*3\.(\d+)")
+
 
 @dataclass(frozen=True)
 class Release:
@@ -46,6 +98,31 @@ class Release:
     """`YYYY-MM-DD`, from the index. Not the ordering key — the version is —
     but what breaks a tie between two builds of one base (`0.6.0-wk.5`),
     which is the one comparison a version cannot make."""
+    requires_python: str = ""
+    """The release's own `Requires-Python`, verbatim from the index. What
+    keeps the floor from becoming a ceiling: zensical asks for `>=3.10` today
+    and something will ask for more tomorrow, so the interpreter to read on is
+    the higher of this and `READ_PYTHON`, never `READ_PYTHON` flat."""
+
+
+def read_python(requires_python: str = "", date: str = "") -> str:
+    """The interpreter to read a release on: its era, raised to its minimum.
+
+    The era is the newest CPython that had shipped by *date*. A release
+    that will not run on it — one asking for more than its own era offered,
+    which happens while a Python is still in prerelease — is read on the
+    oldest it will run on instead. Without a date there is no era to pick,
+    so the newest is used, which is what reading an unstamped release
+    already meant.
+    """
+    era = (
+        next((v for v, since in PYTHON_RELEASES if date >= since), READ_PYTHON)
+        if date
+        else PYTHON_RELEASES[0][0]
+    )
+    found = _MIN_PYTHON.search(requires_python or "")
+    minimum = int(found.group(1)) if found else 0
+    return f"3.{max(int(era.split('.')[1]), minimum)}"
 
 
 LISTABLE = ("uv", "node", "github", "gitlab", "bun", "python")
@@ -266,17 +343,24 @@ def _uv_python() -> list[Release]:
 
 
 def _pypi(driver: Driver) -> list[Release]:
-    """PyPI's index, minus the versions with no files.
+    """PyPI's index, minus the versions with no files and the ones older
+    than the walk's horizon.
 
     It keeps yanked and file-less versions, and neither can be installed to
-    be read.
+    be read. It also keeps releases that predate `READ_PYTHON` — see
+    `READ_PYTHON_SINCE` for why those cannot be read on any interpreter this
+    walk will use, and so are not offered rather than walked into holes.
     """
     package = driver.provision.target(driver.name)
     index = _index(PYPI.format(package=package))
     found = [
-        Release(version=version, date=files[0]["upload_time"][:10])
+        Release(
+            version=version,
+            date=files[0]["upload_time"][:10],
+            requires_python=files[0].get("requires_python") or "",
+        )
         for version, files in index.get("releases", {}).items()
-        if files
+        if files and files[0]["upload_time"][:10] >= READ_PYTHON_SINCE
     ]
     return _order(found)
 
@@ -292,7 +376,7 @@ def install(driver: Driver, release: Release, into: Path) -> Path | None:
     kind = driver.provision.kind
     into.mkdir(parents=True, exist_ok=True)
     if kind == "uv":
-        return _install_pypi(driver, release.version, into)
+        return _install_pypi(driver, release, into)
     if kind == "node":
         return _install_npm(driver, release.version, into)
     if kind in ("github", "gitlab", "bun"):
@@ -324,19 +408,43 @@ def _install_python(version: str) -> Path | None:
     return Path(found).parent
 
 
-def _install_pypi(driver: Driver, version: str, into: Path) -> Path | None:
-    """A venv per release. The plugins a driver declares (pytest's
-    `pytest-cov`) ride along, or the reading loses flags the stub records."""
+def _install_pypi(driver: Driver, release: Release, into: Path) -> Path | None:
+    """A venv per release, resolved as the release itself was.
+
+    The plugins a driver declares (pytest's `pytest-cov`) ride along, or the
+    reading loses flags the stub records.
+
+    Two pins make an old release readable at all, and neither works without
+    the other. `--exclude-newer` at the release's own date keeps its
+    dependencies as they were the day it shipped, because a release read
+    against today's transitive versions is not being read as itself — twine
+    5.1.0 crashes at import under `importlib_metadata` 8. And the
+    interpreter is `read_python` of that same date, because those period
+    dependencies only have wheels for interpreters that existed back then:
+    pinning the date alone leaves a 2022 `cryptography` trying to compile
+    against a 2026 CPython.
+    """
     package = driver.provision.target(driver.name)
     python = (
         into
         / ("Scripts" if _windows() else "bin")
         / ("python.exe" if _windows() else "python")
     )
-    if not _run(["uv", "venv", "--quiet", str(into)]):
+    interpreter = read_python(release.requires_python, release.date)
+    if not _run(["uv", "venv", "--quiet", "--python", interpreter, str(into)]):
         return None
-    wanted = [f"{package}=={version}", *driver.provision.plugins]
-    if not _run(["uv", "pip", "install", "--quiet", "--python", str(python), *wanted]):
+    wanted = [f"{package}=={release.version}", *driver.provision.plugins]
+    argv = ["uv", "pip", "install", "--quiet", "--python", str(python)]
+    if release.date:
+        # Spelled out to the second, and in UTC, because the two clocks
+        # disagree: the index reports `upload_time` in UTC, while a bare
+        # date reaches uv as local midnight. East of UTC that cutoff lands
+        # *before* the end of the UTC day, so a release published in its
+        # last hour is filtered out by its own release date — uv 0.11.32,
+        # published 23:05Z, against a 23:00Z cutoff in BST. The bug would
+        # sleep in CI on a UTC runner and wake on a European laptop.
+        argv += ["--exclude-newer", f"{release.date}T23:59:59Z"]
+    if not _run([*argv, *wanted]):
         return None
     return python.parent
 
