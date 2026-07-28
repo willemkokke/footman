@@ -269,11 +269,13 @@ def _fm_complete(code, line):
     words = line.split()
     if not line or line.endswith(" "):
         words.append("")
-    candidates = [
-        c for c in complete(_fm_manifest["tree"], words)
-        if not c.startswith(chr(0))  # file/dynamic sentinels need a real shell
-    ]
-    return json.dumps(candidates)
+    out = complete(_fm_manifest["tree"], words)
+    if out and out[0].startswith(chr(0)):
+        # A sentinel answer (file handoff, dynamic recompute) needs a real
+        # shell; the elements after the marker are protocol payload — a
+        # partial and an emission prefix — not candidates.
+        return json.dumps([])
+    return json.dumps(out)
 `;
 
 let pyodideReady = null; // one load per browser tab, kept across instant nav
