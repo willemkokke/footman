@@ -382,30 +382,33 @@ def install(driver: Driver, release: Release, into: Path) -> Path | None:
     if kind in ("github", "gitlab", "bun"):
         return _install_asset(driver, release, into)
     if kind == "python":
-        return _install_python(release.version)
+        return _install_python(release.version, into)
     return None
 
 
-def _install_python(version: str) -> Path | None:
+def _install_python(version: str, into: Path) -> Path | None:
     """`uv python install` this exact patch, and read where it landed.
 
-    Unlike every other tier this ignores the throwaway directory: uv keeps
-    its interpreters in one managed store, so the install is shared and
-    already-cached versions cost nothing on a re-run. The store is uv's to
-    clean (`uv python uninstall`), not the prime's.
-
-    What keeps the archive from outliving the interpreter is `UV_NO_CACHE`,
-    set once for the whole walk by `_sandboxed` rather than per tier here.
+    Into a store of its own under the throwaway directory, like every other
+    tier — not uv's shared one. A shared store is one lock, and the walk is
+    ten concurrent installs: uv queues the waiters, the walk's subprocess
+    timeouts kill the queue, and every run scattered a different third of
+    the python chain into holes. `UV_NO_CACHE` (set for the whole walk by
+    `_sandboxed`) already forces each version to download once per run, so
+    a private store costs nothing the shared one was buying — and it is
+    discarded with the release, which the shared store never could be.
 
     The directory uv reports already holds a plain `python` alongside the
     versioned name, which is what the extractor invokes.
     """
-    if not _run(["uv", "python", "install", version]):
+    env = {**os.environ, "UV_PYTHON_INSTALL_DIR": str(into / "store")}
+    if not _run(["uv", "python", "install", version], env=env):
         return None
     # --no-project: `uv python find` consults the nearest pyproject, and the
     # walk runs inside footman's own checkout — whose `requires-python` has
     # opinions about which interpreter the question should resolve to.
-    found = _capture(["uv", "python", "find", "--no-project", version]).strip()
+    found = _capture(["uv", "python", "find", "--no-project", version], env=env)
+    found = found.strip()
     if not found or not Path(found).exists():
         return None
     return Path(found).parent
@@ -512,7 +515,7 @@ def _install_asset(driver: Driver, release: Release, into: Path) -> Path | None:
     return None
 
 
-def _capture(argv: list[str]) -> str:
+def _capture(argv: list[str], env: dict[str, str] | None = None) -> str:
     """What a command printed, or empty when it could not be run.
 
     Empty is not "nothing to report": the callers treat a tool they cannot
@@ -528,7 +531,7 @@ def _capture(argv: list[str]) -> str:
             # Passed rather than inherited, so footman reads the spawn as
             # deliberate — and so the prefix `prime` puts on `PATH` is what
             # picks the uv that carries the index.
-            env=dict(os.environ),
+            env=env if env is not None else dict(os.environ),
         )
     except (OSError, subprocess.SubprocessError):
         return ""

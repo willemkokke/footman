@@ -2662,7 +2662,7 @@ def test_observe_accepts_a_repack_wheel_version(tmp_path, monkeypatch):
     assert tools_tasks.observe("ninja", "1.11.1", scratch=str(tmp_path)) is None
 
 
-def test_python_find_ignores_the_cwd_project(monkeypatch):
+def test_python_find_ignores_the_cwd_project(monkeypatch, tmp_path):
     """`uv python find` consults the nearest pyproject, and the walk runs
     inside footman's own checkout — whose `requires-python` has opinions.
     `--no-project` keeps the answer about the version that was asked."""
@@ -2670,11 +2670,29 @@ def test_python_find_ignores_the_cwd_project(monkeypatch):
 
     calls: list[list[str]] = []
 
-    def capture(argv):
+    def capture(argv, env=None):
         calls.append(argv)
         return ""
 
     monkeypatch.setattr(_toolfetch, "_run", lambda argv, env=None: True)
     monkeypatch.setattr(_toolfetch, "_capture", capture)
-    assert _toolfetch._install_python("3.10.0") is None
+    assert _toolfetch._install_python("3.10.0", tmp_path) is None
     assert calls == [["uv", "python", "find", "--no-project", "3.10.0"]]
+
+
+def test_python_installs_into_a_private_store(monkeypatch, tmp_path):
+    """A shared uv store is one lock, and the walk is ten concurrent
+    installs: uv queues the waiters, the walk's subprocess timeouts kill
+    the queue, and every run scattered a different third of the python
+    chain into holes. Each release installs into a store inside its own
+    throwaway directory — discarded with the release, contended by nobody."""
+    from footman import _toolfetch
+
+    envs: list[dict[str, str] | None] = []
+    monkeypatch.setattr(
+        _toolfetch, "_run", lambda argv, env=None: envs.append(env) or True
+    )
+    monkeypatch.setattr(_toolfetch, "_capture", lambda argv, env=None: "")
+    _toolfetch._install_python("3.10.0", tmp_path)
+    assert envs[0] is not None
+    assert envs[0]["UV_PYTHON_INSTALL_DIR"] == str(tmp_path / "store")
