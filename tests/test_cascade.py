@@ -390,20 +390,24 @@ def test_config_tasks_filename_in_cascade(mono, monkeypatch, capsys):
 def _inherit_repo(tmp_path, monkeypatch, leaf_body: str):
     """A three-level cascade whose leaf overrides `check`."""
     (tmp_path / ".git").mkdir()
+    # The bodies print() rather than run("echo …"): the tests are about
+    # inherited() chaining, not subprocesses, and `echo` is not a program
+    # every machine can run (Windows only has an `echo.exe` when Git's
+    # `usr/bin` is on PATH).
     _write(
         tmp_path / "tasks.py",
-        "from footman import task, run\n"
+        "from footman import task\n"
         "@task\ndef check(fix: bool = False):\n"
         '    """Root gate."""\n'
-        '    run(f"echo root fix={fix}")\n',
+        '    print(f"root fix={fix}")\n',
     )
     _write(
         tmp_path / "svc" / "tasks.py",
-        "from footman import inherited, task, run\n"
+        "from footman import inherited, task\n"
         "@task\ndef check(fix: bool = False):\n"
         '    """Mid gate."""\n'
         "    inherited()(fix=fix)\n"
-        '    run("echo mid")\n',
+        '    print("mid")\n',
     )
     _write(tmp_path / "svc" / "api" / "tasks.py", leaf_body)
     monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
@@ -412,11 +416,11 @@ def _inherit_repo(tmp_path, monkeypatch, leaf_body: str):
 
 
 LEAF = (
-    "from footman import inherited, task, run\n"
+    "from footman import inherited, task\n"
     "@task\ndef check(fix: bool = False, contracts: bool = True):\n"
     '    """Leaf gate."""\n'
     "    inherited()(fix=fix)\n"
-    '    if contracts:\n        run("echo leaf")\n'
+    '    if contracts:\n        print("leaf")\n'
 )
 
 
@@ -445,7 +449,7 @@ def test_inherited_forwarding_is_explicit(tmp_path, monkeypatch, capsys):
     # The leaf chooses what to pass: the root never sees --contracts, and
     # can be given a different value entirely.
     leaf = (
-        "from footman import inherited, task, run\n"
+        "from footman import inherited, task\n"
         "@task\ndef check(fix: bool = False, contracts: bool = True):\n"
         '    """Leaf gate."""\n'
         "    inherited()(fix=False)\n"

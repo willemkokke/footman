@@ -26,6 +26,23 @@ def drive(build, line, **cfg):
     return reg, tree, run_chain(reg, segments, ctx_config=cfg)
 
 
+def _echo(text: str) -> str:
+    """A portable `echo <text>`: a run() string every machine can execute.
+
+    The suite must not assume coreutils on PATH — Windows only has an
+    `echo.exe` when Git's `usr/bin` happens to be there (CI runners: yes;
+    every dev box: no). The interpreter running the suite is the one program
+    that always exists, and the quoting survives both grammars a run()
+    string meets: CreateProcess parsing on Windows, shlex on POSIX.
+    """
+    return f'"{sys.executable}" -c "print(\'{text}\')"'
+
+
+def _exit(code: int) -> str:
+    """A portable `false` (and `true`): exits with *code*, prints nothing."""
+    return f'"{sys.executable}" -c "raise SystemExit({code})"'
+
+
 # --- the colour predicate -----------------------------------------------------
 
 
@@ -160,15 +177,17 @@ def test_in_process_reads_the_run_wide_colour_env(monkeypatch):
 
 
 def test_run_subprocess_records_step():
+    cmd = _echo("hi")
+
     def tasks(reg):
         @reg.task
         def build():
-            run("echo hi")
+            run(cmd)
 
     _, _, results = drive(tasks, "build")
     assert results[0].ok
     step = results[0].steps[0]
-    assert step.command == "echo hi" and step.code == 0
+    assert step.command == cmd and step.code == 0
     assert step.output.strip() == "hi"
 
 
@@ -193,7 +212,7 @@ def test_run_failed_raises_and_fails_task():
     def tasks(reg):
         @reg.task
         def build():
-            run("false")
+            run(_exit(1))
 
     _, _, results = drive(tasks, "build")
     assert results[0].ok is False
@@ -218,7 +237,7 @@ def test_run_nofail_returns_code():
     def tasks(reg):
         @reg.task
         def build():
-            out["code"] = run("false", nofail=True)
+            out["code"] = run(_exit(1), nofail=True)
 
     _, _, results = drive(tasks, "build")
     assert results[0].ok is True
@@ -475,7 +494,7 @@ def test_non_ascii_status_survives_cp1252_stdout(monkeypatch):
     def tasks(reg):
         @reg.task
         def build():
-            run("echo hi")  # run() writes the "→" glyph, absent from cp1252
+            run(_echo("hi"))  # run() writes the "→" glyph, absent from cp1252
 
     _, _, results = drive(tasks, "build")
     assert results[0].ok  # reconfigure(errors='replace') -> no UnicodeEncodeError
@@ -624,7 +643,7 @@ def test_run_string_command():
     def tasks(reg):
         @reg.task
         def go():
-            run("echo tool-ran")
+            run(_echo("tool-ran"))
 
     _, _, results = drive(tasks, "go")
     assert results[0].steps[0].output.strip() == "tool-ran"
@@ -1012,17 +1031,19 @@ def test_step_lines_carry_an_aligned_name_column(capsys):
     def tasks(reg):
         @reg.task
         def go():
-            run("echo hi")
+            run(_echo("hi"))
 
         @reg.task
         def longer():
-            run("echo ho")
+            run(_echo("ho"))
 
     drive(tasks, "go longer")
     out = capsys.readouterr().out
-    # Padded to len("longer"); the duration digit varies with the machine.
-    assert "ok   go      echo hi  (0." in out
-    assert "ok   longer  echo ho  (0." in out
+    # Padded to len("longer"); the duration varies with the machine (a cold
+    # interpreter under a loaded suite can cross 1s), so stop at its "(".
+    # The two commands are the same length, so neither pads the other.
+    assert f"ok   go      {_echo('hi')}  (" in out
+    assert f"ok   longer  {_echo('ho')}  (" in out
 
 
 def test_progress_and_track_report_to_the_status_line():
