@@ -2615,6 +2615,31 @@ def test_observe_rejects_a_reading_of_the_wrong_binary(tmp_path, monkeypatch):
     assert tools_tasks.observe("ruff", "0.15.0", scratch=str(tmp_path)) is not None
 
 
+def test_observe_accepts_a_repack_wheel_version(tmp_path, monkeypatch):
+    """PyPI's ninja 1.11.1.4 wraps a binary that answers `1.11.1` — the
+    repack's own trailing component must not read as a wrong binary. Only a
+    dotted prefix though, and never the reverse: a binary reporting *more*
+    components than its release is some other binary."""
+    from footman.tasks import tools as tools_tasks
+
+    bindir = tmp_path / "release" / "bin"
+
+    def fake_install(driver, release, into):
+        bindir.mkdir(parents=True, exist_ok=True)
+        return bindir
+
+    monkeypatch.setattr("footman._toolfetch.install", fake_install)
+    monkeypatch.setattr(
+        tools_tasks._drivers, "extract", lambda driver: _spec(version="1.11.1")
+    )
+    assert tools_tasks.observe("ninja", "1.11.1.4", scratch=str(tmp_path)) is not None
+    assert tools_tasks.observe("ninja", "1.11.14", scratch=str(tmp_path)) is None
+    monkeypatch.setattr(
+        tools_tasks._drivers, "extract", lambda driver: _spec(version="1.11.1.4")
+    )
+    assert tools_tasks.observe("ninja", "1.11.1", scratch=str(tmp_path)) is None
+
+
 def test_python_find_ignores_the_cwd_project(monkeypatch):
     """`uv python find` consults the nearest pyproject, and the walk runs
     inside footman's own checkout — whose `requires-python` has opinions.

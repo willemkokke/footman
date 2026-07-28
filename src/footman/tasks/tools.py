@@ -1573,7 +1573,7 @@ def observe(
         _discard(bindir)
     if not _describes_itself(spec):
         return None
-    if spec.version and spec.version != version:
+    if spec.version and not _same_release(spec.version, version):
         # The one lie _describes_itself cannot see: a faithful description
         # of the *wrong* binary. When the release's own directory is missing
         # from PATH (or its install left no binary), the extractor resolves
@@ -1583,6 +1583,18 @@ def observe(
         # observation.
         return None
     return _toolhistory.surface_of(spec)
+
+
+def _same_release(reported: str, requested: str) -> bool:
+    """Whether the binary's self-reported version names *requested*.
+
+    Repack wheels append their own component to the version they wrap —
+    PyPI's ninja 1.11.1.4 carries a binary that answers `1.11.1` — so the
+    reported version may be a dotted prefix of the requested one. Never the
+    other way round: a binary reporting *more* components than the release
+    it is supposed to be is some other binary.
+    """
+    return requested == reported or requested.startswith(f"{reported}.")
 
 
 _ROOM_TO_WORK = 512 * 1024 * 1024
