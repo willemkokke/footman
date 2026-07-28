@@ -201,6 +201,7 @@ always wins over a docstring entry for the same parameter:
 
 === "Google"
 
+    <!-- example: revision -->
     ```python
     @task
     def deploy(target: str, fix: bool = False):
@@ -216,6 +217,7 @@ always wins over a docstring entry for the same parameter:
 
 === "NumPy"
 
+    <!-- example: revision -->
     ```python
     @task
     def deploy(target: str, fix: bool = False):
@@ -232,6 +234,7 @@ always wins over a docstring entry for the same parameter:
 
 === "Sphinx"
 
+    <!-- example: revision -->
     ```python
     @task
     def deploy(target: str, fix: bool = False):

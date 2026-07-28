@@ -101,6 +101,7 @@ give you.
 
 A yes/no question asked *before* the task and its prerequisites run:
 
+<!-- example: revision -->
 ```python
 @task(confirm="Deploy to production?")
 def deploy(): ...

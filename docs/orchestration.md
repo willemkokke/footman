@@ -161,6 +161,7 @@ Three escape hatches for the kill:
 one *use* wants a different policy, `.opts()` overrides it there — without
 touching the registered task:
 
+<!-- example: revision -->
 ```python
 from footman import Forward
 
@@ -202,6 +203,7 @@ Declare prerequisites and follow-ups on the task; footman schedules them (a
 prerequisite pulled in twice runs once) and skips a task whose prerequisite
 failed:
 
+<!-- example: revision -->
 ```python
 @task(pre=[fmt, lint, typecheck, test])   # all four run before check
 def check(): ...
@@ -236,6 +238,7 @@ its value threads to every task this one dispatches — its `pre`/`post`
 prerequisites and a [runnable group](#runnable-groups)'s surfaces — that declares
 a parameter of the same name:
 
+<!-- example: revision -->
 ```python
 from typing import Annotated
 from footman import task
@@ -273,6 +276,7 @@ bind arguments — concurrently, waits, and fails if any fail. It honours the sa
 `-s` and `-j` as the scheduler (one worker under `-s`), so concurrency stays
 controlled in one place:
 
+<!-- example: revision -->
 ```python
 from footman import task, parallel
 
@@ -386,8 +390,9 @@ A group is a namespace: `fm lint.markdown` runs a task under `lint`, but bare
 `fm lint` is an error. Give the group a **default action** with `@group.default`
 and the bare form runs — while the surfaces stay addressable:
 
+<!-- example: fresh-session -->
 ```python
-from footman import group, run
+from footman import group, run, task
 from footman.params import Forward
 from footman.tools import ruff, markdownlint, cspell
 
@@ -524,7 +529,9 @@ does — stdin, then its `env()` variable, then the default, with a defaultless
 `ask()` prompting as the last resort — so a task behaves the same however it is
 asked for:
 
+<!-- example: revision -->
 ```python
+from typing import Annotated
 from footman import env
 
 @task

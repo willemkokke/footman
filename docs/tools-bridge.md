@@ -349,6 +349,7 @@ from child processes, so a tool that needs Homebrew's native libraries
 but in-process, an env var set before the first native-library import
 sticks:
 
+<!-- example: revision -->
 ```python
 import os
 import sys

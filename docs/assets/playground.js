@@ -16,6 +16,8 @@
 const PYODIDE_URL = "https://cdn.jsdelivr.net/pyodide/v314.0.3/full/pyodide.mjs";
 const SITE_ROOT = new URL("..", import.meta.url); // …/assets/ -> site root
 const FRAGMENT_MARK = "example: fragment";
+const FRESH_MARK = "example: fresh-session";
+const REVISION_MARK = "example: revision";
 
 const DEFAULT_FILES = {
   "tasks.py": `from typing import Literal
@@ -112,14 +114,17 @@ function onEachPage(fn) {
 
 /* ---------- "run it there" links ---------- */
 
-function isFragment(block) {
-  // The docs mark illustration-only blocks with an HTML comment directly
-  // above the fence; markdown passes it through, so honour it here too.
+function markerOf(block) {
+  // The docs steer blocks with an HTML comment directly above the fence —
+  // `example: fragment` (illustration only), `example: revision` (revises
+  // an earlier definition — in a concatenated session it would be a
+  // duplicate task name), or `example: fresh-session` (the page's session
+  // restarts here); markdown passes the comment through, so honour it too.
   for (let n = block.previousSibling; n; n = n.previousSibling) {
     if (n.nodeType === Node.TEXT_NODE && !n.textContent.trim()) continue;
-    return n.nodeType === Node.COMMENT_NODE && n.textContent.includes(FRAGMENT_MARK);
+    return n.nodeType === Node.COMMENT_NODE ? n.textContent : "";
   }
-  return false;
+  return "";
 }
 
 /* The prompt a run link opens with. Best effort from a light scan of the
@@ -189,7 +194,9 @@ function addRunLinks() {
   for (const block of article.querySelectorAll("div.language-python.highlight")) {
     const codeEl = block.querySelector("code");
     if (!codeEl) continue;
-    if (isFragment(block)) continue;
+    const marker = markerOf(block);
+    if (marker.includes(FRAGMENT_MARK) || marker.includes(REVISION_MARK)) continue;
+    if (marker.includes(FRESH_MARK)) session.length = 0;
     session.push(codeEl.textContent.replace(/\n$/, ""));
     if (block.dataset.fmpLinked) continue; // idempotent re-init
     block.dataset.fmpLinked = "1";
