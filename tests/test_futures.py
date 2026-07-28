@@ -9,7 +9,7 @@ import pytest
 
 from footman import executor, registry
 from footman.params import ask, between, env, stdin
-from footman.registry import Group
+from footman.registry import Group, RegistrationError
 from footman.split import ChainError
 from footman.testing import Runner
 
@@ -1355,3 +1355,105 @@ def test_also_outside_a_block_is_taught():
 
     with pytest.raises(RuntimeError, match=r"inside the `with`"):
         parallel().also(print, "x")
+
+
+# --- a task defined while a run is in flight ---------------------------------
+
+
+def test_a_task_defined_in_a_body_runs_and_is_swept():
+    # `@task` inside a body is ordinary Python: the decorator runs when the
+    # body does, and the task it makes is real. It must not outlive the run —
+    # the manifest was written before any of it happened.
+    reg = Group("root")
+    ran: list[str] = []
+
+    @reg.task
+    def outer():
+        @reg.task
+        def nested(word: str = "hi") -> str:
+            ran.append(word)
+            return f"nested-{word}"
+
+        assert nested("yo") == "nested-yo"  # a real request, with a real value
+
+    result = drive(reg, "outer")
+    assert result.ok, result.stderr
+    assert ran == ["yo"]
+    assert sorted(reg.tasks) == ["outer"]  # swept: the tree is as it was
+
+
+def test_a_clashing_name_is_numbered_only_while_a_run_is_in_flight():
+    # A duplicate written in a tasks file is a mistake and stays taught. One
+    # made mid-run is not: the task is ad-hoc, and the name is incidental.
+    import footman
+
+    reg = Group("root")
+    ran: list[str] = []
+
+    @reg.task
+    def outer():
+        def tidy() -> str:
+            ran.append("tidy")
+            return "done"
+
+        footman.task(tidy)()
+        footman.task(tidy)()  # same name, same run: numbered, not refused
+
+    result = drive(reg, "outer")
+    assert result.ok, result.stderr
+    assert ran == ["tidy", "tidy"]
+    assert "tidy-2" in result.stderr  # and told apart in the report
+    assert "tidy" not in registry.root.tasks  # both swept
+
+    with pytest.raises(RegistrationError, match=r"already has a task named"):
+
+        @reg.task(name="outer")  # at import time, still a mistake
+        def clash(): ...
+
+
+def test_anonymous_adhoc_tasks_in_a_loop_all_run():
+    # Every lambda is `<lambda>`; numbering is what keeps them distinct.
+    import footman
+
+    reg = Group("root")
+    seen: list[int] = []
+
+    @reg.task
+    def go():
+        with footman.parallel() as p:
+            for i in range(3):
+                footman.task(lambda n=i: seen.append(n))()
+        assert len(p.results) == 3
+
+    result = drive(reg, "go")
+    assert result.ok, result.stderr
+    assert sorted(seen) == [0, 1, 2]
+
+
+def test_an_adhoc_task_from_a_plain_callable_joins_a_block():
+    # `task(fn)(args)` makes a named callable into a real task for this run —
+    # so it queues in a block like any other call, and is swept after.
+    import footman
+
+    reg = Group("root")
+    ran: list[str] = []
+
+    def tidy_up(where: str) -> str:
+        ran.append(where)
+        return f"tidied {where}"
+
+    @reg.task
+    def build(target: str = "x") -> str:
+        return f"dist/{target}"
+
+    @reg.task
+    def go():
+        with footman.parallel() as p:
+            build("web")
+            footman.task(tidy_up)("stale")
+        assert p.results == ["dist/web", "tidied stale"]
+
+    result = drive(reg, "go")
+    assert result.ok, result.stderr
+    assert ran == ["stale"]
+    assert "tidy-up" not in registry.root.tasks  # swept from the root too

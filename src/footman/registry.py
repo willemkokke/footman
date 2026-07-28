@@ -158,6 +158,23 @@ _UNBOUND = object()
 _USES = "_footman_uses"
 
 
+def _note_if_ephemeral(group: Group, key: str, previous: Task | None) -> None:
+    """Record a task that was defined *while a run is in flight*, so the run
+    can take it back out again.
+
+    A `@task` inside a task body is ordinary Python — the decorator runs when
+    the body does — and the task it makes is genuinely callable. What it must
+    not do is outlive the run: the manifest was written before any of this
+    happened, so a task nobody can see in a listing would go on shadowing the
+    tree for every later run in the process. Registered, used, swept.
+    """
+    from footman import _futures
+
+    run = _futures.active_session()
+    if run is not None:
+        run.ephemeral.append((group, key, previous))
+
+
 def task_uses(fn: Task) -> tuple[GlobalOption, ...]:
     """The global options *fn* declared it reads — `@task(uses=[OPT])`."""
     return tuple(getattr(fn, _USES, ()))
@@ -774,6 +791,27 @@ class Group:
         setattr(fn, _DEFAULT_GROUP, self)
         setattr(fn, _DEFAULT_FANOUT, fanout)
 
+    def _free_ephemeral_key(self, key: str) -> str:
+        """`key`, or the next free `key-2`, `key-3` — but only mid-run.
+
+        A duplicate name written in a tasks file is a mistake, and stays a
+        taught error. One made *while a run is in flight* is not: the task is
+        ad-hoc, born to be used and swept, and the name is incidental — a
+        `lambda` in a loop is `<lambda>` every time, and `task(rmtree)` twice
+        in one app is two honest pieces of work. Numbering them keeps both
+        callable, and keeps them distinct in the report.
+        """
+        from footman import _futures
+
+        if _futures.active_session() is None:
+            return key
+        if key not in self.tasks and key not in self.groups:
+            return key
+        n = 2
+        while f"{key}-{n}" in self.tasks or f"{key}-{n}" in self.groups:
+            n += 1
+        return f"{key}-{n}"
+
     def _claim(self, key: str) -> None:
         where = f"group {self.name!r}" if self.name != "root" else "the root"
         # `.` is the address separator (`fm docs.serve`), so a name containing
@@ -940,6 +978,7 @@ class Group:
 
         def register(fn: Callable[_P, _R_co]) -> TaskFn[_P, _R_co]:
             key = cli_name(name or fn.__name__)
+            key = self._free_ephemeral_key(key)
             self._shadow_pulled(key)
             self._claim(key)
             task = _TaskFn(fn)  # one handle: registered *and* returned
@@ -973,7 +1012,13 @@ class Group:
                             f"singletons — got {type(used).__name__}"
                         )
                 setattr(task, _USES, tuple(uses))
+            if cli_name(task.__name__) != key:
+                # Numbered by `_free_ephemeral_key`: report it under the name
+                # it actually answers to, not the one it collided on.
+                object.__setattr__(task, "__name__", key)
+            previous = self.tasks.get(key)
             self.tasks[key] = task
+            _note_if_ephemeral(self, key, previous)
             return cast("TaskFn[_P, _R_co]", task)
 
         return register(fn) if fn is not None else register
