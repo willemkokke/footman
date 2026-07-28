@@ -46,9 +46,12 @@ router** — the same move as its stdout router, applied to a second global:
   this task's reads and to every child it spawns, and invisible to
   siblings. A one-time note names the deliberate spellings: `env=` for one
   call, `ctx.env` for the task.
-- **Deletes are a taught error** — a scoped overlay is additive; spawn the
-  child with an explicit `env=` that omits the variable, or mark the task
-  serial.
+- **Deleting a key the task itself set round-trips** — the entry comes
+  back out of the overlay, so set-then-delete (the temp-variable dance
+  pytest does with `PYTEST_VERSION`) is additive both ways. **Deleting a
+  base-environment key is a taught error** — that would be subtractive;
+  spawn the child with an explicit `env=` that omits the variable, or mark
+  the task serial.
 - **`os.putenv`/`os.unsetenv` are taught errors** — they bypass
   `os.environ` even in plain Python, so nothing could scope them.
 

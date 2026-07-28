@@ -9,6 +9,15 @@ versions may include breaking changes.
 
 ### Fixed
 
+- **In-process pytest runs in a parallel task again.** pytest sets
+  `PYTEST_VERSION` and deletes it on the way out, and its session teardown
+  re-chdirs to where it started — two moves the process-global guards
+  refused wholesale, so `pytest(...)` through the tools bridge failed any
+  parallel run. Both are harmless: deleting a key the task itself set
+  scoped now round-trips out of the overlay (deleting a base-environment
+  key stays a taught error), and a chdir to the directory the process is
+  already in is a no-op, not a violation.
+
 - **A machine with no bun says so instead of reporting holes.** bun is how
   the node tier installs, so without it every release of every node tool
   fails to install — and each failure was recorded as a hole, which claims

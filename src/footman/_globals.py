@@ -146,6 +146,20 @@ def _install_environ() -> None:
     def __delitem__(self: Any, key: str) -> None:
         if not _virtual(self) or not _in_task():
             return orig_del(self, key)
+        from footman.context import current
+
+        # A key this task set scoped comes straight back out of the overlay:
+        # set-then-delete round-trips additively (pytest sets PYTEST_VERSION
+        # and deletes it on exit), invisible to siblings either way. Only a
+        # key from the base environment is subtractive and stays refused.
+        ctx = current()
+        hits = [k for k in ctx.env if _norm(k) == _norm(key)]
+        if hits:
+            for k in hits:
+                del ctx.env[k]
+            return
+        if _norm(key) not in _merged():
+            raise KeyError(key)  # absent everywhere: Python's own answer
         raise RuntimeError(
             f"deleting {key!s} from os.environ in a parallel task — scoped "
             f"env is additive; spawn the child with an explicit env= that "
@@ -287,7 +301,16 @@ def _install_os_guards() -> None:
     def chdir(path: Any) -> None:
         ctx, guarded = _managed_task()
         if guarded:
-            raise _chdir_error(ctx)
+            # A chdir to where the process already is changes nothing for
+            # anyone — the defensive restore pattern (pytest's wrap_session
+            # re-chdirs to its startpath on the way out). Only a real move
+            # is refused.
+            try:
+                same = os.path.realpath(path) == os.path.realpath(real_getcwd())
+            except (OSError, TypeError):  # a dir fd, an unstatable path
+                same = False
+            if not same:
+                raise _chdir_error(ctx)
         orig_chdir(path)
 
     os.chdir = chdir  # type: ignore[assignment]
