@@ -351,6 +351,45 @@ def test_release_is_read_in_the_era_it_shipped_in():
     assert read_python(">=3.8", "2022-06-01") == "3.10"  # below the era: the era
 
 
+def test_cutoff_takes_the_far_edge_of_the_publishing_window(monkeypatch):
+    """Publishing is a window, and the cutoff belongs at the end of it.
+
+    ninja 1.11.1 uploaded its seventeen files over 76 days; cmake 4.3.1 took
+    three. A cutoff at the *first* upload filters out the release's own later
+    files, and uv then reports "no version of cmake==4.3.1" while being asked
+    for exactly that — or assembles a partial set whose `--help` segfaults.
+    Both holes in a 709-release walk were this, on every platform at once,
+    which is what makes it look like a platform difference.
+    """
+    import io
+    import json as _json
+
+    from footman import _drivers, _toolfetch
+
+    index = {
+        "releases": {
+            # ninja 1.11.1's real shape: first file 2022-11-05, last 2023-01-20
+            "1.11.1": [
+                {"upload_time": "2022-11-06T12:00:00", "requires_python": ""},
+                {"upload_time": "2023-01-20T09:00:00", "requires_python": ""},
+                {"upload_time": "2022-11-05T18:00:00", "requires_python": ""},
+            ],
+        }
+    }
+    monkeypatch.setattr(
+        _toolfetch.urllib.request,
+        "urlopen",
+        lambda *a, **k: io.BytesIO(_json.dumps(index).encode()),
+    )
+    driver = _drivers.find("ninja")
+    assert driver is not None
+    (release,) = _toolfetch.releases(driver)
+    # Both edges taken across the files, not off whichever the index listed
+    # first — here that is neither the earliest nor the latest.
+    assert release.date == "2022-11-05"  # when it started publishing
+    assert release.published == "2023-01-20"  # when it finished
+
+
 def test_release_date_cutoff_is_spelled_in_utc(monkeypatch, tmp_path):
     """The cutoff has to say UTC, or it excludes the release it is pinning.
 

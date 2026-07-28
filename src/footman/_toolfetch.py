@@ -105,6 +105,13 @@ class Release:
     keeps the floor from becoming a ceiling: zensical asks for `>=3.10` today
     and something will ask for more tomorrow, so the interpreter to read on is
     the higher of this and `READ_PYTHON`, never `READ_PYTHON` flat."""
+    published: str = ""
+    """The day the release *finished* publishing, where `date` is the day it
+    started. Usually the same day and usually uninteresting, but publishing is
+    a window rather than an instant: ninja 1.11.1 took 76 days to upload its
+    seventeen files, cmake 4.3.1 three. A date cutoff at the near edge of that
+    window filters out the release's own later files, which is how a release
+    ends up unable to install itself."""
 
 
 def read_python(requires_python: str = "", date: str = "") -> str:
@@ -651,17 +658,22 @@ def _pypi(driver: Driver) -> list[Release]:
     be read. It also keeps releases that predate `READ_PYTHON` — see
     `READ_PYTHON_SINCE` for why those cannot be read on any interpreter this
     walk will use, and so are not offered rather than walked into holes.
+
+    Both edges of the publishing window are read, and taken across the files
+    rather than off the first of them: the index does not promise an order,
+    and a release is not always uploaded in one sitting.
     """
     package = driver.provision.target(driver.name)
     index = _index(PYPI.format(package=package))
     found = [
         Release(
             version=version,
-            date=files[0]["upload_time"][:10],
+            date=min(f["upload_time"][:10] for f in files),
+            published=max(f["upload_time"][:10] for f in files),
             requires_python=files[0].get("requires_python") or "",
         )
         for version, files in index.get("releases", {}).items()
-        if files and files[0]["upload_time"][:10] >= READ_PYTHON_SINCE
+        if files and min(f["upload_time"][:10] for f in files) >= READ_PYTHON_SINCE
     ]
     return _order(found)
 
@@ -746,7 +758,15 @@ def _install_pypi(driver: Driver, release: Release, into: Path) -> Path | None:
         return None
     wanted = [f"{package}=={release.version}", *driver.provision.plugins]
     argv = ["uv", "pip", "install", "--quiet", "--python", str(python)]
-    if release.date:
+    cutoff = release.published or release.date
+    if cutoff:
+        # The far edge of the publishing window, not the near one. A release
+        # is not always uploaded in one sitting — ninja 1.11.1 took 76 days
+        # over its seventeen files, cmake 4.3.1 three — and a cutoff at the
+        # near edge filters out the release's own later files, leaving uv to
+        # report "no version of cmake==4.3.1" while resolving cmake 4.3.1,
+        # or to assemble a partial set that segfaults on --help.
+        #
         # Spelled out to the second, and in UTC, because the two clocks
         # disagree: the index reports `upload_time` in UTC, while a bare
         # date reaches uv as local midnight. East of UTC that cutoff lands
@@ -754,7 +774,7 @@ def _install_pypi(driver: Driver, release: Release, into: Path) -> Path | None:
         # last hour is filtered out by its own release date — uv 0.11.32,
         # published 23:05Z, against a 23:00Z cutoff in BST. The bug would
         # sleep in CI on a UTC runner and wake on a European laptop.
-        argv += ["--exclude-newer", f"{release.date}T23:59:59Z"]
+        argv += ["--exclude-newer", f"{cutoff}T23:59:59Z"]
     if not _run([*argv, *wanted]):
         return None
     return python.parent
