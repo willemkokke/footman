@@ -4,12 +4,11 @@
  "observed_from": "2.6.0",
  "base": {
   "version": "2.13.1",
-  "date": "2026-07-27",
+  "date": "2026-07-28",
   "platforms": [
-   "Linux",
-   "macOS"
+   "Linux"
   ],
-  "extractor": 1,
+  "extractor": 2,
   "surface": {
    "help": "git-cliff 2.13.1",
    "verbs": {
@@ -478,10 +477,9 @@
   "2.12.0": {
    "date": "2026-01-20",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1,
+   "extractor": 2,
    "verbs": {
     "": {
      "help": "git-cliff 2.12.0"
@@ -492,10 +490,9 @@
   "2.11.0": {
    "date": "2025-12-14",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1,
+   "extractor": 2,
    "drop": [
     "\toffline",
     "\tskip_tags"
@@ -510,10 +507,9 @@
   "2.10.1": {
    "date": "2025-09-21",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1,
+   "extractor": 2,
    "drop": [
     "\tazure_devops_repo",
     "\tazure_devops_token"
@@ -528,10 +524,9 @@
   "2.10.0": {
    "date": "2025-07-27",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1,
+   "extractor": 2,
    "verbs": {
     "": {
      "help": "git-cliff 2.10.0"
@@ -542,10 +537,9 @@
   "2.9.1": {
    "date": "2025-06-03",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1,
+   "extractor": 2,
    "verbs": {
     "": {
      "help": "git-cliff 2.9.1"
@@ -556,10 +550,9 @@
   "2.8.0": {
    "date": "2025-01-24",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1,
+   "extractor": 2,
    "drop": [
     "\tconfig_url"
    ],
@@ -573,10 +566,9 @@
   "2.7.0": {
    "date": "2024-11-20",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1,
+   "extractor": 2,
    "drop": [
     "\tuse_native_tls"
    ],
@@ -590,10 +582,9 @@
   "2.6.1": {
    "date": "2024-09-27",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1,
+   "extractor": 2,
    "verbs": {
     "": {
      "help": "git-cliff 2.6.1"
@@ -604,10 +595,9 @@
   "2.6.0": {
    "date": "2024-09-22",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1,
+   "extractor": 2,
    "verbs": {
     "": {
      "help": "git-cliff 2.6.0"

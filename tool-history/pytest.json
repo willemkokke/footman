@@ -4,12 +4,11 @@
  "observed_from": "8.3.5",
  "base": {
   "version": "9.1.1",
-  "date": "2026-07-27",
+  "date": "2026-07-28",
   "platforms": [
-   "Linux",
-   "macOS"
+   "Linux"
   ],
-  "extractor": 1,
+  "extractor": 2,
   "surface": {
    "help": "",
    "verbs": {
@@ -1048,18 +1047,16 @@
   "9.1.0": {
    "date": "2026-06-13",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1
+   "extractor": 2
   },
   "9.0.3": {
    "date": "2026-04-07",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1,
+   "extractor": 2,
    "drop": [
     "\tmax_warnings",
     "\treport_chars"
@@ -1080,35 +1077,41 @@
   "9.0.2": {
    "date": "2025-12-06",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1
+   "extractor": 2
   },
   "9.0.1": {
    "date": "2025-11-12",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1
+   "extractor": 2
   },
   "9.0.0": {
    "date": "2025-11-08",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1
+   "extractor": 2
   },
   "8.4.2": {
    "date": "2025-09-04",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1,
+   "extractor": 2,
    "revert": {
+    "\tcov_report": {
+     "flags": [
+      "--cov-report"
+     ],
+     "negation": "",
+     "help": "Type of report to generate: term, term-missing, annotate, html, xml, json, lcov (multi-allowed)",
+     "type": "str",
+     "default": null,
+     "choices": []
+    },
     "\toverride_ini": {
      "flags": [
       "--override-ini",
@@ -1155,26 +1158,23 @@
   "8.4.1": {
    "date": "2025-06-18",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1
+   "extractor": 2
   },
   "8.4.0": {
    "date": "2025-06-02",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1
+   "extractor": 2
   },
   "8.3.5": {
    "date": "2025-03-02",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1,
+   "extractor": 2,
    "drop": [
     "\tdisable_plugin_autoload",
     "\tforce_short_summary",

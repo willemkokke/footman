@@ -4,12 +4,11 @@
  "observed_from": "0.15.14",
  "base": {
   "version": "0.16.0",
-  "date": "2026-07-27",
+  "date": "2026-07-28",
   "platforms": [
-   "Linux",
-   "macOS"
+   "Linux"
   ],
-  "extractor": 1,
+  "extractor": 2,
   "surface": {
    "help": "Ruff: An extremely fast Python linter and code formatter.",
    "verbs": {
@@ -871,10 +870,9 @@
   "0.15.22": {
    "date": "2026-07-16",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1,
+   "extractor": 2,
    "revert": {
     "check\tadd_ignore": {
      "flags": [
@@ -891,18 +889,16 @@
   "0.15.21": {
    "date": "2026-07-09",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1
+   "extractor": 2
   },
   "0.15.20": {
    "date": "2026-06-25",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1,
+   "extractor": 2,
    "drop": [
     "check\tadd_ignore",
     "format\textend_exclude"
@@ -911,50 +907,44 @@
   "0.15.19": {
    "date": "2026-06-24",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1
+   "extractor": 2
   },
   "0.15.18": {
    "date": "2026-06-18",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1
+   "extractor": 2
   },
   "0.15.17": {
    "date": "2026-06-11",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1
+   "extractor": 2
   },
   "0.15.16": {
    "date": "2026-06-04",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1
+   "extractor": 2
   },
   "0.15.15": {
    "date": "2026-05-28",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1
+   "extractor": 2
   },
   "0.15.14": {
    "date": "2026-05-21",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1
+   "extractor": 2
   }
  }
 }

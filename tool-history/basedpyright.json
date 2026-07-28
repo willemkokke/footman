@@ -4,12 +4,11 @@
  "observed_from": "1.39.0",
  "base": {
   "version": "1.39.9",
-  "date": "2026-07-27",
+  "date": "2026-07-28",
   "platforms": [
-   "Linux",
-   "macOS"
+   "Linux"
   ],
-  "extractor": 1,
+  "extractor": 2,
   "surface": {
    "help": "",
    "verbs": {
@@ -242,74 +241,65 @@
   "1.39.8": {
    "date": "2026-06-14",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1
+   "extractor": 2
   },
   "1.39.7": {
    "date": "2026-06-07",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1
+   "extractor": 2
   },
   "1.39.6": {
    "date": "2026-05-24",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1
+   "extractor": 2
   },
   "1.39.5": {
    "date": "2026-05-17",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1
+   "extractor": 2
   },
   "1.39.4": {
    "date": "2026-05-11",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1
+   "extractor": 2
   },
   "1.39.3": {
    "date": "2026-04-20",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1
+   "extractor": 2
   },
   "1.39.2": {
    "date": "2026-04-17",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1
+   "extractor": 2
   },
   "1.39.1": {
    "date": "2026-04-16",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1
+   "extractor": 2
   },
   "1.39.0": {
    "date": "2026-04-01",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1,
+   "extractor": 2,
    "revert": {
     "\tpythonplatform": {
      "flags": [

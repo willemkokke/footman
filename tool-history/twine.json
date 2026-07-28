@@ -1,15 +1,14 @@
 {
  "schema": 1,
  "tool": "twine",
- "observed_from": "4.0.0",
+ "observed_from": "4.0.1",
  "base": {
   "version": "7.0.0",
-  "date": "2026-07-27",
+  "date": "2026-07-28",
   "platforms": [
-   "Linux",
-   "macOS"
+   "Linux"
   ],
-  "extractor": 1,
+  "extractor": 2,
   "surface": {
    "help": "",
    "verbs": {
@@ -228,506 +227,70 @@
  },
  "deltas": {
   "6.2.0": {
-   "date": "2026-07-27",
+   "date": "2025-09-04",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1
+   "extractor": 2
   },
   "6.1.0": {
    "date": "2025-01-21",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1
+   "extractor": 2
   },
   "6.0.1": {
    "date": "2024-12-01",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1
+   "extractor": 2
   },
   "6.0.0": {
    "date": "2024-11-30",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1
+   "extractor": 2
   },
   "5.1.1": {
    "date": "2024-06-26",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1
+   "extractor": 2
   },
   "5.1.0": {
    "date": "2024-05-16",
    "platforms": [
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1,
-   "drop": [
-    "\tno_color",
-    "check\tstrict",
-    "upload\tattestations",
-    "upload\tcert",
-    "upload\tclient_cert",
-    "upload\tcomment",
-    "upload\tconfig_file",
-    "upload\tdisable_progress_bar",
-    "upload\tidentity",
-    "upload\tnon_interactive",
-    "upload\tpassword",
-    "upload\trepository",
-    "upload\trepository_url",
-    "upload\tsign",
-    "upload\tsign_with",
-    "upload\tskip_existing",
-    "upload\tusername",
-    "upload\tverbose"
-   ],
-   "verbs": {
-    "upload": {
-     "help": "",
-     "positional": "any",
-     "lead": ""
-    },
-    "check": {
-     "positional": "any",
-     "lead": ""
-    }
-   }
+   "extractor": 2
   },
   "5.0.0": {
    "date": "2024-02-11",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1,
-   "add": {
-    "\tno_color": {
-     "flags": [
-      "--no-color"
-     ],
-     "negation": "",
-     "help": "disable colored output",
-     "type": "bool",
-     "default": null,
-     "choices": []
-    },
-    "check\tstrict": {
-     "flags": [
-      "--strict"
-     ],
-     "negation": "",
-     "help": "Fail on warnings",
-     "type": "bool",
-     "default": null,
-     "choices": []
-    },
-    "upload\tcert": {
-     "flags": [
-      "--cert"
-     ],
-     "negation": "",
-     "help": "Path to alternate CA bundle (can also be set via TWINE_CERT environment variable)",
-     "type": "str",
-     "default": null,
-     "choices": []
-    },
-    "upload\tclient_cert": {
-     "flags": [
-      "--client-cert"
-     ],
-     "negation": "",
-     "help": "Path to SSL client certificate, a single file containing the private key and the certificate in PEM format",
-     "type": "str",
-     "default": null,
-     "choices": []
-    },
-    "upload\tcomment": {
-     "flags": [
-      "--comment",
-      "-c"
-     ],
-     "negation": "",
-     "help": "The comment to include with the distribution file",
-     "type": "str",
-     "default": null,
-     "choices": []
-    },
-    "upload\tconfig_file": {
-     "flags": [
-      "--config-file"
-     ],
-     "negation": "",
-     "help": "The .pypirc config file to use",
-     "type": "str",
-     "default": null,
-     "choices": []
-    },
-    "upload\tdisable_progress_bar": {
-     "flags": [
-      "--disable-progress-bar"
-     ],
-     "negation": "",
-     "help": "Disable the progress bar",
-     "type": "bool",
-     "default": null,
-     "choices": []
-    },
-    "upload\tidentity": {
-     "flags": [
-      "--identity",
-      "-i"
-     ],
-     "negation": "",
-     "help": "GPG identity used to sign files",
-     "type": "str",
-     "default": null,
-     "choices": []
-    },
-    "upload\tnon_interactive": {
-     "flags": [
-      "--non-interactive"
-     ],
-     "negation": "",
-     "help": "Do not interactively prompt for username/password if the required credentials are missing",
-     "type": "bool",
-     "default": null,
-     "choices": []
-    },
-    "upload\tpassword": {
-     "flags": [
-      "--password",
-      "-p"
-     ],
-     "negation": "",
-     "help": "The password to authenticate to the repository (package index) with",
-     "type": "str",
-     "default": null,
-     "choices": []
-    },
-    "upload\trepository": {
-     "flags": [
-      "--repository",
-      "-r"
-     ],
-     "negation": "",
-     "help": "The repository (package index) to upload the package to",
-     "type": "str",
-     "default": "pypi",
-     "choices": []
-    },
-    "upload\trepository_url": {
-     "flags": [
-      "--repository-url"
-     ],
-     "negation": "",
-     "help": "The repository (package index) URL to upload the package to",
-     "type": "str",
-     "default": null,
-     "choices": []
-    },
-    "upload\tsign": {
-     "flags": [
-      "--sign",
-      "-s"
-     ],
-     "negation": "",
-     "help": "Sign files to upload using GPG",
-     "type": "bool",
-     "default": null,
-     "choices": []
-    },
-    "upload\tsign_with": {
-     "flags": [
-      "--sign-with"
-     ],
-     "negation": "",
-     "help": "GPG program used to sign uploads",
-     "type": "str",
-     "default": "gpg",
-     "choices": []
-    },
-    "upload\tskip_existing": {
-     "flags": [
-      "--skip-existing"
-     ],
-     "negation": "",
-     "help": "Continue uploading files if one already exists",
-     "type": "bool",
-     "default": null,
-     "choices": []
-    },
-    "upload\tusername": {
-     "flags": [
-      "--username",
-      "-u"
-     ],
-     "negation": "",
-     "help": "The username to authenticate to the repository (package index) as",
-     "type": "str",
-     "default": null,
-     "choices": []
-    },
-    "upload\tverbose": {
-     "flags": [
-      "--verbose"
-     ],
-     "negation": "",
-     "help": "Show verbose output",
-     "type": "bool",
-     "default": null,
-     "choices": []
-    }
-   },
-   "verbs": {
-    "upload": {
-     "help": "[--config-file CONFIG_FILE] [--skip-existing] [--cert path] [--client-cert path] [--verbose] [--disable-progress-bar]",
-     "positional": "required",
-     "lead": "dist"
-    },
-    "check": {
-     "positional": "required",
-     "lead": "dist"
-    }
-   }
+   "extractor": 2,
+   "drop": [
+    "upload\tattestations"
+   ]
   },
   "4.0.2": {
    "date": "2022-12-01",
    "platforms": [
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1,
-   "drop": [
-    "\tno_color",
-    "check\tstrict",
-    "upload\tcert",
-    "upload\tclient_cert",
-    "upload\tcomment",
-    "upload\tconfig_file",
-    "upload\tdisable_progress_bar",
-    "upload\tidentity",
-    "upload\tnon_interactive",
-    "upload\tpassword",
-    "upload\trepository",
-    "upload\trepository_url",
-    "upload\tsign",
-    "upload\tsign_with",
-    "upload\tskip_existing",
-    "upload\tusername",
-    "upload\tverbose"
-   ],
-   "verbs": {
-    "upload": {
-     "help": "",
-     "positional": "any",
-     "lead": ""
-    },
-    "check": {
-     "positional": "any",
-     "lead": ""
-    }
-   }
+   "extractor": 2
   },
   "4.0.1": {
    "date": "2022-06-01",
    "platforms": [
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1
-  },
-  "4.0.0": {
-   "date": "2022-03-31",
-   "platforms": [
-    "Linux",
-    "macOS"
-   ],
-   "extractor": 1,
-   "add": {
-    "\tno_color": {
-     "flags": [
-      "--no-color"
-     ],
-     "negation": "",
-     "help": "disable colored output",
-     "type": "bool",
-     "default": null,
-     "choices": []
-    },
-    "upload\tcert": {
-     "flags": [
-      "--cert"
-     ],
-     "negation": "",
-     "help": "Path to alternate CA bundle (can also be set via TWINE_CERT environment variable)",
-     "type": "str",
-     "default": null,
-     "choices": []
-    },
-    "upload\tclient_cert": {
-     "flags": [
-      "--client-cert"
-     ],
-     "negation": "",
-     "help": "Path to SSL client certificate, a single file containing the private key and the certificate in PEM format",
-     "type": "str",
-     "default": null,
-     "choices": []
-    },
-    "upload\tcomment": {
-     "flags": [
-      "--comment",
-      "-c"
-     ],
-     "negation": "",
-     "help": "The comment to include with the distribution file",
-     "type": "str",
-     "default": null,
-     "choices": []
-    },
-    "upload\tconfig_file": {
-     "flags": [
-      "--config-file"
-     ],
-     "negation": "",
-     "help": "The .pypirc config file to use",
-     "type": "str",
-     "default": null,
-     "choices": []
-    },
-    "upload\tdisable_progress_bar": {
-     "flags": [
-      "--disable-progress-bar"
-     ],
-     "negation": "",
-     "help": "Disable the progress bar",
-     "type": "bool",
-     "default": null,
-     "choices": []
-    },
-    "upload\tidentity": {
-     "flags": [
-      "--identity",
-      "-i"
-     ],
-     "negation": "",
-     "help": "GPG identity used to sign files",
-     "type": "str",
-     "default": null,
-     "choices": []
-    },
-    "upload\tnon_interactive": {
-     "flags": [
-      "--non-interactive"
-     ],
-     "negation": "",
-     "help": "Do not interactively prompt for username/password if the required credentials are missing",
-     "type": "bool",
-     "default": null,
-     "choices": []
-    },
-    "upload\tpassword": {
-     "flags": [
-      "--password",
-      "-p"
-     ],
-     "negation": "",
-     "help": "The password to authenticate to the repository (package index) with",
-     "type": "str",
-     "default": null,
-     "choices": []
-    },
-    "upload\trepository": {
-     "flags": [
-      "--repository",
-      "-r"
-     ],
-     "negation": "",
-     "help": "The repository (package index) to upload the package to",
-     "type": "str",
-     "default": "pypi",
-     "choices": []
-    },
-    "upload\trepository_url": {
-     "flags": [
-      "--repository-url"
-     ],
-     "negation": "",
-     "help": "The repository (package index) URL to upload the package to",
-     "type": "str",
-     "default": null,
-     "choices": []
-    },
-    "upload\tsign": {
-     "flags": [
-      "--sign",
-      "-s"
-     ],
-     "negation": "",
-     "help": "Sign files to upload using GPG",
-     "type": "bool",
-     "default": null,
-     "choices": []
-    },
-    "upload\tsign_with": {
-     "flags": [
-      "--sign-with"
-     ],
-     "negation": "",
-     "help": "GPG program used to sign uploads",
-     "type": "str",
-     "default": "gpg",
-     "choices": []
-    },
-    "upload\tskip_existing": {
-     "flags": [
-      "--skip-existing"
-     ],
-     "negation": "",
-     "help": "Continue uploading files if one already exists",
-     "type": "bool",
-     "default": null,
-     "choices": []
-    },
-    "upload\tusername": {
-     "flags": [
-      "--username",
-      "-u"
-     ],
-     "negation": "",
-     "help": "The username to authenticate to the repository (package index) as",
-     "type": "str",
-     "default": null,
-     "choices": []
-    },
-    "upload\tverbose": {
-     "flags": [
-      "--verbose"
-     ],
-     "negation": "",
-     "help": "Show verbose output",
-     "type": "bool",
-     "default": null,
-     "choices": []
-    }
-   },
-   "verbs": {
-    "upload": {
-     "help": "[--config-file CONFIG_FILE] [--skip-existing] [--cert path] [--client-cert path] [--verbose] [--disable-progress-bar]",
-     "positional": "required",
-     "lead": "dist"
-    }
-   }
+   "extractor": 2
   }
  }
 }
