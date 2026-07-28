@@ -1640,6 +1640,8 @@ def observe(
     version: str,
     tag: str = "",
     date: str = "",
+    published: str = "",
+    requires_python: str = "",
     scratch: str = "",
 ) -> dict | None:
     """Install one release, read what it accepts, and throw it away.
@@ -1664,7 +1666,17 @@ def observe(
     driver = _drivers.find(tool)
     if driver is None or not scratch:  # pragma: no cover - engine-supplied
         return None
-    release = _toolfetch.Release(version=version, tag=tag, date=date)
+    # Every Release field crosses the task boundary, or a fix to the walk
+    # silently reverts inside it: the publishing-window cutoff never reached
+    # _install_pypi through here, so cmake 4.3.1 kept resolving at the near
+    # edge and holing — while the identical install ran clean by hand.
+    release = _toolfetch.Release(
+        version=version,
+        tag=tag,
+        date=date,
+        published=published,
+        requires_python=requires_python,
+    )
     placed = _toolfetch.install(driver, release, Path(scratch) / f"{tool}-{version}")
     if placed is None:
         _refuse_a_broken_environment(Path(scratch))
@@ -1791,6 +1803,8 @@ def _gather(work: list, scratch: Path) -> dict[str, dict[str, dict | None]]:
                 version=release.version,
                 tag=release.tag,
                 date=release.date,
+                published=release.published,
+                requires_python=release.requires_python,
                 scratch=str(scratch),
             )
             with lock:
