@@ -177,6 +177,14 @@ versions may include breaking changes.
 
 ### Fixed
 
+- **A body call's output is no longer dropped in an uncaptured run.** A task
+  reached by `build()` runs with its own buffer so its output stays one
+  block, but that block was only ever handed to a *capturing* parent — under
+  `--json`, a document run, a `parallel()` child. In an ordinary terminal run
+  the parent streams, so there was nothing to hand it to and the callee's
+  output went nowhere. It now goes to the terminal, the same handoff
+  `parallel()` makes for its own children.
+
 - **`footman.docstrings` and `footman.markdown` resolve for a type-checker.**
   Both are lazily served by `__getattr__` and both were named in `__all__`,
   but neither was declared to a type-checker — so the package advertised two

@@ -606,7 +606,7 @@ def _run_now(
     asked here, at the moment of execution (a request the run has already
     answered never re-asks).
     """
-    from footman import context, executor, schedule
+    from footman import _globals, context, executor, schedule
 
     parent = context.current()
     label = _label(task)
@@ -648,8 +648,22 @@ def _run_now(
     if status is not None:
         status.unit_finished(label, result.ok)
     _record(result)
-    if parent.sink is not None and (text := buf.getvalue()):
-        parent.sink.write(text)  # the callee's output belongs to the run, not /dev/null
+    if text := buf.getvalue():
+        # The callee ran with its own buffer so its output stays one block.
+        # Where that block goes depends on the caller: a capturing parent
+        # (`--json`, a document run, a `parallel()` child) owns it and takes
+        # it; an uncaptured parent is streaming to the terminal, so it goes
+        # there — the same handoff `parallel()` makes for its children,
+        # status line warned first because this write bypasses the routers.
+        if parent.sink is not None:
+            parent.sink.write(text)
+        else:
+            dest = context.real_stdout()
+            with _globals.console_gate():
+                if status is not None:
+                    status.notify(text)
+                dest.write(text)
+                dest.flush()
     if result.error is not None:
         # A failure raises in the caller, exactly as a direct call always did.
         raise result.error

@@ -1457,3 +1457,26 @@ def test_an_adhoc_task_from_a_plain_callable_joins_a_block():
     assert result.ok, result.stderr
     assert ran == ["stale"]
     assert "tidy-up" not in registry.root.tasks  # swept from the root too
+
+
+def test_a_body_calls_output_reaches_an_uncaptured_run(capsys):
+    # The callee runs with its own buffer so its block stays contiguous. A
+    # capturing parent takes that block; an uncaptured one is streaming to the
+    # terminal, and the block must land there rather than in the buffer's bin.
+    from footman import _app
+
+    reg = Group("root")
+
+    @reg.task
+    def callee():
+        print("CALLEE PRINTED")
+
+    @reg.task
+    def caller():
+        print("CALLER PRINTED")
+        callee()
+
+    assert _app.run_group(reg, ["caller"]) == 0
+    out = capsys.readouterr().out
+    assert "CALLER PRINTED" in out
+    assert "CALLEE PRINTED" in out
