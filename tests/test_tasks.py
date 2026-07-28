@@ -22,7 +22,13 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import tasks
+from footman import registry as _registry
+
+# Under capture(), or the repo's own ~30 tasks land in the process-global
+# `registry.root` — which test_registry's leak guard rightly trips on when
+# xdist schedules both files onto one worker.
+with _registry.capture():
+    import tasks
 
 from footman.context import Failed, Result, RunFailed
 
