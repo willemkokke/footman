@@ -10,6 +10,7 @@ real binaries are exercised separately, against whatever is present.
 from __future__ import annotations
 
 import ast
+import os
 import pathlib
 import shutil
 import sys
@@ -952,6 +953,131 @@ def test_extracting_an_absent_tool_yields_an_empty_spec():
     assert (
         _drivers.installed(_drivers.Driver("definitely-not-a-real-tool-xyz")) is False
     )
+
+
+def test_extraction_replaces_this_machines_home_with_a_tilde(monkeypatch, tmp_path):
+    """docker reports its config default expanded: the maintainer's own home
+    directory went into the store and shipped inside `docker.pyi` on PyPI.
+
+    It is also the difference that divides every platform — `/home/runner`
+    on Linux, `C:\\Users\\runneradmin` on Windows, for the same option of
+    the same release — so each leg of the matrix would overwrite the last
+    and the weekly run would report a change nobody made."""
+    home = tmp_path / "someone"
+    monkeypatch.setattr(_drivers.Path, "home", classmethod(lambda cls: home))
+    spec = ToolSpec(
+        name="docker",
+        help=f"config in {home}/.docker",
+        verbs=(
+            Verb(
+                name="",
+                help=f"reads {home}/.docker",
+                options=(
+                    Option(
+                        name="config",
+                        help=f"Location of config files (default {home}/.docker)",
+                        default=f"{home}/.docker",
+                    ),
+                    Option(name="debug", default=False),
+                ),
+            ),
+        ),
+    )
+    clean = _drivers._anonymous(spec)
+    option = clean.verbs[0].options[0]
+    assert clean.help == "config in ~/.docker"
+    assert clean.verbs[0].help == "reads ~/.docker"
+    assert option.default == "~/.docker"
+    assert option.help.endswith("(default ~/.docker)")
+    assert clean.verbs[0].options[1].default is False  # not a string, untouched
+
+
+def test_no_stub_carries_a_home_directory():
+    """The invariant the scrub exists to hold, checked against what ships."""
+    import re
+    from pathlib import Path
+
+    looks_like_home = re.compile(r"/Users/[a-z]|/home/[a-z]|C:\\\\Users\\\\[a-z]", re.I)
+    stubs = Path(_drivers.__file__).parent / "_stubs"
+    guilty = {
+        path.name
+        for path in stubs.glob("*.pyi")
+        if looks_like_home.search(path.read_text())
+    }
+    assert guilty == set()
+
+
+def test_a_verb_that_answers_with_the_root_help_is_not_that_verb(monkeypatch):
+    """Asked for a subcommand it does not have, docker prints its own help
+    and exits 0 — so the reading looked successful and `compose up` was
+    recorded with docker's global options and docker's summary. Nothing
+    downstream could tell: it is a real help text, just not this verb's."""
+    from footman import _toolhelp
+
+    root = "Usage:  docker [OPTIONS] COMMAND\n\nA runtime\n\nOptions:\n  --debug   On\n"
+    own = (
+        "Usage:  docker ps [OPTIONS]\n\nList containers\n\n"
+        "Options:\n  --all   Show all\n"
+    )
+
+    def run_help(argv, **_kw):
+        if argv[1:] == ["ps"]:
+            return own
+        return root  # `compose up` with no plugin installed
+
+    monkeypatch.setattr(_toolhelp, "run_help", run_help)
+    spec = _toolhelp.from_help("docker", verbs=("ps", "compose.up"))
+    assert [verb.name for verb in spec.verbs] == ["", "ps"]
+
+
+def test_a_tool_with_plugins_is_read_under_the_home_they_were_fetched_into(
+    monkeypatch, tmp_path
+):
+    """A plugin is not on `PATH` — the host tool looks for it under the
+    user's home, so without this the machine's own compose answers for
+    every release a walk installs."""
+    from footman.tasks import tools as task_module
+
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    binary = bindir / "docker"
+    binary.write_text("#!/bin/sh\n")
+    (tmp_path / "home" / ".docker" / "cli-plugins").mkdir(parents=True)
+    monkeypatch.setattr(task_module.shutil, "which", lambda _name: str(binary))
+
+    seen = {}
+    monkeypatch.setattr(
+        task_module._drivers,
+        "extract",
+        lambda driver: seen.update(home=os.environ.get("HOME")) or ToolSpec(name="d"),
+    )
+    driver = task_module._drivers.find("docker")
+    assert driver is not None
+    task_module._extract(driver)
+    assert seen["home"] == str(tmp_path / "home")
+
+
+def test_a_tool_with_no_plugin_home_is_read_exactly_as_before(monkeypatch, tmp_path):
+    """The host's own docker, or a prefix from before this existed."""
+    from footman.tasks import tools as task_module
+
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    (bindir / "docker").write_text("#!/bin/sh\n")
+    monkeypatch.setattr(
+        task_module.shutil, "which", lambda _name: str(bindir / "docker")
+    )
+    before = os.environ.get("HOME")
+    seen = {}
+    monkeypatch.setattr(
+        task_module._drivers,
+        "extract",
+        lambda driver: seen.update(home=os.environ.get("HOME")) or ToolSpec(name="d"),
+    )
+    driver = task_module._drivers.find("docker")
+    assert driver is not None
+    task_module._extract(driver)
+    assert seen["home"] == before
 
 
 def test_rebasing_a_verb_that_is_not_there():

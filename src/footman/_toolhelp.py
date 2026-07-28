@@ -745,6 +745,23 @@ def _wide_env() -> dict[str, str]:
     return {**os.environ, "COLUMNS": "200", "TERM": "dumb", "NO_COLOR": "1"}
 
 
+def _is_the_root_again(text: str, root: str) -> bool:
+    """Whether a verb answered with the tool's own help instead of its own.
+
+    A tool asked for a subcommand it does not have does not always fail:
+    docker prints its root help and exits, so the reading looked like a
+    successful one and `compose up` was recorded with docker's global
+    options and docker's own summary. Nothing downstream could tell —
+    it is a real help text, just not this verb's — and a walk that lost
+    its compose plugin for one release would write that release's compose
+    surface as ten global flags.
+
+    Compared on the whole text, which is exact: two verbs of the same tool
+    share phrasing but never the entire page.
+    """
+    return text.strip() == root.strip()
+
+
 def from_help(
     name: str,
     *,
@@ -791,7 +808,7 @@ def from_help(
     parsed = [root_verb]
     for verb in verbs:
         text = run_help([cmd, *verb.split(".")], flag=flag, man=man)
-        if text:
+        if text and not _is_the_root_again(text, root):
             # `git rev-parse` is spelled `tools.git.rev_parse(...)`: the
             # bridge turns the underscore back into a dash when it calls.
             parsed.append(

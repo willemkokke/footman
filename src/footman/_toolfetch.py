@@ -20,13 +20,15 @@ import json
 import os
 import re
 import subprocess
+import sys
+import threading
 import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 
-from footman._drivers import Driver
+from footman._drivers import Driver, Plugin, Provision
 
 PYPI = "https://pypi.org/pypi/{package}/json"
 TIMEOUT = 30
@@ -125,7 +127,7 @@ def read_python(requires_python: str = "", date: str = "") -> str:
     return f"3.{max(int(era.split('.')[1]), minimum)}"
 
 
-LISTABLE = ("uv", "node", "github", "gitlab", "bun", "python")
+LISTABLE = ("uv", "node", "github", "gitlab", "bun", "python", "docker")
 """The tiers with a release index footman can read. `system` is absent
 because git and docker are read from the host and have no fetch source."""
 
@@ -161,6 +163,8 @@ def releases(driver: Driver) -> list[Release]:
         found = _forge(driver, "gitlab" if kind == "gitlab" else "github")
     elif kind == "python":
         found = _uv_python()
+    elif kind == "docker":
+        found = _docker_index()
     else:
         return []
     return _stable(found)
@@ -246,12 +250,19 @@ def _npm(driver: Driver) -> list[Release]:
     )
 
 
-def _forge(driver: Driver, host: str) -> list[Release]:
+def _forge(driver: Driver, host: str, pages: int = 1) -> list[Release]:
     """GitHub and GitLab releases, with the tag normalised to a version.
 
     A tag is `v2.96.0` on one project and `2.96.0` on the next, while the
     binary reports the bare number — and the history keys on what the binary
     says, or a primed release would never match the base it belongs under.
+
+    One page — the hundred newest — is the horizon for a tool, which is
+    read newest-first and walked back only as far as anyone asks. A plugin
+    is different: it is looked up *by date*, to pair with a release of the
+    host tool, so the page that matters is the one covering that date. The
+    compose listing runs out in late 2022, which is well inside the range
+    docker itself goes back to.
     """
     from footman.tools import read_version
 
@@ -259,8 +270,15 @@ def _forge(driver: Driver, host: str) -> list[Release]:
     if not repo:
         return []
     if host == "github":
-        index = _index(f"https://api.github.com/repos/{repo}/releases?per_page=100")
-        entries = index if isinstance(index, list) else []
+        entries = []
+        for page in range(1, pages + 1):
+            index = _index(
+                f"https://api.github.com/repos/{repo}/releases?per_page=100&page={page}"
+            )
+            got = index if isinstance(index, list) else []
+            entries += got
+            if len(got) < 100:
+                break
         found = [
             Release(
                 version=read_version(e.get("tag_name", "")),
@@ -342,6 +360,198 @@ def _uv_python() -> list[Release]:
     return _order(list(found.values()))
 
 
+_DOCKER_INDEX = "https://download.docker.com/{os}/static/stable/{arch}/"
+_DOCKER_FILE = re.compile(
+    r'href="docker-(?P<version>\d+\.\d+\.\d+)\.(?:tgz|zip)"'
+    r".*?(?P<date>\d{4}-\d{2}-\d{2})"
+)
+
+
+def _docker_channel() -> tuple[str, str, str]:
+    """Where this machine's docker archives live, and what they are called.
+
+    Docker publishes static builds per platform and architecture rather than
+    one asset list, so the *index* is chosen here and the version list falls
+    out of it — the inverse of a forge, where one release names many assets.
+    """
+    import platform as _platform_mod
+
+    machine = _platform_mod.machine().lower()
+    arch = "aarch64" if machine in ("arm64", "aarch64") else "x86_64"
+    if _windows():
+        return "win", "x86_64", "zip"  # no arm64 index published
+    if sys.platform == "darwin":
+        return "mac", arch, "tgz"
+    return "linux", arch, "tgz"
+
+
+_MOBY = "moby/moby"
+_PLAIN_TAG = re.compile(r"v(\d+\.\d+\.\d+)$")
+
+_LISTINGS: dict[tuple[str, int], list[Release]] = {}
+_LISTINGS_LOCK = threading.Lock()
+
+
+def _listing(repo: str, pages: int) -> list[Release]:
+    """A forge listing, read once per process.
+
+    A walk asks the same question of the same repository for every release
+    it observes — which compose shipped by then — and the answer cannot
+    change while the walk runs. Unmemoised, a hundred-release docker walk
+    spends three hundred API calls on one listing and meets GitHub's
+    unauthenticated hourly limit five times over.
+    """
+    key = (repo, pages)
+    with _LISTINGS_LOCK:
+        if key in _LISTINGS:
+            return _LISTINGS[key]
+    found = _forge(
+        Driver(repo, provision=Provision(kind="github", repo=repo)), "github", pages
+    )
+    with _LISTINGS_LOCK:
+        _LISTINGS[key] = found
+    return found
+
+
+def _docker_dates() -> dict[str, str]:
+    """When each docker release actually shipped.
+
+    The static index dates its files by *upload* time, and docker re-uploads
+    in bulk: a third of the archives this machine can fetch are stamped one
+    day in 2025, including 20.10.6, which shipped in April 2021. Those dates
+    would go into the history as release dates and — worse — decide which
+    compose each release is paired with, handing a 2021 docker the compose
+    of four years later.
+
+    The engine's own releases carry the real dates, under tags that are
+    exactly the versions the static index publishes.
+    """
+    return {
+        release.version: release.date
+        for release in _listing(_MOBY, 3)
+        if _PLAIN_TAG.fullmatch(release.tag)
+    }
+
+
+def _docker_index() -> list[Release]:
+    """Every static docker build this platform can run.
+
+    A directory listing rather than an API, so the version and its
+    publication date are read from the row: `docker-29.6.2.tgz  2026-07-16`.
+
+    The directory holds more than the builds we want, so the pattern spells
+    out the exact `docker-<x.y.z>.<suffix>` shape rather than merely
+    containing it. That deliberately passes over three neighbours:
+    `docker-rootless-extras-*` (a different program), `docker-17.03.0-ce.tgz`
+    (the 2017 spelling, older than any release this walk can read), and
+    `docker-29.4.2-2.tgz` (a rebuild of a version already listed, which
+    would key to the same entry and simply race the original).
+    """
+    os_name, arch, _suffix = _docker_channel()
+    url = _DOCKER_INDEX.format(os=os_name, arch=arch)
+    try:
+        with urllib.request.urlopen(
+            urllib.request.Request(url, headers={"User-Agent": "footman-provision"}),
+            timeout=TIMEOUT,
+        ) as response:
+            listing = response.read().decode("utf-8", "replace")
+    except (urllib.error.URLError, TimeoutError, OSError) as cause:
+        raise Unreachable(url, cause) from cause
+    shipped = _docker_dates()
+    found = {
+        match["version"]: Release(
+            version=match["version"],
+            date=shipped.get(match["version"], match["date"]),
+        )
+        for match in _DOCKER_FILE.finditer(listing)
+    }
+    return _order(list(found.values()))
+
+
+def _install_docker(driver: Driver, release: Release, into: Path) -> Path | None:
+    """Fetch one static build and place its binary where the walk reads it."""
+    from footman import _provision
+
+    os_name, arch, suffix = _docker_channel()
+    index = _DOCKER_INDEX.format(os=os_name, arch=arch)
+    url = f"{index}docker-{release.version}.{suffix}"
+    bindir = into / "bin"
+    bindir.mkdir(parents=True, exist_ok=True)
+    try:
+        archive = _provision._download(url, into)
+        _provision._extract_binary(archive, "docker", bindir)
+    except (_provision.ProvisionError, OSError, ValueError):
+        return None
+    home = home_beside(bindir)
+    for plugin in driver.plugins:
+        # The directory is made whether or not a plugin lands in it. An
+        # absent one would send the reader to the machine's own plugins,
+        # which is the contamination this exists to remove; an empty one
+        # says what is true — this release had no compose, so those verbs
+        # are absent.
+        (home / plugin.path).mkdir(parents=True, exist_ok=True)
+        install_plugin(plugin, release.date, home)
+    return bindir
+
+
+def home_beside(bindir: Path) -> Path:
+    """The throwaway home that belongs to the release in *bindir*.
+
+    A plugin is found by looking under the user's home, so reading one
+    without reading the machine's own means giving the tool a different
+    home for as long as it is being read. Keeping it beside the binaries
+    is what lets the reader find it later from the binary alone, with no
+    extra argument threaded through five call sites.
+    """
+    return bindir.parent / "home"
+
+
+def install_plugin(plugin: Plugin, on_or_before: str, home: Path) -> bool:
+    """Place the plugin release a user of that tool release would have had.
+
+    Paired by date, newest that is not newer. A plugin has its own release
+    line, so there is no version to match on — but "what shipped alongside"
+    is a fact the two dates settle between them, the same answer every
+    time. A plugin older than any release (or a listing that cannot be
+    reached) leaves the home empty, and the verbs it owns simply read as
+    absent, which is what a walk of an era before the plugin existed
+    should say.
+    """
+    from footman import _provision
+    from footman.tools import version_tuple
+
+    found = _listing(plugin.repo, 3)
+    floor = version_tuple(plugin.since) if plugin.since else ()
+    dated = [
+        r
+        for r in found
+        if r.date
+        and (not on_or_before or r.date <= on_or_before)
+        and version_tuple(r.version) >= floor
+    ]
+    if not dated:
+        return False
+    release = dated[0]  # _forge orders newest first
+    into = home / plugin.path
+    into.mkdir(parents=True, exist_ok=True)
+    for tag in (release.tag, release.version, f"v{release.version}"):
+        if not tag:
+            continue
+        try:
+            assets = _provision.assets_for("github", plugin.repo, tag)
+            _name, url = _provision._pick_asset(assets)
+            archive = _provision._download(url, home)
+            _provision._extract_binary(archive, plugin.name, into)
+        except (_provision.ProvisionError, OSError, ValueError):
+            continue
+        return True
+    # We know which release belongs here and could not get it — a rate
+    # limit, an outage, a withdrawn asset. Read past, that becomes "this
+    # docker had no compose", which is a different claim entirely and one
+    # that would be written into the history as a removal.
+    raise Unreachable(f"{plugin.repo} {release.version}", "could not be placed")
+
+
 def _pypi(driver: Driver) -> list[Release]:
     """PyPI's index, minus the versions with no files and the ones older
     than the walk's horizon.
@@ -383,6 +593,8 @@ def install(driver: Driver, release: Release, into: Path) -> Path | None:
         return _install_asset(driver, release, into)
     if kind == "python":
         return _install_python(release.version)
+    if kind == "docker":
+        return _install_docker(driver, release, into)
     return None
 
 

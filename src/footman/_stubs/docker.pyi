@@ -349,8 +349,7 @@ class Docker(_Tool):
         """A self-sufficient runtime for containers
 
         Args:
-            config: Location of client config files. Defaults to
-                `/Users/willem/.docker`.
+            config: Location of client config files. Defaults to `~/.docker`.
             context: Name of the context to use to connect to the daemon (overrides
                 DOCKER_HOST env var and default context set with "docker context
                 use").
@@ -360,11 +359,9 @@ class Docker(_Tool):
                 "fatal"). Defaults to `info`.
             tls: Use TLS; implied by --tlsverify.
             tlscacert: Trust certs signed only by this CA. Defaults to
-                `/Users/willem/.docker/ca.pem`.
-            tlscert: Path to TLS certificate file. Defaults to
-                `/Users/willem/.docker/cert.pem`.
-            tlskey: Path to TLS key file. Defaults to
-                `/Users/willem/.docker/key.pem`.
+                `~/.docker/ca.pem`.
+            tlscert: Path to TLS certificate file. Defaults to `~/.docker/cert.pem`.
+            tlskey: Path to TLS key file. Defaults to `~/.docker/key.pem`.
             tlsverify: Use TLS and verify the remote.
         """
         ...
@@ -428,7 +425,7 @@ class Docker(_Tool):
             build_context: Additional build contexts (e.g., name=path). May be
                 repeated: a list emits the flag once per item.
             builder: Override the configured builder instance. Defaults to
-                `desktop-linux`.
+                `default`.
             cache_from: External cache sources (e.g., "user/app:cache",
                 "type=local,src=path/to/dir"). May be repeated: a list emits the
                 flag once per item.

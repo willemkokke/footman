@@ -26,6 +26,7 @@ from __future__ import annotations
 import dataclasses
 import json
 import re as _re
+import shutil
 import sys
 import threading
 from collections.abc import Iterator
@@ -96,6 +97,45 @@ def _on_path(prefix: str | Path) -> Iterator[None]:
     inherited = os.environ.get("PATH", "")
     with _overlay(PATH=f"{bindir}{os.pathsep}{inherited}"):
         yield
+
+
+def _extract(driver: _drivers.Driver) -> _toolspec.ToolSpec:
+    """Read an installed tool, with its plugins as the fetch left them.
+
+    A plugin is not on `PATH`: the host tool looks for it under the user's
+    home, which means the machine's own plugins answer for any release the
+    walk installs. `_toolfetch` puts the paired plugin in a throwaway home
+    beside the binaries, and this is where the tool is told to look there
+    instead — derived from the binary it resolves to, so nothing has to be
+    threaded through the five places a spec is read.
+
+    The overlay is written here rather than in `_drivers.extract` because
+    observations run in parallel: inside a run this routes through
+    `ctx.env`, which is this task's own copy, while a bare `os.environ`
+    write in the extractor would be every thread's.
+
+    A tool with no plugin, or a home that was never made — the host's own
+    docker, a prefix from before this existed — reads exactly as it did.
+    """
+    home = _plugin_home(driver)
+    if home is None:
+        return _drivers.extract(driver)
+    with _overlay(HOME=str(home), USERPROFILE=str(home)):
+        return _drivers.extract(driver)
+
+
+def _plugin_home(driver: _drivers.Driver) -> Path | None:
+    """The throwaway home holding *driver*'s plugins, if one was fetched."""
+    from footman import _toolfetch
+
+    if not driver.plugins:
+        return None
+    binary = shutil.which(driver.name)
+    if binary is None:
+        return None
+    home = _toolfetch.home_beside(Path(binary).parent)
+    wanted = {plugin.path for plugin in driver.plugins}
+    return home if any((home / path).is_dir() for path in wanted) else None
 
 
 @contextmanager
@@ -244,7 +284,7 @@ def _generate(driver: _drivers.Driver) -> str:
     *that* — so what ships is a view of the record rather than a second
     record that can disagree with it.
     """
-    spec = _drivers.extract(driver)
+    spec = _extract(driver)
     doc = _observe(driver, spec)
     return _stub_from(driver, doc, in_process=spec.in_process)
 
@@ -461,7 +501,7 @@ def spec(
     if not _drivers.installed(driver):
         raise SystemExit(f"{driver.name} is not installed")
     on = wants_color(sys.stdout)
-    extracted = _drivers.extract(driver)
+    extracted = _extract(driver)
     print(bold(f"{extracted.name} {extracted.version}", on), extracted.help)
     for one in extracted.verbs:
         if verb and one.name != verb:
@@ -626,7 +666,7 @@ def _audit(
             skipped.append(f"{driver.key} ({reason})")
             continue
         path = _stub_path(driver.key)
-        spec = _drivers.extract(driver)
+        spec = _extract(driver)
         fresh = _formatted(_render(driver, spec))
         checked += 1
         if not path.exists() or path.read_text(encoding="utf-8") != fresh:
@@ -721,9 +761,7 @@ def _color_probe_and_write(only: str, write: bool, on: bool) -> None:
             and driver.key not in _colorprobe._CURATED
         )
         spec: _toolspec.ToolSpec = (
-            _drivers.extract(driver)
-            if needs_spec
-            else _toolspec.ToolSpec(name=driver.name)
+            _extract(driver) if needs_spec else _toolspec.ToolSpec(name=driver.name)
         )
         installed.append((driver.key, driver.name, binary, spec))
 
@@ -1582,7 +1620,7 @@ def observe(
         return None
     try:
         with _bin_on_path(bindir):
-            spec = _drivers.extract(driver)
+            spec = _extract(driver)
     finally:
         _discard(bindir)
     if not _describes_itself(spec):
