@@ -96,6 +96,31 @@
   cursor: default;
 }
 
+#fm-playground #fmp-complete {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem;
+  padding: 0.3rem 0.6rem;
+  border-bottom: 0.05rem solid var(--md-default-fg-color--lightest);
+}
+
+#fm-playground #fmp-complete button {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  padding: 0.15rem 0.5rem;
+  background: var(--md-default-fg-color--lightest);
+  color: var(--md-code-fg-color);
+  font-family: var(--md-code-font-family);
+  font-size: 0.64rem;
+  font-weight: 400;
+}
+
+#fm-playground #fmp-complete button span {
+  color: var(--md-default-fg-color--light);
+  font-family: var(--md-text-font-family, inherit);
+}
+
 #fm-playground pre {
   flex: 1;
   margin: 0;

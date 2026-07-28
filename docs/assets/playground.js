@@ -127,6 +127,36 @@ def _fm_invoke(code, line):
             "stdout": "",
             "stderr": traceback.format_exc(limit=8),
         })
+
+_fm_manifest = {"code": None, "tree": None}
+
+def _fm_complete(code, line):
+    # The real completion hot path over the editor's tasks.py: build the
+    # manifest tree once per source text, then every Tab is a pure walk —
+    # the same complete() a shell hook consults.
+    import types
+    from footman import manifest, registry
+    from footman._complete import complete
+    if _fm_manifest["code"] != code:
+        module = types.ModuleType("tasks")
+        sys.modules["tasks"] = module
+        try:
+            with registry.capture() as root:
+                exec(compile(code, "tasks.py", "exec"), module.__dict__)
+            _fm_manifest["tree"] = manifest.build_manifest(root)["tree"]
+            _fm_manifest["code"] = code
+        except Exception:
+            return json.dumps([])
+        finally:
+            sys.modules.pop("tasks", None)
+    words = line.split()
+    if not line or line.endswith(" "):
+        words.append("")
+    candidates = [
+        c for c in complete(_fm_manifest["tree"], words)
+        if not c.startswith(chr(0))  # file/dynamic sentinels need a real shell
+    ]
+    return json.dumps(candidates)
 `;
 
 let pyodideReady = null; // one load per browser tab, kept across instant nav
@@ -186,8 +216,98 @@ function initPlayground() {
   });
   args.addEventListener("keydown", (event) => {
     if (event.key === "Enter") run();
+    if (event.key === "Tab") {
+      event.preventDefault();
+      completeArgs();
+    }
+    if (event.key === "Escape") hideCandidates();
   });
+  args.addEventListener("input", hideCandidates);
   runBtn.addEventListener("click", run);
+
+  /* Tab completion: the same manifest completer a shell hook consults,
+   * over whatever the editor currently says. */
+
+  const strip = document.getElementById("fmp-complete");
+
+  function hideCandidates() {
+    strip.hidden = true;
+    strip.replaceChildren();
+  }
+
+  function insertCompletion(name) {
+    const cursor = args.selectionStart ?? args.value.length;
+    const before = args.value.slice(0, cursor);
+    const after = args.value.slice(cursor);
+    const partial = before.match(/\S*$/)[0];
+    const glue = name.endsWith("=") ? "" : " ";
+    const head = before.slice(0, before.length - partial.length) + name + glue;
+    args.value = head + after;
+    args.selectionStart = args.selectionEnd = head.length;
+    args.focus();
+  }
+
+  function commonPrefix(names) {
+    let prefix = names[0] ?? "";
+    for (const name of names) {
+      while (!name.startsWith(prefix)) prefix = prefix.slice(0, -1);
+    }
+    return prefix;
+  }
+
+  async function completeArgs() {
+    try {
+      const pyodide = await loadRuntime(setStatus);
+      setStatus("ready");
+      const fn = pyodide.globals.get("_fm_complete");
+      const cursor = args.selectionStart ?? args.value.length;
+      const raw = fn(code.value, args.value.slice(0, cursor));
+      fn.destroy?.();
+      const candidates = JSON.parse(raw);
+      const names = candidates.map((c) => c.split("\t")[0]);
+      hideCandidates();
+      if (!names.length) return;
+      if (names.length === 1) {
+        insertCompletion(names[0]);
+        return;
+      }
+      const partial = args.value.slice(0, cursor).match(/\S*$/)[0];
+      const prefix = commonPrefix(names);
+      if (prefix.length > partial.length) {
+        const cut = prefix.length; // keep the menu; extend what's typed
+        const before = args.value.slice(0, cursor);
+        args.value =
+          before.slice(0, before.length - partial.length) +
+          prefix +
+          args.value.slice(cursor);
+        args.selectionStart = args.selectionEnd =
+          before.length - partial.length + cut;
+      }
+      for (const candidate of candidates) {
+        const [name, summary] = candidate.split("\t");
+        const button = document.createElement("button");
+        button.type = "button";
+        const strong = document.createElement("strong");
+        strong.textContent = name;
+        button.appendChild(strong);
+        if (summary) {
+          const dim = document.createElement("span");
+          dim.textContent = summary;
+          button.appendChild(dim);
+        }
+        // mousedown, not click: the input keeps focus and the strip stays.
+        button.addEventListener("mousedown", (event) => {
+          event.preventDefault();
+          insertCompletion(name);
+          hideCandidates();
+        });
+        strip.appendChild(button);
+      }
+      strip.hidden = false;
+    } catch (err) {
+      console.warn("footman playground completion:", err);
+    }
+  }
 
   let running = false;
   async function run() {

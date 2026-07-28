@@ -15,8 +15,11 @@ versions may include breaking changes.
   on first run — nothing installs, and nothing you type leaves the page. A
   browser cannot spawn subprocesses, so `--list`, `--help`, `--json`,
   `--dry-run` plans and taught errors are the show, and the page says so
-  plainly. Every runnable example in the docs carries a small "run it
-  there" link that opens it in the editor together with what it builds on.
+  plainly. The prompt completes on Tab — tasks, flags, choice values —
+  through the same manifest walk a shell hook consults, rebuilt from
+  whatever the editor says. Every runnable example in the docs carries a
+  small "run it there" link that opens it in the editor together with
+  what it builds on.
 - **Every docs example is executed by the test suite.** A page reads as a
   session: its python blocks run in order in one shared namespace, so the
   first block carries the imports and later blocks build on what came

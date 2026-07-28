@@ -14,9 +14,12 @@ machine, and nothing you type leaves it.
 One honest limitation: a browser can't spawn subprocesses, so a task that
 executes `run("…")` for real stops at the boundary a terminal would cross.
 Everything up to that boundary is the real thing — parsing, validation,
-taught errors, help, completion metadata, `--json`, and `--dry-run` plans.
-Try `--list`, then `--dry-run check`, then `deploy produ` and read the
-error. That last one is the pitch.
+taught errors, help, `--json`, and `--dry-run` plans. The prompt even
+completes: press <kbd>Tab</kbd> and the answer comes from the same
+manifest walk a shell hook consults — tasks, flags, choice values, all
+derived from whatever the editor says right now. Try `--list`, then
+`--dry-run check`, then `deploy produ` and read the error. That last one
+is the pitch.
 
 <div id="fm-playground" markdown="0">
   <div class="fmp-pane fmp-editor-pane">
@@ -31,6 +34,7 @@ error. That last one is the pitch.
         autocapitalize="off" aria-label="fm command line" />
       <button id="fmp-run" disabled>Run</button>
     </div>
+    <div id="fmp-complete" hidden></div>
     <pre id="fmp-out" aria-live="polite"></pre>
     <div class="fmp-status" id="fmp-status">Python loads when you first run —
       a few seconds and ~15&nbsp;MB, once per visit.</div>
