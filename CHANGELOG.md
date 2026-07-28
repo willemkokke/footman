@@ -7,6 +7,16 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A backfill is recorded but never announced.** A walk that reaches
+  backwards changes the tool's surface at every step it takes, and every
+  one of those steps is a change the tool made years ago — filling git's
+  history announced that 2.44.0 "adds `--no-checkout`" as though it had
+  happened that week. Only a release newer than anything seen before is
+  news now, so the older ones are still read, folded and stubbed, and the
+  changelog stays a record of releases nobody had seen.
+
 ### Added
 
 - **git is read from its manuals, and every release of them is kept.**

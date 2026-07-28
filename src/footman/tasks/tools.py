@@ -1211,6 +1211,9 @@ def _assemble_documents(documents: list[dict]) -> Refreshed:
         if driver is None or doc_ is None:
             skipped.append(f"{tool} (no history — run `sync` first)")
             continue
+        # What the chain already reached, before this fold. A release above
+        # it is news; one below it is history being filled in.
+        highest = (_toolhistory.observed(doc_) or [""])[0]
         fresh, touched = _fold_into(doc_, tool, versions, meta[tool])
         if fresh:
             read[tool] = fresh
@@ -1221,7 +1224,7 @@ def _assemble_documents(documents: list[dict]) -> Refreshed:
             # recomputed from scratch every Monday.
             _toolhistory.save(doc_, _history_path(tool))
             _stub_path(tool).write_text(_stub_from(driver, doc_), encoding="utf-8")
-        if moved := _events_of(doc_, fresh):
+        if moved := _events_of(doc_, fresh, above=highest):
             events[tool] = moved
     return Refreshed(
         read=read,
@@ -1286,8 +1289,10 @@ class Refreshed:
     read: dict[str, list[str]]
     """Releases newly observed, per tool, oldest first."""
     events: dict[str, list[str]]
-    """The subset of those that *changed* the tool's surface. This is the
-    release decision and the CHANGELOG line at once."""
+    """The subset of those that are *newer than anything seen before* and
+    changed the tool's surface. This is the release decision and the
+    CHANGELOG line at once — so a backfill, which reaches only downwards,
+    is saved and reported but never announced."""
     unreachable: dict[str, str]
     """Indexes that would not answer, and why. Not the same as a tool with
     nothing new — see `_toolfetch.Unreachable`."""
@@ -1834,7 +1839,7 @@ def _assemble(
     return fresh, holes
 
 
-def _events_of(doc: dict, fresh: list[str]) -> list[str]:
+def _events_of(doc: dict, fresh: list[str], *, above: str = "") -> list[str]:
     """Which of *fresh* changed the tool's surface — the release decision.
 
     Answered from the assembled chain rather than remembered from arrival
@@ -1842,10 +1847,21 @@ def _events_of(doc: dict, fresh: list[str]) -> list[str]:
     predecessor, the step back *from* it. A hole just below a release makes
     that delta span the gap, so the change is attributed to the release
     actually read — the chain's standing imprecision, reported as the hole.
+
+    Only releases newer than *above* — the newest the chain held before
+    this fold — are considered. A walk that reaches backwards changes the
+    surface at every step it takes, and every one of those steps is a
+    change the tool made years ago: filling git's history announced that
+    2.44.0 "adds `--no-checkout`" as though it had happened this week. What
+    a changelog reports is a release nobody had seen before, not a release
+    footman had not got around to reading.
     """
     chain = _toolhistory.observed(doc)  # newest first
+    ceiling = _version_tuple(above) if above else ()
     changed: list[str] = []
     for version in fresh:
+        if ceiling and _version_tuple(version) <= ceiling:
+            continue  # history being filled in, not news
         spot = chain.index(version)
         if spot + 1 >= len(chain):
             continue  # the floor: nothing below to have changed from

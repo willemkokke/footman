@@ -1751,6 +1751,99 @@ def test_a_refresh_writes_its_own_events_into_the_changelog(tmp_path, monkeypatc
     assert "adds `--fix`" in written
 
 
+def test_a_backfill_is_recorded_but_never_announced(tmp_path, monkeypatch):
+    """A walk that reaches backwards changes the surface at every step it
+    takes, and every one of those steps is a change the tool made years
+    ago. Filling git's history announced that 2.44.0 "adds `--no-checkout`"
+    as though it had happened that week.
+
+    The releases are still read, still folded, still stubbed — a changelog
+    reports a release nobody had seen before, not one footman had not got
+    around to reading.
+    """
+    from footman import _toolfetch
+    from footman.tasks import tools
+
+    _isolate(tools, monkeypatch, tmp_path)
+    _toolhistory.save(
+        _toolhistory.new(
+            "ruff",
+            version="1.0.3",
+            date="2026-02-04",
+            surface=_with_flags("quiet", "fix"),
+            platforms=[tools._platform()],
+        ),
+        tmp_path / "history" / "ruff.json",
+    )
+    listings = {
+        "ruff": [
+            _toolfetch.Release(version=f"1.0.{n}", date=f"2026-02-0{n + 1}")
+            for n in (3, 2, 1, 0)
+        ]
+    }
+    # Each older release really does differ — the backfill is not a no-op.
+    surfaces = {
+        ("ruff", "1.0.2"): _with_flags("quiet", "fix"),
+        ("ruff", "1.0.1"): _with_flags("quiet"),
+        ("ruff", "1.0.0"): _with_flags("quiet"),
+    }
+    _serve(monkeypatch, listings, surfaces)
+
+    out = tmp_path / "obs.json"
+    assert _tools_run(["gather", "--only=ruff", "--count=3", f"--out={out}"]).ok
+    result = _tools_run(["assemble", str(out)])
+    assert result.ok, result.stderr
+
+    stored = _toolhistory.load(tmp_path / "history" / "ruff.json")
+    assert stored is not None
+    assert _toolhistory.observed(stored) == ["1.0.3", "1.0.2", "1.0.1", "1.0.0"]
+    assert "release warranted: no" in result.stdout
+    written = (tmp_path / "CHANGELOG.md").read_text(encoding="utf-8")
+    assert "`--fix`" not in written
+
+
+def test_a_release_above_the_chain_is_still_announced_beside_a_backfill(
+    tmp_path, monkeypatch
+):
+    """The rule is about direction, not about how much a run read: one run
+    can do both, and only the release nobody had seen is news."""
+    from footman import _toolfetch
+    from footman.tasks import tools
+
+    _isolate(tools, monkeypatch, tmp_path)
+    _toolhistory.save(
+        _toolhistory.new(
+            "ruff",
+            version="1.0.2",
+            date="2026-02-03",
+            surface=_with_flags("quiet"),
+            platforms=[tools._platform()],
+        ),
+        tmp_path / "history" / "ruff.json",
+    )
+    listings = {
+        "ruff": [
+            _toolfetch.Release(version=f"1.0.{n}", date=f"2026-02-0{n + 1}")
+            for n in (3, 2, 1, 0)
+        ]
+    }
+    surfaces = {
+        ("ruff", "1.0.3"): _with_flags("quiet", "fix"),  # above: news
+        ("ruff", "1.0.1"): _with_flags("quiet", "cache"),  # below: history
+        ("ruff", "1.0.0"): _with_flags("quiet"),
+    }
+    _serve(monkeypatch, listings, surfaces)
+
+    out = tmp_path / "obs.json"
+    assert _tools_run(["gather", "--only=ruff", "--count=2", f"--out={out}"]).ok
+    result = _tools_run(["assemble", str(out)])
+    assert result.ok, result.stderr
+
+    written = (tmp_path / "CHANGELOG.md").read_text(encoding="utf-8")
+    assert "`--fix`" in written  # 1.0.3, newer than anything seen
+    assert "`--cache`" not in written  # 1.0.1, filled in behind it
+
+
 def test_a_refresh_with_no_events_writes_no_note(tmp_path, monkeypatch):
     """A new release that changed nothing is recorded — an empty delta — and
     warrants neither a release nor a line about one."""
