@@ -395,13 +395,22 @@ def merge(
     entry = entry_of(doc, version)
     if entry is None:
         return False
+    # What this release already says, replayed — NOT `entry["surface"]`,
+    # which only the base carries. A delta entry stores the step down to its
+    # release, so reading it as a surface makes every option the incoming
+    # platform saw look like one nobody had ever found: a first Linux fold
+    # tagged 25,802 options as missing on macOS, for a store macOS itself
+    # had written.
+    stored = at(doc, version)
+    if stored is None:  # pragma: no cover - entry_of found it, so replay must
+        return False
     observers = sorted({*entry.get("platforms", []), *platforms})
-    before = json.dumps(entry["surface"], sort_keys=True) if "surface" in entry else ""
+    before = json.dumps(stored, sort_keys=True)
 
-    known = _flat(entry["surface"]) if "surface" in entry else {}
+    known = _flat(stored)
     incoming = _flat(surface)
     missing = {key: list(who) for key, who in entry.get("absent", {}).items()}
-    merged = json.loads(json.dumps(entry.get("surface", {"help": "", "verbs": {}})))
+    merged = json.loads(json.dumps(stored))
 
     for key, option in incoming.items():
         verb_name, _, option_name = key.partition("\t")
@@ -422,7 +431,7 @@ def merge(
     for key, who in (absent or {}).items():
         missing[key] = sorted({*missing.get(key, []), *who})
 
-    entry["surface"] = {
+    widened = {
         "help": surface.get("help", "") or merged.get("help", ""),
         "verbs": _ordered(merged.get("verbs", {})),
     }
@@ -431,7 +440,45 @@ def merge(
         entry,
         {key: [p for p in who if p in observers] for key, who in missing.items()},
     )
-    return json.dumps(entry["surface"], sort_keys=True) != before
+    if json.dumps(widened, sort_keys=True) == before:
+        return False  # coverage widened, the tool did not: the chain is untouched
+    _rewrite(doc, version, widened)
+    return True
+
+
+def _rewrite(doc: dict, version: str, surface: dict[str, Any]) -> None:
+    """Record a new surface for a release the chain already holds.
+
+    The base *is* its surface, so it is written. Anything else is described
+    by two steps — the one keyed at the release (down *to* it) and the one
+    below (down *from* it) — and both are recomputed here, against surfaces
+    read before either is touched. Everything else in the chain stays
+    byte-identical, which is the same locality a midfill has.
+    """
+    chain = observed(doc)
+    spot = chain.index(version)
+    above = at(doc, chain[spot - 1]) if spot else None
+    below = at(doc, chain[spot + 1]) if spot + 1 < len(chain) else None
+
+    if version == doc["base"]["version"]:
+        doc["base"]["surface"] = surface
+    else:
+        entry = doc["deltas"][version]
+        kept = {
+            k: entry[k]
+            for k in ("date", "platforms", "extractor", "absent")
+            if k in entry
+        }
+        doc["deltas"][version] = {**kept, **delta(above or surface, surface)}
+    if below is not None:
+        older = chain[spot + 1]
+        entry = doc["deltas"][older]
+        kept = {
+            k: entry[k]
+            for k in ("date", "platforms", "extractor", "absent")
+            if k in entry
+        }
+        doc["deltas"][older] = {**kept, **delta(surface, below)}
 
 
 def _preferred(

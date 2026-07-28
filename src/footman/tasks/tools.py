@@ -251,7 +251,10 @@ def _stub_from(driver: _drivers.Driver, doc: dict, *, in_process: bool = False) 
     return _formatted(
         _stubgen.render(
             spec,
-            platform=(base.get("platforms") or [_platform()])[0],
+            # Every platform that read it, not the first alphabetically: a
+            # base observed on two says so, or the header credits one and
+            # quietly disowns the other's evidence.
+            platform=_and(base.get("platforms") or [_platform()]),
             class_name=_class_name(driver.key),
             in_process=_mode(driver, spec),
         )
@@ -289,10 +292,9 @@ def _observe(driver: _drivers.Driver, spec: _toolspec.ToolSpec) -> dict:
         # already possible today whenever an extractor improvement changed
         # the words.
         doc["base"]["extractor"] = _toolhistory.EXTRACTOR
-        if _toolhistory.merge(
+        _toolhistory.merge(
             doc, version=version, surface=surface, platforms=[_platform()]
-        ):
-            _restitch(doc, version)
+        )
     elif _version_tuple(version) == _version_tuple(doc["base"]["version"]):
         # Two builds of one base — eclint's `0.6.0-wk.3` against its
         # `-wk.5`. The comparator cannot separate them and the dates cannot
@@ -324,32 +326,6 @@ def _observe(driver: _drivers.Driver, spec: _toolspec.ToolSpec) -> dict:
         )
     _toolhistory.save(doc, path)
     return doc
-
-
-def _restitch(doc: dict, version: str) -> None:
-    """Recompute the deltas that describe a release whose surface moved.
-
-    A surface is referenced by exactly two entries — the one keyed at the
-    release itself (the step down *to* it) and the one below it (the step
-    *from* it) — so a merge that widened a surface is as local as a midfill,
-    however long the chain. Everything else stays byte-identical.
-    """
-    chain = _toolhistory.observed(doc)
-    spot = chain.index(version)
-    for newer, older in ((chain[spot - 1] if spot else "", version), (version, "")):
-        older = older or (chain[spot + 1] if spot + 1 < len(chain) else "")
-        if not newer or not older:
-            continue
-        above, below = _toolhistory.at(doc, newer), _toolhistory.at(doc, older)
-        if above is None or below is None:  # pragma: no cover - both observed
-            continue
-        entry = doc["deltas"][older]
-        keep = {
-            k: entry[k]
-            for k in ("date", "platforms", "extractor", "absent")
-            if k in entry
-        }
-        doc["deltas"][older] = {**keep, **_toolhistory.delta(above, below)}
 
 
 def _today() -> str:
@@ -1131,14 +1107,13 @@ def _fold_into(
         platforms = sorted(versions[version])
         if (entry := _toolhistory.entry_of(doc, version)) is not None:
             was = json.dumps(entry, sort_keys=True)
-            if _toolhistory.merge(
+            _toolhistory.merge(
                 doc,
                 version=version,
                 surface=surface,
                 platforms=platforms,
                 absent=absent,
-            ):
-                _restitch(doc, version)
+            )
             touched = touched or json.dumps(entry, sort_keys=True) != was
             continue
         if _toolhistory.insert(
@@ -1530,9 +1505,41 @@ def observe(
             spec = _drivers.extract(driver)
     finally:
         _discard(bindir)
-    if not spec.verbs:
-        return None  # a binary that will not describe itself is no observation
+    if not _describes_itself(spec):
+        return None
     return _toolhistory.surface_of(spec)
+
+
+def _describes_itself(spec) -> bool:
+    """Whether a reading is a description of a tool at all.
+
+    "It printed something" is not the test. A tool whose launcher is missing
+    its interpreter still exits with prose on stdout — a Linux box without
+    `node` read every npm-tier release as one bare verb, no options, help
+    text reading `/usr/bin/env: 'node': No such file or directory` — and the
+    extractor faithfully turned that into a surface. Recorded, it says the
+    tool accepts nothing, which then folds as an absence on that platform:
+    855 options "missing on Linux" for a tool that was never once run.
+
+    So a reading must carry at least one option somewhere, and its prose must
+    not be a launcher complaining. Both, because a tool with genuinely no
+    options is imaginable while one whose help is an exec error is not.
+    """
+    if not spec.verbs:
+        return False
+    if not any(verb.options for verb in spec.verbs):
+        return False
+    lowered = (spec.help or "").lower()
+    return not any(
+        broken in lowered
+        for broken in (
+            "no such file or directory",
+            "command not found",
+            "is not recognized as an internal or external command",
+            "cannot execute",
+            "permission denied",
+        )
+    )
 
 
 def _gather(work: list, scratch: Path) -> dict[str, dict[str, dict | None]]:
@@ -1826,8 +1833,13 @@ def _sync_against(prefix: Path, only: str) -> None:
     sync(only=only, prefix=str(prefix))
 
 
+# `platform` is everyone who read the release — "Linux", or "Linux and
+# macOS", or all three — so it matches up to the sentence's full stop rather
+# than a single word. It was one word when only one machine ever looked, and
+# a header naming two silently stopped parsing: every stub read as
+# hand-written, which is what the reference table then published.
 _READ_FROM = _re.compile(
-    r"Read from (?P<tool>\S+) (?P<version>\S+) on (?P<platform>\w+)\."
+    r"Read from (?P<tool>\S+) (?P<version>\S+) on (?P<platform>[^.]+)\."
     r"(?: In-process: (?P<mode>\w+)\.)?"
 )
 

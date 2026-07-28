@@ -184,6 +184,23 @@ versions may include breaking changes.
   console grandchild allocated another window of its own. They spawn with
   `CREATE_NO_WINDOW` now: a hidden console instead of none, which their
   children inherit.
+- **A platform folding into an older release no longer contradicts what is
+  stored.** Every release below the newest is kept as a *step*, not a
+  surface, and the merge read that step as though it were one — so every
+  option the arriving platform saw looked like one nobody had ever found.
+  The first real Linux fold tagged 25,802 options as missing on macOS,
+  across a store macOS itself had written. The merge now compares against
+  the replayed surface, and restitches the two entries that describe a
+  release whose surface genuinely moved.
+- **A reading has to describe a tool to be recorded as one.** A launcher
+  that cannot find its interpreter still prints prose and exits: a machine
+  without `node` read every npm-tier release as one bare verb, no options,
+  help text saying `No such file or directory`. Stored, that claims the tool
+  accepts nothing — 855 options "missing on Linux" for a tool that never
+  ran. Such a reading is a hole now, which is what a later run fills.
+- **A stub header names every platform that read it**, rather than the first
+  alphabetically — a release observed on two platforms credited one and
+  quietly disowned the other's evidence.
 
 - **A task called from `@pre_tasks` or `@post_tasks` is refused, and says
   why.** Both moments sit outside the run, so such a call quietly became a

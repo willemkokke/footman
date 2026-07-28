@@ -2256,3 +2256,143 @@ def test_no_bun_and_no_node_is_no_worse_than_before(tmp_path, monkeypatch):
     before = os.environ["PATH"]
     with tools._sandboxed(tmp_path / "scratch"):
         assert os.environ["PATH"] == before
+
+
+def test_a_platform_folding_into_an_older_release_agrees_with_what_is_stored():
+    """The case a base-only test cannot reach, and the one a real matrix hits
+    on its first run: every release below the newest is stored as a *step*,
+    not a surface.
+
+    Read that step as though it were a surface and every option the arriving
+    platform saw looks like one nobody ever found — a first Linux fold tagged
+    25,802 options as missing on macOS, across a store macOS itself had
+    written. Two platforms that agree must record agreement: coverage widens,
+    the sidecar stays empty, and the chain does not move.
+    """
+    surfaces = {
+        "1.0.2": _with_flags("quiet", "fix"),
+        "1.0.1": _with_flags("quiet", "fix"),
+        "1.0.0": _with_flags("quiet"),
+    }
+    doc = _toolhistory.new(
+        "ruff",
+        version="1.0.2",
+        date="2026-02-03",
+        surface=surfaces["1.0.2"],
+        platforms=["macOS"],
+    )
+    for version in ("1.0.1", "1.0.0"):
+        _toolhistory.extend(
+            doc,
+            version=version,
+            date="2026-02-01",
+            surface=surfaces[version],
+            platforms=["macOS"],
+        )
+
+    def steps(chain: dict) -> str:
+        """The payloads alone — `platforms` is meant to widen."""
+        return json.dumps(
+            {
+                v: {k: e[k] for k in e if k not in ("platforms", "absent")}
+                for v, e in chain.items()
+            },
+            sort_keys=True,
+        )
+
+    before = steps(doc["deltas"])
+
+    for version, surface in surfaces.items():  # Linux reads the same thing
+        assert not _toolhistory.merge(
+            doc, version=version, surface=surface, platforms=["Linux"]
+        )
+
+    assert steps(doc["deltas"]) == before  # the chain itself did not move
+    for version in surfaces:
+        entry = _toolhistory.entry_of(doc, version)
+        assert entry is not None
+        assert entry["platforms"] == ["Linux", "macOS"]
+        assert not entry.get("absent")  # agreement is not an exception
+        assert _toolhistory.at(doc, version) == surfaces[version]  # replay exact
+
+
+def test_a_divergence_below_the_newest_release_restitches_two_entries():
+    """A merge that genuinely widens an older release rewrites the two steps
+    that describe it — the one keyed at it and the one below — and nothing
+    else, however long the chain."""
+    surfaces = {f"1.0.{n}": _with_flags("quiet") for n in range(5)}
+    doc = _toolhistory.new(
+        "ruff",
+        version="1.0.4",
+        date="2026-02-05",
+        surface=surfaces["1.0.4"],
+        platforms=["macOS"],
+    )
+    for n in (3, 2, 1, 0):
+        _toolhistory.extend(
+            doc,
+            version=f"1.0.{n}",
+            date=f"2026-02-0{n + 1}",
+            surface=surfaces[f"1.0.{n}"],
+            platforms=["macOS"],
+        )
+    untouched = {v: json.dumps(e, sort_keys=True) for v, e in doc["deltas"].items()}
+
+    # Linux sees an extra flag at 1.0.2 — a real divergence, mid-chain.
+    assert _toolhistory.merge(
+        doc,
+        version="1.0.2",
+        surface=_with_flags("quiet", "linuxonly"),
+        platforms=["Linux"],
+    )
+
+    moved = [
+        v
+        for v, was in untouched.items()
+        if json.dumps(doc["deltas"][v], sort_keys=True) != was
+    ]
+    assert sorted(moved) == ["1.0.1", "1.0.2"]  # the step to it, and the step from it
+    assert doc["deltas"]["1.0.2"]["absent"] == {"\tlinuxonly": ["macOS"]}
+    for version, expected in surfaces.items():
+        replayed = _toolhistory.at(doc, version)
+        assert replayed is not None
+        names = {o for v in replayed["verbs"].values() for o in v["options"]}
+        assert names == ({"quiet", "linuxonly"} if version == "1.0.2" else {"quiet"})
+
+
+@pytest.mark.parametrize(
+    ("help_text", "options", "verdict"),
+    [
+        ("Lint your spelling.", ("fix",), True),
+        ("/usr/bin/env: 'node': No such file or directory", (), False),
+        ("/usr/bin/env: 'node': No such file or directory", ("fix",), False),
+        ("cspell: command not found", (), False),
+        ("'foo' is not recognized as an internal or external command", (), False),
+        ("Lint your spelling.", (), False),
+    ],
+)
+def test_a_reading_must_describe_a_tool_to_count_as_one(help_text, options, verdict):
+    """A launcher that cannot find its interpreter still prints prose and
+    exits, and the extractor will faithfully turn that prose into a surface.
+
+    The Linux box had no `node`; every npm-tier release read as one bare verb
+    with no options and help text saying so. Stored, that claims the tool
+    accepts nothing — which folds as 855 options "missing on Linux" for a
+    tool that never ran. An observation has to be a description, not merely
+    output.
+    """
+    from footman._toolspec import ToolSpec, Verb
+    from footman.tasks import tools
+
+    spec = ToolSpec(
+        name="cspell",
+        help=help_text,
+        verbs=(
+            Verb(
+                name="",
+                help=help_text,
+                options=tuple(Option(o, (f"--{o}",)) for o in options),
+            ),
+        ),
+    )
+    assert tools._describes_itself(spec) is verdict
