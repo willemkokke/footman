@@ -138,6 +138,24 @@ def driver(key: str) -> _drivers.Driver:
 # --- reading each family --------------------------------------------------
 
 
+def test_reads_drop_the_callers_interpreter(monkeypatch):
+    """`uv run` exports PYTHONHOME for the environment it launched, and a
+    console script from any *other* Python then loads that stdlib instead of
+    its own and dies before it can describe itself. The walk reads period
+    venvs by design, so every release on a different minor than the runner
+    read as a hole — 107 of them on Windows, every tool whose launcher is a
+    console script rather than a native binary."""
+    monkeypatch.setenv("PYTHONHOME", "/somewhere/else")
+    monkeypatch.setenv("PYTHONPATH", "/also/wrong")
+    monkeypatch.setenv("KEEP_ME", "yes")
+    env = _toolhelp.read_env(COLUMNS="200")
+    assert "PYTHONHOME" not in env
+    assert "PYTHONPATH" not in env
+    assert env["KEEP_ME"] == "yes"  # only the interpreter vars go
+    assert env["COLUMNS"] == "200"
+    assert "PYTHONHOME" not in _toolhelp._wide_env()
+
+
 def test_reads_spawn_off_the_callers_console():
     """A tool that interrogates the terminal at start-up (tea ≤ 0.14.2 sent
     an OSC theme query) hangs a captured read under a VT-capable terminal —

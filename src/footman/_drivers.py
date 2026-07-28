@@ -506,7 +506,7 @@ def _read_version(name: str) -> tuple[str, str]:
     # A version read must never touch the network: gh runs its update check
     # from any command — a banner, a state write, a remote call — unless
     # told not to. The variable is gh's own; every other tool ignores it.
-    env = {**os.environ, "GH_NO_UPDATE_NOTIFIER": "1"}
+    env = _toolhelp.read_env(GH_NO_UPDATE_NOTIFIER="1")
     try:
         done = subprocess.run(
             [binary, "--version"],
