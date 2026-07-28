@@ -105,7 +105,8 @@ def provision(
     for driver in by_kind.get("bun", []):  # before node: node runs through bun
         outcomes.append(_release(prefix, driver, host="github"))
     outcomes += _node_tier(prefix, by_kind.get("node", []))
-    for driver in by_kind.get("github", []) + by_kind.get("gitlab", []):
+    forges = ("github", "gitlab", "gitea")
+    for driver in [d for kind in forges for d in by_kind.get(kind, [])]:
         outcomes.append(_release(prefix, driver, host=driver.provision.kind))
     outcomes += _docker_tier(prefix, by_kind.get("docker", []))
     outcomes += _man_tier(prefix, by_kind.get("man", []))
@@ -377,6 +378,12 @@ def assets_for(host: str, repo: str, tag: str = "") -> list[tuple[str, str]]:
         )
         links = data.get("assets", {}).get("links", [])
         return [(a["name"], a.get("direct_asset_url") or a["url"]) for a in links]
+    if host == "gitea":
+        # GitHub-shaped: same endpoints, same asset fields, gitea.com base.
+        where = f"tags/{tag}" if tag else "latest"
+        data = _get_json(f"https://gitea.com/api/v1/repos/{repo}/releases/{where}")
+        assets = data.get("assets", [])
+        return [(a["name"], a["browser_download_url"]) for a in assets]
     raise ProvisionError(f"unknown release host {host!r}")
 
 

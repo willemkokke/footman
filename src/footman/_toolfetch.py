@@ -6,12 +6,12 @@ environment, read once and thrown away — walking backwards from the newest
 because the current version is the one that matters most, and because a
 backward walk appends to the history rather than rewriting it.
 
-Five tiers can be listed: PyPI (`uv`), npm (`node`), release assets from
-GitHub and GitLab — which covers bun's own releases too — and CPython, whose
-index is the provisioned uv's own. What remains unlistable is the `system`
-tier (git, docker read from the host, with no fetch source wired yet). A tool
-footman cannot list is named and skipped rather than silently treated as
-having no history — the same doctrine `audit` follows.
+The listable tiers: PyPI (`uv`), npm (`node`), release assets from GitHub,
+GitLab and Gitea — which covers bun's own releases too — CPython, whose
+index is the provisioned uv's own, and docker's static-build directory.
+What remains unlistable is the `system` tier (git, read from the host). A
+tool footman cannot list is named and skipped rather than silently treated
+as having no history — the same doctrine `audit` follows.
 """
 
 from __future__ import annotations
@@ -127,7 +127,17 @@ def read_python(requires_python: str = "", date: str = "") -> str:
     return f"3.{max(int(era.split('.')[1]), minimum)}"
 
 
-LISTABLE = ("uv", "node", "github", "gitlab", "bun", "python", "docker", "man")
+LISTABLE = (
+    "uv",
+    "node",
+    "github",
+    "gitlab",
+    "gitea",
+    "bun",
+    "python",
+    "docker",
+    "man",
+)
 """The tiers with a release index footman can read. `system` is absent
 because git and docker are read from the host and have no fetch source."""
 
@@ -159,8 +169,8 @@ def releases(driver: Driver) -> list[Release]:
         found = _pypi(driver)
     elif kind == "node":
         found = _npm(driver)
-    elif kind in ("github", "gitlab", "bun"):
-        found = _forge(driver, "gitlab" if kind == "gitlab" else "github")
+    elif kind in ("github", "gitlab", "gitea", "bun"):
+        found = _forge(driver, kind if kind in ("gitlab", "gitea") else "github")
     elif kind == "python":
         found = _uv_python()
     elif kind == "docker":
@@ -253,7 +263,7 @@ def _npm(driver: Driver) -> list[Release]:
 
 
 def _forge(driver: Driver, host: str, pages: int = 1) -> list[Release]:
-    """GitHub and GitLab releases, with the tag normalised to a version.
+    """GitHub, GitLab and Gitea releases, with the tag normalised to a version.
 
     A tag is `v2.96.0` on one project and `2.96.0` on the next, while the
     binary reports the bare number — and the history keys on what the binary
@@ -271,15 +281,20 @@ def _forge(driver: Driver, host: str, pages: int = 1) -> list[Release]:
     repo = driver.provision.repo
     if not repo:
         return []
-    if host == "github":
+    if host in ("github", "gitea"):
+        # Gitea's release API is GitHub-shaped — same field names, different
+        # base URL and page size — so the two share one reading.
+        base, size = (
+            (f"https://api.github.com/repos/{repo}/releases?per_page=100", 100)
+            if host == "github"
+            else (f"https://gitea.com/api/v1/repos/{repo}/releases?limit=50", 50)
+        )
         entries = []
         for page in range(1, pages + 1):
-            index = _index(
-                f"https://api.github.com/repos/{repo}/releases?per_page=100&page={page}"
-            )
+            index = _index(f"{base}&page={page}")
             got = index if isinstance(index, list) else []
             entries += got
-            if len(got) < 100:
+            if len(got) < size:
                 break
         found = [
             Release(
@@ -659,10 +674,10 @@ def install(driver: Driver, release: Release, into: Path) -> Path | None:
         return _install_pypi(driver, release, into)
     if kind == "node":
         return _install_npm(driver, release.version, into)
-    if kind in ("github", "gitlab", "bun"):
+    if kind in ("github", "gitlab", "gitea", "bun"):
         return _install_asset(driver, release, into)
     if kind == "python":
-        return _install_python(release.version)
+        return _install_python(release.version, into)
     if kind == "docker":
         return _install_docker(driver, release, into)
     if kind == "man":
@@ -670,26 +685,29 @@ def install(driver: Driver, release: Release, into: Path) -> Path | None:
     return None
 
 
-def _install_python(version: str) -> Path | None:
+def _install_python(version: str, into: Path) -> Path | None:
     """`uv python install` this exact patch, and read where it landed.
 
-    Unlike every other tier this ignores the throwaway directory: uv keeps
-    its interpreters in one managed store, so the install is shared and
-    already-cached versions cost nothing on a re-run. The store is uv's to
-    clean (`uv python uninstall`), not the prime's.
-
-    What keeps the archive from outliving the interpreter is `UV_NO_CACHE`,
-    set once for the whole walk by `_sandboxed` rather than per tier here.
+    Into a store of its own under the throwaway directory, like every other
+    tier — not uv's shared one. A shared store is one lock, and the walk is
+    ten concurrent installs: uv queues the waiters, the walk's subprocess
+    timeouts kill the queue, and every run scattered a different third of
+    the python chain into holes. `UV_NO_CACHE` (set for the whole walk by
+    `_sandboxed`) already forces each version to download once per run, so
+    a private store costs nothing the shared one was buying — and it is
+    discarded with the release, which the shared store never could be.
 
     The directory uv reports already holds a plain `python` alongside the
     versioned name, which is what the extractor invokes.
     """
-    if not _run(["uv", "python", "install", version]):
+    env = {**os.environ, "UV_PYTHON_INSTALL_DIR": str(into / "store")}
+    if not _run(["uv", "python", "install", version], env=env):
         return None
     # --no-project: `uv python find` consults the nearest pyproject, and the
     # walk runs inside footman's own checkout — whose `requires-python` has
     # opinions about which interpreter the question should resolve to.
-    found = _capture(["uv", "python", "find", "--no-project", version]).strip()
+    found = _capture(["uv", "python", "find", "--no-project", version], env=env)
+    found = found.strip()
     if not found or not Path(found).exists():
         return None
     return Path(found).parent
@@ -777,7 +795,8 @@ def _install_asset(driver: Driver, release: Release, into: Path) -> Path | None:
     """
     from footman import _provision
 
-    host = "gitlab" if driver.provision.kind == "gitlab" else "github"
+    kind = driver.provision.kind
+    host = kind if kind in ("gitlab", "gitea") else "github"
     bindir = into / "bin"
     bindir.mkdir(parents=True, exist_ok=True)
     for tag in (release.tag, release.version, f"v{release.version}"):
@@ -796,7 +815,7 @@ def _install_asset(driver: Driver, release: Release, into: Path) -> Path | None:
     return None
 
 
-def _capture(argv: list[str]) -> str:
+def _capture(argv: list[str], env: dict[str, str] | None = None) -> str:
     """What a command printed, or empty when it could not be run.
 
     Empty is not "nothing to report": the callers treat a tool they cannot
@@ -812,7 +831,7 @@ def _capture(argv: list[str]) -> str:
             # Passed rather than inherited, so footman reads the spawn as
             # deliberate — and so the prefix `prime` puts on `PATH` is what
             # picks the uv that carries the index.
-            env=dict(os.environ),
+            env=env if env is not None else dict(os.environ),
         )
     except (OSError, subprocess.SubprocessError):
         return ""

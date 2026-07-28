@@ -45,12 +45,12 @@ class Provision:
     isolated prefix (covers the Rust and C++ tools too: ruff, prek, cmake and
     ninja all ship binary wheels). `node` — a package `bun install`s. `bun` —
     bun's own GitHub release, provisioned first because the node tier runs
-    through it. `github` / `gitlab` — a prebuilt release asset. `docker` —
-    a static build from docker's own per-platform index, which is a
-    directory listing rather than an asset list. `man` — a release's
+    through it. `github` / `gitlab` / `gitea` — a prebuilt release asset.
+    `docker` — a static build from docker's own per-platform index, which is
+    a directory listing rather than an asset list. `man` — a release's
     manual pages, for a tool read from its manual rather than its `-h`.
     `system` — already on PATH (the uv running this); never provisioned.
-    `deferred` — parked, `note` saying why (tea, until > 0.14.2)."""
+    `deferred` — parked, `note` saying why (as tea was, until 0.15.0)."""
     package: str = ""
     """The PyPI or npm package, when it differs from the driver's binary name
     (`markdownlint-cli2`); otherwise the binary name is used."""
@@ -336,6 +336,38 @@ DRIVERS: tuple[Driver, ...] = (
             "api",
             "label.list",
             "label.create",
+        ),
+    ),
+    Driver(
+        "tea",
+        provision=Provision(kind="gitea", repo="gitea/tea"),
+        url="https://gitea.com/gitea/tea",
+        verbs=(
+            "issues.create",
+            "issues.list",
+            "issues.close",
+            "pulls.create",
+            "pulls.list",
+            "pulls.checkout",
+            "pulls.merge",
+            "releases.create",
+            "releases.list",
+            "releases.assets",
+            "repos.create",
+            "repos.list",
+            "repos.fork",
+            "labels.list",
+            "labels.create",
+            "milestones.list",
+            "milestones.create",
+            "comments.add",
+            "comments.list",
+            "branches.list",
+            "logins.add",
+            "logins.list",
+            "whoami",
+            "clone",
+            "api",
         ),
     ),
     Driver(

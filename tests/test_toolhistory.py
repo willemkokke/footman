@@ -894,6 +894,30 @@ def test_gitlab_releases_read_their_own_field_names(monkeypatch):
     assert [r.version for r in got] == ["0.6.0-wk.5", "0.6.0-wk.4"]
 
 
+def test_gitea_releases_read_the_github_shape(monkeypatch):
+    """Gitea's API answers with GitHub's field names — one reading serves
+    both hosts, and the prerelease/draft filter applies the same way."""
+    from footman import _drivers, _toolfetch
+
+    _index(
+        monkeypatch,
+        [
+            {
+                "tag_name": "v0.16.0-rc1",
+                "published_at": "2026-07-28T00:00:00Z",
+                "prerelease": True,
+            },
+            {"tag_name": "v0.15.0", "published_at": "2026-07-27T00:00:00Z"},
+            {"tag_name": "v0.14.2", "published_at": "2026-06-26T00:00:00Z"},
+        ],
+    )
+    driver = _drivers.find("tea")
+    assert driver is not None
+    got = _toolfetch.releases(driver)
+    assert [r.version for r in got] == ["0.15.0", "0.14.2"]
+    assert got[0].tag == "v0.15.0" and got[0].date == "2026-07-27"
+
+
 def test_an_unreadable_index_is_not_an_empty_one(monkeypatch):
     """The distinction the release gate rests on.
 
@@ -927,6 +951,7 @@ def test_which_tiers_can_be_listed():
         "cspell": True,  # node
         "gh": True,  # github
         "eclint": True,  # gitlab
+        "tea": True,  # gitea
         "bun": True,  # bun's own releases
         "python": True,  # uv carries CPython's own download index
         "docker": True,  # its own static-build index
@@ -2923,7 +2948,7 @@ def test_observe_accepts_a_repack_wheel_version(tmp_path, monkeypatch):
     assert tools_tasks.observe("ninja", "1.11.1", scratch=str(tmp_path)) is None
 
 
-def test_python_find_ignores_the_cwd_project(monkeypatch):
+def test_python_find_ignores_the_cwd_project(monkeypatch, tmp_path):
     """`uv python find` consults the nearest pyproject, and the walk runs
     inside footman's own checkout — whose `requires-python` has opinions.
     `--no-project` keeps the answer about the version that was asked."""
@@ -2931,11 +2956,29 @@ def test_python_find_ignores_the_cwd_project(monkeypatch):
 
     calls: list[list[str]] = []
 
-    def capture(argv):
+    def capture(argv, env=None):
         calls.append(argv)
         return ""
 
     monkeypatch.setattr(_toolfetch, "_run", lambda argv, env=None: True)
     monkeypatch.setattr(_toolfetch, "_capture", capture)
-    assert _toolfetch._install_python("3.10.0") is None
+    assert _toolfetch._install_python("3.10.0", tmp_path) is None
     assert calls == [["uv", "python", "find", "--no-project", "3.10.0"]]
+
+
+def test_python_installs_into_a_private_store(monkeypatch, tmp_path):
+    """A shared uv store is one lock, and the walk is ten concurrent
+    installs: uv queues the waiters, the walk's subprocess timeouts kill
+    the queue, and every run scattered a different third of the python
+    chain into holes. Each release installs into a store inside its own
+    throwaway directory — discarded with the release, contended by nobody."""
+    from footman import _toolfetch
+
+    envs: list[dict[str, str] | None] = []
+    monkeypatch.setattr(
+        _toolfetch, "_run", lambda argv, env=None: envs.append(env) or True
+    )
+    monkeypatch.setattr(_toolfetch, "_capture", lambda argv, env=None: "")
+    _toolfetch._install_python("3.10.0", tmp_path)
+    assert envs[0] is not None
+    assert envs[0]["UV_PYTHON_INSTALL_DIR"] == str(tmp_path / "store")

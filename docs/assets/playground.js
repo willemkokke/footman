@@ -72,15 +72,23 @@ const DEFAULT_ARGS = "check";
 
 /* ---------- shared helpers ---------- */
 
+/* URL-safe base64: standard `+`/`/` would corrupt the fragment round-trip —
+ * URLSearchParams decodes `+` as a space, atob (forgiving-base64) then
+ * *strips* the space, and the bit-stream shifts into mojibake from the
+ * first `+` on. Encode with `-`/`_`; decode accepts both alphabets and
+ * repairs a legacy-mangled link (base64 never contains a real space, so
+ * space→`+` is lossless). */
+
 function b64encode(text) {
   const bytes = new TextEncoder().encode(text);
   let bin = "";
   for (const b of bytes) bin += String.fromCharCode(b);
-  return btoa(bin);
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_");
 }
 
 function b64decode(b64) {
-  const bin = atob(b64);
+  const std = b64.replace(/ /g, "+").replace(/-/g, "+").replace(/_/g, "/");
+  const bin = atob(std);
   const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
   return new TextDecoder().decode(bytes);
 }

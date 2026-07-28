@@ -264,6 +264,26 @@ def test_release_gitlab_parses_links(monkeypatch):
     assert assets == [("eclint_Darwin_arm64.tar.gz", "http://u")]
 
 
+def test_release_gitea_reads_github_shaped_assets(monkeypatch):
+    urls: list[str] = []
+
+    def fake(url):
+        urls.append(url)
+        return {
+            "assets": [
+                {
+                    "name": "tea-0.15.0-darwin-arm64",
+                    "browser_download_url": "http://u/tea",
+                }
+            ]
+        }
+
+    monkeypatch.setattr(_provision, "_get_json", fake)
+    assets = _provision._latest_assets("gitea", "gitea/tea")
+    assert assets == [("tea-0.15.0-darwin-arm64", "http://u/tea")]
+    assert urls == ["https://gitea.com/api/v1/repos/gitea/tea/releases/latest"]
+
+
 def test_release_missing_repo_fails(tmp_path):
     driver = Driver("gh", provision=Provision(kind="github"))
     (out,) = _provision.provision((driver,), tmp_path)
