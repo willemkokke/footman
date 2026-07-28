@@ -7,6 +7,15 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Changed
+
+- **A group's `default` is listed first.** It *is* the group — `fm db` runs
+  it, and the group's own row is described by it — so a listing that showed
+  it wherever it happened to be written put the headline act in the middle,
+  or at the bottom. Where it sits in the file is the author's business; where
+  it sits in a listing is footman's. `--list`, `--tree` and group help all
+  lead with it, `--sort` included.
+
 ### Documentation
 
 - **The tool version helpers are documented.** `installed_version()`,
