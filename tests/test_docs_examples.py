@@ -217,6 +217,40 @@ def test_page_examples_resolve_names(tmp_path: Path):
     assert not undefined, "docs examples use undefined names:\n" + "\n".join(undefined)
 
 
+def test_playground_module_evaluates(tmp_path: Path):
+    """docs/assets/playground.js is a browser ES module built around large
+    template literals holding Python source. A stray backtick or `${…}`
+    inside one is invisible to every Python-side rehearsal — the Python
+    extracts and runs fine — but terminates the literal in JS and kills
+    the whole module at load: no run links on any page, a dead playground.
+    Evaluate the module the way a browser import does, minimal DOM stubbed.
+    """
+    node = shutil.which("node")
+    if node is None:  # pragma: no cover - present on every CI runner
+        pytest.skip("node not on PATH")
+    probe = tmp_path / "probe.mjs"
+    probe.write_text(
+        'import { pathToFileURL } from "node:url";\n'
+        "globalThis.window ="
+        " { document$: { subscribe(fn) { globalThis.cb = fn; } } };\n"
+        "globalThis.document = { getElementById: () => null,"
+        " querySelector: () => null, addEventListener: () => {},"
+        ' readyState: "complete" };\n'
+        "globalThis.Node = { TEXT_NODE: 3, COMMENT_NODE: 8 };\n"
+        "await import(pathToFileURL(process.argv[2]));\n"
+        "globalThis.cb();\n",
+        encoding="utf-8",
+    )
+    out = subprocess.run(
+        [node, str(probe), str(DOCS / "assets" / "playground.js")],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    assert out.returncode == 0, out.stderr
+
+
 def test_example_markers_are_spent():
     """Every example marker sits directly above a ```python fence — a
     marker that drifted away from its fence would silently stop exempting

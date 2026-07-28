@@ -317,7 +317,7 @@ def _fm_invoke(files_json, line, columns=80):
     finally:
         # In-process pytest imports the editor's files; evict them so the
         # next Run collects what the editor says then, not this run's
-        # modules — otherwise a second `fm test` reruns stale code.
+        # modules — otherwise rerunning fm test reruns stale code.
         written = {str(Path(name).resolve()) for name in files}
         for mod_name, module in list(sys.modules.items()):
             file = getattr(module, "__file__", None)
