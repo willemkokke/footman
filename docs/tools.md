@@ -42,6 +42,7 @@ directory `$FOOTMAN_CACHE_DIR` moves and the daily collector tends, so vendored
 artifacts for deleted projects clean themselves up:
 
 ```python
+from pathlib import Path
 from footman import fetch, task
 
 @task

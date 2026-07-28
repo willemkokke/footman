@@ -35,6 +35,8 @@ replaces a farther one, never stacks. A relative `cwd=`, an absolute `rel=`,
 and `rel=` under `unmanaged` are errors that say what to use instead.
 
 ```python
+from footman import run, task
+
 @task(cwd="root", rel="services/api")
 def deploy():
     run("docker compose up -d")     # spawned from <root>/services/api
@@ -44,6 +46,8 @@ Inside the body, `ctx.cwd` is always a concrete `Path`, and
 `footman.cwd()` hands it to you for path arithmetic:
 
 ```python
+import footman
+
 @task
 def bundle():
     out = footman.cwd() / "dist"    # the task's own directory, not the
@@ -53,6 +57,8 @@ def bundle():
 Per call, `run()` and the tools bridge take the same pair:
 
 ```python
+from footman import tools
+
 run("npm run build", rel="web")             # this one call, in <cwd>/web
 tools.npm.opts(rel="web").run("build")      # same, through the bridge
 web_npm = tools.npm.opts(rel="web")         # or bind it once

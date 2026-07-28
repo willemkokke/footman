@@ -51,7 +51,7 @@ Two halves of the same idea — how a value is *collected*, and how it is
 `Secret`.
 
 ```python
-from footman import Secret, ask, task
+from footman import Secret, Stdout, ask, task
 
 @task
 def login(token: Annotated[str, ask(secret=True)]): ...

@@ -11,6 +11,7 @@ end auto-load when footman and pytest share an environment.
 `@task` returns your function untouched — no wrapper, no argparse object. The
 first altitude of testing is therefore plain Python:
 
+<!-- example: fragment -->
 ```python
 from tasks import lint
 
@@ -26,6 +27,7 @@ commands, you usually want the next altitude instead.
 `recording()` captures every command a block would run — silently, executing
 nothing — and hands you the steps to assert on:
 
+<!-- example: fragment -->
 ```python
 from footman.testing import recording
 from tasks import release
@@ -47,6 +49,7 @@ mixes subprocesses with in-process work.
 Under the hood this is `Context(dry_run=True, quiet=True)` installed with
 `use_context()` — both public, so you can compose your own variants:
 
+<!-- example: fragment -->
 ```python
 from footman import Context, use_context
 
@@ -85,6 +88,7 @@ exactly as `fm hooks.stop < fixture.json` would — and leaving it off means
 
 Point it at a task surface three ways:
 
+<!-- example: fragment -->
 ```python
 Runner().invoke("build", cwd=project_dir)          # normal cascade discovery
 Runner().invoke("build", tasks=Path("ci/tasks.py"))  # one file (--tasks-file)

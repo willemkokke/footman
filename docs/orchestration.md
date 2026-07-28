@@ -5,6 +5,27 @@ what runs concurrently versus one at a time, and how you steer it. Independent
 tasks run in parallel by default; `-s`, `-j`, and `-k` control the concurrency,
 and a few rules decide when footman falls back to sequential.
 
+The examples on this page share a small cast of stand-in tasks:
+
+```python
+from footman import task
+
+@task
+def fmt(): ...
+
+@task
+def lint(): ...
+
+@task
+def typecheck(): ...
+
+@task
+def test(): ...
+
+@task
+def notify(): ...
+```
+
 ## Chaining
 
 `fm format lint --fix test` runs three tasks from one line — duty's muscle
@@ -76,6 +97,8 @@ least deliberate:
 ```python
 from footman import task, fail
 
+def open_pr() -> bool: ...   # your own lookup
+
 @task
 def release(armed: bool = False):
     if not open_pr():
@@ -139,6 +162,8 @@ one *use* wants a different policy, `.opts()` overrides it there — without
 touching the registered task:
 
 ```python
+from footman import Forward
+
 @task(pre=[fmt.opts(atomic=True), lint])   # protect fmt's writes here, not everywhere
 def check(fix: Forward[bool] = False): ...
 ```
@@ -216,9 +241,9 @@ from typing import Annotated
 from footman import task
 from footman.params import forward
 
-@task(pre=[format, lint, test])
+@task(pre=[fmt, lint, test])
 def check(fix: Annotated[bool, forward] = False):
-    "fm check --fix reaches format & lint; test (no `fix`) runs defaulted."
+    "fm check --fix reaches fmt & lint; test (no `fix`) runs defaulted."
 ```
 
 `Forward[bool]` is the shorthand (`Forward[T]` ≡ `Annotated[T, forward]`, like
@@ -253,7 +278,7 @@ from footman import task, parallel
 
 @task
 def check():
-    parallel(lambda: format(check=True), lint, typecheck, test)
+    parallel(lambda: fmt(check=True), lint, typecheck, test)
 ```
 
 Unlike `pre`/`post`, a `parallel()` fan-out is **in-body** — footman can't see
@@ -418,6 +443,8 @@ does — stdin, then its `env()` variable, then the default, with a defaultless
 asked for:
 
 ```python
+from footman import env
+
 @task
 def build(target: Annotated[str, env("DEPLOY_ENV")] = "dev") -> str: ...
 
@@ -454,6 +481,9 @@ then shared. `.opts(shared=False)` asks for one unshared run without changing
 the task — on a call or on a declared edge alike:
 
 ```python
+@task
+def stamp(): ...
+
 @task
 def deploy():
     stamp()                       # shared: the run's one stamp

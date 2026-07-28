@@ -9,6 +9,7 @@ head-to-head behind these claims is on the [Comparison](comparison.md) page.
 The gentlest move — it's the family footman grew up in. Drop the `ctx`
 parameter and shell out through `run()`:
 
+<!-- example: fragment -->
 ```python
 # duty
 @duty
@@ -33,6 +34,7 @@ and growing. Flag syntax note: duty also takes `lint fix=true`; footman uses
 Drop the `c` parameter and delete the manual `Collection` wiring — in footman a
 module *is* a group and `group()` opens a nested one:
 
+<!-- example: fragment -->
 ```python
 # invoke: hand-assembled namespaces
 ns = Collection(); ns.add_task(lint); ns.add_collection(dist)
@@ -70,6 +72,8 @@ args = [{ name = "fix", options = ["--fix"], type = "boolean" }]
 
 ```python
 # footman
+from footman import run, task
+
 @task
 def lint(fix: bool = False):
     run("ruff check ." + (" --fix" if fix else ""))

@@ -44,6 +44,10 @@ bar fills from the truth:
 from pathlib import Path
 from footman import task, track, progress
 
+def load_records() -> list: ...   # your own work, whatever shape it takes
+def apply(record): ...
+def build_index(path): ...
+
 @task
 def migrate():
     "Apply pending migrations."

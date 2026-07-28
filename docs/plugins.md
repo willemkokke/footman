@@ -12,6 +12,7 @@ hand-written code — never a dialect.
 
 One module, three kinds of contribution:
 
+<!-- example: fragment -->
 ```python
 # acme_devkit/footman_tasks.py
 from pathlib import Path
@@ -64,6 +65,7 @@ provider. footman's own `footman.docs`, `footman.tools` and
 
 An installed plugin is inert metadata until a tasks file says otherwise:
 
+<!-- example: fragment -->
 ```python
 from footman.compose import plugin
 
@@ -87,6 +89,8 @@ region = "us"
 ```
 
 ```python
+import footman
+
 @footman.pre_tasks
 def configure(inv):
     settings = inv.config.get("acme.devkit", {})
@@ -124,6 +128,8 @@ in real invocations.
 you, a tmp directory, assertions on the report:
 
 ```python
+from footman.testing import Runner
+
 def test_the_option_reaches_the_task(tmp_path):
     (tmp_path / "tasks.py").write_text(
         'from footman.compose import plugin\nplugin("acme.devkit")\n'

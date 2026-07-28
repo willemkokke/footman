@@ -161,6 +161,11 @@ Generated pages drift unless a build regenerates them. The tasks are plain
 functions, so footman's own docs task calls them directly — copy the shape:
 
 ```python
+from pathlib import Path
+from footman import group
+
+docs = group("docs", help="Documentation")
+
 @docs.task(name="build")
 def docs_build(check: bool = False):
     "Build the docs site; regenerates the task reference first."

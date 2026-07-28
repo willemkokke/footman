@@ -64,6 +64,9 @@ Return a value from a task and it lands in the task's entry — no decorator,
 no context API, the `return` statement is the whole feature:
 
 ```python
+from pathlib import Path
+from footman import task
+
 @task
 def coverage() -> dict:
     "Measure coverage."

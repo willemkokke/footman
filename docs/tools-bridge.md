@@ -6,7 +6,7 @@ and keyword arguments translate into flags *mechanically*:
 
 ```python
 from footman import task
-from footman.tools import bun, docker, ruff, terraform
+from footman.tools import bun, docker, git, mkdocs, pytest, ruff, terraform, uv
 
 @task
 def ship():
@@ -117,6 +117,8 @@ prints them. So a `recording()` assertion reads naturally and doesn't
 change when the executed spelling does:
 
 ```python
+from footman.testing import recording
+
 with recording() as steps:
     ruff.check("src", select=["E", "F"])
 assert steps[0].command == "ruff check src --select E --select F"  # reads plainly
@@ -158,6 +160,7 @@ rather than quietly producing a command it refuses.
 The generated stubs carry the same fact where you'll actually see it — in
 the flag's own documentation:
 
+<!-- example: fragment -->
 ```python
 clean: Remove old files from the site_dir before building (the default).
     Defaults on — `clean=off` emits `--dirty`.
@@ -178,7 +181,11 @@ And a *conditional* flag often needs no negation at all — when the flag is
 off by default, `flag=condition` already does the right thing:
 
 ```python
-zensical.build(clean=True, strict=check)   # --strict only when check
+from footman.tools import zensical
+
+@task
+def docs(check: bool = False):
+    zensical.build(clean=True, strict=check)   # --strict only when check
 ```
 
 ## Why no per-flag Python parameters?
@@ -280,6 +287,7 @@ here), or side-step the whole question by passing the literal flag as a
 positional — always unambiguous, never translated:
 
 ```python
+paths = ["src", "tests"]
 ruff.check(*paths, "--exit-zero")
 ```
 
@@ -306,6 +314,8 @@ simply called; a legacy zero-arg entry runs under the argv router's per-call
 `sys.argv` view instead, and stays parallel too.
 
 ```python
+from footman.tools import Tool, coverage
+
 mkdocs.build(strict=True)                          # in-process by default
 Tool("griffe", in_process=True)("dump", "footman")     # opt any tool in (construction)
 coverage.opts(in_process=False).html()             # ...or out, per call via .opts()
@@ -340,6 +350,9 @@ but in-process, an env var set before the first native-library import
 sticks:
 
 ```python
+import os
+import sys
+
 @task
 def docs():
     if sys.platform == "darwin":            # SIP strips DYLD_* from children;
@@ -364,6 +377,8 @@ and runs it with **no shell**, so `|`, `>`, `&&`, `$VAR` are literal, not
 interpreted. When you *want* a shell, ask for one explicitly:
 
 ```python
+from footman import run
+
 run("tar cf - . | ssh host tar xf -", shell=True)   # a real pipe
 run("echo $HOME/logs/*.gz", shell="bash")           # a specific interpreter
 ```
@@ -379,6 +394,8 @@ you at `shell=`.
 Two flags harden a shell run:
 
 ```python
+script = "tar cf - . | ssh host tar xf -"
+
 run(script, shell=True, strict=True)   # set -eo pipefail
 run(script, shell=True, clean=True)    # no user startup files
 ```
@@ -425,6 +442,7 @@ from footman.tools import Tool
 helmfile = Tool("helmfile", "--environment", "prod")
 ```
 
+<!-- example: fragment -->
 ```python
 # tasks.py
 from yourorg_tools import helmfile

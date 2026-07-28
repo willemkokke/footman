@@ -68,9 +68,18 @@ of `--list` and completion:
 ```python
 from dataclasses import dataclass, field
 from typing import Annotated
-from footman import RunFailed, fail, group, stdin
+from footman import RunFailed, fail, group, stdin, task
 
 hooks = group("hooks", hidden=True, help="Agent lifecycle hooks")
+
+@task
+def format(): ...   # stand-ins for your own gate tasks
+
+@task
+def lint(): ...
+
+@task
+def check(): ...
 
 @dataclass
 class ToolInput:
