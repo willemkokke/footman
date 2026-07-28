@@ -4,12 +4,11 @@
  "observed_from": "0.0.41",
  "base": {
   "version": "0.0.51",
-  "date": "2026-07-27",
+  "date": "2026-07-28",
   "platforms": [
-   "Linux",
-   "macOS"
+   "Linux"
   ],
-  "extractor": 1,
+  "extractor": 2,
   "surface": {
    "help": "Zensical - A modern static site generator.",
    "verbs": {
@@ -127,10 +126,9 @@
   "0.0.50": {
    "date": "2026-07-09",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1,
+   "extractor": 2,
    "revert": {
     "build\tclean": {
      "flags": [
@@ -217,10 +215,9 @@
   "0.0.48": {
    "date": "2026-07-09",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1,
+   "extractor": 2,
    "revert": {
     "build\tclean": {
      "flags": [
@@ -312,58 +309,51 @@
   "0.0.47": {
    "date": "2026-07-05",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1
+   "extractor": 2
   },
   "0.0.46": {
    "date": "2026-06-21",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1
+   "extractor": 2
   },
   "0.0.45": {
    "date": "2026-06-09",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1
+   "extractor": 2
   },
   "0.0.44": {
    "date": "2026-06-04",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1
+   "extractor": 2
   },
   "0.0.43": {
    "date": "2026-05-19",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1
+   "extractor": 2
   },
   "0.0.42": {
    "date": "2026-05-15",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1
+   "extractor": 2
   },
   "0.0.41": {
    "date": "2026-05-09",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1
+   "extractor": 2
   }
  }
 }

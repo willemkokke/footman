@@ -3,13 +3,12 @@
  "tool": "build",
  "observed_from": "1.2.1",
  "base": {
-  "version": "1.5.1",
-  "date": "2026-07-09",
+  "version": "1.5.0",
+  "date": "2026-07-28",
   "platforms": [
-   "Linux",
-   "macOS"
+   "Linux"
   ],
-  "extractor": 1,
+  "extractor": 2,
   "surface": {
    "help": "",
    "verbs": {
@@ -21,15 +20,10 @@
      "options": {
       "config_json": {
        "flags": [
-        "--dependency-constraints-txt",
-        "--skip-dependency-check",
-        "--no-isolation",
-        "--config-json",
-        "--installer",
-        "--env-dir"
+        "--config-json"
        ],
        "negation": "",
-       "help": "",
+       "help": "settings to pass to the backend as a JSON object",
        "type": "str",
        "default": null,
        "choices": []
@@ -55,23 +49,13 @@
        "default": null,
        "choices": []
       },
-      "env_dir": {
-       "flags": [
-        "--env-dir"
-       ],
-       "negation": "",
-       "help": "create the isolated build environment at this location instead of a temporary directory",
-       "type": "str",
-       "default": null,
-       "choices": []
-      },
       "installer": {
        "flags": [
         "--installer"
        ],
        "negation": "",
        "help": "Python package installer to use (defaults to pip)",
-       "type": "bool",
+       "type": "str",
        "default": null,
        "choices": []
       },
@@ -80,19 +64,20 @@
         "--metadata"
        ],
        "negation": "",
-       "help": "print out a wheel's metadata in JSON format, building it first unless the source argument is already a .whl",
+       "help": "print out a wheel's metadata in JSON format",
        "type": "bool",
        "default": null,
        "choices": []
       },
       "no_isolation": {
        "flags": [
-        "--no-isolation",
-        "-n"
+        "--dependency-constraints-txt",
+        "--skip-dependency-check",
+        "--no-isolation"
        ],
        "negation": "",
-       "help": "disable building the project in an isolated virtual environment",
-       "type": "bool",
+       "help": "",
+       "type": "str",
        "default": null,
        "choices": []
       },
@@ -118,16 +103,6 @@
        "default": null,
        "choices": []
       },
-      "report": {
-       "flags": [
-        "--report"
-       ],
-       "negation": "",
-       "help": "write a machine-readable JSON report of the built artifacts (name, path, kind, size and SHA-256 hash) to this path",
-       "type": "str",
-       "default": null,
-       "choices": []
-      },
       "sdist": {
        "flags": [
         "--sdist",
@@ -136,16 +111,6 @@
        "negation": "",
        "help": "build a source distribution (disables the default behavior)",
        "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "sdist_extract_dir": {
-       "flags": [
-        "--sdist-extract-dir"
-       ],
-       "negation": "",
-       "help": "extract the intermediate sdist to PATH (created if missing and kept afterwards) instead of a random temporary directory; reusing it across rebuilds gives compiler caches such as ccache/sccache a stable source path",
-       "type": "str",
        "default": null,
        "choices": []
       },
@@ -188,92 +153,40 @@
   }
  },
  "deltas": {
-  "1.5.0": {
-   "date": "2026-07-27",
-   "platforms": [
-    "Linux",
-    "macOS"
-   ],
-   "extractor": 1,
-   "drop": [
-    "\tenv_dir",
-    "\treport",
-    "\tsdist_extract_dir"
-   ],
-   "revert": {
-    "\tconfig_json": {
-     "flags": [
-      "--config-json"
-     ],
-     "negation": "",
-     "help": "settings to pass to the backend as a JSON object",
-     "type": "str",
-     "default": null,
-     "choices": []
-    },
-    "\tmetadata": {
-     "flags": [
-      "--metadata"
-     ],
-     "negation": "",
-     "help": "print out a wheel's metadata in JSON format",
-     "type": "bool",
-     "default": null,
-     "choices": []
-    },
-    "\tno_isolation": {
-     "flags": [
-      "--dependency-constraints-txt",
-      "--skip-dependency-check",
-      "--no-isolation"
-     ],
-     "negation": "",
-     "help": "",
-     "type": "str",
-     "default": null,
-     "choices": []
-    }
-   }
-  },
   "1.4.4": {
    "date": "2026-04-22",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1
+   "extractor": 2
   },
   "1.4.3": {
    "date": "2026-04-10",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1
+   "extractor": 2
   },
   "1.4.2": {
    "date": "2026-03-25",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1
+   "extractor": 2
   },
   "1.4.1": {
    "date": "2026-03-24",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1
+   "extractor": 2
   },
   "1.4.0": {
    "date": "2026-01-08",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1,
+   "extractor": 2,
    "drop": [
     "\tdependency_constraints_txt"
    ],
@@ -294,15 +207,24 @@
   "1.3.0": {
    "date": "2025-08-01",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1,
+   "extractor": 2,
    "drop": [
     "\tmetadata",
     "\tquiet"
    ],
    "revert": {
+    "\tinstaller": {
+     "flags": [
+      "--installer"
+     ],
+     "negation": "",
+     "help": "Python package installer to use (defaults to pip)",
+     "type": "bool",
+     "default": null,
+     "choices": []
+    },
     "\tno_isolation": {
      "flags": [
       "--no-isolation",
@@ -338,10 +260,9 @@
   "1.2.2.post1": {
    "date": "2024-10-06",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1,
+   "extractor": 2,
    "drop": [
     "\tconfig_json"
    ],
@@ -355,18 +276,16 @@
   "1.2.2": {
    "date": "2024-09-06",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1
+   "extractor": 2
   },
   "1.2.1": {
    "date": "2024-03-28",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1
+   "extractor": 2
   }
  }
 }

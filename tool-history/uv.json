@@ -1,15 +1,14 @@
 {
  "schema": 1,
  "tool": "uv",
- "observed_from": "0.11.23",
+ "observed_from": "0.11.25",
  "base": {
-  "version": "0.11.32",
-  "date": "2026-07-27",
+  "version": "0.12.0",
+  "date": "2026-07-28",
   "platforms": [
-   "Linux",
-   "macOS"
+   "Linux"
   ],
-  "extractor": 1,
+  "extractor": 2,
   "surface": {
    "help": "An extremely fast Python package manager.",
    "verbs": {
@@ -5626,7 +5625,7 @@
         "--exclude-newer-package"
        ],
        "negation": "",
-       "help": "Limit candidate packages for a specific package to those that were uploaded prior to the given date",
+       "help": "Limit candidate packages for specific packages to those that were uploaded prior to the given date",
        "type": "str",
        "default": null,
        "choices": []
@@ -7344,6 +7343,16 @@
        "default": null,
        "choices": []
       },
+      "cert": {
+       "flags": [
+        "--cert"
+       ],
+       "negation": "",
+       "help": "Path to a PEM-encoded CA certificate bundle",
+       "type": "str",
+       "default": null,
+       "choices": []
+      },
       "color": {
        "flags": [
         "--color"
@@ -8216,6 +8225,16 @@
        "default": null,
        "choices": []
       },
+      "cert": {
+       "flags": [
+        "--cert"
+       ],
+       "negation": "",
+       "help": "Path to a PEM-encoded CA certificate bundle",
+       "type": "str",
+       "default": null,
+       "choices": []
+      },
       "color": {
        "flags": [
         "--color"
@@ -9076,6 +9095,16 @@
        "default": null,
        "choices": []
       },
+      "cert": {
+       "flags": [
+        "--cert"
+       ],
+       "negation": "",
+       "help": "Path to a PEM-encoded CA certificate bundle",
+       "type": "str",
+       "default": null,
+       "choices": []
+      },
       "color": {
        "flags": [
         "--color"
@@ -9727,6 +9756,16 @@
        "default": null,
        "choices": []
       },
+      "cert": {
+       "flags": [
+        "--cert"
+       ],
+       "negation": "",
+       "help": "Path to a PEM-encoded CA certificate bundle",
+       "type": "str",
+       "default": null,
+       "choices": []
+      },
       "color": {
        "flags": [
         "--color"
@@ -9808,6 +9847,16 @@
        ],
        "negation": "",
        "help": "Limit candidate packages to those that were uploaded prior to the given date",
+       "type": "str",
+       "default": null,
+       "choices": []
+      },
+      "exclude_newer_package": {
+       "flags": [
+        "--exclude-newer-package"
+       ],
+       "negation": "",
+       "help": "Limit candidate packages for specific packages to those that were uploaded prior to the given date",
        "type": "str",
        "default": null,
        "choices": []
@@ -12132,37 +12181,68 @@
   }
  },
  "deltas": {
+  "0.11.33": {
+   "date": "2026-07-28",
+   "platforms": [
+    "Linux"
+   ],
+   "extractor": 2,
+   "drop": [
+    "pip.compile\tcert",
+    "pip.install\tcert",
+    "pip.list\tcert",
+    "pip.sync\tcert"
+   ]
+  },
+  "0.11.32": {
+   "date": "2026-07-23",
+   "platforms": [
+    "Linux"
+   ],
+   "extractor": 2,
+   "drop": [
+    "pip.list\texclude_newer_package"
+   ],
+   "revert": {
+    "venv\texclude_newer_package": {
+     "flags": [
+      "--exclude-newer-package"
+     ],
+     "negation": "",
+     "help": "Limit candidate packages for a specific package to those that were uploaded prior to the given date",
+     "type": "str",
+     "default": null,
+     "choices": []
+    }
+   }
+  },
   "0.11.31": {
    "date": "2026-07-22",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1
+   "extractor": 2
   },
   "0.11.30": {
    "date": "2026-07-20",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1
+   "extractor": 2
   },
   "0.11.29": {
    "date": "2026-07-15",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1
+   "extractor": 2
   },
   "0.11.28": {
    "date": "2026-07-07",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1,
+   "extractor": 2,
    "drop": [
     "tree\tformat"
    ],
@@ -12472,42 +12552,23 @@
   "0.11.27": {
    "date": "2026-07-06",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1
+   "extractor": 2
   },
   "0.11.26": {
    "date": "2026-06-30",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1
+   "extractor": 2
   },
   "0.11.25": {
    "date": "2026-06-27",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1
-  },
-  "0.11.24": {
-   "date": "2026-06-23",
-   "platforms": [
-    "Linux",
-    "macOS"
-   ],
-   "extractor": 1
-  },
-  "0.11.23": {
-   "date": "2026-06-19",
-   "platforms": [
-    "Linux",
-    "macOS"
-   ],
-   "extractor": 1
+   "extractor": 2
   }
  }
 }

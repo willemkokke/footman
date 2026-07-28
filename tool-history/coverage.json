@@ -4,12 +4,11 @@
  "observed_from": "7.13.3",
  "base": {
   "version": "7.15.2",
-  "date": "2026-07-27",
+  "date": "2026-07-28",
   "platforms": [
-   "Linux",
-   "macOS"
+   "Linux"
   ],
-  "extractor": 1,
+  "extractor": 2,
   "surface": {
    "help": "Coverage.py, version 7.15.2 with C extension",
    "verbs": {
@@ -978,10 +977,9 @@
   "7.15.1": {
    "date": "2026-07-12",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1,
+   "extractor": 2,
    "verbs": {
     "": {
      "help": "Coverage.py, version 7.15.1 with C extension"
@@ -992,10 +990,9 @@
   "7.15.0": {
    "date": "2026-07-02",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1,
+   "extractor": 2,
    "verbs": {
     "": {
      "help": "Coverage.py, version 7.15.0 with C extension"
@@ -1006,10 +1003,9 @@
   "7.14.3": {
    "date": "2026-06-22",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1,
+   "extractor": 2,
    "drop": [
     "annotate\tkeep_combined",
     "html\tkeep_combined",
@@ -1030,10 +1026,9 @@
   "7.14.2": {
    "date": "2026-06-20",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1,
+   "extractor": 2,
    "verbs": {
     "": {
      "help": "Coverage.py, version 7.14.2 with C extension"
@@ -1044,10 +1039,9 @@
   "7.14.1": {
    "date": "2026-05-26",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1,
+   "extractor": 2,
    "verbs": {
     "": {
      "help": "Coverage.py, version 7.14.1 with C extension"
@@ -1058,10 +1052,9 @@
   "7.14.0": {
    "date": "2026-05-10",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1,
+   "extractor": 2,
    "verbs": {
     "": {
      "help": "Coverage.py, version 7.14.0 with C extension"
@@ -1072,10 +1065,9 @@
   "7.13.5": {
    "date": "2026-03-17",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1,
+   "extractor": 2,
    "verbs": {
     "": {
      "help": "Coverage.py, version 7.13.5 with C extension"
@@ -1086,10 +1078,9 @@
   "7.13.4": {
    "date": "2026-02-09",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1,
+   "extractor": 2,
    "verbs": {
     "": {
      "help": "Coverage.py, version 7.13.4 with C extension"
@@ -1100,10 +1091,9 @@
   "7.13.3": {
    "date": "2026-02-03",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1,
+   "extractor": 2,
    "verbs": {
     "": {
      "help": "Coverage.py, version 7.13.3 with C extension"

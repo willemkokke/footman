@@ -1,14 +1,14 @@
 {
  "schema": 1,
  "tool": "markdownlint",
- "observed_from": "0.18.0",
+ "observed_from": "0.18.1",
  "base": {
   "version": "0.23.2",
-  "date": "2026-07-27",
+  "date": "2026-07-28",
   "platforms": [
-   "macOS"
+   "Linux"
   ],
-  "extractor": 1,
+  "extractor": 2,
   "surface": {
    "help": "markdownlint-cli2 v0.23.2 (markdownlint v0.41.1)",
    "verbs": {
@@ -24,7 +24,7 @@
        ],
        "negation": "",
        "help": "specifies the path to a configuration file to define the base configuration",
-       "type": "bool",
+       "type": "str",
        "default": null,
        "choices": []
       },
@@ -34,7 +34,7 @@
         "--config"
        ],
        "negation": "",
-       "help": "",
+       "help": "specifies a JSON Pointer to a configuration object within the --config file",
        "type": "str",
        "default": null,
        "choices": []
@@ -76,11 +76,11 @@
  },
  "deltas": {
   "0.23.1": {
-   "date": "2026-07-27",
+   "date": "2026-07-17",
    "platforms": [
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1,
+   "extractor": 2,
    "verbs": {
     "": {
      "help": "markdownlint-cli2 v0.23.1 (markdownlint v0.41.1)"
@@ -91,9 +91,9 @@
   "0.23.0": {
    "date": "2026-07-01",
    "platforms": [
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1,
+   "extractor": 2,
    "verbs": {
     "": {
      "help": "markdownlint-cli2 v0.23.0 (markdownlint v0.41.0)"
@@ -104,9 +104,9 @@
   "0.22.1": {
    "date": "2026-04-22",
    "platforms": [
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1,
+   "extractor": 2,
    "verbs": {
     "": {
      "help": "markdownlint-cli2 v0.22.1 (markdownlint v0.40.0)"
@@ -117,9 +117,9 @@
   "0.22.0": {
    "date": "2026-03-22",
    "platforms": [
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1,
+   "extractor": 2,
    "verbs": {
     "": {
      "help": "markdownlint-cli2 v0.22.0 (markdownlint v0.40.0)"
@@ -130,9 +130,9 @@
   "0.21.0": {
    "date": "2026-02-15",
    "platforms": [
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1,
+   "extractor": 2,
    "drop": [
     "\tconfigPointer"
    ],
@@ -146,9 +146,9 @@
   "0.20.0": {
    "date": "2025-12-07",
    "platforms": [
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1,
+   "extractor": 2,
    "verbs": {
     "": {
      "help": "markdownlint-cli2 v0.20.0 (markdownlint v0.40.0)"
@@ -159,9 +159,9 @@
   "0.19.1": {
    "date": "2025-11-22",
    "platforms": [
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1,
+   "extractor": 2,
    "verbs": {
     "": {
      "help": "markdownlint-cli2 v0.19.1 (markdownlint v0.39.0)"
@@ -172,9 +172,9 @@
   "0.19.0": {
    "date": "2025-11-13",
    "platforms": [
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1,
+   "extractor": 2,
    "verbs": {
     "": {
      "help": "markdownlint-cli2 v0.19.0 (markdownlint v0.39.0)"
@@ -185,9 +185,9 @@
   "0.18.1": {
    "date": "2025-05-15",
    "platforms": [
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1,
+   "extractor": 2,
    "drop": [
     "\tformat"
    ],
@@ -197,19 +197,6 @@
     }
    },
    "help": "markdownlint-cli2 v0.18.1 (markdownlint v0.38.0)"
-  },
-  "0.18.0": {
-   "date": "2025-05-11",
-   "platforms": [
-    "macOS"
-   ],
-   "extractor": 1,
-   "verbs": {
-    "": {
-     "help": "markdownlint-cli2 v0.18.0 (markdownlint v0.38.0)"
-    }
-   },
-   "help": "markdownlint-cli2 v0.18.0 (markdownlint v0.38.0)"
   }
  }
 }

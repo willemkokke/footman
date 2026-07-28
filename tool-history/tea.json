@@ -6,7 +6,7 @@
   "version": "0.15.0",
   "date": "2026-07-28",
   "platforms": [
-   "Windows"
+   "Linux"
   ],
   "extractor": 2,
   "surface": {
@@ -2335,7 +2335,7 @@
         "--otp"
        ],
        "negation": "",
-       "help": "OTP token for auth, if necessary [%GITEA_SERVER_OTP%]",
+       "help": "OTP token for auth, if necessary [$GITEA_SERVER_OTP]",
        "type": "str",
        "default": null,
        "choices": []
@@ -2346,7 +2346,7 @@
         "--pwd"
        ],
        "negation": "",
-       "help": "Password for basic auth (will create token) [%GITEA_SERVER_PASSWORD%]",
+       "help": "Password for basic auth (will create token) [$GITEA_SERVER_PASSWORD]",
        "type": "str",
        "default": null,
        "choices": []
@@ -2366,7 +2366,7 @@
         "--scopes"
        ],
        "negation": "",
-       "help": "Token scopes to add when creating a new token, separated by a comma [%GITEA_SCOPES%]",
+       "help": "Token scopes to add when creating a new token, separated by a comma [$GITEA_SCOPES]",
        "type": "str",
        "default": null,
        "choices": []
@@ -2421,7 +2421,7 @@
         "-u"
        ],
        "negation": "",
-       "help": "Server URL [%GITEA_SERVER_URL%]",
+       "help": "Server URL [$GITEA_SERVER_URL]",
        "type": "str",
        "default": "https://gitea.com",
        "choices": []
@@ -2431,7 +2431,7 @@
         "--user"
        ],
        "negation": "",
-       "help": "User for basic auth (will create token) [%GITEA_SERVER_USER%]",
+       "help": "User for basic auth (will create token) [$GITEA_SERVER_USER]",
        "type": "str",
        "default": null,
        "choices": []

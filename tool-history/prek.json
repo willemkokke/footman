@@ -1,15 +1,14 @@
 {
  "schema": 1,
  "tool": "prek",
- "observed_from": "0.2.27",
+ "observed_from": "0.4.2",
  "base": {
   "version": "0.4.11",
-  "date": "2026-07-27",
+  "date": "2026-07-28",
   "platforms": [
-   "Linux",
-   "macOS"
+   "Linux"
   ],
-  "extractor": 1,
+  "extractor": 2,
   "surface": {
    "help": "A fast Git hook manager written in Rust, designed as a drop-in alternative to pre-commit, reimagined.",
    "verbs": {
@@ -1154,10 +1153,9 @@
   "0.4.10": {
    "date": "2026-07-16",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1,
+   "extractor": 2,
    "drop": [
     "\tglob",
     "run\tglob"
@@ -1232,34 +1230,30 @@
   "0.4.9": {
    "date": "2026-07-11",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1
+   "extractor": 2
   },
   "0.4.8": {
    "date": "2026-07-04",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1
+   "extractor": 2
   },
   "0.4.7": {
    "date": "2026-07-04",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1
+   "extractor": 2
   },
   "0.4.6": {
    "date": "2026-07-01",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1,
+   "extractor": 2,
    "verbs": {
     "autoupdate": {
      "help": "Auto-update the `rev` field of repositories in the config file to the latest version"
@@ -1269,26 +1263,23 @@
   "0.4.5": {
    "date": "2026-06-15",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1
+   "extractor": 2
   },
   "0.4.4": {
    "date": "2026-06-04",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1
+   "extractor": 2
   },
   "0.4.3": {
    "date": "2026-05-27",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1,
+   "extractor": 2,
    "drop": [
     "\tgroup",
     "\tno_group",
@@ -1299,392 +1290,9 @@
   "0.4.2": {
    "date": "2026-05-26",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1
-  },
-  "0.4.1": {
-   "date": "2026-05-20",
-   "platforms": [
-    "Linux",
-    "macOS"
-   ],
-   "extractor": 1
-  },
-  "0.4.0": {
-   "date": "2026-05-14",
-   "platforms": [
-    "Linux",
-    "macOS"
-   ],
-   "extractor": 1
-  },
-  "0.3.13": {
-   "date": "2026-05-05",
-   "platforms": [
-    "Linux",
-    "macOS"
-   ],
-   "extractor": 1
-  },
-  "0.3.12": {
-   "date": "2026-05-05",
-   "platforms": [
-    "Linux",
-    "macOS"
-   ],
-   "extractor": 1
-  },
-  "0.3.11": {
-   "date": "2026-04-27",
-   "platforms": [
-    "Linux",
-    "macOS"
-   ],
-   "extractor": 1,
-   "revert": {
-    "autoupdate\tcooldown_days": {
-     "flags": [
-      "--cooldown-days"
-     ],
-     "negation": "",
-     "help": "Minimum release age (in days) required for a version to be eligible",
-     "type": "str",
-     "default": "0",
-     "choices": []
-    }
-   }
-  },
-  "0.3.10": {
-   "date": "2026-04-21",
-   "platforms": [
-    "Linux",
-    "macOS"
-   ],
-   "extractor": 1,
-   "drop": [
-    "autoupdate\texclude_repo",
-    "autoupdate\texclude_tag",
-    "autoupdate\texit_code",
-    "autoupdate\tinclude_tag",
-    "autoupdate\trepo_exclude_tag",
-    "autoupdate\trepo_include_tag"
-   ],
-   "revert": {
-    "autoupdate\tcheck": {
-     "flags": [
-      "--check"
-     ],
-     "negation": "",
-     "help": "Alias of `--dry-run` that exits with status 1 if updates would be made",
-     "type": "bool",
-     "default": null,
-     "choices": []
-    }
-   },
-   "verbs": {
-    "": {
-     "help": "A Git hook manager written in Rust, designed as a drop-in alternative to pre-commit."
-    }
-   },
-   "help": "A Git hook manager written in Rust, designed as a drop-in alternative to pre-commit."
-  },
-  "0.3.9": {
-   "date": "2026-04-13",
-   "platforms": [
-    "Linux",
-    "macOS"
-   ],
-   "extractor": 1
-  },
-  "0.3.8": {
-   "date": "2026-03-23",
-   "platforms": [
-    "Linux",
-    "macOS"
-   ],
-   "extractor": 1,
-   "drop": [
-    "autoupdate\tcheck",
-    "uninstall\tgit_dir"
-   ],
-   "verbs": {
-    "": {
-     "help": "Better pre-commit, re-engineered in Rust"
-    },
-    "install": {
-     "help": "Install prek Git shims under the `.git/hooks/` directory"
-    }
-   },
-   "help": "Better pre-commit, re-engineered in Rust"
-  },
-  "0.3.6": {
-   "date": "2026-03-16",
-   "platforms": [
-    "Linux",
-    "macOS"
-   ],
-   "extractor": 1,
-   "drop": [
-    "uninstall\tall"
-   ]
-  },
-  "0.3.5": {
-   "date": "2026-03-09",
-   "platforms": [
-    "Linux",
-    "macOS"
-   ],
-   "extractor": 1,
-   "drop": [
-    "install\tprepare_hooks"
-   ],
-   "add": {
-    "install\tinstall_hooks": {
-     "flags": [
-      "--install-hooks"
-     ],
-     "negation": "",
-     "help": "Create environments for all hooks used in the config file",
-     "type": "bool",
-     "default": null,
-     "choices": []
-    }
-   },
-   "revert": {
-    "install\tgit_dir": {
-     "flags": [
-      "--git-dir"
-     ],
-     "negation": "",
-     "help": "Install hooks into the `hooks` subdirectory of the given git directory (`<GIT_DIR>/hooks/`)",
-     "type": "str",
-     "default": null,
-     "choices": []
-    },
-    "install\thook_type": {
-     "flags": [
-      "--hook-type",
-      "-t"
-     ],
-     "negation": "",
-     "help": "Which hook type(s) to install",
-     "type": "choice",
-     "default": null,
-     "choices": [
-      "commit-msg",
-      "post-checkout",
-      "post-commit",
-      "post-merge",
-      "post-rewrite",
-      "pre-commit",
-      "pre-merge-commit",
-      "pre-push",
-      "pre-rebase",
-      "prepare-commit-msg"
-     ]
-    },
-    "install\toverwrite": {
-     "flags": [
-      "--overwrite",
-      "-f"
-     ],
-     "negation": "",
-     "help": "Overwrite existing hooks",
-     "type": "bool",
-     "default": null,
-     "choices": []
-    },
-    "uninstall\thook_type": {
-     "flags": [
-      "--hook-type",
-      "-t"
-     ],
-     "negation": "",
-     "help": "Which hook type(s) to uninstall",
-     "type": "choice",
-     "default": null,
-     "choices": [
-      "commit-msg",
-      "post-checkout",
-      "post-commit",
-      "post-merge",
-      "post-rewrite",
-      "pre-commit",
-      "pre-merge-commit",
-      "pre-push",
-      "pre-rebase",
-      "prepare-commit-msg"
-     ]
-    }
-   },
-   "verbs": {
-    "install": {
-     "help": "Install prek as a git hook under the `.git/hooks/` directory"
-    },
-    "uninstall": {
-     "help": "Uninstall prek from git hooks"
-    }
-   }
-  },
-  "0.3.4": {
-   "date": "2026-02-28",
-   "platforms": [
-    "Linux",
-    "macOS"
-   ],
-   "extractor": 1,
-   "drop": [
-    "install\tgit_dir"
-   ]
-  },
-  "0.3.3": {
-   "date": "2026-02-15",
-   "platforms": [
-    "Linux",
-    "macOS"
-   ],
-   "extractor": 1
-  },
-  "0.3.2": {
-   "date": "2026-02-06",
-   "platforms": [
-    "Linux",
-    "macOS"
-   ],
-   "extractor": 1
-  },
-  "0.3.1": {
-   "date": "2026-01-31",
-   "platforms": [
-    "Linux",
-    "macOS"
-   ],
-   "extractor": 1,
-   "revert": {
-    "install\tallow_missing_config": {
-     "flags": [
-      "--allow-missing-config"
-     ],
-     "negation": "",
-     "help": "Allow a missing `pre-commit` configuration file",
-     "type": "bool",
-     "default": null,
-     "choices": []
-    },
-    "install\tinstall_hooks": {
-     "flags": [
-      "--install-hooks"
-     ],
-     "negation": "",
-     "help": "Create hook environments for all hooks used in the config file",
-     "type": "bool",
-     "default": null,
-     "choices": []
-    }
-   },
-   "verbs": {
-    "install": {
-     "help": "Install the prek git hook"
-    },
-    "uninstall": {
-     "help": "Uninstall the prek git hook"
-    },
-    "autoupdate": {
-     "help": "Auto-update pre-commit config to the latest repos' versions"
-    }
-   }
-  },
-  "0.3.0": {
-   "date": "2026-01-22",
-   "platforms": [
-    "Linux",
-    "macOS"
-   ],
-   "extractor": 1
-  },
-  "0.2.30": {
-   "date": "2026-01-18",
-   "platforms": [
-    "Linux",
-    "macOS"
-   ],
-   "extractor": 1,
-   "drop": [
-    "\tstage",
-    "run\tstage"
-   ],
-   "add": {
-    "\thook_stage": {
-     "flags": [
-      "--hook-stage"
-     ],
-     "negation": "",
-     "help": "The stage during which the hook is fired",
-     "type": "choice",
-     "default": null,
-     "choices": [
-      "manual",
-      "commit-msg",
-      "post-checkout",
-      "post-commit",
-      "post-merge",
-      "post-rewrite",
-      "pre-commit",
-      "pre-merge-commit",
-      "pre-push",
-      "pre-rebase",
-      "prepare-commit-msg"
-     ]
-    },
-    "run\thook_stage": {
-     "flags": [
-      "--hook-stage"
-     ],
-     "negation": "",
-     "help": "The stage during which the hook is fired",
-     "type": "choice",
-     "default": null,
-     "choices": [
-      "manual",
-      "commit-msg",
-      "post-checkout",
-      "post-commit",
-      "post-merge",
-      "post-rewrite",
-      "pre-commit",
-      "pre-merge-commit",
-      "pre-push",
-      "pre-rebase",
-      "prepare-commit-msg"
-     ]
-    }
-   }
-  },
-  "0.2.29": {
-   "date": "2026-01-16",
-   "platforms": [
-    "Linux",
-    "macOS"
-   ],
-   "extractor": 1
-  },
-  "0.2.28": {
-   "date": "2026-01-13",
-   "platforms": [
-    "Linux",
-    "macOS"
-   ],
-   "extractor": 1
-  },
-  "0.2.27": {
-   "date": "2026-01-07",
-   "platforms": [
-    "Linux",
-    "macOS"
-   ],
-   "extractor": 1
+   "extractor": 2
   }
  }
 }

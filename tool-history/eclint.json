@@ -4,12 +4,11 @@
  "observed_from": "0.5.2-wk.1",
  "base": {
   "version": "0.6.0-wk.5",
-  "date": "2026-07-27",
+  "date": "2026-07-28",
   "platforms": [
-   "Linux",
-   "macOS"
+   "Linux"
   ],
-  "extractor": 1,
+  "extractor": 2,
   "surface": {
    "help": "",
    "verbs": {
@@ -138,26 +137,23 @@
   "0.6.0-wk.4": {
    "date": "2026-07-07",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1
+   "extractor": 2
   },
   "0.6.0-wk.3": {
    "date": "2026-03-18",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1
+   "extractor": 2
   },
   "0.5.2-wk.1": {
    "date": "2026-03-10",
    "platforms": [
-    "Linux",
-    "macOS"
+    "Linux"
    ],
-   "extractor": 1,
+   "extractor": 2,
    "drop": [
     "\tno_gitignore"
    ]
