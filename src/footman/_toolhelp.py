@@ -679,16 +679,21 @@ def run_help(
     if man:
         return _run_man(argv, timeout)
     try:
+        # Tool help is UTF-8, never the locale codec: under Windows cp1252 a
+        # multi-byte help string kills the reader thread mid-decode and the
+        # stream comes back None — an observation lost as a hole.
         done = subprocess.run(
             [*argv, flag],
             capture_output=True,
-            text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=timeout,
             env=_wide_env(),
         )
     except (OSError, subprocess.SubprocessError):
         return ""
-    return done.stdout if len(done.stdout) > len(done.stderr) else done.stderr
+    out, err = done.stdout or "", done.stderr or ""
+    return out if len(out) > len(err) else err
 
 
 # Man renders bold/underline as `c\x08c` / `_\x08c` overstrike; dropping the
@@ -719,13 +724,14 @@ def _run_man(argv: list[str], timeout: float) -> str:
         done = subprocess.run(
             [argv[0], "help", *argv[1:]],
             capture_output=True,
-            text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=timeout,
             env=env,
         )
     except (OSError, subprocess.SubprocessError):
         return ""
-    return _OVERSTRIKE.sub("", done.stdout)
+    return _OVERSTRIKE.sub("", done.stdout or "")
 
 
 def _wide_env() -> dict[str, str]:

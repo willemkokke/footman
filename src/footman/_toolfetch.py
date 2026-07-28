@@ -513,7 +513,8 @@ def _capture(argv: list[str]) -> str:
         done = subprocess.run(
             argv,
             capture_output=True,
-            text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=TIMEOUT,
             # Passed rather than inherited, so footman reads the spawn as
             # deliberate — and so the prefix `prime` puts on `PATH` is what
@@ -528,7 +529,12 @@ def _capture(argv: list[str]) -> str:
 def _run(argv: list[str], env: dict[str, str] | None = None) -> bool:
     try:
         done = subprocess.run(
-            argv, capture_output=True, text=True, timeout=300, env=env
+            argv,
+            capture_output=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=300,
+            env=env,
         )
     except (OSError, subprocess.SubprocessError):
         return False

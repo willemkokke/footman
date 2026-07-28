@@ -388,7 +388,12 @@ def _formatted(text: str) -> str:
     ):
         try:
             done = subprocess.run(
-                argv, input=text, capture_output=True, text=True, timeout=60
+                argv,
+                input=text,
+                capture_output=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=60,
             )
         except (OSError, subprocess.SubprocessError):
             return text
