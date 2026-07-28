@@ -100,6 +100,57 @@ def test_delete_is_a_taught_error():
     assert "PATH" in os.environ  # and the real thing survived
 
 
+def test_set_then_delete_round_trips_scoped(monkeypatch):
+    # pytest's own dance: main() sets PYTEST_VERSION and deletes it on the
+    # way out. A key the task itself set scoped comes back out of the
+    # overlay — additive both ways, invisible to siblings throughout.
+    monkeypatch.delenv("ROUND_TRIP", raising=False)
+    seen = {}
+
+    def tasks(reg):
+        @reg.task
+        def go():
+            os.environ["ROUND_TRIP"] = "up"
+            del os.environ["ROUND_TRIP"]
+            seen["after"] = "ROUND_TRIP" in os.environ
+
+    results = drive(tasks, "go")
+    assert results[0].ok, results[0].error
+    assert seen["after"] is False
+    assert "ROUND_TRIP" not in os.environ
+
+
+def test_delete_of_an_overridden_key_restores_the_base(monkeypatch):
+    # Overriding an existing var then deleting the override is still the
+    # additive round trip: the task falls back to the run-start value; the
+    # base environment itself is never subtracted from.
+    monkeypatch.setenv("BASE_VAR", "original")
+    seen = {}
+
+    def tasks(reg):
+        @reg.task
+        def go():
+            os.environ["BASE_VAR"] = "override"
+            del os.environ["BASE_VAR"]
+            seen["after"] = os.environ.get("BASE_VAR")
+
+    results = drive(tasks, "go")
+    assert results[0].ok, results[0].error
+    assert seen["after"] == "original"
+    assert os.environ["BASE_VAR"] == "original"
+
+
+def test_delete_of_an_absent_key_is_a_key_error():
+    def tasks(reg):
+        @reg.task
+        def go():
+            del os.environ["NEVER_WAS_SET"]
+
+    results = drive(tasks, "go")
+    assert not results[0].ok
+    assert isinstance(results[0].error, KeyError)
+
+
 def test_write_note_is_taught_once_per_task(capfd, monkeypatch):
     monkeypatch.delenv("A_KEY", raising=False)
     monkeypatch.delenv("B_KEY", raising=False)
@@ -245,6 +296,19 @@ def test_chdir_is_a_taught_error():
     results = drive(tasks, "go")
     assert not results[0].ok
     assert "footman.cwd()" in str(results[0].error)
+
+
+def test_chdir_to_the_current_directory_is_a_noop_not_an_error():
+    # The defensive restore pattern: pytest's wrap_session re-chdirs to its
+    # startpath on the way out even when nothing moved. Where the process
+    # already is, nothing changes for any sibling — let it through.
+    def tasks(reg):
+        @reg.task
+        def go():
+            os.chdir(_globals.real_getcwd())
+
+    results = drive(tasks, "go")
+    assert results[0].ok, results[0].error
 
 
 def test_chdir_allowed_under_unmanaged(tmp_path):
