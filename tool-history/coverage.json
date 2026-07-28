@@ -6,6 +6,7 @@
   "version": "7.15.2",
   "date": "2026-07-27",
   "platforms": [
+   "Linux",
    "macOS"
   ],
   "extractor": 1,
@@ -977,6 +978,7 @@
   "7.15.1": {
    "date": "2026-07-12",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 1,
@@ -990,6 +992,7 @@
   "7.15.0": {
    "date": "2026-07-02",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 1,
@@ -1003,6 +1006,7 @@
   "7.14.3": {
    "date": "2026-06-22",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 1,
@@ -1026,6 +1030,7 @@
   "7.14.2": {
    "date": "2026-06-20",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 1,
@@ -1039,6 +1044,7 @@
   "7.14.1": {
    "date": "2026-05-26",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 1,
@@ -1052,6 +1058,7 @@
   "7.14.0": {
    "date": "2026-05-10",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 1,
@@ -1065,6 +1072,7 @@
   "7.13.5": {
    "date": "2026-03-17",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 1,
@@ -1078,6 +1086,7 @@
   "7.13.4": {
    "date": "2026-02-09",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 1,
@@ -1091,6 +1100,7 @@
   "7.13.3": {
    "date": "2026-02-03",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 1,
