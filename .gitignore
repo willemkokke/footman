@@ -22,3 +22,9 @@ notes/__pycache__/
 
 # `fm footman tools provision` throwaway prefix
 .tools-latest/
+
+# `fm tools.gather` observation documents. A gather writes what one
+# machine saw, for folding on one machine — the document is the handoff,
+# not a tracked artefact, and a stale one in the tree is a picture of
+# whichever laptop last ran it.
+obs-*.json
