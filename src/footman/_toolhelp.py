@@ -706,6 +706,14 @@ def _run_man(argv: list[str], timeout: float) -> str:
         "MANPAGER": "cat",
         "MAN_KEEP_FORMATTING": "",
         "COLUMNS": "200",
+        # `git help` honours `help.format`, and on Windows it defaults to
+        # html — which *opens a browser tab per verb* instead of printing
+        # anything. Pin the format to man: a POSIX box reads the same text
+        # it always did, and a box with no man viewer fails quietly into
+        # the empty-text fallback rather than launching twenty tabs.
+        "GIT_CONFIG_COUNT": "1",
+        "GIT_CONFIG_KEY_0": "help.format",
+        "GIT_CONFIG_VALUE_0": "man",
     }
     try:
         done = subprocess.run(
