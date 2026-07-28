@@ -420,6 +420,27 @@ def merge(
     missing = {key: list(who) for key, who in entry.get("absent", {}).items()}
     merged = json.loads(json.dumps(stored))
 
+    for verb_name, reading in surface.get("verbs", {}).items():
+        # A verb's own fields — its summary, its positional shape — settle
+        # by the same rule its options do. Left out, they were frozen at
+        # whatever the first reading said: git's root verb kept a fragment
+        # of a usage line as its description, and no better extractor
+        # could ever replace it, which is the one thing a record of
+        # observations must never need a hand to fix.
+        held = merged.setdefault("verbs", {}).setdefault(verb_name, _empty_verb())
+        fields = {k: v for k, v in reading.items() if k != "options"}
+        chosen = _preferred(
+            {k: v for k, v in held.items() if k != "options"}
+            if verb_name in (stored.get("verbs", {}))
+            else None,
+            fields,
+            entry.get("platforms", []),
+            platforms,
+            missing,
+            f"{verb_name}\t",
+        )
+        held.update(chosen)
+
     for key, option in incoming.items():
         verb_name, _, option_name = key.partition("\t")
         verb = merged.setdefault("verbs", {}).setdefault(verb_name, _empty_verb())

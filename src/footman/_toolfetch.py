@@ -127,7 +127,7 @@ def read_python(requires_python: str = "", date: str = "") -> str:
     return f"3.{max(int(era.split('.')[1]), minimum)}"
 
 
-LISTABLE = ("uv", "node", "github", "gitlab", "bun", "python", "docker")
+LISTABLE = ("uv", "node", "github", "gitlab", "bun", "python", "docker", "man")
 """The tiers with a release index footman can read. `system` is absent
 because git and docker are read from the host and have no fetch source."""
 
@@ -165,6 +165,8 @@ def releases(driver: Driver) -> list[Release]:
         found = _uv_python()
     elif kind == "docker":
         found = _docker_index()
+    elif kind == "man":
+        found = _manpages_index()
     else:
         return []
     return _stable(found)
@@ -552,6 +554,74 @@ def install_plugin(plugin: Plugin, on_or_before: str, home: Path) -> bool:
     raise Unreachable(f"{plugin.repo} {release.version}", "could not be placed")
 
 
+_MANPAGES_INDEX = "https://mirrors.edge.kernel.org/pub/software/scm/git/"
+_MANPAGES_FILE = re.compile(
+    r'href="git-manpages-(?P<version>\d+(?:\.\d+)+)\.tar\.gz"'
+    r".*?(?P<day>\d{2})-(?P<month>[A-Z][a-z]{2})-(?P<year>\d{4})"
+)
+_MONTHS = (
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+)  # fmt: skip
+
+
+def _manpages_index() -> list[Release]:
+    """Every git release, by the manual that shipped with it.
+
+    git is read from its *manual* — `-h` omits about half its flags — and
+    a manual is not a binary: the pages are the reading, so there is
+    nothing to install and nothing to run. kernel.org publishes them per
+    release, one tarball of about a megabyte against the fifty a git build
+    would cost, which is why this tier reaches back to 2013 rather than
+    stopping at a horizon someone had to choose.
+
+    They are also the same bytes everywhere. A manual has no platform, so
+    two machines reading this tier cannot disagree — the cross-platform
+    tagging simply has nothing to say about git, which is the honest
+    answer rather than a gap.
+    """
+    try:
+        with urllib.request.urlopen(
+            urllib.request.Request(
+                _MANPAGES_INDEX, headers={"User-Agent": "footman-provision"}
+            ),
+            timeout=TIMEOUT,
+        ) as response:
+            listing = response.read().decode("utf-8", "replace")
+    except (urllib.error.URLError, TimeoutError, OSError) as cause:
+        raise Unreachable(_MANPAGES_INDEX, cause) from cause
+    found = {}
+    for match in _MANPAGES_FILE.finditer(listing):
+        if match["month"] not in _MONTHS:  # pragma: no cover - a mirror typo
+            continue
+        month = _MONTHS.index(match["month"]) + 1
+        found[match["version"]] = Release(
+            version=match["version"],
+            date=f"{match['year']}-{month:02d}-{match['day']}",
+        )
+    return _order(list(found.values()))
+
+
+def _install_manpages(release: Release, into: Path) -> Path | None:
+    """Unpack one release's manuals where the reader will look for them."""
+    import tarfile
+
+    from footman import _provision
+
+    url = f"{_MANPAGES_INDEX}git-manpages-{release.version}.tar.gz"
+    tree = into / "man"
+    tree.mkdir(parents=True, exist_ok=True)
+    try:
+        archive = _provision._download(url, into)
+        with tarfile.open(archive) as tar:
+            # The tarball is a bare `man1/…` tree with no top directory, so
+            # it lands where `man -M` expects a manpath root.
+            tar.extractall(tree, filter="data")
+    except (_provision.ProvisionError, OSError, ValueError, tarfile.TarError):
+        return None
+    return tree if any(tree.glob("man1/git.1")) else None
+
+
 def _pypi(driver: Driver) -> list[Release]:
     """PyPI's index, minus the versions with no files and the ones older
     than the walk's horizon.
@@ -595,6 +665,8 @@ def install(driver: Driver, release: Release, into: Path) -> Path | None:
         return _install_python(release.version)
     if kind == "docker":
         return _install_docker(driver, release, into)
+    if kind == "man":
+        return _install_manpages(release, into)
     return None
 
 

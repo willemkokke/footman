@@ -315,12 +315,12 @@ def test_only_listable_tiers_are_primed():
     from footman import _drivers, _toolfetch
 
     uv_tier = _drivers.find("prek")
-    system_tier = _drivers.find("git")
     manual = _drivers.find("bash")
-    assert uv_tier and system_tier and manual
+    assert uv_tier and manual
     assert _toolfetch.can_list(uv_tier)
-    assert not _toolfetch.can_list(system_tier)  # git is read from the host
     assert not _toolfetch.can_list(manual)  # hand-written stub, nothing to read
+    parked = _drivers.Driver("nope", provision=_drivers.Provision(kind="deferred"))
+    assert not _toolfetch.can_list(parked)
 
 
 def test_release_is_read_in_the_era_it_shipped_in():
@@ -918,8 +918,8 @@ def test_an_unreadable_index_is_not_an_empty_one(monkeypatch):
 
 
 def test_which_tiers_can_be_listed():
-    """`system` is absent because git is read from the host with no fetch
-    source, and a hand-written stub has nothing to read at all."""
+    """Every tier that can name its past releases. A hand-written stub has
+    nothing to read at all, and a deferred tool is parked on purpose."""
     from footman import _drivers, _toolfetch
 
     expected = {
@@ -930,7 +930,7 @@ def test_which_tiers_can_be_listed():
         "bun": True,  # bun's own releases
         "python": True,  # uv carries CPython's own download index
         "docker": True,  # its own static-build index
-        "git": False,  # system
+        "git": True,  # kernel.org's per-release manuals
         "bash": False,  # manual stub
     }
     for key, listable in expected.items():
@@ -944,10 +944,12 @@ def test_which_tiers_can_be_listed():
 def test_installing_an_unlistable_tier_declines(tmp_path):
     from footman import _drivers, _toolfetch
 
-    driver = _drivers.find("git")
-    assert driver is not None
+    # No curated tool sits in a tier that cannot be fetched any more — git
+    # was the last, and it is read from kernel.org's manuals now. The rule
+    # still holds, so it is stated against a driver rather than a tool.
+    driver = _drivers.Driver("nope", provision=_drivers.Provision(kind="system"))
     release = _toolfetch.Release("2.50.0")
-    assert _toolfetch.install(driver, release, tmp_path / "git") is None
+    assert _toolfetch.install(driver, release, tmp_path / "nope") is None
 
 
 def test_the_npm_tier_needs_bun_and_says_so(tmp_path, monkeypatch):
@@ -2766,7 +2768,6 @@ def test_a_hand_written_stub_is_not_a_uv_tier_tool():
 
     _, skipped = _curated("", _toolfetch)
     assert "bash (hand-written)" in skipped
-    assert "git (system tier)" in skipped
     assert not any("uv tier" in line for line in skipped)
 
 
