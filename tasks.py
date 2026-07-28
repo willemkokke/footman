@@ -544,7 +544,7 @@ def _gate_dir(session: str) -> Path:
 
 
 _QUOTED = re.compile(r"'(?:[^'\\]|\\.)*'|\"(?:[^\"\\]|\\.)*\"")
-_RUNS_FM = re.compile(r"\b(?:uv run )?f(?:m|ootman)\b")
+_RUNS_FM = re.compile(r"^\s*(?:uv run(?: --\S+)* )?f(?:m|ootman)\b")
 _TRUNCATES = re.compile(r"\|\s*(?:tail|head)\b")
 
 
