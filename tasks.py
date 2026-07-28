@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import dataclasses
 import functools
+import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Annotated
 
@@ -496,6 +497,7 @@ hooks = group("hooks", hidden=True, help="Agent lifecycle hooks (stdin-driven)")
 @dataclass
 class ToolInput:
     file_path: str = ""
+    command: str = ""  # Bash only: what the agent is about to run
 
 
 @dataclass
@@ -539,6 +541,44 @@ def _gate_dir(session: str) -> Path:
     from pathlib import Path
 
     return Path(tempfile.gettempdir()) / f"footman-gate-{session or 'unknown'}"
+
+
+_QUOTED = re.compile(r"'(?:[^'\\]|\\.)*'|\"(?:[^\"\\]|\\.)*\"")
+_RUNS_FM = re.compile(r"\b(?:uv run )?f(?:m|ootman)\b")
+_TRUNCATES = re.compile(r"\|\s*(?:tail|head)\b")
+
+
+@hooks.task
+def pre_bash(event: Annotated[HookEvent, stdin]) -> None:
+    """Refuse a footman command piped into tail/head.
+
+    A gate's **exit code is its verdict**, and a pipe replaces it with the
+    filter's — so `fm check | tail -4` reports 0 whatever happened, and prints
+    the parallel step summary while the failing step scrolls past above. This
+    session called a red gate green exactly that way.
+
+    Deliberately narrow. Command separators split first, so `fm check && echo
+    done | tail` stays legal; quoted spans are data, so `rg "fm check" | head`
+    passes. It is a nudge and not a sandbox: `grep`, `sed` and `wc` destroy a
+    verdict just as well and are not blocked, because widening it starts
+    eating honest pipes — `fm docs.page | head` previews generated markdown,
+    where stdout *is* the product.
+    """
+    segments = re.split(r";|&&|\|\|", event.tool_input.command)
+    blind = (_QUOTED.sub('""', segment) for segment in segments)
+    if not any(
+        _TRUNCATES.search(segment[match.end() :])
+        for segment in blind
+        if (match := _RUNS_FM.search(segment)) is not None
+    ):
+        return
+    fail(
+        "piping a footman command into tail/head replaces its exit code with "
+        "the filter's and hides the failing step — this session reported a red "
+        "gate as green that way. Run it unpiped and read the exit code; to "
+        "keep the output short, redirect to a file and slice the file.",
+        code=2,
+    )
 
 
 @hooks.task
