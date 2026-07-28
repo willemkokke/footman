@@ -402,7 +402,10 @@ def _install_python(version: str) -> Path | None:
     """
     if not _run(["uv", "python", "install", version]):
         return None
-    found = _capture(["uv", "python", "find", version]).strip()
+    # --no-project: `uv python find` consults the nearest pyproject, and the
+    # walk runs inside footman's own checkout — whose `requires-python` has
+    # opinions about which interpreter the question should resolve to.
+    found = _capture(["uv", "python", "find", "--no-project", version]).strip()
     if not found or not Path(found).exists():
         return None
     return Path(found).parent

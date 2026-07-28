@@ -99,6 +99,22 @@ def _on_path(prefix: str | Path) -> Iterator[None]:
 
 
 @contextmanager
+def _bin_on_path(bindir: Path) -> Iterator[None]:
+    """Read binaries from exactly *bindir* for the duration.
+
+    `_on_path` speaks prefixes and appends `/bin` — right for a provision
+    directory, wrong for an installed release: a Windows venv keeps its
+    binaries in `Scripts`, and uv's interpreter store keeps `python.exe` at
+    the store root. A reconstructed `<parent>/bin` exists on neither, so the
+    read silently fell through to whatever ambient binary `PATH` held next.
+    """
+    import os
+
+    with _overlay(PATH=f"{bindir}{os.pathsep}{os.environ.get('PATH', '')}"):
+        yield
+
+
+@contextmanager
 def _overlay(**values: str) -> Iterator[None]:
     """Set environment variables for the duration, then put them back.
 
@@ -1551,11 +1567,20 @@ def observe(
         _refuse_a_broken_environment(Path(scratch))
         return None
     try:
-        with _on_path(bindir.parent):
+        with _bin_on_path(bindir):
             spec = _drivers.extract(driver)
     finally:
         _discard(bindir)
     if not _describes_itself(spec):
+        return None
+    if spec.version and spec.version != version:
+        # The one lie _describes_itself cannot see: a faithful description
+        # of the *wrong* binary. When the release's own directory is missing
+        # from PATH (or its install left no binary), the extractor resolves
+        # some ambient tool instead and reads it under this release's label —
+        # the help-path twin of the guard _from_click already carries. A
+        # reading that names a different version is a hole, not an
+        # observation.
         return None
     return _toolhistory.surface_of(spec)
 

@@ -2573,3 +2573,61 @@ def test_a_hand_written_stub_is_not_a_uv_tier_tool():
     assert "bash (hand-written)" in skipped
     assert "git (system tier)" in skipped
     assert not any("uv tier" in line for line in skipped)
+
+
+def test_bin_on_path_overlays_the_directory_itself(tmp_path):
+    """A Windows venv keeps binaries in `Scripts` and uv's interpreter store
+    keeps `python.exe` at the store root — the observation must overlay the
+    directory the install actually returned, never a rebuilt `<parent>/bin`."""
+    import os
+
+    from footman.tasks.tools import _bin_on_path
+
+    scripts = tmp_path / "Scripts"
+    scripts.mkdir()
+    with _bin_on_path(scripts):
+        assert os.environ["PATH"].split(os.pathsep)[0] == str(scripts)
+
+
+def test_observe_rejects_a_reading_of_the_wrong_binary(tmp_path, monkeypatch):
+    """The help-path twin of `_from_click`'s guard. With the release's own
+    directory missing from `PATH`, the extractor resolves some ambient
+    binary and faithfully describes it under this release's label — on
+    Windows a whole platform's uv tier read as one tool, no holes to show
+    for it. A reading that names a different version must be a hole."""
+    from footman.tasks import tools as tools_tasks
+
+    bindir = tmp_path / "release" / "bin"
+
+    def fake_install(driver, release, into):
+        bindir.mkdir(parents=True, exist_ok=True)
+        return bindir
+
+    monkeypatch.setattr("footman._toolfetch.install", fake_install)
+    monkeypatch.setattr(
+        tools_tasks._drivers, "extract", lambda driver: _spec(version="0.99.9")
+    )
+    assert tools_tasks.observe("ruff", "0.15.0", scratch=str(tmp_path)) is None
+
+    monkeypatch.setattr(
+        tools_tasks._drivers, "extract", lambda driver: _spec(version="0.15.0")
+    )
+    assert tools_tasks.observe("ruff", "0.15.0", scratch=str(tmp_path)) is not None
+
+
+def test_python_find_ignores_the_cwd_project(monkeypatch):
+    """`uv python find` consults the nearest pyproject, and the walk runs
+    inside footman's own checkout — whose `requires-python` has opinions.
+    `--no-project` keeps the answer about the version that was asked."""
+    from footman import _toolfetch
+
+    calls: list[list[str]] = []
+
+    def capture(argv):
+        calls.append(argv)
+        return ""
+
+    monkeypatch.setattr(_toolfetch, "_run", lambda argv, env=None: True)
+    monkeypatch.setattr(_toolfetch, "_capture", capture)
+    assert _toolfetch._install_python("3.10.0") is None
+    assert calls == [["uv", "python", "find", "--no-project", "3.10.0"]]
