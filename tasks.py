@@ -62,8 +62,8 @@ def check():
     """Run format --check, lint, typecheck, and the covered suite — in parallel.
 
     The gate: run it before every commit, and CI runs the same checks. The
-    test step runs under coverage and enforces `fail_under` (pyproject), so
-    this one command is the whole local gate — no separate `pytest --cov`.
+    test step runs under coverage against a local floor, so this one command
+    is the whole local gate — no separate `pytest --cov`.
     """
     import os
     import tempfile
@@ -75,7 +75,18 @@ def check():
     cov_file = os.path.join(tempfile.mkdtemp(prefix="fm-check-cov-"), "coverage")
 
     def covered():
-        run("pytest --cov --cov-report=", env={"COVERAGE_FILE": cov_file})
+        # `fail_under` (pyproject, 92) is the *merged* bar: CI combines three
+        # OSes x five Pythons plus the shell jobs, and disables the per-job
+        # threshold because one slice can only ever see its own branches
+        # (Windows run(), pwsh profiles, the other Pythons, the network-gated
+        # tool fetch). One laptop measured against that bar is red by
+        # construction, so the local run gets its own floor — low enough that
+        # a single platform can clear it, high enough to catch a real
+        # regression before CI merges the whole picture.
+        run(
+            "pytest --cov --cov-report= --cov-fail-under=90",
+            env={"COVERAGE_FILE": cov_file},
+        )
 
     # partial, not a lambda: it keeps the callee's name, so the live line
     # and step column say "format" instead of "…"; `covered` borrows the
