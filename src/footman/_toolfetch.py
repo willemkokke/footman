@@ -179,7 +179,13 @@ def releases(driver: Driver) -> list[Release]:
         found = _manpages_index()
     else:
         return []
-    return _stable(found)
+    found = _stable(found)
+    if driver.provision.floor:
+        from footman.tools import version_tuple
+
+        cut = version_tuple(driver.provision.floor)
+        found = [r for r in found if version_tuple(r.version) >= cut]
+    return found
 
 
 _PRERELEASE = re.compile(

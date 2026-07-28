@@ -50,7 +50,8 @@ class Provision:
     a directory listing rather than an asset list. `man` — a release's
     manual pages, for a tool read from its manual rather than its `-h`.
     `system` — already on PATH (the uv running this); never provisioned.
-    `deferred` — parked, `note` saying why (as tea was, until 0.15.0)."""
+    `deferred` — parked whole, `note` saying why (tea sat here until its
+    0.15.0 release; a per-release boundary wants `floor` instead)."""
     package: str = ""
     """The PyPI or npm package, when it differs from the driver's binary name
     (`markdownlint-cli2`); otherwise the binary name is used."""
@@ -58,6 +59,14 @@ class Provision:
     """`owner/repo` for a `github` / `gitlab` release download."""
     note: str = ""
     """Why a `deferred` source is parked — shown by `provision`."""
+    floor: str = ""
+    """Releases below this are not *offered* — not listed, not walked, and
+    so never holes. The precedent is `READ_PYTHON_SINCE`: a hole says "this
+    could not be read", and the store should not carry a shrug about a
+    release that is simply out of scope. Unlike `deferred` this is per
+    release, not per tool — the tool stays curated, its history just starts
+    here. The boundary applies on every platform, so set it only where the
+    releases below are not worth having anywhere, and say why alongside."""
     plugins: tuple[str, ...] = ()
     """Extra packages to install *alongside* the tool (`uv --with`), so a
     plugin-extended CLI is read whole. pytest's `--cov*` flags come from
@@ -340,18 +349,16 @@ DRIVERS: tuple[Driver, ...] = (
     ),
     Driver(
         "tea",
-        # 0.13.0-0.14.2 interrogate the console at start-up (an OSC theme
-        # query, gitea/tea#1054, fixed in 0.15.0) and hang under ANY captured
-        # spawn on Windows — the caller's terminal and a hidden conhost
-        # alike. Measured, not inferred: every other release back to 0.9.0
-        # answers in 0.1s under the same spawn. Those four read as holes on
-        # Windows and fold in from POSIX, where a piped stdout makes the
-        # query skip. Two more are unreadable everywhere, not just here:
-        # 0.10.1's release build is unstamped ("Version: development") so no
-        # reading can prove it is 0.10.1, and 0.9.1 ships no windows asset
-        # at all. Not a floor — 0.12.0 and below read fine, and a floor
-        # would discard them.
-        provision=Provision(kind="gitea", repo="gitea/tea"),
+        # Floored at 0.15.0, the release the console hang was fixed in
+        # (gitea/tea#1054). Measured under the walk's own spawn, not
+        # inferred: 0.13.0-0.14.2 interrogate the console at start-up and
+        # hang every captured Windows read — the caller's terminal and a
+        # hidden conhost alike; 0.10.1's build is unstamped ("Version:
+        # development"), so no reading can prove what it is; 0.9.1 ships no
+        # windows asset. What remains below (0.12.0 and older) reads fine,
+        # but is not worth a history split by permanent platform holes:
+        # tea's curated life starts where the hang ended.
+        provision=Provision(kind="gitea", repo="gitea/tea", floor="0.15.0"),
         url="https://gitea.com/gitea/tea",
         verbs=(
             "issues.create",

@@ -897,7 +897,8 @@ def test_gitlab_releases_read_their_own_field_names(monkeypatch):
 def test_gitea_releases_read_the_github_shape(monkeypatch):
     """Gitea's API answers with GitHub's field names — one reading serves
     both hosts, and the prerelease/draft filter applies the same way."""
-    from footman import _drivers, _toolfetch
+    from footman import _toolfetch
+    from footman._drivers import Driver, Provision
 
     _index(
         monkeypatch,
@@ -911,11 +912,31 @@ def test_gitea_releases_read_the_github_shape(monkeypatch):
             {"tag_name": "v0.14.2", "published_at": "2026-06-26T00:00:00Z"},
         ],
     )
-    driver = _drivers.find("tea")
-    assert driver is not None
+    driver = Driver("x", provision=Provision(kind="gitea", repo="o/r"))
     got = _toolfetch.releases(driver)
     assert [r.version for r in got] == ["0.15.0", "0.14.2"]
     assert got[0].tag == "v0.15.0" and got[0].date == "2026-07-27"
+
+
+def test_a_provision_floor_takes_releases_out_of_scope(monkeypatch):
+    """Below the floor is not *offered* — not walked, never holes. Unlike
+    `deferred` the tool stays curated; its history just starts at the
+    floor. tea's sits at 0.15.0, above the console-hang band."""
+    from footman import _drivers, _toolfetch
+
+    _index(
+        monkeypatch,
+        [
+            {"tag_name": "v0.15.0", "published_at": "2026-07-27T00:00:00Z"},
+            {"tag_name": "v0.14.2", "published_at": "2026-06-26T00:00:00Z"},
+            {"tag_name": "v0.9.0", "published_at": "2024-01-01T00:00:00Z"},
+        ],
+    )
+    driver = _drivers.find("tea")
+    assert driver is not None
+    assert driver.provision.floor == "0.15.0"
+    got = _toolfetch.releases(driver)
+    assert [r.version for r in got] == ["0.15.0"]
 
 
 def test_an_unreadable_index_is_not_an_empty_one(monkeypatch):
