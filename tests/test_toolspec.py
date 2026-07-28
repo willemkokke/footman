@@ -1001,13 +1001,61 @@ def test_extraction_replaces_this_machines_home_with_a_tilde(monkeypatch, tmp_pa
             ),
         ),
     )
-    clean = _drivers._anonymous(spec)
+    clean = _drivers._anonymous(spec, home)
     option = clean.verbs[0].options[0]
     assert clean.help == "config in ~/.docker"
     assert clean.verbs[0].help == "reads ~/.docker"
     assert option.default == "~/.docker"
     assert option.help.endswith("(default ~/.docker)")
     assert clean.verbs[0].options[1].default is False  # not a string, untouched
+
+
+def test_the_scrub_uses_the_home_the_walk_gave_not_this_process_one(
+    monkeypatch, tmp_path
+):
+    """The gap the first Windows gather found.
+
+    Inside a run the overlay that sets `HOME` writes to `ctx.env` — the
+    *children's* environment — so the tool being read echoes the throwaway
+    home while this process still reports the real one. Asking
+    `Path.home()` matched nothing and scrubbed nothing, and docker's config
+    default was recorded as a path with a random per-run directory in it,
+    which would have disagreed with itself every week and with every other
+    platform forever.
+
+    So the home is handed in, and `Path.home()` being something else
+    entirely must not matter.
+    """
+    given = tmp_path / "scratch" / "docker-29.6.2" / "home"
+    monkeypatch.setattr(_drivers.Path, "home", classmethod(lambda cls: tmp_path / "e"))
+    spec = ToolSpec(
+        name="docker",
+        verbs=(
+            Verb(
+                name="",
+                options=(
+                    Option(name="config", default=f"{given}/.docker"),
+                    Option(name="tlscert", help=f"cert at {given}/.docker/c.pem"),
+                ),
+            ),
+        ),
+    )
+    clean = _drivers._anonymous(spec, given, _drivers.Path.home())
+    assert clean.verbs[0].options[0].default == "~/.docker"
+    assert clean.verbs[0].options[1].help.endswith("~/.docker/c.pem")
+
+
+def test_a_throwaway_home_inside_the_real_one_is_replaced_whole(tmp_path):
+    """Longest first, or a nested throwaway home leaves `~/…/home/.docker`
+    behind — still a machine-specific path, just a shorter one."""
+    real = tmp_path
+    given = tmp_path / "scratch" / "release" / "home"
+    spec = ToolSpec(
+        name="docker",
+        verbs=(Verb(name="", options=(Option(name="config", default=f"{given}/.d"),)),),
+    )
+    clean = _drivers._anonymous(spec, given, real)
+    assert clean.verbs[0].options[0].default == "~/.d"
 
 
 def test_no_stub_carries_a_home_directory():
@@ -1067,12 +1115,18 @@ def test_a_tool_with_plugins_is_read_under_the_home_they_were_fetched_into(
     monkeypatch.setattr(
         task_module._drivers,
         "extract",
-        lambda driver: seen.update(home=os.environ.get("HOME")) or ToolSpec(name="d"),
+        lambda driver, home=None: (
+            seen.update(env=os.environ.get("HOME"), given=home) or ToolSpec(name="d")
+        ),
     )
     driver = task_module._drivers.find("docker")
     assert driver is not None
     task_module._extract(driver)
-    assert seen["home"] == str(tmp_path / "home")
+    assert seen["env"] == str(tmp_path / "home")
+    # Handed over as well as overlaid: inside a run the overlay reaches the
+    # children's environment, never this process's, so the scrub cannot
+    # discover it — see `_drivers._anonymous`.
+    assert seen["given"] == tmp_path / "home"
 
 
 def test_a_tool_with_no_plugin_home_is_read_exactly_as_before(monkeypatch, tmp_path):
@@ -1090,7 +1144,9 @@ def test_a_tool_with_no_plugin_home_is_read_exactly_as_before(monkeypatch, tmp_p
     monkeypatch.setattr(
         task_module._drivers,
         "extract",
-        lambda driver: seen.update(home=os.environ.get("HOME")) or ToolSpec(name="d"),
+        lambda driver, home=None: (
+            seen.update(home=os.environ.get("HOME")) or ToolSpec(name="d")
+        ),
     )
     driver = task_module._drivers.find("docker")
     assert driver is not None

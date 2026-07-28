@@ -556,8 +556,11 @@ def in_process_capable(name: str) -> bool:
     return tools._console_entrypoint(name) is not None
 
 
-def extract(driver: Driver) -> ToolSpec:
+def extract(driver: Driver, home: Path | None = None) -> ToolSpec:
     """Ask the installed tool to describe itself, best source first.
+
+    *home* is the throwaway home the caller gave this reading, when it gave
+    one — see `_anonymous` for why it cannot be discovered here.
 
     click hands over its parameters as data — including `secondary_opts`,
     the negation a `--help` scrape can only find if the tool happens to
@@ -584,11 +587,30 @@ def extract(driver: Driver) -> ToolSpec:
             man=driver.man,
             shorts=driver.shorts,
         )
-    return _anonymous(_rebase(spec, driver.base) if driver.base else spec)
+    return _anonymous(
+        _rebase(spec, driver.base) if driver.base else spec,
+        *([home] if home else []),
+        Path.home(),
+    )
 
 
-def _anonymous(spec: ToolSpec) -> ToolSpec:
-    """Replace this machine's home directory with `~` throughout *spec*.
+def _anonymous(spec: ToolSpec, *homes: Path) -> ToolSpec:
+    """Replace every home directory in *homes* with `~` throughout *spec*.
+
+    The homes are given rather than looked up, because the walk gives a
+    tool a home of its own and `Path.home()` cannot see it. Inside a run
+    the overlay that sets `HOME` writes to `ctx.env` — the *children's*
+    environment — so the tool being read echoes the throwaway home while
+    this process still reports the real one. Asking `Path.home()` matched
+    nothing and scrubbed nothing, and the first Windows gather recorded
+    docker's config default as
+    `C:\\Users\\…\\Temp\\footman-gather-2_wvx66g\\docker-29.6.2\\home\\.docker`
+    — a path with a *random* directory in it, so every run on every
+    platform would have written a different value and disagreed with every
+    other platform forever.
+
+    It only ever worked when called bare, which is the path the test took.
+
 
     Tools that default an option to a path under `$HOME` report it
     expanded: docker says its config lives in `/Users/willem/.docker`, and
@@ -605,12 +627,19 @@ def _anonymous(spec: ToolSpec) -> ToolSpec:
 
     `~` is what the tool means and what every platform can agree on.
     """
-    home = str(Path.home()).rstrip("/\\")
-    if not home:  # pragma: no cover - a home of "/" is not a home
+    roots = [str(home).rstrip("/\\") for home in homes if str(home).strip("/\\")]
+    if not roots:  # pragma: no cover - a home of "/" is not a home
         return spec
+    # Longest first: a throwaway home nested under the real one must be
+    # replaced whole, not left as `~/…/home/.docker`.
+    roots.sort(key=len, reverse=True)
 
     def scrub(text: str) -> str:
-        return text.replace(home, "~") if isinstance(text, str) else text
+        if not isinstance(text, str):
+            return text
+        for root in roots:
+            text = text.replace(root, "~")
+        return text
 
     verbs = tuple(
         replace(

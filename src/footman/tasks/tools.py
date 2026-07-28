@@ -128,7 +128,10 @@ def _extract(driver: _drivers.Driver) -> _toolspec.ToolSpec:
     if home is None:
         return _drivers.extract(driver)
     with _overlay(HOME=str(home), USERPROFILE=str(home)):
-        return _drivers.extract(driver)
+        # Handed over, not discovered: this overlay writes to `ctx.env`, so
+        # the tool echoes *this* home while the process still reports the
+        # machine's own.
+        return _drivers.extract(driver, home=home)
 
 
 def _plugin_home(driver: _drivers.Driver) -> Path | None:
