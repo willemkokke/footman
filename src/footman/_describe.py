@@ -304,6 +304,21 @@ def has_listed(node: dict) -> bool:
     )
 
 
+def ordered_tasks(node: dict) -> dict:
+    """A group's tasks with its `default` first, then declaration order.
+
+    The default *is* the group — `fm db` runs it, and the group's own row is
+    described by it — so a listing that showed it wherever it happened to be
+    written put the group's headline act somewhere in the middle, or at the
+    bottom. Where it sits in the file is the author's business; where it sits
+    in a listing is footman's.
+    """
+    tasks = node["tasks"]
+    if "default" not in tasks:
+        return tasks
+    return {"default": tasks["default"], **tasks}
+
+
 def walk(node: dict, prefix: str = "", depth: int = 0):
     """The one traversal every human listing reads — `--list`, `--tree`, group
     help, and the did-you-mean index.
@@ -314,7 +329,7 @@ def walk(node: dict, prefix: str = "", depth: int = 0):
     Two views of one walk, so a rule about what is listed cannot be true of
     one and false of the other.
     """
-    for name, task in node["tasks"].items():
+    for name, task in ordered_tasks(node).items():
         if listed(task):
             yield depth, f"{prefix}{name}", name, task_line(task), "task"
     for name, sub in node["groups"].items():
@@ -346,10 +361,11 @@ def sort_tree(node: dict) -> dict:
     """A copy of *node* with tasks and groups each in name order, recursively.
 
     The listing shape survives — tasks still come before groups at every
-    level — so `[tool.footman] sort = true` changes only where names fall,
-    never the two-band layout."""
+    level, and a group's `default` still leads it — so `[tool.footman] sort =
+    true` changes only where names fall, never the two-band layout."""
     copy = dict(node)
-    copy["tasks"] = {name: node["tasks"][name] for name in sorted(node["tasks"])}
+    by_name = {name: node["tasks"][name] for name in sorted(node["tasks"])}
+    copy["tasks"] = ordered_tasks({"tasks": by_name})
     copy["groups"] = {
         name: sort_tree(sub) for name, sub in sorted(node["groups"].items())
     }
