@@ -346,8 +346,11 @@ DRIVERS: tuple[Driver, ...] = (
         # alike. Measured, not inferred: every other release back to 0.9.0
         # answers in 0.1s under the same spawn. Those four read as holes on
         # Windows and fold in from POSIX, where a piped stdout makes the
-        # query skip. 0.9.1 ships no windows asset at all. Not a floor —
-        # 0.12.0 and below read fine, and a floor would discard them.
+        # query skip. Two more are unreadable everywhere, not just here:
+        # 0.10.1's release build is unstamped ("Version: development") so no
+        # reading can prove it is 0.10.1, and 0.9.1 ships no windows asset
+        # at all. Not a floor — 0.12.0 and below read fine, and a floor
+        # would discard them.
         provision=Provision(kind="gitea", repo="gitea/tea"),
         url="https://gitea.com/gitea/tea",
         verbs=(
