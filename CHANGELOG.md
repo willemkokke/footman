@@ -22,6 +22,14 @@ versions may include breaking changes.
   literal, in completion as at the prompt. Reinstalled hooks pick this up;
   an existing hook keeps today's behaviour everywhere else.
 
+### Fixed
+
+- **A second playground `fm test` sees your edits.** In-process pytest left
+  the editor's files in `sys.modules`, so rerunning collected the first
+  run's modules until the page was reloaded; the driver now evicts them
+  after every run (and skips bytecode caching, whose mtime granularity
+  could resurrect a stale rewritten test inside one clock tick).
+
 ## [0.26.0] — 2026-07-28
 
 ### Added
