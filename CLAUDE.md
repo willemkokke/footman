@@ -41,6 +41,20 @@ uv run fm check                                   # ruff format --check, ruff ch
 uv run --group docs zensical build --clean --strict   # ONLY when docs/ changed
 ```
 
+**The exit code is the verdict — never put a filter between it and you.** A
+pipe replaces the gate's status with the filter's (`fm check | tail -4`
+reports tail's 0 and shows the step summary while the failing step scrolls
+past), which has produced a false "green" twice here and twice in a
+downstream repo. Redirection *keeps* the code, so when the output is
+unwelcome, redirect rather than pipe and read the file only on failure:
+
+```sh
+uv run fm check > /tmp/gate.log 2>&1     # exit code preserved; read the log if non-zero
+```
+
+A `PreToolUse` hook (`fm hooks.pre-bash`) refuses the piped form. It is a
+nudge, not a sandbox — `grep`/`sed`/`wc` hide a verdict just as well.
+
 `fm check` is the whole gate: its test step runs `pytest -n auto` under
 coverage against a local floor (`--cov-fail-under=90`) — no separate `--cov`
 command. That floor is deliberately below `fail_under = 92`, which is the
