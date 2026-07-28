@@ -683,6 +683,201 @@ def test_github_releases_normalise_the_tag_and_drop_the_unreleased(monkeypatch):
     assert [r.version for r in _toolfetch.releases(driver)] == ["2.96.0", "2.95.0"]
 
 
+def _dirlisting(monkeypatch, html):
+    """Serve *html* as a directory index, whatever URL is asked for.
+
+    The engine listing that dates those files is stubbed empty, so a test
+    about the directory is about the directory; a test about dates says so.
+    """
+    import io
+
+    from footman import _toolfetch
+
+    monkeypatch.setattr(
+        _toolfetch.urllib.request,
+        "urlopen",
+        lambda *a, **k: io.BytesIO(html.encode()),
+    )
+    monkeypatch.setattr(_toolfetch, "_docker_dates", dict)
+
+
+DOCKER_LISTING = """<html><body><pre>
+<a href="../">../</a>
+<a href="sbx/">sbx/</a>
+<a href="docker-17.03.0-ce.tgz">ce</a>            2025-08-06 10:05  44MB
+<a href="docker-rootless-extras-27.5.1.tgz">rl</a>  2025-01-22 09:00  20MB
+<a href="docker-27.5.1.tgz">docker-27.5.1</a>      2025-01-22 09:00  44MB
+<a href="docker-29.4.2.tgz">docker-29.4.2</a>      2026-06-01 10:05  46MB
+<a href="docker-29.4.2-2.tgz">rebuild</a>         2026-06-03 10:05  46MB
+<a href="docker-29.6.2.tgz">docker-29.6.2</a>      2026-07-16 12:00  46MB
+</pre></body></html>"""
+
+
+def test_docker_reads_its_versions_from_a_directory_listing(monkeypatch):
+    """Docker publishes a static build of every release per platform, so the
+    index is a folder rather than an asset list. Three neighbours sit in the
+    same folder and none of them is a docker release: the rootless extras,
+    the 2017 `-ce` spelling, and a `-2` rebuild of a version already there."""
+    from footman import _drivers, _toolfetch
+
+    _dirlisting(monkeypatch, DOCKER_LISTING)
+    driver = _drivers.find("docker")
+    assert driver is not None
+    got = _toolfetch.releases(driver)
+    assert [r.version for r in got] == ["29.6.2", "29.4.2", "27.5.1"]
+    assert got[0].date == "2026-07-16"
+
+
+def test_docker_index_is_chosen_by_platform_and_architecture(monkeypatch):
+    """One index per (os, arch) pair, and Windows publishes no arm64 build —
+    an arm Windows box takes the x86_64 zip and runs it in emulation."""
+    import platform as _platform_mod
+
+    from footman import _toolfetch
+
+    def channel(platform, machine, windows):
+        monkeypatch.setattr(_toolfetch.sys, "platform", platform)
+        monkeypatch.setattr(_toolfetch, "_windows", lambda: windows)
+        monkeypatch.setattr(_platform_mod, "machine", lambda: machine)
+        return _toolfetch._docker_channel()
+
+    assert channel("darwin", "arm64", False) == ("mac", "aarch64", "tgz")
+    assert channel("linux", "x86_64", False) == ("linux", "x86_64", "tgz")
+    assert channel("win32", "ARM64", True) == ("win", "x86_64", "zip")
+
+
+def test_docker_is_fetched_rather_than_read_from_the_host():
+    """It used to be a `system` tool, read from whatever the laptop had
+    installed — so its history could only ever hold one version."""
+    from footman import _drivers, _toolfetch
+
+    driver = _drivers.find("docker")
+    assert driver is not None
+    assert driver.provision.kind == "docker"
+    assert _toolfetch.can_list(driver)
+
+
+COMPOSE_RELEASES = [
+    {"tag_name": "v5.3.1", "published_at": "2026-07-07T00:00:00Z"},
+    {"tag_name": "v2.32.4", "published_at": "2025-01-15T00:00:00Z"},
+    {"tag_name": "v2.0.0", "published_at": "2021-09-28T00:00:00Z"},
+    {"tag_name": "1.29.2", "published_at": "2021-05-10T00:00:00Z"},
+]
+
+
+def _plugin_fetch(monkeypatch, placed):
+    """Serve the compose listing, and record what was asked for."""
+    from footman import _provision, _toolfetch
+
+    _index(monkeypatch, COMPOSE_RELEASES)
+    monkeypatch.setattr(_toolfetch, "_LISTINGS", {})
+    asked = []
+
+    def assets_for(_host, _repo, tag=""):
+        asked.append(tag)
+        if not placed:
+            raise _provision.ProvisionError("rate limited")
+        return [("docker-compose-linux-x86_64", "http://x/bin")]
+
+    monkeypatch.setattr(_provision, "assets_for", assets_for)
+    monkeypatch.setattr(_provision, "_pick_asset", lambda a: a[0])
+    monkeypatch.setattr(
+        _provision, "_download", lambda url, into: _written(into / "docker-compose")
+    )
+    monkeypatch.setattr(
+        _provision, "_extract_binary", lambda archive, tool, into: into / tool
+    )
+    return asked
+
+
+def _written(path):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"plugin")
+    return path
+
+
+def test_a_plugin_is_paired_with_the_release_that_shipped_alongside(
+    monkeypatch, tmp_path
+):
+    """compose has its own release line, so there is no version to match on
+    — but "what a user of that docker would have had" is a fact the two
+    dates settle between them, the same answer every time."""
+    from footman import _drivers, _toolfetch
+
+    asked = _plugin_fetch(monkeypatch, placed=True)
+    docker = _drivers.find("docker")
+    assert docker is not None
+    compose = docker.plugins[0]
+    assert _toolfetch.install_plugin(compose, "2025-06-01", tmp_path) is True
+    assert asked == ["v2.32.4"]  # not v5.3.1, which had not shipped yet
+
+
+def test_an_era_before_the_plugin_existed_pairs_with_nothing(monkeypatch, tmp_path):
+    """compose 1.x was a program you ran as `docker-compose`; `docker
+    compose` did not exist until 2.0, and dropping a 1.x binary into the
+    plugin directory would not make it one."""
+    from footman import _drivers, _toolfetch
+
+    asked = _plugin_fetch(monkeypatch, placed=True)
+    docker = _drivers.find("docker")
+    assert docker is not None
+    assert _toolfetch.install_plugin(docker.plugins[0], "2021-06-01", tmp_path) is False
+    assert asked == []
+
+
+def test_a_plugin_that_cannot_be_fetched_is_unreachable_not_absent(
+    monkeypatch, tmp_path
+):
+    """A rate limit read past becomes "this docker had no compose" — a
+    different claim, and one the history would write down as a removal."""
+    from footman import _drivers, _toolfetch
+
+    _plugin_fetch(monkeypatch, placed=False)
+    docker = _drivers.find("docker")
+    assert docker is not None
+    with pytest.raises(_toolfetch.Unreachable, match=r"docker/compose 2\.32\.4"):
+        _toolfetch.install_plugin(docker.plugins[0], "2025-06-01", tmp_path)
+
+
+def test_a_listing_is_read_once_per_process(monkeypatch):
+    """Every release of a walk asks the same question of the same
+    repository, and the answer cannot change while the walk runs."""
+    from footman import _toolfetch
+
+    calls = []
+    _index(monkeypatch, COMPOSE_RELEASES)
+    monkeypatch.setattr(_toolfetch, "_LISTINGS", {})
+    real = _toolfetch._forge
+    monkeypatch.setattr(
+        _toolfetch,
+        "_forge",
+        lambda *a, **k: calls.append(a) or real(*a, **k),
+    )
+    first = _toolfetch._listing("docker/compose", 3)
+    again = _toolfetch._listing("docker/compose", 3)
+    assert first == again and len(calls) == 1
+
+
+def test_docker_dates_come_from_the_engine_not_the_upload(monkeypatch):
+    """The static index dates its files by upload time, and docker
+    re-uploads in bulk: a third of the archives are stamped one day in 2025,
+    including 20.10.6, which shipped in April 2021. Those dates decide which
+    compose a release is paired with."""
+    from footman import _drivers, _toolfetch
+
+    _dirlisting(monkeypatch, DOCKER_LISTING)
+    monkeypatch.setattr(
+        _toolfetch,
+        "_docker_dates",
+        lambda: {"27.5.1": "2025-01-22", "29.6.2": "2026-07-16"},
+    )
+    driver = _drivers.find("docker")
+    assert driver is not None
+    dated = {r.version: r.date for r in _toolfetch.releases(driver)}
+    assert dated["27.5.1"] == "2025-01-22"
+    assert dated["29.4.2"] == "2026-06-01"  # not in the engine listing: the mtime
+
+
 def test_gitlab_releases_read_their_own_field_names(monkeypatch):
     from footman import _drivers, _toolfetch
 
@@ -723,8 +918,8 @@ def test_an_unreadable_index_is_not_an_empty_one(monkeypatch):
 
 
 def test_which_tiers_can_be_listed():
-    """`system` is absent because git and docker are read from the host with
-    no fetch source, and a hand-written stub has nothing to read at all."""
+    """`system` is absent because git is read from the host with no fetch
+    source, and a hand-written stub has nothing to read at all."""
     from footman import _drivers, _toolfetch
 
     expected = {
@@ -734,8 +929,8 @@ def test_which_tiers_can_be_listed():
         "eclint": True,  # gitlab
         "bun": True,  # bun's own releases
         "python": True,  # uv carries CPython's own download index
+        "docker": True,  # its own static-build index
         "git": False,  # system
-        "docker": False,  # system
         "bash": False,  # manual stub
     }
     for key, listable in expected.items():
@@ -2573,6 +2768,71 @@ def test_a_hand_written_stub_is_not_a_uv_tier_tool():
     assert "bash (hand-written)" in skipped
     assert "git (system tier)" in skipped
     assert not any("uv tier" in line for line in skipped)
+
+
+def test_a_reading_older_than_the_extractor_is_offered_again(monkeypatch):
+    """`EXTRACTOR` was recorded against every observation from the start, and
+    nothing ever read it — so an extractor that learned to see more had no
+    way to say so.
+
+    Three twine releases sat in the store with no options at all, recorded
+    when the tool died before argparse ran under today's dependencies. The
+    only thing that noticed was another platform reading them correctly and
+    appearing to disagree, which is a divergence report for a bug. A reading
+    is only as good as the extractor that took it.
+    """
+    from footman import _toolfetch
+    from footman.tasks import tools
+
+    surface = _with_flags("quiet")
+    doc = _toolhistory.new(
+        "ruff",
+        version="1.0.1",
+        date="2026-02-02",
+        surface=surface,
+        platforms=[tools._platform()],
+    )
+    _toolhistory.extend(
+        doc,
+        version="1.0.0",
+        date="2026-02-01",
+        surface=surface,
+        platforms=[tools._platform()],
+    )
+    listing = [_toolfetch.Release(version=v) for v in ("1.0.1", "1.0.0")]
+
+    # Current generation, this platform has read both: nothing owed.
+    assert tools._plan_gather(doc, listing, 0) == []
+
+    # The extractor moves on, and both readings are owed again.
+    monkeypatch.setattr(_toolhistory, "EXTRACTOR", _toolhistory.EXTRACTOR + 1)
+    offered = [r.version for r in tools._plan_gather(doc, listing, 0)]
+    assert offered == ["1.0.1", "1.0.0"]
+
+
+def test_a_re_read_clears_a_claim_the_older_extractor_caused(monkeypatch):
+    """The self-healing the mechanism is for: one platform's blind reading
+    made the other look like a divergence, and reading it again with the
+    better extractor settles it — no hand-editing of the store, which is the
+    one thing a record of observations must never need."""
+    from footman.tasks import tools
+
+    here = tools._platform()
+    blind = _toolhistory.surface_of(_spec(verbs=(Verb(name="", options=()),)))
+    real = _with_flags("quiet", "fix")
+
+    doc = _toolhistory.new(
+        "twine", version="5.1.0", date="2026-02-01", surface=blind, platforms=[here]
+    )
+    # Another platform reads it properly: the options arrive tagged absent here.
+    _toolhistory.merge(doc, version="5.1.0", surface=real, platforms=["Elsewhere"])
+    assert doc["base"]["absent"], "the blind reading should read as an absence"
+    assert here in next(iter(doc["base"]["absent"].values()))
+
+    # This platform reads it again, now seeing what was always there.
+    _toolhistory.merge(doc, version="5.1.0", surface=real, platforms=[here])
+    assert not doc["base"].get("absent")  # the claim is withdrawn by evidence
+    assert sorted(doc["base"]["platforms"]) == sorted([here, "Elsewhere"])
 
 
 def test_bin_on_path_overlays_the_directory_itself(tmp_path):

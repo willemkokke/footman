@@ -6,14 +6,14 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 from unittest import mock
 
 import pytest
 
 from footman import _complete, manifest, registry, task
 from footman._complete import _tasks_file_from, complete, complete_cli
-from footman.params import doc, suggest
+from footman.params import Many, doc, nosplit, suggest
 
 
 @pytest.fixture(autouse=True)
@@ -933,3 +933,115 @@ def test_stale_schema_cache_rebuilds_instead_of_walking(tmp_path, monkeypatch, c
     complete_cli(["--", "li"])
     out = capsys.readouterr().out.split()
     assert "lint" in out, _cold_evidence(tmp_path / "cache")
+
+
+# --- comma-splitting values: the tail item completes on its own ---------------
+
+
+def _csv_tree():
+    with registry.capture() as root:
+
+        @task
+        def lint(
+            paths: list[Path] | None = None,
+            tags: list[Literal["alpha", "beta", "gamma"]] | None = None,
+            names: Annotated[list[str], nosplit] | None = None,
+            projects: Annotated[list[str], suggest(_demo_suggest)] | None = None,
+        ):
+            "Lint."
+
+        @task
+        def sweep(paths: Many[Path]):
+            "Sweep."
+
+        @task
+        def stage(envs: Many[Literal["dev", "prod"]]):
+            "Stage."
+
+    return manifest.build_manifest(root)["tree"]
+
+
+def test_csv_path_option_signals_csv_files():
+    from footman._complete import _FILES, _FILES_CSV
+
+    tree = _csv_tree()
+    # Before any comma the plain signal serves — a hook from an older install
+    # keeps its behaviour; mid-list the csv signal completes the tail item.
+    assert complete(tree, ["lint", "--paths="]) == [_FILES]
+    assert complete(tree, ["lint", "--paths=src,"]) == [_FILES_CSV]
+    assert complete(tree, ["lint", "--paths", "=", "src,tes"]) == [_FILES_CSV]
+
+
+def test_nosplit_value_keeps_commas_literal_in_completion():
+    from footman._complete import _FILES, _FILES_CSV
+
+    tree = _csv_tree()
+    # nosplit: the comma is part of the value, never a list separator.
+    assert complete(tree, ["lint", "--names=a,"]) not in ([_FILES], [_FILES_CSV])
+
+
+def test_csv_choice_option_completes_the_tail_item():
+    tree = _csv_tree()
+    # Whole-token shells re-attach the head; the typed item is not re-offered.
+    assert set(complete(tree, ["lint", "--tags=alpha,"])) == {
+        "--tags=alpha,beta",
+        "--tags=alpha,gamma",
+    }
+    assert complete(tree, ["lint", "--tags=alpha,g"]) == ["--tags=alpha,gamma"]
+    # bash's `=`-split word completes bare values, the head still attached.
+    assert complete(tree, ["lint", "--tags", "=", "alpha,g"]) == ["alpha,gamma"]
+
+
+def test_csv_dynamic_option_recomputes_the_tail():
+    from footman._complete import _DYNAMIC
+
+    tree = _csv_tree()
+    # The typed head folds into the emission prefix; the fresh recompute
+    # filters on the tail item alone.
+    assert complete(tree, ["lint", "--projects=alpha,b"]) == [
+        _DYNAMIC,
+        "b",
+        "--projects=alpha,",
+        "projects",
+        "lint",
+    ]
+    assert complete(tree, ["lint", "--projects", "=", "alpha,b"]) == [
+        _DYNAMIC,
+        "b",
+        "alpha,",
+        "projects",
+        "lint",
+    ]
+
+
+def test_csv_path_positional_signals_csv_files():
+    from footman._complete import _FILES, _FILES_CSV
+
+    tree = _csv_tree()
+    assert complete(tree, ["sweep", ""]) == [_FILES]
+    assert complete(tree, ["sweep", "src,"]) == [_FILES_CSV]
+
+
+def test_csv_choice_positional_completes_the_tail_item():
+    tree = _csv_tree()
+    out = complete(tree, ["stage", "dev,"])
+    assert "dev,prod" in out
+    assert "dev,dev" not in out  # the typed item is not re-offered
+
+
+def test_complete_cli_exits_csv_files_mid_list(tmp_path, capsys):
+    import json
+
+    from footman._complete import _EXIT_FILES_CSV
+
+    with registry.capture() as root:
+
+        @task
+        def lint(paths: list[Path] | None = None):
+            "Lint."
+
+    m = tmp_path / "m.json"
+    m.write_text(json.dumps(manifest.build_manifest(root)))
+    rc = complete_cli(["--manifest", str(m), "--", "lint", "--paths=a,"])
+    assert rc == _EXIT_FILES_CSV
+    assert capsys.readouterr().out == ""

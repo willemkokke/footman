@@ -173,8 +173,8 @@ PR, and only the merged commit is tagged. Don't tag before the bump is on
    a stale local ruff or a plugin-carrying pytest becomes the snapshot. A
    tool that failed to provision, or one whose reading is older than the
    stub already records, is named and left alone — a snapshot only ever
-   moves forward, and `git`/`docker` still come from the host (the `system`
-   tier is never provisioned).
+   moves forward, and `git` still comes from the host (the `system` tier is
+   never provisioned).
 3. Bump both version files to `X.Y.Z`, and the doc version references the
    drift test guards: the `footman~=X.Y.0` pin in `README.md` and
    `docs/index.md`, and the `--version` example in `docs/json.md`

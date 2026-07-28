@@ -186,6 +186,32 @@ def test_extract_binary_names_the_exe_on_windows(tmp_path):
     assert placed.name == "eclint.exe" and placed.read_bytes() == b"PE-ish"
 
 
+def test_extract_binary_prefers_the_file_over_a_directory_of_the_same_name(tmp_path):
+    """docker's tarball is `docker/docker` — a directory whose name matches
+    the tool, listed before the binary it holds. Matching on name alone took
+    the directory, and the extraction failed one line later with "not a
+    file"; a zip took it too, and wrote a zero-byte binary instead."""
+    archive = tmp_path / "docker-27.5.1.tgz"
+    with tarfile.open(archive, "w:gz") as tar:
+        folder = tarfile.TarInfo("docker/")
+        folder.type = tarfile.DIRTYPE
+        tar.addfile(folder)
+        info = tarfile.TarInfo("docker/docker")
+        info.size = len(b"the-real-binary")
+        tar.addfile(info, io.BytesIO(b"the-real-binary"))
+    placed = _provision._extract_binary(archive, "docker", tmp_path / "bin")
+    assert placed.read_bytes() == b"the-real-binary"
+
+
+def test_extract_binary_skips_a_zip_directory_entry(tmp_path):
+    archive = tmp_path / "docker.zip"
+    with zipfile.ZipFile(archive, "w") as zf:
+        zf.writestr("docker/", b"")
+        zf.writestr("docker/docker.exe", b"the-real-binary")
+    placed = _provision._extract_binary(archive, "docker", tmp_path / "bin")
+    assert placed.read_bytes() == b"the-real-binary"
+
+
 def test_extract_binary_missing_is_an_error(tmp_path):
     archive = tmp_path / "x.tar.gz"
     _tar_gz(archive, "something-else", b"nope")

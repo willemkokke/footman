@@ -107,6 +107,51 @@ def provision(
     outcomes += _node_tier(prefix, by_kind.get("node", []))
     for driver in by_kind.get("github", []) + by_kind.get("gitlab", []):
         outcomes.append(_release(prefix, driver, host=driver.provision.kind))
+    outcomes += _docker_tier(prefix, by_kind.get("docker", []))
+    return outcomes
+
+
+def _docker_tier(prefix: Path, drivers: list[Driver]) -> list[Outcome]:
+    """The newest static build docker publishes for this platform.
+
+    Its own tier because docker indexes by platform and architecture rather
+    than by release: there is no asset list to pick from, only a directory
+    of every version this machine could run. `_toolfetch` already knows how
+    to read that index, so provisioning asks it for the newest and installs
+    exactly as a walk would.
+    """
+    from footman import _toolfetch
+
+    outcomes: list[Outcome] = []
+    for driver in drivers:
+        try:
+            found = _toolfetch.releases(driver)
+        except _toolfetch.Unreachable as blocked:
+            outcomes.append(Outcome(driver.key, "docker", "fail", str(blocked)))
+            continue
+        if not found:
+            outcomes.append(Outcome(driver.key, "docker", "fail", "no builds listed"))
+            continue
+        newest = found[0]
+        placed = _toolfetch.install(driver, newest, prefix / ".docker")
+        if placed is None:
+            outcomes.append(
+                Outcome(
+                    driver.key, "docker", "fail", f"{newest.version} would not install"
+                )
+            )
+            continue
+        target = bin_dir(prefix) / driver.name
+        target.unlink(missing_ok=True)
+        shutil.copy2(placed / driver.name, target)
+        # The plugins came down beside the staged binary; a reader finds
+        # them from the binary it resolves to, which here is the prefix's.
+        home = _toolfetch.home_beside(placed)
+        if home.is_dir():
+            shutil.copytree(
+                home, _toolfetch.home_beside(bin_dir(prefix)), dirs_exist_ok=True
+            )
+        outcomes.append(Outcome(driver.key, "docker", "ok", newest.version))
     return outcomes
 
 
@@ -316,7 +361,16 @@ _ARCH_ALIASES = {
 }
 _ARCHIVES = (".tar.gz", ".tgz", ".tar.xz", ".tar.bz2", ".zip")
 # Sidecar files that ride alongside a real asset — never the binary.
-_SIDECARS = (".sha256", ".sha256sum", ".sig", ".asc", ".txt", ".pem", ".sbom")
+_SIDECARS = (
+    ".sha256",
+    ".sha256sum",
+    ".sig",
+    ".asc",
+    ".txt",
+    ".pem",
+    ".sbom",
+    ".json",  # compose ships provenance, sbom and sigstore beside each build
+)
 # Build variants that sit beside the canonical asset for the same platform:
 # bun's `-profile`/`-baseline`, a `-debug` build, a `musl` libc. Preferred
 # against, never excluded — the canonical build is what a task wants.
@@ -432,7 +486,10 @@ def _extract_binary(
 
     Release archives nest the binary under a versioned directory, so the
     whole tree is searched for a file named `tool` (or `tool.exe`); a bare
-    downloaded binary is taken as-is. On Windows the placed file is named
+    downloaded binary is taken as-is. Only file members are eligible: an
+    archive that nests the binary under a directory of the same name
+    (docker ships `docker/docker`) would otherwise match the directory and
+    write nothing. On Windows the placed file is named
     `tool.exe` whatever the archive called it — `shutil.which` resolves
     through `PATHEXT`, and an extensionless PE is invisible to it.
     """
@@ -444,7 +501,12 @@ def _extract_binary(
     if archive.name.lower().endswith((".tar.gz", ".tgz", ".tar.xz", ".tar.bz2")):
         with tarfile.open(archive) as tar:
             member = next(
-                (m for m in tar.getmembers() if Path(m.name).name in wanted), None
+                (
+                    m
+                    for m in tar.getmembers()
+                    if m.isfile() and Path(m.name).name in wanted
+                ),
+                None,
             )
             if member is None:
                 raise ProvisionError(f"{tool} not found inside {archive.name}")
@@ -454,7 +516,14 @@ def _extract_binary(
             dest.write_bytes(source.read())
     elif archive.name.lower().endswith(".zip"):
         with zipfile.ZipFile(archive) as zf:
-            name = next((n for n in zf.namelist() if Path(n).name in wanted), None)
+            name = next(
+                (
+                    n
+                    for n in zf.namelist()
+                    if not n.endswith("/") and Path(n).name in wanted
+                ),
+                None,
+            )
             if name is None:
                 raise ProvisionError(f"{tool} not found inside {archive.name}")
             dest.write_bytes(zf.read(name))
