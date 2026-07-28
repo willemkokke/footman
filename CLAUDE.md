@@ -42,7 +42,12 @@ uv run --group docs zensical build --clean --strict   # ONLY when docs/ changed
 ```
 
 `fm check` is the whole gate: its test step runs `pytest -n auto` under
-coverage and enforces `fail_under` (pyproject) — no separate `--cov` command.
+coverage against a local floor (`--cov-fail-under=90`) — no separate `--cov`
+command. That floor is deliberately below `fail_under = 92`, which is the
+*merged* bar: CI combines three OSes x five Pythons plus the shell jobs and
+disables the per-job threshold, because one slice can only ever see its own
+branches. Driving the local number up to 92 means installing every shell
+(`zsh`, `fish`, `nu`, `pwsh`) and still falling short — don't chase it.
 The suite runs across cores via pytest-xdist (`addopts = "-n auto"`); to debug
 one test serially (live `-s`, `--pdb`, `-x`), override with `-n0`. ruff line
 length is 88; target `py311`; type-checker is basedpyright.
