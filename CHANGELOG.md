@@ -9,6 +9,15 @@ versions may include breaking changes.
 
 ### Added
 
+- **`with parallel()` — a fan-out written as ordinary calls.** Past two or
+  three, threading arguments through thunks reads worse than the calls
+  themselves, and thunks never gave the values back. Inside the block a task
+  call is queued rather than run, so it has no value there (using one is
+  taught, never a silent `None`); everything runs when the block ends, under
+  the rules a call has anywhere else — its own row, sharing, hooks, `-s`/`-j`
+  — and `p.results` hands back what each returned, in the order written. `p`
+  is still the list of exit codes `parallel()` has always returned.
+
 - **The docs have a Playground.** footman runs in the browser: the editor
   is a `tasks.py`, the prompt is `fm`, and the run goes through the same
   in-process `Runner` the testing page teaches. Python arrives via Pyodide

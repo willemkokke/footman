@@ -1205,3 +1205,121 @@ def test_a_shared_request_is_still_its_own_unit():
 
     total, _started = _units(reg, "go")
     assert total == 2
+
+
+# --- the parallel block -------------------------------------------------------
+
+
+def test_a_block_runs_its_calls_together_and_hands_back_values():
+    from footman import parallel
+
+    reg = Group("root")
+    order: list[str] = []
+
+    @reg.task
+    def build(target: str = "x") -> str:
+        order.append(target)
+        return f"dist/{target}"
+
+    @reg.task
+    def go():
+        with parallel() as p:
+            build("web")
+            build("api")
+        assert p.results == ["dist/web", "dist/api"]  # written order, not finish
+        assert list(p) == [0, 0]  # and still the exit codes parallel() returns
+
+    result = drive(reg, "go")
+    assert result.ok, result.stderr
+    assert sorted(order) == ["api", "web"]
+
+
+def test_a_queued_value_cannot_be_used_inside_the_block():
+    from footman import parallel
+
+    reg = Group("root")
+
+    @reg.task
+    def build(target: str = "x") -> str:
+        return f"dist/{target}"
+
+    @reg.task
+    def go():
+        with parallel():
+            artifact = build("web")
+            artifact.upper()  # no value yet: taught, never a silent None
+
+    result = drive(reg, "go")
+    assert not result.ok
+    assert "has not run yet" in result.stderr
+
+
+def test_a_queued_call_is_a_real_request():
+    # Queued or not, what runs is a task: it earns a row and shares with the
+    # run, exactly as a call written outside the block would.
+    from footman import parallel
+
+    reg = Group("root")
+    runs: list[str] = []
+
+    @reg.task
+    def build() -> str:
+        runs.append("build")
+        return "dist/app"
+
+    @reg.task(pre=[build])
+    def go():
+        with parallel() as p:
+            build()
+        assert p.results == ["dist/app"]
+
+    result = drive(reg, "go")
+    assert result.ok, result.stderr
+    assert runs == ["build"]  # shared with the prerequisite's execution
+
+
+def test_a_failing_queued_call_fails_the_block():
+    from footman import fail, parallel
+
+    reg = Group("root")
+
+    @reg.task
+    def boom():
+        fail("nope")
+
+    @reg.task
+    def go():
+        with parallel():
+            boom()
+
+    result = drive(reg, "go")
+    assert not result.ok
+
+
+def test_a_raising_block_body_runs_nothing():
+    from footman import parallel
+
+    reg = Group("root")
+    runs: list[str] = []
+
+    @reg.task
+    def build():
+        runs.append("build")
+
+    @reg.task
+    def go():
+        with parallel():
+            build()
+            raise RuntimeError("changed my mind")
+
+    result = drive(reg, "go")
+    assert not result.ok
+    assert runs == []  # queued, never launched
+
+
+def test_an_empty_splat_is_still_an_empty_list_of_codes():
+    # `parallel(*thunks)` over an empty sequence is the documented dynamic
+    # fan-out; it must not become a context manager.
+    from footman import parallel
+
+    assert parallel(*[]) == []

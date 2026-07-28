@@ -202,6 +202,14 @@ def call(task: Any, args: tuple[Any, ...], kwargs: dict[str, Any]) -> Any:
     is the once-cell: hit the memo, wait for the thread that is running it, or
     claim it and run it here.
     """
+    from footman import context as _context
+
+    # A `with parallel()` block collects instead of running: the call is
+    # queued and answers with a `Pending`. Checked first, because the block
+    # is explicit intent — it holds whether or not a run is in flight.
+    if (queued := _context._queue_call(task, args, kwargs)) is not None:
+        return queued
+
     run = _active
     if run is None:
         _refuse_wide_moment(task)
