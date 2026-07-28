@@ -53,6 +53,8 @@ whole string to interpret, punctuation and all.
     reach a tool as *Windows* text, ask for the platform's own shell:
 
     ```python
+    from footman import run
+
     run(r"build.exe --out C:\dist", shell="native")   # cmd, not git-bash
     ```
 
