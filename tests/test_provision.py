@@ -123,6 +123,35 @@ def test_pick_asset_no_match_raises(mac_arm):
         _provision._pick_asset([("tool_Windows_x86_64.zip", "u")])
 
 
+@pytest.fixture
+def win_amd64(monkeypatch):
+    monkeypatch.setattr(_provision.platform, "system", lambda: "Windows")
+    monkeypatch.setattr(_provision.platform, "machine", lambda: "AMD64")
+
+
+def test_pick_asset_win_never_matches_the_tail_of_darwin(win_amd64):
+    """bun's spelling. `bun-darwin-x64.zip` contains `win` and is one
+    character shorter than the Windows asset, so substring matching plus the
+    shortest-name tiebreak shipped a Mach-O binary to every Windows box."""
+    assets = [
+        ("bun-darwin-x64.zip", "mac"),
+        ("bun-windows-x64.zip", "win"),
+        ("bun-windows-x64-baseline.zip", "variant"),
+    ]
+    _name, url = _provision._pick_asset(assets)
+    assert url == "win"
+
+
+def test_pick_asset_goreleaser_spelling_on_windows(win_amd64):
+    assets = [
+        ("eclint_Darwin_x86_64.tar.gz", "mac"),
+        ("eclint_Linux_x86_64.tar.gz", "linux"),
+        ("eclint_Windows_x86_64.tar.gz", "win"),
+    ]
+    _name, url = _provision._pick_asset(assets)
+    assert url == "win"
+
+
 # --- extraction --------------------------------------------------------------
 
 
@@ -139,7 +168,19 @@ def test_extract_binary_from_zip(tmp_path):
     archive = tmp_path / "gh_macOS_arm64.zip"
     _zip(archive, "gh_2.0_macOS_arm64/bin/gh", b"go-binary")
     placed = _provision._extract_binary(archive, "gh", tmp_path / "bin")
-    assert placed.read_bytes() == b"go-binary" and placed.name == "gh"
+    want = "gh.exe" if sys.platform == "win32" else "gh"
+    assert placed.read_bytes() == b"go-binary" and placed.name == want
+
+
+def test_extract_binary_names_the_exe_on_windows(tmp_path, monkeypatch):
+    """PATHEXT makes an extensionless PE invisible to `shutil.which`, so the
+    placed name carries `.exe` even when the archive member did not.
+    Platform-independent by design — POSIX runners must cover the branch."""
+    monkeypatch.setattr(_provision.os, "name", "nt")
+    archive = tmp_path / "eclint_Windows_x86_64.tar.gz"
+    _tar_gz(archive, "eclint-0.6/eclint", b"PE-ish")
+    placed = _provision._extract_binary(archive, "eclint", tmp_path / "bin")
+    assert placed.name == "eclint.exe" and placed.read_bytes() == b"PE-ish"
 
 
 def test_extract_binary_missing_is_an_error(tmp_path):
@@ -176,7 +217,8 @@ def test_release_github_flow(tmp_path, monkeypatch, mac_arm):
     driver = Driver("gh", provision=Provision(kind="github", repo="cli/cli"))
     (out,) = _provision.provision((driver,), tmp_path)
     assert out.status == "ok"
-    assert (_provision.bin_dir(tmp_path) / "gh").read_bytes() == b"gh!"
+    want = "gh.exe" if sys.platform == "win32" else "gh"
+    assert (_provision.bin_dir(tmp_path) / want).read_bytes() == b"gh!"
 
 
 def test_release_gitlab_parses_links(monkeypatch):
