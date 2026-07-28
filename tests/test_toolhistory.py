@@ -1080,6 +1080,19 @@ def test_the_npm_tier_needs_bun_and_says_so(tmp_path, monkeypatch):
     release = _toolfetch.Release("10.0.0")
     assert _toolfetch.install(driver, release, tmp_path / "cspell") is None
 
+    # ...and the walk says so rather than walking into holes. Without this
+    # the docstring above was a claim the test never checked: a macOS
+    # gather with no bun reported 23 releases across cspell and
+    # markdownlint as holes — "these could not be had" — when every one of
+    # them reads fine the moment bun is on PATH.
+    from footman import _toolfetch as fetch
+    from footman.tasks.tools import _curated
+
+    chosen, skipped = _curated("", fetch)
+    assert "cspell (no bun to install with)" in skipped
+    assert "markdownlint (no bun to install with)" in skipped
+    assert not any(d.provision.kind == "node" for d in chosen)
+
 
 # --- CPython: a tool with more than one release line at a time ---------------
 

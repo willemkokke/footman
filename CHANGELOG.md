@@ -9,6 +9,14 @@ versions may include breaking changes.
 
 ### Fixed
 
+- **A machine with no bun says so instead of reporting holes.** bun is how
+  the node tier installs, so without it every release of every node tool
+  fails to install — and each failure was recorded as a hole, which claims
+  those releases could not be had. A macOS gather reported 23 of them
+  across cspell and markdownlint; the same walk with bun in a prefix read
+  all 23 with none missing. The tools are named and skipped now, the way
+  git is where there is no `man` to render its pages.
+
 - **A tool given a home of its own is anonymised against *that* home.**
   Inside a run, the overlay that hands a tool a throwaway home writes to
   the children's environment, so the tool echoed that home while the
