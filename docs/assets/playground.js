@@ -30,7 +30,8 @@ def lint(fix: bool = False):
 @task(serial=True)   # in-process pytest touches the process globals
 def test():
     "Run the tests — real pytest, in your browser."
-    pytest("-q", "test_demo.py", p="no:cacheprovider")
+    # a list repeats the flag: -p no:cacheprovider -p no:footman
+    pytest("-q", "test_demo.py", p=["no:cacheprovider", "no:footman"])
 
 @task
 def deploy(target: Literal["dev", "staging", "prod"]):
