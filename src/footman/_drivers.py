@@ -340,6 +340,14 @@ DRIVERS: tuple[Driver, ...] = (
     ),
     Driver(
         "tea",
+        # 0.13.0-0.14.2 interrogate the console at start-up (an OSC theme
+        # query, gitea/tea#1054, fixed in 0.15.0) and hang under ANY captured
+        # spawn on Windows — the caller's terminal and a hidden conhost
+        # alike. Measured, not inferred: every other release back to 0.9.0
+        # answers in 0.1s under the same spawn. Those four read as holes on
+        # Windows and fold in from POSIX, where a piped stdout makes the
+        # query skip. 0.9.1 ships no windows asset at all. Not a floor —
+        # 0.12.0 and below read fine, and a floor would discard them.
         provision=Provision(kind="gitea", repo="gitea/tea"),
         url="https://gitea.com/gitea/tea",
         verbs=(
