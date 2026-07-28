@@ -9,6 +9,20 @@ versions may include breaking changes.
 
 ### Added
 
+- **A tool's plugins are fetched and paired, not borrowed from the
+  machine.** `docker compose` and `docker build` are not docker: compose
+  and buildx are separate projects on their own release lines, found under
+  the user's home rather than on `PATH`. So a walk read whatever *this*
+  machine had installed and filed it under the docker release being
+  observed — compose's surface of today recorded as docker 20.10's, and
+  two machines with different plugins reading as a genuine per-platform
+  divergence. Each plugin is now fetched with the release, paired by date
+  — the one a user of that docker would have had — and read from a
+  throwaway home, so the machine's own plugins never answer. An era before
+  a plugin existed pairs with nothing and its verbs read absent, which is
+  what they were; a plugin that is known but cannot be fetched stops the
+  observation rather than recording an absence nobody saw.
+
 - **docker's own release index is a tier.** Docker publishes a static build
   of every release, per platform and architecture, in a plain directory —
   so it is fetched like any other tool rather than read from whatever the
@@ -26,6 +40,15 @@ versions may include breaking changes.
   tool means and the one spelling every platform agrees on: without it
   each leg of the cross-platform matrix would overwrite the last and every
   weekly run would report a change nobody made.
+- **A verb that answers with the tool's own help is no longer recorded as
+  that verb.** Asked for a subcommand it does not have, docker prints its
+  root help and exits 0 — so the reading looked like a successful one, and
+  `compose up` was recorded carrying docker's global options and docker's
+  own summary.
+- **A release asset that is a JSON is never mistaken for a binary.**
+  Provenance, SBOM and sigstore files sit beside each build under names
+  that match the platform; only the shortest-name tiebreak was keeping
+  them out.
 - **An archive whose top directory is named after the tool now extracts.**
   docker ships `docker/docker`; matching a member by name alone found the
   directory first, which failed the tar path outright and wrote a

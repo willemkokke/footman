@@ -683,8 +683,12 @@ def test_github_releases_normalise_the_tag_and_drop_the_unreleased(monkeypatch):
     assert [r.version for r in _toolfetch.releases(driver)] == ["2.96.0", "2.95.0"]
 
 
-def _listing(monkeypatch, html):
-    """Serve *html* as a directory index, whatever URL is asked for."""
+def _dirlisting(monkeypatch, html):
+    """Serve *html* as a directory index, whatever URL is asked for.
+
+    The engine listing that dates those files is stubbed empty, so a test
+    about the directory is about the directory; a test about dates says so.
+    """
     import io
 
     from footman import _toolfetch
@@ -694,6 +698,7 @@ def _listing(monkeypatch, html):
         "urlopen",
         lambda *a, **k: io.BytesIO(html.encode()),
     )
+    monkeypatch.setattr(_toolfetch, "_docker_dates", dict)
 
 
 DOCKER_LISTING = """<html><body><pre>
@@ -715,7 +720,7 @@ def test_docker_reads_its_versions_from_a_directory_listing(monkeypatch):
     the 2017 `-ce` spelling, and a `-2` rebuild of a version already there."""
     from footman import _drivers, _toolfetch
 
-    _listing(monkeypatch, DOCKER_LISTING)
+    _dirlisting(monkeypatch, DOCKER_LISTING)
     driver = _drivers.find("docker")
     assert driver is not None
     got = _toolfetch.releases(driver)
@@ -750,6 +755,127 @@ def test_docker_is_fetched_rather_than_read_from_the_host():
     assert driver is not None
     assert driver.provision.kind == "docker"
     assert _toolfetch.can_list(driver)
+
+
+COMPOSE_RELEASES = [
+    {"tag_name": "v5.3.1", "published_at": "2026-07-07T00:00:00Z"},
+    {"tag_name": "v2.32.4", "published_at": "2025-01-15T00:00:00Z"},
+    {"tag_name": "v2.0.0", "published_at": "2021-09-28T00:00:00Z"},
+    {"tag_name": "1.29.2", "published_at": "2021-05-10T00:00:00Z"},
+]
+
+
+def _plugin_fetch(monkeypatch, placed):
+    """Serve the compose listing, and record what was asked for."""
+    from footman import _provision, _toolfetch
+
+    _index(monkeypatch, COMPOSE_RELEASES)
+    monkeypatch.setattr(_toolfetch, "_LISTINGS", {})
+    asked = []
+
+    def assets_for(_host, _repo, tag=""):
+        asked.append(tag)
+        if not placed:
+            raise _provision.ProvisionError("rate limited")
+        return [("docker-compose-linux-x86_64", "http://x/bin")]
+
+    monkeypatch.setattr(_provision, "assets_for", assets_for)
+    monkeypatch.setattr(_provision, "_pick_asset", lambda a: a[0])
+    monkeypatch.setattr(
+        _provision, "_download", lambda url, into: _written(into / "docker-compose")
+    )
+    monkeypatch.setattr(
+        _provision, "_extract_binary", lambda archive, tool, into: into / tool
+    )
+    return asked
+
+
+def _written(path):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"plugin")
+    return path
+
+
+def test_a_plugin_is_paired_with_the_release_that_shipped_alongside(
+    monkeypatch, tmp_path
+):
+    """compose has its own release line, so there is no version to match on
+    — but "what a user of that docker would have had" is a fact the two
+    dates settle between them, the same answer every time."""
+    from footman import _drivers, _toolfetch
+
+    asked = _plugin_fetch(monkeypatch, placed=True)
+    docker = _drivers.find("docker")
+    assert docker is not None
+    compose = docker.plugins[0]
+    assert _toolfetch.install_plugin(compose, "2025-06-01", tmp_path) is True
+    assert asked == ["v2.32.4"]  # not v5.3.1, which had not shipped yet
+
+
+def test_an_era_before_the_plugin_existed_pairs_with_nothing(monkeypatch, tmp_path):
+    """compose 1.x was a program you ran as `docker-compose`; `docker
+    compose` did not exist until 2.0, and dropping a 1.x binary into the
+    plugin directory would not make it one."""
+    from footman import _drivers, _toolfetch
+
+    asked = _plugin_fetch(monkeypatch, placed=True)
+    docker = _drivers.find("docker")
+    assert docker is not None
+    assert _toolfetch.install_plugin(docker.plugins[0], "2021-06-01", tmp_path) is False
+    assert asked == []
+
+
+def test_a_plugin_that_cannot_be_fetched_is_unreachable_not_absent(
+    monkeypatch, tmp_path
+):
+    """A rate limit read past becomes "this docker had no compose" — a
+    different claim, and one the history would write down as a removal."""
+    from footman import _drivers, _toolfetch
+
+    _plugin_fetch(monkeypatch, placed=False)
+    docker = _drivers.find("docker")
+    assert docker is not None
+    with pytest.raises(_toolfetch.Unreachable, match=r"docker/compose 2\.32\.4"):
+        _toolfetch.install_plugin(docker.plugins[0], "2025-06-01", tmp_path)
+
+
+def test_a_listing_is_read_once_per_process(monkeypatch):
+    """Every release of a walk asks the same question of the same
+    repository, and the answer cannot change while the walk runs."""
+    from footman import _toolfetch
+
+    calls = []
+    _index(monkeypatch, COMPOSE_RELEASES)
+    monkeypatch.setattr(_toolfetch, "_LISTINGS", {})
+    real = _toolfetch._forge
+    monkeypatch.setattr(
+        _toolfetch,
+        "_forge",
+        lambda *a, **k: calls.append(a) or real(*a, **k),
+    )
+    first = _toolfetch._listing("docker/compose", 3)
+    again = _toolfetch._listing("docker/compose", 3)
+    assert first == again and len(calls) == 1
+
+
+def test_docker_dates_come_from_the_engine_not_the_upload(monkeypatch):
+    """The static index dates its files by upload time, and docker
+    re-uploads in bulk: a third of the archives are stamped one day in 2025,
+    including 20.10.6, which shipped in April 2021. Those dates decide which
+    compose a release is paired with."""
+    from footman import _drivers, _toolfetch
+
+    _dirlisting(monkeypatch, DOCKER_LISTING)
+    monkeypatch.setattr(
+        _toolfetch,
+        "_docker_dates",
+        lambda: {"27.5.1": "2025-01-22", "29.6.2": "2026-07-16"},
+    )
+    driver = _drivers.find("docker")
+    assert driver is not None
+    dated = {r.version: r.date for r in _toolfetch.releases(driver)}
+    assert dated["27.5.1"] == "2025-01-22"
+    assert dated["29.4.2"] == "2026-06-01"  # not in the engine listing: the mtime
 
 
 def test_gitlab_releases_read_their_own_field_names(monkeypatch):

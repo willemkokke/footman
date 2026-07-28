@@ -10,6 +10,7 @@ real binaries are exercised separately, against whatever is present.
 from __future__ import annotations
 
 import ast
+import os
 import pathlib
 import shutil
 import sys
@@ -1004,6 +1005,79 @@ def test_no_stub_carries_a_home_directory():
         if looks_like_home.search(path.read_text())
     }
     assert guilty == set()
+
+
+def test_a_verb_that_answers_with_the_root_help_is_not_that_verb(monkeypatch):
+    """Asked for a subcommand it does not have, docker prints its own help
+    and exits 0 — so the reading looked successful and `compose up` was
+    recorded with docker's global options and docker's summary. Nothing
+    downstream could tell: it is a real help text, just not this verb's."""
+    from footman import _toolhelp
+
+    root = "Usage:  docker [OPTIONS] COMMAND\n\nA runtime\n\nOptions:\n  --debug   On\n"
+    own = (
+        "Usage:  docker ps [OPTIONS]\n\nList containers\n\n"
+        "Options:\n  --all   Show all\n"
+    )
+
+    def run_help(argv, **_kw):
+        if argv[1:] == ["ps"]:
+            return own
+        return root  # `compose up` with no plugin installed
+
+    monkeypatch.setattr(_toolhelp, "run_help", run_help)
+    spec = _toolhelp.from_help("docker", verbs=("ps", "compose.up"))
+    assert [verb.name for verb in spec.verbs] == ["", "ps"]
+
+
+def test_a_tool_with_plugins_is_read_under_the_home_they_were_fetched_into(
+    monkeypatch, tmp_path
+):
+    """A plugin is not on `PATH` — the host tool looks for it under the
+    user's home, so without this the machine's own compose answers for
+    every release a walk installs."""
+    from footman.tasks import tools as task_module
+
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    binary = bindir / "docker"
+    binary.write_text("#!/bin/sh\n")
+    (tmp_path / "home" / ".docker" / "cli-plugins").mkdir(parents=True)
+    monkeypatch.setattr(task_module.shutil, "which", lambda _name: str(binary))
+
+    seen = {}
+    monkeypatch.setattr(
+        task_module._drivers,
+        "extract",
+        lambda driver: seen.update(home=os.environ.get("HOME")) or ToolSpec(name="d"),
+    )
+    driver = task_module._drivers.find("docker")
+    assert driver is not None
+    task_module._extract(driver)
+    assert seen["home"] == str(tmp_path / "home")
+
+
+def test_a_tool_with_no_plugin_home_is_read_exactly_as_before(monkeypatch, tmp_path):
+    """The host's own docker, or a prefix from before this existed."""
+    from footman.tasks import tools as task_module
+
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    (bindir / "docker").write_text("#!/bin/sh\n")
+    monkeypatch.setattr(
+        task_module.shutil, "which", lambda _name: str(bindir / "docker")
+    )
+    before = os.environ.get("HOME")
+    seen = {}
+    monkeypatch.setattr(
+        task_module._drivers,
+        "extract",
+        lambda driver: seen.update(home=os.environ.get("HOME")) or ToolSpec(name="d"),
+    )
+    driver = task_module._drivers.find("docker")
+    assert driver is not None
+    task_module._extract(driver)
+    assert seen["home"] == before
 
 
 def test_rebasing_a_verb_that_is_not_there():

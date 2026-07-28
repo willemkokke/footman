@@ -144,6 +144,13 @@ def _docker_tier(prefix: Path, drivers: list[Driver]) -> list[Outcome]:
         target = bin_dir(prefix) / driver.name
         target.unlink(missing_ok=True)
         shutil.copy2(placed / driver.name, target)
+        # The plugins came down beside the staged binary; a reader finds
+        # them from the binary it resolves to, which here is the prefix's.
+        home = _toolfetch.home_beside(placed)
+        if home.is_dir():
+            shutil.copytree(
+                home, _toolfetch.home_beside(bin_dir(prefix)), dirs_exist_ok=True
+            )
         outcomes.append(Outcome(driver.key, "docker", "ok", newest.version))
     return outcomes
 
@@ -354,7 +361,16 @@ _ARCH_ALIASES = {
 }
 _ARCHIVES = (".tar.gz", ".tgz", ".tar.xz", ".tar.bz2", ".zip")
 # Sidecar files that ride alongside a real asset — never the binary.
-_SIDECARS = (".sha256", ".sha256sum", ".sig", ".asc", ".txt", ".pem", ".sbom")
+_SIDECARS = (
+    ".sha256",
+    ".sha256sum",
+    ".sig",
+    ".asc",
+    ".txt",
+    ".pem",
+    ".sbom",
+    ".json",  # compose ships provenance, sbom and sigstore beside each build
+)
 # Build variants that sit beside the canonical asset for the same platform:
 # bun's `-profile`/`-baseline`, a `-debug` build, a `musl` libc. Preferred
 # against, never excluded — the canonical build is what a task wants.

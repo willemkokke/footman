@@ -197,7 +197,7 @@
        "negation": "",
        "help": "Override the configured builder instance",
        "type": "str",
-       "default": "desktop-linux",
+       "default": "default",
        "choices": []
       },
       "cache_from": {

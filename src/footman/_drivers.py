@@ -68,6 +68,43 @@ class Provision:
 
 
 @dataclass(frozen=True)
+class Plugin:
+    """A separately released program a tool loads as one of its verbs.
+
+    `docker compose` is not part of docker. It is its own project on its
+    own release line, shipped as a binary the CLI discovers under the
+    user's config directory — so a static docker build has no compose in
+    it, and reading `docker compose up --help` reads whatever the *machine*
+    happened to have installed. Under a walk that is a lie with a date on
+    it: compose's surface of today, recorded as docker 20.10's. Across a
+    platform matrix it is worse, because two machines with different
+    compose versions look like a genuine per-platform divergence.
+
+    So the plugin is fetched like the tool is, and paired by date: the
+    release a user of *that* docker would have had. The verbs keep their
+    place — `tools.docker.compose.up(...)` is still how you say it — and
+    the pairing is deterministic, so the same walk gives the same answer
+    forever.
+    """
+
+    name: str
+    """The binary as the host tool looks for it (`docker-compose`)."""
+    repo: str
+    """`owner/repo` of the plugin's own releases."""
+    owns: str = ""
+    """The verb prefix these releases account for (`compose`)."""
+    path: str = ""
+    """Where the host tool looks, relative to the user's home
+    (`.docker/cli-plugins`)."""
+    since: str = ""
+    """The first release that was a plugin at all. compose 1.x was a
+    standalone program you ran as `docker-compose`; `docker compose` did
+    not exist until 2.0. Dropping a 1.x binary into the plugin directory
+    would not make it one, so an era before this pairs with nothing and
+    the verbs read as absent — which they were."""
+
+
+@dataclass(frozen=True)
 class Driver:
     """One curated tool: what to run, and which verbs to read."""
 
@@ -101,6 +138,9 @@ class Driver:
     stub-generation time, so the man-page dependency never reaches a user."""
     provision: Provision = field(default_factory=Provision)
     """How to fetch the latest binary — the default is a PyPI `uv` install."""
+    plugins: tuple[Plugin, ...] = field(default_factory=tuple)
+    """Companion programs some of the verbs really come from, each released
+    on its own line — see `Plugin`."""
 
     @property
     def key(self) -> str:
@@ -183,6 +223,26 @@ DRIVERS: tuple[Driver, ...] = (
         # Docker publishes static per-platform builds of every release, so
         # it is fetched like any other tool rather than read from the host.
         provision=Provision(kind="docker"),
+        plugins=(
+            Plugin(
+                name="docker-compose",
+                repo="docker/compose",
+                owns="compose",
+                path=".docker/cli-plugins",
+                since="2.0.0",
+            ),
+            # `docker build` is buildx wherever buildx is installed, which
+            # is everywhere docker itself is these days. Left unpaired, the
+            # static binary falls back to the builder docker shipped with
+            # before 2019 and the stub grows `--compress` and `--cpu-shares`
+            # while losing `--platform` and `--push`.
+            Plugin(
+                name="docker-buildx",
+                repo="docker/buildx",
+                owns="build",
+                path=".docker/cli-plugins",
+            ),
+        ),
         url="https://docs.docker.com/reference/cli/docker/",
         verbs=(
             "build",

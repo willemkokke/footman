@@ -425,7 +425,7 @@ class Docker(_Tool):
             build_context: Additional build contexts (e.g., name=path). May be
                 repeated: a list emits the flag once per item.
             builder: Override the configured builder instance. Defaults to
-                `desktop-linux`.
+                `default`.
             cache_from: External cache sources (e.g., "user/app:cache",
                 "type=local,src=path/to/dir"). May be repeated: a list emits the
                 flag once per item.
