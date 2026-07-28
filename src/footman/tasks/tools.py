@@ -1008,10 +1008,19 @@ def _report_gather(found: Gathered) -> None:
 def _plan_gather(doc: dict, listing: list, count: int) -> list:
     """Everything this platform still owes an answer on, newest first.
 
-    Three kinds, and the third is what a new platform needs: releases the
-    chain has never seen, releases it has seen but *this* platform has not
-    (the base above all, since that is the version people run), and — when
-    asked — releases below the floor, the way `prime` reaches back.
+    Four kinds. Releases the chain has never seen; releases it has seen but
+    *this* platform has not (the base above all, since that is the version
+    people run); releases whose reading predates the current extractor; and
+    — when asked — releases below the floor, the way `prime` reaches back.
+
+    The third is what makes the store self-healing. `EXTRACTOR` was recorded
+    against every observation from the start and nothing ever read it, so an
+    extractor that learned to see more had no way to say so: three twine
+    releases sat in the store with no options at all, recorded when the tool
+    died before argparse ran, and the only thing that noticed was another
+    platform reading them correctly and appearing to disagree. A reading is
+    only as good as the extractor that took it, and this is where that is
+    acted on rather than merely noted.
     """
     here = _platform()
     known = set(_toolhistory.observed(doc))
@@ -1024,7 +1033,12 @@ def _plan_gather(doc: dict, listing: list, count: int) -> list:
     ]
     for release in listing:
         entry = _toolhistory.entry_of(doc, release.version)
-        if entry is not None and here not in entry.get("platforms", []):
+        if entry is None:
+            continue
+        if (
+            here not in entry.get("platforms", [])
+            or entry.get("extractor", 0) < _toolhistory.EXTRACTOR
+        ):
             wanted.append(release)
     if count:
         wanted += _plan_prime(doc, listing, count)[0]

@@ -2575,6 +2575,71 @@ def test_a_hand_written_stub_is_not_a_uv_tier_tool():
     assert not any("uv tier" in line for line in skipped)
 
 
+def test_a_reading_older_than_the_extractor_is_offered_again(monkeypatch):
+    """`EXTRACTOR` was recorded against every observation from the start, and
+    nothing ever read it — so an extractor that learned to see more had no
+    way to say so.
+
+    Three twine releases sat in the store with no options at all, recorded
+    when the tool died before argparse ran under today's dependencies. The
+    only thing that noticed was another platform reading them correctly and
+    appearing to disagree, which is a divergence report for a bug. A reading
+    is only as good as the extractor that took it.
+    """
+    from footman import _toolfetch
+    from footman.tasks import tools
+
+    surface = _with_flags("quiet")
+    doc = _toolhistory.new(
+        "ruff",
+        version="1.0.1",
+        date="2026-02-02",
+        surface=surface,
+        platforms=[tools._platform()],
+    )
+    _toolhistory.extend(
+        doc,
+        version="1.0.0",
+        date="2026-02-01",
+        surface=surface,
+        platforms=[tools._platform()],
+    )
+    listing = [_toolfetch.Release(version=v) for v in ("1.0.1", "1.0.0")]
+
+    # Current generation, this platform has read both: nothing owed.
+    assert tools._plan_gather(doc, listing, 0) == []
+
+    # The extractor moves on, and both readings are owed again.
+    monkeypatch.setattr(_toolhistory, "EXTRACTOR", _toolhistory.EXTRACTOR + 1)
+    offered = [r.version for r in tools._plan_gather(doc, listing, 0)]
+    assert offered == ["1.0.1", "1.0.0"]
+
+
+def test_a_re_read_clears_a_claim_the_older_extractor_caused(monkeypatch):
+    """The self-healing the mechanism is for: one platform's blind reading
+    made the other look like a divergence, and reading it again with the
+    better extractor settles it — no hand-editing of the store, which is the
+    one thing a record of observations must never need."""
+    from footman.tasks import tools
+
+    here = tools._platform()
+    blind = _toolhistory.surface_of(_spec(verbs=(Verb(name="", options=()),)))
+    real = _with_flags("quiet", "fix")
+
+    doc = _toolhistory.new(
+        "twine", version="5.1.0", date="2026-02-01", surface=blind, platforms=[here]
+    )
+    # Another platform reads it properly: the options arrive tagged absent here.
+    _toolhistory.merge(doc, version="5.1.0", surface=real, platforms=["Elsewhere"])
+    assert doc["base"]["absent"], "the blind reading should read as an absence"
+    assert here in next(iter(doc["base"]["absent"].values()))
+
+    # This platform reads it again, now seeing what was always there.
+    _toolhistory.merge(doc, version="5.1.0", surface=real, platforms=[here])
+    assert not doc["base"].get("absent")  # the claim is withdrawn by evidence
+    assert sorted(doc["base"]["platforms"]) == sorted([here, "Elsewhere"])
+
+
 def test_bin_on_path_overlays_the_directory_itself(tmp_path):
     """A Windows venv keeps binaries in `Scripts` and uv's interpreter store
     keeps `python.exe` at the store root — the observation must overlay the
