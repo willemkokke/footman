@@ -162,6 +162,15 @@ fm deploy dist/<TAB>         # a Path positional (options stay one `-` away)
 A plain `str` or `int` value has no such handoff: it completes nothing, rather
 than bluntly offering files where a name was wanted.
 
+A comma-splitting list completes one item at a time: mid-list, completion
+works on the segment after the last comma and keeps what's already typed in
+place — `--paths=src/a.py,<TAB>` completes the second path. The same goes
+for a list with a value set (`Literal` choices or
+[`suggest()`](typing.md#dynamic-completion)): each comma starts a fresh
+item, and values already in the list aren't offered again. A
+[`nosplit`](typing.md#comma-splitting-and-nosplit) parameter keeps its
+commas literal, in completion as at the prompt.
+
 ## Your shell
 
 One command — footman detects which shell invoked it (by walking the

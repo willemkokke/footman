@@ -52,11 +52,31 @@ _{fn}_complete() {{
     # Capture into a variable (not `< <(...)`) so we can read the exit code.
     # `local out` then `out=$(...)` on separate lines — `local out=$(...)`
     # would make $? the exit of `local`, not of the completion call.
-    local out
+    local out ret
     out=$({prog} --complete -- "${{words[@]}}" 2>/dev/null)
+    ret=$?
     # Exit 100 = a path value: leave COMPREPLY empty and let `-o default`
     # (below) hand off to readline's filename completion — works on bash 3.2.
-    (( $? == 100 )) && return 0
+    (( ret == 100 )) && return 0
+    if (( ret == 101 )); then
+        # Exit 101 = a comma-splitting path value mid-list (`--paths=a,b`):
+        # readline would match the whole word, comma and all, so complete
+        # the segment after the last comma here and re-attach the typed
+        # items on every candidate.
+        local cur=${{COMP_WORDS[COMP_CWORD]}}
+        [[ $cur == *,* ]] || return 0
+        compopt +o default 2>/dev/null
+        local head="${{cur%,*}}," f
+        while IFS= read -r f; do
+            [[ -d $f ]] && f+=/
+            printf -v f '%q' "$f"
+            COMPREPLY+=("$head$f")
+        done < <(compgen -f -- "${{cur##*,}}")
+        # A lone directory match keeps the cursor in place for its children.
+        (( ${{#COMPREPLY[@]}} == 1 )) && [[ ${{COMPREPLY[0]}} == */ ]] && \\
+            compopt -o nospace 2>/dev/null
+        return 0
+    fi
     # Not a file: on bash 4+ switch the default filename fallback off so a value
     # with no candidates stays empty. bash 3.2 has no compopt and keeps the
     # blunt fallback — no regression, it already behaved that way.
@@ -95,6 +115,9 @@ _{fn}_complete() {{
     # honours the user's file colours and list settings. compset strips an
     # attached `--opt=` prefix first so the value part completes in place.
     (( ret == 100 )) && {{ compset -P '*='; _files; return; }}
+    # Exit 101 = a comma-splitting path value mid-list: strip through the
+    # last `=` or comma too, so each list item completes as its own path.
+    (( ret == 101 )) && {{ compset -P '*[=,]'; _files; return; }}
     for line in ${{(f)raw}}; do
         # `value:description` feeds _describe, which right-aligns the
         # descriptions into a column and honours the user's completion colours
@@ -116,13 +139,27 @@ _FISH = """\
 function __{fn}_complete
     set -l words (commandline -opc) (commandline -ct)
     set -l out ({prog} --complete -- $words[2..-1] 2>/dev/null)
+    # `test` overwrites $status, so read the resolver's exit code once.
+    set -l ret $status
     # Exit 100 = a path value: hand off to fish's own path completion. An
     # attached `--opt=path` token completes by stripping the prefix for the
     # path walk and re-attaching it on each candidate (fish replaces the
     # whole token).
-    if test $status -eq 100
+    if test $ret -eq 100
         set -l tok (commandline -ct)
         set -l pre (string match -r -- '^-[^=]*=' $tok)
+        if test -n "$pre"
+            __fish_complete_path (string replace -- $pre '' $tok) | \\
+                string replace -r -- '^' $pre
+        else
+            __fish_complete_path $tok
+        end
+    else if test $ret -eq 101
+        # Exit 101 = a comma-splitting path value mid-list: the head through
+        # the last `=` or comma stays, the tail completes as its own path,
+        # and each candidate re-attaches the head.
+        set -l tok (commandline -ct)
+        set -l pre (string match -r -- '^.*[=,]' $tok)
         if test -n "$pre"
             __fish_complete_path (string replace -- $pre '' $tok) | \\
                 string replace -r -- '^' $pre
@@ -152,6 +189,19 @@ Register-ArgumentCompleter -Native -CommandName {prog} -ScriptBlock {{
         return [System.Management.Automation.CompletionCompleters]::CompleteFilename(
             $wordToComplete)
     }}
+    if ($LASTEXITCODE -eq 101) {{
+        # A comma-splitting path value mid-list: the head through the last
+        # `=` or comma stays; the tail completes as a filename and each
+        # result re-attaches the head (completions replace the whole word).
+        $m = [regex]::Match($wordToComplete, '^(.*[=,])?([^,]*)$')
+        $head = $m.Groups[1].Value
+        return [System.Management.Automation.CompletionCompleters]::CompleteFilename(
+            $m.Groups[2].Value) | ForEach-Object {{
+                [System.Management.Automation.CompletionResult]::new(
+                    $head + $_.CompletionText, $head + $_.ListItemText,
+                    $_.ResultType, $_.ToolTip)
+            }}
+    }}
     $out | ForEach-Object {{
         # `value` or `value<tab>description`: the tail becomes the tooltip.
         $parts = $_ -split "`t", 2
@@ -171,8 +221,11 @@ $env.config.completions.external.enable = true
 $env.config.completions.external.completer = {{|spans|
     if $spans.0 == "{prog}" {{
         let r = (^{prog} --complete -- ...($spans | skip 1) | complete)
-        if $r.exit_code == 100 {{
+        if $r.exit_code == 100 or $r.exit_code == 101 {{
             # A path value: null defers to nushell's built-in file completion.
+            # (101 marks a comma-splitting value mid-list; a version-stable
+            # comma-aware spelling isn't available, so nushell completes the
+            # first list item only.)
             null
         }} else {{
             # Split `value<tab>description` into a record so nushell renders the

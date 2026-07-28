@@ -7,6 +7,21 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- **Completion continues a comma-separated list.** Mid-list in a
+  comma-splitting value, <kbd>Tab</kbd> completes the segment after the last
+  comma with the typed items kept in place: `--paths=src/a.py,<TAB>`
+  completes the second path (a new resolver exit code, 101, tells the bash,
+  zsh, fish, and pwsh hooks to strip through the comma before the file walk;
+  nushell's completer protocol can't rewrite part of a token, so it keeps
+  completing the first item only). A list with a value set — `Literal`
+  choices or `suggest()` — completes each item after a comma too, minus the
+  values already in the list, and `suggest()` still recomputes fresh with
+  just the tail as the partial. `nosplit` parameters keep their commas
+  literal, in completion as at the prompt. Reinstalled hooks pick this up;
+  an existing hook keeps today's behaviour everywhere else.
+
 ## [0.26.0] — 2026-07-28
 
 ### Added
