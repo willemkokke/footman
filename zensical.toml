@@ -100,6 +100,7 @@ nav = [
     { "python" = "_generated/tools/python.md" },
     { "ruff" = "_generated/tools/ruff.md" },
     { "ruff_format" = "_generated/tools/ruff_format.md" },
+    { "tea" = "_generated/tools/tea.md" },
     { "twine" = "_generated/tools/twine.md" },
     { "ty" = "_generated/tools/ty.md" },
     { "uv" = "_generated/tools/uv.md" },
