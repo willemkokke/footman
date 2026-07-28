@@ -11,21 +11,28 @@ prompt is `fm`. Python (and footman itself) load into the page via
 [Pyodide](https://pyodide.org) on first use — nothing is installed on your
 machine, and nothing you type leaves it.
 
-One honest limitation: a browser can't spawn subprocesses, so a task that
-executes `run("…")` for real stops at the boundary a terminal would cross.
-Everything up to that boundary is the real thing — parsing, validation,
-taught errors, help, `--json`, and `--dry-run` plans. The prompt even
-completes: press <kbd>Tab</kbd> and the answer comes from the same
-manifest walk a shell hook consults — tasks, flags, choice values, all
-derived from whatever the editor says right now. Try `--list`, then
-`--dry-run check`, then `deploy produ` and read the error. That last one
-is the pitch.
+The browser sandbox, said plainly: it has no processes and one thread, so
+every `run("…")` child is **simulated** — it succeeds and its output says
+`[simulated]` — and runs are sequential. Everything else is the real
+thing: parsing, eager validation, taught errors, scheduling, `--json`,
+`--dry-run` plans — and **`fm test` runs the real pytest**, in-process
+through the tools bridge, right here in the page. The prompt completes
+too: press <kbd>Tab</kbd> and the candidates come from the same manifest
+walk a shell hook consults, rebuilt from whatever the editor says.
+
+Press **Run**. The gate fails — one of the tests is wrong on purpose.
+Read pytest's diff, fix `fizzbuzz` (or the test), and run it green. Then
+try `-k check audit` to watch keep-going collect every failure, and
+`deploy produ` to read a taught error.
 
 <div id="fm-playground" markdown="0">
   <div class="fmp-pane fmp-editor-pane">
-    <div class="fmp-label">tasks.py</div>
+    <div class="fmp-label" role="tablist">
+      <button class="fmp-tab" role="tab" data-file="tasks.py">tasks.py</button>
+      <button class="fmp-tab" role="tab" data-file="test_demo.py">test_demo.py</button>
+    </div>
     <textarea id="fmp-code" spellcheck="false" autocomplete="off"
-      autocapitalize="off" aria-label="tasks.py source"></textarea>
+      autocapitalize="off" aria-label="editor"></textarea>
   </div>
   <div class="fmp-pane fmp-output-pane">
     <div class="fmp-toolbar">

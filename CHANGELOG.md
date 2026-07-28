@@ -13,13 +13,16 @@ versions may include breaking changes.
   is a `tasks.py`, the prompt is `fm`, and the run goes through the same
   in-process `Runner` the testing page teaches. Python arrives via Pyodide
   on first run — nothing installs, and nothing you type leaves the page. A
-  browser cannot spawn subprocesses, so `--list`, `--help`, `--json`,
-  `--dry-run` plans and taught errors are the show, and the page says so
-  plainly. The prompt completes on Tab — tasks, flags, choice values —
-  through the same manifest walk a shell hook consults, rebuilt from
-  whatever the editor says. Every runnable example in the docs carries a
-  small "run it there" link that opens it in the editor together with
-  what it builds on.
+  browser has no processes and one thread, so `run()` children are
+  simulated — labelled `[simulated]`, exit 0 — runs are sequential, and
+  failure demos are plain Python (`fail("…", code=3)`); the page says all
+  of this plainly. **`fm test` runs the real pytest, in-process** through
+  the tools bridge, against a second editor tab whose tests fail on
+  purpose — read the diff, fix the code, run it green. The prompt
+  completes on Tab — tasks, flags, choice values — through the same
+  manifest walk a shell hook consults, rebuilt from whatever the editor
+  says. Every runnable example in the docs carries a small "run it there"
+  link that opens it in the editor together with what it builds on.
 - **Every docs example is executed by the test suite.** A page reads as a
   session: its python blocks run in order in one shared namespace, so the
   first block carries the imports and later blocks build on what came

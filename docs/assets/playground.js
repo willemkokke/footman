@@ -4,24 +4,33 @@
  * Loaded on every page (extra_javascript, module + defer). The site uses
  * navigation.instant, so init re-runs on each document$ emission; every
  * step is idempotent and guarded so a failure here can never break a page.
+ *
+ * Execution model: the browser cannot spawn processes or threads, so the
+ * driver installs a sandbox — subprocess children are simulated (exit 0,
+ * output labelled `[simulated]`), runs are sequential (`-s`), and
+ * parallel() degrades to inline calls. In-process tools are the
+ * exception: pytest really runs, inside the page, through the tools
+ * bridge. The playground page discloses all of this.
  */
 
 const PYODIDE_URL = "https://cdn.jsdelivr.net/pyodide/v314.0.3/full/pyodide.mjs";
 const SITE_ROOT = new URL("..", import.meta.url); // …/assets/ -> site root
 const FRAGMENT_MARK = "example: fragment";
 
-const DEFAULT_CODE = `from typing import Literal
-from footman import parallel, run, task
+const DEFAULT_FILES = {
+  "tasks.py": `from typing import Literal
+from footman import fail, run, task
+from footman.tools import pytest
 
 @task
 def lint(fix: bool = False):
     "Lint the source tree."
     run("ruff check src" + (" --fix" if fix else ""))
 
-@task
+@task(serial=True)   # in-process pytest touches the process globals
 def test():
-    "Run the test suite."
-    run("pytest -q")
+    "Run the tests — real pytest, in your browser."
+    pytest("-q", "test_demo.py", p="no:cacheprovider")
 
 @task
 def deploy(target: Literal["dev", "staging", "prod"]):
@@ -29,12 +38,35 @@ def deploy(target: Literal["dev", "staging", "prod"]):
     run(f"./rollout.sh {target}")
 
 @task
-def check():
-    "Lint and test, in parallel."
-    parallel(lint, test)
-`;
+def audit():
+    "Refuses on purpose — try it with -k."
+    fail("the gate is red — deliberately", code=3)
 
-const DEFAULT_ARGS = "--dry-run check";
+@task(pre=[lint, test])
+def check():
+    "Lint and test; footman schedules the rest."
+`,
+  "test_demo.py": `def fizzbuzz(n):
+    if n % 15 == 0:
+        return "fizzbuzz"
+    if n % 3 == 0:
+        return "fizz"
+    if n % 5 == 0:
+        return "buzz"
+    return str(n)
+
+def test_three():
+    assert fizzbuzz(3) == "fizz"
+
+def test_fifteen():
+    assert fizzbuzz(15) == "fizzbuzz"
+
+def test_wrong():
+    assert fizzbuzz(4) == "fizz"   # deliberately failing — fix it and rerun
+`,
+};
+
+const DEFAULT_ARGS = "check";
 
 /* ---------- shared helpers ---------- */
 
@@ -107,15 +139,75 @@ function addRunLinks() {
 
 /* ---------- the playground page ---------- */
 
+/* The driver. Plain-ASCII python only — this is a JS template literal, so
+ * a backslash would be eaten before python ever saw it (chr(10)/chr(0)
+ * stand in for the escapes). `_FM_PLAYGROUND_SIM` lets the exact shipped
+ * text be rehearsed in CPython. */
 const BOOTSTRAP = `
-import io, json, sys, traceback
+import json, os, sys, traceback
 from pathlib import Path
 
-def _fm_invoke(code, line):
-    Path("tasks.py").write_text(code, encoding="utf-8")
+if sys.platform == "emscripten" or os.environ.get("_FM_PLAYGROUND_SIM"):
+    import subprocess
+
+    class _SimulatedPopen:
+        # The browser cannot spawn processes; every child succeeds and says
+        # what it would have been. In-process tools bypass this entirely.
+        def __init__(self, argv, **kwargs):
+            self.args = argv
+            self.pid = 4242
+            self.returncode = 0
+            cmd = argv if isinstance(argv, str) else " ".join(argv)
+            self._out = "[simulated] " + cmd + chr(10)
+
+        def communicate(self, timeout=None):
+            return self._out, ""
+
+        def poll(self):
+            return self.returncode
+
+        def wait(self, timeout=None):
+            return self.returncode
+
+        def terminate(self):
+            pass
+
+        def kill(self):
+            pass
+
+    subprocess.Popen = _SimulatedPopen
+
+    # One thread is all the browser has: parallel() runs its callables
+    # inline, in order, and a failure still surfaces after the others ran.
+    import footman, footman.context
+
+    footman.parallel  # resolve the lazy re-export before overriding it
+
+    def _inline_parallel(*fns):
+        failure = None
+        for fn in fns:
+            try:
+                fn()
+            except BaseException as exc:
+                failure = failure or exc
+        if failure is not None:
+            raise failure
+
+    footman.context.parallel = _inline_parallel
+    footman.__dict__["parallel"] = _inline_parallel
+
+def _fm_sandbox_line(line):
+    words = line.split()
+    if sys.platform == "emscripten" and "-s" not in words and "--sequential" not in words:
+        return "-s " + line
+    return line
+
+def _fm_invoke(files_json, line):
+    for name, content in json.loads(files_json).items():
+        Path(name).write_text(content, encoding="utf-8")
     try:
         from footman.testing import Runner
-        result = Runner().invoke(line, tasks=Path("tasks.py"))
+        result = Runner().invoke(_fm_sandbox_line(line), tasks=Path("tasks.py"))
         return json.dumps({
             "exit_code": result.exit_code,
             "stdout": result.stdout,
@@ -160,6 +252,7 @@ def _fm_complete(code, line):
 `;
 
 let pyodideReady = null; // one load per browser tab, kept across instant nav
+let pytestReady = null;
 
 function loadRuntime(status) {
   if (!pyodideReady) {
@@ -181,6 +274,20 @@ function loadRuntime(status) {
   return pyodideReady;
 }
 
+function ensurePytest(pyodide, status) {
+  if (!pytestReady) {
+    pytestReady = (async () => {
+      status("installing pytest — first test run only…");
+      const micropip = pyodide.pyimport("micropip");
+      await micropip.install("pytest");
+    })();
+    pytestReady.catch(() => {
+      pytestReady = null;
+    });
+  }
+  return pytestReady;
+}
+
 function initPlayground() {
   const root = document.getElementById("fm-playground");
   if (!root || root.dataset.fmpInit) return;
@@ -191,19 +298,44 @@ function initPlayground() {
   const runBtn = document.getElementById("fmp-run");
   const out = document.getElementById("fmp-out");
   const status = document.getElementById("fmp-status");
+  const tabs = [...root.querySelectorAll(".fmp-tab")];
   const setStatus = (text) => {
     status.textContent = text;
   };
 
-  // Prefill from a "run it there" link, or the default example.
+  /* Two files, one textarea: the tab bar decides which one it shows. */
+  const files = { ...DEFAULT_FILES };
+  let currentFile = "tasks.py";
+
+  // Prefill tasks.py from a "run it there" link, if one brought us here.
   const hash = new URLSearchParams(window.location.hash.slice(1));
   try {
-    code.value = hash.has("code") ? b64decode(hash.get("code")) : DEFAULT_CODE;
+    if (hash.has("code")) files["tasks.py"] = b64decode(hash.get("code"));
   } catch {
-    code.value = DEFAULT_CODE;
+    /* a malformed fragment keeps the default */
   }
   args.value = hash.get("cmd") || DEFAULT_ARGS;
+  code.value = files[currentFile];
   runBtn.disabled = false;
+
+  function syncFiles() {
+    files[currentFile] = code.value;
+  }
+
+  function showFile(name) {
+    syncFiles();
+    currentFile = name;
+    code.value = files[name];
+    for (const tab of tabs) {
+      tab.classList.toggle("fmp-tab-active", tab.dataset.file === name);
+    }
+    code.focus();
+  }
+
+  for (const tab of tabs) {
+    tab.addEventListener("click", () => showFile(tab.dataset.file));
+  }
+  showFile(currentFile);
 
   code.addEventListener("keydown", (event) => {
     if (event.key === "Tab") {
@@ -224,6 +356,36 @@ function initPlayground() {
   });
   args.addEventListener("input", hideCandidates);
   runBtn.addEventListener("click", run);
+
+  let running = false;
+  async function run() {
+    if (running) return;
+    running = true;
+    runBtn.disabled = true;
+    try {
+      syncFiles();
+      const pyodide = await loadRuntime(setStatus);
+      const everything = Object.values(files).join("\n") + "\n" + args.value;
+      if (/\bpytest\b/.test(everything)) await ensurePytest(pyodide, setStatus);
+      setStatus("running…");
+      const invoke = pyodide.globals.get("_fm_invoke");
+      const raw = invoke(JSON.stringify(files), args.value);
+      invoke.destroy?.();
+      const result = JSON.parse(raw);
+      out.textContent =
+        (result.stdout || "") +
+        (result.stderr ? (result.stdout ? "\n" : "") + result.stderr : "");
+      if (!out.textContent.trim()) out.textContent = "(no output)";
+      setStatus(`exit code ${result.exit_code}`);
+      out.classList.toggle("fmp-failed", result.exit_code !== 0);
+    } catch (err) {
+      out.textContent = String(err);
+      setStatus("the runtime failed to load — check your connection and retry");
+    } finally {
+      running = false;
+      runBtn.disabled = false;
+    }
+  }
 
   /* Tab completion: the same manifest completer a shell hook consults,
    * over whatever the editor currently says. */
@@ -257,11 +419,12 @@ function initPlayground() {
 
   async function completeArgs() {
     try {
+      syncFiles();
       const pyodide = await loadRuntime(setStatus);
       setStatus("ready");
       const fn = pyodide.globals.get("_fm_complete");
       const cursor = args.selectionStart ?? args.value.length;
-      const raw = fn(code.value, args.value.slice(0, cursor));
+      const raw = fn(files["tasks.py"], args.value.slice(0, cursor));
       fn.destroy?.();
       const candidates = JSON.parse(raw);
       const names = candidates.map((c) => c.split("\t")[0]);
@@ -306,33 +469,6 @@ function initPlayground() {
       strip.hidden = false;
     } catch (err) {
       console.warn("footman playground completion:", err);
-    }
-  }
-
-  let running = false;
-  async function run() {
-    if (running) return;
-    running = true;
-    runBtn.disabled = true;
-    try {
-      const pyodide = await loadRuntime(setStatus);
-      setStatus("running…");
-      const invoke = pyodide.globals.get("_fm_invoke");
-      const raw = invoke(code.value, args.value);
-      invoke.destroy?.();
-      const result = JSON.parse(raw);
-      out.textContent =
-        (result.stdout || "") +
-        (result.stderr ? (result.stdout ? "\n" : "") + result.stderr : "");
-      if (!out.textContent.trim()) out.textContent = "(no output)";
-      setStatus(`exit code ${result.exit_code}`);
-      out.classList.toggle("fmp-failed", result.exit_code !== 0);
-    } catch (err) {
-      out.textContent = String(err);
-      setStatus("the runtime failed to load — check your connection and retry");
-    } finally {
-      running = false;
-      runBtn.disabled = false;
     }
   }
 }
