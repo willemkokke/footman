@@ -141,7 +141,7 @@ def _sections(text: str) -> dict[str, list[str]]:
     return out
 
 
-def _blocks(lines: Sequence[str]) -> list[tuple[str, str]]:
+def _blocks(lines: Sequence[str], *, man: bool = False) -> list[tuple[str, str]]:
     """Yield `(spellings, help)` for each option in *lines*.
 
     The boundary between two options is the *help column*, not the flag
@@ -151,14 +151,52 @@ def _blocks(lines: Sequence[str]) -> list[tuple[str, str]]:
     the second one as prose belonging to the first. Help text is always
     indented deeper still, so a dash at less than the help column opens a
     new option and anything at or past it is that option's prose.
+
+    In *man* mode a block must also start a paragraph. A manual sets its
+    options at the same indent as its prose, so a sentence that happens to
+    wrap onto a line beginning with a flag is otherwise indistinguishable
+    from a block opening — and git's prose is full of them. Read that way,
+    "--merged, only branches merged into the named commit … With --no-merged
+    only branches not merged" becomes one option carrying both spellings,
+    which pairs them as a negation and hides the real `--no-merged` block
+    below it. Where the sentence wraps decides whether that happens, so the
+    same page read at two widths disagrees about what git accepts: 182
+    options at 80 columns that 200 columns lost, on a manual whose bytes are
+    identical everywhere. A stacked spelling is still a head, because a
+    manual prints `-d, --delete` and `-D` on consecutive lines.
     """
     blocks: list[tuple[str, str]] = []
     pending: tuple[str, list[str]] | None = None
     flag_indent = 0
     help_indent = 0  # 0 until the block's prose reveals the column
+    previous = ""
+    head_indent: int | None = None
     for line in lines:
         match = _OPTION.match(line.rstrip())
         indent = len(match["indent"]) if match else len(line) - len(line.lstrip())
+        if man and match:
+            # A stacked spelling continues the block above it; a spelling
+            # list that *wrapped* continues the head itself, and the comma
+            # left hanging at the end of the line is what says so. Reading
+            # the wrapped remainder as a head of its own splits one option
+            # in two — git-log's four parent filters share a description and
+            # a line, and at 80 columns the line ends `--no-min-parents,`
+            # with `--no-max-parents` below it.
+            if pending is not None and previous.rstrip().endswith(","):
+                # Join it to the head it belongs to, rather than dropping it:
+                # the remainder carries spellings, and the description that
+                # follows is the whole block's.
+                previous = line
+                pending = (f"{pending[0]} {match['body']}", pending[1])
+                head_indent = indent
+                continue
+            starts = not previous.strip() or head_indent == indent
+            head_indent = indent if starts else None
+            if not starts:
+                match = None
+        elif man:
+            head_indent = None
+        previous = line
         opens = indent < help_indent if help_indent else indent <= flag_indent
         if match and (pending is None or opens):
             if pending is not None:
@@ -451,7 +489,7 @@ def parse_help(
     for title, lines in sections.items():
         if _NOT_OPTIONS.search(title):
             continue  # `Commands:`, `Examples:` — dashes there aren't flags
-        for head, help_text in _blocks(lines):
+        for head, help_text in _blocks(lines, man=man):
             first = _FIRST_LONG.search(head)
             option = _option(
                 head,
@@ -473,7 +511,7 @@ def parse_help(
         # section, including that one. Guarded on emptiness, so a tool that
         # parses normally never reaches here and can't regress.
         for _title, lines in sections.items():
-            for head, help_text in _blocks(lines):
+            for head, help_text in _blocks(lines, man=man):
                 option = _option(head, help_text, strict=man, shorts=shorts)
                 if option is not None and option.name not in _NOISE:
                     seen.add(option.name)
