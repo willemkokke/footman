@@ -201,18 +201,29 @@ def _blocks(lines: Sequence[str]) -> list[tuple[str, str]]:
     return blocks
 
 
-def _spellings(head: str, *, strict: bool = False) -> tuple[list[str], str, bool]:
+def _spellings(
+    head: str, *, strict: bool = False, bare_meta: bool = True
+) -> tuple[list[str], str, bool]:
     """The flags in an option's left column, its placeholder, and whether
     the value is optional (a `[=…]` glued to the flag).
 
     *strict* drops the bare-lowercase metavar, for a man page whose prose
     refers to flags mid-sentence: `--patch` there must not read the next
     word as its value.
+
+    *bare_meta* is the same drop for one option in `--help` text, where the
+    usage line has already named this flag's value. The bare-word rule reads
+    the first word after the flag as a metavar, which is right for gh's
+    `--assignee login` and wrong wherever a description begins there instead
+    — and it cannot tell them apart, because both are one lowercase word.
+    The grammar can. Nothing is lost by dropping it: what the placeholder is
+    *called* is never recorded, only that there is one, and that is exactly
+    what the usage line has just said.
     """
     flags: list[str] = []
     meta = ""
     optional = False
-    pattern = _SPELLING_STRICT if strict else _SPELLING
+    pattern = _SPELLING_STRICT if strict or not bare_meta else _SPELLING
     for match in pattern.finditer(head):
         flags.append(match["flag"])
         meta = meta or (match["meta"] or "")
@@ -270,7 +281,12 @@ def _parse_default(text: str) -> str:
 
 
 def _option(
-    head: str, help_text: str, *, strict: bool = False, shorts: str = "only"
+    head: str,
+    help_text: str,
+    *,
+    strict: bool = False,
+    shorts: str = "only",
+    bare_meta: bool = True,
 ) -> Option | None:
     """One `Option` from one parsed block, or None if it isn't one.
 
@@ -279,7 +295,7 @@ def _option(
     (python's `-m`, git's `-C`), and `"all"` also keys on a short that has a
     long — `_short_alias` adds the extra keyword for that mode.
     """
-    flags, meta, optional = _spellings(head, strict=strict)
+    flags, meta, optional = _spellings(head, strict=strict, bare_meta=bare_meta)
     longs = [f for f in flags if f.startswith("--")]
     if not longs:
         # Go's stdlib `flag` spells even long options with one dash (`-color`,
@@ -294,6 +310,14 @@ def _option(
         longs = [f for f in flags if len(f) == 2 and f[1:].isidentifier()][:1]
     if not longs:
         return None  # nothing spellable
+    if not help_text and not bare_meta:
+        # The block never split, because the description sat one space from
+        # the flag rather than in a column — markdownlint-cli2 aligns to its
+        # longest option, so `--configPointer` alone loses its gap. The whole
+        # line arrived as the head, and what follows the flags is the prose.
+        # Only where the grammar has already settled arity: elsewhere that
+        # first word may genuinely be the value's name.
+        help_text = _after_flags(head)
     inline = _INLINE_NEGATION.match(longs[0])
     stem = inline["name"] if inline else longs[0].lstrip("-")
     name = stem.replace("-", "_").replace(".", "_")
@@ -418,13 +442,24 @@ def parse_help(
     for a manual.
     """
     sections = _sections(text)
+    # The flags the usage line has already given a value to. Where it has
+    # spoken, the block's bare-lowercase-word rule is redundant at best and
+    # wrong at worst — see `_spellings`.
+    stated = set() if man else _grammar_values(_usage_line(text))
     options: list[Option] = []
     seen: set[str] = set()
     for title, lines in sections.items():
         if _NOT_OPTIONS.search(title):
             continue  # `Commands:`, `Examples:` — dashes there aren't flags
         for head, help_text in _blocks(lines):
-            option = _option(head, help_text, strict=man, shorts=shorts)
+            first = _FIRST_LONG.search(head)
+            option = _option(
+                head,
+                help_text,
+                strict=man,
+                shorts=shorts,
+                bare_meta=not (first and first["flag"] in stated),
+            )
             if (
                 option is not None
                 and option.name not in _NOISE
@@ -484,11 +519,7 @@ def _arity_from_grammar(options: list[Option], grammar: str) -> list[Option]:
     dialect that omits its options from the usage line loses nothing, and
     one that abbreviates with `[OPTIONS]` says nothing about any of them.
     """
-    if not grammar:
-        return options
-    takes_value = set()
-    for match in _GRAMMAR_PAIR.finditer(grammar):
-        takes_value.add(match["flag"])
+    takes_value = _grammar_values(grammar)
     if not takes_value:
         return options
     out = []
@@ -516,6 +547,30 @@ def _arity_from_grammar(options: list[Option], grammar: str) -> list[Option]:
 _GRAMMAR_PAIR = re.compile(
     r"\[(?P<flag>--[A-Za-z0-9][A-Za-z0-9_-]*)[ \t]+(?![-|])(?P<value>[^\s\[\]|]+)"
 )
+
+# The first long flag opening an option block, for asking the grammar about it.
+_FIRST_LONG = re.compile(r"(?P<flag>--[A-Za-z0-9][A-Za-z0-9_-]*)")
+
+
+def _grammar_values(grammar: str) -> set[str]:
+    """The flags the usage line states a value for."""
+    return {m["flag"] for m in _GRAMMAR_PAIR.finditer(grammar)} if grammar else set()
+
+
+def _after_flags(head: str) -> str:
+    """The prose left in a flag column after the flags that open it.
+
+    Only the flags that *lead* — a description is free to name a flag mid
+    sentence ("a JSON Pointer within the --config file"), and reading to the
+    last one anywhere in the line would return "file" as the description.
+    Once prose intervenes, the column is over.
+    """
+    end = 0
+    for match in _SPELLING_STRICT.finditer(head):
+        if match.start() > end and head[end : match.start()].strip(" ,|"):
+            break
+        end = match.end()
+    return head[end:].strip(" ,")
 
 
 def _with_short_aliases(options: list[Option]) -> list[Option]:

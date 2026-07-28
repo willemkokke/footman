@@ -1872,6 +1872,23 @@ def test_a_flag_with_no_metavar_takes_its_arity_from_the_usage_line():
     assert got["no_globs"].type_name == "bool"  # absent from the usage line
 
 
+def test_a_description_one_space_from_its_flag_is_still_a_description():
+    """markdownlint-cli2 aligns to its longest option, so `--configPointer`
+    sits one space from its prose while the others get a column. The block
+    never splits, the whole line arrives as the flag column, and the
+    description was dropped outright.
+
+    Recovered only where the usage line has already settled arity — elsewhere
+    that first word may genuinely name the value. And only the flags that
+    *lead*: this description names `--config` mid-sentence, and reading to the
+    last flag on the line would call the description "file".
+    """
+    got = flags(_toolhelp.parse_help(MARKDOWNLINT, name="markdownlint-cli2"))
+    assert got["configPointer"].help.startswith("specifies a JSON Pointer")
+    assert got["configPointer"].help.endswith("--config file")
+    assert got["config"].help.startswith("specifies the path")
+
+
 def test_a_stitched_options_block_is_not_read_as_usage_grammar():
     """`_usage_line` joins indented continuations, and a tool whose options
     block is indented under `Usage:` hands the whole block back as one line.
