@@ -9,6 +9,20 @@ versions may include breaking changes.
 
 ### Fixed
 
+- **A tool given a home of its own is anonymised against *that* home.**
+  Inside a run, the overlay that hands a tool a throwaway home writes to
+  the children's environment, so the tool echoed that home while the
+  process reading it still reported the machine's own — and the scrub,
+  which asked `Path.home()`, matched nothing. docker's config default came
+  back from the first Windows gather as a path ending
+  `…\\Temp\\footman-gather-2_wvx66g\\docker-29.6.2\\home\\.docker`: a
+  random per-run directory, which would have differed on every run and
+  disagreed across platforms forever. The home is handed to the scrub now
+  rather than discovered, and a home nested inside another is replaced
+  whole.
+
+### Fixed
+
 - **A backfill is recorded but never announced.** A walk that reaches
   backwards changes the tool's surface at every step it takes, and every
   one of those steps is a change the tool made years ago — filling git's
