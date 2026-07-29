@@ -94,13 +94,21 @@ versions may include breaking changes.
 
 ### Fixed
 
+- **A wrapped usage line is no longer read as an option row.** A usage
+  that wraps continues on an indented line of bracketed flags — the shape
+  of an option row — and it lives in the preamble, where there is no
+  `Usage:` heading for the section filter to skip. Every flag on the
+  continuation was swept into whichever option came first: `build` was
+  recorded with one option carrying six flags and no help, and the five it
+  had swallowed missing entirely. The first weekly refresh read it that way
+  and opened a pull request to record it.
+
 - **The weekly refresh authenticates while provisioning, not only while
   observing.** Provisioning reads release indexes too, and unauthenticated
   that is 60 GitHub API calls an hour *per IP*, shared with every other
   runner in the region. The first dispatch spent it before the macOS and
   Windows legs reached bun: bun failed, and cspell and markdownlint were
   skipped for want of it. The token was on the observe step alone.
-
 - **A walk reads the plugin home it made, not the one on `PATH`.** The
   home was derived — resolve the binary, look beside it — and the
   derivation found the wrong one: `shutil.which` reads `os.environ` while
