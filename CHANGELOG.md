@@ -7,6 +7,25 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Changed
+
+- **A group's `default` is listed first.** It *is* the group — `fm db` runs
+  it, and the group's own row is described by it — so a listing that showed
+  it wherever it happened to be written put the headline act in the middle,
+  or at the bottom. Where it sits in the file is the author's business; where
+  it sits in a listing is footman's. `--list`, `--tree` and group help all
+  lead with it, `--sort` included.
+
+### Documentation
+
+- **The tool version helpers are documented.** `installed_version()`,
+  `read_version()` and `version_tuple()` were public and typed all along, and
+  no page said so — a downstream project asked for the API in its upgrade
+  report and wrote its own scraper meanwhile. The tools page now covers the
+  question they answer (is the CLI new enough), why `installed_version()`
+  differs from a stub header, and why a build tail ends a comparison instead
+  of becoming extra digits.
+
 ### Fixed
 
 - **A walk reads the plugin home it made, not the one on `PATH`.** The

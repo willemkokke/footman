@@ -4,7 +4,7 @@
  "observed_from": "2.49.1",
  "base": {
   "version": "2.55.0",
-  "date": "2026-07-28",
+  "date": "2026-07-29",
   "platforms": [
    "Linux"
   ],
@@ -1148,17 +1148,6 @@
      "positional": "any",
      "lead": "",
      "options": {
-      "all": {
-       "flags": [
-        "--no-all",
-        "--all"
-       ],
-       "negation": "",
-       "help": "Fetch all remotes, except for the ones that have the remote.<name>.skipFetchAll configuration variable set",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
       "allow_unrelated_histories": {
        "flags": [
         "--allow-unrelated-histories"
@@ -1208,17 +1197,6 @@
        "negation": "",
        "help": "This option determines how the merge message will be cleaned up before committing",
        "type": "str",
-       "default": null,
-       "choices": []
-      },
-      "commit": {
-       "flags": [
-        "--no-commit",
-        "--commit"
-       ],
-       "negation": "",
-       "help": "Perform the merge and commit the result",
-       "type": "bool",
        "default": null,
        "choices": []
       },
@@ -1302,16 +1280,6 @@
        "negation": "",
        "help": "Use the partial clone feature and request that the server sends a subset of reachable objects according to a given object filter",
        "type": "str",
-       "default": null,
-       "choices": []
-      },
-      "find_renames": {
-       "flags": [
-        "--find-renames"
-       ],
-       "negation": "",
-       "help": "",
-       "type": "bool",
        "default": null,
        "choices": []
       },
@@ -1761,16 +1729,6 @@
        "negation": "",
        "help": "Run git maintenance run --auto at the end to perform automatic repository maintenance if needed",
        "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "contains": {
-       "flags": [
-        "--contains"
-       ],
-       "negation": "",
-       "help": "",
-       "type": "str",
        "default": null,
        "choices": []
       },
@@ -3171,12 +3129,11 @@
       },
       "merged": {
        "flags": [
-        "--no-merged",
         "--merged"
        ],
-       "negation": "--no-merged",
-       "help": "",
-       "type": "bool",
+       "negation": "",
+       "help": "Only list branches whose tips are reachable from <commit> (HEAD if not specified)",
+       "type": "str",
        "default": null,
        "choices": []
       },
@@ -3218,6 +3175,26 @@
        "negation": "",
        "help": "Only list branches which don't contain <commit> (HEAD if not specified)",
        "type": "str",
+       "default": null,
+       "choices": []
+      },
+      "no_merged": {
+       "flags": [
+        "--no-merged"
+       ],
+       "negation": "",
+       "help": "Only list branches whose tips are not reachable from <commit> (HEAD if not specified)",
+       "type": "str",
+       "default": null,
+       "choices": []
+      },
+      "no_track": {
+       "flags": [
+        "--no-track"
+       ],
+       "negation": "",
+       "help": "Do not set up \"upstream\" configuration, even if the branch.autoSetupMerge configuration variable is set",
+       "type": "bool",
        "default": null,
        "choices": []
       },
@@ -3316,13 +3293,12 @@
       },
       "track": {
        "flags": [
-        "--set-upstream-to",
-        "--no-track",
-        "--track"
+        "--track",
+        "-t"
        ],
-       "negation": "--no-track",
-       "help": "",
-       "type": "bool",
+       "negation": "",
+       "help": "When creating a new branch, set up branch.<name>.remote and branch.<name>.merge configuration entries to set \"upstream\" tracking configuration for the new branch",
+       "type": "optvalue",
        "default": null,
        "choices": []
       },
@@ -4002,6 +3978,11 @@
       "find_renames": {
        "flags": [
         "--find-renames",
+        "-M100",
+        "-M50",
+        "-M05",
+        "-M5",
+        "-M5",
         "-M"
        ],
        "negation": "",
@@ -4429,16 +4410,6 @@
        "negation": "",
        "help": "Generate a diffstat",
        "type": "optvalue",
-       "default": null,
-       "choices": []
-      },
-      "static": {
-       "flags": [
-        "-static"
-       ],
-       "negation": "",
-       "help": "",
-       "type": "bool",
        "default": null,
        "choices": []
       },
@@ -5721,17 +5692,6 @@
        "default": null,
        "choices": []
       },
-      "pretty": {
-       "flags": [
-        "--pretty",
-        "--format"
-       ],
-       "negation": "",
-       "help": "Pretty-print the contents of the commit logs in a given format, where <format> can be one of oneline, short, medium, full, fuller, reference, email, raw, format:<string> and tformat:<string>",
-       "type": "optvalue",
-       "default": null,
-       "choices": []
-      },
       "raw": {
        "flags": [
         "--raw"
@@ -6009,16 +5969,6 @@
        "default": null,
        "choices": []
       },
-      "static": {
-       "flags": [
-        "-static"
-       ],
-       "negation": "",
-       "help": "",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
       "stdin": {
        "flags": [
         "--stdin"
@@ -6182,16 +6132,6 @@
        "default": null,
        "choices": []
       },
-      "all": {
-       "flags": [
-        "--all"
-       ],
-       "negation": "",
-       "help": "Show all refs found in refs/",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
       "branches": {
        "flags": [
         "--branches",
@@ -6201,16 +6141,6 @@
        "negation": "",
        "help": "Show all branches, tags, or remote-tracking branches, respectively (i.e., refs found in refs/heads, refs/tags, or refs/remotes, respectively)",
        "type": "optvalue",
-       "default": null,
-       "choices": []
-      },
-      "default": {
-       "flags": [
-        "--default"
-       ],
-       "negation": "",
-       "help": "If there is no parameter given by the user, use <arg> instead",
-       "type": "str",
        "default": null,
        "choices": []
       },
@@ -6334,26 +6264,6 @@
        "default": null,
        "choices": []
       },
-      "keep_dashdash": {
-       "flags": [
-        "--keep-dashdash"
-       ],
-       "negation": "",
-       "help": "Only meaningful in --parseopt mode",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "local_env_vars": {
-       "flags": [
-        "--local-env-vars"
-       ],
-       "negation": "",
-       "help": "List the GIT_* environment variables that are local to the repository (e.g",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
       "no_revs": {
        "flags": [
         "--no-revs"
@@ -6435,16 +6345,6 @@
        "default": null,
        "choices": []
       },
-      "revs_only": {
-       "flags": [
-        "--revs-only"
-       ],
-       "negation": "",
-       "help": "Do not output flags and parameters not meant for git rev-list command",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
       "shared_index_path": {
        "flags": [
         "--shared-index-path"
@@ -6522,17 +6422,6 @@
        "negation": "",
        "help": "Show the (by default, absolute) path of the top-level directory of the working tree",
        "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "since": {
-       "flags": [
-        "--since",
-        "--after"
-       ],
-       "negation": "",
-       "help": "Parse the date string, and output the corresponding --max-age= parameter for git rev-list",
-       "type": "str",
        "default": null,
        "choices": []
       },
@@ -7327,13 +7216,18 @@
      "default": null,
      "choices": []
     },
-    "pull\tall": {
+    "log\tdirstat": {
      "flags": [
-      "--no-all",
-      "--all"
+      "--name-status",
+      "--name-only",
+      "--dirstat",
+      "--summary",
+      "--check",
+      "-L",
+      "-L"
      ],
      "negation": "",
-     "help": "Fetch all remotes, except for the ones that has the remote.<name>.skipFetchAll configuration variable set",
+     "help": "Trace the evolution of the line range given by <start>,<end>, or by the function name regex <funcname>, within the <file>",
      "type": "bool",
      "default": null,
      "choices": []
@@ -7617,6 +7511,7 @@
    "drop": [
     "clone\tremote_submodules",
     "clone\tshallow_submodules",
+    "clone\tsingle_branch",
     "clone\ttags",
     "diff\tmax_depth",
     "diff\trename_empty",
@@ -7627,7 +7522,6 @@
     "log\tmailmap",
     "log\tmax_depth",
     "log\trename_empty",
-    "pull\tall",
     "pull\trecurse_submodules",
     "pull\tverify",
     "push\tatomic",
@@ -7641,27 +7535,6 @@
     "worktree\ttrack"
    ],
    "revert": {
-    "checkout\tpatch": {
-     "flags": [
-      "--patch"
-     ],
-     "negation": "",
-     "help": "",
-     "type": "bool",
-     "default": null,
-     "choices": []
-    },
-    "clone\tsingle_branch": {
-     "flags": [
-      "--single-branch",
-      "-tracking"
-     ],
-     "negation": "",
-     "help": "",
-     "type": "bool",
-     "default": null,
-     "choices": []
-    },
     "commit\tverify": {
      "flags": [
       "--verify",
@@ -8057,12 +7930,32 @@
      "default": null,
      "choices": []
     },
+    "branch\tmerged": {
+     "flags": [
+      "--merged"
+     ],
+     "negation": "",
+     "help": "Only list branches whose tips are reachable from the specified commit (HEAD if not specified)",
+     "type": "str",
+     "default": null,
+     "choices": []
+    },
     "branch\tno_contains": {
      "flags": [
       "--no-contains"
      ],
      "negation": "",
      "help": "Only list branches which don't contain the specified commit (HEAD if not specified)",
+     "type": "str",
+     "default": null,
+     "choices": []
+    },
+    "branch\tno_merged": {
+     "flags": [
+      "--no-merged"
+     ],
+     "negation": "",
+     "help": "Only list branches whose tips are not reachable from the specified commit (HEAD if not specified)",
      "type": "str",
      "default": null,
      "choices": []

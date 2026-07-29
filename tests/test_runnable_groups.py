@@ -667,3 +667,49 @@ def test_default_is_listed_and_completes_dotted():
     assert rows["lint.default"] == "Lint everything."
     offered = {c.split("\t")[0] for c in complete(tree, ["lint."])}
     assert "lint.default" in offered
+
+
+def test_the_default_is_listed_first_however_late_it_was_declared():
+    # The default *is* the group — `fm db` runs it and the group's own row is
+    # described by it — so where the author happened to write it must not
+    # decide where a listing shows it.
+    from footman import _describe
+
+    reg = Group("root")
+    db = reg.group("db", help="Database")
+
+    @db.task
+    def migrate(): ...
+
+    @db.task
+    def seed(): ...
+
+    @db.default
+    def status(): ...  # declared last, on purpose
+
+    tree = manifest.build_manifest(reg)["tree"]
+    names = [address for address, _help in _describe.iter_tasks(tree)]
+    assert names == ["db", "db.default", "db.migrate", "db.seed"]
+
+    # `--sort` orders by name, and the default still leads its group.
+    sorted_names = [
+        address for address, _ in _describe.iter_tasks(_describe.sort_tree(tree))
+    ]
+    assert sorted_names == ["db", "db.default", "db.migrate", "db.seed"]
+
+
+def test_a_group_without_a_default_is_untouched():
+    from footman import _describe
+
+    reg = Group("root")
+    db = reg.group("db", help="Database")
+
+    @db.task
+    def migrate(): ...
+
+    @db.task
+    def alpha(): ...
+
+    tree = manifest.build_manifest(reg)["tree"]
+    names = [address for address, _ in _describe.iter_tasks(tree)]
+    assert names == ["db.migrate", "db.alpha"]  # declaration order, as before
