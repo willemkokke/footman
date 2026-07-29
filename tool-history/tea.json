@@ -6,8 +6,6 @@
   "version": "0.15.0",
   "date": "2026-07-29",
   "platforms": [
-   "Linux",
-   "Windows",
    "macOS"
   ],
   "extractor": 2,

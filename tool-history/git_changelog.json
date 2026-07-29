@@ -1,20 +1,19 @@
 {
  "schema": 1,
  "tool": "git_changelog",
- "observed_from": "2.6.3",
+ "observed_from": "2.7.0",
  "base": {
   "version": "2.9.5",
   "date": "2026-07-29",
   "platforms": [
-   "Linux",
    "macOS"
   ],
   "extractor": 2,
   "surface": {
-   "help": "[-s SECTIONS] [-a] [-t TEMPLATE] [-T] [-E] [-Z] [-F RANGE] [-j KEY=VALUE] [-V] [--debug-info]",
+   "help": "Automatic Changelog generator using Jinja2 templates.",
    "verbs": {
     "": {
-     "help": "[-s SECTIONS] [-a] [-t TEMPLATE] [-T] [-E] [-Z] [-F RANGE] [-j KEY=VALUE] [-V] [--debug-info]",
+     "help": "Automatic Changelog generator using Jinja2 templates.",
      "wraps": false,
      "positional": "any",
      "lead": "",
@@ -281,8 +280,6 @@
   "2.9.4": {
    "date": "2026-04-29",
    "platforms": [
-    "Linux",
-    "Windows",
     "macOS"
    ],
    "extractor": 2
@@ -290,8 +287,6 @@
   "2.9.3": {
    "date": "2026-03-26",
    "platforms": [
-    "Linux",
-    "Windows",
     "macOS"
    ],
    "extractor": 2
@@ -299,8 +294,6 @@
   "2.9.2": {
    "date": "2026-03-20",
    "platforms": [
-    "Linux",
-    "Windows",
     "macOS"
    ],
    "extractor": 2
@@ -308,8 +301,6 @@
   "2.9.1": {
    "date": "2026-03-17",
    "platforms": [
-    "Linux",
-    "Windows",
     "macOS"
    ],
    "extractor": 2
@@ -317,8 +308,6 @@
   "2.9.0": {
    "date": "2026-03-13",
    "platforms": [
-    "Linux",
-    "Windows",
     "macOS"
    ],
    "extractor": 2
@@ -326,8 +315,6 @@
   "2.8.1": {
    "date": "2026-03-12",
    "platforms": [
-    "Linux",
-    "Windows",
     "macOS"
    ],
    "extractor": 2
@@ -335,8 +322,6 @@
   "2.8.0": {
    "date": "2026-03-12",
    "platforms": [
-    "Linux",
-    "Windows",
     "macOS"
    ],
    "extractor": 2
@@ -344,8 +329,6 @@
   "2.7.1": {
    "date": "2026-01-30",
    "platforms": [
-    "Linux",
-    "Windows",
     "macOS"
    ],
    "extractor": 2
@@ -353,27 +336,9 @@
   "2.7.0": {
    "date": "2025-11-21",
    "platforms": [
-    "Linux",
-    "Windows",
     "macOS"
    ],
    "extractor": 2
-  },
-  "2.6.3": {
-   "date": "2025-09-18",
-   "platforms": [
-    "Windows"
-   ],
-   "extractor": 2,
-   "drop": [
-    "\tinclude_all"
-   ],
-   "verbs": {
-    "": {
-     "help": "[-s SECTIONS] [-t TEMPLATE] [-T] [-E] [-Z] [-F RANGE] [-j KEY=VALUE] [-V] [--debug-info]"
-    }
-   },
-   "help": "[-s SECTIONS] [-t TEMPLATE] [-T] [-E] [-Z] [-F RANGE] [-j KEY=VALUE] [-V] [--debug-info]"
   }
  }
 }
