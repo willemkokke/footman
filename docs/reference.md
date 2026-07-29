@@ -90,6 +90,7 @@ def span(inv, task):
 | ---------------------------- | ---------------------------------------------------- |
 | `run(cmd, ...)`              | run a command or callable in the task context        |
 | `run(..., step=False)`       | run it, return the result, record and show nothing    |
+| `run(..., timeout=30)`       | kill the process tree after 30s; raises `RunTimeout`  |
 | `parallel(*calls)`           | fan tasks/thunks out concurrently                    |
 | `with parallel() as p:`      | the same fan-out written as plain calls; `p.results` |
 | `passthrough()`              | arguments after `--` on the command line             |

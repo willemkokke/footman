@@ -64,6 +64,7 @@ flag, the same policy-vs-work split a task's `.opts()` has:
 git.opts(nofail=True).push()            # tolerate a non-zero exit
 pytest.opts(capture=False)("-s")        # stream this run live
 git.opts(step=False).rev_parse("HEAD")  # a value read, not an event
+git.opts(timeout=30).fetch()            # a bound, after which it is killed
 ```
 
 Because it is a fixed set, `capture` here is unambiguously footman's — a tool's
@@ -409,6 +410,41 @@ Plain `sh` has no `pipefail`, so it degrades to `set -e` with a one-time note;
 not a silent no-op. `clean=True` runs the interpreter without the user's
 startup files (`--norc --noprofile` and no `$BASH_ENV` for bash, `-NoProfile`
 for pwsh, `/d` for cmd), so a task's shell behaves the same on every machine.
+
+## Bounding a call: `timeout=`
+
+A tool that hangs hangs the run. `timeout=` gives a call a deadline, after
+which footman kills it:
+
+<!-- example: fragment -->
+```python
+@task
+def probe():
+    version = git.opts(timeout=30, nofail=True).flags(version=True)()
+    if version.timed_out:
+        report("git did not answer in 30s")
+```
+
+What expiry does:
+
+- **Kills the tree, not just the child** — the same escalation fail-fast
+  uses (ask, then insist), so a tool's own workers die with it rather than
+  outliving the call that bounded them.
+- **Raises `RunTimeout`**, a subclass of `RunFailed` — so an existing
+  `except RunFailed` keeps catching it, while code that must tell a hang
+  from an ordinary failure can catch the narrower one. Under `nofail=True`
+  it returns the `Result` instead.
+- **Reports exit code 124**, the shell convention, and sets
+  `result.timed_out`. Whatever the command managed to print first is still
+  on `stdout`/`stderr` — on a hang, usually the only clue there is.
+- **Ignores `atomic=True`.** That exists so a *sibling's* failure cannot cut
+  a task off mid-write; a timeout is this call's own declared bound, and a
+  bound that silently does not apply would be worse than no bound.
+
+A timeout needs a process to bound, so an in-process call cannot honour one.
+A tool that prefers in-process **demotes to its subprocess twin** (the same
+choice a foreign `cwd` forces), and `run(timeout=…)` on a plain callable is
+a taught error rather than a bound that quietly does nothing.
 
 ## Calls that are not steps
 

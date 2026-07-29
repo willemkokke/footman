@@ -9,6 +9,20 @@ versions may include breaking changes.
 
 ### Added
 
+- **`timeout=` — a bound the caller declares.** `run(cmd, timeout=30)` and
+  `tool.opts(timeout=30)` kill a call that overstays, and kill the whole
+  process tree — the escalation fail-fast already uses — so a hung tool's own
+  workers die with it. Expiry raises `RunTimeout`, a subclass of `RunFailed`
+  so existing handlers keep working while a probe can tell a hang from an
+  ordinary failure; under `nofail=True` it returns the `Result` instead. The
+  code is 124 (the shell convention), `result.timed_out` says so, and
+  whatever the command printed first is still on `stdout`/`stderr`.
+
+  It ignores `atomic=True` — that guards against a *sibling's* failure, where
+  a timeout is this call's own bound. A bound needs a process, so an
+  in-process tool demotes to its subprocess twin (as a foreign `cwd` already
+  forces) and `run(timeout=…)` on a plain callable is a taught error.
+
 - **`step=False` — a call that is not part of the task's story.** A tool call
   is a *step* by default: a receipt line, a row in `--json`, an entry in
   `recording()`, its output in the task's block. Some calls are how a task
@@ -120,6 +134,14 @@ versions may include breaking changes.
   its only users were two tests.
 
 ### Fixed
+
+- **A transient failure reading an index is retried too.** `_download`
+  already retried a dropped connection; the listing path did not, so a
+  `504 Gateway Timeout` on a release index ended a whole platform's
+  gather — the same failure the download retry exists to prevent, one
+  layer up. Every index read now follows the same rule, and `Unreachable`
+  still ends the run once the tries are spent: an index that will not
+  answer must never read as "nothing new".
 
 - **A home is scrubbed however Windows spells it.** A gather set `HOME`
   to a path under `%TEMP%` and docker echoed it back with the 8.3 short
