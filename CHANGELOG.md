@@ -9,6 +9,20 @@ versions may include breaking changes.
 
 ### Added
 
+- **`timeout=` — a bound the caller declares.** `run(cmd, timeout=30)` and
+  `tool.opts(timeout=30)` kill a call that overstays, and kill the whole
+  process tree — the escalation fail-fast already uses — so a hung tool's own
+  workers die with it. Expiry raises `RunTimeout`, a subclass of `RunFailed`
+  so existing handlers keep working while a probe can tell a hang from an
+  ordinary failure; under `nofail=True` it returns the `Result` instead. The
+  code is 124 (the shell convention), `result.timed_out` says so, and
+  whatever the command printed first is still on `stdout`/`stderr`.
+
+  It ignores `atomic=True` — that guards against a *sibling's* failure, where
+  a timeout is this call's own bound. A bound needs a process, so an
+  in-process tool demotes to its subprocess twin (as a foreign `cwd` already
+  forces) and `run(timeout=…)` on a plain callable is a taught error.
+
 - **`step=False` — a call that is not part of the task's story.** A tool call
   is a *step* by default: a receipt line, a row in `--json`, an entry in
   `recording()`, its output in the task's block. Some calls are how a task

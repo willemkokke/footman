@@ -918,3 +918,24 @@ def test_opts_step_true_is_the_default():
     with use_context(ctx):
         tools.Tool(sys.executable)("-c", "print('recorded')")
     assert len(ctx.steps) == 1
+
+
+def test_opts_timeout_bounds_a_tool_call():
+    from footman.context import Context, RunTimeout, use_context
+
+    with use_context(Context()), pytest.raises(RunTimeout) as caught:
+        tools.Tool(sys.executable).opts(timeout=0.5)(
+            "-c", "import time; time.sleep(30)"
+        )
+    assert caught.value.result.code == 124
+
+
+def test_a_timeout_demotes_an_in_process_tool_to_a_subprocess():
+    # A bound needs a process to bound. The bridge demotes rather than
+    # refusing — the same choice a foreign cwd forces — so the timeout the
+    # caller asked for is the thing that survives.
+    from footman.context import Context, RunTimeout, use_context
+
+    tool = tools.Tool(sys.executable, in_process=True)
+    with use_context(Context()), pytest.raises(RunTimeout):
+        tool.opts(timeout=0.5)("-c", "import time; time.sleep(30)")

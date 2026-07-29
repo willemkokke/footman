@@ -454,7 +454,16 @@ _argv_lock = _threading.Lock()
 # *beside* the call, never translated into tool flags. A closed vocabulary, like a
 # task's `.opts()`, so `capture` here is unambiguously footman's (not a tool's own
 # `--capture`, e.g. pytest's); a tool's own flags go in the call or `.flags()`.
-_TOOL_OPTS = ("nofail", "in_process", "capture", "title", "cwd", "rel", "step")
+_TOOL_OPTS = (
+    "nofail",
+    "in_process",
+    "capture",
+    "title",
+    "cwd",
+    "rel",
+    "step",
+    "timeout",
+)
 
 
 def _opts_overrides(kwargs: dict[str, Any]) -> dict[str, Any]:
@@ -599,6 +608,7 @@ class Tool:
         cwd_opt = self._opts.get("cwd", None)
         rel_opt = self._opts.get("rel", None)
         step = self._opts.get("step", True)
+        timeout = self._opts.get("timeout", None)
         flags = _flags(kwargs, self._argv0, single_dash=self._single_dash)
         positionals = list(map(str, args))
         wrapper = _is_wrapper(self._argv0, self._base)
@@ -640,12 +650,25 @@ class Tool:
                 capture=capture,
                 title=title,
                 step=step,
+                timeout=timeout,
                 cwd=cwd_opt,
                 rel=rel_opt,
                 _show=_Invocation(parts, tuple(spawned)),
             )
 
         wanted = self._prefer_in_process if in_process is None else in_process
+        if wanted and timeout is not None:
+            # A bound needs a process to bound: an in-process call has no
+            # child to signal and no safe way to unwind a thread. Demote to
+            # the subprocess twin — the same choice a foreign cwd forces
+            # below, and the timeout is the thing the caller actually asked
+            # for.
+            if _current().verbose:
+                _real_stderr().write(
+                    f"note: {self._argv0}: ran as subprocess — a timeout needs "
+                    f"a process to bound\n"
+                )
+            return _spawn()
         if wanted:
             from footman import _globals as _pg
 
@@ -697,6 +720,7 @@ class Tool:
                 capture=capture,
                 title=title,
                 step=step,
+                timeout=timeout,
                 cwd=cwd_opt,
                 rel=rel_opt,
                 _show=show,
