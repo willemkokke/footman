@@ -75,13 +75,20 @@ def check():
     is the whole local gate — no separate `pytest --cov`.
     """
     import os
+    import shutil
     import tempfile
 
     # Coverage data goes to a per-invocation file: two `fm check` runs
     # sharing the repo's .coverage (a second session, a hook racing a manual
     # run) clobber the SQLite file mid-write, and the reporter then sees a
     # bogus partial total with every test passing.
-    cov_file = os.path.join(tempfile.mkdtemp(prefix="fm-check-cov-"), "coverage")
+    #
+    # Per-invocation means one directory per run, and the gate runs on every
+    # commit and from the stop hook on every turn — so left behind they
+    # accumulate at the rate the agent works. A day of one session left 308
+    # of them, 80 MB, and nothing would ever have collected them.
+    cov_dir = tempfile.mkdtemp(prefix="fm-check-cov-")
+    cov_file = os.path.join(cov_dir, "coverage")
 
     def covered():
         # `fail_under` (pyproject, 92) is the *merged* bar: CI combines three
@@ -101,7 +108,14 @@ def check():
     # and step column say "format" instead of "…"; `covered` borrows the
     # task's name the same way.
     covered.__name__ = "test"
-    parallel(functools.partial(format, check=True), lint, typecheck, covered)
+    try:
+        parallel(functools.partial(format, check=True), lint, typecheck, covered)
+    finally:
+        # In a `finally`, because a red gate is the common case and the one
+        # that would otherwise leak: `parallel` raises on the first failing
+        # step, and a run that never reaches its own cleanup line is exactly
+        # the run you make most often while fixing something.
+        shutil.rmtree(cov_dir, ignore_errors=True)
 
 
 @task
