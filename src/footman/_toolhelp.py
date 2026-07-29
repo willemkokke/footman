@@ -489,6 +489,13 @@ def parse_help(
     for title, lines in sections.items():
         if _NOT_OPTIONS.search(title):
             continue  # `Commands:`, `Examples:` — dashes there aren't flags
+        if not title:
+            # The preamble is the one section a title cannot excuse, and the
+            # usage line lives there. Wrapped, its continuation is an
+            # indented line of bracketed flags — the shape of an option row.
+            # `build` wraps at any width, and every flag on the continuation
+            # was swept into one option carrying six flags and no help.
+            lines = _drop_usage(lines)
         for head, help_text in _blocks(lines, man=man):
             first = _FIRST_LONG.search(head)
             option = _option(
@@ -735,6 +742,25 @@ def _synopsis_shape(text: str, verb: str) -> tuple[str, str]:
         return "any", ""  # multi-form (or unrecognised) — don't constrain
     grammar = " ".join(body.split()).split(prog, 1)[1]
     return _grammar_shape(grammar)
+
+
+def _drop_usage(lines: list[str]) -> list[str]:
+    """*lines* without the usage block — the line and what it wrapped onto.
+
+    The same extent `_usage_line` stitches together, removed rather than
+    joined: there it is the grammar, here it is prose that happens to be
+    shaped like options.
+    """
+    out, skipping = [], False
+    for line in lines:
+        if line.lower().lstrip().startswith(("usage", "syntax")):
+            skipping = True
+            continue
+        if skipping and line.strip() and line[:1].isspace():
+            continue  # a continuation of the usage
+        skipping = False
+        out.append(line)
+    return out
 
 
 def _usage_line(text: str) -> str:

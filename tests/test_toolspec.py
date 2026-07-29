@@ -1091,6 +1091,40 @@ def test_no_stub_carries_a_home_directory():
     assert guilty == set()
 
 
+def test_a_wrapped_usage_line_is_not_an_option_row():
+    """`build`\'s usage wraps at any width, and its continuation is an
+    indented line of bracketed flags — the shape of an option row.
+
+    The section-title filter cannot help here: the usage sits in the
+    untitled preamble, so there is no `Usage:` heading to skip. Every flag
+    on the continuation was swept into whichever option came first,
+    leaving one entry carrying six flags and no help, and the other five
+    absent. A weekly refresh read it that way and opened a PR to record it.
+    """
+    text = (
+        # The bracket is stranded on the line above, so the continuation
+        # opens with a bare `--flag`: exactly an option row's shape.
+        "usage: pyproject-build [-h] [--version] [--outdir PATH] [\n"
+        "                       --config-json JSON] [--installer {pip,uv} |\n"
+        "                       --no-isolation]\n"
+        "                       [--env-dir PATH] [--skip-dependency-check]\n"
+        "\n"
+        "A simple, correct build frontend\n"
+        "\n"
+        "options:\n"
+        "  --config-json JSON    settings for the backend\n"
+        "  --installer {pip,uv}  installer to use\n"
+        "  --env-dir PATH        where to build\n"
+    )
+    verb = _toolhelp.parse_help(text, name="")
+    by_name = {o.name: o for o in verb.options}
+    assert set(by_name) == {"config_json", "installer", "env_dir"}
+    assert list(by_name["config_json"].flags) == ["--config-json"]
+    assert by_name["config_json"].help == "settings for the backend"
+    # and nothing swallowed its neighbours
+    assert all(len(o.flags) <= 2 for o in verb.options)
+
+
 def test_a_verb_that_answers_with_the_root_help_is_not_that_verb(monkeypatch):
     """Asked for a subcommand it does not have, docker prints its own help
     and exits 0 — so the reading looked successful and `compose up` was
