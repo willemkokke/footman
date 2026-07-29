@@ -6,7 +6,9 @@
   "version": "3.14.6",
   "date": "2026-07-29",
   "platforms": [
-   "Linux"
+   "Linux",
+   "Windows",
+   "macOS"
   ],
   "extractor": 2,
   "surface": {
@@ -279,63 +281,81 @@
   "3.14.5": {
    "date": "2026-06-02",
    "platforms": [
-    "Linux"
+    "Linux",
+    "Windows",
+    "macOS"
    ],
    "extractor": 2
   },
   "3.14.4": {
    "date": "2026-04-14",
    "platforms": [
-    "Linux"
+    "Linux",
+    "Windows",
+    "macOS"
    ],
    "extractor": 2
   },
   "3.14.3": {
    "date": "2026-03-25",
    "platforms": [
-    "Linux"
+    "Linux",
+    "Windows",
+    "macOS"
    ],
    "extractor": 2
   },
   "3.14.2": {
    "date": "2026-01-27",
    "platforms": [
-    "Linux"
+    "Linux",
+    "Windows",
+    "macOS"
    ],
    "extractor": 2
   },
   "3.14.1": {
    "date": "2025-12-02",
    "platforms": [
-    "Linux"
+    "Linux",
+    "Windows",
+    "macOS"
    ],
    "extractor": 2
   },
   "3.14.0": {
    "date": "2025-11-20",
    "platforms": [
-    "Linux"
+    "Linux",
+    "Windows",
+    "macOS"
    ],
    "extractor": 2
   },
   "3.13.14": {
    "date": "2026-07-28",
    "platforms": [
-    "Linux"
+    "Linux",
+    "Windows",
+    "macOS"
    ],
    "extractor": 2
   },
   "3.13.13": {
    "date": "2026-06-02",
    "platforms": [
-    "Linux"
+    "Linux",
+    "Windows",
+    "macOS"
    ],
    "extractor": 2
   },
   "3.13.12": {
    "date": "2026-03-25",
    "platforms": [
-    "Linux"
+    "Linux",
+    "Windows",
+    "macOS"
    ],
    "extractor": 2
   }
