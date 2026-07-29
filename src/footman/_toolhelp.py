@@ -819,7 +819,13 @@ def _summary(text: str) -> str:
         return named.group(1).strip()
     if re.match(r"^Usage of \S", text):
         return ""  # Go's `flag` opens with `Usage of <prog>:` and has no summary
-    for line in text.splitlines():
+    # A wrapped usage stands between the `usage:` line and the description,
+    # and what it wraps onto decides what is found: a continuation opening
+    # `[--sdist…` reads as prose and became the summary, one opening
+    # `--config-json…` reads as an option and ended the search. Two
+    # platforms wrapping differently disagreed about `build`'s description
+    # for that reason, and neither had found it.
+    for line in _drop_usage(text.splitlines()):
         stripped = line.strip()
         if not stripped:
             continue

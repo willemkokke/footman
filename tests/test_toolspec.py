@@ -1091,6 +1091,35 @@ def test_no_stub_carries_a_home_directory():
     assert guilty == set()
 
 
+def test_a_summary_is_found_past_a_wrapped_usage():
+    """A wrapped usage stands between the `usage:` line and the
+    description, and what it wraps onto decided what was found: a
+    continuation opening `[--sdist…` reads as prose and became the summary,
+    one opening `--config-json…` reads as an option and ended the search.
+
+    Two platforms wrapping differently disagreed about `build`'s
+    description for that reason, and neither had found it — the tool says
+    `A simple, correct Python build frontend.` two lines further down.
+    """
+    text = (
+        "usage: pyproject-build [-h] [--outdir PATH] [\n"
+        "                       --config-json JSON] [--installer {pip,uv}]\n"
+        "                       [srcdir]\n"
+        "\n"
+        "    A simple, correct Python build frontend.\n"
+        "\n"
+        "options:\n"
+        "  --outdir PATH   where to put it\n"
+    )
+    assert _toolhelp._summary(text) == "A simple, correct Python build frontend."
+
+    # and the other wrap, which used to yield the fragment itself
+    other = text.replace(
+        "[\n                       --config-json JSON]", "\n     [--config-json JSON]"
+    )
+    assert _toolhelp._summary(other) == "A simple, correct Python build frontend."
+
+
 def test_a_wrapped_usage_line_is_not_an_option_row():
     """`build`\'s usage wraps at any width, and its continuation is an
     indented line of bracketed flags — the shape of an option row.

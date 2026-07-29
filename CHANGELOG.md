@@ -100,6 +100,14 @@ versions may include breaking changes.
 
 ### Fixed
 
+- **A tool's summary is found past a wrapped usage.** The usage stands
+  between the `usage:` line and the description, and what it wrapped onto
+  decided the answer: a continuation opening `[--sdist…` reads as prose and
+  became the summary, one opening `--config-json…` reads as an option and
+  ended the search. Two platforms wrapping differently disagreed about
+  `build`'s description for that reason, and neither had found it — the
+  tool says `A simple, correct Python build frontend.` two lines below.
+
 - **A dropped download is retried.** `Remote end closed connection without
   response` says nothing about the asset — the release was there, the
   download was not finished — and it cost a refresh leg its whole
