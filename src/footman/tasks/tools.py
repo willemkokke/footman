@@ -1015,20 +1015,7 @@ def gather(
     holes: dict[str, list[str]] = {}
     try:
         with _on_path(prefix), _sandboxed(scratch):
-            drivers, skipped = _curated(only, _toolfetch)
-            listings, unreachable = _list_phase(drivers, _toolfetch)
-            work, docs = [], {}
-            for driver in drivers:
-                if driver.key not in listings:
-                    continue
-                doc_ = _toolhistory.load(_history_path(driver.key))
-                if doc_ is None:
-                    skipped.append(f"{driver.key} (no history — run `sync` first)")
-                    continue
-                docs[driver.key] = doc_
-                work += [
-                    (driver, r) for r in _plan_gather(doc_, listings[driver.key], count)
-                ]
+            work, skipped, unreachable = _work_to_do(only, count, _toolfetch)
             surfaces = _gather(work, scratch)
             for driver, release in work:
                 surface = surfaces.get(driver.key, {}).get(release.version)
@@ -1059,6 +1046,89 @@ def gather(
         )
         print(f"wrote {target}")
     _report_gather(found)
+    return found
+
+
+def _work_to_do(only: str, count: int, fetch) -> tuple[list, list[str], dict]:
+    """Every (driver, release) this platform still owes a reading of.
+
+    The listing phase and the plan, with nothing installed and nothing
+    read — what `gather` does before it starts working, and all a caller
+    needs to know whether there is any work at all.
+    """
+    drivers, skipped = _curated(only, fetch)
+    listings, unreachable = _list_phase(drivers, fetch)
+    work = []
+    for driver in drivers:
+        if driver.key not in listings:
+            continue
+        doc = _toolhistory.load(_history_path(driver.key))
+        if doc is None:
+            skipped.append(f"{driver.key} (no history — run `sync` first)")
+            continue
+        work += [(driver, r) for r in _plan_gather(doc, listings[driver.key], count)]
+    return work, skipped, unreachable
+
+
+@dataclass(frozen=True)
+class Owed:
+    """What a gather would read, without reading any of it."""
+
+    releases: dict[str, list[str]]
+    """Versions this platform owes a reading of, per tool."""
+    unreachable: dict[str, str]
+    """Indexes that would not answer. Not the same as nothing to do — a
+    walk that cannot see an index cannot say the index has nothing new."""
+    skipped: list[str]
+    """Tools with no index to read, or no history to add to."""
+
+    @property
+    def total(self) -> int:
+        return sum(len(v) for v in self.releases.values())
+
+
+@tasks.task
+def owed(
+    only: Annotated[str, doc("ask about just this tool")] = "",
+    prefix: Annotated[str, doc("drive the tiers from this prefix's bin/")] = "",
+    count: Annotated[int, doc("also reach this many releases below the floor")] = 0,
+) -> Owed:
+    """What this platform would read, without installing anything.
+
+    A gather provisions every tool and then discovers there is nothing to
+    observe — which is most weeks, since a store that is current stays
+    current until something ships. Listing is network and nothing else, so
+    the question "is there any work" can be answered before the work is
+    prepared for.
+
+    One tool must be current for the answer to be true: uv carries
+    CPython's download index inside the binary, so a stale uv reports a
+    stale newest python and this says "nothing owed" about a release it
+    cannot see. Provision uv, ask this, and only then provision the rest.
+
+    An index that would not answer is *not* nothing to do — `unreachable`
+    is reported separately for exactly that reason.
+    """
+    from footman import _toolfetch
+
+    _bounce_bare_call("owed")
+    with _on_path(prefix):
+        work, skipped, unreachable = _work_to_do(only, count, _toolfetch)
+    releases: dict[str, list[str]] = {}
+    for driver, release in work:
+        releases.setdefault(driver.key, []).append(release.version)
+    found = Owed(
+        releases={k: sorted(v) for k, v in sorted(releases.items())},
+        unreachable=unreachable,
+        skipped=skipped,
+    )
+    if found.unreachable:
+        for key, why in sorted(found.unreachable.items()):
+            print(f"unreachable: {key} ({why})")
+    if found.total:
+        for tool, versions in found.releases.items():
+            print(f"{tool}: {len(versions)} to read")
+    print(f"owed: {found.total}")
     return found
 
 

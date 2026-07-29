@@ -9,6 +9,16 @@ versions may include breaking changes.
 
 ### Added
 
+- **`fm tools.owed` answers what a gather would read, without installing
+  anything.** A gather provisioned all 28 tools and then discovered there
+  was nothing to observe, which is most weeks — a current store stays
+  current until something ships. Listing is network and nothing else, so
+  the weekly refresh asks first and provisions only when the answer is not
+  zero: 9 seconds against ~30 downloads per platform. `uv` is still
+  provisioned first, because it carries CPython's download index inside
+  the binary and a stale one would report a stale newest python. An index
+  that would not answer counts as work rather than quiet.
+
 - **git is read from its manuals, and every release of them is kept.**
   git's `-h` omits about half its flags, so it has always been read from
   its manual — and a manual is not a binary. kernel.org publishes the
@@ -60,6 +70,12 @@ versions may include breaking changes.
   an existing hook keeps today's behaviour everywhere else.
 
 ### Changed
+
+- **The weekly refresh opens its pull request without arming auto-merge.**
+  The gate replays every chain and regenerates every stub, which proves
+  the store is *consistent* — not that the readings in it are true. A
+  wrong reading passes it unchanged, and the first dispatch of the
+  workflow produced one.
 
 - **build 1.5.1** adds `--env-dir`, `--report` and `--sdist-extract-dir`. It also rewords 4 descriptions and restates its own description.
 - **A group's `default` is listed first.** It *is* the group — `fm db` runs
