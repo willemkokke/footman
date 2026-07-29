@@ -1063,6 +1063,40 @@ def test_the_scrub_uses_the_home_the_walk_gave_not_this_process_one(
     assert clean.verbs[0].options[1].help.endswith("~/.docker/c.pem")
 
 
+def test_a_short_name_is_the_same_home(tmp_path):
+    """Windows has more than one spelling for one directory.
+
+    A gather set `HOME` to a path under `%TEMP%` and docker echoed it back
+    as `C:\\Users\\WILLEM~1\\AppData\\Local\\Temp\\…` — the 8.3 short name,
+    where the string handed to the scrub had the long one. `str.replace`
+    saw two different paths, wrote neither, and the shipped stub carried a
+    machine's directory again. Case is the same trap: Windows does not
+    distinguish it and a comparison does.
+    """
+    from pathlib import Path
+
+    long = r"C:\Users\Willem Kokke\AppData\Local\Temp\fm-1\docker-29.6.2\home"
+    short = r"C:\Users\WILLEM~1\AppData\Local\Temp\fm-1\docker-29.6.2\home"
+    spec = ToolSpec(
+        name="docker",
+        verbs=(
+            Verb(
+                name="",
+                options=(
+                    Option(name="config", default=short + r"\.docker"),
+                    Option(name="cert", help="at " + short + r"\.docker\ca.pem"),
+                    Option(name="upper", default=short.upper() + r"\.docker"),
+                ),
+            ),
+        ),
+    )
+    clean = _drivers._anonymous(spec, Path(long))
+    got = clean.verbs[0].options
+    assert got[0].default == r"~\.docker"
+    assert got[1].help == r"at ~\.docker\ca.pem"
+    assert got[2].default == r"~\.docker"  # case is not a different path
+
+
 def test_a_throwaway_home_inside_the_real_one_is_replaced_whole(tmp_path):
     """Longest first, or a nested throwaway home leaves `~/…/home/.docker`
     behind — still a machine-specific path, just a shorter one."""

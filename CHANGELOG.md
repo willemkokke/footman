@@ -143,6 +143,14 @@ versions may include breaking changes.
   still ends the run once the tries are spent: an index that will not
   answer must never read as "nothing new".
 
+- **A home is scrubbed however Windows spells it.** A gather set `HOME`
+  to a path under `%TEMP%` and docker echoed it back with the 8.3 short
+  name — `C:\Users\WILLEM~1\…` — where the string handed to the scrub had
+  the long one. Compared as text those are two different paths, so
+  neither was replaced and a shipped stub carried a machine's directory
+  again. Each segment now matches itself or a short name for itself, and
+  case is not a difference, because on Windows it is not one.
+
 - **A tool's summary is found past a wrapped usage.** The usage stands
   between the `usage:` line and the description, and what it wrapped onto
   decided the answer: a continuation opening `[--sdist…` reads as prose and
