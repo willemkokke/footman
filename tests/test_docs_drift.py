@@ -57,6 +57,25 @@ def test_json_version_example_is_current():
     assert f'"version": "{footman.__version__}"' in text
 
 
+KINDS = frozenset(
+    {
+        "Added",
+        "Changed",
+        "Deprecated",
+        "Removed",
+        "Fixed",
+        "Security",
+        "Documentation",
+        "CI",
+    }
+)
+"""The kinds a release may sort its entries into.
+
+Keep a Changelog's six, plus the two this project uses: `Documentation`,
+and `CI` for a change to the pipeline that ships nothing.
+"""
+
+
 def test_each_changelog_section_lists_a_kind_once():
     """A release's entries of one kind belong under one heading.
 
@@ -79,6 +98,12 @@ def test_each_changelog_section_lists_a_kind_once():
         assert not repeated, (
             f"{release} lists {repeated} — merge them under one heading"
         )
+        # One heading per kind is only half of it: two names for the same
+        # kind divide a release just as effectively. `Docs` and
+        # `Documentation` ran side by side for seven releases before
+        # anybody noticed they were the same section.
+        unknown = [k for k in kinds if k not in KINDS]
+        assert not unknown, f"{release} uses {unknown}, not one of {sorted(KINDS)}"
 
 
 def test_foundations_pages_teach_their_guards():

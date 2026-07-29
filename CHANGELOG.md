@@ -980,7 +980,7 @@ versions may include breaking changes.
   default is wrapped too: where the value came from doesn't change what it
   is.
 
-### Docs
+### Documentation
 
 - The input guide gains a **Secrets** section, covering the two halves
   (`secret=True` collects, `Secret` displays), what redaction deliberately
@@ -1194,7 +1194,7 @@ versions may include breaking changes.
   driver's `name`/`in_process` to how `tools.py` builds that tool, so the
   label can't drift from the runtime again.
 
-### Docs
+### Documentation
 
 - footman's own agent hooks are footman tasks now: `.claude/settings.json`
   runs `fm hooks.post-edit` and `fm hooks.stop` (a hidden group in
@@ -1673,7 +1673,7 @@ versions may include breaking changes.
   now retries once with a 5s settle; the happy path pays nothing, and a
   genuinely broken shell still raises the same error.
 
-### Docs
+### Documentation
 
 - Added an abbreviations glossary with site-wide hover tooltips for footman's
   coined vocabulary (manifest, cascade, chain, taught error, …), split the
@@ -2151,7 +2151,7 @@ versions may include breaking changes.
   the merged-coverage note, which shipped in 0.13.0 — it now sits under
   the release that carried it.
 
-### Docs
+### Documentation
 
 - **The `serve` examples use `@task(infinite=True)`** on the home page,
   the README, and getting-started, matching what the runner now offers.
@@ -2688,7 +2688,7 @@ versions may include breaking changes.
   last resort. Undetectable → a taught error naming the five options.
   Verified through a real shell with `$SHELL` deliberately lying.
 
-### Docs
+### Documentation
 
 - **The README is a front door now** — what footman is, why it exists, one
   taste, and pointers into the site — instead of a 460-line hand-maintained
@@ -2795,7 +2795,7 @@ versions may include breaking changes.
   nothing footman can coerce (an unresolved name, a value) now emits a
   `UserWarning` instead of silently treating every value as text.
 
-### Docs
+### Documentation
 
 - Fixed the dynamic-completion examples: the documented `suggest[str, fn]`
   syntax never existed — the real form is `Annotated[str, suggest(fn)]`.
@@ -2854,7 +2854,7 @@ versions may include breaking changes.
   `KeyboardInterrupt` raised inside a task) now propagates instead of being
   silently dropped and reading as success.
 
-### Docs
+### Documentation
 
 - Docstrings converted from reStructuredText to Markdown (renders natively via
   mkdocstrings).
