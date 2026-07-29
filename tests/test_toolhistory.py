@@ -878,6 +878,62 @@ def test_a_plugin_that_cannot_be_fetched_is_unreachable_not_absent(
         _toolfetch.install_plugin(docker.plugins[0], "2025-06-01", tmp_path)
 
 
+def test_a_gateway_timeout_on_an_index_is_retried(monkeypatch):
+    """The gap the retry left. `_download` retries a dropped connection;
+    the listing path did not, so a leg died on
+
+        Unreachable: cannot read .../docker/buildx/releases?…:
+        HTTP Error 504: Gateway Timeout
+
+    and took the whole platform's observations with it — the same failure
+    the download retry exists to prevent, one layer up.
+    """
+    import email.message
+    import urllib.error
+
+    from footman import _toolfetch
+
+    calls = []
+
+    class Answer:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def read(self):
+            return b"[]"
+
+    def flaky(request, timeout=0):
+        calls.append(1)
+        if len(calls) < 3:
+            raise urllib.error.HTTPError(
+                "http://x", 504, "Gateway Timeout", email.message.Message(), None
+            )
+        return Answer()
+
+    monkeypatch.setattr(_toolfetch.urllib.request, "urlopen", flaky)
+    monkeypatch.setattr(_toolfetch.time, "sleep", lambda _s: None)
+    request = _toolfetch.urllib.request.Request("http://x")
+    assert _toolfetch._read_index(request, "http://x") == b"[]"
+    assert len(calls) == 3
+
+    # A 404 is an answer: raised at once, and still as Unreachable.
+    calls.clear()
+
+    def gone(request, timeout=0):
+        calls.append(1)
+        raise urllib.error.HTTPError(
+            "http://x", 404, "Not Found", email.message.Message(), None
+        )
+
+    monkeypatch.setattr(_toolfetch.urllib.request, "urlopen", gone)
+    with pytest.raises(_toolfetch.Unreachable):
+        _toolfetch._read_index(request, "http://x")
+    assert len(calls) == 1
+
+
 def test_a_listing_is_read_once_per_process(monkeypatch):
     """Every release of a walk asks the same question of the same
     repository, and the answer cannot change while the walk runs."""

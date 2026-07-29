@@ -121,6 +121,14 @@ versions may include breaking changes.
 
 ### Fixed
 
+- **A transient failure reading an index is retried too.** `_download`
+  already retried a dropped connection; the listing path did not, so a
+  `504 Gateway Timeout` on a release index ended a whole platform's
+  gather — the same failure the download retry exists to prevent, one
+  layer up. Every index read now follows the same rule, and `Unreachable`
+  still ends the run once the tries are spent: an index that will not
+  answer must never read as "nothing new".
+
 - **A tool's summary is found past a wrapped usage.** The usage stands
   between the `usage:` line and the description, and what it wrapped onto
   decided the answer: a continuation opening `[--sdist…` reads as prose and

@@ -22,6 +22,7 @@ import re
 import subprocess
 import sys
 import threading
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -248,15 +249,42 @@ class Unreachable(Exception):
         self.source = source
 
 
+def _read_index(request: urllib.request.Request, url: str) -> bytes:
+    """Fetch an index, retrying the failures that are about the connection.
+
+    The same rule `_download` follows, one layer up. A refresh leg died on
+    `HTTP Error 504: Gateway Timeout` reading docker/buildx's release list —
+    a momentary hiccup, and the whole platform's observations went with it,
+    which is exactly what retrying a download was written to prevent.
+
+    `Unreachable` still ends the run when the tries are spent: an index
+    that will not answer must never read as "nothing new".
+    """
+    from footman._provision import _worth_retrying
+
+    for attempt in range(_INDEX_TRIES):
+        try:
+            with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
+                return response.read()
+        except (urllib.error.URLError, TimeoutError, OSError) as cause:
+            if attempt + 1 == _INDEX_TRIES or not _worth_retrying(cause):
+                raise Unreachable(url, cause) from cause
+            time.sleep(_INDEX_BACKOFF * (attempt + 1))
+    raise Unreachable(url, "unreachable")  # pragma: no cover - the loop returns
+
+
+_INDEX_TRIES = 3
+_INDEX_BACKOFF = 1.0
+
+
 def _index(url: str) -> dict:
     """A registry's JSON. Raises `Unreachable` when it cannot be read."""
     from footman._provision import api_headers
 
     request = urllib.request.Request(url, headers=api_headers(url))
     try:
-        with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
-            return json.load(response)
-    except (urllib.error.URLError, TimeoutError, ValueError, OSError) as cause:
+        return json.loads(_read_index(request, url))
+    except ValueError as cause:  # answered, but not with JSON
         raise Unreachable(url, cause) from cause
 
 
@@ -479,14 +507,9 @@ def _docker_index() -> list[Release]:
     """
     os_name, arch, _suffix = _docker_channel()
     url = _DOCKER_INDEX.format(os=os_name, arch=arch)
-    try:
-        with urllib.request.urlopen(
-            urllib.request.Request(url, headers={"User-Agent": "footman-provision"}),
-            timeout=TIMEOUT,
-        ) as response:
-            listing = response.read().decode("utf-8", "replace")
-    except (urllib.error.URLError, TimeoutError, OSError) as cause:
-        raise Unreachable(url, cause) from cause
+    listing = _read_index(
+        urllib.request.Request(url, headers={"User-Agent": "footman-provision"}), url
+    ).decode("utf-8", "replace")
     shipped = _docker_dates()
     found = {
         match["version"]: Release(
@@ -608,16 +631,12 @@ def _manpages_index() -> list[Release]:
     tagging simply has nothing to say about git, which is the honest
     answer rather than a gap.
     """
-    try:
-        with urllib.request.urlopen(
-            urllib.request.Request(
-                _MANPAGES_INDEX, headers={"User-Agent": "footman-provision"}
-            ),
-            timeout=TIMEOUT,
-        ) as response:
-            listing = response.read().decode("utf-8", "replace")
-    except (urllib.error.URLError, TimeoutError, OSError) as cause:
-        raise Unreachable(_MANPAGES_INDEX, cause) from cause
+    listing = _read_index(
+        urllib.request.Request(
+            _MANPAGES_INDEX, headers={"User-Agent": "footman-provision"}
+        ),
+        _MANPAGES_INDEX,
+    ).decode("utf-8", "replace")
     found = {}
     for match in _MANPAGES_FILE.finditer(listing):
         if match["month"] not in _MONTHS:  # pragma: no cover - a mirror typo
