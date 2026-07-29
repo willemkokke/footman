@@ -168,8 +168,8 @@ def test_reads_spawn_off_the_callers_console():
     import subprocess
 
     want = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
-    assert want == _toolhelp.DETACHED
-    # And run_help actually works detached — the read below spawns with it.
+    assert want == _toolhelp.NO_CONSOLE_WINDOW
+    # And run_help actually works with it — the read below spawns that way.
     text = _toolhelp.run_help([sys.executable, "-c", "print('usage: x [--ok]')"])
     assert "--ok" in text
 

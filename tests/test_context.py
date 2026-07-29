@@ -819,7 +819,7 @@ def test_run_shell_true_reads_the_configured_policy(monkeypatch):
 
     def fake(argv, *a, **k):
         captured["argv"] = argv
-        return 0, "", ""
+        return 0, "", "", False
 
     monkeypatch.setattr("footman.context._run_subprocess", fake)
     with use_context(Context(shell_default="pwsh")):
@@ -917,9 +917,10 @@ def test_windows_string_commands_are_not_shlex_split(monkeypatch):
         killable=True,
         isolate=True,
         keep_going=False,
+        timeout=None,
     ):
         calls["argv"] = argv
-        return 0, ""
+        return 0, "", "", False
 
     monkeypatch.setattr(context_mod, "_run_subprocess", fake_run)
     monkeypatch.setattr(sys, "platform", "win32")
@@ -1884,3 +1885,68 @@ def test_a_title_on_a_non_step_call_is_noted_once(capsys):
     assert results[0].ok, results[0].error
     err = capsys.readouterr().err
     assert err.count("title= is ignored on a step=False call") == 1
+
+
+# --- timeout: a bound the caller declares ------------------------------------
+
+
+def _sleeper(seconds: float) -> list[str]:
+    """A portable "sleep then print" — the interpreter is the one program
+    every machine running this suite is guaranteed to have."""
+    return [sys.executable, "-c", f"import time; time.sleep({seconds}); print('done')"]
+
+
+def test_a_timeout_kills_the_call_and_raises_runtimeout():
+    from footman.context import Context, RunFailed, RunTimeout, use_context
+
+    with use_context(Context()), pytest.raises(RunTimeout) as caught:
+        run(_sleeper(30), timeout=0.5)
+
+    assert isinstance(caught.value, RunFailed)  # old handlers keep working
+    assert caught.value.timeout == 0.5
+    result = caught.value.result
+    assert result.timed_out
+    assert result.code == 124  # the shell convention, not a private sentinel
+    assert "timed out after 0.5s" in str(caught.value)
+
+
+def test_a_timeout_under_nofail_returns_the_result():
+    from footman.context import Context, use_context
+
+    with use_context(Context()):
+        result = run(_sleeper(30), timeout=0.5, nofail=True)
+    assert result.timed_out
+    assert result.code == 124
+
+
+def test_a_call_inside_its_timeout_is_untouched():
+    from footman.context import Context, use_context
+
+    with use_context(Context()):
+        result = run(_sleeper(0), timeout=30)
+    assert not result.timed_out
+    assert result.ok
+    assert result.stdout.strip() == "done"
+
+
+def test_a_timeout_on_an_in_process_call_is_refused():
+    # There is no child to signal and no safe way to unwind a thread, so the
+    # bound footman cannot honour is refused rather than ignored.
+    from footman.context import Context, use_context
+
+    with use_context(Context()), pytest.raises(ValueError, match=r"needs a process"):
+        run(lambda: 0, timeout=5)
+
+
+def test_a_timed_out_call_is_still_a_step_unless_it_says_otherwise():
+    from footman.context import Context, use_context
+
+    ctx = Context()
+    with use_context(ctx):
+        run(_sleeper(30), timeout=0.5, nofail=True)
+    assert len(ctx.steps) == 1  # it happened and it failed; the receipt says so
+
+    quiet_ctx = Context()
+    with use_context(quiet_ctx):
+        run(_sleeper(30), timeout=0.5, nofail=True, step=False)
+    assert quiet_ctx.steps == []  # step governs reporting, never behaviour

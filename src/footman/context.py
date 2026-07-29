@@ -60,6 +60,10 @@ class Result(int):
     handed the tool, which may spell an option `--flag=value` where
     `command` shows `--flag value`. What `--verbose` prints. Equal to
     `command` when there is nothing to normalise."""
+    timed_out: bool
+    """Whether `timeout=` expired and footman killed the tree. The code is
+    124 — the shell convention — and `stdout`/`stderr` hold whatever the
+    command managed to say first, which on a hang is the only clue there is."""
 
     def __new__(
         cls,
@@ -70,8 +74,10 @@ class Result(int):
         stderr: str = "",
         duration: float = 0.0,
         raw: str = "",
+        timed_out: bool = False,
     ) -> Result:
         self = super().__new__(cls, code)
+        self.timed_out = timed_out
         self.command = command
         self.stdout = stdout
         self.stderr = stderr
@@ -470,6 +476,21 @@ class RunFailed(Exception):
     def __init__(self, result: Result) -> None:
         self.result = result
         super().__init__(f"`{result.command}` exited with code {result.code}")
+
+
+class RunTimeout(RunFailed):
+    """A `run(timeout=…)` expired and the process tree was killed.
+
+    A `RunFailed`, so every `except RunFailed` keeps catching it; catch this
+    to tell a hang from an ordinary non-zero exit — the distinction a version
+    or help probe branches on."""
+
+    def __init__(self, result: Result, timeout: float) -> None:
+        self.result = result
+        self.timeout = timeout
+        Exception.__init__(
+            self, f"`{result.command}` timed out after {timeout:g}s and was killed"
+        )
 
 
 class Failed(Exception):
@@ -1206,7 +1227,15 @@ def reset_abort() -> None:
     _abort_full.clear()
 
 
-def terminate_live_children(grace: float = 2.0, *, failfast_only: bool = False) -> None:
+# How long a terminated child gets to exit before the kill is forced —
+# shared by fail-fast and by a timeout, so "ask, then insist" means the
+# same interval whichever one asked.
+_KILL_GRACE = 2.0
+
+
+def terminate_live_children(
+    grace: float = _KILL_GRACE, *, failfast_only: bool = False
+) -> None:
     """Terminate still-running spawned subprocess *trees* — fail-fast's teeth.
 
     With *failfast_only* (a per-node fail-fast failure) only fail-fast children
@@ -1253,7 +1282,8 @@ def _run_subprocess(
     killable: bool = True,
     isolate: bool = True,
     keep_going: bool = False,
-) -> tuple[int, str, str]:
+    timeout: float | None = None,
+) -> tuple[int, str, str, bool]:
     # Dev tools (pytest, ruff, git, uv) emit UTF-8 regardless of the OS code
     # page, so decode as UTF-8 by default rather than the locale encoding
     # (cp1252 on Windows would mojibake the capture). `encoding=None` restores
@@ -1293,14 +1323,31 @@ def _run_subprocess(
     # truncated. It runs to completion; the run waits for it.
     if killable:
         _register_child(proc, keep_going)
+    timed_out = False
     try:
-        out, err = proc.communicate()
+        try:
+            out, err = proc.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            # The whole tree, not just the child: a hung tool's own workers
+            # would otherwise outlive the call that bounded it. Same escalation
+            # fail-fast uses — ask, then insist — and `atomic` does not spare
+            # it, because a timeout is this call's own declared bound rather
+            # than a sibling's failure reaching across.
+            timed_out = True
+            _kill_tree(proc, force=False)
+            try:
+                out, err = proc.communicate(timeout=_KILL_GRACE)
+            except subprocess.TimeoutExpired:
+                _kill_tree(proc, force=True)
+                out, err = proc.communicate()
     finally:
         if killable:
             _forget_child(proc)
     if not capture:
-        return proc.returncode, "", ""
-    return proc.returncode, out or "", err or ""
+        return proc.returncode, "", "", timed_out
+    # Whatever it managed to say before the kill: on a hang that partial
+    # output is usually the only diagnostic there is.
+    return proc.returncode, out or "", err or "", timed_out
 
 
 def _dim(text: str, color: bool) -> str:
@@ -1632,6 +1679,7 @@ def run(
     nofail: bool = False,
     step: bool = True,
     capture: bool = True,
+    timeout: float | None = None,
     title: str | None = None,
     env: dict[str, str] | None = None,
     cwd: str | Path | None = None,
@@ -1747,9 +1795,21 @@ def run(
 
     start = time.perf_counter()
     if callable(cmd):
+        if timeout is not None:
+            # A Python callable cannot be interrupted safely — there is no
+            # process to signal and no safe way to unwind another thread — so
+            # a bound footman cannot honour is refused rather than ignored.
+            # The tools bridge demotes an in-process *tool* to its subprocess
+            # twin instead, exactly as it does for a foreign cwd.
+            raise ValueError(
+                "run(timeout=…) needs a process to bound, and this call runs "
+                "in-process. Spawn it (a list/str command, or "
+                ".opts(in_process=False) on a tool), or drop the timeout."
+            )
         code, out_s, err_s = _run_callable(
             cmd, args, capture=capture, env=env, cwd=_target_cwd(ctx, cwd, rel)
         )
+        timed_out = False
     else:
         argv: list[str] | str
         shell_kind = ""
@@ -1796,12 +1856,13 @@ def run(
         # `unmanaged` spawns with cwd=None (inherit the live process cwd);
         # a per-call cwd=/rel= override wins — see `_target_cwd`.
         cwd_path = _target_cwd(ctx, cwd, rel)
-        code, out_s, err_s = _run_subprocess(
+        code, out_s, err_s, timed_out = _run_subprocess(
             argv,
             run_env,
             cwd_path,
             capture,
             encoding,
+            timeout=timeout,
             killable=not ctx.atomic,
             # An interactive task owns the real terminal: keep its child in
             # footman's group so it keeps its controlling tty (and its Ctrl-C).
@@ -1811,8 +1872,20 @@ def run(
             keep_going=ctx.keep_going,
         )
     duration = time.perf_counter() - start
+    if timed_out:
+        # 124 is the shell convention for "killed by a timeout", so a code
+        # travelling out through --json or a branded CLI reads as the thing it
+        # is rather than a sentinel of footman's own invention. A Result *is*
+        # its exit code, so this is chosen here, not assigned afterwards.
+        code = 124
     result = Result(
-        code, command=label, stdout=out_s, stderr=err_s, duration=duration, raw=raw
+        code,
+        command=label,
+        stdout=out_s,
+        stderr=err_s,
+        duration=duration,
+        raw=raw,
+        timed_out=timed_out,
     )
     if step:
         ctx.steps.append(result)  # what --json, the report and recording() read
@@ -1829,6 +1902,8 @@ def run(
         out.flush()
 
     if code != 0 and not nofail:
+        if result.timed_out:
+            raise RunTimeout(result, timeout or 0.0)  # only set when one was given
         raise RunFailed(result)
     return result
 
