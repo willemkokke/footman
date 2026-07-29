@@ -30,6 +30,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from footman import _toolhelp
 from footman._toolspec import ToolSpec
 
 _SGR = re.compile("\x1b\\[")  # a CSI escape — how "it emitted colour" is seen
@@ -188,8 +189,14 @@ def _capture(argv: list[str], cwd: Path, env_add: dict[str, str]) -> str:
 
     A real `TERM` is set when the ambient one is empty or `dumb` — many tools
     (mypy, …) refuse colour without one even under `FORCE_COLOR`, and the probe
-    must judge them as they behave from a genuine terminal, not a bare CI env."""
+    must judge them as they behave from a genuine terminal, not a bare CI env.
+
+    Told not to phone home for a reason of its own: gh's update notice is
+    itself coloured, so a tool left free to fetch it can hand the probe
+    someone else's escape sequences and be recorded as colouring output it
+    never wrote."""
     env = {k: v for k, v in os.environ.items() if k not in _COLOR_VARS}
+    env.update(_toolhelp.QUIET)
     if env.get("TERM", "") in ("", "dumb"):
         env["TERM"] = "xterm-256color"
     env.update(env_add)

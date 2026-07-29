@@ -18,7 +18,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from footman import _drivers, _stubgen, _toolhelp, _toolspec
+from footman import _drivers, _globals, _stubgen, _toolhelp, _toolspec
 from footman._toolspec import Option, ToolSpec, Verb
 
 CLAP = """\
@@ -138,22 +138,34 @@ def driver(key: str) -> _drivers.Driver:
 # --- reading each family --------------------------------------------------
 
 
-def test_reads_drop_the_callers_interpreter(monkeypatch):
-    """`uv run` exports PYTHONHOME for the environment it launched, and a
-    console script from any *other* Python then loads that stdlib instead of
-    its own and dies before it can describe itself. The walk reads period
-    venvs by design, so every release on a different minor than the runner
-    read as a hole — 107 of them on Windows, every tool whose launcher is a
-    console script rather than a native binary."""
+def test_reads_inherit_a_task_env_without_the_interpreter(monkeypatch):
+    """A read gets what any task gets — which never includes the caller's
+    interpreter.
+
+    `uv run` on Windows exports PYTHONHOME for the environment it launched,
+    and a console script from any *other* Python then loads that stdlib
+    instead of its own and dies before it can describe itself. The walk reads
+    period venvs by design, so every release on a different minor than the
+    runner read as a hole — 107 of them, every tool whose launcher was a
+    console script rather than a native binary.
+
+    Dropping it is not a rule about reads, though, which is why this asserts
+    on the same `base_env()` every task starts from. PYTHONPATH *is* carried:
+    a read is no more entitled to second-guess a deliberate `PYTHONPATH=src`
+    than any other spawn.
+    """
     monkeypatch.setenv("PYTHONHOME", "/somewhere/else")
-    monkeypatch.setenv("PYTHONPATH", "/also/wrong")
+    monkeypatch.setenv("PYTHONEXECUTABLE", "/somewhere/else/python")
+    monkeypatch.setenv("PYTHONPATH", "/deliberate")
     monkeypatch.setenv("KEEP_ME", "yes")
-    env = _toolhelp.read_env(COLUMNS="200")
+
+    env = {**_globals.base_env(), **_toolhelp.QUIET}
+
     assert "PYTHONHOME" not in env
-    assert "PYTHONPATH" not in env
-    assert env["KEEP_ME"] == "yes"  # only the interpreter vars go
-    assert env["COLUMNS"] == "200"
-    assert "PYTHONHOME" not in _toolhelp._wide_env()
+    assert "PYTHONEXECUTABLE" not in env
+    assert env["PYTHONPATH"] == "/deliberate"
+    assert env["KEEP_ME"] == "yes"
+    assert env["GH_NO_UPDATE_NOTIFIER"] == "1"  # no update check mid-read
 
 
 def test_reads_spawn_off_the_callers_console():

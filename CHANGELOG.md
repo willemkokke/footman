@@ -9,6 +9,22 @@ versions may include breaking changes.
 
 ### Added
 
+- **A task never inherits `PYTHONHOME` or `PYTHONEXECUTABLE`.** On Windows
+  `uv run` exports `PYTHONHOME` pointing at the environment it launched —
+  footman's own — and every child inherits it, so a console script belonging
+  to any *other* Python loads that stdlib instead of its own and dies during
+  start-up (`Could not import runpy._run_module_as_main`). One tool walk read
+  107 tools as holes that way: every one whose launcher was a console script,
+  while native binaries read clean. Both variables are now dropped from the
+  environment a task *inherits*, so nothing footman spawns carries the
+  caller's interpreter into a tool that has its own.
+
+  Dropped from the inherited copy rather than at spawn, so a task that sets
+  `PYTHONHOME` deliberately — through `os.environ`, `ctx.env` or
+  `run(env=…)` — still hands over exactly what it asked for. `PYTHONPATH` is
+  untouched: people export it on purpose and it is harmless when merely
+  present.
+
 - **A captured child gets no console window on Windows.** Windows Terminal
   hands each spawn a visible window, and a tool that interrogates the
   terminal at start-up hangs against it — so whether a read hung depended on

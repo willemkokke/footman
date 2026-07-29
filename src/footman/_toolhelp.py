@@ -912,7 +912,16 @@ def run_help(
             step=False,
             timeout=timeout,
             nofail=True,
-            env=_wide_env(),
+            # A wide, dumb, colourless terminal: every family honours one
+            # of these, and a narrow wrap costs nothing but re-joined prose
+            # while a wide one keeps `[default: …]` on the line it belongs to.
+            env={
+                **os.environ,
+                **QUIET,
+                "COLUMNS": "200",
+                "TERM": "dumb",
+                "NO_COLOR": "1",
+            },
         )
     except (OSError, subprocess.SubprocessError):
         return ""
@@ -993,21 +1002,23 @@ def _run_man(argv: list[str], timeout: float) -> str:
         rest = [part for part in argv[1:] if part != tool]
         return _render_page(tree, "-".join([tool, *rest]), timeout)
 
-    env = read_env(
-        GIT_PAGER="cat",
-        PAGER="cat",
-        MANPAGER="cat",
-        MAN_KEEP_FORMATTING="",
-        COLUMNS="200",
+    env = {
+        **os.environ,
+        **QUIET,
+        "GIT_PAGER": "cat",
+        "PAGER": "cat",
+        "MANPAGER": "cat",
+        "MAN_KEEP_FORMATTING": "",
+        "COLUMNS": "200",
         # `git help` honours `help.format`, and on Windows it defaults to
         # html — which *opens a browser tab per verb* instead of printing
         # anything. Pin the format to man: a POSIX box reads the same text
         # it always did, and a box with no man viewer fails quietly into
         # the empty-text fallback rather than launching twenty tabs.
-        GIT_CONFIG_COUNT="1",
-        GIT_CONFIG_KEY_0="help.format",
-        GIT_CONFIG_VALUE_0="man",
-    )
+        "GIT_CONFIG_COUNT": "1",
+        "GIT_CONFIG_KEY_0": "help.format",
+        "GIT_CONFIG_VALUE_0": "man",
+    }
     try:
         done = _run(
             [argv[0], "help", *argv[1:]],
@@ -1047,17 +1058,6 @@ def _render_page(tree: str, page: str, timeout: float) -> str:
     return _OVERSTRIKE.sub("", done.stdout or "")
 
 
-# The caller's interpreter is never the read tool's interpreter. `uv run`
-# exports PYTHONHOME pointing at the environment it launched — footman's own
-# — and a console script from any *other* Python then loads that stdlib
-# instead of its own and dies before it can describe itself ("Could not
-# import runpy._run_module_as_main"). A walk reads period venvs by design, so
-# every release on a different minor than the runner read as a hole: 107 of
-# them on Windows, every tool whose launcher is a console script rather than
-# a native binary. PYTHONPATH rides along for the same reason.
-_HOST_INTERPRETER = ("PYTHONHOME", "PYTHONPATH", "PYTHONEXECUTABLE")
-
-
 QUIET = {"GH_NO_UPDATE_NOTIFIER": "1"}
 """Tools told not to phone home while being read.
 
@@ -1068,25 +1068,6 @@ per read and a chance per read for the notice to land in the surface.
 
 Reading a tool must never depend on, or be delayed by, the network.
 """
-
-
-def read_env(**extra: str) -> dict[str, str]:
-    """The environment to read another tool in: ours, minus our interpreter."""
-    env = {k: v for k, v in os.environ.items() if k not in _HOST_INTERPRETER}
-    env.update(QUIET)
-    env.update(extra)
-    return env
-
-
-def _wide_env() -> dict[str, str]:
-    """A wide terminal, so help text wraps as little as possible.
-
-    Every family honours one of these; a narrow wrap costs nothing but
-    re-joined prose, and a wide one keeps `[default: …]` on the line it
-    belongs to.
-    """
-
-    return read_env(COLUMNS="200", TERM="dumb", NO_COLOR="1")
 
 
 def _is_the_root_again(text: str, root: str) -> bool:

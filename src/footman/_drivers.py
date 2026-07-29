@@ -503,9 +503,7 @@ def _read_version(name: str) -> tuple[str, str]:
     binary = _resolve(name)
     if binary is None:
         return "", "not on PATH"
-    # A version read must never touch the network. `read_env` carries the
-    # variables that say so — see `_toolhelp.QUIET`, which every read shares
-    # now rather than this one alone.
+    # A version read must never touch the network — see `_toolhelp.QUIET`.
     #
     # Through `run()`: `step=False` keeps a probe out of the run's story,
     # `timeout=` kills the tree rather than leaving a hung tool's workers
@@ -520,7 +518,7 @@ def _read_version(name: str) -> tuple[str, str]:
             step=False,
             timeout=30,
             nofail=True,
-            env=_toolhelp.read_env(),
+            env={**os.environ, **_toolhelp.QUIET},
         )
     except (OSError, subprocess.SubprocessError) as exc:
         return "", f"spawn failed: {type(exc).__name__}: {exc}"

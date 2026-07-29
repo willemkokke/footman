@@ -56,6 +56,33 @@ def snapshot_env() -> dict[str, str]:
     return dict(_snapshot)
 
 
+# Never inherited: the caller's interpreter is never a spawned tool's
+# interpreter. On Windows `uv run` exports PYTHONHOME pointing at the
+# environment it launched — footman's own — and every child inherits it, so a
+# console script belonging to any *other* Python loads that stdlib instead of
+# its own and dies before it can say anything ("Could not import
+# runpy._run_module_as_main"). Measured: 107 tools read as holes in one walk,
+# every one whose launcher was a console script rather than a native binary.
+# Confirmed on Windows under uv 0.11.1 and 0.11.31; on macOS and Linux the
+# variable is simply absent, so dropping it costs those platforms nothing.
+#
+# Dropped from the *inherited* copy, not at spawn: a task that deliberately
+# sets PYTHONHOME — or hands one to `run(env=…)` — still gets exactly what it
+# asked for. Inheritance is the thing nobody chose.
+#
+# PYTHONPATH is deliberately NOT here. People export it on purpose
+# (`PYTHONPATH=src`) meaning it for what their tasks run, it is harmless when
+# merely present (a directory that isn't on it changes nothing), and footman
+# cannot tell a deliberate one from an inherited one. The tool walk strips it
+# separately, where reading other-era venvs makes it genuinely dangerous.
+_NEVER_INHERITED = frozenset({"PYTHONHOME", "PYTHONEXECUTABLE"})
+
+
+def _inheritable(env: dict[str, str]) -> dict[str, str]:
+    """*env* minus the variables that describe our own interpreter."""
+    return {k: v for k, v in env.items() if _norm(k) not in _NEVER_INHERITED}
+
+
 def base_env() -> dict[str, str]:
     """The environment a fresh task starts from — a real dict, never a diff.
 
@@ -63,12 +90,14 @@ def base_env() -> dict[str, str]:
     from the same base whatever a sibling has done to its own. Outside one it
     is the live process environment, read through the *saved* method so an
     installed router cannot answer about some other task's view.
+
+    Either way it arrives without `_NEVER_INHERITED`.
     """
     if _installs:
-        return dict(_snapshot)
+        return _inheritable(_snapshot)
     if "copy" in _environ_saved:  # router installed but not for this read
-        return dict(_environ_saved["copy"](os.environ))
-    return dict(os.environ)
+        return _inheritable(_environ_saved["copy"](os.environ))
+    return _inheritable(dict(os.environ))
 
 
 def _norm(key: str) -> str:
