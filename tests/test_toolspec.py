@@ -1147,6 +1147,66 @@ def test_a_tool_with_plugins_is_read_under_the_home_they_were_fetched_into(
     assert seen["given"] == tmp_path / "home"
 
 
+def test_the_walk_reads_the_home_it_made_not_the_one_on_path(monkeypatch, tmp_path):
+    """The bug a three-platform fold found.
+
+    `_plugin_home` resolved the binary with `shutil.which` and looked
+    beside it — but `which` reads `os.environ`, while the walk's `PATH`
+    overlay goes to `ctx.env`. So it never saw the release's own directory
+    and settled on the provisioned prefix, which has a home of its own
+    holding the *latest* plugins: ten docker releases read with one compose
+    between them, and the five that recorded it recorded the same surface
+    five times.
+
+    A caller that knows where it put things hands the home over.
+    """
+    from footman.tasks import tools as task_module
+
+    # What a lookup would find: the prefix, plugins and all.
+    decoy = tmp_path / "prefix"
+    (decoy / "bin").mkdir(parents=True)
+    (decoy / "bin" / "docker").write_text("#!/bin/sh\n")
+    (decoy / "home" / ".docker" / "cli-plugins").mkdir(parents=True)
+    monkeypatch.setattr(
+        task_module.shutil, "which", lambda _name: str(decoy / "bin" / "docker")
+    )
+    # What this observation actually fetched.
+    mine = tmp_path / "release" / "home"
+    (mine / ".docker" / "cli-plugins").mkdir(parents=True)
+
+    seen = {}
+    monkeypatch.setattr(
+        task_module._drivers,
+        "extract",
+        lambda driver, home=None: (
+            seen.update(env=os.environ.get("HOME"), given=home) or ToolSpec(name="d")
+        ),
+    )
+    driver = task_module._drivers.find("docker")
+    assert driver is not None
+    task_module._extract(driver, home=mine)
+    assert seen["given"] == mine
+    assert seen["env"] == str(mine)
+    assert str(decoy) not in str(seen["given"])
+
+
+def test_the_fetched_home_is_the_one_beside_what_was_installed(tmp_path):
+    """And nothing is claimed when the fetch made no home — a tool with no
+    plugins, or a tier that places bare binaries."""
+    from footman.tasks import tools as task_module
+
+    placed = tmp_path / "release" / "bin"
+    placed.mkdir(parents=True)
+    docker = task_module._drivers.find("docker")
+    ruff = task_module._drivers.find("ruff")
+    assert docker is not None and ruff is not None
+
+    assert task_module._fetched_home(docker, placed) is None  # not made yet
+    (tmp_path / "release" / "home").mkdir()
+    assert task_module._fetched_home(docker, placed) == tmp_path / "release" / "home"
+    assert task_module._fetched_home(ruff, placed) is None  # no plugins to hold
+
+
 def test_a_tool_with_no_plugin_home_is_read_exactly_as_before(monkeypatch, tmp_path):
     """The host's own docker, or a prefix from before this existed."""
     from footman.tasks import tools as task_module

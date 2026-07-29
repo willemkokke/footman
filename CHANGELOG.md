@@ -26,6 +26,19 @@ versions may include breaking changes.
   differs from a stub header, and why a build tail ends a comparison instead
   of becoming extra digits.
 
+### Fixed
+
+- **A walk reads the plugin home it made, not the one on `PATH`.** The
+  home was derived — resolve the binary, look beside it — and the
+  derivation found the wrong one: `shutil.which` reads `os.environ` while
+  the walk's `PATH` overlay goes to `ctx.env`, so the lookup never saw the
+  release's own directory and settled on the provisioned prefix, which
+  keeps a home of its own holding the *latest* plugins. Ten docker
+  releases were read with one compose between them, and the five that
+  recorded it recorded the same surface five times. A caller that knows
+  where it put things hands the home over now, so each release is read
+  with the plugins that shipped alongside it.
+
 ### Documentation
 
 - **`shell=True` on Windows is git-bash, and that eats backslashes.** The

@@ -106,25 +106,35 @@ def _on_path(prefix: str | Path) -> Iterator[None]:
         yield
 
 
-def _extract(driver: _drivers.Driver) -> _toolspec.ToolSpec:
+def _extract(driver: _drivers.Driver, home: Path | None = None) -> _toolspec.ToolSpec:
     """Read an installed tool, with its plugins as the fetch left them.
 
     A plugin is not on `PATH`: the host tool looks for it under the user's
-    home, which means the machine's own plugins answer for any release the
-    walk installs. `_toolfetch` puts the paired plugin in a throwaway home
-    beside the binaries, and this is where the tool is told to look there
-    instead — derived from the binary it resolves to, so nothing has to be
-    threaded through the five places a spec is read.
+    home, so the machine's own plugins answer for any release the walk
+    installs unless the tool is pointed somewhere else. *home* is where the
+    caller put this reading's plugins.
+
+    **A caller that knows the home passes it.** It used to be derived —
+    resolve the binary, look beside it — and the derivation found the wrong
+    one. `shutil.which` reads `os.environ`, while the walk's `PATH` overlay
+    goes to `ctx.env`, so the lookup never saw the release's own directory
+    and settled on the provisioned prefix, which has a home of its own
+    holding the *latest* plugins. Ten docker releases were read with one
+    compose between them, and the five that recorded it recorded the same
+    surface five times. Nothing failed; the readings were simply of
+    something else.
 
     The overlay is written here rather than in `_drivers.extract` because
     observations run in parallel: inside a run this routes through
     `ctx.env`, which is this task's own copy, while a bare `os.environ`
     write in the extractor would be every thread's.
 
-    A tool with no plugin, or a home that was never made — the host's own
-    docker, a prefix from before this existed — reads exactly as it did.
+    A reading with no home given falls back to the derivation, which is
+    right where it is used — `sync --prefix` reads the prefix's binary and
+    wants the prefix's plugins.
     """
-    home = _plugin_home(driver)
+    if home is None:
+        home = _plugin_home(driver)
     if home is None:
         return _drivers.extract(driver)
     with _overlay(HOME=str(home), USERPROFILE=str(home)):
@@ -135,7 +145,12 @@ def _extract(driver: _drivers.Driver) -> _toolspec.ToolSpec:
 
 
 def _plugin_home(driver: _drivers.Driver) -> Path | None:
-    """The throwaway home holding *driver*'s plugins, if one was fetched."""
+    """The plugin home beside whichever binary this process resolves.
+
+    For a prefix — `sync --prefix`, `audit --prefix` — that is the right
+    answer and the only one available. A walk must not use it: see
+    `_extract`.
+    """
     from footman import _toolfetch
 
     if not driver.plugins:
@@ -146,6 +161,16 @@ def _plugin_home(driver: _drivers.Driver) -> Path | None:
     home = _toolfetch.home_beside(Path(binary).parent)
     wanted = {plugin.path for plugin in driver.plugins}
     return home if any((home / path).is_dir() for path in wanted) else None
+
+
+def _fetched_home(driver: _drivers.Driver, placed: Path) -> Path | None:
+    """The home this observation's own plugins were fetched into."""
+    from footman import _toolfetch
+
+    if not driver.plugins:
+        return None
+    home = _toolfetch.home_beside(placed)
+    return home if home.is_dir() else None
 
 
 @contextmanager
@@ -1684,7 +1709,8 @@ def observe(
         return None
     try:
         with _reading(driver, placed):
-            spec = _extract(driver)
+            # The home this walk made, never the one a lookup would find.
+            spec = _extract(driver, home=_fetched_home(driver, placed))
     finally:
         _discard(placed)
     if not _describes_itself(spec):
