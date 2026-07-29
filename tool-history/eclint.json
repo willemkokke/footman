@@ -6,7 +6,9 @@
   "version": "0.6.0-wk.5",
   "date": "2026-07-29",
   "platforms": [
-   "Linux"
+   "Linux",
+   "Windows",
+   "macOS"
   ],
   "extractor": 2,
   "surface": {
@@ -137,21 +139,27 @@
   "0.6.0-wk.4": {
    "date": "2026-07-07",
    "platforms": [
-    "Linux"
+    "Linux",
+    "Windows",
+    "macOS"
    ],
    "extractor": 2
   },
   "0.6.0-wk.3": {
    "date": "2026-03-18",
    "platforms": [
-    "Linux"
+    "Linux",
+    "Windows",
+    "macOS"
    ],
    "extractor": 2
   },
   "0.5.2-wk.1": {
    "date": "2026-03-10",
    "platforms": [
-    "Linux"
+    "Linux",
+    "Windows",
+    "macOS"
    ],
    "extractor": 2,
    "drop": [

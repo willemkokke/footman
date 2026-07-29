@@ -9,6 +9,7 @@ versions may include breaking changes.
 
 ### Changed
 
+- **build 1.5.1** adds `--env-dir`, `--report` and `--sdist-extract-dir`. It also rewords 4 descriptions and restates its own description.
 - **A group's `default` is listed first.** It *is* the group — `fm db` runs
   it, and the group's own row is described by it — so a listing that showed
   it wherever it happened to be written put the headline act in the middle,

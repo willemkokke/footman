@@ -3,17 +3,18 @@
  "tool": "build",
  "observed_from": "1.2.1",
  "base": {
-  "version": "1.5.0",
-  "date": "2026-07-29",
+  "version": "1.5.1",
+  "date": "2026-07-09",
   "platforms": [
-   "Linux"
+   "Windows",
+   "macOS"
   ],
   "extractor": 2,
   "surface": {
-   "help": "",
+   "help": "[--sdist-extract-dir PATH] [--sdist] [--wheel] [--metadata] [--report PATH]",
    "verbs": {
     "": {
-     "help": "",
+     "help": "[--sdist-extract-dir PATH] [--sdist] [--wheel] [--metadata] [--report PATH]",
      "wraps": false,
      "positional": "any",
      "lead": "",
@@ -49,6 +50,16 @@
        "default": null,
        "choices": []
       },
+      "env_dir": {
+       "flags": [
+        "--env-dir"
+       ],
+       "negation": "",
+       "help": "create the isolated build environment at this location instead of a temporary directory",
+       "type": "str",
+       "default": null,
+       "choices": []
+      },
       "installer": {
        "flags": [
         "--installer"
@@ -64,20 +75,19 @@
         "--metadata"
        ],
        "negation": "",
-       "help": "print out a wheel's metadata in JSON format",
+       "help": "print out a wheel's metadata in JSON format, building it first unless the source argument is already a .whl",
        "type": "bool",
        "default": null,
        "choices": []
       },
       "no_isolation": {
        "flags": [
-        "--dependency-constraints-txt",
-        "--skip-dependency-check",
-        "--no-isolation"
+        "--no-isolation",
+        "-n"
        ],
        "negation": "",
-       "help": "",
-       "type": "str",
+       "help": "disable building the project in an isolated virtual environment",
+       "type": "bool",
        "default": null,
        "choices": []
       },
@@ -87,7 +97,7 @@
         "-o"
        ],
        "negation": "",
-       "help": "output directory (defaults to {srcdir}/dist)",
+       "help": "output directory (defaults to {srcdir}\\dist)",
        "type": "str",
        "default": null,
        "choices": []
@@ -103,6 +113,16 @@
        "default": null,
        "choices": []
       },
+      "report": {
+       "flags": [
+        "--report"
+       ],
+       "negation": "",
+       "help": "write a machine-readable JSON report of the built artifacts (name, path, kind, size and SHA-256 hash) to this path",
+       "type": "str",
+       "default": null,
+       "choices": []
+      },
       "sdist": {
        "flags": [
         "--sdist",
@@ -111,6 +131,16 @@
        "negation": "",
        "help": "build a source distribution (disables the default behavior)",
        "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "sdist_extract_dir": {
+       "flags": [
+        "--sdist-extract-dir"
+       ],
+       "negation": "",
+       "help": "extract the intermediate sdist to PATH (created if missing and kept afterwards) instead of a random temporary directory; reusing it across rebuilds gives compiler caches such as ccache/sccache a stable source path",
+       "type": "str",
        "default": null,
        "choices": []
       },
@@ -153,38 +183,103 @@
   }
  },
  "deltas": {
+  "1.5.0": {
+   "date": "2026-07-29",
+   "platforms": [
+    "Linux",
+    "Windows",
+    "macOS"
+   ],
+   "extractor": 2,
+   "drop": [
+    "\tenv_dir",
+    "\treport",
+    "\tsdist_extract_dir"
+   ],
+   "revert": {
+    "\tmetadata": {
+     "flags": [
+      "--metadata"
+     ],
+     "negation": "",
+     "help": "print out a wheel's metadata in JSON format",
+     "type": "bool",
+     "default": null,
+     "choices": []
+    },
+    "\tno_isolation": {
+     "flags": [
+      "--dependency-constraints-txt",
+      "--skip-dependency-check",
+      "--no-isolation"
+     ],
+     "negation": "",
+     "help": "",
+     "type": "str",
+     "default": null,
+     "choices": []
+    },
+    "\toutdir": {
+     "flags": [
+      "--outdir",
+      "-o"
+     ],
+     "negation": "",
+     "help": "output directory (defaults to {srcdir}/dist)",
+     "type": "str",
+     "default": null,
+     "choices": []
+    }
+   },
+   "verbs": {
+    "": {
+     "help": ""
+    }
+   },
+   "help": "[--metadata] [--config-setting KEY[=VALUE] | --config-json JSON_STRING]"
+  },
   "1.4.4": {
    "date": "2026-04-22",
    "platforms": [
-    "Linux"
+    "Linux",
+    "Windows",
+    "macOS"
    ],
    "extractor": 2
   },
   "1.4.3": {
    "date": "2026-04-10",
    "platforms": [
-    "Linux"
+    "Linux",
+    "Windows",
+    "macOS"
    ],
    "extractor": 2
   },
   "1.4.2": {
    "date": "2026-03-25",
    "platforms": [
-    "Linux"
+    "Linux",
+    "Windows",
+    "macOS"
    ],
    "extractor": 2
   },
   "1.4.1": {
    "date": "2026-03-24",
    "platforms": [
-    "Linux"
+    "Linux",
+    "Windows",
+    "macOS"
    ],
    "extractor": 2
   },
   "1.4.0": {
    "date": "2026-01-08",
    "platforms": [
-    "Linux"
+    "Linux",
+    "Windows",
+    "macOS"
    ],
    "extractor": 2,
    "drop": [
@@ -207,7 +302,9 @@
   "1.3.0": {
    "date": "2025-08-01",
    "platforms": [
-    "Linux"
+    "Linux",
+    "Windows",
+    "macOS"
    ],
    "extractor": 2,
    "drop": [
@@ -260,7 +357,9 @@
   "1.2.2.post1": {
    "date": "2024-10-06",
    "platforms": [
-    "Linux"
+    "Linux",
+    "Windows",
+    "macOS"
    ],
    "extractor": 2,
    "drop": [
@@ -276,14 +375,18 @@
   "1.2.2": {
    "date": "2024-09-06",
    "platforms": [
-    "Linux"
+    "Linux",
+    "Windows",
+    "macOS"
    ],
    "extractor": 2
   },
   "1.2.1": {
    "date": "2024-03-28",
    "platforms": [
-    "Linux"
+    "Linux",
+    "Windows",
+    "macOS"
    ],
    "extractor": 2
   }

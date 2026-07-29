@@ -6,7 +6,9 @@
   "version": "1.6.1",
   "date": "2026-07-29",
   "platforms": [
-   "Linux"
+   "Linux",
+   "Windows",
+   "macOS"
   ],
   "extractor": 2,
   "surface": {
@@ -488,7 +490,9 @@
   "1.6.0": {
    "date": "2024-04-20",
    "platforms": [
-    "Linux"
+    "Linux",
+    "Windows",
+    "macOS"
    ],
    "extractor": 2,
    "drop": [
@@ -960,7 +964,9 @@
   "1.5.3": {
    "date": "2023-09-18",
    "platforms": [
-    "Linux"
+    "Linux",
+    "Windows",
+    "macOS"
    ],
    "extractor": 2,
    "drop": [
@@ -984,28 +990,36 @@
   "1.5.2": {
    "date": "2023-08-02",
    "platforms": [
-    "Linux"
+    "Linux",
+    "Windows",
+    "macOS"
    ],
    "extractor": 2
   },
   "1.5.1": {
    "date": "2023-07-27",
    "platforms": [
-    "Linux"
+    "Linux",
+    "Windows",
+    "macOS"
    ],
    "extractor": 2
   },
   "1.5.0": {
    "date": "2023-07-26",
    "platforms": [
-    "Linux"
+    "Linux",
+    "Windows",
+    "macOS"
    ],
    "extractor": 2
   },
   "1.4.3": {
    "date": "2023-05-02",
    "platforms": [
-    "Linux"
+    "Linux",
+    "Windows",
+    "macOS"
    ],
    "extractor": 2,
    "drop": [
@@ -1075,21 +1089,27 @@
   "1.4.2": {
    "date": "2022-11-01",
    "platforms": [
-    "Linux"
+    "Linux",
+    "Windows",
+    "macOS"
    ],
    "extractor": 2
   },
   "1.4.1": {
    "date": "2022-10-15",
    "platforms": [
-    "Linux"
+    "Linux",
+    "Windows",
+    "macOS"
    ],
    "extractor": 2
   },
   "1.4.0": {
    "date": "2022-09-27",
    "platforms": [
-    "Linux"
+    "Linux",
+    "Windows",
+    "macOS"
    ],
    "extractor": 2
   }

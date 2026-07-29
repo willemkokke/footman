@@ -6,7 +6,8 @@
   "version": "2.55.0",
   "date": "2026-07-29",
   "platforms": [
-   "Linux"
+   "Linux",
+   "macOS"
   ],
   "extractor": 2,
   "surface": {
@@ -7160,7 +7161,8 @@
   "2.54.0": {
    "date": "2026-04-20",
    "platforms": [
-    "Linux"
+    "Linux",
+    "macOS"
    ],
    "extractor": 2,
    "drop": [
@@ -7258,7 +7260,8 @@
   "2.53.0": {
    "date": "2026-02-02",
    "platforms": [
-    "Linux"
+    "Linux",
+    "macOS"
    ],
    "extractor": 2,
    "drop": [
@@ -7359,7 +7362,8 @@
   "2.52.0": {
    "date": "2025-11-17",
    "platforms": [
-    "Linux"
+    "Linux",
+    "macOS"
    ],
    "extractor": 2,
    "revert": {
@@ -7505,7 +7509,8 @@
   "2.51.2": {
    "date": "2025-10-27",
    "platforms": [
-    "Linux"
+    "Linux",
+    "macOS"
    ],
    "extractor": 2,
    "drop": [
@@ -7713,21 +7718,24 @@
   "2.51.1": {
    "date": "2025-10-15",
    "platforms": [
-    "Linux"
+    "Linux",
+    "macOS"
    ],
    "extractor": 2
   },
   "2.51.0": {
    "date": "2025-08-18",
    "platforms": [
-    "Linux"
+    "Linux",
+    "macOS"
    ],
    "extractor": 2
   },
   "2.50.1": {
    "date": "2025-07-08",
    "platforms": [
-    "Linux"
+    "Linux",
+    "macOS"
    ],
    "extractor": 2,
    "drop": [
@@ -7886,14 +7894,16 @@
   "2.50.0": {
    "date": "2025-06-16",
    "platforms": [
-    "Linux"
+    "Linux",
+    "macOS"
    ],
    "extractor": 2
   },
   "2.49.1": {
    "date": "2025-07-08",
    "platforms": [
-    "Linux"
+    "Linux",
+    "macOS"
    ],
    "extractor": 2,
    "add": {
