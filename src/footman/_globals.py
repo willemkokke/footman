@@ -543,6 +543,43 @@ class _ArgvProxy(list):
         ov = self._ov()
         return list(ov) if ov is not None else list(self)
 
+    # In-place mutators. Unoverridden these fall through to `list`, which
+    # edits the proxy's own base storage — so the change vanishes from the
+    # caller (reads consult the override) *and* leaks into every call that
+    # has none. A legacy `main()` appending a default (`sys.argv += [...]`)
+    # is the realistic one; the rest are here so the set has no holes.
+    def __iadd__(self, other: Any) -> Any:
+        ov = self._ov()
+        if ov is None:
+            return super().__iadd__(other)
+        ov.extend(other)
+        return self
+
+    def __imul__(self, n: Any) -> Any:
+        ov = self._ov()
+        if ov is None:
+            return super().__imul__(n)
+        ov *= n
+        return self
+
+    def __mul__(self, n: Any) -> Any:
+        ov = self._ov()
+        return (ov * n) if ov is not None else list(self) * n
+
+    __rmul__ = __mul__
+
+    def __reversed__(self) -> Any:
+        ov = self._ov()
+        return reversed(ov) if ov is not None else super().__reversed__()
+
+    def sort(self, **kw: Any) -> None:
+        ov = self._ov()
+        ov.sort(**kw) if ov is not None else super().sort(**kw)
+
+    def reverse(self) -> None:
+        ov = self._ov()
+        ov.reverse() if ov is not None else super().reverse()
+
 
 def argv_override(args: list[str]) -> Any:
     """A context manager giving this thread its own `sys.argv` view for the
