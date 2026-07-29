@@ -87,6 +87,13 @@ versions may include breaking changes.
 
 ### Fixed
 
+- **The weekly refresh authenticates while provisioning, not only while
+  observing.** Provisioning reads release indexes too, and unauthenticated
+  that is 60 GitHub API calls an hour *per IP*, shared with every other
+  runner in the region. The first dispatch spent it before the macOS and
+  Windows legs reached bun: bun failed, and cspell and markdownlint were
+  skipped for want of it. The token was on the observe step alone.
+
 - **A walk reads the plugin home it made, not the one on `PATH`.** The
   home was derived — resolve the binary, look beside it — and the
   derivation found the wrong one: `shutil.which` reads `os.environ` while

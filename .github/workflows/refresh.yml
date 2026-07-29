@@ -45,6 +45,8 @@ jobs:
         # uv carries CPython's download index inside the binary, so a stale
         # uv reports a stale newest python — and the pre-pass would say
         # "nothing owed" about a release it cannot see. One tool, ~3s.
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: uv run fm tools.provision --only=uv
 
       - name: is there anything to read?
@@ -72,6 +74,13 @@ jobs:
         # a gather drives the tiers from `uv` and `bun` alone, installing
         # each release itself.
         if: steps.owed.outputs.work == 'true'
+        env:
+          # Provisioning reads release indexes too, and unauthenticated that
+          # is 60 calls an hour *per IP* — shared with every other runner in
+          # the region. The first dispatch spent it before macOS and Windows
+          # got to bun, which failed, and took cspell and markdownlint with
+          # it. The token was on the observe step alone.
+          GH_TOKEN: ${{ github.token }}
         run: uv run fm tools.provision
 
       - name: observe what this platform sees
