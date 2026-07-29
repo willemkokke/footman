@@ -75,11 +75,13 @@ jobs:
             echo "work=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: provision the rest of the tools
-        # Only once something is owed. Most weeks a current store stays
-        # current, and this is ~30 downloads per platform that nothing reads:
-        # a gather drives the tiers from `uv` and `bun` alone, installing
-        # each release itself.
+      - name: provision what a gather actually drives
+        # `uv` and `bun`, and nothing else. A gather installs each release
+        # itself; the provisioned binaries only drive the tiers — `uv` for
+        # the python and PyPI tiers, `bun` for the npm one. Fetching the
+        # other 26 was work nothing read, and 26 more chances for a dropped
+        # connection to cost a platform its observations. One did: a leg
+        # died on gh's zip, for a tool the gather never opens.
         if: steps.owed.outputs.work == 'true'
         env:
           # Provisioning reads release indexes too, and unauthenticated that
@@ -88,7 +90,7 @@ jobs:
           # got to bun, which failed, and took cspell and markdownlint with
           # it. The token was on the observe step alone.
           GH_TOKEN: ${{ github.token }}
-        run: uv run fm tools.provision --strict
+        run: uv run fm tools.provision --only=uv,bun --strict
 
       - name: observe what this platform sees
         if: steps.owed.outputs.work == 'true'

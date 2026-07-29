@@ -40,6 +40,7 @@ import re
 import shutil
 import subprocess
 import tarfile
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -132,7 +133,8 @@ def provision(
     """
     prefix = Path(prefix)
     bin_dir(prefix).mkdir(parents=True, exist_ok=True)
-    chosen = [d for d in drivers if not only or d.key == only]
+    wanted = {name.strip() for name in only.split(",") if name.strip()}
+    chosen = [d for d in drivers if not wanted or d.key in wanted]
     outcomes: list[Outcome] = []
     by_kind: dict[str, list[Driver]] = {}
     for driver in chosen:
@@ -565,15 +567,41 @@ def _download(url: str, prefix: Path) -> Path:
     if dest.exists() and dest.stat().st_size:
         return dest
     request = urllib.request.Request(url, headers={"User-Agent": "footman-provision"})
-    try:
-        with (
-            urllib.request.urlopen(request, timeout=120) as response,
-            open(dest, "wb") as out,
-        ):
-            shutil.copyfileobj(response, out)
-    except (urllib.error.URLError, OSError) as exc:
-        raise ProvisionError(f"{url}: {exc}") from exc
-    return dest
+    # Three tries, because a dropped connection says nothing about the asset.
+    # A refresh leg died on `Remote end closed connection without response`
+    # part-way through gh's zip: the release was there, the download was not
+    # finished. Retrying costs a second; not retrying cost a platform's
+    # observations.
+    for attempt in range(_TRIES):
+        try:
+            with (
+                urllib.request.urlopen(request, timeout=120) as response,
+                open(dest, "wb") as out,
+            ):
+                shutil.copyfileobj(response, out)
+            return dest
+        except (urllib.error.URLError, OSError) as exc:
+            dest.unlink(missing_ok=True)  # a part-written file is not a cache hit
+            if attempt + 1 == _TRIES or not _worth_retrying(exc):
+                raise ProvisionError(f"{url}: {exc}") from exc
+            time.sleep(_BACKOFF * (attempt + 1))
+    raise ProvisionError(f"{url}: unreachable")  # pragma: no cover - loop returns
+
+
+_TRIES = 3
+_BACKOFF = 1.0
+
+
+def _worth_retrying(exc: BaseException) -> bool:
+    """Whether this failure is about the connection rather than the asset.
+
+    A 404 is an answer — the asset is not there and asking again will not
+    change that. A dropped connection, a timeout, a 5xx or a 429 are the
+    network having a moment.
+    """
+    if isinstance(exc, urllib.error.HTTPError):
+        return exc.code in (408, 429) or 500 <= exc.code < 600
+    return True
 
 
 def _extract_binary(

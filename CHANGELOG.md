@@ -9,6 +9,12 @@ versions may include breaking changes.
 
 ### Added
 
+- **`fm tools.provision --only` takes a set.** `--only=uv,bun` is what a
+  gather actually drives: it installs each release itself, and the
+  provisioned binaries only run the tiers — `uv` for the python and PyPI
+  ones, `bun` for npm. The weekly refresh fetches those two and nothing
+  else.
+
 - **`fm tools.provision --strict` turns a failed tier into a failed run.**
   Without it the table names what did not arrive and the run still
   succeeds, which is right for a person deciding what to do next and wrong
@@ -93,6 +99,13 @@ versions may include breaking changes.
   lead with it, `--sort` included.
 
 ### Fixed
+
+- **A dropped download is retried.** `Remote end closed connection without
+  response` says nothing about the asset — the release was there, the
+  download was not finished — and it cost a refresh leg its whole
+  platform, for a tool the gather never opens. Three tries with a short
+  backoff, and only for failures about the connection: a 404 is an answer,
+  and asking again will not change it.
 
 - **The weekly refresh runs bash on every platform.** A `run:` block on a
   Windows runner is PowerShell by default, and the pre-pass — the gather

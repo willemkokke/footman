@@ -34,6 +34,67 @@ def _zip(path: Path, arcname: str, data: bytes) -> None:
 # --- tiers -------------------------------------------------------------------
 
 
+def test_only_takes_a_set_of_tools(tmp_path):
+    """A gather drives the tiers from `uv` and `bun` and installs each
+    release itself, so those two are all a refresh needs in its prefix.
+    Fetching the other 26 was work nothing read — and 26 more chances for a
+    dropped connection to cost a platform its observations."""
+    drivers = (
+        Driver("ruff"),
+        Driver("uv", provision=Provision(kind="system")),
+        Driver("bun", provision=Provision(kind="system")),
+    )
+    outcomes = _provision.provision(drivers, tmp_path / "p", only="uv,bun")
+    assert sorted(o.key for o in outcomes) == ["bun", "uv"]
+    # and one name still means one tool
+    assert [o.key for o in _provision.provision(drivers, tmp_path / "p", only="ruff")]
+
+
+def test_a_dropped_download_is_retried(tmp_path, monkeypatch):
+    """A refresh leg died on `Remote end closed connection without response`
+    part-way through gh's zip. The release was there; the download was not
+    finished. A 404 is an answer and is not retried — a dropped connection
+    says nothing about the asset."""
+    import email.message
+    import urllib.error
+
+    calls = []
+
+    class Fake:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def read(self, *a):
+            return b""
+
+    def flaky(request, timeout=0):
+        calls.append(1)
+        if len(calls) < 3:
+            raise urllib.error.URLError("Remote end closed connection")
+        return Fake()
+
+    monkeypatch.setattr(_provision.urllib.request, "urlopen", flaky)
+    monkeypatch.setattr(_provision.time, "sleep", lambda _s: None)
+    placed = _provision._download("http://x/gh.zip", tmp_path)
+    assert placed.exists() and len(calls) == 3
+
+    calls.clear()
+
+    def gone(request, timeout=0):
+        calls.append(1)
+        raise urllib.error.HTTPError(
+            "http://x/gh.zip", 404, "Not Found", email.message.Message(), None
+        )
+
+    monkeypatch.setattr(_provision.urllib.request, "urlopen", gone)
+    with pytest.raises(_provision.ProvisionError, match="404"):
+        _provision._download("http://x/missing.zip", tmp_path)
+    assert len(calls) == 1  # an answer, not a hiccup
+
+
 def test_strict_turns_a_failed_tier_into_a_failed_run(tmp_path, monkeypatch):
     """`ok` for a prefix that is missing tools is right for a person and
     wrong for a job. A refresh run where bun hit a rate limit still said
