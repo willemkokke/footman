@@ -601,6 +601,25 @@ def extract(driver: Driver, home: Path | None = None) -> ToolSpec:
     )
 
 
+def _spellings_of(root: str) -> str:
+    """A pattern matching *root* however this platform spells it.
+
+    Windows separates with either slash, and a path that passed through
+    `%TEMP%` may carry an 8.3 short name (`WILLEM~1`) where the caller
+    holds the long one. Each segment is therefore matched as itself *or*
+    as a short name for itself: a leading run of the segment, then `~`,
+    then digits.
+    """
+    parts = []
+    for segment in re.split(r"[\\/]+", root):
+        if not segment:
+            parts.append("")
+            continue
+        stem = re.escape(segment[:6])
+        parts.append(f"(?:{re.escape(segment)}|{stem}~\\d+)")
+    return r"[\\/]+".join(parts)
+
+
 def _anonymous(spec: ToolSpec, *homes: Path) -> ToolSpec:
     """Replace every home directory in *homes* with `~` throughout *spec*.
 
@@ -640,12 +659,21 @@ def _anonymous(spec: ToolSpec, *homes: Path) -> ToolSpec:
     # Longest first: a throwaway home nested under the real one must be
     # replaced whole, not left as `~/…/home/.docker`.
     roots.sort(key=len, reverse=True)
+    # Matched by pattern, not by equality, because Windows has more than one
+    # spelling for the same directory. A gather set `HOME` to a path under
+    # `%TEMP%` and docker echoed it back as
+    # `C:\Users\WILLEM~1\AppData\Local\Temp\…` — the 8.3 short name, where
+    # the string handed to the scrub had the long one. `str.replace` saw two
+    # different paths, wrote neither, and a shipped stub carried a
+    # machine's directory again. Case is the same trap: Windows does not
+    # distinguish it and a comparison does.
+    matchers = [re.compile(_spellings_of(root), re.IGNORECASE) for root in roots]
 
     def scrub(text: str) -> str:
         if not isinstance(text, str):
             return text
-        for root in roots:
-            text = text.replace(root, "~")
+        for matcher in matchers:
+            text = matcher.sub("~", text)
         return text
 
     verbs = tuple(
