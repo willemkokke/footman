@@ -28,7 +28,9 @@ import tempfile
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
+from footman import _toolhelp
 from footman._toolspec import ToolSpec
 
 _SGR = re.compile("\x1b\\[")  # a CSI escape — how "it emitted colour" is seen
@@ -137,6 +139,14 @@ class Verdict:
     flag: ColourFlag | None = None  # the switch, when a direction needs one
 
 
+def _fm_run(*args: Any, **kwargs: Any) -> Any:
+    """`context.run`, imported at call time (the probe is reachable from the
+    stub tooling, which has no interest in the run machinery)."""
+    from footman.context import run
+
+    return run(*args, **kwargs)
+
+
 @contextlib.contextmanager
 def _fixture(binary: str, trigger: Trigger) -> Iterator[Path]:
     """A throwaway directory with the trigger's files (and a git repo if asked)."""
@@ -145,10 +155,12 @@ def _fixture(binary: str, trigger: Trigger) -> Iterator[Path]:
         for name, content in trigger.files.items():
             (cwd / name).write_text(content, encoding="utf-8")
         if trigger.git:
-            quiet = {"cwd": cwd, "capture_output": True}
-            subprocess.run([binary, "init", "-q"], **quiet)
-            subprocess.run([binary, "add", "-A"], **quiet)
-            subprocess.run(
+            # Fixture setup, not the probe: unreported, and a bound so a
+            # wedged git cannot hang the whole colour walk.
+            quiet = {"cwd": cwd, "step": False, "nofail": True, "timeout": 60}
+            _fm_run([binary, "init", "-q"], **quiet)
+            _fm_run([binary, "add", "-A"], **quiet)
+            _fm_run(
                 [
                     binary,
                     "-c",
@@ -177,20 +189,24 @@ def _capture(argv: list[str], cwd: Path, env_add: dict[str, str]) -> str:
 
     A real `TERM` is set when the ambient one is empty or `dumb` — many tools
     (mypy, …) refuse colour without one even under `FORCE_COLOR`, and the probe
-    must judge them as they behave from a genuine terminal, not a bare CI env."""
+    must judge them as they behave from a genuine terminal, not a bare CI env.
+
+    Told not to phone home for a reason of its own: gh's update notice is
+    itself coloured, so a tool left free to fetch it can hand the probe
+    someone else's escape sequences and be recorded as colouring output it
+    never wrote."""
     env = {k: v for k, v in os.environ.items() if k not in _COLOR_VARS}
+    env.update(_toolhelp.QUIET)
     if env.get("TERM", "") in ("", "dumb"):
         env["TERM"] = "xterm-256color"
     env.update(env_add)
     try:
-        done = subprocess.run(
+        done = _fm_run(
             argv,
             cwd=cwd,
             env=env,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
+            step=False,  # the probe reads bytes; it is not the run's business
+            nofail=True,
             timeout=60,
         )
     except (OSError, subprocess.SubprocessError):

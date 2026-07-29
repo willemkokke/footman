@@ -147,9 +147,30 @@ any more:
   under the old overlay it could not
 - `CREATE_NO_WINDOW` (#220) — no longer needs saying per call
 
-**Not done deliberately.** All nine sites are tool-walk machinery, which
-another session is actively working in, and this is cleanup rather than a
-fix. Whoever owns that area should do it — `read_env()` retires with it.
+**Done 2026-07-29.** Twelve sites, not nine: `_drivers` (1), `_toolhelp` (3),
+`_toolfetch` (2), `_provision` (2), `_colorprobe` (4). No raw `subprocess.run`
+is left in any of the five. Each module reaches `run()` through a call-time
+import (`_fm_run`), because the probes are reachable from the stub tooling,
+which has no business importing the run machinery at module scope.
+
+The ordering above was load-bearing, and `_colorprobe._capture` is the proof:
+it builds its environment as *`os.environ` minus the colour variables* and
+hands it over. Converted before the env change, the additive overlay would
+have merged those very variables straight back in and the probe would have
+read every tool as already-coloured — a silent wrong answer, not a failure.
+Verified after the fact by probing git live through `run()`: `flag`/`env`
+with both `color.ui` spellings and `pre_verb`, identical to the verdict
+baked in `_colordata`.
+
+**`read_env()` does not retire — the premise was wrong.** It was recorded
+above as "snapshot minus three, hand-rolled", i.e. a workaround for the
+overlay's inability to subtract. It is not: it strips `PYTHONHOME`,
+`PYTHONPATH` and `PYTHONEXECUTABLE` because handing footman's interpreter to
+a *console-script* tool makes it import the wrong stdlib — the failure that
+read 107 tools as holes on Windows. That subtraction is permanent, it is
+needed however the environment is modelled, and the new `run(env=)` is what
+finally lets it survive the trip. It stays, and now composes instead of
+being bypassed.
 
 ## Verification
 

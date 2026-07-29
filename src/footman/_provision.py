@@ -47,6 +47,7 @@ import urllib.request
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from footman._drivers import Driver
 
@@ -319,11 +320,11 @@ def _python_tier(prefix: Path, drivers: list[Driver]) -> list[Outcome]:
             )
             continue
         try:
-            found = subprocess.run(
+            found = _fm_run(
                 ["uv", "python", "find", version],
-                capture_output=True,
-                text=True,
+                step=False,  # a lookup, not part of the run's story
                 timeout=60,
+                nofail=True,
                 env=dict(os.environ),
             )
             path = Path(found.stdout.strip())
@@ -661,12 +662,18 @@ def _extract_binary(
 # --- subprocess --------------------------------------------------------------
 
 
+def _fm_run(*args: Any, **kwargs: Any) -> Any:
+    """`context.run`, imported at call time — provisioning is reachable from
+    the stub generator, which has no interest in the run machinery."""
+    from footman.context import run
+
+    return run(*args, **kwargs)
+
+
 def _run(argv: list[str], *, env: dict[str, str]) -> bool:
     """Run an install command, quietly; its success is all the caller needs."""
     try:
-        done = subprocess.run(
-            argv, env=env, capture_output=True, text=True, timeout=600
-        )
+        done = _fm_run(argv, step=False, timeout=600, nofail=True, env=env)
     except (OSError, subprocess.SubprocessError):
         return False
-    return done.returncode == 0
+    return done.code == 0

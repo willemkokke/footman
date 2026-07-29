@@ -55,6 +55,14 @@ router** — the same move as its stdout router, applied to a second global:
   unsetting.
 - **`os.putenv`/`os.unsetenv` are taught errors** — they bypass
   `os.environ` even in plain Python, so nothing could scope them.
+- **Two variables are never inherited.** `PYTHONHOME` and
+  `PYTHONEXECUTABLE` describe *footman's* interpreter, and a tool that has
+  its own has no use for them — a console script handed the wrong one dies
+  during start-up, before it can say why. So a task starts without them
+  whatever the surrounding process holds. Set either deliberately and it is
+  passed on untouched: what is dropped is the inheriting, not the variable.
+  `PYTHONPATH` is left alone, because `PYTHONPATH=src` is a thing people
+  mean.
 
 ## Handing one to a child
 
@@ -67,7 +75,7 @@ footman-specific spelling:
 run(cmd, env={**os.environ, "CI": "1"})   # add to what this task has
 
 leaner = dict(os.environ)                  # or take something away
-del leaner["PYTHONHOME"]
+leaner.pop("GITHUB_TOKEN", None)           # no token for a linter
 run(cmd, env=leaner)
 ```
 

@@ -1027,3 +1027,98 @@ def test_argv_reordering_stays_in_the_view():
         assert list(_s.argv) == base_before
     finally:
         _globals.uninstall()
+
+
+def test_base_env_drops_the_host_interpreter(monkeypatch):
+    """PYTHONHOME/PYTHONEXECUTABLE never reach a task; PYTHONPATH does.
+
+    On Windows `uv run` exports PYTHONHOME pointing at footman's own
+    environment. Inherited by a console script from any other Python, it
+    loads the wrong stdlib and dies during startup — 107 tools read as holes
+    in one walk. PYTHONPATH stays because people export it deliberately.
+    """
+    monkeypatch.setenv("PYTHONHOME", "/nonexistent")
+    monkeypatch.setenv("PYTHONEXECUTABLE", "/nonexistent/python")
+    monkeypatch.setenv("PYTHONPATH", "/deliberate")
+
+    base = _globals.base_env()
+
+    assert "PYTHONHOME" not in base
+    assert "PYTHONEXECUTABLE" not in base
+    assert base["PYTHONPATH"] == "/deliberate"
+
+
+def test_a_task_never_inherits_the_host_interpreter(monkeypatch):
+    monkeypatch.setenv("PYTHONHOME", "/nonexistent")
+    monkeypatch.setenv("PYTHONPATH", "/deliberate")
+    seen = {}
+
+    def tasks(reg):
+        @reg.task
+        def go():
+            seen["home"] = os.environ.get("PYTHONHOME", "(absent)")
+            seen["path"] = os.environ.get("PYTHONPATH", "(absent)")
+
+    results = drive(tasks, "go")
+    assert results[0].ok
+    assert seen == {"home": "(absent)", "path": "/deliberate"}
+
+
+def test_the_child_of_a_task_never_inherits_it(monkeypatch):
+    monkeypatch.setenv("PYTHONHOME", "/nonexistent")
+
+    def tasks(reg):
+        @reg.task
+        def go():
+            run(
+                [
+                    sys.executable,
+                    "-c",
+                    "import os; print(os.environ.get('PYTHONHOME', '(absent)'))",
+                ]
+            )
+
+    results = drive(tasks, "go")
+    assert results[0].ok
+    assert results[0].steps[0].output.strip() == "(absent)"
+
+
+def test_a_deliberate_setting_still_reaches_the_child(monkeypatch):
+    """Inheritance is what is dropped, not the variable. A task that means it
+    gets exactly what it asked for — by either spelling.
+
+    Asserted on the environment footman hands over rather than on a child's
+    own report: a real interpreter handed a bogus PYTHONHOME dies during
+    startup, which would test CPython rather than footman.
+    """
+    from footman import context as context_mod
+
+    monkeypatch.delenv("PYTHONHOME", raising=False)
+    hand_over: dict[str, dict[str, str]] = {}
+
+    def fake_run(argv, env, cwd, capture, *a, **kw):
+        hand_over[argv[-1]] = dict(env)
+        return 0, "", "", False
+
+    monkeypatch.setattr(context_mod, "_run_subprocess", fake_run)
+
+    def tasks(reg):
+        @reg.task
+        def by_environ():
+            os.environ["PYTHONHOME"] = "chosen"
+            run(["tool", "by_environ"])
+
+        @reg.task
+        def by_env_argument():
+            run(["tool", "by_env_argument"], env={**os.environ, "PYTHONHOME": "handed"})
+
+        @reg.task
+        def by_neither():
+            run(["tool", "by_neither"])
+
+    for name in ("by-environ", "by-env-argument", "by-neither"):
+        assert drive(tasks, name)[0].ok
+
+    assert hand_over["by_environ"]["PYTHONHOME"] == "chosen"
+    assert hand_over["by_env_argument"]["PYTHONHOME"] == "handed"
+    assert "PYTHONHOME" not in hand_over["by_neither"]
