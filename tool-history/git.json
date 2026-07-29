@@ -6,7 +6,6 @@
   "version": "2.55.0",
   "date": "2026-07-29",
   "platforms": [
-   "Linux",
    "macOS"
   ],
   "extractor": 2,
@@ -1144,7 +1143,7 @@
      }
     },
     "pull": {
-     "help": "Fetch from and integrate with another repository or a local branch",
+     "help": "Fetch from and integrate with another repository or a local",
      "wraps": false,
      "positional": "any",
      "lead": "",
@@ -2507,7 +2506,7 @@
      }
     },
     "init": {
-     "help": "Create an empty Git repository or reinitialize an existing one",
+     "help": "Create an empty Git repository or reinitialize an existing",
      "wraps": false,
      "positional": "any",
      "lead": "",
@@ -3979,11 +3978,6 @@
       "find_renames": {
        "flags": [
         "--find-renames",
-        "-M100",
-        "-M50",
-        "-M05",
-        "-M5",
-        "-M5",
         "-M"
        ],
        "negation": "",
@@ -4941,10 +4935,14 @@
       },
       "exclude": {
        "flags": [
-        "--exclude"
+        "--branches",
+        "--exclude",
+        "--remotes",
+        "--tags",
+        "--glob"
        ],
        "negation": "",
-       "help": "Do not include refs matching <glob-pattern> that the next --all, --branches, --tags, --remotes, or --glob would otherwise consider",
+       "help": "Do not include refs matching <glob-pattern> that the next --all, Repetitions of this option accumulate exclusion patterns up to the next --all, --branches, --tags, --remotes, or --glob option (other options or arguments do not clear accumulated patterns)",
        "type": "str",
        "default": null,
        "choices": []
@@ -5419,7 +5417,10 @@
         "--no-min-parents",
         "--no-max-parents",
         "--min-parents",
-        "--max-parents"
+        "--max-parents",
+        "--min-parents",
+        "--max-parents",
+        "--merges"
        ],
        "negation": "",
        "help": "Show only commits which have at least (or at most) that many parent commits",
@@ -5439,10 +5440,17 @@
       },
       "name_only": {
        "flags": [
-        "--name-only"
+        "--name-status",
+        "--name-only",
+        "--no-prefix",
+        "--summary",
+        "-L",
+        "-L",
+        "-w",
+        "-b"
        ],
        "negation": "",
-       "help": "Show only the name of each changed file in the post-image tree",
+       "help": "Trace the evolution of the line range given by <start>,<end>, or by the function name regex <funcname>, within the <file>",
        "type": "bool",
        "default": null,
        "choices": []
@@ -5560,6 +5568,8 @@
       },
       "notes": {
        "flags": [
+        "--oneline",
+        "--format",
         "--notes"
        ],
        "negation": "",
@@ -5901,10 +5911,12 @@
       },
       "single_worktree": {
        "flags": [
-        "--single-worktree"
+        "--single-worktree",
+        "--indexed-objects",
+        "--reflog"
        ],
        "negation": "",
-       "help": "By default, all working trees will be examined by the following options when there are more than one (see git-worktree(1)): --all, --reflog and --indexed-objects",
+       "help": "By default, all working trees will be examined by the following options when there are more than one (see git-worktree(1)): --all, the current working tree only",
        "type": "bool",
        "default": null,
        "choices": []
@@ -6157,10 +6169,14 @@
       },
       "exclude": {
        "flags": [
-        "--exclude"
+        "--branches",
+        "--exclude",
+        "--remotes",
+        "--tags",
+        "--glob"
        ],
        "negation": "",
-       "help": "Do not include refs matching <glob-pattern> that the next --all, --branches, --tags, --remotes, or --glob would otherwise consider",
+       "help": "Do not include refs matching <glob-pattern> that the next --all, Repetitions of this option accumulate exclusion patterns up to the next --all, --branches, --tags, --remotes, or --glob option (other options or arguments do not clear accumulated patterns)",
        "type": "str",
        "default": null,
        "choices": []
@@ -6510,7 +6526,7 @@
      }
     },
     "describe": {
-     "help": "Give an object a human readable name based on an available ref",
+     "help": "Give an object a human readable name based on an",
      "wraps": false,
      "positional": "any",
      "lead": "",
@@ -7161,7 +7177,6 @@
   "2.54.0": {
    "date": "2026-04-20",
    "platforms": [
-    "Linux",
     "macOS"
    ],
    "extractor": 2,
@@ -7218,15 +7233,30 @@
      "default": null,
      "choices": []
     },
-    "log\tdirstat": {
+    "log\tname_only": {
+     "flags": [
+      "--name-only"
+     ],
+     "negation": "",
+     "help": "Show only the name of each changed file in the post-image tree",
+     "type": "bool",
+     "default": null,
+     "choices": []
+    },
+    "log\tnumstat": {
      "flags": [
       "--name-status",
+      "--shortstat",
       "--name-only",
+      "--no-prefix",
+      "--numstat",
       "--dirstat",
       "--summary",
       "--check",
       "-L",
-      "-L"
+      "-L",
+      "-w",
+      "-b"
      ],
      "negation": "",
      "help": "Trace the evolution of the line range given by <start>,<end>, or by the function name regex <funcname>, within the <file>",
@@ -7260,7 +7290,6 @@
   "2.53.0": {
    "date": "2026-02-02",
    "platforms": [
-    "Linux",
     "macOS"
    ],
    "extractor": 2,
@@ -7278,6 +7307,17 @@
      ],
      "negation": "",
      "help": "Instead of pointing the newly created HEAD to the branch pointed to by the cloned repository's HEAD, point to <name> branch instead",
+     "type": "str",
+     "default": null,
+     "choices": []
+    },
+    "clone\tfilter": {
+     "flags": [
+      "--filter",
+      "--filter"
+     ],
+     "negation": "",
+     "help": "Use the partial clone feature and request that the server sends a subset of reachable objects according to a given object filter",
      "type": "str",
      "default": null,
      "choices": []
@@ -7336,6 +7376,24 @@
      "default": null,
      "choices": []
     },
+    "log\tnumstat": {
+     "flags": [
+      "--name-status",
+      "--shortstat",
+      "--name-only",
+      "--numstat",
+      "--dirstat",
+      "--summary",
+      "--check",
+      "-L",
+      "-L"
+     ],
+     "negation": "",
+     "help": "Trace the evolution of the line range given by <start>,<end>, or by the function name regex <funcname>, within the <file>",
+     "type": "bool",
+     "default": null,
+     "choices": []
+    },
     "log\tunified": {
      "flags": [
       "--unified",
@@ -7362,7 +7420,6 @@
   "2.52.0": {
    "date": "2025-11-17",
    "platforms": [
-    "Linux",
     "macOS"
    ],
    "extractor": 2,
@@ -7509,7 +7566,6 @@
   "2.51.2": {
    "date": "2025-10-27",
    "platforms": [
-    "Linux",
     "macOS"
    ],
    "extractor": 2,
@@ -7718,7 +7774,6 @@
   "2.51.1": {
    "date": "2025-10-15",
    "platforms": [
-    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -7726,7 +7781,6 @@
   "2.51.0": {
    "date": "2025-08-18",
    "platforms": [
-    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -7734,7 +7788,6 @@
   "2.50.1": {
    "date": "2025-07-08",
    "platforms": [
-    "Linux",
     "macOS"
    ],
    "extractor": 2,
@@ -7894,7 +7947,6 @@
   "2.50.0": {
    "date": "2025-06-16",
    "platforms": [
-    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -7902,7 +7954,6 @@
   "2.49.1": {
    "date": "2025-07-08",
    "platforms": [
-    "Linux",
     "macOS"
    ],
    "extractor": 2,

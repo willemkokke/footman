@@ -6,8 +6,6 @@
   "version": "29.6.2",
   "date": "2026-07-29",
   "platforms": [
-   "Linux",
-   "Windows",
    "macOS"
   ],
   "extractor": 2,
@@ -616,26 +614,6 @@
        "default": null,
        "choices": []
       },
-      "cpu_count": {
-       "flags": [
-        "--cpu-count"
-       ],
-       "negation": "",
-       "help": "CPU count (Windows only)",
-       "type": "str",
-       "default": null,
-       "choices": []
-      },
-      "cpu_percent": {
-       "flags": [
-        "--cpu-percent"
-       ],
-       "negation": "",
-       "help": "CPU percent (Windows only)",
-       "type": "str",
-       "default": null,
-       "choices": []
-      },
       "cpu_period": {
        "flags": [
         "--cpu-period"
@@ -988,26 +966,6 @@
        "negation": "",
        "help": "Keep STDIN open even if not attached",
        "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "io_maxbandwidth": {
-       "flags": [
-        "--io-maxbandwidth"
-       ],
-       "negation": "",
-       "help": "Maximum IO bandwidth limit for the system drive (Windows only)",
-       "type": "str",
-       "default": null,
-       "choices": []
-      },
-      "io_maxiops": {
-       "flags": [
-        "--io-maxiops"
-       ],
-       "negation": "",
-       "help": "Maximum IOps limit for the system drive (Windows only)",
-       "type": "str",
        "default": null,
        "choices": []
       },
@@ -3049,28 +3007,12 @@
      }
     }
    }
-  },
-  "absent": {
-   "run\tcpu_count": [
-    "macOS"
-   ],
-   "run\tcpu_percent": [
-    "macOS"
-   ],
-   "run\tio_maxbandwidth": [
-    "macOS"
-   ],
-   "run\tio_maxiops": [
-    "macOS"
-   ]
   }
  },
  "deltas": {
   "29.6.1": {
    "date": "2026-06-26",
    "platforms": [
-    "Linux",
-    "Windows",
     "macOS"
    ],
    "extractor": 2,
@@ -3089,50 +3031,18 @@
      "default": false,
      "choices": []
     }
-   },
-   "absent": {
-    "run\tcpu_count": [
-     "macOS"
-    ],
-    "run\tcpu_percent": [
-     "macOS"
-    ],
-    "run\tio_maxbandwidth": [
-     "macOS"
-    ],
-    "run\tio_maxiops": [
-     "macOS"
-    ]
    }
   },
   "29.6.0": {
    "date": "2026-06-18",
    "platforms": [
-    "Linux",
-    "Windows",
     "macOS"
    ],
-   "extractor": 2,
-   "absent": {
-    "run\tcpu_count": [
-     "macOS"
-    ],
-    "run\tcpu_percent": [
-     "macOS"
-    ],
-    "run\tio_maxbandwidth": [
-     "macOS"
-    ],
-    "run\tio_maxiops": [
-     "macOS"
-    ]
-   }
+   "extractor": 2
   },
   "29.5.3": {
    "date": "2026-06-03",
    "platforms": [
-    "Linux",
-    "Windows",
     "macOS"
    ],
    "extractor": 2,
@@ -3150,159 +3060,49 @@
      "default": null,
      "choices": []
     }
-   },
-   "absent": {
-    "run\tcpu_count": [
-     "macOS"
-    ],
-    "run\tcpu_percent": [
-     "macOS"
-    ],
-    "run\tio_maxbandwidth": [
-     "macOS"
-    ],
-    "run\tio_maxiops": [
-     "macOS"
-    ]
    }
   },
   "29.5.2": {
    "date": "2026-05-20",
    "platforms": [
-    "Linux",
-    "Windows",
     "macOS"
    ],
-   "extractor": 2,
-   "absent": {
-    "run\tcpu_count": [
-     "macOS"
-    ],
-    "run\tcpu_percent": [
-     "macOS"
-    ],
-    "run\tio_maxbandwidth": [
-     "macOS"
-    ],
-    "run\tio_maxiops": [
-     "macOS"
-    ]
-   }
+   "extractor": 2
   },
   "29.5.1": {
    "date": "2026-05-18",
    "platforms": [
-    "Linux",
-    "Windows",
     "macOS"
    ],
-   "extractor": 2,
-   "absent": {
-    "run\tcpu_count": [
-     "macOS"
-    ],
-    "run\tcpu_percent": [
-     "macOS"
-    ],
-    "run\tio_maxbandwidth": [
-     "macOS"
-    ],
-    "run\tio_maxiops": [
-     "macOS"
-    ]
-   }
+   "extractor": 2
   },
   "29.5.0": {
    "date": "2026-05-14",
    "platforms": [
-    "Linux",
-    "Windows",
     "macOS"
    ],
-   "extractor": 2,
-   "absent": {
-    "run\tcpu_count": [
-     "macOS"
-    ],
-    "run\tcpu_percent": [
-     "macOS"
-    ],
-    "run\tio_maxbandwidth": [
-     "macOS"
-    ],
-    "run\tio_maxiops": [
-     "macOS"
-    ]
-   }
+   "extractor": 2
   },
   "29.4.3": {
    "date": "2026-05-06",
    "platforms": [
-    "Linux",
-    "Windows",
     "macOS"
    ],
-   "extractor": 2,
-   "absent": {
-    "run\tcpu_count": [
-     "macOS"
-    ],
-    "run\tcpu_percent": [
-     "macOS"
-    ],
-    "run\tio_maxbandwidth": [
-     "macOS"
-    ],
-    "run\tio_maxiops": [
-     "macOS"
-    ]
-   }
+   "extractor": 2
   },
   "29.4.2": {
    "date": "2026-05-01",
    "platforms": [
-    "Linux",
-    "Windows",
     "macOS"
    ],
-   "extractor": 2,
-   "absent": {
-    "run\tcpu_count": [
-     "macOS"
-    ],
-    "run\tcpu_percent": [
-     "macOS"
-    ],
-    "run\tio_maxbandwidth": [
-     "macOS"
-    ],
-    "run\tio_maxiops": [
-     "macOS"
-    ]
-   }
+   "extractor": 2
   },
   "29.4.1": {
    "date": "2026-04-20",
    "platforms": [
-    "Linux",
-    "Windows",
     "macOS"
    ],
-   "extractor": 2,
-   "absent": {
-    "run\tcpu_count": [
-     "macOS"
-    ],
-    "run\tcpu_percent": [
-     "macOS"
-    ],
-    "run\tio_maxbandwidth": [
-     "macOS"
-    ],
-    "run\tio_maxiops": [
-     "macOS"
-    ]
-   }
+   "extractor": 2
   }
  }
 }

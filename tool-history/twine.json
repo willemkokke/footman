@@ -6,8 +6,6 @@
   "version": "7.0.0",
   "date": "2026-07-29",
   "platforms": [
-   "Linux",
-   "Windows",
    "macOS"
   ],
   "extractor": 2,
@@ -33,7 +31,7 @@
      }
     },
     "upload": {
-     "help": "[--config-file CONFIG_FILE] [--skip-existing] [--cert path] [--client-cert path] [--verbose] [--disable-progress-bar]",
+     "help": "",
      "wraps": false,
      "positional": "required",
      "lead": "dist",
@@ -231,8 +229,6 @@
   "6.2.0": {
    "date": "2025-09-04",
    "platforms": [
-    "Linux",
-    "Windows",
     "macOS"
    ],
    "extractor": 2
@@ -240,8 +236,6 @@
   "6.1.0": {
    "date": "2025-01-21",
    "platforms": [
-    "Linux",
-    "Windows",
     "macOS"
    ],
    "extractor": 2
@@ -249,8 +243,6 @@
   "6.0.1": {
    "date": "2024-12-01",
    "platforms": [
-    "Linux",
-    "Windows",
     "macOS"
    ],
    "extractor": 2
@@ -258,8 +250,6 @@
   "6.0.0": {
    "date": "2024-11-30",
    "platforms": [
-    "Linux",
-    "Windows",
     "macOS"
    ],
    "extractor": 2
@@ -267,8 +257,6 @@
   "5.1.1": {
    "date": "2024-06-26",
    "platforms": [
-    "Linux",
-    "Windows",
     "macOS"
    ],
    "extractor": 2
@@ -276,8 +264,6 @@
   "5.1.0": {
    "date": "2024-05-16",
    "platforms": [
-    "Linux",
-    "Windows",
     "macOS"
    ],
    "extractor": 2
@@ -285,8 +271,6 @@
   "5.0.0": {
    "date": "2024-02-11",
    "platforms": [
-    "Linux",
-    "Windows",
     "macOS"
    ],
    "extractor": 2,
@@ -297,8 +281,6 @@
   "4.0.2": {
    "date": "2022-12-01",
    "platforms": [
-    "Linux",
-    "Windows",
     "macOS"
    ],
    "extractor": 2
@@ -306,8 +288,6 @@
   "4.0.1": {
    "date": "2022-06-01",
    "platforms": [
-    "Linux",
-    "Windows",
     "macOS"
    ],
    "extractor": 2
