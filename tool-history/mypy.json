@@ -1090,7 +1090,8 @@
    "date": "2025-12-15",
    "platforms": [
     "Linux",
-    "Windows"
+    "Windows",
+    "macOS"
    ],
    "extractor": 2,
    "drop": [
@@ -1130,13 +1131,15 @@
      "default": null,
      "choices": []
     }
-   }
+   },
+   "help": "Mypy is a program that will type check your Python code."
   },
   "1.19.0": {
    "date": "2025-11-28",
    "platforms": [
     "Linux",
-    "Windows"
+    "Windows",
+    "macOS"
    ],
    "extractor": 2
   },
@@ -1144,7 +1147,8 @@
    "date": "2025-09-19",
    "platforms": [
     "Linux",
-    "Windows"
+    "Windows",
+    "macOS"
    ],
    "extractor": 2,
    "revert": {

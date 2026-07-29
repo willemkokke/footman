@@ -7,11 +7,12 @@
   "date": "2026-07-29",
   "platforms": [
    "Linux",
+   "Windows",
    "macOS"
   ],
   "extractor": 2,
   "surface": {
-   "help": "[-s SECTIONS] [-a] [-t TEMPLATE] [-T] [-E] [-Z] [-F RANGE] [-j KEY=VALUE] [-V] [--debug-info]",
+   "help": "Automatic Changelog generator using Jinja2 templates.",
    "verbs": {
     "": {
      "help": "[-s SECTIONS] [-a] [-t TEMPLATE] [-T] [-E] [-Z] [-F RANGE] [-j KEY=VALUE] [-V] [--debug-info]",
@@ -285,7 +286,8 @@
     "Windows",
     "macOS"
    ],
-   "extractor": 2
+   "extractor": 2,
+   "help": "[-s SECTIONS] [-a] [-t TEMPLATE] [-T] [-E] [-Z] [-F RANGE] [-j KEY=VALUE] [-V] [--debug-info]"
   },
   "2.9.3": {
    "date": "2026-03-26",
@@ -362,7 +364,9 @@
   "2.6.3": {
    "date": "2025-09-18",
    "platforms": [
-    "Windows"
+    "Linux",
+    "Windows",
+    "macOS"
    ],
    "extractor": 2,
    "drop": [
@@ -370,10 +374,10 @@
    ],
    "verbs": {
     "": {
-     "help": "[-s SECTIONS] [-t TEMPLATE] [-T] [-E] [-Z] [-F RANGE] [-j KEY=VALUE] [-V] [--debug-info]"
+     "help": "Automatic Changelog generator using Jinja2 templates."
     }
    },
-   "help": "[-s SECTIONS] [-t TEMPLATE] [-T] [-E] [-Z] [-F RANGE] [-j KEY=VALUE] [-V] [--debug-info]"
+   "help": "Automatic Changelog generator using Jinja2 templates."
   }
  }
 }

@@ -6,15 +6,16 @@
   "version": "1.5.1",
   "date": "2026-07-09",
   "platforms": [
+   "Linux",
    "Windows",
    "macOS"
   ],
   "extractor": 2,
   "surface": {
-   "help": "[--sdist-extract-dir PATH] [--sdist] [--wheel] [--metadata] [--report PATH]",
+   "help": "A simple, correct Python build frontend.",
    "verbs": {
     "": {
-     "help": "[--sdist-extract-dir PATH] [--sdist] [--wheel] [--metadata] [--report PATH]",
+     "help": "A simple, correct Python build frontend.",
      "wraps": false,
      "positional": "any",
      "lead": "",
@@ -97,7 +98,7 @@
         "-o"
        ],
        "negation": "",
-       "help": "output directory (defaults to {srcdir}\\dist)",
+       "help": "output directory (defaults to {srcdir}/dist)",
        "type": "str",
        "default": null,
        "choices": []
@@ -215,17 +216,6 @@
      ],
      "negation": "",
      "help": "",
-     "type": "str",
-     "default": null,
-     "choices": []
-    },
-    "\toutdir": {
-     "flags": [
-      "--outdir",
-      "-o"
-     ],
-     "negation": "",
-     "help": "output directory (defaults to {srcdir}/dist)",
      "type": "str",
      "default": null,
      "choices": []
