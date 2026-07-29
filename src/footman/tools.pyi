@@ -21,6 +21,7 @@
 # __getattr__, and they satisfy the AST parity test (tools.py bindings ⊆ this
 # stub). Only `_re` and `_threading` are referenced here; the rest exist purely
 # for parity.
+import os as _os  # noqa: F401
 import re as _re
 import subprocess as _subprocess  # noqa: F401
 import sys as _sys  # noqa: F401
@@ -72,6 +73,8 @@ from footman.context import color_on as _color_on  # noqa: F401
 from footman.context import current as _current  # noqa: F401
 from footman.context import real_stderr as _real_stderr  # noqa: F401
 from footman.context import run as _run  # noqa: F401
+
+_QUIET: dict[str, str]
 
 _argv_lock: _threading.Lock
 

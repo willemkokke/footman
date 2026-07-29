@@ -136,6 +136,13 @@ versions may include breaking changes.
 
 ### Fixed
 
+- **Reading a tool never makes it check for a newer one.** gh runs its
+  update check from any command unless told not to — a network call, and a
+  banner alongside the answer. Only the version read said so, and only the
+  maintainer's one: a walk asked `gh --help` and `gh <verb> --help` once
+  per release, and `installed_version()` did the same from a user's task.
+  Every read shares the setting now.
+
 - **A week with nothing to read is a success.** The pre-pass skips
   provisioning, the walk and the upload when a platform owes nothing —
   which is the point of it — and the assembler then failed for want of an

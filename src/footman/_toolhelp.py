@@ -1045,9 +1045,22 @@ def _render_page(tree: str, page: str, timeout: float) -> str:
 _HOST_INTERPRETER = ("PYTHONHOME", "PYTHONPATH", "PYTHONEXECUTABLE")
 
 
+QUIET = {"GH_NO_UPDATE_NOTIFIER": "1"}
+"""Tools told not to phone home while being read.
+
+gh runs its update check from *any* command unless told otherwise: a
+network call, and a banner it writes alongside the answer. A walk asks
+`gh --help` and `gh <verb> --help` once per release, so that is a request
+per read and a chance per read for the notice to land in the surface.
+
+Reading a tool must never depend on, or be delayed by, the network.
+"""
+
+
 def read_env(**extra: str) -> dict[str, str]:
     """The environment to read another tool in: ours, minus our interpreter."""
     env = {k: v for k, v in os.environ.items() if k not in _HOST_INTERPRETER}
+    env.update(QUIET)
     env.update(extra)
     return env
 
