@@ -136,6 +136,14 @@ versions may include breaking changes.
 
 ### Fixed
 
+- **A week with nothing to read is a success.** The pre-pass skips
+  provisioning, the walk and the upload when a platform owes nothing —
+  which is the point of it — and the assembler then failed for want of an
+  observation document from each platform. The first genuinely quiet run
+  failed on its own quietness. A leg that *died* still stops the workflow,
+  because a failed matrix job skips the assembler outright; what changed
+  is that reporting nothing is now read as the answer it is.
+
 - **A transient failure reading an index is retried too.** `_download`
   already retried a dropped connection; the listing path did not, so a
   `504 Gateway Timeout` on a release index ended a whole platform's
