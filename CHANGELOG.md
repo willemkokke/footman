@@ -7,92 +7,6 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
-### Changed
-
-- **build 1.5.1** adds `--env-dir`, `--report` and `--sdist-extract-dir`. It also rewords 4 descriptions and restates its own description.
-- **A group's `default` is listed first.** It *is* the group — `fm db` runs
-  it, and the group's own row is described by it — so a listing that showed
-  it wherever it happened to be written put the headline act in the middle,
-  or at the bottom. Where it sits in the file is the author's business; where
-  it sits in a listing is footman's. `--list`, `--tree` and group help all
-  lead with it, `--sort` included.
-
-### Documentation
-
-- **The tool version helpers are documented.** `installed_version()`,
-  `read_version()` and `version_tuple()` were public and typed all along, and
-  no page said so — a downstream project asked for the API in its upgrade
-  report and wrote its own scraper meanwhile. The tools page now covers the
-  question they answer (is the CLI new enough), why `installed_version()`
-  differs from a stub header, and why a build tail ends a comparison instead
-  of becoming extra digits.
-
-### Fixed
-
-- **A walk reads the plugin home it made, not the one on `PATH`.** The
-  home was derived — resolve the binary, look beside it — and the
-  derivation found the wrong one: `shutil.which` reads `os.environ` while
-  the walk's `PATH` overlay goes to `ctx.env`, so the lookup never saw the
-  release's own directory and settled on the provisioned prefix, which
-  keeps a home of its own holding the *latest* plugins. Ten docker
-  releases were read with one compose between them, and the five that
-  recorded it recorded the same surface five times. A caller that knows
-  where it put things hands the home over now, so each release is read
-  with the plugins that shipped alongside it.
-
-### Documentation
-
-- **`shell=True` on Windows is git-bash, and that eats backslashes.** The
-  posix policy resolves to git-bash so one pipeline behaves the same
-  everywhere, but a POSIX shell reads `\` as an escape — so a command
-  carrying Windows paths lost its separators, with the fix (`shell="native"`)
-  only findable in the config table. The page that teaches `run(shell=…)`
-  now says it where a port will read it.
-- **`Arg[T]` says which rule it is bending.** It is the one parameter that
-  keeps its position despite having a default; its reference entry now names
-  the default-decides rule it departs from and points at the typing guide.
-
-### Fixed
-
-- **In-process pytest runs in a parallel task again.** pytest sets
-  `PYTEST_VERSION` and deletes it on the way out, and its session teardown
-  re-chdirs to where it started — two moves the process-global guards
-  refused wholesale, so `pytest(...)` through the tools bridge failed any
-  parallel run. Both are harmless: deleting a key the task itself set
-  scoped now round-trips out of the overlay (deleting a base-environment
-  key stays a taught error), and a chdir to the directory the process is
-  already in is a no-op, not a violation.
-
-- **A machine with no bun says so instead of reporting holes.** bun is how
-  the node tier installs, so without it every release of every node tool
-  fails to install — and each failure was recorded as a hole, which claims
-  those releases could not be had. A macOS gather reported 23 of them
-  across cspell and markdownlint; the same walk with bun in a prefix read
-  all 23 with none missing. The tools are named and skipped now, the way
-  git is where there is no `man` to render its pages.
-
-- **A tool given a home of its own is anonymised against *that* home.**
-  Inside a run, the overlay that hands a tool a throwaway home writes to
-  the children's environment, so the tool echoed that home while the
-  process reading it still reported the machine's own — and the scrub,
-  which asked `Path.home()`, matched nothing. docker's config default came
-  back from the first Windows gather as a path ending
-  `…\\Temp\\footman-gather-2_wvx66g\\docker-29.6.2\\home\\.docker`: a
-  random per-run directory, which would have differed on every run and
-  disagreed across platforms forever. The home is handed to the scrub now
-  rather than discovered, and a home nested inside another is replaced
-  whole.
-
-### Fixed
-
-- **A backfill is recorded but never announced.** A walk that reaches
-  backwards changes the tool's surface at every step it takes, and every
-  one of those steps is a change the tool made years ago — filling git's
-  history announced that 2.44.0 "adds `--no-checkout`" as though it had
-  happened that week. Only a release newer than anything seen before is
-  news now, so the older ones are still read, folded and stubbed, and the
-  changelog stays a record of releases nobody had seen.
-
 ### Added
 
 - **git is read from its manuals, and every release of them is kept.**
@@ -113,7 +27,6 @@ versions may include breaking changes.
 
   With git fetched, **no tool footman ships a stub for is read from the
   host any more** — every one comes from something it fetched itself.
-
 - **A tool's plugins are fetched and paired, not borrowed from the
   machine.** `docker compose` and `docker build` are not docker: compose
   and buildx are separate projects on their own release lines, found under
@@ -127,14 +40,12 @@ versions may include breaking changes.
   a plugin existed pairs with nothing and its verbs read absent, which is
   what they were; a plugin that is known but cannot be fetched stops the
   observation rather than recording an absence nobody saw.
-
 - **docker's own release index is a tier.** Docker publishes a static build
   of every release, per platform and architecture, in a plain directory —
   so it is fetched like any other tool rather than read from whatever the
   machine happens to have installed. Its option history could hold exactly
   one version before this; it can now be walked back as far as the index
   goes.
-
 - **Completion continues a comma-separated list.** Mid-list in a
   comma-splitting value, <kbd>Tab</kbd> completes the segment after the last
   comma with the typed items kept in place: `--paths=src/a.py,<TAB>`
@@ -148,8 +59,61 @@ versions may include breaking changes.
   literal, in completion as at the prompt. Reinstalled hooks pick this up;
   an existing hook keeps today's behaviour everywhere else.
 
+### Changed
+
+- **build 1.5.1** adds `--env-dir`, `--report` and `--sdist-extract-dir`. It also rewords 4 descriptions and restates its own description.
+- **A group's `default` is listed first.** It *is* the group — `fm db` runs
+  it, and the group's own row is described by it — so a listing that showed
+  it wherever it happened to be written put the headline act in the middle,
+  or at the bottom. Where it sits in the file is the author's business; where
+  it sits in a listing is footman's. `--list`, `--tree` and group help all
+  lead with it, `--sort` included.
+
 ### Fixed
 
+- **A walk reads the plugin home it made, not the one on `PATH`.** The
+  home was derived — resolve the binary, look beside it — and the
+  derivation found the wrong one: `shutil.which` reads `os.environ` while
+  the walk's `PATH` overlay goes to `ctx.env`, so the lookup never saw the
+  release's own directory and settled on the provisioned prefix, which
+  keeps a home of its own holding the *latest* plugins. Ten docker
+  releases were read with one compose between them, and the five that
+  recorded it recorded the same surface five times. A caller that knows
+  where it put things hands the home over now, so each release is read
+  with the plugins that shipped alongside it.
+- **In-process pytest runs in a parallel task again.** pytest sets
+  `PYTEST_VERSION` and deletes it on the way out, and its session teardown
+  re-chdirs to where it started — two moves the process-global guards
+  refused wholesale, so `pytest(...)` through the tools bridge failed any
+  parallel run. Both are harmless: deleting a key the task itself set
+  scoped now round-trips out of the overlay (deleting a base-environment
+  key stays a taught error), and a chdir to the directory the process is
+  already in is a no-op, not a violation.
+- **A machine with no bun says so instead of reporting holes.** bun is how
+  the node tier installs, so without it every release of every node tool
+  fails to install — and each failure was recorded as a hole, which claims
+  those releases could not be had. A macOS gather reported 23 of them
+  across cspell and markdownlint; the same walk with bun in a prefix read
+  all 23 with none missing. The tools are named and skipped now, the way
+  git is where there is no `man` to render its pages.
+- **A tool given a home of its own is anonymised against *that* home.**
+  Inside a run, the overlay that hands a tool a throwaway home writes to
+  the children's environment, so the tool echoed that home while the
+  process reading it still reported the machine's own — and the scrub,
+  which asked `Path.home()`, matched nothing. docker's config default came
+  back from the first Windows gather as a path ending
+  `…\\Temp\\footman-gather-2_wvx66g\\docker-29.6.2\\home\\.docker`: a
+  random per-run directory, which would have differed on every run and
+  disagreed across platforms forever. The home is handed to the scrub now
+  rather than discovered, and a home nested inside another is replaced
+  whole.
+- **A backfill is recorded but never announced.** A walk that reaches
+  backwards changes the tool's surface at every step it takes, and every
+  one of those steps is a change the tool made years ago — filling git's
+  history announced that 2.44.0 "adds `--no-checkout`" as though it had
+  happened that week. Only a release newer than anything seen before is
+  news now, so the older ones are still read, folded and stubbed, and the
+  changelog stays a record of releases nobody had seen.
 - **A tool's defaults no longer carry the home directory of the machine
   that read them.** docker reports its config path expanded, so
   `/Users/<name>/.docker` was recorded as docker's documented default —
@@ -183,6 +147,24 @@ versions may include breaking changes.
   after every run (and skips bytecode caching, whose mtime granularity
   could resurrect a stale rewritten test inside one clock tick).
 
+### Documentation
+
+- **The tool version helpers are documented.** `installed_version()`,
+  `read_version()` and `version_tuple()` were public and typed all along, and
+  no page said so — a downstream project asked for the API in its upgrade
+  report and wrote its own scraper meanwhile. The tools page now covers the
+  question they answer (is the CLI new enough), why `installed_version()`
+  differs from a stub header, and why a build tail ends a comparison instead
+  of becoming extra digits.
+- **`shell=True` on Windows is git-bash, and that eats backslashes.** The
+  posix policy resolves to git-bash so one pipeline behaves the same
+  everywhere, but a POSIX shell reads `\` as an escape — so a command
+  carrying Windows paths lost its separators, with the fix (`shell="native"`)
+  only findable in the config table. The page that teaches `run(shell=…)`
+  now says it where a port will read it.
+- **`Arg[T]` says which rule it is bending.** It is the one parameter that
+  keeps its position despite having a default; its reference entry now names
+  the default-decides rule it departs from and points at the typing guide.
 ## [0.26.0] — 2026-07-28
 
 ### Added
