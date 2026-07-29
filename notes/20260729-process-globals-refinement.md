@@ -162,15 +162,39 @@ Verified after the fact by probing git live through `run()`: `flag`/`env`
 with both `color.ui` spellings and `pre_verb`, identical to the verdict
 baked in `_colordata`.
 
-**`read_env()` does not retire — the premise was wrong.** It was recorded
-above as "snapshot minus three, hand-rolled", i.e. a workaround for the
-overlay's inability to subtract. It is not: it strips `PYTHONHOME`,
-`PYTHONPATH` and `PYTHONEXECUTABLE` because handing footman's interpreter to
-a *console-script* tool makes it import the wrong stdlib — the failure that
-read 107 tools as holes on Windows. That subtraction is permanent, it is
-needed however the environment is modelled, and the new `run(env=)` is what
-finally lets it survive the trip. It stays, and now composes instead of
-being bypassed.
+## 5. The interpreter is never inherited (#222)
+
+The rule that read the walk's 107 holes belongs to environments, not to
+reads. `base_env()` drops `PYTHONHOME` and `PYTHONEXECUTABLE`, so they are
+absent from every task's environment, in a run or out of one. A walk spawns
+foreign tools; so does any task that calls one, and `run(["mypy", "."])`
+against a console script from another environment broke identically.
+
+- **Dropped from the inherited copy, not at spawn.** Nobody chooses to
+  inherit. Setting either deliberately still arrives untouched through
+  `os.environ`, `ctx.env` or `run(env=)`.
+- **`PYTHONPATH` is inherited everywhere, reads included.** It is the one of
+  the three people export on purpose, harmless when merely present, and
+  indistinguishable from an inherited one. Stripping it for reads alone was
+  the special case.
+- **`read_env()` and `_wide_env()` are gone.** With the rule central they
+  held no policy — only arguments about particular spawns (don't phone home,
+  be wide, page with `cat`), which each read site now passes as its own
+  `env=`.
+
+Measured, not reasoned: `PYTHONHOME` is set only on Windows (uv 0.11.1 and
+0.11.31 alike; absent on macOS/Linux across CPython 3.10–3.14, and
+independent of whether the interpreter is uv-downloaded). It is not
+load-bearing there — a uv-managed interpreter called without it runs and
+reports an unchanged `sys.prefix` — which is the one thing that could have
+made stripping it wrong. Windows CI covers it: a task spawns
+`sys.executable` with the variable dropped.
+
+**A prediction this note got wrong twice.** Item 1 said `read_env()` would
+disappear because it was a workaround for the overlay; I then argued at
+length that it must stay because its subtraction was permanent. Both were
+about the function. What actually settled it was the rule moving out from
+under it — after which there was nothing general left inside.
 
 ## Verification
 
