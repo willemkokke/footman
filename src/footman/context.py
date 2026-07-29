@@ -108,8 +108,15 @@ class Result(int):
 class Context:
     """State for one running task: environment, flags, passthrough, output."""
 
-    env: dict[str, str] = field(default_factory=dict)
-    """Extra environment variables overlaid on every `run()` subprocess."""
+    env: dict[str, str] = field(default_factory=lambda: _globals.base_env())
+    """**This task's environment** — a complete one, not a diff.
+
+    Starts as a copy of the run's pinned environment, and is what `os.environ`
+    answers from inside the task, what every child footman spawns receives,
+    and what `run(env=…)` replaces. Because it is a whole value rather than an
+    overlay, `del os.environ["FOO"]` is ordinary: it removes the key from this
+    task's environment and from the children it goes on to spawn, while a
+    sibling's copy is untouched."""
     cwd: Path | None = None
     """Where `run()` executes — resolved once per task by the policy ladder
     (`.opts(cwd=)` / `@task(cwd=)` / config `cwd`, default `taskfile`), so it
@@ -1121,7 +1128,8 @@ def _run_callable(
     # the run boundary (`color_environment`), so an in-process tool reads it
     # straight from the environment — no per-call patch here, so the lock-free
     # fast path in `_process_state` is kept in every colour mode.
-    overlay = {**ctx.env, **(env or {})}
+    # Same rule as the subprocess branch: `env=` replaces, absent inherits.
+    overlay = dict(env) if env is not None else dict(ctx.env)
     # `unmanaged` means footman stays out: no cwd opinion for the callable,
     # exactly as the subprocess branch spawns with cwd=None.
     default_cwd = None if ctx.cwd_unmanaged else ctx.cwd
@@ -1843,11 +1851,14 @@ def run(
             argv = cmd if sys.platform == "win32" else shlex.split(cmd)
         else:
             argv = [str(a) for a in cmd]
-        # The child inherits the run-wide colour decision from os.environ, set
-        # once at the run boundary (`color_environment`) — FORCE_COLOR so it
-        # colours past its own pipe, or NO_COLOR so it stays quiet. A task's
-        # `ctx.env`/`env=` still overrides it.
-        run_env = {**os.environ, **ctx.env, **(env or {})}
+        # `env=` is the child's environment, exactly as `subprocess` means it —
+        # what you pass is what it gets. Otherwise the task's own, which
+        # already carries the run-wide colour decision published at the run
+        # boundary (`color_environment`) and anything the body has set or
+        # deleted. To add rather than replace, say so: `{**os.environ, …}` —
+        # inside a task `os.environ` *is* this environment, so the copy is
+        # exact rather than approximate.
+        run_env = dict(env) if env is not None else dict(ctx.env)
         # A clean POSIX shell means no startup files: `--norc`/`--noprofile`
         # cover interactive/login rc, but bash/sh also source $BASH_ENV/$ENV for
         # a non-interactive `-c`, so drop those from the child env too.

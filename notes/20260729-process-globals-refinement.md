@@ -70,12 +70,26 @@ the process already is "changes nothing for anyone" and stopped being refused
 may be polled in a loop. Compare the already-resolved `ctx.cwd` against a
 cached process cwd rather than resolving per call.
 
-## 3. `cwd` + `cwd_unmanaged` collapse into one field
+## 3. `cwd` + `cwd_unmanaged` — proposed, then withdrawn
 
-Two fields encode one concept, so `None if ctx.cwd_unmanaged else ctx.cwd`
-recurs and every reader must check both. The three real states —
-*unresolved*, *managed(path)*, *unmanaged* — fit one field with a sentinel:
-`None` / `Path` / `UNMANAGED`. Cosmetic, cheap, do it while touching the area.
+**The proposal was to collapse them into one field with an `UNMANAGED`
+sentinel.** It is wrong, and the code says so plainly: `resolve_cwd` under
+the unmanaged policy returns `(Path.cwd(), True)` — a real path *and* the
+flag. The two carry different facts:
+
+- **`ctx.cwd`** is *where the task is*: what `footman.cwd()` answers, what
+  `rel=` builds on, what the in-process demotion compares against.
+- **`cwd_unmanaged`** is *whether footman manages it*: it disarms the guards
+  (an unmanaged task may `chdir`) and makes spawns inherit rather than
+  receive an explicit `cwd=`.
+
+A sentinel in `cwd` would destroy the path `cwd()` needs, or would have to
+wrap it — the two fields again with more ceremony. The repetition that
+prompted this (`None if ctx.cwd_unmanaged else ctx.cwd`) is not redundancy:
+it reads "the spawn base, which is nothing when unmanaged", a different
+question from "where am I".
+
+**No change. Recorded so the next reader does not re-propose it.**
 
 ## 4. `sys.argv` — one bug fixed, one question deferred
 

@@ -51,7 +51,7 @@ own calls:
   friends spawn at the C level where footman cannot fill anything in — the
   note says to prefer `run()`.
 - **`multiprocessing` workers earn a note** too: they inherit the *real*
-  environment, not the task's overlay — and a tool that parallelises
+  environment, not the task's own — and a tool that parallelises
   itself loses little by taking the serial lane instead, since it
   saturates the machine on its own.
 

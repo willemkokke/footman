@@ -39,21 +39,42 @@ breaks by switching lanes.
 For the run's duration, `os.environ` goes through footman's **environment
 router** — the same move as its stdout router, applied to a second global:
 
-- **Reads** see the environment as it was at run start, plus *this task's*
-  own overlay — exactly what the subprocess lane would inject. The two
-  lanes read one world.
+- **Each task owns a whole environment**, copied from the run's at the
+  boundary — not a diff against something. `os.environ` answers from it,
+  every child footman spawns receives it, and the subprocess lane gets the
+  same value the in-process lane reads. The two lanes read one world.
 - **Writes scope to the task.** `os.environ["API_KEY"] = "…"` is visible to
   this task's reads and to every child it spawns, and invisible to
   siblings. A one-time note names the deliberate spellings: `env=` for one
   call, `ctx.env` for the task.
-- **Deleting a key the task itself set round-trips** — the entry comes
-  back out of the overlay, so set-then-delete (the temp-variable dance
-  pytest does with `PYTEST_VERSION`) is additive both ways. **Deleting a
-  base-environment key is a taught error** — that would be subtractive;
-  spawn the child with an explicit `env=` that omits the variable, or mark
-  the task serial.
+- **Deleting is ordinary.** `del os.environ["NO_COLOR"]` removes the key
+  from this task's environment and from the children it spawns after, while
+  a sibling's copy is untouched — because a task holds a value, not an
+  overlay with nothing to say for absence. That matters for variables read
+  by *presence* rather than value, where setting `""` is not the same as
+  unsetting.
 - **`os.putenv`/`os.unsetenv` are taught errors** — they bypass
   `os.environ` even in plain Python, so nothing could scope them.
+
+## Handing one to a child
+
+`env=` is the child's environment, exactly as `subprocess` means it — what
+you pass is what it gets. Both standard idioms work, and neither needs a
+footman-specific spelling:
+
+<!-- example: fragment -->
+```python
+run(cmd, env={**os.environ, "CI": "1"})   # add to what this task has
+
+leaner = dict(os.environ)                  # or take something away
+del leaner["PYTHONHOME"]
+run(cmd, env=leaner)
+```
+
+Inside a task `os.environ` *is* the task's environment, so `dict(os.environ)`
+is exactly what a child would otherwise receive — the copy is a faithful
+starting point rather than an approximation. Omit `env=` and the child simply
+inherits the task's.
 
 Outside a run, `os.environ` behaves exactly as stock Python. And because
 environment flows down at spawn, everything composes: a scoped write made

@@ -404,7 +404,7 @@ write through:
 - **`task.state`** — scratch private to *your plugin and this execution*,
   delivered back to your `post_task`. Another plugin's hooks cannot see it,
   and the next execution starts clean.
-- **`task.env`** — the task's own environment overlay: `run()` merges it into
+- **`task.env`** — the task's own environment: `run()` hands it to
   every subprocess, and in-body `os.environ` reads see it. Never write
   `os.environ` from a per-task hook — that is shared with every parallel
   sibling; `inv` is frozen here for the same reason.
@@ -465,7 +465,7 @@ request, only the body is shared.
 
 The window the ladder runs in is the task's managed window, opened before
 binding: hook code and validator code answer to the same rules a body does
-(an `os.environ` write is captured into the task's overlay, a prompt outside
+(an `os.environ` write lands in the task's own environment, a prompt outside
 an interactive task is refused), while footman's own prompts — `ask()`
 menus, `confirm=` — use the real terminal and are never caught.
 
