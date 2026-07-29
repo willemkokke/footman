@@ -41,13 +41,50 @@ jobs:
       - uses: astral-sh/setup-uv@v7
       - run: uv sync
 
-      - name: provision the latest tools
-        # uv included, and deliberately: uv carries CPython's download index
-        # inside the binary, so a stale uv reports a stale newest python. bun
-        # lands here too, which the npm tier installs through.
-        run: uv run fm tools.provision
+      - name: uv first, so the question can be answered truthfully
+        # uv carries CPython's download index inside the binary, so a stale
+        # uv reports a stale newest python — and the pre-pass would say
+        # "nothing owed" about a release it cannot see. One tool, ~3s.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: uv run fm tools.provision --only=uv --strict
+
+      - name: is there anything to read?
+        id: owed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          uv run fm --json tools.owed --prefix=.tools-latest > owed.json
+          total=$(jq '[.results[] | select(.task | endswith("owed"))
+                       | .returned.releases[] | length] | add // 0' owed.json)
+          blocked=$(jq '[.results[] | select(.task | endswith("owed"))
+                         | .returned.unreachable | length] | add // 0' owed.json)
+          echo "total=$total blocked=$blocked"
+          # An index that would not answer is not "nothing to do": a walk
+          # that cannot see an index cannot say the index has nothing new.
+          if [ "$total" = "0" ] && [ "$blocked" = "0" ]; then
+            echo "work=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "work=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: provision the rest of the tools
+        # Only once something is owed. Most weeks a current store stays
+        # current, and this is ~30 downloads per platform that nothing reads:
+        # a gather drives the tiers from `uv` and `bun` alone, installing
+        # each release itself.
+        if: steps.owed.outputs.work == 'true'
+        env:
+          # Provisioning reads release indexes too, and unauthenticated that
+          # is 60 calls an hour *per IP* — shared with every other runner in
+          # the region. The first dispatch spent it before macOS and Windows
+          # got to bun, which failed, and took cspell and markdownlint with
+          # it. The token was on the observe step alone.
+          GH_TOKEN: ${{ github.token }}
+        run: uv run fm tools.provision --strict
 
       - name: observe what this platform sees
+        if: steps.owed.outputs.work == 'true'
         env:
           GH_TOKEN: ${{ github.token }} # 5,000/hr; a shared runner's 60 is spent by strangers
         run: >
@@ -55,6 +92,7 @@ jobs:
           --out=observations/${{ matrix.os }}.json
 
       - uses: actions/upload-artifact@v4
+        if: steps.owed.outputs.work == 'true'
         with:
           name: observations-${{ matrix.os }}
           path: observations/
@@ -137,7 +175,11 @@ jobs:
             --title "chore(tools): weekly tool refresh${tag:+ ($tag)}" \
             --body "$(printf 'Observed on ubuntu, macOS and Windows; folded by one assembler.\n\n```\n%s\n```\n\nAuto-merges once the gate is green — the gate is the reviewer here: it replays every chain, regenerates every stub, and runs the drift tests.' \
               "$(jq -r '.results[] | select(.task | endswith("assemble")) | .output' assembled.json)")"
-          gh pr merge --auto --merge "$branch"
+          # Opened, not merged. The gate replays every chain and
+          # regenerates every stub, which proves the store is *consistent* —
+          # not that the readings in it are true. A wrong reading passes it
+          # unchanged: the first dispatch of this workflow read `build`
+          # with six flags on one option and would have merged that.
 
       - name: tag the release once it lands
         # Only after auto-merge actually completed: a tag on a commit that

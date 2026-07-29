@@ -9,6 +9,23 @@ versions may include breaking changes.
 
 ### Added
 
+- **`fm tools.provision --strict` turns a failed tier into a failed run.**
+  Without it the table names what did not arrive and the run still
+  succeeds, which is right for a person deciding what to do next and wrong
+  for a job that will read the prefix and believe it: a refresh where bun
+  hit a rate limit reported `ok`, and the half-provisioned prefix went
+  into the gather unremarked. The weekly refresh provisions strictly.
+
+- **`fm tools.owed` answers what a gather would read, without installing
+  anything.** A gather provisioned all 28 tools and then discovered there
+  was nothing to observe, which is most weeks — a current store stays
+  current until something ships. Listing is network and nothing else, so
+  the weekly refresh asks first and provisions only when the answer is not
+  zero: 9 seconds against ~30 downloads per platform. `uv` is still
+  provisioned first, because it carries CPython's download index inside
+  the binary and a stale one would report a stale newest python. An index
+  that would not answer counts as work rather than quiet.
+
 - **git is read from its manuals, and every release of them is kept.**
   git's `-h` omits about half its flags, so it has always been read from
   its manual — and a manual is not a binary. kernel.org publishes the
@@ -61,6 +78,12 @@ versions may include breaking changes.
 
 ### Changed
 
+- **The weekly refresh opens its pull request without arming auto-merge.**
+  The gate replays every chain and regenerates every stub, which proves
+  the store is *consistent* — not that the readings in it are true. A
+  wrong reading passes it unchanged, and the first dispatch of the
+  workflow produced one.
+
 - **build 1.5.1** adds `--env-dir`, `--report` and `--sdist-extract-dir`. It also rewords 4 descriptions and restates its own description.
 - **A group's `default` is listed first.** It *is* the group — `fm db` runs
   it, and the group's own row is described by it — so a listing that showed
@@ -79,6 +102,13 @@ versions may include breaking changes.
   recorded with one option carrying six flags and no help, and the five it
   had swallowed missing entirely. The first weekly refresh read it that way
   and opened a pull request to record it.
+
+- **The weekly refresh authenticates while provisioning, not only while
+  observing.** Provisioning reads release indexes too, and unauthenticated
+  that is 60 GitHub API calls an hour *per IP*, shared with every other
+  runner in the region. The first dispatch spent it before the macOS and
+  Windows legs reached bun: bun failed, and cspell and markdownlint were
+  skipped for want of it. The token was on the observe step alone.
 - **A walk reads the plugin home it made, not the one on `PATH`.** The
   home was derived — resolve the binary, look beside it — and the
   derivation found the wrong one: `shutil.which` reads `os.environ` while

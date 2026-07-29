@@ -1853,6 +1853,72 @@ def test_a_refresh_writes_its_own_events_into_the_changelog(tmp_path, monkeypatc
     assert "adds `--fix`" in written
 
 
+def test_the_pre_pass_answers_without_installing_anything(tmp_path, monkeypatch):
+    """A gather provisions every tool and then discovers there is nothing
+    to observe, which is most weeks. Listing is network and nothing else,
+    so the question can be answered before the work is prepared for."""
+    from footman import _toolfetch
+    from footman.tasks import tools
+
+    _isolate(tools, monkeypatch, tmp_path)
+    _toolhistory.save(
+        _toolhistory.new(
+            "ruff",
+            version="1.0.0",
+            date="2026-02-01",
+            surface=_with_flags("quiet"),
+            platforms=[tools._platform()],
+        ),
+        tmp_path / "history" / "ruff.json",
+    )
+    listings = {
+        "ruff": [
+            _toolfetch.Release(version="1.0.1", date="2026-02-02"),
+            _toolfetch.Release(version="1.0.0", date="2026-02-01"),
+        ]
+    }
+    installed = _serve(monkeypatch, listings, {})
+
+    result = _tools_run("owed --only=ruff")
+    assert result.ok, result.stderr
+    answer = result.results[0].returned
+    assert answer.releases == {"ruff": ["1.0.1"]}
+    assert answer.total == 1
+    assert installed == []  # nothing fetched to find that out
+    assert "owed: 1" in result.stdout
+
+
+def test_an_unreadable_index_is_not_nothing_to_do(tmp_path, monkeypatch):
+    """The distinction the release gate turns on. A walk that cannot see an
+    index cannot say the index has nothing new, so the caller is told
+    separately rather than reading a total of zero as "all quiet"."""
+    from footman import _toolfetch
+    from footman.tasks import tools
+
+    _isolate(tools, monkeypatch, tmp_path)
+    _toolhistory.save(
+        _toolhistory.new(
+            "ruff",
+            version="1.0.0",
+            date="2026-02-01",
+            surface=_with_flags("quiet"),
+            platforms=[tools._platform()],
+        ),
+        tmp_path / "history" / "ruff.json",
+    )
+
+    def blocked(driver):
+        raise _toolfetch.Unreachable("the index", "429")
+
+    monkeypatch.setattr(_toolfetch, "releases", blocked)
+    result = _tools_run("owed --only=ruff")
+    assert result.ok, result.stderr
+    answer = result.results[0].returned
+    assert answer.total == 0
+    assert "ruff" in answer.unreachable
+    assert "unreachable: ruff" in result.stdout
+
+
 def test_a_backfill_is_recorded_but_never_announced(tmp_path, monkeypatch):
     """A walk that reaches backwards changes the surface at every step it
     takes, and every one of those steps is a change the tool made years
