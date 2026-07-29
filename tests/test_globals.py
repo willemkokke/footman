@@ -937,3 +937,41 @@ def test_multiprocessing_workers_inherit_the_run_wide_colour(tmp_path, monkeypat
     results = drive(tasks, "spawn-worker", force_color=True)
     assert results[0].ok, results[0].error
     assert out.read_text(encoding="utf-8") == "1"  # colour rode the real env
+
+
+def test_argv_in_place_mutation_stays_in_the_view():
+    """`sys.argv += [...]` is a plausible thing for a legacy `main()` to do —
+    append a default, then read it back. Without `__iadd__` it falls through
+    to `list.__iadd__`, which mutates the proxy's *base* storage: the append
+    vanishes from the caller's own view (reads consult the override) and
+    leaks into every call that has none."""
+    import sys as _s
+
+    _globals.install()
+    try:
+        base_before = list(_s.argv)
+        with _globals.argv_override(["tool", "--x"]):
+            _s.argv += ["--added"]
+            assert list(_s.argv) == ["tool", "--x", "--added"]  # the caller sees it
+        assert list(_s.argv) == base_before  # and nothing leaked into the base
+    finally:
+        _globals.uninstall()
+
+
+def test_argv_reordering_stays_in_the_view():
+    """`sort`/`reverse` are the same shape as `__iadd__`: unoverridden, they
+    reorder the base list while the caller's view is untouched."""
+    import sys as _s
+
+    _globals.install()
+    try:
+        base_before = list(_s.argv)
+        with _globals.argv_override(["tool", "b", "a"]):
+            _s.argv.reverse()
+            assert list(_s.argv) == ["a", "b", "tool"]
+            _s.argv.sort()
+            assert list(_s.argv) == ["a", "b", "tool"]
+            assert list(reversed(_s.argv)) == ["tool", "b", "a"]
+        assert list(_s.argv) == base_before
+    finally:
+        _globals.uninstall()
