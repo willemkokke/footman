@@ -6,6 +6,7 @@
   "version": "1.5.1",
   "date": "2026-07-09",
   "platforms": [
+   "Linux",
    "Windows",
    "macOS"
   ],
@@ -14,17 +15,22 @@
    "help": "[--sdist-extract-dir PATH] [--sdist] [--wheel] [--metadata] [--report PATH]",
    "verbs": {
     "": {
-     "help": "[--sdist-extract-dir PATH] [--sdist] [--wheel] [--metadata] [--report PATH]",
+     "help": "",
      "wraps": false,
      "positional": "any",
      "lead": "",
      "options": {
       "config_json": {
        "flags": [
-        "--config-json"
+        "--dependency-constraints-txt",
+        "--skip-dependency-check",
+        "--no-isolation",
+        "--config-json",
+        "--installer",
+        "--env-dir"
        ],
        "negation": "",
-       "help": "settings to pass to the backend as a JSON object",
+       "help": "",
        "type": "str",
        "default": null,
        "choices": []
@@ -97,7 +103,7 @@
         "-o"
        ],
        "negation": "",
-       "help": "output directory (defaults to {srcdir}\\dist)",
+       "help": "output directory (defaults to {srcdir}/dist)",
        "type": "str",
        "default": null,
        "choices": []
@@ -197,6 +203,16 @@
     "\tsdist_extract_dir"
    ],
    "revert": {
+    "\tconfig_json": {
+     "flags": [
+      "--config-json"
+     ],
+     "negation": "",
+     "help": "settings to pass to the backend as a JSON object",
+     "type": "str",
+     "default": null,
+     "choices": []
+    },
     "\tmetadata": {
      "flags": [
       "--metadata"
@@ -218,22 +234,6 @@
      "type": "str",
      "default": null,
      "choices": []
-    },
-    "\toutdir": {
-     "flags": [
-      "--outdir",
-      "-o"
-     ],
-     "negation": "",
-     "help": "output directory (defaults to {srcdir}/dist)",
-     "type": "str",
-     "default": null,
-     "choices": []
-    }
-   },
-   "verbs": {
-    "": {
-     "help": ""
     }
    },
    "help": "[--metadata] [--config-setting KEY[=VALUE] | --config-json JSON_STRING]"
