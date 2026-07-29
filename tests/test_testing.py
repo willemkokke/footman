@@ -64,7 +64,7 @@ def test_use_context_installs_and_restores():
     ctx = Context(env={"MODE": "test"})
     with use_context(ctx) as installed:
         assert installed is ctx
-        run(cmd, silent=True)
+        run(cmd)  # a step, which is what this asserts on; pytest swallows the line
     assert ctx.steps[0].command == cmd
     # Outside the block a fresh default context applies again.
     with recording() as steps:

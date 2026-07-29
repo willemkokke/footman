@@ -57,12 +57,13 @@ places a global where the tool expects it and returns the tool, keeping the
 chain typed.
 
 footman's own **run-control** is separate — it rides `opts()`, a closed set
-(`nofail`, `in_process`, `capture`, `title`) that never becomes a tool flag,
-the same policy-vs-work split a task's `.opts()` has:
+(`nofail`, `in_process`, `capture`, `title`, `step`) that never becomes a tool
+flag, the same policy-vs-work split a task's `.opts()` has:
 
 ```python
-git.opts(nofail=True).push()        # tolerate a non-zero exit
-pytest.opts(capture=False)("-s")    # stream this run live
+git.opts(nofail=True).push()            # tolerate a non-zero exit
+pytest.opts(capture=False)("-s")        # stream this run live
+git.opts(step=False).rev_parse("HEAD")  # a value read, not an event
 ```
 
 Because it is a fixed set, `capture` here is unambiguously footman's — a tool's
@@ -338,7 +339,7 @@ a `--dry-run`, or a `recording()` test, costs zero tool imports; you pay
 only for the in-process tools you really invoke. A *preference* (`Tool(...,
 in_process=True)`) falls back to a subprocess when no entry point is
 installed; a *demand* (`.opts(in_process=True)`) errors with a taught message
-instead. `nofail`, `in_process`, `capture`, and `title` are footman
+instead. `nofail`, `in_process`, `capture`, `title` and `step` are footman
 run-control — set through `.opts()`, never translated to flags — so everything
 you pass to the call itself is a tool flag.
 
@@ -408,6 +409,40 @@ Plain `sh` has no `pipefail`, so it degrades to `set -e` with a one-time note;
 not a silent no-op. `clean=True` runs the interpreter without the user's
 startup files (`--norc --noprofile` and no `$BASH_ENV` for bash, `-NoProfile`
 for pwsh, `/d` for cmd), so a task's shell behaves the same on every machine.
+
+## Calls that are not steps
+
+A tool call is a **step** by default: it earns a receipt line, a row in
+`--json`, an entry in `recording()`, and its output joins the task's block.
+That is right for the things a task *does* — but some calls are how a task
+*knows* something, and those are not events anyone wants reported:
+
+<!-- example: fragment -->
+```python
+@task
+def release():
+    sha = git.opts(step=False).rev_parse("HEAD").stdout.strip()
+    run(f"./ship --sha={sha}")          # this one is the step
+```
+
+`step=False` runs the tool, hands back the `Result`, and reports nothing. In
+a release task with a dozen such reads, it is the difference between a report
+you can scan and one you cannot.
+
+It is **unreported, not unmanaged.** The call still runs in the task's
+directory with the task's environment, inside the task's lane, terminated
+with everything else under fail-fast — and it still fails the task on a
+non-zero exit unless you add `nofail=True`.
+
+One deliberate asymmetry: a non-step call **executes under `recording()`**,
+where a step is faked. A value read is not the story being recorded, and
+faking it would corrupt the story that is — the real steps after it would go
+on to record whatever a blank answer produced. (`--dry-run` is a different
+thing: it prints the plan and never runs a task body at all.)
+
+Passing `title=` alongside `step=False` is a note rather than an error —
+there is no receipt to label — because `.opts()` merges along a chain and a
+shared tool may carry a title that a later call site never asked for.
 
 ## Which version am I actually running?
 

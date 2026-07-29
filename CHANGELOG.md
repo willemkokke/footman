@@ -9,6 +9,20 @@ versions may include breaking changes.
 
 ### Added
 
+- **`step=False` — a call that is not part of the task's story.** A tool call
+  is a *step* by default: a receipt line, a row in `--json`, an entry in
+  `recording()`, its output in the task's block. Some calls are how a task
+  *knows* something rather than something it did — `git rev-parse HEAD` in a
+  release task — and those now say so: `git.opts(step=False).rev_parse("HEAD")`
+  runs, hands back its `Result`, and reports nothing. Available on `run()` and
+  in every tool's `.opts()`.
+
+  It is unreported, not unmanaged: the call keeps the task's directory,
+  environment and lane, is terminated with the rest under fail-fast, and still
+  fails the task on a non-zero exit unless `nofail=True`. It also **executes
+  under `recording()`**, where a step is faked — a value read is not the story
+  being recorded, and faking it would corrupt the story that is.
+
 - **`fm tools.provision --only` takes a set.** `--only=uv,bun` is what a
   gather actually drives: it installs each release itself, and the
   provisioned binaries only run the tiers — `uv` for the python and PyPI
@@ -97,6 +111,13 @@ versions may include breaking changes.
   or at the bottom. Where it sits in the file is the author's business; where
   it sits in a listing is footman's. `--list`, `--tree` and group help all
   lead with it, `--sort` included.
+
+### Removed
+
+- **`run(silent=)`**, replaced by `step=`. It suppressed the display but still
+  recorded the call, so a "silent" run appeared in `--json` and `recording()`
+  anyway — two switches that could disagree about one call. Undocumented, and
+  its only users were two tests.
 
 ### Fixed
 

@@ -757,7 +757,7 @@ def test_abort_latch_clears_after_a_failed_run():
     results = drive(tasks, "boom")
     assert not results[0].ok
     with use_context(Context()):
-        r = run([sys.executable, "-c", "print('alive')"], silent=True)
+        r = run([sys.executable, "-c", "print('alive')"], step=False)
     assert r == 0
     assert r.stdout.strip() == "alive"
 

@@ -163,6 +163,7 @@ class Tool:
         title: str = ...,
         cwd: str | _Path = ...,
         rel: str | _Path = ...,
+        step: bool = ...,
     ) -> Self: ...
     # A tool's own global options, bound before the next subcommand
     # (`docker.flags(host="x").ps()`). Generated stubs override it with the

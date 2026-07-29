@@ -1806,3 +1806,81 @@ def test_reveal_is_the_unwrap_said_out_loud():
     # Secret already yields a plain str, which is what makes the filter case
     # work without a flag to disarm.
     assert f"export TOKEN={token}" == "export TOKEN=hunter2"
+
+
+# --- step=False: a call that is not part of the task's story ------------------
+
+
+def test_a_non_step_call_runs_and_returns_but_reports_nothing(capsys):
+    def tasks(reg):
+        @reg.task
+        def release():
+            r = run(_echo("abc123"), step=False)
+            assert r == 0
+            assert r.stdout.strip() == "abc123"  # the value is the whole point
+            run(_echo("tagged"))  # a real step, for contrast
+
+    _, _, results = drive(tasks, "release")
+    assert results[0].ok, results[0].error
+    # Only the real step is recorded — the value read is absent from what
+    # `--json`, the report and `recording()` all read.
+    assert [s.command for s in results[0].steps] == [_echo("tagged")]
+    out = capsys.readouterr().out
+    assert "abc123" not in out  # no receipt, no output replayed
+
+
+def test_a_non_step_call_executes_under_recording():
+    # A step is faked under dry_run; a non-step is not the story being
+    # recorded, and faking it would corrupt the story that is — the real
+    # steps downstream would record whatever a blank answer produced.
+    from footman.testing import recording
+
+    with recording() as steps:
+        real = run(_echo("live"), step=False)
+        run("echo pretend")
+
+    assert real.stdout.strip() == "live"  # actually ran
+    assert [s.command for s in steps] == ["echo pretend"]  # only the step
+
+
+def test_a_non_step_call_still_fails_the_task():
+    # Unreported is not unmanaged: a non-zero exit still raises unless nofail.
+    def tasks(reg):
+        @reg.task
+        def build():
+            run([sys.executable, "-c", "raise SystemExit(3)"], step=False)
+
+    _, _, results = drive(tasks, "build")
+    assert not results[0].ok
+    assert results[0].code == 3
+
+    def tolerant(reg):
+        @reg.task
+        def build():
+            r = run(
+                [sys.executable, "-c", "raise SystemExit(3)"], step=False, nofail=True
+            )
+            assert r == 3
+
+    _, _, results = drive(tolerant, "build")
+    assert results[0].ok, results[0].error
+
+
+def test_a_title_on_a_non_step_call_is_noted_once(capsys):
+    # Not an error: `.opts()` merges along a chain, so a shared tool can carry
+    # a title while a call site adds step=False — neither author wrote the
+    # contradiction. Said once, on stderr.
+    from footman import _globals
+
+    _globals._noted.clear()
+
+    def tasks(reg):
+        @reg.task
+        def build():
+            run(_echo("one"), step=False, title="labelled")
+            run(_echo("two"), step=False, title="labelled")
+
+    _, _, results = drive(tasks, "build")
+    assert results[0].ok, results[0].error
+    err = capsys.readouterr().err
+    assert err.count("title= is ignored on a step=False call") == 1
