@@ -57,6 +57,55 @@ def test_json_version_example_is_current():
     assert f'"version": "{footman.__version__}"' in text
 
 
+KINDS = frozenset(
+    {
+        "Added",
+        "Changed",
+        "Deprecated",
+        "Removed",
+        "Fixed",
+        "Security",
+        "Documentation",
+        "CI",
+    }
+)
+"""The kinds a release may sort its entries into.
+
+Keep a Changelog's six, plus the two this project uses: `Documentation`,
+and `CI` for a change to the pipeline that ships nothing.
+"""
+
+
+def test_each_changelog_section_lists_a_kind_once():
+    """A release's entries of one kind belong under one heading.
+
+    Sessions append rather than look: `[Unreleased]` reached eight headings
+    for four kinds — `Fixed` four times — and `[0.26.0]` shipped with two
+    `Changed`. It costs nothing until release, when the runbook moves
+    `[Unreleased]` wholesale into a version section, and whatever shape it
+    is in is the shape that ships.
+    """
+    import collections
+    import re
+
+    text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    for section in re.split(r"^## ", text, flags=re.M)[1:]:
+        release = section.splitlines()[0].strip()
+        kinds = [
+            line[4:].strip() for line in section.splitlines() if line.startswith("### ")
+        ]
+        repeated = {k: n for k, n in collections.Counter(kinds).items() if n > 1}
+        assert not repeated, (
+            f"{release} lists {repeated} — merge them under one heading"
+        )
+        # One heading per kind is only half of it: two names for the same
+        # kind divide a release just as effectively. `Docs` and
+        # `Documentation` ran side by side for seven releases before
+        # anybody noticed they were the same section.
+        unknown = [k for k in kinds if k not in KINDS]
+        assert not unknown, f"{release} uses {unknown}, not one of {sorted(KINDS)}"
+
+
 def test_foundations_pages_teach_their_guards():
     """Every process-globals guard has a Foundations page teaching its
     ground. The mapping lives here (runtime error texts don't carry doc
