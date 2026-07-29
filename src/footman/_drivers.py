@@ -503,10 +503,10 @@ def _read_version(name: str) -> tuple[str, str]:
     binary = _resolve(name)
     if binary is None:
         return "", "not on PATH"
-    # A version read must never touch the network: gh runs its update check
-    # from any command — a banner, a state write, a remote call — unless
-    # told not to. The variable is gh's own; every other tool ignores it.
-    env = _toolhelp.read_env(GH_NO_UPDATE_NOTIFIER="1")
+    # A version read must never touch the network. `read_env` carries the
+    # variables that say so — see `_toolhelp.QUIET`, which every read shares
+    # now rather than this one alone.
+    env = _toolhelp.read_env()
     try:
         done = subprocess.run(
             [binary, "--version"],

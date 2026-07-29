@@ -36,6 +36,7 @@ from __future__ import annotations
 # module attribute lookup beats module `__getattr__`, so a public `run`/`sys`
 # would make `tools.run`/`tools.sys` the imported object instead of a Tool —
 # typechecking as Tools (per the stub) but crashing at runtime (F50, F53).
+import os as _os
 import re as _re
 import subprocess as _subprocess
 import sys as _sys
@@ -54,6 +55,9 @@ from footman.context import color_on as _color_on
 from footman.context import current as _current
 from footman.context import real_stderr as _real_stderr
 from footman.context import run as _run
+
+_QUIET = {"GH_NO_UPDATE_NOTIFIER": "1"}
+"""Told not to phone home while being read — see `_toolhelp.QUIET`."""
 
 _version_cache: dict[str, tuple[int, ...]] = {}
 
@@ -787,6 +791,11 @@ class Tool:
                 encoding="utf-8",
                 errors="replace",
                 timeout=30,
+                # Asking a tool its version must not make it check for a
+                # newer one: gh does that from any command unless told not
+                # to, so a task that guards on a version paid for a network
+                # round trip to find out.
+                env={**_os.environ, **_QUIET},
             )
             found = read_version(out.stdout or out.stderr)
             if out.returncode != 0 or not found:
