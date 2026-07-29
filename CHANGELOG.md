@@ -112,6 +112,7 @@ versions may include breaking changes.
 
 ### Changed
 
+- **build 1.5.1** adds `--env-dir`, `--report` and `--sdist-extract-dir`. It also rewords 1 description.
 - **The weekly refresh opens its pull request without arming auto-merge.**
   The gate replays every chain and regenerates every stub, which proves
   the store is *consistent* — not that the readings in it are true. A
