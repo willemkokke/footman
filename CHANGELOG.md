@@ -2698,7 +2698,7 @@ versions may include breaking changes.
   catalogue of every taught error, generated against real output, with the
   standing invitation that a raw traceback is a footman bug.
 
-### CI
+### Changed
 
 - **Every completion hook is now functionally tested against its real
   shell.** New tests drive bash (`COMP_WORDS`/`COMPREPLY`), zsh (the hook's
@@ -2841,6 +2841,13 @@ versions may include breaking changes.
 - Dry-run now records `StepResult`s (and honours `quiet`), so tests can assert
   which commands *would* run without executing anything.
 
+- Releases are gated: `release.yml` now runs the full CI suite on the tagged
+  commit and refuses to publish unless the tag, `pyproject.toml`,
+  `__version__`, and the changelog all agree on the version (and the wheel
+  ships `py.typed`).
+- Coverage is enforced (`fail_under = 92`), and the strict docs build runs on
+  every PR instead of only after merge.
+
 ### Fixed
 
 - `fm --help <task>` used to **execute the task**.
@@ -2858,15 +2865,6 @@ versions may include breaking changes.
 
 - Docstrings converted from reStructuredText to Markdown (renders natively via
   mkdocstrings).
-
-### CI
-
-- Releases are gated: `release.yml` now runs the full CI suite on the tagged
-  commit and refuses to publish unless the tag, `pyproject.toml`,
-  `__version__`, and the changelog all agree on the version (and the wheel
-  ships `py.typed`).
-- Coverage is enforced (`fail_under = 92`), and the strict docs build runs on
-  every PR instead of only after merge.
 
 ## [0.4.0] — 2026-07-16
 

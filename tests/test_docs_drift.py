@@ -66,13 +66,13 @@ KINDS = frozenset(
         "Fixed",
         "Security",
         "Documentation",
-        "CI",
     }
 )
 """The kinds a release may sort its entries into.
 
-Keep a Changelog's six, plus the two this project uses: `Documentation`,
-and `CI` for a change to the pipeline that ships nothing.
+Keep a Changelog's six, plus `Documentation`. A change to the pipeline is
+a `Changed`: `CI` was a seventh kind for three entries in two releases of
+July 2026, and nothing had used it since.
 """
 
 
