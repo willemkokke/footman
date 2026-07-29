@@ -2133,6 +2133,7 @@ def provision(
         bool, doc("run `tools sync` against the prefix afterwards")
     ] = False,
     clean: Annotated[bool, doc("remove the prefix when done")] = False,
+    strict: Annotated[bool, doc("fail if any tier could not be provisioned")] = False,
 ):
     """Fetch the latest curated tools into an isolated prefix — no pollution.
 
@@ -2143,6 +2144,11 @@ def provision(
     node CLIs, a release asset for the Go ones — touching nothing outside it.
     `--sync` then rewrites the stubs against that prefix; `--clean` deletes it.
     Deleting the prefix is the whole undo.
+
+    `--strict` turns a failed tier into a failed run. Without it the table
+    names what did not arrive and the run still succeeds, which is right
+    for a person deciding what to do next and wrong for a job that will
+    read the prefix and believe it.
     """
     from footman import _provision
 
@@ -2151,6 +2157,21 @@ def provision(
     prefix = Path(prefix).expanduser().resolve()
     outcomes = _provision.provision(_drivers.DRIVERS, prefix, only=only)
     _print_outcomes(outcomes)
+    if strict:
+        from footman import fail
+
+        # A person at a terminal reads the table and decides what to do
+        # next, so a failed tier is named and the rest carries on. A step
+        # whose whole purpose is to leave a prefix complete has no such
+        # judgement: a run where bun hit a rate limit still said `ok`, and
+        # a half-provisioned prefix went into the gather unremarked.
+        failed = [out for out in outcomes if out.status == "fail"]
+        if failed:
+            fail(
+                "could not provision "
+                + ", ".join(f"{out.key} ({out.detail})" for out in failed),
+                code=70,  # EX_SOFTWARE: the prefix is not what was asked for
+            )
     if sync_:
         _sync_against(prefix, only)
     else:

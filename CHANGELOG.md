@@ -9,6 +9,13 @@ versions may include breaking changes.
 
 ### Added
 
+- **`fm tools.provision --strict` turns a failed tier into a failed run.**
+  Without it the table names what did not arrive and the run still
+  succeeds, which is right for a person deciding what to do next and wrong
+  for a job that will read the prefix and believe it: a refresh where bun
+  hit a rate limit reported `ok`, and the half-provisioned prefix went
+  into the gather unremarked. The weekly refresh provisions strictly.
+
 - **`fm tools.owed` answers what a gather would read, without installing
   anything.** A gather provisioned all 28 tools and then discovered there
   was nothing to observe, which is most weeks — a current store stays

@@ -47,7 +47,7 @@ jobs:
         # "nothing owed" about a release it cannot see. One tool, ~3s.
         env:
           GH_TOKEN: ${{ github.token }}
-        run: uv run fm tools.provision --only=uv
+        run: uv run fm tools.provision --only=uv --strict
 
       - name: is there anything to read?
         id: owed
@@ -81,7 +81,7 @@ jobs:
           # got to bun, which failed, and took cspell and markdownlint with
           # it. The token was on the observe step alone.
           GH_TOKEN: ${{ github.token }}
-        run: uv run fm tools.provision
+        run: uv run fm tools.provision --strict
 
       - name: observe what this platform sees
         if: steps.owed.outputs.work == 'true'

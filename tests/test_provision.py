@@ -34,6 +34,31 @@ def _zip(path: Path, arcname: str, data: bytes) -> None:
 # --- tiers -------------------------------------------------------------------
 
 
+def test_strict_turns_a_failed_tier_into_a_failed_run(tmp_path, monkeypatch):
+    """`ok` for a prefix that is missing tools is right for a person and
+    wrong for a job. A refresh run where bun hit a rate limit still said
+    `ok`, and the half-provisioned prefix went into the gather unremarked
+    — cspell and markdownlint were skipped for want of the tool that had
+    failed two steps earlier."""
+    from footman import Failed
+    from footman.tasks import tools
+
+    outcomes = [
+        _provision.Outcome("ruff", "uv", "ok", "ruff"),
+        _provision.Outcome("bun", "bun", "fail", "HTTP Error 403: rate limit"),
+    ]
+    monkeypatch.setattr(_provision, "provision", lambda *a, **k: outcomes)
+
+    # Without it: the table names the failure and the run succeeds.
+    tools.provision(prefix=tmp_path / "p")
+
+    with pytest.raises(Failed) as refused:
+        tools.provision(prefix=tmp_path / "p", strict=True)
+    assert "bun" in str(refused.value)
+    assert "rate limit" in str(refused.value)
+    assert refused.value.code == 70
+
+
 def test_system_and_deferred_are_reported_not_fetched(tmp_path):
     drivers = (
         Driver("git", provision=Provision(kind="system")),
