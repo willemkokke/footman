@@ -1,10 +1,10 @@
 {
  "schema": 1,
  "tool": "git_changelog",
- "observed_from": "2.6.3",
+ "observed_from": "2.7.0",
  "base": {
-  "version": "2.9.4",
-  "date": "2026-07-28",
+  "version": "2.9.5",
+  "date": "2026-07-29",
   "platforms": [
    "Linux"
   ],
@@ -277,6 +277,13 @@
   }
  },
  "deltas": {
+  "2.9.4": {
+   "date": "2026-04-29",
+   "platforms": [
+    "Linux"
+   ],
+   "extractor": 2
+  },
   "2.9.3": {
    "date": "2026-03-26",
    "platforms": [
@@ -332,22 +339,6 @@
     "Linux"
    ],
    "extractor": 2
-  },
-  "2.6.3": {
-   "date": "2025-09-18",
-   "platforms": [
-    "Linux"
-   ],
-   "extractor": 2,
-   "drop": [
-    "\tinclude_all"
-   ],
-   "verbs": {
-    "": {
-     "help": "[-s SECTIONS] [-t TEMPLATE] [-T] [-E] [-Z] [-F RANGE] [-j KEY=VALUE] [-V] [--debug-info]"
-    }
-   },
-   "help": "[-s SECTIONS] [-t TEMPLATE] [-T] [-E] [-Z] [-F RANGE] [-j KEY=VALUE] [-V] [--debug-info]"
   }
  }
 }
