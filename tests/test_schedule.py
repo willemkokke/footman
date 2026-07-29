@@ -8,7 +8,7 @@ import threading
 
 import pytest
 
-from footman import manifest, parallel, run, schedule
+from footman import _globals, manifest, parallel, run, schedule
 from footman.registry import Group
 from footman.split import ChainError, Segment, split_chain
 
@@ -598,6 +598,16 @@ def test_interactive_task_suspends_the_status_line_for_its_body(monkeypatch):
     # the terminal (a \r + clear-line would erase its prompt) — but the line
     # itself lives on around the body, instead of costing the whole run.
     monkeypatch.delenv("NO_COLOR", raising=False)
+    # Under coverage the tracer canonicalises each newly-seen file through
+    # `os.path.realpath`, and ntpath resolves a relative path by calling
+    # `os.getcwd()` — on this task's thread, so the guard attributes it to
+    # `wizard` and teaches a lesson about a line the task never wrote. It
+    # lands on the real stderr mid-body and fails the assert below, but only
+    # when the tracer happens to meet a fresh file inside the window: red
+    # about two runs in three under the full suite, green alone. footman's
+    # own internals all use `real_getcwd`, so pre-consuming this one key
+    # silences the artefact and nothing genuine.
+    monkeypatch.setattr(_globals, "_noted", {*_globals._noted, ("wizard", "getcwd")})
     err_fake = _Tty()
     monkeypatch.setattr(sys, "stderr", err_fake)
     monkeypatch.setattr(sys, "stdout", io.StringIO())
