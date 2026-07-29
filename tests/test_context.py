@@ -909,17 +909,10 @@ def test_windows_string_commands_are_not_shlex_split(monkeypatch):
 
     calls = {}
 
-    def fake_run(
-        argv,
-        env,
-        cwd,
-        capture,
-        encoding="utf-8",
-        killable=True,
-        isolate=True,
-        keep_going=False,
-        timeout=None,
-    ):
+    # **kw, not the exact signature: this stands in for _run_subprocess to
+    # inspect one argument, so it should not break every time the real one
+    # grows another.
+    def fake_run(argv, env, cwd, capture, *a, **kw):
         calls["argv"] = argv
         return 0, "", "", False
 
@@ -1951,3 +1944,40 @@ def test_a_timed_out_call_is_still_a_step_unless_it_says_otherwise():
     with use_context(quiet_ctx):
         run(_sleeper(30), timeout=0.5, nofail=True, step=False)
     assert quiet_ctx.steps == []  # step governs reporting, never behaviour
+
+
+def test_a_captured_windows_child_gets_no_console_window(monkeypatch):
+    """Windows Terminal hands each spawn a visible window, and a tool that
+    interrogates the terminal at start-up hangs against the caller's console.
+    A captured read has no business owning one — so it gets a hidden console
+    (CREATE_NO_WINDOW), never a detached one, which would leave pwsh and
+    git-bash with no console at all."""
+    import subprocess as sp
+
+    from footman import context as context_mod
+
+    seen: dict[str, object] = {}
+
+    def fake_run(argv, env, cwd, capture, *a, **k):
+        seen["no_window"] = k.get("no_window")
+        return 0, "", "", False
+
+    monkeypatch.setattr(context_mod, "_run_subprocess", fake_run)
+
+    def tasks(reg):
+        @reg.task
+        def go():
+            run(_echo("hi"))
+
+    drive(tasks, "go")
+    assert seen["no_window"] is True
+
+    def streaming(reg):
+        @reg.task
+        def go():
+            run(_echo("hi"), capture=False)  # reaching for the real terminal
+
+    drive(streaming, "go")
+    assert seen["no_window"] is False
+
+    assert hasattr(sp, "CREATE_NO_WINDOW") == (sys.platform == "win32")

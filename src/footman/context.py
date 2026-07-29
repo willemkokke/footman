@@ -1291,6 +1291,7 @@ def _run_subprocess(
     isolate: bool = True,
     keep_going: bool = False,
     timeout: float | None = None,
+    no_window: bool = False,
 ) -> tuple[int, str, str, bool]:
     # Dev tools (pytest, ruff, git, uv) emit UTF-8 regardless of the OS code
     # page, so decode as UTF-8 by default rather than the locale encoding
@@ -1310,11 +1311,26 @@ def _run_subprocess(
     # its controlling tty and a full-screen program would misbehave). The kill
     # guard signals such an in-group child alone, never the shared group.
     group: dict[str, Any] = {}
-    if isolate:
-        if sys.platform == "win32":
-            group["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
-        else:
-            group["start_new_session"] = True
+    if sys.platform == "win32":
+        flags = subprocess.CREATE_NEW_PROCESS_GROUP if isolate else 0
+        # A *captured* read has no business owning a console. Without this,
+        # Windows Terminal hands each spawn a visible window, and a tool that
+        # interrogates the terminal at start-up blocks forever waiting for a
+        # reply no pipe will carry — so whether a read hung depended on which
+        # window the run was launched from. CREATE_NO_WINDOW gives it a fresh
+        # *hidden* console, which is determinism rather than a cure: a
+        # determined interrogator still queries the hidden one. Deliberately
+        # not DETACHED_PROCESS, which leaves console-hosted runtimes with no
+        # console at all — pwsh dies at start-up, git-bash goes mute.
+        #
+        # Streaming and interactive runs are exempt: they mean to reach the
+        # caller's terminal, which is the thing this takes away.
+        if no_window:
+            flags |= subprocess.CREATE_NO_WINDOW
+        if flags:
+            group["creationflags"] = flags
+    elif isolate:
+        group["start_new_session"] = True
     proc = subprocess.Popen(
         argv,
         env=env,
@@ -1881,6 +1897,10 @@ def run(
             # Tag the child with its task's policy: a fail-fast failure elsewhere
             # reaps this tree only if the task is fail-fast, not keep-going.
             keep_going=ctx.keep_going,
+            # A captured child writes to pipes, so it needs no console of its
+            # own; an uncaptured or interactive one is reaching for the real
+            # terminal on purpose.
+            no_window=capture and not ctx.interactive,
         )
     duration = time.perf_counter() - start
     if timed_out:
