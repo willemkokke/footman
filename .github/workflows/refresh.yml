@@ -36,6 +36,13 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        # bash on every leg, Windows included. A `run:` block there is pwsh
+        # by default, and the pre-pass — the job's first multi-line step —
+        # is shell script: `$(…)`, `[ … ]`, `>> "$GITHUB_OUTPUT"`. It failed
+        # on Windows alone, and took provisioning and the gather with it.
+        shell: bash
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v7

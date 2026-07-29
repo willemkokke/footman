@@ -94,6 +94,12 @@ versions may include breaking changes.
 
 ### Fixed
 
+- **The weekly refresh runs bash on every platform.** A `run:` block on a
+  Windows runner is PowerShell by default, and the pre-pass — the gather
+  job's first multi-line step — is shell script. It failed on Windows
+  alone with `Missing '(' after 'if'`, and took provisioning and the
+  gather down with it while the other two legs passed.
+
 - **A wrapped usage line is no longer read as an option row.** A usage
   that wraps continues on an indented line of bracketed flags — the shape
   of an option row — and it lives in the preamble, where there is no
