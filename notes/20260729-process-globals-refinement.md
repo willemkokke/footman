@@ -135,11 +135,21 @@ split happens**, not before.
    `ctx.env`, colour handling, Windows quoting and the encoding policy they
    currently hand-roll.
 
-**Still open, blocking step 3 only:** four of those sites pass
-`creationflags=NO_CONSOLE_WINDOW` and `run()` cannot express it. The
-interesting option is that `run()` should set it for *every* captured Windows
-run — `_toolhelp`'s comment argues that case — but it is a Windows behaviour
-change that wants verifying on Windows.
+**Resolved (#220):** `run()` now sets `CREATE_NO_WINDOW` for *every* captured
+run, exempting `capture=False` and `interactive=True` — Willem's call, "always
+set it until we find out a reason not to". So nothing blocks the conversion
+any more:
+
+- `step=False` (#209) — the probes report nothing
+- `timeout=` (#212) — their hand-rolled `TimeoutExpired` branches retire, and
+  gain a tree-kill they never had
+- `env=` replaces (#219) — `read_env()`'s subtraction survives the trip, which
+  under the old overlay it could not
+- `CREATE_NO_WINDOW` (#220) — no longer needs saying per call
+
+**Not done deliberately.** All nine sites are tool-walk machinery, which
+another session is actively working in, and this is cleanup rather than a
+fix. Whoever owns that area should do it — `read_env()` retires with it.
 
 ## Verification
 
