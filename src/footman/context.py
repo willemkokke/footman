@@ -1630,7 +1630,7 @@ def run(
     cmd: str | list[str] | Callable[..., Any],
     *args: Any,
     nofail: bool = False,
-    silent: bool = False,
+    step: bool = True,
     capture: bool = True,
     title: str | None = None,
     env: dict[str, str] | None = None,
@@ -1652,6 +1652,21 @@ def run(
     `rel=` appends a relative suffix to the base in force (`ctx.cwd`, or the
     explicit `cwd=`), so `run("npm run build", rel="web")` is the ergonomic
     spelling of `cwd=ctx.cwd / "web"`.
+
+    **`step=False` says this call is not part of the task's story.** A call is
+    a *step* by default: it earns a receipt line, a row in `--json`, a
+    `recording()` entry, and its output joins the task's block. Some calls
+    aren't events, though — they are how a task *knows* something (`git
+    rev-parse HEAD` in a release task). Those return their `Result` and
+    report nothing: no record, no receipt, no output replayed.
+
+    Everything else still applies, because the call is not unmanaged — only
+    unreported. It runs in `ctx.cwd` with `ctx.env`, inside the task's lane,
+    with colour resolved the same way, it is terminated with the rest on a
+    fail-fast, and it still raises unless `nofail=True`. It also *executes*
+    under `recording()`, where a step would be faked: a value read is not the
+    story being recorded, and faking it would corrupt the story that is —
+    the real steps downstream would record whatever a blank answer produced.
 
     `_show` is an internal channel from the `tools.*` bridge: a structured
     view of the call, so the shown command line can be normalised and
@@ -1684,17 +1699,34 @@ def run(
         shown = _dim(label, color)
         shown_plain = label
 
-    if ctx.dry_run:
+    if ctx.dry_run and step:
         # Record the step even when not executing: `dry_run` + `quiet` is the
         # silent-capture mode `footman.testing` builds on. The recorded label
         # is normalised; only the shown line colours or (under -v) goes exact.
+        #
+        # A non-step call runs anyway. It is not the story being recorded — it
+        # is how the task learns something — and faking it would corrupt the
+        # story that *is*: the real steps downstream would go on to record
+        # whatever a blank answer produced (`git tag ` for a missing sha).
         result = Result(0, command=label, raw=raw)
         ctx.steps.append(result)
         if not ctx.quiet:
             out.write(f"$ {shown if color else shown_plain}\n")
         return result
 
-    show = not silent and not ctx.quiet
+    if title is not None and not step:
+        # Not an error: `.opts()` merges along a chain, so a shared tool may
+        # carry a title from where it was configured while a call site adds
+        # `step=False` — neither author wrote the contradiction. Say it once.
+        from footman import _globals as _pg_note
+
+        _pg_note._note(
+            "step-title",
+            f"title= is ignored on a step=False call ({label}): there is no "
+            f"receipt to label.",
+        )
+
+    show = step and not ctx.quiet
     # `ctx.tty` means "this output dresses for a terminal" (colour, marks);
     # liveness is `sink is None`. A captured block styles for the terminal
     # it will replay onto, but in-place rewrites and the announce line stay
@@ -1782,7 +1814,8 @@ def run(
     result = Result(
         code, command=label, stdout=out_s, stderr=err_s, duration=duration, raw=raw
     )
-    ctx.steps.append(result)
+    if step:
+        ctx.steps.append(result)  # what --json, the report and recording() read
 
     if show:
         ok = code == 0

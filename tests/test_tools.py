@@ -894,3 +894,27 @@ def test_git_globals_via_flags_precede_the_verb():
     assert _one(lambda: tools.git.flags(no_pager=True).log(n=1)) == (
         "git --no-pager log -n 1"
     )
+
+
+def test_opts_step_false_runs_the_tool_without_recording_it(capsys):
+    # The value-read case: call a tool, read the output, leave no trace. The
+    # in-tree modules that dropped to raw subprocess to get this are why it
+    # exists (_toolhelp, _provision, _colorprobe, _drivers).
+    from footman.context import Context, use_context
+
+    ctx = Context()
+    with use_context(ctx):
+        result = tools.Tool(sys.executable).opts(step=False)("-c", "print('a-value')")
+    assert result.stdout.strip() == "a-value"
+    assert result.code == 0
+    assert ctx.steps == []  # nothing recorded
+    assert "a-value" not in capsys.readouterr().out  # nothing shown
+
+
+def test_opts_step_true_is_the_default():
+    from footman.context import Context, use_context
+
+    ctx = Context()
+    with use_context(ctx):
+        tools.Tool(sys.executable)("-c", "print('recorded')")
+    assert len(ctx.steps) == 1

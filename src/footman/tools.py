@@ -454,7 +454,7 @@ _argv_lock = _threading.Lock()
 # *beside* the call, never translated into tool flags. A closed vocabulary, like a
 # task's `.opts()`, so `capture` here is unambiguously footman's (not a tool's own
 # `--capture`, e.g. pytest's); a tool's own flags go in the call or `.flags()`.
-_TOOL_OPTS = ("nofail", "in_process", "capture", "title", "cwd", "rel")
+_TOOL_OPTS = ("nofail", "in_process", "capture", "title", "cwd", "rel", "step")
 
 
 def _opts_overrides(kwargs: dict[str, Any]) -> dict[str, Any]:
@@ -548,11 +548,19 @@ class Tool:
     def opts(self, **overrides: Any) -> Tool:
         """Set footman run-control policy for the call — the same `.opts()` a task
         has, mirroring its policy-vs-work split. A closed vocabulary
-        (`nofail`, `in_process`, `capture`, `title`) that rides *beside* the call,
-        never becoming a tool flag:
+        (`nofail`, `in_process`, `capture`, `title`, `step`) that rides *beside*
+        the call, never becoming a tool flag:
 
             git.opts(nofail=True).push()          # tolerate a non-zero exit
             pytest.opts(capture=False)("-s")      # stream this run live
+            git.opts(step=False).rev_parse("HEAD")  # a value read, not an event
+
+        `step=False` is the one that changes what the *run* sees rather than
+        how the tool is invoked: the call runs in the task's directory and
+        environment as always, but reports nothing — no receipt, no row in
+        `--json`, no `recording()` entry — and hands back its `Result`. Reach
+        for it when the call is how the task *knows* something rather than
+        something the task *did*.
 
         Because it is a fixed set, `capture` here is unambiguously footman's — a
         tool's own `--capture` (pytest's) still goes in the call. The overridden
@@ -590,6 +598,7 @@ class Tool:
         in_process = self._opts.get("in_process", None)
         cwd_opt = self._opts.get("cwd", None)
         rel_opt = self._opts.get("rel", None)
+        step = self._opts.get("step", True)
         flags = _flags(kwargs, self._argv0, single_dash=self._single_dash)
         positionals = list(map(str, args))
         wrapper = _is_wrapper(self._argv0, self._base)
@@ -630,6 +639,7 @@ class Tool:
                 nofail=nofail,
                 capture=capture,
                 title=title,
+                step=step,
                 cwd=cwd_opt,
                 rel=rel_opt,
                 _show=_Invocation(parts, tuple(spawned)),
@@ -686,6 +696,7 @@ class Tool:
                 nofail=nofail,
                 capture=capture,
                 title=title,
+                step=step,
                 cwd=cwd_opt,
                 rel=rel_opt,
                 _show=show,
