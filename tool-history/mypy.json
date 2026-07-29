@@ -1090,7 +1090,8 @@
    "date": "2025-12-15",
    "platforms": [
     "Linux",
-    "Windows"
+    "Windows",
+    "macOS"
    ],
    "extractor": 2,
    "drop": [
@@ -1136,7 +1137,8 @@
    "date": "2025-11-28",
    "platforms": [
     "Linux",
-    "Windows"
+    "Windows",
+    "macOS"
    ],
    "extractor": 2
   },
@@ -1144,7 +1146,8 @@
    "date": "2025-09-19",
    "platforms": [
     "Linux",
-    "Windows"
+    "Windows",
+    "macOS"
    ],
    "extractor": 2,
    "revert": {

@@ -7,6 +7,7 @@
   "date": "2026-07-29",
   "platforms": [
    "Linux",
+   "Windows",
    "macOS"
   ],
   "extractor": 2,
@@ -362,7 +363,9 @@
   "2.6.3": {
    "date": "2025-09-18",
    "platforms": [
-    "Windows"
+    "Linux",
+    "Windows",
+    "macOS"
    ],
    "extractor": 2,
    "drop": [
