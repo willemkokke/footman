@@ -135,19 +135,27 @@ jobs:
           pattern: observations-*
           merge-multiple: true
 
-      - name: every platform must have reported
-        # Not a nicety: absences are tagged per platform, so a leg that never
-        # reported is a platform whose silence must not be read as an answer.
+      - name: what reported
+        id: reported
+        # A leg that *died* never reaches here — `needs: gather` requires
+        # every matrix job to succeed, and a failed one skips this job
+        # rather than letting its silence read as an answer.
+        #
+        # A leg that reported nothing is a different thing entirely: the
+        # pre-pass found nothing owed, so it skipped provisioning, the walk
+        # and the upload. That is the quiet week this workflow was built to
+        # cost nothing, and it must not look like a failure.
         run: |
-          for os in ubuntu-latest macos-latest windows-latest; do
-            test -f "observations/$os.json" || {
-              echo "::error::$os produced no observation document"; exit 1; }
-          done
+          count=$(ls observations/*.json 2>/dev/null | wc -l | tr -d " ")
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+          echo "$count platform(s) had something to read"
 
       - name: fold them into the store
+        if: steps.reported.outputs.count != '0'
         run: uv run fm --json tools.assemble observations/*.json > assembled.json
 
       - name: what changed
+        if: steps.reported.outputs.count != '0'
         run: |
           git add -A -- tool-history src/footman/_stubs CHANGELOG.md
           if git diff --cached --quiet; then
@@ -162,7 +170,8 @@ jobs:
         # Built, and off unless the repo variable says otherwise: a stub-only
         # release is a patch bump, and whether that ships without a human
         # looking is a policy, not a mechanism.
-        if: env.changed == 'true' && env.release == 'true' && vars.AUTO_RELEASE == 'true'
+        if: steps.reported.outputs.count != '0' && env.changed == 'true'
+          && env.release == 'true' && vars.AUTO_RELEASE == 'true'
         run: |
           uv run fm --json tools.prepare-release > prepared.json
           jq -r '.results[] | select(.task | endswith("prepare-release"))
@@ -170,7 +179,7 @@ jobs:
           git add -A -- pyproject.toml src/footman/__init__.py docs/json.md CHANGELOG.md
 
       - name: open the pull request
-        if: env.changed == 'true'
+        if: steps.reported.outputs.count != '0' && env.changed == 'true'
         env:
           GH_TOKEN: ${{ secrets.REFRESH_TOKEN }}
         run: |
@@ -194,7 +203,7 @@ jobs:
         # Only after auto-merge actually completed: a tag on a commit that
         # never reached main points at nothing. A PAT-pushed tag triggers
         # release.yml, which a GITHUB_TOKEN-pushed one would not.
-        if: env.changed == 'true' && env.tag != ''
+        if: steps.reported.outputs.count != '0' && env.changed == 'true' && env.tag != ''
         env:
           GH_TOKEN: ${{ secrets.REFRESH_TOKEN }}
         run: |
