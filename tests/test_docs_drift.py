@@ -57,6 +57,30 @@ def test_json_version_example_is_current():
     assert f'"version": "{footman.__version__}"' in text
 
 
+def test_each_changelog_section_lists_a_kind_once():
+    """A release's entries of one kind belong under one heading.
+
+    Sessions append rather than look: `[Unreleased]` reached eight headings
+    for four kinds — `Fixed` four times — and `[0.26.0]` shipped with two
+    `Changed`. It costs nothing until release, when the runbook moves
+    `[Unreleased]` wholesale into a version section, and whatever shape it
+    is in is the shape that ships.
+    """
+    import collections
+    import re
+
+    text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    for section in re.split(r"^## ", text, flags=re.M)[1:]:
+        release = section.splitlines()[0].strip()
+        kinds = [
+            line[4:].strip() for line in section.splitlines() if line.startswith("### ")
+        ]
+        repeated = {k: n for k, n in collections.Counter(kinds).items() if n > 1}
+        assert not repeated, (
+            f"{release} lists {repeated} — merge them under one heading"
+        )
+
+
 def test_foundations_pages_teach_their_guards():
     """Every process-globals guard has a Foundations page teaching its
     ground. The mapping lives here (runtime error texts don't carry doc

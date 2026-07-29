@@ -187,7 +187,6 @@ versions may include breaking changes.
   callable as a task. A duplicate name in a tasks file stays a taught error;
   one made mid-run is numbered (`rmtree`, `rmtree-2`), so a `lambda` in a
   loop and a helper used twice are each their own work.
-
 - **The docs have a Playground.** footman runs in the browser: the editor
   is a `tasks.py`, the prompt is `fm`, and the run goes through the same
   in-process `Runner` the testing page teaches. Python arrives via Pyodide
@@ -255,7 +254,6 @@ versions may include breaking changes.
   on one runner. Its PR opens on any tree change and auto-merges once the
   gate is green; auto-release is built and gated on `vars.AUTO_RELEASE`,
   default off.
-
 - **The tool walks gather in parallel, on footman's own runtime.** Each
   (tool, release) observation is a task of its own, fanned out with
   `parallel()` in bounded waves — the task boundary gives every observation
@@ -284,7 +282,6 @@ versions may include breaking changes.
   in parallel or across runs, and assemble as results arrive. A release that
   will not install stops being fatal to a tool's whole walk; the gap is
   filled later, and until then costs precision rather than correctness.
-
 - **Writing plugins — the provider's guide.** One page for the whole
   authoring story: the worked provider, the `footman.tasks` entry point
   (lifecycle-only modules included), pull semantics, the
@@ -314,7 +311,6 @@ versions may include breaking changes.
   fresh, or satisfied by sharing — counts and shows as running exactly
   like a scheduler node or a `parallel()` child. A task handed to
   `parallel()` is counted once, by the body-call machinery, never twice.
-
 - **A GitHub token is used when one is offered.** `GH_TOKEN` or
   `GITHUB_TOKEN` in the environment raises the API budget from 60 calls an
   hour to 5,000 — which matters less for footman's own volume than for a
@@ -327,9 +323,6 @@ versions may include breaking changes.
   when an option arrived rather than only what exists today — 102 new `Added
   in` claims across the set. eclint reaches four, because four is all that
   has been published; prek and python already reached further and keep it.
-
-### Changed
-
 - **build 1.5.1** adds `--env-dir`, `--report` and `--sdist-extract-dir`. It also rewords 3 descriptions.
 - **djlint 1.43.0** adds `--stdin-filename`.
 - **markdownlint 0.23.2** rewords 1 description. It also restates its own description.
@@ -348,7 +341,6 @@ versions may include breaking changes.
   heals itself when extraction improves rather than needing the record edited
   by hand. Reading each release in its own era is generation 2, and every
   observation taken before it is owed a second look.
-
 - **A body call's output is no longer dropped in an uncaptured run.** A task
   reached by `build()` runs with its own buffer so its output stays one
   block, but that block was only ever handed to a *capturing* parent — under
@@ -372,7 +364,6 @@ versions may include breaking changes.
 - **A hand-written stub is named as one.** The six shells carry the default
   provision kind, so a skipped list called them `uv tier` — a tier nobody
   fetches them from.
-
 - **`footman.docstrings` and `footman.markdown` resolve for a type-checker.**
   Both are lazily served by `__getattr__` and both were named in `__all__`,
   but neither was declared to a type-checker — so the package advertised two
@@ -380,7 +371,6 @@ versions may include breaking changes.
   consumer running a strict check saw footman complain about itself. Declared
   in the `TYPE_CHECKING` block, which never executes: a bare `import footman`
   still imports nothing.
-
 - **The npm tier no longer needs node on the machine.** It installs through
   bun, but what bun installs is a launcher beginning `#!/usr/bin/env node` —
   and bun only stands in for node when bun itself runs a script, while the
@@ -391,7 +381,6 @@ versions may include breaking changes.
   the same two tools lost on every leg, indefinitely. The walk now writes a
   `node` that forwards to `bun --bun`, inside the scratch directory so it goes
   when the walk does, and only where bun is present and node is not.
-
 - **A tool's man probe can no longer open a browser.** `git help <verb>`
   honours `help.format`, which Windows defaults to html — so extracting the
   git driver opened the HTML docs in a browser tab per verb, twenty-one at
@@ -399,7 +388,6 @@ versions may include breaking changes.
   `help.format=man`: a POSIX box reads the same text it always did, and a
   box with no man viewer fails quietly into the existing empty-text
   fallback.
-
 - **The detached refresh and collector children stay invisible on Windows
   11.** With Windows Terminal as the default terminal, a `DETACHED_PROCESS`
   child is handed a *visible* terminal window — one popped over the shell
@@ -424,7 +412,6 @@ versions may include breaking changes.
 - **A stub header names every platform that read it**, rather than the first
   alphabetically — a release observed on two platforms credited one and
   quietly disowned the other's evidence.
-
 - **One piece of work is one unit on the live line, whatever the spelling.**
   `parallel(lambda: build("web"))` counted twice — once as the thunk, once as
   the request inside it — where `parallel(build)` and a `functools.partial`
@@ -433,7 +420,6 @@ versions may include breaking changes.
   counting a second one for the same work. The claim is one-shot and never
   reaches the callee, so a thunk running two tasks counts two, and a plain
   thunk keeps the unit nobody claimed.
-
 - **A task called from `@pre_tasks` or `@post_tasks` is refused, and says
   why.** Both moments sit outside the run, so such a call quietly became a
   plain function call — no result row, no sharing, no availability gate, and
@@ -444,7 +430,6 @@ versions may include breaking changes.
   move the call to a per-task moment, which runs inside the run and gives it
   a real task boundary. Calling a task from outside footman entirely — a
   REPL, an import of the tasks module — is untouched.
-
 - **Re-reading a release no longer overwrites what other platforms saw.**
   The same-version path replaced the stored surface outright — erasing every
   recorded absence while the entry went on claiming those platforms had
@@ -455,7 +440,6 @@ versions may include breaking changes.
   with a symlink, which Windows grants only with developer mode or
   elevation; it falls back to a launcher, since a copied `python.exe` finds
   no standard library.
-
 - **Click extraction no longer mistakes this environment for the binary.**
   The entry point imports from the running process while the binary comes
   from `PATH`, and nothing tied the two together — so priming a click tool
@@ -466,12 +450,10 @@ versions may include breaking changes.
   path — which asks the binary itself — on any disagreement. Both chains are
   re-primed: mkdocs turns out to have changed surface in 1.6.0, 1.5.3 and
   1.4.3, zensical in 0.0.50 and 0.0.48.
-
 - **A release asset is fetched by the tag the listing recorded, not one
   derived from the version.** bun tags `bun-v1.3.13` for a binary answering
   `1.3.13`, so deriving the tag made its entire history unreachable — listing
   worked, and only installing failed, which is why nothing looked wrong.
-
 ## [0.25.0] — 2026-07-27
 
 ### Added
