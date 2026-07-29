@@ -56,21 +56,39 @@ def snapshot_env() -> dict[str, str]:
     return dict(_snapshot)
 
 
+def base_env() -> dict[str, str]:
+    """The environment a fresh task starts from — a real dict, never a diff.
+
+    Inside a run that is the pinned run-start snapshot, so every task begins
+    from the same base whatever a sibling has done to its own. Outside one it
+    is the live process environment, read through the *saved* method so an
+    installed router cannot answer about some other task's view.
+    """
+    if _installs:
+        return dict(_snapshot)
+    if "copy" in _environ_saved:  # router installed but not for this read
+        return dict(_environ_saved["copy"](os.environ))
+    return dict(os.environ)
+
+
 def _norm(key: str) -> str:
     """Windows environment lookups are case-insensitive; mirror that."""
     return key.upper() if os.name == "nt" else key
 
 
 def _merged() -> dict[str, str]:
-    """The virtual environment: run-start snapshot + the task's overlay."""
+    """The virtual environment: simply the task's own, which is a whole one.
+
+    It used to be `snapshot + overlay`, merged here and spelled two other ways
+    elsewhere. A task now owns its environment outright, so there is one value
+    and nothing to reconcile — which is what makes deletion ordinary.
+    """
     from footman.context import current
 
-    overlay = current().env
+    env = current().env
     if os.name == "nt":
-        merged = {k.upper(): v for k, v in _snapshot.items()}
-        merged.update((k.upper(), v) for k, v in overlay.items())
-        return merged
-    return {**_snapshot, **overlay}
+        return {k.upper(): v for k, v in env.items()}
+    return dict(env)
 
 
 def _note(kind: str, text: str) -> None:
@@ -148,23 +166,18 @@ def _install_environ() -> None:
             return orig_del(self, key)
         from footman.context import current
 
-        # A key this task set scoped comes straight back out of the overlay:
-        # set-then-delete round-trips additively (pytest sets PYTEST_VERSION
-        # and deletes it on exit), invisible to siblings either way. Only a
-        # key from the base environment is subtractive and stays refused.
+        # Ordinary, because a task owns its environment outright: the key goes
+        # from this task's copy and from every child it spawns after, while a
+        # sibling's copy is untouched. This used to be a taught error for any
+        # key the task had not set itself — the overlay had no way to say
+        # "absent" — which left presence-semantics variables (NO_COLOR, CI)
+        # impossible to hide from an in-process tool.
         ctx = current()
         hits = [k for k in ctx.env if _norm(k) == _norm(key)]
-        if hits:
-            for k in hits:
-                del ctx.env[k]
-            return
-        if _norm(key) not in _merged():
-            raise KeyError(key)  # absent everywhere: Python's own answer
-        raise RuntimeError(
-            f"deleting {key!s} from os.environ in a parallel task — scoped "
-            f"env is additive; spawn the child with an explicit env= that "
-            f"omits it, or mark the task serial."
-        )
+        if not hits:
+            raise KeyError(key)  # absent: Python's own answer
+        for k in hits:
+            del ctx.env[k]
 
     def __iter__(self: Any) -> Any:
         if not _virtual(self):
@@ -252,7 +265,7 @@ def _install_popen() -> None:
                 kw["cwd"] = ctx.cwd
                 filled.append("cwd")
             if kw.get("env") is None:
-                kw["env"] = {**_snapshot, **ctx.env}
+                kw["env"] = dict(ctx.env)  # the task's own, handed over whole
                 filled.append("env")
             if filled:
                 _note(
@@ -329,15 +342,24 @@ def _install_os_guards() -> None:
     orig_getcwd = _guard_saved["getcwd"]
 
     def getcwd() -> str:
+        here = orig_getcwd()
         ctx, guarded = _managed_task()
-        if guarded:
+        # Only when the answer is actually misleading. A task whose directory
+        # *is* the process directory — the common case, the runner started
+        # where the tasks file lives — gets a correct answer, and saying
+        # otherwise teaches people to ignore notes. The sibling chdir guard
+        # learned the same lesson: a move to where the process already is
+        # changes nothing for anyone, so it stopped being refused. A string
+        # compare against the already-resolved ctx.cwd, because getcwd can be
+        # polled in a loop where chdir can afford a realpath.
+        if guarded and ctx.cwd is not None and str(ctx.cwd) != here:
             _note(
                 "getcwd",
-                f"task {ctx.task or '?'} reads the process cwd — in a "
-                f"parallel run it can be anyone's; footman.cwd() is this "
-                f"task's own directory.",
+                f"task {ctx.task or '?'} reads the process cwd, which is not "
+                f"this task's directory ({ctx.cwd}) — a parallel run never "
+                f"chdirs. cwd() is the directory you want.",
             )
-        return orig_getcwd()
+        return here
 
     os.getcwd = getcwd  # type: ignore[assignment]
 

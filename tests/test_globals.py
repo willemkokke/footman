@@ -88,16 +88,43 @@ def test_scoped_write_reaches_the_child_spawn(monkeypatch):
     assert results[0].steps[0].output.strip() == "rides"
 
 
-def test_delete_is_a_taught_error():
+def test_delete_removes_it_for_this_task_and_its_children():
+    """A task owns its environment outright, so deletion is ordinary. It used
+    to be a taught error for any key the task had not set itself, which left
+    presence-semantics variables impossible to hide from an in-process tool."""
+    seen = {}
+
     def tasks(reg):
         @reg.task
         def go():
             del os.environ["PATH"]
+            seen["gone"] = "PATH" not in os.environ
 
     results = drive(tasks, "go")
-    assert not results[0].ok
-    assert "additive" in str(results[0].error)
-    assert "PATH" in os.environ  # and the real thing survived
+    assert results[0].ok, results[0].error
+    assert seen["gone"]
+    assert "PATH" in os.environ  # the real process environment is untouched
+
+
+def test_another_task_keeps_what_one_deleted():
+    """The copies are per task: subtraction is as private as addition. Each
+    task starts from the run's pinned environment, so one cutting a key away
+    cannot reach into another's."""
+    seen = {}
+
+    def tasks(reg):
+        @reg.task
+        def cutter():
+            del os.environ["PATH"]
+            seen["cutter"] = "PATH" in os.environ
+
+        @reg.task
+        def keeper():
+            seen["keeper"] = "PATH" in os.environ
+
+    results = drive(tasks, "cutter keeper")
+    assert all(r.ok for r in results), [r.error for r in results]
+    assert seen == {"cutter": False, "keeper": True}
 
 
 def test_set_then_delete_round_trips_scoped(monkeypatch):
@@ -120,10 +147,10 @@ def test_set_then_delete_round_trips_scoped(monkeypatch):
     assert "ROUND_TRIP" not in os.environ
 
 
-def test_delete_of_an_overridden_key_restores_the_base(monkeypatch):
-    # Overriding an existing var then deleting the override is still the
-    # additive round trip: the task falls back to the run-start value; the
-    # base environment itself is never subtracted from.
+def test_delete_of_an_overridden_key_removes_it(monkeypatch):
+    # There is no base to fall back to any more: the task holds one
+    # environment, so overriding then deleting leaves the key absent — which
+    # is what `del` means everywhere else in Python.
     monkeypatch.setenv("BASE_VAR", "original")
     seen = {}
 
@@ -136,7 +163,7 @@ def test_delete_of_an_overridden_key_restores_the_base(monkeypatch):
 
     results = drive(tasks, "go")
     assert results[0].ok, results[0].error
-    assert seen["after"] == "original"
+    assert seen["after"] is None
     assert os.environ["BASE_VAR"] == "original"
 
 
@@ -203,9 +230,10 @@ def test_install_is_refcounted():
     assert not _globals.active()
 
 
-def test_in_process_callable_reads_the_call_overlay(monkeypatch):
-    # run(callable, env=…) reads land on snapshot + ctx.env + the call's
-    # env — served by the router, no process-global patch, no lock.
+def test_in_process_callable_reads_the_env_it_was_given(monkeypatch):
+    # `env=` is the call's environment, as subprocess means it — what you
+    # pass is what it gets, served by the router with no process-global patch
+    # and no lock. Spread `os.environ` to add rather than replace.
     monkeypatch.setenv("BASE", "base")
     monkeypatch.delenv("EXTRA", raising=False)
     seen = {}
@@ -217,12 +245,19 @@ def test_in_process_callable_reads_the_call_overlay(monkeypatch):
                 seen["pair"] = (os.environ.get("BASE"), os.environ.get("EXTRA"))
                 return 0
 
-            run(tool, env={"EXTRA": "call"})
+            run(tool, env={"EXTRA": "call"})  # exactly this, nothing inherited
             seen["after"] = os.environ.get("EXTRA")
 
+            def adding():
+                seen["added"] = (os.environ.get("BASE"), os.environ.get("EXTRA"))
+                return 0
+
+            run(adding, env={**os.environ, "EXTRA": "call"})  # the add idiom
+
     assert drive(tasks, "go")[0].ok
-    assert seen["pair"] == ("base", "call")
-    assert seen["after"] is None  # the call overlay ended with the call
+    assert seen["pair"] == (None, "call")  # BASE was not inherited
+    assert seen["added"] == ("base", "call")
+    assert seen["after"] is None  # the call's env ended with the call
 
 
 # --- the Popen injection ------------------------------------------------------
@@ -327,7 +362,9 @@ def test_chdir_allowed_under_unmanaged(tmp_path):
     assert seen["moved"] == str(tmp_path)
 
 
-def test_getcwd_warns_once_toward_footman_cwd(capfd):
+def test_getcwd_warns_once_when_the_answer_is_misleading(capfd, tmp_path):
+    """A task rooted somewhere other than the process directory gets a
+    `getcwd` that answers about the wrong place — that is worth a note, once."""
     seen = {}
 
     def tasks(reg):
@@ -336,10 +373,25 @@ def test_getcwd_warns_once_toward_footman_cwd(capfd):
             seen["cwd"] = os.getcwd()
             os.getcwd()  # second read: no second note
 
-    assert drive(tasks, "go")[0].ok
+    assert drive(tasks, "go", cwd=tmp_path)[0].ok
     assert seen["cwd"] == _globals.real_getcwd()  # the value is still real
-    err = capfd.readouterr().err
-    assert err.count("footman.cwd()") == 1
+    assert capfd.readouterr().err.count("reads the process cwd") == 1
+
+
+def test_getcwd_is_silent_when_it_answers_correctly(capfd):
+    """The common case: a task whose directory *is* the process directory —
+    `ctx.cwd` unset means exactly that, since the spawn inherits it. The read
+    is correct, and a note there only teaches people to ignore notes. The
+    sibling `chdir` guard learned the same in #180: a move to where the
+    process already is changes nothing for anyone."""
+
+    def tasks(reg):
+        @reg.task
+        def go():
+            os.getcwd()
+
+    assert drive(tasks, "go")[0].ok
+    assert "reads the process cwd" not in capfd.readouterr().err
 
 
 def test_putenv_is_a_taught_error():

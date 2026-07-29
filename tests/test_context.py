@@ -419,8 +419,9 @@ def test_footman_cwd_is_concrete(tmp_path):
     assert footman.cwd() == Path.cwd()  # outside a run: the process cwd
 
 
-def test_run_callable_honors_env_overlay(monkeypatch):
-    # F17: os.environ is visible plus the call's env overlay, for callables too.
+def test_run_callable_honors_the_env_it_was_given(monkeypatch):
+    # F17: a callable sees the call's environment — and `env=` *is* that
+    # environment, as subprocess means it, so spread to add.
     monkeypatch.setenv("BASE", "base")
     seen = {}
 
@@ -431,7 +432,7 @@ def test_run_callable_honors_env_overlay(monkeypatch):
                 seen["env"] = (os.environ.get("BASE"), os.environ.get("EXTRA"))
                 return 0
 
-            run(tool, env={"EXTRA": "extra"})
+            run(tool, env={**os.environ, "EXTRA": "extra"})
 
     drive(tasks, "go")
     assert seen["env"] == ("base", "extra")

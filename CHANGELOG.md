@@ -9,6 +9,15 @@ versions may include breaking changes.
 
 ### Added
 
+- **A task owns its environment, and `del os.environ[…]` works.** `ctx.env`
+  is a whole environment copied from the run's, not an overlay over a
+  snapshot — so removing a variable is ordinary Python: it goes from this
+  task's environment and from the children it spawns after, while a sibling's
+  copy is untouched. It used to be a taught error for any key the task had
+  not set itself, which left variables read by *presence* (`NO_COLOR`, `CI`)
+  impossible to hide from an in-process tool, since there is no child
+  environment to construct in that lane.
+
 - **`timeout=` — a bound the caller declares.** `run(cmd, timeout=30)` and
   `tool.opts(timeout=30)` kill a call that overstays, and kill the whole
   process tree — the escalation fail-fast already uses — so a hung tool's own
@@ -111,6 +120,19 @@ versions may include breaking changes.
   an existing hook keeps today's behaviour everywhere else.
 
 ### Changed
+
+- **`run(env=…)` replaces the child's environment rather than overlaying it**,
+  exactly as `subprocess` means it: what you pass is what the child gets.
+  An overlay could only add or override, never remove — which made the
+  standard copy-modify-pass idiom silently wrong, since a key deleted from
+  your copy returned from the layer beneath. Both idioms now work as written:
+  `run(cmd, env={**os.environ, "CI": "1"})` to add, and `dict(os.environ)`
+  minus a key to take one away. Inside a task `os.environ` *is* the task's
+  environment, so the copy is exact.
+
+  **Migration:** a `run(env={…})` passing a partial set of variables must
+  become `{**os.environ, **your_dict}`, or the child gets those variables and
+  nothing else — no `PATH`. `Context(env={…})` changes the same way.
 
 - **build 1.5.1** adds `--env-dir`, `--report` and `--sdist-extract-dir`. It also rewords 1 description.
 - **The weekly refresh opens its pull request without arming auto-merge.**

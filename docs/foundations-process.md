@@ -58,7 +58,7 @@ declared end.
 ## What footman does about it
 
 Every task gets its own **context**: `ctx.cwd` is *that task's* working
-directory, `ctx.env` is *that task's* environment overlay — plain data,
+directory, `ctx.env` is *that task's* whole environment — plain data,
 per task, no sharing. When a task spawns a subprocess, footman hands the
 child its world *at spawn* (`cwd=`, `env=`), which is the one moment the
 operating system lets you set a child's globals race-free. The real process

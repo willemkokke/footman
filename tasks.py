@@ -101,7 +101,9 @@ def check():
         # regression before CI merges the whole picture.
         run(
             "pytest --cov --cov-report= --cov-fail-under=90",
-            env={"COVERAGE_FILE": cov_file},
+            # `env=` is the child's whole environment, as subprocess means it:
+            # spread the task's own (which `os.environ` *is* in here) and add.
+            env={**os.environ, "COVERAGE_FILE": cov_file},
         )
 
     # partial, not a lambda: it keeps the callee's name, so the live line

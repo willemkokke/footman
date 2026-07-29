@@ -11,7 +11,7 @@ by one page and one footman answer:
 | Global | The problem | footman's answer |
 |--------|-------------|------------------|
 | working directory | one per process; chdir moves it for everyone | `ctx.cwd` as data; children get it at spawn; `footman.cwd()` in bodies |
-| environment | one map; flows down only at spawn | reads = snapshot + task overlay; writes scope to the task |
+| environment | one map; flows down only at spawn | each task owns a copy; reads, writes and deletes are its own |
 | spawning | the child's world is fixed at spawn | `run()`/injection fill `cwd=`/`env=` per child, race-free |
 | the terminal | one stdin, consumed not mutated | `ask()` and the `stdin` marker at the boundary; `interactive=True` to own it |
 
