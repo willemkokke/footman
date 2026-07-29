@@ -9,6 +9,16 @@ versions may include breaking changes.
 
 ### Added
 
+- **A captured child gets no console window on Windows.** Windows Terminal
+  hands each spawn a visible window, and a tool that interrogates the
+  terminal at start-up hangs against it — so whether a read hung depended on
+  which window the run was launched from. Every captured `run()` now spawns
+  with `CREATE_NO_WINDOW`: a child writing to pipes has no business owning a
+  console. Not `DETACHED_PROCESS`, which leaves console-hosted runtimes with
+  none at all (pwsh dies at start-up, git-bash goes mute). Streaming
+  (`capture=False`) and `interactive=True` runs are exempt — both are
+  reaching for the real terminal on purpose.
+
 - **A task owns its environment, and `del os.environ[…]` works.** `ctx.env`
   is a whole environment copied from the run's, not an overlay over a
   snapshot — so removing a variable is ordinary Python: it goes from this
