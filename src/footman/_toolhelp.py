@@ -40,8 +40,25 @@ import subprocess
 from collections.abc import Sequence
 from dataclasses import replace
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 from footman._toolspec import Option, ToolSpec, Verb
+
+if TYPE_CHECKING:
+    from footman.context import Result
+
+
+def _run(*args: Any, **kwargs: Any) -> Result:
+    """`context.run`, imported at call time.
+
+    A module-level import would be circular — `context` reaches the tools
+    bridge, which reaches here — and this module is also imported by the
+    stub generator, which has no interest in the run machinery.
+    """
+    from footman.context import run
+
+    return run(*args, **kwargs)
+
 
 # An option block opens with a dash at the start of the line's content. The
 # indent is captured because it decides what counts as a continuation line;
@@ -886,17 +903,16 @@ def run_help(
     if shutil.which(argv[0]) is None:
         return ""
     try:
-        # Tool help is UTF-8, never the locale codec: under Windows cp1252 a
-        # multi-byte help string kills the reader thread mid-decode and the
-        # stream comes back None — an observation lost as a hole.
-        done = subprocess.run(
+        # UTF-8 rather than the locale codec, a hidden console, and a bound
+        # that kills the tree: all of it is what `run()` does for a captured
+        # call now, so the read says only what is particular to it. `step=False`
+        # keeps a probe out of the run's story.
+        done = _run(
             [*argv, flag],
-            capture_output=True,
-            encoding="utf-8",
-            errors="replace",
+            step=False,
             timeout=timeout,
+            nofail=True,
             env=_wide_env(),
-            creationflags=NO_CONSOLE_WINDOW,
         )
     except (OSError, subprocess.SubprocessError):
         return ""
@@ -993,14 +1009,12 @@ def _run_man(argv: list[str], timeout: float) -> str:
         GIT_CONFIG_VALUE_0="man",
     )
     try:
-        done = subprocess.run(
+        done = _run(
             [argv[0], "help", *argv[1:]],
-            capture_output=True,
-            encoding="utf-8",
-            errors="replace",
+            step=False,
             timeout=timeout,
+            nofail=True,
             env=env,
-            creationflags=NO_CONSOLE_WINDOW,
         )
     except (OSError, subprocess.SubprocessError):
         return ""
@@ -1012,15 +1026,14 @@ def _render_page(tree: str, page: str, timeout: float) -> str:
     if shutil.which("man") is None:
         return ""
     try:
-        done = subprocess.run(
+        done = _run(
             # Absolute: `man -M` given a relative manpath finds nothing and
             # says so by rendering an empty page rather than failing, which
             # reads downstream as a release that documented nothing.
             ["man", "-M", str(Path(tree).resolve()), page],
-            capture_output=True,
-            encoding="utf-8",
-            errors="replace",
+            step=False,
             timeout=timeout,
+            nofail=True,
             env={
                 **os.environ,
                 "MANPAGER": "cat",

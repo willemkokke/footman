@@ -866,40 +866,34 @@ def _capture(argv: list[str], env: dict[str, str] | None = None) -> str:
     Empty is not "nothing to report": the callers treat a tool they cannot
     read as one they have not looked at, the same as an unreachable index.
     """
-    from footman import _toolhelp
+    from footman.context import run as _fm_run
 
     try:
-        done = subprocess.run(
+        done = _fm_run(
             argv,
-            capture_output=True,
-            encoding="utf-8",
-            errors="replace",
+            step=False,  # a probe, not part of the run's story
             timeout=TIMEOUT,
+            nofail=True,
             # Passed rather than inherited, so footman reads the spawn as
             # deliberate — and so the prefix `prime` puts on `PATH` is what
-            # picks the uv that carries the index.
+            # picks the uv that carries the index. A captured spawn gets the
+            # hidden console for free now.
             env=env if env is not None else dict(os.environ),
-            # Off the caller's console too — see _toolhelp.NO_CONSOLE_WINDOW.
-            creationflags=_toolhelp.NO_CONSOLE_WINDOW,
         )
     except (OSError, subprocess.SubprocessError):
         return ""
-    return done.stdout if done.returncode == 0 else ""
+    return done.stdout if done.code == 0 else ""
 
 
 def _run(argv: list[str], env: dict[str, str] | None = None) -> bool:
+    """Whether *argv* succeeded. A fetch step, not a step in the report."""
+    from footman.context import run as _fm_run
+
     try:
-        done = subprocess.run(
-            argv,
-            capture_output=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=300,
-            env=env,
-        )
+        done = _fm_run(argv, step=False, timeout=300, nofail=True, env=env)
     except (OSError, subprocess.SubprocessError):
         return False
-    return done.returncode == 0
+    return done.code == 0
 
 
 def _windows() -> bool:

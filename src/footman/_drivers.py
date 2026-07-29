@@ -506,29 +506,32 @@ def _read_version(name: str) -> tuple[str, str]:
     # A version read must never touch the network. `read_env` carries the
     # variables that say so — see `_toolhelp.QUIET`, which every read shares
     # now rather than this one alone.
-    env = _toolhelp.read_env()
+    #
+    # Through `run()`: `step=False` keeps a probe out of the run's story,
+    # `timeout=` kills the tree rather than leaving a hung tool's workers
+    # behind, the hidden console comes with any captured spawn, and `env=`
+    # hands over exactly what `read_env` built — its subtraction survives the
+    # trip, which under the old overlay it could not.
+    from footman.context import run as _run
+
     try:
-        done = subprocess.run(
+        done = _run(
             [binary, "--version"],
-            capture_output=True,
-            encoding="utf-8",
-            errors="replace",
+            step=False,
             timeout=30,
-            env=env,
-            # No console for a version read either — the same start-up
-            # terminal query that wedged help reads runs before --version.
-            creationflags=_toolhelp.NO_CONSOLE_WINDOW,
+            nofail=True,
+            env=_toolhelp.read_env(),
         )
-    except subprocess.TimeoutExpired:
-        return "", "timed out after 30s"
     except (OSError, subprocess.SubprocessError) as exc:
         return "", f"spawn failed: {type(exc).__name__}: {exc}"
+    if done.timed_out:
+        return "", "timed out after 30s"
     found = _without_build_tail(tools.read_version(done.stdout or done.stderr))
     if found:
         return found, ""
     lines = (done.stdout or done.stderr).strip().splitlines()
     head = lines[0][:80] if lines else "<no output>"
-    return "", f"no version token (exit {done.returncode}): {head!r}"
+    return "", f"no version token (exit {done.code}): {head!r}"
 
 
 _BUILD_TAIL = re.compile(r"\.(?!post\d)[A-Za-z].*$")
