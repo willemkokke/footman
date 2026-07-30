@@ -157,17 +157,22 @@ class Tool:
     # footman run-control policy — a closed vocabulary that rides beside the
     # call (never a tool flag). Returns Self, so a generated tool keeps its verb
     # completions: `git.opts(nofail=True).push()`.
+    #
+    # The options are forwarded verbatim to `run()`, so they carry `run()`'s
+    # types — the four it treats as "unset" take None, which is what a caller
+    # computing one (`timeout=cfg.timeout`, `cwd=None if inline else build_dir`)
+    # passes. `test_tools.py` enforces the match.
     def opts(
         self,
         *,
         nofail: bool = ...,
         in_process: bool | None = ...,
         capture: bool = ...,
-        title: str = ...,
-        cwd: str | _Path = ...,
-        rel: str | _Path = ...,
+        title: str | None = ...,
+        cwd: str | _Path | None = ...,
+        rel: str | _Path | None = ...,
         step: bool = ...,
-        timeout: float = ...,
+        timeout: float | None = ...,
     ) -> Self: ...
     # A tool's own global options, bound before the next subcommand
     # (`docker.flags(host="x").ps()`). Generated stubs override it with the

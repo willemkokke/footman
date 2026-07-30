@@ -106,6 +106,19 @@ def test_opts_cwd_beats_the_task_declaration(tmp_path):
     assert executor.resolve_cwd(fn.opts(cwd="root"), ctx) == (tmp_path, False)
 
 
+def test_opts_cwd_none_clears_the_task_declaration(tmp_path):
+    # None is "no opinion" — what a caller computing an override passes, and
+    # the way to drop a declared policy for this one use. It reaches the
+    # validators, which must let it through rather than try `Path(None)`.
+    fn = _stamped(tmp_path / "pkg", cwd="asinvoked", rel="dist")
+    ctx = Context(
+        cwd_policy="root",
+        root_dir=str(tmp_path),
+        invoked_dir=str(tmp_path / "launch"),
+    )
+    assert executor.resolve_cwd(fn.opts(cwd=None, rel=None), ctx) == (tmp_path, False)
+
+
 # --- rel suffixes ------------------------------------------------------------
 
 

@@ -466,9 +466,13 @@ def _opts_overrides(kwargs: dict[str, Any]) -> dict[str, Any]:
                 f".opts({name}=…) needs a hashable value — options key the run's "
                 f"deduplication — but got an unhashable {type(value).__name__}"
             ) from None
-    if "cwd" in kwargs:
+    # None is "no opinion" — the value a caller computing an override passes
+    # (`cwd=None if inline else build_dir`), and the way to clear a declared
+    # one for this use. Readers all `getattr(fn, _CWD, None)`, so a stored None
+    # already reads as unset; only the validators need to let it through.
+    if kwargs.get("cwd") is not None:
         kwargs["cwd"] = _validate_cwd(kwargs["cwd"])
-    if "rel" in kwargs:
+    if kwargs.get("rel") is not None:
         kwargs["rel"] = _validate_rel(kwargs["rel"])
     if kwargs.get("cwd") == "unmanaged" and kwargs.get("rel"):
         raise TypeError(

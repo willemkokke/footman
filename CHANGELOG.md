@@ -7,6 +7,20 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Fixed
+
+- **`.opts()` takes `None` for the options that mean "unset".** The tools
+  bridge forwards `.opts()` policy straight to `run()`, which reads `cwd`,
+  `rel`, `title` and `timeout` as *no opinion* when they are `None` — but the
+  typed stub declared them non-optional, so a caller computing one
+  (`timeout=cfg.timeout`, `cwd=None if inline else build_dir`) got a type
+  error against code that ran fine. The stub now carries `run()`'s own types,
+  and a test holds the two signatures together.
+
+  A task's `.opts(cwd=None, rel=None)` agrees: `None` clears a declared
+  policy for that one use instead of reaching the path validators, which used
+  to raise a bare `Path(None)` `TypeError`.
+
 ## [0.27.0] — 2026-07-30
 
 ### Added
