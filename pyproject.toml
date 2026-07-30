@@ -184,6 +184,12 @@ addopts = "-q -n auto --dist=worksteal"
 # (also part of strict) keeps this checker's set honest.
 files = ["src", "tests", "tasks.py"]
 mypy_path = ["src"]
+# One world to check, whatever runs the check: unpinned, mypy assumes the
+# host's platform and interpreter, so a Windows job (or a 3.14 laptop) sees
+# different typeshed branches than the one the tree was made clean under —
+# os.fork/pty vanish, ignores go stale. basedpyright pins the same floor.
+platform = "linux"
+python_version = "3.11"
 strict = true
 disallow_untyped_defs = false
 disallow_incomplete_defs = false
@@ -218,6 +224,11 @@ warn_unused_ignores = false
 [tool.ty.src]
 include = ["src"]
 
+[tool.ty.environment]
+# Same one-world pin as mypy's: check as linux/3.11 on every host.
+python-platform = "linux"
+python-version = "3.11" 
+
 [tool.pyrefly]
 # Fourth gate, same scope as ty. Preset `default`, not `strict`: strict
 # demands @override decorators, and `typing.override` is Python 3.12+ — a
@@ -225,6 +236,9 @@ include = ["src"]
 # typing_extensions runtime dep. Revisit when 3.11 support ends.
 preset = "default"
 project-includes = ["src"]
+# Same one-world pin as mypy's.
+python-platform = "linux"
+python-version = "3.11"
 
 [tool.basedpyright]
 # First-party code only. comparison/ exercises third-party runners (duty,
