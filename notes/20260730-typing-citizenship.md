@@ -318,6 +318,19 @@ on (`@task` preserves your signature, `.opts()` too, markers are
   isinstance narrows to `dict[Unknown, Unknown]` and invariance blocks
   the reassignment.
 
+## Phase 5 outcome (built 2026-07-30, same day)
+
+Two files, split by suppression dialect: `tests/typecheck_api.py` is the
+positive consumer surface — no ignores, so ty and pyrefly include it by
+name (their one tests/ file); `typecheck_api_negative.py` is the must-fail
+surface, mypy+basedpyright only, every line's ignore policed for staleness
+from both sides. The exercise caught real API texture both times it ran a
+new checker over consumer shapes: select() grew plain-strings overloads
+(ty solved the pair-overload's TypeVar to Unknown on a string menu), and
+the group-default handle's signature-keeping is pinned (the answer to
+"where do default parameters autocomplete" is: on the handle, call it
+directly).
+
 ## Rejected along the way
 
 - **An advisory tier.** The first draft proposed ty + pyrefly as a

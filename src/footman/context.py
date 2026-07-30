@@ -859,6 +859,22 @@ def confirm(message: str, *, default: bool = False) -> bool:
 @overload
 def select(
     message: str,
+    options: Sequence[str],
+    *,
+    multiple: Literal[True],
+    default: list[str] = ...,
+) -> list[str]: ...
+@overload
+def select(
+    message: str,
+    options: Sequence[str],
+    *,
+    multiple: Literal[False] = False,
+    default: str = ...,
+) -> str: ...
+@overload
+def select(
+    message: str,
     options: Sequence[str | tuple[str, _V]],
     *,
     multiple: Literal[True],
