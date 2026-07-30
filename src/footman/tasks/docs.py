@@ -18,20 +18,20 @@ from pathlib import Path
 from typing import Annotated, Any, Literal
 
 from footman import (
+    _config,
     _describe,
+    _discover,
+    _manifest,
     _paths,
     _shellcomp,
-    config,
     context,
-    discover,
     markdown,
     registry,
 )
-from footman import manifest as _manifest
 from footman.params import between, doc
 from footman.registry import Group, requires, requires_dep
 
-tasks = Group("docs", help="Generate markdown docs for this project's tasks")
+tasks: Group = Group("docs", help="Generate markdown docs for this project's tasks")
 
 
 def _project_tree(include_self: bool) -> dict:
@@ -44,18 +44,18 @@ def _project_tree(include_self: bool) -> dict:
     """
     cwd = Path.cwd()
     ceiling = _paths.find_repo_root(cwd)
-    cfg = config.load_config(
+    cfg = _config.load_config(
         cwd, ceiling, None, on_warning=lambda m: print(m, file=sys.stderr)
     )
     name = cfg.get("tasks")
     filename = name if isinstance(name, str) else _paths.DEFAULT_TASKS_FILE
     files = _paths.task_files(cwd, ceiling, filename)
     base = registry.Group("root")
-    reg = discover.load_tree(files, base=base)
+    reg = _discover.load_tree(files, base=base)
     if not include_self:
         _prune_first_party(reg)
     tree = _manifest.build_manifest(reg)["tree"]
-    if config.sort_listing(cfg):  # the pages follow the same one setting
+    if _config.sort_listing(cfg):  # the pages follow the same one setting
         tree = _describe.sort_tree(tree)
     return tree
 

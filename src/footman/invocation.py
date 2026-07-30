@@ -50,6 +50,12 @@ class Invocation:
         "total_ms",
     )
 
+    cli: dict[str, Any]
+    config: dict[str, Any]
+    root: str
+    cwd: str
+    tasks: Tasks | None
+
     def __init__(
         self,
         *,

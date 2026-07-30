@@ -9,10 +9,10 @@ from typing import Literal
 
 import pytest
 
-from footman import manifest
-from footman.executor import run_chain
+from footman import _manifest as manifest
+from footman._executor import run_chain
+from footman._split import ChainError, split_chain
 from footman.registry import Group
-from footman.split import ChainError, split_chain
 
 
 class Colour(enum.Enum):

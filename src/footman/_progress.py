@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import TextIO
 
 from footman import _paths
-from footman.split import Segment
+from footman._split import Segment
 
 SCHEMA = 1
 WINDOW = 50  # samples kept per chain — recency policy, sliding

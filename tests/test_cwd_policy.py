@@ -7,9 +7,11 @@ from typing import Any
 
 import pytest
 
-from footman import _app, _paths, context, discover, executor, registry
+from footman import _app, _paths, context, registry
+from footman import _discover as discover
+from footman import _executor as executor
+from footman._executor import EX_USAGE
 from footman.context import Context, current, use_context
-from footman.executor import EX_USAGE
 
 # --- helpers -----------------------------------------------------------------
 

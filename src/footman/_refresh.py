@@ -54,16 +54,16 @@ def refresh_cwd() -> None:
 def _rebuild() -> None:
     from pathlib import Path
 
-    from footman import _paths, config, discover, manifest, registry
+    from footman import _config, _discover, _manifest, _paths, registry
 
     cwd = Path.cwd()
     ceiling = _paths.find_repo_root(cwd)
-    cfg = config.load_config(cwd, ceiling)
+    cfg = _config.load_config(cwd, ceiling)
     filename = cfg.get("tasks")
     if not isinstance(filename, str):
         # A branded CLI's default filename isn't knowable here — but the
         # manifest this child refreshes baked it in.
-        cached = manifest.load_manifest(_paths.manifest_path(cwd))
+        cached = _manifest.load_manifest(_paths.manifest_path(cwd))
         baked = cached.get("tasks_file") if isinstance(cached, dict) else None
         filename = baked if isinstance(baked, str) else _paths.DEFAULT_TASKS_FILE
     name = filename
@@ -75,9 +75,9 @@ def _rebuild() -> None:
     # Mirror the app layer's cwd cascade build; plugin pulls are authored in
     # the tasks files themselves, so discovery alone rebuilds the whole tree.
     base = registry.Group("root")
-    reg = discover.load_tree(files, base=base)
-    manifest.sync_manifest(
-        reg, cwd, completion_max_age=config.completion_max_age(cfg), tasks_file=name
+    reg = _discover.load_tree(files, base=base)
+    _manifest.sync_manifest(
+        reg, cwd, completion_max_age=_config.completion_max_age(cfg), tasks_file=name
     )
 
 
@@ -91,7 +91,7 @@ def refresh_source(tasks_file: str) -> None:
 def _rebuild_source(tasks_file: str) -> None:
     from pathlib import Path
 
-    from footman import _paths, discover, manifest, registry
+    from footman import _discover, _manifest, _paths, registry
 
     one = Path(tasks_file).expanduser()
     if not one.is_file():
@@ -108,8 +108,8 @@ def _rebuild_source(tasks_file: str) -> None:
     # under the (cwd, file) key with max_age=0 — no background refresh,
     # rebuilt on the next -f run or the next cold TAB.
     base = registry.Group("root")
-    reg = discover.load_tree([one], base=base)
-    manifest.sync_manifest(
+    reg = _discover.load_tree([one], base=base)
+    _manifest.sync_manifest(
         reg,
         cwd,
         completion_max_age=0,

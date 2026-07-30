@@ -8,9 +8,11 @@ import threading
 
 import pytest
 
-from footman import manifest, parallel, run, schedule
+from footman import _manifest as manifest
+from footman import _schedule as schedule
+from footman import parallel, run
+from footman._split import ChainError, Segment, split_chain
 from footman.registry import Group
-from footman.split import ChainError, Segment, split_chain
 
 
 def drive(build, line, **kw):

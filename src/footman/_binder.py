@@ -24,7 +24,7 @@ import types
 import typing
 from typing import Any
 
-from footman import coerce
+from footman import _coerce
 
 _MISSING = dataclasses.MISSING
 
@@ -146,10 +146,10 @@ def _leaf(value: Any, target: Any, path: str) -> Any:
         raise ValueError(f"{path}: expected {_phrase(target)}, got {_json_name(value)}")
     if isinstance(value, str):
         try:
-            out = coerce.coerce_token(value, target)
+            out = _coerce.coerce_token(value, target)
         except ValueError as exc:
             raise ValueError(f"{path}: {exc}") from exc
-        choices = coerce.all_choices(target)
+        choices = _coerce.all_choices(target)
         if choices is not None:
             shown = str(out.value) if hasattr(out, "value") else str(out)
             if shown not in choices:
@@ -158,7 +158,7 @@ def _leaf(value: Any, target: Any, path: str) -> Any:
                 )
         return out
     # A JSON number or bool: no token to parse, so the fit is structural.
-    for member in coerce.union_members(target):
+    for member in _coerce.union_members(target):
         member = _strip(member)
         if isinstance(value, bool):
             if member is bool:
@@ -181,10 +181,10 @@ def _leaf(value: Any, target: Any, path: str) -> Any:
 
 
 def _phrase(target: Any) -> str:
-    tags = coerce.element_tags(target)
+    tags = _coerce.element_tags(target)
     if tags:
-        return coerce.type_phrase(tags)
-    choices = coerce.all_choices(target)
+        return _coerce.type_phrase(tags)
+    choices = _coerce.all_choices(target)
     if choices:
         return "one of " + "|".join(choices)
     return getattr(target, "__name__", str(target))

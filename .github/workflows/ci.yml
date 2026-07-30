@@ -96,6 +96,10 @@ jobs:
       - name: Type-check
         # `--warnings` here too, or the rule holds on a laptop and not in CI.
         run: uv run basedpyright --warnings
+      - name: Type-completeness
+        # 100% or red: every public symbol fully typed (the exit code is the
+        # verdict — 0 only at a full score).
+        run: uv run basedpyright --verifytypes footman --ignoreexternal
 
   test:
     name: py${{ matrix.python }} · ${{ matrix.os }}

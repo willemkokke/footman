@@ -11,7 +11,8 @@ from unittest import mock
 
 import pytest
 
-from footman import _complete, manifest, registry, task
+from footman import _complete, registry, task
+from footman import _manifest as manifest
 from footman._complete import _tasks_file_from, complete, complete_cli
 from footman.params import Many, doc, nosplit, suggest
 
@@ -365,7 +366,8 @@ def test_globals_not_offered_past_a_group_or_task(tree):
 def test_completion_globals_mirror_split():
     # Drift pin: the hot-path arity mirror must match split.GLOBALS exactly, so
     # renaming or re-typing a global fails CI instead of silently misparsing.
-    from footman import _complete, _shellcomp, split
+    from footman import _complete, _shellcomp
+    from footman import _split as split
 
     names: set[str] = set()
     for name, alias, _kind, _hint, _help in split.GLOBALS:
@@ -859,7 +861,7 @@ def test_abbreviation_is_completion_only(tree):
     # cannot change meaning when a new task lands.
     import pytest as _pytest
 
-    from footman.split import ChainError, split_chain
+    from footman._split import ChainError, split_chain
 
     with _pytest.raises(ChainError):
         split_chain(tree, ["w.mount"])
@@ -895,7 +897,7 @@ def test_completion_schema_mirrors_manifest():
     # Drift pin: the hot path's schema literal must match the manifest's, so
     # bumping SCHEMA_VERSION without teaching the completer fails CI.
     from footman import _complete as hot
-    from footman import manifest as cold
+    from footman import _manifest as cold
 
     assert hot._SCHEMA == cold.SCHEMA_VERSION
 

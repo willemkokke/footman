@@ -9,7 +9,8 @@ from typing import Annotated, Literal, Optional
 
 import pytest
 
-from footman import _paths, manifest
+from footman import _manifest as manifest
+from footman import _paths
 from footman.params import doc
 
 

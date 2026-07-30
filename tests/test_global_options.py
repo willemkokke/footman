@@ -9,7 +9,8 @@ from typing import Annotated
 
 import pytest
 
-from footman import manifest, registry
+from footman import _manifest as manifest
+from footman import registry
 from footman._complete import _DYNAMIC, _FILES, complete
 from footman.params import suggest
 from footman.registry import GlobalOption, Group, RegistrationError

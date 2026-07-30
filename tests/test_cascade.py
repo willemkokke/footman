@@ -7,9 +7,12 @@ from pathlib import Path
 
 import pytest
 
-from footman import _app, _paths, config, discover, executor, registry
+from footman import _app, _paths, registry
+from footman import _config as config
+from footman import _discover as discover
+from footman import _executor as executor
+from footman._split import Segment
 from footman.context import Context
-from footman.split import Segment
 
 # --- path primitives ---------------------------------------------------------
 
@@ -437,7 +440,8 @@ def test_inherited_names_the_task_it_calls(tmp_path, monkeypatch, capsys):
     # functools.wraps keeps the name, so `parallel(inherited(), extra)`
     # labels its live line honestly instead of showing an anonymous call.
     _inherit_repo(tmp_path, monkeypatch, LEAF)
-    from footman import Context, discover, inherited, use_context
+    from footman import Context, inherited, use_context
+    from footman import _discover as discover
 
     files = _paths.task_files(Path.cwd(), tmp_path)
     tree = discover.load_tree(files)

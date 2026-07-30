@@ -56,7 +56,7 @@ def _values(param: str, path: list[str], g: dict[str, object]) -> list[str]:
     completer. Any miss — no tasks file, a renamed task, a plain parameter —
     is an empty list, never an error.
     """
-    from footman import _app, coerce, discover, manifest, registry
+    from footman import _app, _coerce, _discover, _manifest, registry
 
     files, _cfg = _app.resolve_task_files(g, on_warning=lambda *a: None, on_note=None)
     if not files or not path:
@@ -65,7 +65,7 @@ def _values(param: str, path: list[str], g: dict[str, object]) -> list[str]:
     # Plugin pulls are authored in the tasks files, so discovery alone
     # rebuilds the whole tree — a completer on a pulled task included.
     base = registry.Group("root")
-    root = discover.load_tree(files, base=base)
+    root = _discover.load_tree(files, base=base)
 
     node: registry.Group | None = root
     for name in path[:-1]:  # descend the groups
@@ -73,13 +73,13 @@ def _values(param: str, path: list[str], g: dict[str, object]) -> list[str]:
     task = node.tasks.get(path[-1]) if node else None
     if task is None:
         return []
-    for p in manifest.resolved_signature(task).parameters.values():
+    for p in _manifest.resolved_signature(task).parameters.values():
         if (
             registry.cli_name(p.name) != param
             or p.annotation is inspect.Parameter.empty
         ):
             continue
-        completer = coerce.peel(p.annotation).completer
+        completer = _coerce.peel(p.annotation).completer
         if completer is None:
             return []
         return _fresh(completer)
@@ -93,18 +93,18 @@ def _global_values(name: str, g: dict[str, object]) -> list[str]:
     finds a task's completer finds an option's: rediscover, match the cli
     name, peel the annotation, run what it carries. Any miss — no tasks
     file, an unpulled owner, a plain option — is an empty list."""
-    from footman import _app, coerce, discover, registry
+    from footman import _app, _coerce, _discover, registry
 
     files, _cfg = _app.resolve_task_files(g, on_warning=lambda *a: None, on_note=None)
     if not files:
         return []
     _maybe_reexec(files)  # before any user code is imported
     base = registry.Group("root")
-    root = discover.load_tree(files, base=base)
+    root = _discover.load_tree(files, base=base)
     for opt in root.contributions.get("globals", ()):
         if opt.name != name:
             continue
-        completer = coerce.peel(opt.annotation).completer
+        completer = _coerce.peel(opt.annotation).completer
         if completer is None:
             return []
         return _fresh(completer)

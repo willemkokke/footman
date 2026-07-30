@@ -30,7 +30,7 @@ import warnings
 from pathlib import Path
 from typing import Any
 
-from footman import _binder, _describe, _paths, coerce, discover, docstrings, registry
+from footman import _binder, _coerce, _describe, _discover, _paths, docstrings, registry
 from footman.context import context_param_name
 from footman.params import suggest
 from footman.registry import Group
@@ -138,8 +138,8 @@ def param_spec(param: inspect.Parameter) -> dict[str, Any]:
     if param.kind is inspect.Parameter.VAR_POSITIONAL:
         spec["kind"] = "variadic"
         if ann is not empty:
-            peeled = coerce.peel(ann)  # unwrap Annotated so markers reach the spec
-            tags = coerce.element_tags(peeled.element)
+            peeled = _coerce.peel(ann)  # unwrap Annotated so markers reach the spec
+            tags = _coerce.element_tags(peeled.element)
             if tags and tags != ["str"]:
                 spec["types"] = tags
             _marker_keys(spec, peeled, param, has_default=False)
@@ -170,7 +170,7 @@ def param_spec(param: inspect.Parameter) -> dict[str, Any]:
             spec["kind"] = "argument"
         return spec
 
-    peeled = coerce.peel(ann)
+    peeled = _coerce.peel(ann)
     if peeled.mapping:
         # A dict is always an option (--name KEY=VALUE); when it has no default
         # it is a *required* option — footman has no positional-mapping syntax.
@@ -181,13 +181,13 @@ def param_spec(param: inspect.Parameter) -> dict[str, Any]:
         _marker_keys(spec, peeled, param, has_default)
         if peeled.nosplit:
             spec["nosplit"] = True
-        if (ktags := coerce.element_tags(peeled.key)) and ktags != ["str"]:
+        if (ktags := _coerce.element_tags(peeled.key)) and ktags != ["str"]:
             spec["key_types"] = ktags
-        vchoices = coerce.all_choices(peeled.element)
-        vtags = coerce.element_tags(peeled.element)
+        vchoices = _coerce.all_choices(peeled.element)
+        vtags = _coerce.element_tags(peeled.element)
         if vchoices is not None:
             spec["value_choices"] = vchoices
-        if vtags and vtags != ["str"] and coerce.eagerly_checkable(peeled.element):
+        if vtags and vtags != ["str"] and _coerce.eagerly_checkable(peeled.element):
             spec["value_types"] = vtags
         return spec
 
@@ -210,7 +210,7 @@ def param_spec(param: inspect.Parameter) -> dict[str, Any]:
         _marker_keys(spec, peeled, param, has_default)
         return spec
 
-    if coerce.is_flag(element) and not peeled.multiple:
+    if _coerce.is_flag(element) and not peeled.multiple:
         # Only a *scalar* bool is a --flag; `list[bool]` stays a repeatable
         # option whose tokens parse as booleans (true/false/1/0/yes/no/on/off).
         spec["kind"] = "flag"
@@ -262,14 +262,14 @@ def param_spec(param: inspect.Parameter) -> dict[str, Any]:
         spec["_completer"] = peeled.completer
         return spec
 
-    choices = coerce.all_choices(element)
-    tags = coerce.element_tags(element)
+    choices = _coerce.all_choices(element)
+    tags = _coerce.element_tags(element)
     if choices is not None:
         spec["choices"] = choices
     # Emit `types` only when the element is eagerly checkable — a union with a
     # custom member (`UUID | int`) can't be accept/rejected up front, so leave
     # it to binding rather than eagerly rejecting valid values.
-    if tags and tags != ["str"] and coerce.eagerly_checkable(element):
+    if tags and tags != ["str"] and _coerce.eagerly_checkable(element):
         spec["types"] = tags
     elif choices is None and not tags and not isinstance(element, type):
         if isinstance(element, str) and "stdin" in element:
@@ -294,7 +294,7 @@ def param_spec(param: inspect.Parameter) -> dict[str, Any]:
 
 def _marker_keys(
     spec: dict[str, Any],
-    peeled: coerce.Peeled,
+    peeled: _coerce.Peeled,
     param: inspect.Parameter,
     has_default: bool,
 ) -> None:
@@ -481,7 +481,7 @@ def _task_node(fn: Any, memo: dict[int, list[str]]) -> dict[str, Any]:
         # The globals this task declares it reads — help, the catalog and
         # agents see the dependency without running anything.
         node["uses"] = [opt.name for opt in used]
-    if (previous := discover.shadowed(fn)) is not None:
+    if (previous := _discover.shadowed(fn)) is not None:
         # Additive, and only for the rare overridden task: the options of
         # the task this one shadows, so `--help` can show the call
         # `inherited()` will make.
@@ -489,7 +489,7 @@ def _task_node(fn: Any, memo: dict[int, list[str]]) -> dict[str, Any]:
             "params": [_finish(param_spec(p), memo) for p in _cli_params(previous)],
             "where": _source_of(previous),
         }
-    declares, _inner = coerce.emitted(sig.return_annotation)
+    declares, _inner = _coerce.emitted(sig.return_annotation)
     if declares:
         if interactive:
             raise SpecError(

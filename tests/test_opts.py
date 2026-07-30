@@ -8,8 +8,10 @@ from typing import assert_type
 
 import pytest
 
-from footman import manifest
-from footman.executor import run_chain
+from footman import _manifest as manifest
+from footman._executor import run_chain
+from footman._schedule import resolve_keep_going, run_plan
+from footman._split import split_chain
 from footman.params import Forward
 from footman.registry import (
     Group,
@@ -18,8 +20,6 @@ from footman.registry import (
     keeps_going,
     wants_progress,
 )
-from footman.schedule import resolve_keep_going, run_plan
-from footman.split import split_chain
 
 
 def _tree(build):
@@ -57,7 +57,10 @@ def test_task_signature_is_forwarded_to_the_type_checker():
         return 1
 
     assert_type(build("web", release=True), int)  # parameters + return forwarded
-    _ = build.opts(atomic=True)  # ...and `.opts()` still resolves on the same type
+    opted = build.opts(atomic=True)
+    assert_type(opted("web", release=True), int)  # an opted call keeps the signature
+    chained = opted.opts(keep_going=True)
+    assert_type(chained("web"), int)  # ...and so does a chained .opts()
 
 
 def test_opts_is_a_transparent_proxy():
@@ -80,7 +83,9 @@ def test_opts_rejects_unknown_options():
     def t(fix: bool = False): ...
 
     with pytest.raises(TypeError, match=r"unknown option"):
-        t.opts(fix=True)  # a task parameter, not a policy option
+        # A static error too (TaskOpts closes the set) — suppressed because
+        # this test pins the *runtime* rail a dynamic caller still hits.
+        t.opts(fix=True)  # pyright: ignore[reportCallIssue]
 
 
 def test_opts_rejects_an_unhashable_value():
@@ -90,7 +95,19 @@ def test_opts_rejects_an_unhashable_value():
     def t(): ...
 
     with pytest.raises(TypeError, match=r"hashable"):
-        t.opts(confirm=["not", "hashable"])  # values key dedup — must be hashable
+        # Statically a wrong type as well — kept for the runtime rail, which
+        # guards dedup hashability for callers the checker never sees.
+        t.opts(confirm=["not", "hashable"])  # pyright: ignore[reportArgumentType]
+
+
+def test_task_opts_matches_opts_attrs():
+    # TaskOpts (the typed .opts()/set_opts surface) and _OPTS_ATTRS (the
+    # runtime validator) are the same closed set, or completion and the
+    # taught error drift apart.
+    from footman.registry import _OPTS_ATTRS, TaskOpts
+
+    declared = set(TaskOpts.__optional_keys__) | set(TaskOpts.__required_keys__)
+    assert declared == set(_OPTS_ATTRS)
 
 
 def test_opts_chains_later_wins():

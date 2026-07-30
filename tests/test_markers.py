@@ -7,11 +7,11 @@ from typing import Annotated, Any
 
 import pytest
 
-from footman import manifest
-from footman.executor import run_chain
+from footman import _manifest as manifest
+from footman._executor import run_chain
+from footman._split import ChainError, split_chain
 from footman.params import between, check, env, exists, isdir, isfile
 from footman.registry import Group
-from footman.split import ChainError, split_chain
 
 
 def _even(v: int) -> None:
@@ -466,7 +466,7 @@ def test_check_context_includes_a_defaulted_sibling():
 
 
 def test_wants_context_detects_arity():
-    from footman.executor import _wants_context
+    from footman._executor import _wants_context
 
     assert not _wants_context(lambda v: None)  # one positional -> plain check
     assert _wants_context(lambda v, p: None)  # two positional -> contextual
@@ -476,7 +476,7 @@ def test_wants_context_detects_arity():
 def test_wants_context_handles_a_signatureless_callable(monkeypatch):
     import inspect
 
-    from footman.executor import _wants_context
+    from footman._executor import _wants_context
 
     def _no_signature(_fn):
         raise ValueError("no signature")

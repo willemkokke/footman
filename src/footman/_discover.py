@@ -169,7 +169,7 @@ def load_tree(
         # child's situation, and the reason a tree edit may not depend on one.
         inv = Invocation(cwd=str(Path.cwd()))
     inv.tasks = registry.Tasks(merged)
-    from footman.executor import wide_moment
+    from footman._executor import wide_moment
 
     with wide_moment("pre_tasks"):
         for run in merged.contributions["pre_tasks"]:

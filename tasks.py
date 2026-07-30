@@ -57,6 +57,19 @@ def typecheck():
 
 
 @task
+def typecomplete():
+    """Verify the public API is 100% type-complete (pyright --verifytypes).
+
+    The exit code is the verdict: 0 only when every public symbol has a
+    fully known type — a new unannotated export fails the gate here before
+    a consumer's checker ever sees it. `--ignoreexternal` scopes the claim
+    to footman's own surface (the pytest plugin necessarily references
+    pytest types, whose completeness is not ours to promise).
+    """
+    basedpyright(verifytypes="footman", ignoreexternal=True)
+
+
+@task
 def test(*pytest_args: str):
     """Run the test suite.
 
@@ -68,7 +81,7 @@ def test(*pytest_args: str):
 
 @task
 def check():
-    """Run format --check, lint, typecheck, and the covered suite — in parallel.
+    """Run format --check, lint, both type gates, and the covered suite — in parallel.
 
     The gate: run it before every commit, and CI runs the same checks. The
     test step runs under coverage against a local floor, so this one command
@@ -111,7 +124,13 @@ def check():
     # task's name the same way.
     covered.__name__ = "test"
     try:
-        parallel(functools.partial(format, check=True), lint, typecheck, covered)
+        parallel(
+            functools.partial(format, check=True),
+            lint,
+            typecheck,
+            typecomplete,
+            covered,
+        )
     finally:
         # In a `finally`, because a red gate is the common case and the one
         # that would otherwise leak: `parallel` raises on the first failing

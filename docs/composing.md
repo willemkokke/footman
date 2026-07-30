@@ -94,11 +94,11 @@ says both. A predicate that raises reads as unavailable (a broken gate must not
 swing open).
 
 Keep the gates **below `@task`**, as above — `@task` on top, `@requires_*`
-stacked beneath it. Either order *runs* (a gate sets an attribute the same task
-object carries), but `@task` outermost is what keeps the task's typed signature
-and `.opts()` in view for a type checker; flipped, the gate erases them. It also
-reads the way it works: `@task` is the identity, the gates are modifiers under
-it.
+stacked beneath it. Either order works, for a type checker too: a gate sets an
+attribute on the same task object and hands back exactly what it wrapped, so
+the task's typed signature and `.opts()` stay in view whichever side of `@task`
+it stands on. This order simply reads the way it works: `@task` is the
+identity, the gates are modifiers under it.
 
 !!! warning "Keep a predicate cheap — it runs live"
 

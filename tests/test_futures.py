@@ -7,10 +7,11 @@ from typing import Annotated, Literal
 
 import pytest
 
-from footman import executor, registry
+from footman import _executor as executor
+from footman import registry
+from footman._split import ChainError
 from footman.params import ask, between, env, stdin
 from footman.registry import Group, RegistrationError
-from footman.split import ChainError
 from footman.testing import Runner
 
 
@@ -555,8 +556,8 @@ def test_something_that_never_began_sits_after_what_prevented_it():
     # directly after the one it blames, so the report reads cause then
     # consequence. (Skipped nodes become results in their own right with the
     # post_tasks hook; the ordering contract is here and pinned now.)
-    from footman import schedule
-    from footman.executor import TaskResult
+    from footman import _schedule as schedule
+    from footman._executor import TaskResult
 
     ran_first = TaskResult(task="build", ok=False, code=1, started=1.0)
     ran_later = TaskResult(task="notify", ok=True, started=2.0)
@@ -623,7 +624,7 @@ def test_a_shared_entry_does_not_change_the_exit_code():
 def test_reported_state_resolves_one_word_from_the_parts():
     # `ok`/`code` stay the exit-code channel; this is the reported spelling, so
     # a new outcome becomes another value here rather than another boolean.
-    from footman.executor import TaskResult
+    from footman._executor import TaskResult
 
     assert executor.reported_state(TaskResult(task="a", ok=True)) == "ok"
     assert executor.reported_state(TaskResult(task="a", ok=False)) == "failed"
@@ -640,7 +641,7 @@ def test_reported_state_resolves_one_word_from_the_parts():
 def test_the_ladder_resolver_is_shared():
     # Sharing is the first user of the down-the-subtree ladder; a later
     # property (a cross-run "never cached") reuses this rather than copying it.
-    from footman import schedule
+    from footman import _schedule as schedule
 
     assert schedule.resolve_inherited(True, False) is True  # own wins
     assert schedule.resolve_inherited(False, True) is False  # even over a parent
@@ -993,6 +994,7 @@ class _FakeStatus:
     def __init__(self):
         self.events: list[tuple] = []
         self.total = 0
+        self.counted: dict[str, tuple[int, int]] = {}
 
     def unit_added(self, count: int = 1) -> None:
         self.total += count
@@ -1014,6 +1016,12 @@ class _FakeStatus:
         pass
 
     def paint(self) -> None:
+        pass
+
+    def suspend(self) -> None:
+        pass
+
+    def resume(self) -> None:
         pass
 
 

@@ -14,12 +14,13 @@ from typing import Annotated
 
 import pytest
 
-from footman import context, manifest
+from footman import _manifest as manifest
+from footman import context
 from footman._describe import param_detail
-from footman.executor import EX_USAGE, resolve_asks, run_chain
+from footman._executor import EX_USAGE, resolve_asks, run_chain
+from footman._split import split_chain
 from footman.params import Stdin, ask, check, env, stdin
 from footman.registry import Group
-from footman.split import split_chain
 from footman.testing import Runner
 
 

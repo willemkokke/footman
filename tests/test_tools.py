@@ -382,9 +382,10 @@ def test_in_process_tools_run_concurrently_with_separate_capture(monkeypatch):
     times out if they serialise) and must not cross-contaminate captures."""
     import threading
 
-    from footman import manifest, schedule
+    from footman import _manifest as manifest
+    from footman import _schedule as schedule
+    from footman._split import split_chain
     from footman.registry import Group
-    from footman.split import split_chain
 
     barrier = threading.Barrier(2, timeout=5)
 
@@ -427,9 +428,10 @@ def test_in_process_tool_with_foreign_cwd_demotes_to_subprocess(monkeypatch, tmp
     # target cwd differs from the live process cwd runs as its subprocess
     # twin instead: same command, right cwd, still fully parallel — the
     # in-process speedup is the only loss.
-    from footman import manifest, schedule
+    from footman import _manifest as manifest
+    from footman import _schedule as schedule
+    from footman._split import split_chain
     from footman.registry import Group
-    from footman.split import split_chain
 
     seen = {}
 
@@ -469,9 +471,11 @@ def test_in_process_tool_with_foreign_cwd_demotes_to_subprocess(monkeypatch, tmp
 def test_in_process_tool_with_matching_cwd_stays_in_process(monkeypatch):
     # Equal target and live cwd (the common single-package case): no
     # demotion, the in-process speedup is kept.
-    from footman import _globals, manifest, schedule
+    from footman import _globals
+    from footman import _manifest as manifest
+    from footman import _schedule as schedule
+    from footman._split import split_chain
     from footman.registry import Group
-    from footman.split import split_chain
 
     seen = {}
 
@@ -505,9 +509,10 @@ def test_in_process_tool_with_matching_cwd_stays_in_process(monkeypatch):
 def test_tool_opts_rel_roots_the_call(tmp_path):
     # Tool.opts(cwd=, rel=) is the bridge's per-call override — the same
     # policy carrier as nofail/capture, threading straight into run().
-    from footman import manifest, schedule
+    from footman import _manifest as manifest
+    from footman import _schedule as schedule
+    from footman._split import split_chain
     from footman.registry import Group
-    from footman.split import split_chain
 
     (tmp_path / "web").mkdir()
     reg = Group("root")
@@ -533,9 +538,10 @@ def test_tool_opts_none_means_unset(tmp_path):
     # None is "no opinion" for the four options run() treats that way, so a
     # caller can compute one (`cwd=None if inline else build_dir`) and a later
     # None clears an earlier bound value. The types say so; this says it runs.
-    from footman import manifest, schedule
+    from footman import _manifest as manifest
+    from footman import _schedule as schedule
+    from footman._split import split_chain
     from footman.registry import Group
-    from footman.split import split_chain
 
     (tmp_path / "web").mkdir()
     reg = Group("root")
@@ -583,9 +589,10 @@ def test_mixed_tool_output_is_never_interleaved(monkeypatch, capsys, tmp_path):
     import threading
     import time
 
-    from footman import manifest, schedule
+    from footman import _manifest as manifest
+    from footman import _schedule as schedule
+    from footman._split import split_chain
     from footman.registry import Group
-    from footman.split import split_chain
 
     lines, tool_count = 20, 8
     script = tmp_path / "vtool.py"

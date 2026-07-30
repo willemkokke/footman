@@ -11,8 +11,8 @@ import sys
 from typing import Literal
 
 from footman import Context, run, use_context
+from footman._executor import EX_USAGE
 from footman.app import App
-from footman.executor import EX_USAGE
 from footman.registry import Group
 from footman.testing import Runner, recording
 

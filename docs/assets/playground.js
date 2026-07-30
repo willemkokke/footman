@@ -331,7 +331,7 @@ def _fm_complete(code, line):
     # manifest tree once per source text, then every Tab is a pure walk —
     # the same complete() a shell hook consults.
     import types
-    from footman import manifest, registry
+    from footman import _manifest as manifest, registry
     from footman._complete import complete
     if _fm_manifest["code"] != code:
         module = types.ModuleType("tasks")

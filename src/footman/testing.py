@@ -44,9 +44,9 @@ from pathlib import Path
 from typing import Any
 
 from footman import _app, context
+from footman._executor import TaskResult
 from footman.app import App
 from footman.context import Context, Result, use_context
-from footman.executor import TaskResult
 from footman.registry import Group
 
 __all__ = [
@@ -120,6 +120,8 @@ class Runner:
     error prefixes, `--version`, and hints then use that brand, exactly as
     they would for real users.
     """
+
+    app: App
 
     def __init__(self, app: App | None = None) -> None:
         self.app = app if app is not None else App()

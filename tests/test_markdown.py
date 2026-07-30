@@ -6,7 +6,8 @@ from typing import Annotated, Literal
 
 import pytest
 
-from footman import manifest, markdown, registry, task
+from footman import _manifest as manifest
+from footman import markdown, registry, task
 from footman.params import doc
 from footman.registry import group
 
@@ -110,7 +111,7 @@ def test_render_is_deterministic(sample_tree):
 
 
 def test_globals_table_mirrors_the_grammar():
-    from footman import split
+    from footman import _split as split
 
     text = markdown.globals_table()
     lines = text.splitlines()

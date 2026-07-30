@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from footman.split import ChainError, split_chain
+from footman._split import ChainError, split_chain
 
 
 def segs(tree, line):

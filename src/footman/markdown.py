@@ -31,16 +31,16 @@ __all__ = ["globals_table", "render_page", "render_site"]
 def globals_table(*, prog: str = "fm") -> str:
     """The runner's global options as a markdown pipe table.
 
-    Rendered straight from the CLI grammar (`split.GLOBALS`) — the same
+    Rendered straight from the CLI grammar (`_split.GLOBALS`) — the same
     rows, in the same order, with the same words `--help` prints — so a
     docs page that regenerates this on each build can never drift from the
     runner. *prog* fills the `{prog}` placeholders, so a branded CLI's docs
     speak its own name.
     """
-    from footman import split
+    from footman import _split
 
     rows = []
-    for name, alias, _kind, hint, help_text in split.GLOBALS:
+    for name, alias, _kind, hint, help_text in _split.GLOBALS:
         main = f"`{name} {hint}`" if hint else f"`{name}`"
         label = f"`{alias}`, {main}" if alias else main
         rows.append((label, _cell(help_text.replace("{prog}", prog))))

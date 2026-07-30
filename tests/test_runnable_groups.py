@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from footman import manifest
-from footman.executor import run_chain
+from footman import _manifest as manifest
+from footman._executor import run_chain
+from footman._split import ChainError, split_chain
 from footman.params import Forward
 from footman.registry import (
     Group,
@@ -16,7 +17,6 @@ from footman.registry import (
     pre_deps,
     task_confirm,
 )
-from footman.split import ChainError, split_chain
 
 
 def drive(build, line):

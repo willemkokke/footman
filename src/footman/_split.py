@@ -31,7 +31,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from footman import coerce
+from footman import _coerce
 
 
 def _close1(a: str, b: str) -> bool:
@@ -193,17 +193,17 @@ def _check(
         # A union like `Literal['fast','slow'] | int` carries both choices and
         # types: accept a value that matches either, and only teach both when
         # neither fits.
-        if not (types and coerce.coerce_scalar(value, types)[0]):
+        if not (types and _coerce.coerce_scalar(value, types)[0]):
             listing = "|".join(choices) if choices else "(none available)"
-            extra = f", or {coerce.type_phrase(types)}" if types else ""
+            extra = f", or {_coerce.type_phrase(types)}" if types else ""
             hint = _did_you_mean(value, choices)
             raise ChainError(
                 f"{where}: {label} must be one of {listing}{extra} "
                 f"(got {value!r}){hint}"
             )
         # matched via the type path -> fall through to bounds/path below
-    elif types and not coerce.coerce_scalar(value, types)[0]:
-        expected = coerce.type_phrase(types)
+    elif types and not _coerce.coerce_scalar(value, types)[0]:
+        expected = _coerce.type_phrase(types)
         raise ChainError(f"{where}: {label} expects {expected} (got {value!r})")
     if path is not None:
         _check_path(where, label, value, path)
@@ -227,7 +227,7 @@ def _check_path(where: str, label: str, value: str, req: str) -> None:
 def _check_bounds(
     where: str, label: str, value: str, types: list | None, bounds: tuple
 ) -> None:
-    ok, number = coerce.coerce_scalar(value, types or ["int", "float"])
+    ok, number = _coerce.coerce_scalar(value, types or ["int", "float"])
     if not ok or isinstance(number, bool) or not isinstance(number, (int, float)):
         return  # the types check above already taught the type error
     lo, hi = bounds
@@ -731,7 +731,7 @@ def _consume_positional(seg: Segment, tree: dict, p: dict, tok: str) -> None:
         "choices" in p
         and tok not in p["choices"]
         and not _suggest_only(p["choices"], p.get("dynamic"))
-        and not (p.get("types") and coerce.coerce_scalar(tok, p["types"])[0])
+        and not (p.get("types") and _coerce.coerce_scalar(tok, p["types"])[0])
         and _is_address(tree, tok)
     ):
         raise ChainError(

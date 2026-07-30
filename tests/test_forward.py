@@ -6,11 +6,11 @@ from typing import Annotated
 
 import pytest
 
-from footman import manifest
-from footman.executor import forward_map, run_chain
+from footman import _manifest as manifest
+from footman._executor import forward_map, run_chain
+from footman._split import ChainError, Segment, split_chain
 from footman.params import Forward, forward
 from footman.registry import Group
-from footman.split import ChainError, Segment, split_chain
 
 
 def drive(build, line):
