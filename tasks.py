@@ -59,16 +59,26 @@ def typecheck():
     basedpyright runs `--warnings` so a warning fails the gate exactly as an
     error does — a warning nobody has to act on is a warning everybody stops
     reading. mypy is strict on footman itself and checks every test body as
-    consumer code; ty and pyrefly cover the library at the scopes pyproject
-    pins. All four gate: a checker footman uses is a checker the tree is
-    clean against (notes/20260730-typing-citizenship.md).
+    consumer code — once per platform (linux from config, darwin and win32
+    by flag), since mypy has no all-platforms mode; ty and pyrefly check
+    every platform at once (`python-platform = "all"`) at the scopes
+    pyproject pins. All four gate: a checker footman uses is a checker the
+    tree is clean against (notes/20260730-typing-citizenship.md).
     """
 
     def based():
         basedpyright(warnings=True)
 
-    def run_mypy():
-        mypy()
+    # Each run gets its own cache dir: mypy's SQLite cache (2.x default)
+    # does not tolerate three concurrent writers on one file.
+    def mypy_linux():
+        mypy(cache_dir=".mypy_cache/linux")
+
+    def mypy_darwin():
+        mypy(platform="darwin", cache_dir=".mypy_cache/darwin")
+
+    def mypy_win32():
+        mypy(platform="win32", cache_dir=".mypy_cache/win32")
 
     def run_ty():
         ty.check()
@@ -77,10 +87,9 @@ def typecheck():
         pyrefly("check")
 
     based.__name__ = "basedpyright"
-    run_mypy.__name__ = "mypy"
     run_ty.__name__ = "ty"
     run_pyrefly.__name__ = "pyrefly"
-    parallel(based, run_mypy, run_ty, run_pyrefly)
+    parallel(based, mypy_linux, mypy_darwin, mypy_win32, run_ty, run_pyrefly)
 
 
 @task

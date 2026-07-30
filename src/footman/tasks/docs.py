@@ -356,6 +356,8 @@ def _pty_session(
 ) -> list[tuple[float, bytes]]:
     """Run *argv* on a pty, play the keystroke script, and record
     (elapsed-seconds, bytes) chunks until output has settled."""
+    if sys.platform == "win32":  # pragma: no cover — the @requires gates hold
+        raise RuntimeError("terminal recording needs a POSIX pseudo-terminal")
     import fcntl
     import pty
     import select

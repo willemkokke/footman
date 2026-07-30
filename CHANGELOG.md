@@ -54,7 +54,12 @@ versions may include breaking changes.
   same four), and the tree is clean under each — none are advisory. mypy
   runs strict on footman itself and checks every test body as consumer
   code (`check_untyped_defs`; the full test-annotation pass is a planned
-  follow-up); ty and pyrefly cover the library. pyrefly runs its `default`
+  follow-up); ty and pyrefly cover the library. Every platform's typeshed
+  is checked from any machine: ty and pyrefly check the platform union
+  (`python-platform = "all"`), and mypy — which has no such mode — runs
+  once per platform (linux, darwin, win32), so POSIX-only branches like
+  the fork guard and the pty recorder carry real platform narrowing
+  instead of breaking the check on Windows. pyrefly runs its `default`
   preset — its strict tier demands `@override`, which is Python 3.12+
   typing and out of reach for a zero-dependency 3.11 library. The one
   place a checker is overruled is the deliberate monkeypatching in the

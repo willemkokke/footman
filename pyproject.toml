@@ -146,6 +146,10 @@ select = ["E", "F", "I", "UP", "B", "SIM", "C4", "RUF"]
 # Tasks fixtures deliberately shadow builtins (format, list) and take unused
 # params to exercise the signature grammar.
 "tests/**" = ["A", "B", "ARG"]
+# The process-globals router is one deliberate monkeypatch: setattr IS the
+# honest spelling there (a static assignment can't be blessed by any checker
+# on any platform), so B010's "use direct assignment" advice is excused.
+"src/footman/_globals.py" = ["B010"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -184,10 +188,11 @@ addopts = "-q -n auto --dist=worksteal"
 # (also part of strict) keeps this checker's set honest.
 files = ["src", "tests", "tasks.py"]
 mypy_path = ["src"]
-# One world to check, whatever runs the check: unpinned, mypy assumes the
-# host's platform and interpreter, so a Windows job (or a 3.14 laptop) sees
-# different typeshed branches than the one the tree was made clean under —
-# os.fork/pty vanish, ignores go stale. basedpyright pins the same floor.
+# Deterministic world, whatever host runs the check: unpinned, mypy assumes
+# the host's platform and interpreter. linux is the bare-run default; the
+# typecheck gate adds --platform darwin and --platform win32 runs (mypy has
+# no all-platforms mode), so every platform's typeshed branches are checked
+# from any machine. 3.11 is the floor basedpyright pins too.
 platform = "linux"
 python_version = "3.11"
 strict = true
@@ -225,8 +230,8 @@ warn_unused_ignores = false
 include = ["src"]
 
 [tool.ty.environment]
-# Same one-world pin as mypy's: check as linux/3.11 on every host.
-python-platform = "linux"
+# Every platform at once (ty checks the union), 3.11 floor.
+python-platform = "all"
 python-version = "3.11" 
 
 [tool.pyrefly]
@@ -236,8 +241,8 @@ python-version = "3.11"
 # typing_extensions runtime dep. Revisit when 3.11 support ends.
 preset = "default"
 project-includes = ["src"]
-# Same one-world pin as mypy's.
-python-platform = "linux"
+# Every platform at once (pyrefly checks the union), 3.11 floor.
+python-platform = "all"
 python-version = "3.11"
 
 [tool.basedpyright]

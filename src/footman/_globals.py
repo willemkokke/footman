@@ -241,19 +241,20 @@ def _install_environ() -> None:
             return value
         return found
 
-    # Deliberate runtime class patching — the router IS a monkeypatch, and
-    # no checker has a way to bless one (mypy calls it method-assign, ty
-    # invalid-assignment — ty refuses even signature-identical patches).
-    # There is nothing to "fix", so the bare ignore, honoured by every
-    # checker in the gate, is the honest spelling on these lines.
-    env_cls.__getitem__ = __getitem__  # type: ignore
-    env_cls.__setitem__ = __setitem__  # type: ignore
-    env_cls.__delitem__ = __delitem__  # type: ignore
-    env_cls.__iter__ = __iter__  # type: ignore
-    env_cls.__len__ = __len__  # type: ignore
-    env_cls.__contains__ = __contains__  # type: ignore
-    env_cls.copy = copy  # type: ignore
-    env_cls.setdefault = setdefault  # type: ignore
+    # Deliberate runtime patching — the router IS a monkeypatch, and no
+    # checker has a way to bless a static spelling of one (ty refuses even
+    # signature-identical patches, and which os.* names exist depends on
+    # the platform being checked). setattr says what is happening — a
+    # dynamic write — and needs no suppression on any checker or platform;
+    # ruff's B010 is excused for this file in pyproject.
+    setattr(env_cls, "__getitem__", __getitem__)
+    setattr(env_cls, "__setitem__", __setitem__)
+    setattr(env_cls, "__delitem__", __delitem__)
+    setattr(env_cls, "__iter__", __iter__)
+    setattr(env_cls, "__len__", __len__)
+    setattr(env_cls, "__contains__", __contains__)
+    setattr(env_cls, "copy", copy)
+    setattr(env_cls, "setdefault", setdefault)
 
 
 def _restore_environ() -> None:
@@ -315,7 +316,7 @@ def _install_popen() -> None:
                 )
         orig(self, args, *pa, **kw)
 
-    subprocess.Popen.__init__ = __init__  # type: ignore[method-assign]
+    setattr(subprocess.Popen, "__init__", __init__)
 
 
 def _restore_popen() -> None:
@@ -323,7 +324,7 @@ def _restore_popen() -> None:
     if _popen_saved is not None:
         import subprocess
 
-        subprocess.Popen.__init__ = _popen_saved  # type: ignore[method-assign]
+        setattr(subprocess.Popen, "__init__", _popen_saved)
         _popen_saved = None
 
 
@@ -364,7 +365,7 @@ def _install_os_guards() -> None:
                 raise _chdir_error(ctx)
         orig_chdir(path)
 
-    os.chdir = chdir  # ty: ignore[invalid-assignment]
+    setattr(os, "chdir", chdir)
 
     if _guard_saved["fchdir"] is not None:
         orig_fchdir: Callable[[int], None] = _guard_saved["fchdir"]
@@ -375,7 +376,7 @@ def _install_os_guards() -> None:
                 raise _chdir_error(ctx)
             orig_fchdir(fd)
 
-        os.fchdir = fchdir  # ty: ignore[invalid-assignment]
+        setattr(os, "fchdir", fchdir)
 
     orig_getcwd: Callable[[], str] = _guard_saved["getcwd"]
 
@@ -399,7 +400,7 @@ def _install_os_guards() -> None:
             )
         return here
 
-    os.getcwd = getcwd  # ty: ignore[invalid-assignment]
+    setattr(os, "getcwd", getcwd)
 
     def _env_bypass_error(name: str) -> RuntimeError:
         return RuntimeError(
@@ -417,7 +418,7 @@ def _install_os_guards() -> None:
                 raise _env_bypass_error("putenv")
             orig_putenv(name, value)
 
-        os.putenv = putenv  # type: ignore
+        setattr(os, "putenv", putenv)
 
     if _guard_saved["unsetenv"] is not None:
         orig_unsetenv = _guard_saved["unsetenv"]
@@ -428,7 +429,7 @@ def _install_os_guards() -> None:
                 raise _env_bypass_error("unsetenv")
             orig_unsetenv(name)
 
-        os.unsetenv = unsetenv  # type: ignore
+        setattr(os, "unsetenv", unsetenv)
 
     if _guard_saved["fork"] is not None:
         orig_fork: Callable[[], int] = _guard_saved["fork"]
@@ -445,22 +446,22 @@ def _install_os_guards() -> None:
                 )
             return orig_fork()
 
-        os.fork = fork  # ty: ignore[invalid-assignment]
+        setattr(os, "fork", fork)
 
 
 def _restore_os_guards() -> None:
     if not _guard_saved:
         return
-    os.chdir = _guard_saved["chdir"]
-    os.getcwd = _guard_saved["getcwd"]
+    setattr(os, "chdir", _guard_saved["chdir"])
+    setattr(os, "getcwd", _guard_saved["getcwd"])
     if _guard_saved["fchdir"] is not None:
-        os.fchdir = _guard_saved["fchdir"]
+        setattr(os, "fchdir", _guard_saved["fchdir"])
     if _guard_saved["putenv"] is not None:
-        os.putenv = _guard_saved["putenv"]
+        setattr(os, "putenv", _guard_saved["putenv"])
     if _guard_saved["unsetenv"] is not None:
-        os.unsetenv = _guard_saved["unsetenv"]
+        setattr(os, "unsetenv", _guard_saved["unsetenv"])
     if _guard_saved["fork"] is not None:
-        os.fork = _guard_saved["fork"]
+        setattr(os, "fork", _guard_saved["fork"])
     _guard_saved.clear()
 
 
@@ -491,7 +492,7 @@ def _install_multiprocessing() -> None:
             )
         return orig(self)
 
-    mp_process.BaseProcess.start = start  # type: ignore[method-assign]
+    setattr(mp_process.BaseProcess, "start", start)
 
 
 def _restore_multiprocessing() -> None:
@@ -499,7 +500,7 @@ def _restore_multiprocessing() -> None:
     if _mp_saved is not None:
         from multiprocessing import process as mp_process
 
-        mp_process.BaseProcess.start = _mp_saved  # type: ignore[method-assign]
+        setattr(mp_process.BaseProcess, "start", _mp_saved)
         _mp_saved = None
 
 

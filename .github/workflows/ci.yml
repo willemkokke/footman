@@ -96,8 +96,12 @@ jobs:
       - name: Type-check (basedpyright)
         # `--warnings` here too, or the rule holds on a laptop and not in CI.
         run: uv run basedpyright --warnings
-      - name: Type-check (mypy)
+      - name: Type-check (mypy, linux)
         run: uv run mypy
+      - name: Type-check (mypy, darwin)
+        run: uv run mypy --platform darwin
+      - name: Type-check (mypy, win32)
+        run: uv run mypy --platform win32
       - name: Type-check (ty)
         run: uv run ty check
       - name: Type-check (pyrefly)

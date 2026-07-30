@@ -412,6 +412,8 @@ def test_fork_notes_the_serial_lane(capfd):
     def tasks(reg):
         @reg.task
         def go():
+            if sys.platform == "win32":  # pragma: no cover — skipif holds
+                raise RuntimeError("fork is POSIX-only")
             pid = os.fork()
             if pid == 0:  # the child: touch nothing, leave immediately
                 os._exit(0)

@@ -295,6 +295,17 @@ on (`@task` preserves your signature, `.opts()` too, markers are
   `src/` — the consumer seam in tests is already double-checked, and the
   Rust checkers' fake-object modelling isn't ready for the suite's
   doubles.
+- **All platforms, from any host** (Willem's call, same day): basedpyright
+  defaults to `pythonPlatform: All`; ty and pyrefly check the platform
+  union (`python-platform = "all"`); mypy has no all-mode, so the gate
+  runs it three times (linux by config, darwin and win32 by flag), each
+  with its own cache dir — mypy's SQLite cache does not tolerate
+  concurrent writers. The win32 view forced two honest improvements: the
+  process-globals router now patches via `setattr` (a dynamic write said
+  dynamically — zero suppressions left in the file, B010 excused for it),
+  and POSIX-only code carries `sys.platform` narrowing (`if`-statements,
+  not asserts — mypy's platform reasoning only follows ifs, and never
+  across a nested-function boundary).
 - **mypy tier landed as agreed** (strict on `footman.*`, usage-checking on
   tests), with one structural inversion: mypy's per-module patterns can't
   address the tests' bare top-level module names, so the *global* config

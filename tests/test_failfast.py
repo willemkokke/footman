@@ -339,6 +339,8 @@ def test_fail_fast_kills_grandchildren_not_just_the_direct_child(tmp_path):
             break
         time.sleep(0.02)
     leaked = alive()
+    if sys.platform == "win32":  # pragma: no cover — the skipif above holds
+        pytest.skip("group kill is POSIX-only here")
     if leaked:  # don't strand a 30s sleeper if the assertion is about to fail
         os.kill(gc_pid, signal.SIGKILL)
     assert not leaked, "grandchild survived fail-fast — the group kill missed it"
@@ -403,6 +405,8 @@ def test_fail_fast_escalates_to_sigkill_when_sigterm_is_ignored(tmp_path):
         ctx._register_child(proc)
         ctx.terminate_live_children(grace=0.2)  # SIGTERM ignored → SIGKILL follows
         proc.wait(timeout=5)
+        if sys.platform == "win32":  # pragma: no cover — the skipif holds
+            pytest.skip("SIGKILL is POSIX-only")
         assert proc.returncode == -signal.SIGKILL  # forced, not the ignored SIGTERM
     finally:
         ctx._forget_child(proc)
