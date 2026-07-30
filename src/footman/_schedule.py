@@ -852,7 +852,7 @@ def _run_parallel(
     def dep_lost(n: _Node) -> bool:
         def lost(m: _Node) -> bool:
             return m.state == "skipped" or (
-                m.state == "done" and bool(m.result) and not m.result.ok  # type: ignore[union-attr]
+                m.state == "done" and (res := m.result) is not None and not res.ok
             )
 
         return any(lost(by_key[d]) for d in n.deps if d in by_key)
