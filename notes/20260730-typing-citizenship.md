@@ -1,7 +1,8 @@
 # Typing citizenship
 
-**Status: AGREED (2026-07-30) — every open question settled, ready to
-build.**
+**Status: BUILT — all six phases shipped 2026-07-30 (PRs #228, #229,
+#230, and the typechecking docs page). Remaining: the two follow-ups at
+the end of "Decided".**
 
 footman should be a good citizen for people who strongly type their code:
 consumer `tasks.py` files should type-check cleanly against the public API
@@ -330,6 +331,15 @@ new checker over consumer shapes: select() grew plain-strings overloads
 the group-default handle's signature-keeping is pinned (the answer to
 "where do default parameters autocomplete" is: on the handle, call it
 directly).
+
+## Phase 6 outcome (built 2026-07-30, same day)
+
+docs/typechecking.md, a Guide page after "Testing your tasks": what the
+types promise (with runnable examples — the deliberate type-error lines
+are `example: fragment` blocks so the page-as-session harness skips
+them), private-is-private said consumer-facing, and the enforcement story.
+All six phases of this plan are now built; what remains are the two
+follow-ups (test-alias respelling, full test annotation).
 
 ## Rejected along the way
 
