@@ -10,10 +10,20 @@ import dataclasses
 import functools
 import re
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Annotated
+from typing import TYPE_CHECKING, Annotated, Any
 
 from footman import RunFailed, doc, fail, group, parallel, plugin, run, stdin, task
-from footman.tools import basedpyright, pytest, ruff, ruff_format, uv, zensical
+from footman.tools import (
+    basedpyright,
+    mypy,
+    pyrefly,
+    pytest,
+    ruff,
+    ruff_format,
+    ty,
+    uv,
+    zensical,
+)
 
 docs = group("docs", help="Documentation site (Zensical)")
 
@@ -44,16 +54,33 @@ def format(check: bool = False):
 
 @task
 def typecheck():
-    """Type-check with basedpyright — warnings included.
+    """Type-check with all four gating checkers, in parallel.
 
-    `--warnings` makes the exit code 1 when anything at all is reported, so
-    a warning fails the gate exactly as an error does. A warning nobody has
-    to act on is a warning everybody stops reading, and the two this started
-    with were real: `__all__` advertised two submodules that no type-checker
-    could resolve, so an editor gave a consumer no completion for them and a
-    strict consumer saw our package complain about itself.
+    basedpyright runs `--warnings` so a warning fails the gate exactly as an
+    error does — a warning nobody has to act on is a warning everybody stops
+    reading. mypy is strict on footman itself and checks every test body as
+    consumer code; ty and pyrefly cover the library at the scopes pyproject
+    pins. All four gate: a checker footman uses is a checker the tree is
+    clean against (notes/20260730-typing-citizenship.md).
     """
-    basedpyright(warnings=True)
+
+    def based():
+        basedpyright(warnings=True)
+
+    def run_mypy():
+        mypy()
+
+    def run_ty():
+        ty.check()
+
+    def run_pyrefly():
+        pyrefly("check")
+
+    based.__name__ = "basedpyright"
+    run_mypy.__name__ = "mypy"
+    run_ty.__name__ = "ty"
+    run_pyrefly.__name__ = "pyrefly"
+    parallel(based, run_mypy, run_ty, run_pyrefly)
 
 
 @task
@@ -267,7 +294,7 @@ def _write_llms_txt() -> None:
 
     pages: list[tuple[str, str]] = []  # (title, md filename), nav order
 
-    def walk(items: list) -> None:
+    def walk(items: list[dict[str, Any]]) -> None:
         for item in items:
             for title, value in item.items():
                 if isinstance(value, list):

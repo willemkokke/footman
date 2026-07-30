@@ -275,6 +275,38 @@ which checkers, the PEP 695 spelling policy, and what a consumer can rely
 on (`@task` preserves your signature, `.opts()` too, markers are
 `Annotated` aliases that vanish at the type level). Plain words.
 
+## Phase 4 outcomes (built 2026-07-30, same day)
+
+- **All four checkers gate, and ty survived the roster rule.** The drop
+  risk turned out misplaced: ty handled the `TaskFn` ParamSpec pattern
+  without complaint. Its findings were substantive — it caught
+  `Peeled.ask` annotating itself with its own field name (shadowing the
+  `ask` class), and its dict-splat strictness forced honest intermediate
+  types. Its one wall: module/class attributes are effectively Final —
+  it refuses even a signature-identical monkeypatch (`def fork() -> int`
+  onto `os.fork`), so `_globals.py`'s 13 patch lines carry suppressions
+  (bare `# type: ignore` where mypy also objects, `# ty: ignore[…]` where
+  only ty does). Concentrated, uniform, one file whose nature is the
+  patch — the documented exception, not a spray.
+- **pyrefly gates at its `default` preset.** `strict` demands `@override`
+  (`typing.override` is 3.12+; unreachable for a zero-dep 3.11 library)
+  plus annotate-every-empty-container churn. Revisit at 3.11 EOL.
+- **Scope:** basedpyright + mypy check everything; ty + pyrefly check
+  `src/` — the consumer seam in tests is already double-checked, and the
+  Rust checkers' fake-object modelling isn't ready for the suite's
+  doubles.
+- **mypy tier landed as agreed** (strict on `footman.*`, usage-checking on
+  tests), with one structural inversion: mypy's per-module patterns can't
+  address the tests' bare top-level module names, so the *global* config
+  is the tests tier and a `footman.*` override tightens the library.
+- **Portability idioms that emerged** (use these, not suppressions):
+  `task_name(fn: Any)` for `__name__` on `Callable` (ty is per-spec right
+  that Callable has none); getattr-then-call instead of hasattr-narrowing
+  (not portable); annotated intermediate dicts instead of heterogeneous
+  inline `**{…}` splats (ty distributes the value union); `cast` where
+  isinstance narrows to `dict[Unknown, Unknown]` and invariance blocks
+  the reassignment.
+
 ## Rejected along the way
 
 - **An advisory tier.** The first draft proposed ty + pyrefly as a
