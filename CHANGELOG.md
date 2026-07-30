@@ -69,6 +69,17 @@ versions may include breaking changes.
   class with its own field, `parallel()`'s queue and status-line contracts,
   and honest narrowing in the binder and scheduler.
 
+- **The typed contract has consumer-shaped tests now.** Two checked-never-
+  executed files pin the seam where a `tasks.py` meets the API:
+  `tests/typecheck_api.py` holds the positive shapes — signatures kept
+  through `@task`, `.opts()` and the gates, markers vanishing at the type
+  level, `run()`/`parallel()`/`select()`/`Runner` contracts — under all
+  four checkers, and `typecheck_api_negative.py` holds the misuses that
+  must stay static errors, with ignores both mypy and basedpyright police
+  for staleness. Writing them improved `select()` again: dedicated
+  plain-strings overloads, so every checker agrees a string menu answers
+  with exactly `str`.
+
 ### Fixed
 
 - **`.opts()` takes `None` for the options that mean "unset".** The tools
