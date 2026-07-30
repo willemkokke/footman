@@ -114,7 +114,9 @@ def _available(name: str) -> bool:
     return importlib.util.find_spec(name) is not None
 
 
-def _download(backend: str, url: str, dest: Path, meta: dict[str, Any]) -> dict:
+def _download(
+    backend: str, url: str, dest: Path, meta: dict[str, Any]
+) -> dict[str, Any]:
     """Fetch *url* into *dest*; return the new metadata (empty = unchanged)."""
     if backend == "curl":
         return _download_curl(url, dest, meta)
@@ -132,7 +134,7 @@ def _conditional_headers(meta: dict[str, Any]) -> dict[str, str]:
     return headers
 
 
-def _download_urllib(url: str, dest: Path, meta: dict[str, Any]) -> dict:
+def _download_urllib(url: str, dest: Path, meta: dict[str, Any]) -> dict[str, Any]:
     request = urllib.request.Request(url, headers=_conditional_headers(meta))
     try:
         with urllib.request.urlopen(request) as response:
@@ -163,7 +165,7 @@ def _download_urllib(url: str, dest: Path, meta: dict[str, Any]) -> dict:
         ) from exc
 
 
-def _download_curl(url: str, dest: Path, meta: dict[str, Any]) -> dict:
+def _download_curl(url: str, dest: Path, meta: dict[str, Any]) -> dict[str, Any]:
     import subprocess
 
     argv = ["curl", "-fsSL", "--retry", "2", "-o", str(dest), url]
@@ -175,18 +177,16 @@ def _download_curl(url: str, dest: Path, meta: dict[str, Any]) -> dict:
     return {}  # curl's revalidation story is its own; re-fetch is honest
 
 
-def _download_lib(name: str, url: str, dest: Path, meta: dict[str, Any]) -> dict:
+def _download_lib(
+    name: str, url: str, dest: Path, meta: dict[str, Any]
+) -> dict[str, Any]:
     import importlib
 
     client = importlib.import_module(name)
     response = (
-        client.get(  # type: ignore[attr-defined]
-            url, headers=_conditional_headers(meta), follow_redirects=True
-        )
+        client.get(url, headers=_conditional_headers(meta), follow_redirects=True)
         if name == "httpx"
-        else client.get(  # type: ignore[attr-defined]
-            url, headers=_conditional_headers(meta), allow_redirects=True
-        )
+        else client.get(url, headers=_conditional_headers(meta), allow_redirects=True)
     )
     if response.status_code == 304:
         return {}

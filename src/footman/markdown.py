@@ -93,7 +93,7 @@ def render_site(
 # --- resolution ---------------------------------------------------------------
 
 
-def _resolve(tree: dict, path: tuple[str, ...]) -> tuple[str, dict]:
+def _resolve(tree: dict[str, Any], path: tuple[str, ...]) -> tuple[str, dict[str, Any]]:
     """Walk *path* to its node; ("task"|"group", node). Taught ValueError."""
     node = tree
     for i, name in enumerate(path):
@@ -128,7 +128,7 @@ def _h(level: int, text: str, path: list[str], flavor: str) -> str:
     return f"{'#' * min(level, 6)} {text}{anchor}"
 
 
-def _type_cell(p: dict) -> str:
+def _type_cell(p: dict[str, Any]) -> str:
     if p["kind"] == "flag":
         return "flag"
     if p.get("mapping"):
@@ -146,7 +146,7 @@ def _type_cell(p: dict) -> str:
     return ", ".join(bits)
 
 
-def _default_cell(p: dict) -> str:
+def _default_cell(p: dict[str, Any]) -> str:
     # A positional argument is required by kind (a default would have made it
     # an option — the grammar's load-bearing rule); flags/options say so.
     if p.get("required") or p["kind"] == "argument":
@@ -157,7 +157,7 @@ def _default_cell(p: dict) -> str:
 
 
 def _task_page(
-    path: list[str], task: dict, level: int, flavor: str, prog: str
+    path: list[str], task: dict[str, Any], level: int, flavor: str, prog: str
 ) -> list[str]:
     title = ".".join(path) or prog
     parts = [_h(level, title, path, flavor), ""]
@@ -211,7 +211,7 @@ def _task_page(
 
 
 def _group_page(
-    path: list[str], node: dict, level: int, flavor: str, prog: str
+    path: list[str], node: dict[str, Any], level: int, flavor: str, prog: str
 ) -> list[str]:
     title = ".".join(path) if path else f"{prog} tasks"
     parts = [_h(level, title, path, flavor), ""]
@@ -229,7 +229,7 @@ def _group_page(
 
 def _site_group(
     path: list[str],
-    node: dict,
+    node: dict[str, Any],
     prefix: str,
     files: dict[str, str],
     flavor: str,

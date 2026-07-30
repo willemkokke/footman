@@ -157,20 +157,20 @@ class Segment:
     notes: list[str] = field(default_factory=list)
 
 
-def _required_label(p: dict) -> str:
+def _required_label(p: dict[str, Any]) -> str:
     """Label a required option for the missing-option error — a flag teaches
     both its `--x` and `--no-x` forms."""
     name = f"--{p['name']}"
     return f"{name} (or --no-{p['name']})" if p["kind"] == "flag" else name
 
 
-def _suggest_only(choices: list | None, dynamic: dict | None) -> bool:
+def _suggest_only(choices: list[str] | None, dynamic: dict[str, Any] | None) -> bool:
     """Whether a completer only *suggests* (never rejects): a soft completer
     (`strict=False`), or a strict one whose candidate list is empty — the
     completer genuinely returned nothing, and a *failing* strict completer
     aborts the manifest build instead, so rejecting every value would brick
     the task."""
-    return bool(dynamic) and (not dynamic.get("strict") or not choices)
+    return bool(dynamic and (not dynamic.get("strict") or not choices))
 
 
 def _check(
@@ -178,11 +178,11 @@ def _check(
     label: str,
     value: str,
     *,
-    choices: list | None = None,
-    types: list | None = None,
-    dynamic: dict | None = None,
+    choices: list[str] | None = None,
+    types: list[str] | None = None,
+    dynamic: dict[str, Any] | None = None,
     path: str | None = None,
-    bounds: tuple | None = None,
+    bounds: tuple[float | None, float | None] | None = None,
 ) -> None:
     """Validate one string against choices or type tags; raise a taught error."""
     if choices is not None:
@@ -225,7 +225,11 @@ def _check_path(where: str, label: str, value: str, req: str) -> None:
 
 
 def _check_bounds(
-    where: str, label: str, value: str, types: list | None, bounds: tuple
+    where: str,
+    label: str,
+    value: str,
+    types: list[str] | None,
+    bounds: tuple[float | None, float | None],
 ) -> None:
     ok, number = _coerce.coerce_scalar(value, types or ["int", "float"])
     if not ok or isinstance(number, bool) or not isinstance(number, (int, float)):
@@ -247,7 +251,7 @@ def _check_bounds(
         raise ChainError(f"{where}: {label} must be {expect} (got {value!r})")
 
 
-def _validate(where: str, p: dict, value: str) -> None:
+def _validate(where: str, p: dict[str, Any], value: str) -> None:
     """Eagerly validate a choice/typed value; raise a taught error if wrong."""
     label = (
         f"<{p['name']}>" if p["kind"] in ("argument", "variadic") else f"--{p['name']}"
@@ -338,7 +342,7 @@ def _parse_globals(
     return globals_, i
 
 
-def flat_addresses(tree: dict) -> list[str]:
+def flat_addresses(tree: dict[str, Any]) -> list[str]:
     """Every runnable dotted address: tasks at any depth, plus runnable groups.
 
     The one index behind did-you-mean suggestions for a mistyped address —
@@ -347,7 +351,7 @@ def flat_addresses(tree: dict) -> list[str]:
     """
     out: list[str] = []
 
-    def walk(node: dict, prefix: str) -> None:
+    def walk(node: dict[str, Any], prefix: str) -> None:
         for name in node["tasks"]:
             out.append(prefix + name)
         for name, sub in node["groups"].items():
@@ -359,7 +363,7 @@ def flat_addresses(tree: dict) -> list[str]:
     return out
 
 
-def _children(node: dict, prefix: str) -> list[str]:
+def _children(node: dict[str, Any], prefix: str) -> list[str]:
     """A node's children as addresses for a "know:" listing — groups keep a
     trailing dot (`docs.`), the `ls -F` idiom, so descend-vs-run is visible;
     tasks are bare and copy-paste-runnable."""
@@ -369,8 +373,11 @@ def _children(node: dict, prefix: str) -> list[str]:
 
 
 def _resolve_head(
-    tree: dict, argv: list[str], i: int, prev_group: tuple[str, dict] | None
-) -> tuple[dict, list[str], dict | None, int]:
+    tree: dict[str, Any],
+    argv: list[str],
+    i: int,
+    prev_group: tuple[str, dict[str, Any]] | None,
+) -> tuple[dict[str, Any], list[str], dict[str, Any] | None, int]:
     """Resolve segment head `argv[i]` — one dotted address — to its task.
 
     Returns `(task, path, group_node, next_i)`; `group_node` is set when the
@@ -492,7 +499,10 @@ def _resolve_head(
 
 
 def _default_notes(
-    seg: Segment, group_node: dict, fixed: list[dict], rest: dict | None
+    seg: Segment,
+    group_node: dict[str, Any],
+    fixed: list[dict[str, Any]],
+    rest: dict[str, Any] | None,
 ) -> None:
     """Advisory notes for a runnable group's positional values.
 
@@ -537,12 +547,14 @@ def _default_notes(
             )
 
 
-def split_chain(tree: dict, argv: list[str]) -> tuple[list[str], list[Segment]]:
+def split_chain(
+    tree: dict[str, Any], argv: list[str]
+) -> tuple[list[str], list[Segment]]:
     """Split *argv* into leading globals and a list of resolved segments."""
     plugin = {"--" + g["name"]: g["kind"] for g in tree.get("globals", ())}
     globals_, i = _parse_globals(argv, 0, plugin=plugin)
     segments: list[Segment] = []
-    prev_group: tuple[str, dict] | None = None
+    prev_group: tuple[str, dict[str, Any]] | None = None
 
     while i < len(argv):
         task, path, group_node, i = _resolve_head(tree, argv, i, prev_group)
@@ -625,7 +637,9 @@ def split_chain(tree: dict, argv: list[str]) -> tuple[list[str], list[Segment]]:
     return globals_, segments
 
 
-def _consume_option(seg: Segment, opts: dict, argv: list[str], i: int) -> int:
+def _consume_option(
+    seg: Segment, opts: dict[str, dict[str, Any]], argv: list[str], i: int
+) -> int:
     tok = argv[i]
     name = tok.split("=", 1)[0]
     negated = False
@@ -678,7 +692,7 @@ def _consume_option(seg: Segment, opts: dict, argv: list[str], i: int) -> int:
     return i
 
 
-def _values(p: dict, value: str) -> list[str]:
+def _values(p: dict[str, Any], value: str) -> list[str]:
     """Comma-split parts of a list/dict value, unless the param opts out.
 
     Called only for collection params, so splitting is the default; a `nosplit`
@@ -689,7 +703,7 @@ def _values(p: dict, value: str) -> list[str]:
     return [part for part in value.split(",") if part] or [value]
 
 
-def _consume_pair(seg: Segment, p: dict, cli: str, pair: str) -> None:
+def _consume_pair(seg: Segment, p: dict[str, Any], cli: str, pair: str) -> None:
     """Parse and validate one `KEY=VALUE` token for a dict parameter."""
     if "=" not in pair:
         raise ChainError(f"{seg.task}: --{cli} expects KEY=VALUE (got {pair!r})")
@@ -708,7 +722,7 @@ def _consume_pair(seg: Segment, p: dict, cli: str, pair: str) -> None:
     seg.values.setdefault(cli, []).append((key, value))
 
 
-def _is_address(tree: dict, tok: str) -> bool:
+def _is_address(tree: dict[str, Any], tok: str) -> bool:
     """Whether *tok* walks the tree to a task or group — the "looks like the
     next task" peek for choice-positional errors. Loose on purpose: it only
     shapes an error message, so a namespace group counts too."""
@@ -726,7 +740,9 @@ def _is_address(tree: dict, tok: str) -> bool:
     return True
 
 
-def _consume_positional(seg: Segment, tree: dict, p: dict, tok: str) -> None:
+def _consume_positional(
+    seg: Segment, tree: dict[str, Any], p: dict[str, Any], tok: str
+) -> None:
     if (
         "choices" in p
         and tok not in p["choices"]

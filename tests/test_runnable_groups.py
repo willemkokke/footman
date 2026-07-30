@@ -106,7 +106,7 @@ def test_a_group_without_a_default_is_still_a_taught_error():
 
 
 def _surfaces(reg):
-    seen = {}
+    seen: dict[str, object] = {}
     lint = reg.group("lint")
 
     @lint.task
@@ -168,7 +168,7 @@ def test_a_custom_body_default_does_not_auto_fan_out():
 def test_forward_chains_through_a_group_used_as_a_prerequisite():
     # `check` forwards --fix into the `lint` group (a pre= target); lint's
     # default re-forwards it to the surfaces that declare it. Declarative check.
-    seen = {}
+    seen: dict[str, object] = {}
 
     def tasks(reg):
         lint = reg.group("lint")
@@ -258,9 +258,11 @@ def test_bare_default_still_registers_with_no_options():
     def lint_all(fix: Forward[bool] = False):
         """Lint everything."""
 
-    assert reg.groups["lint"].default_task is lint_all
     assert keeps_going(lint_all) is None
     assert pre_deps(lint_all) == []
+    # Last: `is` narrows lint_all to default_task's `Task | None` for the
+    # rest of the block, so the calls above must come first.
+    assert reg.groups["lint"].default_task is lint_all
 
 
 def test_interactive_on_an_empty_body_default_is_rejected():
@@ -293,7 +295,7 @@ def test_default_takes_positionals():
     # after the group is unambiguously the default's value, because every
     # child keeps its own dotted spelling (`fm lint.markdown`).
     reg = Group("root")
-    seen = {}
+    seen: dict[str, object] = {}
     lint = reg.group("lint")
 
     @lint.task
@@ -315,7 +317,7 @@ def test_positional_matching_a_child_name_wins_and_notes():
     # Deterministic grammar (the positional wins), never silent: an exact
     # child-name value carries a one-line stderr note with the dotted form.
     reg = Group("root")
-    seen = {}
+    seen: dict[str, object] = {}
     lint = reg.group("lint")
 
     @lint.task

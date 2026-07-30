@@ -29,7 +29,7 @@ def _run(build_tasks, line):
 
 
 def test_scalar_coercion():
-    seen = {}
+    seen: dict[str, object] = {}
 
     def tasks(reg):
         @reg.task
@@ -44,7 +44,7 @@ def test_scalar_coercion():
 
 
 def test_literal_and_list_coercion():
-    seen = {}
+    seen: dict[str, object] = {}
 
     def tasks(reg):
         @reg.task
@@ -68,7 +68,7 @@ def test_enum_coercion():
 
 
 def test_required_positionals():
-    seen = {}
+    seen: dict[str, object] = {}
 
     def tasks(reg):
         @reg.task
@@ -80,7 +80,7 @@ def test_required_positionals():
 
 
 def test_keyword_only_required_option_binds_by_name():
-    seen = {}
+    seen: dict[str, object] = {}
 
     def tasks(reg):
         @reg.task
@@ -237,7 +237,7 @@ def test_positional_only_default_hole_is_filled():
 
 
 def test_union_literal_and_int_accepts_either():
-    seen = {}
+    seen: dict[str, object] = {}
 
     def tasks(reg):
         @reg.task
@@ -245,9 +245,13 @@ def test_union_literal_and_int_accepts_either():
             seen["x"] = x
 
     _run(tasks, "go --x=fast")
-    assert seen["x"] == "fast"
+    # Read into locals per run: mypy's narrowing of `seen["x"]` would
+    # otherwise survive the second _run() and clash with the new value.
+    as_choice = seen["x"]
+    assert as_choice == "fast"
     _run(tasks, "go --x=7")
-    assert seen["x"] == 7 and type(seen["x"]) is int
+    as_int = seen["x"]
+    assert as_int == 7 and type(as_int) is int
 
 
 def test_union_literal_and_int_rejects_neither():

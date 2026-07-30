@@ -38,6 +38,7 @@ from footman.registry import (
     pre_deps,
     sharing,
     task_confirm,
+    task_name,
     wants_progress,
 )
 
@@ -67,7 +68,7 @@ def _default_seg(fn: Task) -> Segment:
     a bare `pre=`/`post=` dependency, or a body call. Named the way the task is
     *addressed* (`import_` is `fm import`), so a report never shows a spelling
     you could not type."""
-    name = cli_name(fn.__name__)
+    name = cli_name(task_name(fn))
     return Segment(task=name, path=[name])
 
 
@@ -171,13 +172,13 @@ def _build_dag(root: Group, segments: list[Segment]) -> list[_Node]:
             node.group = owner
             _link(node)
             return node
-        node = dep_nodes.get(_dep_key(fn))
-        if node is None:
-            node = new_node(fn, _default_seg(fn), True)
-            node.group = owner
-            dep_nodes[_dep_key(fn)] = node
-            _link(node)
-        return node
+        dep_node = dep_nodes.get(_dep_key(fn))
+        if dep_node is None:
+            dep_node = new_node(fn, _default_seg(fn), True)
+            dep_node.group = owner
+            dep_nodes[_dep_key(fn)] = dep_node
+            _link(dep_node)
+        return dep_node
 
     def _thread(dep: _Node, fmap: dict[str, Any], source: str) -> None:
         # A forwarded value reaches only a dispatched task that *declares* the
@@ -752,7 +753,14 @@ def _run_plan(
     return denied + [n.result for n in ordered if n.result is not None] + skipped
 
 
-def _run_sequential(nodes, real, capture, ctx_config, status, err=None) -> None:
+def _run_sequential(
+    nodes: list[_Node],
+    real: TextIO,
+    capture: bool,
+    ctx_config: dict[str, Any] | None,
+    status: _progress.StatusLine | None,
+    err: TextIO | None = None,
+) -> None:
     done: dict[int, bool] = {}
     failed = False
     width = max((len(n.seg.task) for n in nodes), default=0)
@@ -817,7 +825,15 @@ def _make_status(
     return _progress.StatusLine(err, estimate, color=True)
 
 
-def _run_parallel(nodes, real, err, capture, ctx_config, status, jobs) -> None:
+def _run_parallel(
+    nodes: list[_Node],
+    real: TextIO,
+    err: TextIO | None,
+    capture: bool,
+    ctx_config: dict[str, Any] | None,
+    status: _progress.StatusLine | None,
+    jobs: int,
+) -> None:
     by_key = {n.key: n for n in nodes}
     lock = threading.Lock()
     # A confirm denied before the run is already a failure on the board.
@@ -826,7 +842,9 @@ def _run_parallel(nodes, real, err, capture, ctx_config, status, jobs) -> None:
 
     def dep_ok(n: _Node) -> bool:
         return all(
-            by_key[d].state == "done" and by_key[d].result and by_key[d].result.ok
+            by_key[d].state == "done"
+            and (res := by_key[d].result) is not None
+            and res.ok
             for d in n.deps
             if d in by_key
         )
@@ -860,7 +878,11 @@ def _run_parallel(nodes, real, err, capture, ctx_config, status, jobs) -> None:
             # Flush this task's buffered output as one block — queued while a
             # wizard owns the terminal, so it never splats over a prompt.
             with _globals.console_gate(), lock:
-                blob = ctx.sink.getvalue()  # type: ignore[union-attr]
+                # The per-task sink is always the StringIO buffer set above;
+                # the isinstance states the invariant where the type (TextIO)
+                # can't.
+                sink = ctx.sink
+                blob = sink.getvalue() if isinstance(sink, io.StringIO) else ""
                 if status is not None:
                     # A direct real-stream write (bypasses the routers): the
                     # status line clears itself and tracks the column.

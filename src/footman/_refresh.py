@@ -23,9 +23,13 @@ tasks file's *module-level* imports are usually just the runner.
 from __future__ import annotations
 
 import contextlib
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:  # runtime imports stay deferred: this child spawns cheap
+    from pathlib import Path
 
 
-def _maybe_reexec(files: list, entry: str, *args: str) -> None:
+def _maybe_reexec(files: list[Path], entry: str, *args: str) -> None:
     """Continue this rebuild inside a script file's own environment.
 
     Only for a single file that declares dependencies, and only when uv can

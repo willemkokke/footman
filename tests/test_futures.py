@@ -992,7 +992,7 @@ class _FakeStatus:
     """Collects unit events the way the real StatusLine receives them."""
 
     def __init__(self):
-        self.events: list[tuple] = []
+        self.events: list[tuple[str | int | bool, ...]] = []
         self.total = 0
         self.counted: dict[str, tuple[int, int]] = {}
 
@@ -1106,7 +1106,7 @@ def test_parallel_task_children_count_once():
 # may count differently from another.
 
 
-def _units(reg: Group, line: str) -> tuple[int, list[str]]:
+def _units(reg: Group, line: str) -> tuple[int, list[str | int | bool]]:
     status = _with_status(reg, line)
     return status.total, [e[1] for e in status.events if e[0] == "started"]
 

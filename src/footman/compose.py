@@ -32,6 +32,7 @@ from __future__ import annotations
 import importlib
 import sys
 from types import ModuleType
+from typing import Any
 
 from footman import registry
 from footman.registry import Group, RegistrationError, Task, pulled_from
@@ -445,13 +446,13 @@ def _validate_filter(node: Group, address: str, verb: str) -> None:
 _KEEP = object()  # sentinel: keep this whole subtree
 
 
-def _keep_tree(only: tuple[str, ...]) -> dict:
+def _keep_tree(only: tuple[str, ...]) -> dict[str, Any]:
     """The `only=` addresses as a nested keep-tree.
 
     Union semantics: `only=["docs", "docs.build"]` is redundant, not an
     error — the whole-group entry subsumes the leaf.
     """
-    tree: dict = {}
+    tree: dict[str, Any] = {}
     for address in only:
         node = tree
         segments = address.split(".")
@@ -465,7 +466,7 @@ def _keep_tree(only: tuple[str, ...]) -> dict:
     return tree
 
 
-def _apply_only(node: Group, keep: dict) -> None:
+def _apply_only(node: Group, keep: dict[str, Any]) -> None:
     for name in list(node.tasks):
         if keep.get(name) is not _KEEP:
             del node.tasks[name]
@@ -639,6 +640,7 @@ def include(
     project. A `Group` or imported module may be passed programmatically
     (tests, generated trees). Returns the group grafted into.
     """
+    node: Group | Task
     if isinstance(source, Group):
         identity, node = source.name, source
         landing = source.name

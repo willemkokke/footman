@@ -236,10 +236,11 @@ def _verb_from_click(name: str, command: Any) -> Verb:
         if getattr(param, "param_type_name", "") != "option":
             continue
         secondary = tuple(getattr(param, "secondary_opts", ()) or ())
+        opts: list[str] = list(param.opts)
         options.append(
             Option(
                 name=_keyword(param),
-                flags=tuple(sorted(param.opts, key=len, reverse=True)),
+                flags=tuple(sorted(opts, key=len, reverse=True)),
                 negation=secondary[0] if secondary else "",
                 help=_first_line(getattr(param, "help", "") or ""),
                 type_name=_type_name(param),
@@ -292,11 +293,8 @@ def _keyword(param: Any) -> str:
     The bridge translates a *keyword* into a *flag*, so the flag's own
     spelling is the only name that round-trips.
     """
-    longest = max(
-        (o for o in getattr(param, "opts", ()) if o.startswith("--")),
-        key=len,
-        default="",
-    )
+    flags: list[str] = [o for o in getattr(param, "opts", ()) if o.startswith("--")]
+    longest = max(flags, key=len, default="")
     stem = longest.removeprefix("--") if longest else str(param.name)
     return stem.replace("-", "_")
 

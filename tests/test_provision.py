@@ -133,10 +133,13 @@ def test_system_and_deferred_are_reported_not_fetched(tmp_path):
 
 
 def test_uv_tier_installs_each_package_once(tmp_path, monkeypatch):
-    calls: list = []
-    monkeypatch.setattr(
-        _provision, "_run", lambda argv, env: calls.append((argv, env)) or True
-    )
+    calls: list[tuple[list[str], dict[str, str]]] = []
+
+    def fake_run(argv, env):
+        calls.append((argv, env))
+        return True
+
+    monkeypatch.setattr(_provision, "_run", fake_run)
     drivers = (
         Driver("ruff", provision=Provision()),
         Driver("ruff", attr="ruff_format", base=("format",), provision=Provision()),
@@ -167,10 +170,13 @@ def test_node_tier_installs_through_bun(tmp_path, monkeypatch):
     _provision.bin_dir(tmp_path).mkdir(parents=True)
     bun_name = "bun.exe" if sys.platform == "win32" else "bun"
     (_provision.bin_dir(tmp_path) / bun_name).write_text("#!/bin/sh\n")
-    calls: list = []
-    monkeypatch.setattr(
-        _provision, "_run", lambda argv, env: calls.append((argv, env)) or True
-    )
+    calls: list[tuple[list[str], dict[str, str]]] = []
+
+    def fake_run(argv, env):
+        calls.append((argv, env))
+        return True
+
+    monkeypatch.setattr(_provision, "_run", fake_run)
     drivers = (
         Driver("cspell", provision=Provision(kind="node")),
         Driver(
@@ -450,12 +456,13 @@ def test_get_json_error_is_provision_error(monkeypatch):
 
 
 def test_download_caches_by_name(tmp_path, monkeypatch):
-    hits = []
-    monkeypatch.setattr(
-        _provision.urllib.request,
-        "urlopen",
-        lambda req, timeout=0: hits.append(1) or io.BytesIO(b"payload"),
-    )
+    hits: list[int] = []
+
+    def fake_urlopen(req, timeout=0):
+        hits.append(1)
+        return io.BytesIO(b"payload")
+
+    monkeypatch.setattr(_provision.urllib.request, "urlopen", fake_urlopen)
     first = _provision._download("http://x/thing.tar.gz", tmp_path)
     second = _provision._download("http://x/thing.tar.gz", tmp_path)
     assert first == second and first.read_bytes() == b"payload"
@@ -489,7 +496,7 @@ def test_task_sync_runs_sync_against_the_prefix(tmp_path, monkeypatch):
     from footman.tasks import tools
 
     monkeypatch.setattr(_provision, "provision", lambda *a, **k: [])
-    seen = {}
+    seen: dict[str, str] = {}
 
     def fake_sync(only="", prefix=""):
         with tools._on_path(prefix):
@@ -513,9 +520,12 @@ def test_uv_tier_installs_plugins_as_with_packages(tmp_path, monkeypatch):
     from footman._drivers import Driver, Provision
 
     calls: list[list[str]] = []
-    monkeypatch.setattr(
-        _provision, "_run", lambda argv, env: calls.append(argv) or True
-    )
+
+    def fake_run(argv, env):
+        calls.append(argv)
+        return True
+
+    monkeypatch.setattr(_provision, "_run", fake_run)
     drivers = (Driver("pytest", provision=Provision(plugins=("pytest-cov",))),)
     outcomes = _provision.provision(drivers, tmp_path)
     argv = calls[0]

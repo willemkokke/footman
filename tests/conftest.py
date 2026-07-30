@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 import os
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -91,5 +92,6 @@ def root() -> registry.Group:
 
 
 @pytest.fixture
-def tree(root: registry.Group) -> dict:
-    return manifest.build_manifest(root)["tree"]
+def tree(root: registry.Group) -> dict[str, Any]:
+    built: dict[str, Any] = manifest.build_manifest(root)["tree"]
+    return built

@@ -704,7 +704,8 @@ def stdin_payload() -> bytes | None:
                 # No byte buffer (an embedded/captured stream) or a stream
                 # that refuses to read: nothing was provided.
                 _stdin_payload = None
-    return _stdin_payload
+    payload: bytes | None = _stdin_payload  # the sentinel is gone by here
+    return payload
 
 
 def _inject_stdin(payload: bytes | None) -> Any:
@@ -960,7 +961,7 @@ def _parse_multi(line: str, n: int) -> list[int]:
 
 
 @contextlib.contextmanager
-def routing():
+def routing() -> Iterator[tuple[TextIO, TextIO]]:
     """Install stdout/stderr routers for the duration of a run.
 
     Both streams proxy through the running task's sink, so an in-process tool's
@@ -978,10 +979,13 @@ def routing():
     # degrade unencodable glyphs to '?' instead of crashing the run.
     for stream in (real_out, real_err):
         with contextlib.suppress(Exception):
-            if hasattr(stream, "reconfigure"):
-                stream.reconfigure(errors="replace")  # type: ignore[union-attr]
+            # getattr, not hasattr-then-call: hasattr narrowing is not
+            # portable across checkers, the getattr is.
+            reconfigure = getattr(stream, "reconfigure", None)
+            if reconfigure is not None:
+                reconfigure(errors="replace")
     _router, _err_router = _Router(real_out), _Router(real_err, err=True)
-    sys.stdout, sys.stderr = _router, _err_router  # type: ignore[assignment]
+    sys.stdout, sys.stderr = _router, _err_router
     try:
         # (real stdout, real stderr): task blocks land on the first, the live
         # status line on the second — stdout is the answer, stderr commentary.
@@ -1999,6 +2003,8 @@ class Pending:
 
     __slots__ = ("_task",)
 
+    _task: str
+
     def __init__(self, task: str) -> None:
         object.__setattr__(self, "_task", task)
 
@@ -2032,8 +2038,8 @@ class Pending:
 # The queue a `with parallel()` block collects into: a contextvar, so the
 # calls a *queued task* makes when it later runs (on a pool thread, which
 # starts from contextvar defaults) are ordinary calls, never re-collected.
-_collecting: ContextVar[list[tuple[Any, tuple, dict]] | None] = ContextVar(
-    "footman_parallel_block", default=None
+_collecting: ContextVar[list[tuple[Any, tuple[Any, ...], dict[str, Any]]] | None] = (
+    ContextVar("footman_parallel_block", default=None)
 )
 
 
@@ -2077,7 +2083,7 @@ class Fanout(list[int]):
         self._queued.append((call, args, kwargs))
         return Pending(_call_name(call))
 
-    def __exit__(self, exc_type: Any, exc: Any, tb: Any) -> bool:
+    def __exit__(self, exc_type: Any, exc: Any, tb: Any) -> Literal[False]:
         _collecting.reset(self._token)
         if exc_type is not None:
             return False  # the block itself failed: nothing to run
@@ -2234,7 +2240,7 @@ def parallel(
             _current.reset(token)
         gate = _globals.console_gate() if dest_is_real else contextlib.nullcontext()
         with gate, lock:
-            blob = child.sink.getvalue()  # type: ignore[union-attr]
+            blob = buf.getvalue()
             # A child that ended mid-colour (a crash, an unterminated SGR) must
             # not bleed into the next child's block when they interleave: cap a
             # colourful run's block with a reset. Only when colour is on, so a

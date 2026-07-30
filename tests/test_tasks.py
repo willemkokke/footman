@@ -17,6 +17,7 @@ from __future__ import annotations
 import sys
 import tempfile
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -179,7 +180,7 @@ def test_a_stop_gates_the_checkout_the_session_edited(tmp_path, monkeypatch):
     monkeypatch.setattr(tasks, "_gate_dir", lambda _s: note)
 
     here: list[str] = []
-    spawned: list[tuple] = []
+    spawned: list[tuple[list[str], dict[str, Any]]] = []
     monkeypatch.setattr(tasks, "check", lambda: here.append("local"))
     monkeypatch.setattr(tasks, "run", lambda argv, **kw: spawned.append((argv, kw)))
 
@@ -312,7 +313,7 @@ def test_a_wrapper_task_calls_its_tool_over_the_whole_repo(
     """`SRC` is the whole repo, as CI lints it. Anything narrower lets a
     tracked file outside src/tests pass the gate and fail the build — which
     tracking `notes/` proved within minutes."""
-    seen: list[tuple] = []
+    seen: list[tuple[object, ...]] = []
 
     class Recorder:
         def __init__(self, verb=None):
@@ -332,7 +333,7 @@ def test_a_wrapper_task_calls_its_tool_over_the_whole_repo(
 def test_the_test_task_forwards_its_arguments_verbatim(monkeypatch):
     """`fm test -k thing -x` has to reach pytest unchanged, or the escape
     hatch is not one."""
-    seen: list[tuple] = []
+    seen: list[tuple[str, object]] = []
 
     class Pytest:
         def opts(self, **kwargs):
@@ -348,7 +349,7 @@ def test_the_gate_gives_every_run_its_own_coverage_file(monkeypatch):
     """Two `fm check` runs sharing the repo's .coverage — a hook racing a
     manual run — clobber the SQLite file mid-write, and the reporter then
     reports a bogus partial total with every test passing."""
-    runs: list[dict] = []
+    runs: list[dict[str, Any]] = []
     monkeypatch.setattr(tasks, "run", lambda cmd, **kw: runs.append({"cmd": cmd, **kw}))
     monkeypatch.setattr(tasks, "parallel", lambda *steps: [step() for step in steps])
     monkeypatch.setattr(tasks, "format", lambda check=False: None)
@@ -378,7 +379,7 @@ def test_sync_goes_through_the_projects_own_uv(monkeypatch):
 
 
 def test_the_dist_tasks_build_and_clean(monkeypatch):
-    seen: list = []
+    seen: list[tuple[str, ...] | str] = []
     monkeypatch.setattr(tasks, "uv", lambda *args: seen.append(args))
     monkeypatch.setattr(tasks, "run", lambda cmd, **kw: seen.append(cmd))
     tasks.build()

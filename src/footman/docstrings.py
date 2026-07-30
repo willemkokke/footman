@@ -172,7 +172,8 @@ def _google_params(lines: list[str], start: int) -> dict[str, str]:
     """Entries under a Google `Args:` header, ended by a dedent to it."""
     header_indent = _indent(lines[start])
     params: dict[str, str] = {}
-    name, fragments = "", []
+    name = ""
+    fragments: list[str] = []
     for line in lines[start + 1 :]:
         if not line.strip():
             continue  # blank lines inside the section are allowed
@@ -229,7 +230,8 @@ def _numpy_params(lines: list[str], start: int) -> dict[str, str]:
 def _sphinx_params(lines: list[str], start: int) -> dict[str, str]:
     """`:param [type] name: text` fields; indented follow-ups continue one."""
     params: dict[str, str] = {}
-    name, fragments = "", []
+    name = ""
+    fragments: list[str] = []
     for line in lines[start:]:
         stripped = line.strip()
         if not stripped:

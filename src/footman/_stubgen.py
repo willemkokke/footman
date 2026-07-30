@@ -23,6 +23,7 @@ from __future__ import annotations
 import re
 import textwrap
 from collections.abc import Iterable
+from typing import cast
 
 from footman._toolspec import Option, ToolSpec, Verb
 
@@ -90,11 +91,14 @@ def _tree(verbs: Iterable[Verb]) -> dict[str, object]:
     """Nest dotted verb names: `compose.up` hangs under `compose`."""
     tree: dict[str, object] = {}
     for verb in verbs:
-        node = tree
+        node: dict[str, object] = tree
         parts = verb.name.split(".") if verb.name else []
         for part in parts[:-1]:
             child = node.setdefault(part, {})
-            node = child if isinstance(child, dict) else {}
+            # cast: isinstance narrows to dict[Unknown, Unknown], which
+            # invariant-dict checkers refuse to assign back; the tree is
+            # str-keyed by construction.
+            node = cast("dict[str, object]", child) if isinstance(child, dict) else {}
         node[parts[-1] if parts else ""] = verb
     return tree
 
@@ -115,7 +119,8 @@ def _classes(tree: dict[str, object], name: str, depth: int = 0) -> str:
         node = tree[key]
         if isinstance(node, dict):
             child = key.title().replace("_", "")
-            body.append(_indent(_classes(node, child, depth + 1)))
+            subtree = cast("dict[str, object]", node)
+            body.append(_indent(_classes(subtree, child, depth + 1)))
             body.append(f"    {key}: {child}")
     for key in sorted(tree):
         node = tree[key]

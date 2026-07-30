@@ -14,6 +14,7 @@ import decimal
 import enum
 import json
 import uuid
+from collections.abc import Callable, Iterator
 from pathlib import PurePath
 from typing import Any
 
@@ -74,7 +75,7 @@ def red(text: str, on: bool) -> str:
     return f"\033[31m{text}\033[0m" if on else text
 
 
-def value_hint(p: dict) -> str:
+def value_hint(p: dict[str, Any]) -> str:
     """The value placeholder shown for an option/argument in help output."""
     if p.get("mapping"):
         return "KEY=VALUE"
@@ -87,7 +88,7 @@ def value_hint(p: dict) -> str:
     return "VALUE"
 
 
-def usage_fragment(p: dict) -> str:
+def usage_fragment(p: dict[str, Any]) -> str:
     kind = p["kind"]
     required = p.get("required")
     if kind == "stdin":
@@ -105,7 +106,7 @@ def usage_fragment(p: dict) -> str:
     return f"<{p['name']}>{suffix}"
 
 
-def param_label(p: dict) -> str:
+def param_label(p: dict[str, Any]) -> str:
     kind = p["kind"]
     if kind == "flag":
         return f"--{p['name']}"
@@ -115,18 +116,18 @@ def param_label(p: dict) -> str:
     return f"<{p['name']}>{suffix}"
 
 
-def param_detail(p: dict) -> str:
+def param_detail(p: dict[str, Any]) -> str:
     doc, mechanics = param_detail_parts(p)
     return "; ".join(bit for bit in (doc, mechanics) if bit)
 
 
-def param_detail_parts(p: dict) -> tuple[str, str]:
+def param_detail_parts(p: dict[str, Any]) -> tuple[str, str]:
     """(author's doc, the mechanical suffix) — split so help can dim the
     mechanics under the author's words."""
     return p.get("doc", ""), _mechanics(p)
 
 
-def _mechanics(p: dict) -> str:
+def _mechanics(p: dict[str, Any]) -> str:
     bits: list[str] = []
     if p["kind"] == "flag":
         bits.append(f"flag (--no-{p['name']} to disable)")
@@ -160,7 +161,7 @@ def _mechanics(p: dict) -> str:
     return "; ".join(bits)
 
 
-def uses_line(task: dict, tree: dict) -> str:
+def uses_line(task: dict[str, Any], tree: dict[str, Any]) -> str:
     """The globals a task declared it reads (`@task(uses=[...])`), with
     provenance — the dependency shown where the option will be typed."""
     names = task.get("uses")
@@ -174,7 +175,7 @@ def uses_line(task: dict, tree: dict) -> str:
     return "reads " + ", ".join(bits)
 
 
-def sample_value(p: dict) -> str:
+def sample_value(p: dict[str, Any]) -> str:
     """A realistic value for a param in a synthesised example: its first choice
     when it has one, else an `<name>` placeholder."""
     choices = p.get("choices")
@@ -184,7 +185,7 @@ def sample_value(p: dict) -> str:
 # CLI lines (usage, examples) are token lists — (kind, text) — so every
 # renderer paints the same structure: `prog` bold, `group` bold cyan (as in
 # the tree), `task` bold, `req`/`value` cyan, `opt` dim, `flag` plain.
-_CLI_PAINT = {
+_CLI_PAINT: dict[str, Callable[[str, bool], str]] = {
     "prog": bold,
     "group": bold_cyan,
     "task": bold,
@@ -211,7 +212,9 @@ def invocation_parts(prog: str, path: list[str]) -> list[tuple[str, str]]:
     return parts
 
 
-def usage_parts(prog: str, path: list[str], task: dict) -> list[tuple[str, str]]:
+def usage_parts(
+    prog: str, path: list[str], task: dict[str, Any]
+) -> list[tuple[str, str]]:
     parts = invocation_parts(prog, path)
     for p in task["params"]:
         fragment = usage_fragment(p)
@@ -221,7 +224,9 @@ def usage_parts(prog: str, path: list[str], task: dict) -> list[tuple[str, str]]
     return parts
 
 
-def example_parts(path: list[str], task: dict, prog: str) -> list[tuple[str, str]]:
+def example_parts(
+    path: list[str], task: dict[str, Any], prog: str
+) -> list[tuple[str, str]]:
     """A realistic invocation synthesised straight from the signature — required
     positionals and options with sample values, plus one representative flag.
 
@@ -243,12 +248,12 @@ def example_parts(path: list[str], task: dict, prog: str) -> list[tuple[str, str
     return parts
 
 
-def example(path: list[str], task: dict, prog: str) -> str:
+def example(path: list[str], task: dict[str, Any], prog: str) -> str:
     """The example invocation as plain text (the markdown exporter's form)."""
     return " ".join(text for _, text in example_parts(path, task, prog))
 
 
-def task_line(task: dict) -> str:
+def task_line(task: dict[str, Any]) -> str:
     """A task's one-line description, plus how it ends when that's notable:
     availability if disabled, the Ctrl-C note if it runs until stopped."""
     notes = []
@@ -256,12 +261,13 @@ def task_line(task: dict) -> str:
         notes.append("(runs until Ctrl-C)")
     if task.get("disabled"):
         notes.append(f"(unavailable: {task['disabled']})")
+    line: str = task["help"]
     if not notes:
-        return task["help"]
-    return f"{task['help']}  {' '.join(notes)}".strip()
+        return line
+    return f"{line}  {' '.join(notes)}".strip()
 
 
-def default_line(node: dict) -> str:
+def default_line(node: dict[str, Any]) -> str:
     """The one-line description of a runnable group's default action.
 
     The author's docstring when there is one; otherwise generated from what
@@ -278,7 +284,7 @@ def default_line(node: dict) -> str:
     return "run this group's default action"
 
 
-def listed(node: dict) -> bool:
+def listed(node: dict[str, Any]) -> bool:
     """Whether a task or group node belongs in a human listing.
 
     `hidden` is the only thing that takes one out — a task nobody is meant to
@@ -288,7 +294,7 @@ def listed(node: dict) -> bool:
     return not node.get("hidden")
 
 
-def has_listed(node: dict) -> bool:
+def has_listed(node: dict[str, Any]) -> bool:
     """Whether anything under *node* is worth printing.
 
     Deliberately *not* short-circuited on the group's own `hidden`: hiding a
@@ -304,7 +310,7 @@ def has_listed(node: dict) -> bool:
     )
 
 
-def ordered_tasks(node: dict) -> dict:
+def ordered_tasks(node: dict[str, Any]) -> dict[str, Any]:
     """A group's tasks with its `default` first, then declaration order.
 
     The default *is* the group — `fm db` runs it, and the group's own row is
@@ -313,13 +319,15 @@ def ordered_tasks(node: dict) -> dict:
     bottom. Where it sits in the file is the author's business; where it sits
     in a listing is footman's.
     """
-    tasks = node["tasks"]
+    tasks: dict[str, Any] = node["tasks"]
     if "default" not in tasks:
         return tasks
     return {"default": tasks["default"], **tasks}
 
 
-def walk(node: dict, prefix: str = "", depth: int = 0):
+def walk(
+    node: dict[str, Any], prefix: str = "", depth: int = 0
+) -> Iterator[tuple[int, str, str, str, str]]:
     """The one traversal every human listing reads — `--list`, `--tree`, group
     help, and the did-you-mean index.
 
@@ -349,7 +357,7 @@ def walk(node: dict, prefix: str = "", depth: int = 0):
         yield from walk(sub, f"{prefix}{name}.", depth + 1)
 
 
-def iter_tasks(node: dict, prefix: str = ""):
+def iter_tasks(node: dict[str, Any], prefix: str = "") -> Iterator[tuple[str, str]]:
     """`walk()` as the flat listing sees it: `(address, help)` for everything
     you can actually type, headings dropped."""
     for _depth, address, _leaf, help_text, kind in walk(node, prefix):
@@ -357,7 +365,7 @@ def iter_tasks(node: dict, prefix: str = ""):
             yield address, help_text
 
 
-def sort_tree(node: dict) -> dict:
+def sort_tree(node: dict[str, Any]) -> dict[str, Any]:
     """A copy of *node* with tasks and groups each in name order, recursively.
 
     The listing shape survives — tasks still come before groups at every
@@ -372,7 +380,7 @@ def sort_tree(node: dict) -> dict:
     return copy
 
 
-def iter_group_paths(node: dict, prefix: str = ""):
+def iter_group_paths(node: dict[str, Any], prefix: str = "") -> Iterator[str]:
     for name, sub in node["groups"].items():
         yield f"{prefix}{name}"
         yield from iter_group_paths(sub, f"{prefix}{name}.")

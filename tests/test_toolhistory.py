@@ -13,6 +13,7 @@ import contextlib
 import itertools
 import json
 import pathlib
+from typing import Any
 
 import pytest
 
@@ -402,9 +403,12 @@ def test_release_date_cutoff_is_spelled_in_utc(monkeypatch, tmp_path):
     from footman import _drivers, _toolfetch
 
     calls: list[list[str]] = []
-    monkeypatch.setattr(
-        _toolfetch, "_run", lambda argv, env=None: calls.append(argv) or True
-    )
+
+    def fake_run(argv, env=None):
+        calls.append(argv)
+        return True
+
+    monkeypatch.setattr(_toolfetch, "_run", fake_run)
     driver = _drivers.find("prek")
     assert driver is not None
     release = _toolfetch.Release(version="0.4.11", date="2026-07-23")
@@ -939,15 +943,16 @@ def test_a_listing_is_read_once_per_process(monkeypatch):
     repository, and the answer cannot change while the walk runs."""
     from footman import _toolfetch
 
-    calls = []
+    calls: list[tuple[object, ...]] = []
     _index(monkeypatch, COMPOSE_RELEASES)
     monkeypatch.setattr(_toolfetch, "_LISTINGS", {})
     real = _toolfetch._forge
-    monkeypatch.setattr(
-        _toolfetch,
-        "_forge",
-        lambda *a, **k: calls.append(a) or real(*a, **k),
-    )
+
+    def fake_forge(*a, **k):
+        calls.append(a)
+        return real(*a, **k)
+
+    monkeypatch.setattr(_toolfetch, "_forge", fake_forge)
     first = _toolfetch._listing("docker/compose", 3)
     again = _toolfetch._listing("docker/compose", 3)
     assert first == again and len(calls) == 1
@@ -1021,7 +1026,7 @@ def test_observe_carries_every_release_field_through(tmp_path, monkeypatch):
     identical install ran clean by hand."""
     from footman.tasks import tools as tools_tasks
 
-    seen: list = []
+    seen: list[Any] = []
 
     def fake_install(driver, release, into):
         seen.append(release)
@@ -1202,7 +1207,12 @@ def test_the_python_listing_asks_only_for_downloads(monkeypatch):
     from footman import _drivers, _toolfetch
 
     seen: list[list[str]] = []
-    monkeypatch.setattr(_toolfetch, "_capture", lambda argv: seen.append(argv) or "[]")
+
+    def fake_capture(argv):
+        seen.append(argv)
+        return "[]"
+
+    monkeypatch.setattr(_toolfetch, "_capture", fake_capture)
     driver = _drivers.find("python")
     assert driver is not None
     _toolfetch.releases(driver)
@@ -1530,7 +1540,7 @@ def test_a_release_is_discarded_once_its_surface_is_read(tmp_path):
 # --- insert: a release arriving at any position ------------------------------
 
 
-def _surface_at(n: int) -> dict:
+def _surface_at(n: int) -> dict[str, Any]:
     """A surface that differs at every release, so a wrong delta cannot pass."""
     return _toolhistory.surface_of(
         _spec(
@@ -2913,7 +2923,7 @@ def test_a_platform_folding_into_an_older_release_agrees_with_what_is_stored():
             platforms=["macOS"],
         )
 
-    def steps(chain: dict) -> str:
+    def steps(chain: dict[str, Any]) -> str:
         """The payloads alone — `platforms` is meant to widen."""
         return json.dumps(
             {
@@ -3229,9 +3239,12 @@ def test_npm_install_spawns_the_resolved_bun(tmp_path, monkeypatch):
     fake = tmp_path / "bun.exe"
     calls: list[list[str]] = []
     monkeypatch.setattr("shutil.which", lambda name: str(fake))
-    monkeypatch.setattr(
-        _toolfetch, "_run", lambda argv, env=None: calls.append(argv) or True
-    )
+
+    def fake_run(argv, env=None):
+        calls.append(argv)
+        return True
+
+    monkeypatch.setattr(_toolfetch, "_run", fake_run)
     driver = _drivers.find("cspell")
     assert driver is not None
     out = _toolfetch._install_npm(driver, "9.8.0", tmp_path / "into")
@@ -3292,9 +3305,12 @@ def test_python_installs_into_a_private_store(monkeypatch, tmp_path):
     from footman import _toolfetch
 
     envs: list[dict[str, str] | None] = []
-    monkeypatch.setattr(
-        _toolfetch, "_run", lambda argv, env=None: envs.append(env) or True
-    )
+
+    def fake_run(argv, env=None):
+        envs.append(env)
+        return True
+
+    monkeypatch.setattr(_toolfetch, "_run", fake_run)
     monkeypatch.setattr(_toolfetch, "_capture", lambda argv, env=None: "")
     _toolfetch._install_python("3.10.0", tmp_path)
     assert envs[0] is not None

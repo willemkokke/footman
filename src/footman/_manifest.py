@@ -404,7 +404,7 @@ def _finish(spec: dict[str, Any], memo: dict[int, list[str]]) -> dict[str, Any]:
     return spec
 
 
-def _cli_params(fn: Any):
+def _cli_params(fn: Any) -> list[inspect.Parameter]:
     """The parameters that form a task's CLI (the injected ctx is not one)."""
     sig = resolved_signature(fn)
     ctx_name = context_param_name(sig)

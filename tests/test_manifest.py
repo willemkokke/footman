@@ -325,13 +325,14 @@ def test_sync_rewrites_only_on_hash_change(root, tmp_path, monkeypatch):
     project = tmp_path / "proj"
     project.mkdir()
 
-    writes = []
+    writes: list[Path] = []
     real_write = manifest.write_manifest
-    monkeypatch.setattr(
-        manifest,
-        "write_manifest",
-        lambda m, p: writes.append(p) or real_write(m, p),
-    )
+
+    def fake_write_manifest(m, p):
+        writes.append(p)
+        return real_write(m, p)
+
+    monkeypatch.setattr(manifest, "write_manifest", fake_write_manifest)
 
     manifest.sync_manifest(root, project)
     manifest.sync_manifest(root, project)  # identical tree -> no rewrite

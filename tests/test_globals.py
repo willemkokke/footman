@@ -29,7 +29,7 @@ def drive(build, line, **cfg):
 def test_reads_see_snapshot_plus_overlay(monkeypatch):
     monkeypatch.setenv("BASE", "base")
     monkeypatch.delenv("EXTRA", raising=False)
-    seen = {}
+    seen: dict[str, object] = {}
 
     def tasks(reg):
         @reg.task
@@ -237,7 +237,7 @@ def test_in_process_callable_reads_the_env_it_was_given(monkeypatch):
     # and no lock. Spread `os.environ` to add rather than replace.
     monkeypatch.setenv("BASE", "base")
     monkeypatch.delenv("EXTRA", raising=False)
-    seen = {}
+    seen: dict[str, object] = {}
 
     def tasks(reg):
         @reg.task

@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import textwrap
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 import pytest
 
@@ -513,7 +513,7 @@ def test_pre_and_post_fire_around_every_execution():
     # each gets the pair. pre_task fires post-bind, so `task.args` holds what
     # the body receives — defaults included.
     reg = Group("root")
-    log: list[tuple] = []
+    log: list[tuple[object, ...]] = []
 
     @reg.pre_task
     def opened(inv, task):
@@ -550,7 +550,7 @@ def test_task_state_is_private_to_the_plugin_and_the_execution():
     # same plugin gets a fresh one per execution — nothing leaks sideways or
     # forward.
     reg = Group("root")
-    seen: list[tuple] = []
+    seen: list[tuple[object, ...]] = []
 
     def a_pre(inv, task):
         assert not vars(task.state)  # fresh per execution
@@ -764,7 +764,7 @@ def test_a_post_only_plugin_observes_every_execution():
     # A plugin with no pre has nothing to pair with, so its post rides the
     # moment itself: it fires for every execution that ran.
     reg = Group("root")
-    seen: list[tuple] = []
+    seen: list[tuple[str, bool]] = []
 
     @reg.post_task
     def report(inv, task, result):
@@ -919,7 +919,7 @@ def test_a_bind_failure_still_fires_the_posts():
     # The attempt concluded — a bind-time span needs closing — so the posts
     # fire with the refusal result, exactly as the finished-event rule says.
     reg = Group("root")
-    closed: list[tuple] = []
+    closed: list[tuple[str, bool, int]] = []
 
     @reg.pre_bind
     def poison(inv, task):
@@ -1181,7 +1181,7 @@ def test_a_raising_pre_bind_on_a_body_call_fails_the_caller():
 
 def test_a_bind_failure_on_a_body_call_fires_the_posts():
     reg = Group("root")
-    closed: list[tuple] = []
+    closed: list[tuple[str, int]] = []
 
     def poison(inv, task):
         if task.name == "build":
@@ -1396,7 +1396,7 @@ def test_a_wrapper_must_be_a_generator_function():
 
 def test_post_tasks_receives_the_whole_story():
     reg = Group("root")
-    story: dict = {}
+    story: dict[str, Any] = {}
 
     @reg.post_tasks
     def digest(inv):

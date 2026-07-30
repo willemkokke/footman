@@ -19,8 +19,9 @@ Two kinds of assertion, and the second is the load-bearing one:
   required to *fail* proves the flag is declared and typed: if
   `mkdocs.build(strict=...)` ever stopped being stubbed, `strict="yes"`
   would be swallowed by `**flags`, the error would vanish, and the
-  `# pyright: ignore` above it would become unnecessary — which this file
-  turns into an error with the pragma on line 1.
+  `# type: ignore` above it would become unnecessary — which this file
+  turns into an error via the pragma on line 1 (basedpyright honours and
+  polices `# type: ignore` too) and via mypy's `warn_unused_ignores`.
 
 So: to assert that a flag exists, pass it something wrong.
 """
@@ -150,28 +151,28 @@ def _a_variable_drives_the_negation(pretty_urls: bool) -> None:
 def _flags_are_declared_and_typed() -> None:
     """Each of these MUST fail to type-check.
 
-    An unnecessary `# pyright: ignore` is an error here, so if a flag stops
+    An unnecessary `# type: ignore` is an error here, so if a flag stops
     being declared — and `**flags: Any` starts swallowing it — this file
     fails rather than quietly testing nothing.
     """
-    tools.mkdocs.build(strict="yes")  # pyright: ignore[reportArgumentType]
-    tools.mkdocs.build(clean="no")  # pyright: ignore[reportArgumentType]
-    tools.ruff.check(fix="always")  # pyright: ignore[reportArgumentType]
-    tools.ruff.check(output_format="nope")  # pyright: ignore[reportArgumentType]
-    tools.ruff_format(check="yes")  # pyright: ignore[reportArgumentType]
-    tools.uv.sync(frozen="yes")  # pyright: ignore[reportArgumentType]
-    tools.git.commit(signoff="yes")  # pyright: ignore[reportArgumentType]
-    tools.docker.compose.up(detach="yes")  # pyright: ignore[reportArgumentType]
-    tools.coverage.report(show_missing="yes")  # pyright: ignore[reportArgumentType]
-    tools.zensical.build(clean="yes")  # pyright: ignore[reportArgumentType]
-    tools.basedpyright(outputjson="yes")  # pyright: ignore[reportArgumentType]
-    tools.bun.add(dev="yes")  # pyright: ignore[reportArgumentType]
-    tools.cspell.lint(quiet="yes")  # pyright: ignore[reportArgumentType]
-    tools.prek.run(all_files="yes")  # pyright: ignore[reportArgumentType]
-    tools.markdownlint(fix="yes")  # pyright: ignore[reportArgumentType]
-    tools.docker.flags(debug="yes")  # pyright: ignore[reportArgumentType]
-    tools.git.opts(nofail="yes")  # pyright: ignore[reportArgumentType]
-    tools.git.opts(bogus=True)  # pyright: ignore[reportCallIssue]
+    tools.mkdocs.build(strict="yes")  # type: ignore[arg-type]
+    tools.mkdocs.build(clean="no")  # type: ignore[arg-type]
+    tools.ruff.check(fix="always")  # type: ignore[arg-type]
+    tools.ruff.check(output_format="nope")  # type: ignore[arg-type]
+    tools.ruff_format(check="yes")  # type: ignore[arg-type]
+    tools.uv.sync(frozen="yes")  # type: ignore[arg-type]
+    tools.git.commit(signoff="yes")  # type: ignore[arg-type]
+    tools.docker.compose.up(detach="yes")  # type: ignore[arg-type]
+    tools.coverage.report(show_missing="yes")  # type: ignore[arg-type]
+    tools.zensical.build(clean="yes")  # type: ignore[arg-type]
+    tools.basedpyright(outputjson="yes")  # type: ignore[arg-type]
+    tools.bun.add(dev="yes")  # type: ignore[arg-type]
+    tools.cspell.lint(quiet="yes")  # type: ignore[arg-type]
+    tools.prek.run(all_files="yes")  # type: ignore[arg-type]
+    tools.markdownlint(fix="yes")  # type: ignore[arg-type]
+    tools.docker.flags(debug="yes")  # type: ignore[arg-type]
+    tools.git.opts(nofail="yes")  # type: ignore[arg-type]
+    tools.git.opts(bogus=True)  # type: ignore[call-arg]
 
 
 def _positional_shape_is_enforced() -> None:
@@ -182,10 +183,10 @@ def _positional_shape_is_enforced() -> None:
     omitting it — is wrong. Each MUST fail, so the shape can't silently
     decay to `*args` without this file noticing.
     """
-    tools.mkdocs.build("site")  # pyright: ignore[reportCallIssue]
-    tools.uv.sync("extra")  # pyright: ignore[reportCallIssue]
-    tools.docker.run(image="alpine")  # pyright: ignore[reportCallIssue]
-    tools.docker.run()  # pyright: ignore[reportCallIssue]
+    tools.mkdocs.build("site")  # type: ignore[call-arg, arg-type]
+    tools.uv.sync("extra")  # type: ignore[call-arg, arg-type]
+    tools.docker.run(image="alpine")  # type: ignore[call-arg]
+    tools.docker.run()  # type: ignore[call-arg]
 
     # ...and the shapes that DO take positionals still accept them.
     tools.docker.run("alpine", "echo", "hi", detach=True)

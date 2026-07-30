@@ -26,6 +26,13 @@ import subprocess
 import sys
 import time
 
+# The literal-False spelling both checkers honour without importing `typing`:
+# annotations here are strings (`from __future__ import annotations`), so the
+# hot path never pays for the import — a TAB press stays one file read away.
+TYPE_CHECKING = False
+if TYPE_CHECKING:
+    from typing import Any
+
 # Hardcoded mirror of split.GLOBALS — the hot path can't import split (it
 # would pull the whole package). `test_completion_globals_mirror_split`
 # rebuilds this FROM split.GLOBALS, so renaming a global fails CI. The
@@ -101,7 +108,7 @@ def _rejoin(words: list[str]) -> tuple[list[str], bool]:
     return out, merged_last
 
 
-def _csv_head(p: dict, value: str) -> tuple[str, str]:
+def _csv_head(p: dict[str, Any], value: str) -> tuple[str, str]:
     """Split *value* at its last comma when *p* comma-splits.
 
     A collection value completes one comma-separated item at a time: the
@@ -115,7 +122,7 @@ def _csv_head(p: dict, value: str) -> tuple[str, str]:
     return "", value
 
 
-def _choice_tokens(p: dict, partial: str) -> list[str]:
+def _choice_tokens(p: dict[str, Any], partial: str) -> list[str]:
     """*p*'s choice values as whole completion tokens against *partial*.
 
     Mid-list in a comma-splitting value, each choice arrives as
@@ -145,11 +152,11 @@ def _consume_globals(prior: list[str]) -> list[str]:
 class _Segment:
     """Walk state for one chain segment (mirrors the splitter's rules)."""
 
-    def __init__(self, task: dict | None = None) -> None:
+    def __init__(self, task: dict[str, Any] | None = None) -> None:
         self.task = task
-        self.opts: dict = {}
-        self.fixed: list[dict] = []
-        self.rest: dict | None = None
+        self.opts: dict[str, dict[str, Any]] = {}
+        self.fixed: list[dict[str, Any]] = []
+        self.rest: dict[str, Any] | None = None
         self.filled = 0
         self.used: set[str] = set()  # options already given in this segment
         if task is not None:
@@ -171,7 +178,7 @@ class _Segment:
             )
 
 
-def _has_visible(node: dict) -> bool:
+def _has_visible(node: dict[str, Any]) -> bool:
     """Whether anything under a group is offered to a human.
 
     The completion twin of `_describe.has_listed`, spelled again here because
@@ -197,7 +204,9 @@ def _cand(address: str, summary: str) -> str:
     return f"{address}\t{summary}" if summary else address
 
 
-def _walk_address(tree: dict, token: str) -> tuple[str, dict, list[str]] | None:
+def _walk_address(
+    tree: dict[str, Any], token: str
+) -> tuple[str, dict[str, Any], list[str]] | None:
     """Resolve one dotted token to `("task"|"group", node, path)`, or None."""
     parts = token.split(".")
     if "" in parts:
@@ -217,7 +226,7 @@ def _walk_address(tree: dict, token: str) -> tuple[str, dict, list[str]] | None:
     return None
 
 
-def _leaf_fallback(tree: dict, partial: str) -> list[str]:
+def _leaf_fallback(tree: dict[str, Any], partial: str) -> list[str]:
     """Nested candidates whose *last* segment starts with *partial*.
 
     The rescue for "I know the task, not where it lives": when a typed token
@@ -228,7 +237,7 @@ def _leaf_fallback(tree: dict, partial: str) -> list[str]:
     """
     out: list[str] = []
 
-    def walk(node: dict, prefix: str) -> None:
+    def walk(node: dict[str, Any], prefix: str) -> None:
         for name, spec in node["tasks"].items():
             if prefix and name.startswith(partial) and not spec.get("hidden"):
                 out.append(_cand(f"{prefix}{name}", spec.get("help", "")))
@@ -250,7 +259,7 @@ def _leaf_fallback(tree: dict, partial: str) -> list[str]:
     return out
 
 
-def _address_candidates(tree: dict, partial: str) -> list[str]:
+def _address_candidates(tree: dict[str, Any], partial: str) -> list[str]:
     """Path-style completion over the tree: the `.` is footman's `/`.
 
     One emission rule, `ls -F` style: candidates sit one segment beyond the
@@ -337,7 +346,7 @@ def _address_candidates(tree: dict, partial: str) -> list[str]:
     return out
 
 
-def complete(tree: dict, words: list[str]) -> list[str]:
+def complete(tree: dict[str, Any], words: list[str]) -> list[str]:
     """Resolve completion candidates for *words* against a manifest *tree*.
 
     Chain-aware: the walk tracks segments the way the splitter would — a
@@ -561,7 +570,7 @@ def complete(tree: dict, words: list[str]) -> list[str]:
     return out + next_heads
 
 
-def _load_manifest(path: str) -> dict | None:
+def _load_manifest(path: str) -> dict[str, Any] | None:
     try:
         with open(path, "rb") as fh:
             data = json.load(fh)
@@ -570,7 +579,7 @@ def _load_manifest(path: str) -> dict | None:
     return data if isinstance(data, dict) else None
 
 
-def _maybe_refresh(path: str, data: dict) -> None:
+def _maybe_refresh(path: str, data: dict[str, Any]) -> None:
     """Stale-while-revalidate: if the manifest is older than its baked
     `completion_max_age`, bump its mtime and spawn a detached rebuild for *next*
     time, then return. Never blocks the TAB (the rebuild imports the package and
@@ -627,7 +636,7 @@ def _spawn_refresh(override: str | None = None) -> None:
         return  # a background refresh must never break completion
 
 
-def _cold_build(manifest: str, override: str | None) -> dict | None:
+def _cold_build(manifest: str, override: str | None) -> dict[str, Any] | None:
     """Build a cold-cache manifest once, then load it.
 
     The first <kbd>Tab</kbd> in a fresh directory has nothing cached. Rather than
