@@ -214,6 +214,38 @@ def test_tools_stub_declares_every_runtime_binding():
     assert not missing, f"tools.pyi is missing runtime bindings: {sorted(missing)}"
 
 
+def test_tool_opts_stub_mirrors_run_signature():
+    # `.opts()` policy is forwarded verbatim to `run()`, so the stub must carry
+    # `run()`'s types. The stub used to narrow the four "unset" options
+    # (`cwd`/`rel`/`title`/`timeout`), which made a computed `timeout=None` — no
+    # bound — a type error against code that runs fine.
+    import ast
+    import inspect
+    from pathlib import Path
+
+    from footman import context
+
+    stub = ast.parse(Path(tools.__file__).with_suffix(".pyi").read_text())
+    cls = next(n for n in stub.body if isinstance(n, ast.ClassDef) and n.name == "Tool")
+    opts = next(
+        n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name == "opts"
+    )
+    declared = {
+        arg.arg: ast.unparse(arg.annotation).replace("_Path", "Path")
+        for arg in opts.args.kwonlyargs
+        if arg.annotation is not None
+    }
+    assert set(declared) == set(tools._TOOL_OPTS)
+    run_params = inspect.signature(context.run).parameters
+    for name, annotation in declared.items():
+        if name == "in_process":
+            continue  # the bridge's own — no run() counterpart
+        assert annotation == str(run_params[name].annotation), (
+            f".opts({name}=) is typed {annotation}, run() takes "
+            f"{run_params[name].annotation}"
+        )
+
+
 def test_curated_names_map_to_real_executables():
     assert _one(lambda: tools.markdownlint("docs/index.md")) == (
         "markdownlint-cli2 docs/index.md"
@@ -495,6 +527,35 @@ def test_tool_opts_rel_roots_the_call(tmp_path):
     }
     assert results["go"].ok, results["go"].error
     assert results["go"].steps[0].output.strip() == str(tmp_path / "web")
+
+
+def test_tool_opts_none_means_unset(tmp_path):
+    # None is "no opinion" for the four options run() treats that way, so a
+    # caller can compute one (`cwd=None if inline else build_dir`) and a later
+    # None clears an earlier bound value. The types say so; this says it runs.
+    from footman import manifest, schedule
+    from footman.registry import Group
+    from footman.split import split_chain
+
+    (tmp_path / "web").mkdir()
+    reg = Group("root")
+
+    @reg.task
+    def go():
+        t = tools.Tool(
+            "python", "-c", "import os; print(os.getcwd())", path=sys.executable
+        )
+        t.opts(rel="web").opts(rel=None)()  # the bound override, cleared
+        t.opts(cwd=None, rel=None, title=None, timeout=None)()
+
+    tree = manifest.build_manifest(reg)["tree"]
+    _, segments = split_chain(tree, ["go"])
+    results = {
+        r.task: r
+        for r in schedule.run_plan(reg, segments, ctx_config={"cwd": tmp_path})
+    }
+    assert results["go"].ok, results["go"].error
+    assert [s.output.strip() for s in results["go"].steps] == [str(tmp_path)] * 2
 
 
 def test_zero_arg_entries_fall_back_to_argv_patching(monkeypatch):
