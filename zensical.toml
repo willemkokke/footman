@@ -25,6 +25,7 @@ nav = [
     { "Composing tasks" = "composing.md" },
     { "Writing plugins" = "plugins.md" },
     { "Testing your tasks" = "testing.md" },
+    { "Type-checking your tasks" = "typechecking.md" },
     { "Your tasks, documented" = "taskdocs.md" },
     { "Cookbook" = "cookbook.md" },
     { "Custom CLI" = "custom-cli.md" },

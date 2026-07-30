@@ -80,6 +80,12 @@ versions may include breaking changes.
   plain-strings overloads, so every checker agrees a string menu answers
   with exactly `str`.
 
+- **The typing contract is documented.** A Guide page, "Type-checking
+  your tasks", states what the types promise — signatures kept through
+  `@task` and `.opts()`, markers that vanish at the type level, identity
+  gates, the typed context surfaces — plus the private-is-private line
+  and how the promises are enforced rather than aspired to.
+
 ### Fixed
 
 - **`.opts()` takes `None` for the options that mean "unset".** The tools
