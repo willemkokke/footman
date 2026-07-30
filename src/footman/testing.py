@@ -121,6 +121,8 @@ class Runner:
     they would for real users.
     """
 
+    app: App
+
     def __init__(self, app: App | None = None) -> None:
         self.app = app if app is not None else App()
 

@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from pathlib import Path
-from typing import Annotated, Any, TypeVar
+from typing import Annotated, Any, Final, TypeVar
 
 _T = TypeVar("_T")
 
@@ -78,6 +78,9 @@ class suggest:
 
     __slots__ = ("fn", "strict")
 
+    fn: Callable[[], Any]
+    strict: bool
+
     def __init__(self, fn: Callable[[], Any], *, strict: bool = True) -> None:
         self.fn = fn
         self.strict = strict
@@ -89,7 +92,7 @@ class suggest:
 Many = list
 
 
-class _NoSplitMarker:
+class NoSplitMarker:
     """Marker for `nosplit`."""
 
     __slots__ = ()
@@ -98,7 +101,7 @@ class _NoSplitMarker:
         return "nosplit"
 
 
-nosplit = _NoSplitMarker()
+nosplit: Final[NoSplitMarker] = NoSplitMarker()
 """Opt a list/dict parameter OUT of comma-splitting, via `Annotated`:
 
 ```python
@@ -117,7 +120,7 @@ NoSplit = Annotated[_T, nosplit]
 out of comma-splitting (see `nosplit`)."""
 
 
-class _ForwardMarker:
+class ForwardMarker:
     """Marker for `forward`."""
 
     __slots__ = ()
@@ -126,7 +129,7 @@ class _ForwardMarker:
         return "forward"
 
 
-forward = _ForwardMarker()
+forward: Final[ForwardMarker] = ForwardMarker()
 """Forward this parameter to the tasks this task dispatches, via `Annotated`:
 
 ```python
@@ -143,7 +146,7 @@ chains through callees that re-declare the marker. Forwarding supplies a
 (every parameter defaulted)."""
 
 
-class _ArgMarker:
+class ArgMarker:
     """Marker for `Arg`."""
 
     __slots__ = ()
@@ -152,7 +155,7 @@ class _ArgMarker:
         return "optional-arg"
 
 
-_arg = _ArgMarker()
+_arg: Final[ArgMarker] = ArgMarker()
 
 Arg = Annotated[_T, _arg]
 """An *optional trailing positional*, via `Annotated`-alias:
@@ -190,10 +193,13 @@ def check(fix: Forward[bool] = False): ...
 noise on a signature full of forwarded parameters. See `forward`."""
 
 
-class _PathRequirement:
+class PathRequirement:
     """Marker for `exists` / `isfile` / `isdir`."""
 
     __slots__ = ("_name", "kind")
+
+    kind: str
+    _name: str
 
     def __init__(self, kind: str, name: str) -> None:
         self.kind = kind
@@ -203,7 +209,7 @@ class _PathRequirement:
         return self._name
 
 
-exists = _PathRequirement("exists", "exists")
+exists: Final[PathRequirement] = PathRequirement("exists", "exists")
 """Require a `Path` parameter to name something that exists on disk:
 
 ```python
@@ -213,10 +219,10 @@ def rm(target: Annotated[Path, exists]): ...
 Validated eagerly (at parse time) with a taught error. See also `isfile`
 and `isdir`."""
 
-isfile = _PathRequirement("file", "isfile")
+isfile: Final[PathRequirement] = PathRequirement("file", "isfile")
 """Require a `Path` parameter to name an existing *file* (see `exists`)."""
 
-isdir = _PathRequirement("dir", "isdir")
+isdir: Final[PathRequirement] = PathRequirement("dir", "isdir")
 """Require a `Path` parameter to name an existing *directory* (see `exists`)."""
 
 
@@ -246,6 +252,9 @@ class between:
 
     __slots__ = ("hi", "lo")
 
+    lo: float | None
+    hi: float | None
+
     def __init__(self, lo: float | None, hi: float | None) -> None:
         self.lo = lo
         self.hi = hi
@@ -267,6 +276,8 @@ class env:
     """
 
     __slots__ = ("var",)
+
+    var: str
 
     def __init__(self, var: str) -> None:
         self.var = var
@@ -303,6 +314,9 @@ class stdin:
 
     __slots__ = ("field", "lines")
 
+    field: str | None
+    lines: bool
+
     def __init__(self, field: str | None = None, *, lines: bool = False) -> None:
         if field is not None and lines:
             raise ValueError(
@@ -324,7 +338,7 @@ The bare-marker form only — the call forms (`stdin("field")`,
 `stdin(lines=True)`) are spelled inside `Annotated`, like `env("VAR")`."""
 
 
-class _StdoutMarker:
+class StdoutMarker:
     """Marker for `stdout`."""
 
     __slots__ = ()
@@ -333,7 +347,7 @@ class _StdoutMarker:
         return "stdout"
 
 
-stdout = _StdoutMarker()
+stdout: Final[StdoutMarker] = StdoutMarker()
 """Declare that a task's return value is the document on stdout, via the
 *return* annotation:
 
@@ -405,6 +419,8 @@ class check:
 
     __slots__ = ("fn",)
 
+    fn: Callable[..., Any]
+
     def __init__(self, fn: Callable[..., Any]) -> None:
         self.fn = fn
 
@@ -423,6 +439,8 @@ class doc:
     """
 
     __slots__ = ("text",)
+
+    text: str
 
     def __init__(self, text: str) -> None:
         self.text = text
@@ -446,6 +464,9 @@ class ask:
     """
 
     __slots__ = ("prompt", "secret")
+
+    prompt: str | None
+    secret: bool
 
     def __init__(self, *, secret: bool = False, prompt: str | None = None) -> None:
         self.secret = secret

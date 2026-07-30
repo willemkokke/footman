@@ -29,7 +29,7 @@ from collections.abc import Callable, Iterable, Iterator, Sequence, Sized
 from contextvars import ContextVar
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Any, Literal, NoReturn, Protocol, TextIO, TypeVar, overload
+from typing import Any, ClassVar, Literal, NoReturn, Protocol, TextIO, TypeVar, overload
 
 from footman import _globals
 
@@ -2013,13 +2013,17 @@ class Pending:
     __bool__ = _refuse
     __iter__ = _refuse
     __len__ = _refuse
-    __str__ = _refuse
     __int__ = _refuse
     __float__ = _refuse
-    __eq__ = _refuse
     __lt__ = _refuse
     __add__ = _refuse
-    __hash__ = None  # type: ignore[assignment]  # unusable, like every other read
+    __hash__: ClassVar[None] = None  # type: ignore[assignment]  # unusable too
+
+    def __str__(self) -> NoReturn:
+        self._refuse()
+
+    def __eq__(self, other: object) -> NoReturn:
+        self._refuse()
 
     def __repr__(self) -> str:  # debuggers and tracebacks stay usable
         return f"<pending {self._task}>"
@@ -2043,7 +2047,7 @@ class Fanout(list[int]):
 
     def __init__(self, keep_going: bool = False) -> None:
         super().__init__()
-        self.keep_going = keep_going
+        self.keep_going: bool = keep_going
         self.results: list[Any] = []
         """What each queued call returned, in the order they were written."""
         self._queued: list[tuple[Any, tuple[Any, ...], dict[str, Any]]] = []

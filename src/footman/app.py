@@ -66,6 +66,8 @@ DEFAULT_BRAND = Brand()
 class App:
     """A branded footman CLI — call `run` from your console-script entry."""
 
+    brand: Brand
+
     def __init__(
         self,
         name: str = "footman",

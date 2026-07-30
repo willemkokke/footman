@@ -270,7 +270,6 @@ def __getattr__(name: str) -> object:
         "Stdin",
         "stdout",
         "Stdout",
-        "Stdout",
         "Exists",
         "IsFile",
         "IsDir",
@@ -296,8 +295,6 @@ def __getattr__(name: str) -> object:
         "Failed",
         "fail",
         "use_context",
-        "wrap_bind",
-        "wrap_task",
     ):
         from footman import context
 

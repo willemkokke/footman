@@ -33,7 +33,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from footman import _drivers, _stubgen, _toolhistory, _toolspec
 from footman._describe import bold, cyan, wants_color
@@ -42,7 +42,7 @@ from footman.params import doc
 from footman.registry import Group
 from footman.tools import version_tuple as _version_tuple
 
-tasks = Group("tools", help="Keep the tools.* stubs honest")
+tasks: Group = Group("tools", help="Keep the tools.* stubs honest")
 
 _STUBS = Path(__file__).resolve().parent.parent / "_stubs"
 # Repo-only, deliberately outside `src/`: generation reads the history and
@@ -963,7 +963,7 @@ class Gathered:
 
     platform: str
     """Who looked — the one fact every observation in this document shares."""
-    observations: dict[str, dict[str, dict]]
+    observations: dict[str, dict[str, dict[str, Any]]]
     """`tool -> version -> {date, tag, surface}`: what this platform found."""
     holes: dict[str, list[str]] = dataclasses.field(default_factory=dict)
     """Releases this platform meant to read and could not. Carried rather
@@ -974,7 +974,7 @@ class Gathered:
     skipped: list[str] = dataclasses.field(default_factory=list)
     """Tools with no index, or no history to add to, on this platform."""
 
-    def document(self) -> dict:
+    def document(self) -> dict[str, Any]:
         return {"schema": OBSERVATION_SCHEMA, **dataclasses.asdict(self)}
 
 
@@ -1011,7 +1011,7 @@ def gather(
 
     _bounce_bare_call("gather")
     scratch = Path(tempfile.mkdtemp(prefix="footman-gather-"))
-    observations: dict[str, dict[str, dict]] = {}
+    observations: dict[str, dict[str, dict[str, Any]]] = {}
     holes: dict[str, list[str]] = {}
     try:
         with _on_path(prefix), _sandboxed(scratch):
@@ -1739,7 +1739,7 @@ def observe(
     published: str = "",
     requires_python: str = "",
     scratch: str = "",
-) -> dict | None:
+) -> dict[str, Any] | None:
     """Install one release, read what it accepts, and throw it away.
 
     The unit of the gather, pure in (tool, version): requests for the same

@@ -31,7 +31,7 @@ from footman import (
 from footman.params import between, doc
 from footman.registry import Group, requires, requires_dep
 
-tasks = Group("docs", help="Generate markdown docs for this project's tasks")
+tasks: Group = Group("docs", help="Generate markdown docs for this project's tasks")
 
 
 def _project_tree(include_self: bool) -> dict:

@@ -33,7 +33,7 @@ import os
 import shutil
 from collections.abc import Callable, Iterator, Sequence
 from pathlib import Path
-from typing import Any, ParamSpec, Protocol, TypeVar, cast, overload
+from typing import Any, Final, ParamSpec, Protocol, TypeVar, cast, overload
 
 Task = Callable[..., Any]
 Hook = Callable[..., object]
@@ -84,6 +84,12 @@ class GlobalOption:
         "name",
         "owner",
     )
+
+    name: str
+    annotation: Any
+    default: Any
+    help: str
+    owner: str
 
     def __init__(
         self,
@@ -746,6 +752,53 @@ class TaskFn(Protocol[_P, _R_co]):
         ...
 
 
+class TaskDecorator(Protocol):
+    """The static shape of the module-level `task` decorator — the bound
+    `Group.task` of the root registry. `test_registry_aliases_stay_in_sync`
+    holds its parameterised form to `Group.task`'s."""
+
+    @overload
+    def __call__(self, fn: Callable[_P, _R_co]) -> TaskFn[_P, _R_co]: ...
+    @overload
+    def __call__(
+        self,
+        fn: None = None,
+        *,
+        name: str = "",
+        pre: Sequence[Task] = (),
+        post: Sequence[Task] = (),
+        progress: bool = True,
+        infinite: bool = False,
+        shared: bool | None = None,
+        confirm: str = "",
+        interactive: bool = False,
+        keep_going: bool | None = None,
+        atomic: bool = False,
+        cwd: str | Path = "",
+        rel: str | Path = "",
+        serial: bool = False,
+        exclusive: bool = False,
+        hidden: bool | None = None,
+        uses: Sequence[GlobalOption] = (),
+    ) -> Callable[[Callable[_P, _R_co]], TaskFn[_P, _R_co]]: ...
+
+
+class GroupFactory(Protocol):
+    """The static shape of the module-level `group` factory (`Group.group`)."""
+
+    def __call__(
+        self, name: str, help: str = "", hidden: bool | None = None
+    ) -> Group: ...
+
+
+class HookRegistrar(Protocol):
+    """The static shape of a module-level hook registrar (`pre_tasks` and
+    friends): an identity decorator — it registers the hook and hands the
+    same object back."""
+
+    def __call__(self, fn: _F) -> _F: ...
+
+
 class Group:
     """A node in the command tree: named tasks and nested sub-groups."""
 
@@ -1069,7 +1122,7 @@ class Group:
         self.groups[key] = sub
         return sub
 
-    def pre_tasks(self, fn: Hook) -> Hook:
+    def pre_tasks(self, fn: _F) -> _F:
         """Register the once-per-invocation hook, run before anything else.
 
         It happens after the whole `tasks.py` cascade is assembled and *before*
@@ -1106,7 +1159,7 @@ class Group:
         self.contributions["pre_tasks"].append(fn)
         return fn
 
-    def pre_bind(self, fn: Hook) -> Hook:
+    def pre_bind(self, fn: _F) -> _F:
         """Register the before-binding hook: `pre_bind(inv, task)`.
 
         The earliest per-task moment: it fires before the task's parameters
@@ -1128,7 +1181,7 @@ class Group:
         self.contributions["pre_bind"].append(fn)
         return fn
 
-    def post_tasks(self, fn: Hook) -> Hook:
+    def post_tasks(self, fn: _F) -> _F:
         """Register the once-per-invocation closing hook: `post_tasks(inv)`.
 
         The run report's moment, on the main thread, after every task has
@@ -1154,7 +1207,7 @@ class Group:
         self.contributions["post_tasks"].append(fn)
         return fn
 
-    def wrap_task(self, fn: Hook) -> Hook:
+    def wrap_task(self, fn: _F) -> _F:
         """Register a one-yield wrapper around the body: sugar over the pair.
 
         Write the pre half, `result = yield`, then the post half — locals
@@ -1217,7 +1270,7 @@ class Group:
         self.contributions["post_task"].append(_post)
         return fn
 
-    def wrap_bind(self, fn: Hook) -> Hook:
+    def wrap_bind(self, fn: _F) -> _F:
         """Register a two-yield wrapper spanning bind, body and all: sugar
         over `pre_bind` + `pre_task` + `post_task`, one generator per request.
 
@@ -1310,7 +1363,7 @@ class Group:
         self.contributions["post_task"].append(_post)
         return fn
 
-    def pre_task(self, fn: Hook) -> Hook:
+    def pre_task(self, fn: _F) -> _F:
         """Register the before-each-task hook: `pre_task(inv, task)`.
 
         Runs on the task's worker thread — in parallel across tasks, for
@@ -1341,7 +1394,7 @@ class Group:
         self.contributions["pre_task"].append(fn)
         return fn
 
-    def post_task(self, fn: Hook) -> Hook:
+    def post_task(self, fn: _F) -> _F:
         """Register the after-each-task hook: `post_task(inv, task, result)`.
 
         The task-finished event: once a request's ladder opened, it fires
@@ -1510,16 +1563,16 @@ class Group:
 # The implicit root registry populated by the module-level `task`/`group`
 # aliases (re-exported from `footman`). Constructing an explicit `Group` is
 # always an option and keeps tests free of global state.
-root = Group("root")
-task = root.task
-group = root.group
-pre_tasks = root.pre_tasks
-post_tasks = root.post_tasks
-pre_bind = root.pre_bind
-pre_task = root.pre_task
-post_task = root.post_task
-wrap_task = root.wrap_task
-wrap_bind = root.wrap_bind
+root: Final[Group] = Group("root")
+task: Final[TaskDecorator] = root.task
+group: Final[GroupFactory] = root.group
+pre_tasks: Final[HookRegistrar] = root.pre_tasks
+post_tasks: Final[HookRegistrar] = root.post_tasks
+pre_bind: Final[HookRegistrar] = root.pre_bind
+pre_task: Final[HookRegistrar] = root.pre_task
+post_task: Final[HookRegistrar] = root.post_task
+wrap_task: Final[HookRegistrar] = root.wrap_task
+wrap_bind: Final[HookRegistrar] = root.wrap_bind
 
 
 def reset() -> None:

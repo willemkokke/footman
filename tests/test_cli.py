@@ -6,6 +6,7 @@ import json
 import os
 import sys
 import time
+from pathlib import Path
 
 import pytest
 
@@ -269,6 +270,46 @@ def test_an_explicit_tasks_file_still_wins(tmp_path, monkeypatch, capsys):
     with pytest.raises(SystemExit):
         footman.main(str(mine))
     assert "theirs" in capsys.readouterr().out
+
+
+def test_task_decorator_protocol_matches_group_task():
+    # The module-level `task` alias is declared as a TaskDecorator Protocol so
+    # the assignment has a stated type; this pins the Protocol's parameterised
+    # overload to `Group.task`'s keyword surface, or the two drift silently.
+    import ast as ast_
+
+    source = (Path(footman.__file__).parent / "registry.py").read_text(encoding="utf-8")
+    tree = ast_.parse(source)
+
+    def kwonly(fn: ast_.FunctionDef) -> dict[str, tuple[str, str]]:
+        args = fn.args
+        defaults = args.kw_defaults
+        return {
+            a.arg: (
+                ast_.unparse(a.annotation) if a.annotation else "",
+                ast_.unparse(d) if d is not None else "",
+            )
+            for a, d in zip(args.kwonlyargs, defaults)
+        }
+
+    group_task = None
+    proto_call = None
+    for node in tree.body:
+        if isinstance(node, ast_.ClassDef) and node.name == "Group":
+            # the implementation def (last `task` def wins: overloads precede)
+            for item in node.body:
+                if isinstance(item, ast_.FunctionDef) and item.name == "task":
+                    group_task = item
+        if isinstance(node, ast_.ClassDef) and node.name == "TaskDecorator":
+            for item in node.body:
+                if (
+                    isinstance(item, ast_.FunctionDef)
+                    and item.name == "__call__"
+                    and item.args.kwonlyargs  # the parameterised overload
+                ):
+                    proto_call = item
+    assert group_task is not None and proto_call is not None
+    assert kwonly(proto_call) == kwonly(group_task)
 
 
 def test_lazy_reexports():

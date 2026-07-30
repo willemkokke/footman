@@ -22,10 +22,9 @@ from dataclasses import dataclass
 from pathlib import Path, PurePath
 from typing import Annotated, Any
 
-from footman.params import _arg as _ARG
 from footman.params import (
-    _PathRequirement,
-    _StdoutMarker,
+    PathRequirement,
+    StdoutMarker,
     ask,
     between,
     check,
@@ -33,6 +32,7 @@ from footman.params import (
     env,
     suggest,
 )
+from footman.params import _arg as _ARG
 from footman.params import forward as _FORWARD
 from footman.params import nosplit as _NOSPLIT
 from footman.params import stdin as _stdin_marker
@@ -137,7 +137,7 @@ def peel(ann: Any) -> Peeled:
                     completer = mark
                 elif mark is _NOSPLIT:
                     is_nosplit = True
-                elif isinstance(mark, _PathRequirement):
+                elif isinstance(mark, PathRequirement):
                     path_req = mark.kind
                 elif isinstance(mark, between):
                     bounds = (mark.lo, mark.hi)
@@ -257,7 +257,7 @@ def emitted(ann: Any) -> tuple[bool, Any]:
         changed = False
         if typing.get_origin(ann) is Annotated:
             base, *meta = typing.get_args(ann)
-            if any(m is _STDOUT or isinstance(m, _StdoutMarker) for m in meta):
+            if any(m is _STDOUT or isinstance(m, StdoutMarker) for m in meta):
                 found = True
             ann, changed = base, True
         elif _is_union(ann):
