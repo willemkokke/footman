@@ -57,7 +57,10 @@ def test_task_signature_is_forwarded_to_the_type_checker():
         return 1
 
     assert_type(build("web", release=True), int)  # parameters + return forwarded
-    _ = build.opts(atomic=True)  # ...and `.opts()` still resolves on the same type
+    opted = build.opts(atomic=True)
+    assert_type(opted("web", release=True), int)  # an opted call keeps the signature
+    chained = opted.opts(keep_going=True)
+    assert_type(chained("web"), int)  # ...and so does a chained .opts()
 
 
 def test_opts_is_a_transparent_proxy():

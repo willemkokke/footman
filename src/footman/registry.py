@@ -726,6 +726,8 @@ def _apply_policy(
 
 _P = ParamSpec("_P")
 _R_co = TypeVar("_R_co", covariant=True)
+# Identity-decorator variable: a gate returns exactly what it was given.
+_F = TypeVar("_F", bound=Callable[..., Any])
 
 
 class TaskFn(Protocol[_P, _R_co]):
@@ -738,7 +740,10 @@ class TaskFn(Protocol[_P, _R_co]):
     __name__: str
 
     def __call__(self, *args: _P.args, **kwargs: _P.kwargs) -> _R_co: ...
-    def opts(self, **overrides: Any) -> _Opted: ...
+    def opts(self, **overrides: Any) -> TaskFn[_P, _R_co]:
+        """Per-use option overrides; the reference stays callable with the
+        task's own signature, so an opted call type-checks like a bare one."""
+        ...
 
 
 class Group:
@@ -1458,11 +1463,14 @@ class Group:
 
         return register(fn) if fn is not None else register
 
-    def opts(self, **overrides: Any) -> _Opted:
+    def opts(self, **overrides: Any) -> TaskFn[..., Any]:
         """Per-use option overrides for this group's default action, the same
         `.opts()` a task has — `pre=[lint.opts(keep_going=True)]`. Overrides ride
-        the group's default when it runs (bare, as a `pre=`, or called)."""
-        return _Opted(self, _opts_overrides(overrides))
+        the group's default when it runs (bare, as a `pre=`, or called). The
+        static type is a task reference with an untracked signature — `Group`
+        doesn't carry its default's parameters the way `TaskFn` carries a
+        task's."""
+        return cast("TaskFn[..., Any]", _Opted(self, _opts_overrides(overrides)))
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         """Run this group's default action — the imperative mirror of a bare
@@ -1681,10 +1689,14 @@ Check = Callable[[], str | None]
 """One availability gate: the reason it fails, or `None` when it passes."""
 
 
-def _gate(check: Check) -> Callable[[Task], Task]:
-    """Stack *check* onto a task's availability gates, read live by `availability`."""
+def _gate(check: Check) -> Callable[[_F], _F]:
+    """Stack *check* onto a task's availability gates, read live by `availability`.
 
-    def decorate(fn: Task) -> Task:
+    The decorator is identity in types — a gate marks the function and hands
+    the same object back, so whatever it wraps (a plain function below
+    `@task`, or a `TaskFn` when stacked above it) keeps its static type."""
+
+    def decorate(fn: _F) -> _F:
         setattr(fn, _CHECKS, [*getattr(fn, _CHECKS, ()), check])
         return fn
 
@@ -1693,7 +1705,7 @@ def _gate(check: Check) -> Callable[[Task], Task]:
 
 def requires(
     predicate: Callable[[], object], *, reason: str = ""
-) -> Callable[[Task], Task]:
+) -> Callable[[_F], _F]:
     """Gate a task on a live *predicate* — available only while it is truthy.
 
     The generic gate the three specialisations build on. A predicate that
@@ -1717,7 +1729,7 @@ def requires(
     return _gate(check)
 
 
-def requires_dep(*modules: str, reason: str = "") -> Callable[[Task], Task]:
+def requires_dep(*modules: str, reason: str = "") -> Callable[[_F], _F]:
     """Gate a task on Python *modules* being importable (`find_spec`, no import).
 
     Keep the real `import` in the body; this only checks availability, so a
@@ -1733,7 +1745,7 @@ def requires_dep(*modules: str, reason: str = "") -> Callable[[Task], Task]:
     return _gate(check)
 
 
-def requires_tool(*commands: str, reason: str = "") -> Callable[[Task], Task]:
+def requires_tool(*commands: str, reason: str = "") -> Callable[[_F], _F]:
     """Gate a task on command-line tools being on `PATH` (`shutil.which`)."""
 
     def check() -> str | None:
@@ -1745,7 +1757,7 @@ def requires_tool(*commands: str, reason: str = "") -> Callable[[Task], Task]:
     return _gate(check)
 
 
-def requires_env(*names: str, reason: str = "") -> Callable[[Task], Task]:
+def requires_env(*names: str, reason: str = "") -> Callable[[_F], _F]:
     """Gate a task on environment variables being set (`in os.environ`)."""
 
     def check() -> str | None:
