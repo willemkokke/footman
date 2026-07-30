@@ -7,10 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from footman import _app, _paths, registry
-from footman import _config as config
-from footman import _discover as discover
-from footman import _executor as executor
+from footman import _app, _config, _discover, _executor, _paths, registry
 from footman._split import Segment
 from footman.context import Context
 
@@ -85,7 +82,7 @@ def test_cascade_appends_new_names(tmp_path):
     sub = _write(
         tmp_path / "svc" / "tasks.py", "from footman import task\n@task\ndef b():...\n"
     )
-    merged = discover.load_tree([root, sub])
+    merged = _discover.load_tree([root, sub])
     assert set(merged.tasks) == {"a", "b"}
 
 
@@ -98,9 +95,9 @@ def test_cascade_local_overrides_by_name(tmp_path):
         tmp_path / "svc" / "tasks.py",
         "from footman import task\n@task\ndef build():\n    return 0\n",
     )
-    merged = discover.load_tree([root, sub])
+    merged = _discover.load_tree([root, sub])
     # the local (svc) build wins, and is tagged with the svc directory
-    assert discover.defining_dir(merged.tasks["build"]) == str(tmp_path / "svc")
+    assert _discover.defining_dir(merged.tasks["build"]) == str(tmp_path / "svc")
     assert merged.tasks["build"]() == 0
 
 
@@ -113,7 +110,7 @@ def test_cascade_merges_groups(tmp_path):
         tmp_path / "svc" / "tasks.py",
         "from footman import group\nd = group('dist')\n@d.task\ndef deploy():...\n",
     )
-    merged = discover.load_tree([root, sub])
+    merged = _discover.load_tree([root, sub])
     assert set(merged.groups["dist"].tasks) == {"build", "deploy"}
 
 
@@ -134,7 +131,7 @@ def test_cascade_isolates_sibling_helpers(tmp_path, capsys):
         "from footman import task\nimport helpers\n"
         "@task\ndef b():\n    print(helpers.VALUE)\n",
     )
-    merged = discover.load_tree([root, sub])
+    merged = _discover.load_tree([root, sub])
     merged.tasks["a"]()
     merged.tasks["b"]()
     out = capsys.readouterr().out
@@ -149,8 +146,8 @@ def test_failed_cascade_import_resets_registry(tmp_path):
         "from footman import task\n@task\ndef ghost(): ...\n"
         "raise RuntimeError('boom')\n",
     )
-    with pytest.raises(discover.TasksImportError):
-        discover.load_tree([bad])
+    with pytest.raises(_discover.TasksImportError):
+        _discover.load_tree([bad])
     assert "ghost" not in registry.root.tasks
 
 
@@ -161,9 +158,9 @@ def test_cascade_tags_defining_dir(tmp_path):
     sub = _write(
         tmp_path / "svc" / "tasks.py", "from footman import task\n@task\ndef b():...\n"
     )
-    merged = discover.load_tree([root, sub])
-    assert discover.defining_dir(merged.tasks["a"]) == str(tmp_path)
-    assert discover.defining_dir(merged.tasks["b"]) == str(tmp_path / "svc")
+    merged = _discover.load_tree([root, sub])
+    assert _discover.defining_dir(merged.tasks["a"]) == str(tmp_path)
+    assert _discover.defining_dir(merged.tasks["b"]) == str(tmp_path / "svc")
 
 
 def test_load_tree_leaves_no_global_state(tmp_path):
@@ -172,7 +169,7 @@ def test_load_tree_leaves_no_global_state(tmp_path):
     root = _write(
         tmp_path / "tasks.py", "from footman import task\n@task\ndef a():...\n"
     )
-    discover.load_tree([root])
+    _discover.load_tree([root])
     assert registry.root.tasks == {}  # reset after building
 
 
@@ -186,7 +183,7 @@ def test_run_task_uses_defining_dir_as_cwd():
     fn._footman_dir = "/some/place"  # type: ignore[attr-defined]
     ctx = Context()
     seg = Segment(task="fn", path=["fn"])
-    executor.run_task(fn, seg, ctx)
+    _executor.run_task(fn, seg, ctx)
     assert ctx.cwd == Path("/some/place")
 
 
@@ -196,7 +193,7 @@ def test_run_task_respects_explicit_cwd():
 
     fn._footman_dir = "/some/place"  # type: ignore[attr-defined]
     ctx = Context(cwd=Path("/explicit"))
-    executor.run_task(fn, Segment(task="fn", path=["fn"]), ctx)
+    _executor.run_task(fn, Segment(task="fn", path=["fn"]), ctx)
     assert ctx.cwd == Path("/explicit")  # not overridden
 
 
@@ -208,27 +205,27 @@ def test_config_nearest_wins(tmp_path):
     sub = tmp_path / "svc"
     sub.mkdir()
     _write(sub / "footman.toml", "tasks = 'svc.py'\n")
-    cfg = config.load_config(sub, tmp_path)
+    cfg = _config.load_config(sub, tmp_path)
     assert cfg["tasks"] == "svc.py"  # cwd folder overrides the root
 
 
 def test_config_footman_toml_beats_pyproject_in_same_dir(tmp_path):
     _write(tmp_path / "pyproject.toml", "[tool.footman]\nsequential = false\n")
     _write(tmp_path / "footman.toml", "sequential = true\n")
-    cfg = config.load_config(tmp_path, tmp_path)
+    cfg = _config.load_config(tmp_path, tmp_path)
     assert cfg["sequential"] is True
 
 
 def test_config_cli_path_overrides_all(tmp_path):
     _write(tmp_path / "footman.toml", "tasks = 'a.py'\n")
     override = _write(tmp_path / "custom.toml", "tasks = 'b.py'\n")
-    cfg = config.load_config(tmp_path, tmp_path, str(override))
+    cfg = _config.load_config(tmp_path, tmp_path, str(override))
     assert cfg["tasks"] == "b.py"
 
 
 def test_config_corrupt_toml_is_ignored(tmp_path):
     _write(tmp_path / "footman.toml", "this is : not [[ valid")
-    assert config.load_config(tmp_path, tmp_path) == {}
+    assert _config.load_config(tmp_path, tmp_path) == {}
 
 
 def test_config_global_file_is_the_bottom_rung(tmp_path, monkeypatch):
@@ -237,10 +234,10 @@ def test_config_global_file_is_the_bottom_rung(tmp_path, monkeypatch):
     monkeypatch.setenv("FOOTMAN_CONFIG", str(global_file))
     project = tmp_path / "proj"
     project.mkdir()
-    cfg = config.load_config(project, project)
+    cfg = _config.load_config(project, project)
     assert cfg == {"uv": False, "tasks": "g.py"}  # global alone applies
     _write(project / "footman.toml", "tasks = 'p.py'\n")
-    cfg = config.load_config(project, project)
+    cfg = _config.load_config(project, project)
     assert cfg["tasks"] == "p.py"  # the cascade wins the contested key
     assert cfg["uv"] is False  # and the uncontested global key survives
 
@@ -254,14 +251,14 @@ def test_config_global_default_location(tmp_path, monkeypatch):
     _write(spot, "sequential = true\n")
     project = tmp_path / "proj"
     project.mkdir()
-    assert config.load_config(project, project)["sequential"] is True
+    assert _config.load_config(project, project)["sequential"] is True
 
 
 def test_config_malformed_global_warns_and_is_skipped(tmp_path, monkeypatch):
     global_file = _write(tmp_path / "global.toml", "not [[ toml")
     monkeypatch.setenv("FOOTMAN_CONFIG", str(global_file))
     warnings: list[str] = []
-    cfg = config.load_config(tmp_path, tmp_path, on_warning=warnings.append)
+    cfg = _config.load_config(tmp_path, tmp_path, on_warning=warnings.append)
     assert cfg == {}
     assert any("malformed" in w for w in warnings)
 
@@ -274,11 +271,11 @@ def test_config_user_level_keys_stripped_from_the_cascade(tmp_path, monkeypatch)
     monkeypatch.setenv("FOOTMAN_CONFIG", str(global_file))
     _write(tmp_path / "footman.toml", "gc = true\ntasks = 'x.py'\n")
     notes: list[str] = []
-    cfg = config.load_config(tmp_path, tmp_path, on_note=notes.append)
+    cfg = _config.load_config(tmp_path, tmp_path, on_note=notes.append)
     assert cfg["gc"] is False  # the global value, not the project's
     assert cfg["tasks"] == "x.py"  # ordinary keys cascade as ever
     assert any("user-level" in n for n in notes)
-    assert config.load_config(tmp_path, tmp_path)["gc"] is False  # silent too
+    assert _config.load_config(tmp_path, tmp_path)["gc"] is False  # silent too
 
 
 def test_config_cli_path_replaces_global_and_cascade(tmp_path, monkeypatch):
@@ -287,7 +284,7 @@ def test_config_cli_path_replaces_global_and_cascade(tmp_path, monkeypatch):
     monkeypatch.setenv("FOOTMAN_CONFIG", str(global_file))
     _write(tmp_path / "footman.toml", "sequential = true\n")
     override = _write(tmp_path / "custom.toml", "tasks = 'b.py'\n")
-    cfg = config.load_config(tmp_path, tmp_path, str(override))
+    cfg = _config.load_config(tmp_path, tmp_path, str(override))
     assert cfg == {"tasks": "b.py"}  # no uv, no sequential: replaced, not merged
 
 
@@ -440,11 +437,10 @@ def test_inherited_names_the_task_it_calls(tmp_path, monkeypatch, capsys):
     # functools.wraps keeps the name, so `parallel(inherited(), extra)`
     # labels its live line honestly instead of showing an anonymous call.
     _inherit_repo(tmp_path, monkeypatch, LEAF)
-    from footman import Context, inherited, use_context
-    from footman import _discover as discover
+    from footman import Context, _discover, inherited, use_context
 
     files = _paths.task_files(Path.cwd(), tmp_path)
-    tree = discover.load_tree(files)
+    tree = _discover.load_tree(files)
     with use_context(Context(fn=tree.tasks["check"])):
         assert inherited().__name__ == "check"
 
@@ -587,7 +583,7 @@ def test_cascade_unknown_env_value_is_a_taught_error(
 ):
     monkeypatch.setenv("FOOTMAN_CASCADE", "galaxy")
     monkeypatch.chdir(tmp_path)
-    with pytest.raises(config.CascadeError, match="galaxy"):
+    with pytest.raises(_config.CascadeError, match="galaxy"):
         _app.resolve_task_files({})
 
 
@@ -596,7 +592,7 @@ def test_cascade_unknown_config_value_names_the_tokens(
 ):
     (tmp_path / "global.toml").write_text("cascade = 'sideways'\n", encoding="utf-8")
     monkeypatch.chdir(tmp_path)
-    with pytest.raises(config.CascadeError) as exc:
+    with pytest.raises(_config.CascadeError) as exc:
         _app.resolve_task_files({})
     for token in ("none", "repo", "filesystem"):
         assert token in str(exc.value)

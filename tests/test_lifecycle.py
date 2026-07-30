@@ -9,10 +9,7 @@ from typing import Annotated, Any
 
 import pytest
 
-from footman import _discover as discover
-from footman import _executor as executor
-from footman import _manifest as manifest
-from footman import registry
+from footman import _discover, _executor, _manifest, registry
 from footman.params import between, check, env
 from footman.registry import Group, RegistrationError
 from footman.testing import Runner
@@ -45,7 +42,7 @@ def test_a_hook_edits_the_merged_tree(tmp_path):
                     t.add_pre(audit)
         """,
     )
-    view = registry.Tasks(discover.load_tree([src]))
+    view = registry.Tasks(_discover.load_tree([src]))
     assert view["audit"].fn in view["deploy-web"].pre
 
 
@@ -76,7 +73,7 @@ def test_a_hook_reaches_a_subfolder_task(tmp_path):
         def ship(): ...
         """,
     )
-    view = registry.Tasks(discover.load_tree([root, sub]))
+    view = registry.Tasks(_discover.load_tree([root, sub]))
     assert view["audit"].fn in view["ship"].pre
 
 
@@ -109,7 +106,7 @@ def test_hooks_run_in_cascade_order_specific_last(tmp_path):
             fn._order = [*getattr(fn, "_order", []), "svc"]
         """,
     )
-    tree = discover.load_tree([root, sub])
+    tree = _discover.load_tree([root, sub])
     assert getattr(tree.tasks["x"], "_order") == ["root", "svc"]
 
 
@@ -124,8 +121,8 @@ def test_a_hook_that_raises_is_named(tmp_path):
             raise ValueError("nope")
         """,
     )
-    with pytest.raises(discover.HookError, match="boom"):
-        discover.load_tree([bad])
+    with pytest.raises(_discover.HookError, match="boom"):
+        _discover.load_tree([bad])
 
 
 def test_tasks_view_iterates_nested_tasks(tmp_path):
@@ -143,7 +140,7 @@ def test_tasks_view_iterates_nested_tasks(tmp_path):
         def build(): ...
         """,
     )
-    view = registry.Tasks(discover.load_tree([src]))
+    view = registry.Tasks(_discover.load_tree([src]))
     assert sorted(t.name for t in view) == ["a", "build"]
 
 
@@ -164,8 +161,8 @@ def test_a_hook_disable_reaches_the_manifest(tmp_path):
             inv.tasks["x"].disable("off by policy")
         """,
     )
-    tree = discover.load_tree([src])
-    node = manifest.build_manifest(tree)["tree"]["tasks"]["x"]
+    tree = _discover.load_tree([src])
+    node = _manifest.build_manifest(tree)["tree"]["tasks"]["x"]
     assert node["disabled"] == "off by policy"
 
 
@@ -187,7 +184,7 @@ def test_task_view_add_post_and_read_post(tmp_path):
             inv.tasks["deploy"].add_post(inv.tasks["notify"])
         """,
     )
-    view = registry.Tasks(discover.load_tree([src]))
+    view = registry.Tasks(_discover.load_tree([src]))
     assert view["notify"].fn in view["deploy"].post
     assert "missing" not in view
     with pytest.raises(KeyError):
@@ -212,7 +209,7 @@ def test_task_view_disabled_reads_the_reason(tmp_path):
             inv.tasks["a"].disable("off by policy")
         """,
     )
-    view = registry.Tasks(discover.load_tree([src]))
+    view = registry.Tasks(_discover.load_tree([src]))
     assert view["a"].disabled == "off by policy"
     assert view["b"].disabled is None
 
@@ -230,7 +227,7 @@ def test_task_view_reads_policy_flags(tmp_path):
         def plain(): ...
         """,
     )
-    view = registry.Tasks(discover.load_tree([src]))
+    view = registry.Tasks(_discover.load_tree([src]))
     gated, plain = view["gated"], view["plain"]
     assert gated.keep_going is False
     assert gated.atomic is True
@@ -254,7 +251,7 @@ def test_task_view_infinite_is_untimed(tmp_path):
         def serve(): ...
         """,
     )
-    view = registry.Tasks(discover.load_tree([src]))
+    view = registry.Tasks(_discover.load_tree([src]))
     assert view["serve"].infinite is True
     assert view["serve"].timed is False  # infinite implies no timing history
 
@@ -274,7 +271,7 @@ def test_task_view_owning_group(tmp_path):
         def build(): ...
         """,
     )
-    view = registry.Tasks(discover.load_tree([src]))
+    view = registry.Tasks(_discover.load_tree([src]))
     assert view["top"].group is None  # top-level task is in no named group
     assert view["build"].group is not None
     assert view["build"].group.name == "docs"
@@ -290,7 +287,7 @@ def test_task_view_provenance_single_file(tmp_path):
         def x(): ...
         """,
     )
-    view = registry.Tasks(discover.load_tree([src]))
+    view = registry.Tasks(_discover.load_tree([src]))
     x = view["x"]
     assert x.defining_dir == str(src.parent)
     assert x.source_file is not None and x.source_file.endswith("tasks.py")
@@ -319,7 +316,7 @@ def test_task_view_shadow_chain_across_cascade(tmp_path):
             "svc version"
         """,
     )
-    view = registry.Tasks(discover.load_tree([root, sub]))
+    view = registry.Tasks(_discover.load_tree([root, sub]))
     x = view["x"]  # the winning (nearest-cwd) definition
     assert x.defining_dir == str(sub.parent)
     assert x.fn.__doc__ == "svc version"
@@ -343,7 +340,7 @@ def test_task_view_set_opts_is_permanent(tmp_path):
             inv.tasks["x"].set_opts(keep_going=False, atomic=True)
         """,
     )
-    view = registry.Tasks(discover.load_tree([src]))
+    view = registry.Tasks(_discover.load_tree([src]))
     assert view["x"].keep_going is False
     assert view["x"].atomic is True
     # It writes the same attributes the policy accessors read.
@@ -367,8 +364,8 @@ def test_task_view_set_opts_rejects_a_task_parameter(tmp_path):
     )
     # `set_opts` reuses `.opts()`'s validation, so a stray parameter is a taught
     # error surfaced (named) through the hook.
-    with pytest.raises(discover.HookError, match="bad"):
-        discover.load_tree([src])
+    with pytest.raises(_discover.HookError, match="bad"):
+        _discover.load_tree([src])
 
 
 def test_a_hook_uses_defining_dir_for_a_cascade_decision(tmp_path):
@@ -400,7 +397,7 @@ def test_a_hook_uses_defining_dir_for_a_cascade_decision(tmp_path):
         def deploy(): ...
         """,
     )
-    view = registry.Tasks(discover.load_tree([root, infra]))
+    view = registry.Tasks(_discover.load_tree([root, infra]))
     assert view["audit"].fn in view["deploy"].pre
 
 
@@ -521,7 +518,7 @@ def test_pre_and_post_fire_around_every_execution():
 
     @reg.post_task
     def closed(inv, task, result):
-        log.append(("post", task.name, executor.reported_state(result)))
+        log.append(("post", task.name, _executor.reported_state(result)))
 
     @reg.task
     def build(target: str = "web") -> str:
@@ -981,7 +978,7 @@ def test_the_ladder_is_per_request_only_the_body_is_shared():
 
     @reg.post_task
     def closed(inv, task, result):
-        log.append(f"post:{task.name}:{executor.reported_state(result)}")
+        log.append(f"post:{task.name}:{_executor.reported_state(result)}")
 
     @reg.task
     def build() -> str:
@@ -1053,7 +1050,7 @@ def test_a_declared_repeat_gets_the_pair_with_its_shared_row():
 
     @reg.post_task
     def closed(inv, task, result):
-        log.append(f"post:{task.name}:{executor.reported_state(result)}")
+        log.append(f"post:{task.name}:{_executor.reported_state(result)}")
 
     @reg.task
     def build() -> str:
@@ -1096,7 +1093,7 @@ def test_a_raising_pre_on_a_satisfied_request_fails_only_that_request():
     result = Runner().invoke("publish", tasks=reg)
     assert not result.ok
     assert "flaked on the repeat" in result.stderr
-    states = [(r.task, executor.reported_state(r)) for r in result.results]
+    states = [(r.task, _executor.reported_state(r)) for r in result.results]
     assert ("build", "ok") in states  # the execution itself stayed green
 
 
@@ -1105,7 +1102,7 @@ def test_a_crashing_post_on_a_shared_request_fails_the_caller():
 
     @reg.post_task
     def report(inv, task, result):
-        if executor.reported_state(result) == "shared":
+        if _executor.reported_state(result) == "shared":
             raise RuntimeError("reporter tripped on the share")
 
     @reg.task
@@ -1142,7 +1139,7 @@ def test_a_raising_pre_on_a_repeated_segment_fails_that_segment_only():
     # — a request that never began sorts by cause, not by clock.)
     result = Runner().invoke("--sequential build build", tasks=reg)
     assert not result.ok
-    states = [(r.task, executor.reported_state(r)) for r in result.results]
+    states = [(r.task, _executor.reported_state(r)) for r in result.results]
     assert ("build", "ok") in states  # the execution itself stayed green
     assert ("build", "failed") in states  # the refused second request
 
@@ -1160,7 +1157,7 @@ def test_a_raising_pre_bind_on_a_body_call_fails_the_caller():
 
     @reg.post_task
     def observe(inv, task, result):
-        closed.append(f"{task.name}:{executor.reported_state(result)}")
+        closed.append(f"{task.name}:{_executor.reported_state(result)}")
 
     @reg.task
     def build() -> str:
@@ -1240,7 +1237,7 @@ def test_wrap_task_spans_every_request_shared_included():
     def span(inv, task):
         log.append(f"open:{task.name}")
         result = yield
-        log.append(f"close:{task.name}:{executor.reported_state(result)}")
+        log.append(f"close:{task.name}:{_executor.reported_state(result)}")
 
     @reg.task
     def build() -> str:
@@ -1339,7 +1336,7 @@ def test_wrap_bind_spans_bind_and_body_and_closes_on_a_bind_failure():
             bound = yield
             log.append(f"bound:{task.name}:{dict(bound)}")
             result = yield
-            log.append(f"done:{task.name}:{executor.reported_state(result)}")
+            log.append(f"done:{task.name}:{_executor.reported_state(result)}")
         except ValueError as exc:
             log.append(f"bindfail:{task.name}:{'between 1 and 10' in str(exc)}")
         finally:
@@ -1401,7 +1398,7 @@ def test_post_tasks_receives_the_whole_story():
     @reg.post_tasks
     def digest(inv):
         story["rows"] = [
-            (r.task, executor.reported_state(r), r.blocked_by) for r in inv.results
+            (r.task, _executor.reported_state(r), r.blocked_by) for r in inv.results
         ]
         story["skipped"] = [r.task for r in inv.skipped]
         story["total"] = inv.total_ms
@@ -1571,12 +1568,12 @@ def test_a_prerequisites_confirm_is_asked_and_a_denial_blocks_dependents():
     assert not result.ok
     rows = {r.task: r for r in result.results}
     assert "not confirmed" in str(rows["wipe"].error)
-    assert executor.reported_state(rows["rebuild"]) == "skipped"
+    assert _executor.reported_state(rows["rebuild"]) == "skipped"
     assert rows["rebuild"].blocked_by == "wipe"
 
 
 def test_one_reference_is_asked_once_however_many_ways_it_is_reached(monkeypatch):
-    from footman import _schedule as schedule
+    from footman import _schedule
 
     asked: list[str] = []
 
@@ -1584,7 +1581,7 @@ def test_one_reference_is_asked_once_however_many_ways_it_is_reached(monkeypatch
         asked.append(message)
         return True
 
-    monkeypatch.setattr(schedule, "_ask_confirm", fake_ask)
+    monkeypatch.setattr(_schedule, "_ask_confirm", fake_ask)
     reg = Group("root")
 
     @reg.task(confirm="deploy?")

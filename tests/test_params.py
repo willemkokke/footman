@@ -8,7 +8,7 @@ from typing import Annotated, Any
 
 import pytest
 
-from footman import _manifest as manifest
+from footman import _manifest
 from footman._coerce import peel
 from footman._complete import complete
 from footman._executor import EX_USAGE, run_chain
@@ -57,7 +57,7 @@ class Version:
 def build_tree(build):
     reg = Group("root")
     build(reg)
-    return reg, manifest.build_manifest(reg)["tree"]
+    return reg, _manifest.build_manifest(reg)["tree"]
 
 
 def run(build, line):
@@ -605,10 +605,10 @@ def test_a_bare_callable_is_refused():
         @reg.task
         def build(project: Annotated[str, (lambda: ["x"])]): ...
 
-    with pytest.raises(manifest.SpecError, match=r"a bare callable is not a marker"):
+    with pytest.raises(_manifest.SpecError, match=r"a bare callable is not a marker"):
         build_tree(tasks)
     # The message names the fix, not just the problem.
-    with pytest.raises(manifest.SpecError, match=r"suggest\(<lambda>\)"):
+    with pytest.raises(_manifest.SpecError, match=r"suggest\(<lambda>\)"):
         build_tree(tasks)
 
 
@@ -640,7 +640,7 @@ def test_completer_deduped_per_build():
 
     reg = Group("root")
     tasks(reg)
-    manifest.build_manifest(reg)
+    _manifest.build_manifest(reg)
     assert _DEDUP_CALLS == [1]  # one call despite two params sharing the completer
 
 
@@ -649,7 +649,7 @@ def test_broken_strict_completer_fails_the_build():
         @reg.task
         def build(project: Annotated[str, suggest(lambda: 1 / 0)]): ...
 
-    with pytest.raises(manifest.CompleterError, match="ZeroDivisionError"):
+    with pytest.raises(_manifest.CompleterError, match="ZeroDivisionError"):
         build_tree(tasks)
 
 
@@ -829,7 +829,7 @@ def test_arg_needs_a_default():
         def files(pattern: Arg[str]):
             pass
 
-    with pytest.raises(manifest.SpecError, match="needs a default"):
+    with pytest.raises(_manifest.SpecError, match="needs a default"):
         build_tree(tasks)
 
 
@@ -845,7 +845,7 @@ def test_arg_must_trail_required_positionals():
         def files2(pattern: Arg[str] = "*", *rest: str): ...
 
     build_tree(tasks)  # option-after-Arg is legal
-    with pytest.raises(manifest.SpecError, match="must come last"):
+    with pytest.raises(_manifest.SpecError, match="must come last"):
         build_tree(bad)
 
 

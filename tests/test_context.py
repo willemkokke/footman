@@ -10,8 +10,7 @@ from typing import Annotated, Literal
 
 import pytest
 
-from footman import _manifest as manifest
-from footman import tools
+from footman import _manifest, tools
 from footman._executor import run_chain
 from footman._split import split_chain
 from footman.context import Context, RunFailed, parallel, passthrough, run, use_context
@@ -22,7 +21,7 @@ from footman.registry import Group
 def drive(build, line, **cfg):
     reg = Group("root")
     build(reg)
-    tree = manifest.build_manifest(reg)["tree"]
+    tree = _manifest.build_manifest(reg)["tree"]
     _, segments = split_chain(tree, line.split())
     return reg, tree, run_chain(reg, segments, ctx_config=cfg)
 
@@ -1536,8 +1535,7 @@ def _live_options():  # module-level: `from __future__ import annotations` makes
 
 
 def test_ask_front_loads_before_any_body_runs(monkeypatch):
-    from footman import _schedule as schedule
-    from footman import context
+    from footman import _schedule, context
 
     monkeypatch.setattr(context, "_stdin_is_tty", lambda: True)
     order = []
@@ -1557,17 +1555,16 @@ def test_ask_front_loads_before_any_body_runs(monkeypatch):
     def beta(b: Annotated[int, ask()]):
         order.append("body")
 
-    tree = manifest.build_manifest(reg)["tree"]
+    tree = _manifest.build_manifest(reg)["tree"]
     _, segments = split_chain(tree, ["alpha", "beta"])
-    results = schedule.run_plan(reg, segments)
+    results = _schedule.run_plan(reg, segments)
     assert all(r.ok for r in results), [str(r.error) for r in results]
     assert order[:2] == ["ask", "ask"]  # every question first, then the work
     assert order[2:] == ["body", "body"]
 
 
 def test_ask_with_live_suggest_resolves_after_its_prereqs(monkeypatch):
-    from footman import _schedule as schedule
-    from footman import context
+    from footman import _schedule, context
 
     monkeypatch.setattr(context, "_stdin_is_tty", lambda: True)
     monkeypatch.setattr(sys, "stdin", io.StringIO("1\n"))  # pick from the menu
@@ -1582,10 +1579,10 @@ def test_ask_with_live_suggest_resolves_after_its_prereqs(monkeypatch):
     def choose(which: Annotated[str, ask(), suggest(_traced_options)]):
         _TRACE.append("body")
 
-    tree = manifest.build_manifest(reg)["tree"]
+    tree = _manifest.build_manifest(reg)["tree"]
     _TRACE.clear()  # the manifest build bakes choices (one completer run)
     _, segments = split_chain(tree, ["choose"])
-    results = schedule.run_plan(reg, segments)
+    results = _schedule.run_plan(reg, segments)
     assert all(r.ok for r in results), [str(r.error) for r in results]
     # The completer runs at ask time — which must be after the dep, before
     # the body: a live-suggest question may need the dep's effects.
@@ -1593,8 +1590,7 @@ def test_ask_with_live_suggest_resolves_after_its_prereqs(monkeypatch):
 
 
 def test_ask_refuses_up_front_without_a_terminal(monkeypatch):
-    from footman import _schedule as schedule
-    from footman import context
+    from footman import _schedule, context
     from footman._split import ChainError
 
     monkeypatch.setattr(context, "_stdin_is_tty", lambda: False)
@@ -1609,10 +1605,10 @@ def test_ask_refuses_up_front_without_a_terminal(monkeypatch):
     def release(version: Annotated[str, ask()]):
         ran.append("body")
 
-    tree = manifest.build_manifest(reg)["tree"]
+    tree = _manifest.build_manifest(reg)["tree"]
     _, segments = split_chain(tree, ["noop", "release"])
     with pytest.raises(ChainError, match="--version"):
-        schedule.run_plan(reg, segments)
+        _schedule.run_plan(reg, segments)
     assert ran == []  # refused before anything started, noop included
 
 
@@ -1621,8 +1617,7 @@ def test_ask_with_live_suggest_under_no_input_fails_that_task_loudly(monkeypatch
     # menu may need a dep's output), so --no-input can't refuse it up front —
     # the task fails loudly at launch instead, and can never hang. A sibling
     # is untouched.
-    from footman import _schedule as schedule
-    from footman import context
+    from footman import _schedule, context
 
     monkeypatch.setattr(context, "_stdin_is_tty", lambda: True)
     ran = []
@@ -1636,11 +1631,11 @@ def test_ask_with_live_suggest_under_no_input_fails_that_task_loudly(monkeypatch
     def choose(which: Annotated[str, ask(), suggest(_live_options)]):
         ran.append("body")
 
-    tree = manifest.build_manifest(reg)["tree"]
+    tree = _manifest.build_manifest(reg)["tree"]
     _, segments = split_chain(tree, ["sibling", "choose"])
     results = {
         r.task: r
-        for r in schedule.run_plan(reg, segments, ctx_config={"no_input": True})
+        for r in _schedule.run_plan(reg, segments, ctx_config={"no_input": True})
     }
     assert not results["choose"].ok
     assert "--which is required" in str(results["choose"].error)
@@ -1726,14 +1721,13 @@ def test_ask_with_best_effort_suggest_stays_free_text(monkeypatch, capfd):
 
 
 def test_secret_answers_arrive_redacting(monkeypatch):
-    from footman import _executor as executor
-    from footman import context
+    from footman import _executor, context
     from footman._coerce import peel
 
     monkeypatch.setattr(context, "_stdin_is_tty", lambda: True)
     monkeypatch.setattr(context, "_prompt_core", lambda *a, **k: "hunter2")
     peeled = peel(Annotated[str, ask(secret=True)])
-    raw, value = executor._prompt_param("token", peeled, None)
+    raw, value = _executor._prompt_param("token", peeled, None)
     assert isinstance(raw, Secret) and isinstance(value, Secret)
     assert repr(value) == "Secret('***')"  # what logs and tracebacks see
     assert str(value) == "hunter2"  # what the body uses
@@ -1753,7 +1747,7 @@ def test_secret_params_publish_no_values():
     def login(token: Annotated[str, ask(secret=True), suggest(_menu_opts)]):
         pass
 
-    spec = manifest.build_manifest(reg)["tree"]["tasks"]["login"]["params"][0]
+    spec = _manifest.build_manifest(reg)["tree"]["tasks"]["login"]["params"][0]
     assert spec["secret"] is True
     assert "choices" not in spec  # the completer never ran, nothing baked
 

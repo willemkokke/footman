@@ -7,7 +7,7 @@ from typing import Annotated, Any
 
 import pytest
 
-from footman import _manifest as manifest
+from footman import _manifest
 from footman._executor import run_chain
 from footman._split import ChainError, split_chain
 from footman.params import between, check, env, exists, isdir, isfile
@@ -22,7 +22,7 @@ def _even(v: int) -> None:
 def build_tree(build):
     reg = Group("root")
     build(reg)
-    return reg, manifest.build_manifest(reg)["tree"]
+    return reg, _manifest.build_manifest(reg)["tree"]
 
 
 def run(build, line):
@@ -315,7 +315,7 @@ def test_env_without_default_is_a_spec_error():
         @reg.task
         def deploy(target: Annotated[str, env("DEPLOY_ENV")]): ...
 
-    with pytest.raises(manifest.SpecError, match="needs a default"):
+    with pytest.raises(_manifest.SpecError, match="needs a default"):
         build_tree(tasks)
 
 
@@ -324,7 +324,7 @@ def test_env_on_dict_is_a_spec_error():
         @reg.task
         def deploy(opts: Annotated[dict[str, str], env("OPTS")] | None = None): ...
 
-    with pytest.raises(manifest.SpecError, match="not supported on dict"):
+    with pytest.raises(_manifest.SpecError, match="not supported on dict"):
         build_tree(tasks)
 
 

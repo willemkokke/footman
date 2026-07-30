@@ -8,9 +8,7 @@ import threading
 
 import pytest
 
-from footman import _manifest as manifest
-from footman import _schedule as schedule
-from footman import parallel, run
+from footman import _manifest, _schedule, parallel, run
 from footman._split import ChainError, Segment, split_chain
 from footman.registry import Group
 
@@ -18,9 +16,9 @@ from footman.registry import Group
 def drive(build, line, **kw):
     reg = Group("root")
     build(reg)
-    tree = manifest.build_manifest(reg)["tree"]
+    tree = _manifest.build_manifest(reg)["tree"]
     _, segments = split_chain(tree, line.split())
-    return schedule.run_plan(reg, segments, **kw)
+    return _schedule.run_plan(reg, segments, **kw)
 
 
 def _echo(text: str) -> str:
@@ -45,11 +43,11 @@ def test_force_color_survives_a_terminal_but_not_capture(monkeypatch):
             return True
 
     seg = Segment(task="t", path=["t"])
-    live = schedule._make_ctx(
+    live = _schedule._make_ctx(
         seg, {"force_color": True}, sequential=True, capture=False, real=_Tty()
     )
     assert live.force_color is True
-    captured = schedule._make_ctx(
+    captured = _schedule._make_ctx(
         seg, {"force_color": True}, sequential=True, capture=True, real=_Tty()
     )
     assert captured.force_color is False

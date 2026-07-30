@@ -8,7 +8,7 @@ from typing import assert_type
 
 import pytest
 
-from footman import _manifest as manifest
+from footman import _manifest
 from footman._executor import run_chain
 from footman._schedule import resolve_keep_going, run_plan
 from footman._split import split_chain
@@ -25,7 +25,7 @@ from footman.registry import (
 def _tree(build):
     reg = Group("root")
     build(reg)
-    return reg, manifest.build_manifest(reg)["tree"]
+    return reg, _manifest.build_manifest(reg)["tree"]
 
 
 # --- the mechanism -----------------------------------------------------------
@@ -133,7 +133,7 @@ def test_opts_keep_going_on_a_prerequisite_reaches_run_wide_resolution():
     @reg.task(pre=[lint.opts(keep_going=True)])
     def check(): ...
 
-    tree = manifest.build_manifest(reg)["tree"]
+    tree = _manifest.build_manifest(reg)["tree"]
     _, segs = split_chain(tree, ["check"])
     assert resolve_keep_going(reg, segs, None) is True  # the prereq opts keep-going
     assert resolve_keep_going(reg, segs, False) is False  # CLI --fail-fast still wins
@@ -158,7 +158,7 @@ def test_opts_atomic_on_a_prerequisite_survives_fail_fast(tmp_path):
     def boom():
         raise SystemExit(1)
 
-    tree = manifest.build_manifest(reg)["tree"]
+    tree = _manifest.build_manifest(reg)["tree"]
     _, segs = split_chain(tree, ["gate", "boom"])
     run_plan(reg, segs, sequential=False)  # fail-fast, but the prereq opts atomic
     assert marker.exists()  # ran to completion despite the failing sibling
@@ -200,7 +200,7 @@ def test_opts_is_callable_from_a_body():
     def top():
         helper.opts(atomic=True)(msg="from-body")  # opts + explicit call
 
-    tree = manifest.build_manifest(reg)["tree"]
+    tree = _manifest.build_manifest(reg)["tree"]
     _, segs = split_chain(tree, ["top"])
     run_chain(reg, segs)
     assert ran == ["from-body"]
@@ -221,7 +221,7 @@ def test_forward_reaches_through_an_opted_target():
     def check(fix: Forward[bool] = False):
         """Gate."""
 
-    tree = manifest.build_manifest(reg)["tree"]
+    tree = _manifest.build_manifest(reg)["tree"]
     _, segs = split_chain(tree, ["check", "--fix"])
     run_chain(reg, segs)
     assert seen == {"target_fix": True}  # --fix reached target *through* .opts()
@@ -247,7 +247,7 @@ def test_identical_opts_references_share_one_dag_node():
     @reg.task(pre=[shared.opts(atomic=True)])
     def b(): ...
 
-    tree = manifest.build_manifest(reg)["tree"]
+    tree = _manifest.build_manifest(reg)["tree"]
     _, segs = split_chain(tree, ["a", "b"])
     run_chain(reg, segs)
     assert runs == ["shared"]  # deduped: one node, one run
@@ -269,7 +269,7 @@ def test_a_bare_and_an_opted_reference_are_distinct_nodes():
     @reg.task(pre=[shared.opts(atomic=True)])
     def b(): ...
 
-    tree = manifest.build_manifest(reg)["tree"]
+    tree = _manifest.build_manifest(reg)["tree"]
     _, segs = split_chain(tree, ["a", "b"])
     run_chain(reg, segs)
     assert runs == ["shared", "shared"]  # bare vs opted: two distinct nodes
@@ -291,7 +291,7 @@ def test_empty_opts_collapses_onto_the_bare_task():
     @reg.task(pre=[shared.opts()])  # empty overrides
     def b(): ...
 
-    tree = manifest.build_manifest(reg)["tree"]
+    tree = _manifest.build_manifest(reg)["tree"]
     _, segs = split_chain(tree, ["a", "b"])
     run_chain(reg, segs)
     assert runs == ["shared"]  # empty .opts() == bare: one node, one run

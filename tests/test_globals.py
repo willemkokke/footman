@@ -10,8 +10,7 @@ import time
 
 import pytest
 
-from footman import _globals
-from footman import _manifest as manifest
+from footman import _globals, _manifest
 from footman._executor import run_chain
 from footman._split import split_chain
 from footman.context import chdir, run
@@ -21,7 +20,7 @@ from footman.registry import Group
 def drive(build, line, **cfg):
     reg = Group("root")
     build(reg)
-    tree = manifest.build_manifest(reg)["tree"]
+    tree = _manifest.build_manifest(reg)["tree"]
     _, segments = split_chain(tree, line.split())
     return run_chain(reg, segments, ctx_config=cfg)
 
@@ -688,7 +687,7 @@ def test_interactive_overlaps_the_parallel_pool():
     # A cross-handshake that only completes when the two nodes truly run
     # concurrently: the old model (interactive forces the whole run
     # sequential) would deadlock both waits and fail loudly.
-    from footman import _schedule as schedule
+    from footman import _schedule
 
     e_wizard, e_sibling = threading.Event(), threading.Event()
     reg = Group("root")
@@ -703,14 +702,14 @@ def test_interactive_overlaps_the_parallel_pool():
         assert e_wizard.wait(5), "wizard never started alongside"
         e_sibling.set()
 
-    tree = manifest.build_manifest(reg)["tree"]
+    tree = _manifest.build_manifest(reg)["tree"]
     _, segments = split_chain(tree, ["wizard", "sibling"])
-    results = schedule.run_plan(reg, segments)
+    results = _schedule.run_plan(reg, segments)
     assert all(r.ok for r in results), [str(r.error) for r in results]
 
 
 def test_console_lane_has_one_owner_at_a_time():
-    from footman import _schedule as schedule
+    from footman import _schedule
 
     holds: list[tuple[str, float]] = []
     guard = threading.Lock()
@@ -733,9 +732,9 @@ def test_console_lane_has_one_owner_at_a_time():
         time.sleep(0.2)
         _mark("second-out")
 
-    tree = manifest.build_manifest(reg)["tree"]
+    tree = _manifest.build_manifest(reg)["tree"]
     _, segments = split_chain(tree, ["first", "second"])
-    results = schedule.run_plan(reg, segments)
+    results = _schedule.run_plan(reg, segments)
     assert all(r.ok for r in results), [str(r.error) for r in results]
     stamps = dict(holds)
     windows = sorted(
@@ -971,13 +970,13 @@ def test_zero_arg_entry_parallelises_via_the_router(monkeypatch):
         def two():
             _tools.Tool("tool-b", in_process=True)()
 
-    from footman import _schedule as schedule
+    from footman import _schedule
 
     reg = Group("root")
     tasks(reg)
-    tree = manifest.build_manifest(reg)["tree"]
+    tree = _manifest.build_manifest(reg)["tree"]
     _, segments = split_chain(tree, ["one", "two"])
-    results = {r.task: r for r in schedule.run_plan(reg, segments)}
+    results = {r.task: r for r in _schedule.run_plan(reg, segments)}
     assert all(r.ok for r in results.values()), [str(r.error) for r in results.values()]
     assert seen["a"] == ["tool-a", "--x"]
     assert seen["b"] == ["tool-b"]

@@ -9,8 +9,7 @@ from typing import Annotated
 
 import pytest
 
-from footman import _manifest as manifest
-from footman import registry
+from footman import _manifest, registry
 from footman._complete import _DYNAMIC, _FILES, complete
 from footman.params import suggest
 from footman.registry import GlobalOption, Group, RegistrationError
@@ -156,7 +155,7 @@ def test_the_manifest_bakes_globals_and_uses(tmp_path):
     @reg.task(uses=[opt])
     def build(): ...
 
-    data = manifest.build_manifest(reg)
+    data = _manifest.build_manifest(reg)
     assert data["schema"] == 2
     (entry,) = data["tree"]["globals"]
     assert entry["name"] == "env-file"
@@ -177,7 +176,7 @@ def test_completion_offers_and_completes_plugin_globals():
     @reg.task
     def build(): ...
 
-    tree = manifest.build_manifest(reg)["tree"]
+    tree = _manifest.build_manifest(reg)["tree"]
     names = complete(tree, ["--l"])
     assert "--lint-mode" in names
     values = complete(tree, ["--lint-mode=s"])
@@ -213,7 +212,7 @@ def test_a_dynamic_global_signals_recompute():
     @reg.task
     def build(): ...
 
-    tree = manifest.build_manifest(reg)["tree"]
+    tree = _manifest.build_manifest(reg)["tree"]
     # the value is dynamic → defer to a fresh recompute, carrying the partial,
     # the emission prefix (whole-token shells re-attach `--target=`; bash
     # completes the bare value) and the option's name — no segment path: an

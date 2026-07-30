@@ -6,7 +6,7 @@ import sys
 
 import pytest
 
-from footman import _manifest as manifest
+from footman import _manifest
 from footman._schedule import resolve_keep_going
 from footman._split import _parse_globals, split_chain
 from footman.registry import Group
@@ -15,7 +15,7 @@ from footman.registry import Group
 def _tree(build):
     reg = Group("root")
     build(reg)
-    return reg, manifest.build_manifest(reg)["tree"]
+    return reg, _manifest.build_manifest(reg)["tree"]
 
 
 def _segs(tree, line):
@@ -130,7 +130,7 @@ def test_mixed_chain_gate_surfaces_siblings_while_fail_fast_task_bails():
     def deploy():
         ran.append("deploy")
 
-    tree = manifest.build_manifest(reg)["tree"]
+    tree = _manifest.build_manifest(reg)["tree"]
     segs = split_chain(tree, ["check", "deploy"])[1]
     run_plan(reg, segs, sequential=False)
     assert "unit" in ran  # the keep-going gate surfaced its sibling despite lint
@@ -167,7 +167,7 @@ def test_fail_fast_reaps_only_the_fail_fast_in_flight_tree_in_a_mixed_run(tmp_pa
     def boom():
         raise SystemExit(1)
 
-    tree = manifest.build_manifest(reg)["tree"]
+    tree = _manifest.build_manifest(reg)["tree"]
     segs = split_chain(tree, ["keeper", "victim", "boom"])[1]
     started = time.perf_counter()
     run_plan(reg, segs, sequential=False)
