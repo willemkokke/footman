@@ -7,6 +7,8 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+## [0.27.0] — 2026-07-30
+
 ### Added
 
 - **A task never inherits `PYTHONHOME` or `PYTHONEXECUTABLE`.** On Windows
@@ -160,7 +162,6 @@ versions may include breaking changes.
   become `{**os.environ, **your_dict}`, or the child gets those variables and
   nothing else — no `PATH`. `Context(env={…})` changes the same way.
 
-- **build 1.5.1** adds `--env-dir`, `--report` and `--sdist-extract-dir`. It also rewords 1 description.
 - **The weekly refresh opens its pull request without arming auto-merge.**
   The gate replays every chain and regenerates every stub, which proves
   the store is *consistent* — not that the readings in it are true. A
@@ -3109,7 +3110,8 @@ versions may include breaking changes.
 
 - Placeholder release claiming the `footman` name on PyPI. Not tagged in git.
 
-[Unreleased]: https://github.com/willemkokke/footman/compare/v0.26.0...HEAD
+[Unreleased]: https://github.com/willemkokke/footman/compare/v0.27.0...HEAD
+[0.27.0]: https://github.com/willemkokke/footman/compare/v0.26.0...v0.27.0
 [0.26.0]: https://github.com/willemkokke/footman/compare/v0.25.0...v0.26.0
 [0.25.0]: https://github.com/willemkokke/footman/compare/v0.24.0...v0.25.0
 [0.24.0]: https://github.com/willemkokke/footman/compare/v0.23.0...v0.24.0
