@@ -167,6 +167,12 @@ def _fixture(binary: str, trigger: Trigger) -> Iterator[Path]:
                     "user.email=t@t.t",
                     "-c",
                     "user.name=t",
+                    # The user's global config must not reach this commit: a
+                    # signing setup (gpgsign + an agent that is locked or
+                    # asleep) would fail it, and the probe would then read a
+                    # colourless empty repo as "this tool never colours".
+                    "-c",
+                    "commit.gpgsign=false",
                     "commit",
                     "-qm",
                     "x",
