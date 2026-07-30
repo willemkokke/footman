@@ -19,6 +19,7 @@ import subprocess
 import sys
 import tomllib
 from pathlib import Path
+from typing import Any
 
 # The reference regex from PEP 723, verbatim: a comment block fenced by
 # `# /// script` and `# ///`, every line a comment.
@@ -27,7 +28,7 @@ _BLOCK = re.compile(
 )
 
 
-def read_block(path: Path) -> tuple[dict | None, str | None]:
+def read_block(path: Path) -> tuple[dict[str, Any] | None, str | None]:
     """The file's `script` metadata: `(metadata, warning)`.
 
     `(None, None)` when the file has no block (or cannot be read — a
@@ -73,7 +74,7 @@ def _canonical(name: str) -> str:
     return re.sub(r"[-_.]+", "-", head).lower()
 
 
-def declares(meta: dict, dist: str) -> bool:
+def declares(meta: dict[str, Any], dist: str) -> bool:
     """Whether the block's dependencies name the distribution *dist*.
 
     The portability rule rides on this: a tasks file must declare the

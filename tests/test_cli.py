@@ -7,6 +7,7 @@ import os
 import sys
 import time
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -94,7 +95,7 @@ def test_swr_rapid_tabs_spawn_exactly_once(tree, tmp_path, monkeypatch):
 
 
 def test_spawn_refresh_posix_is_detached(monkeypatch):
-    captured: dict = {}
+    captured: dict[str, Any] = {}
     monkeypatch.setattr(_complete.os, "name", "posix")
     monkeypatch.setattr(
         _complete.subprocess, "Popen", lambda cmd, **kw: captured.update(cmd=cmd, kw=kw)
@@ -105,7 +106,7 @@ def test_spawn_refresh_posix_is_detached(monkeypatch):
 
 
 def test_spawn_refresh_windows_uses_creationflags(monkeypatch):
-    captured: dict = {}
+    captured: dict[str, Any] = {}
     monkeypatch.setattr(_complete.os, "name", "nt")
     monkeypatch.setattr(
         _complete.subprocess, "Popen", lambda cmd, **kw: captured.update(cmd=cmd, kw=kw)

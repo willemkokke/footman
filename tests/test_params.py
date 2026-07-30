@@ -70,7 +70,7 @@ def run(build, line):
 
 
 def test_union_scalar_coercion():
-    seen = {}
+    seen: dict[str, object] = {}
 
     def tasks(reg):
         @reg.task
@@ -78,7 +78,10 @@ def test_union_scalar_coercion():
             seen["x"] = x
 
     run(tasks, "go --x=5")
-    assert seen["x"] == 5 and type(seen["x"]) is int
+    # Read into locals per run: mypy's narrowing of `seen["x"]` would
+    # otherwise survive the second run() and clash with the new value.
+    as_int = seen["x"]
+    assert as_int == 5 and type(as_int) is int
     run(tasks, "go --x=hi")
     assert seen["x"] == "hi"
 
@@ -251,7 +254,10 @@ def test_forward_marker_is_peeled():
 
 def test_forward_alias_expands_to_annotated():
     # `Forward[T]` is exactly `Annotated[T, forward]`, like `Many[T]` is a list.
-    assert Forward[bool] == Annotated[bool, forward]
+    # (Widened: mypy types the two typing-form expressions differently and
+    # would call this runtime equality non-overlapping.)
+    expanded: object = Annotated[bool, forward]
+    assert Forward[bool] == expanded
     # A marker rides alongside the type without disturbing the peel of that type.
     peeled = peel(Forward[list[str]])
     assert peeled.multiple is True and peeled.forward is True
@@ -558,7 +564,8 @@ def test_bare_list_is_a_string_list():
 
     def tasks(reg):
         @reg.task
-        def release(tags: list):
+        # The bare, unparameterized `list` IS what this test pins.
+        def release(tags: list):  # type: ignore[type-arg]
             seen["tags"] = tags
 
     run(tasks, "release abc")
@@ -572,7 +579,8 @@ def test_bare_dict_is_a_required_mapping():
 
     def tasks(reg):
         @reg.task
-        def envs(vars: dict):
+        # The bare, unparameterized `dict` IS what this test pins.
+        def envs(vars: dict):  # type: ignore[type-arg]
             seen["vars"] = vars
 
     run(tasks, "envs --vars=A=1")
@@ -708,7 +716,7 @@ def test_scalar_bool_is_still_a_flag():
 
 
 def test_bool_in_union_coerces_tokens():
-    seen = {}
+    seen: dict[str, object] = {}
 
     def tasks(reg):
         @reg.task
@@ -716,7 +724,9 @@ def test_bool_in_union_coerces_tokens():
             seen["x"] = x
 
     run(tasks, "go --x=true")
-    assert seen["x"] is True
+    # Locals per run, as above: narrowing would outlive the second run().
+    as_bool = seen["x"]
+    assert as_bool is True
     run(tasks, "go --x=nope")
     assert seen["x"] == "nope"
 
@@ -763,7 +773,7 @@ def test_arg_absent_runs_on_the_default():
 def test_arg_is_greedy_and_never_peeks_at_task_names():
     # `files build` gives the token to files — deterministically, even
     # though a task named build exists. The grammar never guesses.
-    seen = {}
+    seen: dict[str, object] = {}
 
     def tasks(reg):
         @reg.task
@@ -780,7 +790,7 @@ def test_arg_is_greedy_and_never_peeks_at_task_names():
 
 
 def test_arg_plus_boundary_says_absent_next_task():
-    seen = {}
+    seen: dict[str, object] = {}
 
     def tasks(reg):
         @reg.task

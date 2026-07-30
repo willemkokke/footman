@@ -731,7 +731,7 @@ def test_keyboard_interrupt_exits_130(tmp_path, monkeypatch, capsys):
 # --- the timing story: recording, the eta line, the off switches --------------
 
 
-def _hi_key(values: dict | None = None) -> str:
+def _hi_key(values: dict[str, object] | None = None) -> str:
     seg = Segment(task="hi", path=["hi"], values=values or {})
     return _progress.chain_key([seg], sequential=False, jobs=_progress.default_jobs())
 

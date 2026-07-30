@@ -200,10 +200,12 @@ def test_child_python_honours_the_belt_and_the_optout(tmp_path, monkeypatch):
 
 
 def test_reexec_child_carries_the_belt(monkeypatch):
-    calls: list[tuple] = []
-    monkeypatch.setattr(
-        _script.os, "execv", lambda f, a: calls.append((f, list(a))) or None
-    )
+    calls: list[tuple[str, list[str]]] = []
+
+    def fake_execv(f, a):
+        calls.append((f, list(a)))
+
+    monkeypatch.setattr(_script.os, "execv", fake_execv)
     monkeypatch.setenv("VIRTUAL_ENV", "/some/other/venv")
     monkeypatch.delenv("FOOTMAN_UV_REEXEC", raising=False)
     _script.reexec_child("/env/bin/python", ["-c", "pass"])

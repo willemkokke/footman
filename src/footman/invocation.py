@@ -50,6 +50,7 @@ class Invocation:
         "total_ms",
     )
 
+    _frozen: bool
     cli: dict[str, Any]
     config: dict[str, Any]
     root: str

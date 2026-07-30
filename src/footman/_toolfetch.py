@@ -28,6 +28,7 @@ import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from footman._drivers import Driver, Plugin, Provision
 
@@ -265,7 +266,8 @@ def _read_index(request: urllib.request.Request, url: str) -> bytes:
     for attempt in range(_INDEX_TRIES):
         try:
             with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
-                return response.read()
+                data: bytes = response.read()
+                return data
         except (urllib.error.URLError, TimeoutError, OSError) as cause:
             if attempt + 1 == _INDEX_TRIES or not _worth_retrying(cause):
                 raise Unreachable(url, cause) from cause
@@ -277,8 +279,10 @@ _INDEX_TRIES = 3
 _INDEX_BACKOFF = 1.0
 
 
-def _index(url: str) -> dict:
-    """A registry's JSON. Raises `Unreachable` when it cannot be read."""
+def _index(url: str) -> Any:
+    """A registry's JSON — shape varies by registry (PyPI a dict, a paged
+    forge API a list), so the honest static type is the JSON it is. Raises
+    `Unreachable` when it cannot be read."""
     from footman._provision import api_headers
 
     request = urllib.request.Request(url, headers=api_headers(url))

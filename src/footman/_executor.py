@@ -23,6 +23,7 @@ import json
 import os
 import threading
 import time
+import types as _types
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path, PurePath
@@ -337,10 +338,14 @@ def _document_shape(peeled: _coerce.Peeled) -> Any:
     peeled form: the dataclass itself, `list[T]` for a list parameter,
     `dict[K, V]` for a mapping. `None` for the text/bytes forms."""
     if peeled.mapping:
-        value_t: Any = list[peeled.element] if peeled.value_multiple else peeled.element
-        return dict[peeled.key, value_t]
+        value_t: Any = (
+            _types.GenericAlias(list, (peeled.element,))
+            if peeled.value_multiple
+            else peeled.element
+        )
+        return _types.GenericAlias(dict, (peeled.key, value_t))
     if peeled.multiple:
-        return list[peeled.element]
+        return _types.GenericAlias(list, (peeled.element,))
     if _binder.is_document_target(peeled.element):
         return peeled.element
     return None
@@ -1183,6 +1188,14 @@ class TaskHandle:
 
     __slots__ = ("_bound", "_ctx", "_fn", "_kwargs", "_raw_args", "_states", "name")
 
+    _fn: Task
+    _ctx: Context
+    _raw_args: tuple[Any, ...] | None
+    _kwargs: dict[str, Any] | None
+    _bound: Mapping[str, Any] | None
+    _states: dict[str, SimpleNamespace]
+    name: str
+
     def __init__(self, fn: Task, seg: Segment, ctx: Context) -> None:
         object.__setattr__(self, "_fn", fn)
         object.__setattr__(self, "_ctx", ctx)
@@ -1211,7 +1224,8 @@ class TaskHandle:
         `pre_bind`, which runs before values exist."""
         bound: Mapping[str, Any] | None = self._bound
         if bound is None:
-            if self._raw_args is None:
+            raw_args, kwargs = self._raw_args, self._kwargs
+            if raw_args is None or kwargs is None:  # set together by _bind
                 raise RuntimeError(
                     "task.args is not readable at pre_bind — nothing is "
                     "bound yet; read the values in pre_task, the post-bind "
@@ -1220,13 +1234,11 @@ class TaskHandle:
             from footman._manifest import call_signature
 
             try:
-                b = call_signature(self._fn).bind_partial(
-                    *self._raw_args, **self._kwargs
-                )
+                b = call_signature(self._fn).bind_partial(*raw_args, **kwargs)
                 b.apply_defaults()
                 mapping = dict(b.arguments)
             except TypeError:  # an unbindable shape: show what was passed
-                mapping = dict(self._kwargs)
+                mapping = dict(kwargs)
             bound = MappingProxyType(mapping)
             object.__setattr__(self, "_bound", bound)
         return bound
@@ -1477,8 +1489,8 @@ def run_bound(
             if handle is None:
                 handle = TaskHandle(fn, seg, ctx)
             handle._bind(args, kwargs)
-            if (hook_error := _enter_task_hooks(life, handle)) is not None:
-                result = _result(seg, 1, None, hook_error, 0.0)
+            if (enter_error := _enter_task_hooks(life, handle)) is not None:
+                result = _result(seg, 1, None, enter_error, 0.0)
                 _exit_task_hooks(life, handle, result)
                 return result
         try:
@@ -1553,6 +1565,7 @@ def run_bound(
     else:
         handle = None
     try:
+        error: BaseException | None
         if hook_error is not None:
             # A raising pre fails the task like a failed prerequisite: the
             # body never runs, and the failure names the plugin.

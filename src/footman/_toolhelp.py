@@ -943,7 +943,9 @@ def run_help(
 # The same choice footman's own detached children make (`_complete`,
 # `_app`), for the sibling reason: console-less, Windows Terminal hands
 # each spawn a visible window.
-NO_CONSOLE_WINDOW = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+NO_CONSOLE_WINDOW: int = (
+    getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
+)
 
 # Man renders bold/underline as `c\x08c` / `_\x08c` overstrike; dropping the
 # char-then-backspace pair leaves clean text, no `col` binary needed.

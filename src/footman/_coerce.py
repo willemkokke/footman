@@ -20,7 +20,7 @@ import types
 import typing
 from dataclasses import dataclass
 from pathlib import Path, PurePath
-from typing import Annotated, Any
+from typing import Annotated, Any, TypedDict
 
 from footman.params import (
     PathRequirement,
@@ -33,6 +33,7 @@ from footman.params import (
     suggest,
 )
 from footman.params import _arg as _ARG
+from footman.params import ask as _ask_marker
 from footman.params import forward as _FORWARD
 from footman.params import nosplit as _NOSPLIT
 from footman.params import stdin as _stdin_marker
@@ -105,10 +106,27 @@ class Peeled:
     env: str | None = None  # environment-variable fallback
     checks: tuple[Any, ...] = ()  # post-coercion validators (check(fn))
     doc: str | None = None  # per-parameter help text (doc("..."))
-    ask: ask | None = None  # prompt-if-missing marker (ask())
+    # `_ask_marker`, not `ask`: the field name shadows the class inside
+    # this scope, so the plain spelling would annotate with the field.
+    ask: _ask_marker | None = None  # prompt-if-missing marker (ask())
     forward: bool = False  # thread this value to dispatched tasks (forward)
     optional: bool = False  # Arg[T]: an optional trailing positional
     stdin: _stdin_marker | None = None  # bind from the boundary's stdin read
+
+
+class _Markers(TypedDict):
+    """The marker bundle `peel` collects and hands to `Peeled` — typed so the
+    `**markers` unpack checks against the dataclass's own field types."""
+
+    path_req: str | None
+    bounds: tuple[float | None, float | None] | None
+    env: str | None
+    checks: tuple[Any, ...]
+    doc: str | None
+    ask: _ask_marker | None
+    forward: bool
+    optional: bool
+    stdin: _stdin_marker | None
 
 
 def peel(ann: Any) -> Peeled:
@@ -187,7 +205,7 @@ def peel(ann: Any) -> Peeled:
             if len(members) == 1:
                 ann, changed = members[0], True
 
-    markers = {
+    markers: _Markers = {
         "path_req": path_req,
         "bounds": bounds,
         "env": env_var,
@@ -314,7 +332,7 @@ def type_phrase(tags: list[str]) -> str:
 
 def element_choices(
     element: Any,
-) -> tuple[list[str] | None, type[enum.Enum] | None, tuple | None]:
+) -> tuple[list[str] | None, type[enum.Enum] | None, tuple[Any, ...] | None]:
     """(choices as strings, Enum class, Literal values) for a choice element."""
     if typing.get_origin(element) is typing.Literal:
         values = typing.get_args(element)
@@ -473,6 +491,9 @@ def coerce_custom(value: str, element: Any) -> Any:
             return element.fromisoformat(value)
         if issubclass(element, _datetime.date):
             return element.fromisoformat(value)
-        return element(value)
+        # A user constructor: its call signature is its own business (the
+        # contract is "accepts a string"), so the call is deliberately dynamic.
+        ctor: Any = element
+        return ctor(value)
     except (ValueError, TypeError) as exc:
         raise ValueError(f"{value!r} is not a valid {element.__name__}") from exc

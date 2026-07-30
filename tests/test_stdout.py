@@ -38,8 +38,10 @@ def invoke(build, line, **kw):
 
 
 def test_both_optional_spellings_read_identically():
-    house, _ = emitted(Stdout[dict | None])
-    outer, _ = emitted(Stdout[dict] | None)
+    # The house spelling is the test; mypy cannot type-apply a runtime
+    # union (`dict | None`) to the Annotated alias in expression position.
+    house, _ = emitted(Stdout[dict[str, object] | None])  # type: ignore[misc]
+    outer, _ = emitted(Stdout[dict[str, object]] | None)
     plain, _ = emitted(Annotated[dict, stdout])
     assert house and outer and plain
     none_at_all, _ = emitted(dict)
@@ -49,7 +51,10 @@ def test_both_optional_spellings_read_identically():
 def test_the_mode_follows_the_inner_type():
     assert emission_mode(emitted(Stdout[str])[1]) == "text"
     assert emission_mode(emitted(Stdout[bytes])[1]) == "bytes"
-    assert emission_mode(emitted(Stdout[dict | None])[1]) == "json"
+    # In assignment position mypy reads this as a type alias, so the
+    # expression-position union limitation from above does not bite here.
+    optional_dict = Stdout[dict[str, object] | None]
+    assert emission_mode(emitted(optional_dict)[1]) == "json"
     assert emission_mode(emitted(Stdout[int])[1]) == "json"
 
 
@@ -59,7 +64,7 @@ def test_the_mode_follows_the_inner_type():
 def test_a_dict_document_lands_on_stdout_compact():
     def tasks(reg):
         @reg.task
-        def status() -> Stdout[dict]:
+        def status() -> Stdout[dict[str, object]]:
             return {"branch": "main", "dirty": False}
 
     result = invoke(tasks, "status")
@@ -113,7 +118,7 @@ def test_a_bare_int_return_stays_the_exit_code():
 def test_none_means_empty_stdout_exit_zero():
     def tasks(reg):
         @reg.task
-        def maybe() -> Stdout[dict | None]:
+        def maybe() -> Stdout[dict[str, object] | None]:
             return None
 
     result = invoke(tasks, "maybe")
@@ -123,7 +128,7 @@ def test_none_means_empty_stdout_exit_zero():
 def test_prints_replay_on_stderr_not_stdout():
     def tasks(reg):
         @reg.task
-        def status() -> Stdout[dict]:
+        def status() -> Stdout[dict[str, bool]]:
             print("working...")
             return {"ok": True}
 
@@ -135,7 +140,7 @@ def test_prints_replay_on_stderr_not_stdout():
 def test_a_failed_task_emits_nothing():
     def tasks(reg):
         @reg.task
-        def broken() -> Stdout[dict]:
+        def broken() -> Stdout[dict[str, object]]:
             raise RuntimeError("boom")
 
     result = invoke(tasks, "broken")
@@ -148,7 +153,7 @@ def test_a_failed_task_emits_nothing():
 def test_only_the_addressed_task_emits():
     def tasks(reg):
         @reg.task
-        def status() -> Stdout[dict]:
+        def status() -> Stdout[dict[str, str]]:
             return {"from": "dep"}
 
         @reg.task(pre=[status])
@@ -166,11 +171,11 @@ def test_only_the_addressed_task_emits():
 def test_two_declaring_tasks_in_a_chain_refuse():
     def tasks(reg):
         @reg.task
-        def a() -> Stdout[dict]:
+        def a() -> Stdout[dict[str, object]]:
             return {}
 
         @reg.task
-        def b() -> Stdout[dict]:
+        def b() -> Stdout[dict[str, object]]:
             return {}
 
     result = invoke(tasks, "a b")
@@ -181,7 +186,7 @@ def test_two_declaring_tasks_in_a_chain_refuse():
 def test_json_wins_and_keeps_the_envelope():
     def tasks(reg):
         @reg.task
-        def status() -> Stdout[dict]:
+        def status() -> Stdout[dict[str, str]]:
             return {"branch": "main"}
 
     result = invoke(tasks, "--json status")
@@ -194,7 +199,7 @@ def test_a_body_call_returns_the_value():
 
     def tasks(reg):
         @reg.task
-        def status() -> Stdout[dict]:
+        def status() -> Stdout[dict[str, str]]:
             return {"branch": "main"}
 
         @reg.task
@@ -213,7 +218,7 @@ def test_interactive_and_stdout_cannot_both_hold():
     reg = Group("root")
 
     @reg.task(interactive=True)
-    def wizard() -> Stdout[dict]:
+    def wizard() -> Stdout[dict[str, object]]:
         return {}
 
     with pytest.raises(manifest.SpecError, match="interactive"):
@@ -224,7 +229,7 @@ def test_the_manifest_marks_an_emitting_task():
     reg = Group("root")
 
     @reg.task
-    def status() -> Stdout[dict]:
+    def status() -> Stdout[dict[str, object]]:
         return {}
 
     tree = manifest.build_manifest(reg)["tree"]

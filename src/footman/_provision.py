@@ -550,8 +550,9 @@ def api_headers(url: str) -> dict[str, str]:
     return headers
 
 
-def _get_json(url: str) -> dict:
-    """A JSON API response — GitHub/GitLab both want a User-Agent."""
+def _get_json(url: str) -> Any:
+    """A JSON API response (shape is the endpoint's business) — GitHub and
+    GitLab both want a User-Agent."""
     request = urllib.request.Request(url, headers=api_headers(url))
     try:
         with urllib.request.urlopen(request, timeout=30) as response:
@@ -676,4 +677,4 @@ def _run(argv: list[str], *, env: dict[str, str]) -> bool:
         done = _fm_run(argv, step=False, timeout=600, nofail=True, env=env)
     except (OSError, subprocess.SubprocessError):
         return False
-    return done.code == 0
+    return bool(done.code == 0)

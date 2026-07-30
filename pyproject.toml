@@ -85,6 +85,13 @@ dev = [
     "pytest-xdist>=3.6",
     "ruff>=0.6",
     "basedpyright>=1.18",
+    # The rest of the four-checker gate (notes/20260730-typing-citizenship.md):
+    # all gating, none advisory — a checker footman uses is a checker the tree
+    # is clean against. The lockfile pins them, so a new release only lands
+    # through a deliberate lock bump, never mid-week.
+    "mypy>=1.14",
+    "ty",
+    "pyrefly",
     # The optional fetch backends, so every one of them is driven against a
     # real server in the suite — footman never imports them itself.
     "httpx>=0.27",
@@ -139,6 +146,10 @@ select = ["E", "F", "I", "UP", "B", "SIM", "C4", "RUF"]
 # Tasks fixtures deliberately shadow builtins (format, list) and take unused
 # params to exercise the signature grammar.
 "tests/**" = ["A", "B", "ARG"]
+# The process-globals router is one deliberate monkeypatch: setattr IS the
+# honest spelling there (a static assignment can't be blessed by any checker
+# on any platform), so B010's "use direct assignment" advice is excused.
+"src/footman/_globals.py" = ["B010"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -162,6 +173,77 @@ testpaths = ["tests"]
 # cores, so there are few workers and little imbalance to exploit, while
 # worksteal's rebalancing is not free. Do not expect this to show up there.
 addopts = "-q -n auto --dist=worksteal"
+
+[tool.mypy]
+# The second gate of the four-checker matrix. footman itself is fully strict;
+# tests and tasks.py run the usage-checking half only (check_untyped_defs, on
+# via strict) — every test body type-checks as consumer code without demanding
+# `-> None` on every def. Full test annotation is an agreed follow-up
+# (notes/20260730-typing-citizenship.md). The tiers are inverted structurally:
+# mypy's per-module patterns cannot address the tests' bare top-level module
+# names (partial wildcards match nothing), but `footman.*` is a real package —
+# so the global config is the tests tier and the override tightens footman.
+# Narrow suppressions live inline as `# type: ignore[code]` with a reason;
+# pyright-only suppressions use `# pyright: ignore` so warn_unused_ignores
+# (also part of strict) keeps this checker's set honest.
+files = ["src", "tests", "tasks.py"]
+mypy_path = ["src"]
+# Deterministic world, whatever host runs the check: unpinned, mypy assumes
+# the host's platform and interpreter. linux is the bare-run default; the
+# typecheck gate adds --platform darwin and --platform win32 runs (mypy has
+# no all-platforms mode), so every platform's typeshed branches are checked
+# from any machine. 3.11 is the floor basedpyright pins too.
+platform = "linux"
+python_version = "3.11"
+strict = true
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+disallow_untyped_calls = false
+disallow_untyped_decorators = false
+# Tests reach through modules to monkeypatch (`_shellcomp.os`), and the rule
+# keys on the accessed module's config — so it is off everywhere for mypy.
+# The public surface's re-export discipline is policed by verifytypes, the
+# __all__/TYPE_CHECKING drift tests, and basedpyright instead.
+implicit_reexport = true
+
+[[tool.mypy.overrides]]
+module = "footman.*"
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+disallow_untyped_calls = true
+disallow_untyped_decorators = true
+
+[[tool.mypy.overrides]]
+# Generated tool stubs carry `# type: ignore[override]` for basedpyright's
+# benefit; mypy doesn't need them and must not demand their removal.
+module = "footman._stubs.*"
+warn_unused_ignores = false
+
+[tool.ty]
+# Third gate. Scope: the library itself — the consumer seam in tests/ is
+# already double-checked (basedpyright + mypy), and ty's fake-object
+# modelling is not yet ready for the suite's doubles. The 13 monkeypatch
+# assignments in _globals.py carry inline suppressions: ty refuses even a
+# signature-identical patch of a module attribute (its module members are
+# effectively Final), which is a modelling wall, not a defect here.
+[tool.ty.src]
+include = ["src"]
+
+[tool.ty.environment]
+# Every platform at once (ty checks the union), 3.11 floor.
+python-platform = "all"
+python-version = "3.11" 
+
+[tool.pyrefly]
+# Fourth gate, same scope as ty. Preset `default`, not `strict`: strict
+# demands @override decorators, and `typing.override` is Python 3.12+ — a
+# zero-dependency 3.11 library cannot spell it without growing a
+# typing_extensions runtime dep. Revisit when 3.11 support ends.
+preset = "default"
+project-includes = ["src"]
+# Every platform at once (pyrefly checks the union), 3.11 floor.
+python-platform = "all"
+python-version = "3.11"
 
 [tool.basedpyright]
 # First-party code only. comparison/ exercises third-party runners (duty,

@@ -24,7 +24,7 @@ import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TextIO
+from typing import Any, TextIO
 
 from footman import _paths
 from footman._split import Segment
@@ -163,7 +163,7 @@ def record(cwd: Path, key: str, seconds: float, cmd_width: int = 0) -> None:
         pass
 
 
-def _load(cwd: Path) -> dict:
+def _load(cwd: Path) -> dict[str, Any]:
     try:
         data = json.loads(_paths.times_path(cwd).read_text(encoding="utf-8"))
     except (OSError, ValueError):

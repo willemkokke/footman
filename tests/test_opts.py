@@ -85,7 +85,7 @@ def test_opts_rejects_unknown_options():
     with pytest.raises(TypeError, match=r"unknown option"):
         # A static error too (TaskOpts closes the set) — suppressed because
         # this test pins the *runtime* rail a dynamic caller still hits.
-        t.opts(fix=True)  # pyright: ignore[reportCallIssue]
+        t.opts(fix=True)  # type: ignore[call-arg]
 
 
 def test_opts_rejects_an_unhashable_value():
@@ -97,7 +97,7 @@ def test_opts_rejects_an_unhashable_value():
     with pytest.raises(TypeError, match=r"hashable"):
         # Statically a wrong type as well — kept for the runtime rail, which
         # guards dedup hashability for callers the checker never sees.
-        t.opts(confirm=["not", "hashable"])  # pyright: ignore[reportArgumentType]
+        t.opts(confirm=["not", "hashable"])  # type: ignore[arg-type]
 
 
 def test_task_opts_matches_opts_attrs():

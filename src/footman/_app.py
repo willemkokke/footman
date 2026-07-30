@@ -16,8 +16,9 @@ import subprocess
 import sys
 import time
 import tomllib
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from pathlib import Path
+from typing import Any
 
 from footman import (
     _coerce,
@@ -137,6 +138,13 @@ def _globals_to_dict(tokens: list[str]) -> dict[str, object]:
     return result
 
 
+def _config_arg(g: dict[str, object]) -> str | None:
+    """The --config global as the string it is (or None) — the globals dict
+    is object-valued, and this is the one place that narrows it."""
+    value = g.get("config")
+    return value if isinstance(value, str) else None
+
+
 def resolve_task_files(
     g: dict[str, object],
     *,
@@ -163,7 +171,7 @@ def resolve_task_files(
     must see exactly what the run will.
     """
     cwd = cwd or Path.cwd()
-    mode = _config.cascade_mode(g.get("config"))  # type: ignore[arg-type]
+    mode = _config.cascade_mode(_config_arg(g))
     if mode == "none":
         ceiling = cwd
     elif mode == "filesystem":
@@ -173,7 +181,7 @@ def resolve_task_files(
     cfg = _config.load_config(
         cwd,
         ceiling,
-        g.get("config"),  # type: ignore[arg-type]
+        _config_arg(g),
         on_warning=on_warning,
         on_note=on_note,
     )
@@ -332,7 +340,7 @@ def _address_band(rows: list[tuple[str, str]]) -> list[tuple[str, int, str]]:
     ]
 
 
-def _print_list(tree: dict) -> None:
+def _print_list(tree: dict[str, Any]) -> None:
     rows = list(_describe.iter_tasks(tree))
     if not rows:
         print("No tasks defined.")
@@ -341,7 +349,7 @@ def _print_list(tree: dict) -> None:
     _print_two_band(_address_band(rows))
 
 
-def _print_tree(node: dict) -> None:
+def _print_tree(node: dict[str, Any]) -> None:
     rows = list(_describe.walk(node))
     if not rows:
         # Mirror _print_list rather than printing zero bytes and exiting 0.
@@ -373,7 +381,7 @@ def _print_tree(node: dict) -> None:
     _print_two_band(band)
 
 
-def _last_of_each_branch(rows: list[tuple]) -> list[bool]:
+def _last_of_each_branch(rows: Sequence[tuple[Any, ...]]) -> list[bool]:
     """Which rows end their own branch — the `└─` corners.
 
     A row is last when no later row sits at its depth before the walk climbs
@@ -389,7 +397,7 @@ def _last_of_each_branch(rows: list[tuple]) -> list[bool]:
     return flags
 
 
-def _print_task_help(tree: dict, path: list[str]) -> None:
+def _print_task_help(tree: dict[str, Any], path: list[str]) -> None:
     # All phrasing (labels, details, examples) lives in `_describe`, shared
     # with the markdown exporter so help text and pages can never drift.
     node = tree
@@ -441,7 +449,7 @@ def _print_task_help(tree: dict, path: list[str]) -> None:
         print(f"  {usage}")
 
 
-def _print_group_help(tree: dict, path: list[str]) -> None:
+def _print_group_help(tree: dict[str, Any], path: list[str]) -> None:
     node = tree
     for name in path:
         node = node["groups"][name]
@@ -481,7 +489,7 @@ def _print_group_help(tree: dict, path: list[str]) -> None:
             print(f"  {_describe.bold(label, on)}{pad}  {detail}".rstrip())
 
 
-def _print_global_help(tree: dict) -> None:
+def _print_global_help(tree: dict[str, Any]) -> None:
     prog = _brand.prog
     parts = [
         ("prog", prog),
@@ -521,7 +529,7 @@ def _wants_help(argv: list[str]) -> bool:
     return False
 
 
-def _resolve_lenient(tree: dict, token: str) -> tuple[str, list[str]] | None:
+def _resolve_lenient(tree: dict[str, Any], token: str) -> tuple[str, list[str]] | None:
     """Walk one dotted address to `("task"|"group", path)`, or None.
 
     The help surface's resolver: never raises — a token that isn't an address
@@ -546,7 +554,7 @@ def _resolve_lenient(tree: dict, token: str) -> tuple[str, list[str]] | None:
 
 
 def _help_targets(
-    tree: dict, argv: list[str]
+    tree: dict[str, Any], argv: list[str]
 ) -> tuple[list[tuple[str, list[str]]], list[str]]:
     """Group/task addresses mentioned on a `--help` line, resolved leniently —
     plus the bare words that resolved to nothing, so the caller can refuse a
@@ -573,7 +581,7 @@ def _help_targets(
     return targets, strays
 
 
-def _print_help(tree: dict, argv: list[str]) -> int:
+def _print_help(tree: dict[str, Any], argv: list[str]) -> int:
     """`--help` alone covers fm itself; with names, the named groups/tasks.
 
     A name that matches nothing is a refusal (exit EX_USAGE) with a suggestion —
@@ -678,7 +686,7 @@ def _plugins_report(reg: registry.Group) -> int:
     return 0
 
 
-def _where(root: registry.Group, tree: dict, dotted: str) -> int:
+def _where(root: registry.Group, tree: dict[str, Any], dotted: str) -> int:
     # Strict, like every address surface: `docs..serve` or a trailing dot is
     # an error, never silently normalised away.
     path = dotted.split(".")
@@ -1265,11 +1273,11 @@ def _uv_handoff(argv: list[str], g: dict[str, object]) -> int | None:
     Windows difference.
     """
     if os.environ.get("FOOTMAN_UV_REEXEC") or os.environ.get("FOOTMAN_NO_UV"):
-        return
+        return None
     try:
         probe = Path(str(g.get("directory") or Path.cwd())).resolve(strict=True)
     except OSError:
-        return  # a missing -C target: _run's own error path reports it
+        return None  # a missing -C target: _run's own error path reports it
     uv = _find_uv()
     root = _pinning_project(probe)
     if root is None:
@@ -1281,9 +1289,9 @@ def _uv_handoff(argv: list[str], g: dict[str, object]) -> int | None:
     # not a warning, not a refusal; visible under -v and nowhere else.
     _note_ignored_block(g, probe)
     if _inside(root / ".venv"):
-        return  # already the project's environment
+        return None  # already the project's environment
     if uv is None:
-        return
+        return None
     try:
         cfg = _config.load_config(
             probe,
@@ -1292,9 +1300,9 @@ def _uv_handoff(argv: list[str], g: dict[str, object]) -> int | None:
             on_warning=lambda _: None,  # the real run repeats any warning
         )
     except _config.ConfigError:
-        return  # the real run reports the broken --config properly
+        return None  # the real run reports the broken --config properly
     if cfg.get("uv") is False:
-        return
+        return None
     if g.get("verbose"):
         print(
             f"{_brand.prog}: handing off to uv run --project {root}",
@@ -1302,6 +1310,7 @@ def _uv_handoff(argv: list[str], g: dict[str, object]) -> int | None:
         )
     os.environ["FOOTMAN_UV_REEXEC"] = "1"
     _reexec([uv, "run", "--project", str(root), _brand.prog, *argv])
+    return None  # unreachable: _reexec replaces or exits this process
 
 
 def _run(
@@ -1485,7 +1494,7 @@ def _execute(
 
 def _run_tree(
     reg: registry.Group,
-    tree: dict,
+    tree: dict[str, Any],
     argv: list[str],
     cfg: dict[str, object],
     collect: list[_executor.TaskResult] | None,

@@ -93,9 +93,19 @@ jobs:
         run: uv run ruff check .
       - name: Ruff (format)
         run: uv run ruff format --check .
-      - name: Type-check
+      - name: Type-check (basedpyright)
         # `--warnings` here too, or the rule holds on a laptop and not in CI.
         run: uv run basedpyright --warnings
+      - name: Type-check (mypy, linux)
+        run: uv run mypy
+      - name: Type-check (mypy, darwin)
+        run: uv run mypy --platform darwin
+      - name: Type-check (mypy, win32)
+        run: uv run mypy --platform win32
+      - name: Type-check (ty)
+        run: uv run ty check
+      - name: Type-check (pyrefly)
+        run: uv run pyrefly check
       - name: Type-completeness
         # 100% or red: every public symbol fully typed (the exit code is the
         # verdict — 0 only at a full score).

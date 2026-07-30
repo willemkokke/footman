@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import os
 import threading
+from collections.abc import Callable
 from contextvars import ContextVar
 from typing import Any
 
@@ -152,14 +153,16 @@ def _install_environ() -> None:
     )
     for name in names:
         _environ_saved[name] = getattr(env_cls, name)
-    orig_get = _environ_saved["__getitem__"]
-    orig_set = _environ_saved["__setitem__"]
-    orig_del = _environ_saved["__delitem__"]
-    orig_iter = _environ_saved["__iter__"]
-    orig_len = _environ_saved["__len__"]
-    orig_contains = _environ_saved["__contains__"]
-    orig_copy = _environ_saved["copy"]
-    orig_setdefault = _environ_saved["setdefault"]
+    # The originals, typed as the unbound methods they are — the wrappers
+    # below both call them and must honour their signatures.
+    orig_get: Callable[[Any, str], str] = _environ_saved["__getitem__"]
+    orig_set: Callable[[Any, str, str], None] = _environ_saved["__setitem__"]
+    orig_del: Callable[[Any, str], None] = _environ_saved["__delitem__"]
+    orig_iter: Callable[[Any], Any] = _environ_saved["__iter__"]
+    orig_len: Callable[[Any], int] = _environ_saved["__len__"]
+    orig_contains: Callable[[Any, object], bool] = _environ_saved["__contains__"]
+    orig_copy: Callable[[Any], Any] = _environ_saved["copy"]
+    orig_setdefault: Callable[[Any, str, str], str] = _environ_saved["setdefault"]
 
     def _virtual(self: Any) -> bool:
         if self is not os.environ or not _installs:
@@ -232,19 +235,26 @@ def _install_environ() -> None:
         if not _virtual(self):
             return orig_setdefault(self, key, value)
         try:
-            return self[key]
+            found: str = self[key]
         except KeyError:
             self[key] = value
             return value
+        return found
 
-    env_cls.__getitem__ = __getitem__
-    env_cls.__setitem__ = __setitem__
-    env_cls.__delitem__ = __delitem__
-    env_cls.__iter__ = __iter__
-    env_cls.__len__ = __len__
-    env_cls.__contains__ = __contains__
-    env_cls.copy = copy
-    env_cls.setdefault = setdefault
+    # Deliberate runtime patching — the router IS a monkeypatch, and no
+    # checker has a way to bless a static spelling of one (ty refuses even
+    # signature-identical patches, and which os.* names exist depends on
+    # the platform being checked). setattr says what is happening — a
+    # dynamic write — and needs no suppression on any checker or platform;
+    # ruff's B010 is excused for this file in pyproject.
+    setattr(env_cls, "__getitem__", __getitem__)
+    setattr(env_cls, "__setitem__", __setitem__)
+    setattr(env_cls, "__delitem__", __delitem__)
+    setattr(env_cls, "__iter__", __iter__)
+    setattr(env_cls, "__len__", __len__)
+    setattr(env_cls, "__contains__", __contains__)
+    setattr(env_cls, "copy", copy)
+    setattr(env_cls, "setdefault", setdefault)
 
 
 def _restore_environ() -> None:
@@ -306,7 +316,7 @@ def _install_popen() -> None:
                 )
         orig(self, args, *pa, **kw)
 
-    subprocess.Popen.__init__ = __init__  # type: ignore[method-assign]
+    setattr(subprocess.Popen, "__init__", __init__)
 
 
 def _restore_popen() -> None:
@@ -314,7 +324,7 @@ def _restore_popen() -> None:
     if _popen_saved is not None:
         import subprocess
 
-        subprocess.Popen.__init__ = _popen_saved  # type: ignore[method-assign]
+        setattr(subprocess.Popen, "__init__", _popen_saved)
         _popen_saved = None
 
 
@@ -338,7 +348,7 @@ def _install_os_guards() -> None:
             f"serial, or build paths from footman.cwd()."
         )
 
-    orig_chdir = _guard_saved["chdir"]
+    orig_chdir: Callable[[Any], None] = _guard_saved["chdir"]
 
     def chdir(path: Any) -> None:
         ctx, guarded = _managed_task()
@@ -355,10 +365,10 @@ def _install_os_guards() -> None:
                 raise _chdir_error(ctx)
         orig_chdir(path)
 
-    os.chdir = chdir  # type: ignore[assignment]
+    setattr(os, "chdir", chdir)
 
     if _guard_saved["fchdir"] is not None:
-        orig_fchdir = _guard_saved["fchdir"]
+        orig_fchdir: Callable[[int], None] = _guard_saved["fchdir"]
 
         def fchdir(fd: Any) -> None:
             ctx, guarded = _managed_task()
@@ -366,9 +376,9 @@ def _install_os_guards() -> None:
                 raise _chdir_error(ctx)
             orig_fchdir(fd)
 
-        os.fchdir = fchdir  # type: ignore[assignment]
+        setattr(os, "fchdir", fchdir)
 
-    orig_getcwd = _guard_saved["getcwd"]
+    orig_getcwd: Callable[[], str] = _guard_saved["getcwd"]
 
     def getcwd() -> str:
         here = orig_getcwd()
@@ -390,7 +400,7 @@ def _install_os_guards() -> None:
             )
         return here
 
-    os.getcwd = getcwd  # type: ignore[assignment]
+    setattr(os, "getcwd", getcwd)
 
     def _env_bypass_error(name: str) -> RuntimeError:
         return RuntimeError(
@@ -408,7 +418,7 @@ def _install_os_guards() -> None:
                 raise _env_bypass_error("putenv")
             orig_putenv(name, value)
 
-        os.putenv = putenv  # type: ignore[assignment]
+        setattr(os, "putenv", putenv)
 
     if _guard_saved["unsetenv"] is not None:
         orig_unsetenv = _guard_saved["unsetenv"]
@@ -419,10 +429,10 @@ def _install_os_guards() -> None:
                 raise _env_bypass_error("unsetenv")
             orig_unsetenv(name)
 
-        os.unsetenv = unsetenv  # type: ignore[assignment]
+        setattr(os, "unsetenv", unsetenv)
 
     if _guard_saved["fork"] is not None:
-        orig_fork = _guard_saved["fork"]
+        orig_fork: Callable[[], int] = _guard_saved["fork"]
 
         def fork() -> int:
             ctx, guarded = _managed_task()
@@ -436,22 +446,22 @@ def _install_os_guards() -> None:
                 )
             return orig_fork()
 
-        os.fork = fork  # type: ignore[assignment]
+        setattr(os, "fork", fork)
 
 
 def _restore_os_guards() -> None:
     if not _guard_saved:
         return
-    os.chdir = _guard_saved["chdir"]
-    os.getcwd = _guard_saved["getcwd"]
+    setattr(os, "chdir", _guard_saved["chdir"])
+    setattr(os, "getcwd", _guard_saved["getcwd"])
     if _guard_saved["fchdir"] is not None:
-        os.fchdir = _guard_saved["fchdir"]
+        setattr(os, "fchdir", _guard_saved["fchdir"])
     if _guard_saved["putenv"] is not None:
-        os.putenv = _guard_saved["putenv"]
+        setattr(os, "putenv", _guard_saved["putenv"])
     if _guard_saved["unsetenv"] is not None:
-        os.unsetenv = _guard_saved["unsetenv"]
+        setattr(os, "unsetenv", _guard_saved["unsetenv"])
     if _guard_saved["fork"] is not None:
-        os.fork = _guard_saved["fork"]
+        setattr(os, "fork", _guard_saved["fork"])
     _guard_saved.clear()
 
 
@@ -467,7 +477,7 @@ def _install_multiprocessing() -> None:
     except Exception:  # a stripped-down build without multiprocessing
         return
     _mp_saved = mp_process.BaseProcess.start
-    orig = _mp_saved
+    orig: Callable[[Any], None] = _mp_saved
 
     def start(self: Any) -> None:
         ctx, guarded = _managed_task()
@@ -482,7 +492,7 @@ def _install_multiprocessing() -> None:
             )
         return orig(self)
 
-    mp_process.BaseProcess.start = start  # type: ignore[method-assign]
+    setattr(mp_process.BaseProcess, "start", start)
 
 
 def _restore_multiprocessing() -> None:
@@ -490,7 +500,7 @@ def _restore_multiprocessing() -> None:
     if _mp_saved is not None:
         from multiprocessing import process as mp_process
 
-        mp_process.BaseProcess.start = _mp_saved  # type: ignore[method-assign]
+        setattr(mp_process.BaseProcess, "start", _mp_saved)
         _mp_saved = None
 
 
@@ -500,7 +510,7 @@ _argv_saved: Any = None
 _argv_ctx: ContextVar[list[str] | None] = ContextVar("footman_argv", default=None)
 
 
-class _ArgvProxy(list):
+class _ArgvProxy(list[str]):
     """The run's `sys.argv` — a real list underneath, with every Python-level
     operation consulting the current call's override first.
 
@@ -552,7 +562,7 @@ class _ArgvProxy(list):
         ov = self._ov()
         return (ov == other) if ov is not None else super().__eq__(other)
 
-    __hash__ = None  # type: ignore[assignment]  # lists are unhashable
+    __hash__ = None  # lists are unhashable
 
     def __add__(self, other: Any) -> Any:
         ov = self._ov()

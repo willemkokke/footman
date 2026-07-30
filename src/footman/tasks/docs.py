@@ -14,6 +14,7 @@ import re
 import shutil
 import subprocess
 import sys
+from collections.abc import Callable
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
@@ -34,7 +35,7 @@ from footman.registry import Group, requires, requires_dep
 tasks: Group = Group("docs", help="Generate markdown docs for this project's tasks")
 
 
-def _project_tree(include_self: bool) -> dict:
+def _project_tree(include_self: bool) -> dict[str, Any]:
     """The invoking project's manifest tree, rebuilt the way `fm` builds it.
 
     Plugin tasks run from the invocation directory (the composing contract),
@@ -54,7 +55,7 @@ def _project_tree(include_self: bool) -> dict:
     reg = _discover.load_tree(files, base=base)
     if not include_self:
         _prune_first_party(reg)
-    tree = _manifest.build_manifest(reg)["tree"]
+    tree: dict[str, Any] = _manifest.build_manifest(reg)["tree"]
     if _config.sort_listing(cfg):  # the pages follow the same one setting
         tree = _describe.sort_tree(tree)
     return tree
@@ -94,7 +95,7 @@ def page(
         str, doc("command name in usage and examples (default: the invoking CLI)")
     ] = "",
     all: Annotated[bool, doc("include footman's own mounted tasks")] = False,
-):
+) -> list[str] | None:
     """Render the task tree (or one group/task) as one markdown page.
 
     Without --out the page is the task's stdout, ready to redirect or pipe
@@ -130,7 +131,7 @@ def site(
         str, doc("command name in usage and examples (default: the invoking CLI)")
     ] = "",
     all: Annotated[bool, doc("include footman's own mounted tasks")] = False,
-):
+) -> list[str]:
     """Render the task tree as linked pages: index.md per group, one file per task.
 
     Made for docs sites — point <out> into your docs tree and add the pages
@@ -176,7 +177,7 @@ def shots(
     title: Annotated[str, doc("window title (default: the command line)")] = "",
     width: Annotated[int, between(40, 200), doc("terminal columns")] = 72,
     cmd: Annotated[str, doc("executable to run (default: the invoking CLI)")] = "",
-):
+) -> list[str]:
     """Run the CLI on a pseudo-terminal and save a framed SVG screenshot.
 
     Runs `<cmd> <argv…>` on a real pty — colours, receipts, taught errors,
@@ -318,7 +319,12 @@ _NEEDS_CURSOR_REPLY = frozenset({"pwsh", "nushell"})
 
 
 def _answer_queries(
-    buf: bytes, new_from: int, cursor_at, reply, *, cursor: bool = True
+    buf: bytes,
+    new_from: int,
+    cursor_at: Callable[[], tuple[int, int]],
+    reply: Callable[[bytes], object],
+    *,
+    cursor: bool = True,
 ) -> None:
     """Answer terminal queries in *buf* that end at or past *new_from* —
     earlier bytes were answered on a previous read (the buffer overlaps so
@@ -350,6 +356,8 @@ def _pty_session(
 ) -> list[tuple[float, bytes]]:
     """Run *argv* on a pty, play the keystroke script, and record
     (elapsed-seconds, bytes) chunks until output has settled."""
+    if sys.platform == "win32":  # pragma: no cover — the @requires gates hold
+        raise RuntimeError("terminal recording needs a POSIX pseudo-terminal")
     import fcntl
     import pty
     import select
@@ -692,7 +700,7 @@ def cast(
         Path | None, doc("directory the shell starts in (default: here)")
     ] = None,
     max_frames: Annotated[int, between(2, 120), doc("frame budget")] = 60,
-):
+) -> list[str]:
     """Record an animated SVG of a real interactive shell session.
 
     Boots the shell from a scratch config with footman completion loaded
@@ -772,7 +780,7 @@ def cast(
 
 
 @tasks.task
-def errors(out: Path | None = None):
+def errors(out: Path | None = None) -> list[str] | None:
     """Render every runtime error and note as a markdown reference page.
 
     The entries are extracted from footman's own source (AST, not prose):
@@ -852,7 +860,7 @@ def globals_(
     prog: Annotated[
         str, doc("command name in the table (default: the invoking CLI)")
     ] = "",
-):
+) -> list[str] | None:
     """Render the runner's global options as a markdown table.
 
     The rows come straight from the CLI grammar — the same table `--help`

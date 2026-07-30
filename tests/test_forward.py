@@ -56,7 +56,7 @@ def test_forward_of_the_default_overrides_the_callee_default():
 
 
 def test_forward_is_partial_untaken_prereqs_run_defaulted():
-    seen = {}
+    seen: dict[str, object] = {}
 
     def tasks(reg):
         @reg.task

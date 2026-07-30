@@ -341,6 +341,15 @@ class RegistrationError(ValueError):
     """
 
 
+def task_name(fn: Any) -> str:
+    """The callable's `__name__`. Every task-shaped object carries one (a
+    function, a `_TaskFn` handle, an `_Opted` proxy), but the plain
+    `Callable` type does not — reading through `Any` keeps the access legal
+    under every checker without a suppression."""
+    name: str = fn.__name__
+    return name
+
+
 def cli_name(name: str) -> str:
     """Normalise a Python identifier to its command-line spelling.
 
@@ -873,7 +882,7 @@ class Group:
         where = self.name if self.name != "root" else "the root group"
         if interactive and fanout:
             raise RegistrationError(
-                f"{where}'s default {fn.__name__!r} is interactive but has "
+                f"{where}'s default {task_name(fn)!r} is interactive but has "
                 f"an empty body, so it fans the group's tasks out in "
                 f"parallel — there is no single body to own the terminal. "
                 f"Give it a real body, or drop interactive."
@@ -1070,7 +1079,7 @@ class Group:
             pass
 
         def register(fn: Callable[_P, _R_co]) -> TaskFn[_P, _R_co]:
-            key = cli_name(name or fn.__name__)
+            key = cli_name(name or task_name(fn))
             key = self._free_ephemeral_key(key)
             self._shadow_pulled(key)
             self._claim(key)

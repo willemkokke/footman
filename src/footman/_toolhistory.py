@@ -67,6 +67,14 @@ which is exactly what this number is for.
 # and that is the honest record: only this OS ever looked.
 
 
+def _option_fields(option: Option, **replaced: Any) -> dict[str, Any]:
+    """An Option's fields as one merged dict — its own values with *replaced*
+    laid over them, annotated so the `Option(**…)` splat type-checks under
+    every checker (an inline heterogeneous dict distributes its value union
+    over each field otherwise)."""
+    return {**option.__dict__, **replaced}
+
+
 def surface_of(spec: ToolSpec) -> dict[str, Any]:
     """A ToolSpec reduced to what a release *is*, losing nothing else."""
     return {
@@ -138,7 +146,7 @@ def new(
     date: str,
     surface: dict[str, Any],
     platforms: list[str] | None = None,
-) -> dict:
+) -> dict[str, Any]:
     """A history of one release. A short history is a valid history — which is
     what lets the store ship before anything has been primed."""
     return {
@@ -205,7 +213,7 @@ def apply(surface: dict[str, Any], step: dict[str, Any]) -> dict[str, Any]:
 
 
 def extend(
-    doc: dict,
+    doc: dict[str, Any],
     *,
     version: str,
     date: str,
@@ -237,7 +245,7 @@ def extend(
 
 
 def promote(
-    doc: dict,
+    doc: dict[str, Any],
     *,
     version: str,
     date: str,
@@ -286,18 +294,20 @@ because `sorted()` is not it: ASCII puts `macOS` after `Windows`.
 """
 
 
-def entry_of(doc: dict, version: str) -> dict[str, Any] | None:
+def entry_of(doc: dict[str, Any], version: str) -> dict[str, Any] | None:
     """The stored record for *version* — the base, or one of the deltas.
 
     The record, not the surface: `at()` replays a surface, while this is the
     entry itself, carrying who observed the release and what they missed.
     """
-    if version == doc["base"]["version"]:
-        return doc["base"]
-    return doc["deltas"].get(version)
+    base: dict[str, Any] = doc["base"]
+    if version == base["version"]:
+        return base
+    deltas: dict[str, dict[str, Any]] = doc["deltas"]
+    return deltas.get(version)
 
 
-def absent_at(doc: dict, version: str) -> dict[str, list[str]]:
+def absent_at(doc: dict[str, Any], version: str) -> dict[str, list[str]]:
     """Who looked at *version* and did not find each option.
 
     A **sidecar** beside the surface, keyed `verb\toption` the way deltas
@@ -313,10 +323,11 @@ def absent_at(doc: dict, version: str) -> dict[str, list[str]]:
     can be revised, rather than written down where it would harden.
     """
     entry = entry_of(doc, version) or {}
-    return entry.get("absent", {})
+    absent: dict[str, list[str]] = entry.get("absent", {})
+    return absent
 
 
-def _set_absent(entry: dict, missing: dict[str, list[str]]) -> None:
+def _set_absent(entry: dict[str, Any], missing: dict[str, list[str]]) -> None:
     """Record the sidecar, or drop it when there is nothing to say."""
     tidy = {key: sorted(set(who)) for key, who in sorted(missing.items()) if who}
     if tidy:
@@ -325,7 +336,9 @@ def _set_absent(entry: dict, missing: dict[str, list[str]]) -> None:
         entry.pop("absent", None)
 
 
-def fold(readings: dict[str, dict[str, Any]]) -> tuple[dict[str, Any], dict]:
+def fold(
+    readings: dict[str, dict[str, Any]],
+) -> tuple[dict[str, Any], dict[str, list[str]]]:
     """One release seen by several platforms → one surface and its sidecar.
 
     *readings* maps platform to that platform's surface for a single
@@ -378,7 +391,7 @@ def fold(readings: dict[str, dict[str, Any]]) -> tuple[dict[str, Any], dict]:
 
 
 def merge(
-    doc: dict,
+    doc: dict[str, Any],
     *,
     version: str,
     surface: dict[str, Any],
@@ -475,7 +488,7 @@ def merge(
     return True
 
 
-def _rewrite(doc: dict, version: str, surface: dict[str, Any]) -> None:
+def _rewrite(doc: dict[str, Any], version: str, surface: dict[str, Any]) -> None:
     """Record a new surface for a release the chain already holds.
 
     The base *is* its surface, so it is written. Anything else is described
@@ -511,13 +524,13 @@ def _rewrite(doc: dict, version: str, surface: dict[str, Any]) -> None:
 
 
 def _preferred(
-    stored: dict | None,
-    incoming: dict,
+    stored: dict[str, Any] | None,
+    incoming: dict[str, Any],
     was: list[str],
     now: list[str],
     missing: dict[str, list[str]],
     key: str,
-) -> dict:
+) -> dict[str, Any]:
     """Whose words to keep for one option, independent of merge order.
 
     The stored text belongs to the highest-priority platform that had the
@@ -537,7 +550,7 @@ def _preferred(
 
 
 def insert(
-    doc: dict,
+    doc: dict[str, Any],
     *,
     version: str,
     date: str,
@@ -617,11 +630,11 @@ def insert(
     return True
 
 
-def at(doc: dict, version: str) -> dict[str, Any] | None:
+def at(doc: dict[str, Any], version: str) -> dict[str, Any] | None:
     """The surface of *version*, replayed from the base. `None` when that
     release was never observed — which a caller must not read as "empty"."""
     base = doc["base"]
-    surface = base["surface"]
+    surface: dict[str, Any] = base["surface"]
     if version == base["version"]:
         return surface
     for older, step in doc["deltas"].items():
@@ -631,7 +644,7 @@ def at(doc: dict, version: str) -> dict[str, Any] | None:
     return None
 
 
-def union(doc: dict, *, name: str, in_process: bool = False) -> ToolSpec:
+def union(doc: dict[str, Any], *, name: str, in_process: bool = False) -> ToolSpec:
     """Every option the tool has *ever* had, each with its interval.
 
     The stub renders this rather than the newest release alone: a removed
@@ -691,22 +704,22 @@ def union(doc: dict, *, name: str, in_process: bool = False) -> ToolSpec:
                 not_on=verdicts.get(f"{verb.name}\t", ()),
                 options=tuple(
                     Option(
-                        **{
-                            **option.__dict__,
-                            "not_on": verdicts.get(f"{verb.name}\t{option.name}", ()),
-                            "since": ""
+                        **_option_fields(
+                            option,
+                            not_on=verdicts.get(f"{verb.name}\t{option.name}", ()),
+                            since=""
                             if first[(verb.name, option.name)] == floor
                             or _only_here(
                                 doc, first[(verb.name, option.name)], verb.name, option
                             )
                             else first[(verb.name, option.name)],
-                            "until": newer.get(last[(verb.name, option.name)], "")
+                            until=newer.get(last[(verb.name, option.name)], "")
                             if last[(verb.name, option.name)] != chain[0]
                             and _corroborated(
                                 doc, last[(verb.name, option.name)], verb.name, option
                             )
                             else "",
-                        }
+                        )
                     )
                     for option in verb.options
                 ),
@@ -717,7 +730,9 @@ def union(doc: dict, *, name: str, in_process: bool = False) -> ToolSpec:
 
 
 def _verdicts(
-    doc: dict, chain: list[str], surfaces: dict
+    doc: dict[str, Any],
+    chain: list[str],
+    surfaces: dict[str, dict[str, Any] | None],
 ) -> dict[str, tuple[str, ...]]:
     """Which platforms currently lack each option — derived, never stored.
 
@@ -753,14 +768,14 @@ def _verdicts(
     }
 
 
-def _holders(doc: dict, version: str, verb: str, option: Option) -> list[str]:
+def _holders(doc: dict[str, Any], version: str, verb: str, option: Option) -> list[str]:
     """The platforms that observed *version* and found this option."""
     entry = entry_of(doc, version) or {}
     missing = entry.get("absent", {}).get(f"{verb}\t{option.name}", ())
     return [p for p in entry.get("platforms", []) if p not in missing]
 
 
-def _only_here(doc: dict, first: str, verb: str, option: Option) -> bool:
+def _only_here(doc: dict[str, Any], first: str, verb: str, option: Option) -> bool:
     """Whether a `since` at *first* would out-run the evidence.
 
     An option first seen where only one platform's floor reaches is not
@@ -782,7 +797,7 @@ def _only_here(doc: dict, first: str, verb: str, option: Option) -> bool:
     return bool(holders)
 
 
-def _corroborated(doc: dict, last: str, verb: str, option: Option) -> bool:
+def _corroborated(doc: dict[str, Any], last: str, verb: str, option: Option) -> bool:
     """Whether "gone since" is a claim the observations support.
 
     A platform that never held the option cannot witness its removal, and a
@@ -804,7 +819,7 @@ def _corroborated(doc: dict, last: str, verb: str, option: Option) -> bool:
     return bool(holders.intersection(witnesses))
 
 
-def changes(doc: dict, *, since: str, until: str = "") -> dict[str, Any]:
+def changes(doc: dict[str, Any], *, since: str, until: str = "") -> dict[str, Any]:
     """What changed between two observed releases, as one step.
 
     The *net* effect, not a concatenation of the steps between: an option a
@@ -823,7 +838,7 @@ def changes(doc: dict, *, since: str, until: str = "") -> dict[str, Any]:
     return delta(newer, older)
 
 
-def spellings(doc: dict, version: str, keys: Iterable[str]) -> dict[str, str]:
+def spellings(doc: dict[str, Any], version: str, keys: Iterable[str]) -> dict[str, str]:
     """How *version* spells each option key on the command line.
 
     A delta records the option's Python-side name, which is what the surface
@@ -842,12 +857,12 @@ def spellings(doc: dict, version: str, keys: Iterable[str]) -> dict[str, str]:
     return found
 
 
-def observed(doc: dict) -> list[str]:
+def observed(doc: dict[str, Any]) -> list[str]:
     """Every release in the chain, newest first."""
     return [doc["base"]["version"], *doc["deltas"]]
 
 
-def load(path: Path) -> dict | None:
+def load(path: Path) -> dict[str, Any] | None:
     """A tool's history, or `None` when it has none yet."""
     try:
         data = json.loads(path.read_text("utf-8"))
@@ -856,7 +871,7 @@ def load(path: Path) -> dict | None:
     return data if isinstance(data, dict) else None
 
 
-def save(doc: dict, path: Path) -> None:
+def save(doc: dict[str, Any], path: Path) -> None:
     """Write *doc* atomically, formatted for a diff a human reads.
 
     The temp name carries the thread id beside the pid: assembly is

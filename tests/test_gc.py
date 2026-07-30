@@ -15,7 +15,7 @@ from footman import _app, _gc, _paths
 
 def _pair(cache: Path, stem: str, cwd: str | None, age_days: float = 0) -> None:
     """A manifest + times pair, optionally aged and optionally cwd-less."""
-    manifest: dict = {"schema": 1, "hash": stem, "tree": {}}
+    manifest: dict[str, object] = {"schema": 1, "hash": stem, "tree": {}}
     if cwd is not None:
         manifest["cwd"] = cwd
     (cache / f"{stem}.json").write_text(json.dumps(manifest), encoding="utf-8")

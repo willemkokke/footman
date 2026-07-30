@@ -29,7 +29,7 @@ def drive(build, line, **cfg):
 def test_reads_see_snapshot_plus_overlay(monkeypatch):
     monkeypatch.setenv("BASE", "base")
     monkeypatch.delenv("EXTRA", raising=False)
-    seen = {}
+    seen: dict[str, object] = {}
 
     def tasks(reg):
         @reg.task
@@ -237,7 +237,7 @@ def test_in_process_callable_reads_the_env_it_was_given(monkeypatch):
     # and no lock. Spread `os.environ` to add rather than replace.
     monkeypatch.setenv("BASE", "base")
     monkeypatch.delenv("EXTRA", raising=False)
-    seen = {}
+    seen: dict[str, object] = {}
 
     def tasks(reg):
         @reg.task
@@ -412,6 +412,8 @@ def test_fork_notes_the_serial_lane(capfd):
     def tasks(reg):
         @reg.task
         def go():
+            if sys.platform == "win32":  # pragma: no cover — skipif holds
+                raise RuntimeError("fork is POSIX-only")
             pid = os.fork()
             if pid == 0:  # the child: touch nothing, leave immediately
                 os._exit(0)

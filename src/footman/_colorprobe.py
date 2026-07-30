@@ -211,7 +211,8 @@ def _capture(argv: list[str], cwd: Path, env_add: dict[str, str]) -> str:
         )
     except (OSError, subprocess.SubprocessError):
         return ""
-    return done.stdout + done.stderr
+    combined: str = done.stdout + done.stderr
+    return combined
 
 
 def probe(key: str, binary: str, spec: ToolSpec) -> Verdict:
@@ -227,7 +228,11 @@ def probe(key: str, binary: str, spec: ToolSpec) -> Verdict:
     pre_off = flag.off if (flag and flag.pre_verb) else ()
     post_off = flag.off if (flag and not flag.pre_verb) else ()
 
-    def coloured(env_add: dict[str, str], pre=(), post=()) -> bool:
+    def coloured(
+        env_add: dict[str, str],
+        pre: tuple[str, ...] = (),
+        post: tuple[str, ...] = (),
+    ) -> bool:
         return bool(
             _SGR.search(_capture(_argv(binary, trigger, pre, post), cwd, env_add))
         )

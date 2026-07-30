@@ -278,10 +278,15 @@ def test_version_spelling_is_declarable():
     """Windows `cmd` has no `--version`; `cmd /c ver` is how it answers. A
     tool that spells it differently says so at construction rather than
     leaving `installed_version()` a special case nobody can reach."""
-    assert tools.cmd._version_argv == ("/c", "ver")
-    assert tools.ruff._version_argv == ("--version",)
+    # object-typed peeks: the stub types every Tool attribute access as the
+    # next Tool in the chain, so the checker cannot see the real tuples.
+    cmd_spelling: object = tools.cmd._version_argv
+    ruff_spelling: object = tools.ruff._version_argv
+    assert cmd_spelling == ("/c", "ver")
+    assert ruff_spelling == ("--version",)
     # It rides a chain, like every other construction fact.
-    assert tools.cmd.anything._version_argv == ("/c", "ver")
+    chained: object = tools.cmd.anything._version_argv
+    assert chained == ("/c", "ver")
 
 
 def test_read_version_handles_the_grammars_tools_really_ship():
@@ -318,7 +323,7 @@ class _FakeEP:
     """A stand-in console_scripts EntryPoint: `.load()` returns the target
     (and records that the import happened)."""
 
-    def __init__(self, target, loaded: list | None = None) -> None:
+    def __init__(self, target, loaded: list[bool] | None = None) -> None:
         self._target = target
         self._loaded = loaded
 
@@ -706,7 +711,7 @@ def test_click_extraction_reads_the_real_negations():
     # An optional tool: importorskip above guards the run, and the
     # type-check job installs the shots group, not every tool footman
     # can drive.
-    import mkdocs.__main__ as entry  # type: ignore[import-not-found]
+    import mkdocs.__main__ as entry
 
     from footman._toolspec import from_click
 
@@ -731,7 +736,7 @@ def test_negation_table_matches_what_the_tools_say():
     # An optional tool: importorskip above guards the run, and the
     # type-check job installs the shots group, not every tool footman
     # can drive.
-    import mkdocs.__main__ as entry  # type: ignore[import-not-found]
+    import mkdocs.__main__ as entry
 
     from footman._toolspec import from_click
     from footman.tools import _NEGATIONS
@@ -858,7 +863,7 @@ def test_opts_is_run_control_policy_not_flags():
     assert _one(lambda: tools.ruff.opts(nofail=True).check("src")) == "ruff check src"
     with pytest.raises(TypeError, match="unknown option"):
         # fix is a tool flag, not policy — a runtime error, and a type error too.
-        tools.ruff.opts(fix=True)  # pyright: ignore[reportCallIssue]
+        tools.ruff.opts(fix=True)  # type: ignore[call-arg]
     # capture is unambiguously footman's here; a tool's own --capture is a flag.
     assert _one(lambda: tools.pytest(capture="no")) == "pytest --capture no"
 

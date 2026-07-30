@@ -15,6 +15,7 @@ import pathlib
 import shutil
 import sys
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 
@@ -176,10 +177,15 @@ def test_reads_spawn_off_the_callers_console():
     interrogating, while console-hosted runtimes keep working — fully
     detached, pwsh dies at start-up and git-bash goes mute. POSIX passes 0,
     which subprocess accepts as "no flags"."""
-    import os
     import subprocess
 
-    want = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+    # `sys.platform` in statement form rather than `os.name`: same truth,
+    # but a platform guard the type checkers understand, so the win32-only
+    # constant is only analysed where it exists.
+    if sys.platform == "win32":
+        want: int = subprocess.CREATE_NO_WINDOW
+    else:
+        want = 0
     assert want == _toolhelp.NO_CONSOLE_WINDOW
     # And run_help actually works with it — the read below spawns that way.
     text = _toolhelp.run_help([sys.executable, "-c", "print('usage: x [--ok]')"])
@@ -832,7 +838,7 @@ def test_colorprobe_render_round_trips():
     text = _colorprobe.render(
         {"git": ("git", _colorprobe.Verdict("flag", "env", flag))}
     )
-    ns: dict = {}
+    ns: dict[str, Any] = {}
     exec(text, ns)  # the generated module must be valid, importable Python
     assert ns["COLOUR"]["git"] == (
         "git",
@@ -1238,14 +1244,13 @@ def test_a_tool_with_plugins_is_read_under_the_home_they_were_fetched_into(
     (tmp_path / "home" / ".docker" / "cli-plugins").mkdir(parents=True)
     monkeypatch.setattr(task_module.shutil, "which", lambda _name: str(binary))
 
-    seen = {}
-    monkeypatch.setattr(
-        task_module._drivers,
-        "extract",
-        lambda driver, home=None: (
-            seen.update(env=os.environ.get("HOME"), given=home) or ToolSpec(name="d")
-        ),
-    )
+    seen: dict[str, object] = {}
+
+    def fake_extract(driver, home=None):
+        seen.update(env=os.environ.get("HOME"), given=home)
+        return ToolSpec(name="d")
+
+    monkeypatch.setattr(task_module._drivers, "extract", fake_extract)
     driver = task_module._drivers.find("docker")
     assert driver is not None
     task_module._extract(driver)
@@ -1283,14 +1288,13 @@ def test_the_walk_reads_the_home_it_made_not_the_one_on_path(monkeypatch, tmp_pa
     mine = tmp_path / "release" / "home"
     (mine / ".docker" / "cli-plugins").mkdir(parents=True)
 
-    seen = {}
-    monkeypatch.setattr(
-        task_module._drivers,
-        "extract",
-        lambda driver, home=None: (
-            seen.update(env=os.environ.get("HOME"), given=home) or ToolSpec(name="d")
-        ),
-    )
+    seen: dict[str, object] = {}
+
+    def fake_extract(driver, home=None):
+        seen.update(env=os.environ.get("HOME"), given=home)
+        return ToolSpec(name="d")
+
+    monkeypatch.setattr(task_module._drivers, "extract", fake_extract)
     driver = task_module._drivers.find("docker")
     assert driver is not None
     task_module._extract(driver, home=mine)
@@ -1327,14 +1331,13 @@ def test_a_tool_with_no_plugin_home_is_read_exactly_as_before(monkeypatch, tmp_p
         task_module.shutil, "which", lambda _name: str(bindir / "docker")
     )
     before = os.environ.get("HOME")
-    seen = {}
-    monkeypatch.setattr(
-        task_module._drivers,
-        "extract",
-        lambda driver, home=None: (
-            seen.update(home=os.environ.get("HOME")) or ToolSpec(name="d")
-        ),
-    )
+    seen: dict[str, object] = {}
+
+    def fake_extract(driver, home=None):
+        seen.update(home=os.environ.get("HOME"))
+        return ToolSpec(name="d")
+
+    monkeypatch.setattr(task_module._drivers, "extract", fake_extract)
     driver = task_module._drivers.find("docker")
     assert driver is not None
     task_module._extract(driver)

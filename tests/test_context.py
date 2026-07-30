@@ -406,7 +406,7 @@ def test_run_callable_matching_cwd_runs(tmp_path):
 def test_run_callable_unmanaged_skips_the_check(tmp_path):
     # cwd='unmanaged' is the "insensitive at my own risk" declaration: the
     # resolved ctx.cwd is ignored for in-process calls, no error, no chdir.
-    seen = {}
+    seen: dict[str, bool] = {}
     with use_context(Context(cwd=tmp_path, cwd_unmanaged=True)):
         run(lambda: seen.setdefault("ran", True) and 0)
     assert seen["ran"] is True
@@ -609,7 +609,7 @@ def test_subprocess_cwd_via_ctx(tmp_path):
 
 
 def test_ctx_injected_and_not_a_cli_param():
-    seen = {}
+    seen: dict[str, object] = {}
 
     def tasks(reg):
         @reg.task

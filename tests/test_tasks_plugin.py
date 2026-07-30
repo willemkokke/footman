@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 
 from footman import _app, _paths
+from footman._executor import TaskResult
 
 
 @pytest.fixture
@@ -71,7 +72,7 @@ def test_page_all_includes_the_documenter(plugin_project, capsys):
 def test_page_scoped_and_written_to_a_file(plugin_project, capsys):
     dest = plugin_project / "build" / "serve.md"
     line = ["docs.page", "--target=docs.serve", f"--out={dest}"]
-    collected: list = []
+    collected: list[TaskResult] = []
     assert _app.run(line, collect=collected) == 0
     text = dest.read_text()
     assert text.startswith("# docs.serve\n")
@@ -86,7 +87,7 @@ def test_page_unknown_target_is_a_task_failure(plugin_project, capsys):
 
 
 def test_site_writes_indexes_and_pages(plugin_project, capsys):
-    collected: list = []
+    collected: list[TaskResult] = []
     assert _app.run(["docs.site", "pages"], collect=collected) == 0
     root = plugin_project / "pages"
     assert (root / "index.md").exists()

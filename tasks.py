@@ -10,10 +10,20 @@ import dataclasses
 import functools
 import re
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Annotated
+from typing import TYPE_CHECKING, Annotated, Any
 
 from footman import RunFailed, doc, fail, group, parallel, plugin, run, stdin, task
-from footman.tools import basedpyright, pytest, ruff, ruff_format, uv, zensical
+from footman.tools import (
+    basedpyright,
+    mypy,
+    pyrefly,
+    pytest,
+    ruff,
+    ruff_format,
+    ty,
+    uv,
+    zensical,
+)
 
 docs = group("docs", help="Documentation site (Zensical)")
 
@@ -44,16 +54,42 @@ def format(check: bool = False):
 
 @task
 def typecheck():
-    """Type-check with basedpyright — warnings included.
+    """Type-check with all four gating checkers, in parallel.
 
-    `--warnings` makes the exit code 1 when anything at all is reported, so
-    a warning fails the gate exactly as an error does. A warning nobody has
-    to act on is a warning everybody stops reading, and the two this started
-    with were real: `__all__` advertised two submodules that no type-checker
-    could resolve, so an editor gave a consumer no completion for them and a
-    strict consumer saw our package complain about itself.
+    basedpyright runs `--warnings` so a warning fails the gate exactly as an
+    error does — a warning nobody has to act on is a warning everybody stops
+    reading. mypy is strict on footman itself and checks every test body as
+    consumer code — once per platform (linux from config, darwin and win32
+    by flag), since mypy has no all-platforms mode; ty and pyrefly check
+    every platform at once (`python-platform = "all"`) at the scopes
+    pyproject pins. All four gate: a checker footman uses is a checker the
+    tree is clean against (notes/20260730-typing-citizenship.md).
     """
-    basedpyright(warnings=True)
+
+    def based():
+        basedpyright(warnings=True)
+
+    # Each run gets its own cache dir: mypy's SQLite cache (2.x default)
+    # does not tolerate three concurrent writers on one file.
+    def mypy_linux():
+        mypy(cache_dir=".mypy_cache/linux")
+
+    def mypy_darwin():
+        mypy(platform="darwin", cache_dir=".mypy_cache/darwin")
+
+    def mypy_win32():
+        mypy(platform="win32", cache_dir=".mypy_cache/win32")
+
+    def run_ty():
+        ty.check()
+
+    def run_pyrefly():
+        pyrefly("check")
+
+    based.__name__ = "basedpyright"
+    run_ty.__name__ = "ty"
+    run_pyrefly.__name__ = "pyrefly"
+    parallel(based, mypy_linux, mypy_darwin, mypy_win32, run_ty, run_pyrefly)
 
 
 @task
@@ -267,7 +303,7 @@ def _write_llms_txt() -> None:
 
     pages: list[tuple[str, str]] = []  # (title, md filename), nav order
 
-    def walk(items: list) -> None:
+    def walk(items: list[dict[str, Any]]) -> None:
         for item in items:
             for title, value in item.items():
                 if isinstance(value, list):

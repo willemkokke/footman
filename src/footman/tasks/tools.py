@@ -29,13 +29,18 @@ import re as _re
 import shutil
 import sys
 import threading
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Annotated, Any, Literal
+from typing import TYPE_CHECKING, Annotated, Any, Literal, cast
 
 from footman import _drivers, _stubgen, _toolhistory, _toolspec
+
+if TYPE_CHECKING:
+    from types import ModuleType
+
+    from footman import _colorprobe, _provision, _toolfetch
 from footman._describe import bold, cyan, wants_color
 from footman.context import current
 from footman.params import doc
@@ -334,7 +339,9 @@ def _generate(driver: _drivers.Driver) -> str:
     return _stub_from(driver, doc, in_process=spec.in_process)
 
 
-def _stub_from(driver: _drivers.Driver, doc: dict, *, in_process: bool = False) -> str:
+def _stub_from(
+    driver: _drivers.Driver, doc: dict[str, Any], *, in_process: bool = False
+) -> str:
     """The stub text for a tool's history.
 
     Rendered from the *union*, not the newest release: a flag the tool has
@@ -362,7 +369,7 @@ def _stub_from(driver: _drivers.Driver, doc: dict, *, in_process: bool = False) 
     )
 
 
-def _observe(driver: _drivers.Driver, spec: _toolspec.ToolSpec) -> dict:
+def _observe(driver: _drivers.Driver, spec: _toolspec.ToolSpec) -> dict[str, Any]:
     """Record this reading in the tool's history, and return the history.
 
     Three cases, and the third is the one the format exists for: a first
@@ -508,7 +515,7 @@ def list_(
         Literal["all", "installed", "missing"],
         doc("which tools to list (default: all, present or not)"),
     ] = "all",
-):
+) -> None:
     """The curated tools: version, in-process capability, stub state.
 
     Every curated tool is listed by default, absent ones included — the
@@ -538,7 +545,7 @@ def list_(
 def spec(
     name: Annotated[str, doc("a curated tool: ruff, uv, mkdocs, …")],
     verb: Annotated[str, doc("one verb, dotted for nesting (compose.up)")] = "",
-):
+) -> None:
     """Print what a tool says about itself, as footman reads it."""
     driver = _drivers.find(name)
     if driver is None:
@@ -625,7 +632,7 @@ def _prefix_root(prefix: str) -> Path | None:
 def sync(
     only: Annotated[str, doc("regenerate just this tool")] = "",
     prefix: Annotated[str, doc("read binaries from this prefix's bin/")] = "",
-):
+) -> None:
     """Rewrite the stubs from the tools installed on this machine.
 
     A stub is a *snapshot*: what one tool accepted at one version, on one
@@ -676,7 +683,7 @@ def audit(
     fix: Annotated[bool, doc("take a fresh snapshot instead of reporting")] = False,
     prefix: Annotated[str, doc("read binaries from this prefix's bin/")] = "",
     strict: Annotated[bool, doc("exit non-zero when a snapshot is behind")] = False,
-):
+) -> dict[str, object]:
     """Report which tools have moved on since their stub snapshot.
 
     A stub records what one tool accepted at the version it was read from.
@@ -776,7 +783,7 @@ def color(
     only: Annotated[str, doc("probe just this tool")] = "",
     write: Annotated[bool, doc("regenerate src/footman/_colordata.py")] = True,
     prefix: Annotated[str, doc("probe binaries from this prefix's bin/")] = "",
-):
+) -> None:
     """Probe how footman forces colour for each installed tool, and regenerate
     the colour data.
 
@@ -841,7 +848,7 @@ _ON_WORD = {"env": "environment", "none": "— *(no colour over a pipe)*", "n/a"
 _OFF_WORD = {"env": "environment", "none": "**can't silence**", "n/a": "—"}
 
 
-def _color_docs_table(results: dict) -> str:
+def _color_docs_table(results: dict[str, tuple[str, _colorprobe.Verdict]]) -> str:
     """A Markdown support table from the probe results — generated into the docs,
     never hand-maintained. `on`/`off` columns read the verdict for each tool;
     the forced switch is shown where a direction needs one."""
@@ -872,7 +879,7 @@ def prime(
     count: Annotated[int, doc("how many releases back to read")] = 20,
     keep: Annotated[bool, doc("leave the throwaway environments behind")] = False,
     prefix: Annotated[str, doc("drive the tiers from this prefix's bin/")] = "",
-):
+) -> None:
     """Read past releases into the option history, deepening each chain.
 
     Reaches below each tool's floor, up to `--count` releases further back.
@@ -906,8 +913,8 @@ def prime(
             listings, unreachable = _list_phase(drivers, _toolfetch)
             skipped += [f"{key} ({why})" for key, why in sorted(unreachable.items())]
 
-            plans: dict[str, list] = {}
-            docs: dict[str, dict] = {}
+            plans: dict[str, list[_toolfetch.Release]] = {}
+            docs: dict[str, dict[str, Any]] = {}
             for driver in drivers:
                 if driver.key not in listings:
                     continue
@@ -1049,7 +1056,9 @@ def gather(
     return found
 
 
-def _work_to_do(only: str, count: int, fetch) -> tuple[list, list[str], dict]:
+def _work_to_do(
+    only: str, count: int, fetch: ModuleType
+) -> tuple[list[tuple[_drivers.Driver, _toolfetch.Release]], list[str], dict[str, str]]:
     """Every (driver, release) this platform still owes a reading of.
 
     The listing phase and the plan, with nothing installed and nothing
@@ -1168,7 +1177,9 @@ def _report_gather(found: Gathered) -> None:
         )
 
 
-def _plan_gather(doc: dict, listing: list, count: int) -> list:
+def _plan_gather(
+    doc: dict[str, Any], listing: list[_toolfetch.Release], count: int
+) -> list[_toolfetch.Release]:
     """Everything this platform still owes an answer on, newest first.
 
     Four kinds. Releases the chain has never seen; releases it has seen but
@@ -1260,12 +1271,14 @@ def _finish(found: Refreshed, changelog: bool) -> Refreshed:
     return found
 
 
-def _read_document(name: str) -> dict:
+def _read_document(name: str) -> dict[str, Any]:
     """One observation document, refused rather than guessed at when wrong."""
     from footman import fail
 
     try:
-        payload = json.loads(Path(name).expanduser().read_text(encoding="utf-8"))
+        payload: dict[str, Any] = json.loads(
+            Path(name).expanduser().read_text(encoding="utf-8")
+        )
     except (OSError, ValueError) as bad:
         fail(f"{name}: not a readable observation document ({bad})", code=64)
     if payload.get("schema") != OBSERVATION_SCHEMA or not payload.get("platform"):
@@ -1273,10 +1286,10 @@ def _read_document(name: str) -> dict:
     return payload
 
 
-def _assemble_documents(documents: list[dict]) -> Refreshed:
+def _assemble_documents(documents: list[dict[str, Any]]) -> Refreshed:
     """The fold-then-insert core, shared by `assemble` and `refresh`."""
-    by_release: dict[str, dict[str, dict[str, dict]]] = {}
-    meta: dict[str, dict[str, dict]] = {}
+    by_release: dict[str, dict[str, dict[str, dict[str, Any]]]] = {}
+    meta: dict[str, dict[str, dict[str, Any]]] = {}
     unreachable: dict[str, str] = {}
     skipped: list[str] = []
     holes: dict[str, list[str]] = {}
@@ -1326,7 +1339,10 @@ def _assemble_documents(documents: list[dict]) -> Refreshed:
 
 
 def _fold_into(
-    doc: dict, tool: str, versions: dict[str, dict[str, dict]], meta: dict[str, dict]
+    doc: dict[str, Any],
+    tool: str,
+    versions: dict[str, dict[str, dict[str, Any]]],
+    meta: dict[str, dict[str, Any]],
 ) -> tuple[list[str], bool]:
     """Fold every platform's reading of each release into one chain.
 
@@ -1435,7 +1451,7 @@ def refresh(
 _CHANGELOG = _HISTORY.parent / "CHANGELOG.md"
 
 
-def _entry_for(key: str, doc: dict, versions: list[str]) -> str:
+def _entry_for(key: str, doc: dict[str, Any], versions: list[str]) -> str:
     """One CHANGELOG bullet for one tool's refresh.
 
     Per tool rather than per release: a reader cares that prek gained
@@ -1501,7 +1517,7 @@ def _entry_for(key: str, doc: dict, versions: list[str]) -> str:
     return f"- **{key} {newest}** {said[0]}{over}.{rest}"
 
 
-def _predecessor(doc: dict, version: str) -> str:
+def _predecessor(doc: dict[str, Any], version: str) -> str:
     """The observed release just older than *version*, or the oldest there is."""
     chain = _toolhistory.observed(doc)  # newest first
     if version in chain and chain.index(version) + 1 < len(chain):
@@ -1621,9 +1637,10 @@ def _bounce_bare_call(task: str) -> None:
         )
 
 
-def _curated(only: str, fetch) -> tuple[list, list[str]]:
+def _curated(only: str, fetch: ModuleType) -> tuple[list[_drivers.Driver], list[str]]:
     """The drivers a walk can work on, and the ones it names as skipped."""
-    chosen, skipped = [], []
+    chosen: list[_drivers.Driver] = []
+    skipped: list[str] = []
     for driver in _drivers.DRIVERS:
         if only and driver.key != only:
             continue
@@ -1659,7 +1676,9 @@ def _curated(only: str, fetch) -> tuple[list, list[str]]:
     return chosen, skipped
 
 
-def _list_phase(drivers: list, fetch) -> tuple[dict[str, list], dict[str, str]]:
+def _list_phase(
+    drivers: list[_drivers.Driver], fetch: ModuleType
+) -> tuple[dict[str, list[_toolfetch.Release]], dict[str, str]]:
     """Every tool's release listing, fetched concurrently.
 
     Network-bound and environment-free, so plain thunks are enough.
@@ -1669,12 +1688,12 @@ def _list_phase(drivers: list, fetch) -> tuple[dict[str, list], dict[str, str]]:
     """
     from footman import parallel
 
-    listings: dict[str, list] = {}
+    listings: dict[str, list[_toolfetch.Release]] = {}
     unreachable: dict[str, str] = {}
     lock = threading.Lock()
 
-    def look(driver):
-        def call():
+    def look(driver: _drivers.Driver) -> Callable[[], None]:
+        def call() -> None:
             try:
                 found = fetch.releases(driver)
             except fetch.Unreachable as blocked:
@@ -1693,7 +1712,9 @@ def _list_phase(drivers: list, fetch) -> tuple[dict[str, list], dict[str, str]]:
     return listings, unreachable
 
 
-def _plan_refresh(doc: dict, listing: list) -> list:
+def _plan_refresh(
+    doc: dict[str, Any], listing: list[_toolfetch.Release]
+) -> list[_toolfetch.Release]:
     """Every listed release the chain does not hold, down to its floor.
 
     Not just the ones above the base: an interior gap — a hole a previous
@@ -1711,7 +1732,9 @@ def _plan_refresh(doc: dict, listing: list) -> list:
     ]
 
 
-def _plan_prime(doc: dict, listing: list, count: int) -> tuple[list, str]:
+def _plan_prime(
+    doc: dict[str, Any], listing: list[_toolfetch.Release], count: int
+) -> tuple[list[_toolfetch.Release], str]:
     """Up to *count* releases below the floor — the backward walk's work.
 
     The floor is positioned in the *listing*, never compared by date: a base
@@ -1844,7 +1867,7 @@ def _refuse_a_broken_environment(scratch: Path) -> None:
         )
 
 
-def _describes_itself(spec) -> bool:
+def _describes_itself(spec: _toolspec.ToolSpec) -> bool:
     """Whether a reading is a description of a tool at all.
 
     "It printed something" is not the test. A tool whose launcher is missing
@@ -1876,7 +1899,9 @@ def _describes_itself(spec) -> bool:
     )
 
 
-def _gather(work: list, scratch: Path) -> dict[str, dict[str, dict | None]]:
+def _gather(
+    work: list[tuple[_drivers.Driver, _toolfetch.Release]], scratch: Path
+) -> dict[str, dict[str, dict[str, Any] | None]]:
     """Observe every (driver, release) in *work*, a bounded wave at a time.
 
     Each observation is a body call into `observe` — the task boundary is
@@ -1890,11 +1915,13 @@ def _gather(work: list, scratch: Path) -> dict[str, dict[str, dict | None]]:
     from footman import parallel
     from footman.context import current
 
-    surfaces: dict[str, dict[str, dict | None]] = {}
+    surfaces: dict[str, dict[str, dict[str, Any] | None]] = {}
     lock = threading.Lock()
 
-    def observing(driver, release):
-        def call():
+    def observing(
+        driver: _drivers.Driver, release: _toolfetch.Release
+    ) -> Callable[[], None]:
+        def call() -> None:
             surface = observe(
                 tool=driver.key,
                 version=release.version,
@@ -1918,7 +1945,10 @@ def _gather(work: list, scratch: Path) -> dict[str, dict[str, dict | None]]:
 
 
 def _assemble(
-    driver, doc: dict, planned: list, surfaces: dict
+    driver: _drivers.Driver,
+    doc: dict[str, Any],
+    planned: list[_toolfetch.Release],
+    surfaces: dict[str, dict[str, dict[str, Any] | None]],
 ) -> tuple[list[str], list[str]]:
     """Insert whatever the gather brought home; say what is missing.
 
@@ -1953,7 +1983,7 @@ def _assemble(
     return fresh, holes
 
 
-def _events_of(doc: dict, fresh: list[str], *, above: str = "") -> list[str]:
+def _events_of(doc: dict[str, Any], fresh: list[str], *, above: str = "") -> list[str]:
     """Which of *fresh* changed the tool's surface — the release decision.
 
     Answered from the assembled chain rather than remembered from arrival
@@ -2134,7 +2164,7 @@ def provision(
     ] = False,
     clean: Annotated[bool, doc("remove the prefix when done")] = False,
     strict: Annotated[bool, doc("fail if any tier could not be provisioned")] = False,
-):
+) -> None:
     """Fetch the latest curated tools into an isolated prefix — no pollution.
 
     The stubs are read from installed binaries, so syncing against the newest
@@ -2188,7 +2218,7 @@ def provision(
 _MARK = {"ok": "ok", "fail": "FAIL", "skip": "—", "deferred": "parked"}
 
 
-def _print_outcomes(outcomes: list) -> None:
+def _print_outcomes(outcomes: list[_provision.Outcome]) -> None:
     """The provisioning result, one aligned line per tool."""
     width = max((len(o.key) for o in outcomes), default=4)
     for out in outcomes:
@@ -2318,7 +2348,10 @@ def _verbs_of(path: Path) -> list[str]:
     def walk(node: dict[str, object], prefix: str) -> None:
         for name, child in node.items():
             if isinstance(child, dict):
-                walk(child, f"{prefix}{name}.")
+                # cast: isinstance narrows to dict[Unknown, Unknown], which
+                # invariant-dict checkers refuse to pass on; the tree is
+                # str-keyed by construction.
+                walk(cast("dict[str, object]", child), f"{prefix}{name}.")
             else:
                 found.append(f"{prefix}{name}")
 
@@ -2332,7 +2365,7 @@ def pages(
     nav: Annotated[
         Path | None, doc("a config whose Tools nav block to rewrite")
     ] = None,
-):
+) -> None:
     """Write one reference page per tool, plus the index table.
 
     Built from the checked-in stubs rather than from the installed tools, so

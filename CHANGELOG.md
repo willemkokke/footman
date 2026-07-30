@@ -49,6 +49,26 @@ versions may include breaking changes.
     taught runtime error. A parity test holds `TaskOpts` to the runtime
     validator's key set.
 
+- **Four type checkers gate now: basedpyright, mypy, ty, and pyrefly.**
+  `fm check`'s typecheck step fans across all four in parallel (CI runs the
+  same four), and the tree is clean under each — none are advisory. mypy
+  runs strict on footman itself and checks every test body as consumer
+  code (`check_untyped_defs`; the full test-annotation pass is a planned
+  follow-up); ty and pyrefly cover the library. Every platform's typeshed
+  is checked from any machine: ty and pyrefly check the platform union
+  (`python-platform = "all"`), and mypy — which has no such mode — runs
+  once per platform (linux, darwin, win32), so POSIX-only branches like
+  the fork guard and the pty recorder carry real platform narrowing
+  instead of breaking the check on Windows. pyrefly runs its `default`
+  preset — its strict tier demands `@override`, which is Python 3.12+
+  typing and out of reach for a zero-dependency 3.11 library. The one
+  place a checker is overruled is the deliberate monkeypatching in the
+  process-globals router, where suppressions state what no checker can
+  bless; everywhere else the code was made clean, not quieted — among the
+  real fixes: a dataclass field annotation that shadowed the `ask` marker
+  class with its own field, `parallel()`'s queue and status-line contracts,
+  and honest narrowing in the binder and scheduler.
+
 ### Fixed
 
 - **`.opts()` takes `None` for the options that mean "unset".** The tools

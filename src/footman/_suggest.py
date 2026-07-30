@@ -18,10 +18,13 @@ import contextlib
 import inspect
 import io
 import sys
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:  # runtime imports stay deferred: the TAB path spawns cheap
+    from pathlib import Path
 
 
-def _maybe_reexec(files: list) -> None:
+def _maybe_reexec(files: list[Path]) -> None:
     """Continue in a script file's own environment, when it already exists.
 
     A completer on a tasks file that carries its own dependencies needs
