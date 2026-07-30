@@ -7,6 +7,41 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Changed
+
+- **The seven undocumented framework modules are private now.** `coerce`,
+  `config`, `discover`, `executor`, `manifest`, `schedule` and `split` were
+  never documented and only ever imported by footman itself, but their plain
+  names read as an invitation. They are `_coerce`, `_config`, `_discover`,
+  `_executor`, `_manifest`, `_schedule` and `_split`; nothing documented
+  moves. `TaskResult` keeps its public spelling, `footman.testing.TaskResult`.
+
+### Added
+
+- **The public API verifies 100% type-complete, and the gate holds it
+  there.** `basedpyright --verifytypes footman --ignoreexternal` scores a
+  full 1.0 (from 0.86), `fm check` grew a `typecomplete` step whose exit
+  code enforces it, and CI runs the same check — a new public symbol
+  without a fully known type is a red gate, not a consumer's surprise.
+  What moved to get there, all visible to a consumer's checker:
+
+  - `.opts()` keeps the task's signature: `build.opts(atomic=True)("web")`
+    type-checks exactly like `build("web")`, chaining included.
+  - The `@requires` gates are identity in types — they no longer erase a
+    decorated function to `Callable[..., Any]` on either side of `@task`.
+  - `parallel(*calls)` returns `list[int]`; the bare block form returns the
+    `Fanout` it always did, now typed (`list[int]` underneath). `track()`
+    is `Iterable[T] -> Iterator[T]`; `select()` is typed over its
+    documented strings-or-pairs contract; `inherited()`, `prompt()`,
+    `active_status()` and `real_stdin()` state their real types.
+  - The marker singletons (`exists`, `nosplit`, `forward`, `stdout`, …)
+    have public, nameable types, and every marker class declares its
+    attributes.
+  - The module-level `task`, `group` and hook registrars carry declared
+    types (`TaskDecorator`, `GroupFactory`, `HookRegistrar` Protocols); an
+    AST test pins `TaskDecorator` to `Group.task` so they cannot drift.
+    Registering a lifecycle hook returns the hook's own type.
+
 ### Fixed
 
 - **`.opts()` takes `None` for the options that mean "unset".** The tools
