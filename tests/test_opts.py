@@ -83,7 +83,9 @@ def test_opts_rejects_unknown_options():
     def t(fix: bool = False): ...
 
     with pytest.raises(TypeError, match=r"unknown option"):
-        t.opts(fix=True)  # a task parameter, not a policy option
+        # A static error too (TaskOpts closes the set) — suppressed because
+        # this test pins the *runtime* rail a dynamic caller still hits.
+        t.opts(fix=True)  # pyright: ignore[reportCallIssue]
 
 
 def test_opts_rejects_an_unhashable_value():
@@ -93,7 +95,19 @@ def test_opts_rejects_an_unhashable_value():
     def t(): ...
 
     with pytest.raises(TypeError, match=r"hashable"):
-        t.opts(confirm=["not", "hashable"])  # values key dedup — must be hashable
+        # Statically a wrong type as well — kept for the runtime rail, which
+        # guards dedup hashability for callers the checker never sees.
+        t.opts(confirm=["not", "hashable"])  # pyright: ignore[reportArgumentType]
+
+
+def test_task_opts_matches_opts_attrs():
+    # TaskOpts (the typed .opts()/set_opts surface) and _OPTS_ATTRS (the
+    # runtime validator) are the same closed set, or completion and the
+    # taught error drift apart.
+    from footman.registry import _OPTS_ATTRS, TaskOpts
+
+    declared = set(TaskOpts.__optional_keys__) | set(TaskOpts.__required_keys__)
+    assert declared == set(_OPTS_ATTRS)
 
 
 def test_opts_chains_later_wins():

@@ -41,6 +41,13 @@ versions may include breaking changes.
     types (`TaskDecorator`, `GroupFactory`, `HookRegistrar` Protocols); an
     AST test pins `TaskDecorator` to `Group.task` so they cannot drift.
     Registering a lifecycle hook returns the hook's own type.
+  - **The option names inside `.opts(...)` complete now.** `.opts()` and
+    `TaskView.set_opts` declare their eleven policy options as a typed
+    `TaskOpts` set (`keep_going`, `atomic`, `cwd`, …), so an editor offers
+    the names with their types and a misspelt or wrongly-typed option is a
+    static error at the call site — while a dynamic caller still gets the
+    taught runtime error. A parity test holds `TaskOpts` to the runtime
+    validator's key set.
 
 ### Fixed
 

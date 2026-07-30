@@ -33,7 +33,17 @@ import os
 import shutil
 from collections.abc import Callable, Iterator, Sequence
 from pathlib import Path
-from typing import Any, Final, ParamSpec, Protocol, TypeVar, cast, overload
+from typing import (
+    Any,
+    Final,
+    ParamSpec,
+    Protocol,
+    TypedDict,
+    TypeVar,
+    Unpack,
+    cast,
+    overload,
+)
 
 Task = Callable[..., Any]
 Hook = Callable[..., object]
@@ -431,6 +441,27 @@ _OPTS_ATTRS = {
 }
 
 
+class TaskOpts(TypedDict, total=False):
+    """The orchestration options `.opts()` and `TaskView.set_opts` accept —
+    the policy of *how* a task runs, as one closed, typed set. Spelled as a
+    TypedDict so option names complete in an editor and a wrong name or type
+    is a static error at the call site; `test_task_opts_matches_opts_attrs`
+    holds these keys to `_OPTS_ATTRS`. `None` clears a tri-state or a
+    declared `cwd`/`rel` policy for that use."""
+
+    keep_going: bool | None
+    atomic: bool
+    interactive: bool
+    progress: bool
+    confirm: str
+    infinite: bool
+    shared: bool | None
+    cwd: str | Path | None
+    rel: str | Path | None
+    serial: bool
+    exclusive: bool
+
+
 def work_key(fn: Task) -> tuple[int, frozenset[tuple[str, Any]]]:
     """The identity of the *work* a reference names: the task and its policy,
     with sharing left out.
@@ -545,10 +576,10 @@ class _Opted:
                 ctx.cwd, ctx.cwd_unmanaged = saved, saved_unmanaged
         return base(*args, **kwargs)
 
-    def opts(self, **overrides: Any) -> _Opted:
+    def opts(self, **overrides: Unpack[TaskOpts]) -> _Opted:
         base = object.__getattribute__(self, "_opted_base")
         merged = dict(object.__getattribute__(self, "_opted_overrides"))
-        merged.update(_opts_overrides(overrides))  # a later .opts() wins
+        merged.update(_opts_overrides(dict(overrides)))  # a later .opts() wins
         return _Opted(base, merged)
 
     def _dedup_key(self) -> tuple[int, frozenset[tuple[str, Any]]]:
@@ -612,11 +643,11 @@ class _TaskFn:
             raise AttributeError(name) from None
         return getattr(fn, name)
 
-    def opts(self, **overrides: Any) -> _Opted:
+    def opts(self, **overrides: Unpack[TaskOpts]) -> _Opted:
         """Per-use option overrides — `lint.opts(keep_going=True)`. The base is
         this handle, so an opted reference and a bare one agree about which
         task they name (the DAG's dedup key reads `id(base)`)."""
-        return _Opted(self, _opts_overrides(overrides))
+        return _Opted(self, _opts_overrides(dict(overrides)))
 
     def __repr__(self) -> str:
         return f"<task {getattr(self, '__name__', '?')}>"
@@ -746,7 +777,7 @@ class TaskFn(Protocol[_P, _R_co]):
     __name__: str
 
     def __call__(self, *args: _P.args, **kwargs: _P.kwargs) -> _R_co: ...
-    def opts(self, **overrides: Any) -> TaskFn[_P, _R_co]:
+    def opts(self, **overrides: Unpack[TaskOpts]) -> TaskFn[_P, _R_co]:
         """Per-use option overrides; the reference stays callable with the
         task's own signature, so an opted call type-checks like a bare one."""
         ...
@@ -1516,14 +1547,14 @@ class Group:
 
         return register(fn) if fn is not None else register
 
-    def opts(self, **overrides: Any) -> TaskFn[..., Any]:
+    def opts(self, **overrides: Unpack[TaskOpts]) -> TaskFn[..., Any]:
         """Per-use option overrides for this group's default action, the same
         `.opts()` a task has — `pre=[lint.opts(keep_going=True)]`. Overrides ride
         the group's default when it runs (bare, as a `pre=`, or called). The
         static type is a task reference with an untracked signature — `Group`
         doesn't carry its default's parameters the way `TaskFn` carries a
         task's."""
-        return cast("TaskFn[..., Any]", _Opted(self, _opts_overrides(overrides)))
+        return cast("TaskFn[..., Any]", _Opted(self, _opts_overrides(dict(overrides))))
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         """Run this group's default action — the imperative mirror of a bare
@@ -1972,15 +2003,15 @@ class TaskView:
         """Mark the task unavailable — listed with *reason*, refused if run."""
         _gate(lambda: reason)(self.fn)
 
-    def set_opts(self, **overrides: Any) -> None:
+    def set_opts(self, **overrides: Unpack[TaskOpts]) -> None:
         """Set orchestration options on the task **permanently, for every use** —
         the discovery-time counterpart to a per-use `.opts()`. Takes the same
-        options (`keep_going`, `atomic`, `interactive`, `progress`, `confirm`,
-        `infinite`) and rejects a task parameter with the same taught error; the
-        difference is that it edits the registered task rather than a per-use
-        proxy, so a hook can set a policy across a whole class of tasks. A
-        command-line `-k`/`--fail-fast` still wins over a set `keep_going`."""
-        for attr, value in _opts_overrides(overrides).items():
+        options (`TaskOpts`, the whole `.opts()` set) and rejects a task
+        parameter with the same taught error; the difference is that it edits
+        the registered task rather than a per-use proxy, so a hook can set a
+        policy across a whole class of tasks. A command-line `-k`/`--fail-fast`
+        still wins over a set `keep_going`."""
+        for attr, value in _opts_overrides(dict(overrides)).items():
             setattr(self.fn, attr, value)
 
 
