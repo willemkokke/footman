@@ -7,8 +7,7 @@ import textwrap
 
 import pytest
 
-from footman import _manifest as manifest
-from footman import compose, registry
+from footman import _manifest, compose, registry
 from footman._executor import EX_USAGE
 from footman.registry import (
     Group,
@@ -26,7 +25,7 @@ from footman.testing import Runner
 def _tree(build):
     reg = Group("root")
     build(reg)
-    return reg, manifest.build_manifest(reg)["tree"]
+    return reg, _manifest.build_manifest(reg)["tree"]
 
 
 def test_requires_false_predicate_is_listed_but_disabled():
@@ -443,7 +442,7 @@ def test_include_carries_a_providers_hook_to_the_merged_tree(tmp_path, monkeypat
     # the provider under capture() as a distinct instance, and `_evict_siblings`
     # drops it from sys.modules — so a re-`import` of it sees a stale copy the
     # grafted hook never touched (the module-aliasing trap).
-    from footman import _discover as discover
+    from footman import _discover
 
     monkeypatch.setattr(compose, "_module_trees", {})
     monkeypatch.syspath_prepend(str(tmp_path))
@@ -477,7 +476,7 @@ def test_include_carries_a_providers_hook_to_the_merged_tree(tmp_path, monkeypat
             """
         )
     )
-    view = registry.Tasks(discover.load_tree([root]))
+    view = registry.Tasks(_discover.load_tree([root]))
     # the provider's hook edited a ROOT task, proving it saw the merged tree.
     assert view["shared-audit"].fn in view["deploy-web"].pre
 
@@ -875,7 +874,7 @@ def test_include_preserves_group_default(default_provider):
     with registry.capture() as captured:
         compose.include("reltasks")
     assert captured.groups["release"].default_task is not None
-    tree = manifest.build_manifest(captured)["tree"]
+    tree = _manifest.build_manifest(captured)["tree"]
     node = tree["groups"]["release"]
     assert "default" in node  # the runnable-group node the splitter/help read
     assert [p["name"] for p in node["default"]["params"]] == ["armed"]

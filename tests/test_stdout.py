@@ -14,7 +14,7 @@ from typing import Annotated
 
 import pytest
 
-from footman import _manifest as manifest
+from footman import _manifest
 from footman._coerce import emission_mode, emitted
 from footman._executor import EX_USAGE
 from footman.params import Stdout, stdin, stdout
@@ -221,8 +221,8 @@ def test_interactive_and_stdout_cannot_both_hold():
     def wizard() -> Stdout[dict[str, object]]:
         return {}
 
-    with pytest.raises(manifest.SpecError, match="interactive"):
-        manifest.build_manifest(reg)
+    with pytest.raises(_manifest.SpecError, match="interactive"):
+        _manifest.build_manifest(reg)
 
 
 def test_the_manifest_marks_an_emitting_task():
@@ -232,5 +232,5 @@ def test_the_manifest_marks_an_emitting_task():
     def status() -> Stdout[dict[str, object]]:
         return {}
 
-    tree = manifest.build_manifest(reg)["tree"]
+    tree = _manifest.build_manifest(reg)["tree"]
     assert tree["tasks"]["status"]["emits"] is True

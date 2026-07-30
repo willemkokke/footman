@@ -7,9 +7,7 @@ from typing import Any
 
 import pytest
 
-from footman import _app, _paths, context, registry
-from footman import _discover as discover
-from footman import _executor as executor
+from footman import _app, _discover, _executor, _paths, context, registry
 from footman._executor import EX_USAGE
 from footman.context import Context, current, use_context
 
@@ -30,7 +28,7 @@ def _task(reg=None, /, **policy) -> Any:
 def _stamped(tmp_path, **policy) -> Any:
     """A task carrying a defining-dir stamp, as the cascade would tag it."""
     fn = _task(**policy)
-    setattr(fn, discover.DEFINING_DIR, str(tmp_path))
+    setattr(fn, _discover.DEFINING_DIR, str(tmp_path))
     return fn
 
 
@@ -39,42 +37,42 @@ def _stamped(tmp_path, **policy) -> Any:
 
 def test_default_policy_is_the_taskfile(tmp_path):
     fn = _stamped(tmp_path)
-    assert executor.resolve_cwd(fn, Context()) == (tmp_path, False)
+    assert _executor.resolve_cwd(fn, Context()) == (tmp_path, False)
 
 
 def test_taskfile_falls_back_to_root_without_a_stamp(tmp_path):
     fn = _task()  # config-mounted plugins carry no defining dir
     ctx = Context(root_dir=str(tmp_path))
-    assert executor.resolve_cwd(fn, ctx) == (tmp_path, False)
+    assert _executor.resolve_cwd(fn, ctx) == (tmp_path, False)
 
 
 def test_nothing_known_stays_none(tmp_path):
     # Bare calls outside discovery: no stamp, no root — same as today.
-    assert executor.resolve_cwd(_task(), Context()) == (None, False)
+    assert _executor.resolve_cwd(_task(), Context()) == (None, False)
 
 
 def test_root_token(tmp_path):
     fn = _stamped(tmp_path / "pkg", cwd="root")
     ctx = Context(root_dir=str(tmp_path))
-    assert executor.resolve_cwd(fn, ctx) == (tmp_path, False)
+    assert _executor.resolve_cwd(fn, ctx) == (tmp_path, False)
 
 
 def test_asinvoked_is_the_pinned_snapshot(tmp_path):
     fn = _stamped(tmp_path / "pkg", cwd="asinvoked")
     ctx = Context(invoked_dir=str(tmp_path / "launch"))
-    assert executor.resolve_cwd(fn, ctx) == (tmp_path / "launch", False)
+    assert _executor.resolve_cwd(fn, ctx) == (tmp_path / "launch", False)
 
 
 def test_unmanaged_pins_live_cwd_and_flags(tmp_path):
     fn = _stamped(tmp_path, cwd="unmanaged")
-    resolved, unmanaged = executor.resolve_cwd(fn, Context())
+    resolved, unmanaged = _executor.resolve_cwd(fn, Context())
     assert resolved == Path.cwd()
     assert unmanaged is True
 
 
 def test_absolute_path_cwd(tmp_path):
     fn = _task(cwd=tmp_path / "elsewhere")
-    assert executor.resolve_cwd(fn, Context()) == (tmp_path / "elsewhere", False)
+    assert _executor.resolve_cwd(fn, Context()) == (tmp_path / "elsewhere", False)
 
 
 # --- the ladder --------------------------------------------------------------
@@ -83,13 +81,13 @@ def test_absolute_path_cwd(tmp_path):
 def test_config_default_names_a_token(tmp_path):
     fn = _stamped(tmp_path / "pkg")
     ctx = Context(cwd_policy="root", root_dir=str(tmp_path))
-    assert executor.resolve_cwd(fn, ctx) == (tmp_path, False)
+    assert _executor.resolve_cwd(fn, ctx) == (tmp_path, False)
 
 
 def test_config_default_can_be_an_absolute_path(tmp_path):
     fn = _stamped(tmp_path / "pkg")
     ctx = Context(cwd_policy=str(tmp_path / "fixed"))
-    assert executor.resolve_cwd(fn, ctx) == (tmp_path / "fixed", False)
+    assert _executor.resolve_cwd(fn, ctx) == (tmp_path / "fixed", False)
 
 
 def test_task_cwd_beats_the_config_default(tmp_path):
@@ -99,13 +97,13 @@ def test_task_cwd_beats_the_config_default(tmp_path):
         root_dir=str(tmp_path),
         invoked_dir=str(tmp_path / "launch"),
     )
-    assert executor.resolve_cwd(fn, ctx) == (tmp_path / "launch", False)
+    assert _executor.resolve_cwd(fn, ctx) == (tmp_path / "launch", False)
 
 
 def test_opts_cwd_beats_the_task_declaration(tmp_path):
     fn = _stamped(tmp_path / "pkg", cwd="asinvoked")
     ctx = Context(root_dir=str(tmp_path), invoked_dir=str(tmp_path / "launch"))
-    assert executor.resolve_cwd(fn.opts(cwd="root"), ctx) == (tmp_path, False)
+    assert _executor.resolve_cwd(fn.opts(cwd="root"), ctx) == (tmp_path, False)
 
 
 def test_opts_cwd_none_clears_the_task_declaration(tmp_path):
@@ -118,7 +116,7 @@ def test_opts_cwd_none_clears_the_task_declaration(tmp_path):
         root_dir=str(tmp_path),
         invoked_dir=str(tmp_path / "launch"),
     )
-    assert executor.resolve_cwd(fn.opts(cwd=None, rel=None), ctx) == (tmp_path, False)
+    assert _executor.resolve_cwd(fn.opts(cwd=None, rel=None), ctx) == (tmp_path, False)
 
 
 # --- rel suffixes ------------------------------------------------------------
@@ -127,19 +125,19 @@ def test_opts_cwd_none_clears_the_task_declaration(tmp_path):
 def test_rel_appends_to_the_base(tmp_path):
     fn = _task(cwd="root", rel="dist")
     ctx = Context(root_dir=str(tmp_path))
-    assert executor.resolve_cwd(fn, ctx) == (tmp_path / "dist", False)
+    assert _executor.resolve_cwd(fn, ctx) == (tmp_path / "dist", False)
 
 
 def test_nearer_rel_replaces_farther(tmp_path):
     fn = _task(cwd="root", rel="dist")
     ctx = Context(root_dir=str(tmp_path))
-    resolved, _ = executor.resolve_cwd(fn.opts(rel="web"), ctx)
+    resolved, _ = _executor.resolve_cwd(fn.opts(rel="web"), ctx)
     assert resolved == tmp_path / "web"  # replaced, never stacked
 
 
 def test_rel_alone_rides_the_policy_base(tmp_path):
     fn = _stamped(tmp_path, rel="dist")
-    assert executor.resolve_cwd(fn, Context()) == (tmp_path / "dist", False)
+    assert _executor.resolve_cwd(fn, Context()) == (tmp_path / "dist", False)
 
 
 # --- taught errors -----------------------------------------------------------
@@ -170,7 +168,7 @@ def test_unmanaged_config_with_task_rel_errors_at_resolve(tmp_path):
     # The cross-rung combination only meets at resolve time.
     fn = _stamped(tmp_path, rel="dist")
     with pytest.raises(ValueError, match="asinvoked"):
-        executor.resolve_cwd(fn, Context(cwd_policy="unmanaged"))
+        _executor.resolve_cwd(fn, Context(cwd_policy="unmanaged"))
 
 
 def test_relative_opts_cwd_is_a_taught_error():
@@ -204,7 +202,7 @@ def test_opts_rel_overrides_a_body_call(tmp_path):
     def probe():
         seen["cwd"] = current().cwd
 
-    setattr(probe, discover.DEFINING_DIR, str(tmp_path))
+    setattr(probe, _discover.DEFINING_DIR, str(tmp_path))
     with use_context(Context()):
         probe.opts(rel="web")()
         assert seen["cwd"] == tmp_path / "web"

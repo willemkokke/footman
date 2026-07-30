@@ -6,8 +6,7 @@ from typing import Annotated, Literal
 
 import pytest
 
-from footman import _manifest as manifest
-from footman import markdown, registry, task
+from footman import _manifest, markdown, registry, task
 from footman.params import doc
 from footman.registry import group
 
@@ -34,7 +33,7 @@ def sample_tree():
         def serve(port: Annotated[int, doc("port to bind")] = 8000):
             "Serve the docs."
 
-    return manifest.build_manifest(root)["tree"]
+    return _manifest.build_manifest(root)["tree"]
 
 
 def test_page_whole_tree(sample_tree):
@@ -111,12 +110,12 @@ def test_render_is_deterministic(sample_tree):
 
 
 def test_globals_table_mirrors_the_grammar():
-    from footman import _split as split
+    from footman import _split
 
     text = markdown.globals_table()
     lines = text.splitlines()
-    assert len(lines) == len(split.GLOBALS) + 2  # header + rule + one row each
-    for (name, alias, _kind, hint, _help), line in zip(split.GLOBALS, lines[2:]):
+    assert len(lines) == len(_split.GLOBALS) + 2  # header + rule + one row each
+    for (name, alias, _kind, hint, _help), line in zip(_split.GLOBALS, lines[2:]):
         assert f"`{name}" in line
         if alias:
             assert f"`{alias}`" in line

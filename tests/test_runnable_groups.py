@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from footman import _manifest as manifest
+from footman import _manifest
 from footman._executor import run_chain
 from footman._split import ChainError, split_chain
 from footman.params import Forward
@@ -22,7 +22,7 @@ from footman.registry import (
 def drive(build, line):
     reg = Group("root")
     build(reg)
-    tree = manifest.build_manifest(reg)["tree"]
+    tree = _manifest.build_manifest(reg)["tree"]
     _, segments = split_chain(tree, line.split())
     run_chain(reg, segments)
     return [s.task for s in segments]
@@ -46,7 +46,7 @@ def _lint(reg):
 def test_bare_group_runs_its_default():
     reg = Group("root")
     seen = _lint(reg)
-    tree = manifest.build_manifest(reg)["tree"]
+    tree = _manifest.build_manifest(reg)["tree"]
     _, segs = split_chain(tree, ["lint"])
     run_chain(reg, segs)
     assert seen == {"default": False}
@@ -56,7 +56,7 @@ def test_bare_group_runs_its_default():
 def test_group_flag_reaches_the_default():
     reg = Group("root")
     seen = _lint(reg)
-    tree = manifest.build_manifest(reg)["tree"]
+    tree = _manifest.build_manifest(reg)["tree"]
     _, segs = split_chain(tree, ["lint", "--fix"])
     run_chain(reg, segs)
     assert seen == {"default": True}
@@ -65,7 +65,7 @@ def test_group_flag_reaches_the_default():
 def test_targeting_a_child_runs_the_child_not_the_default():
     reg = Group("root")
     seen = _lint(reg)
-    tree = manifest.build_manifest(reg)["tree"]
+    tree = _manifest.build_manifest(reg)["tree"]
     _, segs = split_chain(tree, ["lint.markdown", "--fix"])
     run_chain(reg, segs)
     assert seen == {"markdown": True}  # the default never ran
@@ -131,7 +131,7 @@ def _surfaces(reg):
 def test_empty_body_default_fans_out_the_groups_tasks():
     reg = Group("root")
     seen = _surfaces(reg)
-    tree = manifest.build_manifest(reg)["tree"]
+    tree = _manifest.build_manifest(reg)["tree"]
     _, segs = split_chain(tree, ["lint"])
     run_chain(reg, segs)
     assert seen == {"python": False, "markdown": False, "spelling": "ran"}
@@ -140,7 +140,7 @@ def test_empty_body_default_fans_out_the_groups_tasks():
 def test_fan_out_threads_the_flag_only_to_surfaces_that_declare_it():
     reg = Group("root")
     seen = _surfaces(reg)
-    tree = manifest.build_manifest(reg)["tree"]
+    tree = _manifest.build_manifest(reg)["tree"]
     _, segs = split_chain(tree, ["lint", "--fix"])
     run_chain(reg, segs)
     # fix reaches python/markdown; spelling has no such parameter and just runs.
@@ -202,7 +202,7 @@ def test_completion_offers_the_default_flags_alongside_children():
 
     reg = Group("root")
     _surfaces(reg)  # lint with python/markdown/spelling + a fix default
-    tree = manifest.build_manifest(reg)["tree"]
+    tree = _manifest.build_manifest(reg)["tree"]
     # In-word, the stop-or-descend choice: the group itself plus its dotted
     # children (the common prefix stays `lint`, so no shell forces a space).
     offered = {c.split("\t")[0] for c in complete(tree, ["lin"])}
@@ -306,7 +306,7 @@ def test_default_takes_positionals():
     def lint_all(path: str):
         seen["path"] = path
 
-    tree = manifest.build_manifest(reg)["tree"]
+    tree = _manifest.build_manifest(reg)["tree"]
     _, segs = split_chain(tree, ["lint", "src"])
     run_chain(reg, segs)
     assert seen == {"path": "src"}
@@ -328,7 +328,7 @@ def test_positional_matching_a_child_name_wins_and_notes():
     def lint_all(path: str):
         seen["path"] = path
 
-    tree = manifest.build_manifest(reg)["tree"]
+    tree = _manifest.build_manifest(reg)["tree"]
     _, segs = split_chain(tree, ["lint", "markdown"])
     run_chain(reg, segs)
     assert seen == {"path": "markdown"}  # the value, not the subtask
@@ -350,7 +350,7 @@ def test_near_miss_of_a_child_name_notes_the_nearest_subtask():
     @lint.default
     def lint_all(path: str): ...
 
-    tree = manifest.build_manifest(reg)["tree"]
+    tree = _manifest.build_manifest(reg)["tree"]
 
     def notes_for(line):
         _, segs = split_chain(tree, line.split())
@@ -420,7 +420,7 @@ def test_a_task_body_runs_a_group_and_forwards_through_the_runner():
         lint(fix=fix)
         seen["check"] = fix
 
-    tree = manifest.build_manifest(reg)["tree"]
+    tree = _manifest.build_manifest(reg)["tree"]
     _, segs = split_chain(tree, ["check", "--fix"])
     run_chain(reg, segs)
     assert seen == {
@@ -448,7 +448,7 @@ def test_listings_carry_the_default_with_its_docstring():
     def lint_all(fix: Forward[bool] = False):
         """Lint everything."""
 
-    tree = manifest.build_manifest(reg)["tree"]
+    tree = _manifest.build_manifest(reg)["tree"]
     rows = dict(_describe.iter_tasks(tree))
     assert rows["lint"] == "Lint everything."  # the bare-group spelling, described
     assert rows["lint.markdown"] == "Lint Markdown."
@@ -467,7 +467,7 @@ def test_undocumented_empty_body_default_gets_generated_help():
     def lint_all(fix: Forward[bool] = False):
         pass
 
-    tree = manifest.build_manifest(reg)["tree"]
+    tree = _manifest.build_manifest(reg)["tree"]
     rows = dict(_describe.iter_tasks(tree))
     assert rows["lint"] == "run every task in this group"
 
@@ -485,7 +485,7 @@ def test_undocumented_custom_body_default_gets_generated_help():
     def lint_all(fix: bool = False):
         markdown(fix=fix)
 
-    tree = manifest.build_manifest(reg)["tree"]
+    tree = _manifest.build_manifest(reg)["tree"]
     rows = dict(_describe.iter_tasks(tree))
     assert rows["lint"] == "run this group's default action"
 
@@ -572,7 +572,7 @@ def test_the_default_has_a_dotted_address():
     def lint_all(fix: bool = False):
         seen["default"] = fix
 
-    tree = manifest.build_manifest(reg)["tree"]
+    tree = _manifest.build_manifest(reg)["tree"]
     _, segs = split_chain(tree, ["lint.default", "--fix"])
     run_chain(reg, segs)
     assert seen == {"default": True}
@@ -592,7 +592,7 @@ def test_a_task_named_default_is_the_default():
         seen["ran"] = fix
 
     assert lint.default_task is anything
-    tree = manifest.build_manifest(reg)["tree"]
+    tree = _manifest.build_manifest(reg)["tree"]
     _, segs = split_chain(tree, ["lint", "--fix"])
     run_chain(reg, segs)
     assert seen == {"ran": True}
@@ -613,7 +613,7 @@ def test_an_empty_task_named_default_fans_out():
     def lint_all(fix: Forward[bool] = False):
         pass
 
-    tree = manifest.build_manifest(reg)["tree"]
+    tree = _manifest.build_manifest(reg)["tree"]
     _, segs = split_chain(tree, ["lint", "--fix"])
     run_chain(reg, segs)
     assert seen == {"markdown": True}  # fanned out; never ran itself twice
@@ -664,7 +664,7 @@ def test_default_is_listed_and_completes_dotted():
     def lint_all(fix: Forward[bool] = False):
         """Lint everything."""
 
-    tree = manifest.build_manifest(reg)["tree"]
+    tree = _manifest.build_manifest(reg)["tree"]
     rows = dict(_describe.iter_tasks(tree))
     assert rows["lint.default"] == "Lint everything."
     offered = {c.split("\t")[0] for c in complete(tree, ["lint."])}
@@ -689,7 +689,7 @@ def test_the_default_is_listed_first_however_late_it_was_declared():
     @db.default
     def status(): ...  # declared last, on purpose
 
-    tree = manifest.build_manifest(reg)["tree"]
+    tree = _manifest.build_manifest(reg)["tree"]
     names = [address for address, _help in _describe.iter_tasks(tree)]
     assert names == ["db", "db.default", "db.migrate", "db.seed"]
 
@@ -712,6 +712,6 @@ def test_a_group_without_a_default_is_untouched():
     @db.task
     def alpha(): ...
 
-    tree = manifest.build_manifest(reg)["tree"]
+    tree = _manifest.build_manifest(reg)["tree"]
     names = [address for address, _ in _describe.iter_tasks(tree)]
     assert names == ["db.migrate", "db.alpha"]  # declaration order, as before

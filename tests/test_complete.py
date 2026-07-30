@@ -11,8 +11,7 @@ from unittest import mock
 
 import pytest
 
-from footman import _complete, registry, task
-from footman import _manifest as manifest
+from footman import _complete, _manifest, registry, task
 from footman._complete import _tasks_file_from, complete, complete_cli
 from footman.params import Many, doc, nosplit, suggest
 
@@ -200,7 +199,7 @@ def test_doc_marker_becomes_option_description():
         @task
         def lint(fix: Annotated[bool, doc("apply fixes in place")] = False): ...
 
-    built = manifest.build_manifest(root)["tree"]
+    built = _manifest.build_manifest(root)["tree"]
     assert complete(built, ["lint", "--f"]) == ["--fix\tapply fixes in place"]
 
 
@@ -216,7 +215,7 @@ def test_docstring_doc_becomes_option_description():
                 force: skip the freshness check
             """
 
-    built = manifest.build_manifest(root)["tree"]
+    built = _manifest.build_manifest(root)["tree"]
     assert complete(built, ["sync", "--f"]) == ["--force\tskip the freshness check"]
 
 
@@ -364,13 +363,12 @@ def test_globals_not_offered_past_a_group_or_task(tree):
 
 
 def test_completion_globals_mirror_split():
-    # Drift pin: the hot-path arity mirror must match split.GLOBALS exactly, so
+    # Drift pin: the hot-path arity mirror must match _split.GLOBALS exactly, so
     # renaming or re-typing a global fails CI instead of silently misparsing.
-    from footman import _complete, _shellcomp
-    from footman import _split as split
+    from footman import _complete, _shellcomp, _split
 
     names: set[str] = set()
-    for name, alias, _kind, _hint, _help in split.GLOBALS:
+    for name, alias, _kind, _hint, _help in _split.GLOBALS:
         names |= {name} | ({alias} if alias else set())
     assert names == _complete._GLOBALS
     assert _complete._GLOBAL_FILES <= _complete._GLOBALS
@@ -429,7 +427,7 @@ def test_f_completion_reads_the_source_key(tmp_path, monkeypatch, capsys):
     def beta(): ...
 
     # Cache the manifest under the (cwd, file) key, exactly as a `-f` run does.
-    manifest.sync_manifest(
+    _manifest.sync_manifest(
         g,
         Path.cwd(),
         completion_max_age=0,
@@ -457,7 +455,7 @@ def test_f_partial_value_defers_to_file_completion(tmp_path, monkeypatch, capsys
     # `-f=cust` here is a *partial* being typed, not a finished override, so
     # completion must land on the cwd tree and signal files (exit 100) rather
     # than hunt for a "(cwd, 'cust')" manifest that never existed.
-    manifest.sync_manifest(g, Path.cwd(), completion_max_age=0)
+    _manifest.sync_manifest(g, Path.cwd(), completion_max_age=0)
     assert complete_cli(["--", "-f=cust"]) == _EXIT_FILES
     assert capsys.readouterr().out == ""
 
@@ -495,7 +493,7 @@ def test_path_typed_option_value_signals_file_completion():
         def fetch(out: Path = Path(".")):
             "Fetch."
 
-    built = manifest.build_manifest(root)["tree"]
+    built = _manifest.build_manifest(root)["tree"]
     assert complete(built, ["fetch", "--out="]) == [_FILES]
     # a plain str option value has no such signal — it stays empty, so the
     # shell never bluntly offers files where a name was wanted.
@@ -505,7 +503,7 @@ def test_path_typed_option_value_signals_file_completion():
         def greet(name: str = "world"):
             "Greet."
 
-    built2 = manifest.build_manifest(root2)["tree"]
+    built2 = _manifest.build_manifest(root2)["tree"]
     assert complete(built2, ["greet", "--name="]) == []
 
 
@@ -518,7 +516,7 @@ def test_path_positional_signals_file_completion():
         def deploy(target: Path, *extra: Path):
             "Deploy."
 
-    built = manifest.build_manifest(root)["tree"]
+    built = _manifest.build_manifest(root)["tree"]
     assert complete(built, ["deploy", ""]) == [_FILES]  # the Path positional
     assert complete(built, ["deploy", "a", ""]) == [_FILES]  # the Path variadic
     assert complete(built, ["deploy", "-"]) != [_FILES]  # a dash reaches options
@@ -530,7 +528,7 @@ def test_path_positional_signals_file_completion():
         def greet(name: str):
             "Greet."
 
-    built2 = manifest.build_manifest(root2)["tree"]
+    built2 = _manifest.build_manifest(root2)["tree"]
     assert complete(built2, ["greet", ""]) != [_FILES]
 
 
@@ -550,7 +548,7 @@ def test_dynamic_option_signals_recompute():
         def deploy(target: Annotated[str, suggest(_demo_suggest)] = ""):
             "Deploy."
 
-    built = manifest.build_manifest(root)["tree"]
+    built = _manifest.build_manifest(root)["tree"]
     # the value is dynamic → defer to a fresh recompute, carrying the
     # partial, the emission prefix (whole-token shells re-attach `--opt=`;
     # bash completes the bare value), the param name, and the task path
@@ -960,7 +958,7 @@ def _csv_tree():
         def stage(envs: Many[Literal["dev", "prod"]]):
             "Stage."
 
-    return manifest.build_manifest(root)["tree"]
+    return _manifest.build_manifest(root)["tree"]
 
 
 def test_csv_path_option_signals_csv_files():
@@ -1043,7 +1041,7 @@ def test_complete_cli_exits_csv_files_mid_list(tmp_path, capsys):
             "Lint."
 
     m = tmp_path / "m.json"
-    m.write_text(json.dumps(manifest.build_manifest(root)))
+    m.write_text(json.dumps(_manifest.build_manifest(root)))
     rc = complete_cli(["--manifest", str(m), "--", "lint", "--paths=a,"])
     assert rc == _EXIT_FILES_CSV
     assert capsys.readouterr().out == ""

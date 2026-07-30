@@ -33,8 +33,7 @@ RUNS = 25
 
 
 def build_manifest() -> Path:
-    from footman import _manifest as manifest
-    from footman import registry
+    from footman import _manifest, registry
 
     registry.reset()
     spec = importlib.util.spec_from_file_location("sample_tasks", FIXTURE)
@@ -42,7 +41,7 @@ def build_manifest() -> Path:
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     path = Path(tempfile.gettempdir()) / "footman_bench_manifest.json"
-    manifest.write_manifest(manifest.build_manifest(registry.root), path)
+    _manifest.write_manifest(_manifest.build_manifest(registry.root), path)
     return path
 
 

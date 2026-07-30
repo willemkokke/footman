@@ -9,8 +9,7 @@ from typing import Any
 
 import pytest
 
-from footman import _manifest as manifest
-from footman import registry
+from footman import _manifest, registry
 
 FIXTURE = Path(__file__).parent / "fixtures" / "sample_tasks.py"
 PYPROJECT = Path(__file__).resolve().parent.parent / "pyproject.toml"
@@ -93,5 +92,5 @@ def root() -> registry.Group:
 
 @pytest.fixture
 def tree(root: registry.Group) -> dict[str, Any]:
-    built: dict[str, Any] = manifest.build_manifest(root)["tree"]
+    built: dict[str, Any] = _manifest.build_manifest(root)["tree"]
     return built

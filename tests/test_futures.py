@@ -7,8 +7,7 @@ from typing import Annotated, Literal
 
 import pytest
 
-from footman import _executor as executor
-from footman import registry
+from footman import _executor, registry
 from footman._split import ChainError
 from footman.params import ask, between, env, stdin
 from footman.registry import Group, RegistrationError
@@ -556,7 +555,7 @@ def test_something_that_never_began_sits_after_what_prevented_it():
     # directly after the one it blames, so the report reads cause then
     # consequence. (Skipped nodes become results in their own right with the
     # post_tasks hook; the ordering contract is here and pinned now.)
-    from footman import _schedule as schedule
+    from footman import _schedule
     from footman._executor import TaskResult
 
     ran_first = TaskResult(task="build", ok=False, code=1, started=1.0)
@@ -564,7 +563,7 @@ def test_something_that_never_began_sits_after_what_prevented_it():
     skipped = TaskResult(task="publish", ok=False, blocked_by="build")
     denied = TaskResult(task="deploy", ok=False)  # nothing to blame: it leads
 
-    ordered = schedule._chronological([ran_later, skipped, ran_first, denied])
+    ordered = _schedule._chronological([ran_later, skipped, ran_first, denied])
     assert [r.task for r in ordered] == ["deploy", "build", "publish", "notify"]
 
 
@@ -589,7 +588,7 @@ def test_a_memo_hit_is_reported_as_shared():
     result = drive(reg, "publish")
     assert result.ok, result.stderr
     assert len(runs) == 1
-    states = [(r.task, executor.reported_state(r)) for r in result.results]
+    states = [(r.task, _executor.reported_state(r)) for r in result.results]
     # The request has its own moment — the instant it was answered, mid-way
     # through publish's body — so it seats exactly where an executed
     # body-callee would: after the caller that made it.
@@ -614,7 +613,7 @@ def test_a_shared_entry_does_not_change_the_exit_code():
 
     result = drive(reg, "gate")
     assert result.ok and result.exit_code == 0
-    assert [executor.reported_state(r) for r in result.results] == [
+    assert [_executor.reported_state(r) for r in result.results] == [
         "ok",
         "ok",
         "shared",
@@ -626,14 +625,14 @@ def test_reported_state_resolves_one_word_from_the_parts():
     # a new outcome becomes another value here rather than another boolean.
     from footman._executor import TaskResult
 
-    assert executor.reported_state(TaskResult(task="a", ok=True)) == "ok"
-    assert executor.reported_state(TaskResult(task="a", ok=False)) == "failed"
+    assert _executor.reported_state(TaskResult(task="a", ok=True)) == "ok"
+    assert _executor.reported_state(TaskResult(task="a", ok=False)) == "failed"
     assert (
-        executor.reported_state(TaskResult(task="a", ok=False, cancelled=True))
+        _executor.reported_state(TaskResult(task="a", ok=False, cancelled=True))
         == "cancelled"
     )
     assert (
-        executor.reported_state(TaskResult(task="a", ok=True, state="shared"))
+        _executor.reported_state(TaskResult(task="a", ok=True, state="shared"))
         == "shared"
     )
 
@@ -641,12 +640,12 @@ def test_reported_state_resolves_one_word_from_the_parts():
 def test_the_ladder_resolver_is_shared():
     # Sharing is the first user of the down-the-subtree ladder; a later
     # property (a cross-run "never cached") reuses this rather than copying it.
-    from footman import _schedule as schedule
+    from footman import _schedule
 
-    assert schedule.resolve_inherited(True, False) is True  # own wins
-    assert schedule.resolve_inherited(False, True) is False  # even over a parent
-    assert schedule.resolve_inherited(None, True) is True  # else inherited
-    assert schedule.resolve_inherited(None, False) is False  # else shared
+    assert _schedule.resolve_inherited(True, False) is True  # own wins
+    assert _schedule.resolve_inherited(False, True) is False  # even over a parent
+    assert _schedule.resolve_inherited(None, True) is True  # else inherited
+    assert _schedule.resolve_inherited(None, False) is False  # else shared
 
 
 # --- one rule, whichever way the task was reached ------------------------------
@@ -665,7 +664,7 @@ def test_a_repeated_chain_segment_is_one_execution_when_shared():
     result = drive(reg, "check check")
     assert result.ok, result.stderr
     assert len(runs) == 1
-    assert [executor.reported_state(r) for r in result.results] == ["ok", "shared"]
+    assert [_executor.reported_state(r) for r in result.results] == ["ok", "shared"]
 
 
 def test_a_repeated_chain_segment_runs_twice_when_unshared():
@@ -680,7 +679,7 @@ def test_a_repeated_chain_segment_runs_twice_when_unshared():
     result = drive(reg, "notify notify")
     assert result.ok, result.stderr
     assert len(runs) == 2
-    assert [executor.reported_state(r) for r in result.results] == ["ok", "ok"]
+    assert [_executor.reported_state(r) for r in result.results] == ["ok", "ok"]
 
 
 def test_a_node_reuses_what_a_body_call_already_did():
@@ -702,7 +701,7 @@ def test_a_node_reuses_what_a_body_call_already_did():
     result = drive(reg, "early survey")  # …then survey as a segment of its own
     assert result.ok, result.stderr
     assert len(runs) == 1
-    states = [(r.task, executor.reported_state(r)) for r in result.results]
+    states = [(r.task, _executor.reported_state(r)) for r in result.results]
     # `early` and the survey execution race on parallel workers, so only the
     # invariants are asserted: one execution, one share, and the share
     # concluded after the execution it joined — never their order vs `early`.
@@ -782,7 +781,8 @@ def test_two_racing_requests_are_one_execution_whichever_starts_first():
         result = drive(reg, line)
         assert result.ok, result.stderr
         assert len(runs) == 1, f"{line}: ran {len(runs)} times"
-        assert [executor.reported_state(r) for r in result.results].count("shared") == 1
+        states = [_executor.reported_state(r) for r in result.results]
+        assert states.count("shared") == 1
 
 
 # --- a call binds like a segment ---------------------------------------------

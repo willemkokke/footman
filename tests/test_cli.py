@@ -131,35 +131,34 @@ def test_spawn_refresh_swallows_oserror(monkeypatch):
 
 
 def test_refresh_cwd_no_tasks_file_builds_nothing(tmp_path, monkeypatch):
-    from footman import _manifest as manifest
-    from footman import _refresh
+    from footman import _manifest, _refresh
 
     (tmp_path / ".git").mkdir()  # ceiling here, so the cascade can't climb higher
     monkeypatch.chdir(tmp_path)
     built: list[int] = []
-    monkeypatch.setattr(manifest, "sync_manifest", lambda *a, **k: built.append(1))
+    monkeypatch.setattr(_manifest, "sync_manifest", lambda *a, **k: built.append(1))
     _refresh.refresh_cwd()  # no tasks.py in the cascade — nothing built, no crash
     assert built == []
 
 
 def test_completion_max_age_parsing():
-    from footman import _config as config
+    from footman import _config
 
-    assert config.completion_max_age({}) == 600  # default
-    assert config.completion_max_age({"completion": {"max_age": "30s"}}) == 30
-    assert config.completion_max_age({"completion": {"max_age": "5m"}}) == 300
-    assert config.completion_max_age({"completion": {"max_age": "1h"}}) == 3600
-    assert config.completion_max_age({"completion": {"max_age": "2d"}}) == 172800
-    assert config.completion_max_age({"completion": {"max_age": "off"}}) is None
-    assert config.completion_max_age({"completion": {"max_age": "none"}}) is None
-    assert config.completion_max_age({"completion": {"max_age": 0}}) is None
-    assert config.completion_max_age({"completion": {"max_age": -5}}) is None
-    assert config.completion_max_age({"completion": {"max_age": 120}}) == 120
-    assert config.completion_max_age({"completion": {"max_age": True}}) == 600
-    assert config.completion_max_age({"completion": {"max_age": False}}) is None
-    assert config.completion_max_age({"completion": {"max_age": "garbage"}}) == 600
+    assert _config.completion_max_age({}) == 600  # default
+    assert _config.completion_max_age({"completion": {"max_age": "30s"}}) == 30
+    assert _config.completion_max_age({"completion": {"max_age": "5m"}}) == 300
+    assert _config.completion_max_age({"completion": {"max_age": "1h"}}) == 3600
+    assert _config.completion_max_age({"completion": {"max_age": "2d"}}) == 172800
+    assert _config.completion_max_age({"completion": {"max_age": "off"}}) is None
+    assert _config.completion_max_age({"completion": {"max_age": "none"}}) is None
+    assert _config.completion_max_age({"completion": {"max_age": 0}}) is None
+    assert _config.completion_max_age({"completion": {"max_age": -5}}) is None
+    assert _config.completion_max_age({"completion": {"max_age": 120}}) == 120
+    assert _config.completion_max_age({"completion": {"max_age": True}}) == 600
+    assert _config.completion_max_age({"completion": {"max_age": False}}) is None
+    assert _config.completion_max_age({"completion": {"max_age": "garbage"}}) == 600
     assert (
-        config.completion_max_age({"completion": {"max_age": []}}) == 600
+        _config.completion_max_age({"completion": {"max_age": []}}) == 600
     )  # non-scalar
 
 
@@ -202,12 +201,11 @@ def test_refresh_source_rebuilds_the_manifest(tmp_path, monkeypatch):
 
 
 def test_refresh_source_missing_file_builds_nothing(tmp_path, monkeypatch):
-    from footman import _manifest as manifest
-    from footman import _refresh
+    from footman import _manifest, _refresh
 
     monkeypatch.chdir(tmp_path)
     built: list[int] = []
-    monkeypatch.setattr(manifest, "sync_manifest", lambda *a, **k: built.append(1))
+    monkeypatch.setattr(_manifest, "sync_manifest", lambda *a, **k: built.append(1))
     _refresh.refresh_source("nope.py")  # the -f value names no file — nothing built
     assert built == []
 

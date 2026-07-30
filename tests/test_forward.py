@@ -6,7 +6,7 @@ from typing import Annotated
 
 import pytest
 
-from footman import _manifest as manifest
+from footman import _manifest
 from footman._executor import forward_map, run_chain
 from footman._split import ChainError, Segment, split_chain
 from footman.params import Forward, forward
@@ -16,7 +16,7 @@ from footman.registry import Group
 def drive(build, line):
     reg = Group("root")
     build(reg)
-    tree = manifest.build_manifest(reg)["tree"]
+    tree = _manifest.build_manifest(reg)["tree"]
     _, segments = split_chain(tree, line.split())
     run_chain(reg, segments)
 

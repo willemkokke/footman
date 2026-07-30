@@ -16,8 +16,7 @@ from typing import Annotated, Any, Literal
 
 import pytest
 
-from footman import _manifest as manifest
-from footman import context
+from footman import _manifest, context
 from footman._describe import param_detail, usage_fragment
 from footman._executor import EX_USAGE, run_chain
 from footman._split import ChainError, split_chain
@@ -57,7 +56,7 @@ class Stamped:
 def build_tree(build):
     reg = Group("root")
     build(reg)
-    return reg, manifest.build_manifest(reg)["tree"]
+    return reg, _manifest.build_manifest(reg)["tree"]
 
 
 def run(build, line):
@@ -289,7 +288,7 @@ def test_a_local_dataclass_is_a_taught_spec_error():
         @reg.task
         def hook(event: Annotated[Local, stdin] = None): ...  # type: ignore[assignment]
 
-    with pytest.raises(manifest.SpecError, match="module-level"):
+    with pytest.raises(_manifest.SpecError, match="module-level"):
         build_tree(tasks)
 
 

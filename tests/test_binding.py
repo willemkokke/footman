@@ -9,7 +9,7 @@ from typing import Literal
 
 import pytest
 
-from footman import _manifest as manifest
+from footman import _manifest
 from footman._executor import run_chain
 from footman._split import ChainError, split_chain
 from footman.registry import Group
@@ -23,7 +23,7 @@ class Colour(enum.Enum):
 def _run(build_tasks, line):
     reg = Group("root")
     build_tasks(reg)
-    tree = manifest.build_manifest(reg)["tree"]
+    tree = _manifest.build_manifest(reg)["tree"]
     _, segments = split_chain(tree, line.split())
     return reg, run_chain(reg, segments)
 
@@ -163,7 +163,7 @@ def test_keep_going_runs_everything():
     def b():
         ran.append("b")
 
-    tree = manifest.build_manifest(reg)["tree"]
+    tree = _manifest.build_manifest(reg)["tree"]
     _, segments = split_chain(tree, ["a", "b"])
     results = run_chain(reg, segments, keep_going=True)
     assert ran == ["a", "b"]
@@ -270,7 +270,7 @@ def test_union_literal_and_int_manifest_carries_both():
 
     reg = Group("root")
     tasks(reg)
-    spec = manifest.build_manifest(reg)["tree"]["tasks"]["go"]["params"][0]
+    spec = _manifest.build_manifest(reg)["tree"]["tasks"]["go"]["params"][0]
     assert spec["choices"] == ["fast", "slow"]
     assert spec["types"] == ["int"]
 

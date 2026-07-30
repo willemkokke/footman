@@ -9,14 +9,13 @@ from typing import Annotated, Literal, Optional
 
 import pytest
 
-from footman import _manifest as manifest
-from footman import _paths
+from footman import _manifest, _paths
 from footman.params import doc
 
 
 def specs(fn):
-    sig = manifest.resolved_signature(fn)
-    return [manifest.param_spec(p) for p in sig.parameters.values()]
+    sig = _manifest.resolved_signature(fn)
+    return [_manifest.param_spec(p) for p in sig.parameters.values()]
 
 
 def test_flag():
@@ -39,7 +38,9 @@ def node(fn):
 
     with registry.capture() as root:
         registry.task(fn)
-    return manifest.build_manifest(root)["tree"]["tasks"][fn.__name__.replace("_", "-")]
+    return _manifest.build_manifest(root)["tree"]["tasks"][
+        fn.__name__.replace("_", "-")
+    ]
 
 
 def test_docstring_params_fill_doc():
@@ -124,7 +125,7 @@ def test_numpy_and_sphinx_docstrings_reach_the_spec():
 def test_kwargs_is_a_spec_error():
     def f(**opts): ...
 
-    with pytest.raises(manifest.SpecError, match=r"\*\*opts"):
+    with pytest.raises(_manifest.SpecError, match=r"\*\*opts"):
         specs(f)
 
 
@@ -137,7 +138,7 @@ def test_help_option_is_a_reserved_name():
     def with_option(help: str = ""): ...
 
     for fn in (with_flag, with_option):
-        with pytest.raises(manifest.SpecError, match=r"'help' is a reserved"):
+        with pytest.raises(_manifest.SpecError, match=r"'help' is a reserved"):
             node(fn)
 
 
@@ -268,10 +269,10 @@ def test_footman_cache_dir_overrides_every_cache_path(tmp_path, monkeypatch):
 
 
 def test_write_load_roundtrip(root, tmp_path):
-    m = manifest.build_manifest(root)
+    m = _manifest.build_manifest(root)
     path = tmp_path / "manifest.json"
-    manifest.write_manifest(m, path)
-    assert manifest.load_manifest(path) == m
+    _manifest.write_manifest(m, path)
+    assert _manifest.load_manifest(path) == m
 
 
 def test_write_retries_when_a_reader_holds_the_destination(root, tmp_path, monkeypatch):
@@ -280,7 +281,7 @@ def test_write_retries_when_a_reader_holds_the_destination(root, tmp_path, monke
     every few milliseconds while a detached refresh rewrites it. Losing that
     race silently means the rebuild never lands (the child swallows its
     errors), so the write retries instead."""
-    m = manifest.build_manifest(root)
+    m = _manifest.build_manifest(root)
     path = tmp_path / "manifest.json"
     real_replace = os.replace
     denials = [PermissionError(5, "being used by another process")] * 3
@@ -290,34 +291,34 @@ def test_write_retries_when_a_reader_holds_the_destination(root, tmp_path, monke
             raise denials.pop()
         return real_replace(src, dst)
 
-    monkeypatch.setattr(manifest, "_REPLACE_PAUSE", 0)
+    monkeypatch.setattr(_manifest, "_REPLACE_PAUSE", 0)
     monkeypatch.setattr(os, "replace", flaky)
-    manifest.write_manifest(m, path)
-    assert manifest.load_manifest(path) == m
+    _manifest.write_manifest(m, path)
+    assert _manifest.load_manifest(path) == m
     assert not denials  # every denial was actually met with a retry
 
 
 def test_write_gives_up_without_littering_the_cache(root, tmp_path, monkeypatch):
     """A reader that never lets go must not leave `<name>.<pid>.tmp` behind:
     nothing ever reads those, and the cache directory is not a graveyard."""
-    m = manifest.build_manifest(root)
+    m = _manifest.build_manifest(root)
     path = tmp_path / "manifest.json"
 
     def always_denied(src, dst):
         raise PermissionError(5, "being used by another process")
 
-    monkeypatch.setattr(manifest, "_REPLACE_PAUSE", 0)
+    monkeypatch.setattr(_manifest, "_REPLACE_PAUSE", 0)
     monkeypatch.setattr(os, "replace", always_denied)
     with pytest.raises(PermissionError):
-        manifest.write_manifest(m, path)
+        _manifest.write_manifest(m, path)
     assert list(tmp_path.glob("*.tmp")) == []
 
 
 def test_load_missing_or_corrupt_returns_none(tmp_path):
-    assert manifest.load_manifest(tmp_path / "nope.json") is None
+    assert _manifest.load_manifest(tmp_path / "nope.json") is None
     bad = tmp_path / "bad.json"
     bad.write_text("{not json")
-    assert manifest.load_manifest(bad) is None
+    assert _manifest.load_manifest(bad) is None
 
 
 def test_sync_rewrites_only_on_hash_change(root, tmp_path, monkeypatch):
@@ -326,23 +327,23 @@ def test_sync_rewrites_only_on_hash_change(root, tmp_path, monkeypatch):
     project.mkdir()
 
     writes: list[Path] = []
-    real_write = manifest.write_manifest
+    real_write = _manifest.write_manifest
 
     def fake_write_manifest(m, p):
         writes.append(p)
         return real_write(m, p)
 
-    monkeypatch.setattr(manifest, "write_manifest", fake_write_manifest)
+    monkeypatch.setattr(_manifest, "write_manifest", fake_write_manifest)
 
-    manifest.sync_manifest(root, project)
-    manifest.sync_manifest(root, project)  # identical tree -> no rewrite
+    _manifest.sync_manifest(root, project)
+    _manifest.sync_manifest(root, project)  # identical tree -> no rewrite
     assert len(writes) == 1
 
     @root.task
     def brand_new_task():  # changes the hash
         """A new task."""
 
-    manifest.sync_manifest(root, project)
+    _manifest.sync_manifest(root, project)
     assert len(writes) == 2
 
 
@@ -354,14 +355,14 @@ def test_sync_bakes_the_cwd_and_upgrades_manifests_without_it(
     monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path)
     project = tmp_path / "proj"
     project.mkdir()
-    manifest.sync_manifest(root, project)
+    _manifest.sync_manifest(root, project)
     path = _paths.manifest_path(project)
     data = json.loads(path.read_text(encoding="utf-8"))
     assert data["cwd"] == str(project)
 
     del data["cwd"]  # simulate a manifest from before the key existed
     path.write_text(json.dumps(data), encoding="utf-8")
-    manifest.sync_manifest(root, project)  # same tree, but cwd-less: rewrite
+    _manifest.sync_manifest(root, project)  # same tree, but cwd-less: rewrite
     fresh = json.loads(path.read_text(encoding="utf-8"))
     assert fresh["cwd"] == str(project)
 
@@ -379,7 +380,7 @@ def test_infinite_task_carries_the_note_key():
         def plain():
             "Ends."
 
-    tree = manifest.build_manifest(root)["tree"]
+    tree = _manifest.build_manifest(root)["tree"]
     assert tree["tasks"]["serve"]["infinite"] is True
     assert "infinite" not in tree["tasks"]["plain"]  # additive: absent means no
 
@@ -397,7 +398,7 @@ def test_confirm_and_interactive_carry_note_keys():
         def plain():
             "Plain."
 
-    tree = manifest.build_manifest(root)["tree"]
+    tree = _manifest.build_manifest(root)["tree"]
     assert tree["tasks"]["deploy"]["interactive"] is True
     assert tree["tasks"]["deploy"]["confirm"] == "to prod?"
     assert "interactive" not in tree["tasks"]["plain"]
@@ -421,7 +422,7 @@ def test_serial_and_exclusive_carry_the_lane_key():
         def plain():
             "Plain."
 
-    tree = manifest.build_manifest(root)["tree"]
+    tree = _manifest.build_manifest(root)["tree"]
     assert tree["tasks"]["legacy"]["lane"] == "serial"
     assert tree["tasks"]["bench"]["lane"] == "exclusive"
     assert "lane" not in tree["tasks"]["plain"]

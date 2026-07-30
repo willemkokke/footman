@@ -14,8 +14,7 @@ from typing import Annotated
 
 import pytest
 
-from footman import _manifest as manifest
-from footman import context
+from footman import _manifest, context
 from footman._describe import param_detail
 from footman._executor import EX_USAGE, resolve_asks, run_chain
 from footman._split import split_chain
@@ -27,7 +26,7 @@ from footman.testing import Runner
 def build_tree(build):
     reg = Group("root")
     build(reg)
-    return reg, manifest.build_manifest(reg)["tree"]
+    return reg, _manifest.build_manifest(reg)["tree"]
 
 
 def run(build, line):
@@ -396,7 +395,7 @@ def test_lines_on_a_scalar_is_a_spec_error():
         @reg.task
         def wc(text: Annotated[str, stdin(lines=True)] = ""): ...
 
-    with pytest.raises(manifest.SpecError, match="list parameter"):
+    with pytest.raises(_manifest.SpecError, match="list parameter"):
         build_tree(tasks)
 
 
@@ -405,7 +404,7 @@ def test_field_on_a_list_is_a_spec_error():
         @reg.task
         def each(names: Annotated[list[str], stdin("names")] = ()): ...  # type: ignore[assignment]
 
-    with pytest.raises(manifest.SpecError, match="single"):
+    with pytest.raises(_manifest.SpecError, match="single"):
         build_tree(tasks)
 
 
@@ -415,7 +414,7 @@ def test_field_or_lines_on_a_dict_is_a_spec_error():
         @reg.task
         def conf(pairs: Annotated[dict[str, str], stdin("k")] = {}): ...
 
-    with pytest.raises(manifest.SpecError, match="whole"):
+    with pytest.raises(_manifest.SpecError, match="whole"):
         build_tree(tasks)
 
 
