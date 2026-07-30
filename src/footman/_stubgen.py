@@ -23,6 +23,7 @@ from __future__ import annotations
 import re
 import textwrap
 from collections.abc import Iterable
+from typing import cast
 
 from footman._toolspec import Option, ToolSpec, Verb
 
@@ -93,8 +94,11 @@ def _tree(verbs: Iterable[Verb]) -> dict[str, object]:
         node = tree
         parts = verb.name.split(".") if verb.name else []
         for part in parts[:-1]:
-            child = node.setdefault(part, {})
-            node = child if isinstance(child, dict) else {}
+            child: object = node.setdefault(part, {})
+            # The cast is what the guard proved: a nested node is a node, and
+            # `dict` is invariant in its value type, so a bare narrowing leaves
+            # the branch typed `dict[Unknown, Unknown]`.
+            node = cast("dict[str, object]", child) if isinstance(child, dict) else {}
         node[parts[-1] if parts else ""] = verb
     return tree
 
@@ -115,7 +119,8 @@ def _classes(tree: dict[str, object], name: str, depth: int = 0) -> str:
         node = tree[key]
         if isinstance(node, dict):
             child = key.title().replace("_", "")
-            body.append(_indent(_classes(node, child, depth + 1)))
+            nested = cast("dict[str, object]", node)  # invariance, as in `_tree`
+            body.append(_indent(_classes(nested, child, depth + 1)))
             body.append(f"    {key}: {child}")
     for key in sorted(tree):
         node = tree[key]

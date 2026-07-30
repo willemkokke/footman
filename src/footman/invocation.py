@@ -38,6 +38,10 @@ class Invocation:
     writes refused, so what a task-time hook reads is what the run decided.
     """
 
+    # `_frozen` is installed through `object.__setattr__` (every other write
+    # goes through the guard below), so it is declared rather than assigned.
+    _frozen: bool
+
     __slots__ = (
         "_frozen",
         "cli",

@@ -93,7 +93,12 @@ jobs:
         run: uv run ruff check .
       - name: Ruff (format)
         run: uv run ruff format --check .
-      - name: Type-check
+      - name: Type-check (ty)
+        # The cheap checker first, for the same reason `fm typecheck` runs it
+        # first: a sub-second verdict before the thorough one starts.
+        # `--error-on-warning` is ty's `--warnings`.
+        run: uv run ty check --error-on-warning
+      - name: Type-check (basedpyright)
         # `--warnings` here too, or the rule holds on a laptop and not in CI.
         run: uv run basedpyright --warnings
 

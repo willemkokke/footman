@@ -193,10 +193,12 @@ class Context:
     tty: bool = False
     """Output dresses for a terminal (colour, marks). Live in-place
     rewrites additionally require output to be uncaptured."""
-    sink: TextIO | None = None
+    # `io.StringIO`, not `TextIO`: a sink is always a capture buffer, and the
+    # flush sites read `.getvalue()` — which is the buffer's, not the protocol's.
+    sink: io.StringIO | None = None
     """Where this task's stdout goes: a capture buffer in buffered
     (parallel) mode, `None` for the real stdout (live mode)."""
-    err_sink: TextIO | None = None
+    err_sink: io.StringIO | None = None
     """Where this task's stderr goes. At task level it is the *same* buffer as
     `sink` (so the atomic parallel flush keeps stdout/stderr in order); a
     `run()` capturing an in-process callable temporarily points the two at
@@ -602,7 +604,7 @@ class _Router:
         except Exception:
             self._tty = False
 
-    def _sink(self) -> TextIO | None:
+    def _sink(self) -> io.StringIO | None:
         ctx = current()
         return ctx.err_sink if self._err else ctx.sink
 
@@ -943,8 +945,12 @@ def routing():
     # degrade unencodable glyphs to '?' instead of crashing the run.
     for stream in (real_out, real_err):
         with contextlib.suppress(Exception):
-            if hasattr(stream, "reconfigure"):
-                stream.reconfigure(errors="replace")  # type: ignore[union-attr]
+            # Fetched rather than tested: `hasattr` tells a checker nothing
+            # about what it found, and this asks any stream that has the method
+            # — not only the `TextIOWrapper` that declares it.
+            reconfigure = getattr(stream, "reconfigure", None)
+            if reconfigure is not None:
+                reconfigure(errors="replace")
     _router, _err_router = _Router(real_out), _Router(real_err, err=True)
     sys.stdout, sys.stderr = _router, _err_router  # type: ignore[assignment]
     try:
@@ -2185,7 +2191,9 @@ def parallel(*calls: Callable[[], Any], keep_going: bool = False) -> Any:
             _current.reset(token)
         gate = _globals.console_gate() if dest_is_real else contextlib.nullcontext()
         with gate, lock:
-            blob = child.sink.getvalue()  # type: ignore[union-attr]
+            # `buf` rather than `child.sink`, which is the same object read back
+            # out of the child through a `| None` the flush cannot be handed.
+            blob = buf.getvalue()
             # A child that ended mid-colour (a crash, an unterminated SGR) must
             # not bleed into the next child's block when they interleave: cap a
             # colourful run's block with a reset. Only when colour is on, so a

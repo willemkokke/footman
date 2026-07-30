@@ -37,7 +37,7 @@ grammar may break without a deprecation cycle.
 This project dogfoods itself, so use `uv run fm …`:
 
 ```sh
-uv run fm check                                   # ruff format --check, ruff check, basedpyright, covered pytest (all parallel)
+uv run fm check                                   # ruff format --check, ruff check, ty + basedpyright, covered pytest (all parallel)
 uv run --group docs zensical build --clean --strict   # ONLY when docs/ changed
 ```
 
@@ -64,7 +64,20 @@ branches. Driving the local number up to 92 means installing every shell
 (`zsh`, `fish`, `nu`, `pwsh`) and still falling short — don't chase it.
 The suite runs across cores via pytest-xdist (`addopts = "-n auto"`); to debug
 one test serially (live `-s`, `--pdb`, `-x`), override with `-n0`. ruff line
-length is 88; target `py311`; type-checker is basedpyright.
+length is 88; target `py311`.
+
+**Two type checkers, both gating.** `fm typecheck` runs `ty` (sub-second) and
+then `basedpyright`; warnings fail both (`--error-on-warning`, `--warnings`).
+`fm typecheck --fast` is ty alone, for the editing loop. ty's slate lives in
+`[tool.ty.*]` in `pyproject.toml` and derives from hse-devkit's packaged
+`ty.toml`; its `include` is deliberately basedpyright's, so neither checker can
+be green about a file the other never read. ty reads neither
+`# type: ignore[…]` nor `# pyright: ignore[…]`, so a site both must tolerate
+carries `# ty: ignore[<ty-rule>]` too — and `unused-ignore-comment = "error"`
+means a stale one fails the gate. Where a whole file's pattern is deliberate
+(the `os.*` routers in `_globals.py`) or a test's wrong shape *is* the
+assertion, the relaxation is a scoped `[[tool.ty.overrides]]` with its reason,
+never a blanket rule.
 
 ## Layout
 

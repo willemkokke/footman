@@ -71,7 +71,8 @@ def recording(**overrides: Any) -> Iterator[list[Result]]:
     # Build the kwargs dict so `overrides` can win over the dry_run/quiet
     # defaults — passing them as positional defaults made `recording(quiet=False)`
     # raise "got multiple values for keyword argument" (F51).
-    ctx = Context(**{"dry_run": True, "quiet": True, **overrides})
+    kwargs: dict[str, Any] = {"dry_run": True, "quiet": True, **overrides}
+    ctx = Context(**kwargs)
     with use_context(ctx):
         yield ctx.steps
 

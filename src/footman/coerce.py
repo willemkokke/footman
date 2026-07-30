@@ -187,7 +187,10 @@ def peel(ann: Any) -> Peeled:
             if len(members) == 1:
                 ann, changed = members[0], True
 
-    markers = {
+    # Annotated: the values are a wide union (markers, bounds, callables), and
+    # splatting an inferred union into `Peeled`'s typed fields reads as a type
+    # error at every call site below.
+    markers: dict[str, Any] = {
         "path_req": path_req,
         "bounds": bounds,
         "env": env_var,

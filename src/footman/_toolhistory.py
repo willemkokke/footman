@@ -21,6 +21,7 @@ about what was read rather than a policy about what we meant to read.
 
 from __future__ import annotations
 
+import dataclasses
 import itertools
 import json
 from collections.abc import Iterable
@@ -689,24 +690,24 @@ def union(doc: dict, *, name: str, in_process: bool = False) -> ToolSpec:
                 positional=verb.positional,
                 lead=verb.lead,
                 not_on=verdicts.get(f"{verb.name}\t", ()),
+                # `replace`, not a splat of `__dict__`: the same three fields
+                # rewritten, said in the language of the dataclass.
                 options=tuple(
-                    Option(
-                        **{
-                            **option.__dict__,
-                            "not_on": verdicts.get(f"{verb.name}\t{option.name}", ()),
-                            "since": ""
-                            if first[(verb.name, option.name)] == floor
-                            or _only_here(
-                                doc, first[(verb.name, option.name)], verb.name, option
-                            )
-                            else first[(verb.name, option.name)],
-                            "until": newer.get(last[(verb.name, option.name)], "")
-                            if last[(verb.name, option.name)] != chain[0]
-                            and _corroborated(
-                                doc, last[(verb.name, option.name)], verb.name, option
-                            )
-                            else "",
-                        }
+                    dataclasses.replace(
+                        option,
+                        not_on=verdicts.get(f"{verb.name}\t{option.name}", ()),
+                        since=""
+                        if first[(verb.name, option.name)] == floor
+                        or _only_here(
+                            doc, first[(verb.name, option.name)], verb.name, option
+                        )
+                        else first[(verb.name, option.name)],
+                        until=newer.get(last[(verb.name, option.name)], "")
+                        if last[(verb.name, option.name)] != chain[0]
+                        and _corroborated(
+                            doc, last[(verb.name, option.name)], verb.name, option
+                        )
+                        else "",
                     )
                     for option in verb.options
                 ),

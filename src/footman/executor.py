@@ -1183,6 +1183,18 @@ class TaskHandle:
 
     __slots__ = ("_bound", "_ctx", "_fn", "_kwargs", "_raw_args", "_states", "name")
 
+    # Declared, not assigned: `__setattr__` refuses every write, so the fields
+    # are installed through `object.__setattr__` and a checker has no
+    # assignment to infer them from. Annotation-only, so `__slots__` still owns
+    # the storage.
+    name: str
+    _fn: Task
+    _ctx: Context
+    _raw_args: tuple[Any, ...] | None
+    _kwargs: dict[str, Any] | None
+    _bound: Mapping[str, Any] | None
+    _states: dict[str, SimpleNamespace]
+
     def __init__(self, fn: Task, seg: Segment, ctx: Context) -> None:
         object.__setattr__(self, "_fn", fn)
         object.__setattr__(self, "_ctx", ctx)
@@ -1211,7 +1223,11 @@ class TaskHandle:
         `pre_bind`, which runs before values exist."""
         bound: Mapping[str, Any] | None = self._bound
         if bound is None:
-            if self._raw_args is None:
+            # `_bind` writes the pair or neither, so one test covers both —
+            # said as one condition because a checker can only narrow what it
+            # is shown, and `**kwargs` on a `dict | None` is a real hole.
+            raw_args, kwargs = self._raw_args, self._kwargs
+            if raw_args is None or kwargs is None:
                 raise RuntimeError(
                     "task.args is not readable at pre_bind — nothing is "
                     "bound yet; read the values in pre_task, the post-bind "
@@ -1220,13 +1236,11 @@ class TaskHandle:
             from footman.manifest import call_signature
 
             try:
-                b = call_signature(self._fn).bind_partial(
-                    *self._raw_args, **self._kwargs
-                )
+                b = call_signature(self._fn).bind_partial(*raw_args, **kwargs)
                 b.apply_defaults()
                 mapping = dict(b.arguments)
             except TypeError:  # an unbindable shape: show what was passed
-                mapping = dict(self._kwargs)
+                mapping = dict(kwargs)
             bound = MappingProxyType(mapping)
             object.__setattr__(self, "_bound", bound)
         return bound

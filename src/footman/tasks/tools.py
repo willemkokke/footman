@@ -33,7 +33,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Annotated, Literal, cast
 
 from footman import _drivers, _stubgen, _toolhistory, _toolspec
 from footman._describe import bold, cyan, wants_color
@@ -2318,7 +2318,9 @@ def _verbs_of(path: Path) -> list[str]:
     def walk(node: dict[str, object], prefix: str) -> None:
         for name, child in node.items():
             if isinstance(child, dict):
-                walk(child, f"{prefix}{name}.")
+                # `dict` is invariant, so the guard alone leaves the value
+                # typed `dict[Unknown, Unknown]`; the cast says what it is.
+                walk(cast("dict[str, object]", child), f"{prefix}{name}.")
             else:
                 found.append(f"{prefix}{name}")
 

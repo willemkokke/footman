@@ -239,7 +239,9 @@ def _verb_from_click(name: str, command: Any) -> Verb:
         options.append(
             Option(
                 name=_keyword(param),
-                flags=tuple(sorted(param.opts, key=len, reverse=True)),
+                # `map(str, …)`: click's `opts` is untyped here, and sorting by
+                # `len` alone says only that the members are sized.
+                flags=tuple(sorted(map(str, param.opts), key=len, reverse=True)),
                 negation=secondary[0] if secondary else "",
                 help=_first_line(getattr(param, "help", "") or ""),
                 type_name=_type_name(param),

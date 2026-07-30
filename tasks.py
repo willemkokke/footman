@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Annotated
 
 from footman import RunFailed, doc, fail, group, parallel, plugin, run, stdin, task
-from footman.tools import basedpyright, pytest, ruff, ruff_format, uv, zensical
+from footman.tools import basedpyright, pytest, ruff, ruff_format, ty, uv, zensical
 
 docs = group("docs", help="Documentation site (Zensical)")
 
@@ -43,17 +43,28 @@ def format(check: bool = False):
 
 
 @task
-def typecheck():
-    """Type-check with basedpyright — warnings included.
+def typecheck(fast: bool = False):
+    """Type-check with ty and basedpyright — warnings included, in that order.
 
-    `--warnings` makes the exit code 1 when anything at all is reported, so
-    a warning fails the gate exactly as an error does. A warning nobody has
-    to act on is a warning everybody stops reading, and the two this started
-    with were real: `__all__` advertised two submodules that no type-checker
-    could resolve, so an editor gave a consumer no completion for them and a
-    strict consumer saw our package complain about itself.
+    Two checkers, because they disagree about a codebase more often than
+    either is wrong about it: each has caught what the other read as fine.
+    ty answers in well under a second and goes first, so the cheap verdict
+    arrives before the thorough one starts; `--fast` stops there, which is
+    the one to run while editing.
+
+    Warnings gate in both (`--warnings`, `--error-on-warning`): the exit code
+    is 1 when anything at all is reported. A warning nobody has to act on is
+    a warning everybody stops reading, and the two this started with were
+    real — `__all__` advertised two submodules that no type-checker could
+    resolve, so an editor gave a consumer no completion for them and a strict
+    consumer saw our package complain about itself.
+
+    Args:
+        fast: ty only — the sub-second answer, for the editing loop
     """
-    basedpyright(warnings=True)
+    ty.check(error_on_warning=True)
+    if not fast:
+        basedpyright(warnings=True)
 
 
 @task

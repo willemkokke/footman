@@ -7,6 +7,38 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- **A second type checker in the gate.** `fm typecheck` now runs
+  [ty](https://github.com/astral-sh/ty) before basedpyright, and warnings fail
+  both (`--error-on-warning`, `--warnings`). ty answers in about a fifth of a
+  second against basedpyright's four, so the cheap verdict lands before the
+  thorough one starts, and `fm typecheck --fast` stops after it — the one to
+  run while editing. CI runs both as separate steps.
+
+  Two checkers earn their keep by disagreeing. Getting the tree green under ty
+  closed a real hole: `TaskHandle`'s fields are installed through
+  `object.__setattr__` (every direct write is refused), so nothing declared
+  them and `task.args` splatted a `dict | None` that only happened to never be
+  `None`. Declaring the seven fields made basedpyright report the same hole.
+  A `Context` sink is now typed as the `io.StringIO` it always is rather than
+  `TextIO`, which is what the flush sites actually read (`.getvalue()`), and
+  the parallel flush reads the buffer it created instead of fetching it back
+  out of the child through an `Optional` it could not narrow.
+
+  ty's slate is `[tool.ty.*]` in `pyproject.toml`, derived from hse-devkit's
+  packaged `ty.toml`, with its `include` set deliberately identical to
+  basedpyright's. Two of that slate's rules did not carry over: ty has no
+  global strictness mode to mirror `typeCheckingMode`, and
+  `missing-type-argument` reports 220 idiomatic bare `dict`/`list` annotations
+  here, none of them a bug. ty reads neither mypy's nor pyright's suppression
+  comments, so the handful of sites that need one carry
+  `# ty: ignore[<ty-rule>]` as well, and a stale one fails the gate
+  (`unused-ignore-comment = "error"`). Where the pattern rather than the line
+  is deliberate — the `os.*` routers in `_globals.py`, tests whose wrong shape
+  *is* the assertion — the relaxation is a scoped `[[tool.ty.overrides]]`
+  naming its reason.
+
 ### Fixed
 
 - **`.opts()` takes `None` for the options that mean "unset".** The tools

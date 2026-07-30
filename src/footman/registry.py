@@ -783,8 +783,11 @@ class Group:
         fanout = _empty_body(fn)
         where = self.name if self.name != "root" else "the root group"
         if interactive and fanout:
+            # `Task` is a Callable alias, which declares no `__name__` — the
+            # same `getattr` this module already uses to name a reference.
+            shown = getattr(fn, "__name__", repr(fn))
             raise RegistrationError(
-                f"{where}'s default {fn.__name__!r} is interactive but has "
+                f"{where}'s default {shown!r} is interactive but has "
                 f"an empty body, so it fans the group's tasks out in "
                 f"parallel — there is no single body to own the terminal. "
                 f"Give it a real body, or drop interactive."
@@ -981,7 +984,9 @@ class Group:
             pass
 
         def register(fn: Callable[_P, _R_co]) -> TaskFn[_P, _R_co]:
-            key = cli_name(name or fn.__name__)
+            # A bare `Callable` declares no `__name__`; a decorated function
+            # always has one, and a nameless callable is not a task.
+            key = cli_name(name or fn.__name__)  # ty: ignore[unresolved-attribute]
             key = self._free_ephemeral_key(key)
             self._shadow_pulled(key)
             self._claim(key)

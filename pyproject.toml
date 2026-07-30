@@ -85,6 +85,13 @@ dev = [
     "pytest-xdist>=3.6",
     "ruff>=0.6",
     "basedpyright>=1.18",
+    # The second type checker. Two checkers disagree about a codebase far more
+    # often than either is wrong about it, and this one answers in under a
+    # second, so it is the one you run while editing. Pre-1.0 and explicitly
+    # unstable, hence a floor on the version the rule slate below was tuned
+    # against — a new release may add diagnostics, and the gate should say so
+    # on purpose (when we bump it) rather than on a fresh `uv lock`.
+    "ty>=0.0.65,<0.1",
     # The optional fetch backends, so every one of them is driven against a
     # real server in the suite — footman never imports them itself.
     "httpx>=0.27",
@@ -172,6 +179,79 @@ exclude = ["comparison"]
 pythonVersion = "3.11"
 typeCheckingMode = "standard"
 reportMissingModuleSource = false
+
+# The second checker, from the same slate as hse-devkit's packaged `ty.toml` —
+# every difference from it is noted below. It lives here rather than in a
+# `ty.toml` because every other tool this repo runs is configured in this file;
+# devkit ships a standalone file only because it has to reach instances from a
+# wheel, and ty has no `extends` to inherit it with.
+[tool.ty.environment]
+python-version = "3.11"
+# Mirrors basedpyright's `pythonPlatform: "All"` intent: the Windows-only
+# branches (taskkill process trees, CREATE_NO_WINDOW, the pwsh profile writer)
+# are read on macOS and Linux too, so a Windows type error fails on the laptop
+# that wrote it instead of in the matrix.
+python-platform = "all"
+
+[tool.ty.src]
+# Deliberately the same whitelist as basedpyright's `include` above — one
+# include set, two checkers, so neither can be green about a file the other
+# never read. (`comparison/` needs no exclusion: it is simply not in the list.)
+include = ["src", "tests", "scripts", "tasks.py"]
+
+[tool.ty.rules]
+# Deltas from ty's defaults, as in devkit.
+possibly-unresolved-reference = "error" # 0 hits here — insurance
+unused-ignore-comment = "error"         # ≈ reportUnnecessaryTypeIgnoreComment
+# devkit also carries `missing-type-argument = "error"`; not here. basedpyright
+# runs `typeCheckingMode = "standard"`, where `reportMissingTypeArgument` is
+# off, so a bare `dict`/`list` annotation is idiomatic throughout this codebase
+# — the rule reports 220 sites and not one of them is a bug.
+
+# Tests hand doubles and deliberately wrong values to typed parameters, so the
+# devkit relaxation carries over — doubly, because `tests/typecheck_tools.py`
+# asks a stub to *reject* a call: there, a wrong argument type is the assertion.
+# The rest of this list is the same story told by rule: a suite for a framework
+# spends its time doing, on purpose, what a user does by mistake. Each of these
+# sites already carries a mypy-shaped `# type: ignore[…]` naming the reason —
+# ty reads neither the code nor the comment, and the lines have no room left
+# inside the 88-column budget for a second directive. basedpyright still checks
+# the suite under every one of these rules; nothing here is unchecked.
+[[tool.ty.overrides]]
+include = ["**/tests/**"]
+
+[tool.ty.overrides.rules]
+invalid-argument-type = "ignore"
+# `paths: list[Path] = ()` — the repeatable-parameter spelling docs/typing.md
+# teaches. A tuple default is deliberate (a list default would be shared and
+# mutable), and footman coerces the value before the body ever sees it.
+invalid-parameter-default = "ignore"
+# Calls a task the way the CLI does, not the way the signature reads: a
+# ctx-injected parameter is never passed, and the negative stub tests call
+# `docker.run()` with no image *because* the stub must demand one.
+missing-argument = "ignore"
+unknown-argument = "ignore"
+too-many-positional-arguments = "ignore"
+# `fn._footman_dir = …` stamps the marker attribute the cascade stamps, and
+# `parse("x").summary = "y"` asserts a frozen dataclass refuses the write.
+unresolved-attribute = "ignore"
+invalid-assignment = "ignore"
+# One test imports a tasks module the wrong way (outside footman's isolation)
+# to prove the error it raises; the module does not exist to a checker.
+unresolved-import = "ignore"
+
+# The one module whose whole job is replacing callables the stdlib declared:
+# the process-global routers install their own `os.chdir`/`os.getcwd`/`putenv`
+# and rebind `os.environ`'s mapping methods, so every install reads as an
+# invalid assignment by construction (basedpyright needs its own
+# `# type: ignore[assignment]` on the same lines). ty is also plainly wrong on
+# some of them — it rejects `def getcwd() -> str` as unassignable to
+# `def getcwd() -> str`. Scoped to the file, and to that one rule.
+[[tool.ty.overrides]]
+include = ["src/footman/_globals.py"]
+
+[tool.ty.overrides.rules]
+invalid-assignment = "ignore"
 
 [tool.coverage.run]
 branch = true

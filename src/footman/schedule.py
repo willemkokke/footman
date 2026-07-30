@@ -67,7 +67,8 @@ def _default_seg(fn: Task) -> Segment:
     a bare `pre=`/`post=` dependency, or a body call. Named the way the task is
     *addressed* (`import_` is `fm import`), so a report never shows a spelling
     you could not type."""
-    name = cli_name(fn.__name__)
+    # `Task` is a Callable alias, which declares no `__name__`.
+    name = cli_name(fn.__name__)  # ty: ignore[unresolved-attribute]
     return Segment(task=name, path=[name])
 
 
@@ -860,7 +861,7 @@ def _run_parallel(nodes, real, err, capture, ctx_config, status, jobs) -> None:
             # Flush this task's buffered output as one block — queued while a
             # wizard owns the terminal, so it never splats over a prompt.
             with _globals.console_gate(), lock:
-                blob = ctx.sink.getvalue()  # type: ignore[union-attr]
+                blob = ctx.sink.getvalue()
                 if status is not None:
                     # A direct real-stream write (bypasses the routers): the
                     # status line clears itself and tracks the column.

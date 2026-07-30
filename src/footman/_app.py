@@ -163,7 +163,11 @@ def resolve_task_files(
     must see exactly what the run will.
     """
     cwd = cwd or Path.cwd()
-    mode = config.cascade_mode(g.get("config"))  # type: ignore[arg-type]
+    # `g` is the untyped globals mapping, so `--config` arrives as `object`;
+    # narrowed once here rather than asserted at each of the two uses.
+    raw_config = g.get("config")
+    config_flag = raw_config if isinstance(raw_config, str) else None
+    mode = config.cascade_mode(config_flag)
     if mode == "none":
         ceiling = cwd
     elif mode == "filesystem":
@@ -173,7 +177,7 @@ def resolve_task_files(
     cfg = config.load_config(
         cwd,
         ceiling,
-        g.get("config"),  # type: ignore[arg-type]
+        config_flag,
         on_warning=on_warning,
         on_note=on_note,
     )
