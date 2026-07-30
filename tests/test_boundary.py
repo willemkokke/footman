@@ -18,8 +18,8 @@ from pathlib import Path
 SRC = Path(__file__).resolve().parents[1] / "src" / "footman"
 
 # The two files that produce refusal codes. The constant itself lives in
-# executor.py; everything else says the name.
-REFUSAL_SITES = ("_app.py", "executor.py")
+# _executor.py; everything else says the name.
+REFUSAL_SITES = ("_app.py", "_executor.py")
 
 _LITERAL_TWO = re.compile(r"\breturn 2\b|\bcode\s*=\s*2\b|_result\(seg, 2\b")
 

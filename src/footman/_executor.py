@@ -29,7 +29,10 @@ from pathlib import Path, PurePath
 from types import MappingProxyType, SimpleNamespace
 from typing import Any
 
-from footman import _binder, _futures, _globals, coerce, context, registry
+from footman import _binder, _coerce, _futures, _globals, context, registry
+from footman._discover import defining_dir
+from footman._manifest import resolved_signature
+from footman._split import ChainError, Segment
 from footman.context import (
     Context,
     Failed,
@@ -38,11 +41,8 @@ from footman.context import (
     _current,
     context_param_name,
 )
-from footman.discover import defining_dir
-from footman.manifest import resolved_signature
 from footman.params import Secret
 from footman.registry import Group, Task
-from footman.split import ChainError, Segment
 
 EX_USAGE = 64
 """The refusal exit code — footman did not understand the command line.
@@ -151,7 +151,7 @@ def _wants_context(fn: Any) -> bool:
 
 
 def _run_checks(
-    value: Any, peeled: coerce.Peeled, label: str, params: dict[str, Any] | None = None
+    value: Any, peeled: _coerce.Peeled, label: str, params: dict[str, Any] | None = None
 ) -> Any:
     """Apply `check(fn)` validators to one coerced value (element-level).
 
@@ -173,19 +173,19 @@ def _run_checks(
     return value
 
 
-def _validate_value(value: Any, peeled: coerce.Peeled, label: str) -> Any:
+def _validate_value(value: Any, peeled: _coerce.Peeled, label: str) -> Any:
     """Validate a value the splitter never saw (env fallback, variadic /
     passthrough token) against the constraints it would have enforced eagerly
     for a CLI token (choices, bounds, path)."""
-    choices = coerce.all_choices(peeled.element)
+    choices = _coerce.all_choices(peeled.element)
     if choices is not None:
         shown = str(value.value) if isinstance(value, enum.Enum) else str(value)
-        tags = coerce.element_tags(peeled.element)
+        tags = _coerce.element_tags(peeled.element)
         # A mixed union (`Literal['a','b'] | int`) accepts a choice member OR a
         # value that coerces to one of its tags — reject only when neither fits.
-        type_ok = bool(tags) and coerce.coerce_scalar(str(value), tags)[0]
+        type_ok = bool(tags) and _coerce.coerce_scalar(str(value), tags)[0]
         if shown not in choices and not type_ok:
-            extra = f", or {coerce.type_phrase(tags)}" if tags else ""
+            extra = f", or {_coerce.type_phrase(tags)}" if tags else ""
             raise ValueError(
                 f"{label} must be one of {'|'.join(choices)}{extra} (got {value!r})"
             )
@@ -209,13 +209,13 @@ def _validate_value(value: Any, peeled: coerce.Peeled, label: str) -> Any:
 
 
 def _coerce_extra(
-    token: str, peeled: coerce.Peeled, label: str, params: dict[str, Any] | None = None
+    token: str, peeled: _coerce.Peeled, label: str, params: dict[str, Any] | None = None
 ) -> Any:
     """Coerce + validate one token the splitter never validated (an env
     fallback or a `--` passthrough value): strict coercion, then the same
     choices / bounds / path / check(fn) checks a CLI token gets."""
     try:
-        value = coerce.coerce_token(token, peeled.element)
+        value = _coerce.coerce_token(token, peeled.element)
     except ValueError as exc:
         raise ValueError(f"{label} {exc}") from exc
     return _run_checks(_validate_value(value, peeled, label), peeled, label, params)
@@ -223,7 +223,7 @@ def _coerce_extra(
 
 def _env_value(
     param: inspect.Parameter,
-    peeled: coerce.Peeled,
+    peeled: _coerce.Peeled,
     params: dict[str, Any] | None = None,
 ) -> Any:
     """The env-fallback path for an absent option: CLI beats env beats default.
@@ -282,7 +282,7 @@ def _stdin_document(payload: bytes) -> dict[str, Any]:
 
 def _stdin_value(
     param: inspect.Parameter,
-    peeled: coerce.Peeled,
+    peeled: _coerce.Peeled,
     params: dict[str, Any] | None = None,
 ) -> Any:
     """The stdin path for an absent option: CLI beats stdin beats env.
@@ -332,7 +332,7 @@ def _stdin_value(
     return _run_checks(_validate_value(text, peeled, label), peeled, label, params)
 
 
-def _document_shape(peeled: coerce.Peeled) -> Any:
+def _document_shape(peeled: _coerce.Peeled) -> Any:
     """The JSON shape a bare `stdin` parameter binds to, rebuilt from its
     peeled form: the dataclass itself, `list[T]` for a list parameter,
     `dict[K, V]` for a mapping. `None` for the text/bytes forms."""
@@ -346,7 +346,7 @@ def _document_shape(peeled: coerce.Peeled) -> Any:
     return None
 
 
-def _stdin_fillable(peeled: coerce.Peeled) -> bool:
+def _stdin_fillable(peeled: _coerce.Peeled) -> bool:
     """Whether the boundary's stdin would fill this parameter — the ask()
     front-loader skips a question stdin already answers."""
     payload = context.stdin_payload()
@@ -363,7 +363,7 @@ def _stdin_fillable(peeled: coerce.Peeled) -> bool:
 
 def _prompt_param(
     cli: str,
-    peeled: coerce.Peeled,
+    peeled: _coerce.Peeled,
     ctx: Context | None,
     params: dict[str, Any] | None = None,
 ) -> tuple[str, Any]:
@@ -390,7 +390,7 @@ def _prompt_param(
     # as numbers rather than free text — and `Many[...]` makes it a
     # multi-select. (Secrets never menu; best-effort completers only hint.)
     if peeled.completer is not None and peeled.completer.strict and not marker.secret:
-        from footman.manifest import _run_completer
+        from footman._manifest import _run_completer
 
         options = _run_completer(peeled.completer, {})
         if options:
@@ -412,7 +412,7 @@ def _prompt_param(
                     if peeled.multiple:
                         picked = [
                             _run_checks(
-                                coerce.coerce_token(c, peeled.element),
+                                _coerce.coerce_token(c, peeled.element),
                                 peeled,
                                 f"--{cli}",
                                 params,
@@ -420,18 +420,18 @@ def _prompt_param(
                             for c in chosen
                         ]
                         return ",".join(chosen), picked
-                    value = coerce.coerce_token(chosen, peeled.element)
+                    value = _coerce.coerce_token(chosen, peeled.element)
                     return chosen, _run_checks(value, peeled, f"--{cli}", params)
                 except ValueError as exc:
                     note(f"  {exc}")
                     continue
 
-    choices = coerce.all_choices(peeled.element)
+    choices = _coerce.all_choices(peeled.element)
     hints = choices
     if hints is None and peeled.completer is not None:
         # A best-effort completer suggests, never enforces: its values ride
         # the hint, the answer stays free text.
-        from footman.manifest import _run_completer
+        from footman._manifest import _run_completer
 
         hints = _run_completer(peeled.completer, {}) or None
     if hints and len(hints) > 6:
@@ -444,7 +444,7 @@ def _prompt_param(
             note(f"  choose one of {', '.join(choices)}")
             continue
         try:
-            value = coerce.coerce_token(raw, peeled.element)
+            value = _coerce.coerce_token(raw, peeled.element)
             value = _run_checks(value, peeled, f"--{cli}", params)
         except ValueError as exc:
             note(f"  {exc}")
@@ -499,7 +499,7 @@ def resolve_asks(fn: Task, seg: Segment, ctx: Context | None) -> None:
         cli = registry.cli_name(param.name)
         if cli in seg.values:
             continue
-        peeled = coerce.peel(param.annotation)
+        peeled = _coerce.peel(param.annotation)
         if peeled.ask is None or param.default is not empty:
             continue
         if peeled.completer is not None:
@@ -521,7 +521,7 @@ def bind(
     """Turn a segment's string values into `(*args, **kwargs)` for *fn*.
 
     Coercion (union member selection, list handling, one-or-many collapse) goes
-    through `footman.coerce`, the same module the manifest and splitter use.
+    through `footman._coerce`, the same module the manifest and splitter use.
     `check(fn)` validators run here on the coerced values, and absent options
     fall back to their `env()` variable before their default.
 
@@ -544,7 +544,7 @@ def bind(
             if param.annotation is empty:
                 var_args = list(extra)
             else:
-                peeled = coerce.peel(param.annotation)
+                peeled = _coerce.peel(param.annotation)
                 label = f"<{param.name}>"
                 var_args = [_coerce_extra(v, peeled, label, siblings) for v in extra]
             continue
@@ -561,7 +561,7 @@ def bind(
                 kwargs[param.name] = forwarded[param.name]
                 continue
             if param.annotation is not empty:
-                peeled = coerce.peel(param.annotation)
+                peeled = _coerce.peel(param.annotation)
                 # CLI > stdin > env > default > prompt: the piped payload
                 # outranks the ambient environment, and both lose to an
                 # explicit option.
@@ -617,14 +617,14 @@ def bind(
             kwargs[param.name] = raw
             continue
 
-        peeled = coerce.peel(param.annotation)
+        peeled = _coerce.peel(param.annotation)
         label = f"--{cli}"
         if peeled.mapping:
             result: dict[Any, Any] = {}
             for key, value in raw:
-                k = coerce.coerce_one(key, peeled.key)
+                k = _coerce.coerce_one(key, peeled.key)
                 v = _run_checks(
-                    coerce.coerce_one(value, peeled.element), peeled, label, siblings
+                    _coerce.coerce_one(value, peeled.element), peeled, label, siblings
                 )
                 if peeled.value_multiple:
                     result.setdefault(k, []).append(v)
@@ -635,13 +635,13 @@ def bind(
             items = raw if isinstance(raw, list) else [raw]
             kwargs[param.name] = [
                 _run_checks(
-                    coerce.coerce_one(v, peeled.element), peeled, label, siblings
+                    _coerce.coerce_one(v, peeled.element), peeled, label, siblings
                 )
                 for v in items
             ]
         else:
             kwargs[param.name] = _run_checks(
-                coerce.coerce_one(raw, peeled.element), peeled, label, siblings
+                _coerce.coerce_one(raw, peeled.element), peeled, label, siblings
             )
 
     # Positional-only params (`def build(target, /)`) cannot be passed by
@@ -687,7 +687,7 @@ def forward_map(
     for param in sig.parameters.values():
         if param.annotation is empty or param.default is empty:
             continue
-        peeled = coerce.peel(param.annotation)
+        peeled = _coerce.peel(param.annotation)
         if not peeled.forward:
             continue
         if received is not None and param.name in received:
@@ -702,16 +702,16 @@ def forward_map(
             out[param.name] = raw
         elif peeled.multiple:
             items = raw if isinstance(raw, list) else [raw]
-            out[param.name] = [coerce.coerce_one(v, peeled.element) for v in items]
+            out[param.name] = [_coerce.coerce_one(v, peeled.element) for v in items]
         else:
-            out[param.name] = coerce.coerce_one(raw, peeled.element)
+            out[param.name] = _coerce.coerce_one(raw, peeled.element)
     return out
 
 
 @dataclass(frozen=True)
 class _PlanParam:
     param: inspect.Parameter
-    peeled: coerce.Peeled
+    peeled: _coerce.Peeled
     validates: bool  # choices / bounds / path requirement / check(fn) to enforce
     sources: bool  # stdin / env / a required ask() to consult when absent
 
@@ -736,7 +736,7 @@ def _call_plan(fn: Task) -> _CallPlan:
     would hand a recycled id another function's plan. Two threads racing on
     a first call both build the same plan; the last write wins, harmlessly.
     """
-    from footman.manifest import call_signature
+    from footman._manifest import call_signature
 
     body = registry.task_body(fn)
     plan: _CallPlan | None = getattr(body, _CALL_PLAN, None)
@@ -748,12 +748,12 @@ def _call_plan(fn: Task) -> _CallPlan:
     for param in sig.parameters.values():
         if param.annotation is empty or param.kind is inspect.Parameter.VAR_KEYWORD:
             continue
-        peeled = coerce.peel(param.annotation)
+        peeled = _coerce.peel(param.annotation)
         validates = bool(
             peeled.checks
             or peeled.bounds is not None
             or peeled.path_req is not None
-            or coerce.all_choices(peeled.element) is not None
+            or _coerce.all_choices(peeled.element) is not None
         )
         sources = param.kind is not inspect.Parameter.VAR_POSITIONAL and (
             peeled.stdin is not None
@@ -768,7 +768,7 @@ def _call_plan(fn: Task) -> _CallPlan:
 
 
 def _validate_explicit(
-    value: Any, peeled: coerce.Peeled, label: str, siblings: dict[str, Any]
+    value: Any, peeled: _coerce.Peeled, label: str, siblings: dict[str, Any]
 ) -> None:
     """Validate a Python value a caller passed explicitly — the annotation is
     the contract however the task was asked for — without coercing it: the
@@ -889,7 +889,7 @@ def _call(
         # wins; a bare `-> int` keeps its long-standing meaning. It is a
         # *segment's* channel, though: a body call asked for the value, and
         # `n = measure()` has always handed the number over.
-        declares, _ = coerce.emitted(resolved_signature(fn).return_annotation)
+        declares, _ = _coerce.emitted(resolved_signature(fn).return_annotation)
         if not declares:
             return returned, returned, None
     return 0, returned, None
@@ -1001,7 +1001,7 @@ def bind_global_options(options: Sequence[Any], tokens: Sequence[str]) -> str | 
     coerced `=`-attached value, or its default — and freezes, so `.value`
     answers anywhere in-run. The value string runs the same coercion,
     bounds, choices and `check(fn)` pipeline a task parameter's would.
-    Returns the teaching message for a value that will not coerce.
+    Returns the teaching message for a value that will not _coerce.
     """
     by_flag: dict[str, Any] = {}
     for opt in options:
@@ -1015,7 +1015,7 @@ def bind_global_options(options: Sequence[Any], tokens: Sequence[str]) -> str | 
         if opt.annotation is bool:
             values[opt.name] = True
             continue
-        peeled = coerce.peel(opt.annotation)
+        peeled = _coerce.peel(opt.annotation)
         try:
             values[opt.name] = _coerce_extra(raw, peeled, name)
         except ValueError as exc:
@@ -1217,7 +1217,7 @@ class TaskHandle:
                     "bound yet; read the values in pre_task, the post-bind "
                     "moment"
                 )
-            from footman.manifest import call_signature
+            from footman._manifest import call_signature
 
             try:
                 b = call_signature(self._fn).bind_partial(
@@ -1636,9 +1636,9 @@ def run_chain(
     ctx_config: dict[str, Any] | None = None,
 ) -> list[TaskResult]:
     """Run a chain sequentially (a thin shim over the DAG scheduler)."""
-    from footman import schedule
+    from footman import _schedule
 
-    return schedule.run_plan(
+    return _schedule.run_plan(
         root,
         segments,
         sequential=True,

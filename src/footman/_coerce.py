@@ -173,7 +173,7 @@ def peel(ann: Any) -> Peeled:
                     # Unknown metadata that is not callable stays ignored, so
                     # a plugin marker (the house pattern is a non-callable
                     # instance) still rides through untouched.
-                    from footman.manifest import SpecError  # circular at import
+                    from footman._manifest import SpecError  # circular at import
 
                     name = getattr(mark, "__name__", type(mark).__name__)
                     raise SpecError(

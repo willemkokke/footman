@@ -14,9 +14,9 @@ from typing import Annotated
 
 import pytest
 
-from footman import manifest
-from footman.coerce import emission_mode, emitted
-from footman.executor import EX_USAGE
+from footman import _manifest as manifest
+from footman._coerce import emission_mode, emitted
+from footman._executor import EX_USAGE
 from footman.params import Stdout, stdin, stdout
 from footman.registry import Group
 from footman.testing import Runner

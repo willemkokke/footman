@@ -6,10 +6,10 @@ import sys
 
 import pytest
 
-from footman import manifest
+from footman import _manifest as manifest
+from footman._schedule import resolve_keep_going
+from footman._split import _parse_globals, split_chain
 from footman.registry import Group
-from footman.schedule import resolve_keep_going
-from footman.split import _parse_globals, split_chain
 
 
 def _tree(build):
@@ -74,7 +74,7 @@ def _mixed(reg):
 
 
 def test_scope_keep_going_isolates_a_gate_from_a_fail_fast_task():
-    from footman.schedule import _build_dag, _scope_keep_going
+    from footman._schedule import _build_dag, _scope_keep_going
 
     reg, tree = _tree(_mixed)
     nodes = _build_dag(reg, _segs(tree, "check deploy"))
@@ -87,7 +87,7 @@ def test_scope_keep_going_isolates_a_gate_from_a_fail_fast_task():
 
 
 def test_cli_choice_forces_the_policy_run_wide_over_scope():
-    from footman.schedule import _build_dag, _scope_keep_going
+    from footman._schedule import _build_dag, _scope_keep_going
 
     reg, tree = _tree(_mixed)
     segs = _segs(tree, "check deploy")
@@ -104,7 +104,7 @@ def test_cli_choice_forces_the_policy_run_wide_over_scope():
 def test_mixed_chain_gate_surfaces_siblings_while_fail_fast_task_bails():
     import time
 
-    from footman.schedule import run_plan
+    from footman._schedule import run_plan
 
     ran = []
     reg = Group("root")
@@ -140,8 +140,8 @@ def test_mixed_chain_gate_surfaces_siblings_while_fail_fast_task_bails():
 def test_fail_fast_reaps_only_the_fail_fast_in_flight_tree_in_a_mixed_run(tmp_path):
     import time
 
+    from footman._schedule import run_plan
     from footman.context import run
-    from footman.schedule import run_plan
 
     kept = tmp_path / "kept"
     killed = tmp_path / "killed"
@@ -180,8 +180,8 @@ def test_fail_fast_kills_an_in_flight_sibling_subprocess(tmp_path):
     import sys
     import time
 
+    from footman._schedule import run_plan
     from footman.context import run
-    from footman.schedule import run_plan
 
     marker = tmp_path / "finished"
     sleep = [sys.executable, "-c", "import time; time.sleep(30)"]  # portable, killable
@@ -207,8 +207,8 @@ def test_fail_fast_kills_an_in_flight_sibling_subprocess(tmp_path):
 def test_keep_going_lets_an_in_flight_sibling_finish(tmp_path):
     import sys
 
+    from footman._schedule import run_plan
     from footman.context import run
-    from footman.schedule import run_plan
 
     marker = tmp_path / "finished"
     sleep = [sys.executable, "-c", "import time; time.sleep(0.4)"]
@@ -232,8 +232,8 @@ def test_keep_going_lets_an_in_flight_sibling_finish(tmp_path):
 def test_atomic_task_is_not_killed_by_fail_fast(tmp_path):
     import sys
 
+    from footman._schedule import run_plan
     from footman.context import run
-    from footman.schedule import run_plan
 
     marker = tmp_path / "finished"
     sleep = [sys.executable, "-c", "import time; time.sleep(0.4)"]
@@ -255,8 +255,8 @@ def test_atomic_task_is_not_killed_by_fail_fast(tmp_path):
 
 
 def test_a_killed_task_reports_cancelled_not_failed():
+    from footman._schedule import run_plan
     from footman.context import run
-    from footman.schedule import run_plan
 
     def tasks(reg):
         @reg.task
@@ -287,8 +287,8 @@ def test_fail_fast_kills_grandchildren_not_just_the_direct_child(tmp_path):
     import signal
     import time
 
+    from footman._schedule import run_plan
     from footman.context import run
-    from footman.schedule import run_plan
 
     pidfile = tmp_path / "grandchild.pid"
     grandchild = tmp_path / "grandchild.py"

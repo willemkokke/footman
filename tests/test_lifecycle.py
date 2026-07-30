@@ -9,7 +9,10 @@ from typing import Annotated
 
 import pytest
 
-from footman import discover, executor, manifest, registry
+from footman import _discover as discover
+from footman import _executor as executor
+from footman import _manifest as manifest
+from footman import registry
 from footman.params import between, check, env
 from footman.registry import Group, RegistrationError
 from footman.testing import Runner
@@ -1573,7 +1576,7 @@ def test_a_prerequisites_confirm_is_asked_and_a_denial_blocks_dependents():
 
 
 def test_one_reference_is_asked_once_however_many_ways_it_is_reached(monkeypatch):
-    from footman import schedule
+    from footman import _schedule as schedule
 
     asked: list[str] = []
 

@@ -275,7 +275,7 @@ def chdir(
     elif isinstance(target, str) and target == "asinvoked" and ctx.invoked_dir:
         base = Path(ctx.invoked_dir)
     elif isinstance(target, str) and target == "taskfile":
-        from footman.discover import defining_dir
+        from footman._discover import defining_dir
 
         home = defining_dir(ctx.fn) if ctx.fn is not None else None
         base = Path(home) if home else Path(_globals.real_getcwd())
@@ -439,7 +439,7 @@ def inherited() -> Any:
     shows the inherited task's options, so you can read the forwarding
     call straight off it.
     """
-    from footman import discover
+    from footman import _discover
 
     fn = current().fn
     if fn is None:
@@ -447,7 +447,7 @@ def inherited() -> Any:
             "inherited() works inside a running task — footman resolves the "
             "task being shadowed from the one currently running"
         )
-    previous = discover.shadowed(fn)
+    previous = _discover.shadowed(fn)
     if previous is None:
         name = current().task or getattr(fn, "__name__", "this task")
         raise RuntimeError(

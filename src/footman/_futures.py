@@ -39,12 +39,12 @@ from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any
 
 from footman import registry
-from footman.split import ChainError
+from footman._split import ChainError
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-    from footman.executor import TaskResult
+    from footman._executor import TaskResult
 
 # The memo key's argument half when the arguments cannot be frozen (an
 # unhashable value with no obvious frozen form — a live object, a generator).
@@ -176,14 +176,14 @@ def _key(task: Any, args: Any, kwargs: dict[str, Any]) -> Any | None:
     resolve to the same arguments name one piece of work. `None` when the
     arguments have no frozen form.
     """
-    from footman import manifest
+    from footman import _manifest
 
     # The caller's signature: `ctx` is injected at the task boundary, so it is
     # stripped before binding — binding against the declared signature would
     # put the first positional value in the `ctx` slot and key every call on
     # the wrong arguments.
     try:
-        bound = manifest.call_signature(task).bind(*args, **kwargs)
+        bound = _manifest.call_signature(task).bind(*args, **kwargs)
     except TypeError:
         return None  # a call that won't bind: let it raise where it is made
     bound.apply_defaults()
@@ -242,11 +242,10 @@ def call(task: Any, args: tuple[Any, ...], kwargs: dict[str, Any]) -> Any:
             return task._plain_call(args, kwargs)
         return registry.task_body(task)(*args, **kwargs)
     _refuse_unrunnable(task)
-    from footman import context, schedule
-    from footman import executor as _executor
+    from footman import _executor, _schedule, context
 
     label = _label(task)
-    seg = schedule._default_seg(task)
+    seg = _schedule._default_seg(task)
     # Availability is a per-request gate on the declared path (`run_task`
     # checks it before the window opens), so a call checks it in the same
     # place: before any hook fires.
@@ -491,7 +490,7 @@ def _shared_result(label: str, value: Any) -> TaskResult:
     """
     import time
 
-    from footman.executor import TaskResult
+    from footman._executor import TaskResult
 
     return TaskResult(
         task=label,
@@ -542,7 +541,7 @@ def _refuse_wide_moment(task: Any) -> None:
     A call from *outside footman entirely* (a REPL, an import of the tasks
     module) is untouched — it is the plain function call it looks like.
     """
-    from footman.executor import _wide_moment
+    from footman._executor import _wide_moment
 
     moment = _wide_moment.get()
     if moment is None:
@@ -606,13 +605,13 @@ def _run_now(
     asked here, at the moment of execution (a request the run has already
     answered never re-asks).
     """
-    from footman import _globals, context, executor, schedule
+    from footman import _executor, _globals, _schedule, context
 
     parent = context.current()
     label = _label(task)
     if seg is None:
-        seg = schedule._default_seg(task)
-    if (denial := schedule.confirm_gate(task, seg, parent)) is not None:
+        seg = _schedule._default_seg(task)
+    if (denial := _schedule.confirm_gate(task, seg, parent)) is not None:
         _record(denial)
         raise denial.error or ChainError(f"{label} was not confirmed")
     if child is None:
@@ -638,7 +637,7 @@ def _run_now(
     # work (a confirm= denial above never was one).
     status = _claim_unit(label)
     try:
-        result = executor.run_bound(
+        result = _executor.run_bound(
             task, seg, child, list(args), dict(kwargs), as_call=True, handle=handle
         )
     except BaseException:

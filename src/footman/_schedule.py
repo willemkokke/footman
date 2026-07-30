@@ -22,7 +22,8 @@ from dataclasses import dataclass, field
 from itertools import count
 from typing import Any, TextIO
 
-from footman import _describe, _futures, _globals, _progress, context, executor
+from footman import _describe, _executor, _futures, _globals, _progress, context
+from footman._split import ChainError, Segment
 from footman.registry import (
     Group,
     Task,
@@ -39,7 +40,6 @@ from footman.registry import (
     task_confirm,
     wants_progress,
 )
-from footman.split import ChainError, Segment
 
 
 @dataclass
@@ -49,7 +49,7 @@ class _Node:
     key: int
     deps: set[int] = field(default_factory=set)
     state: str = "pending"  # pending / running / done / skipped
-    result: executor.TaskResult | None = None
+    result: _executor.TaskResult | None = None
     forwarded: dict[str, Any] = field(default_factory=dict)  # `forward`ed values in
     forward_targets: list[_Node] = field(default_factory=list)  # …and out
     keep_going: bool = False  # resolved failure policy for THIS node (per-subtree)
@@ -186,7 +186,7 @@ def _build_dag(root: Group, segments: list[Segment]) -> list[_Node]:
         if not fmap:
             return
         declared = {
-            p.name for p in executor.resolved_signature(dep.fn).parameters.values()
+            p.name for p in _executor.resolved_signature(dep.fn).parameters.values()
         }
         for name, value in fmap.items():
             if name not in declared:
@@ -223,7 +223,7 @@ def _build_dag(root: Group, segments: list[Segment]) -> list[_Node]:
             node.forward_targets.append(d)
 
     for seg in segments:
-        fn = executor.resolve(root, seg.path)
+        fn = _executor.resolve(root, seg.path)
         key = _dep_key(fn)
         # A chain segment is a root: nothing asked for it, so only its own
         # declaration can make it unshared.
@@ -248,7 +248,7 @@ def _build_dag(root: Group, segments: list[Segment]) -> list[_Node]:
     # into its surfaces. It runs after segment adoption above, so each node's seg
     # (hence its forward map) is final.
     for node in reversed(_toposort(nodes)):
-        fmap = executor.forward_map(node.fn, node.seg, node.forwarded)
+        fmap = _executor.forward_map(node.fn, node.seg, node.forwarded)
         for target in node.forward_targets:
             _thread(target, fmap, node.seg.task)
     return nodes
@@ -418,7 +418,7 @@ def _ask_confirm(message: str, *, no_input: bool) -> bool:
 
 def _gate_confirms(
     root: Group, segments: list[Segment], ctx_config: dict[str, Any] | None
-) -> tuple[list[Segment], list[executor.TaskResult], dict[Any, bool]]:
+) -> tuple[list[Segment], list[_executor.TaskResult], dict[Any, bool]]:
     """Resolve each invoked task's `@task(confirm=)` before the DAG is built —
     asked in invocation order, before any prerequisite runs. A confirmed task
     is kept; a denied one is dropped (so its exclusive pre-deps are pruned with
@@ -430,10 +430,10 @@ def _gate_confirms(
     assume_yes = bool(cfg.get("assume_yes"))
     no_input = bool(cfg.get("no_input"))
     kept: list[Segment] = []
-    denied: list[executor.TaskResult] = []
+    denied: list[_executor.TaskResult] = []
     answers: dict[Any, bool] = {}
     for seg in segments:
-        fn = executor.resolve(root, seg.path)
+        fn = _executor.resolve(root, seg.path)
         message = task_confirm(fn)
         if not message:
             kept.append(seg)
@@ -475,10 +475,10 @@ def _gate_node_confirms(
             n.state = "done"
 
 
-def _not_confirmed(seg: Segment) -> executor.TaskResult:
+def _not_confirmed(seg: Segment) -> _executor.TaskResult:
     # Denied at a moment (before the run for a segment, at the call for a call),
     # so it carries that moment and needs no special placement.
-    return executor.TaskResult(
+    return _executor.TaskResult(
         task=seg.task,
         ok=False,
         code=1,
@@ -487,7 +487,7 @@ def _not_confirmed(seg: Segment) -> executor.TaskResult:
     )
 
 
-def _chronological(results: list[executor.TaskResult]) -> list[executor.TaskResult]:
+def _chronological(results: list[_executor.TaskResult]) -> list[_executor.TaskResult]:
     """The run's results in the order the run happened.
 
     Chronological is the only ordering that has a place for everything: a task
@@ -504,7 +504,7 @@ def _chronological(results: list[executor.TaskResult]) -> list[executor.TaskResu
         (r for r in results if r.started is not None),
         key=lambda r: r.started or 0.0,
     )
-    never: list[executor.TaskResult] = [r for r in results if r.started is None]
+    never: list[_executor.TaskResult] = [r for r in results if r.started is None]
     ordered = [r for r in never if not r.blocked_by] + ran
     for result in (r for r in never if r.blocked_by):
         after = [i for i, r in enumerate(ordered) if r.task == result.blocked_by]
@@ -514,7 +514,7 @@ def _chronological(results: list[executor.TaskResult]) -> list[executor.TaskResu
 
 def confirm_gate(
     fn: Task, seg: Segment, ctx: context.Context
-) -> executor.TaskResult | None:
+) -> _executor.TaskResult | None:
     """Ask *fn*'s `@task(confirm=)` gate now; a denial is the refusal to report.
 
     The scheduler resolves a segment's gate before the run starts, so the human
@@ -541,7 +541,7 @@ def run_plan(
     estimate: _progress.Estimate | None = None,
     progress: bool = True,
     jobs: int = 0,
-) -> list[executor.TaskResult]:
+) -> list[_executor.TaskResult]:
     """Build and run the DAG; return results in dependency order."""
     with _futures.session():
         results = _run_plan(
@@ -572,7 +572,7 @@ def _run_plan(
     estimate: _progress.Estimate | None = None,
     progress: bool = True,
     jobs: int = 0,
-) -> list[executor.TaskResult]:
+) -> list[_executor.TaskResult]:
     context.reset_abort()  # clear any latched fail-fast from a previous run
     segments, denied, answers = _gate_confirms(root, segments, ctx_config)
     nodes = _build_dag(root, segments)
@@ -590,7 +590,7 @@ def _run_plan(
         for n in _toposort(nodes):
             if n.result is not None:  # denied its confirm: it will not run
                 continue
-            executor.resolve_asks(n.fn, n.seg, ask_ctx)
+            _executor.resolve_asks(n.fn, n.seg, ask_ctx)
     except ValueError as exc:
         raise ChainError(str(exc)) from exc
     # One node has nothing to parallelise — run it on the sequential-live
@@ -743,7 +743,7 @@ def _run_plan(
         if finishes:
             n.result.eligible = max(finishes)
     skipped = [
-        executor.TaskResult(
+        _executor.TaskResult(
             task=n.seg.task, ok=False, state="skipped", blocked_by=_blocked_by(n)
         )
         for n in ordered
@@ -782,7 +782,7 @@ def _run_sequential(nodes, real, capture, ctx_config, status, err=None) -> None:
             hint = f"{node.seg.task} runs until you stop it — Ctrl-C"
             err.write(_describe.dim(hint, True) + "\n")
             err.flush()
-        node.result = executor.run_task(node.fn, node.seg, ctx, node.forwarded)
+        node.result = _executor.run_task(node.fn, node.seg, ctx, node.forwarded)
         node.state = "done"
         if status is not None:
             status.unit_finished(node.seg.task, node.result.ok)
@@ -855,7 +855,7 @@ def _run_parallel(nodes, real, err, capture, ctx_config, status, jobs) -> None:
             # parallel pool: the arbiter's console lane guarantees one owner,
             # and captured siblings' flushes queue on the gate below.
             ctx.sink = ctx.err_sink = None
-        n.result = executor.run_task(n.fn, n.seg, ctx, n.forwarded)
+        n.result = _executor.run_task(n.fn, n.seg, ctx, n.forwarded)
         if not capture and ctx.sink is not None:
             # Flush this task's buffered output as one block — queued while a
             # wizard owns the terminal, so it never splats over a prompt.

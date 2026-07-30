@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from footman import _paths, _progress
-from footman.split import Segment
+from footman._split import Segment
 
 # --- estimator ----------------------------------------------------------------
 

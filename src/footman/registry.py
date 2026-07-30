@@ -21,7 +21,7 @@ a nested command group. Command names are the function/group name with
 underscores turned into hyphens (`add_word` -> `add-word`).
 
 This module holds only the tree structure. Turning it into the manifest (which
-pays the cost of `inspect`) lives in `footman.manifest`, and the
+pays the cost of `inspect`) lives in `footman._manifest`, and the
 completion hot path never imports either.
 """
 
@@ -187,7 +187,7 @@ def validate_global_options(options: Sequence[GlobalOption]) -> str | None:
     claiming one name are refused naming both. The same singleton reached
     through two pulls is one option, not a clash. Returns the teaching
     message, or `None` when the set is sound."""
-    from footman.split import _GLOBAL_KIND
+    from footman._split import _GLOBAL_KIND
 
     seen: dict[str, GlobalOption] = {}
     for opt in options:
@@ -526,13 +526,13 @@ class _Opted:
             # the base invocation — a save/restore of the *field*, never a
             # process chdir. The other options are scheduler-read and inert
             # on a plain call. Lazy import: executor imports registry.
-            from footman import executor
+            from footman import _executor
             from footman.context import current
 
             ctx = current()
             saved, saved_unmanaged = ctx.cwd, ctx.cwd_unmanaged
             ctx.cwd = None  # let the override's ladder re-resolve
-            ctx.cwd, ctx.cwd_unmanaged = executor.resolve_cwd(self, ctx)
+            ctx.cwd, ctx.cwd_unmanaged = _executor.resolve_cwd(self, ctx)
             try:
                 return base(*args, **kwargs)
             finally:
@@ -589,7 +589,7 @@ class _TaskFn:
         # A call from a task body is a piece of the run: it dedups against the
         # DAG, waits on a copy already running, or runs here with a real task
         # boundary. Outside a run it is the plain function call it looks like.
-        # Lazy import: `_futures` reaches back into the executor.
+        # Lazy import: `_futures` reaches back into the _executor.
         from footman import _futures
 
         return _futures.call(self, args, kwargs)
@@ -1489,7 +1489,7 @@ class Group:
         # the arguments it declares — the imperative echo of `fm <group>`.
         # Sequential, like any body call; wrap the call in parallel() to overlap.
         # The `default` child is the fan-out itself: excluded from its own set.
-        from footman.manifest import resolved_signature
+        from footman._manifest import resolved_signature
 
         for name, child in self.tasks.items():
             if name == "default":
@@ -1857,24 +1857,24 @@ class TaskView:
         """The folder the task was defined in, or `None` when the cascade did
         not tag it (a plugin- or `include()`-composed task, not a cascade file).
         Use it to act on tasks from one subtree of a monorepo."""
-        from footman import discover
+        from footman import _discover
 
-        return discover.defining_dir(self.fn)
+        return _discover.defining_dir(self.fn)
 
     @property
     def shadowed(self) -> Task | None:
         """The task this one overrides — same name, one cascade level up — or
         `None` if it shadows nothing."""
-        from footman import discover
+        from footman import _discover
 
-        return discover.shadowed(self.fn)
+        return _discover.shadowed(self.fn)
 
     @property
     def shadow_chain(self) -> tuple[Task, ...]:
         """This task and every task it shadows, nearest (this one) first."""
-        from footman import discover
+        from footman import _discover
 
-        return tuple(discover.shadow_chain(self.fn))
+        return tuple(_discover.shadow_chain(self.fn))
 
     @property
     def source_file(self) -> str | None:

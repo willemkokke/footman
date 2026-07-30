@@ -10,12 +10,13 @@ from typing import Annotated, Literal
 
 import pytest
 
-from footman import manifest, tools
+from footman import _manifest as manifest
+from footman import tools
+from footman._executor import run_chain
+from footman._split import split_chain
 from footman.context import Context, RunFailed, parallel, passthrough, run, use_context
-from footman.executor import run_chain
 from footman.params import Many, Secret, ask, suggest
 from footman.registry import Group
-from footman.split import split_chain
 
 
 def drive(build, line, **cfg):
@@ -1400,7 +1401,7 @@ def test_ask_validates_a_literal_choice(monkeypatch):
 
 def test_ask_off_a_terminal_fails_loudly(monkeypatch):
     from footman import context
-    from footman.split import ChainError
+    from footman._split import ChainError
 
     # No tty, no default: the required value can't be prompted. Since asks
     # front-load, the whole run refuses before anything starts — naming the
@@ -1514,7 +1515,8 @@ def _live_options():  # module-level: `from __future__ import annotations` makes
 
 
 def test_ask_front_loads_before_any_body_runs(monkeypatch):
-    from footman import context, schedule
+    from footman import _schedule as schedule
+    from footman import context
 
     monkeypatch.setattr(context, "_stdin_is_tty", lambda: True)
     order = []
@@ -1543,7 +1545,8 @@ def test_ask_front_loads_before_any_body_runs(monkeypatch):
 
 
 def test_ask_with_live_suggest_resolves_after_its_prereqs(monkeypatch):
-    from footman import context, schedule
+    from footman import _schedule as schedule
+    from footman import context
 
     monkeypatch.setattr(context, "_stdin_is_tty", lambda: True)
     monkeypatch.setattr(sys, "stdin", io.StringIO("1\n"))  # pick from the menu
@@ -1569,8 +1572,9 @@ def test_ask_with_live_suggest_resolves_after_its_prereqs(monkeypatch):
 
 
 def test_ask_refuses_up_front_without_a_terminal(monkeypatch):
-    from footman import context, schedule
-    from footman.split import ChainError
+    from footman import _schedule as schedule
+    from footman import context
+    from footman._split import ChainError
 
     monkeypatch.setattr(context, "_stdin_is_tty", lambda: False)
     ran = []
@@ -1596,7 +1600,8 @@ def test_ask_with_live_suggest_under_no_input_fails_that_task_loudly(monkeypatch
     # menu may need a dep's output), so --no-input can't refuse it up front —
     # the task fails loudly at launch instead, and can never hang. A sibling
     # is untouched.
-    from footman import context, schedule
+    from footman import _schedule as schedule
+    from footman import context
 
     monkeypatch.setattr(context, "_stdin_is_tty", lambda: True)
     ran = []
@@ -1700,8 +1705,9 @@ def test_ask_with_best_effort_suggest_stays_free_text(monkeypatch, capfd):
 
 
 def test_secret_answers_arrive_redacting(monkeypatch):
-    from footman import context, executor
-    from footman.coerce import peel
+    from footman import _executor as executor
+    from footman import context
+    from footman._coerce import peel
 
     monkeypatch.setattr(context, "_stdin_is_tty", lambda: True)
     monkeypatch.setattr(context, "_prompt_core", lambda *a, **k: "hunter2")

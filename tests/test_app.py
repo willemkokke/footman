@@ -10,8 +10,8 @@ from pathlib import Path
 import pytest
 
 from footman import _app, _paths, _progress
-from footman.executor import EX_USAGE
-from footman.split import Segment
+from footman._executor import EX_USAGE
+from footman._split import Segment
 
 TASKS = '''
 from typing import Annotated

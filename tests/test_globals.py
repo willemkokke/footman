@@ -10,11 +10,12 @@ import time
 
 import pytest
 
-from footman import _globals, manifest
+from footman import _globals
+from footman import _manifest as manifest
+from footman._executor import run_chain
+from footman._split import split_chain
 from footman.context import chdir, run
-from footman.executor import run_chain
 from footman.registry import Group
-from footman.split import split_chain
 
 
 def drive(build, line, **cfg):
@@ -685,7 +686,7 @@ def test_interactive_overlaps_the_parallel_pool():
     # A cross-handshake that only completes when the two nodes truly run
     # concurrently: the old model (interactive forces the whole run
     # sequential) would deadlock both waits and fail loudly.
-    from footman import schedule
+    from footman import _schedule as schedule
 
     e_wizard, e_sibling = threading.Event(), threading.Event()
     reg = Group("root")
@@ -707,7 +708,7 @@ def test_interactive_overlaps_the_parallel_pool():
 
 
 def test_console_lane_has_one_owner_at_a_time():
-    from footman import schedule
+    from footman import _schedule as schedule
 
     holds: list[tuple[str, float]] = []
     guard = threading.Lock()
@@ -947,7 +948,7 @@ def test_zero_arg_entry_parallelises_via_the_router(monkeypatch):
         def two():
             _tools.Tool("tool-b", in_process=True)()
 
-    from footman import schedule
+    from footman import _schedule as schedule
 
     reg = Group("root")
     tasks(reg)

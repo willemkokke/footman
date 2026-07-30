@@ -16,12 +16,13 @@ from typing import Annotated, Any, Literal
 
 import pytest
 
-from footman import context, manifest
+from footman import _manifest as manifest
+from footman import context
 from footman._describe import param_detail, usage_fragment
-from footman.executor import EX_USAGE, run_chain
+from footman._executor import EX_USAGE, run_chain
+from footman._split import ChainError, split_chain
 from footman.params import stdin
 from footman.registry import Group
-from footman.split import ChainError, split_chain
 from footman.testing import Runner
 
 

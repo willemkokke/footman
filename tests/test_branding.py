@@ -7,7 +7,7 @@ dogfoods the same harness users are told to test their branded CLIs with.
 from __future__ import annotations
 
 from footman import App, Brand, __version__
-from footman.executor import EX_USAGE
+from footman._executor import EX_USAGE
 from footman.testing import Runner
 
 

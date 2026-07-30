@@ -8,10 +8,11 @@ from typing import Annotated, Any
 
 import pytest
 
-from footman import manifest
+from footman import _manifest as manifest
+from footman._coerce import peel
 from footman._complete import complete
-from footman.coerce import peel
-from footman.executor import EX_USAGE, run_chain
+from footman._executor import EX_USAGE, run_chain
+from footman._split import ChainError, split_chain
 from footman.params import (
     Arg,
     Exists,
@@ -25,7 +26,6 @@ from footman.params import (
     suggest,
 )
 from footman.registry import Group
-from footman.split import ChainError, split_chain
 
 
 class _StandInMarker:

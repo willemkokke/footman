@@ -129,7 +129,8 @@ def test_spawn_refresh_swallows_oserror(monkeypatch):
 
 
 def test_refresh_cwd_no_tasks_file_builds_nothing(tmp_path, monkeypatch):
-    from footman import _refresh, manifest
+    from footman import _manifest as manifest
+    from footman import _refresh
 
     (tmp_path / ".git").mkdir()  # ceiling here, so the cascade can't climb higher
     monkeypatch.chdir(tmp_path)
@@ -140,7 +141,7 @@ def test_refresh_cwd_no_tasks_file_builds_nothing(tmp_path, monkeypatch):
 
 
 def test_completion_max_age_parsing():
-    from footman import config
+    from footman import _config as config
 
     assert config.completion_max_age({}) == 600  # default
     assert config.completion_max_age({"completion": {"max_age": "30s"}}) == 30
@@ -199,7 +200,8 @@ def test_refresh_source_rebuilds_the_manifest(tmp_path, monkeypatch):
 
 
 def test_refresh_source_missing_file_builds_nothing(tmp_path, monkeypatch):
-    from footman import _refresh, manifest
+    from footman import _manifest as manifest
+    from footman import _refresh
 
     monkeypatch.chdir(tmp_path)
     built: list[int] = []

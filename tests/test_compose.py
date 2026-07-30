@@ -7,8 +7,9 @@ import textwrap
 
 import pytest
 
-from footman import compose, manifest, registry
-from footman.executor import EX_USAGE
+from footman import _manifest as manifest
+from footman import compose, registry
+from footman._executor import EX_USAGE
 from footman.registry import (
     Group,
     RegistrationError,
@@ -442,7 +443,7 @@ def test_include_carries_a_providers_hook_to_the_merged_tree(tmp_path, monkeypat
     # the provider under capture() as a distinct instance, and `_evict_siblings`
     # drops it from sys.modules — so a re-`import` of it sees a stale copy the
     # grafted hook never touched (the module-aliasing trap).
-    from footman import discover
+    from footman import _discover as discover
 
     monkeypatch.setattr(compose, "_module_trees", {})
     monkeypatch.syspath_prepend(str(tmp_path))

@@ -8,7 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from footman import manifest, registry
+from footman import _manifest as manifest
+from footman import registry
 
 FIXTURE = Path(__file__).parent / "fixtures" / "sample_tasks.py"
 PYPROJECT = Path(__file__).resolve().parent.parent / "pyproject.toml"

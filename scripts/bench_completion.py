@@ -33,7 +33,8 @@ RUNS = 25
 
 
 def build_manifest() -> Path:
-    from footman import manifest, registry
+    from footman import _manifest as manifest
+    from footman import registry
 
     registry.reset()
     spec = importlib.util.spec_from_file_location("sample_tasks", FIXTURE)

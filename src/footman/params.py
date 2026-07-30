@@ -4,7 +4,7 @@ Dynamic completion (`suggest`), one-or-more (`Many`), comma-split opt-out
 (`nosplit`), path requirements (`exists`/`isfile`/`isdir`), numeric bounds
 (`between`, or a bare `range`), environment fallbacks (`env`), custom
 validators (`check`), and per-parameter help (`doc`). Each carries no runtime
-weight beyond a small marker object; `footman.coerce.peel` reads them all in
+weight beyond a small marker object; `footman._coerce.peel` reads them all in
 one place.
 """
 

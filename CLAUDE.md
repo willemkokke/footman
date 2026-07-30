@@ -76,16 +76,16 @@ src/footman/
   _shellcomp.py   shell completion installers (bash/zsh/fish/pwsh/nushell)
   _app.py         execution path: _run → _execute → _run_tree / run_group
   registry.py     @task / group() decorators, capture()
-  discover.py     the monorepo tasks.py cascade (per-file import isolation)
+  _discover.py    the monorepo tasks.py cascade (per-file import isolation)
   compose.py      include() / plugin() (footman.tasks entry points)
-  manifest.py     introspect tasks → serialisable manifest (baked completer output)
-  split.py        CLI grammar: globals + chain splitting; GLOBALS is the source of truth
-  coerce.py       type coercion (unions, choices, markers)
+  _manifest.py    introspect tasks → serialisable manifest (baked completer output)
+  _split.py       CLI grammar: globals + chain splitting; GLOBALS is the source of truth
+  _coerce.py      type coercion (unions, choices, markers)
   params.py       public markers: suggest, Many, nosplit, between, env, check, exists…
   context.py      run(), parallel(), the stdout/stderr router
-  executor.py     bind + run one task
-  schedule.py     the DAG scheduler (parallel/sequential, live progress line)
-  config.py       [tool.footman] discovery
+  _executor.py    bind + run one task
+  _schedule.py    the DAG scheduler (parallel/sequential, live progress line)
+  _config.py      [tool.footman] discovery
   tools.py/.pyi   the tools.* bridge + its typing stub
   testing.py      Runner (in-process CLI) + recording()
 docs/             Zensical (mkdocs-like) site

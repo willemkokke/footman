@@ -8,8 +8,10 @@ from typing import assert_type
 
 import pytest
 
-from footman import manifest
-from footman.executor import run_chain
+from footman import _manifest as manifest
+from footman._executor import run_chain
+from footman._schedule import resolve_keep_going, run_plan
+from footman._split import split_chain
 from footman.params import Forward
 from footman.registry import (
     Group,
@@ -18,8 +20,6 @@ from footman.registry import (
     keeps_going,
     wants_progress,
 )
-from footman.schedule import resolve_keep_going, run_plan
-from footman.split import split_chain
 
 
 def _tree(build):

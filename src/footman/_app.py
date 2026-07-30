@@ -20,24 +20,24 @@ from collections.abc import Callable
 from pathlib import Path
 
 from footman import (
+    _coerce,
+    _config,
     _describe,
+    _discover,
+    _executor,
+    _manifest,
     _paths,
     _progress,
+    _schedule,
     _script,
-    coerce,
-    config,
+    _split,
     context,
-    discover,
-    executor,
     invocation,
-    manifest,
     registry,
-    schedule,
-    split,
 )
+from footman._executor import EX_USAGE
+from footman._split import Segment
 from footman.app import DEFAULT_BRAND, Brand
-from footman.executor import EX_USAGE
-from footman.split import Segment
 
 # The brand (names + version) in effect for the current invocation. Set at the
 # top of `run()`; a CLI is one invocation per process, so a module global is
@@ -145,7 +145,7 @@ def resolve_task_files(
     cwd: Path | None = None,
 ) -> tuple[list[Path], dict[str, object]]:
     """The task files and merged config for the cwd + globals — the pure core of
-    `_discover`, shared with the completion subprocess (`_suggest`) so both
+    `_discover_files`, shared with the completion subprocess (`_suggest`) so both
     discover exactly the same tasks.
 
     `-f/--tasks-file` loads exactly one file, no cascade; otherwise every
@@ -153,8 +153,8 @@ def resolve_task_files(
     the cascade mode (user-level `cascade` key, `FOOTMAN_CASCADE` override):
     the cwd alone (`none`), the repo root (`repo`, default), or the whole
     ancestor path (`filesystem`) — and config search follows the same walk,
-    so the two cascades stay one concept. Raises `config.ConfigError` on a
-    bad `--config` or an unknown cascade mode (`config.CascadeError`); an
+    so the two cascades stay one concept. Raises `_config.ConfigError` on a
+    bad `--config` or an unknown cascade mode (`_config.CascadeError`); an
     empty file list means nothing matched. The caller owns how either
     outcome is surfaced.
 
@@ -163,14 +163,14 @@ def resolve_task_files(
     must see exactly what the run will.
     """
     cwd = cwd or Path.cwd()
-    mode = config.cascade_mode(g.get("config"))  # type: ignore[arg-type]
+    mode = _config.cascade_mode(g.get("config"))  # type: ignore[arg-type]
     if mode == "none":
         ceiling = cwd
     elif mode == "filesystem":
         ceiling = Path(cwd.anchor)
     else:
         ceiling = _paths.find_repo_root(cwd)
-    cfg = config.load_config(
+    cfg = _config.load_config(
         cwd,
         ceiling,
         g.get("config"),  # type: ignore[arg-type]
@@ -190,7 +190,7 @@ def resolve_task_files(
     return files, cfg
 
 
-def _discover(
+def _discover_files(
     g: dict[str, object], wants_help: bool, bare: bool
 ) -> tuple[list[Path], dict[str, object]] | int:
     """Resolve the task files to load and the merged config for this cwd.
@@ -206,11 +206,11 @@ def _discover(
             on_warning=_error,
             on_note=_error if g.get("verbose") else None,
         )
-    except config.CascadeError as exc:
+    except _config.CascadeError as exc:
         # Self-describing (names FOOTMAN_CASCADE / the `cascade` key): no
         # `--config:` prefix, which would misattribute an env-var mistake.
         return _refuse(bool(g.get("json")), str(exc))
-    except config.ConfigError as exc:
+    except _config.ConfigError as exc:
         return _refuse(bool(g.get("json")), f"--config: {exc}")
 
     if files:
@@ -221,13 +221,13 @@ def _discover(
         # A stuck newcomer asking for help should see the globals (-f/-C are the
         # way out) — not a bare one-liner. Global help over an empty tree, then
         # the "where did I look" note.
-        _print_global_help(manifest.build_manifest(registry.Group("root"))["tree"])
+        _print_global_help(_manifest.build_manifest(registry.Group("root"))["tree"])
         print(f"\n(no tasks file found — looked for {looked})")
         return 0
     if bare or g.get("list") or g.get("tree"):
         # A bare `fm` (like `--list`) is a warm empty state, not a hard error.
         if g.get("json"):  # the catalog envelope, honestly empty
-            tree = manifest.build_manifest(registry.Group("root"))["tree"]
+            tree = _manifest.build_manifest(registry.Group("root"))["tree"]
             print(json.dumps({"schema": 1, "tree": tree}, indent=2))
         else:
             print(f"No tasks file found (looked for {looked}).")
@@ -493,7 +493,7 @@ def _print_global_help(tree: dict) -> None:
     print(f"usage: {_describe.paint_cli(parts, _color_out)}")
     print(f"\n{_describe.bold('globals (before the first task):', _color_out)}")
     rows = []
-    for name, alias, _kind, hint, help_text in split.GLOBALS:
+    for name, alias, _kind, hint, help_text in _split.GLOBALS:
         label = f"{alias}, {name}" if alias else f"    {name}"
         if hint:
             label += f"={hint}"  # values are always `=`-attached
@@ -557,7 +557,7 @@ def _help_targets(
     dotted addresses only and skips every other token (option-shaped tokens
     and, once a target is found, its argument values).
     """
-    _, i = split._parse_globals(argv, 0, lenient=True)
+    _, i = _split._parse_globals(argv, 0, lenient=True)
     targets: list[tuple[str, list[str]]] = []
     strays: list[str] = []
     for tok in argv[i:]:
@@ -591,7 +591,7 @@ def _print_help(tree: dict, argv: list[str]) -> int:
             return _refuse(
                 _wants_json(argv),
                 f"--help: unknown task or group {strays[0]!r}"
-                f"{split._did_you_mean(strays[0], known)}",
+                f"{_split._did_you_mean(strays[0], known)}",
             )
         _print_global_help(tree)
         return 0
@@ -685,12 +685,12 @@ def _where(root: registry.Group, tree: dict, dotted: str) -> int:
     try:
         if "" in path:
             raise KeyError(dotted)
-        fn = executor.resolve(root, path)
+        fn = _executor.resolve(root, path)
     except (KeyError, IndexError):
-        names = split.flat_addresses(tree)
-        _error(f"--where: unknown task {dotted!r}{split._did_you_mean(dotted, names)}")
+        names = _split.flat_addresses(tree)
+        _error(f"--where: unknown task {dotted!r}{_split._did_you_mean(dotted, names)}")
         return EX_USAGE
-    chain = discover.shadow_chain(fn)
+    chain = _discover.shadow_chain(fn)
     lines = []
     for index, member in enumerate(chain):
         code = getattr(member, "__code__", None)
@@ -713,7 +713,7 @@ def _emit_document(value: object, inner: object) -> None:
     one compact line into a pipe, always a trailing newline. Encoded via
     `_describe.json_default`, the same encoder `--json` uses, so dataclasses
     serialise and `Secret` redacts identically on both surfaces."""
-    mode = coerce.emission_mode(inner)
+    mode = _coerce.emission_mode(inner)
     if mode == "bytes" and isinstance(value, (bytes, bytearray)):
         buffer = getattr(sys.stdout, "buffer", None)
         if buffer is not None:
@@ -740,7 +740,7 @@ def _emit_document(value: object, inner: object) -> None:
 
 
 def _print_summary(
-    results: list[executor.TaskResult],
+    results: list[_executor.TaskResult],
     *,
     timings: bool,
     total: float,
@@ -754,7 +754,7 @@ def _print_summary(
     for result in results:
         ok = result.ok
         cancelled = result.cancelled
-        state = executor.reported_state(result)
+        state = _executor.reported_state(result)
         if color:
             if state == "shared":
                 # Dimmed, not green: nothing ran, the run already had it.
@@ -812,13 +812,13 @@ def _print_summary(
         print(took, file=sys.stderr)
 
 
-def _print_json(results: list[executor.TaskResult], *, total: float) -> None:
+def _print_json(results: list[_executor.TaskResult], *, total: float) -> None:
     payload = []
     for r in results:
         entry: dict[str, object] = {
             "task": r.task,
             "ok": r.ok,
-            "state": executor.reported_state(r),
+            "state": _executor.reported_state(r),
             "cancelled": r.cancelled,
             "code": r.code,
             "duration_ms": round(r.duration * 1000, 3),
@@ -961,7 +961,7 @@ def _setup_completion(shell: object) -> int:
 def run(
     argv: list[str],
     brand: Brand = DEFAULT_BRAND,
-    collect: list[executor.TaskResult] | None = None,
+    collect: list[_executor.TaskResult] | None = None,
 ) -> int:
     """Run the CLI; when *collect* is given, extend it with the TaskResults.
 
@@ -1151,7 +1151,7 @@ def _script_source(g: dict[str, object], probe: Path) -> Path | None:
     """
     try:
         files, _cfg = resolve_task_files(g, on_warning=lambda _: None, cwd=probe)
-    except (config.ConfigError, config.CascadeError):
+    except (_config.ConfigError, _config.CascadeError):
         return None  # the real run reports these properly
     return files[0] if len(files) == 1 else None
 
@@ -1187,13 +1187,13 @@ def _script_handoff(
     if meta is None or not meta.get("dependencies"):
         return None  # not a script, or a block that asks for no world
     try:
-        cfg = config.load_config(
+        cfg = _config.load_config(
             probe,
             _paths.find_repo_root(probe),
             str(g["config"]) if g.get("config") else None,
             on_warning=lambda _: None,  # the real run repeats any warning
         )
-    except config.ConfigError:
+    except _config.ConfigError:
         return None  # the real run reports the broken --config properly
     if cfg.get("uv") is False:
         return None
@@ -1285,13 +1285,13 @@ def _uv_handoff(argv: list[str], g: dict[str, object]) -> int | None:
     if uv is None:
         return
     try:
-        cfg = config.load_config(
+        cfg = _config.load_config(
             probe,
             _paths.find_repo_root(probe),
             str(g["config"]) if g.get("config") else None,
             on_warning=lambda _: None,  # the real run repeats any warning
         )
-    except config.ConfigError:
+    except _config.ConfigError:
         return  # the real run reports the broken --config properly
     if cfg.get("uv") is False:
         return
@@ -1307,15 +1307,15 @@ def _uv_handoff(argv: list[str], g: dict[str, object]) -> int | None:
 def _run(
     argv: list[str],
     brand: Brand,
-    collect: list[executor.TaskResult] | None = None,
+    collect: list[_executor.TaskResult] | None = None,
     *,
     handoff: bool = True,
 ) -> int:
     global _brand
     _brand = brand
     try:
-        pre_globals, after = split._parse_globals(argv, 0, lenient=True)
-    except split.ChainError as exc:
+        pre_globals, after = _split._parse_globals(argv, 0, lenient=True)
+    except _split.ChainError as exc:
         return _refuse(_wants_json(argv), str(exc))
     g = _globals_to_dict(pre_globals)
     _set_colors(_resolve_color(g))
@@ -1340,7 +1340,7 @@ def _run(
                 flag = "--" + key.replace("_", "-")
                 return _refuse(
                     bool(g.get("json")),
-                    split._expects_value(None, flag, "[SHELL]", argv[after]),
+                    _split._expects_value(None, flag, "[SHELL]", argv[after]),
                 )
             return run_action(value)
 
@@ -1377,7 +1377,7 @@ def _execute(
     argv: list[str],
     g: dict[str, object],
     wants_help: bool,
-    collect: list[executor.TaskResult] | None,
+    collect: list[_executor.TaskResult] | None,
 ) -> int:
     """Discover the cascade, load + sync its manifest, then run the tree.
 
@@ -1386,8 +1386,8 @@ def _execute(
     """
     # "Bare" means no chain was asked for — globals-only lines (`fm --json`,
     # `fm -k`) are listing-shaped, exactly like they are when tasks exist.
-    _, after_globals = split._parse_globals(argv, 0, lenient=True)
-    found = _discover(g, wants_help, bare=after_globals >= len(argv))
+    _, after_globals = _split._parse_globals(argv, 0, lenient=True)
+    found = _discover_files(g, wants_help, bare=after_globals >= len(argv))
     if isinstance(found, int):
         return found
     files, cfg = found
@@ -1411,11 +1411,11 @@ def _execute(
         cwd=os.getcwd(),
     )
     try:
-        reg = discover.load_tree(files, base=base, inv=inv)
-    except discover.HookError as exc:
+        reg = _discover.load_tree(files, base=base, inv=inv)
+    except _discover.HookError as exc:
         # A hook that raised is a refusal, named — nothing has run yet.
         return _refuse(json_mode, str(exc))
-    except discover.TasksImportError as exc:
+    except _discover.TasksImportError as exc:
         if isinstance(exc.original, registry.RegistrationError):
             # a user mistake, not a crash
             return _refuse(json_mode, f"{exc.path}: {exc.original}")
@@ -1445,7 +1445,7 @@ def _execute(
             # that file's tasks. max_age=0: no background refresh (rebuilt on the
             # next -f run); a live refresh is a fast-follow.
             override = str(g.get("tasks_file"))
-            tree = manifest.sync_manifest(
+            tree = _manifest.sync_manifest(
                 reg,
                 Path.cwd(),
                 completion_max_age=0,
@@ -1454,15 +1454,15 @@ def _execute(
             )["tree"]
         else:
             cfg_tasks = cfg.get("tasks")
-            tree = manifest.sync_manifest(
+            tree = _manifest.sync_manifest(
                 reg,
                 Path.cwd(),
-                completion_max_age=config.completion_max_age(cfg),
+                completion_max_age=_config.completion_max_age(cfg),
                 tasks_file=cfg_tasks
                 if isinstance(cfg_tasks, str)
                 else _brand.tasks_file,
             )["tree"]
-    except manifest.ManifestError as exc:  # broken completer, bad markers, …
+    except _manifest.ManifestError as exc:  # broken completer, bad markers, …
         return _refuse(json_mode, str(exc))
 
     # The `root` policy token's target: the highest cascade file's directory.
@@ -1470,11 +1470,11 @@ def _execute(
     # Arm the per-task lifecycle for exactly this run: every execution —
     # segment, prerequisite, fan-out member, body call — reaches the same
     # ladder through `run_bound`, and the frozen invocation rides along.
-    executor.install_lifecycle(inv, reg.contributions)
+    _executor.install_lifecycle(inv, reg.contributions)
     try:
         code = _run_tree(reg, tree, argv, cfg, collect, root_dir=root_dir)
     finally:
-        executor.clear_lifecycle()
+        _executor.clear_lifecycle()
         registry.release_global_options(reg.contributions["globals"])
     # After the run, so it never adds latency before the user's command —
     # and after the uv handoff by construction (the handoff replaced this
@@ -1488,7 +1488,7 @@ def _run_tree(
     tree: dict,
     argv: list[str],
     cfg: dict[str, object],
-    collect: list[executor.TaskResult] | None,
+    collect: list[_executor.TaskResult] | None,
     root_dir: str = "",
 ) -> int:
     """The post-manifest tail: help/where/split/list/tree/dry-run/run/report.
@@ -1497,7 +1497,7 @@ def _run_tree(
     so both honour `--help`/`--version`/`--list`/`--tree`/`--json` identically.
     Globals are re-derived from `argv` (already validated upstream).
     """
-    g = _globals_to_dict(split._parse_globals(argv, 0, lenient=True)[0])
+    g = _globals_to_dict(_split._parse_globals(argv, 0, lenient=True)[0])
     json_mode = bool(g.get("json"))
 
     cli_color = g.get("color")
@@ -1517,8 +1517,8 @@ def _run_tree(
     # config key is validated even when --sort already decides, so a broken
     # value teaches on every invocation, not just unflagged ones.
     try:
-        sort_cfg = config.sort_listing(cfg)
-    except config.ConfigError as exc:
+        sort_cfg = _config.sort_listing(cfg)
+    except _config.ConfigError as exc:
         return _refuse(json_mode, str(exc))
     if g.get("sort") or sort_cfg:
         tree = _describe.sort_tree(tree)
@@ -1535,8 +1535,8 @@ def _run_tree(
         return _where(reg, tree, str(g["where"]))
 
     try:
-        globals_, segments = split.split_chain(tree, argv)
-    except split.ChainError as exc:
+        globals_, segments = _split.split_chain(tree, argv)
+    except _split.ChainError as exc:
         return _refuse(json_mode, str(exc))
 
     # A task whose signature claims stdout (`-> Stdout[T]`) makes this a
@@ -1547,14 +1547,14 @@ def _run_tree(
     # count — a declaring task reached as a dependency or through a group
     # fan-out is suppressed, not refused, so composing a filter into a
     # bigger task stays legal.
-    emitters: list[tuple[split.Segment, object]] = []
+    emitters: list[tuple[_split.Segment, object]] = []
     for seg in segments:
         try:
-            seg_fn = executor.resolve(reg, seg.task.split("."))
+            seg_fn = _executor.resolve(reg, seg.task.split("."))
         except (KeyError, IndexError):
             continue  # the splitter validated; never refuse twice
-        declares, inner = coerce.emitted(
-            manifest.resolved_signature(seg_fn).return_annotation
+        declares, inner = _coerce.emitted(
+            _manifest.resolved_signature(seg_fn).return_annotation
         )
         if declares:
             emitters.append((seg, inner))
@@ -1686,7 +1686,7 @@ def _run_tree(
     predictable = (
         progress_on
         and not g.get("tasks_file")
-        and schedule.dag_wants_progress(reg, segments)
+        and _schedule.dag_wants_progress(reg, segments)
     )
     est = times_key = None
     context.seed_cmd_width(0)  # each run learns (or is seeded) afresh
@@ -1709,12 +1709,12 @@ def _run_tree(
     # here. Released by the caller's finally, so an outside-a-run read goes
     # back to teaching.
     if (
-        bad := executor.bind_global_options(reg.contributions["globals"], globals_)
+        bad := _executor.bind_global_options(reg.contributions["globals"], globals_)
     ) is not None:
         return _refuse(json_mode, bad)
     start = time.perf_counter()
     try:
-        results = schedule.run_plan(
+        results = _schedule.run_plan(
             reg,
             segments,
             sequential=sequential,
@@ -1727,7 +1727,7 @@ def _run_tree(
             progress=progress_on,
             jobs=jobs,
         )
-    except split.ChainError as exc:  # e.g. passthrough with no *args
+    except _split.ChainError as exc:  # e.g. passthrough with no *args
         return _refuse(json_mode, str(exc))
     total = time.perf_counter() - start
 
@@ -1735,7 +1735,7 @@ def _run_tree(
         collect.extend(results)
     # The run report's moment: every row is in, nothing has printed. A
     # rewrite a hook makes through its result view is what gets reported.
-    post_error = executor.run_post_tasks(results, total, json_mode)
+    post_error = _executor.run_post_tasks(results, total, json_mode)
     if predictable and times_key and results and all(r.ok for r in results):
         # Green runs teach: the duration, and the step-alignment width.
         _progress.record(Path.cwd(), times_key, total, cmd_width=context.cmd_width())
@@ -1786,7 +1786,7 @@ def run_group(
     root: registry.Group,
     argv: list[str],
     brand: Brand = DEFAULT_BRAND,
-    collect: list[executor.TaskResult] | None = None,
+    collect: list[_executor.TaskResult] | None = None,
 ) -> int:
     """Drive an in-memory Group tree: globals, `--version`, manifest, run.
 
@@ -1799,8 +1799,8 @@ def run_group(
     global _brand
     _brand = brand
     try:
-        pre_globals, _ = split._parse_globals(argv, 0, lenient=True)
-    except split.ChainError as exc:
+        pre_globals, _ = _split._parse_globals(argv, 0, lenient=True)
+    except _split.ChainError as exc:
         return _refuse(_wants_json(argv), str(exc))
     g = _globals_to_dict(pre_globals)
     _set_colors(_resolve_color(g))
@@ -1808,7 +1808,7 @@ def run_group(
     if g.get("version"):
         return _print_version(bool(g.get("json")))
 
-    tree = manifest.build_manifest(root)["tree"]
+    tree = _manifest.build_manifest(root)["tree"]
     # An in-memory tree still gets the per-task lifecycle — its hooks live on
     # the Group's own contributions. `pre_tasks` stays a discovery-time moment
     # (there is no cascade here), so the invocation arrives already frozen.
@@ -1820,9 +1820,9 @@ def run_group(
         return _refuse(bool(g.get("json")), clash)
     for orphan in registry.orphan_global_options(root):
         _error(f"warning: {orphan}")
-    executor.install_lifecycle(inv, root.contributions)
+    _executor.install_lifecycle(inv, root.contributions)
     try:
         return _run_tree(root, tree, argv, {}, collect)
     finally:
-        executor.clear_lifecycle()
+        _executor.clear_lifecycle()
         registry.release_global_options(root.contributions["globals"])
