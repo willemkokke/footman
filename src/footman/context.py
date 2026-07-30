@@ -25,11 +25,11 @@ import subprocess
 import sys
 import threading
 import time
-from collections.abc import Callable, Iterator, Sequence
+from collections.abc import Callable, Iterable, Iterator, Sequence, Sized
 from contextvars import ContextVar
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Any, NoReturn, TextIO
+from typing import Any, Literal, NoReturn, Protocol, TextIO, TypeVar, overload
 
 from footman import _globals
 
@@ -379,7 +379,7 @@ def progress(done: int, total: int = 0) -> None:
             status.counted.pop(name, None)
 
 
-def track(iterable: Any, total: int | None = None) -> Any:
+def track(iterable: Iterable[_T], total: int | None = None) -> Iterator[_T]:
     """Iterate *iterable*, reporting progress as it goes.
 
     The ergonomic form of `progress()`: the total comes from `len()` when
@@ -395,10 +395,7 @@ def track(iterable: Any, total: int | None = None) -> Any:
     ```
     """
     if total is None:
-        try:
-            total = len(iterable)
-        except TypeError:
-            total = 0
+        total = len(iterable) if isinstance(iterable, Sized) else 0
     done = 0
     try:
         for item in iterable:
@@ -411,7 +408,7 @@ def track(iterable: Any, total: int | None = None) -> Any:
             progress(0, 0)
 
 
-def inherited() -> Any:
+def inherited() -> Callable[..., Any]:
     """The task this one shadows in the cascade — footman's `super()`.
 
     A nearer `tasks.py` overriding a task by name usually wants to *extend*
@@ -551,10 +548,26 @@ def context_param_name(sig: inspect.Signature) -> str | None:
 # --- output routing ----------------------------------------------------------
 
 
-# The run's live status line (duck-typed — a `_progress.StatusLine`),
-# registered by the scheduler for the duration of a run. context stays
-# ignorant of _progress on purpose; outside a run there is none.
-_status: Any = None
+class Status(Protocol):
+    """What context asks of a live status line — the duck-typed face of
+    `_progress.StatusLine`. context stays ignorant of _progress on purpose;
+    this Protocol is the contract, satisfied structurally."""
+
+    counted: dict[str, tuple[int, int]]
+
+    def unit_added(self, count: int = 1) -> None: ...
+    def unit_started(self, name: str) -> None: ...
+    def unit_counted(self, name: str, done: int, total: int) -> None: ...
+    def unit_finished(self, name: str, ok: bool) -> None: ...
+    def unit_skipped(self, name: str) -> None: ...
+    def notify(self, s: str) -> None: ...
+    def suspend(self) -> None: ...
+    def resume(self) -> None: ...
+
+
+# The run's live status line, registered by the scheduler for the duration
+# of a run; outside a run there is none.
+_status: Status | None = None
 
 # The widest command label seen, for aligning the step lines' time column.
 # Seeded from the previous run's history (so alignment is right from the
@@ -579,12 +592,13 @@ def _observe_cmd(label: str) -> int:
     return _cmd_width
 
 
-def set_status(status: Any) -> None:
+def set_status(status: Status | None) -> None:
     global _status
     _status = status
 
 
-def active_status() -> Any:
+def active_status() -> Status | None:
+    """The run's live status line, or `None` outside a run."""
     return _status
 
 
@@ -640,7 +654,7 @@ def real_stderr() -> TextIO:
     return _err_router.real if _err_router is not None else sys.stderr
 
 
-def real_stdin() -> Any:
+def real_stdin() -> TextIO:
     """The underlying stdin, bypassing the guard proxy.
 
     The framework's own prompts read here — they already write through
@@ -650,6 +664,9 @@ def real_stdin() -> Any:
     real = getattr(sys.stdin, "_real", None)
     return real if real is not None else sys.stdin
 
+
+_T = TypeVar("_T")
+_V = TypeVar("_V")
 
 _UNSET: Any = object()  # "no default given" — None is a valid default/value
 
@@ -836,6 +853,24 @@ def confirm(message: str, *, default: bool = False) -> bool:
         default="y" if default else "n",
     )
     return reply.strip().lower() in ("y", "yes")
+
+
+@overload
+def select(
+    message: str,
+    options: Sequence[str | tuple[str, _V]],
+    *,
+    multiple: Literal[True],
+    default: list[str | _V] = ...,
+) -> list[str | _V]: ...
+@overload
+def select(
+    message: str,
+    options: Sequence[str | tuple[str, _V]],
+    *,
+    multiple: Literal[False] = False,
+    default: str | _V = ...,
+) -> str | _V: ...
 
 
 def select(
@@ -1998,7 +2033,7 @@ _collecting: ContextVar[list[tuple[Any, tuple, dict]] | None] = ContextVar(
 )
 
 
-class Fanout(list):
+class Fanout(list[int]):
     """The `with parallel() as p:` block — task calls inside it are queued,
     then run together when the block ends.
 
@@ -2011,7 +2046,7 @@ class Fanout(list):
         self.keep_going = keep_going
         self.results: list[Any] = []
         """What each queued call returned, in the order they were written."""
-        self._queued: list[tuple[Any, tuple, dict]] = []
+        self._queued: list[tuple[Any, tuple[Any, ...], dict[str, Any]]] = []
         self._token: Any = None
 
     def __enter__(self) -> Fanout:
@@ -2044,7 +2079,9 @@ class Fanout(list):
             return False  # the block itself failed: nothing to run
         values: list[Any] = [None] * len(self._queued)
 
-        def thunk(index: int, task: Any, args: tuple, kwargs: dict):
+        def thunk(
+            index: int, task: Any, args: tuple[Any, ...], kwargs: dict[str, Any]
+        ) -> Callable[[], None]:
             def run() -> None:
                 # The value goes to the slot, never through the return: a task
                 # returning an int would read as an exit code out here.
@@ -2074,7 +2111,15 @@ def _queue_call(task: Any, args: tuple[Any, ...], kwargs: dict[str, Any]) -> Any
     return Pending(registry.cli_name(getattr(task, "__name__", "task")))
 
 
-def parallel(*calls: Callable[[], Any], keep_going: bool = False) -> Any:
+@overload
+def parallel(*, keep_going: bool = False) -> Fanout: ...
+@overload
+def parallel(*calls: Callable[[], object], keep_going: bool = False) -> list[int]: ...
+
+
+def parallel(
+    *calls: Callable[[], object], keep_going: bool = False
+) -> Fanout | list[int]:
     """Run task calls / thunks concurrently; wait; fail if any fail.
 
     Each call runs in a child of the current context with its own output buffer,

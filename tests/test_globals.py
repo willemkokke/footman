@@ -824,11 +824,32 @@ def test_console_lane_suspends_the_status_line():
     calls = []
 
     class _FakeStatus:
+        def __init__(self):
+            self.counted: dict[str, tuple[int, int]] = {}
+
         def suspend(self):
             calls.append("suspend")
 
         def resume(self):
             calls.append("resume")
+
+        def unit_added(self, count=1):
+            pass
+
+        def unit_started(self, name):
+            pass
+
+        def unit_counted(self, name, done, total):
+            pass
+
+        def unit_finished(self, name, ok):
+            pass
+
+        def unit_skipped(self, name):
+            pass
+
+        def notify(self, s):
+            pass
 
     _globals.install()
     context.set_status(_FakeStatus())

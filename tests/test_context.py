@@ -1080,6 +1080,27 @@ def test_progress_and_track_report_to_the_status_line():
             self.reports.append((name, done, total))
             self.counted[name] = (done, total)
 
+        def unit_added(self, count=1):
+            pass
+
+        def unit_started(self, name):
+            pass
+
+        def unit_finished(self, name, ok):
+            pass
+
+        def unit_skipped(self, name):
+            pass
+
+        def notify(self, s):
+            pass
+
+        def suspend(self):
+            pass
+
+        def resume(self):
+            pass
+
         def paint(self):
             pass
 

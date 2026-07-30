@@ -994,6 +994,7 @@ class _FakeStatus:
     def __init__(self):
         self.events: list[tuple] = []
         self.total = 0
+        self.counted: dict[str, tuple[int, int]] = {}
 
     def unit_added(self, count: int = 1) -> None:
         self.total += count
@@ -1015,6 +1016,12 @@ class _FakeStatus:
         pass
 
     def paint(self) -> None:
+        pass
+
+    def suspend(self) -> None:
+        pass
+
+    def resume(self) -> None:
         pass
 
 
