@@ -27,6 +27,16 @@ only; the register carries nuance.
   **`Result`**.
 - **off the record** (`recorded=False`) — executed under full
   management, no record. How a task learns something.
+- **the audit** — the record's verdict provenance: every lifecycle
+  moment that acted on (or failed) the grain, as (moment, actor,
+  code-or-None) entries in execution order. The body/capture entry is
+  always present and carries the work's own raw code; a failing moment
+  always enters, declared or not; quiet undeclared moments are
+  skipped; involvement without a verdict write records code None —
+  and nothing else (no title-diff log). `failed_at` and the
+  pre-failure code are derived readings of the audit, not stored
+  twins. (Ruled 2026-07-31, name Willem's; supersedes the provisional
+  `work_code` field.)
 - **address** — a node's tree-derived name (parent-path + label +
   ordinal). Universal, referential, line-number-stable. Ordinals count
   same-labelled siblings in request order AS WRITTEN — never completion
@@ -84,11 +94,11 @@ only; the register carries nuance.
   drift, not intent. At a hook moment the stakes are higher — the
   verbatim honouring would have let an observer "fail" a grain green
   (move 4, verified in source) — but the rule is one rule, uniform.
-  And a grain failed by a post-work moment (review, observe) keeps
-  the code it carried when that moment began (provisional spelling
-  `work_code`; register row): a green build vetoed at observe shows
-  its 0 — visible on the record, not merely inferable from the
-  reason.
+  And every grain carries its audit (see definitions): the verdict's
+  full provenance in execution order, so a green build vetoed at
+  observe shows its raw code, its reviewed 0, and the veto — each
+  attributed. `failed_at` and the pre-failure code are derived
+  readings of the audit, not stored twins.
 - **I6 — One identity rule, everywhere.** Address is universal; sharing
   exists only where a declaration does (I13), and the key is uniform at
   plan and execution: **(declaration, frozen overrides, resolved
@@ -612,6 +622,120 @@ labels, not paths, so no separator or drive-letter semantics leak in.
 **Move 4 complete. New opens: decision 9 (reviewer composition),
 decision 10 (review provenance). Everything else bounced or
 sharpened decision 1.**
+
+## Move 5 — decisions (started 2026-07-31)
+
+Called in the agreed dependency order, report shape first — decision
+1's brief is below, awaiting the call.
+
+### Decision 9 — reviewer composition: RULED
+
+Chained draft, bottom-up: the reviewer written closest to the `def`
+runs first, each further-out reviewer sees the accumulated edits, and
+`.opts(pre_record=…)` runs last. Uniform wherever the hooks sit
+relative to the lifter (attachment stays order-free; execution order
+is always bottom-up). The docs phrasing, per Willem's ask — carry
+this wording to the docs page when it comes:
+
+> Reviewers run from the inside out: the hook written closest to your
+> function sees the draft first, and each one above it sees what the
+> previous reviewers left. A per-use `.opts(pre_record=…)` runs last —
+> the use site gets the final word. (This is the same order decorators
+> themselves apply: bottom to top.)
+
+### Decision 10 — review provenance: RULED as the audit
+
+Willem's generalisation and his name (2026-07-31): not a reviewer
+list — the record carries every lifecycle moment involved with the
+verdict, as (moment, actor, code-or-None) entries in execution order.
+Full shape in the definitions ("the audit"). Pinned rules: the
+body/capture entry always enters with the work's own raw code; a
+failing moment always enters, declared or not; quiet undeclared
+moments are skipped; involvement without a verdict write records code
+None and nothing more (verdict-scope only — no title-diff log). One
+structure subsumes three fields: `failed_at` and the pre-failure code
+(`work_code`, whose naming question dissolves) become derived
+readings. A bonus that fell out: the audit's execution order IS
+decision 9's order, documented by the data itself.
+
+### The decision-1 brief (the shadow-emitter spike, 2026-07-31)
+
+Method: the real `fm --json check` payload (schema 1, green run,
+22.8s), projected into the model's item set — foreign defs lifted per
+walk 1, fan-outs as anonymous grouping items — with parentage
+hand-threaded from tasks.py, because the runtime records no requester
+identity (gap 1 below). Both candidate shapes built from the same
+items; every query run against both.
+
+**Exhibit 1 — today's 5 rows are 24 items.** The real structure the
+flat report hides: `covered`'s 22.8s pytest run rides `check`'s row
+unnamed; the six checker runs are anonymous command strings on
+`typecheck` (their `__name__` labels reach the live line but are LOST
+in `--json`); the nesting exists only as pre-rendered text inside
+`check`'s `output` field. Abridged, as the model records it:
+
+    check                                  22.8s  [task]
+      (fanout)
+        format → ruff format . --check      0.1s
+        lint   → ruff check .               0.1s
+        typecheck                           5.5s  [task]
+          (fanout)
+            basedpyright → basedpyright…    5.5s  [lifted step]
+            mypy_linux / _darwin / _win32   0.6s ×3
+            ty / pyrefly                    0.3s / 0.5s
+        typecomplete → verifytypes          1.1s
+        covered → pytest --cov …           22.8s  [lifted step]
+
+**Exhibit 2 — the queries, measured.** Identical answers from both
+shapes; the difference is reader ergonomics:
+
+| question | flat + address | nested tree |
+| --- | --- | --- |
+| did lint pass | one `select(.address == …)` | recursive descent (`.. \| objects`) |
+| all failures | one `select(.ok \| not)` | recursive descent |
+| typecheck subtree wall-time | address PREFIX match (prefix = subtree, free) | two-stage recursion (find node, then descend) |
+| render the human tree | ~10 lines, group by parent (finding 7, now run) | native |
+
+**Exhibit 3 — a failing item under the model** (simulated fields; the
+green payload has no failures to show). The hse djlint step: raw exit
+1, reviewed green, then vetoed at observe by a duration budget:
+
+    { "address": "check/fanout/djlint",
+      "label": "djlint",
+      "code": 1, "ok": false,
+      "title": "djlint: reformatted",
+      "state": "failed",
+      "failed_at": "observe",         // derived
+      "work_code": 0,                 // derived
+      "audit": [
+        ["body",    "djlint reformat …", 1],
+        ["review",  "dj_outcome",        0],
+        ["observe", "budget",            1]
+      ] }
+
+One field tells the whole story — raw 1, reviewed 0, vetoed 1 — each
+attributed; the derived readings answer the common questions without
+scanning.
+
+**The gaps today's runtime must close, whatever shape is chosen:**
+requester identity (rows do not know who asked for them); report
+labels for lifted work (the `__name__` hack reaches the live line
+only); cross-grain creation order (steps carry no start times relative
+to child rows); the fan-out grouping item (invisible today).
+
+**Recommendation: flat creation-order list, parent by address.** Every
+reader query is a one-line select; address prefix gives subtrees for
+free; the human tree derives in ~10 lines (finding 7 confirmed by
+running it); the machine surface stays simple while receipts own the
+human rendering; and the information content is identical — measured,
+not asserted. The tree candidate's only win is native nesting, which
+is a renderer's need, not a reader's. Schema bumps to 2.
+
+**Decision 1 stays OPEN** — the call is the shape plus the reader
+contract riding it: name-lookup multiplicity (by name → a list, by
+address → unique), the failure story as `state` + the audit (the
+`state` × `failed_at` pair from move 4 collapses into this), and
+reference-row accounting (no double-counted shared subtrees).
 
 ## Strays found along the way (housekeeping commit, not the model)
 

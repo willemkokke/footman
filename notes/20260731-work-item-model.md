@@ -80,7 +80,8 @@ agreed, its public name is not).
 | projection | report tree and dependency DAG as two views of one item set | notes | settled |
 | creates (output marker) | a Path param whose value names a produced artifact — path is key-input, content is output | API | concept settled (Bazel side quest); NAME provisional |
 | optional input | a declared input that may be absent — absence is a digestable state, never an eager error | API | open — marker spelling undecided (`Path \| None`? softer marker?) |
-| (preserved work code) | the code the grain carried when a later lifecycle moment (review, observe) failed it — a vetoed green keeps its 0 on the record, visible not inferred; None when nothing had concluded | API | concept ruled 2026-07-31 (move-4 follow-up); NAME provisional — notes/loom spell it `work_code` |
+| (preserved work code) | the code the grain carried when a later lifecycle moment (review, observe) failed it — a vetoed green keeps its 0 on the record, visible not inferred; None when nothing had concluded | API | DISSOLVED 2026-07-31 into the audit — a derived reading, not a stored field; the naming question is moot |
+| audit | the record's verdict provenance: every lifecycle moment that acted on (or failed) the grain, as (moment, actor, code-or-None) entries in execution order; body always enters with the raw code, failures always enter, quiet undeclared moments skipped; verdict-scope only | docs/API | settled 2026-07-31 — Willem's name and generalisation (decision 10) |
 
 Register rules: a notes-tier term appearing in docs or an error message is
 a bug; the two **unnamed** rows block their features (a thing users touch
@@ -663,7 +664,11 @@ the spec becomes its own note linking back once the flood is done.
    codified as two axes with one word each (the shipped `state`
    docstring's rule, extended); and reference-row accounting (duration
    and steps live on the execution row, references link — aggregation
-   never double-counts a shared subtree).
+   never double-counts a shared subtree). BRIEF READY (spec note,
+   move-5 section, 2026-07-31): the shadow-emitter spike ran the real
+   `fm --json check` payload through both candidates — recommendation
+   is flat creation-order list with parent-by-address; awaiting the
+   call.
 2. **Hook name and family membership.** Largely resolved 2026-07-31:
    `@pre_record(fn)` stacked on makers (declared) + `.opts(pre_record=…)`
    (dynamic/per-use); no new global observer — `post_task` keeps that
@@ -701,15 +706,16 @@ the spec becomes its own note linking back once the flood is done.
    callables outright (stance says yes if DX-consistent; `suggest()` is
    the precedent) — and if so, what the cheapest lifted one-liner
    spelling is, since that spelling becomes the new reflex.
-9. **Reviewer composition** (opened by move 4). Multiple `pre_record`
-   attachments on one maker (several stacked; stacked plus `.opts`):
-   execution order, and whether each reviewer sees the prior one's
-   edits (a chained draft) or the pristine capture. The gates precedent
-   says stacking must work; the draft's mutability makes order
-   observable, so it needs calling before the build.
-10. **Review provenance** (opened by move 4). Should a committed record
-    say it was amended in review — and by what? Today's row carries no
-    hook fingerprint (`TaskResult` has no such field), so a reader
-    cannot tell a reviewed green from a native green, and the abuser
-    defense leans on attribution. A record field is I10's business, a
-    receipt marker decision 4's; either way it needs a call.
+9. **Reviewer composition** (opened by move 4). RULED 2026-07-31:
+   chained draft, bottom-up — the reviewer nearest the `def` runs
+   first, each further-out one sees the accumulated edits,
+   `.opts(pre_record=…)` last; uniform regardless of where the lifter
+   sits. Docs phrasing pinned in the spec's move-5 section ("reviewers
+   run from the inside out").
+10. **Review provenance** (opened by move 4). RULED 2026-07-31 as
+    **the audit** (Willem's generalisation and name): not a reviewer
+    list — every involved lifecycle moment, (moment, actor,
+    code-or-None), execution order. Register row; full shape in the
+    spec's definitions. Subsumes `failed_at` and the preserved work
+    code as derived readings; the audit's order also documents
+    decision 9's order by construction.
