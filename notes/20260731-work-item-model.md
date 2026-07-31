@@ -78,6 +78,8 @@ agreed, its public name is not).
 | execution–record fusion (informally: "the weld") | execution and its record fused in `run()`; the model separates the concerns, `run()` stays their default composition | notes | settled 2026-07-31 (renamed same day with the record-family takeover) — descriptive name is the register key; the metaphor is local shorthand only |
 | forged receipt | a record unmoored from work (the anti-pattern) | notes | settled as the thing we refuse |
 | projection | report tree and dependency DAG as two views of one item set | notes | settled |
+| creates (output marker) | a Path param whose value names a produced artifact — path is key-input, content is output | API | concept settled (Bazel side quest); NAME provisional |
+| optional input | a declared input that may be absent — absence is a digestable state, never an eager error | API | open — marker spelling undecided (`Path \| None`? softer marker?) |
 
 Register rules: a notes-tier term appearing in docs or an error message is
 a bug; the two **unnamed** rows block their features (a thing users touch
@@ -491,6 +493,72 @@ The gift: lanes, keep-going subtrees, `skipped`, and confirm gates map
 cleanly onto dataflow vocabulary (resource constraints, partial failure,
 upstream-failed, approval gates) — the model does not need to be bent for
 the horizon, only not nailed to the floor.
+
+## The horizon, part two: lessons from Bazel (side quest, 2026-07-31)
+
+Bazel is the benchmark for hermeticity and reproducibility; once the
+horizon reaches data processing "there isn't all that much difference
+left" (Willem). Compared against the model as it stands:
+
+**Where we already rhyme:** identity ↔ their action key (I6's uniform
+key is the same shape; `.opts()` is their configuration axis in
+miniature); plan/execution split ↔ loading/analysis vs execution — and
+the completion hot path's imports-must-be-cheap discipline is a
+Starlark-flavoured constraint arrived at from TAB latency instead of
+determinism; run-scoped cells ↔ the memoised action graph; the ladder's
+"spec-shaped = shippable" ↔ REAPI's serialised actions.
+
+**The one structural gap: items don't declare inputs and outputs** —
+and the answer is the founding trick applied once more: **the typed
+signature IS the declaration** (prior brainstorm, confirmed to fit).
+Path markers (`exists`/`isfile`/`isdir`) declare file inputs — the
+marker names the kind, the bound value names the file, eager validation
+extends to content digesting; `env("VAR")` and `uses=` already declare
+environment inputs; the tools bridge already knows binary + version
+(toolchain identity). One hole: produced files — a `creates`-shaped
+output marker on a Path param, with Bazel's own duality (the path is
+input to the key, the content is the output). Worked example: declare
+djlint's config as `config: Annotated[Path, isfile] = Path(".djlintrc")`
+— one line is simultaneously CLI surface (an override flag users never
+had), validation, docs, and cache-key input. A named corner: optional
+inputs need may-be-absent semantics where absence is a digestable state,
+not an error (creating the file must invalidate as surely as editing
+it).
+
+**Lessons with teeth:**
+
+1. **Declare, don't observe.** Keying on observed reads is unsound (the
+   read-set depends on the inputs). Cacheability is therefore declared,
+   opt-in — boundary policy, an I13 instance: `cacheable` exists exactly
+   where declaration does.
+2. **Enforcement over convention.** Declarations nothing checks become
+   lies. The guards are the seed; the env router's read-tracking is
+   half the plumbing for a `hermetic` policy that refuses undeclared
+   reads with taught errors — Bazel's rigor, footman's surface.
+   Signature-derived coverage is the ergonomic 90%; enforcement is what
+   makes the declared set sound for caching. Unenforced durable keys
+   are partial and must say so or not be offered.
+3. **Value-flow first.** Bazel is file-centric because builds are;
+   data pipelines can hand off through typed serialisable returns (the
+   structured-results rendezvous), which gives Merkle-style durable
+   keys for free — an item's key = declaration + digests of resolved
+   inputs, where inputs are upstream outputs. Cleaner than Bazel, not
+   weaker; file artifacts are the later, optional vocabulary.
+4. **Keep our dynamism; island the cacheable subset.** Bazel suffers
+   where outputs aren't knowable pre-execution; we are strong there.
+   The lesson is not to restrict dynamism but to keep the
+   durable-cacheable subset identifiable — hermetic islands in a
+   dynamic run.
+5. **The gradient is the moat.** Bazel's real-world failure is the
+   adoption cliff. The ladder extends with rungs Bazel never had —
+   cacheable, hermetic, shippable — each opt-in, per item, purchasable
+   incrementally. Bazel-grade guarantees as a gradient is the one thing
+   Bazel cannot retrofit.
+
+(Toolchain pinning ↔ provisioned tools + lockfile discipline: seed
+exists. Deterministic outputs for cacheable items: docs-level lesson.
+Skyframe's analysis-cost story: a warning the completion budget already
+polices.)
 
 ## Staging is legitimate once the lane is modelled
 
