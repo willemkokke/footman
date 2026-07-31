@@ -144,9 +144,9 @@ only; the register carries nuance.
   undeclared grain. (Carve-out found by move 3 — the two clauses
   collided the moment the policy groups became types.) Every wall in
   "defaults, not walls" is an instance of this one.
-- **I12 (conditional, decision 8) — Footman holds no ungraded code.**
-  If the bare-callable ban lands: everything handed to footman has a
-  chosen grain; the foreign rung exists only inside bodies.
+- **I12 — Footman holds no ungraded code.** (Ruled GO 2026-07-31 —
+  decision 8.) Everything handed to footman has a chosen grain; the
+  foreign rung exists only inside bodies.
 
 ## Derivation ledger
 
@@ -163,8 +163,8 @@ only; the register carries nuance.
 | `recorded=False` | I4 verbatim | axiom (spelling ruled) |
 | forged receipt refused | I3 verbatim | axiom |
 | cwd lane (and custom resources) | I8 + lanes definition; the in-process-only scope derives from `run()` injecting `cwd=` for subprocesses | derives |
-| `parallel()` takes work items only | I12 if it lands; without the ban, coercion rules persist | derives conditionally on decision 8 |
-| `p.also` retires | I12 + deferability of makers | derives conditionally on decision 8 |
+| `parallel()` takes work items only | I12 (ruled GO 2026-07-31); refusal structural — a bare callable has no `.opts`, so neither maker protocol matches | derives |
+| `p.also` retires | I12 + deferability of makers | derives — decision 8 ruled GO |
 | no step-grain observer | I6 (steps carry no shareable identity; address is parent-derived — out of context they are storyless) + the dispatch refusal + I5's enforced windows; liveness routes via the Status units today and record-stream export under the horizon | derives (opinion ruled 2026-07-31) |
 | dry-run semantics | Walk 3 falsified the old row ("skips observed steps" — PEP 377 makes with-bodies unskippable, and dry-run never skipped body code anyway). Correct rule derives from the ladder: dry-run fakes what footman owns the execution of (run payloads, deferred makers, generator steps); inline body code always runs, with-form records without an execution boundary. | derives (walk 3, corrected) |
 | per-step duration history | address (universal, cross-run-matchable) | derives — future work, nothing blocks it |
@@ -760,6 +760,52 @@ string — no parent-id join), and the batch file stays
 creation-ordered while the stream arrives in commit order (lines
 carry `started`; consumers re-sort if they care). Nothing designed
 now beyond not foreclosing it — which the flat shape just did.
+
+### Decisions 4, 5, 6, 8 — ruled (2026-07-31, one sitting)
+
+- **8, the bare-callable ban: GO** ("hell yeah"). I12 stops being
+  conditional; the two conditional ledger rows promote; the loom's
+  typed refusal (no `.opts` on a lambda → no overload match) is the
+  enforcement, already in place. Migration is mechanical: `step(fn)`
+  around every thunk, each gaining a receipt.
+- **6: dissolved into the build.** The model itself killed the old
+  tension (`recorded=` is execution policy, not a grain change; the
+  boundary rule IS I13, already typed). The `step=` → `recorded=`
+  rename rides the build wave, no deprecation shim; CHANGELOG carries
+  it.
+- **4: split as proposed, with the default ruled.** At normal
+  verbosity the report shows TASK grain only; verbose adds steps.
+  The full display thread (verbosity matrix, provenance markers,
+  emission-time redaction) parks as its own post-model thread.
+  Sub-question still open: whether a failed task auto-expands its
+  failing step and audit line at normal verbosity (assumed yes;
+  awaiting the explicit word).
+- **5: dissolved — hse is unblocked and moving.** Willem has been
+  developing hse alongside this whole thread; it pins its current
+  footman until the model ships, then migrates once (target 0.28.0).
+  No interim wave, no staged migration release; staging collapses to
+  "ship when coherent."
+
+### Decision 7 — partially ruled; the generator-pump spike runs next
+
+Ruled in the same sitting: **env needs no lane** (the router
+virtualises it completely); **cwd is a lane, opt-in** — claiming it
+is knowingly giving up parallelism, and the spelling must make that
+legible; **console is a lane and not optional** — the terminal is one
+resource, every claimant queues; **no further core lanes, ever** —
+everything else is plugin-defined, so the lane mechanism is a plugin
+surface and footman's own two lanes are built on it (dogfooding the
+registration path). The fourth process global, stdin, dissolves
+rather than lanes: the question layer resolves at the request
+boundary, and an interactive body's terminal access rides the console
+claim (process-globals v2's resolution, unchanged). argv was never a
+contended global — read once at CLI parse.
+
+Remaining before the call: the generator-pump prototype (walk 5's
+cancellation claims — close() at a yield must release lanes through
+the machinery's boundary ownership) and the plugin-lane registration
+spelling (declaration-required so a typo is a taught refusal, not a
+silently new lane).
 
 ## Strays found along the way (housekeeping commit, not the model)
 

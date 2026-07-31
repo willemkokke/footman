@@ -690,24 +690,32 @@ the spec becomes its own note linking back once the flood is done.
    handle and its maker's `pre_record`; watching-from-outside is the
    request-grain observer plus (someday) record-stream export — never a
    step-grain lifecycle hook.
-4. **Display policy** (collapse-green-at-normal-verbosity): in the first
-   build, or parked as its own thread once the model lands?
-5. **Migration for hse**: what ships in which release so their interim
-   workarounds (documented at two sites) come out cleanly rather than
-   surviving another version.
-6. **The `.opts()`-vs-wrapper boundary** (from the lifting operators):
-   wrappers change grain, `.opts()` configures within one — does
-   `step=False` migrate into the lifting vocabulary or stay as the
-   legacy spelling of the nothing-lift?
-7. **Per-resource lanes**: which globals get lanes (cwd first; env?
-   argv? stdin already has boundary semantics), the declaration spelling
-   (rides decision 6), and the custom-resource surface — how a user
-   names one, whether claims are exclusive-only or counted, and what
-   the report shows for lane waits.
-8. **The bare-callable ban**: do footman's boundaries refuse ungraded
-   callables outright (stance says yes if DX-consistent; `suggest()` is
-   the precedent) — and if so, what the cheapest lifted one-liner
-   spelling is, since that spelling becomes the new reflex.
+4. **Display policy**. RULED 2026-07-31: split — minimal defaults ship
+   with the build (task grain only at normal verbosity; verbose adds
+   steps; failed-task auto-expand assumed, awaiting the word), the
+   full display thread (verbosity matrix, provenance markers,
+   emission-time redaction) parks as its own post-model thread.
+5. **Migration for hse**. DISSOLVED 2026-07-31: hse is unblocked and
+   being developed alongside; it pins its current footman until the
+   model ships, then migrates once (target 0.28.0). No interim wave;
+   staging collapses to "ship when coherent."
+6. **The `.opts()`-vs-wrapper boundary**. DISSOLVED 2026-07-31 by the
+   model itself: `recorded=` is execution policy, not a grain change,
+   and the boundary rule is I13 (typed in the loom). The `step=` →
+   `recorded=` rename rides the build, no shim.
+7. **Per-resource lanes**. PARTIALLY RULED 2026-07-31: env — no lane
+   (fully virtualised by the router); cwd — a lane, OPT-IN (claiming
+   it is knowingly giving up parallelism); console — a lane, NOT
+   optional; no further core lanes ever — plugin-defined via a
+   registration mechanism footman's own two lanes are built on.
+   stdin dissolves (boundary questions + the console claim); argv was
+   never contended. Remaining before the call: the generator-pump
+   spike and the plugin-lane registration spelling (typo = taught
+   refusal).
+8. **The bare-callable ban**. RULED GO 2026-07-31 ("hell yeah"). I12
+   unconditional; `step(fn)` is the one-liner; refusal is structural
+   (no `.opts` on a bare callable — the loom's typing is the
+   enforcement).
 9. **Reviewer composition** (opened by move 4). RULED 2026-07-31:
    chained draft, bottom-up — the reviewer nearest the `def` runs
    first, each further-out one sees the accumulated edits,

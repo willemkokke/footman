@@ -396,8 +396,8 @@ def run(
 ) -> Result:
     """The default composition of execution and record (I4);
     `recorded=False` is execution alone — off the record. `command` is a
-    str only: `run(callable)` retires under decision 8's ban (the lifted
-    spelling replaces it); that narrowing is conditional on decision 8."""
+    str only: `run(callable)` retired with decision 8's ban (ruled GO
+    2026-07-31); the lifted spelling replaces it."""
     raise NotImplementedError
 
 
@@ -407,8 +407,8 @@ class Fanout(list[Result]):
     A list of committed records underneath (walk 1's promotion: Results
     over codes; I2 keeps every code-reader working). Owned calls inside
     the block queue themselves, carrying arguments naturally; `p.also`
-    does not exist here — under decision 8's ban foreign code lifts
-    instead (conditional on that decision)."""
+    does not exist here — under the ban (decision 8, ruled GO) foreign
+    code lifts instead."""
 
     results: list[object]
 
@@ -432,7 +432,7 @@ def parallel(
 ) -> object:
     """Takes work items and makers only — the acceptance test at full
     strength, structural because both maker Protocols demand `.opts`:
-    a bare lambda fails to match (conditional on decision 8)."""
+    a bare lambda fails to match (decision 8, ruled GO 2026-07-31)."""
     raise NotImplementedError
 
 
