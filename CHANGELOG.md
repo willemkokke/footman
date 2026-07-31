@@ -7,6 +7,22 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking: `run(step=False)` is spelled `run(recorded=False)`.** The
+  off-the-record call — executed under full management, no receipt — now
+  carries the record family's own word, on `run()` and through the tools
+  bridge's `.opts(recorded=False)` alike. A rename, not a behaviour
+  change; there is no compatibility shim, and the old keyword is a plain
+  `TypeError`. First step of the work-item build
+  ([the design](https://willemkokke.github.io/footman/design/)).
+
+- **Breaking: `fail(code=0)` is refused.** `fail()` means failure, and
+  exit code 0 is success — the old verbatim honouring could produce a row
+  that read as ok while carrying an error. The refusal teaches the honest
+  spelling: `return 0` (or a plain `return`) stops a task early with
+  success.
+
 ## [0.27.1] — 2026-07-31
 
 ### Changed

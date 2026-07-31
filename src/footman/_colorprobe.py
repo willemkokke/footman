@@ -157,7 +157,7 @@ def _fixture(binary: str, trigger: Trigger) -> Iterator[Path]:
         if trigger.git:
             # Fixture setup, not the probe: unreported, and a bound so a
             # wedged git cannot hang the whole colour walk.
-            quiet = {"cwd": cwd, "step": False, "nofail": True, "timeout": 60}
+            quiet = {"cwd": cwd, "recorded": False, "nofail": True, "timeout": 60}
             _fm_run([binary, "init", "-q"], **quiet)
             _fm_run([binary, "add", "-A"], **quiet)
             _fm_run(
@@ -211,7 +211,7 @@ def _capture(argv: list[str], cwd: Path, env_add: dict[str, str]) -> str:
             argv,
             cwd=cwd,
             env=env,
-            step=False,  # the probe reads bytes; it is not the run's business
+            recorded=False,  # the probe reads bytes; it is not the run's business
             nofail=True,
             timeout=60,
         )

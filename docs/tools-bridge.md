@@ -63,7 +63,7 @@ flag, the same policy-vs-work split a task's `.opts()` has:
 ```python
 git.opts(nofail=True).push()            # tolerate a non-zero exit
 pytest.opts(capture=False)("-s")        # stream this run live
-git.opts(step=False).rev_parse("HEAD")  # a value read, not an event
+git.opts(recorded=False).rev_parse("HEAD")  # a value read, not an event
 git.opts(timeout=30).fetch()            # a bound, after which it is killed
 ```
 
@@ -457,11 +457,11 @@ That is right for the things a task *does* — but some calls are how a task
 ```python
 @task
 def release():
-    sha = git.opts(step=False).rev_parse("HEAD").stdout.strip()
+    sha = git.opts(recorded=False).rev_parse("HEAD").stdout.strip()
     run(f"./ship --sha={sha}")          # this one is the step
 ```
 
-`step=False` runs the tool, hands back the `Result`, and reports nothing. In
+`recorded=False` runs the tool, hands back the `Result`, and reports nothing. In
 a release task with a dozen such reads, it is the difference between a report
 you can scan and one you cannot.
 
@@ -476,7 +476,7 @@ faking it would corrupt the story that is — the real steps after it would go
 on to record whatever a blank answer produced. (`--dry-run` is a different
 thing: it prints the plan and never runs a task body at all.)
 
-Passing `title=` alongside `step=False` is a note rather than an error —
+Passing `title=` alongside `recorded=False` is a note rather than an error —
 there is no receipt to label — because `.opts()` merges along a chain and a
 shared tool may carry a title that a later call site never asked for.
 

@@ -505,7 +505,7 @@ def _read_version(name: str) -> tuple[str, str]:
         return "", "not on PATH"
     # A version read must never touch the network — see `_toolhelp.QUIET`.
     #
-    # Through `run()`: `step=False` keeps a probe out of the run's story,
+    # Through `run()`: `recorded=False` keeps a probe out of the run's story,
     # `timeout=` kills the tree rather than leaving a hung tool's workers
     # behind, the hidden console comes with any captured spawn, and `env=`
     # hands over exactly what `read_env` built — its subtraction survives the
@@ -515,7 +515,7 @@ def _read_version(name: str) -> tuple[str, str]:
     try:
         done = _run(
             [binary, "--version"],
-            step=False,
+            recorded=False,
             timeout=30,
             nofail=True,
             env={**os.environ, **_toolhelp.QUIET},
