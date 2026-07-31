@@ -7,6 +7,8 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+## [0.27.1] — 2026-07-31
+
 ### Changed
 
 - **The seven undocumented framework modules are private now.** `coerce`,
@@ -3210,7 +3212,8 @@ versions may include breaking changes.
 
 - Placeholder release claiming the `footman` name on PyPI. Not tagged in git.
 
-[Unreleased]: https://github.com/willemkokke/footman/compare/v0.27.0...HEAD
+[Unreleased]: https://github.com/willemkokke/footman/compare/v0.27.1...HEAD
+[0.27.1]: https://github.com/willemkokke/footman/compare/v0.27.0...v0.27.1
 [0.27.0]: https://github.com/willemkokke/footman/compare/v0.26.0...v0.27.0
 [0.26.0]: https://github.com/willemkokke/footman/compare/v0.25.0...v0.26.0
 [0.25.0]: https://github.com/willemkokke/footman/compare/v0.24.0...v0.25.0
