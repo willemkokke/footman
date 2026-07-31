@@ -65,7 +65,8 @@ agreed, its public name is not).
 | the record (family) | what happened vs what's recorded — supersedes the "narration" family (2026-07-31): off the record, `recorded=False`, `recording()`, receipt = the rendered record, adjudication = amending the record before commit | docs/API/notes — one family across all tiers | settled 2026-07-31, fusion rename included |
 | ~~narration / narrative~~ | (tombstone) my coinage, second metaphor family for the record concern | — | superseded by the record family |
 | ResultView | THE view — one type across grains (Willem, 2026-07-31: no separate Step/Task views): the record's draft, phase-gated writes; committed it is a `Result`. Already shipped (post_task, wrap_bind) — zero new vocabulary | API | settled. Criticism 4 narrows rather than falls: under one substrate, `returned` is None by CIRCUMSTANCE (fine on the shared view); absent-by-KIND surfaces (plugin `state`, CLI binding) stay off it |
-| post_step | amend a step's record after the code is final, before commit | API | name settled; scoping settled (per-tool `.opts()`) |
+| pre_record | review an item's draft before the record commits — the code is final, the verdict is not | API | settled 2026-07-31 (renamed from "post_step", which died grain-neutral — it stacks on `@task` too; `pre_record` stays in the hook family's moment-grammar: pre/post + the anchoring noun). Declared: `@pre_record(fn)` stacked on any maker (the `requires=`→stacked-`@requires` precedent); dynamic: `.opts(pre_record=…)` for def-less attachments and per-use overrides; lifecycle `post_task` stays the plugin-lane global observer. Cardinality (ruled 2026-07-31): fires once per EXECUTION of the item its maker makes — a task-attached hook reviews the row's draft, never the contained steps (children are reviewed only by their own makers' attachments); shared rows: one review, observer events per request. Phase rule: reviewed → observed → committed — ENFORCED (ruled same day): at the observed phase the verdict-bearing fields (code, ok, title) are read-only; post_task observes, never judges. Same one ResultView, phase-gated windows |
+| ~~post_step~~ | (tombstone) minted step-scoped, died grain-neutral | — | superseded by `pre_record` |
 | `step()` | one name, three grammatical positions mirroring `@task`'s own grammar (settled 2026-07-31): `@step` decorating a local plain/generator function (the lifter at definition — the visible mark that calling it builds-not-runs), `with step("title"):` for the immediate inline block (title at entry, so dry-run can skip the body), `step(fn, title=…)` as the expression lift (decision 8's cheap spelling). No second noun for what they make — they make steps ("span" retired: rung leaked as user noun, duration-not-story, tracing's word) | API | settled |
 | yield contract | DISSOLVED into existing idioms (settled 2026-07-31, the third non-name): bare `yield` = checkpoint (cancellation window); every yield evaluates to the item's `ResultView` (the `result = yield` idiom `wrap_task` already ships); progress = ordinary `progress()`/`track()` calls; **yielding a value is a taught error** — the set stays closed, the channel reserved for a future that earns it | API | settled — zero new types |
 | address | a node's tree-derived name: parent-path + label (+ ordinal) | notes; surfaces in `--json` | settled |
@@ -95,7 +96,7 @@ breaking later — flood them here.
 3. The forged receipt collided with the 0.27 foreign-cwd refusal for
    in-process callables — record-making borrowing an execution primitive met
    an execution guard. `hse check` broke from subdirectories.
-4. Designing the fix (`post_step`) surfaced the `step()` context-manager
+4. Designing the fix (the review hook, then unnamed) surfaced the `step()` context-manager
    idea (record work footman didn't execute — an API call), which
    surfaced the containment question (an observed step holding `run()`s), which
    surfaced the task/step audit, which surfaced `parallel()`'s payload
@@ -151,7 +152,7 @@ of `run()` — they are the two concerns asking to be separately addressable.
 - **`run(callable)` and a body-called task are near-twins** — in-process,
   captured, timed, recorded — differing only in name, dedup, and hooks.
 - **The record requests re-invent row machinery one level down**:
-  `post_step` is `post_task`'s twin; a `step()` block is an anonymous
+  the review hook is `post_task`'s twin; a `step()` block is an anonymous
   inline task in all but name.
 
 Tempering the list (self-criticism, kept): each of these generalisations
@@ -221,7 +222,7 @@ generators-as-lifecycle:
    item's `ResultView` (the `result = yield` idiom `wrap_task` already
    ships), so a title decided mid-work is a plain attribute write;
    progress is ordinary `progress()`/`track()` calls — a *during*, where
-   `title=` is before and `post_step` is after. The event vocabulary already exists from
+   `title=` is before and `pre_record` is after. The event vocabulary already exists from
    the inside: the `Status` protocol's units.
 
 What does not fall: placement (generators don't pickle — the rung stays
@@ -351,11 +352,40 @@ be a note-word, not a docs-word) is open.
   plugin state) off the record surface; one view type carrying every
   grain's fields as maybe-None is the God-object this repo has refused
   before (TaskFn/TaskView: orthogonal, don't merge).
-- **Hooks collapse**: `post_task` and the proposed `post_step` become one
-  hook over work items, with scoping by attachment — a tool's
-  `.opts(post_step=…)` sees only that tool's items (no dispatch if/else;
-  attachment is the dispatch), the lifecycle-family form (if ever needed)
-  sees everything as an observer.
+- **Hooks collapse** (sharpened 2026-07-31): one review hook over
+  work items, attached two ways — declared, as `@pre_record(fn)` stacked
+  on any maker (`@step` and, by I1, `@task`); or dynamically, via
+  `.opts(pre_record=…)` for tool expressions and runtime steps (the
+  escape hatch, kept by ruling). Attachment is the dispatch either way.
+  The lifecycle-family `post_task` is relieved of adjudication duty and
+  stays what it is: the plugin-lane global observer — with the relief
+  enforced (ruled 2026-07-31): verdict-bearing fields (code, ok, title)
+  are read-only at the observed phase. Residue: whether any
+  display-only fields remain observer-writable.
+
+  The family, in event order (verified against source 2026-07-31 —
+  `@finalize` is long gone, absorbed by `pre_tasks`):
+  `pre_tasks(inv)` [invocation editable] → per request: `pre_bind` →
+  binding → `pre_task` → body (steps: execute → own `pre_record` →
+  commit; generator yields hand out the view) → `pre_record(view)` per
+  execution → `post_task(inv, task, result)` per request, reverse
+  plugin order → commit → `post_tasks(inv)`. Plural = invocation-level,
+  singular = per-thing; every name is pre/post + anchoring noun; hooks
+  exist where their moments exist (steps have no binding moment, so no
+  step-level pre_bind — consistency, not absence).
+
+  **And no step-grain observer, as an opinion (ruled 2026-07-31):
+  observation follows the request grain; records travel with their
+  parents.** Observers see every step — committed, in context, riding
+  its row (`result.steps`). A live global step stream as a lifecycle
+  hook would hand observers decontextualised events (a step out of its
+  row is a command line with no story), reopen the amendment-window
+  question per grain, and duplicate the lane that already exists for
+  liveness: the Status protocol's units today, and — when the horizon
+  asks for tracing exporters — an export of the record stream
+  (presentation over committed records; stream consumers cannot judge
+  by construction). Review at every grain, observe at the request
+  grain, export streams for liveness.
 - **Acceptance test**: the design is right when `parallel()` and its
   block need no special cases — they take work items; anything else is
   coerced into an anonymous one.
@@ -396,7 +426,7 @@ be a note-word, not a docs-word) is open.
 
 ## Corollaries (fall out; not separate features)
 
-- hse's outcome-titling: `djlint.opts(post_step=…)` mutating the view —
+- hse's outcome-titling: `djlint.opts(pre_record=…)` reviewing the draft —
   title and code override; the `RunFailed` decision reads the post-hook
   code, so "a Result is its exit code" survives untouched.
 - The forged-receipt idiom, the `cwd=invoked_dir()` workaround, and both
@@ -559,13 +589,17 @@ the spec becomes its own note linking back once the flood is done.
    flat compatibility view — the shape just needs to be *right*, chosen as
    if 1.0 were watching. Still first: nothing else lands before this is
    called.
-2. **Hook name and family membership.** `post_step` vs one collapsed
-   hook name over work items; whether a global observer form ships at all
-   in v1, or only `.opts()` attachment.
-3. **Does adjudication fire for anonymous items?** Tool-attached hooks
-   answer "no" naturally (an observed step has no tool); does an observed
-   step's own handle (`s.title = …`) cover every need, or does something
-   want to watch them from outside?
+2. **Hook name and family membership.** Largely resolved 2026-07-31:
+   `@pre_record(fn)` stacked on makers (declared) + `.opts(pre_record=…)`
+   (dynamic/per-use); no new global observer — `post_task` keeps that
+   role. Residue: the stacked form's exact typing (identity like the
+   gates) and whether `@pre_record` above vs below the lifter reads
+   order-free the way the gates do.
+3. **Does adjudication fire for anonymous items?** CLOSED 2026-07-31 as
+   a corollary of the observer opinion: self-review via the item's own
+   handle and its maker's `pre_record`; watching-from-outside is the
+   request-grain observer plus (someday) record-stream export — never a
+   step-grain lifecycle hook.
 4. **Display policy** (collapse-green-at-normal-verbosity): in the first
    build, or parked as its own thread once the model lands?
 5. **Migration for hse**: what ships in which release so their interim
