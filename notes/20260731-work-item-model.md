@@ -84,6 +84,7 @@ agreed, its public name is not).
 | audit | the record's verdict provenance: every lifecycle moment that acted on (or failed) the grain, as (moment, actor, code-or-None) entries in execution order; body always enters with the raw code, failures always enter, quiet undeclared moments skipped; verdict-scope only | docs/API | settled 2026-07-31 — Willem's name and generalisation (decision 10) |
 | cwd_lane / console_lane | the two exported core lane handles — the only core lanes ever, by ruling | API | settled 2026-07-31: the `_lane` suffix is the warning label at the import site (`from footman import cwd_lane` says what it costs), and bare `footman.cwd` was already taken by the context manager |
 | sealed | the docs-tier word for a committed record ("the record is sealed") — notes/API keep "commit"; the design page introduced it because "committed" drags git along for a docs reader | docs | provisional — liked in principle (Willem, 2026-07-31); final ruling once the design page is read in place |
+| task-handle hooks | every per-task lifecycle moment attachable on the task's own handle (`@build.pre_task`, `@build.pre_record`, `@build.post_task`, `pre_bind`, the wrap sugar) — bare decorator, permanent (set_opts tier), code local to the task | API | settled 2026-07-31 (the contract page's first finding): exact mirror of the per-task set; the plugin lane keeps only hooks with no task knowledge in them |
 
 Register rules: a notes-tier term appearing in docs or an error message is
 a bug; the two **unnamed** rows block their features (a thing users touch
@@ -740,4 +741,10 @@ the spec becomes its own note linking back once the flood is done.
     code-or-None), execution order. Register row; full shape in the
     spec's definitions. Subsumes `failed_at` and the preserved work
     code as derived readings; the audit's order also documents
-    decision 9's order by construction.
+    decision 9's order by construction. ADDENDUM 2026-07-31 (the
+    contract page's first finding): per-task hooks live on the task's
+    HANDLE — the exact mirror of the per-task lifecycle set, bare
+    decorators, permanent (set_opts tier) — and the plugin lane keeps
+    only hooks with no task knowledge in them ("the moment a global
+    hook says 'if this is task X', it belongs on X"). Full ruling in
+    the spec's move-5 section.

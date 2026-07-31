@@ -181,6 +181,7 @@ only; the register carries nuance.
 | **hook raises carry no success** | `fail(code=0)` is honoured verbatim in a body (the author's own record — verified in `_executor.py`); at a hook moment raising IS failure and the code is never 0 (taught error), else the veto asymmetry is false | derives (move 4, hse) — guard added to I5 |
 | **a generator abusing GeneratorExit** | Swallowing GeneratorExit and yielding again is Python's own RuntimeError; the item fails; lane release is machinery-owned at the boundary (I8) — the abuse cannot hold a lane | derives (move 4) |
 | **completion hot path and Windows under the model** | Every move-3 surface is execution-side: anonymous steps never touch the manifest (I9), runtime lifting grants report labels only, `Phase`/`failed_at` live in `--json`, the ban changes no CLI grammar; observation runs on the runner after child reaping, so walk 5's kill discipline is untouched | confirmed clean (move 4) |
+| **per-task hooks on the handle** | Attachment-as-dispatch extended to the lifecycle moments; handles-are-the-registry (the lanes precedent, identically argued); knowledge lives where it belongs; zero invariants moved — the mark of something the model already implied | ruled 2026-07-31 (the contract page's first finding) |
 
 ## Move 2 — the payload walks
 
@@ -906,6 +907,51 @@ two databases are two bindings (`db_main = lane("db-main")`,
 `db_replica = lane("db-replica")`), so "instances" need no
 type/instance machinery, no lane classes, no parameterisation. A
 resource IS a binding; keep it that flat.
+
+### Ruling: per-task hooks live on the handle (2026-07-31)
+
+Found by the contract page's first reader doing exactly what the page
+invites: Willem read the observer section, expected `post_task` to be
+per-task, and rejected the global-with-if-chains shape outright — "I'd
+rather the code lives local to the task." The design's own principles
+agreed on inspection: knowledge lives where it belongs, attachment is
+the dispatch, and observation being global-only was an unargued
+asymmetry (review was already per-maker). Ruled:
+
+- **The task handle exposes the exact mirror of the per-task
+  lifecycle set** — `@build.pre_bind`, `@build.pre_task`,
+  `@build.post_task`, the `wrap_task`/`wrap_bind` sugar — alongside
+  the already-ruled `@build.pre_record`. Bare decorator spelling, no
+  parentheses (no parameters foreseeable).
+- **Handle attachment is permanent** — it changes what the task does
+  for every requester (the `set_opts` family); `.opts(...)` remains
+  the per-use tier. Hooks get the same two-tier story as options.
+- **Decision 9 generalises**: distance from the `def` decides —
+  stacked hooks inside-out first, handle attachments in the order
+  they were made, `.opts` always last. Cross-file attachment order is
+  registration order: deterministic every run, invisible at either
+  site (plugin-order's known property); when order between two far
+  attachments matters, one attachment site composing two functions is
+  the honest fix.
+- **The plugin lane survives, narrowly, with a one-sentence test:** a
+  hook with no task knowledge in it (a tracing exporter, the timing
+  collector, a CI annotator) registers globally from a plugin; the
+  moment a global hook would say "if this is task X", it belongs on
+  X. User task rules never need the global lane.
+- **Steps are unaffected**: the no-step-grain-observer ruling stands;
+  step makers keep `pre_record` (review), observation stays at task
+  grain.
+- **Signatures**: the per-task form drops what the attachment already
+  answers — the task is the handle's own — so the loom types
+  `post_task` as receiving the sealed `Result` and `pre_record` the
+  draft view; the global plugin forms keep their shipped
+  `(inv, task, …)` shape. (Convergence note, for the record: the loom
+  had already typed the observer hook as `(result)` alone — it never
+  fit the global signature, and it fits this one exactly.)
+
+Zero invariants move: sealed stays sealed, veto-never-forge stands,
+and the audit's actor slots fill better — the attributed actor is the
+rule itself, never a switchboard function routing everyone's rules.
 
 **Move 5 is complete. Every open decision of the work-item spec is
 closed** — 1 through 10: ruled, dissolved, or confirmed. What remains

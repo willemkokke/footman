@@ -308,11 +308,20 @@ class StepFn(Protocol[P, R_co]):
 
 class TaskFn(Protocol[P, R_co]):
     """Restates the shipped TaskFn Protocol (registry.py), narrowed to
-    what move 3 needs: the call keeps the task's own signature; `.opts()`
-    takes the full policy set."""
+    what the loom needs: the call keeps the task's own signature;
+    `.opts()` takes the full policy set; and the handle exposes the
+    task's own lifecycle moments for local attachment (ruled
+    2026-07-31 — the exact mirror of the per-task set; `pre_bind` and
+    the wrap sugar ride the same rule, typed when built). Handle
+    attachment is permanent — the set_opts tier — where `.opts()` is
+    per-use; each returns the hook unchanged, so the decorators stack
+    and the functions stay callable."""
 
     def __call__(self, *args: P.args, **kwargs: P.kwargs) -> R_co: ...
     def opts(self, **overrides: Unpack[TaskOpts]) -> TaskFn[P, R_co]: ...
+    def pre_task(self, hook: Callable[[], None], /) -> Callable[[], None]: ...
+    def pre_record(self, hook: RecordHook, /) -> RecordHook: ...
+    def post_task(self, hook: ObserverHook, /) -> ObserverHook: ...
 
 
 def task(fn: Callable[P, R], /) -> TaskFn[P, R]:
@@ -601,6 +610,38 @@ def budget(result: Result) -> None:
     # through the error channel — attributed, never a record write.
     if result.duration > 60.0:
         fail(f"duration budget exceeded: {result.duration:.0f}s")
+
+
+# --- per-task hooks on the handle (ruled 2026-07-31) --------------------
+# Code local to the task it governs: the handle exposes the lifecycle,
+# the plugin lane keeps only hooks with no task knowledge in them.
+
+
+@typecheck.pre_task
+def warm() -> None:
+    raise NotImplementedError
+
+
+@typecheck.pre_record
+def tidy_title(view: ResultView) -> None:
+    view.title = view.title.strip()
+
+
+@typecheck.post_task
+def slow_alarm(result: Result) -> None:
+    if result.duration > 300.0:
+        fail(f"typecheck blew its budget: {result.duration:.0f}s")
+
+
+def handle_attachment_returns_the_hook() -> None:
+    # Identity-shaped: the decorated functions stay plain callables.
+    warm()
+    tidy_title(_draft())
+    assert_type(slow_alarm, ObserverHook)
+
+
+def _draft() -> ResultView:
+    raise NotImplementedError
 
 
 # --- off the record: how a task learns something (I4) ------------------
