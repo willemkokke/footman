@@ -80,6 +80,7 @@ agreed, its public name is not).
 | projection | report tree and dependency DAG as two views of one item set | notes | settled |
 | creates (output marker) | a Path param whose value names a produced artifact — path is key-input, content is output | API | concept settled (Bazel side quest); NAME provisional |
 | optional input | a declared input that may be absent — absence is a digestable state, never an eager error | API | open — marker spelling undecided (`Path \| None`? softer marker?) |
+| (preserved work code) | the code the grain carried when a later lifecycle moment (review, observe) failed it — a vetoed green keeps its 0 on the record, visible not inferred; None when nothing had concluded | API | concept ruled 2026-07-31 (move-4 follow-up); NAME provisional — notes/loom spell it `work_code` |
 
 Register rules: a notes-tier term appearing in docs or an error message is
 a bug; the two **unnamed** rows block their features (a thing users touch

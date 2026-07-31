@@ -123,6 +123,16 @@ class Result(int):
         ever rewrites a verdict."""
         raise NotImplementedError
 
+    @property
+    def work_code(self) -> int | None:
+        """The code the grain carried when a later lifecycle moment
+        failed it — a green build vetoed at observe keeps its 0 here,
+        visible on the record rather than inferred from the reason.
+        None when nothing had concluded (a bind/enter/body failure)
+        or nothing superseded it (success). Name provisional
+        (register row)."""
+        raise NotImplementedError
+
 
 class ResultView:
     """THE view — one type across grains (ruled 2026-07-31): the
@@ -326,7 +336,9 @@ def fail(reason: str, code: int = 1) -> NoReturn:
     the VETO: it rides the error channel — loud, attributed to the
     observe moment (`failed_at="observe"`), its code the grain's final
     int (I2) — never a forged verdict: observers may veto, never
-    forge."""
+    forge. `code=0` is a taught error EVERYWHERE (ruled, move-4
+    follow-up: fail is the failure verb) — a runtime refusal, since
+    int carries no nonzero static type for the loom to lean on."""
     raise NotImplementedError
 
 
@@ -540,6 +552,7 @@ def policy_split_in_use() -> None:
 def audit(result: Result) -> None:
     if not result.ok:
         assert_type(result.failed_at, Phase | None)  # which moment broke
+        assert_type(result.work_code, int | None)  # a vetoed green shows its 0
         assert_type(result.stderr, str)
         assert_type(result.address, Address)
 
