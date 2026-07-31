@@ -74,7 +74,6 @@ def _observation_is_read_only_by_type() -> None:
 
 
 def _bare_callables_are_refused() -> None:
-    # decision 8's ban, structural: a lambda has no chosen grain (no
-    # .opts), so neither maker protocol matches. Conditional on the
-    # decision landing; delete this line if the ban is rejected.
+    # decision 8's ban (ruled GO 2026-07-31), structural: a lambda has
+    # no chosen grain (no .opts), so neither maker protocol matches.
     parallel(lambda: 0)  # type: ignore[call-overload]  # lift it: step(fn)

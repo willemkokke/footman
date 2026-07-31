@@ -80,7 +80,8 @@ agreed, its public name is not).
 | projection | report tree and dependency DAG as two views of one item set | notes | settled |
 | creates (output marker) | a Path param whose value names a produced artifact — path is key-input, content is output | API | concept settled (Bazel side quest); NAME provisional |
 | optional input | a declared input that may be absent — absence is a digestable state, never an eager error | API | open — marker spelling undecided (`Path \| None`? softer marker?) |
-| (preserved work code) | the code the grain carried when a later lifecycle moment (review, observe) failed it — a vetoed green keeps its 0 on the record, visible not inferred; None when nothing had concluded | API | concept ruled 2026-07-31 (move-4 follow-up); NAME provisional — notes/loom spell it `work_code` |
+| (preserved work code) | the code the grain carried when a later lifecycle moment (review, observe) failed it — a vetoed green keeps its 0 on the record, visible not inferred; None when nothing had concluded | API | DISSOLVED 2026-07-31 into the audit — a derived reading, not a stored field; the naming question is moot |
+| audit | the record's verdict provenance: every lifecycle moment that acted on (or failed) the grain, as (moment, actor, code-or-None) entries in execution order; body always enters with the raw code, failures always enter, quiet undeclared moments skipped; verdict-scope only | docs/API | settled 2026-07-31 — Willem's name and generalisation (decision 10) |
 
 Register rules: a notes-tier term appearing in docs or an error message is
 a bug; the two **unnamed** rows block their features (a thing users touch
@@ -663,7 +664,13 @@ the spec becomes its own note linking back once the flood is done.
    codified as two axes with one word each (the shipped `state`
    docstring's rule, extended); and reference-row accounting (duration
    and steps live on the execution row, references link — aggregation
-   never double-counts a shared subtree).
+   never double-counts a shared subtree). RULED 2026-07-31: flat
+   creation-order list, parent by address, per the shadow-emitter
+   brief (spec note, move-5 section) — with the schema field STAYING
+   1 (no consumers; footman launches with the new shape rather than
+   migrating to it). Streaming corollary parked at the horizon: the
+   flat list is jsonl-shaped, the file form of the record-stream
+   export the observer opinion anticipated.
 2. **Hook name and family membership.** Largely resolved 2026-07-31:
    `@pre_record(fn)` stacked on makers (declared) + `.opts(pre_record=…)`
    (dynamic/per-use); no new global observer — `post_task` keeps that
@@ -683,33 +690,43 @@ the spec becomes its own note linking back once the flood is done.
    handle and its maker's `pre_record`; watching-from-outside is the
    request-grain observer plus (someday) record-stream export — never a
    step-grain lifecycle hook.
-4. **Display policy** (collapse-green-at-normal-verbosity): in the first
-   build, or parked as its own thread once the model lands?
-5. **Migration for hse**: what ships in which release so their interim
-   workarounds (documented at two sites) come out cleanly rather than
-   surviving another version.
-6. **The `.opts()`-vs-wrapper boundary** (from the lifting operators):
-   wrappers change grain, `.opts()` configures within one — does
-   `step=False` migrate into the lifting vocabulary or stay as the
-   legacy spelling of the nothing-lift?
-7. **Per-resource lanes**: which globals get lanes (cwd first; env?
-   argv? stdin already has boundary semantics), the declaration spelling
-   (rides decision 6), and the custom-resource surface — how a user
-   names one, whether claims are exclusive-only or counted, and what
-   the report shows for lane waits.
-8. **The bare-callable ban**: do footman's boundaries refuse ungraded
-   callables outright (stance says yes if DX-consistent; `suggest()` is
-   the precedent) — and if so, what the cheapest lifted one-liner
-   spelling is, since that spelling becomes the new reflex.
-9. **Reviewer composition** (opened by move 4). Multiple `pre_record`
-   attachments on one maker (several stacked; stacked plus `.opts`):
-   execution order, and whether each reviewer sees the prior one's
-   edits (a chained draft) or the pristine capture. The gates precedent
-   says stacking must work; the draft's mutability makes order
-   observable, so it needs calling before the build.
-10. **Review provenance** (opened by move 4). Should a committed record
-    say it was amended in review — and by what? Today's row carries no
-    hook fingerprint (`TaskResult` has no such field), so a reader
-    cannot tell a reviewed green from a native green, and the abuser
-    defense leans on attribution. A record field is I10's business, a
-    receipt marker decision 4's; either way it needs a call.
+4. **Display policy**. RULED 2026-07-31: split — minimal defaults ship
+   with the build (task grain only at normal verbosity; verbose adds
+   steps; a failed task auto-expands its failing step and audit line —
+   confirmed same day), the full display thread (verbosity matrix,
+   provenance markers, emission-time redaction) parks as its own
+   post-model thread.
+5. **Migration for hse**. DISSOLVED 2026-07-31: hse is unblocked and
+   being developed alongside; it pins its current footman until the
+   model ships, then migrates once (target 0.28.0). No interim wave;
+   staging collapses to "ship when coherent."
+6. **The `.opts()`-vs-wrapper boundary**. DISSOLVED 2026-07-31 by the
+   model itself: `recorded=` is execution policy, not a grain change,
+   and the boundary rule is I13 (typed in the loom). The `step=` →
+   `recorded=` rename rides the build, no shim.
+7. **Per-resource lanes**. PARTIALLY RULED 2026-07-31: env — no lane
+   (fully virtualised by the router); cwd — a lane, OPT-IN (claiming
+   it is knowingly giving up parallelism); console — a lane, NOT
+   optional; no further core lanes ever — plugin-defined via a
+   registration mechanism footman's own two lanes are built on.
+   stdin dissolves (boundary questions + the console claim); argv was
+   never contended. Remaining before the call: the generator-pump
+   spike and the plugin-lane registration spelling (typo = taught
+   refusal).
+8. **The bare-callable ban**. RULED GO 2026-07-31 ("hell yeah"). I12
+   unconditional; `step(fn)` is the one-liner; refusal is structural
+   (no `.opts` on a bare callable — the loom's typing is the
+   enforcement).
+9. **Reviewer composition** (opened by move 4). RULED 2026-07-31:
+   chained draft, bottom-up — the reviewer nearest the `def` runs
+   first, each further-out one sees the accumulated edits,
+   `.opts(pre_record=…)` last; uniform regardless of where the lifter
+   sits. Docs phrasing pinned in the spec's move-5 section ("reviewers
+   run from the inside out").
+10. **Review provenance** (opened by move 4). RULED 2026-07-31 as
+    **the audit** (Willem's generalisation and name): not a reviewer
+    list — every involved lifecycle moment, (moment, actor,
+    code-or-None), execution order. Register row; full shape in the
+    spec's definitions. Subsumes `failed_at` and the preserved work
+    code as derived readings; the audit's order also documents
+    decision 9's order by construction.

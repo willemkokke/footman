@@ -24,6 +24,7 @@ from typing import (
     Any,
     Generic,
     Literal,
+    NamedTuple,
     NoReturn,
     ParamSpec,
     Protocol,
@@ -66,6 +67,19 @@ class Address:
 # every error indicates its moment). The union of all moments; a grain
 # without a moment (steps have no bind) simply never reports it.
 Phase: TypeAlias = Literal["bind", "enter", "body", "review", "observe"]
+
+
+class AuditEntry(NamedTuple):
+    """One entry of the audit (decision 10, ruled 2026-07-31): a
+    lifecycle moment that acted on — or failed — the grain's verdict.
+    `code` None means involved but left the verdict alone (a reviewer
+    that only set a title). The tuple order in `Result.audit` is
+    execution order, which is also decision 9's reviewer order,
+    documented by the data itself."""
+
+    moment: Phase
+    actor: str | None
+    code: int | None
 
 
 class Result(int):
@@ -115,22 +129,30 @@ class Result(int):
         raise NotImplementedError
 
     @property
+    def audit(self) -> tuple[AuditEntry, ...]:
+        """The verdict's provenance, the storage truth (decision 10):
+        every lifecycle moment that acted on or failed the grain, in
+        execution order. The body/capture entry always enters with the
+        work's own raw code; a failing moment always enters, declared
+        or not; quiet undeclared moments are skipped; verdict-scope
+        only (no title-diff log)."""
+        raise NotImplementedError
+
+    @property
     def failed_at(self) -> Phase | None:
-        """The lifecycle moment the grain failed at, None on success.
-        A raising hook fails the grain like any other error — tagged
-        with ITS moment (a reviewer at "review", an observer at
-        "observe"): the machinery records that a moment broke; no hook
-        ever rewrites a verdict."""
+        """The lifecycle moment the grain failed at, None on success —
+        a derived reading of the audit (the failing entry's moment),
+        kept as a property so the common question needs no scan. A
+        raising hook fails the grain like any other error, tagged with
+        ITS moment; no hook ever rewrites a verdict."""
         raise NotImplementedError
 
     @property
     def work_code(self) -> int | None:
-        """The code the grain carried when a later lifecycle moment
-        failed it — a green build vetoed at observe keeps its 0 here,
-        visible on the record rather than inferred from the reason.
-        None when nothing had concluded (a bind/enter/body failure)
-        or nothing superseded it (success). Name provisional
-        (register row)."""
+        """The code the grain carried when the failing moment began —
+        a vetoed green shows its 0 here. A derived reading of the
+        audit (the last code-bearing entry before the failure), not a
+        stored field; the old naming question is moot (register)."""
         raise NotImplementedError
 
 
@@ -374,8 +396,8 @@ def run(
 ) -> Result:
     """The default composition of execution and record (I4);
     `recorded=False` is execution alone — off the record. `command` is a
-    str only: `run(callable)` retires under decision 8's ban (the lifted
-    spelling replaces it); that narrowing is conditional on decision 8."""
+    str only: `run(callable)` retired with decision 8's ban (ruled GO
+    2026-07-31); the lifted spelling replaces it."""
     raise NotImplementedError
 
 
@@ -385,8 +407,8 @@ class Fanout(list[Result]):
     A list of committed records underneath (walk 1's promotion: Results
     over codes; I2 keeps every code-reader working). Owned calls inside
     the block queue themselves, carrying arguments naturally; `p.also`
-    does not exist here — under decision 8's ban foreign code lifts
-    instead (conditional on that decision)."""
+    does not exist here — under the ban (decision 8, ruled GO) foreign
+    code lifts instead."""
 
     results: list[object]
 
@@ -410,7 +432,7 @@ def parallel(
 ) -> object:
     """Takes work items and makers only — the acceptance test at full
     strength, structural because both maker Protocols demand `.opts`:
-    a bare lambda fails to match (conditional on decision 8)."""
+    a bare lambda fails to match (decision 8, ruled GO 2026-07-31)."""
     raise NotImplementedError
 
 
@@ -549,12 +571,16 @@ def policy_split_in_use() -> None:
 
 
 @post_task
-def audit(result: Result) -> None:
+def triage(result: Result) -> None:
     if not result.ok:
         assert_type(result.failed_at, Phase | None)  # which moment broke
         assert_type(result.work_code, int | None)  # a vetoed green shows its 0
         assert_type(result.stderr, str)
         assert_type(result.address, Address)
+        for moment, actor, code in result.audit:  # the whole verdict story
+            assert_type(moment, Phase)
+            assert_type(actor, str | None)
+            assert_type(code, int | None)
 
 
 @post_task

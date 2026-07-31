@@ -27,6 +27,16 @@ only; the register carries nuance.
   **`Result`**.
 - **off the record** (`recorded=False`) — executed under full
   management, no record. How a task learns something.
+- **the audit** — the record's verdict provenance: every lifecycle
+  moment that acted on (or failed) the grain, as (moment, actor,
+  code-or-None) entries in execution order. The body/capture entry is
+  always present and carries the work's own raw code; a failing moment
+  always enters, declared or not; quiet undeclared moments are
+  skipped; involvement without a verdict write records code None —
+  and nothing else (no title-diff log). `failed_at` and the
+  pre-failure code are derived readings of the audit, not stored
+  twins. (Ruled 2026-07-31, name Willem's; supersedes the provisional
+  `work_code` field.)
 - **address** — a node's tree-derived name (parent-path + label +
   ordinal). Universal, referential, line-number-stable. Ordinals count
   same-labelled siblings in request order AS WRITTEN — never completion
@@ -84,11 +94,11 @@ only; the register carries nuance.
   drift, not intent. At a hook moment the stakes are higher — the
   verbatim honouring would have let an observer "fail" a grain green
   (move 4, verified in source) — but the rule is one rule, uniform.
-  And a grain failed by a post-work moment (review, observe) keeps
-  the code it carried when that moment began (provisional spelling
-  `work_code`; register row): a green build vetoed at observe shows
-  its 0 — visible on the record, not merely inferable from the
-  reason.
+  And every grain carries its audit (see definitions): the verdict's
+  full provenance in execution order, so a green build vetoed at
+  observe shows its raw code, its reviewed 0, and the veto — each
+  attributed. `failed_at` and the pre-failure code are derived
+  readings of the audit, not stored twins.
 - **I6 — One identity rule, everywhere.** Address is universal; sharing
   exists only where a declaration does (I13), and the key is uniform at
   plan and execution: **(declaration, frozen overrides, resolved
@@ -134,9 +144,9 @@ only; the register carries nuance.
   undeclared grain. (Carve-out found by move 3 — the two clauses
   collided the moment the policy groups became types.) Every wall in
   "defaults, not walls" is an instance of this one.
-- **I12 (conditional, decision 8) — Footman holds no ungraded code.**
-  If the bare-callable ban lands: everything handed to footman has a
-  chosen grain; the foreign rung exists only inside bodies.
+- **I12 — Footman holds no ungraded code.** (Ruled GO 2026-07-31 —
+  decision 8.) Everything handed to footman has a chosen grain; the
+  foreign rung exists only inside bodies.
 
 ## Derivation ledger
 
@@ -153,17 +163,17 @@ only; the register carries nuance.
 | `recorded=False` | I4 verbatim | axiom (spelling ruled) |
 | forged receipt refused | I3 verbatim | axiom |
 | cwd lane (and custom resources) | I8 + lanes definition; the in-process-only scope derives from `run()` injecting `cwd=` for subprocesses | derives |
-| `parallel()` takes work items only | I12 if it lands; without the ban, coercion rules persist | derives conditionally on decision 8 |
-| `p.also` retires | I12 + deferability of makers | derives conditionally on decision 8 |
+| `parallel()` takes work items only | I12 (ruled GO 2026-07-31); refusal structural — a bare callable has no `.opts`, so neither maker protocol matches | derives |
+| `p.also` retires | I12 + deferability of makers | derives — decision 8 ruled GO |
 | no step-grain observer | I6 (steps carry no shareable identity; address is parent-derived — out of context they are storyless) + the dispatch refusal + I5's enforced windows; liveness routes via the Status units today and record-stream export under the horizon | derives (opinion ruled 2026-07-31) |
 | dry-run semantics | Walk 3 falsified the old row ("skips observed steps" — PEP 377 makes with-bodies unskippable, and dry-run never skipped body code anyway). Correct rule derives from the ladder: dry-run fakes what footman owns the execution of (run payloads, deferred makers, generator steps); inline body code always runs, with-form records without an execution boundary. | derives (walk 3, corrected) |
 | per-step duration history | address (universal, cross-run-matchable) | derives — future work, nothing blocks it |
 | display policy (collapse green) | receipt = rendered record (record family); pure presentation over I5's committed records | derives — scope still open (decision 4) |
 | **`recorded=False` at task grain** | Walk 4: refused — sharing IS record-reuse, and declared items are the run's accounting. Declared ⟹ recorded (I13). Taught error, not a capability. | resolved (walk 4) |
-| **`parallel()`'s return shape** | Walk 1: nothing wants codes over Results; I2 makes Results backward-readable. Rides decision 1 only. | promoted (walk 1) — conditional on decision 1 |
+| **`parallel()`'s return shape** | Walk 1: nothing wants codes over Results; I2 makes Results backward-readable. Rides decision 1 only. | derives — decision 1 called 2026-07-31 (flat items): `list[Result]` it is |
 | **`confirm=`/gates on steps** | Walk 4: refused via I13 — boundary policy (confirm, gates, shared, forward) requires a declaration to resolve at; execution policy (cwd, env, timeout, lanes, capture, recorded) is item-general. The policy table splits on this line. | resolved (walk 4) |
 | **The generator pump vs lanes** | Walk 5: suspended-at-yield is exactly what close() cancels — GeneratorExit unwinds, finally releases (boundary-atomic = one release site). Between yields: uninterruptible, bounded by the longest inter-yield stretch, documented. Lanes never force-stripped. | resolved (walk 5) |
-| **`Fanout` in the model** | Walk 1: both parallel() forms are an anonymous grouping item whose children are the fanned items — not special, just an anonymous parent. Shape known; rendering rides decision 1. | promoted (walk 1) — conditional on decision 1 |
+| **`Fanout` in the model** | Walk 1: both parallel() forms are an anonymous grouping item whose children are the fanned items — not special, just an anonymous parent. Shape known; rendering rides decision 1. | derives — decision 1 called 2026-07-31: a flat item with children by address |
 | **I6 and bound arguments** | Walk 1 found the gap; `_futures._key` verified. The Forward question exposed the plan layer's arg-excluding dedup + divergence refusal — and Willem's ruling collapsed the layers: ONE key, (declaration, overrides, resolved args), everywhere; the shipped ChainError retires (divergence = two nodes). Display of same-label/different-args rows parked at decisions 1/4. | resolved — ruled, uniform |
 | **partial-of-a-task defeats interception** | Walk 1: real today (footman's own tasks.py) — silent grain demotion. The double-count worry died in source: the unit-claim protocol anticipated "a task call in disguise" by name (unit_pending handed down, claimed by the first request). The footgun narrows to interception/queueing loss alone. Under I12: taught refusal. | resolved into decision 8's case |
 | **post_task observes the committed record** | Ruling 2026-07-31 (the phase-gate counter, move 3): observation holds the immutable `Result` — the phase gate is the ResultView/Result type split, static; `set_returned` review-window-only; a raising observer fails the grain; every failure carries `failed_at` lifecycle provenance (I5) | resolved — ruled, typed in the loom |
@@ -612,6 +622,219 @@ labels, not paths, so no separator or drive-letter semantics leak in.
 **Move 4 complete. New opens: decision 9 (reviewer composition),
 decision 10 (review provenance). Everything else bounced or
 sharpened decision 1.**
+
+## Move 5 — decisions (started 2026-07-31)
+
+Called in the agreed dependency order, report shape first — decision
+1's brief is below, awaiting the call.
+
+### Decision 9 — reviewer composition: RULED
+
+Chained draft, bottom-up: the reviewer written closest to the `def`
+runs first, each further-out reviewer sees the accumulated edits, and
+`.opts(pre_record=…)` runs last. Uniform wherever the hooks sit
+relative to the lifter (attachment stays order-free; execution order
+is always bottom-up). The docs phrasing, per Willem's ask — carry
+this wording to the docs page when it comes:
+
+> Reviewers run from the inside out: the hook written closest to your
+> function sees the draft first, and each one above it sees what the
+> previous reviewers left. A per-use `.opts(pre_record=…)` runs last —
+> the use site gets the final word. (This is the same order decorators
+> themselves apply: bottom to top.)
+
+### Decision 10 — review provenance: RULED as the audit
+
+Willem's generalisation and his name (2026-07-31): not a reviewer
+list — the record carries every lifecycle moment involved with the
+verdict, as (moment, actor, code-or-None) entries in execution order.
+Full shape in the definitions ("the audit"). Pinned rules: the
+body/capture entry always enters with the work's own raw code; a
+failing moment always enters, declared or not; quiet undeclared
+moments are skipped; involvement without a verdict write records code
+None and nothing more (verdict-scope only — no title-diff log). One
+structure subsumes three fields: `failed_at` and the pre-failure code
+(`work_code`, whose naming question dissolves) become derived
+readings. A bonus that fell out: the audit's execution order IS
+decision 9's order, documented by the data itself.
+
+### The decision-1 brief (the shadow-emitter spike, 2026-07-31)
+
+Method: the real `fm --json check` payload (schema 1, green run,
+22.8s), projected into the model's item set — foreign defs lifted per
+walk 1, fan-outs as anonymous grouping items — with parentage
+hand-threaded from tasks.py, because the runtime records no requester
+identity (gap 1 below). Both candidate shapes built from the same
+items; every query run against both.
+
+**Exhibit 1 — today's 5 rows are 24 items.** The real structure the
+flat report hides: `covered`'s 22.8s pytest run rides `check`'s row
+unnamed; the six checker runs are anonymous command strings on
+`typecheck` (their `__name__` labels reach the live line but are LOST
+in `--json`); the nesting exists only as pre-rendered text inside
+`check`'s `output` field. Abridged, as the model records it:
+
+    check                                  22.8s  [task]
+      (fanout)
+        format → ruff format . --check      0.1s
+        lint   → ruff check .               0.1s
+        typecheck                           5.5s  [task]
+          (fanout)
+            basedpyright → basedpyright…    5.5s  [lifted step]
+            mypy_linux / _darwin / _win32   0.6s ×3
+            ty / pyrefly                    0.3s / 0.5s
+        typecomplete → verifytypes          1.1s
+        covered → pytest --cov …           22.8s  [lifted step]
+
+**Exhibit 2 — the queries, measured.** Identical answers from both
+shapes; the difference is reader ergonomics:
+
+| question | flat + address | nested tree |
+| --- | --- | --- |
+| did lint pass | one `select(.address == …)` | recursive descent (`.. \| objects`) |
+| all failures | one `select(.ok \| not)` | recursive descent |
+| typecheck subtree wall-time | address PREFIX match (prefix = subtree, free) | two-stage recursion (find node, then descend) |
+| render the human tree | ~10 lines, group by parent (finding 7, now run) | native |
+
+**Exhibit 3 — a failing item under the model** (simulated fields; the
+green payload has no failures to show). The hse djlint step: raw exit
+1, reviewed green, then vetoed at observe by a duration budget:
+
+    { "address": "check/fanout/djlint",
+      "label": "djlint",
+      "code": 1, "ok": false,
+      "title": "djlint: reformatted",
+      "state": "failed",
+      "failed_at": "observe",         // derived
+      "work_code": 0,                 // derived
+      "audit": [
+        ["body",    "djlint reformat …", 1],
+        ["review",  "dj_outcome",        0],
+        ["observe", "budget",            1]
+      ] }
+
+One field tells the whole story — raw 1, reviewed 0, vetoed 1 — each
+attributed; the derived readings answer the common questions without
+scanning.
+
+**The gaps today's runtime must close, whatever shape is chosen:**
+requester identity (rows do not know who asked for them); report
+labels for lifted work (the `__name__` hack reaches the live line
+only); cross-grain creation order (steps carry no start times relative
+to child rows); the fan-out grouping item (invisible today).
+
+**Recommendation: flat creation-order list, parent by address.** Every
+reader query is a one-line select; address prefix gives subtrees for
+free; the human tree derives in ~10 lines (finding 7 confirmed by
+running it); the machine surface stays simple while receipts own the
+human rendering; and the information content is identical — measured,
+not asserted. The tree candidate's only win is native nesting, which
+is a renderer's need, not a reader's.
+
+### Decision 1 — the report shape: RULED (2026-07-31)
+
+Flat creation-order list of items, parent by address — the brief's
+recommendation, called by Willem with one amendment: **the schema
+field stays 1.** Nobody consumes `--json` yet (the cost-sign
+inversion the thinking record noted), so the new shape replaces the
+old under the same number — footman launches with it rather than
+migrating to it. The reader contract rides the call as briefed:
+name-lookup multiplicity (by name → a list, by address → unique); the
+failure story is `state` plus the audit (move 4's `state` ×
+`failed_at` pair collapses into this); reference-row accounting
+(execution rows own duration and steps, references link, aggregation
+never double-counts). The ledger rows conditional on this call
+promote: `parallel()` returns Results, and the fan-out grouping item
+has a place to render.
+
+**Streaming corollary (Willem's, parked at the post-1.0 horizon):**
+the flat list is jsonl-shaped — one committed item per line, appended
+as commits happen. This is the FILE FORM of the record-stream export
+the observer opinion already anticipated ("presentation over
+committed records; stream consumers cannot judge by construction"):
+only committed records stream, so I5 holds structurally, and liveness
+stays the Status lane. Two properties fall out free: a child's line
+is self-describing before its parent exists in the stream (parents
+commit AFTER their children, and the address carries parentage as a
+string — no parent-id join), and the batch file stays
+creation-ordered while the stream arrives in commit order (lines
+carry `started`; consumers re-sort if they care). Nothing designed
+now beyond not foreclosing it — which the flat shape just did.
+
+### Decisions 4, 5, 6, 8 — ruled (2026-07-31, one sitting)
+
+- **8, the bare-callable ban: GO** ("hell yeah"). I12 stops being
+  conditional; the two conditional ledger rows promote; the loom's
+  typed refusal (no `.opts` on a lambda → no overload match) is the
+  enforcement, already in place. Migration is mechanical: `step(fn)`
+  around every thunk, each gaining a receipt.
+- **6: dissolved into the build.** The model itself killed the old
+  tension (`recorded=` is execution policy, not a grain change; the
+  boundary rule IS I13, already typed). The `step=` → `recorded=`
+  rename rides the build wave, no deprecation shim; CHANGELOG carries
+  it.
+- **4: split as proposed, with the default ruled.** At normal
+  verbosity the report shows TASK grain only; verbose adds steps.
+  The full display thread (verbosity matrix, provenance markers,
+  emission-time redaction) parks as its own post-model thread.
+  And confirmed (2026-07-31): a FAILED task auto-expands its failing
+  step and audit line at normal verbosity — green is collapsible,
+  failure is never hidden.
+- **5: dissolved — hse is unblocked and moving.** Willem has been
+  developing hse alongside this whole thread; it pins its current
+  footman until the model ships, then migrates once (target 0.28.0).
+  No interim wave, no staged migration release; staging collapses to
+  "ship when coherent."
+
+### Decision 7 — partially ruled; the generator-pump spike runs next
+
+Ruled in the same sitting: **env needs no lane** (the router
+virtualises it completely); **cwd is a lane, opt-in** — claiming it
+is knowingly giving up parallelism, and the spelling must make that
+legible; **console is a lane and not optional** — the terminal is one
+resource, every claimant queues; **no further core lanes, ever** —
+everything else is plugin-defined, so the lane mechanism is a plugin
+surface and footman's own two lanes are built on it (dogfooding the
+registration path). The fourth process global, stdin, dissolves
+rather than lanes: the question layer resolves at the request
+boundary, and an interactive body's terminal access rides the console
+claim (process-globals v2's resolution, unchanged). argv was never a
+contended global — read once at CLI parse.
+
+Remaining before the call: the generator-pump prototype (walk 5's
+cancellation claims — close() at a yield must release lanes through
+the machinery's boundary ownership) and the plugin-lane registration
+spelling (declaration-required so a typo is a taught refusal, not a
+silently new lane).
+
+### The generator-pump spike (2026-07-31): walk 5 confirmed in code
+
+A working pump (scratch prototype: boundary-atomic lane acquire, a
+`send(view)` drive loop, release in the PUMP's finally) ran the four
+claims:
+
+- **Cancel at a checkpoint works exactly as walked**: close() at the
+  suspended yield → GeneratorExit → the generator's own try/finally
+  ran → the pump's finally released the lane. Measured latency 36ms
+  against a 50ms inter-yield stretch — the bound is real and is the
+  stretch, as documented.
+- **"Between yields is uninterruptible" is CPython's law, not just
+  our doctrine**: close() from another thread while the frame is
+  executing raises `ValueError: generator already executing`. There
+  is no design choice to make — cancellation is pump-mediated
+  (decline to resume, or close at the next yield) because Python
+  refuses anything else.
+- **The hostage generator cannot hold a lane**: a body that swallows
+  GeneratorExit and yields again gets `RuntimeError: generator
+  ignored GeneratorExit`; the item fails; the lane released anyway,
+  because release is pump-owned. The move-4 ledger row, now run.
+- **The `view = yield` protocol pumps cleanly** — send-driven, bare
+  yields as checkpoints, no vocabulary needed beyond what wrap_task
+  shipped.
+
+No walk-5 sentence needs amending: the mechanism is exactly as
+specified. Decision 7 now waits on one artifact only — the
+plugin-lane registration spelling.
 
 ## Strays found along the way (housekeeping commit, not the model)
 
