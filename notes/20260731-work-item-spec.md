@@ -834,8 +834,13 @@ claims:
   shipped.
 
 No walk-5 sentence needs amending: the mechanism is exactly as
-specified. Decision 7 now waits on one artifact only — the
-plugin-lane registration spelling.
+specified. Pinned while writing the design page (2026-07-31):
+cancellation reaches a generator step only at a checkpoint, and for
+exactly three reasons — fail-fast abort, full abort (Ctrl-C), and the
+step's own `timeout=` (the timeout refusal's honest exception: at
+checkpoints, enforcement is declining to resume). One cancellation
+story, worst-case latency one inter-yield stretch. Decision 7 now
+waits on one artifact only — the plugin-lane registration spelling.
 
 ### Decision 7 — the registration brief (2026-07-31, the last artifact)
 
