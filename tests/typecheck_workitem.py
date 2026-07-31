@@ -23,6 +23,7 @@ from contextlib import AbstractContextManager
 from typing import (
     Any,
     Generic,
+    Literal,
     ParamSpec,
     Protocol,
     Self,
@@ -60,21 +61,49 @@ class Address:
         raise NotImplementedError
 
 
+# Where in the grain's lifecycle a failure happened (ruled 2026-07-31:
+# every error indicates its moment). The union of all moments; a grain
+# without a moment (steps have no bind) simply never reports it.
+Phase: TypeAlias = Literal["bind", "enter", "body", "review", "observe"]
+
+
 class Result(int):
     """The committed record IS its exit code (I2): an int subclass, so
     every consumer that read codes keeps reading them. Extends the
     shipped `run()` Result shape (command/stdout/stderr/duration/raw)
-    with the record surface the spec adds (title, address). Immutable
-    after commit (I5) — no setters exist on this type at all.
+    with the record surface the spec adds (title, address, failed_at).
+    Immutable — statically: every field is a read-only property, and
+    this is the ONLY type an observer ever holds (ruled 2026-07-31), so
+    "observers see, never judge" is unspellable rather than enforced.
     """
 
-    title: str
-    command: str
-    stdout: str
-    stderr: str
-    duration: float
-    raw: str
-    address: Address
+    @property
+    def title(self) -> str:
+        raise NotImplementedError
+
+    @property
+    def command(self) -> str:
+        raise NotImplementedError
+
+    @property
+    def stdout(self) -> str:
+        raise NotImplementedError
+
+    @property
+    def stderr(self) -> str:
+        raise NotImplementedError
+
+    @property
+    def duration(self) -> float:
+        raise NotImplementedError
+
+    @property
+    def raw(self) -> str:
+        raise NotImplementedError
+
+    @property
+    def address(self) -> Address:
+        raise NotImplementedError
 
     @property
     def code(self) -> int:
@@ -84,23 +113,34 @@ class Result(int):
     def ok(self) -> bool:
         raise NotImplementedError
 
+    @property
+    def failed_at(self) -> Phase | None:
+        """The lifecycle moment the grain failed at, None on success.
+        A raising hook fails the grain like any other error — tagged
+        with ITS moment (a reviewer at "review", an observer at
+        "observe"): the machinery records that a moment broke; no hook
+        ever rewrites a verdict."""
+        raise NotImplementedError
+
 
 class ResultView:
     """THE view — one type across grains (ruled 2026-07-31): the
     record's draft, `Result`'s only mutable phase.
 
-    The static face is the review window: `title` and `code` are plain
+    This type IS the review window: `title` and `code` are plain
     writable attributes (the maker's `pre_record`, the item's own
     `with`-handle, and the generator's sent-in view all write them).
     `ok` DERIVES from `code` — a read-only property, so `code = 1` with
     `ok = True` is unspellable; the verdict follows the code (I2).
     What was captured is read-only everywhere: review sees what the run
-    kept, never edits it (walk 2). The observed phase's read-only-ness
-    for `title`/`code` is runtime-enforced — phase is per-object state
-    a single nominal type cannot carry statically (move-3 finding).
+    kept, never edits it (walk 2). Observers never hold this type at
+    all (ruled 2026-07-31): `post_task` receives the immutable
+    `Result`, so the phase gate is the type split, not enforcement.
     `returned` is on the shared view, None by circumstance (I10);
-    `set_returned` is the display-lane write whose observer-phase fate
-    is decision 2's residue.
+    `set_returned` is the review-window display write — per-maker,
+    contract-aware shaping of the reported value; its old observer-
+    phase home is gone, and the contract-free global scrub it never
+    soundly delivered belongs to display policy (decision 4).
     """
 
     title: str
@@ -260,6 +300,23 @@ def pre_record(hook: RecordHook, /) -> Callable[[F], F]:
     it reads order-free above or below the lifter (decision 2's typing
     residue, answered: `Callable[[F], F]` preserves a plain function, a
     StepFn, and a TaskFn alike)."""
+    raise NotImplementedError
+
+
+# --- observation (ruled 2026-07-31: purely read-only) ------------------
+
+
+class ObserverHook(Protocol):
+    """`post_task`, narrowed to the record argument (inv/task ride the
+    shipped signature unchanged): observation holds the immutable
+    `Result` — judging is unspellable, not discouraged. A raising
+    observer is an error like any other error: the grain fails, tagged
+    `failed_at="observe"` by the machinery, never by a write."""
+
+    def __call__(self, result: Result, /) -> None: ...
+
+
+def post_task(hook: ObserverHook, /) -> ObserverHook:
     raise NotImplementedError
 
 
@@ -464,6 +521,17 @@ def policy_split_in_use() -> None:
     assert_type(pinned(), WorkItem[int])
     reviewed = typecheck.opts(pre_record=tidy)
     assert_type(reviewed(), None)
+
+
+# --- observation: read everything, write nothing -----------------------
+
+
+@post_task
+def audit(result: Result) -> None:
+    if not result.ok:
+        assert_type(result.failed_at, Phase | None)  # which moment broke
+        assert_type(result.stderr, str)
+        assert_type(result.address, Address)
 
 
 # --- off the record: how a task learns something (I4) ------------------

@@ -59,8 +59,14 @@ only; the register carries nuance.
   commit the record is immutable and reported exactly once. Review is
   per EXECUTION (a shared row: one review, observer events per
   request); a maker's hook reviews the record its maker makes, never
-  its children's. After the review window closes, verdict-bearing
-  fields (code, ok, title) are read-only — observers see, never judge.
+  its children's. Observation is read-only BY TYPE (ruled 2026-07-31):
+  after the review window closes there is no view — `post_task` holds
+  the immutable `Result`, so observers see, never judge, unspellably;
+  `set_returned` is a review-window write only. A raising hook at any
+  moment is an error like any other error: the grain fails, and every
+  failure records WHERE in the lifecycle it happened (`failed_at`:
+  bind / enter / body / review / observe) — the machinery tags the
+  moment; no hook rewrites a verdict.
 - **I6 — One identity rule, everywhere.** Address is universal; sharing
   exists only where a declaration does (I13), and the key is uniform at
   plan and execution: **(declaration, frozen overrides, resolved
@@ -138,6 +144,7 @@ only; the register carries nuance.
 | **`Fanout` in the model** | Walk 1: both parallel() forms are an anonymous grouping item whose children are the fanned items — not special, just an anonymous parent. Shape known; rendering rides decision 1. | promoted (walk 1) — conditional on decision 1 |
 | **I6 and bound arguments** | Walk 1 found the gap; `_futures._key` verified. The Forward question exposed the plan layer's arg-excluding dedup + divergence refusal — and Willem's ruling collapsed the layers: ONE key, (declaration, overrides, resolved args), everywhere; the shipped ChainError retires (divergence = two nodes). Display of same-label/different-args rows parked at decisions 1/4. | resolved — ruled, uniform |
 | **partial-of-a-task defeats interception** | Walk 1: real today (footman's own tasks.py) — silent grain demotion. The double-count worry died in source: the unit-claim protocol anticipated "a task call in disguise" by name (unit_pending handed down, claimed by the first request). The footgun narrows to interception/queueing loss alone. Under I12: taught refusal. | resolved into decision 8's case |
+| **post_task observes the committed record** | Ruling 2026-07-31 (the phase-gate counter, move 3): observation holds the immutable `Result` — the phase gate is the ResultView/Result type split, static; `set_returned` review-window-only; a raising observer fails the grain; every failure carries `failed_at` lifecycle provenance (I5) | resolved — ruled, typed in the loom |
 
 ## Move 2 — the payload walks
 
@@ -366,14 +373,43 @@ What the types forced — the findings, numbered for the record:
    follows the code by construction (I2 typed). Consequence for walk
    2's hook: a reviewer writes `view.code`, never `view.ok` — the
    negative file pins the write as an error.
-2. **The phase gate is runtime, not static.** One `ResultView` across
-   grains (ruled) means one nominal type, and a type cannot carry
-   per-object phase: the static face is the REVIEW window (`title`,
-   `code` writable; captured streams, duration, address read-only
-   everywhere), and the observed phase's read-only-ness of the verdict
-   fields is runtime enforcement. The negative file can pin "review
-   never edits what was captured" but not "observers never judge" —
-   that one stays a runtime taught error.
+2. **The phase gate went static after all — Willem's counter, ruled
+   same day.** First drafted as runtime-only ("one nominal type cannot
+   carry per-object phase"). The counter: the one-view ruling is one
+   type across GRAINS, never across PHASES — and the phase axis
+   already has two types. Ruled: `post_task` is purely read-only
+   observability; an observer holds the immutable `Result`, so
+   "observers see, never judge" is unspellable, not enforced (the
+   negative file pins the write). Three consequences, walked before
+   the ruling:
+   - **`set_returned` loses its observer-phase home.** The audit
+     killed the counter-case: the "global redaction plugin" was never
+     sound as an observer write — it rewrote `returned` while the same
+     secret sat in captured stdout, in receipts, in what dependents
+     and `recording()` already held (the pristine value is handed over
+     before any hook fires). Contract-aware shaping of a reported
+     value is per-maker review-window work (`pre_record`, and
+     `set_returned` on the draft); contract-free scrubbing is
+     emission-time display policy over committed records (decision 4's
+     lane) — the sound version of what the observer write only
+     pretended to do. Decision 2's observer-writable residue: settled,
+     none.
+   - **A raising observer is an error like any other — the grain
+     fails.** Ruled with a generalisation: EVERY failure records where
+     in the grain's lifecycle it happened — `failed_at`: bind / enter
+     / body / review / observe — subsuming walk 2's "a raising
+     reviewer fails the item" and the enter-hook precedent as
+     instances of one rule. The machinery tags the moment; no hook
+     rewrites a verdict. Commit therefore stays after observation (the
+     machinery can still fail the grain at the observe moment) — the
+     static gate never needed commit-first, only the type split.
+   - **Shared rows unify.** Every observer event holds an immutable
+     record; the first-request/shared-request asymmetry disappears.
+
+   Typed: `Result` is all read-only properties plus `failed_at:
+   Phase | None`; `ObserverHook` holds one; I5 amended above; breaking
+   for the shipped `post_task` surface (`set_returned` moves into the
+   review window), CHANGELOG-visible when built.
 3. **`step(fn)` is always the maker.** Decorator position and
    expression position are the same expression — Python cannot tell
    them apart — so both return the lifted `StepFn`, never a built item.

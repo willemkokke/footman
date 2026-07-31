@@ -662,7 +662,15 @@ the spec becomes its own note linking back once the flood is done.
    (dynamic/per-use); no new global observer — `post_task` keeps that
    role. Residue: the stacked form's exact typing (identity like the
    gates) and whether `@pre_record` above vs below the lifter reads
-   order-free the way the gates do.
+   order-free the way the gates do. CLOSED 2026-07-31 by move 3 + the
+   phase-gate ruling: the stacked form types as the identity
+   `Callable[[F], F]` — order-free both ways (loom finding 6) — and
+   the observer-writable residue is none: `post_task` is purely
+   read-only (it holds the immutable `Result`, not the view),
+   `set_returned` is review-window-only, and a raising observer fails
+   the grain with `failed_at="observe"` lifecycle provenance (spec I5;
+   the "no downsides" audit — redaction was never soundly an observer
+   write — lives in the spec's move-3 section).
 3. **Does adjudication fire for anonymous items?** CLOSED 2026-07-31 as
    a corollary of the observer opinion: self-review via the item's own
    handle and its maker's `pre_record`; watching-from-outside is the

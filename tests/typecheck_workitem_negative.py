@@ -14,6 +14,7 @@ yield vocabulary, and (conditional on decision 8) the bare-callable ban.
 """
 
 from typecheck_workitem import (
+    Result,
     ResultView,
     StepBody,
     covered,
@@ -59,6 +60,17 @@ def _the_verdict_follows_the_code() -> None:
         view.stdout = ""  # type: ignore[misc]  # review sees what was captured
 
     del hook
+
+
+def _observation_is_read_only_by_type() -> None:
+    # ruled 2026-07-31: post_task is purely read-only observability — an
+    # observer holds the immutable Result, so judging (or any write,
+    # including the retired observer-phase set_returned) is unspellable.
+    def watcher(result: Result) -> None:
+        result.title = "better"  # type: ignore[misc]  # observers see, never judge
+        result.set_returned(3)  # type: ignore[attr-defined]  # review-window write only
+
+    del watcher
 
 
 def _bare_callables_are_refused() -> None:
