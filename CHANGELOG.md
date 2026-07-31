@@ -7,6 +7,34 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking: `post_task` observes a sealed record — observers see, never
+  judge.** The observer's `result` view is now fully read-only:
+  `set_returned` moved into the review window (`ResultView.set_returned`,
+  on the draft a `pre_record` reviewer holds), where the rewrite is
+  attributed in the record's audit. An observer that finds a problem
+  vetoes instead: `footman.fail(reason, code)` from a `post_task` hook
+  fails the task with the hook's own code, `failed_at` reads `"observe"`,
+  and the audit keeps the code the work had earned. And a `shared` row now
+  reports what the execution's sealed record reported — a shared answer is
+  the record reused — so a review's rewrite covers shares automatically
+  (previously the posts re-fired per share to the same effect).
+
+- **Breaking: `run(step=False)` is spelled `run(recorded=False)`.** The
+  off-the-record call — executed under full management, no receipt — now
+  carries the record family's own word, on `run()` and through the tools
+  bridge's `.opts(recorded=False)` alike. A rename, not a behaviour
+  change; there is no compatibility shim, and the old keyword is a plain
+  `TypeError`. First step of the work-item build
+  ([the design](https://willemkokke.github.io/footman/design/)).
+
+- **Breaking: `fail(code=0)` is refused.** `fail()` means failure, and
+  exit code 0 is success — the old verbatim honouring could produce a row
+  that read as ok while carrying an error. The refusal teaches the honest
+  spelling: `return 0` (or a plain `return`) stops a task early with
+  success.
+
 ### Added
 
 - **`@pre_record(fn)` — a task's own reviewer, stacked on the `def`.** The
@@ -45,22 +73,6 @@ versions may include breaking changes.
   no record to review — a note, not an error. The first slice of the
   record surface from
   [the design](https://willemkokke.github.io/footman/design/).
-
-### Changed
-
-- **Breaking: `run(step=False)` is spelled `run(recorded=False)`.** The
-  off-the-record call — executed under full management, no receipt — now
-  carries the record family's own word, on `run()` and through the tools
-  bridge's `.opts(recorded=False)` alike. A rename, not a behaviour
-  change; there is no compatibility shim, and the old keyword is a plain
-  `TypeError`. First step of the work-item build
-  ([the design](https://willemkokke.github.io/footman/design/)).
-
-- **Breaking: `fail(code=0)` is refused.** `fail()` means failure, and
-  exit code 0 is success — the old verbatim honouring could produce a row
-  that read as ok while carrying an error. The refusal teaches the honest
-  spelling: `return 0` (or a plain `return`) stops a task early with
-  success.
 
 ## [0.27.1] — 2026-07-31
 

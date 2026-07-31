@@ -410,12 +410,15 @@ write through:
   sibling; `inv` is frozen here for the same reason.
 
 `result` reads everything — `ok`, `code`, `returned`, `error`, `duration`,
-`output`, `steps` — and writes one thing: `set_returned(value)`, which
-rewrites the **reported** value (the summary and the `--json` envelope),
-never what a dependent or a body caller received. A `shared` row starts out
-reporting what its requester was actually handed — and since the posts fire
-on it too, a reporter that rewrites the execution's row can rewrite the
-shares the same way.
+`output`, `steps` — and writes nothing: **observers see, never judge**. The
+record was sealed when the review window closed, and every write there —
+title, code, the reported value via `set_returned` — belongs to a
+`pre_record` reviewer, where it is attributed in the record's audit. An
+observer that finds a problem is not powerless: `footman.fail(reason,
+code)` from a `post_task` hook fails the task with the hook's own code, the
+failure named and the moment recorded. A `shared` row reports what the
+execution's sealed record reported — a shared answer is the record reused —
+so a review's rewrite covers the shares automatically.
 
 Pres run in plugin order and posts unwind in reverse, so the first plugin in
 speaks last. The post is the **task-finished event**: once an execution

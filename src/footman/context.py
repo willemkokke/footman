@@ -196,6 +196,7 @@ class ResultView:
         "_command",
         "_duration",
         "_raw",
+        "_returned",
         "_stderr",
         "_stdout",
         "_title",
@@ -212,6 +213,7 @@ class ResultView:
         duration: float,
         raw: str,
         command: str,
+        returned: Any = None,
     ) -> None:
         self._title = title
         self._code = code
@@ -220,6 +222,7 @@ class ResultView:
         self._duration = duration
         self._raw = raw
         self._command = command
+        self._returned = returned
         self._touched: set[str] = set()
 
     @property
@@ -281,6 +284,21 @@ class ResultView:
     def command(self) -> str:
         """The normalised command line as it stood before review."""
         return self._command
+
+    @property
+    def returned(self) -> Any:
+        """What the body returned, when this draft is a task's row — None by
+        circumstance elsewhere (a subprocess step has no return value)."""
+        return self._returned
+
+    def set_returned(self, value: Any) -> None:
+        """Rewrite the *reported* value — the summary line and the `--json`
+        envelope — never what a dependent or a body caller received: that was
+        snapshotted the moment the body handed it over. The review window is
+        this write's home: reviewed, attributed in the audit, before the
+        record seals."""
+        self._returned = value
+        self._touched.add("returned")
 
 
 @dataclass

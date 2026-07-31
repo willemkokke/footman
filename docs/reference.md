@@ -74,7 +74,7 @@ def creds(inv, task): ...
 def opened(inv, task): ...  # post-bind: task.args, task.state, task.env
 
 @post_task
-def closed(inv, task, result): ...  # result.ok/returned + set_returned()
+def closed(inv, task, result): ...  # sealed, read-only; veto via fail()
 
 @post_tasks                 # once per invocation, after the run
 def digest(inv): ...        # inv.results / inv.skipped / inv.total_ms
