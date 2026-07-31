@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -244,6 +246,61 @@ def test_target_cwd_unmanaged_with_rel_raises(tmp_path):
     ctx = Context(cwd=tmp_path, cwd_unmanaged=True)
     with pytest.raises(ValueError, match="managed base"):
         context._target_cwd(ctx, None, "web")
+
+
+def test_target_cwd_per_call_unmanaged_token(tmp_path):
+    # The task-level token, accepted per call: no base at all for this one
+    # call, while ctx.cwd stays managed for every other call the task makes.
+    ctx = Context(cwd=tmp_path)
+    assert context._target_cwd(ctx, "unmanaged", None) is None
+
+
+def test_run_callable_per_call_unmanaged_skips_the_check(tmp_path):
+    # An in-process callable that touches no paths says so on the call: it
+    # runs under the live process cwd, foreign ctx.cwd notwithstanding.
+    seen: dict[str, bool] = {}
+    with use_context(Context(cwd=tmp_path)):
+        context.run(lambda: seen.setdefault("ran", True) and 0, cwd="unmanaged")
+    assert seen["ran"] is True
+
+
+def test_run_callable_foreign_cwd_still_refuses_without_the_token(tmp_path):
+    # The guard is not weakened: only the explicit per-call token opts out.
+    with (
+        use_context(Context(cwd=tmp_path)),
+        pytest.raises(ValueError, match="no longer chdirs"),
+    ):
+        context.run(lambda: 0)
+
+
+def test_run_subprocess_per_call_unmanaged_inherits_live_cwd(tmp_path, monkeypatch):
+    # A spawned child gets cwd=None — the live process cwd, not ctx.cwd
+    # (which here names a directory that does not even exist).
+    monkeypatch.chdir(tmp_path)
+    with use_context(Context(cwd=tmp_path / "nowhere")):
+        result = context.run(
+            [sys.executable, "-c", "import os; print(os.getcwd())"],
+            cwd="unmanaged",
+        )
+    assert Path(result.stdout.strip()).resolve() == tmp_path.resolve()
+
+
+def test_run_per_call_unmanaged_with_rel_is_a_taught_error(tmp_path):
+    with (
+        use_context(Context(cwd=tmp_path)),
+        pytest.raises(ValueError, match="managed base"),
+    ):
+        context.run(lambda: 0, cwd="unmanaged", rel="x")
+
+
+def test_serial_lane_per_call_unmanaged_is_the_applied_cwd(tmp_path):
+    # Under the serial lane the task's cwd is applied with a real chdir, so
+    # "the live process cwd" *is* ctx.cwd — the token stays correct there.
+    seen: dict[str, str] = {}
+    ctx = Context(cwd=tmp_path)
+    with use_context(ctx), _executor._serial_globals(ctx):
+        context.run(lambda: seen.setdefault("cwd", os.getcwd()) and 0, cwd="unmanaged")
+    assert Path(seen["cwd"]).resolve() == tmp_path.resolve()
 
 
 # --- end to end: the config default threads into a real run ------------------
