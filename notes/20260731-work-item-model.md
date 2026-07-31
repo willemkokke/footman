@@ -664,11 +664,13 @@ the spec becomes its own note linking back once the flood is done.
    codified as two axes with one word each (the shipped `state`
    docstring's rule, extended); and reference-row accounting (duration
    and steps live on the execution row, references link — aggregation
-   never double-counts a shared subtree). BRIEF READY (spec note,
-   move-5 section, 2026-07-31): the shadow-emitter spike ran the real
-   `fm --json check` payload through both candidates — recommendation
-   is flat creation-order list with parent-by-address; awaiting the
-   call.
+   never double-counts a shared subtree). RULED 2026-07-31: flat
+   creation-order list, parent by address, per the shadow-emitter
+   brief (spec note, move-5 section) — with the schema field STAYING
+   1 (no consumers; footman launches with the new shape rather than
+   migrating to it). Streaming corollary parked at the horizon: the
+   flat list is jsonl-shaped, the file form of the record-stream
+   export the observer opinion anticipated.
 2. **Hook name and family membership.** Largely resolved 2026-07-31:
    `@pre_record(fn)` stacked on makers (declared) + `.opts(pre_record=…)`
    (dynamic/per-use); no new global observer — `post_task` keeps that

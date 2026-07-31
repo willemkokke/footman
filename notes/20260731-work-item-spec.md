@@ -170,10 +170,10 @@ only; the register carries nuance.
 | per-step duration history | address (universal, cross-run-matchable) | derives — future work, nothing blocks it |
 | display policy (collapse green) | receipt = rendered record (record family); pure presentation over I5's committed records | derives — scope still open (decision 4) |
 | **`recorded=False` at task grain** | Walk 4: refused — sharing IS record-reuse, and declared items are the run's accounting. Declared ⟹ recorded (I13). Taught error, not a capability. | resolved (walk 4) |
-| **`parallel()`'s return shape** | Walk 1: nothing wants codes over Results; I2 makes Results backward-readable. Rides decision 1 only. | promoted (walk 1) — conditional on decision 1 |
+| **`parallel()`'s return shape** | Walk 1: nothing wants codes over Results; I2 makes Results backward-readable. Rides decision 1 only. | derives — decision 1 called 2026-07-31 (flat items): `list[Result]` it is |
 | **`confirm=`/gates on steps** | Walk 4: refused via I13 — boundary policy (confirm, gates, shared, forward) requires a declaration to resolve at; execution policy (cwd, env, timeout, lanes, capture, recorded) is item-general. The policy table splits on this line. | resolved (walk 4) |
 | **The generator pump vs lanes** | Walk 5: suspended-at-yield is exactly what close() cancels — GeneratorExit unwinds, finally releases (boundary-atomic = one release site). Between yields: uninterruptible, bounded by the longest inter-yield stretch, documented. Lanes never force-stripped. | resolved (walk 5) |
-| **`Fanout` in the model** | Walk 1: both parallel() forms are an anonymous grouping item whose children are the fanned items — not special, just an anonymous parent. Shape known; rendering rides decision 1. | promoted (walk 1) — conditional on decision 1 |
+| **`Fanout` in the model** | Walk 1: both parallel() forms are an anonymous grouping item whose children are the fanned items — not special, just an anonymous parent. Shape known; rendering rides decision 1. | derives — decision 1 called 2026-07-31: a flat item with children by address |
 | **I6 and bound arguments** | Walk 1 found the gap; `_futures._key` verified. The Forward question exposed the plan layer's arg-excluding dedup + divergence refusal — and Willem's ruling collapsed the layers: ONE key, (declaration, overrides, resolved args), everywhere; the shipped ChainError retires (divergence = two nodes). Display of same-label/different-args rows parked at decisions 1/4. | resolved — ruled, uniform |
 | **partial-of-a-task defeats interception** | Walk 1: real today (footman's own tasks.py) — silent grain demotion. The double-count worry died in source: the unit-claim protocol anticipated "a task call in disguise" by name (unit_pending handed down, claimed by the first request). The footgun narrows to interception/queueing loss alone. Under I12: taught refusal. | resolved into decision 8's case |
 | **post_task observes the committed record** | Ruling 2026-07-31 (the phase-gate counter, move 3): observation holds the immutable `Result` — the phase gate is the ResultView/Result type split, static; `set_returned` review-window-only; a raising observer fails the grain; every failure carries `failed_at` lifecycle provenance (I5) | resolved — ruled, typed in the loom |
@@ -729,13 +729,37 @@ free; the human tree derives in ~10 lines (finding 7 confirmed by
 running it); the machine surface stays simple while receipts own the
 human rendering; and the information content is identical — measured,
 not asserted. The tree candidate's only win is native nesting, which
-is a renderer's need, not a reader's. Schema bumps to 2.
+is a renderer's need, not a reader's.
 
-**Decision 1 stays OPEN** — the call is the shape plus the reader
-contract riding it: name-lookup multiplicity (by name → a list, by
-address → unique), the failure story as `state` + the audit (the
-`state` × `failed_at` pair from move 4 collapses into this), and
-reference-row accounting (no double-counted shared subtrees).
+### Decision 1 — the report shape: RULED (2026-07-31)
+
+Flat creation-order list of items, parent by address — the brief's
+recommendation, called by Willem with one amendment: **the schema
+field stays 1.** Nobody consumes `--json` yet (the cost-sign
+inversion the thinking record noted), so the new shape replaces the
+old under the same number — footman launches with it rather than
+migrating to it. The reader contract rides the call as briefed:
+name-lookup multiplicity (by name → a list, by address → unique); the
+failure story is `state` plus the audit (move 4's `state` ×
+`failed_at` pair collapses into this); reference-row accounting
+(execution rows own duration and steps, references link, aggregation
+never double-counts). The ledger rows conditional on this call
+promote: `parallel()` returns Results, and the fan-out grouping item
+has a place to render.
+
+**Streaming corollary (Willem's, parked at the post-1.0 horizon):**
+the flat list is jsonl-shaped — one committed item per line, appended
+as commits happen. This is the FILE FORM of the record-stream export
+the observer opinion already anticipated ("presentation over
+committed records; stream consumers cannot judge by construction"):
+only committed records stream, so I5 holds structurally, and liveness
+stays the Status lane. Two properties fall out free: a child's line
+is self-describing before its parent exists in the stream (parents
+commit AFTER their children, and the address carries parentage as a
+string — no parent-id join), and the batch file stays
+creation-ordered while the stream arrives in commit order (lines
+carry `started`; consumers re-sort if they care). Nothing designed
+now beyond not foreclosing it — which the flat shape just did.
 
 ## Strays found along the way (housekeeping commit, not the model)
 
