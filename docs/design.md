@@ -86,6 +86,7 @@ Nothing else divides them.
 
 You can make a step three ways, and all three are the same word:
 
+<!-- example: fragment -->
 ```python
 from footman import step
 
@@ -108,6 +109,7 @@ be a surprise.
 
 A step can also be a generator, which buys two things with one keyword:
 
+<!-- example: fragment -->
 ```python
 @step
 def rebuild(target: str):
@@ -129,6 +131,7 @@ says so plainly instead of pretending otherwise.
 
 Hand footman a bare function and it will refuse:
 
+<!-- example: fragment -->
 ```python
 parallel(lint, test, lambda: shutil.rmtree("build"))   # refused
 parallel(lint, test, step(clean, title="clear build/")) # one wrapper fixes it
@@ -164,6 +167,7 @@ Sometimes execution is the *only* half you want. A task that reads the
 current git hash isn't telling the story of the run — it's learning
 something in order to tell it:
 
+<!-- example: fragment -->
 ```python
 head = run("git rev-parse HEAD", recorded=False)   # off the record
 ```
@@ -203,6 +207,7 @@ The design answer is a **review window**. Between a step finishing and
 its record being sealed, a reviewer you name may read the draft and
 amend the verdict:
 
+<!-- example: fragment -->
 ```python
 def reformatted_is_fine(view):
     if "reformatted" in view.stdout or view.code == 0:
@@ -231,6 +236,7 @@ enforced by the type system, not by convention: the observer's object
 simply has no way to write. An observer that finds a problem is not
 powerless, though — it can *fail* the work, loudly and attributably:
 
+<!-- example: fragment -->
 ```python
 @post_task
 def budget(result):
@@ -360,6 +366,7 @@ parallelism and the code should say so where reviewers can see it.
 Everything else is yours to declare. A lane is created by binding a
 name, and claimed by handing that binding around:
 
+<!-- example: fragment -->
 ```python
 db = footman.lane("database", reason="serialises the shared dev DB")
 
