@@ -717,7 +717,11 @@ the spec becomes its own note linking back once the flood is done.
    strings (a typo is a NameError by construction), sharing is
    importing, collision is a provenance-naming refusal, core's two
    lanes dogfood the same call, `serial=` becomes sugar for both.
-   Awaiting the call.
+   CALLED 2026-07-31 on the brief as amended (one holder per lane;
+   capacity deferred as a purely additive keyword). Willem's recorded
+   reason: the handle mechanism cleanly extends to multiple resources
+   of one type — a resource IS a binding. MOVE 5 COMPLETE; every open
+   decision closed.
 8. **The bare-callable ban**. RULED GO 2026-07-31 ("hell yeah"). I12
    unconditional; `step(fn)` is the one-liner; refusal is structural
    (no `.opts` on a bare callable — the loom's typing is the

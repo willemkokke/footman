@@ -894,6 +894,24 @@ IS the registry.**
   generalises from — a shippable spec can carry the name where a
   handle cannot travel; nothing else designed now.
 
+### Decision 7 — CALLED (2026-07-31)
+
+Ruled on the brief as amended (one-holder wording; capacity
+deferred). Willem's specific reason, recorded because it is a design
+property every future lane feature must keep true: **the handle
+mechanism cleanly extends to multiple resources of the same type** —
+two databases are two bindings (`db_main = lane("db-main")`,
+`db_replica = lane("db-replica")`), so "instances" need no
+type/instance machinery, no lane classes, no parameterisation. A
+resource IS a binding; keep it that flat.
+
+**Move 5 is complete. Every open decision of the work-item spec is
+closed** — 1 through 10: ruled, dissolved, or confirmed. What remains
+for the thread: the build (target 0.28.0; hse migrates on it), two
+loose names (the `creates` marker; the exported core lane handles),
+and the parked post-model threads (the display-policy thread; jsonl
+streaming at the horizon).
+
 ## Strays found along the way (housekeeping commit, not the model)
 
 - `_futures._fill` is dead code (defined, zero call sites — superseded
