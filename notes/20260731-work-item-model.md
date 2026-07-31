@@ -710,9 +710,18 @@ the spec becomes its own note linking back once the flood is done.
    optional; no further core lanes ever — plugin-defined via a
    registration mechanism footman's own two lanes are built on.
    stdin dissolves (boundary questions + the console claim); argv was
-   never contended. Remaining before the call: the generator-pump
-   spike and the plugin-lane registration spelling (typo = taught
-   refusal).
+   never contended. Both artifacts are in: the generator-pump spike
+   (DONE 2026-07-31 — walk 5 confirmed in running code) and the
+   registration BRIEF (spec move-5 section): declaration is a Python
+   binding — `lane()` returns a handle, `lanes=` takes handles never
+   strings (a typo is a NameError by construction), sharing is
+   importing, collision is a provenance-naming refusal, core's two
+   lanes dogfood the same call, `serial=` becomes sugar for both.
+   CALLED 2026-07-31 on the brief as amended (one holder per lane;
+   capacity deferred as a purely additive keyword). Willem's recorded
+   reason: the handle mechanism cleanly extends to multiple resources
+   of one type — a resource IS a binding. MOVE 5 COMPLETE; every open
+   decision closed.
 8. **The bare-callable ban**. RULED GO 2026-07-31 ("hell yeah"). I12
    unconditional; `step(fn)` is the one-liner; refusal is structural
    (no `.opts` on a bare callable — the loom's typing is the

@@ -836,6 +836,82 @@ No walk-5 sentence needs amending: the mechanism is exactly as
 specified. Decision 7 now waits on one artifact only — the
 plugin-lane registration spelling.
 
+### Decision 7 — the registration brief (2026-07-31, the last artifact)
+
+**Recommendation: declaration is a Python binding — the import system
+IS the registry.**
+
+    # in a plugin module, or plain tasks.py — same mechanism, no
+    # plugin-only privilege:
+    db = footman.lane("database", reason="serialises the shared dev DB")
+
+    @task(lanes=(db,))
+    def migrate(): ...
+
+- **`lanes=` takes Lane HANDLES, never strings.** A misspelt lane is
+  an undefined Python name — `NameError`, the interpreter's own taught
+  refusal — because there is no string lookup to typo. The ruled
+  requirement ("a typo must not mint a silent new lane") is satisfied
+  by construction, with zero registry machinery. The loom anticipated
+  this shape: `lane(name) -> Lane`, `lanes: tuple[Lane, ...]` in
+  ExecutionOpts, already four-checker green.
+- **Sharing is importing.** Two modules serialise on one resource by
+  importing one handle. Deliberate, visible in the import list, and
+  refactorable like any other name.
+- **Name collision is a taught refusal with provenance.** Declaring
+  `lane("database")` at two sites is an error naming both files (the
+  plugin-collision precedent) — the display name must stay unambiguous
+  because the live line will say "waiting on database". Reuse is
+  spelled by importing, never by re-declaring.
+- **Core dogfoods the same call.** footman declares its own two lanes
+  with the identical mechanism and exports the handles: cwd (opt-in —
+  claiming it is knowingly giving up parallelism, and an import plus
+  an explicit `lanes=` makes that legible at the use site) and console
+  (claimed implicitly by `interactive=`, claimable explicitly). The
+  exported names are register-unnamed for now (blocks the build until
+  named, per register discipline).
+- **Claims: one holder at a time per lane in v1** — "exclusive" in
+  the narrow sense only: a claim contends solely with other claimants
+  of THAT lane; unrelated work runs in parallel untouched (nothing
+  drains — that is `exclusive=`, the arbiter's separate regime, and
+  it is not this). The split exists to RAISE parallelism over today's
+  single serial lane, never to lower it. Claims are boundary-atomic
+  (I8), spelled in execution policy everywhere the loom already puts
+  them (`@task`, `@step`, `.opts()`, tool opts). Counted capacity
+  (`lane("db", capacity=10)`) is a purely additive keyword later —
+  deferred (ruled 2026-07-31) until a real payload wants it, since
+  the two core lanes are physically capacity-1 and the counted
+  questions (fairness, k-slot claims, slot display) deserve a driving
+  user.
+- **`serial=` becomes sugar** for claiming both core lanes;
+  `exclusive=` stays the arbiter's full drain (process-globals v2),
+  not a lane. `reason=` is optional documentation on the declaration.
+- **Waits render** through the timing fields the report already has
+  (`eligible`/`started` — a lane wait is launch latency) plus a live
+  line state ("waiting on database"); the exact rendering belongs to
+  the parked display thread.
+- **Horizon note:** a Lane's name is what a cluster-level token later
+  generalises from — a shippable spec can carry the name where a
+  handle cannot travel; nothing else designed now.
+
+### Decision 7 — CALLED (2026-07-31)
+
+Ruled on the brief as amended (one-holder wording; capacity
+deferred). Willem's specific reason, recorded because it is a design
+property every future lane feature must keep true: **the handle
+mechanism cleanly extends to multiple resources of the same type** —
+two databases are two bindings (`db_main = lane("db-main")`,
+`db_replica = lane("db-replica")`), so "instances" need no
+type/instance machinery, no lane classes, no parameterisation. A
+resource IS a binding; keep it that flat.
+
+**Move 5 is complete. Every open decision of the work-item spec is
+closed** — 1 through 10: ruled, dissolved, or confirmed. What remains
+for the thread: the build (target 0.28.0; hse migrates on it), two
+loose names (the `creates` marker; the exported core lane handles),
+and the parked post-model threads (the display-policy thread; jsonl
+streaming at the horizon).
+
 ## Strays found along the way (housekeeping commit, not the model)
 
 - `_futures._fill` is dead code (defined, zero call sites — superseded
