@@ -27,6 +27,7 @@ if TYPE_CHECKING:
     from footman.app import Brand as Brand
     from footman.compose import include as include
     from footman.compose import plugin as plugin
+    from footman.context import AuditEntry as AuditEntry
     from footman.context import Context as Context
     from footman.context import Failed as Failed
     from footman.context import Result as Result
@@ -94,6 +95,7 @@ __version__ = "0.27.1"
 __all__ = [
     "App",
     "Arg",
+    "AuditEntry",
     "Brand",
     "Context",
     "Exists",
@@ -285,6 +287,7 @@ def __getattr__(name: str) -> object:
         "Context",
         "Result",
         "ResultView",
+        "AuditEntry",
         "inherited",
         "passthrough",
         "progress",

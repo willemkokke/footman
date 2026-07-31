@@ -838,6 +838,11 @@ def _print_json(results: list[_executor.TaskResult], *, total: float) -> None:
                     "duration_ms": round(s.duration * 1000, 3),
                     "stdout": s.stdout,
                     "stderr": s.stderr,
+                    # The verdict's provenance: [moment, actor, code] per
+                    # entry, and the derived failing moment (null when the
+                    # step succeeded). Additive to schema 1.
+                    "audit": [[e.moment, e.actor, e.code] for e in s.audit],
+                    "failed_at": s.failed_at,
                 }
                 for s in r.steps
             ],
