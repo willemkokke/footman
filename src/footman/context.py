@@ -1155,7 +1155,7 @@ def _run_callable(
     *,
     capture: bool = True,
     env: dict[str, str] | None = None,
-    cwd: str | Path | None = None,
+    cwd: Path | None = None,
 ) -> tuple[int, str, str]:
     """Run a callable — parallel-safe under the router, honoring env/cwd.
 
@@ -1185,19 +1185,20 @@ def _run_callable(
     # fast path in `_process_state` is kept in every colour mode.
     # Same rule as the subprocess branch: `env=` replaces, absent inherits.
     overlay = dict(env) if env is not None else dict(ctx.env)
-    # `unmanaged` means footman stays out: no cwd opinion for the callable,
-    # exactly as the subprocess branch spawns with cwd=None.
-    default_cwd = None if ctx.cwd_unmanaged else ctx.cwd
-    target_cwd = Path(cwd) if cwd is not None else default_cwd
-    if target_cwd is not None:
+    # `cwd` arrives resolved by `_target_cwd`: the task's managed directory
+    # or an explicit per-call target. None means footman stays out (the
+    # `unmanaged` token, task-level or per-call): no cwd opinion for the
+    # callable, exactly as the subprocess branch spawns with cwd=None.
+    if cwd is not None:
         live = Path(_globals.real_getcwd())
-        if target_cwd.resolve() != live:
+        if cwd.resolve() != live:
             raise ValueError(
-                f"this in-process call needs cwd {target_cwd} but the process "
+                f"this in-process call needs cwd {cwd} but the process "
                 f"is at {live} — footman no longer chdirs in a parallel task. "
                 f"Run it as a subprocess (which gets cwd= for free), build "
-                f"paths from footman.cwd(), or declare @task(cwd='unmanaged') "
-                f"if the call genuinely doesn't care."
+                f"paths from footman.cwd(), declare @task(cwd='unmanaged'), "
+                f"or pass cwd='unmanaged' on this call if it genuinely "
+                f"doesn't care."
             )
     state = _env_overlay(ctx, overlay) if _globals.active() else _process_state(overlay)
     with state:
@@ -1733,8 +1734,18 @@ def _target_cwd(
 ) -> Path | None:
     """The effective directory for one call. Explicit `cwd=` wins; otherwise
     the task's resolved `ctx.cwd` (or none at all under the `unmanaged`
-    policy). `rel=` is a relative suffix on whatever base is in force at
+    policy). The literal `cwd="unmanaged"` opts this one call out — the
+    same word, the same meaning as the task-level token: no base at all, so
+    a child inherits the live process cwd and an in-process callable runs
+    under it. `rel=` is a relative suffix on whatever base is in force at
     this call — `ctx.cwd` in the common case."""
+    if cwd == "unmanaged":
+        if rel is not None:
+            raise ValueError(
+                "rel=… needs a managed base and cwd='unmanaged' has none — "
+                "pass cwd=… explicitly, or use the asinvoked policy"
+            )
+        return None
     base = Path(cwd) if cwd is not None else (None if ctx.cwd_unmanaged else ctx.cwd)
     if rel is None:
         return base
@@ -1778,7 +1789,11 @@ def run(
     `cwd=` roots this one call somewhere other than the task's directory;
     `rel=` appends a relative suffix to the base in force (`ctx.cwd`, or the
     explicit `cwd=`), so `run("npm run build", rel="web")` is the ergonomic
-    spelling of `cwd=ctx.cwd / "web"`.
+    spelling of `cwd=ctx.cwd / "web"`. `cwd="unmanaged"` opts this one call
+    out instead — the task-level token, per call: a subprocess spawns
+    inheriting the live process cwd, an in-process callable runs under it —
+    for a call that touches no paths while its task keeps `ctx.cwd`
+    everywhere else.
 
     **`step=False` says this call is not part of the task's story.** A call is
     a *step* by default: it earns a receipt line, a row in `--json`, a
@@ -1935,8 +1950,9 @@ def run(
         # a non-interactive `-c`, so drop those from the child env too.
         if clean and shell_kind in ("bash", "sh", "zsh"):
             run_env = {k: v for k, v in run_env.items() if k not in ("BASH_ENV", "ENV")}
-        # `unmanaged` spawns with cwd=None (inherit the live process cwd);
-        # a per-call cwd=/rel= override wins — see `_target_cwd`.
+        # `unmanaged` spawns with cwd=None (inherit the live process cwd),
+        # task-level or per-call; a per-call cwd=/rel= override wins — see
+        # `_target_cwd`.
         cwd_path = _target_cwd(ctx, cwd, rel)
         code, out_s, err_s, timed_out = _run_subprocess(
             argv,

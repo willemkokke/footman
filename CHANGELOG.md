@@ -18,6 +18,13 @@ versions may include breaking changes.
 
 ### Added
 
+- **`run(..., cwd="unmanaged")` works per call.** The task-level token,
+  accepted on a single call: that call gets no directory opinion — a
+  subprocess inherits the live process cwd, an in-process callable runs
+  wherever the process is — while the task keeps `ctx.cwd` for everything
+  else. The tools bridge takes it through `.opts(cwd="unmanaged")`, and
+  combining it with `rel=` is the same taught error as on a task.
+
 - **The public API verifies 100% type-complete, and the gate holds it
   there.** `basedpyright --verifytypes footman --ignoreexternal` scores a
   full 1.0 (from 0.86), `fm check` grew a `typecomplete` step whose exit

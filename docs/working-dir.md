@@ -68,6 +68,11 @@ The rule that makes all of this one idea: **`rel` is a suffix on whatever
 base is in force at the point it appears** — the ladder's base on a task,
 `ctx.cwd` at a call site.
 
+`cwd="unmanaged"` is accepted per call too, and means what the task-level
+token means: footman has no directory opinion for that one call — a child
+inherits the live process cwd — while the task keeps `ctx.cwd` for
+everything else.
+
 ## In-process calls and the directory
 
 An in-process call runs inside footman's own process, which has exactly one
@@ -81,8 +86,9 @@ the directory a call needs decides how that call runs:
   directory, still parallel; the startup saving is the only loss.
 - A bare `run(callable, cwd=…)` pointing somewhere foreign is an error
   naming the exits: use the subprocess form, build paths from
-  `footman.cwd()`, or declare `@task(cwd="unmanaged")` if the callable
-  genuinely doesn't care.
+  `footman.cwd()`, declare `@task(cwd="unmanaged")`, or pass
+  `cwd="unmanaged"` on the call itself if only that one call genuinely
+  doesn't care.
 
 `os.chdir` in a parallel task is an error for the same reason, and
 `os.getcwd` earns a one-time note pointing at `footman.cwd()` — in a
