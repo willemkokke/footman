@@ -83,6 +83,7 @@ agreed, its public name is not).
 | (preserved work code) | the code the grain carried when a later lifecycle moment (review, observe) failed it — a vetoed green keeps its 0 on the record, visible not inferred; None when nothing had concluded | API | DISSOLVED 2026-07-31 into the audit — a derived reading, not a stored field; the naming question is moot |
 | audit | the record's verdict provenance: every lifecycle moment that acted on (or failed) the grain, as (moment, actor, code-or-None) entries in execution order; body always enters with the raw code, failures always enter, quiet undeclared moments skipped; verdict-scope only | docs/API | settled 2026-07-31 — Willem's name and generalisation (decision 10) |
 | cwd_lane / console_lane | the two exported core lane handles — the only core lanes ever, by ruling | API | settled 2026-07-31: the `_lane` suffix is the warning label at the import site (`from footman import cwd_lane` says what it costs), and bare `footman.cwd` was already taken by the context manager |
+| sealed | the docs-tier word for a committed record ("the record is sealed") — notes/API keep "commit"; the design page introduced it because "committed" drags git along for a docs reader | docs | provisional — liked in principle (Willem, 2026-07-31); final ruling once the design page is read in place |
 
 Register rules: a notes-tier term appearing in docs or an error message is
 a bug; the two **unnamed** rows block their features (a thing users touch
