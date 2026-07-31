@@ -870,10 +870,19 @@ IS the registry.**
   (claimed implicitly by `interactive=`, claimable explicitly). The
   exported names are register-unnamed for now (blocks the build until
   named, per register discipline).
-- **Claims: exclusive-only in v1**, boundary-atomic (I8), spelled in
-  execution policy everywhere the loom already puts it (`@task`,
-  `@step`, `.opts()`, tool opts). Counted/semaphore claims wait for a
-  real payload that wants them.
+- **Claims: one holder at a time per lane in v1** — "exclusive" in
+  the narrow sense only: a claim contends solely with other claimants
+  of THAT lane; unrelated work runs in parallel untouched (nothing
+  drains — that is `exclusive=`, the arbiter's separate regime, and
+  it is not this). The split exists to RAISE parallelism over today's
+  single serial lane, never to lower it. Claims are boundary-atomic
+  (I8), spelled in execution policy everywhere the loom already puts
+  them (`@task`, `@step`, `.opts()`, tool opts). Counted capacity
+  (`lane("db", capacity=10)`) is a purely additive keyword later —
+  deferred (ruled 2026-07-31) until a real payload wants it, since
+  the two core lanes are physically capacity-1 and the counted
+  questions (fairness, k-slot claims, slot display) deserve a driving
+  user.
 - **`serial=` becomes sugar** for claiming both core lanes;
   `exclusive=` stays the arbiter's full drain (process-globals v2),
   not a lane. `reason=` is optional documentation on the declaration.
