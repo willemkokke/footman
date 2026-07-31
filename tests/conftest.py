@@ -9,7 +9,7 @@ from typing import Any
 
 import pytest
 
-from footman import _manifest, registry
+from footman import _manifest, context, registry
 
 FIXTURE = Path(__file__).parent / "fixtures" / "sample_tasks.py"
 PYPROJECT = Path(__file__).resolve().parent.parent / "pyproject.toml"
@@ -94,3 +94,22 @@ def root() -> registry.Group:
 def tree(root: registry.Group) -> dict[str, Any]:
     built: dict[str, Any] = _manifest.build_manifest(root)["tree"]
     return built
+
+
+@pytest.fixture(autouse=True)
+def _clean_abort_state():
+    """Every test starts with the abort latch clear.
+
+    The latch is process-global and deliberately survives an exception
+    unwind (a Ctrl-C must keep reaping children spawned after it). Inside
+    one xdist worker that durability leaks across tests: a test that
+    drives an abort and unwinds by exception leaves the latch set, and
+    the next test on that worker to spawn a bare run() child has it
+    reaped at registration (SIGTERM, code -15) — or, through the nofail
+    paths, silently read back empty output. Seen four times in two days
+    as machine-dependent flakes; order-dependent, so no single test
+    reproduces it. run_plan resets the latch at run start for real runs;
+    this does the same for every test.
+    """
+    context.reset_abort()
+    yield
