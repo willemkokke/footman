@@ -61,10 +61,27 @@ only; the register carries nuance.
   request); a maker's hook reviews the record its maker makes, never
   its children's. After the review window closes, verdict-bearing
   fields (code, ok, title) are read-only — observers see, never judge.
-- **I6 — Dedup only at declared identity.** Address is universal;
-  sharing exists only where shareable identity exists (declaration +
-  overrides + normal-form bound arguments; unkeyable → unique); a
-  shared item's subtree rides with it.
+- **I6 — One identity rule, everywhere.** Address is universal; sharing
+  exists only where a declaration does (I13), and the key is uniform at
+  plan and execution: **(declaration, frozen overrides, resolved
+  normal-form arguments)** — defaults applied, forwarding resolved,
+  unkeyable → unique. A node and a body call that resolve to the same
+  arguments name one piece of work; requests that resolve differently
+  are different work, silently and correctly, on every path. Ruled
+  2026-07-31 (Willem: "if declared means dedup by default, arguments
+  passed in must be part of the key"), overruling the shipped
+  divergent-forwarding `ChainError`: divergence now makes two nodes —
+  what the user meant — not a refusal; the build carries that as a
+  CHANGELOG-visible change. Consequence parked at decisions 1/4:
+  same-label different-args rows are distinct by address ordinal, and
+  whether resolved arguments surface on receipts is display policy.
+  (Both paths verified in source, 2026-07-31: `run_bound` computes the
+  same `work_of`/`_key` over bound-including-forwarded arguments and
+  joins the same cell protocol body calls use — "sharing means the same
+  thing whichever way a task was reached." Also found and adopted: the
+  key is computed before `ctx` joins the arguments, so the context can
+  never become part of the work's identity.) A shared item's subtree
+  rides with it.
 - **I7 — Yields are never scheduling points.** Bare `yield` =
   checkpoint; every yield evaluates to the item's `ResultView`; yielding
   a value is a taught error. Concurrency stays threads and processes.
@@ -115,8 +132,8 @@ only; the register carries nuance.
 | **`confirm=`/gates on steps** | Walk 4: refused via I13 — boundary policy (confirm, gates, shared, forward) requires a declaration to resolve at; execution policy (cwd, env, timeout, lanes, capture, recorded) is item-general. The policy table splits on this line. | resolved (walk 4) |
 | **The generator pump vs lanes** | Walk 5: suspended-at-yield is exactly what close() cancels — GeneratorExit unwinds, finally releases (boundary-atomic = one release site). Between yields: uninterruptible, bounded by the longest inter-yield stretch, documented. Lanes never force-stripped. | resolved (walk 5) |
 | **`Fanout` in the model** | Walk 1: both parallel() forms are an anonymous grouping item whose children are the fanned items — not special, just an anonymous parent. Shape known; rendering rides decision 1. | promoted (walk 1) — conditional on decision 1 |
-| **I6 and bound arguments** | Walk 1 found the gap; source verified same day (`_futures._key`): identity already includes normal-form bound args, unkeyable → unique. I6 and the definition restated. The runtime was ahead of the spec. | resolved (walk 1) |
-| **partial-of-a-task defeats interception** | Walk 1: real today (footman's own tasks.py) — silent grain demotion, possible unit double-count (verify empirically). Under I12: taught refusal. | ⚠ NEW (walk 1) — strengthens decision 8 |
+| **I6 and bound arguments** | Walk 1 found the gap; `_futures._key` verified. The Forward question exposed the plan layer's arg-excluding dedup + divergence refusal — and Willem's ruling collapsed the layers: ONE key, (declaration, overrides, resolved args), everywhere; the shipped ChainError retires (divergence = two nodes). Display of same-label/different-args rows parked at decisions 1/4. | resolved — ruled, uniform |
+| **partial-of-a-task defeats interception** | Walk 1: real today (footman's own tasks.py) — silent grain demotion. The double-count worry died in source: the unit-claim protocol anticipated "a task call in disguise" by name (unit_pending handed down, claimed by the first request). The footgun narrows to interception/queueing loss alone. Under I12: taught refusal. | resolved into decision 8's case |
 
 ## Move 2 — the payload walks
 
@@ -325,6 +342,14 @@ The six payload walks (djlint gate; footman's own `check`; dry-run;
 these invariants specifically to attack the ⚠ rows: each walk must
 either turn a ⚠ into *derives* (with the derivation written down) or
 sharpen it into a named open decision. No walk, no promotion.
+
+## Strays found along the way (housekeeping commit, not the model)
+
+- `_futures._fill` is dead code (defined, zero call sites — superseded
+  by claim-side registration).
+- `_futures` module docstring drift: claims an unshared request "still
+  fills an empty cell"; `run_bound` passes `work=None` for unshared, so
+  it neither reads nor fills.
 
 ## Links
 
