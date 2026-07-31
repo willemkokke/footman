@@ -9,6 +9,18 @@ versions may include breaking changes.
 
 ### Added
 
+- **`@pre_record(fn)` — a task's own reviewer, stacked on the `def`.** The
+  same review window `run()` and the tools bridge gained, at task grain:
+  the reviewer sees the row's draft after the body concluded — before it
+  is sealed, observed, or reported — and may set `title` and `code`; the
+  row's verdict follows the review, the audit names every reviewer, and a
+  raising reviewer fails the task with its own error. Reviewers run from
+  the inside out — the hook written closest to your function sees the
+  draft first, and each one above it sees what the previous reviewers
+  left. Rows gained `title`, `audit`, and the derived `failed_at`/
+  `work_code` readings; `--json` rows carry `title`, `audit`, and
+  `failed_at` when a review happened, additively.
+
 - **Every step's record carries its audit** — the verdict's provenance.
   `Result.audit` lists every lifecycle moment that acted on the verdict, in
   execution order: the body entry with what the work itself produced, a

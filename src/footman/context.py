@@ -147,12 +147,7 @@ class Result(int):
         derived reading of the audit: the last moment that wrote the verdict.
         A red tool reviewed green reads None (the record succeeded); a green
         tool failed by its reviewer reads `"review"`."""
-        if self.code == 0 or not self.audit:
-            return None
-        for entry in reversed(self.audit):
-            if entry.code is not None:
-                return entry.moment
-        return None
+        return _failed_moment(self.code, self.audit)
 
     @property
     def work_code(self) -> int | None:
@@ -160,10 +155,27 @@ class Result(int):
         derived reading of the audit, None on success or when nothing came
         before the failure. A green build failed in review keeps its 0 here,
         visible rather than inferred."""
-        if self.failed_at is None:
-            return None
-        coded = [entry for entry in self.audit if entry.code is not None]
-        return coded[-2].code if len(coded) >= 2 else None
+        return _earned_code(self.code, self.audit)
+
+
+def _failed_moment(code: int, audit: Sequence[AuditEntry]) -> str | None:
+    """The moment the final non-zero verdict came from — the derivation both
+    record shapes (step `Result`, task row) share."""
+    if code == 0 or not audit:
+        return None
+    for entry in reversed(audit):
+        if entry.code is not None:
+            return entry.moment
+    return None
+
+
+def _earned_code(code: int, audit: Sequence[AuditEntry]) -> int | None:
+    """The code carried when the failing moment began; None on success or
+    when nothing code-bearing came before the failure."""
+    if _failed_moment(code, audit) is None:
+        return None
+    coded = [entry for entry in audit if entry.code is not None]
+    return coded[-2].code if len(coded) >= 2 else None
 
 
 class ResultView:

@@ -1765,3 +1765,107 @@ def test_a_plain_call_outside_a_run_is_untouched(tmp_path):
         return "helped"
 
     assert helper() == "helped"
+
+
+def test_a_stacked_reviewer_amends_the_row_verdict(tmp_path):
+    # The review window at task grain: the body's code is the draft, the
+    # reviewer's word is the verdict, and the audit names them both.
+    (tmp_path / "tasks.py").write_text(
+        textwrap.dedent(
+            """
+            import footman
+            from footman import task
+
+            def reformatted_is_fine(view):
+                view.title = "fmt: reformatted"
+                view.code = 0
+
+            @footman.pre_record(reformatted_is_fine)
+            @task
+            def fmt():
+                return 1  # the tool's honest "I changed files"
+            """
+        )
+    )
+    result = Runner().invoke("--json fmt", cwd=tmp_path)
+    assert result.ok, result.stderr
+    row = json.loads(result.stdout)["results"][0]
+    assert row["ok"] is True and row["code"] == 0
+    assert row["title"] == "fmt: reformatted"
+    assert row["audit"] == [["body", "fmt", 1], ["review", "reformatted_is_fine", 0]]
+    assert row["failed_at"] is None  # reviewed green IS green
+
+
+def test_row_reviewers_run_inside_out_and_the_use_site_wins(tmp_path):
+    (tmp_path / "tasks.py").write_text(
+        textwrap.dedent(
+            """
+            import footman
+            from footman import task
+
+            def outer(view):
+                view.title = view.title + "+outer"
+
+            def inner(view):
+                view.title = view.title + "+inner"
+
+            @footman.pre_record(outer)
+            @footman.pre_record(inner)
+            @task
+            def build(): ...
+            """
+        )
+    )
+    result = Runner().invoke("--json build", cwd=tmp_path)
+    assert result.ok, result.stderr
+    row = json.loads(result.stdout)["results"][0]
+    # Nearest the def runs first; each outer reviewer sees what it left.
+    assert row["title"] == "build+inner+outer"
+    assert [e[1] for e in row["audit"]] == ["build", "inner", "outer"]
+
+
+def test_a_raising_row_reviewer_fails_the_task_with_its_own_error(tmp_path):
+    (tmp_path / "tasks.py").write_text(
+        textwrap.dedent(
+            """
+            import footman
+            from footman import task
+
+            def broken(view):
+                raise KeyError("oops")
+
+            @footman.pre_record(broken)
+            @task
+            def build(): ...
+            """
+        )
+    )
+    result = Runner().invoke("--json build", cwd=tmp_path)
+    assert not result.ok
+    row = json.loads(result.stdout)["results"][0]
+    assert row["ok"] is False
+    assert "pre_record hook 'broken'" in (row["error"] or "")
+    assert row["audit"][-1] == ["review", "broken", None]  # involved, then broke
+
+
+def test_a_green_row_vetoed_in_review_keeps_its_earned_code(tmp_path):
+    (tmp_path / "tasks.py").write_text(
+        textwrap.dedent(
+            """
+            import footman
+            from footman import task
+
+            def too_easy(view):
+                view.code = 3
+
+            @footman.pre_record(too_easy)
+            @task
+            def build(): ...
+            """
+        )
+    )
+    result = Runner().invoke("--json build", cwd=tmp_path)
+    assert not result.ok
+    row = json.loads(result.stdout)["results"][0]
+    assert row["code"] == 3 and row["failed_at"] == "review"
+    assert row["audit"][0] == ["body", "build", 0]  # the green it earned, kept

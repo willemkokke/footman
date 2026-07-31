@@ -1796,6 +1796,39 @@ def _gate(check: Check) -> Callable[[_F], _F]:
     return decorate
 
 
+_PRE_RECORD = "_footman_pre_record"
+
+
+def pre_record(hook: Callable[[Any], None]) -> Callable[[_F], _F]:
+    """Attach a reviewer to a task: `@pre_record(fn)` stacked on the `def`.
+
+    The reviewer receives the task's record while it is still a draft — after
+    the body concluded, before the record is sealed, observed, or reported.
+    It reads the draft (a `ResultView`) and may set `title` and `code`; the
+    row's verdict follows what the review leaves behind, and the record's
+    audit names the reviewer and what it did.
+
+    Reviewers run from the inside out: the hook written closest to the
+    function sees the draft first, and each one above it sees what the
+    previous reviewers left. Stacks above or below `@task` alike — the
+    decorated function (and a `TaskFn` when stacked above the lifter) keeps
+    its static type. A reviewer that raises fails the task with its own
+    error: a broken reviewer is a broken gate.
+    """
+
+    def decorate(fn: _F) -> _F:
+        setattr(fn, _PRE_RECORD, [*getattr(fn, _PRE_RECORD, ()), hook])
+        return fn
+
+    return decorate
+
+
+def task_reviewers(fn: Any) -> list[Callable[[Any], None]]:
+    """The reviewers attached to *fn*, in execution order (inside-out:
+    decorators apply bottom-up, so the nearest attachment appended first)."""
+    return list(getattr(fn, _PRE_RECORD, ()))
+
+
 def requires(
     predicate: Callable[[], object], *, reason: str = ""
 ) -> Callable[[_F], _F]:
