@@ -300,10 +300,15 @@ class StepFn(Protocol[P, R_co]):
     """What a lifter returns. Calling it BUILDS the bound, deferrable
     item — where a TaskFn call RUNS (a body call is a request). The
     build/run asymmetry is the declared/deferred seam, stated in the
-    types."""
+    types. The handle carries the step's two lifecycle moments (ruled
+    2026-07-31): `pre_record` and `post_step` — the pre side is the
+    request pipeline, which steps never traverse, and setup is the
+    body's own first line."""
 
     def __call__(self, *args: P.args, **kwargs: P.kwargs) -> WorkItem[R_co]: ...
     def opts(self, **overrides: Unpack[StepOpts]) -> StepFn[P, R_co]: ...
+    def pre_record(self, hook: RecordHook, /) -> RecordHook: ...
+    def post_step(self, hook: ObserverHook, /) -> ObserverHook: ...
 
 
 class TaskFn(Protocol[P, R_co]):
@@ -633,11 +638,27 @@ def slow_alarm(result: Result) -> None:
         fail(f"typecheck blew its budget: {result.duration:.0f}s")
 
 
+# Step handles carry the same idea at their size: reviewer + observer.
+
+
+@covered.pre_record
+def neat(view: ResultView) -> None:
+    view.title = view.title.strip()
+
+
+@covered.post_step
+def watch_coverage(result: Result) -> None:
+    if not result.ok:
+        assert_type(result.audit, tuple[AuditEntry, ...])
+
+
 def handle_attachment_returns_the_hook() -> None:
     # Identity-shaped: the decorated functions stay plain callables.
     warm()
     tidy_title(_draft())
+    neat(_draft())
     assert_type(slow_alarm, ObserverHook)
+    assert_type(watch_coverage, ObserverHook)
 
 
 def _draft() -> ResultView:

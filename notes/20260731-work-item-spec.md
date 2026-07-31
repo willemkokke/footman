@@ -165,7 +165,7 @@ only; the register carries nuance.
 | cwd lane (and custom resources) | I8 + lanes definition; the in-process-only scope derives from `run()` injecting `cwd=` for subprocesses | derives |
 | `parallel()` takes work items only | I12 (ruled GO 2026-07-31); refusal structural — a bare callable has no `.opts`, so neither maker protocol matches | derives |
 | `p.also` retires | I12 + deferability of makers | derives — decision 8 ruled GO |
-| no step-grain observer | I6 (steps carry no shareable identity; address is parent-derived — out of context they are storyless) + the dispatch refusal + I5's enforced windows; liveness routes via the Status units today and record-stream export under the horizon | derives (opinion ruled 2026-07-31) |
+| no step-grain observer | I6 (steps carry no shareable identity; address is parent-derived — out of context they are storyless) + the dispatch refusal + I5's enforced windows; liveness routes via the Status units today and record-stream export under the horizon | derives (opinion ruled 2026-07-31) — scope sharpened same day: this refuses the GLOBAL stream; handle-attached per-maker observation (`post_step`) is not this, and was ruled in (move-5 addendum) |
 | dry-run semantics | Walk 3 falsified the old row ("skips observed steps" — PEP 377 makes with-bodies unskippable, and dry-run never skipped body code anyway). Correct rule derives from the ladder: dry-run fakes what footman owns the execution of (run payloads, deferred makers, generator steps); inline body code always runs, with-form records without an execution boundary. | derives (walk 3, corrected) |
 | per-step duration history | address (universal, cross-run-matchable) | derives — future work, nothing blocks it |
 | display policy (collapse green) | receipt = rendered record (record family); pure presentation over I5's committed records | derives — scope still open (decision 4) |
@@ -938,9 +938,25 @@ asymmetry (review was already per-maker). Ruled:
   collector, a CI annotator) registers globally from a plugin; the
   moment a global hook would say "if this is task X", it belongs on
   X. User task rules never need the global lane.
-- **Steps are unaffected**: the no-step-grain-observer ruling stands;
-  step makers keep `pre_record` (review), observation stays at task
-  grain.
+- **Step handles carry their two moments** (extended same day, after
+  the follow-up challenge): **`pre_record` and `post_step`**. The
+  whole pre side — `pre_bind`, `pre_task`, and the wrap sugar over
+  that pair — belongs to the request pipeline only tasks traverse;
+  the spec's own event order already said so (steps: execute → review
+  → commit). The missing enter hook costs nothing: a step's body is
+  always code you hold, so setup is its first line — `pre_task` earns
+  its keep on tasks because outsiders attach to bodies they don't
+  own, and a step has no outside callers to serve. The
+  no-step-grain-observer ruling stands untouched against what it
+  actually refused — the GLOBAL step stream — because its reasons
+  dissolve for handle attachment: the attacher owns the context, and
+  the amendment-window worry died with the static phase gate. Naming
+  ruled `post_step`: the family grammar anchors pre/post to the
+  thing's own noun (how `pre_record` got its name); the tombstoned
+  first minting (briefly the review hook, never shipped) gets a
+  second line, not a veto. And steps stay unique per mention, so
+  per-request and per-execution are the same event — no shared-row
+  cardinality question exists at step grain.
 - **Signatures**: the per-task form drops what the attachment already
   answers — the task is the handle's own — so the loom types
   `post_task` as receiving the sealed `Result` and `pre_record` the

@@ -255,7 +255,12 @@ encodes. Every task exposes its own lifecycle this way —
 `@test.pre_task` for setup that belongs to it, `@test.pre_record` for
 its reviewer, `@test.post_task` for watching it — so a rule about one
 task never has to live in some central file that lists everybody.
-Hooks with *no* task knowledge in them — a tracing exporter, a timing
+Named steps carry the same idea at their size: `@clean.pre_record`
+for their reviewer, `@clean.post_step` for watching them. The only
+moments a step doesn't offer are the ones it genuinely doesn't have —
+no arguments are bound and no request is resolved inside a step, and
+setup for a body you wrote yourself is simply its first line. Hooks
+with *no* task knowledge in them — a tracing exporter, a timing
 collector — register globally from a plugin instead, and the line
 between the two lanes is one sentence: the moment a global hook would
 say "if this is task X", it belongs on X.
