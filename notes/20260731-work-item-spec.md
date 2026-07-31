@@ -807,6 +807,35 @@ the machinery's boundary ownership) and the plugin-lane registration
 spelling (declaration-required so a typo is a taught refusal, not a
 silently new lane).
 
+### The generator-pump spike (2026-07-31): walk 5 confirmed in code
+
+A working pump (scratch prototype: boundary-atomic lane acquire, a
+`send(view)` drive loop, release in the PUMP's finally) ran the four
+claims:
+
+- **Cancel at a checkpoint works exactly as walked**: close() at the
+  suspended yield → GeneratorExit → the generator's own try/finally
+  ran → the pump's finally released the lane. Measured latency 36ms
+  against a 50ms inter-yield stretch — the bound is real and is the
+  stretch, as documented.
+- **"Between yields is uninterruptible" is CPython's law, not just
+  our doctrine**: close() from another thread while the frame is
+  executing raises `ValueError: generator already executing`. There
+  is no design choice to make — cancellation is pump-mediated
+  (decline to resume, or close at the next yield) because Python
+  refuses anything else.
+- **The hostage generator cannot hold a lane**: a body that swallows
+  GeneratorExit and yields again gets `RuntimeError: generator
+  ignored GeneratorExit`; the item fails; the lane released anyway,
+  because release is pump-owned. The move-4 ledger row, now run.
+- **The `view = yield` protocol pumps cleanly** — send-driven, bare
+  yields as checkpoints, no vocabulary needed beyond what wrap_task
+  shipped.
+
+No walk-5 sentence needs amending: the mechanism is exactly as
+specified. Decision 7 now waits on one artifact only — the
+plugin-lane registration spelling.
+
 ## Strays found along the way (housekeeping commit, not the model)
 
 - `_futures._fill` is dead code (defined, zero call sites — superseded
