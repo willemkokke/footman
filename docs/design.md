@@ -53,6 +53,13 @@ from footman import task, run
 def test(coverage: bool = False):
     """Run the test suite."""
     run("pytest --cov" if coverage else "pytest")
+    # footman also ships a full typed tools API (from footman import
+    # tools), where flags become checked keyword arguments with
+    # completion:
+    #
+    #     tools.pytest(cov=coverage)
+    #
+    # This page sticks to plain run() commands everyone already knows.
 ```
 
 That `run()` call makes a **step**: one recorded piece of the task's
@@ -395,14 +402,18 @@ special machinery for kinds or instances, and there never needs to be.
 A design is also the things it says no to, and the reasons deserve to be
 on the record:
 
-- **No event loop.** Checkpoints in generator steps are cancellation
-  points, never scheduling points — footman will not multiplex other
-  work into your suspended step. The moment it did, it would be a badly
-  reinvented asyncio, with the function-coloring problem dragged in
-  behind it. Concurrency stays what it visibly is: threads for tasks,
-  processes for programs. (A step that genuinely needs mass concurrent
-  I/O can run a real event loop *inside* itself — that is composition,
-  not contradiction.)
+- **No event loop.** A checkpoint in a generator step is a cancellation
+  point, never a scheduling point. Your step is free to *create* work —
+  calling another task from its body queues it into the same pool as
+  everything else, exactly as it would anywhere. What footman refuses
+  is the other direction: it never uses your suspension as an
+  opportunity to run something else on your step's thread, and your
+  resumption never waits on unrelated work. The moment yields became
+  scheduling points, footman would be a badly reinvented asyncio with
+  the function-coloring problem dragged in behind it. Concurrency stays
+  what it visibly is: threads for tasks, processes for programs. (A
+  step that genuinely needs mass concurrent I/O can run a real event
+  loop *inside* itself — that is composition, not contradiction.)
 - **No hiding switches.** The one "don't record this" spelling is for
   how a task learns things, and stops existing at the task level. Report
   noise is solved by display — collapse what's green — never by not
