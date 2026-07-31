@@ -300,19 +300,33 @@ class StepFn(Protocol[P, R_co]):
     """What a lifter returns. Calling it BUILDS the bound, deferrable
     item — where a TaskFn call RUNS (a body call is a request). The
     build/run asymmetry is the declared/deferred seam, stated in the
-    types."""
+    types. The handle carries the step's two lifecycle moments (ruled
+    2026-07-31): `pre_record` and `post_step` — the pre side is the
+    request pipeline, which steps never traverse, and setup is the
+    body's own first line."""
 
     def __call__(self, *args: P.args, **kwargs: P.kwargs) -> WorkItem[R_co]: ...
     def opts(self, **overrides: Unpack[StepOpts]) -> StepFn[P, R_co]: ...
+    def pre_record(self, hook: RecordHook, /) -> RecordHook: ...
+    def post_step(self, hook: ObserverHook, /) -> ObserverHook: ...
 
 
 class TaskFn(Protocol[P, R_co]):
     """Restates the shipped TaskFn Protocol (registry.py), narrowed to
-    what move 3 needs: the call keeps the task's own signature; `.opts()`
-    takes the full policy set."""
+    what the loom needs: the call keeps the task's own signature;
+    `.opts()` takes the full policy set; and the handle exposes the
+    task's own lifecycle moments for local attachment (ruled
+    2026-07-31 — the exact mirror of the per-task set; `pre_bind` and
+    the wrap sugar ride the same rule, typed when built). Handle
+    attachment is permanent — the set_opts tier — where `.opts()` is
+    per-use; each returns the hook unchanged, so the decorators stack
+    and the functions stay callable."""
 
     def __call__(self, *args: P.args, **kwargs: P.kwargs) -> R_co: ...
     def opts(self, **overrides: Unpack[TaskOpts]) -> TaskFn[P, R_co]: ...
+    def pre_task(self, hook: Callable[[], None], /) -> Callable[[], None]: ...
+    def pre_record(self, hook: RecordHook, /) -> RecordHook: ...
+    def post_task(self, hook: ObserverHook, /) -> ObserverHook: ...
 
 
 def task(fn: Callable[P, R], /) -> TaskFn[P, R]:
@@ -601,6 +615,54 @@ def budget(result: Result) -> None:
     # through the error channel — attributed, never a record write.
     if result.duration > 60.0:
         fail(f"duration budget exceeded: {result.duration:.0f}s")
+
+
+# --- per-task hooks on the handle (ruled 2026-07-31) --------------------
+# Code local to the task it governs: the handle exposes the lifecycle,
+# the plugin lane keeps only hooks with no task knowledge in them.
+
+
+@typecheck.pre_task
+def warm() -> None:
+    raise NotImplementedError
+
+
+@typecheck.pre_record
+def tidy_title(view: ResultView) -> None:
+    view.title = view.title.strip()
+
+
+@typecheck.post_task
+def slow_alarm(result: Result) -> None:
+    if result.duration > 300.0:
+        fail(f"typecheck blew its budget: {result.duration:.0f}s")
+
+
+# Step handles carry the same idea at their size: reviewer + observer.
+
+
+@covered.pre_record
+def neat(view: ResultView) -> None:
+    view.title = view.title.strip()
+
+
+@covered.post_step
+def watch_coverage(result: Result) -> None:
+    if not result.ok:
+        assert_type(result.audit, tuple[AuditEntry, ...])
+
+
+def handle_attachment_returns_the_hook() -> None:
+    # Identity-shaped: the decorated functions stay plain callables.
+    warm()
+    tidy_title(_draft())
+    neat(_draft())
+    assert_type(slow_alarm, ObserverHook)
+    assert_type(watch_coverage, ObserverHook)
+
+
+def _draft() -> ResultView:
+    raise NotImplementedError
 
 
 # --- off the record: how a task learns something (I4) ------------------

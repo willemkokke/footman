@@ -165,7 +165,7 @@ only; the register carries nuance.
 | cwd lane (and custom resources) | I8 + lanes definition; the in-process-only scope derives from `run()` injecting `cwd=` for subprocesses | derives |
 | `parallel()` takes work items only | I12 (ruled GO 2026-07-31); refusal structural — a bare callable has no `.opts`, so neither maker protocol matches | derives |
 | `p.also` retires | I12 + deferability of makers | derives — decision 8 ruled GO |
-| no step-grain observer | I6 (steps carry no shareable identity; address is parent-derived — out of context they are storyless) + the dispatch refusal + I5's enforced windows; liveness routes via the Status units today and record-stream export under the horizon | derives (opinion ruled 2026-07-31) |
+| no step-grain observer | I6 (steps carry no shareable identity; address is parent-derived — out of context they are storyless) + the dispatch refusal + I5's enforced windows; liveness routes via the Status units today and record-stream export under the horizon | derives (opinion ruled 2026-07-31) — scope sharpened same day: this refuses the GLOBAL stream; handle-attached per-maker observation (`post_step`) is not this, and was ruled in (move-5 addendum) |
 | dry-run semantics | Walk 3 falsified the old row ("skips observed steps" — PEP 377 makes with-bodies unskippable, and dry-run never skipped body code anyway). Correct rule derives from the ladder: dry-run fakes what footman owns the execution of (run payloads, deferred makers, generator steps); inline body code always runs, with-form records without an execution boundary. | derives (walk 3, corrected) |
 | per-step duration history | address (universal, cross-run-matchable) | derives — future work, nothing blocks it |
 | display policy (collapse green) | receipt = rendered record (record family); pure presentation over I5's committed records | derives — scope still open (decision 4) |
@@ -181,6 +181,7 @@ only; the register carries nuance.
 | **hook raises carry no success** | `fail(code=0)` is honoured verbatim in a body (the author's own record — verified in `_executor.py`); at a hook moment raising IS failure and the code is never 0 (taught error), else the veto asymmetry is false | derives (move 4, hse) — guard added to I5 |
 | **a generator abusing GeneratorExit** | Swallowing GeneratorExit and yielding again is Python's own RuntimeError; the item fails; lane release is machinery-owned at the boundary (I8) — the abuse cannot hold a lane | derives (move 4) |
 | **completion hot path and Windows under the model** | Every move-3 surface is execution-side: anonymous steps never touch the manifest (I9), runtime lifting grants report labels only, `Phase`/`failed_at` live in `--json`, the ban changes no CLI grammar; observation runs on the runner after child reaping, so walk 5's kill discipline is untouched | confirmed clean (move 4) |
+| **per-task hooks on the handle** | Attachment-as-dispatch extended to the lifecycle moments; handles-are-the-registry (the lanes precedent, identically argued); knowledge lives where it belongs; zero invariants moved — the mark of something the model already implied | ruled 2026-07-31 (the contract page's first finding) |
 
 ## Move 2 — the payload walks
 
@@ -833,8 +834,13 @@ claims:
   shipped.
 
 No walk-5 sentence needs amending: the mechanism is exactly as
-specified. Decision 7 now waits on one artifact only — the
-plugin-lane registration spelling.
+specified. Pinned while writing the design page (2026-07-31):
+cancellation reaches a generator step only at a checkpoint, and for
+exactly three reasons — fail-fast abort, full abort (Ctrl-C), and the
+step's own `timeout=` (the timeout refusal's honest exception: at
+checkpoints, enforcement is declining to resume). One cancellation
+story, worst-case latency one inter-yield stretch. Decision 7 now
+waits on one artifact only — the plugin-lane registration spelling.
 
 ### Decision 7 — the registration brief (2026-07-31, the last artifact)
 
@@ -906,6 +912,67 @@ two databases are two bindings (`db_main = lane("db-main")`,
 `db_replica = lane("db-replica")`), so "instances" need no
 type/instance machinery, no lane classes, no parameterisation. A
 resource IS a binding; keep it that flat.
+
+### Ruling: per-task hooks live on the handle (2026-07-31)
+
+Found by the contract page's first reader doing exactly what the page
+invites: Willem read the observer section, expected `post_task` to be
+per-task, and rejected the global-with-if-chains shape outright — "I'd
+rather the code lives local to the task." The design's own principles
+agreed on inspection: knowledge lives where it belongs, attachment is
+the dispatch, and observation being global-only was an unargued
+asymmetry (review was already per-maker). Ruled:
+
+- **The task handle exposes the exact mirror of the per-task
+  lifecycle set** — `@build.pre_bind`, `@build.pre_task`,
+  `@build.post_task`, the `wrap_task`/`wrap_bind` sugar — alongside
+  the already-ruled `@build.pre_record`. Bare decorator spelling, no
+  parentheses (no parameters foreseeable).
+- **Handle attachment is permanent** — it changes what the task does
+  for every requester (the `set_opts` family); `.opts(...)` remains
+  the per-use tier. Hooks get the same two-tier story as options.
+- **Decision 9 generalises**: distance from the `def` decides —
+  stacked hooks inside-out first, handle attachments in the order
+  they were made, `.opts` always last. Cross-file attachment order is
+  registration order: deterministic every run, invisible at either
+  site (plugin-order's known property); when order between two far
+  attachments matters, one attachment site composing two functions is
+  the honest fix.
+- **The plugin lane survives, narrowly, with a one-sentence test:** a
+  hook with no task knowledge in it (a tracing exporter, the timing
+  collector, a CI annotator) registers globally from a plugin; the
+  moment a global hook would say "if this is task X", it belongs on
+  X. User task rules never need the global lane.
+- **Step handles carry their two moments** (extended same day, after
+  the follow-up challenge): **`pre_record` and `post_step`**. The
+  whole pre side — `pre_bind`, `pre_task`, and the wrap sugar over
+  that pair — belongs to the request pipeline only tasks traverse;
+  the spec's own event order already said so (steps: execute → review
+  → commit). The missing enter hook costs nothing: a step's body is
+  always code you hold, so setup is its first line — `pre_task` earns
+  its keep on tasks because outsiders attach to bodies they don't
+  own, and a step has no outside callers to serve. The
+  no-step-grain-observer ruling stands untouched against what it
+  actually refused — the GLOBAL step stream — because its reasons
+  dissolve for handle attachment: the attacher owns the context, and
+  the amendment-window worry died with the static phase gate. Naming
+  ruled `post_step`: the family grammar anchors pre/post to the
+  thing's own noun (how `pre_record` got its name); the tombstoned
+  first minting (briefly the review hook, never shipped) gets a
+  second line, not a veto. And steps stay unique per mention, so
+  per-request and per-execution are the same event — no shared-row
+  cardinality question exists at step grain.
+- **Signatures**: the per-task form drops what the attachment already
+  answers — the task is the handle's own — so the loom types
+  `post_task` as receiving the sealed `Result` and `pre_record` the
+  draft view; the global plugin forms keep their shipped
+  `(inv, task, …)` shape. (Convergence note, for the record: the loom
+  had already typed the observer hook as `(result)` alone — it never
+  fit the global signature, and it fits this one exactly.)
+
+Zero invariants move: sealed stays sealed, veto-never-forge stands,
+and the audit's actor slots fill better — the attributed actor is the
+rule itself, never a switchboard function routing everyone's rules.
 
 **Move 5 is complete. Every open decision of the work-item spec is
 closed** — 1 through 10: ruled, dissolved, or confirmed. What remains

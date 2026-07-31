@@ -64,6 +64,7 @@ nav = [
     { "Roadmap" = "roadmap.md" },
   ] },
   { "Reference" = [
+    { "Design" = "design.md" },
     { "CLI reference" = "reference.md" },
     { "Configuration" = "configuration.md" },
     { "API reference" = "api.md" },
