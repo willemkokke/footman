@@ -248,8 +248,17 @@ powerless, though — it can *fail* the work, loudly and attributably:
 @post_task
 def budget(result):
     if result.duration > 60.0:
-        fail(f"too slow: {result.duration:.0f}s against a 60s budget")
+        fail(f"{result.address}: {result.duration:.0f}s against the 60s budget")
 ```
+
+Notice what `budget` is attached to: nothing. An observer is
+deliberately **global** — it sees every sealed record in the run,
+because that is what observers are for: repo-wide rules that no single
+task should have to know about. When a rule only applies somewhere, the
+hook reads the record it was handed — the address above scopes as
+finely as you like. And when a rule really belongs to *one* task, it is
+better written as that task's own reviewer, which acts before sealing
+and travels with the task it governs.
 
 The distinction matters enough to name: observers may **veto**, never
 **forge**. A veto rides the ordinary error channel — the row fails, the
