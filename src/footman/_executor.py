@@ -1337,13 +1337,42 @@ def _reserved_note(
     )
 
 
-def _enter_bind_hooks(life: _Lifecycle, handle: TaskHandle) -> BaseException | None:
-    """Run every plugin's `pre_bind` hooks, in plugin order, before binding.
+def _own_hook_error(
+    hook: Any, moment: str, task_name: str, exc: Exception
+) -> HookFailed:
+    failure = HookFailed(
+        f"{moment} hook {getattr(hook, '__name__', '?')!r} on task "
+        f"{task_name!r} failed: {type(exc).__name__}: {exc}"
+    )
+    failure.__cause__ = exc
+    return failure
+
+
+def _enter_own_hooks(
+    handle: TaskHandle, attr: str, moment: str
+) -> BaseException | None:
+    """Run the task's own hooks for one enter moment — the handle-attached
+    lane, innermost: closest to the task, after any plugin's."""
+    for hook in registry.own_hooks(handle._fn, attr):
+        try:
+            hook()
+        except Exception as exc:
+            return _own_hook_error(hook, moment, handle.name, exc)
+    return None
+
+
+def _enter_bind_hooks(
+    life: _Lifecycle | None, handle: TaskHandle
+) -> BaseException | None:
+    """Run `pre_bind` hooks before binding: every plugin's in plugin order,
+    then the task's own (innermost).
 
     The first failure stops the walk and fails the task — binding never
     happens, the body never runs, and the posts still fire when the attempt
     concludes.
     """
+    if life is None:
+        return _enter_own_hooks(handle, registry._PRE_BIND_HOOKS, "pre_bind")
     for plugin in life.plugins:
         for hook in plugin.bind_pre:
             token = _hook_owner.set(plugin.name)
@@ -1361,11 +1390,15 @@ def _enter_bind_hooks(life: _Lifecycle, handle: TaskHandle) -> BaseException | N
                 _hook_owner.reset(token)
             if value is not None:
                 _reserved_note(handle._ctx, plugin.name, hook, kind="pre_bind")
-    return None
+    return _enter_own_hooks(handle, registry._PRE_BIND_HOOKS, "pre_bind")
 
 
-def _enter_task_hooks(life: _Lifecycle, handle: TaskHandle) -> BaseException | None:
-    """Run every plugin's `pre_task` hooks, in plugin order.
+def _enter_task_hooks(
+    life: _Lifecycle | None, handle: TaskHandle
+) -> BaseException | None:
+    """Run `pre_task` hooks: every plugin's in plugin order, then the task's
+    own (innermost — plugins are the wider audience, the task's own hooks
+    nest closest to the body).
 
     The first failure stops the walk and fails the task — the body will not
     run. It does not gate the posts: a post is the task-finished event, so
@@ -1373,6 +1406,8 @@ def _enter_task_hooks(life: _Lifecycle, handle: TaskHandle) -> BaseException | N
     fires when it concludes, irrespective of which pres its plugin
     registered or how any of them fared.
     """
+    if life is None:
+        return _enter_own_hooks(handle, registry._PRE_TASK_HOOKS, "pre_task")
     for plugin in life.plugins:
         for hook in plugin.pre:
             token = _hook_owner.set(plugin.name)
@@ -1390,55 +1425,78 @@ def _enter_task_hooks(life: _Lifecycle, handle: TaskHandle) -> BaseException | N
                 _hook_owner.reset(token)
             if value is not None:
                 _reserved_note(handle._ctx, plugin.name, hook)
-    return None
+    return _enter_own_hooks(handle, registry._PRE_TASK_HOOKS, "pre_task")
 
 
 def _exit_task_hooks(
-    life: _Lifecycle,
+    life: _Lifecycle | None,
     handle: TaskHandle,
     result: TaskResult,
 ) -> BaseException | None:
-    """Unwind `post_task` hooks in reverse plugin order; every one runs.
+    """Unwind `post_task` hooks: the task's own first (innermost), then
+    every plugin's in reverse plugin order; every one runs.
 
     The first failure is kept (it fails an otherwise-green task); later
-    plugins still unwind, context-manager style.
+    hooks still unwind, context-manager style. A `fail()` from any of them
+    is the veto — its own code, an "observe" audit entry.
     """
     view = ResultView(result)
     first: BaseException | None = None
-    for plugin in reversed(life.plugins):
-        for hook in plugin.post:
-            token = _hook_owner.set(plugin.name)
-            name = getattr(hook, "__name__", "?")
-            try:
-                hook(life.inv, handle, view)
-            except context.Failed as exc:
-                # The veto: fail(reason, code) from an observer is a
-                # deliberate failure that rides the error channel — loud,
-                # attributed, its own code (never 0; fail() refuses that).
-                # The audit records the moment; the work's own story stays.
-                if not result.audit:
-                    result.audit.append(
-                        context.AuditEntry("body", result.task, result.code)
-                    )
-                result.audit.append(context.AuditEntry("observe", name, exc.code))
-                if first is None:
-                    first = exc
-            except Exception as exc:
-                if not result.audit:
-                    result.audit.append(
-                        context.AuditEntry("body", result.task, result.code)
-                    )
-                result.audit.append(context.AuditEntry("observe", name, None))
-                if first is None:
-                    failure = HookFailed(
-                        f"post_task hook {name!r} "
-                        f"from {plugin.name} failed for task {handle.name!r}: "
-                        f"{type(exc).__name__}: {exc}"
-                    )
-                    failure.__cause__ = exc
-                    first = failure
-            finally:
-                _hook_owner.reset(token)
+    for hook in registry.own_hooks(handle._fn, registry._POST_TASK_HOOKS):
+        name = getattr(hook, "__name__", "?")
+        try:
+            hook(view)
+        except context.Failed as exc:
+            if not result.audit:
+                result.audit.append(
+                    context.AuditEntry("body", result.task, result.code)
+                )
+            result.audit.append(context.AuditEntry("observe", name, exc.code))
+            if first is None:
+                first = exc
+        except Exception as exc:
+            if not result.audit:
+                result.audit.append(
+                    context.AuditEntry("body", result.task, result.code)
+                )
+            result.audit.append(context.AuditEntry("observe", name, None))
+            if first is None:
+                first = _own_hook_error(hook, "post_task", handle.name, exc)
+    if life is not None:
+        for plugin in reversed(life.plugins):
+            for hook in plugin.post:
+                token = _hook_owner.set(plugin.name)
+                name = getattr(hook, "__name__", "?")
+                try:
+                    hook(life.inv, handle, view)
+                except context.Failed as exc:
+                    # The veto: fail(reason, code) from an observer is a
+                    # deliberate failure that rides the error channel — loud,
+                    # attributed, its own code (never 0; fail() refuses that).
+                    # The audit records the moment; the work's own story stays.
+                    if not result.audit:
+                        result.audit.append(
+                            context.AuditEntry("body", result.task, result.code)
+                        )
+                    result.audit.append(context.AuditEntry("observe", name, exc.code))
+                    if first is None:
+                        first = exc
+                except Exception as exc:
+                    if not result.audit:
+                        result.audit.append(
+                            context.AuditEntry("body", result.task, result.code)
+                        )
+                    result.audit.append(context.AuditEntry("observe", name, None))
+                    if first is None:
+                        failure = HookFailed(
+                            f"post_task hook {name!r} "
+                            f"from {plugin.name} failed for task {handle.name!r}: "
+                            f"{type(exc).__name__}: {exc}"
+                        )
+                        failure.__cause__ = exc
+                        first = failure
+                finally:
+                    _hook_owner.reset(token)
     return first
 
 
@@ -1464,11 +1522,11 @@ def run_task(
     token = _current.set(ctx)
     ctx.in_task = True
     life = _lifecycle
-    handle = TaskHandle(fn, seg, ctx) if life is not None else None
+    own = registry.has_own_hooks(fn)
+    handle = TaskHandle(fn, seg, ctx) if life is not None or own else None
     try:
         if (
-            life is not None
-            and handle is not None
+            handle is not None
             and (hook_error := _enter_bind_hooks(life, handle)) is not None
         ):
             # A raising pre_bind fails the task; binding never happens, the
@@ -1482,7 +1540,7 @@ def run_task(
             raise  # e.g. passthrough with no *args — reported by the app layer
         except Exception as exc:  # a coercion failure (custom-type constructor)
             result = _result(seg, EX_USAGE, None, exc, 0.0)
-            if life is not None and handle is not None:
+            if handle is not None:
                 # A bind failure still concluded the attempt: the posts fire
                 # (a bind-time span needs closing), with the refusal result.
                 _exit_task_hooks(life, handle, result)
@@ -1527,7 +1585,7 @@ def run_bound(
         # the post closes the request with its row, and `result.state` says
         # whether this request executed or was satisfied by another.
         life = _lifecycle
-        if life is not None:
+        if life is not None or registry.has_own_hooks(fn):
             if handle is None:
                 handle = TaskHandle(fn, seg, ctx)
             handle._bind(args, kwargs)
@@ -1544,7 +1602,7 @@ def run_bound(
             result.blocked_by = cell.label
         else:
             result = _futures.shared_result(seg.task, value, cell.record)
-        if life is not None and handle is not None:
+        if handle is not None:
             post_error = _exit_task_hooks(life, handle, result)
             if post_error is not None and result.ok:
                 result.ok = False
@@ -1596,7 +1654,7 @@ def run_bound(
     started = start  # the report's ordering key: when this task actually began
     life = _lifecycle
     hook_error: BaseException | None = None
-    if life is not None:
+    if life is not None or registry.has_own_hooks(fn):
         # The handle rides in from run_task (declared path) or the futures
         # layer (a body call); a direct run_bound caller gets a fresh one.
         # Its arguments are the pre-injection values: ctx is machinery, not
@@ -1687,7 +1745,7 @@ def run_bound(
                 # snapshotted at the body's exit and resolves below.
                 result.returned = view.returned
         result.audit = audit
-    if life is not None and handle is not None:
+    if handle is not None:
         post_error = _exit_task_hooks(life, handle, result)
         if post_error is not None and result.ok:
             # An observer that crashed must not pass silently: the task

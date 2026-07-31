@@ -572,6 +572,51 @@ is skipped belongs to a later cache. Today a returned value gets a note and
 is ignored; state belongs on `task.state`. (A wrapper never touches the
 channel: its `yield` is the moment itself.)
 
+## Hooks that live on the task
+
+Plugin hooks are deliberately **global** — they see every task, which is
+right for concerns with no task knowledge in them: a tracing exporter, a
+timing collector, a CI annotator. A rule about *one* task belongs on that
+task, and every task's handle carries its own lifecycle for exactly this:
+
+```python
+from footman import fail, task
+
+@task
+def build(target: str = "web"): ...
+
+@build.pre_task          # setup that belongs to build
+def warm(): ...
+
+@build.pre_record        # build's reviewer: the draft, before sealing
+def review(view):
+    view.title = f"build: {view.returned or 'ok'}"
+
+@build.post_task         # watch build's sealed record; veto via fail()
+def budget(result):
+    if result.duration > 60.0:
+        fail(f"too slow: {result.duration:.0f}s")
+```
+
+The line between the two lanes is one sentence: the moment a global hook
+would say "if this is task X", it belongs on X. Everything else follows
+the shapes above: attachment is permanent — the task changes for every
+requester, wherever the attaching module was imported from — and each
+attacher returns the hook unchanged, so the decorators stack and the
+functions stay plain callables. The task's own hooks need no arguments a
+plugin hook would (the task is the handle's own): `pre_bind` and
+`pre_task` take nothing, the reviewer takes the draft, the observer takes
+the sealed record. `@build.wrap_task` and `@build.wrap_bind` mirror the
+plugin wrappers, one task at a time.
+
+Plugins remain the outer ring: their pres run first and their posts run
+last, so a task's own hooks nest closest to the body — and the handle
+lane fires whether or not any plugin is registered. Reviewers compose
+inside-out wherever they were attached: stacked `@pre_record` decorators
+first (nearest the `def` leading), handle attachments in the order they
+were made, a per-call `.opts(pre_record=…)` always last — the use site
+keeps the final word.
+
 ## A plugin's own globals: `GlobalOption`
 
 A plugin whose behaviour is invocation-wide wants an invocation-wide switch —

@@ -264,7 +264,7 @@ def call(task: Any, args: tuple[Any, ...], kwargs: dict[str, Any]) -> Any:
     life = _executor._lifecycle
     child: Any = None
     handle: Any = None
-    if life is not None:
+    if life is not None or registry.has_own_hooks(task):
         parent = context.current()
         buf = io.StringIO()
         child = dataclasses.replace(
@@ -326,7 +326,7 @@ def call(task: Any, args: tuple[Any, ...], kwargs: dict[str, Any]) -> Any:
     # the wait, so a span honestly covers it; the post closes the request
     # with its `shared` row. A crashing hook must not pass silently here
     # either: it fails this request, at the call site.
-    if life is not None and handle is not None:
+    if handle is not None:
         handle._bind(args, kwargs)
         if (hook_error := _executor._enter_task_hooks(life, handle)) is not None:
             row = _executor._result(seg, 1, None, hook_error, 0.0)
@@ -353,7 +353,7 @@ def call(task: Any, args: tuple[Any, ...], kwargs: dict[str, Any]) -> Any:
     if status is not None:
         status.unit_finished(label, True)
     row = _shared_result(cell.label, value, cell.record)
-    if life is not None and handle is not None:
+    if handle is not None:
         post_error = _executor._exit_task_hooks(life, handle, row)
         if post_error is not None:
             row.ok = False

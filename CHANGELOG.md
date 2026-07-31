@@ -37,6 +37,18 @@ versions may include breaking changes.
 
 ### Added
 
+- **Every task's handle carries its own lifecycle.** `@build.pre_task`
+  runs setup that belongs to build; `@build.pre_record` attaches its
+  reviewer; `@build.post_task` watches its sealed record;
+  `@build.pre_bind` and the `@build.wrap_task`/`@build.wrap_bind` sugar
+  complete the mirror of the per-task moments. Code lives local to the
+  task it governs — a rule about one task never needs a central file that
+  lists everybody — and the plugin lane keeps only hooks with no task
+  knowledge in them. Attachment is permanent (the task changes for every
+  requester), the hooks stay plain callables, plugins remain the outer
+  ring (a task's own hooks nest closest to the body), and the handle
+  lane fires with or without any plugin registered.
+
 - **`@pre_record(fn)` — a task's own reviewer, stacked on the `def`.** The
   same review window `run()` and the tools bridge gained, at task grain:
   the reviewer sees the row's draft after the body concluded — before it
