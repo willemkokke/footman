@@ -480,6 +480,38 @@ Passing `title=` alongside `recorded=False` is a note rather than an error —
 there is no receipt to label — because `.opts()` merges along a chain and a
 shared tool may carry a title that a later call site never asked for.
 
+## Reviewing a tool's verdict
+
+Some tools speak exit codes that need interpreting. `djlint --reformat`
+exits `1` when it changed files — reasonable for a linter, wrong for a
+formatting gate where "I fixed your files" is success. `pre_record=` names
+a **reviewer**: a function that receives the record's draft after the tool
+ran and before anything is sealed, shown, or raised:
+
+<!-- example: fragment -->
+```python
+def reformatted_is_fine(view):
+    if "reformatted" in view.stdout or view.code == 0:
+        view.title = "djlint: reformatted"
+        view.code = 0                    # the verdict follows the code
+
+djlint.opts(pre_record=reformatted_is_fine).reformat("templates/")
+```
+
+The draft (`ResultView`) shows the reviewer what the run captured —
+`stdout`, `stderr`, the real command in `raw`, the duration — all
+read-only; it may set `title` and `code`, and `ok` derives from the code so
+the two can never disagree. The receipt, the record, and the
+raise-on-non-zero decision all read what the review leaves behind: "fail by
+this tool's definition of failure" needs no `nofail=` at the call site.
+
+Three rules keep the window honest. Review sees what was captured — an
+uncaptured (`capture=False`) call reviews the code alone. A reviewer that
+raises **fails the call with its own error**: a broken reviewer is a broken
+gate, not a shrug, and the record keeps what the tool honestly produced.
+And an off-the-record call has no record to review — `pre_record=` beside
+`recorded=False` is a note, for the same chain-merging reason as `title=`.
+
 ## Which version am I actually running?
 
 A task that needs a flag only newer builds have — or a checkout that should
