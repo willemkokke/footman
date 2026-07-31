@@ -248,8 +248,9 @@ by the type system, not by convention: the observer's object simply has
 no way to write. An observer that finds a problem is not powerless,
 though — it can *fail* the work, loudly and attributably:
 
-<!-- example: fragment -->
 ```python
+from footman import fail
+
 @test.post_task
 def budget(result):
     if result.duration > 60.0:
