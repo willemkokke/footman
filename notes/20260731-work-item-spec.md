@@ -66,7 +66,12 @@ only; the register carries nuance.
   moment is an error like any other error: the grain fails, and every
   failure records WHERE in the lifecycle it happened (`failed_at`:
   bind / enter / body / review / observe) — the machinery tags the
-  moment; no hook rewrites a verdict.
+  moment; no hook rewrites a verdict. An observer may VETO —
+  `fail(reason, code)` rides this same channel, loud and attributed to
+  the observe moment (on a shared re-request: to the requesting
+  reference row's) — but never FORGE: the work's own verdict is not
+  rewritten; I2 makes the veto's code the grain's final int, and the
+  work-was-green story survives in `failed_at` plus the reason.
 - **I6 — One identity rule, everywhere.** Address is universal; sharing
   exists only where a declaration does (I13), and the key is uniform at
   plan and execution: **(declaration, frozen overrides, resolved
@@ -405,6 +410,21 @@ What the types forced — the findings, numbered for the record:
      static gate never needed commit-first, only the type split.
    - **Shared rows unify.** Every observer event holds an immutable
      record; the first-request/shared-request asymmetry disappears.
+   - **`fail()` in an observer is the veto, and needs no special case
+     (ruled follow-up, same day).** It rides the error channel — loud,
+     attributed: the grain fails at "observe" with the hook's reason —
+     while forging (rewriting title/code/returned as the work's own
+     words) stays unspellable. The line: observers may veto, never
+     forge; that is what "never judge" always meant. Two consequences,
+     both clean: I2 decides the committed int (a green-work-vetoed
+     grain reads as the failure code — a Result reading 0 on a failed
+     row would lie to `if result:`; the work-was-green story is
+     display over `failed_at` + the reason, no second code field), and
+     shared rows get a coherent late veto (observer events fire per
+     request — on a re-request the execution's record is long
+     committed, so the veto lands on the requesting reference row's
+     observe moment, which under the old writable view had nowhere
+     sound to go).
 
    Typed: `Result` is all read-only properties plus `failed_at:
    Phase | None`; `ObserverHook` holds one; I5 amended above; breaking

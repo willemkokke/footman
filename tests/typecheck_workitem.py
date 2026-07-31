@@ -24,6 +24,7 @@ from typing import (
     Any,
     Generic,
     Literal,
+    NoReturn,
     ParamSpec,
     Protocol,
     Self,
@@ -320,6 +321,15 @@ def post_task(hook: ObserverHook, /) -> ObserverHook:
     raise NotImplementedError
 
 
+def fail(reason: str, code: int = 1) -> NoReturn:
+    """Restates the shipped blessed failure verb. In an observer it is
+    the VETO: it rides the error channel — loud, attributed to the
+    observe moment (`failed_at="observe"`), its code the grain's final
+    int (I2) — never a forged verdict: observers may veto, never
+    forge."""
+    raise NotImplementedError
+
+
 # --- the tools bridge sliver (attachment-as-dispatch, I1) --------------
 
 
@@ -532,6 +542,14 @@ def audit(result: Result) -> None:
         assert_type(result.failed_at, Phase | None)  # which moment broke
         assert_type(result.stderr, str)
         assert_type(result.address, Address)
+
+
+@post_task
+def budget(result: Result) -> None:
+    # The veto: a policy gate at the observe moment fails the grain
+    # through the error channel — attributed, never a record write.
+    if result.duration > 60.0:
+        fail(f"duration budget exceeded: {result.duration:.0f}s")
 
 
 # --- off the record: how a task learns something (I4) ------------------
