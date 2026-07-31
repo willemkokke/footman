@@ -237,28 +237,28 @@ previous left, and a per-use `.opts(pre_record=...)` always has the
 final word.
 
 Once the review window closes, the record is **sealed**. Whoever looks
-at it afterwards — the lifecycle hooks that plugins use, your own
-`post_task` observers — receives the sealed, immutable form. This is
-enforced by the type system, not by convention: the observer's object
-simply has no way to write. An observer that finds a problem is not
-powerless, though — it can *fail* the work, loudly and attributably:
+at it afterwards receives the sealed, immutable form. This is enforced
+by the type system, not by convention: the observer's object simply has
+no way to write. An observer that finds a problem is not powerless,
+though — it can *fail* the work, loudly and attributably:
 
 <!-- example: fragment -->
 ```python
-@post_task
+@test.post_task
 def budget(result):
     if result.duration > 60.0:
-        fail(f"{result.address}: {result.duration:.0f}s against the 60s budget")
+        fail(f"too slow: {result.duration:.0f}s against the 60s budget")
 ```
 
-Notice what `budget` is attached to: nothing. An observer is
-deliberately **global** — it sees every sealed record in the run,
-because that is what observers are for: repo-wide rules that no single
-task should have to know about. When a rule only applies somewhere, the
-hook reads the record it was handed — the address above scopes as
-finely as you like. And when a rule really belongs to *one* task, it is
-better written as that task's own reviewer, which acts before sealing
-and travels with the task it governs.
+Notice where that lives: on `test`, right next to the knowledge it
+encodes. Every task exposes its own lifecycle this way —
+`@test.pre_task` for setup that belongs to it, `@test.pre_record` for
+its reviewer, `@test.post_task` for watching it — so a rule about one
+task never has to live in some central file that lists everybody.
+Hooks with *no* task knowledge in them — a tracing exporter, a timing
+collector — register globally from a plugin instead, and the line
+between the two lanes is one sentence: the moment a global hook would
+say "if this is task X", it belongs on X.
 
 The distinction matters enough to name: observers may **veto**, never
 **forge**. A veto rides the ordinary error channel — the row fails, the
