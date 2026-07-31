@@ -512,6 +512,16 @@ gate, not a shrug, and the record keeps what the tool honestly produced.
 And an off-the-record call has no record to review — `pre_record=` beside
 `recorded=False` is a note, for the same chain-merging reason as `title=`.
 
+Nothing a reviewer does is hidden: every record carries its **audit** —
+`Result.audit`, a tuple of `AuditEntry` — listing each moment that acted on
+the verdict, in order. The body entry holds what the tool itself exited
+with; a review entry names the reviewer and the code it set (or `None`
+when it only retitled). Two derived readings answer the common questions:
+`Result.failed_at` names the moment a failure came from (`None` on
+success — a red tool reviewed green *is* green), and `Result.work_code`
+keeps the code the work had earned when a later moment failed it. The same
+fields ride each step in `--json`.
+
 ## Which version am I actually running?
 
 A task that needs a flag only newer builds have — or a checkout that should

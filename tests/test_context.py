@@ -1114,6 +1114,63 @@ def test_pre_record_with_capture_off_reviews_the_code_alone():
     assert seen == {"stdout": "", "code": 0}
 
 
+def test_every_step_carries_its_body_audit_entry():
+    from footman import Context, run, use_context
+
+    with use_context(Context()):
+        result = run([sys.executable, "-c", "print('hi')"])
+    assert len(result.audit) == 1
+    moment, actor, code = result.audit[0]
+    assert moment == "body" and code == 0 and "python" in actor.lower()
+    assert result.failed_at is None and result.work_code is None
+
+
+def test_the_audit_tells_the_whole_verdict_story():
+    # The exhibit from the design page: raw 1, reviewed green — and the
+    # derived readings answer the common questions without scanning.
+    from footman import Context, run, use_context
+
+    def reformatted_is_fine(view):
+        view.title = "fmt: reformatted"
+        view.code = 0
+
+    ctx = Context()
+    with use_context(ctx):
+        result = run(
+            [sys.executable, "-c", "raise SystemExit(1)"],
+            pre_record=reformatted_is_fine,
+        )
+    body, review = result.audit
+    assert body.moment == "body" and body.code == 1
+    assert review == ("review", "reformatted_is_fine", 0)
+    assert result.failed_at is None  # reviewed green IS green
+
+
+def test_a_green_run_failed_in_review_keeps_its_work_code():
+    from footman import Context, RunFailed, run, use_context
+
+    def zero_is_sus(view):
+        view.code = 3
+
+    with use_context(Context()), pytest.raises(RunFailed) as caught:
+        run([sys.executable, "-c", "print('ok')"], pre_record=zero_is_sus)
+    result = caught.value.result
+    assert result.failed_at == "review"  # where the failure came from
+    assert result.work_code == 0  # the green the work earned, kept visible
+
+
+def test_a_title_only_reviewer_is_involved_but_writes_no_verdict():
+    from footman import Context, run, use_context
+
+    def rename_only(view):
+        view.title = "tidy"
+
+    with use_context(Context()):
+        result = run([sys.executable, "-c", "pass"], pre_record=rename_only)
+    assert result.audit[1] == ("review", "rename_only", None)
+    assert result.command == "tidy"
+
+
 def test_fail_refuses_code_zero_everywhere():
     # fail() means failure; code 0 is success. The pass-branch spelling was
     # rejected in the task-failure design, and the old verbatim honouring

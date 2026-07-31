@@ -9,6 +9,17 @@ versions may include breaking changes.
 
 ### Added
 
+- **Every step's record carries its audit** — the verdict's provenance.
+  `Result.audit` lists every lifecycle moment that acted on the verdict, in
+  execution order: the body entry with what the work itself produced, a
+  review entry per reviewer (its code, or `None` when it only set the
+  title). Two derived readings answer the common questions without
+  scanning: `failed_at` names the moment a failure came from (`None` on
+  success — a red tool reviewed green *is* green), and `work_code` keeps
+  the code the work had earned when a later moment failed it (a green run
+  failed in review shows its 0, visible rather than inferred). `--json`
+  steps carry both, additively. `AuditEntry` is public.
+
 - **`run(..., pre_record=…)` — the review window.** Some tools speak exit
   codes that need interpreting: `djlint --reformat` exits 1 when it changed
   files, which is success for a formatting gate. A reviewer receives the

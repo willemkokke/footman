@@ -29,9 +29,40 @@ from collections.abc import Callable, Iterable, Iterator, Sequence, Sized
 from contextvars import ContextVar
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Any, ClassVar, Literal, NoReturn, Protocol, TextIO, TypeVar, overload
+from typing import (
+    Any,
+    ClassVar,
+    Literal,
+    NamedTuple,
+    NoReturn,
+    Protocol,
+    TextIO,
+    TypeVar,
+    overload,
+)
 
 from footman import _globals
+
+
+class AuditEntry(NamedTuple):
+    """One entry of a record's audit: a lifecycle moment that acted on the
+    verdict — who acted, and what they set.
+
+    The body entry is always present and carries what the work itself
+    produced; a review entry names the reviewer, with `code` None when it
+    was involved without writing the verdict (a reviewer that only set the
+    title). Entries are in execution order.
+    """
+
+    moment: str
+    """Where in the record's lifecycle this happened: `"body"` for the work
+    itself, `"review"` for a `pre_record` reviewer."""
+    actor: str
+    """Who acted: the command line for the body, the hook's name for a
+    reviewer."""
+    code: int | None
+    """The code this moment left, or None for involvement without a verdict
+    write."""
 
 
 class Result(int):
@@ -64,6 +95,11 @@ class Result(int):
     """Whether `timeout=` expired and footman killed the tree. The code is
     124 — the shell convention — and `stdout`/`stderr` hold whatever the
     command managed to say first, which on a hang is the only clue there is."""
+    audit: tuple[AuditEntry, ...]
+    """The verdict's provenance: every lifecycle moment that acted on it, in
+    execution order — the body entry with what the work itself produced, a
+    review entry per `pre_record` reviewer. Empty for a record that executed
+    nothing (a dry-run plan line)."""
 
     def __new__(
         cls,
@@ -75,6 +111,7 @@ class Result(int):
         duration: float = 0.0,
         raw: str = "",
         timed_out: bool = False,
+        audit: tuple[AuditEntry, ...] = (),
     ) -> Result:
         self = super().__new__(cls, code)
         self.timed_out = timed_out
@@ -83,6 +120,7 @@ class Result(int):
         self.stderr = stderr
         self.duration = duration
         self.raw = raw or command
+        self.audit = audit
         return self
 
     @property
@@ -103,6 +141,30 @@ class Result(int):
         and `stderr` separately."""
         return self.stdout + self.stderr
 
+    @property
+    def failed_at(self) -> str | None:
+        """The lifecycle moment the failure came from, None on success — a
+        derived reading of the audit: the last moment that wrote the verdict.
+        A red tool reviewed green reads None (the record succeeded); a green
+        tool failed by its reviewer reads `"review"`."""
+        if self.code == 0 or not self.audit:
+            return None
+        for entry in reversed(self.audit):
+            if entry.code is not None:
+                return entry.moment
+        return None
+
+    @property
+    def work_code(self) -> int | None:
+        """The code the record carried when the failing moment began — a
+        derived reading of the audit, None on success or when nothing came
+        before the failure. A green build failed in review keeps its 0 here,
+        visible rather than inferred."""
+        if self.failed_at is None:
+            return None
+        coded = [entry for entry in self.audit if entry.code is not None]
+        return coded[-2].code if len(coded) >= 2 else None
+
 
 class ResultView:
     """A step's record, in the review window: the draft a `pre_record`
@@ -117,14 +179,16 @@ class ResultView:
     so the two can never disagree.
     """
 
-    __slots__ = ("_command", "_duration", "_raw", "_stderr", "_stdout", "code", "title")
-
-    title: str
-    """The receipt's label. Starts as the shown command (or the call's
-    `title=`); what the review leaves here is what the report shows."""
-    code: int
-    """The verdict. What the review leaves here is the step's exit code —
-    the raise decision and the receipt both read it."""
+    __slots__ = (
+        "_code",
+        "_command",
+        "_duration",
+        "_raw",
+        "_stderr",
+        "_stdout",
+        "_title",
+        "_touched",
+    )
 
     def __init__(
         self,
@@ -137,13 +201,37 @@ class ResultView:
         raw: str,
         command: str,
     ) -> None:
-        self.title = title
-        self.code = code
+        self._title = title
+        self._code = code
         self._stdout = stdout
         self._stderr = stderr
         self._duration = duration
         self._raw = raw
         self._command = command
+        self._touched: set[str] = set()
+
+    @property
+    def title(self) -> str:
+        """The receipt's label. Starts as the shown command (or the call's
+        `title=`); what the review leaves here is what the report shows."""
+        return self._title
+
+    @title.setter
+    def title(self, value: str) -> None:
+        self._title = value
+        self._touched.add("title")
+
+    @property
+    def code(self) -> int:
+        """The verdict. What the review leaves here is the step's exit code —
+        the raise decision and the receipt both read it. The audit records
+        whether a reviewer wrote it or left it alone."""
+        return self._code
+
+    @code.setter
+    def code(self, value: int) -> None:
+        self._code = value
+        self._touched.add("code")
 
     @property
     def ok(self) -> bool:
@@ -2093,6 +2181,9 @@ def run(
         # is rather than a sentinel of footman's own invention. A Result *is*
         # its exit code, so this is chosen here, not assigned afterwards.
         code = 124
+    # The audit: the verdict's provenance. The body entry is always present
+    # and carries what the work itself produced; review entries follow.
+    audit: tuple[AuditEntry, ...] = (AuditEntry("body", label, code),)
     if pre_record is not None and recorded:
         # The review window: the work ran and the record is still a draft.
         # The reviewer reads what was captured and may amend the verdict —
@@ -2101,6 +2192,7 @@ def run(
         # reviewer is a broken gate, not a shrug. The record keeps what the
         # work honestly produced in that case — review never finished, so
         # nothing it half-did is kept.
+        hook = getattr(pre_record, "__name__", repr(pre_record))
         view = ResultView(
             title=label,
             code=code,
@@ -2122,13 +2214,17 @@ def run(
                     duration=duration,
                     raw=raw,
                     timed_out=timed_out,
+                    audit=(*audit, AuditEntry("review", hook, None)),
                 )
             )
-            hook = getattr(pre_record, "__name__", repr(pre_record))
             raise RuntimeError(
                 f"pre_record hook {hook!r} failed reviewing {label!r}: "
                 f"{type(exc).__name__}: {exc}"
             ) from exc
+        audit = (
+            *audit,
+            AuditEntry("review", hook, view.code if "code" in view._touched else None),
+        )
         code = view.code
         label = view.title
     result = Result(
@@ -2139,6 +2235,7 @@ def run(
         duration=duration,
         raw=raw,
         timed_out=timed_out,
+        audit=audit,
     )
     if recorded:
         ctx.steps.append(result)  # what --json, the report and recording() read
