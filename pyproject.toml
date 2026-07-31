@@ -227,9 +227,10 @@ warn_unused_ignores = false
 # signature-identical patch of a module attribute (its module members are
 # effectively Final), which is a modelling wall, not a defect here.
 [tool.ty.src]
-# typecheck_api.py: the consumer-shaped positive typing shapes — clean-room
-# consumer code, the one tests/ file in ty's and pyrefly's scope.
-include = ["src", "tests/typecheck_api.py"]
+# The two tests/ files in ty's and pyrefly's scope, both never-executed
+# clean-room shapes: typecheck_api.py (the consumer-shaped positive surface)
+# and typecheck_workitem.py (the work-item spec's move-3 loom skeleton).
+include = ["src", "tests/typecheck_api.py", "tests/typecheck_workitem.py"]
 
 [tool.ty.environment]
 # Every platform at once (ty checks the union), 3.11 floor.
@@ -242,7 +243,7 @@ python-version = "3.11"
 # zero-dependency 3.11 library cannot spell it without growing a
 # typing_extensions runtime dep. Revisit when 3.11 support ends.
 preset = "default"
-project-includes = ["src", "tests/typecheck_api.py"]
+project-includes = ["src", "tests/typecheck_api.py", "tests/typecheck_workitem.py"]
 # Every platform at once (pyrefly checks the union), 3.11 floor.
 python-platform = "all"
 python-version = "3.11"
