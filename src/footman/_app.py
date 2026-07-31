@@ -848,6 +848,14 @@ def _print_json(results: list[_executor.TaskResult], *, total: float) -> None:
             ],
             "error": None if r.error is None else str(r.error),
         }
+        if r.title:
+            # A reviewer's label for the row; absent when no one set one.
+            entry["title"] = r.title
+        if r.audit:
+            # The row was reviewed: its verdict provenance and the derived
+            # failing moment, same shape as on steps. Additive to schema 1.
+            entry["audit"] = [[e.moment, e.actor, e.code] for e in r.audit]
+            entry["failed_at"] = r.failed_at
         if r.blocked_by:
             entry["blocked_by"] = r.blocked_by
         if r.eligible is not None and r.started is not None:

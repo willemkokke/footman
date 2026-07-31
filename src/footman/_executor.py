@@ -96,6 +96,26 @@ class TaskResult:
     latency: time spent waiting for a free worker, never attributed to the
     task's own `duration`. `None` for a node with no prerequisites, and for
     anything that never ran."""
+    title: str = ""
+    """A reviewer's label for the row, when one set it (`@pre_record`).
+    Empty means the task's name speaks for itself, as it always did."""
+    audit: list[context.AuditEntry] = field(default_factory=list)
+    """The verdict's provenance, when the row was reviewed: the body entry
+    with what the task itself produced, then a review entry per reviewer, in
+    execution order. Empty for an unreviewed row — the verdict is the
+    body's, no one touched it."""
+
+    @property
+    def failed_at(self) -> str | None:
+        """The lifecycle moment the failure came from, None on success — the
+        same derived reading a step's `Result` offers."""
+        return context._failed_moment(self.code, self.audit)
+
+    @property
+    def work_code(self) -> int | None:
+        """The code the row carried when the failing moment began — a green
+        body failed by its reviewer keeps its 0 here."""
+        return context._earned_code(self.code, self.audit)
 
 
 def reported_state(result: TaskResult) -> str:
@@ -1591,6 +1611,52 @@ def run_bound(
     result.started = started
     result.thread = born
     result.thread_id = threading.get_native_id()
+    reviewers = registry.task_reviewers(fn)
+    if reviewers and hook_error is None:
+        # The row's review window: the body concluded, the record is still a
+        # draft, and the task's own reviewers see it before it is sealed,
+        # observed, or reported. Reviewers run inside-out; the first failure
+        # stops the walk and fails the task with the hook's own error —
+        # nothing a broken review half-did is kept.
+        audit = [context.AuditEntry("body", seg.task, result.code)]
+        view = context.ResultView(
+            title=seg.task,
+            code=result.code,
+            stdout=result.output,
+            stderr="",
+            duration=result.duration,
+            raw="",
+            command=seg.task,
+        )
+        for reviewer in reviewers:
+            name = getattr(reviewer, "__name__", repr(reviewer))
+            try:
+                reviewer(view)
+            except Exception as exc:
+                audit.append(context.AuditEntry("review", name, None))
+                failure = HookFailed(
+                    f"pre_record hook {name!r} failed reviewing task "
+                    f"{seg.task!r}: {type(exc).__name__}: {exc}"
+                )
+                failure.__cause__ = exc
+                result.ok = False
+                if result.code == 0:
+                    result.code = 1
+                result.error = failure
+                error = failure  # a waiter shares the failure, not a value
+                break
+            audit.append(
+                context.AuditEntry(
+                    "review", name, view.code if "code" in view._touched else None
+                )
+            )
+        else:
+            # Every reviewer finished: the verdict is what the review left.
+            result.code = view.code
+            result.ok = result.error is None and view.code == 0
+            if "title" in view._touched:
+                result.title = view.title
+        result.audit = audit
     if life is not None and handle is not None:
         post_error = _exit_task_hooks(life, handle, result)
         if post_error is not None and result.ok:

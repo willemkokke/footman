@@ -79,6 +79,7 @@ if TYPE_CHECKING:
     from footman.registry import post_task as post_task
     from footman.registry import post_tasks as post_tasks
     from footman.registry import pre_bind as pre_bind
+    from footman.registry import pre_record as pre_record
     from footman.registry import pre_task as pre_task
     from footman.registry import pre_tasks as pre_tasks
     from footman.registry import requires as requires
@@ -147,6 +148,7 @@ __all__ = [
     "post_task",
     "post_tasks",
     "pre_bind",
+    "pre_record",
     "pre_task",
     "pre_tasks",
     "progress",
@@ -213,6 +215,7 @@ def __getattr__(name: str) -> object:
         "capture",
         "GlobalOption",
         "pre_tasks",
+        "pre_record",
         "pre_bind",
         "pre_task",
         "post_task",
