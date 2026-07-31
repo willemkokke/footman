@@ -656,7 +656,13 @@ the spec becomes its own note linking back once the flood is done.
    yet there is no versioning/migration story to design and no case for a
    flat compatibility view — the shape just needs to be *right*, chosen as
    if 1.0 were watching. Still first: nothing else lands before this is
-   called.
+   called. Move 4 (the report-reader persona) adds three requirements to
+   the call: a lookup contract under I6's same-label multiplicity (by
+   name → a list, by address → unique); the `state` × `failed_at` pair
+   codified as two axes with one word each (the shipped `state`
+   docstring's rule, extended); and reference-row accounting (duration
+   and steps live on the execution row, references link — aggregation
+   never double-counts a shared subtree).
 2. **Hook name and family membership.** Largely resolved 2026-07-31:
    `@pre_record(fn)` stacked on makers (declared) + `.opts(pre_record=…)`
    (dynamic/per-use); no new global observer — `post_task` keeps that
@@ -694,3 +700,15 @@ the spec becomes its own note linking back once the flood is done.
    callables outright (stance says yes if DX-consistent; `suggest()` is
    the precedent) — and if so, what the cheapest lifted one-liner
    spelling is, since that spelling becomes the new reflex.
+9. **Reviewer composition** (opened by move 4). Multiple `pre_record`
+   attachments on one maker (several stacked; stacked plus `.opts`):
+   execution order, and whether each reviewer sees the prior one's
+   edits (a chained draft) or the pristine capture. The gates precedent
+   says stacking must work; the draft's mutability makes order
+   observable, so it needs calling before the build.
+10. **Review provenance** (opened by move 4). Should a committed record
+    say it was amended in review — and by what? Today's row carries no
+    hook fingerprint (`TaskResult` has no such field), so a reader
+    cannot tell a reviewed green from a native green, and the abuser
+    defense leans on attribution. A record field is I10's business, a
+    receipt marker decision 4's; either way it needs a call.

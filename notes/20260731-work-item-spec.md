@@ -28,7 +28,12 @@ only; the register carries nuance.
 - **off the record** (`recorded=False`) — executed under full
   management, no record. How a task learns something.
 - **address** — a node's tree-derived name (parent-path + label +
-  ordinal). Universal, referential, line-number-stable.
+  ordinal). Universal, referential, line-number-stable. Ordinals count
+  same-labelled siblings in request order AS WRITTEN — never completion
+  order — so addresses are deterministic across runs and hosts (move 4:
+  cross-run duration history and the horizon need nothing racier, and a
+  parent's requests are made from its own control flow, so written
+  order is well-defined even under a parallel pool).
 - **shareable identity** — (declaration, frozen overrides, bound
   arguments in normal form — defaults applied); declared items only;
   what dedup keys on. Unkeyable arguments (no frozen form) mean unique
@@ -71,7 +76,14 @@ only; the register carries nuance.
   the observe moment (on a shared re-request: to the requesting
   reference row's) — but never FORGE: the work's own verdict is not
   rewritten; I2 makes the veto's code the grain's final int, and the
-  work-was-green story survives in `failed_at` plus the reason.
+  work-was-green story survives in `failed_at` plus the reason. The
+  veto's code is never 0: raising at a hook moment IS failure, so a
+  `Failed` carrying code 0 there is a taught error — the write channel
+  succeeds, the raise channel fails, and the two must not contradict
+  (move 4: the executor honours `Failed.code` verbatim in a body,
+  which is the author's own record and their business; at a hook
+  moment the same verbatim honouring would let an observer "fail" a
+  grain green).
 - **I6 — One identity rule, everywhere.** Address is universal; sharing
   exists only where a declaration does (I13), and the key is uniform at
   plan and execution: **(declaration, frozen overrides, resolved
@@ -150,6 +162,10 @@ only; the register carries nuance.
 | **I6 and bound arguments** | Walk 1 found the gap; `_futures._key` verified. The Forward question exposed the plan layer's arg-excluding dedup + divergence refusal — and Willem's ruling collapsed the layers: ONE key, (declaration, overrides, resolved args), everywhere; the shipped ChainError retires (divergence = two nodes). Display of same-label/different-args rows parked at decisions 1/4. | resolved — ruled, uniform |
 | **partial-of-a-task defeats interception** | Walk 1: real today (footman's own tasks.py) — silent grain demotion. The double-count worry died in source: the unit-claim protocol anticipated "a task call in disguise" by name (unit_pending handed down, claimed by the first request). The footgun narrows to interception/queueing loss alone. Under I12: taught refusal. | resolved into decision 8's case |
 | **post_task observes the committed record** | Ruling 2026-07-31 (the phase-gate counter, move 3): observation holds the immutable `Result` — the phase gate is the ResultView/Result type split, static; `set_returned` review-window-only; a raising observer fails the grain; every failure carries `failed_at` lifecycle provenance (I5) | resolved — ruled, typed in the loom |
+| **the empty `with step():` block** | The residual forgery spelling — undetectable by construction (no CM can veto its block, PEP 377). I3 works by motive-removal plus attribution: the honest spelling (`pre_record`) is strictly cheaper than the lie, and the lie sits in reviewed code with a real duration. Rope, priced in — not a hole to plug. | accepted residue (move 4, hse) |
+| **hook raises carry no success** | `fail(code=0)` is honoured verbatim in a body (the author's own record — verified in `_executor.py`); at a hook moment raising IS failure and the code is never 0 (taught error), else the veto asymmetry is false | derives (move 4, hse) — guard added to I5 |
+| **a generator abusing GeneratorExit** | Swallowing GeneratorExit and yielding again is Python's own RuntimeError; the item fails; lane release is machinery-owned at the boundary (I8) — the abuse cannot hold a lane | derives (move 4) |
+| **completion hot path and Windows under the model** | Every move-3 surface is execution-side: anonymous steps never touch the manifest (I9), runtime lifting grants report labels only, `Phase`/`failed_at` live in `--json`, the ban changes no CLI grammar; observation runs on the runner after child reaping, so walk 5's kill discipline is untouched | confirmed clean (move 4) |
 
 ## Move 2 — the payload walks
 
@@ -487,6 +503,96 @@ What the loom deliberately did not weave: identity/dedup (I6 is a
 runtime key, not a signature), lanes beyond their declaration surface,
 dry-run/`recording()` (no new static surface), and everything riding
 decision 1's container shape beyond what finding 7 dissolves.
+
+## Move 4 — the adversarial pass (2026-07-31)
+
+Five fixed personas, run against the spec as written (I1–I13 plus the
+loom's typed surface), not against the chat. Every attack either
+bounced off a named invariant (a confirmation), sharpened an open
+decision, or opened a new one. The ledger rows above marked "(move 4)"
+carry the promotions; the sharpenings landed on the open-decisions
+list in the thinking record (decisions 1, 9, 10).
+
+### hse-the-abuser: the next forgeable primitive
+
+1. **The empty with-block survives as the residual forgery spelling**
+   (`with step("deployed"): pass`) — and is undetectable by
+   construction: no context manager can veto or inspect its block
+   (PEP 377 again), and "a block of real work" includes the empty
+   block. The defense is not detection but economics plus
+   attribution: the 2026-07-30 forgery existed because
+   titling-after-the-fact HAD no honest spelling; now the honest line
+   (`pre_record`) is strictly cheaper than the lie, and the lie sits
+   in reviewable code carrying a real (suspicious ~0s) duration. I3's
+   role restated honestly: it removes the *reasons* to forge and the
+   blessed spellings of forgery — it cannot remove all rope. Same
+   answer for the reconstruction attack (`recorded=False` on the real
+   work + an empty titled block): three dishonest lines against one
+   honest one.
+2. **The greenwash hole — real, and verified in source.** The
+   executor honours `Failed.code` verbatim (`except Failed: return
+   exc.code, …`), so `fail("looks fine", code=0)` from a post_task
+   observer would fail a grain *green* — the veto asymmetry
+   ("observers can only make things worse, never better") would be
+   false as spelled. Closed with one derived guard in I5: raising at
+   a hook moment is failure and its code is never 0; `Failed(code=0)`
+   there is a taught error. In a body it stays the author's own
+   business — their record, their code.
+3. **Greenwashing via `pre_record` itself** (attach `view.code = 0`
+   reviewers everywhere) is sanctioned per-maker interpretation — that
+   is literally the djlint walk — and the defense is attribution. But
+   the record currently would not SAY it was amended: nothing on
+   today's row names a hook (verified: `TaskResult` has no such
+   field), so a reader cannot tell a reviewed green from a native
+   green. Opened as decision 10 (review provenance).
+4. **Lane hostage via GeneratorExit** bounced off I8: a generator that
+   swallows the close and yields again is Python's own RuntimeError,
+   the item fails, and release is machinery-owned at the boundary —
+   the abuse cannot hold what it never owned.
+
+### The report reader
+
+All three findings sharpen decision 1 (appended there): a lookup
+contract under I6's same-label multiplicity (by name → a list, by
+address → unique); the `state` × `failed_at` pair codified as two
+axes with one word each (the shipped `state` docstring's own rule,
+extended); and reference-row accounting (duration and steps live on
+the execution row, references link — aggregation must never
+double-count a shared subtree). One confirmation: a veto row reads
+fully from code ≠ 0 + `failed_at="observe"` + the reason; work-was-
+green display is decision 4's, as ruled.
+
+### The distributed future
+
+One amendment, folded into the address definition: ordinals count
+same-labelled siblings in request order AS WRITTEN, never completion
+order — cross-run matching (duration history) and any future
+placement need addresses deterministic across runs and hosts, and a
+parent's requests come from its own control flow, so written order is
+well-defined even under the pool. The rest bounced: unkeyable-means-
+unique composes with declared-opt-in cacheability (Bazel lesson 1);
+generator items are local-only by the ladder's placement reading,
+already stated.
+
+### The completion hot path
+
+Clean pass, no findings: every move-3 surface is execution-side.
+Anonymous steps never enter the manifest (I9), runtime lifting grants
+report labels never CLI addresses, `Phase`/`failed_at` are report
+vocabulary, and the ban changes runtime coercion, not CLI grammar.
+The TAB path gains zero imports and zero schema changes.
+
+### Windows
+
+Clean pass: observation happens on the runner after children are
+reaped, so the phase-gate ruling never meets taskkill/killpg
+semantics; walk 5's kill discipline is untouched; `timeout` keeps its
+124 convention inside `failed_at="body"`; addresses are made of
+labels, not paths, so no separator or drive-letter semantics leak in.
+
+**Move 4 complete. New opens: decision 9 (reviewer composition),
+decision 10 (review provenance). Everything else bounced or
+sharpened decision 1.**
 
 ## Strays found along the way (housekeeping commit, not the model)
 
