@@ -104,6 +104,85 @@ class Result(int):
         return self.stdout + self.stderr
 
 
+class ResultView:
+    """A step's record, in the review window: the draft a `pre_record`
+    reviewer receives after the work ran and before the record is sealed.
+
+    The verdict is still open — `title` and `code` are plain writable
+    attributes, and the raise-on-nonzero decision reads the code the review
+    leaves behind, so "fail by this tool's definition of failure" needs no
+    `nofail=` at the call site. Everything the run *captured* is read-only:
+    review sees what the run kept, never edits it — an uncaptured
+    (`capture=False`) call reviews the code alone. `ok` derives from `code`,
+    so the two can never disagree.
+    """
+
+    __slots__ = ("_command", "_duration", "_raw", "_stderr", "_stdout", "code", "title")
+
+    title: str
+    """The receipt's label. Starts as the shown command (or the call's
+    `title=`); what the review leaves here is what the report shows."""
+    code: int
+    """The verdict. What the review leaves here is the step's exit code —
+    the raise decision and the receipt both read it."""
+
+    def __init__(
+        self,
+        *,
+        title: str,
+        code: int,
+        stdout: str,
+        stderr: str,
+        duration: float,
+        raw: str,
+        command: str,
+    ) -> None:
+        self.title = title
+        self.code = code
+        self._stdout = stdout
+        self._stderr = stderr
+        self._duration = duration
+        self._raw = raw
+        self._command = command
+
+    @property
+    def ok(self) -> bool:
+        """Whether the code, as it stands, is success — derives from `code`."""
+        return self.code == 0
+
+    @property
+    def stdout(self) -> str:
+        """Captured standard output; empty when the call streamed instead."""
+        return self._stdout
+
+    @property
+    def stderr(self) -> str:
+        """Captured standard error; empty when the call streamed instead."""
+        return self._stderr
+
+    @property
+    def output(self) -> str:
+        """`stdout` then `stderr`, concatenated — the same convenience the
+        sealed `Result` offers."""
+        return self._stdout + self._stderr
+
+    @property
+    def duration(self) -> float:
+        """Wall-clock seconds the work took — machinery-owned, read-only."""
+        return self._duration
+
+    @property
+    def raw(self) -> str:
+        """The exact command line executed — the review can read what really
+        ran while retitling what the report shows."""
+        return self._raw
+
+    @property
+    def command(self) -> str:
+        """The normalised command line as it stood before review."""
+        return self._command
+
+
 @dataclass
 class Context:
     """State for one running task: environment, flags, passthrough, output."""
@@ -1780,6 +1859,7 @@ def run(
     capture: bool = True,
     timeout: float | None = None,
     title: str | None = None,
+    pre_record: Callable[[ResultView], None] | None = None,
     env: dict[str, str] | None = None,
     cwd: str | Path | None = None,
     rel: str | Path | None = None,
@@ -1818,6 +1898,18 @@ def run(
     under `recording()`, where a step would be faked: a value read is not the
     story being recorded, and faking it would corrupt the story that is —
     the real steps downstream would record whatever a blank answer produced.
+
+    **`pre_record=` reviews the record before it is sealed.** Some tools
+    speak exit codes that need interpreting — `djlint --reformat` exits 1
+    when it changed files, which is success for a formatting gate. The
+    reviewer receives the draft (`ResultView`) after the work ran: it reads
+    what was captured and may set `title` and `code`; the receipt, the
+    record, and the raise-on-nonzero decision all read what the review
+    leaves behind, so the call site writes no `nofail=`. A reviewer that
+    raises fails the call with its own error — a broken reviewer is a
+    broken gate — and the record keeps what the work honestly produced.
+    Dry-run never reviews (nothing ran, nothing captured), and a
+    `recorded=False` call has no record to review (a note, not an error).
 
     `_show` is an internal channel from the `tools.*` bridge: a structured
     view of the call, so the shown command line can be normalised and
@@ -1875,6 +1967,18 @@ def run(
             "recorded-title",
             f"title= is ignored on a recorded=False call ({label}): there is no "
             f"receipt to label.",
+        )
+
+    if pre_record is not None and not recorded:
+        # Same shape as the title note: `.opts()` merges along a chain, so a
+        # shared tool may carry a reviewer while one call site goes off the
+        # record — neither author wrote the contradiction. Say it once.
+        from footman import _globals as _pg_note2
+
+        _pg_note2._note(
+            "pre-record-recorded",
+            f"pre_record is ignored on a recorded=False call ({label}): there "
+            f"is no record to review.",
         )
 
     show = recorded and not ctx.quiet
@@ -1989,6 +2093,44 @@ def run(
         # is rather than a sentinel of footman's own invention. A Result *is*
         # its exit code, so this is chosen here, not assigned afterwards.
         code = 124
+    if pre_record is not None and recorded:
+        # The review window: the work ran and the record is still a draft.
+        # The reviewer reads what was captured and may amend the verdict —
+        # title and code — before anything is sealed, shown, or raised. A
+        # raising reviewer fails the call with the hook's own error: a broken
+        # reviewer is a broken gate, not a shrug. The record keeps what the
+        # work honestly produced in that case — review never finished, so
+        # nothing it half-did is kept.
+        view = ResultView(
+            title=label,
+            code=code,
+            stdout=out_s,
+            stderr=err_s,
+            duration=duration,
+            raw=raw,
+            command=label,
+        )
+        try:
+            pre_record(view)
+        except Exception as exc:
+            ctx.steps.append(
+                Result(
+                    code,
+                    command=label,
+                    stdout=out_s,
+                    stderr=err_s,
+                    duration=duration,
+                    raw=raw,
+                    timed_out=timed_out,
+                )
+            )
+            hook = getattr(pre_record, "__name__", repr(pre_record))
+            raise RuntimeError(
+                f"pre_record hook {hook!r} failed reviewing {label!r}: "
+                f"{type(exc).__name__}: {exc}"
+            ) from exc
+        code = view.code
+        label = view.title
     result = Result(
         code,
         command=label,

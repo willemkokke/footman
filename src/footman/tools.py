@@ -467,6 +467,7 @@ _TOOL_OPTS = (
     "rel",
     "recorded",
     "timeout",
+    "pre_record",
 )
 
 
@@ -613,6 +614,7 @@ class Tool:
         rel_opt = self._opts.get("rel", None)
         recorded = self._opts.get("recorded", True)
         timeout = self._opts.get("timeout", None)
+        pre_record = self._opts.get("pre_record", None)
         flags = _flags(kwargs, self._argv0, single_dash=self._single_dash)
         positionals = list(map(str, args))
         wrapper = _is_wrapper(self._argv0, self._base)
@@ -653,6 +655,7 @@ class Tool:
                 nofail=nofail,
                 capture=capture,
                 title=title,
+                pre_record=pre_record,
                 recorded=recorded,
                 timeout=timeout,
                 cwd=cwd_opt,
@@ -723,6 +726,7 @@ class Tool:
                 nofail=nofail,
                 capture=capture,
                 title=title,
+                pre_record=pre_record,
                 recorded=recorded,
                 timeout=timeout,
                 cwd=cwd_opt,

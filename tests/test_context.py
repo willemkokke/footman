@@ -1024,6 +1024,96 @@ def test_fail_raises_failed_with_reason_and_code():
     assert bare.value.reason == "" and bare.value.code == 1
 
 
+def test_pre_record_reviews_the_draft_and_the_verdict_follows():
+    # The djlint shape: the tool exits 1 meaning "I reformatted", the gate
+    # wants that green. The reviewer reads what was captured, sets title and
+    # code; the record, the receipt, and the raise decision all read what
+    # the review left — no nofail= at the call site.
+    from footman import Context, run, use_context
+
+    def reformatted_is_fine(view):
+        assert "changed 3 files" in view.stdout  # review sees the capture
+        assert view.duration >= 0.0
+        assert not view.ok  # derives from the raw code, for now
+        view.title = "fmt: reformatted"
+        view.code = 0
+
+    ctx = Context()
+    with use_context(ctx):
+        result = run(
+            [sys.executable, "-c", "print('changed 3 files'); raise SystemExit(1)"],
+            pre_record=reformatted_is_fine,
+        )
+    assert result == 0 and result.ok  # post-review verdict, no raise
+    assert result.command == "fmt: reformatted"  # the reviewed title is the label
+    assert "changed 3 files" in result.stdout  # capture kept, not edited
+    assert ctx.steps and ctx.steps[-1].code == 0  # the record sealed reviewed
+
+
+def test_pre_record_can_fail_a_green_run():
+    # The other direction: review reads the post-review code too, so a
+    # reviewer may decide a zero exit was a failure by this gate's rules.
+    from footman import Context, RunFailed, run, use_context
+
+    def zero_is_sus(view):
+        view.code = 3
+
+    with use_context(Context()), pytest.raises(RunFailed) as caught:
+        run([sys.executable, "-c", "print('ok')"], pre_record=zero_is_sus)
+    assert caught.value.result.code == 3
+
+
+def test_a_raising_reviewer_fails_the_call_with_its_own_error():
+    # A broken reviewer is a broken gate, not a shrug — and the record keeps
+    # what the work honestly produced, because review never finished.
+    from footman import Context, run, use_context
+
+    def broken(view):
+        raise KeyError("oops")
+
+    ctx = Context()
+    with (
+        use_context(ctx),
+        pytest.raises(RuntimeError, match=r"pre_record hook 'broken'.*oops"),
+    ):
+        run([sys.executable, "-c", "raise SystemExit(0)"], pre_record=broken)
+    assert ctx.steps and ctx.steps[-1].code == 0  # the raw record, unreviewed
+
+
+def test_pre_record_is_a_note_on_an_off_the_record_call(capsys):
+    # .opts() merges along a chain, so a shared tool may carry a reviewer
+    # while one call site goes off the record — a note, not an error, and
+    # the reviewer never fires.
+    from footman import Context, ResultView, run, use_context
+
+    fired: list[ResultView] = []
+    with use_context(Context()):
+        result = run(
+            [sys.executable, "-c", "print('sha')"],
+            recorded=False,
+            pre_record=fired.append,
+        )
+    assert result == 0 and fired == []
+
+
+def test_pre_record_with_capture_off_reviews_the_code_alone():
+    from footman import Context, run, use_context
+
+    seen = {}
+
+    def reviewer(view):
+        seen["stdout"] = view.stdout
+        seen["code"] = view.code
+
+    with use_context(Context()):
+        run(
+            [sys.executable, "-c", "print('to the terminal')"],
+            capture=False,
+            pre_record=reviewer,
+        )
+    assert seen == {"stdout": "", "code": 0}
+
+
 def test_fail_refuses_code_zero_everywhere():
     # fail() means failure; code 0 is success. The pass-branch spelling was
     # rejected in the task-failure design, and the old verbatim honouring

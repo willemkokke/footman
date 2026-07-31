@@ -30,6 +30,7 @@ if TYPE_CHECKING:
     from footman.context import Context as Context
     from footman.context import Failed as Failed
     from footman.context import Result as Result
+    from footman.context import ResultView as ResultView
     from footman.context import RunFailed as RunFailed
     from footman.context import chdir as chdir
     from footman.context import confirm as confirm
@@ -107,6 +108,7 @@ __all__ = [
     "Many",
     "NoSplit",
     "Result",
+    "ResultView",
     "RunFailed",
     "Runner",
     "Secret",
@@ -282,6 +284,7 @@ def __getattr__(name: str) -> object:
         "parallel",
         "Context",
         "Result",
+        "ResultView",
         "inherited",
         "passthrough",
         "progress",

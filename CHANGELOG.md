@@ -7,6 +7,22 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- **`run(..., pre_record=…)` — the review window.** Some tools speak exit
+  codes that need interpreting: `djlint --reformat` exits 1 when it changed
+  files, which is success for a formatting gate. A reviewer receives the
+  record's draft (`ResultView`, now public) after the work ran and before
+  anything is sealed: it reads what was captured and may set `title` and
+  `code` — the receipt, the record, and the raise-on-nonzero decision all
+  read what the review leaves behind, so the call site writes no `nofail=`.
+  The tools bridge takes it through `.opts(pre_record=…)`. A raising
+  reviewer fails the call with its own error; review sees what was captured
+  (an uncaptured call reviews the code alone); an off-the-record call has
+  no record to review — a note, not an error. The first slice of the
+  record surface from
+  [the design](https://willemkokke.github.io/footman/design/).
+
 ### Changed
 
 - **Breaking: `run(step=False)` is spelled `run(recorded=False)`.** The

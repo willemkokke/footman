@@ -231,7 +231,9 @@ def test_tool_opts_stub_mirrors_run_signature():
         n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name == "opts"
     )
     declared = {
-        arg.arg: ast.unparse(arg.annotation).replace("_Path", "Path")
+        arg.arg: ast.unparse(arg.annotation)
+        .replace("_Path", "Path")
+        .replace("_ResultView", "ResultView")
         for arg in opts.args.kwonlyargs
         if arg.annotation is not None
     }
