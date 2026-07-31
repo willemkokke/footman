@@ -875,7 +875,7 @@ def _capture(argv: list[str], env: dict[str, str] | None = None) -> str:
     try:
         done = _fm_run(
             argv,
-            step=False,  # a probe, not part of the run's story
+            recorded=False,  # a probe, not part of the run's story
             timeout=TIMEOUT,
             nofail=True,
             # Passed rather than inherited, so footman reads the spawn as
@@ -894,7 +894,7 @@ def _run(argv: list[str], env: dict[str, str] | None = None) -> bool:
     from footman.context import run as _fm_run
 
     try:
-        done = _fm_run(argv, step=False, timeout=300, nofail=True, env=env)
+        done = _fm_run(argv, recorded=False, timeout=300, nofail=True, env=env)
     except (OSError, subprocess.SubprocessError):
         return False
     return done.code == 0

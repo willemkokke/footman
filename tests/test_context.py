@@ -1024,6 +1024,18 @@ def test_fail_raises_failed_with_reason_and_code():
     assert bare.value.reason == "" and bare.value.code == 1
 
 
+def test_fail_refuses_code_zero_everywhere():
+    # fail() means failure; code 0 is success. The pass-branch spelling was
+    # rejected in the task-failure design, and the old verbatim honouring
+    # produced an incoherent row (ok=True with an error attached). The
+    # refusal teaches the honest spelling: return 0, or a plain return.
+    from footman import Failed, fail
+
+    with pytest.raises(ValueError, match=r"fail\(\) means failure") as caught:
+        fail("looks fine", code=0)
+    assert not isinstance(caught.value, Failed)  # a misuse, not a failure
+
+
 def test_fail_is_a_function_so_it_is_lint_clean_for_consumers(tmp_path):
     # The whole reason fail() is a function, not `raise Failed(...)`: a call trips
     # no EM101 (flake8-errmsg) or TRY003 (tryceratops) at a consumer's call site,
@@ -1824,14 +1836,14 @@ def test_reveal_is_the_unwrap_said_out_loud():
     assert f"export TOKEN={token}" == "export TOKEN=hunter2"
 
 
-# --- step=False: a call that is not part of the task's story ------------------
+# --- recorded=False: a call that is not part of the task's story ------------------
 
 
 def test_a_non_step_call_runs_and_returns_but_reports_nothing(capsys):
     def tasks(reg):
         @reg.task
         def release():
-            r = run(_echo("abc123"), step=False)
+            r = run(_echo("abc123"), recorded=False)
             assert r == 0
             assert r.stdout.strip() == "abc123"  # the value is the whole point
             run(_echo("tagged"))  # a real step, for contrast
@@ -1852,7 +1864,7 @@ def test_a_non_step_call_executes_under_recording():
     from footman.testing import recording
 
     with recording() as steps:
-        real = run(_echo("live"), step=False)
+        real = run(_echo("live"), recorded=False)
         run("echo pretend")
 
     assert real.stdout.strip() == "live"  # actually ran
@@ -1864,7 +1876,7 @@ def test_a_non_step_call_still_fails_the_task():
     def tasks(reg):
         @reg.task
         def build():
-            run([sys.executable, "-c", "raise SystemExit(3)"], step=False)
+            run([sys.executable, "-c", "raise SystemExit(3)"], recorded=False)
 
     _, _, results = drive(tasks, "build")
     assert not results[0].ok
@@ -1874,7 +1886,9 @@ def test_a_non_step_call_still_fails_the_task():
         @reg.task
         def build():
             r = run(
-                [sys.executable, "-c", "raise SystemExit(3)"], step=False, nofail=True
+                [sys.executable, "-c", "raise SystemExit(3)"],
+                recorded=False,
+                nofail=True,
             )
             assert r == 3
 
@@ -1884,7 +1898,7 @@ def test_a_non_step_call_still_fails_the_task():
 
 def test_a_title_on_a_non_step_call_is_noted_once(capsys):
     # Not an error: `.opts()` merges along a chain, so a shared tool can carry
-    # a title while a call site adds step=False — neither author wrote the
+    # a title while a call site adds recorded=False — neither author wrote the
     # contradiction. Said once, on stderr.
     from footman import _globals
 
@@ -1893,13 +1907,13 @@ def test_a_title_on_a_non_step_call_is_noted_once(capsys):
     def tasks(reg):
         @reg.task
         def build():
-            run(_echo("one"), step=False, title="labelled")
-            run(_echo("two"), step=False, title="labelled")
+            run(_echo("one"), recorded=False, title="labelled")
+            run(_echo("two"), recorded=False, title="labelled")
 
     _, _, results = drive(tasks, "build")
     assert results[0].ok, results[0].error
     err = capsys.readouterr().err
-    assert err.count("title= is ignored on a step=False call") == 1
+    assert err.count("title= is ignored on a recorded=False call") == 1
 
 
 # --- timeout: a bound the caller declares ------------------------------------
@@ -1963,7 +1977,7 @@ def test_a_timed_out_call_is_still_a_step_unless_it_says_otherwise():
 
     quiet_ctx = Context()
     with use_context(quiet_ctx):
-        run(_sleeper(30), timeout=0.5, nofail=True, step=False)
+        run(_sleeper(30), timeout=0.5, nofail=True, recorded=False)
     assert quiet_ctx.steps == []  # step governs reporting, never behaviour
 
 

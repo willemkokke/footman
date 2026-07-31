@@ -970,7 +970,9 @@ def test_opts_step_false_runs_the_tool_without_recording_it(capsys):
 
     ctx = Context()
     with use_context(ctx):
-        result = tools.Tool(sys.executable).opts(step=False)("-c", "print('a-value')")
+        result = tools.Tool(sys.executable).opts(recorded=False)(
+            "-c", "print('a-value')"
+        )
     assert result.stdout.strip() == "a-value"
     assert result.code == 0
     assert ctx.steps == []  # nothing recorded

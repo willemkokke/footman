@@ -905,11 +905,11 @@ def run_help(
     try:
         # UTF-8 rather than the locale codec, a hidden console, and a bound
         # that kills the tree: all of it is what `run()` does for a captured
-        # call now, so the read says only what is particular to it. `step=False`
+        # call now, so the read says only what is particular to it. `recorded=False`
         # keeps a probe out of the run's story.
         done = _run(
             [*argv, flag],
-            step=False,
+            recorded=False,
             timeout=timeout,
             nofail=True,
             # A wide, dumb, colourless terminal: every family honours one
@@ -1024,7 +1024,7 @@ def _run_man(argv: list[str], timeout: float) -> str:
     try:
         done = _run(
             [argv[0], "help", *argv[1:]],
-            step=False,
+            recorded=False,
             timeout=timeout,
             nofail=True,
             env=env,
@@ -1044,7 +1044,7 @@ def _render_page(tree: str, page: str, timeout: float) -> str:
             # says so by rendering an empty page rather than failing, which
             # reads downstream as a release that documented nothing.
             ["man", "-M", str(Path(tree).resolve()), page],
-            step=False,
+            recorded=False,
             timeout=timeout,
             nofail=True,
             env={

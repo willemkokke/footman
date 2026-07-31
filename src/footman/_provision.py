@@ -322,7 +322,7 @@ def _python_tier(prefix: Path, drivers: list[Driver]) -> list[Outcome]:
         try:
             found = _fm_run(
                 ["uv", "python", "find", version],
-                step=False,  # a lookup, not part of the run's story
+                recorded=False,  # a lookup, not part of the run's story
                 timeout=60,
                 nofail=True,
                 env=dict(os.environ),
@@ -674,7 +674,7 @@ def _fm_run(*args: Any, **kwargs: Any) -> Any:
 def _run(argv: list[str], *, env: dict[str, str]) -> bool:
     """Run an install command, quietly; its success is all the caller needs."""
     try:
-        done = _fm_run(argv, step=False, timeout=600, nofail=True, env=env)
+        done = _fm_run(argv, recorded=False, timeout=600, nofail=True, env=env)
     except (OSError, subprocess.SubprocessError):
         return False
     return bool(done.code == 0)

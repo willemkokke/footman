@@ -465,7 +465,7 @@ _TOOL_OPTS = (
     "title",
     "cwd",
     "rel",
-    "step",
+    "recorded",
     "timeout",
 )
 
@@ -566,9 +566,9 @@ class Tool:
 
             git.opts(nofail=True).push()          # tolerate a non-zero exit
             pytest.opts(capture=False)("-s")      # stream this run live
-            git.opts(step=False).rev_parse("HEAD")  # a value read, not an event
+            git.opts(recorded=False).rev_parse("HEAD")  # a value read, not an event
 
-        `step=False` is the one that changes what the *run* sees rather than
+        `recorded=False` is the one that changes what the *run* sees rather than
         how the tool is invoked: the call runs in the task's directory and
         environment as always, but reports nothing — no receipt, no row in
         `--json`, no `recording()` entry — and hands back its `Result`. Reach
@@ -611,7 +611,7 @@ class Tool:
         in_process = self._opts.get("in_process", None)
         cwd_opt = self._opts.get("cwd", None)
         rel_opt = self._opts.get("rel", None)
-        step = self._opts.get("step", True)
+        recorded = self._opts.get("recorded", True)
         timeout = self._opts.get("timeout", None)
         flags = _flags(kwargs, self._argv0, single_dash=self._single_dash)
         positionals = list(map(str, args))
@@ -653,7 +653,7 @@ class Tool:
                 nofail=nofail,
                 capture=capture,
                 title=title,
-                step=step,
+                recorded=recorded,
                 timeout=timeout,
                 cwd=cwd_opt,
                 rel=rel_opt,
@@ -723,7 +723,7 @@ class Tool:
                 nofail=nofail,
                 capture=capture,
                 title=title,
-                step=step,
+                recorded=recorded,
                 timeout=timeout,
                 cwd=cwd_opt,
                 rel=rel_opt,

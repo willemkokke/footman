@@ -171,7 +171,7 @@ class Tool:
         title: str | None = ...,
         cwd: str | _Path | None = ...,
         rel: str | _Path | None = ...,
-        step: bool = ...,
+        recorded: bool = ...,
         timeout: float | None = ...,
     ) -> Self: ...
     # A tool's own global options, bound before the next subcommand

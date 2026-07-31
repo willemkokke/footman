@@ -524,7 +524,16 @@ def fail(reason: str = "", *, code: int = 1) -> NoReturn:
     reason `sys.exit()` and `pytest.fail()` are functions. `return N` still
     spells a bare code; `sys.exit(...)` still works — `fail()` is just the
     footman-native one, with a reason and a code together.
+
+    `fail()` means failure, so `code=0` — success — is a contradiction it
+    refuses rather than a corner it interprets: `return 0` (or a plain
+    `return`) spells stopping early with success.
     """
+    if code == 0:
+        raise ValueError(
+            "fail() means failure and exit code 0 is success — return 0 "
+            "(or just return) spells stopping early with success"
+        )
     raise Failed(reason, code=code)
 
 
@@ -1767,7 +1776,7 @@ def run(
     cmd: str | list[str] | Callable[..., Any],
     *args: Any,
     nofail: bool = False,
-    step: bool = True,
+    recorded: bool = True,
     capture: bool = True,
     timeout: float | None = None,
     title: str | None = None,
@@ -1795,10 +1804,10 @@ def run(
     for a call that touches no paths while its task keeps `ctx.cwd`
     everywhere else.
 
-    **`step=False` says this call is not part of the task's story.** A call is
-    a *step* by default: it earns a receipt line, a row in `--json`, a
-    `recording()` entry, and its output joins the task's block. Some calls
-    aren't events, though — they are how a task *knows* something (`git
+    **`recorded=False` runs this call off the record.** A call is a *step*
+    by default: it earns a receipt line, a row in `--json`, a `recording()`
+    entry, and its output joins the task's block. Some calls aren't part of
+    the task's story, though — they are how a task *knows* something (`git
     rev-parse HEAD` in a release task). Those return their `Result` and
     report nothing: no record, no receipt, no output replayed.
 
@@ -1841,7 +1850,7 @@ def run(
         shown = _dim(label, color)
         shown_plain = label
 
-    if ctx.dry_run and step:
+    if ctx.dry_run and recorded:
         # Record the step even when not executing: `dry_run` + `quiet` is the
         # silent-capture mode `footman.testing` builds on. The recorded label
         # is normalised; only the shown line colours or (under -v) goes exact.
@@ -1856,19 +1865,19 @@ def run(
             out.write(f"$ {shown if color else shown_plain}\n")
         return result
 
-    if title is not None and not step:
+    if title is not None and not recorded:
         # Not an error: `.opts()` merges along a chain, so a shared tool may
         # carry a title from where it was configured while a call site adds
-        # `step=False` — neither author wrote the contradiction. Say it once.
+        # `recorded=False` — neither author wrote the contradiction. Say it once.
         from footman import _globals as _pg_note
 
         _pg_note._note(
-            "step-title",
-            f"title= is ignored on a step=False call ({label}): there is no "
+            "recorded-title",
+            f"title= is ignored on a recorded=False call ({label}): there is no "
             f"receipt to label.",
         )
 
-    show = step and not ctx.quiet
+    show = recorded and not ctx.quiet
     # `ctx.tty` means "this output dresses for a terminal" (colour, marks);
     # liveness is `sink is None`. A captured block styles for the terminal
     # it will replay onto, but in-place rewrites and the announce line stay
@@ -1989,7 +1998,7 @@ def run(
         raw=raw,
         timed_out=timed_out,
     )
-    if step:
+    if recorded:
         ctx.steps.append(result)  # what --json, the report and recording() read
 
     if show:
