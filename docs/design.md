@@ -119,20 +119,26 @@ A step can also be a generator, which buys two things with one keyword:
 <!-- example: fragment -->
 ```python
 @step
-def rebuild(target: str):
-    view = yield                 # the step's own record, mid-work
-    view.title = f"rebuilding {target}"
-    heavy_setup()
-    yield                        # a checkpoint: safe to cancel here
-    heavy_work()
+def convert(images: list[Path]):
+    view = yield                     # the step's own record, mid-work
+    for done, image in enumerate(images, start=1):
+        view.title = f"converting {done}/{len(images)}"
+        to_webp(image)
+        yield                        # a checkpoint, once per image
 ```
 
-Every bare `yield` is a **checkpoint** — a place where footman may
-safely cancel the step: cleanup runs, claims are released, nothing is
-left half-held. Between checkpoints the step cannot be interrupted, and
-that is not our timidity but Python's own rule — a running generator
-refuses to be closed from outside, by design. footman's contract simply
-says so plainly instead of pretending otherwise.
+Every bare `yield` is a **checkpoint**: a place where footman may
+safely cancel the step. Cancellation only ever happens at a
+checkpoint, and only for three reasons: the run is failing fast
+(another task failed, so this result is no longer wanted), you pressed
+Ctrl-C, or the step ran past its own `timeout=`. All three arrive the
+same way — the loop simply never resumes: any `try`/`finally` around
+the yield runs, claims are released, nothing is left half-converted,
+and the worst case costs one trip around the loop. Between checkpoints
+the step cannot be interrupted, and that is not timidity but Python's
+own rule — a running generator refuses to be closed from outside, by
+design. footman's contract says the same thing plainly: yield where it
+is safe to stop, and footman will only ever stop you there.
 
 ## Nothing runs anonymously
 
