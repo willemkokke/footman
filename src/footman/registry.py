@@ -31,9 +31,11 @@ import contextlib
 import functools
 import os
 import shutil
+import threading
 from collections.abc import Callable, Iterator, Sequence
 from pathlib import Path
 from typing import (
+    TYPE_CHECKING,
     Any,
     Final,
     ParamSpec,
@@ -44,6 +46,9 @@ from typing import (
     cast,
     overload,
 )
+
+if TYPE_CHECKING:
+    from footman.context import ResultView
 
 Task = Callable[..., Any]
 Hook = Callable[..., object]
@@ -768,6 +773,158 @@ def _apply_policy(
         setattr(fn, _SERIAL, True)
     if exclusive:
         setattr(fn, _EXCLUSIVE, True)
+    _attach_lifecycle(fn)
+
+
+_PRE_BIND_HOOKS = "_footman_own_pre_bind"
+_PRE_TASK_HOOKS = "_footman_own_pre_task"
+_POST_TASK_HOOKS = "_footman_own_post_task"
+
+
+def own_hooks(fn: Any, attr: str) -> list[Callable[..., Any]]:
+    """A task's own hooks for one moment, in attachment order."""
+    return list(getattr(fn, attr, ()))
+
+
+def has_own_hooks(fn: Any) -> bool:
+    """Whether *fn* carries any handle-attached lifecycle hooks — the executor
+    fires them whether or not any plugin is registered."""
+    return bool(
+        getattr(fn, _PRE_BIND_HOOKS, None)
+        or getattr(fn, _PRE_TASK_HOOKS, None)
+        or getattr(fn, _POST_TASK_HOOKS, None)
+    )
+
+
+def _attach_lifecycle(fn: Any) -> None:
+    """Give a registered task its handle surface: the task's own lifecycle
+    moments, attachable where the task lives.
+
+    `@build.pre_task` runs setup that belongs to build; `@build.pre_record`
+    is its reviewer; `@build.post_task` watches its sealed record — code
+    local to the task, so a rule about one task never lives in a central
+    file that lists everybody (hooks with no task knowledge belong to the
+    plugin lane instead). Attachment is permanent — it changes what the
+    task does for every requester — and each attacher returns the hook
+    unchanged, so the decorators stack and the functions stay callable.
+    """
+
+    def _attacher(attr: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+        def attach(hook: Callable[..., Any]) -> Callable[..., Any]:
+            setattr(fn, attr, [*getattr(fn, attr, ()), hook])
+            return hook
+
+        return attach
+
+    fn.pre_bind = _attacher(_PRE_BIND_HOOKS)
+    fn.pre_task = _attacher(_PRE_TASK_HOOKS)
+    fn.post_task = _attacher(_POST_TASK_HOOKS)
+    fn.pre_record = _attacher(_PRE_RECORD)
+
+    def wrap_task_sugar(gen_fn: Callable[..., Any]) -> Callable[..., Any]:
+        """The pair as one generator, per task: the pre half, then
+        `result = yield` where the body runs (resumed with the sealed,
+        read-only record), then the post half. Sugar lowered into the
+        task's own `pre_task` + `post_task` at attachment."""
+        name = getattr(gen_fn, "__name__", repr(gen_fn))
+        if not _isgeneratorfunction(gen_fn):
+            raise RegistrationError(
+                f"@{task_name(fn)}.wrap_task {name!r} must be a generator "
+                f"function — write `result = yield` where the body runs"
+            )
+        tls = threading.local()
+
+        def _pre() -> None:
+            gen = gen_fn()
+            try:
+                next(gen)
+            except StopIteration:
+                raise RuntimeError(
+                    f"@{task_name(fn)}.wrap_task {name!r} returned without "
+                    f"yielding — exactly one `result = yield` marks where "
+                    f"the body runs"
+                ) from None
+            tls.gen = gen
+
+        def _post(result: Any) -> None:
+            gen = getattr(tls, "gen", None)
+            if gen is None:
+                return  # the anchor never fired: no span open
+            tls.gen = None
+            try:
+                gen.send(result)
+            except StopIteration:
+                return
+            raise RuntimeError(
+                f"@{task_name(fn)}.wrap_task {name!r} yielded a second time "
+                f"— one yield exactly"
+            )
+
+        _pre.__name__ = name
+        _post.__name__ = name
+        fn.pre_task(_pre)
+        fn.post_task(_post)
+        return gen_fn
+
+    def wrap_bind_sugar(gen_fn: Callable[..., Any]) -> Callable[..., Any]:
+        """The two-yield wrapper, per task: enters at the bind boundary,
+        yields once before binding and once where the body runs."""
+        name = getattr(gen_fn, "__name__", repr(gen_fn))
+        if not _isgeneratorfunction(gen_fn):
+            raise RegistrationError(
+                f"@{task_name(fn)}.wrap_bind {name!r} must be a generator "
+                f"function — two yields: the bind boundary, then the body"
+            )
+        tls = threading.local()
+
+        def _bind() -> None:
+            gen = gen_fn()
+            try:
+                next(gen)
+            except StopIteration:
+                raise RuntimeError(
+                    f"@{task_name(fn)}.wrap_bind {name!r} returned without "
+                    f"yielding — two yields exactly"
+                ) from None
+            tls.gen = gen
+
+        def _enter() -> None:
+            gen = getattr(tls, "gen", None)
+            if gen is None:
+                return  # a body call skips binding: the span never opened
+            try:
+                gen.send(None)
+            except StopIteration:
+                tls.gen = None
+                raise RuntimeError(
+                    f"@{task_name(fn)}.wrap_bind {name!r} finished after one "
+                    f"yield — two yields exactly (bind, then body)"
+                ) from None
+
+        def _post(result: Any) -> None:
+            gen = getattr(tls, "gen", None)
+            if gen is None:
+                return
+            tls.gen = None
+            try:
+                gen.send(result)
+            except StopIteration:
+                return
+            raise RuntimeError(
+                f"@{task_name(fn)}.wrap_bind {name!r} yielded a third time — "
+                f"two yields exactly"
+            )
+
+        _bind.__name__ = name
+        _enter.__name__ = name
+        _post.__name__ = name
+        fn.pre_bind(_bind)
+        fn.pre_task(_enter)
+        fn.post_task(_post)
+        return gen_fn
+
+    fn.wrap_task = wrap_task_sugar
+    fn.wrap_bind = wrap_bind_sugar
 
 
 _P = ParamSpec("_P")
@@ -789,6 +946,36 @@ class TaskFn(Protocol[_P, _R_co]):
     def opts(self, **overrides: Unpack[TaskOpts]) -> TaskFn[_P, _R_co]:
         """Per-use option overrides; the reference stays callable with the
         task's own signature, so an opted call type-checks like a bare one."""
+        ...
+
+    # The task's own lifecycle, attachable on the handle: code local to the
+    # task it governs. Attachment is permanent (it changes what the task
+    # does for every requester); each attacher returns the hook unchanged,
+    # so the decorators stack and the functions stay callable.
+    def pre_bind(self, hook: Callable[[], None], /) -> Callable[[], None]:
+        """Before this task's arguments bind — its own setup moment."""
+        ...
+
+    def pre_task(self, hook: Callable[[], None], /) -> Callable[[], None]:
+        """Before this task's body, innermost — after any plugin's pres."""
+        ...
+
+    def pre_record(
+        self, hook: Callable[[ResultView], None], /
+    ) -> Callable[[ResultView], None]:
+        """This task's reviewer: the draft, before the record seals."""
+        ...
+
+    def post_task(self, hook: Callable[[Any], None], /) -> Callable[[Any], None]:
+        """Watch this task's sealed record — read-only; veto via `fail()`."""
+        ...
+
+    def wrap_task(self, fn: _F, /) -> _F:
+        """The pre/post pair as one generator: `result = yield` once."""
+        ...
+
+    def wrap_bind(self, fn: _F, /) -> _F:
+        """The two-yield wrapper: the bind boundary, then the body."""
         ...
 
 

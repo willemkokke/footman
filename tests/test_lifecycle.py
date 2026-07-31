@@ -1912,3 +1912,107 @@ def test_an_observer_vetoes_with_fail_and_the_audit_tells_the_story():
         ("body", "build", 0),
         ("observe", "budget", 3),
     ]
+
+
+def test_the_task_handle_carries_its_own_lifecycle():
+    # Code local to the task, no plugins anywhere: the handle-attached
+    # lane fires on its own, in lifecycle order, and the observer holds
+    # the sealed record.
+    reg = Group("root")
+    calls: list[object] = []
+
+    @reg.task
+    def build() -> str:
+        calls.append("body")
+        return "v"
+
+    @build.pre_task
+    def warm():
+        calls.append("warm")
+
+    @build.pre_record
+    def review(view):
+        calls.append("review")
+        view.title = "built"
+
+    @build.post_task
+    def watch(result):
+        calls.append(("watch", result.title, result.ok))
+        with pytest.raises(AttributeError, match="observers see"):
+            result.ok = False
+
+    result = Runner().invoke("build", tasks=reg)
+    assert result.ok, result.stderr
+    assert calls == ["warm", "body", "review", ("watch", "built", True)]
+
+
+def test_the_handle_attached_observer_vetoes_like_any_other():
+    import footman
+
+    reg = Group("root")
+
+    @reg.task
+    def build(): ...
+
+    @build.post_task
+    def budget(result):
+        footman.fail("not buying it", code=4)
+
+    result = Runner().invoke("build", tasks=reg)
+    assert not result.ok
+    row = next(r for r in result.results if r.task == "build")
+    assert row.code == 4 and row.failed_at == "observe"
+    assert [tuple(e) for e in row.audit] == [
+        ("body", "build", 0),
+        ("observe", "budget", 4),
+    ]
+
+
+def test_plugins_are_the_outer_ring_and_the_tasks_own_hooks_nest_inside():
+    reg = Group("root")
+    order: list[str] = []
+
+    @reg.pre_task
+    def plugin_pre(inv, task):
+        order.append("plugin-pre")
+
+    @reg.post_task
+    def plugin_post(inv, task, result):
+        order.append("plugin-post")
+
+    @reg.task
+    def build():
+        order.append("body")
+
+    @build.pre_task
+    def own_pre():
+        order.append("own-pre")
+
+    @build.post_task
+    def own_post(result):
+        order.append("own-post")
+
+    result = Runner().invoke("build", tasks=reg)
+    assert result.ok, result.stderr
+    # Plugins are the wider audience — the outer ring; the task's own
+    # hooks nest closest to the body, entering last and leaving first.
+    assert order == ["plugin-pre", "own-pre", "body", "own-post", "plugin-post"]
+
+
+def test_wrap_task_sugar_on_the_handle_spans_one_execution():
+    reg = Group("root")
+    spans: list[object] = []
+
+    @reg.task
+    def build() -> int:
+        return 0
+
+    @build.wrap_task
+    def span():
+        spans.append("open")
+        result = yield
+        spans.append(("close", result.ok))
+
+    result = Runner().invoke("build", tasks=reg)
+    assert result.ok, result.stderr
+    assert spans == ["open", ("close", True)]

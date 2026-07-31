@@ -30,6 +30,7 @@ from footman import (
     Many,
     NoSplit,
     Result,
+    ResultView,
     RunFailed,
     Secret,
     Stdin,
@@ -273,3 +274,25 @@ def _context_is_reachable() -> None:
     @task
     def where(ctx: Context) -> None:
         assert_type(ctx.dry_run, bool)
+
+
+def _task_handles_expose_their_lifecycle() -> None:
+    @task
+    def build(target: str = "web") -> int:
+        return 0
+
+    @build.pre_task
+    def warm() -> None: ...
+
+    @build.pre_record
+    def review(view: ResultView) -> None:
+        view.title = view.title.strip()
+        view.code = 0
+        view.set_returned("summarised")
+
+    @build.post_task
+    def watch(result: object) -> None: ...
+
+    # Attachment is identity-shaped: the hooks stay plain callables.
+    warm()
+    assert_type(build("web"), int)  # the handle stays callable as itself
