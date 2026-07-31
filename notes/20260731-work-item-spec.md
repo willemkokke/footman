@@ -777,9 +777,9 @@ now beyond not foreclosing it — which the flat shape just did.
   verbosity the report shows TASK grain only; verbose adds steps.
   The full display thread (verbosity matrix, provenance markers,
   emission-time redaction) parks as its own post-model thread.
-  Sub-question still open: whether a failed task auto-expands its
-  failing step and audit line at normal verbosity (assumed yes;
-  awaiting the explicit word).
+  And confirmed (2026-07-31): a FAILED task auto-expands its failing
+  step and audit line at normal verbosity — green is collapsible,
+  failure is never hidden.
 - **5: dissolved — hse is unblocked and moving.** Willem has been
   developing hse alongside this whole thread; it pins its current
   footman until the model ships, then migrates once (target 0.28.0).

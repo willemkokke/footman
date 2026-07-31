@@ -692,9 +692,10 @@ the spec becomes its own note linking back once the flood is done.
    step-grain lifecycle hook.
 4. **Display policy**. RULED 2026-07-31: split — minimal defaults ship
    with the build (task grain only at normal verbosity; verbose adds
-   steps; failed-task auto-expand assumed, awaiting the word), the
-   full display thread (verbosity matrix, provenance markers,
-   emission-time redaction) parks as its own post-model thread.
+   steps; a failed task auto-expands its failing step and audit line —
+   confirmed same day), the full display thread (verbosity matrix,
+   provenance markers, emission-time redaction) parks as its own
+   post-model thread.
 5. **Migration for hse**. DISSOLVED 2026-07-31: hse is unblocked and
    being developed alongside; it pins its current footman until the
    model ships, then migrates once (target 0.28.0). No interim wave;
