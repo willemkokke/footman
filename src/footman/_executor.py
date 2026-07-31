@@ -99,6 +99,10 @@ class TaskResult:
     title: str = ""
     """A reviewer's label for the row, when one set it (`@pre_record`).
     Empty means the task's name speaks for itself, as it always did."""
+    pristine: Any = None
+    """What the body actually returned — the value dependents and body
+    callers receive, snapshotted at the body's exit. `returned` is its
+    *reported* twin: a reviewer's `set_returned` rewrites that one only."""
     audit: list[context.AuditEntry] = field(default_factory=list)
     """The verdict's provenance, when the row was reviewed: the body entry
     with what the task itself produced, then a review entry per reviewer, in
@@ -1295,11 +1299,14 @@ class TaskHandle:
 
 
 class ResultView:
-    """A `post_task`'s view of the result: read everything, write one thing.
+    """A `post_task`'s view of the result: the sealed record, read-only.
 
-    `set_returned` rewrites the *reported* value — the summary line and the
-    `--json` envelope — never what a dependent or a body caller received:
-    that was snapshotted the moment the body handed it over.
+    Observers see, never judge: the review window (`pre_record`) closed
+    before this view was made, and every write there — code, title, the
+    reported value via `set_returned` — is attributed in the record's
+    audit. An observer that finds a problem fails the task instead, loudly:
+    `footman.fail(reason, code)` from a `post_task` hook is the veto, and
+    the failure names the hook and the moment.
     """
 
     __slots__ = ("_result",)
@@ -1312,14 +1319,11 @@ class ResultView:
 
     def __setattr__(self, name: str, value: Any) -> None:
         raise AttributeError(
-            f"result.{name} is read-only in post_task — the one write is "
-            f"set_returned(value), which rewrites the reported value only"
+            f"result.{name} is read-only in post_task — observers see, never "
+            f"judge. Amend verdicts in the review window instead "
+            f"(pre_record, where set_returned also lives), or veto with "
+            f"fail(reason, code)."
         )
-
-    def set_returned(self, value: Any) -> None:
-        """Rewrite the reported value; the pristine return is already spoken
-        for (dependents, body callers, forwarding)."""
-        object.__getattribute__(self, "_result").returned = value
 
 
 def _reserved_note(
@@ -1404,12 +1408,30 @@ def _exit_task_hooks(
     for plugin in reversed(life.plugins):
         for hook in plugin.post:
             token = _hook_owner.set(plugin.name)
+            name = getattr(hook, "__name__", "?")
             try:
                 hook(life.inv, handle, view)
+            except context.Failed as exc:
+                # The veto: fail(reason, code) from an observer is a
+                # deliberate failure that rides the error channel — loud,
+                # attributed, its own code (never 0; fail() refuses that).
+                # The audit records the moment; the work's own story stays.
+                if not result.audit:
+                    result.audit.append(
+                        context.AuditEntry("body", result.task, result.code)
+                    )
+                result.audit.append(context.AuditEntry("observe", name, exc.code))
+                if first is None:
+                    first = exc
             except Exception as exc:
+                if not result.audit:
+                    result.audit.append(
+                        context.AuditEntry("body", result.task, result.code)
+                    )
+                result.audit.append(context.AuditEntry("observe", name, None))
                 if first is None:
                     failure = HookFailed(
-                        f"post_task hook {getattr(hook, '__name__', '?')!r} "
+                        f"post_task hook {name!r} "
                         f"from {plugin.name} failed for task {handle.name!r}: "
                         f"{type(exc).__name__}: {exc}"
                     )
@@ -1521,12 +1543,14 @@ def run_bound(
             # it has no answer — named, so the report seats it after it.
             result.blocked_by = cell.label
         else:
-            result = _futures.shared_result(seg.task, value)
+            result = _futures.shared_result(seg.task, value, cell.record)
         if life is not None and handle is not None:
             post_error = _exit_task_hooks(life, handle, result)
             if post_error is not None and result.ok:
                 result.ok = False
-                result.code = 1
+                result.code = (
+                    post_error.code if isinstance(post_error, context.Failed) else 1
+                )
                 result.error = post_error
                 result.state = ""  # it no longer reads as a clean share
         return result
@@ -1608,6 +1632,7 @@ def run_bound(
     duration = time.perf_counter() - start
     output = ctx.sink.getvalue() if isinstance(ctx.sink, io.StringIO) else ""
     result = _result(seg, code, returned, error, duration, output, ctx.steps)
+    result.pristine = returned
     result.started = started
     result.thread = born
     result.thread_id = threading.get_native_id()
@@ -1627,6 +1652,7 @@ def run_bound(
             duration=result.duration,
             raw="",
             command=seg.task,
+            returned=result.returned,
         )
         for reviewer in reviewers:
             name = getattr(reviewer, "__name__", repr(reviewer))
@@ -1656,14 +1682,22 @@ def run_bound(
             result.ok = result.error is None and view.code == 0
             if "title" in view._touched:
                 result.title = view.title
+            if "returned" in view._touched:
+                # The *reported* value only: the pristine return was
+                # snapshotted at the body's exit and resolves below.
+                result.returned = view.returned
         result.audit = audit
     if life is not None and handle is not None:
         post_error = _exit_task_hooks(life, handle, result)
         if post_error is not None and result.ok:
-            # A reporter that crashed must not pass silently: the task fails,
-            # named, exactly as a raising pre would have failed it.
+            # An observer that crashed must not pass silently: the task
+            # fails, named, exactly as a raising pre would have failed it.
+            # A deliberate veto (fail() from the hook) keeps its own code —
+            # never 0, fail() refuses that spelling.
             result.ok = False
-            result.code = 1
+            result.code = (
+                post_error.code if isinstance(post_error, context.Failed) else 1
+            )
             result.error = post_error
             error = post_error
     # The pristine return, snapshotted the moment the body handed it over: what
@@ -1674,7 +1708,7 @@ def run_bound(
     # `_call` exit. Only a shared execution holds a cell (`claim` gives an
     # unshared one none), so what a run reuses never depends on scheduling
     # order.
-    _futures.resolve(cell, returned, error)
+    _futures.resolve(cell, returned, error, record=result)
     # A task that failed while fail-fast was already aborting the run wasn't a
     # genuine failure — it was cut off. Report that honestly, not as "failed".
     if not result.ok and context._aborting.is_set():

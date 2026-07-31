@@ -673,15 +673,17 @@ def test_a_post_failure_never_masks_the_bodys_own():
 def test_set_returned_rewrites_the_report_never_the_value():
     # The pristine return was snapshotted at the body's exit: a dependent's
     # body call still receives it, while the report and `--json` carry the
-    # rewrite.
+    # rewrite. The write lives in the review window now — reviewed and
+    # attributed — never in observation.
+    import footman
+
     reg = Group("root")
 
-    @reg.post_task
-    def redact(inv, task, result):
-        if task.name == "build":
-            result.set_returned("[redacted]")
+    def redact(view):
+        view.set_returned("[redacted]")
 
     @reg.task
+    @footman.pre_record(redact)
     def build() -> str:
         return "secret-artifact"
 
@@ -694,8 +696,9 @@ def test_set_returned_rewrites_the_report_never_the_value():
     build_rows = [r.returned for r in result.results if r.task == "build"]
     # The caller's body received the real value; the report — the execution's
     # row AND the `shared` row the body call added — carries the rewrite,
-    # because the finished event fires on shares too. A redaction covers
-    # every row that would have leaked the secret.
+    # because a shared answer is the record REUSED: the later request's row
+    # copies what the execution reported. A redaction covers every row that
+    # would have leaked the secret.
     assert build_rows == ["[redacted]", "[redacted]"]
 
 
@@ -803,8 +806,10 @@ def test_the_handle_is_read_only_where_it_should_be():
 
     @reg.post_task
     def probe_result(inv, task, result):
-        with pytest.raises(AttributeError, match="set_returned"):
+        with pytest.raises(AttributeError, match="observers see, never judge"):
             result.ok = True
+        with pytest.raises(AttributeError, match="set_returned"):
+            result.set_returned("nope")  # the write moved to the review window
         probed.append("post")
 
     @reg.task
@@ -1419,20 +1424,29 @@ def test_post_tasks_receives_the_whole_story():
     assert story["total"] >= 0
 
 
-def test_post_tasks_rewrite_reaches_the_report():
-    # It fires before anything prints, so a set_returned lands in the
-    # envelope — the run-level twin of a post_task rewrite.
+def test_the_run_end_hook_reads_sealed_records_and_review_owns_the_rewrite():
+    # Sealed means sealed at every altitude: the run-end hook observes, and
+    # the reported-value rewrite lives in the review window, where it is
+    # attributed. The envelope carries what the review left.
     import json as json_mod
 
+    import footman
+
     reg = Group("root")
+    seen: list[object] = []
 
     @reg.post_tasks
-    def redact(inv):
+    def observe(inv):
         for r in inv.results:
-            if r.returned is not None:
-                r.set_returned("[redacted]")
+            seen.append(r.returned)
+            with pytest.raises(AttributeError):
+                r.set_returned("nope")  # observers see, never judge
+
+    def redact(view):
+        view.set_returned("[redacted]")
 
     @reg.task
+    @footman.pre_record(redact)
     def build() -> str:
         return "secret"
 
@@ -1440,6 +1454,7 @@ def test_post_tasks_rewrite_reaches_the_report():
     assert result.ok, result.stderr
     envelope = json_mod.loads(result.stdout)
     assert envelope["results"][0]["returned"] == "[redacted]"
+    assert seen == ["[redacted]"]  # the observer saw the sealed record
 
 
 def test_post_tasks_stdout_goes_to_stderr_under_json():
@@ -1869,3 +1884,31 @@ def test_a_green_row_vetoed_in_review_keeps_its_earned_code(tmp_path):
     row = json.loads(result.stdout)["results"][0]
     assert row["code"] == 3 and row["failed_at"] == "review"
     assert row["audit"][0] == ["body", "build", 0]  # the green it earned, kept
+
+
+def test_an_observer_vetoes_with_fail_and_the_audit_tells_the_story():
+    # The veto: an observer cannot rewrite a sealed record, but it can fail
+    # the task — loudly, with its own code, attributed to the observe
+    # moment. The work's earned green stays visible in the audit.
+    import footman
+
+    reg = Group("root")
+
+    @reg.post_task
+    def budget(inv, task, result):
+        if task.name == "build" and result.ok:
+            footman.fail("too easy to be true", code=3)
+
+    @reg.task
+    def build(): ...
+
+    result = Runner().invoke("build", tasks=reg)
+    assert not result.ok
+    row = next(r for r in result.results if r.task == "build")
+    assert row.code == 3  # the veto's own code, never a flat 1
+    assert row.failed_at == "observe"
+    assert row.work_code == 0  # the green the work earned, kept visible
+    assert [tuple(e) for e in row.audit] == [
+        ("body", "build", 0),
+        ("observe", "budget", 3),
+    ]

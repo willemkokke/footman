@@ -55,12 +55,13 @@ _UNKEYABLE = object()
 class _Cell:
     """One (task, arguments) execution: its future, its owner, its label."""
 
-    __slots__ = ("future", "label", "owner")
+    __slots__ = ("future", "label", "owner", "record")
 
     def __init__(self, owner: int, label: str) -> None:
         self.future: Future[Any] = Future()
         self.owner = owner  # the thread that claimed it (for the wait graph)
         self.label = label
+        self.record: Any = None  # the execution's sealed row, for reuse
 
 
 class _Session:
@@ -351,12 +352,12 @@ def call(task: Any, args: tuple[Any, ...], kwargs: dict[str, Any]) -> Any:
             run.waits.pop(me, None)
     if status is not None:
         status.unit_finished(label, True)
-    row = _shared_result(cell.label, value)
+    row = _shared_result(cell.label, value, cell.record)
     if life is not None and handle is not None:
         post_error = _executor._exit_task_hooks(life, handle, row)
         if post_error is not None:
             row.ok = False
-            row.code = 1
+            row.code = post_error.code if isinstance(post_error, context.Failed) else 1
             row.error = post_error
             row.state = ""  # it no longer reads as a clean share
             _record(row)
@@ -432,23 +433,29 @@ def join(cell: Any) -> Any:
                 run.waits.pop(me, None)
 
 
-def resolve(cell: Any, value: Any, error: BaseException | None) -> None:
+def resolve(
+    cell: Any, value: Any, error: BaseException | None, record: Any = None
+) -> None:
     """Hand this claimed cell its outcome, so anyone waiting is answered.
 
     Always called for a claimed cell, on every path out — an unresolved cell
-    would leave a waiter blocked for the rest of the run.
+    would leave a waiter blocked for the rest of the run. *record* is the
+    execution's sealed row, when there is one: a shared answer is the record
+    reused, so a later request's row copies what this one *reported* —
+    reviewed title, reported value, audit — not just the pristine value.
     """
     if cell is None or cell.future.done():
         return
+    cell.record = record
     if error is not None:
         cell.future.set_exception(error)
     else:
         cell.future.set_result(value)
 
 
-def shared_result(label: str, value: Any) -> TaskResult:
+def shared_result(label: str, value: Any, record: Any = None) -> TaskResult:
     """The report entry for a request an earlier execution satisfied."""
-    return _shared_result(label, value)
+    return _shared_result(label, value, record)
 
 
 def _record(result: TaskResult) -> None:
@@ -458,7 +465,7 @@ def _record(result: TaskResult) -> None:
         run.results.append(result)
 
 
-def _shared_result(label: str, value: Any) -> TaskResult:
+def _shared_result(label: str, value: Any, record: Any = None) -> TaskResult:
     """The report entry for a request the run had already satisfied.
 
     Recorded rather than left invisible: the work happened, and a reader (or a
@@ -474,13 +481,21 @@ def _shared_result(label: str, value: Any) -> TaskResult:
 
     from footman._executor import TaskResult
 
-    return TaskResult(
+    row = TaskResult(
         task=label,
         ok=True,
         returned=value,
         state="shared",
         started=time.perf_counter(),
     )
+    if record is not None:
+        # A shared answer is the record reused: the row a reader sees carries
+        # what the execution *reported* — a reviewed title, a rewritten
+        # reported value, the audit — never a fresher, less honest copy.
+        row.returned = record.returned
+        row.title = record.title
+        row.audit = list(record.audit)
+    return row
 
 
 def _claim_unit(label: str) -> Any:
@@ -574,6 +589,7 @@ def _run_now(
     seg: Any = None,
     child: Any = None,
     handle: Any = None,
+    cell: Any = None,
 ) -> Any:
     """Run *task* here and now with full task semantics, and return its value.
 
@@ -629,6 +645,8 @@ def _run_now(
     if status is not None:
         status.unit_finished(label, result.ok)
     _record(result)
+    if cell is not None:
+        cell.record = result  # the sealed row, for later requests to reuse
     if text := buf.getvalue():
         # The callee ran with its own buffer so its output stays one block.
         # Where that block goes depends on the caller: a capturing parent
@@ -650,4 +668,7 @@ def _run_now(
         raise result.error
     if not result.ok:  # a bare `sys.exit(N)`, which carries no error object
         raise ChainError(f"{label} exited with code {result.code}")
-    return result.returned
+    # The pristine value, never the reported one: what a body caller
+    # receives was snapshotted at the body's exit, whatever a reviewer
+    # later did to the report.
+    return result.pristine
