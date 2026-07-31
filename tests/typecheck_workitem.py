@@ -237,15 +237,20 @@ class WorkItem(Generic[R_co]):
 
 
 class Lane:
-    """A serialised claim on a named resource — process globals and, by
-    ruling, custom user resources. Lanes appear only in declaration
-    surfaces (opts below): acquisition is boundary-atomic (I8), so a
-    mid-body acquire has no spelling on this surface at all."""
+    """A serialised claim on a named resource — the two core lanes
+    (cwd, console) and plugin/user-declared customs, all made by the
+    same `lane()` call (decision 7 brief). Lanes appear only in
+    declaration surfaces (opts below): acquisition is boundary-atomic
+    (I8), so a mid-body acquire has no spelling on this surface at
+    all. `lanes=` takes HANDLES, never strings — a misspelt lane is a
+    NameError, the interpreter's own taught refusal; sharing is
+    importing; re-declaring a taken name is a provenance-naming
+    error."""
 
     name: str
 
 
-def lane(name: str) -> Lane:
+def lane(name: str, *, reason: str | None = None) -> Lane:
     raise NotImplementedError
 
 
