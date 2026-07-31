@@ -18,10 +18,10 @@ decision, its own reported result.
 
 Sharing is a property of the *request*, not of this layer: an unshared request
 (`@task(shared=False)`, `.opts(shared=False)`, or inherited from the task that
-asked) never reads a cell. It still fills an empty one, because what a run
-remembers is the first result it produced, and a later shared request can reuse
-it. `schedule` resolves the same ladder for DAG nodes, so a declared request and
-a called one behave the same.
+asked) neither reads a cell nor becomes one — its execution is its own, and a
+later shared request runs fresh rather than reusing it. `schedule` resolves the
+same ladder for DAG nodes, so a declared request and a called one behave the
+same.
 
 Two things are deliberately *not* here. A call outside a run is a plain call —
 importing a tasks file and calling a function must keep working. And lane
@@ -449,24 +449,6 @@ def resolve(cell: Any, value: Any, error: BaseException | None) -> None:
 def shared_result(label: str, value: Any) -> TaskResult:
     """The report entry for a request an earlier execution satisfied."""
     return _shared_result(label, value)
-
-
-def _fill(key: Any, label: str, value: Any) -> None:
-    """Remember *value* for *key* — the first result to arrive, and only it.
-
-    First-write-wins: what the run remembers is the first execution's result,
-    so a freshly-requested re-run never rewrites history, and a cell the
-    machinery already owns is left for its claimant to resolve.
-    """
-    run = _active
-    if run is None:
-        return
-    with run.lock:
-        if key in run.cells:
-            return
-        cell = _Cell(threading.get_ident(), label)
-        cell.future.set_result(value)
-        run.cells[key] = cell
 
 
 def _record(result: TaskResult) -> None:

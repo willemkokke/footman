@@ -59,8 +59,19 @@ only; the register carries nuance.
   commit the record is immutable and reported exactly once. Review is
   per EXECUTION (a shared row: one review, observer events per
   request); a maker's hook reviews the record its maker makes, never
-  its children's. After the review window closes, verdict-bearing
-  fields (code, ok, title) are read-only — observers see, never judge.
+  its children's. Observation is read-only BY TYPE (ruled 2026-07-31):
+  after the review window closes there is no view — `post_task` holds
+  the immutable `Result`, so observers see, never judge, unspellably;
+  `set_returned` is a review-window write only. A raising hook at any
+  moment is an error like any other error: the grain fails, and every
+  failure records WHERE in the lifecycle it happened (`failed_at`:
+  bind / enter / body / review / observe) — the machinery tags the
+  moment; no hook rewrites a verdict. An observer may VETO —
+  `fail(reason, code)` rides this same channel, loud and attributed to
+  the observe moment (on a shared re-request: to the requesting
+  reference row's) — but never FORGE: the work's own verdict is not
+  rewritten; I2 makes the veto's code the grain's final int, and the
+  work-was-green story survives in `failed_at` plus the reason.
 - **I6 — One identity rule, everywhere.** Address is universal; sharing
   exists only where a declaration does (I13), and the key is uniform at
   plan and execution: **(declaration, frozen overrides, resolved
@@ -100,8 +111,12 @@ only; the register carries nuance.
 - **I13 — Declaration is the commitment boundary.** Shareable identity,
   boundary policy (confirm, gates, shared, forward), and the guarantee
   of a record exist exactly where a declaration does; execution policy
-  (cwd, env, timeout, lanes, capture, recorded) is item-general. Every
-  wall in "defaults, not walls" is an instance of this one.
+  (cwd, env, timeout, lanes, capture, recorded) is item-general —
+  except `recorded`, whose task-grain value is pinned True by this same
+  invariant (declared ⟹ recorded, walk 4): the keyword exists only at
+  undeclared grain. (Carve-out found by move 3 — the two clauses
+  collided the moment the policy groups became types.) Every wall in
+  "defaults, not walls" is an instance of this one.
 - **I12 (conditional, decision 8) — Footman holds no ungraded code.**
   If the bare-callable ban lands: everything handed to footman has a
   chosen grain; the foreign rung exists only inside bodies.
@@ -134,6 +149,7 @@ only; the register carries nuance.
 | **`Fanout` in the model** | Walk 1: both parallel() forms are an anonymous grouping item whose children are the fanned items — not special, just an anonymous parent. Shape known; rendering rides decision 1. | promoted (walk 1) — conditional on decision 1 |
 | **I6 and bound arguments** | Walk 1 found the gap; `_futures._key` verified. The Forward question exposed the plan layer's arg-excluding dedup + divergence refusal — and Willem's ruling collapsed the layers: ONE key, (declaration, overrides, resolved args), everywhere; the shipped ChainError retires (divergence = two nodes). Display of same-label/different-args rows parked at decisions 1/4. | resolved — ruled, uniform |
 | **partial-of-a-task defeats interception** | Walk 1: real today (footman's own tasks.py) — silent grain demotion. The double-count worry died in source: the unit-claim protocol anticipated "a task call in disguise" by name (unit_pending handed down, claimed by the first request). The footgun narrows to interception/queueing loss alone. Under I12: taught refusal. | resolved into decision 8's case |
+| **post_task observes the committed record** | Ruling 2026-07-31 (the phase-gate counter, move 3): observation holds the immutable `Result` — the phase gate is the ResultView/Result type split, static; `set_returned` review-window-only; a raising observer fails the grain; every failure carries `failed_at` lifecycle provenance (I5) | resolved — ruled, typed in the loom |
 
 ## Move 2 — the payload walks
 
@@ -342,6 +358,135 @@ The six payload walks (djlint gate; footman's own `check`; dry-run;
 these invariants specifically to attack the ⚠ rows: each walk must
 either turn a ⚠ into *derives* (with the derivation written down) or
 sharpen it into a named open decision. No walk, no promotion.
+
+## Move 3 — the loom (2026-07-31)
+
+The skeleton exists and the four-checker gate weaves it:
+`tests/typecheck_workitem.py` (the stub-only spec surface plus the
+walks retyped as consumer exercises; self-contained, imports nothing
+from footman, never executed; in ty's and pyrefly's scope by name, the
+`typecheck_api.py` pattern) and `tests/typecheck_workitem_negative.py`
+(the taught errors the skeleton makes structural, each line a policed
+`type: ignore` — the ignore is the assertion; mypy + basedpyright only,
+the `typecheck_api_negative.py` pattern). `fm check` green with both
+wired in.
+
+What the types forced — the findings, numbered for the record:
+
+1. **`ok` must derive from `code`.** Stored, `code = 1` with
+   `ok = True` is spellable; as a read-only property the verdict
+   follows the code by construction (I2 typed). Consequence for walk
+   2's hook: a reviewer writes `view.code`, never `view.ok` — the
+   negative file pins the write as an error.
+2. **The phase gate went static after all — Willem's counter, ruled
+   same day.** First drafted as runtime-only ("one nominal type cannot
+   carry per-object phase"). The counter: the one-view ruling is one
+   type across GRAINS, never across PHASES — and the phase axis
+   already has two types. Ruled: `post_task` is purely read-only
+   observability; an observer holds the immutable `Result`, so
+   "observers see, never judge" is unspellable, not enforced (the
+   negative file pins the write). Three consequences, walked before
+   the ruling:
+   - **`set_returned` loses its observer-phase home.** The audit
+     killed the counter-case: the "global redaction plugin" was never
+     sound as an observer write — it rewrote `returned` while the same
+     secret sat in captured stdout, in receipts, in what dependents
+     and `recording()` already held (the pristine value is handed over
+     before any hook fires). Contract-aware shaping of a reported
+     value is per-maker review-window work (`pre_record`, and
+     `set_returned` on the draft); contract-free scrubbing is
+     emission-time display policy over committed records (decision 4's
+     lane) — the sound version of what the observer write only
+     pretended to do. Decision 2's observer-writable residue: settled,
+     none.
+   - **A raising observer is an error like any other — the grain
+     fails.** Ruled with a generalisation: EVERY failure records where
+     in the grain's lifecycle it happened — `failed_at`: bind / enter
+     / body / review / observe — subsuming walk 2's "a raising
+     reviewer fails the item" and the enter-hook precedent as
+     instances of one rule. The machinery tags the moment; no hook
+     rewrites a verdict. Commit therefore stays after observation (the
+     machinery can still fail the grain at the observe moment) — the
+     static gate never needed commit-first, only the type split.
+   - **Shared rows unify.** Every observer event holds an immutable
+     record; the first-request/shared-request asymmetry disappears.
+   - **`fail()` in an observer is the veto, and needs no special case
+     (ruled follow-up, same day).** It rides the error channel — loud,
+     attributed: the grain fails at "observe" with the hook's reason —
+     while forging (rewriting title/code/returned as the work's own
+     words) stays unspellable. The line: observers may veto, never
+     forge; that is what "never judge" always meant. Two consequences,
+     both clean: I2 decides the committed int (a green-work-vetoed
+     grain reads as the failure code — a Result reading 0 on a failed
+     row would lie to `if result:`; the work-was-green story is
+     display over `failed_at` + the reason, no second code field), and
+     shared rows get a coherent late veto (observer events fire per
+     request — on a re-request the execution's record is long
+     committed, so the veto lands on the requesting reference row's
+     observe moment, which under the old writable view had nowhere
+     sound to go).
+
+   Typed: `Result` is all read-only properties plus `failed_at:
+   Phase | None`; `ObserverHook` holds one; I5 amended above; breaking
+   for the shipped `post_task` surface (`set_returned` moves into the
+   review window), CHANGELOG-visible when built.
+3. **`step(fn)` is always the maker.** Decorator position and
+   expression position are the same expression — Python cannot tell
+   them apart — so both return the lifted `StepFn`, never a built item.
+   Decision 8's cheap spelling therefore hands `parallel()` a *maker*,
+   and `parallel()`'s payload union must say so: (work item | step
+   maker | task ref). Bonus: the ban is structural for free — both
+   maker protocols demand `.opts`, which a bare lambda lacks, so
+   `parallel(lambda: 0)` already fails overload resolution.
+4. **I13's `recorded` carve-out** (amended in the invariant above): the
+   execution-policy list said item-general; walk 4 said declared ⟹
+   recorded. As prose both read fine; as types one keyword cannot be in
+   `TaskOpts` and refused there too. Resolved by omission — `StepOpts`
+   carries `recorded`, `TaskOpts` does not — and the invariant text now
+   carries the carve-out.
+5. **The yield contract is statically enforceable.** `StepBody =
+   Generator[None, ResultView, R]`: the `None` yield-type makes
+   yielding a value a *type error*, `result = yield` types as the view,
+   and bare `yield` checks. I7's taught error is structural.
+6. **Decision 2's typing residue is answered.** `pre_record(hook)`
+   types as the identity `Callable[[F], F]` — exactly the gates'
+   shape — so it reads order-free above or below the lifter and one
+   spelling covers a plain function, a `StepFn`, and a `TaskFn`. The
+   exercises pin both stacking orders on `@step` and the `@task` form.
+7. **Address keeps I11's projections cheap by itself.** An address
+   encodes its own parent chain (parent-path + label + ordinal), so a
+   flat creation-order list of records derives the report tree with no
+   extra storage — whichever container decision 1 picks, the other
+   projection is a fold over addresses. Typed as `Address.parent:
+   Address | None`.
+8. **`Result(int)` does walk 1's compatibility work.** `parallel()`
+   returning `list[Result]` and `Fanout(list[Result])` keep every
+   code-reader working because the record IS its code — I2 is what
+   makes the return-shape promotion non-breaking.
+9. **The build/run asymmetry is now stated in types.** `StepFn.__call__
+   → WorkItem[R]` (builds); `TaskFn.__call__ → R` (a body call is a
+   request that runs). The generator-call footgun's mitigation — "the
+   expression's static type says work-item-not-result" — is verified,
+   `assert_type`-pinned.
+10. **I13 as two TypedDicts.** `ExecutionOpts` (cwd, env, timeout,
+    lanes, capture) / `BoundaryOpts` (confirm, shared, keep_going) —
+    `StepOpts` extends the former (+ `recorded`, `pre_record`),
+    `TaskOpts` composes both (+ `pre_record`). The policy-table split
+    from walk 4 is now a pair of keyword surfaces, and `confirm=` on a
+    step is a type error the negative file pins.
+
+Drift note, on purpose: the skeleton restates shipped shapes
+(`TaskFn`, run's `Result`) rather than importing them, so it CAN drift
+from `src/` — that is the point pre-build (the spec must be free to
+lead the code), and the files' docstrings say which shapes are
+restatements. When the build lands, each restated stub either becomes
+the real import or dies; a skeleton line the build contradicts is a
+decision to surface, not silently reconcile.
+
+What the loom deliberately did not weave: identity/dedup (I6 is a
+runtime key, not a signature), lanes beyond their declaration surface,
+dry-run/`recording()` (no new static surface), and everything riding
+decision 1's container shape beyond what finding 7 dissolves.
 
 ## Strays found along the way (housekeeping commit, not the model)
 
