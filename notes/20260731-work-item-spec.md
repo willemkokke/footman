@@ -867,9 +867,11 @@ IS the registry.**
   with the identical mechanism and exports the handles: cwd (opt-in —
   claiming it is knowingly giving up parallelism, and an import plus
   an explicit `lanes=` makes that legible at the use site) and console
-  (claimed implicitly by `interactive=`, claimable explicitly). The
-  exported names are register-unnamed for now (blocks the build until
-  named, per register discipline).
+  (claimed implicitly by `interactive=`, claimable explicitly).
+  Exported names settled (2026-07-31): **`cwd_lane`** and
+  **`console_lane`** — the `_lane` suffix is the warning label at the
+  import site, and bare `footman.cwd` was taken by the context
+  manager.
 - **Claims: one holder at a time per lane in v1** — "exclusive" in
   the narrow sense only: a claim contends solely with other claimants
   of THAT lane; unrelated work runs in parallel untouched (nothing
@@ -907,10 +909,12 @@ resource IS a binding; keep it that flat.
 
 **Move 5 is complete. Every open decision of the work-item spec is
 closed** — 1 through 10: ruled, dissolved, or confirmed. What remains
-for the thread: the build (target 0.28.0; hse migrates on it), two
-loose names (the `creates` marker; the exported core lane handles),
-and the parked post-model threads (the display-policy thread; jsonl
-streaming at the horizon).
+for the thread: the build (target 0.28.0; hse migrates on it) and the
+parked post-model threads (the display-policy thread; jsonl streaming
+at the horizon; the output marker, parked with the cacheable-rung
+thread after the 2026-07-31 audit found nothing in 0.28.0 needs it —
+name front-runner `product`, final naming when that thread opens).
+The core lane handles are named: `cwd_lane`, `console_lane`.
 
 ## Strays found along the way (housekeeping commit, not the model)
 

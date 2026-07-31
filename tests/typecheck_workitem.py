@@ -254,6 +254,13 @@ def lane(name: str, *, reason: str | None = None) -> Lane:
     raise NotImplementedError
 
 
+# The two core lanes — the only ones footman will ever build (ruled),
+# declared with the same call plugins use. Names settled 2026-07-31:
+# the `_lane` suffix is the import-site warning label.
+cwd_lane = lane("cwd", reason="the one real working directory")
+console_lane = lane("console", reason="the one terminal")
+
+
 class ExecutionOpts(TypedDict, total=False):
     """Execution policy: item-general (I13) — every grain accepts these."""
 
@@ -566,7 +573,7 @@ def policy_split_in_use() -> None:
     # item-general — both on TaskOpts, only the latter on StepOpts.
     opted = lint.opts(confirm="rewrites history", cwd="sub")
     assert_type(opted(fix=True), int)  # an opted call checks like a bare one
-    pinned = covered.opts(lanes=(lane("cwd"),), recorded=False)
+    pinned = covered.opts(lanes=(cwd_lane,), recorded=False)
     assert_type(pinned(), WorkItem[int])
     reviewed = typecheck.opts(pre_record=tidy)
     assert_type(reviewed(), None)
