@@ -180,24 +180,57 @@ def _build_dag(root: Group, segments: list[Segment]) -> list[_Node]:
             _link(dep_node)
         return dep_node
 
-    def _thread(dep: _Node, fmap: dict[str, Any], source: str) -> None:
+    splits: dict[object, _Node] = {}
+
+    def _thread(owner: _Node, dep: _Node, fmap: dict[str, Any]) -> None:
         # A forwarded value reaches only a dispatched task that *declares* the
-        # parameter (partial reach); two dispatchers sending different values to
-        # a shared prerequisite is a taught error, not a silent last-wins.
+        # parameter (partial reach). Two dispatchers sending different values
+        # to a shared prerequisite are asking for different WORK: one identity
+        # rule, everywhere — requests that resolve to different arguments are
+        # different nodes, silently and correctly, never a refusal.
         if not fmap:
             return
         declared = {
             p.name for p in _executor.resolved_signature(dep.fn).parameters.values()
         }
-        for name, value in fmap.items():
-            if name not in declared:
-                continue
-            if name in dep.forwarded and dep.forwarded[name] != value:
-                raise ChainError(
-                    f"{dep.seg.task}: {name!r} is forwarded with conflicting values "
-                    f"(one from {source!r}); run the forwarding tasks separately"
-                )
-            dep.forwarded[name] = value
+        wanted = {name: value for name, value in fmap.items() if name in declared}
+        if not wanted:
+            return
+        if all(
+            name not in dep.forwarded or dep.forwarded[name] == value
+            for name, value in wanted.items()
+        ):
+            dep.forwarded.update(wanted)
+            return
+        # The split: this dispatcher's resolved arguments name their own node.
+        # Same-argument dispatchers share the split (the plan key mirrors the
+        # execution key's normal form: declaration + frozen resolved values).
+        frozen = tuple(
+            (name, _futures._freeze(wanted[name])) for name in sorted(wanted)
+        )
+        split_key = (_dep_key(dep.fn), frozen)
+        clone = splits.get(split_key)
+        if clone is None:
+            clone = new_node(dep.fn, dep.seg, dep.shared)
+            clone.group = dep.group
+            clone.deps = set(dep.deps)
+            clone.forwarded = dict(wanted)
+            clone.forward_targets = list(dep.forward_targets)
+            clone.keep_going = dep.keep_going
+            splits[split_key] = clone
+            # The clone forwards onward with its own values, so its subtree
+            # sees what THIS request meant.
+            clone_map = _executor.forward_map(clone.fn, clone.seg, clone.forwarded)
+            for target in clone.forward_targets:
+                _thread(clone, target, clone_map)
+        if dep.key in owner.deps:  # a pre: the owner now waits on the clone
+            owner.deps.discard(dep.key)
+            owner.deps.add(clone.key)
+        elif owner.key in dep.deps:  # a post: the clone follows the owner
+            clone.deps.add(owner.key)
+        owner.forward_targets = [
+            clone if t is dep else t for t in owner.forward_targets
+        ]
 
     def _link(node: _Node) -> None:
         """Attach *node*'s prerequisites, propagating its sharing policy down:
@@ -250,8 +283,8 @@ def _build_dag(root: Group, segments: list[Segment]) -> list[_Node]:
     # (hence its forward map) is final.
     for node in reversed(_toposort(nodes)):
         fmap = _executor.forward_map(node.fn, node.seg, node.forwarded)
-        for target in node.forward_targets:
-            _thread(target, fmap, node.seg.task)
+        for target in list(node.forward_targets):
+            _thread(node, target, fmap)
     return nodes
 
 
