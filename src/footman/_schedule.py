@@ -48,6 +48,7 @@ class _Node:
     fn: Task
     seg: Segment
     key: int
+    address: str = ""  # assigned once the plan is final, in creation order
     deps: set[int] = field(default_factory=set)
     state: str = "pending"  # pending / running / done / skipped
     result: _executor.TaskResult | None = None
@@ -285,6 +286,12 @@ def _build_dag(root: Group, segments: list[Segment]) -> list[_Node]:
         fmap = _executor.forward_map(node.fn, node.seg, node.forwarded)
         for target in list(node.forward_targets):
             _thread(node, target, fmap)
+    # Addresses, once the plan is final: creation order IS request order as
+    # written (segments, then dependencies as declared, then splits), so the
+    # names are deterministic across runs and hosts.
+    labels: dict[str, int] = {}
+    for node in nodes:
+        node.address = context._next_label(labels, node.seg.task)
     return nodes
 
 
@@ -360,8 +367,10 @@ def _make_ctx(
     name_width: int = 0,
     keep_going: bool = False,
     shared: bool = True,
+    address: str = "",
 ) -> context.Context:
     ctx = context.Context(**(ctx_config or {}), passthrough=list(seg.passthrough or []))
+    ctx.address = address or seg.task
     ctx.keep_going = keep_going  # per-subtree policy; tags this task's subprocesses
     # The sharing policy this node resolved to, carried so anything its body
     # asks for inherits it: an unshared request asks unshared too.
@@ -816,6 +825,7 @@ def _run_sequential(
             name_width=width,
             keep_going=node.keep_going,
             shared=node.shared,
+            address=node.address,
         )
         if status is not None:
             status.unit_started(node.seg.task)
@@ -900,6 +910,7 @@ def _run_parallel(
             name_width=width,
             keep_going=n.keep_going,
             shared=n.shared,
+            address=n.address,
         )
         if is_interactive(n.fn) and not capture:
             # A console owner runs on the real terminal even inside the

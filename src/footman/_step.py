@@ -171,6 +171,7 @@ class _StepBlock:
             code,
             command=view.title,
             duration=duration,
+            address=_context._child_address(ctx, view.title),
             audit=(AuditEntry("body", view.title, code),),
         )
         ctx.steps.append(result)
@@ -233,10 +234,11 @@ def _pump(item: WorkItem[Any]) -> Any:
     timeout: float | None = o.get("timeout")
     env: dict[str, str] | None = o.get("env")
 
+    addr = _context._child_address(ctx, label)
     if ctx.dry_run and recorded:
         # Dry-run fakes what footman owns and records: a deferred maker is
         # exactly that. Declared, not executed — an empty audit says so.
-        result = Result(0, command=label)
+        result = Result(0, command=label, address=addr)
         ctx.steps.append(result)
         return None
 
@@ -341,6 +343,7 @@ def _pump(item: WorkItem[Any]) -> Any:
                         stderr=err_buf.getvalue(),
                         duration=duration,
                         timed_out=timed_out,
+                        address=addr,
                         audit=(*audit, AuditEntry("review", name, None)),
                     )
                 )
@@ -362,6 +365,7 @@ def _pump(item: WorkItem[Any]) -> Any:
         stderr=err_buf.getvalue(),
         duration=duration,
         timed_out=timed_out,
+        address=addr,
         audit=audit,
     )
     if recorded:
@@ -389,6 +393,7 @@ def _pump(item: WorkItem[Any]) -> Any:
                     stderr=result.stderr,
                     duration=result.duration,
                     timed_out=result.timed_out,
+                    address=result.address,
                     audit=(*result.audit, AuditEntry("observe", name, exc.code)),
                 )
                 ctx.steps[-1] = amended
@@ -401,6 +406,7 @@ def _pump(item: WorkItem[Any]) -> Any:
                     stderr=result.stderr,
                     duration=result.duration,
                     timed_out=result.timed_out,
+                    address=result.address,
                     audit=(*result.audit, AuditEntry("observe", name, None)),
                 )
                 ctx.steps[-1] = amended
