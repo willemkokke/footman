@@ -1,7 +1,7 @@
 {
  "schema": 1,
  "tool": "ssh",
- "observed_from": "unknown",
+ "observed_from": "2.9p1",
  "base": {
   "version": "10.4p1",
   "date": "2026-08-01",
@@ -454,8 +454,1022 @@
   }
  },
  "deltas": {
-  "unknown": {
-   "date": "2026-08-01",
+  "10.3p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "10.2p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "10.1p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "10.0p2": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "10.0p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "9.9p2": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "9.9p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "9.8p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "9.7p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "9.6p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "9.5p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2,
+   "verbs": {
+    "": {
+     "positional": "required",
+     "lead": "destination"
+    }
+   }
+  },
+  "9.4p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "9.3p2": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2,
+   "drop": [
+    "\tP"
+   ],
+   "revert": {
+    "\tJ": {
+     "flags": [
+      "-J"
+     ],
+     "negation": "",
+     "help": "Connect to the target host by first making a ssh connection to the jump host described by destination and then establishing a TCP forwarding to the ultimate destination from there",
+     "type": "list[str]",
+     "default": null,
+     "choices": []
+    },
+    "\tQ": {
+     "flags": [
+      "-Q"
+     ],
+     "negation": "",
+     "help": "Queries for the algorithms supported by one of the following features: cipher (supported symmetric ciphers), cipher-auth (supported symmetric ciphers that support authenticated encryption), help (supported query terms for use with the -Q flag), mac (supported message integrity codes), kex (key exchange algorithms), key (key types), key-cert (certificate key types), key-plain (non-certificate key types), key-sig (all key types and signature algorithms), protocol-version (supported SSH protocol versions), and sig (supported signature algorithms)",
+     "type": "list[str]",
+     "default": null,
+     "choices": []
+    }
+   }
+  },
+  "9.3p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "9.2p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "9.1p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "9.0p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "8.9p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "8.8p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "8.7p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "8.6p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2,
+   "revert": {
+    "\tQ": {
+     "flags": [
+      "-Q"
+     ],
+     "negation": "",
+     "help": "Queries ssh for the algorithms supported for the specified version 2",
+     "type": "list[str]",
+     "default": null,
+     "choices": []
+    }
+   }
+  },
+  "8.5p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "8.4p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "8.3p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "8.2p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "8.1p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2,
+   "revert": {
+    "\tA": {
+     "flags": [
+      "-A"
+     ],
+     "negation": "",
+     "help": "Enables forwarding of the authentication agent connection",
+     "type": "bool",
+     "default": null,
+     "choices": []
+    },
+    "\tQ": {
+     "flags": [
+      "-Q"
+     ],
+     "negation": "",
+     "help": "Queries ssh for the algorithms supported for the specified version 2",
+     "type": "str",
+     "default": null,
+     "choices": []
+    }
+   }
+  },
+  "8.0p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "7.9p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2,
+   "revert": {
+    "\tI": {
+     "flags": [
+      "-I"
+     ],
+     "negation": "",
+     "help": "Specify the PKCS#11 shared library ssh should use to communicate with a PKCS#11 token providing the user's private RSA key",
+     "type": "str",
+     "default": null,
+     "choices": []
+    }
+   }
+  },
+  "7.8p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "7.7p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "7.6p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2,
+   "drop": [
+    "\tB"
+   ],
+   "revert": {
+    "\tJ": {
+     "flags": [
+      "-J"
+     ],
+     "negation": "",
+     "help": "Connect to the target host by first making a ssh connection to the jump host and then establishing a TCP forwarding to the ultimate destination from there",
+     "type": "list[str]",
+     "default": null,
+     "choices": []
+    }
+   },
+   "verbs": {
+    "": {
+     "positional": "any",
+     "lead": ""
+    }
+   }
+  },
+  "7.5p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2,
+   "revert": {
+    "\tR": {
+     "flags": [
+      "-R"
+     ],
+     "negation": "",
+     "help": "Specifies that connections to the given TCP port or Unix socket on the remote (server) host are to be forwarded to the given host and port, or Unix socket, on the local side",
+     "type": "str",
+     "default": null,
+     "choices": []
+    }
+   }
+  },
+  "7.4p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "7.3p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "7.2p2": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2,
+   "drop": [
+    "\tJ"
+   ]
+  },
+  "7.2p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "7.1p2": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2,
+   "revert": {
+    "\tQ": {
+     "flags": [
+      "-Q"
+     ],
+     "negation": "",
+     "help": "Queries ssh for the algorithms supported for the specified version 2",
+     "type": "bool",
+     "default": null,
+     "choices": []
+    },
+    "\tm": {
+     "flags": [
+      "-m"
+     ],
+     "negation": "",
+     "help": "Additionally, for protocol version 2 a comma-separated list of MAC (message authentication code) algorithms can be specified in order of preference",
+     "type": "list[str]",
+     "default": null,
+     "choices": []
+    }
+   }
+  },
+  "7.1p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "7.0p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "6.9p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2,
+   "revert": {
+    "\tL": {
+     "flags": [
+      "-L"
+     ],
+     "negation": "",
+     "help": "Specifies that the given port on the local (client) host is to be forwarded to the given host and port on the remote side",
+     "type": "list[str]",
+     "default": null,
+     "choices": []
+    },
+    "\tR": {
+     "flags": [
+      "-R"
+     ],
+     "negation": "",
+     "help": "Specifies that the given port on the remote (server) host is to be forwarded to the given host and port on the local side",
+     "type": "list[str]",
+     "default": null,
+     "choices": []
+    }
+   }
+  },
+  "6.8p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2,
+   "revert": {
+    "\tT": {
+     "flags": [
+      "-T"
+     ],
+     "negation": "",
+     "help": "Disable pseudo-tty allocation",
+     "type": "bool",
+     "default": null,
+     "choices": []
+    },
+    "\tt": {
+     "flags": [
+      "-t"
+     ],
+     "negation": "",
+     "help": "Force pseudo-tty allocation",
+     "type": "bool",
+     "default": null,
+     "choices": []
+    }
+   }
+  },
+  "6.7p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2,
+   "drop": [
+    "\tG"
+   ]
+  },
+  "6.6p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2,
+   "revert": {
+    "\tC": {
+     "flags": [
+      "-C"
+     ],
+     "negation": "",
+     "help": "Requests compression of all data (including stdin, stdout, stderr, and data for forwarded X11 and TCP connections)",
+     "type": "bool",
+     "default": null,
+     "choices": []
+    }
+   }
+  },
+  "6.5p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "6.4p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2,
+   "revert": {
+    "\tQ": {
+     "flags": [
+      "-Q"
+     ],
+     "negation": "",
+     "help": "Queries ssh for the algorithms supported for the specified version 2 protocol_feature",
+     "type": "str",
+     "default": null,
+     "choices": []
+    }
+   }
+  },
+  "6.3p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "6.2p2": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2,
+   "drop": [
+    "\tE",
+    "\tQ"
+   ]
+  },
+  "6.2p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "6.1p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "6.0p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "5.9p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "5.8p2": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "5.8p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "5.7p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "5.6p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2,
+   "revert": {
+    "\ti": {
+     "flags": [
+      "-i"
+     ],
+     "negation": "",
+     "help": "Selects a file from which the identity (private key) for RSA or DSA authentication is read",
+     "type": "str",
+     "default": null,
+     "choices": []
+    }
+   }
+  },
+  "5.5p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2,
+   "revert": {
+    "\tS": {
+     "flags": [
+      "-S"
+     ],
+     "negation": "",
+     "help": "Specifies the location of a control socket for connection sharing or the string \"none\" to disable connection sharing",
+     "type": "str",
+     "default": null,
+     "choices": []
+    }
+   }
+  },
+  "5.4p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2,
+   "revert": {
+    "\tS": {
+     "flags": [
+      "-S"
+     ],
+     "negation": "",
+     "help": "Specifies the location of a control socket for connection sharing",
+     "type": "str",
+     "default": null,
+     "choices": []
+    }
+   }
+  },
+  "5.3p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2,
+   "drop": [
+    "\tW"
+   ],
+   "revert": {
+    "\tI": {
+     "flags": [
+      "-I"
+     ],
+     "negation": "",
+     "help": "Specify the device ssh should use to communicate with a smartcard used for storing the user's private RSA key",
+     "type": "str",
+     "default": "is no support",
+     "choices": []
+    }
+   }
+  },
+  "5.2p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "5.1p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2,
+   "drop": [
+    "\ty"
+   ]
+  },
+  "5.0p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "4.9p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "4.7p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "4.6p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2,
+   "drop": [
+    "\tK"
+   ]
+  },
+  "4.5p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "4.4p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "4.3p2": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2,
+   "revert": {
+    "\tw": {
+     "flags": [
+      "-w"
+     ],
+     "negation": "",
+     "help": "Requests a tun(4) device on the client (first tunnel arg) and server (second tunnel arg)",
+     "type": "list[str]",
+     "default": null,
+     "choices": []
+    }
+   }
+  },
+  "4.3p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "4.2p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2,
+   "drop": [
+    "\tw"
+   ],
+   "revert": {
+    "\tC": {
+     "flags": [
+      "-C"
+     ],
+     "negation": "",
+     "help": "Requests compression of all data (including stdin, stdout, stderr, and data for forwarded X11 and TCP/IP connections)",
+     "type": "bool",
+     "default": null,
+     "choices": []
+    },
+    "\tD": {
+     "flags": [
+      "-D"
+     ],
+     "negation": "",
+     "help": "Specifies a local \"dynamic\" application-level port forwarding",
+     "type": "str",
+     "default": null,
+     "choices": []
+    },
+    "\tI": {
+     "flags": [
+      "-I"
+     ],
+     "negation": "",
+     "help": "Specifies which smartcard device to use",
+     "type": "str",
+     "default": null,
+     "choices": []
+    },
+    "\te": {
+     "flags": [
+      "-e"
+     ],
+     "negation": "",
+     "help": "Sets the escape character for sessions with a pty ",
+     "type": "bool",
+     "default": false,
+     "choices": []
+    }
+   }
+  },
+  "4.1p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2,
+   "revert": {
+    "\tb": {
+     "flags": [
+      "-b"
+     ],
+     "negation": "",
+     "help": "Specify the interface to transmit from on machines with multiple interfaces or aliased addresses",
+     "type": "str",
+     "default": null,
+     "choices": []
+    }
+   }
+  },
+  "4.0p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "3.9p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2,
+   "drop": [
+    "\tO"
+   ]
+  },
+  "3.8p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2,
+   "drop": [
+    "\tM",
+    "\tS"
+   ],
+   "revert": {
+    "\tc": {
+     "flags": [
+      "-c"
+     ],
+     "negation": "",
+     "help": "Selects the cipher to use for encrypting the session",
+     "type": "bool",
+     "default": null,
+     "choices": []
+    }
+   }
+  },
+  "3.7p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2,
+   "drop": [
+    "\tY"
+   ],
+   "revert": {
+    "\tc": {
+     "flags": [
+      "-c"
+     ],
+     "negation": "",
+     "help": "Selects the cipher to use for encrypting the session",
+     "type": "str",
+     "default": null,
+     "choices": []
+    },
+    "\te": {
+     "flags": [
+      "-e"
+     ],
+     "negation": "",
+     "help": "Sets the escape character for sessions with a pty ",
+     "type": "str",
+     "default": "~",
+     "choices": []
+    },
+    "\tk": {
+     "flags": [
+      "-k"
+     ],
+     "negation": "",
+     "help": "Disables forwarding of Kerberos tickets",
+     "type": "bool",
+     "default": null,
+     "choices": []
+    }
+   }
+  },
+  "3.6p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2,
+   "drop": [
+    "\tV"
+   ],
+   "revert": {
+    "\tk": {
+     "flags": [
+      "-k"
+     ],
+     "negation": "",
+     "help": "Disables forwarding of Kerberos tickets and AFS tokens",
+     "type": "bool",
+     "default": null,
+     "choices": []
+    }
+   }
+  },
+  "3.5p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "3.4p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2,
+   "add": {
+    "\tP": {
+     "flags": [
+      "-P"
+     ],
+     "negation": "",
+     "help": "Use a non-privileged port for outgoing connections",
+     "type": "bool",
+     "default": null,
+     "choices": []
+    }
+   }
+  },
+  "3.3p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "3.1p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "3.0p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2,
+   "revert": {
+    "\ti": {
+     "flags": [
+      "-i"
+     ],
+     "negation": "",
+     "help": "Selects the file from which the identity (private key) for RSA or DSA authentication is read",
+     "type": "str",
+     "default": null,
+     "choices": []
+    }
+   }
+  },
+  "2.9p2": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2,
+   "drop": [
+    "\tD",
+    "\tF",
+    "\tI",
+    "\tb"
+   ],
+   "revert": {
+    "\to": {
+     "flags": [
+      "-o"
+     ],
+     "negation": "",
+     "help": "Can be used to give options in the format used in the config file",
+     "type": "list[str]",
+     "default": null,
+     "choices": []
+    }
+   }
+  },
+  "2.9p1": {
+   "date": "",
    "platforms": [
     "macOS"
    ],

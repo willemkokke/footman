@@ -1,7 +1,7 @@
 {
  "schema": 1,
  "tool": "ssh_keygen",
- "observed_from": "unknown",
+ "observed_from": "2.9p1",
  "base": {
   "version": "10.4p1",
   "date": "2026-08-01",
@@ -444,8 +444,1109 @@
   }
  },
  "deltas": {
-  "unknown": {
-   "date": "2026-08-01",
+  "10.3p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2,
+   "revert": {
+    "\tA": {
+     "flags": [
+      "-A"
+     ],
+     "negation": "",
+     "help": "Generate host keys of all default key types (rsa, ecdsa, and ed25519) if they do not already exist",
+     "type": "bool",
+     "default": null,
+     "choices": []
+    }
+   }
+  },
+  "10.2p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "10.1p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "10.0p2": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2,
+   "revert": {
+    "\tU": {
+     "flags": [
+      "-U"
+     ],
+     "negation": "",
+     "help": "When used in combination with -s or -Y sign, this option indicates that a CA key resides in a ssh-agent(1)",
+     "type": "bool",
+     "default": null,
+     "choices": []
+    }
+   }
+  },
+  "10.0p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "9.9p2": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "9.9p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "9.8p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "9.7p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "9.6p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "9.5p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "9.4p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "9.3p2": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "9.3p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "9.2p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "9.1p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "9.0p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2,
+   "revert": {
+    "\tA": {
+     "flags": [
+      "-A"
+     ],
+     "negation": "",
+     "help": "For each of the key types (rsa, dsa, ecdsa and ed25519) for which host keys do not exist, generate the host keys with the default key file path, an empty passphrase, default bits for the key type, and default comment",
+     "type": "bool",
+     "default": null,
+     "choices": []
+    },
+    "\tU": {
+     "flags": [
+      "-U"
+     ],
+     "negation": "",
+     "help": "When used in combination with -s, this option indicates that a CA key resides in a ssh-agent(1)",
+     "type": "bool",
+     "default": null,
+     "choices": []
+    }
+   }
+  },
+  "8.9p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "8.8p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "8.7p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "8.6p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "8.5p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "8.4p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2,
+   "drop": [
+    "\tZ"
+   ],
+   "revert": {
+    "\ta": {
+     "flags": [
+      "-a"
+     ],
+     "negation": "",
+     "help": "When saving a private key, this option specifies the number of KDF (key derivation function) rounds used",
+     "type": "str",
+     "default": null,
+     "choices": []
+    }
+   }
+  },
+  "8.3p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "8.2p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "8.1p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2,
+   "drop": [
+    "\tw"
+   ],
+   "add": {
+    "\tG": {
+     "flags": [
+      "-G"
+     ],
+     "negation": "",
+     "help": "Generate candidate primes for DH-GEX",
+     "type": "str",
+     "default": null,
+     "choices": []
+    },
+    "\tJ": {
+     "flags": [
+      "-J"
+     ],
+     "negation": "",
+     "help": "Exit after screening the specified number of lines while performing DH candidate screening using the -T option",
+     "type": "str",
+     "default": null,
+     "choices": []
+    },
+    "\tS": {
+     "flags": [
+      "-S"
+     ],
+     "negation": "",
+     "help": "Specify start point (in hex) when generating candidate moduli for DH-GEX",
+     "type": "str",
+     "default": null,
+     "choices": []
+    },
+    "\tT": {
+     "flags": [
+      "-T"
+     ],
+     "negation": "",
+     "help": "Test DH group exchange candidate primes (generated using the -G option) for safety",
+     "type": "str",
+     "default": null,
+     "choices": []
+    },
+    "\tW": {
+     "flags": [
+      "-W"
+     ],
+     "negation": "",
+     "help": "Specify desired generator when testing candidate moduli for DH- GEX",
+     "type": "str",
+     "default": null,
+     "choices": []
+    },
+    "\tj": {
+     "flags": [
+      "-j"
+     ],
+     "negation": "",
+     "help": "Start screening at the specified line number while performing DH candidate screening using the -T option",
+     "type": "str",
+     "default": null,
+     "choices": []
+    }
+   },
+   "revert": {
+    "\tK": {
+     "flags": [
+      "-K"
+     ],
+     "negation": "",
+     "help": "Write the last line processed to the file checkpt while performing DH candidate screening using the -T option",
+     "type": "str",
+     "default": null,
+     "choices": []
+    },
+    "\tM": {
+     "flags": [
+      "-M"
+     ],
+     "negation": "",
+     "help": "Specify the amount of memory to use (in megabytes) when generating candidate moduli for DH-GEX",
+     "type": "str",
+     "default": null,
+     "choices": []
+    },
+    "\tO": {
+     "flags": [
+      "-O"
+     ],
+     "negation": "",
+     "help": "Specify a certificate option when signing a key",
+     "type": "list[str]",
+     "default": null,
+     "choices": []
+    },
+    "\tY": {
+     "flags": [
+      "-Y"
+     ],
+     "negation": "",
+     "help": "Cryptographically sign a file or some data using a SSH key",
+     "type": "str",
+     "default": null,
+     "choices": []
+    }
+   }
+  },
+  "8.0p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2,
+   "drop": [
+    "\tY"
+   ],
+   "revert": {
+    "\ta": {
+     "flags": [
+      "-a"
+     ],
+     "negation": "",
+     "help": "When saving a private key this option specifies the number of KDF (key derivation function) rounds used",
+     "type": "str",
+     "default": null,
+     "choices": []
+    }
+   }
+  },
+  "7.9p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2,
+   "revert": {
+    "\tD": {
+     "flags": [
+      "-D"
+     ],
+     "negation": "",
+     "help": "Download the RSA public keys provided by the PKCS#11 shared library pkcs11",
+     "type": "str",
+     "default": null,
+     "choices": []
+    },
+    "\tF": {
+     "flags": [
+      "-F"
+     ],
+     "negation": "",
+     "help": "Search for the specified hostname in a known_hosts file, listing any occurrences found",
+     "type": "str",
+     "default": null,
+     "choices": []
+    },
+    "\tR": {
+     "flags": [
+      "-R"
+     ],
+     "negation": "",
+     "help": "Removes all keys belonging to hostname from a known_hosts file",
+     "type": "str",
+     "default": null,
+     "choices": []
+    },
+    "\te": {
+     "flags": [
+      "-e"
+     ],
+     "negation": "",
+     "help": "This option will read a private or public OpenSSH key file and print to stdout the key in one of the formats specified by the -m option",
+     "type": "bool",
+     "default": null,
+     "choices": []
+    },
+    "\tm": {
+     "flags": [
+      "-m"
+     ],
+     "negation": "",
+     "help": "Specify a key format for the -i (import) or -e (export) conversion options",
+     "type": "str",
+     "default": null,
+     "choices": []
+    }
+   }
+  },
+  "7.8p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "7.7p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2,
+   "add": {
+    "\to": {
+     "flags": [
+      "-o"
+     ],
+     "negation": "",
+     "help": "Causes ssh-keygen to save private keys using the new OpenSSH format rather than the more compatible PEM format",
+     "type": "bool",
+     "default": null,
+     "choices": []
+    }
+   },
+   "revert": {
+    "\ta": {
+     "flags": [
+      "-a"
+     ],
+     "negation": "",
+     "help": "When saving a new-format private key (i.e",
+     "type": "str",
+     "default": null,
+     "choices": []
+    }
+   }
+  },
+  "7.6p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "7.5p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2,
+   "drop": [
+    "\tU"
+   ],
+   "revert": {
+    "\tA": {
+     "flags": [
+      "-A"
+     ],
+     "negation": "",
+     "help": "For each of the key types (rsa1, rsa, dsa, ecdsa and ed25519) for which host keys do not exist, generate the host keys with the default key file path, an empty passphrase, default bits for the key type, and default comment",
+     "type": "bool",
+     "default": null,
+     "choices": []
+    }
+   }
+  },
+  "7.4p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "7.3p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "7.2p2": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "7.2p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "7.1p2": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2,
+   "revert": {
+    "\tL": {
+     "flags": [
+      "-L"
+     ],
+     "negation": "",
+     "help": "Prints the contents of a certificate",
+     "type": "bool",
+     "default": null,
+     "choices": []
+    },
+    "\to": {
+     "flags": [
+      "-o"
+     ],
+     "negation": "",
+     "help": "Causes ssh-keygen to save SSH protocol 2 private keys using the new OpenSSH format rather than the more compatible PEM format",
+     "type": "bool",
+     "default": null,
+     "choices": []
+    }
+   }
+  },
+  "7.1p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "7.0p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "6.9p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "6.8p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "6.7p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2,
+   "drop": [
+    "\tE"
+   ]
+  },
+  "6.6p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2,
+   "revert": {
+    "\tt": {
+     "flags": [
+      "-t"
+     ],
+     "negation": "",
+     "help": "Specifies the type of key to create",
+     "type": "str",
+     "default": null,
+     "choices": []
+    }
+   }
+  },
+  "6.5p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "6.4p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2,
+   "drop": [
+    "\to"
+   ],
+   "revert": {
+    "\tA": {
+     "flags": [
+      "-A"
+     ],
+     "negation": "",
+     "help": "For each of the key types (rsa1, rsa, dsa and ecdsa) for which host keys do not exist, generate the host keys with the default key file path, an empty passphrase, default bits for the key type, and default comment",
+     "type": "bool",
+     "default": null,
+     "choices": []
+    },
+    "\ta": {
+     "flags": [
+      "-a"
+     ],
+     "negation": "",
+     "help": "Specifies the number of primality tests to perform when screening DH-GEX candidates using the -T command",
+     "type": "str",
+     "default": null,
+     "choices": []
+    }
+   }
+  },
+  "6.3p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "6.2p2": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "6.2p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "6.1p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2,
+   "drop": [
+    "\tQ",
+    "\tk",
+    "\tu"
+   ]
+  },
+  "6.0p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2,
+   "drop": [
+    "\tJ",
+    "\tj"
+   ]
+  },
+  "5.9p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2,
+   "drop": [
+    "\tK"
+   ]
+  },
+  "5.8p2": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2,
+   "drop": [
+    "\tA"
+   ]
+  },
+  "5.8p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "5.7p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "5.6p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "5.5p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2,
+   "drop": [
+    "\tm",
+    "\tz"
+   ],
+   "revert": {
+    "\tO": {
+     "flags": [
+      "-O"
+     ],
+     "negation": "",
+     "help": "Specify a certificate constraint when signing a key",
+     "type": "list[str]",
+     "default": null,
+     "choices": []
+    },
+    "\te": {
+     "flags": [
+      "-e"
+     ],
+     "negation": "",
+     "help": "This option will read a private or public OpenSSH key file and print the key in RFC 4716 SSH Public Key File Format to stdout",
+     "type": "bool",
+     "default": null,
+     "choices": []
+    },
+    "\ti": {
+     "flags": [
+      "-i"
+     ],
+     "negation": "",
+     "help": "This option will read an unencrypted private (or public) key file in SSH2-compatible format and print an OpenSSH compatible private (or public) key to stdout",
+     "type": "bool",
+     "default": null,
+     "choices": []
+    }
+   }
+  },
+  "5.4p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "5.3p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2,
+   "drop": [
+    "\tI",
+    "\tL",
+    "\tO",
+    "\tV",
+    "\th",
+    "\tn",
+    "\ts"
+   ],
+   "add": {
+    "\tU": {
+     "flags": [
+      "-U"
+     ],
+     "negation": "",
+     "help": "Upload an existing RSA private key into the smartcard in reader",
+     "type": "str",
+     "default": null,
+     "choices": []
+    }
+   },
+   "revert": {
+    "\tD": {
+     "flags": [
+      "-D"
+     ],
+     "negation": "",
+     "help": "Download the RSA public key stored in the smartcard in reader",
+     "type": "str",
+     "default": null,
+     "choices": []
+    }
+   }
+  },
+  "5.2p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "5.1p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "5.0p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "4.9p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "4.7p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "4.6p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "4.5p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2,
+   "revert": {
+    "\te": {
+     "flags": [
+      "-e"
+     ],
+     "negation": "",
+     "help": "This option will read a private or public OpenSSH key file and print the key in a 'SECSH Public Key File Format' to stdout",
+     "type": "bool",
+     "default": null,
+     "choices": []
+    }
+   }
+  },
+  "4.4p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "4.3p2": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "4.3p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "4.2p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "4.1p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "4.0p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2,
+   "revert": {
+    "\tH": {
+     "flags": [
+      "-H"
+     ],
+     "negation": "",
+     "help": "Hash a known_hosts file, printing the result to standard output",
+     "type": "bool",
+     "default": null,
+     "choices": []
+    }
+   }
+  },
+  "3.9p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2,
+   "drop": [
+    "\tF",
+    "\tH",
+    "\tR"
+   ],
+   "revert": {
+    "\tC": {
+     "flags": [
+      "-C"
+     ],
+     "negation": "",
+     "help": "Provides the new comment",
+     "type": "str",
+     "default": null,
+     "choices": []
+    },
+    "\tt": {
+     "flags": [
+      "-t"
+     ],
+     "negation": "",
+     "help": "Specifies the type of the key to create",
+     "type": "str",
+     "default": null,
+     "choices": []
+    }
+   }
+  },
+  "3.8p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2,
+   "revert": {
+    "\tg": {
+     "flags": [
+      "-g"
+     ],
+     "negation": "",
+     "help": "Use generic DNS resource record format",
+     "type": "bool",
+     "default": null,
+     "choices": []
+    },
+    "\tr": {
+     "flags": [
+      "-r"
+     ],
+     "negation": "",
+     "help": "Print DNS resource record with the specified hostname",
+     "type": "str",
+     "default": null,
+     "choices": []
+    }
+   }
+  },
+  "3.7p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2,
+   "drop": [
+    "\tv"
+   ]
+  },
+  "3.6p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2,
+   "drop": [
+    "\tG",
+    "\tM",
+    "\tS",
+    "\tT",
+    "\tW",
+    "\ta",
+    "\tg",
+    "\tr"
+   ]
+  },
+  "3.5p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "3.4p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "3.3p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "3.1p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2
+  },
+  "3.0p1": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2,
+   "revert": {
+    "\tl": {
+     "flags": [
+      "-l"
+     ],
+     "negation": "",
+     "help": "Show fingerprint of specified private or public key file",
+     "type": "bool",
+     "default": null,
+     "choices": []
+    }
+   }
+  },
+  "2.9p2": {
+   "date": "",
+   "platforms": [
+    "macOS"
+   ],
+   "extractor": 2,
+   "drop": [
+    "\tD",
+    "\tU"
+   ],
+   "revert": {
+    "\tf": {
+     "flags": [
+      "-f"
+     ],
+     "negation": "",
+     "help": "Specifies the filename of the key file",
+     "type": "bool",
+     "default": null,
+     "choices": []
+    }
+   }
+  },
+  "2.9p1": {
+   "date": "",
    "platforms": [
     "macOS"
    ],
