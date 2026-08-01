@@ -582,17 +582,25 @@ def insert(
     Returns whether the release was added; a release the chain already holds
     is left exactly as it is.
     """
+    from footman._toolfetch import _patchlevel
     from footman.tools import version_tuple
 
     if version in observed(doc):
         return False
     chain = observed(doc)  # newest first
 
-    def placed(name: str) -> tuple[tuple[int, ...], str]:
+    # The patchlevel rides between the tuple and the date for the same
+    # reason `_toolfetch._order` reads it: `version_tuple` deliberately
+    # reads OpenSSH's `9.9p1` and `9.9p2` as the same base and leaves the
+    # tie to the caller — and OpenSSH's listing carries no dates to break
+    # it. Without the middle component two patchlevels compare *equal*,
+    # the strict scan below finds no strictly-older entry, and the walk
+    # dies on the `next()`.
+    def placed(name: str) -> tuple[tuple[int, ...], int, str]:
         entry = doc["base"] if name == doc["base"]["version"] else doc["deltas"][name]
-        return version_tuple(name), entry.get("date", "")
+        return version_tuple(name), _patchlevel(name), entry.get("date", "")
 
-    mine = (version_tuple(version), date)
+    mine = (version_tuple(version), _patchlevel(version), date)
     if mine > placed(chain[0]):
         promote(doc, version=version, date=date, surface=surface, platforms=platforms)
         return True
@@ -601,7 +609,13 @@ def insert(
             doc, version=version, date=date, surface=surface, platforms=platforms
         )
 
-    older = next(name for name in chain if placed(name) < mine)
+    older = next((name for name in chain if placed(name) < mine), None)
+    if older is None:
+        # Every comparator component ties an existing entry (same base, same
+        # patchlevel, no dates to separate them): there is no honest place
+        # in the chain, and a named refusal beats a StopIteration escaping
+        # the walk.
+        raise ValueError(f"{version} ties an entry already in the chain")
     newer = chain[chain.index(older) - 1]
     before, after = at(doc, newer), at(doc, older)
     if before is None or after is None:  # pragma: no cover — both are in the chain
