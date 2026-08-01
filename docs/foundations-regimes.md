@@ -23,18 +23,23 @@ the guards turn each classic mistake into a lesson — `os.chdir` errors,
 environment writes scope with a note, a bare `input()` names the honest
 spellings. Nothing blocks, so nothing deadlocks.
 
-**The declared regime** is for the tasks that genuinely need the real
-thing, named in one word each:
+**The declared regime** is for the tasks that genuinely need a real
+shared thing — and it is one ladder, each rung claiming strictly more
+than the one below it:
 
-- `serial=True` — owns the process globals; at most one at a time,
-  *overlapping* the parallel pool; real `chdir` legal inside.
+- `lanes=(db,)` — owns exactly the named resources; contends only with
+  other claimants of the same lanes, everything unrelated runs beside
+  it. (`cwd_lane` roots the real directory at the task's cwd for the
+  hold; `console_lane` is the terminal, which `interactive=True`
+  spells for you.)
+- `serial=True` — owns the process globals: the all-lanes claim, said
+  in one word. At most one at a time, *overlapping* the parallel pool;
+  real `chdir` legal inside.
 - `exclusive=True` — owns the machine; nothing else in flight.
-- `interactive=True` — owns the terminal; the pool keeps running around
-  it, captured, and the status line steps aside for exactly that window.
 
-All three are granted at task boundaries by one arbiter, which is why they
-can be scheduled instead of contended for — the deadlocks page is why that
-distinction earns its keep.
+Every rung is granted at task boundaries by one arbiter, in one atomic
+predicate, which is why claims can be scheduled instead of contended
+for — the deadlocks page is why that distinction earns its keep.
 
 ## The sentence to defend
 

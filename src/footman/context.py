@@ -542,9 +542,12 @@ def chdir(
     if ctx.in_task and not ctx.serial_active:
         raise RuntimeError(
             f"task {ctx.task or '?'} calls footman.chdir() in a parallel "
-            f"task — the process directory belongs to no one there. Mark "
-            f"the task serial (or exclusive), or build paths from "
-            f"footman.cwd()."
+            f"task — the process directory belongs to no one there. The "
+            f"ladder: build paths from footman.cwd() (no chdir at all); or "
+            f"claim lanes=(cwd_lane,) if the real directory only needs to "
+            f"*be* the task's cwd for the duration; or mark the task serial "
+            f"(or exclusive) to own the real globals — footman.chdir() is "
+            f"legal there."
         )
     base: Path
     if target is None:

@@ -344,8 +344,11 @@ def _install_os_guards() -> None:
     def _chdir_error(ctx: Any) -> RuntimeError:
         return RuntimeError(
             f"task {ctx.task or '?'} changes the process directory in a "
-            f"parallel task — the cwd belongs to no one there. Mark the task "
-            f"serial, or build paths from footman.cwd()."
+            f"parallel task — the cwd belongs to no one there. The ladder: "
+            f"build paths from footman.cwd() (no chdir at all); or claim "
+            f"lanes=(cwd_lane,) — footman roots the real directory at the "
+            f"task's cwd for the hold; or mark the task serial to own the "
+            f"real globals and chdir freely."
         )
 
     orig_chdir: Callable[[Any], None] = _guard_saved["chdir"]
