@@ -1639,8 +1639,8 @@ def _run_tree(
             f"a relative suffix belongs on a task's rel=…",
         )
     ctx_config = {
-        "fetch_backend": str(backend) if isinstance(backend, str) else "",
-        "shell_default": str(shell_default) if isinstance(shell_default, str) else "",
+        "fetch_backend": backend if isinstance(backend, str) else "",
+        "shell_default": shell_default if isinstance(shell_default, str) else "",
         # The cwd policy ladder's run-wide rungs: the config default, and the
         # two pinned directions tokens resolve against — the highest cascade
         # file's directory (`root`) and the launch cwd snapshot (`asinvoked`).

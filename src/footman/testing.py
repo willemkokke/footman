@@ -38,7 +38,7 @@ import io
 import os
 import shlex
 import tempfile
-from collections.abc import Iterator
+from collections.abc import Generator
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -60,7 +60,7 @@ __all__ = [
 
 
 @contextlib.contextmanager
-def recording(**overrides: Any) -> Iterator[list[Result]]:
+def recording(**overrides: Any) -> Generator[list[Result]]:
     """Capture the commands a block would `run()` — silently, not executing.
 
     Yields the live step list; each `run()`/`tools.*` call inside the block
@@ -99,7 +99,7 @@ class InvokeResult:
 
 
 @contextlib.contextmanager
-def _isolated(cwd: Path | None) -> Iterator[None]:
+def _isolated(cwd: Path | None) -> Generator[None]:
     """A throwaway completion cache (and optional cwd) for one invocation."""
     with tempfile.TemporaryDirectory(prefix="footman-test-") as tmp:
         old = os.environ.get("XDG_CACHE_HOME")
@@ -150,7 +150,7 @@ class Runner:
         the test says and nothing else. Never raises on task failure — the
         code is in the `Result`; `KeyboardInterrupt` passes through.
         """
-        argv = shlex.split(args) if isinstance(args, str) else [str(a) for a in args]
+        argv = shlex.split(args) if isinstance(args, str) else list(args)
         out, err = io.StringIO(), io.StringIO()
         collected: list[TaskResult] = []
         payload = stdin.encode("utf-8") if isinstance(stdin, str) else stdin

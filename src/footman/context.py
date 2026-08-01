@@ -25,7 +25,7 @@ import subprocess
 import sys
 import threading
 import time
-from collections.abc import Callable, Iterable, Iterator, Sequence, Sized
+from collections.abc import Callable, Generator, Iterable, Iterator, Sequence, Sized
 from contextvars import ContextVar
 from dataclasses import dataclass, field, replace
 from pathlib import Path
@@ -526,7 +526,7 @@ def current() -> Context:
 @contextlib.contextmanager
 def chdir(
     target: str | Path | None = None, *, rel: str | Path | None = None
-) -> Iterator[None]:
+) -> Generator[None]:
     """Really change the process directory — inside a serial/exclusive task.
 
     The sugar for bodies that own the globals: the default target is the
@@ -602,7 +602,7 @@ def cwd() -> Path:
 
 
 @contextlib.contextmanager
-def use_context(ctx: Context | None = None) -> Iterator[Context]:
+def use_context(ctx: Context | None = None) -> Generator[Context]:
     """Install *ctx* as the current run context for the duration of the block.
 
     The public seam for calling tasks from other Python code — tests included:
@@ -1294,7 +1294,7 @@ def _parse_multi(line: str, n: int) -> list[int]:
 
 
 @contextlib.contextmanager
-def routing() -> Iterator[tuple[TextIO, TextIO]]:
+def routing() -> Generator[tuple[TextIO, TextIO]]:
     """Install stdout/stderr routers for the duration of a run.
 
     Both streams proxy through the running task's sink, so an in-process tool's
@@ -1423,7 +1423,7 @@ _state_lock = threading.RLock()
 
 
 @contextlib.contextmanager
-def _process_state(env: dict[str, str]) -> Iterator[None]:
+def _process_state(env: dict[str, str]) -> Generator[None]:
     """Patch `os.environ` around an in-process callable — the *bare-call
     fallback only*.
 
@@ -1453,7 +1453,7 @@ def _process_state(env: dict[str, str]) -> Iterator[None]:
 
 
 @contextlib.contextmanager
-def _env_overlay(ctx: Context, overlay: dict[str, str]) -> Iterator[None]:
+def _env_overlay(ctx: Context, overlay: dict[str, str]) -> Generator[None]:
     """Thread-confined env for an in-process call inside a run: swap
     `ctx.env` for the call's merged overlay — the environ router serves the
     callable's reads from it, and any child it spawns inherits it. No
@@ -1589,7 +1589,7 @@ def _child_address(parent: Context, label: str) -> str:
 
 
 @contextlib.contextmanager
-def _captured_streams(out_buf: io.StringIO, err_buf: io.StringIO) -> Iterator[None]:
+def _captured_streams(out_buf: io.StringIO, err_buf: io.StringIO) -> Generator[None]:
     """Capture this thread's stdout/stderr into the two buffers — the same
     dual strategy `_run_callable` uses: a thread-confined sink swap under
     the router (parallel-safe), the classic global redirect outside a
@@ -1899,7 +1899,7 @@ def run_colour_on(
 
 
 @contextlib.contextmanager
-def color_environment(on: bool) -> Iterator[None]:
+def color_environment(on: bool) -> Generator[None]:
     """Publish the run-wide colour decision into `os.environ` for the run.
 
     One decision, set once: a subprocess inherits it, an in-process tool reads
@@ -2382,7 +2382,7 @@ def run(
             # paths — hand the string straight to subprocess there.
             argv = cmd if sys.platform == "win32" else shlex.split(cmd)
         else:
-            argv = [str(a) for a in cmd]
+            argv = list(cmd)
         # `env=` is the child's environment, exactly as `subprocess` means it —
         # what you pass is what it gets. Otherwise the task's own, which
         # already carries the run-wide colour decision published at the run

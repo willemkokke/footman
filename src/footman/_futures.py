@@ -44,7 +44,7 @@ from footman import registry
 from footman._split import ChainError
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Generator
 
     from footman._executor import TaskResult
 
@@ -94,7 +94,7 @@ _pending_seq: ContextVar[int | None] = ContextVar("footman_request_seq", default
 
 
 @contextmanager
-def session() -> Iterator[_Session]:
+def session() -> Generator[_Session]:
     """Install a fresh cell registry for the duration of one run.
 
     Run-scoped by construction: memoisation means "this work happened in *this*

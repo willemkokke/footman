@@ -24,7 +24,7 @@ import os
 import threading
 import time
 import types as _types
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Generator, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path, PurePath
 from types import MappingProxyType, SimpleNamespace
@@ -442,7 +442,7 @@ def _prompt_param(
                         label,
                         options,
                         multiple=peeled.multiple,
-                        no_input=bool(ctx is not None and ctx.no_input),
+                        no_input=ctx is not None and ctx.no_input,
                     )
                 except RuntimeError as exc:  # a bad number: say so, re-show
                     note(f"  {exc}")
@@ -1007,7 +1007,7 @@ def resolve_cwd(fn: Task, ctx: Context) -> tuple[Path | None, bool]:
 
 
 @contextlib.contextmanager
-def _cwd_hold(ctx: Context) -> Iterator[None]:
+def _cwd_hold(ctx: Context) -> Generator[None]:
     """The cwd lane's application: chdir to the task's resolved directory
     and restore — legitimate only under the lane's sole occupancy. The
     foreign-cwd guard then passes naturally: live and target agree."""
@@ -1022,7 +1022,7 @@ def _cwd_hold(ctx: Context) -> Iterator[None]:
 
 
 @contextlib.contextmanager
-def _serial_globals(ctx: Context) -> Iterator[None]:
+def _serial_globals(ctx: Context) -> Generator[None]:
     """A serial/exclusive body owns the real process globals.
 
     Sole occupancy (the lane) is what makes this safe: apply the task's

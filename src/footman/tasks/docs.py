@@ -665,7 +665,7 @@ def _boot_shell(
         hook.write_text(_shellcomp.script_for("nushell", prog), encoding="utf-8")
         env_nu = scratch / "env.nu"
         env_nu.write_text(
-            f"$env.PATH = ($env.PATH | prepend {str(bin_dir)!r})\n"
+            f"$env.PATH = ($env.PATH | prepend {bin_dir!r})\n"
             '$env.PROMPT_COMMAND = {|| "" }\n'
             '$env.PROMPT_COMMAND_RIGHT = {|| "" }\n'
             '$env.PROMPT_INDICATOR = {|| $"(ansi green)\u276f (ansi reset)" }\n',

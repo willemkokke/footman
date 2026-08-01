@@ -32,7 +32,7 @@ import functools
 import os
 import shutil
 import threading
-from collections.abc import Callable, Iterator, Sequence
+from collections.abc import Callable, Generator, Iterator, Sequence
 from pathlib import Path
 from typing import (
     TYPE_CHECKING,
@@ -2334,7 +2334,7 @@ def _task_views(g: Group, owner: Group | None = None) -> Iterator[TaskView]:
 
 
 @contextlib.contextmanager
-def capture() -> Iterator[Group]:
+def capture() -> Generator[Group]:
     """Redirect module-level `@task`/`group` registration into a fresh tree.
 
     The seam `include()` uses to import a provider module without letting its

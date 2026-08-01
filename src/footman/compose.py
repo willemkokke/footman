@@ -331,7 +331,7 @@ def _vivify_into(into: str | Group | None, verb: str) -> Group:
         return into
     node = registry.root
     walked: list[str] = []
-    for seg in str(into).split("."):
+    for seg in into.split("."):
         walked.append(seg)
         addr = ".".join(walked)
         if seg == "default" or not seg or any(c.isspace() for c in seg):
@@ -340,16 +340,15 @@ def _vivify_into(into: str | Group | None, verb: str) -> Group:
             # For a provider's default, pull it by address instead:
             # plugin("acme.linters.default", into="lint").
             raise RegistrationError(
-                f"{verb}(into={str(into)!r}): {addr!r} cannot name a group — "
+                f"{verb}(into={into!r}): {addr!r} cannot name a group — "
                 f"'default' is a task; to adopt a provider's default, pull "
                 f'it directly: {verb}("…​.default", into="<group>")'
                 if seg == "default"
-                else f"{verb}(into={str(into)!r}): {addr!r} is not a legal "
-                f"group address"
+                else f"{verb}(into={into!r}): {addr!r} is not a legal group address"
             )
         if seg in node.tasks:
             raise RegistrationError(
-                f"{verb}(into={str(into)!r}): {addr!r} is a task — into= "
+                f"{verb}(into={into!r}): {addr!r} is a task — into= "
                 f"names a group to graft into"
             )
         sub = node.groups.get(seg)
