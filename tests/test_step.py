@@ -232,3 +232,25 @@ def test_off_the_record_items_leave_no_trace():
         value = probe.opts(recorded=False)()()
     assert value == "value"
     assert ctx.steps == []
+
+
+def test_a_sealed_record_refuses_writes():
+    @step
+    def quick() -> None: ...
+
+    ctx = Context()
+    with use_context(ctx):
+        quick()()
+    record = ctx.steps[-1]
+    with pytest.raises(AttributeError, match="sealed"):
+        record.command = "rewritten"
+
+
+def test_a_step_yielding_a_value_is_taught():
+    @step
+    def chatty():
+        yield
+        yield "progress"
+
+    with use_context(Context()), pytest.raises(TypeError, match="checkpoints"):
+        chatty()()

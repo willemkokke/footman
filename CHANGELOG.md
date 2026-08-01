@@ -55,6 +55,13 @@ versions may include breaking changes.
   block form, and the four checker functions are named steps with real
   receipts instead of borrowed `__name__`s.
 
+- **Breaking: a committed record is sealed — everywhere.** `Result`
+  refuses attribute writes after construction (amend verdicts in the
+  review window; veto with `fail()`), so a step observer holds the same
+  read-only truth a row observer does. And a generator step that yields
+  a *value* is a taught error: yields are checkpoints, the draft is what
+  a yield evaluates to, `return` carries the value out.
+
 - **Breaking: `post_task` observes a sealed record — observers see, never
   judge.** The observer's `result` view is now fully read-only:
   `set_returned` moved into the review window (`ResultView.set_returned`,

@@ -93,9 +93,13 @@ Nothing else divides them.
 
 You can make a step three ways, and all three are the same word:
 
-<!-- example: fragment -->
 ```python
+import shutil
+
 from footman import step
+
+def write_fixtures(): ...    # stand-ins for your own helpers
+def build_docs(): ...
 
 @step                       # 1. a function that IS a step
 def clean():
@@ -104,7 +108,7 @@ def clean():
 with step("prepare fixtures"):   # 2. record a block of your own code
     write_fixtures()
 
-step(build_docs, title="docs")   # 3. wrap an existing function
+docs = step(build_docs, title="docs")   # 3. wrap an existing function
 ```
 
 One honesty note, learned from Python itself: calling a step function
@@ -116,8 +120,11 @@ be a surprise.
 
 A step can also be a generator, which buys two things with one keyword:
 
-<!-- example: fragment -->
 ```python
+from pathlib import Path
+
+def to_webp(image: Path): ...        # your converter
+
 @step
 def convert(images: list[Path]):
     view = yield                     # the step's own record, mid-work
@@ -394,8 +401,9 @@ parallelism and the code should say so where reviewers can see it.
 Everything else is yours to declare. A lane is created by binding a
 name, and claimed by handing that binding around:
 
-<!-- example: fragment -->
 ```python
+import footman
+
 db = footman.lane("database", reason="serialises the shared dev DB")
 
 @task(lanes=(db,))

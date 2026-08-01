@@ -983,6 +983,35 @@ thread after the 2026-07-31 audit found nothing in 0.28.0 needs it —
 name front-runner `product`, final naming when that thread opens).
 The core lane handles are named: `cwd_lane`, `console_lane`.
 
+## The build (2026-08-01): all eight stages shipped
+
+One session, PRs #247–#260 plus the sweep: A the honest verbs, B the
+record surface, C sealed observation + handle hooks, D the substrate
+and the ban, E identity (the split, addresses), F the report (Results,
+task-grain display, the flat items envelope), G lanes, H this sweep.
+The design page's fragments are down to three, each environmental or
+deliberately unrunnable (the refusal demo raises; the git read and the
+djlint reviewer need their tools); everything else on the page runs in
+the page session on every gate.
+
+**Reconciliations the loom surfaced, accepted rather than silently
+absorbed:** the spec's `Address` OBJECT shipped as a plain string — a
+tree-derived name needs nothing richer than prefix selection — and
+lifecycle moments travel as strings at runtime, the `Literal` set
+remaining the documented vocabulary. **Contradictions the
+reconciliation caught and the build then closed:** step observers were
+handed a mutable record (the page's sealed-by-type claim) — `Result`
+now refuses writes after construction; and the pump accepted yielded
+values silently where I7 demands a taught error — it teaches now.
+`typecheck_workitem.py` types every exhibit against the real surface;
+its negative twin pins what stayed structural.
+
+**hse's migration, when it takes 0.28.0:** delete `run_titled`, its
+twin, both forged-receipt lambdas and the cwd workaround
+(`djlint.opts(pre_record=…)` is the whole replacement); `step=False` →
+`recorded=False`; any `fail(code=0)` → `return`; thunks in `parallel()`
+→ `step(fn)(…)` items or the block form; read `--json` as `items`.
+
 ## Strays found along the way (housekeeping commit, not the model)
 
 - `_futures._fill` is dead code (defined, zero call sites — superseded

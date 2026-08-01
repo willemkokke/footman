@@ -125,15 +125,22 @@ class Result(int):
         audit: tuple[AuditEntry, ...] = (),
     ) -> Result:
         self = super().__new__(cls, code)
-        self.timed_out = timed_out
-        self.address = address
-        self.command = command
-        self.stdout = stdout
-        self.stderr = stderr
-        self.duration = duration
-        self.raw = raw or command
-        self.audit = audit
+        object.__setattr__(self, "timed_out", timed_out)
+        object.__setattr__(self, "address", address)
+        object.__setattr__(self, "command", command)
+        object.__setattr__(self, "stdout", stdout)
+        object.__setattr__(self, "stderr", stderr)
+        object.__setattr__(self, "duration", duration)
+        object.__setattr__(self, "raw", raw or command)
+        object.__setattr__(self, "audit", audit)
         return self
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        raise AttributeError(
+            f"Result.{name} is sealed — a committed record is immutable. "
+            f"Amend verdicts in the review window (pre_record), or veto "
+            f"with fail(reason, code) from an observer."
+        )
 
     @property
     def code(self) -> int:

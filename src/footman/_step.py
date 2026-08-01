@@ -267,9 +267,20 @@ def _pump(item: WorkItem[Any]) -> Any:
         payload: Any = None
         while True:
             try:
-                gen.send(payload)
+                yielded = gen.send(payload)
             except StopIteration as stop:
                 return stop.value
+            if yielded is not None:
+                # The vocabulary is closed: a bare yield is a checkpoint and
+                # evaluates to the draft — the value channel is reserved for
+                # a future that earns it, so using it is an error, not noise.
+                gen.close()
+                raise TypeError(
+                    f"step {label!r} yielded {yielded!r} — a step's yields "
+                    f"are checkpoints and carry nothing out. Write a bare "
+                    f"`yield`; read the draft with `view = yield`; return "
+                    f"the step's value with `return`."
+                )
             payload = view  # every yield evaluates to the item's own draft
             # The checkpoint: the only place a running item is cancelled —
             # fail-fast/Ctrl-C aborts, or the item's own timeout. All three
