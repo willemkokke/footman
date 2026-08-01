@@ -15,6 +15,13 @@ versions may include breaking changes.
   runs nothing, so the work would silently not happen. The block now
   raises before running anything, naming the dead items.
 
+- **`TaskResult.pristine` is now `body_returned`.** The field holds
+  what the body handed over — the value dependents and body callers
+  receive, snapshotted at the body's exit — and the new name says so,
+  pairing visibly with `returned`, its reported twin that a reviewer's
+  `set_returned` rewrites. An adjective read like a flag; a noun reads
+  like what it holds.
+
 ### Fixed
 
 - **`wrap_task`/`wrap_bind` spans survive nested executions.** A body

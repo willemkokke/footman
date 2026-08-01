@@ -70,7 +70,7 @@ def test_the_cwd_lane_applies_the_directory_for_the_hold(tmp_path):
     result = Runner().invoke("where", cwd=tmp_path)
     assert result.ok, result.stderr
     row = next(r for r in result.results if r.task == "where")
-    assert os.path.realpath(str(row.pristine)) == os.path.realpath(str(tmp_path))
+    assert os.path.realpath(str(row.body_returned)) == os.path.realpath(str(tmp_path))
 
 
 def test_console_on_a_step_is_taught():

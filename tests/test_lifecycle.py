@@ -671,7 +671,7 @@ def test_a_post_failure_never_masks_the_bodys_own():
 
 
 def test_set_returned_rewrites_the_report_never_the_value():
-    # The pristine return was snapshotted at the body's exit: a dependent's
+    # The body's return was snapshotted at its exit: a dependent's
     # body call still receives it, while the report and `--json` carry the
     # rewrite. The write lives in the review window now — reviewed and
     # attributed — never in observation.

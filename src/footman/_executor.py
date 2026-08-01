@@ -103,7 +103,7 @@ class TaskResult:
     title: str = ""
     """A reviewer's label for the row, when one set it (`@pre_record`).
     Empty means the task's name speaks for itself, as it always did."""
-    pristine: Any = None
+    body_returned: Any = None
     """What the body actually returned — the value dependents and body
     callers receive, snapshotted at the body's exit. `returned` is its
     *reported* twin: a reviewer's `set_returned` rewrites that one only."""
@@ -1726,7 +1726,7 @@ def run_bound(
     output = ctx.sink.getvalue() if isinstance(ctx.sink, io.StringIO) else ""
     result = _result(seg, code, returned, error, duration, output, ctx.steps)
     result.address = ctx.address
-    result.pristine = returned
+    result.body_returned = returned
     result.started = started
     result.thread = born
     result.thread_id = threading.get_native_id()
@@ -1777,7 +1777,7 @@ def run_bound(
             if "title" in view._touched:
                 result.title = view.title
             if "returned" in view._touched:
-                # The *reported* value only: the pristine return was
+                # The *reported* value only: the body's return was
                 # snapshotted at the body's exit and resolves below.
                 result.returned = view.returned
         result.audit = audit
@@ -1794,7 +1794,7 @@ def run_bound(
             )
             result.error = post_error
             error = post_error
-    # The pristine return, snapshotted the moment the body handed it over: what
+    # The body's return, snapshotted the moment it was handed over: what
     # a dependent or a body-caller receives is what the annotation promised,
     # whatever a reporter later does to the *reported* result. Resolved after
     # the posts, so a hook-failed task never hands a waiter a green value; a
