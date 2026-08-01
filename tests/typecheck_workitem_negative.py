@@ -10,7 +10,7 @@ sealed record's writes, `confirm=` on a step maker) are pinned by the
 executed suites instead.
 """
 
-from footman import ResultView, parallel, step
+from footman import Result, ResultView, parallel, step
 from typecheck_workitem import lint
 
 
@@ -34,6 +34,16 @@ def _the_verdict_follows_the_code() -> None:
         view.stdout = ""  # type: ignore[misc]  # review sees what was captured
 
     del hook
+
+
+def _the_sealed_record_is_sealed_statically_too() -> None:
+    # I5 by type, at both grains: a committed record's fields are read-only
+    # properties, so an observer's write dies at check time, before runtime
+    # would have taught it.
+    def observer(result: Result) -> None:
+        result.command = "rewritten"  # type: ignore[misc]  # sealed
+
+    del observer
 
 
 def _bare_callables_are_refused() -> None:
