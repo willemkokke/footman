@@ -134,7 +134,7 @@ make about itself.
 
 ## Golden tests: the `--json` surface
 
-`--json` is the blessed machine surface: `{"schema": 1, "results": [...]}`,
+`--json` is the blessed machine surface: `{"schema": 1, "items": [...]}`,
 documented in full on [JSON output](json.md) and additive-only after 1.0.
 Filter the volatile fields and snapshot the shape:
 
@@ -145,7 +145,8 @@ def test_check_pipeline_shape(fm):
     payload = json.loads(fm.invoke("--json check").stdout)
     shape = [
         (t["task"], t["ok"], [s["command"] for s in t["steps"]])
-        for t in payload["results"]
+        for t in payload["items"]
+        if "task" in t
     ]
     assert shape == [
         ("lint", True, ["ruff check ."]),

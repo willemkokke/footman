@@ -191,7 +191,7 @@ def test_json_wins_and_keeps_the_envelope():
 
     result = invoke(tasks, "--json status")
     payload = json.loads(result.stdout)
-    assert payload["results"][0]["returned"] == {"branch": "main"}
+    assert payload["items"][0]["returned"] == {"branch": "main"}
 
 
 def test_a_body_call_returns_the_value():

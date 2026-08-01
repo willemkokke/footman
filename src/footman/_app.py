@@ -99,7 +99,7 @@ def _refuse(json_mode: bool, message: str, code: int = EX_USAGE) -> int:
     _error(message)
     if json_mode:
         envelope = {"schema": 1, "error": {"code": code, "message": message}}
-        print(json.dumps({**envelope, "results": []}, indent=2))
+        print(json.dumps({**envelope, "items": []}, indent=2))
     return code
 
 
@@ -832,22 +832,6 @@ def _print_json(results: list[_executor.TaskResult], *, total: float) -> None:
             "code": r.code,
             "duration_ms": round(r.duration * 1000, 3),
             "output": r.output,
-            "steps": [
-                {
-                    "command": s.command,
-                    "address": s.address,
-                    "code": s.code,
-                    "duration_ms": round(s.duration * 1000, 3),
-                    "stdout": s.stdout,
-                    "stderr": s.stderr,
-                    # The verdict's provenance: [moment, actor, code] per
-                    # entry, and the derived failing moment (null when the
-                    # step succeeded). Additive to schema 1.
-                    "audit": [[e.moment, e.actor, e.code] for e in s.audit],
-                    "failed_at": s.failed_at,
-                }
-                for s in r.steps
-            ],
             "error": None if r.error is None else str(r.error),
         }
         if r.title:
@@ -886,11 +870,32 @@ def _print_json(results: list[_executor.TaskResult], *, total: float) -> None:
             else:
                 entry["returned"] = value
         payload.append(entry)
+        # The children stand alone, right after their requester: ONE flat
+        # list in creation order, the tree carried by every item's address
+        # (a prefix names a subtree, and a child's entry is self-describing
+        # before its parent's would even be complete in a stream). A row
+        # has "task"; a step has "command" — that is the reader's kind
+        # test, and `[.items[] | select(.task == NAME)]` is the name
+        # lookup, a LIST by contract: the same label may name distinct
+        # work, distinct by address.
+        for s in r.steps:
+            payload.append(
+                {
+                    "command": s.command,
+                    "address": s.address,
+                    "code": s.code,
+                    "duration_ms": round(s.duration * 1000, 3),
+                    "stdout": s.stdout,
+                    "stderr": s.stderr,
+                    "audit": [[e.moment, e.actor, e.code] for e in s.audit],
+                    "failed_at": s.failed_at,
+                }
+            )
     # The stable machine surface: an envelope so post-1.0 additions (metadata,
-    # summaries) never have to break consumers of the results list.
+    # summaries) never have to break consumers of the items list.
     print(
         json.dumps(
-            {"schema": 1, "total_ms": round(total * 1000, 3), "results": payload},
+            {"schema": 1, "total_ms": round(total * 1000, 3), "items": payload},
             indent=2,
             default=_describe.json_default,
         )

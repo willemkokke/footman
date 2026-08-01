@@ -50,7 +50,7 @@ the line and the recording off.
 $ fm --json check
 {
   "schema": 1,
-  "results": [
+  "items": [
     {"task": "lint", "ok": true, "code": 0, "duration_ms": 812.4,
      "output": "...", "steps": [...], "error": null}
   ]
@@ -68,7 +68,7 @@ every envelope, field by field, with recipes — lives on one page:
 The CI shape-check:
 
 ```sh
-fm --json check | jq -e '.error == null and (.results | all(.ok))'
+fm --json check | jq -e '.error == null and ([.items[] | select(.task)] | all(.ok))'
 ```
 
 ## Exit codes

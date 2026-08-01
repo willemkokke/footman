@@ -168,8 +168,8 @@ def test_runner_group_json_output():
     result = Runner().invoke("--json greet --name=J", tasks=_demo_group())
     assert result.ok
     payload = json.loads(result.stdout)
-    assert payload["results"][0]["task"] == "greet"
-    assert "hello J" in payload["results"][0]["output"]
+    assert payload["items"][0]["task"] == "greet"
+    assert "hello J" in payload["items"][0]["output"]
 
 
 def test_help_example_uses_choice_values():

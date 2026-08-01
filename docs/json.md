@@ -10,40 +10,58 @@ mixes prose with data.
 This page is the whole contract. Every other page that mentions `--json`
 links here.
 
-## The results envelope
+## The items envelope
 
-A run prints one entry per request, in the order things happened — a node
-that never started sits directly after whatever prevented it:
+A run prints **one flat list of records, in the order the work was
+created** — tasks and their steps alike, every item carrying its
+`address`: the path of requests that led to it, with an ordinal once a
+label repeats (`check/git`, `check/git#2`). An address prefix names a
+subtree, so the tree is always recoverable — it just never makes a reader
+recurse to ask a flat question. A row has `"task"`; a step has
+`"command"` — that is the kind test:
 
 ```console
 $ fm --json check
 {
   "schema": 1,
   "total_ms": 5412.7,
-  "results": [
+  "items": [
     {
       "task": "lint",
+      "address": "lint",
       "ok": true,
       "code": 0,
       "duration_ms": 812.4,
       "output": "...",
-      "steps": [
-        {"command": "ruff check src tests", "code": 0, "duration_ms": 790.1, "output": "..."}
-      ],
       "error": null,
       "returned": {"files": 42}
+    },
+    {
+      "command": "ruff check src tests",
+      "address": "lint/ruff",
+      "code": 0,
+      "duration_ms": 790.1,
+      "stdout": "...",
+      "stderr": "",
+      "audit": [["body", "ruff check src tests", 0]],
+      "failed_at": null
     }
   ]
 }
 ```
 
 Top-level, `total_ms` is wall-clock for the whole run — the human summary's
-`took` line, as a number. Per task: `task` (dotted name), `ok`, `code`,
-`duration_ms`, `output` (all
-captured text), `error` (`null`, or the exception as a string), `steps` —
-one entry per [`run()` or tool](tools.md) call, each with `command`,
-`code`, `duration_ms`, `output` — and, when the task returns a value,
-`returned`. `state` is the one word for what happened — `ok`, `failed`,
+`took` line, as a number. Per task: `task` (dotted name), `address`, `ok`,
+`code`, `duration_ms`, `output` (all captured text), `error` (`null`, or
+the exception as a string) — and, when the task returns a value,
+`returned`. Its steps follow it in the list — one item per
+[`run()`, tool, or `step()`](tools.md) call, each with `command`,
+`address`, `code`, `duration_ms`, split `stdout`/`stderr`, its `audit`
+(the verdict's provenance: one `[moment, actor, code]` entry per actor
+that touched it), and `failed_at`, the moment a failure came from
+(`null` on success — a red tool reviewed green *is* green). Looking a
+task up **by name returns a list** by contract: the same label can name
+distinct pieces of work, distinct by address. `state` is the one word for what happened — `ok`, `failed`,
 `cancelled`, `shared`, `skipped` — and it is an **open set**: tolerate values
 you don't know. A node the run never started is a `skipped` row with
 `blocked_by` naming what prevented it, seated directly after that cause — so
@@ -75,7 +93,7 @@ def coverage() -> dict:
 ```
 
 ```console
-$ fm --json coverage | jq '.results[0].returned'
+$ fm --json coverage | jq '.items[0].returned'
 {"percent": 94.2, "failed": [], "report": "htmlcov/index.html"}
 ```
 
@@ -128,7 +146,7 @@ same rules as `returned` above (dataclasses to dicts, `Secret` redacted).
 The rules, all of them:
 
 - **An explicit `--json` wins.** The envelope keeps stdout and the document
-  rides inside `results[].returned`, where a return value already lives.
+  rides inside `items[].returned`, where a return value already lives.
 - **Only the addressed task emits.** A declaring task reached as a `pre=`/
   `post=` dependency or a group fan-out member is suppressed, not refused —
   composing a filter into a bigger task stays legal.
@@ -164,7 +182,7 @@ $ fm --json chekc
     "code": 64,
     "message": "expected a task name, got 'chekc' — did you mean 'check'? (know: docs, lint, test, check)"
   },
-  "results": []
+  "items": []
 }
 ```
 
@@ -256,11 +274,11 @@ milliseconds with a taught message, not after twenty minutes of setup.
 
 ## Recipes
 
-A shape-check in CI — guard `.error` too, because an empty `results` list
+A shape-check in CI — guard `.error` too, because an empty `items` list
 on a refusal would pass `all(.ok)` vacuously:
 
 ```sh
-fm --json check | jq -e '.error == null and (.results | all(.ok))'
+fm --json check | jq -e '.error == null and ([.items[] | select(.task)] | all(.ok))'
 ```
 
 Pull one task's data out of a pipeline:
