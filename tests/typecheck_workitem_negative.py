@@ -1,60 +1,34 @@
 # pyright: reportUnnecessaryTypeIgnoreComment=true
-"""Misuse the work-item spec makes STRUCTURAL — move 3's negative half.
+"""Misuse the work-item model makes STRUCTURAL — the negative half.
 
-Never executed; checked by basedpyright and mypy only (ty and pyrefly do
-not honour per-line ignores, so this file stays out of their scope, like
-`typecheck_api_negative.py`). Every line is a deliberate type error
-carrying `# type: ignore[code]`: if the skeleton loosens and the error
-disappears, the ignore goes stale and both checkers turn the line red.
-The ignore is the assertion.
-
-These are the spec's taught errors, promoted to type errors by the
-skeleton in `typecheck_workitem.py`: the walls of I13 and I3, the closed
-yield vocabulary, and (conditional on decision 8) the bare-callable ban.
+Checked by basedpyright and mypy only (ty and pyrefly do not honour
+per-line ignores). Every line is a deliberate type error carrying
+`# type: ignore[code]`: if the surface loosens and the error disappears,
+the ignore goes stale and both checkers turn the line red. The ignore is
+the assertion. Runtime-taught refusals (a step yielding a value, a
+sealed record's writes, `confirm=` on a step maker) are pinned by the
+executed suites instead.
 """
 
-from typecheck_workitem import (
-    Result,
-    ResultView,
-    StepBody,
-    covered,
-    lint,
-    parallel,
-    step,
-)
+from footman import ResultView, parallel, step
+from typecheck_workitem import lint
 
 
 def _declared_means_recorded() -> None:
-    # walk 4 / I13: declared ⟹ recorded — the keyword does not exist
-    # at task grain, so hiding a declared row is unspellable.
+    # walk 4 / I13: declared ⟹ recorded — the keyword does not exist at
+    # task grain, so hiding a declared row is unspellable.
     lint.opts(recorded=False)  # type: ignore[call-arg]  # a task is part of the story
 
 
-def _boundary_policy_needs_a_declaration() -> None:
-    # walk 4 / I13: confirm resolves at the request boundary; an
-    # anonymous item has no boundary to resolve it at.
-    covered.opts(confirm="really?")  # type: ignore[call-arg]  # steps take execution policy only
-
-
-def _the_yield_vocabulary_is_closed() -> None:
-    # I7: bare yield = checkpoint; yielding a value is a taught error —
-    # and a static one: StepBody's yield type is None.
-    @step
-    def chatty() -> StepBody[None]:
-        yield "progress"  # type: ignore[misc]  # the channel is reserved
-
-    del chatty
-
-
 def _the_forged_receipt_is_unspellable() -> None:
-    # I3: no record without work. The rejected receipt primitive —
-    # a plain call minting a titled verdict — matches no overload; the
-    # with-form binds a record to a real block by construction.
+    # I3: no record without work — a plain call minting a titled verdict
+    # matches no form of step().
     step("done", code=0)  # type: ignore[call-overload]  # a record needs work
 
 
 def _the_verdict_follows_the_code() -> None:
-    # I2: ok derives from code — code=1 with ok=True cannot be written.
+    # I2: ok derives from code — code=1 with ok=True cannot be written,
+    # and review never edits what was captured.
     def hook(view: ResultView) -> None:
         view.ok = True  # type: ignore[misc]  # write the code; ok follows
         view.stdout = ""  # type: ignore[misc]  # review sees what was captured
@@ -62,18 +36,7 @@ def _the_verdict_follows_the_code() -> None:
     del hook
 
 
-def _observation_is_read_only_by_type() -> None:
-    # ruled 2026-07-31: post_task is purely read-only observability — an
-    # observer holds the immutable Result, so judging (or any write,
-    # including the retired observer-phase set_returned) is unspellable.
-    def watcher(result: Result) -> None:
-        result.title = "better"  # type: ignore[misc]  # observers see, never judge
-        result.set_returned(3)  # type: ignore[attr-defined]  # review-window write only
-
-    del watcher
-
-
 def _bare_callables_are_refused() -> None:
-    # decision 8's ban (ruled GO 2026-07-31), structural: a lambda has
-    # no chosen grain (no .opts), so neither maker protocol matches.
+    # decision 8's ban, static before it is runtime: a lambda has no
+    # chosen grain, so the payload union refuses it.
     parallel(lambda: 0)  # type: ignore[call-overload]  # lift it: step(fn)

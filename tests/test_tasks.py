@@ -36,9 +36,7 @@ from footman.context import Failed, Result, RunFailed
 
 def _failed_run(command: str = "ruff") -> RunFailed:
     """What `run()` raises: a RunFailed carrying the Result that failed."""
-    result = Result(1)
-    result.command = command
-    return RunFailed(result)
+    return RunFailed(Result(1, command=command))
 
 
 # --- the hook adapters -------------------------------------------------------
