@@ -978,6 +978,130 @@ def test_docker_dates_come_from_the_engine_not_the_upload(monkeypatch):
     assert dated["29.4.2"] == "2026-06-01"  # not in the engine listing: the mtime
 
 
+def test_man_index_reads_a_dated_and_an_undated_listing(monkeypatch):
+    """One reader serves both manual publishers: kernel.org's Apache listing
+    shows dates; OpenSSH's table shows none, and its date stays empty."""
+    from footman import _toolfetch
+    from footman._drivers import Driver, Manual, Provision
+
+    kernel = (
+        '<a href="git-manpages-2.50.0.tar.gz">x</a> 16-Jun-2025 16:31\n'
+        '<a href="git-manpages-2.49.0.tar.gz">x</a> 14-Mar-2025 18:34\n'
+    )
+    monkeypatch.setattr(_toolfetch, "_read_index", lambda *_a: kernel.encode())
+    git = Driver(
+        "git",
+        provision=Provision(
+            kind="man",
+            manual=Manual(
+                index="https://k.org/",
+                archive="git-manpages-{version}.tar.gz",
+                listing=(
+                    r'href="git-manpages-(?P<version>\d+(?:\.\d+)+)\.tar\.gz"'
+                    r".*?(?P<day>\d{2})-(?P<month>[A-Z][a-z]{2})-(?P<year>\d{4})"
+                ),
+            ),
+        ),
+    )
+    got = _toolfetch.releases(git)
+    assert [(r.version, r.date) for r in got] == [
+        ("2.50.0", "2025-06-16"),
+        ("2.49.0", "2025-03-14"),
+    ]
+
+    openssh = (
+        '<tr><td><a href="openssh-9.9p1.tar.gz">openssh-9.9p1.tar.gz</a></td>\n'
+        '<tr><td><a href="openssh-10.0p1.tar.gz">openssh-10.0p1.tar.gz</a></td>\n'
+        '<tr><td><a href="openssh-9.9p2.tar.gz">openssh-9.9p2.tar.gz</a></td>\n'
+    )
+    monkeypatch.setattr(_toolfetch, "_read_index", lambda *_a: openssh.encode())
+    ssh = Driver(
+        "ssh",
+        provision=Provision(
+            kind="man",
+            manual=Manual(
+                index="https://o.org/",
+                archive="openssh-{version}.tar.gz",
+                listing=r'href="openssh-(?P<version>\d+\.\d+p\d+)\.tar\.gz"',
+            ),
+        ),
+    )
+    got = _toolfetch.releases(ssh)
+    # `version_tuple` reads 9.9p1 and 9.9p2 as the same base and the listing
+    # shows no dates; the portable patchlevel breaks the tie.
+    assert [r.version for r in got] == ["10.0p1", "9.9p2", "9.9p1"]
+    assert all(r.date == "" for r in got)
+
+
+def test_install_man_pulls_named_pages_from_a_source_tarball(tmp_path, monkeypatch):
+    """OpenSSH's release tarball carries its pages beside the sources: only
+    the named pages land, by basename, and nothing else escapes."""
+    import io
+    import tarfile
+
+    from footman import _provision, _toolfetch
+    from footman._drivers import Driver, Manual, Provision
+
+    archive = tmp_path / "openssh-9.9p2.tar.gz"
+    with tarfile.open(archive, "w:gz") as tar:
+        for member, payload in [
+            ("openssh-9.9p2/ssh.1", b".Dd ssh page"),
+            ("openssh-9.9p2/ssh-keygen.1", b".Dd keygen page"),
+            ("openssh-9.9p2/configure", b"#!/bin/sh"),
+        ]:
+            info = tarfile.TarInfo(member)
+            info.size = len(payload)
+            tar.addfile(info, io.BytesIO(payload))
+    monkeypatch.setattr(_provision, "_download", lambda _url, _into, **_kw: archive)
+    driver = Driver(
+        "ssh",
+        provision=Provision(
+            kind="man",
+            manual=Manual(
+                index="https://o.org/",
+                archive="openssh-{version}.tar.gz",
+                listing=r'href="openssh-(?P<version>\d+\.\d+p\d+)\.tar\.gz"',
+                pages=("ssh.1", "ssh-keygen.1"),
+            ),
+        ),
+    )
+    release = _toolfetch.Release(version="9.9p2", date="")
+    placed = _toolfetch.install(driver, release, tmp_path / "into")
+    assert placed is not None
+    assert sorted(p.name for p in placed.glob("man1/*")) == ["ssh-keygen.1", "ssh.1"]
+    assert (placed / "man1" / "ssh.1").read_bytes() == b".Dd ssh page"
+
+
+def test_man_tier_merges_every_tools_pages(tmp_path, monkeypatch):
+    """The man tier holds more than one tool's pages: a second driver merges
+    into the shared tree rather than replacing the first's."""
+    from footman import _provision, _toolfetch
+    from footman._drivers import Driver, Manual, Provision
+
+    manual = Manual(index="https://x/", archive="{version}.tar.gz", listing="x")
+    drivers = [
+        Driver("git", provision=Provision(kind="man", manual=manual)),
+        Driver("ssh", provision=Provision(kind="man", manual=manual)),
+    ]
+    release = _toolfetch.Release(version="1.0", date="")
+    monkeypatch.setattr(_toolfetch, "releases", lambda _d: [release])
+
+    def fake_install(driver, _release, into):
+        tree = into / "man"
+        (tree / "man1").mkdir(parents=True)
+        (tree / "man1" / f"{driver.name}.1").write_text("page")
+        return tree
+
+    monkeypatch.setattr(_toolfetch, "install", fake_install)
+    prefix = tmp_path / "prefix"
+    outcomes = _provision._man_tier(prefix, drivers)
+    assert [(o.status, o.detail) for o in outcomes] == [("ok", "1.0"), ("ok", "1.0")]
+    assert sorted(p.name for p in (prefix / "man" / "man1").glob("*.1")) == [
+        "git.1",
+        "ssh.1",
+    ]
+
+
 def test_gitlab_releases_read_their_own_field_names(monkeypatch):
     from footman import _drivers, _toolfetch
 

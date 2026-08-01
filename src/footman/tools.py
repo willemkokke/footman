@@ -70,8 +70,13 @@ _version_cache: dict[str, tuple[int, ...]] = {}
 # has no word boundary before its first digit, so `\b` would skip to the middle
 # and read `23.1`. Reject only a preceding digit or dot, so `v0.23.1` -> `0.23.1`
 # while `2` inside `1.2.3` still can't start a fresh match. The tail matches the
-# build grammars tools really ship (`0.6.0-wk.5`, `1.13.0.git.kitware…`).
-_VERSION = _re.compile(r"(?<![\d.])(\d+\.\d+(?:\.\d+)?(?:[-.][A-Za-z0-9]+)*)\b")
+# build grammars tools really ship (`0.6.0-wk.5`, `1.13.0.git.kitware…`), plus
+# OpenSSH's glued patchlevel (`OpenSSH_10.4p1` -> `10.4p1` — without it the
+# `\b` fails at `10.4` and the match falls through to LibreSSL's version,
+# reporting the wrong library's number as ssh's).
+_VERSION = _re.compile(
+    r"(?<![\d.])(\d+\.\d+(?:\.\d+)?(?:p\d+)?(?:[-.][A-Za-z0-9]+)*)\b"
+)
 
 
 def read_version(text: str) -> str:
@@ -184,6 +189,9 @@ _WRAPPERS: dict[str, frozenset[str]] = {
     # python's own root is a wrapper: `python -v script.py` puts the
     # interpreter's options before the script, whose own args follow it.
     "python": frozenset({""}),
+    # ssh forwards everything after `destination` to the remote shell: its
+    # flags must precede the positionals or they land on the remote command.
+    "ssh": frozenset({""}),
 }
 
 
@@ -824,6 +832,10 @@ cspell = Tool("cspell")
 prek = Tool("prek")
 markdownlint = Tool("markdownlint-cli2")
 gh = Tool("gh")
+# The remote command is a positional: transport, then payload. `-V` is the
+# whole version surface (`--version` is an illegal option), answered on stderr.
+ssh = Tool("ssh", version_argv=("-V",))
+ssh_keygen = Tool("ssh-keygen")  # no version output of its own; ssh speaks for it
 eclint = Tool("eclint", single_dash=True)  # Go flag package: `-fix`, not `--fix`
 djlint = Tool("djlint")
 mypy = Tool("mypy")

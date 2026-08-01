@@ -90,6 +90,11 @@ _GO_TYPES = (
 )
 # The flag and any attached optional-value placeholder, shared by both forms.
 _FLAG = (
+    # A flag starts a word: a dash reached mid-word is a hyphen, not a
+    # spelling. Without the boundary, `-Y find-principals` (ssh-keygen's
+    # verb-word arguments) yields a phantom `-principals` that the Go-style
+    # fallback would happily promote to a keyword.
+    r"(?<![A-Za-z0-9-])"
     # A dot is allowed only *inside* the name (`--foo.bar`), never trailing:
     # clap prints a repeatable flag as `--verbose...`, and a greedy `.` would
     # swallow the ellipsis into the name (`verbose...` → keyword `verbose___`).
@@ -199,15 +204,34 @@ def _blocks(lines: Sequence[str], *, man: bool = False) -> list[tuple[str, str]]
             # in two — git-log's four parent filters share a description and
             # a line, and at 80 columns the line ends `--no-min-parents,`
             # with `--no-max-parents` below it.
-            if pending is not None and previous.rstrip().endswith(","):
+            if (
+                pending is not None
+                and previous.rstrip().endswith(",")
+                and head_indent == indent
+            ):
                 # Join it to the head it belongs to, rather than dropping it:
                 # the remainder carries spellings, and the description that
-                # follows is the whole block's.
+                # follows is the whole block's. Only from the head's own
+                # column — a *description* line that happens to end with a
+                # comma before a wrapped flag mention ("Implies -N, -T, …")
+                # sits at the help indent, and joining it would smuggle the
+                # mentioned flags into the head as extra spellings.
                 previous = line
                 pending = (f"{pending[0]} {match['body']}", pending[1])
                 head_indent = indent
                 continue
-            starts = not previous.strip() or head_indent == indent
+            starts = (
+                not previous.strip()
+                or head_indent == indent
+                # A head in the open block's own flag column is a head even
+                # without a blank line before it: mandoc renders ssh's
+                # `-p port` flush against `-P tag`'s paragraph, uniquely on
+                # the page, and the paragraph rule alone would close the
+                # block and drop `-p` on the floor. Prose can't be confused
+                # for this — a wrapped sentence lands at the help indent,
+                # not the flag column.
+                or (pending is not None and indent == flag_indent)
+            )
             head_indent = indent if starts else None
             if not starts:
                 match = None
@@ -332,7 +356,12 @@ def _parse_default(text: str) -> str:
     match = _DEFAULT.search(text)
     if not match:
         return ""
-    return (match["clap"] or match["other"] or "").strip().strip("\"'")
+    # Folded before stripping, so a manual's typeset quotes (mdoc curls
+    # them around ssh's escape-char default) read as the quotes they are
+    # and come off with the ASCII ones — the value is the tilde alone, not
+    # a pair of curly marks the stub would then fail ASCII linting over.
+    value = (match["clap"] or match["other"] or "").translate(_TYPOGRAPHY)
+    return value.strip().strip("\"'")
 
 
 def _option(
@@ -351,17 +380,30 @@ def _option(
     long — `_short_alias` adds the extra keyword for that mode.
     """
     flags, meta, optional = _spellings(head, strict=strict, bare_meta=bare_meta)
+    if strict and not meta and not optional and not head.startswith("--"):
+        # The manual's flag column names a value with a bare word — mdoc
+        # typesets `-B bind_interface`, and rendered it is two plain tokens.
+        # Trusted only in that exact shape: one spelling, one following word
+        # that is not itself a flag. A prose paragraph misread as a head is a
+        # sentence and never that short, so the rule that keeps `--patch`
+        # from eating the next word keeps holding everywhere else.
+        parts = head.split()
+        if len(parts) == 2 and flags and not parts[1].startswith("-"):
+            meta = parts[1]
     longs = [f for f in flags if f.startswith("--")]
-    if not longs:
+    if not longs and not strict:
         # Go's stdlib `flag` spells even long options with one dash (`-color`,
         # `-no_gitignore`); read a multi-char single-dash flag as the keyword
-        # when there's no `--` form.
+        # when there's no `--` form. `--help` text only: a manual never
+        # spells Go-style longs, and promoting a manual's stray dash-words
+        # fabricates options that were never there.
         longs = [f for f in flags if len(f) > 2 and not f.startswith("--")]
-    if not longs and shorts != "none" and not strict:
-        # A short-only option (python's `-m`, `-c`, `-O`): the single char is
-        # the keyword — the bridge turns `m="build"` into `-m build`. Help text
-        # only (a man page's prose is too noisy to trust), and only a letter
-        # that forms a valid keyword (`-0` can't).
+    if not longs and shorts != "none":
+        # A short-only option (python's `-m`, ssh's whole surface): the
+        # single char is the keyword — the bridge turns `m="build"` into
+        # `-m build`. The `shorts` policy alone decides, from `--help` and
+        # manual alike; only a letter that forms a valid keyword (`-0`
+        # can't, ssh's `-4`/`-6` can't).
         longs = [f for f in flags if len(f) == 2 and f[1:].isidentifier()][:1]
     if not longs:
         return None  # nothing spellable
@@ -502,7 +544,7 @@ def parse_help(
     # wrong at worst — see `_spellings`.
     stated = set() if man else _grammar_values(_usage_line(text))
     options: list[Option] = []
-    seen: set[str] = set()
+    seen: dict[str, int] = {}
     for title, lines in sections.items():
         if _NOT_OPTIONS.search(title):
             continue  # `Commands:`, `Examples:` — dashes there aren't flags
@@ -522,13 +564,19 @@ def parse_help(
                 shorts=shorts,
                 bare_meta=not (first and first["flag"] in stated),
             )
-            if (
-                option is not None
-                and option.name not in _NOISE
-                and option.name not in seen
-            ):
-                seen.add(option.name)
-                options.append(option)
+            if option is None or option.name in _NOISE:
+                continue
+            if (kept := seen.get(option.name)) is not None:
+                # A manual may state one option as several complete forms on
+                # consecutive head lines (ssh's `-L` gives four), and only
+                # the last carries the description. The first form stays the
+                # option; a later twin only donates the help the kept one
+                # lacks.
+                if not options[kept].help and option.help:
+                    options[kept] = replace(options[kept], help=option.help)
+                continue
+            seen[option.name] = len(options)
+            options.append(option)
     if not options:
         # Go's `flag` prints its options under `Usage of <prog>:` — a section
         # `_NOT_OPTIONS` skips. Nothing parsed anywhere else, so scan every
@@ -538,21 +586,21 @@ def parse_help(
             for head, help_text in _blocks(lines, man=man):
                 option = _option(head, help_text, strict=man, shorts=shorts)
                 if option is not None and option.name not in _NOISE:
-                    seen.add(option.name)
+                    seen[option.name] = len(options)
                     options.append(option)
         options = list({o.name: o for o in options}.values())
     if shorts == "all":
         options = _with_short_aliases(options)
     if not man:
         options = _arity_from_grammar(options, _usage_line(text))
-    positional, lead = _synopsis_shape(text, name) if man else _usage_shape(text)
+    positional, lead = _synopsis_shape(text) if man else _usage_shape(text)
     return Verb(
         name=name,
         help=_summary(text),
         options=tuple(sorted(_pair_negations(options), key=lambda o: o.name)),
         positional=positional,
         lead=lead,
-        wraps=_wraps(text),
+        wraps=_synopsis_wraps(text) if man else _wraps(text),
     )
 
 
@@ -737,28 +785,59 @@ def _grammar_shape(grammar: str) -> tuple[str, str]:
     return "required", base.replace("-", "_").lower()
 
 
-def _synopsis_shape(text: str, verb: str) -> tuple[str, str]:
-    """`(positional, lead)` from a man page's `SYNOPSIS`.
+def _synopsis_forms(text: str) -> list[str]:
+    """Each complete form a man page's `SYNOPSIS` states, as its grammar.
 
-    git's manual states each verb as one or more complete forms. A verb
-    with a *single* form has one grammar to read (`git clone … <repository>
-    [<directory>]` → required); a verb with several — `git checkout` lists,
-    detaches, creates, restores — has no single shape, so it stays `"any"`.
-    Counting the forms is just counting the lines that restate `git <verb>`;
-    the wrapped continuations don't.
+    The manual restates the command per form, and the command is the page's
+    own NAME — verbatim for a single-binary page (`ssh`, `ssh-keygen`), with
+    dashes as spaces for a subcommand page (`git-clone` states `git clone`).
+    A line that doesn't restate it is a wrapped continuation of the form
+    above, and joins it.
     """
     match = re.search(
         r"(?ms)^SYNOPSIS[ \t]*\n(?P<body>.*?)\n(?:[A-Z][A-Z ]+\n|\Z)", text
     )
     if not match:
-        return "any", ""
+        return []
     body = match["body"]
-    prog = f"git {verb}"
-    forms = re.findall(rf"(?m)^[ \t]*{re.escape(prog)}\b", body)
+    page = re.search(r"(?ms)^NAME[ \t]*\n[ \t]*(?P<name>[A-Za-z0-9._-]+)", text)
+    if not page:
+        return []
+    for prog in dict.fromkeys((page["name"], page["name"].replace("-", " "))):
+        pattern = rf"(?m)^[ \t]*{re.escape(prog)}(?=\s|$)"
+        if re.search(pattern, body):
+            chunks = re.split(pattern, body)
+            return [" ".join(chunk.split()) for chunk in chunks[1:]]
+    return []
+
+
+def _synopsis_shape(text: str) -> tuple[str, str]:
+    """`(positional, lead)` from a man page's `SYNOPSIS`.
+
+    A verb with a *single* form has one grammar to read (`git clone …
+    <repository> [<directory>]` → required); a verb with several — `git
+    checkout` lists, detaches, creates, restores; `ssh` connects and
+    queries — has no single shape, so it stays `"any"`.
+    """
+    forms = _synopsis_forms(text)
     if len(forms) != 1:
         return "any", ""  # multi-form (or unrecognised) — don't constrain
-    grammar = " ".join(body.split()).split(prog, 1)[1]
-    return _grammar_shape(grammar)
+    return _grammar_shape(forms[0])
+
+
+def _synopsis_wraps(text: str) -> bool:
+    """`_wraps`, read from the `SYNOPSIS`: a manual has no `usage:` line.
+
+    Any form ending in a command slot marks the wrapper — ssh's main form
+    is `ssh … destination [command [argument ...]]`, and the flags of a
+    call like that must precede the positionals or they land on the remote
+    command instead of on ssh.
+    """
+    return any(
+        re.split(r"[\[:]", token.strip("[]<>"))[0].lower() in _WRAP_METAVAR
+        for form in _synopsis_forms(text)
+        for token in _top_level_positionals(form)
+    )
 
 
 def _drop_usage(lines: list[str]) -> list[str]:
@@ -952,14 +1031,26 @@ NO_CONSOLE_WINDOW: int = (
 _OVERSTRIKE = re.compile(r".\x08")
 
 
-def man_version(tree: Path) -> str:
+def man_version(tree: Path, name: str = "git") -> str:
     """The version a fetched manual belongs to, from its own header.
 
-    `.TH "GIT" "1" "2025-06-15" "Git 2\\&.50\\&.1" "Git Manual"` — the tree
-    says which release it documents, so a reading names its own version
-    the way a binary does, and the guard against describing the wrong
-    release works unchanged.
+    The installer stamps the tree with the release it fetched, per tool
+    (`VERSION-ssh`) because the provision tier merges every manual into one
+    tree and git's release is not ssh's — and the stamp is the only
+    statement there is for mdoc pages, which say no version anywhere.
+    git's older trees predate the stamp and carry it in their `.TH` line
+    instead: `.TH "GIT" "1" "2025-06-15" "Git 2\\&.50\\&.1" "Git Manual"`.
+    Either way the tree says which release it documents, so a reading
+    names its own version the way a binary does, and the guard against
+    describing the wrong release works unchanged.
     """
+    stamp = tree / f"VERSION-{name}"
+    try:
+        stamped = stamp.read_text(encoding="utf-8").strip()
+    except OSError:
+        stamped = ""
+    if stamped:
+        return stamped
     page = tree / "man1" / "git.1"
     try:
         head = page.read_text(encoding="utf-8", errors="replace")[:4000]
@@ -1131,9 +1222,19 @@ def from_help(
         # precede the verb — what `.opts()` binds. Read them from there.
         manual = run_help([cmd, name], man=True)
         if manual:
-            root_verb = replace(
-                root_verb, options=parse_help(manual, man=True, shorts=shorts).options
-            )
+            from_manual = parse_help(manual, man=True, shorts=shorts)
+            root_verb = replace(root_verb, options=from_manual.options)
+            if not verbs:
+                # A verb-less manual tool (ssh) *is* its root: the manual's
+                # SYNOPSIS is the only statement of its shape, and whether
+                # it wraps a trailing command — the terse root read above
+                # had no usage line to say either.
+                root_verb = replace(
+                    root_verb,
+                    positional=from_manual.positional,
+                    lead=from_manual.lead,
+                    wraps=from_manual.wraps,
+                )
     parsed = [root_verb]
     for verb in verbs:
         text = run_help([cmd, *verb.split(".")], flag=flag, man=man)

@@ -244,6 +244,13 @@ python-version = "3.11"
 # typing_extensions runtime dep. Revisit when 3.11 support ends.
 preset = "default"
 project-includes = ["src", "tests/typecheck_api.py", "tests/typecheck_workitem.py"]
+# The includes above are the whole scope; nothing may subtract from them by
+# accident. Ignore files and the hidden-directory heuristic are both
+# path-dependent — a checkout under a dot-directory (a `.claude/worktrees/`
+# worktree) had every include silently skipped and the gate failing on
+# "no files matched". At the repo root neither setting changes anything.
+use-ignore-files = false
+disable-project-excludes-heuristics = true
 # Every platform at once (pyrefly checks the union), 3.11 floor.
 python-platform = "all"
 python-version = "3.11"

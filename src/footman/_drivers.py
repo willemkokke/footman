@@ -32,6 +32,35 @@ from footman._toolspec import ToolSpec, Verb
 
 
 @dataclass(frozen=True)
+class Manual:
+    """Where a `kind="man"` tool's per-release pages are published.
+
+    A manual is not a binary: the pages are the reading, so nothing is
+    installed and nothing is run — the fetch is a directory listing, an
+    archive per release, and a `man -M` tree to unpack it into. Two
+    publishers so far: kernel.org's per-release git manpage tarballs, and
+    OpenSSH's portable release tarballs (which carry `ssh.1` alongside the
+    sources). The pages are the same bytes everywhere — a manual has no
+    platform — so machines reading this tier cannot disagree.
+    """
+
+    index: str
+    """The directory listing the per-release archives appear in."""
+    archive: str
+    """The archive's filename with a `{version}` slot, joined to *index*."""
+    listing: str
+    """Regex over the listing naming each release: must bind
+    `(?P<version>…)`, and may bind `(?P<day>…)`/`(?P<month>…)`/`(?P<year>…)`
+    where the listing shows dates (kernel.org does; OpenSSH's does not, and
+    its patchlevels tie under `version_tuple` — `_order` breaks that tie on
+    the numeric `pN` suffix)."""
+    pages: tuple[str, ...] = ()
+    """Member basenames to pull into `man1/` (`("ssh.1",)` from a source
+    tarball). Empty means the archive already is a bare man tree, unpacked
+    whole (git's manpages tarball)."""
+
+
+@dataclass(frozen=True)
 class Provision:
     """How `fm tools.provision` fetches this tool's *latest* binary.
 
@@ -71,6 +100,9 @@ class Provision:
     """Extra packages to install *alongside* the tool (`uv --with`), so a
     plugin-extended CLI is read whole. pytest's `--cov*` flags come from
     `pytest-cov`; without it a bare provisioned pytest would stub none of them."""
+    manual: Manual | None = None
+    """Where the pages live, for `kind="man"` — required there, unused
+    elsewhere."""
 
     def target(self, name: str) -> str:
         """What to fetch: the explicit `package`/`repo`, else the tool *name*."""
@@ -140,6 +172,10 @@ class Driver:
     long form. Read only from `--help`, never a man page (its prose is noisy)."""
     url: str = ""
     """The tool's home, for the reference page's table."""
+    version_of: str = ""
+    """The sibling binary whose version answers for this tool, when it has
+    no version output of its own — ssh-keygen ships in lockstep with ssh,
+    and the OpenSSH release is the version of both."""
     man: bool = False
     """Read each verb's *manual* (`git help <verb>`) instead of its terse
     `-h`. git's `-h` omits about half its flags and prints an idiosyncratic
@@ -204,8 +240,20 @@ DRIVERS: tuple[Driver, ...] = (
         "git",
         # Read from its manual, and a manual is not a binary: kernel.org
         # publishes the pages per release, so nothing is installed and
-        # nothing is run.
-        provision=Provision(kind="man"),
+        # nothing is run. One tarball of about a megabyte against the fifty
+        # a git build would cost, which is why this tier reaches back to
+        # 2013 rather than stopping at a horizon someone had to choose.
+        provision=Provision(
+            kind="man",
+            manual=Manual(
+                index="https://mirrors.edge.kernel.org/pub/software/scm/git/",
+                archive="git-manpages-{version}.tar.gz",
+                listing=(
+                    r'href="git-manpages-(?P<version>\d+(?:\.\d+)+)\.tar\.gz"'
+                    r".*?(?P<day>\d{2})-(?P<month>[A-Z][a-z]{2})-(?P<year>\d{4})"
+                ),
+            ),
+        ),
         url="https://git-scm.com/docs",
         help_flag="-h",
         man=True,
@@ -230,6 +278,40 @@ DRIVERS: tuple[Driver, ...] = (
             "restore",
             "worktree",
         ),
+    ),
+    Driver(
+        "ssh",
+        # OpenSSH has no `--help` at all: the manual is the only statement
+        # of its surface, and the portable release tarball carries the
+        # pages beside the sources. All-short options — the whole surface
+        # keys through the default shorts policy.
+        provision=Provision(
+            kind="man",
+            manual=Manual(
+                index="https://cdn.openbsd.org/pub/OpenBSD/OpenSSH/portable/",
+                archive="openssh-{version}.tar.gz",
+                listing=r'href="openssh-(?P<version>\d+\.\d+p\d+)\.tar\.gz"',
+                pages=("ssh.1",),
+            ),
+        ),
+        man=True,
+        url="https://man.openbsd.org/ssh.1",
+    ),
+    Driver(
+        "ssh-keygen",
+        attr="ssh_keygen",
+        version_of="ssh",
+        provision=Provision(
+            kind="man",
+            manual=Manual(
+                index="https://cdn.openbsd.org/pub/OpenBSD/OpenSSH/portable/",
+                archive="openssh-{version}.tar.gz",
+                listing=r'href="openssh-(?P<version>\d+\.\d+p\d+)\.tar\.gz"',
+                pages=("ssh-keygen.1",),
+            ),
+        ),
+        man=True,
+        url="https://man.openbsd.org/ssh-keygen.1",
     ),
     Driver(
         "docker",
@@ -500,9 +582,21 @@ def _read_version(name: str) -> tuple[str, str]:
     """
     from footman import tools
 
+    # A suite tool may name a sibling that answers for it: ssh-keygen has no
+    # version output at all, and ssh speaks for the OpenSSH release both
+    # ship in.
+    for sibling in DRIVERS:
+        if sibling.name == name and sibling.version_of:
+            name = sibling.version_of
+            break
     binary = _resolve(name)
     if binary is None:
         return "", "not on PATH"
+    # The probe's spelling is the baked tool's own: `ssh` only answers `-V`
+    # (`--version` is an illegal option), `cmd` spells it `/c ver`. An
+    # unbaked name resolves to a default `Tool`, whose spelling is the
+    # `--version` everyone else speaks.
+    spelling = getattr(tools, name.replace("-", "_"))._version_argv
     # A version read must never touch the network — see `_toolhelp.QUIET`.
     #
     # Through `run()`: `recorded=False` keeps a probe out of the run's story,
@@ -514,7 +608,7 @@ def _read_version(name: str) -> tuple[str, str]:
 
     try:
         done = _run(
-            [binary, "--version"],
+            [binary, *spelling],
             recorded=False,
             timeout=30,
             nofail=True,
@@ -588,7 +682,9 @@ def extract(driver: Driver, home: Path | None = None) -> ToolSpec:
             binary=_resolve(driver.name),
             verbs=driver.wanted,
             version=(
-                _toolhelp.man_version(Path(tree)) if tree else version(driver.name)
+                _toolhelp.man_version(Path(tree), driver.name)
+                if tree
+                else version(driver.name)
             ),
             in_process=in_process_capable(driver.name),
             flag=driver.help_flag,

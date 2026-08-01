@@ -185,7 +185,7 @@ def releases(driver: Driver) -> list[Release]:
     elif kind == "docker":
         found = _docker_index()
     elif kind == "man":
-        found = _manpages_index()
+        found = _man_index(driver)
     else:
         return []
     found = _stable(found)
@@ -231,7 +231,28 @@ def _order(found: list[Release]) -> list[Release]:
     """
     from footman.tools import version_tuple
 
-    return sorted(found, key=lambda r: (version_tuple(r.version), r.date), reverse=True)
+    return sorted(
+        found,
+        key=lambda r: (version_tuple(r.version), _patchlevel(r.version), r.date),
+        reverse=True,
+    )
+
+
+_PATCHLEVEL = re.compile(r"p(\d+)$")
+
+
+def _patchlevel(version: str) -> int:
+    """OpenSSH's portable patchlevel: `9.9p2` follows `9.9p1`.
+
+    `version_tuple` deliberately reads two builds of one base as equal and
+    leaves the caller to say what that means; ordering a release chain is a
+    caller with an answer. OpenSSH's listing shows no dates, so without
+    this the p-levels of one base would keep their listing order rather
+    than their release order. Inert everywhere else: no other curated
+    tool's versions end in `p<digits>`.
+    """
+    match = _PATCHLEVEL.search(version)
+    return int(match[1]) if match else 0
 
 
 class Unreachable(Exception):
@@ -609,68 +630,90 @@ def install_plugin(plugin: Plugin, on_or_before: str, home: Path) -> bool:
     raise Unreachable(f"{plugin.repo} {release.version}", "could not be placed")
 
 
-_MANPAGES_INDEX = "https://mirrors.edge.kernel.org/pub/software/scm/git/"
-_MANPAGES_FILE = re.compile(
-    r'href="git-manpages-(?P<version>\d+(?:\.\d+)+)\.tar\.gz"'
-    r".*?(?P<day>\d{2})-(?P<month>[A-Z][a-z]{2})-(?P<year>\d{4})"
-)
 _MONTHS = (
     "Jan", "Feb", "Mar", "Apr", "May", "Jun",
     "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
 )  # fmt: skip
 
 
-def _manpages_index() -> list[Release]:
-    """Every git release, by the manual that shipped with it.
+def _man_index(driver: Driver) -> list[Release]:
+    """Every release of a manual-read tool, by the pages that shipped with it.
 
-    git is read from its *manual* — `-h` omits about half its flags — and
-    a manual is not a binary: the pages are the reading, so there is
-    nothing to install and nothing to run. kernel.org publishes them per
-    release, one tarball of about a megabyte against the fifty a git build
-    would cost, which is why this tier reaches back to 2013 rather than
-    stopping at a horizon someone had to choose.
+    A tool is read from its *manual* where the binary cannot answer — git's
+    `-h` omits about half its flags, ssh has no `--help` at all — and a
+    manual is not a binary: the pages are the reading, so there is nothing
+    to install and nothing to run. Where the manual lives is the driver's
+    `Manual` descriptor; this walks its listing.
 
-    They are also the same bytes everywhere. A manual has no platform, so
-    two machines reading this tier cannot disagree — the cross-platform
-    tagging simply has nothing to say about git, which is the honest
-    answer rather than a gap.
+    The pages are also the same bytes everywhere. A manual has no platform,
+    so two machines reading this tier cannot disagree — the cross-platform
+    tagging simply has nothing to say about these tools, which is the
+    honest answer rather than a gap.
     """
+    man = driver.provision.manual
+    if man is None:
+        return []
     listing = _read_index(
-        urllib.request.Request(
-            _MANPAGES_INDEX, headers={"User-Agent": "footman-provision"}
-        ),
-        _MANPAGES_INDEX,
+        urllib.request.Request(man.index, headers={"User-Agent": "footman-provision"}),
+        man.index,
     ).decode("utf-8", "replace")
     found = {}
-    for match in _MANPAGES_FILE.finditer(listing):
-        if match["month"] not in _MONTHS:  # pragma: no cover - a mirror typo
-            continue
-        month = _MONTHS.index(match["month"]) + 1
-        found[match["version"]] = Release(
-            version=match["version"],
-            date=f"{match['year']}-{month:02d}-{match['day']}",
-        )
+    for match in re.finditer(man.listing, listing):
+        date = ""
+        if "month" in match.groupdict():
+            if match["month"] not in _MONTHS:  # pragma: no cover - a mirror typo
+                continue
+            month = _MONTHS.index(match["month"]) + 1
+            date = f"{match['year']}-{month:02d}-{match['day']}"
+        found[match["version"]] = Release(version=match["version"], date=date)
     return _order(list(found.values()))
 
 
-def _install_manpages(release: Release, into: Path) -> Path | None:
+def _install_man(driver: Driver, release: Release, into: Path) -> Path | None:
     """Unpack one release's manuals where the reader will look for them."""
     import tarfile
 
     from footman import _provision
 
-    url = f"{_MANPAGES_INDEX}git-manpages-{release.version}.tar.gz"
+    man = driver.provision.manual
+    if man is None:
+        return None
+    url = man.index + man.archive.format(version=release.version)
     tree = into / "man"
     tree.mkdir(parents=True, exist_ok=True)
     try:
         archive = _provision._download(url, into)
         with tarfile.open(archive) as tar:
-            # The tarball is a bare `man1/…` tree with no top directory, so
-            # it lands where `man -M` expects a manpath root.
-            tar.extractall(tree, filter="data")
+            if not man.pages:
+                # A bare `man1/…` tree with no top directory (git's manpages
+                # tarball), landing where `man -M` expects a manpath root.
+                tar.extractall(tree, filter="data")
+            else:
+                # A source archive that happens to carry its pages (OpenSSH's
+                # release tarball): pull just the named pages, by basename so
+                # the top directory's name never matters, written by hand so
+                # a member path can't steer the extraction.
+                section = tree / "man1"
+                section.mkdir(parents=True, exist_ok=True)
+                wanted = set(man.pages)
+                for member in tar.getmembers():
+                    name = member.name.rsplit("/", 1)[-1]
+                    if member.isfile() and name in wanted:
+                        payload = tar.extractfile(member)
+                        if payload is not None:
+                            (section / name).write_bytes(payload.read())
     except (_provision.ProvisionError, OSError, ValueError, tarfile.TarError):
         return None
-    return tree if any(tree.glob("man1/git.1")) else None
+    proof = man.pages[0] if man.pages else f"{driver.name}.1"
+    if not any(tree.glob(f"man1/{proof}")):
+        return None
+    # The tree says which release it documents. git's pages carry it in
+    # their .TH line, but mdoc pages (OpenSSH's) state no version anywhere —
+    # the installer is the one who knows, so it stamps what it fetched.
+    # Per tool, because the provision tier merges every manual into one
+    # tree and git's release is not ssh's.
+    (tree / f"VERSION-{driver.name}").write_text(release.version, encoding="utf-8")
+    return tree
 
 
 def _pypi(driver: Driver) -> list[Release]:
@@ -722,7 +765,7 @@ def install(driver: Driver, release: Release, into: Path) -> Path | None:
     if kind == "docker":
         return _install_docker(driver, release, into)
     if kind == "man":
-        return _install_manpages(release, into)
+        return _install_man(driver, release, into)
     return None
 
 

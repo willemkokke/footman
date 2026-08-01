@@ -188,15 +188,16 @@ def _man_tier(prefix: Path, drivers: list[Driver]) -> list[Outcome]:
             outcomes.append(Outcome(driver.key, "man", "fail", "no manuals listed"))
             continue
         newest = found[0]
-        placed = _toolfetch.install(driver, newest, prefix / ".man")
+        # Staged per driver and *merged* into the shared tree: the tier holds
+        # more than one tool's pages (git's man1/… beside ssh.1), so a
+        # replace-the-tree copy would leave only whichever driver ran last.
+        placed = _toolfetch.install(driver, newest, prefix / ".man" / driver.key)
         if placed is None:
             outcomes.append(
                 Outcome(driver.key, "man", "fail", f"{newest.version} unavailable")
             )
             continue
-        target = prefix / "man"
-        shutil.rmtree(target, ignore_errors=True)
-        shutil.copytree(placed, target)
+        shutil.copytree(placed, prefix / "man", dirs_exist_ok=True)
         outcomes.append(Outcome(driver.key, "man", "ok", newest.version))
     return outcomes
 
