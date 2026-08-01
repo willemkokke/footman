@@ -65,29 +65,33 @@ class Ssh(_Tool):
             A: Enables forwarding of connections from an authentication agent such
                 as ssh-agent(1).
             B: Bind to the address of bind_interface before attempting to connect to
-                the destination host.
+                the destination host. Added in 7.7p1.
             C: Requests compression of all data (including stdin, stdout, stderr,
                 and data for forwarded X11, TCP and UNIX-domain connections).
             D: Specifies a local "dynamic" application-level port forwarding. May be
-                repeated: a list emits the flag once per item.
-            E: Append debug logs to log_file instead of standard error.
-            F: Specifies an alternative per-user configuration file.
+                repeated: a list emits the flag once per item. Added in 3.0p1.
+            E: Append debug logs to log_file instead of standard error. Added in
+                6.3p1.
+            F: Specifies an alternative per-user configuration file. Added in 3.0p1.
             G: Causes ssh to print its configuration after evaluating Host and Match
-                blocks and exit.
+                blocks and exit. Added in 6.8p1.
             I: Specify the PKCS#11 shared library ssh should use to communicate with
-                a PKCS#11 token providing keys for user authentication.
+                a PKCS#11 token providing keys for user authentication. Added in
+                3.0p1.
             J: Connect to the target host by first making an ssh connection to the
                 jump host described by destination and then establishing a TCP
                 forwarding to the ultimate destination from there. May be repeated:
-                a list emits the flag once per item.
+                a list emits the flag once per item. Added in 7.3p1.
             K: Enables GSSAPI-based authentication and forwarding (delegation) of
-                GSSAPI credentials to the server.
+                GSSAPI credentials to the server. Added in 4.7p1.
             L: Specifies that connections to the given TCP port or Unix socket on
                 the local (client) host are to be forwarded to the given host and
                 port, or Unix socket, on the remote side.
             M: Places the ssh client into "master" mode for connection sharing.
+                Added in 3.9p1.
             N: Do not execute a remote command.
-            O: Control an active connection multiplexing master process.
+            O: Control an active connection multiplexing master process. Added in
+                4.0p1.
             P: Specify a tag name that may be used to select configuration in
                 ssh_config(5). May be repeated: a list emits the flag once per item.
             Q: Queries for the algorithms supported by one of the following
@@ -100,20 +104,20 @@ class Ssh(_Tool):
                 (non-certificate key types), key-sig (all key types and signature
                 algorithms), protocol-version (supported SSH protocol versions), and
                 sig (supported signature algorithms). May be repeated: a list emits
-                the flag once per item.
+                the flag once per item. Added in 6.3p1.
             R: Specifies that connections to the given TCP port or Unix socket on
                 the remote (server) host are to be forwarded to the local side.
             S: Specifies the location of a control socket for connection sharing, or
-                the string "none" to disable connection sharing.
+                the string "none" to disable connection sharing. Added in 3.9p1.
             T: Disable pseudo-terminal allocation.
-            V: Display the version number and exit.
+            V: Display the version number and exit. Added in 3.7p1.
             W: Requests that standard input and output on the client be forwarded to
-                host on port over the secure channel.
+                host on port over the secure channel. Added in 5.4p1.
             X: Enables X11 forwarding.
-            Y: Enables trusted X11 forwarding.
+            Y: Enables trusted X11 forwarding. Added in 3.8p1.
             a: Disables forwarding of the authentication agent connection.
             b: Use bind_address on the local machine as the source address of the
-                connection.
+                connection. Added in 3.0p1.
             c: Selects the cipher specification for encrypting the session.
             e: Sets the escape character for sessions with a pty . Defaults to `~`.
             f: Requests ssh to go to background just before command execution.
@@ -138,8 +142,9 @@ class Ssh(_Tool):
             v: Verbose mode.
             w: Requests tunnel device forwarding with the specified tun(4) devices
                 between the client (local_tun) and the server (remote_tun). May be
-                repeated: a list emits the flag once per item.
+                repeated: a list emits the flag once per item. Added in 4.3p1.
             x: Disables X11 forwarding.
-            y: Send log information using the syslog(3) system module.
+            y: Send log information using the syslog(3) system module. Added in
+                5.2p1.
         """
         ...

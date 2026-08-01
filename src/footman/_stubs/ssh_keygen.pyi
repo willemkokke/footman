@@ -19,8 +19,10 @@ class SshKeygen(_Tool):
         D: _Value = ...,
         E: _Value = ...,
         F: _Flag = ...,
+        G: _Value = ...,
         H: _Flag = ...,
         I: _Value = ...,
+        J: _Value = ...,
         K: _Flag = ...,
         L: _Flag = ...,
         M: _Value = ...,
@@ -29,8 +31,11 @@ class SshKeygen(_Tool):
         P: _Value = ...,
         Q: _Flag = ...,
         R: _Flag = ...,
+        S: _Value = ...,
+        T: _Value = ...,
         U: _Flag = ...,
         V: _Value = ...,
+        W: _Value = ...,
         Y: _Value = ...,
         Z: _Value = ...,
         a: _Value = ...,
@@ -41,10 +46,12 @@ class SshKeygen(_Tool):
         g: _Flag = ...,
         h: _Flag = ...,
         i: _Flag = ...,
+        j: _Value = ...,
         k: _Flag = ...,
         l: _Flag = ...,
         m: _Value = ...,
         n: _Value = ...,
+        o: _Flag = ...,
         p: _Flag = ...,
         q: _Flag = ...,
         r: _Value = ...,
@@ -62,39 +69,51 @@ class SshKeygen(_Tool):
 
         Args:
             A: Generate host keys of all default key types (rsa, ecdsa,
-                mldsa44-ed25519 and ed25519) if they do not already exist.
+                mldsa44-ed25519 and ed25519) if they do not already exist. Added in
+                5.9p1.
             B: Show the bubblebabble digest of specified private or public key file.
             C: Provides a new comment.
             D: Download the public keys provided by the PKCS#11 shared library
-                pkcs11.
+                pkcs11. Added in 3.0p1.
             E: Specifies the hash algorithm used when displaying key fingerprints.
+                Added in 6.8p1.
             F: Search for the specified hostname (with optional port number) in a
-                known_hosts file, listing any occurrences found.
-            H: Hash a known_hosts file.
-            I: Specify the key identity when signing a public key.
-            K: Download resident keys from a FIDO authenticator.
-            L: Prints the contents of one or more certificates.
+                known_hosts file, listing any occurrences found. Added in 4.0p1.
+            G: Generate candidate primes for DH-GEX. Gone since 8.2p1.
+            H: Hash a known_hosts file. Added in 4.0p1.
+            I: Specify the key identity when signing a public key. Added in 5.4p1.
+            J: Exit after screening the specified number of lines while performing
+                DH candidate screening using the -T option. Gone since 8.2p1.
+            K: Download resident keys from a FIDO authenticator. Added in 6.0p1.
+            L: Prints the contents of one or more certificates. Added in 5.4p1.
             M: Generate candidate Diffie-Hellman Group Exchange (DH-GEX) parameters
                 for eventual use by the 'diffie-hellman-group-exchange-*' key
-                exchange methods.
+                exchange methods. Added in 3.7p1.
             N: Provides the new passphrase.
             O: Specify a key/value option. May be repeated: a list emits the flag
-                once per item.
+                once per item. Added in 5.4p1.
             P: Provides the (old) passphrase.
-            Q: Test whether keys have been revoked in a KRL.
+            Q: Test whether keys have been revoked in a KRL. Added in 6.2p1.
             R: Removes all keys belonging to the specified hostname (with optional
-                port number) from a known_hosts file.
+                port number) from a known_hosts file. Added in 4.0p1.
+            S: Specify start point (in hex) when generating candidate moduli for
+                DH-GEX. Gone since 8.2p1.
+            T: Test DH group exchange candidate primes (generated using the -G
+                option) for safety. Gone since 8.2p1.
             U: When used in combination with -s or -Y sign, this option indicates
-                that a CA key resides in an ssh-agent(1).
+                that a CA key resides in an ssh-agent(1). Added in 3.0p1.
             V: Specify a validity interval when signing a certificate. May be
-                repeated: a list emits the flag once per item.
+                repeated: a list emits the flag once per item. Added in 5.4p1.
+            W: Specify desired generator when testing candidate moduli for DH- GEX.
+                Gone since 8.2p1.
             Y: Find the principal(s) associated with the public key of a signature,
                 provided using the -s flag in an authorized signers file provided
-                using the -f flag.
+                using the -f flag. Added in 8.1p1.
             Z: Specifies the cipher to use for encryption when writing an
-                OpenSSH-format private key file.
+                OpenSSH-format private key file. Added in 8.5p1.
             a: When saving a private key, this option specifies the number of KDF
                 (key derivation function, currently bcrypt_pbkdf(3)) rounds used.
+                Added in 3.7p1.
             b: Specifies the number of bits in the key to create.
             c: Requests changing the comment in the private and public key files.
             e: This option will read a private or public OpenSSH key file and print
@@ -102,35 +121,41 @@ class SshKeygen(_Tool):
                 option.
             f: Specifies the filename of the key file.
             g: Use generic DNS format when printing fingerprint resource records
-                using the -r command.
+                using the -r command. Added in 3.7p1.
             h: When signing a key, create a host certificate instead of a user
-                certificate.
+                certificate. Added in 5.4p1.
             i: This option will read an unencrypted private (or public) key file in
                 the format specified by the -m option and print an OpenSSH
                 compatible private (or public) key to stdout.
-            k: Generate a KRL file.
+            j: Start screening at the specified line number while performing DH
+                candidate screening using the -T option. Gone since 8.2p1.
+            k: Generate a KRL file. Added in 6.2p1.
             l: Show fingerprint of specified public key file.
             m: Specify a key format for key generation, the -i (import), -e (export)
                 conversion options, and the -p change passphrase operation. May be
-                repeated: a list emits the flag once per item.
+                repeated: a list emits the flag once per item. Added in 5.6p1.
             n: Specify one or more principals (user or host names) to be included in
                 a certificate when signing a key. May be repeated: a list emits the
-                flag once per item.
+                flag once per item. Added in 5.4p1.
+            o: Causes ssh-keygen to save private keys using the new OpenSSH format
+                rather than the more compatible PEM format. Gone since 7.8p1.
             p: Requests changing the passphrase of a private key file instead of
                 creating a new private key.
             q: Silence ssh-keygen.
             r: Print the SSHFP fingerprint resource record named hostname for the
-                specified public key file.
-            s: Certify (sign) a public key using the specified CA key.
+                specified public key file. Added in 3.7p1.
+            s: Certify (sign) a public key using the specified CA key. Added in
+                5.4p1.
             t: Specifies the type of key to create.
-            u: Update a KRL.
-            v: Verbose mode.
+            u: Update a KRL. Added in 6.2p1.
+            v: Verbose mode. Added in 3.8p1.
             w: Specifies a path to a library that will be used when creating FIDO
                 authenticator-hosted keys, overriding the default of using the
-                internal USB HID support.
+                internal USB HID support. Added in 8.2p1.
             y: This option will read a private OpenSSH format file and print an
                 OpenSSH public key to stdout.
             z: Specifies a serial number to be embedded in the certificate to
-                distinguish this certificate from others from the same CA.
+                distinguish this certificate from others from the same CA. Added in
+                5.6p1.
         """
         ...

@@ -63,6 +63,7 @@ from footman._stubs.ruff import Ruff as Ruff
 from footman._stubs.ruff_format import RuffFormat as RuffFormat
 from footman._stubs.ssh import Ssh as Ssh
 from footman._stubs.ssh_keygen import SshKeygen as SshKeygen
+from footman._stubs.ssh_keyscan import SshKeyscan as SshKeyscan
 from footman._stubs.twine import Twine as Twine
 from footman._stubs.ty import Ty as Ty
 from footman._stubs.uv import Uv as Uv
@@ -201,6 +202,7 @@ markdownlint: Markdownlint
 gh: Gh
 ssh: Ssh
 ssh_keygen: SshKeygen
+ssh_keyscan: SshKeyscan
 eclint: Eclint
 djlint: Djlint
 mypy: Mypy
