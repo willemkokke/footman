@@ -2147,6 +2147,45 @@ def test_a_timeout_under_nofail_returns_the_result():
     assert result.code == 124
 
 
+# --- a missing executable: the taught error ----------------------------------
+
+
+def test_a_missing_executable_raises_a_taught_command_not_found():
+    from footman.context import CommandNotFound, Context, use_context
+
+    with use_context(Context()), pytest.raises(CommandNotFound) as caught:
+        run(["definitely-not-installed-anywhere", "--version"])
+
+    assert isinstance(caught.value, FileNotFoundError)  # old handlers keep working
+    assert caught.value.command == "definitely-not-installed-anywhere"
+    message = str(caught.value)
+    assert "no executable 'definitely-not-installed-anywhere'" in message
+    assert "@footman.requires_tool" in message
+
+
+def test_a_missing_executable_is_not_silenced_by_nofail():
+    from footman.context import CommandNotFound, Context, use_context
+
+    # No command ran, so there is no exit code for nofail to accept — the
+    # environment defect raises either way.
+    with use_context(Context()), pytest.raises(CommandNotFound):
+        run(["definitely-not-installed-anywhere"], nofail=True)
+
+
+def test_a_missing_cwd_keeps_the_honest_os_error(tmp_path):
+    from footman.context import CommandNotFound, Context, use_context
+
+    with (
+        use_context(Context()),
+        pytest.raises(FileNotFoundError) as caught,
+    ):
+        run([sys.executable, "--version"], cwd=tmp_path / "nowhere")
+
+    # The interpreter exists; the directory does not — blaming the tool
+    # would teach the wrong fix.
+    assert not isinstance(caught.value, CommandNotFound)
+
+
 def test_a_call_inside_its_timeout_is_untouched():
     from footman.context import Context, use_context
 

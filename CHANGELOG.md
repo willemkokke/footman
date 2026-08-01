@@ -30,6 +30,17 @@ versions may include breaking changes.
 
 ### Fixed
 
+- **A missing executable is a taught error.** `run()` — and so every
+  `tools.*` call — raises `CommandNotFound` when the program does not
+  exist: the message names the executable, says it is not installed
+  here or is misspelled, and points at `@requires_tool(…, reason=…)`
+  so the task lists as unavailable instead of failing mid-run. It
+  subclasses `FileNotFoundError`, so existing handlers keep catching
+  it, and `nofail=True` does not silence it — no command ran, so
+  there is no exit code to accept. A `cwd=` naming a directory that
+  does not exist keeps the honest OS error rather than blaming the
+  tool.
+
 - **The report's order is deterministic under parallel bursts.** Task
   rows seat chronologically by start, as always — but starts landing
   inside the same instant are worker-thread noise, so the tie now
