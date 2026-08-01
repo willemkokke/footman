@@ -9,6 +9,7 @@ import pytest
 
 from footman import _executor, registry
 from footman._split import ChainError
+from footman._step import step
 from footman.params import ask, between, env, stdin
 from footman.registry import Group, RegistrationError
 from footman.testing import Runner
@@ -389,7 +390,7 @@ def test_two_threads_calling_one_task_share_a_single_execution():
         def one() -> None:
             seen.append(slow())
 
-        parallel(one, one, one)
+        parallel(step(one)(), step(one)(), step(one)())
 
     assert drive(reg, "fan").ok
     assert len(runs) == 1
@@ -1089,7 +1090,7 @@ def test_parallel_task_children_count_once():
 
     @reg.task
     def fanout():
-        parallel(compile, lambda: 0)
+        parallel(compile, step(lambda: 0)())
 
     status = _with_status(reg, "fanout")
     started = [e for e in status.events if e[0] == "started"]
@@ -1114,14 +1115,12 @@ def _units(reg: Group, line: str) -> tuple[int, list[str | int | bool]]:
 def test_every_parallel_spelling_counts_the_same():
     # The regression this pins: a lambda wrapping a call used to count twice —
     # once as parallel()'s anonymous thunk, once as the request inside it.
-    import functools
 
     from footman import parallel
 
     for label, body in (
         ("handle", lambda w: parallel(w)),
-        ("partial", lambda w: parallel(functools.partial(w, tag="p"))),
-        ("lambda", lambda w: parallel(lambda: w(tag="l"))),
+        ("item", lambda w: parallel(step(lambda: w(tag="l"))())),
     ):
         reg = Group("root")
 
@@ -1149,7 +1148,7 @@ def test_a_plain_thunk_keeps_its_own_unit():
 
     @reg.task
     def go():
-        parallel(plain)
+        parallel(step(plain)())
 
     total, started = _units(reg, "go")
     assert (total, started, ran) == (1, ["plain"], ["plain"])
@@ -1167,7 +1166,7 @@ def test_a_thunk_that_runs_two_tasks_counts_both():
 
     @reg.task
     def go():
-        parallel(lambda: (leaf("a"), leaf("b")))
+        parallel(step(lambda: (leaf("a"), leaf("b")))())
 
     total, _started = _units(reg, "go")
     assert total == 2
@@ -1209,7 +1208,7 @@ def test_a_shared_request_is_still_its_own_unit():
 
     @reg.task
     def go():
-        parallel(lambda: leaf("same"), lambda: leaf("same"))
+        parallel(step(lambda: leaf("same"))(), step(lambda: leaf("same"))())
 
     total, _started = _units(reg, "go")
     assert total == 2
@@ -1349,8 +1348,8 @@ def test_also_queues_a_plain_callable_into_the_block():
     def go():
         with parallel() as p:
             build("web")
-            p.also(ran.append, "straggler")
-            p.also(lambda: "from a lambda")
+            p(step(ran.append, title="straggler")("straggler"))
+            p(step(lambda: "from a lambda", title="lifted")())
         assert p.results == ["dist/web", None, "from a lambda"]
 
     result = drive(reg, "go")
@@ -1358,11 +1357,39 @@ def test_also_queues_a_plain_callable_into_the_block():
     assert ran == ["straggler"]
 
 
-def test_also_outside_a_block_is_taught():
+def test_also_is_retired_and_teaches_the_lift():
+    from footman import parallel
+
+    with pytest.raises(RuntimeError, match=r"earns a receipt too"):
+        parallel().also(print, "x")
+
+
+def test_queueing_an_item_outside_a_block_is_taught():
     from footman import parallel
 
     with pytest.raises(RuntimeError, match=r"inside the `with`"):
-        parallel().also(print, "x")
+        parallel()(step(lambda: 0, title="x")())
+
+
+def test_the_partial_footgun_is_a_taught_refusal():
+    # A partial of a task silently defeated interception once (footman's own
+    # tasks.py did it). Under the ban it teaches instead.
+    import functools
+
+    from footman import parallel
+
+    reg = Group("root")
+
+    @reg.task
+    def work(tag: str = "plain"): ...
+
+    @reg.task
+    def go():
+        parallel(functools.partial(work, tag="p"))  # type: ignore[call-overload]
+
+    result = drive(reg, "go")
+    assert not result.ok
+    assert "runs tasks and steps" in result.stderr
 
 
 # --- a task defined while a run is in flight ---------------------------------

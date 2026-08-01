@@ -245,14 +245,17 @@ def test_in_process_callable_reads_the_env_it_was_given(monkeypatch):
                 seen["pair"] = (os.environ.get("BASE"), os.environ.get("EXTRA"))
                 return 0
 
-            run(tool, env={"EXTRA": "call"})  # exactly this, nothing inherited
+            from footman import step
+
+            # exactly this env, nothing inherited — the step's own overlay
+            step(tool).opts(env={"EXTRA": "call"})()()
             seen["after"] = os.environ.get("EXTRA")
 
             def adding():
                 seen["added"] = (os.environ.get("BASE"), os.environ.get("EXTRA"))
                 return 0
 
-            run(adding, env={**os.environ, "EXTRA": "call"})  # the add idiom
+            step(adding).opts(env={**os.environ, "EXTRA": "call"})()()  # add idiom
 
     assert drive(tasks, "go")[0].ok
     assert seen["pair"] == (None, "call")  # BASE was not inherited

@@ -21,11 +21,10 @@ time — and a bouncing pulse with elapsed time when it hasn't. Both
 parallel engines feed the same line, so a chain and a `parallel()` inside
 a task body present identically, with running names appearing the moment
 each unit starts. A **unit is a request** — a task in the chain, a
-prerequisite, a body call, a `parallel()` child — and a thunk that runs no
-task counts as the one piece of work it is. So the same fan-out written
-`parallel(build)`, `parallel(functools.partial(build, "web"))` or
-`parallel(lambda: build("web"))` counts the same: how you spell a call
-never changes the total. It always clears itself before any output lands, so
+prerequisite, a body call, a `parallel()` child — and a step item that
+runs no task counts as the one piece of work it is. So the same fan-out
+written `parallel(build)` or `parallel(step(lambda: build("web"))())`
+counts the same: how you spell a call never changes the total. It always clears itself before any output lands, so
 blocks and live step lines stay clean. Without a TTY, a confident
 estimate prints once as `eta ~5.8s` on stderr instead — the same honesty,
 one line.

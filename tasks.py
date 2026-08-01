@@ -7,12 +7,22 @@ Chaining works: ``fm format lint --fix test``.
 from __future__ import annotations
 
 import dataclasses
-import functools
 import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Annotated, Any
 
-from footman import RunFailed, doc, fail, group, parallel, plugin, run, stdin, task
+from footman import (
+    RunFailed,
+    doc,
+    fail,
+    group,
+    parallel,
+    plugin,
+    run,
+    stdin,
+    step,
+    task,
+)
 from footman.tools import (
     basedpyright,
     mypy,
@@ -86,10 +96,14 @@ def typecheck():
     def run_pyrefly():
         pyrefly("check")
 
-    based.__name__ = "basedpyright"
-    run_ty.__name__ = "ty"
-    run_pyrefly.__name__ = "pyrefly"
-    parallel(based, mypy_linux, mypy_darwin, mypy_win32, run_ty, run_pyrefly)
+    parallel(
+        step(based, title="basedpyright")(),
+        step(mypy_linux)(),
+        step(mypy_darwin)(),
+        step(mypy_win32)(),
+        step(run_ty, title="ty")(),
+        step(run_pyrefly, title="pyrefly")(),
+    )
 
 
 @task
@@ -155,18 +169,16 @@ def check():
             env={**os.environ, "COVERAGE_FILE": cov_file},
         )
 
-    # partial, not a lambda: it keeps the callee's name, so the live line
-    # and step column say "format" instead of "…"; `covered` borrows the
-    # task's name the same way.
-    covered.__name__ = "test"
     try:
-        parallel(
-            functools.partial(format, check=True),
-            lint,
-            typecheck,
-            typecomplete,
-            covered,
-        )
+        # The block form carries a task's arguments naturally, and the one
+        # foreign def lifts into a named step — a receipt instead of a
+        # borrowed __name__.
+        with parallel() as p:
+            format(check=True)
+            lint()
+            typecheck()
+            typecomplete()
+            p(step(covered, title="test")())
     finally:
         # In a `finally`, because a red gate is the common case and the one
         # that would otherwise leak: `parallel` raises on the first failing

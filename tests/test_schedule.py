@@ -10,6 +10,7 @@ import pytest
 
 from footman import _manifest, _schedule, parallel, run
 from footman._split import ChainError, Segment, split_chain
+from footman._step import step
 from footman.registry import Group
 
 
@@ -220,7 +221,7 @@ def test_parallel_helper_runs_concurrently():
     def tasks(reg):
         @reg.task
         def build():
-            parallel(hit, hit, hit)
+            parallel(step(hit)(), step(hit)(), step(hit)())
 
     results = drive(tasks, "build")
     assert results[0].ok
@@ -230,18 +231,19 @@ def test_parallel_helper_propagates_failure():
     def tasks(reg):
         @reg.task
         def build():
-            parallel(lambda: run(_exit(1)), lambda: run(_exit(0)))
+            parallel(step(lambda: run(_exit(1)))(), step(lambda: run(_exit(0)))())
 
     results = drive(tasks, "build")
     assert results[0].ok is False
 
 
-def test_parallel_fails_on_nonzero_return():
-    # F13: a thunk that *returns* a non-zero code fails the run, same as a raise.
+def test_parallel_fails_on_a_failing_item():
+    # A step fails by raising (or by its reviewer's word) — its return value
+    # is data. sys.exit(1) is the classic spelling, honoured in the pump.
     def tasks(reg):
         @reg.task
         def build():
-            parallel(lambda: 1, lambda: 0)
+            parallel(step(lambda: sys.exit(1))(), step(lambda: 0)())
 
     results = drive(tasks, "build")
     assert results[0].ok is False
@@ -254,7 +256,11 @@ def test_parallel_keep_going_collects_all_codes():
     def tasks(reg):
         @reg.task
         def build():
-            codes["got"] = parallel(lambda: 1, lambda: 0, keep_going=True)
+            codes["got"] = parallel(
+                step(lambda: sys.exit(1), title="red")(),
+                step(lambda: 0, title="green")(),
+                keep_going=True,
+            )
 
     results = drive(tasks, "build")
     assert results[0].ok is True
@@ -267,7 +273,9 @@ def test_parallel_failure_exit_code_is_the_thunks_code():
     def tasks(reg):
         @reg.task
         def build():
-            parallel(lambda: run([sys.executable, "-c", "import sys; sys.exit(7)"]))
+            parallel(
+                step(lambda: run([sys.executable, "-c", "import sys; sys.exit(7)"]))()
+            )
 
     results = drive(tasks, "build")
     assert results[0].ok is False
@@ -280,11 +288,14 @@ def test_parallel_child_steps_surface_on_parent():
     def tasks(reg):
         @reg.task
         def build():
-            parallel(lambda: run(_echo("one")), lambda: run(_echo("two")))
+            parallel(
+                step(lambda: run(_echo("one")))(), step(lambda: run(_echo("two")))()
+            )
 
     results = drive(tasks, "build")
     commands = {s.command for s in results[0].steps}
-    assert commands == {_echo("one"), _echo("two")}
+    # The lifted items add their own receipts beside the inner runs'.
+    assert {_echo("one"), _echo("two")} <= commands
 
 
 def test_single_node_runs_live(capsys):
@@ -356,7 +367,7 @@ def test_both_engines_feed_the_same_status_line(monkeypatch):
 
             def bravo(): ...
 
-            parallel(alpha, bravo)
+            parallel(step(alpha)(), step(bravo)())
 
     drive(fanout, "combo")
     frames = err2.getvalue()
@@ -371,7 +382,7 @@ def test_parallel_without_a_run_is_a_noop(capsys):
 
     def a(): ...
 
-    assert parallel(a) == [0]
+    assert parallel(step(a)()) == [0]
 
 
 def test_parallel_output_is_grouped_not_interleaved(capsys):

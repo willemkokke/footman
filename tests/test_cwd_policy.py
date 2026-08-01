@@ -258,19 +258,24 @@ def test_target_cwd_per_call_unmanaged_token(tmp_path):
 def test_run_callable_per_call_unmanaged_skips_the_check(tmp_path):
     # An in-process callable that touches no paths says so on the call: it
     # runs under the live process cwd, foreign ctx.cwd notwithstanding.
+    # run(callable) retired; the token's path lives on under the tools
+    # bridge's in-process lane, pinned at the machinery that serves it.
     seen: dict[str, bool] = {}
-    with use_context(Context(cwd=tmp_path)):
-        context.run(lambda: seen.setdefault("ran", True) and 0, cwd="unmanaged")
+    with use_context(Context(cwd=tmp_path)) as ctx:
+        target = context._target_cwd(ctx, "unmanaged", None)
+        context._run_callable(
+            lambda: seen.setdefault("ran", True) and 0, (), cwd=target
+        )
     assert seen["ran"] is True
 
 
 def test_run_callable_foreign_cwd_still_refuses_without_the_token(tmp_path):
     # The guard is not weakened: only the explicit per-call token opts out.
     with (
-        use_context(Context(cwd=tmp_path)),
+        use_context(Context(cwd=tmp_path)) as ctx,
         pytest.raises(ValueError, match="no longer chdirs"),
     ):
-        context.run(lambda: 0)
+        context._run_callable(lambda: 0, (), cwd=context._target_cwd(ctx, None, None))
 
 
 def test_run_subprocess_per_call_unmanaged_inherits_live_cwd(tmp_path, monkeypatch):
@@ -287,10 +292,10 @@ def test_run_subprocess_per_call_unmanaged_inherits_live_cwd(tmp_path, monkeypat
 
 def test_run_per_call_unmanaged_with_rel_is_a_taught_error(tmp_path):
     with (
-        use_context(Context(cwd=tmp_path)),
+        use_context(Context(cwd=tmp_path)) as ctx,
         pytest.raises(ValueError, match="managed base"),
     ):
-        context.run(lambda: 0, cwd="unmanaged", rel="x")
+        context._target_cwd(ctx, "unmanaged", "x")
 
 
 def test_serial_lane_per_call_unmanaged_is_the_applied_cwd(tmp_path):
@@ -299,7 +304,10 @@ def test_serial_lane_per_call_unmanaged_is_the_applied_cwd(tmp_path):
     seen: dict[str, str] = {}
     ctx = Context(cwd=tmp_path)
     with use_context(ctx), _executor._serial_globals(ctx):
-        context.run(lambda: seen.setdefault("cwd", os.getcwd()) and 0, cwd="unmanaged")
+        target = context._target_cwd(ctx, "unmanaged", None)
+        context._run_callable(
+            lambda: seen.setdefault("cwd", os.getcwd()) and 0, (), cwd=target
+        )
     assert Path(seen["cwd"]).resolve() == tmp_path.resolve()
 
 

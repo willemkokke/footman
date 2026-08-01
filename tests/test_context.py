@@ -13,6 +13,7 @@ import pytest
 from footman import _manifest, tools
 from footman._executor import run_chain
 from footman._split import split_chain
+from footman._step import step
 from footman.context import Context, RunFailed, parallel, passthrough, run, use_context
 from footman.params import Many, Secret, ask, suggest
 from footman.registry import Group
@@ -163,7 +164,7 @@ def test_in_process_reads_the_run_wide_colour_env(monkeypatch):
                 seen["fc"] = os.environ.get("FORCE_COLOR")
                 seen["nc"] = os.environ.get("NO_COLOR")
 
-            run(inproc)
+            step(inproc)()()
 
     drive(tasks, "probe", force_color=True)  # always
     assert seen["fc"] == "1"
@@ -201,10 +202,10 @@ def test_run_in_process_callable_captured():
                 print("in-process")
                 return 0
 
-            out["code"] = run(tool)
+            out["value"] = step(tool)()()
 
     _, _, results = drive(tasks, "go")
-    assert out["code"] == 0
+    assert out["value"] == 0  # the body's return is data, handed back
     assert results[0].steps[0].output.strip() == "in-process"
 
 
@@ -289,12 +290,12 @@ def test_result_separates_in_process_streams():
                 print("in-out")
                 print("in-err", file=sys.stderr)
 
-            run(tool)
+            step(tool)()()
 
     _, _, results = drive(tasks, "go")
-    step = results[0].steps[0]
-    assert step.stdout.strip() == "in-out"
-    assert step.stderr.strip() == "in-err"
+    record = results[0].steps[0]
+    assert record.stdout.strip() == "in-out"
+    assert record.stderr.strip() == "in-err"
 
 
 def test_parallel_in_process_separates_streams_under_routing():
@@ -312,7 +313,7 @@ def test_parallel_in_process_separates_streams_under_routing():
                 print("y-out")
                 print("y-err", file=sys.stderr)
 
-            parallel(lambda: run(x), lambda: run(y))
+            parallel(step(x)(), step(y)())
 
     _, _, results = drive(tasks, "go")
     steps = results[0].steps
@@ -328,7 +329,10 @@ def test_parallel_flush_caps_colour_bleed(capsys, monkeypatch):
     def tasks(reg):
         @reg.task
         def go():
-            parallel(lambda: print("\033[31mred"), lambda: print("plain"))
+            parallel(
+                step(lambda: print("\033[31mred"), title="red").opts(capture=False)(),
+                step(lambda: print("plain"), title="plain").opts(capture=False)(),
+            )
 
     drive(tasks, "go", force_color=True)
     out = capsys.readouterr().out
@@ -340,7 +344,10 @@ def test_parallel_flush_no_reset_when_monochrome(capsys):
     def tasks(reg):
         @reg.task
         def go():
-            parallel(lambda: print("plain-a"), lambda: print("plain-b"))
+            parallel(
+                step(lambda: print("plain-a"), title="a").opts(capture=False)(),
+                step(lambda: print("plain-b"), title="b").opts(capture=False)(),
+            )
 
     drive(tasks, "go")  # auto, no tty -> byte-clean, no injected reset
     assert "\033" not in capsys.readouterr().out
@@ -356,7 +363,7 @@ def test_run_callable_capture_false_is_live_not_buffered(capsys):
                 print("live-line")
                 return 0
 
-            run(tool, capture=False)
+            step(tool).opts(capture=False)()()
 
     _, _, results = drive(tasks, "serve")
     assert "live-line" in capsys.readouterr().out  # went live to stdout
@@ -369,6 +376,10 @@ def test_run_callable_foreign_cwd_is_a_taught_error(tmp_path):
     # exits instead of silently serialising the run.
     seen = {}
 
+    # run(callable) retired; the guard lives on under the tools bridge's
+    # in-process lane, so it is pinned at the machinery it protects.
+    from footman.context import _run_callable
+
     def tasks(reg):
         @reg.task
         def go():
@@ -376,7 +387,7 @@ def test_run_callable_foreign_cwd_is_a_taught_error(tmp_path):
                 seen["ran"] = True
                 return 0
 
-            run(tool, cwd=tmp_path)
+            _run_callable(tool, (), cwd=tmp_path)
 
     _, _, results = drive(tasks, "go")
     assert not results[0].ok
@@ -396,7 +407,9 @@ def test_run_callable_matching_cwd_runs(tmp_path):
                 seen["cwd"] = os.getcwd()
                 return 0
 
-            run(tool, cwd=Path.cwd())
+            from footman.context import _run_callable
+
+            _run_callable(tool, (), cwd=Path.cwd())
 
     drive(tasks, "go")
     assert seen["cwd"] == os.getcwd()
@@ -407,7 +420,7 @@ def test_run_callable_unmanaged_skips_the_check(tmp_path):
     # resolved ctx.cwd is ignored for in-process calls, no error, no chdir.
     seen: dict[str, bool] = {}
     with use_context(Context(cwd=tmp_path, cwd_unmanaged=True)):
-        run(lambda: seen.setdefault("ran", True) and 0)
+        step(lambda: seen.setdefault("ran", True) and 0, title="probe")()()
     assert seen["ran"] is True
 
 
@@ -432,7 +445,7 @@ def test_run_callable_honors_the_env_it_was_given(monkeypatch):
                 seen["env"] = (os.environ.get("BASE"), os.environ.get("EXTRA"))
                 return 0
 
-            run(tool, env={**os.environ, "EXTRA": "extra"})
+            step(tool).opts(env={**os.environ, "EXTRA": "extra"})()()
 
     drive(tasks, "go")
     assert seen["env"] == ("base", "extra")
@@ -467,12 +480,12 @@ def test_in_process_stderr_is_captured():
                 print("to stderr", file=sys.stderr)
                 return 0
 
-            run(tool)
+            step(tool)()()
 
     _, _, results = drive(tasks, "build")
-    step = results[0].steps[0]
-    assert "to stdout" in step.output
-    assert "to stderr" in step.output  # stderr now merges into the capture
+    record = results[0].steps[0]
+    assert "to stdout" in record.output
+    assert "to stderr" in record.output  # stderr merges into the capture
 
 
 def test_routing_is_reentrant():
@@ -957,7 +970,7 @@ def test_parallel_honours_the_sequential_request():
         order.append("fast-start")
 
     with use_context(Context(sequential=True)):
-        assert parallel(slow, fast) == [0, 0]
+        assert parallel(step(slow)(), step(fast)()) == [0, 0]
     assert order == ["slow-start", "slow-end", "fast-start"]
 
     # And without the request, the calls genuinely overlap — proven by
@@ -972,12 +985,12 @@ def test_parallel_honours_the_sequential_request():
         barrier.wait()
 
     with use_context(Context()):
-        assert parallel(hit, hit) == [0, 0]
+        assert parallel(step(hit)(), step(hit)()) == [0, 0]
 
     # -j caps the pool the same way: width one behaves like sequential.
     order.clear()
     with use_context(Context(jobs=1)):
-        parallel(slow, fast)
+        parallel(step(slow)(), step(fast)())
     assert order == ["slow-start", "slow-end", "fast-start"]
 
 
@@ -993,9 +1006,9 @@ def test_parallel_collects_systemexit():
         return 0
 
     with use_context(Context()):
-        assert parallel(boom, fine, keep_going=True) == [1, 0]
+        assert parallel(step(boom)(), step(fine)(), keep_going=True) == [1, 0]
         with pytest.raises(RunFailed):
-            parallel(boom, fine)
+            parallel(step(boom)(), step(fine)())
 
 
 def test_parallel_systemexit_zero_is_success():
@@ -1007,7 +1020,7 @@ def test_parallel_systemexit_zero_is_success():
         sys.exit()  # SystemExit(None)
 
     with use_context(Context()):
-        assert parallel(clean, bare) == [0, 0]
+        assert parallel(step(clean)(), step(bare)()) == [0, 0]
 
 
 def test_fail_raises_failed_with_reason_and_code():
@@ -2105,12 +2118,12 @@ def test_a_call_inside_its_timeout_is_untouched():
     assert result.stdout.strip() == "done"
 
 
-def test_a_timeout_on_an_in_process_call_is_refused():
-    # There is no child to signal and no safe way to unwind a thread, so the
-    # bound footman cannot honour is refused rather than ignored.
+def test_run_refuses_a_bare_callable_and_teaches_the_lift():
+    # run() runs commands; in-process work is a step. (A step's own
+    # timeout= is honoured at checkpoints — test_step pins it.)
     from footman.context import Context, use_context
 
-    with use_context(Context()), pytest.raises(ValueError, match=r"needs a process"):
+    with use_context(Context()), pytest.raises(TypeError, match=r"work is a step"):
         run(lambda: 0, timeout=5)
 
 
