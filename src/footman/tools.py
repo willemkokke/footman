@@ -476,7 +476,45 @@ _TOOL_OPTS = (
     "recorded",
     "timeout",
     "pre_record",
+    "input",
+    "env",
 )
+
+
+class _Consumed:
+    """The tombstone a fed `input=` leaves behind — see `_StdinPayload`."""
+
+    __slots__ = ()
+
+    def __repr__(self) -> str:
+        return "<input consumed>"
+
+
+_CONSUMED = _Consumed()
+_consume_lock = _threading.Lock()
+
+
+class _StdinPayload:
+    """One `.opts(input=…)` is one payload, however the handle is used after.
+
+    Chaining copies the policy *dict* (`_sub` → the constructor's
+    `dict(policy)`), so the payload rides in this cell, shared **by
+    reference** through every derived tool — the stored intermediate, each
+    chained verb, the leaf that finally runs. Delivery is exactly-once
+    across that whole family, taken atomically so parallel tasks sharing a
+    handle can't both feed; whoever comes second meets the tombstone, and
+    the caller turns it into a taught refusal rather than a silently-unfed
+    child hanging on a stdin that never comes."""
+
+    __slots__ = ("_value",)
+
+    def __init__(self, value: str) -> None:
+        self._value: str | _Consumed = value
+
+    def take(self) -> str | _Consumed:
+        with _consume_lock:
+            value, self._value = self._value, _CONSUMED
+        return value
 
 
 def _opts_overrides(kwargs: dict[str, Any]) -> dict[str, Any]:
@@ -489,7 +527,12 @@ def _opts_overrides(kwargs: dict[str, Any]) -> dict[str, Any]:
             f"tool's own flags go in the call — tools.ruff(fix=True) — or before a "
             f"verb via .flags()."
         )
-    return dict(kwargs)
+    out = dict(kwargs)
+    if out.get("input") is not None:
+        # Into the shared cell, so the exactly-once promise survives chaining
+        # (the policy dict is copied per sub-tool; the cell is not).
+        out["input"] = _StdinPayload(out["input"])
+    return out
 
 
 class Tool:
@@ -588,6 +631,17 @@ class Tool:
         tool's own `--capture` (pytest's) still goes in the call. The overridden
         options ride the chain and win at call time. For a tool's *own* global
         options that must precede a verb, use `.flags()`.
+
+        `env=` is the child's environment exactly as `run(env=…)` means it —
+        what you pass is what the child gets — and like the rest of the set it
+        rides the chain and replays. `input=` feeds the child's standard input,
+        and unlike the rest it is **consumed**: stdin is consumable, so the
+        payload is delivered exactly once however the handle is chained or
+        shared, and a second call is a taught refusal rather than a
+        silently-unfed child hanging on a stdin that never comes. Re-opt with
+        a fresh payload per call:
+
+            uv.pip.install.opts(input=requirement)("-r", "-")
         """
         t = self._sub()
         t._opts = {**self._opts, **_opts_overrides(overrides)}
@@ -623,6 +677,23 @@ class Tool:
         recorded = self._opts.get("recorded", True)
         timeout = self._opts.get("timeout", None)
         pre_record = self._opts.get("pre_record", None)
+        env_opt = self._opts.get("env", None)
+        # `input=` is consumed *at entry*: one `.opts(input=…)` is one
+        # delivery, wherever in the chain the call lands. Entry rather than
+        # after execution, so a dry-run or `recording()` rehearsal consumes
+        # exactly as the run it predicts would. `.opts(input=…)` re-arms.
+        cell = self._opts.get("input", None)
+        input_: str | None = None
+        if cell is not None:
+            taken = cell.take()
+            if isinstance(taken, _Consumed):
+                raise TypeError(
+                    f"{self._argv0}: this handle's input= was already fed — "
+                    f"stdin is consumable, so a payload is delivered exactly "
+                    f"once. Re-opt with a fresh payload per call: "
+                    f"{self._argv0}.opts(input=…)(…)"
+                )
+            input_ = taken
         flags = _flags(kwargs, self._argv0, single_dash=self._single_dash)
         positionals = list(map(str, args))
         wrapper = _is_wrapper(self._argv0, self._base)
@@ -662,6 +733,8 @@ class Tool:
                 spawned,
                 nofail=nofail,
                 capture=capture,
+                input=input_,
+                env=env_opt,
                 title=title,
                 pre_record=pre_record,
                 recorded=recorded,
@@ -733,6 +806,10 @@ class Tool:
                 _invoke,
                 nofail=nofail,
                 capture=capture,
+                # Forwarded so run()'s refusal teaches: an in-process tool
+                # has no standard input to feed.
+                input=input_,
+                env=env_opt,
                 title=title,
                 pre_record=pre_record,
                 recorded=recorded,

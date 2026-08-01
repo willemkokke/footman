@@ -7,6 +7,21 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- **`.opts(input=…)` and `.opts(env=…)` on every tool.** The two `run()`
+  parameters the bridge's policy channel didn't yet carry. `env=` is the
+  child's environment exactly as `run(env=…)` means it, replaying like any
+  policy. `input=` feeds the child's standard input and is **consumed**:
+  stdin is consumable, so the payload is delivered exactly once however
+  the handle is chained or shared — the cell rides by reference through
+  every derived tool — and a second call is a taught refusal rather than
+  a silently-unfed child hanging on a stdin that never comes. A dry-run
+  or `recording()` rehearsal consumes exactly as the run it predicts
+  would; `.opts(input=…)` re-arms with a fresh payload. An in-process
+  tool has no standard input to feed, so the existing `run()` refusal
+  teaches there too.
+
 ## [0.29.0] — 2026-08-01
 
 ### Added

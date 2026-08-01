@@ -1012,3 +1012,50 @@ def test_a_timeout_demotes_an_in_process_tool_to_a_subprocess():
     tool = tools.Tool(sys.executable, in_process=True)
     with use_context(Context()), pytest.raises(RunTimeout):
         tool.opts(timeout=0.5)("-c", "import time; time.sleep(30)")
+
+
+def test_opts_input_feeds_the_child_once_and_teaches_on_replay():
+    from footman.context import Context, use_context
+
+    reader = "import sys; print(sys.stdin.read().upper(), end='')"
+    fed = tools.python.opts(input="one shot\n")
+    with use_context(Context()):
+        assert fed("-c", reader).stdout == "ONE SHOT\n"
+        # stdin is consumable: the payload was delivered; a second call is a
+        # taught refusal, not a silently-unfed child hanging on a read.
+        with pytest.raises(TypeError, match=r"already fed"):
+            fed("-c", reader)
+
+
+def test_opts_input_is_consumed_across_the_whole_chained_family():
+    # Chaining copies the policy dict but not the payload cell: a stored
+    # intermediate can't mint fresh, re-armed leaves — one `.opts(input=…)`
+    # is one delivery, wherever in the chain the call lands. recording()
+    # fakes the execution and still consumes, exactly as the run it
+    # predicts would.
+    intermediate = tools.uv.opts(input="one payload")
+    with recording():
+        intermediate.pip.install("-r", "-")
+        with pytest.raises(TypeError, match=r"already fed"):
+            intermediate.pip.install("-r", "-")
+
+
+def test_opts_input_rearms_with_a_fresh_payload():
+    from footman.context import Context, use_context
+
+    reader = "import sys; print(sys.stdin.read(), end='')"
+    fed = tools.python.opts(input="first")
+    with use_context(Context()):
+        assert fed("-c", reader).stdout == "first"
+        assert fed.opts(input="second")("-c", reader).stdout == "second"
+
+
+def test_opts_env_is_the_childs_environment_and_replays():
+    from footman.context import Context, use_context
+
+    probe = "import os; print(os.environ.get('FOOTMAN_OPT_ENV', 'absent'), end='')"
+    tool = tools.python.opts(env={**os.environ, "FOOTMAN_OPT_ENV": "yes"})
+    with use_context(Context()):
+        # Policy, not payload: the environment rides the handle and replays.
+        assert tool("-c", probe).stdout == "yes"
+        assert tool("-c", probe).stdout == "yes"

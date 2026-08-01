@@ -92,6 +92,15 @@ class _Off: ...
 
 off: _Off
 
+class _Consumed: ...
+
+_CONSUMED: _Consumed
+_consume_lock: _threading.Lock
+
+class _StdinPayload:
+    def __init__(self, value: str) -> None: ...
+    def take(self) -> str | _Consumed: ...
+
 # A boolean flag: True → --flag, off → the tool's own negation,
 # False/None → omitted (which is what lets a task parameter's default flow
 # straight through).
@@ -172,6 +181,8 @@ class Tool:
         nofail: bool = ...,
         in_process: bool | None = ...,
         capture: bool = ...,
+        input: str | None = ...,
+        env: dict[str, str] | None = ...,
         title: str | None = ...,
         cwd: str | _Path | None = ...,
         rel: str | _Path | None = ...,
