@@ -49,6 +49,7 @@ class _Node:
     seg: Segment
     key: int
     address: str = ""  # assigned once the plan is final, in creation order
+    seq: int | None = None  # run-wide request stamp (the _futures counter)
     deps: set[int] = field(default_factory=set)
     state: str = "pending"  # pending / running / done / skipped
     result: _executor.TaskResult | None = None
@@ -292,6 +293,12 @@ def _build_dag(root: Group, segments: list[Segment]) -> list[_Node]:
     labels: dict[str, int] = {}
     for node in nodes:
         node.address = context._next_label(labels, node.seg.task)
+    # Request stamps, in topological order and from the same run-wide counter
+    # body calls draw on: within one instant the report's tie-break then
+    # reads cause-before-consequence (a prerequisite outranks its dependent)
+    # and plan-before-body-call, deterministically across runs.
+    for node in _toposort(nodes):
+        node.seq = next(_futures._seq)
     return nodes
 
 
@@ -534,6 +541,7 @@ def _gate_node_confirms(
             )
         if not answers[key]:
             n.result = _not_confirmed(n.seg)
+            n.result.seq = n.seq
             n.state = "done"
 
 
@@ -562,9 +570,17 @@ def _chronological(results: list[_executor.TaskResult]) -> list[_executor.TaskRe
     after whatever prevented it — the report reads as cause, then consequence.
     With nothing to blame (a gate answered before any task ran) it comes first.
     """
+    # Starts landing inside the same instant are scheduler noise — worker
+    # threads stamp `started` microseconds apart in an order that carries no
+    # information — so within a 10ms bucket the request order decides, and
+    # the shuffle a rerun would produce disappears.
     ran = sorted(
         (r for r in results if r.started is not None),
-        key=lambda r: r.started or 0.0,
+        key=lambda r: (
+            int((r.started or 0.0) * 100),
+            r.seq if r.seq is not None else float("inf"),
+            r.started or 0.0,
+        ),
     )
     never: list[_executor.TaskResult] = [r for r in results if r.started is None]
     ordered = [r for r in never if not r.blocked_by] + ran
@@ -856,6 +872,10 @@ def _run_sequential(
             err.write(_describe.dim(hint, True) + "\n")
             err.flush()
         node.result = _executor.run_task(node.fn, node.seg, ctx, node.forwarded)
+        if node.result.seq is None or node.seq is None:
+            node.result.seq = node.seq
+        else:  # a shared row keeps its above-the-record floor
+            node.result.seq = max(node.result.seq, node.seq)
         node.state = "done"
         if status is not None:
             status.unit_finished(node.seg.task, node.result.ok)
@@ -940,6 +960,10 @@ def _run_parallel(
             # and captured siblings' flushes queue on the gate below.
             ctx.sink = ctx.err_sink = None
         n.result = _executor.run_task(n.fn, n.seg, ctx, n.forwarded)
+        if n.result.seq is None or n.seq is None:
+            n.result.seq = n.seq
+        else:  # a shared row keeps its above-the-record floor
+            n.result.seq = max(n.result.seq, n.seq)
         if not capture and ctx.sink is not None:
             # Flush this task's buffered output as one block — queued while a
             # wizard owns the terminal, so it never splats over a prompt.

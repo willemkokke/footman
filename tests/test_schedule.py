@@ -704,3 +704,73 @@ def test_the_name_is_restored_after_the_body():
     result = Runner().invoke("report", tasks=reg)
     assert result.ok, result.stderr
     assert names == ["fm:report"]  # not fm:build — the call restored it
+
+
+# --- the report's tie-break ----------------------------------------------------
+
+
+def test_near_simultaneous_starts_seat_in_request_order():
+    # Starts inside one instant are worker-thread noise; the request stamp
+    # decides, so a rerun cannot shuffle the report.
+    from footman._executor import TaskResult
+
+    def row(task, started, seq):
+        return TaskResult(task=task, ok=True, code=0, started=started, seq=seq)
+
+    burst = [
+        row("late-written", 10.0004, 7),
+        row("first-written", 10.0001, 5),
+        row("mid-written", 10.0092, 6),
+    ]
+    ordered = _schedule._chronological(burst)
+    assert [r.task for r in ordered] == ["first-written", "mid-written", "late-written"]
+
+
+def test_genuinely_later_starts_keep_their_moment():
+    # Across buckets the clock still rules: a task requested early but
+    # started late (pool saturation) seats where it actually ran.
+    from footman._executor import TaskResult
+
+    def row(task, started, seq):
+        return TaskResult(task=task, ok=True, code=0, started=started, seq=seq)
+
+    rows = [
+        row("requested-first-ran-last", 10.5, 1),
+        row("requested-last-ran-first", 10.0, 9),
+    ]
+    ordered = _schedule._chronological(rows)
+    assert [r.task for r in ordered] == [
+        "requested-last-ran-first",
+        "requested-first-ran-last",
+    ]
+
+
+def test_block_children_carry_the_written_order_as_their_stamp():
+    from footman import parallel
+    from footman.testing import Runner
+
+    reg = Group("root")
+
+    @reg.task
+    def zulu() -> None: ...
+
+    @reg.task
+    def alpha() -> None: ...
+
+    @reg.task
+    def mike() -> None: ...
+
+    @reg.task
+    def gate():
+        with parallel():
+            zulu()
+            alpha()
+            mike()
+
+    result = Runner().invoke("gate", tasks=reg)
+    assert result.ok, result.stderr
+    seqs = {r.task: r.seq for r in result.results}
+    stamped = [seqs["gate"], seqs["zulu"], seqs["alpha"], seqs["mike"]]
+    assert None not in stamped
+    # The queue moment is the request: written order, whatever the pool did.
+    assert stamped == sorted(stamped)  # type: ignore[type-var]

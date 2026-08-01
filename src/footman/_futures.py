@@ -33,9 +33,11 @@ from __future__ import annotations
 
 import dataclasses
 import io
+import itertools
 import threading
 from concurrent.futures import Future
 from contextlib import contextmanager
+from contextvars import ContextVar
 from typing import TYPE_CHECKING, Any
 
 from footman import registry
@@ -78,6 +80,17 @@ class _Session:
 
 
 _active: _Session | None = None
+
+# The run-wide request counter: every request for task-shaped work takes a
+# number at the moment it is *made* — plan order for scheduled segments, the
+# written line for a `parallel()` block's queued calls, the call moment for
+# body calls. The report's chronological order tie-breaks on it when two
+# starts land inside the same instant (worker threads stamp `started`
+# microseconds apart in an order that is scheduler noise, not information).
+_seq = itertools.count()
+# A queued call re-enters `call()` on a pool worker; the queue moment (the
+# written line) already took its number, carried here around the invocation.
+_pending_seq: ContextVar[int | None] = ContextVar("footman_request_seq", default=None)
 
 
 @contextmanager
@@ -230,10 +243,16 @@ def call(task: Any, args: tuple[Any, ...], kwargs: dict[str, Any]) -> Any:
     """
     from footman import context as _context
 
+    # The request takes its number now, in the caller's thread — for a
+    # queued call this IS the written line; the thunk carries the number
+    # back in through `_pending_seq` when the pool later runs it.
+    carried = _pending_seq.get()
+    seq = carried if carried is not None else next(_seq)
+
     # A `with parallel()` block collects instead of running: the call is
     # queued and answers with a `Pending`. Checked first, because the block
     # is explicit intent — it holds whether or not a run is in flight.
-    if (queued := _context._queue_call(task, args, kwargs)) is not None:
+    if (queued := _context._queue_call(task, args, kwargs, seq)) is not None:
         return queued
 
     run = _active
@@ -251,6 +270,7 @@ def call(task: Any, args: tuple[Any, ...], kwargs: dict[str, Any]) -> Any:
     # checks it before the window opens), so a call checks it in the same
     # place: before any hook fires.
     if (refusal := _executor.unavailable(task, seg)) is not None:
+        refusal.seq = seq
         _record(refusal)
         raise refusal.error or ChainError(f"{label} is unavailable")
 
@@ -286,6 +306,7 @@ def call(task: Any, args: tuple[Any, ...], kwargs: dict[str, Any]) -> Any:
             # The attempt concluded before binding: the posts fire, the row
             # is recorded, and the failure raises at the call site.
             result = _executor._result(seg, 1, None, err, 0.0)
+            result.seq = seq
             _executor._exit_task_hooks(life, handle, result)
             _record(result)
             raise err
@@ -295,6 +316,7 @@ def call(task: Any, args: tuple[Any, ...], kwargs: dict[str, Any]) -> Any:
             args, kwargs = _executor.bind_call(task, args, kwargs)
         except Exception as exc:
             result = _executor._result(seg, _executor.EX_USAGE, None, exc, 0.0)
+            result.seq = seq
             _executor._exit_task_hooks(life, handle, result)
             _record(result)
             raise
@@ -304,21 +326,42 @@ def call(task: Any, args: tuple[Any, ...], kwargs: dict[str, Any]) -> Any:
         args, kwargs = _executor.bind_call(task, args, kwargs)
     key = _key(task, args, kwargs)
     if key is None:  # arguments with no frozen form: honest work every time
-        return _run_now(task, args, kwargs, seg=seg, child=child, handle=handle)
+        return _run_now(
+            task, args, kwargs, seg=seg, child=child, handle=handle, seq=seq
+        )
     if unshared(task):
         # Asked for unshared: it neither reads a cell nor becomes one. Its
         # result is its own — the run's answer is only ever an execution that
         # was itself shareable, so how much work a run does cannot depend on
         # which of two nodes the scheduler happened to start first.
         return _run_now(
-            task, args, kwargs, shared=False, seg=seg, child=child, handle=handle
+            task,
+            args,
+            kwargs,
+            shared=False,
+            seg=seg,
+            child=child,
+            handle=handle,
+            seq=seq,
         )
 
     me = threading.get_ident()
     claimed, cell = _claim(run, key, me, label)
     if claimed:  # nobody had run it: this thread owns it, inline, right here
         try:
-            value = _run_now(task, args, kwargs, seg=seg, child=child, handle=handle)
+            # The cell rides along so the sealed row lands on it *before* the
+            # future resolves — a later sharer copies what this execution
+            # reported (title, audit, reported value) and seats after it.
+            value = _run_now(
+                task,
+                args,
+                kwargs,
+                seg=seg,
+                child=child,
+                handle=handle,
+                cell=cell,
+                seq=seq,
+            )
         except BaseException as exc:
             cell.future.set_exception(exc)
             raise
@@ -332,6 +375,7 @@ def call(task: Any, args: tuple[Any, ...], kwargs: dict[str, Any]) -> Any:
         handle._bind(args, kwargs)
         if (hook_error := _executor._enter_task_hooks(life, handle)) is not None:
             row = _executor._result(seg, 1, None, hook_error, 0.0)
+            row.seq = seq
             _executor._exit_task_hooks(life, handle, row)
             _record(row)
             with run.lock:
@@ -354,7 +398,7 @@ def call(task: Any, args: tuple[Any, ...], kwargs: dict[str, Any]) -> Any:
             run.waits.pop(me, None)
     if status is not None:
         status.unit_finished(label, True)
-    row = _shared_result(cell.label, value, cell.record)
+    row = _shared_result(cell.label, value, cell.record, seq=seq)
     row.address = (
         child.address
         if child is not None
@@ -472,7 +516,9 @@ def _record(result: TaskResult) -> None:
         run.results.append(result)
 
 
-def _shared_result(label: str, value: Any, record: Any = None) -> TaskResult:
+def _shared_result(
+    label: str, value: Any, record: Any = None, seq: int | None = None
+) -> TaskResult:
     """The report entry for a request the run had already satisfied.
 
     Recorded rather than left invisible: the work happened, and a reader (or a
@@ -502,6 +548,15 @@ def _shared_result(label: str, value: Any, record: Any = None) -> TaskResult:
         row.returned = record.returned
         row.title = record.title
         row.audit = list(record.audit)
+    # The share concluded after the execution it joined, and the tie-break
+    # must never say otherwise: the row's stamp is floored just above its
+    # record's, whatever number the request itself took.
+    floor = record.seq + 1 if record is not None and record.seq is not None else None
+    row.seq = (
+        max(seq, floor)
+        if seq is not None and floor is not None
+        else (seq if floor is None else floor)
+    )
     return row
 
 
@@ -597,6 +652,7 @@ def _run_now(
     child: Any = None,
     handle: Any = None,
     cell: Any = None,
+    seq: int | None = None,
 ) -> Any:
     """Run *task* here and now with full task semantics, and return its value.
 
@@ -617,6 +673,7 @@ def _run_now(
     if seg is None:
         seg = _schedule._default_seg(task)
     if (denial := _schedule.confirm_gate(task, seg, parent)) is not None:
+        denial.seq = seq
         _record(denial)
         raise denial.error or ChainError(f"{label} was not confirmed")
     if child is None:
@@ -653,6 +710,7 @@ def _run_now(
         raise
     if status is not None:
         status.unit_finished(label, result.ok)
+    result.seq = seq
     _record(result)
     if cell is not None:
         cell.record = result  # the sealed row, for later requests to reuse
