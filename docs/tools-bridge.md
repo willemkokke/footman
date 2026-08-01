@@ -79,10 +79,16 @@ git.opts(nofail=True).push()            # tolerate a non-zero exit
 pytest.opts(capture=False)("-s")        # stream this run live
 git.opts(recorded=False).rev_parse("HEAD")  # a value read, not an event
 git.opts(timeout=30).fetch()            # a bound, after which it is killed
+uv.pip.install.opts(input="left-pad==1.3.0")("-r", "-")  # feed the child's stdin
 ```
 
 Because it is a fixed set, `capture` here is unambiguously footman's — a tool's
 own `--capture` (pytest's) still goes in the call, `pytest(capture="no")`.
+`env=` rides here too, the child's environment exactly as `run(env=…)` means
+it. `input=` is the one member that is **consumed** rather than replayed:
+stdin is consumable, so the payload is delivered exactly once however the
+handle is chained or shared afterwards, and a second call is a taught
+refusal — re-opt with a fresh payload per call.
 
 !!! note "Colour without a pty"
 
