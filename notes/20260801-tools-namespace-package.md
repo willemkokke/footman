@@ -1,7 +1,10 @@
 # footman.tools as a separately installable package
 
 Status: PLAN — nothing built. Decisions marked **open** await Willem's
-call. Supersedes the "still thinking — don't build toward it" hold on
+call. Sibling plan:
+[20260801-tools-separate-repo.md](20260801-tools-separate-repo.md)
+explores the same split with the tools dist in its own repository, and
+carries the merits comparison between the two. Supersedes the "still thinking — don't build toward it" hold on
 the standalone-tools idea (2026-07-29): the plan is now ordered; the
 build still is not.
 
