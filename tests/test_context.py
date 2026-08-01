@@ -2175,14 +2175,15 @@ def test_a_missing_executable_is_not_silenced_by_nofail():
 def test_a_missing_cwd_keeps_the_honest_os_error(tmp_path):
     from footman.context import CommandNotFound, Context, use_context
 
+    # POSIX spells it FileNotFoundError, Windows NotADirectoryError
+    # ([WinError 267]) — either way the interpreter exists and the
+    # directory does not, and blaming the tool would teach the wrong fix.
     with (
         use_context(Context()),
-        pytest.raises(FileNotFoundError) as caught,
+        pytest.raises(OSError) as caught,
     ):
         run([sys.executable, "--version"], cwd=tmp_path / "nowhere")
 
-    # The interpreter exists; the directory does not — blaming the tool
-    # would teach the wrong fix.
     assert not isinstance(caught.value, CommandNotFound)
 
 
