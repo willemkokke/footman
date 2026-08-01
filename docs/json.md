@@ -247,7 +247,7 @@ $ fm --json --dry-run lint --fix test -- -x
 
 ```console
 $ fm --json --version
-{"schema": 1, "name": "footman", "version": "0.28.0"}
+{"schema": 1, "name": "footman", "version": "0.28.1"}
 ```
 
 ## The two exceptions

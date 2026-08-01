@@ -7,6 +7,8 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+## [0.28.1] — 2026-08-01
+
 ### Changed
 
 - **A `with parallel()` block refuses to run over a dead item.** A step
@@ -3413,7 +3415,8 @@ versions may include breaking changes.
 
 - Placeholder release claiming the `footman` name on PyPI. Not tagged in git.
 
-[Unreleased]: https://github.com/willemkokke/footman/compare/v0.28.0...HEAD
+[Unreleased]: https://github.com/willemkokke/footman/compare/v0.28.1...HEAD
+[0.28.1]: https://github.com/willemkokke/footman/compare/v0.28.0...v0.28.1
 [0.28.0]: https://github.com/willemkokke/footman/compare/v0.27.1...v0.28.0
 [0.27.1]: https://github.com/willemkokke/footman/compare/v0.27.0...v0.27.1
 [0.27.0]: https://github.com/willemkokke/footman/compare/v0.26.0...v0.27.0
