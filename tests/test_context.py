@@ -1229,7 +1229,7 @@ def test_step_lines_carry_an_aligned_name_column(capsys):
         def longer():
             run(_echo("ho"))
 
-    drive(tasks, "go longer")
+    drive(tasks, "go longer", verbose=True)
     out = capsys.readouterr().out
     # Padded to len("longer"); the duration varies with the machine (a cold
     # interpreter under a loaded suite can cross 1s), so stop at its "(".

@@ -560,7 +560,7 @@ def test_buffered_blocks_dress_for_the_terminal(monkeypatch):
         def b():
             run(_echo("two"), title="two")
 
-    drive(tasks, "a b")
+    drive(tasks, "a b", ctx_config={"verbose": True})
     text = out_fake.getvalue()
     assert "\033[32m✓\033[0m" in text  # styled mark, buffered engine
     assert "\r" not in text and "\033[K" not in text  # no live control bytes
@@ -581,7 +581,7 @@ def test_buffered_blocks_stay_plain_when_piped(monkeypatch):
         def b():
             run(_echo("two"), title="two")
 
-    drive(tasks, "a b")
+    drive(tasks, "a b", ctx_config={"verbose": True})
     text = out_fake.getvalue()
     assert "ok   " in text and "\033" not in text
 

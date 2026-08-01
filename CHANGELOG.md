@@ -9,6 +9,19 @@ versions may include breaking changes.
 
 ### Changed
 
+- **`parallel()` returns sealed records.** Each entry of the returned
+  list — and of the block form's own list — is a `Result`: named,
+  addressed, timed, and *being* its exit code, so every code-reader
+  (`== [0, 0]`, truthiness, sums) keeps working unchanged. The report
+  stops speaking a poorer language than the records it carries.
+
+- **Task grain at normal verbosity.** A green step's receipt shows under
+  `--verbose` (and for uncaptured, live steps, whose output needs its
+  label); a FAILED step always shows, with its output replayed and — when
+  anyone touched the verdict — its audit on one line (`body 1 → review
+  reformatted_is_fine 0 → observe budget 3`). Green is collapsible;
+  failure is never hidden.
+
 - **Breaking: diverging forwards make two nodes, not a refusal.** One
   identity rule, everywhere: a piece of work is its declaration, its
   option overrides, and its resolved arguments. Two dispatchers
