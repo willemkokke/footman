@@ -370,9 +370,9 @@ def _pump(item: WorkItem[Any]) -> Any:
     )
     if recorded:
         ctx.steps.append(result)
-        if not ctx.quiet:
-            # The receipt, exactly as run() prints one — and the captured
-            # output replays when it matters (failure, or --verbose).
+        # Task grain at normal verbosity: the receipt shows under --verbose
+        # (and for uncaptured, live items) — and always when it failed.
+        if not ctx.quiet and (ctx.verbose or not capture or result.code != 0):
             import sys as _sys
 
             out = _sys.stdout
@@ -380,6 +380,15 @@ def _pump(item: WorkItem[Any]) -> Any:
             combined = result.stdout + result.stderr
             if capture and combined and (result.code != 0 or ctx.verbose):
                 out.write(combined if combined.endswith("\n") else combined + "\n")
+            if result.code != 0 and len(result.audit) > 1:
+                trail = " → ".join(
+                    f"{e.moment} {e.actor}"
+                    + (f" {e.code}" if e.code is not None else "")
+                    for e in result.audit
+                )
+                out.write(
+                    _context._dim(f"     audit: {trail}", _context._colored(ctx)) + "\n"
+                )
             out.flush()
         for observer in maker._observers:
             name = getattr(observer, "__name__", repr(observer))

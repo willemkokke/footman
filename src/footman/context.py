@@ -2174,7 +2174,7 @@ def run(
             f"is no record to review.",
         )
 
-    show = recorded and not ctx.quiet
+    show = recorded and not ctx.quiet and (ctx.verbose or not capture)
     # `ctx.tty` means "this output dresses for a terminal" (colour, marks);
     # liveness is `sink is None`. A captured block styles for the terminal
     # it will replay onto, but in-place rewrites and the announce line stay
@@ -2351,7 +2351,11 @@ def run(
     if recorded:
         ctx.steps.append(result)  # what --json, the report and recording() read
 
-    if show:
+    # Task grain at normal verbosity: a step's receipt shows under
+    # --verbose (and for uncaptured, live steps, whose output needs its
+    # label) — and ALWAYS when it failed. Green is collapsible; failure is
+    # never hidden.
+    if recorded and not ctx.quiet and (ctx.verbose or not capture or code != 0):
         ok = code == 0
         prefix = "\r\033[K" if ctx.tty and live else ""
         out.write(f"{prefix}{_step_line(ctx, ok, label, duration)}")
@@ -2360,6 +2364,14 @@ def run(
         combined = out_s + err_s
         if capture and combined and (not ok or ctx.verbose):
             out.write(combined if combined.endswith("\n") else combined + "\n")
+        if not ok and len(result.audit) > 1:
+            # The verdict's story, when anyone touched it: who acted, what
+            # they set — the audit, one dim line under the failure.
+            trail = " → ".join(
+                f"{e.moment} {e.actor}" + (f" {e.code}" if e.code is not None else "")
+                for e in result.audit
+            )
+            out.write(_dim(f"     audit: {trail}", _colored(ctx)) + "\n")
         out.flush()
 
     if code != 0 and not nofail:
@@ -2434,12 +2446,14 @@ _collecting: ContextVar[list[tuple[Any, tuple[Any, ...], dict[str, Any]]] | None
 )
 
 
-class Fanout(list[int]):
+class Fanout(list[Result]):
     """The `with parallel() as p:` block — task calls inside it are queued,
     then run together when the block ends.
 
-    A `list` underneath, and empty, so `parallel(*calls)` with nothing to do
-    still answers with the empty list of exit codes it always did.
+    A `list` underneath — of sealed records, each of which IS its exit code,
+    so everything that read the block as a list of codes keeps working — and
+    empty, so `parallel(*items)` with nothing to do still answers with the
+    empty list it always did.
     """
 
     def __init__(self, keep_going: bool = False) -> None:
@@ -2511,7 +2525,7 @@ class Fanout(list[int]):
             keep_going=self.keep_going,
         )
         self.results = values
-        self.extend(codes)  # the block *is* its list of exit codes
+        self.extend(codes)  # the block *is* its list of records (codes included)
         return False
 
 
@@ -2536,7 +2550,7 @@ def parallel(
     | _registry_t.TaskFn[..., Any]
     | _registry_t.Group,
     keep_going: bool = False,
-) -> list[int]: ...
+) -> list[Result]: ...
 
 
 def parallel(
@@ -2545,7 +2559,7 @@ def parallel(
     | _registry_t.TaskFn[..., Any]
     | _registry_t.Group,
     keep_going: bool = False,
-) -> Fanout | list[int]:
+) -> Fanout | list[Result]:
     """Run tasks and steps concurrently; wait; fail if any fail.
 
     Each one runs in a child of the current context with its own output
@@ -2610,7 +2624,7 @@ def parallel(
 
 def _run_thunks(
     calls: list[Callable[[], Any]], *, keep_going: bool = False
-) -> list[int]:
+) -> list[Result]:
     """The fan-out engine: run zero-argument callables the caller vouches
     for. `parallel()` validates and lands here; the block's `__exit__`
     drives it directly with the closures footman itself wrote."""
@@ -2636,8 +2650,9 @@ def _run_thunks(
     # Sibling names are known up front, so their step lines can align.
     width = max((len(_call_name(c)) for c in calls), default=0)
 
-    def invoke(call: Callable[[], Any]) -> tuple[int, BaseException | None]:
+    def invoke(call: Callable[[], Any]) -> tuple[Result, BaseException | None]:
         name = _call_name(call)
+        child_start = time.perf_counter()
         if status is not None:
             status.unit_started(name)
         # One buffer for both streams at task level, so the atomic flush keeps
@@ -2718,7 +2733,15 @@ def _run_thunks(
             parent.steps.extend(child.steps)
         if status is not None:
             status.unit_finished(name, error is None)
-        return code, error
+        # The caller's view of this child: a sealed record that IS its exit
+        # code (so every code-reader keeps working), named and addressed.
+        record = Result(
+            code,
+            command=name,
+            address=child.address,
+            duration=time.perf_counter() - child_start,
+        )
+        return record, error
 
     # -s reaches inside tasks (one worker serialises the calls in
     # submission order), and -j caps the width; same code path either way.
@@ -2740,7 +2763,7 @@ def _run_thunks(
         outcomes = list(pool.map(invoke, calls))
 
     if not keep_going:
-        for _code, error in outcomes:
+        for _record, error in outcomes:
             if error is not None:
                 raise error
-    return [code for code, _ in outcomes]
+    return [record for record, _ in outcomes]

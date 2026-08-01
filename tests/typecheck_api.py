@@ -185,14 +185,13 @@ def _parallel_is_typed_both_ways() -> None:
 
     @task
     def all_checks() -> None:
-        codes = parallel(lint, test, keep_going=True)
-        assert_type(codes, list[int])
+        records = parallel(lint, test, keep_going=True)
+        assert_type(records, list[Result])  # each of which IS its exit code
         with parallel() as p:
             lint()
-            p.also(print, "extra")
         results: list[object] = p.results  # heterogeneous by nature
-        # The block is its exit codes.
-        assert_type(p[0], int)
+        # The block is its list of records — codes included, by I2.
+        assert_type(p[0], Result)
         _ = results
 
 
