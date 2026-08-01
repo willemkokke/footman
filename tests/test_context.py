@@ -2206,6 +2206,42 @@ def test_run_refuses_a_bare_callable_and_teaches_the_lift():
         run(lambda: 0, timeout=5)
 
 
+def test_run_input_feeds_the_childs_stdin():
+    # The write side of the process boundary: the payload arrives whole and
+    # the pipe closes, so a child reading to EOF finishes rather than hangs.
+    from footman.context import Context, use_context
+
+    reader = "import sys; print(sys.stdin.read().upper(), end='')"
+    with use_context(Context()):
+        result = run([sys.executable, "-c", reader], input="fed via stdin\n")
+    assert result.stdout == "FED VIA STDIN\n"
+
+
+def test_run_without_input_leaves_stdin_alone():
+    # No payload, no pipe: the child sees whatever stdin the process had —
+    # here not-a-terminal, and crucially not an instantly-EOF pipe footman
+    # opened on its behalf.
+    from footman.context import Context, use_context
+
+    probe = "import sys; print(sys.stdin is not None)"
+    with use_context(Context()):
+        result = run([sys.executable, "-c", probe], input=None)
+    assert result.stdout.strip() == "True"
+
+
+def test_run_input_on_an_in_process_tool_is_a_taught_error():
+    # Reached only through the tools bridge's in-process lane: a subprocess
+    # has a stdin to feed, a Python call does not.
+    from footman.context import Context, Invocation, use_context
+
+    show = Invocation(parts=(("prog", "demo"),), exact=("demo",))
+    with (
+        use_context(Context()),
+        pytest.raises(TypeError, match=r"in-process tool has none"),
+    ):
+        run(lambda: 0, input="payload", _show=show)
+
+
 def test_a_timed_out_call_is_still_a_step_unless_it_says_otherwise():
     from footman.context import Context, use_context
 
