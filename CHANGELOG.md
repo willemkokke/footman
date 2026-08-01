@@ -19,8 +19,9 @@ versions may include breaking changes.
   in-process tool has no standard input to feed, so `input=` on one is a
   taught `TypeError`.
 
-- **`tools.ssh` and `tools.ssh_keygen`.** OpenSSH joins the curated
-  tools, stubbed from its own manual pages — ssh has no `--help`, so
+- **`tools.ssh`, `tools.ssh_keygen`, and `tools.ssh_keyscan`.** OpenSSH
+  joins the curated tools, stubbed from its own manual pages — ssh has
+  no `--help`, so
   the pages are the surface. The whole surface is single-letter flags,
   which the bridge already spells (`p=2222` → `-p 2222`; a tuple
   repeats its flag: `o=("BatchMode=yes", …)` → `-o … -o …`). ssh is a
@@ -29,7 +30,9 @@ versions may include breaking changes.
   command itself rides as a positional — the transport is the tool,
   the command is its payload. `ssh -V` (the whole version surface,
   answered on stderr) backs `installed_version()`; ssh-keygen has no
-  version output of its own, so the ssh release answers for both.
+  version output of its own and ssh-keyscan none either, so the ssh
+  release answers for all three. Their option histories are backfilled
+  across the portable release line.
 
 - **The man tier reads any published manual, not just git's.** Where a
   `kind="man"` tool's pages live is now the driver's `Manual`

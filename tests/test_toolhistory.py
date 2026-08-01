@@ -1709,6 +1709,19 @@ def test_a_release_can_arrive_at_any_position_and_the_chain_still_replays():
         assert _toolhistory.at(doc, version) == expected, version
 
 
+def test_inserting_between_undated_patchlevels_of_one_base():
+    """OpenSSH's shape: `version_tuple` reads 9.9p1 and 9.9p2 as the same
+    base, and the portable listing carries no dates to break the tie — the
+    patchlevel itself must place the release, or the middle-insertion scan
+    finds no strictly-older entry and the walk dies on a StopIteration."""
+    doc = _toolhistory.new("ssh", version="9.9p3", date="", surface=_surface_at(3))
+    assert _toolhistory.insert(doc, version="9.9p1", date="", surface=_surface_at(1))
+    assert _toolhistory.insert(doc, version="9.9p2", date="", surface=_surface_at(2))
+    assert _toolhistory.observed(doc) == ["9.9p3", "9.9p2", "9.9p1"]
+    for version, n in (("9.9p1", 1), ("9.9p2", 2), ("9.9p3", 3)):
+        assert _toolhistory.at(doc, version) == _surface_at(n), version
+
+
 def test_inserting_a_release_the_chain_already_holds_changes_nothing():
     """What makes an interrupted gather resumable: run it again and the
     releases already recorded are skipped rather than rewritten."""

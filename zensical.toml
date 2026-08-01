@@ -104,6 +104,7 @@ nav = [
     { "ruff_format" = "_generated/tools/ruff_format.md" },
     { "ssh" = "_generated/tools/ssh.md" },
     { "ssh_keygen" = "_generated/tools/ssh_keygen.md" },
+    { "ssh_keyscan" = "_generated/tools/ssh_keyscan.md" },
     { "tea" = "_generated/tools/tea.md" },
     { "twine" = "_generated/tools/twine.md" },
     { "ty" = "_generated/tools/ty.md" },
