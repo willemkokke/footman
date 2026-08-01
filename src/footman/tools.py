@@ -573,6 +573,7 @@ class Tool:
         # resolved at call time. Rides the chain, so `git.opts(nofail=True).push()`
         # works. Kept apart from the tool's flags: policy vs work.
         self._opts = dict(policy or {})
+        self._rebound = False
         # The executable actually run, when it isn't the name: `tools.python`
         # runs `sys.executable`, not whatever `python` is on PATH.
         self._path = path or name
@@ -593,7 +594,7 @@ class Tool:
 
     def _sub(self, *tail: str) -> Tool:
         """A chained tool sharing this one's executable, entry, mode, and policy."""
-        return Tool(
+        t = Tool(
             self._argv0,
             *self._base,
             *tail,
@@ -604,6 +605,8 @@ class Tool:
             version_argv=self._version_argv,
             policy=self._opts,
         )
+        t._rebound = self._rebound
+        return t
 
     def __getattr__(self, verb: str) -> Tool:
         if verb.startswith("_"):
@@ -645,6 +648,33 @@ class Tool:
         """
         t = self._sub()
         t._opts = {**self._opts, **_opts_overrides(overrides)}
+        return t
+
+    def at(self, path: str | _Path) -> Tool:
+        """Rebind this handle to an executable — the *identity* channel,
+        beside `.opts()` (policy) and `.flags()` (the tool's own argv).
+
+        Everything else rides along: verbs, bound flags, policy — including
+        a pending `input=` payload, whose cell is shared, not copied. What
+        changes is *what runs*: `tools.python.at(venv_python)` is that
+        venv's interpreter carrying python's whole typed surface, and the
+        shown command line keeps the tool's own name.
+
+        The in-process lane runs *this* interpreter, which is exactly what
+        an `.at()` handle says not to do — so the handle always spawns, and
+        an explicit `in_process=True` on one is a taught refusal.
+        """
+        t = Tool(
+            self._argv0,
+            *self._base,
+            in_process=False,
+            path=str(path),
+            entry=self._entry,
+            single_dash=self._single_dash,
+            version_argv=self._version_argv,
+            policy=self._opts,
+        )
+        t._rebound = True
         return t
 
     def flags(self, **kwargs: Any) -> Tool:
@@ -745,6 +775,12 @@ class Tool:
             )
 
         wanted = self._prefer_in_process if in_process is None else in_process
+        if wanted and self._rebound:
+            raise ValueError(
+                f"{self._argv0}: in_process=True on an .at() handle — the "
+                f"in-process lane runs this interpreter, and .at() names a "
+                f"different executable. Drop one of them."
+            )
         if wanted and timeout is not None:
             # A bound needs a process to bound: an in-process call has no
             # child to signal and no safe way to unwind a thread. Demote to

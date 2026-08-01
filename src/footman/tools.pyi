@@ -154,6 +154,7 @@ class Tool:
     _base: list[str]
     _prefer_in_process: bool
     _single_dash: bool
+    _rebound: bool
     _opts: dict[str, Any]
     def __init__(
         self,
@@ -193,6 +194,7 @@ class Tool:
     # A tool's own global options, bound before the next subcommand
     # (`docker.flags(host="x").ps()`). Generated stubs override it with the
     # tool's typed globals; the base takes any flag.
+    def at(self, path: str | _Path) -> Self: ...
     def flags(self, **flags: Any) -> Self: ...
     def __call__(self, *args: Any, **flags: Any) -> Result: ...
     def installed_version(self) -> tuple[int, ...]: ...

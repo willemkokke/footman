@@ -6,7 +6,7 @@ and keyword arguments translate into flags *mechanically*:
 
 ```python
 from footman import task
-from footman.tools import bun, docker, git, mkdocs, pytest, ruff, ssh, terraform, uv
+from footman.tools import bun, docker, git, mkdocs, pytest, python, ruff, ssh, terraform, uv
 
 @task
 def ship():
@@ -70,6 +70,12 @@ docker.flags(host="tcp://x").compose.up(detach=True)
 places a global where the tool expects it and returns the tool, keeping the
 chain typed.
 
+The placement rule, in one line: **call keywords land after the
+positionals** (before them for a wrapper verb), and **`.flags()` hoists to
+the tool's top level**, before any subcommand. An option that must sit
+elsewhere — in front of a package spec, say — is a positional string,
+placed exactly where you put it.
+
 footman's own **run-control** is separate — it rides `opts()`, a closed set
 (`nofail`, `in_process`, `capture`, `title`, `step`) that never becomes a tool
 flag, the same policy-vs-work split a task's `.opts()` has:
@@ -89,6 +95,19 @@ it. `input=` is the one member that is **consumed** rather than replayed:
 stdin is consumable, so the payload is delivered exactly once however the
 handle is chained or shared afterwards, and a second call is a taught
 refusal — re-opt with a fresh payload per call.
+
+The third channel is **identity**: `.at(path)` rebinds a handle to an
+executable, keeping everything else — verbs, bound flags, policy, the
+typed surface — while the shown command line keeps the tool's own name:
+
+```python
+python.at(".venv/bin/python")("-m", "pytest")   # that venv's interpreter
+```
+
+Which executable runs is never policy, so it does not ride `.opts()` —
+a policy merge must change *how* a call runs, never *what*. And because
+the in-process lane runs the current interpreter, an `.at()` handle
+always spawns; demanding `in_process=True` on one is a taught refusal.
 
 !!! note "Colour without a pty"
 
@@ -146,6 +165,11 @@ with recording() as steps:
 assert steps[0].command == "ruff check src --select E --select F"  # reads plainly
 assert steps[0].raw == "ruff check src --select=E --select=F"      # the real argv
 ```
+
+Both are *spellings*, rendered per platform — Windows quotes differently
+than POSIX, by design. Parse a tool's **data** out of `stdout`, never out
+of `raw`: an assertion that parses `raw` passes on the machine that wrote
+it and fails on the next OS.
 
 ## Disabling a flag that defaults on
 

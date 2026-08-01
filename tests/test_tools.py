@@ -1059,3 +1059,38 @@ def test_opts_env_is_the_childs_environment_and_replays():
         # Policy, not payload: the environment rides the handle and replays.
         assert tool("-c", probe).stdout == "yes"
         assert tool("-c", probe).stdout == "yes"
+
+
+def test_at_rebinds_the_executable_for_any_tool():
+    # Identity channel: any tool — even one footman never heard of — runs
+    # the executable .at() names, while the shown line keeps the tool's own
+    # name (the receipt says what the call *is*, the path says what ran).
+    from footman.context import Context, use_context
+
+    ghost = tools.Tool("doesnotexist").at(sys.executable)
+    with use_context(Context()):
+        assert ghost("-c", "print('rebound', end='')").stdout == "rebound"
+    with recording() as steps:
+        ghost("-c", "pass")
+    assert steps[0].command.startswith("doesnotexist ")
+
+
+def test_at_carries_policy_and_the_typed_surface():
+    from footman.context import Context, use_context
+
+    tool = tools.python.opts(nofail=True).at(sys.executable)
+    with use_context(Context()):
+        result = tool("-c", "raise SystemExit(3)")
+    assert result.code == 3  # nofail rode along; the rebind changed nothing else
+
+
+def test_at_refuses_an_in_process_demand():
+    # The in-process lane runs THIS interpreter; .at() names a different
+    # executable — the two contradict, and the refusal teaches which to drop.
+    from footman.context import Context, use_context
+
+    with (
+        use_context(Context()),
+        pytest.raises(ValueError, match=r"in_process=True on an .at\(\) handle"),
+    ):
+        tools.python.at(sys.executable).opts(in_process=True)("-c", "pass")

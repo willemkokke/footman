@@ -7,6 +7,16 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- **`.at(path)` on every tool — the identity channel.** Rebinds a handle
+  to an executable while keeping everything else: verbs, bound flags,
+  policy, the typed surface, the shown name. `tools.python.at(venv)` is
+  that venv's interpreter carrying python's whole stub. Which executable
+  runs is never policy, so it does not ride `.opts()`; and because the
+  in-process lane runs the current interpreter, an `.at()` handle always
+  spawns — `in_process=True` on one is a taught refusal.
+
 ## [0.29.1] — 2026-08-01
 
 ### Added
