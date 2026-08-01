@@ -95,35 +95,14 @@ class Result(int):
     and in-process runs; a streamed run (`capture=False`) leaves them empty.
     """
 
-    command: str
-    """The command line that ran, normalised for reading — options in
-    separated form, values shell-quoted. What `recording()` asserts against,
-    and what the terminal shows."""
-    stdout: str
-    """Captured standard output; empty when the step streamed instead."""
-    stderr: str
-    """Captured standard error; empty when the step streamed instead."""
-    duration: float
-    """Wall-clock seconds the step took."""
-    raw: str
-    """The exact command line executed, shell-quoted — the bytes footman
-    handed the tool, which may spell an option `--flag=value` where
-    `command` shows `--flag value`. What `--verbose` prints. Equal to
-    `command` when there is nothing to normalise."""
-    timed_out: bool
-    """Whether `timeout=` expired and footman killed the tree. The code is
-    124 — the shell convention — and `stdout`/`stderr` hold whatever the
-    command managed to say first, which on a hang is the only clue there is."""
-    address: str
-    """The record's tree-derived name: the requester's path, this record's
-    label, and an ordinal once a label repeats among siblings — counted in
-    request order as written, so it is deterministic across runs and hosts.
-    Empty outside a managed context."""
-    audit: tuple[AuditEntry, ...]
-    """The verdict's provenance: every lifecycle moment that acted on it, in
-    execution order — the body entry with what the work itself produced, a
-    review entry per `pre_record` reviewer. Empty for a record that executed
-    nothing (a dry-run plan line)."""
+    _command: str
+    _stdout: str
+    _stderr: str
+    _duration: float
+    _raw: str
+    _timed_out: bool
+    _address: str
+    _audit: tuple[AuditEntry, ...]
 
     def __new__(
         cls,
@@ -139,15 +118,69 @@ class Result(int):
         audit: tuple[AuditEntry, ...] = (),
     ) -> Result:
         self = super().__new__(cls, code)
-        object.__setattr__(self, "timed_out", timed_out)
-        object.__setattr__(self, "address", address)
-        object.__setattr__(self, "command", command)
-        object.__setattr__(self, "stdout", stdout)
-        object.__setattr__(self, "stderr", stderr)
-        object.__setattr__(self, "duration", duration)
-        object.__setattr__(self, "raw", raw or command)
-        object.__setattr__(self, "audit", audit)
+        object.__setattr__(self, "_timed_out", timed_out)
+        object.__setattr__(self, "_address", address)
+        object.__setattr__(self, "_command", command)
+        object.__setattr__(self, "_stdout", stdout)
+        object.__setattr__(self, "_stderr", stderr)
+        object.__setattr__(self, "_duration", duration)
+        object.__setattr__(self, "_raw", raw or command)
+        object.__setattr__(self, "_audit", audit)
         return self
+
+    @property
+    def command(self) -> str:
+        """The command line that ran, normalised for reading — options in
+        separated form, values shell-quoted. What `recording()` asserts
+        against, and what the terminal shows."""
+        return self._command
+
+    @property
+    def stdout(self) -> str:
+        """Captured standard output; empty when the step streamed instead."""
+        return self._stdout
+
+    @property
+    def stderr(self) -> str:
+        """Captured standard error; empty when the step streamed instead."""
+        return self._stderr
+
+    @property
+    def duration(self) -> float:
+        """Wall-clock seconds the step took."""
+        return self._duration
+
+    @property
+    def raw(self) -> str:
+        """The exact command line executed, shell-quoted — the bytes footman
+        handed the tool, which may spell an option `--flag=value` where
+        `command` shows `--flag value`. What `--verbose` prints. Equal to
+        `command` when there is nothing to normalise."""
+        return self._raw
+
+    @property
+    def timed_out(self) -> bool:
+        """Whether `timeout=` expired and footman killed the tree. The code
+        is 124 — the shell convention — and `stdout`/`stderr` hold whatever
+        the command managed to say first, which on a hang is the only clue
+        there is."""
+        return self._timed_out
+
+    @property
+    def address(self) -> str:
+        """The record's tree-derived name: the requester's path, this
+        record's label, and an ordinal once a label repeats among siblings —
+        counted in request order as written, so it is deterministic across
+        runs and hosts. Empty outside a managed context."""
+        return self._address
+
+    @property
+    def audit(self) -> tuple[AuditEntry, ...]:
+        """The verdict's provenance: every lifecycle moment that acted on
+        it, in execution order — the body entry with what the work itself
+        produced, a review entry per `pre_record` reviewer. Empty for a
+        record that executed nothing (a dry-run plan line)."""
+        return self._audit
 
     def __setattr__(self, name: str, value: Any) -> None:
         raise AttributeError(

@@ -58,7 +58,9 @@ versions may include breaking changes.
 - **Breaking: a committed record is sealed — everywhere.** `Result`
   refuses attribute writes after construction (amend verdicts in the
   review window; veto with `fail()`), so a step observer holds the same
-  read-only truth a row observer does. And a generator step that yields
+  read-only truth a row observer does. The seal is static too: the
+  record's fields are read-only properties, so a write is a type error
+  before it is a runtime one. And a generator step that yields
   a *value* is a taught error: yields are checkpoints, the draft is what
   a yield evaluates to, `return` carries the value out.
 

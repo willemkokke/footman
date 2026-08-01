@@ -243,7 +243,9 @@ def test_a_sealed_record_refuses_writes():
         quick()()
     record = ctx.steps[-1]
     with pytest.raises(AttributeError, match="sealed"):
-        record.command = "rewritten"
+        # the static seal (read-only property) and the runtime one agree;
+        # the ignore lets the runtime half be exercised at all
+        record.command = "rewritten"  # type: ignore[misc]
 
 
 def test_a_step_yielding_a_value_is_taught():
