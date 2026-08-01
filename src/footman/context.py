@@ -100,6 +100,11 @@ class Result(int):
     """Whether `timeout=` expired and footman killed the tree. The code is
     124 — the shell convention — and `stdout`/`stderr` hold whatever the
     command managed to say first, which on a hang is the only clue there is."""
+    address: str
+    """The record's tree-derived name: the requester's path, this record's
+    label, and an ordinal once a label repeats among siblings — counted in
+    request order as written, so it is deterministic across runs and hosts.
+    Empty outside a managed context."""
     audit: tuple[AuditEntry, ...]
     """The verdict's provenance: every lifecycle moment that acted on it, in
     execution order — the body entry with what the work itself produced, a
@@ -116,10 +121,12 @@ class Result(int):
         duration: float = 0.0,
         raw: str = "",
         timed_out: bool = False,
+        address: str = "",
         audit: tuple[AuditEntry, ...] = (),
     ) -> Result:
         self = super().__new__(cls, code)
         self.timed_out = timed_out
+        self.address = address
         self.command = command
         self.stdout = stdout
         self.stderr = stderr
@@ -317,6 +324,14 @@ class ResultView:
 @dataclass
 class Context:
     """State for one running task: environment, flags, passthrough, output."""
+
+    address: str = ""
+    """This context's place in the run's tree — the path of requests that
+    led here. Every record made under it derives its own address from this
+    one."""
+    _labels: dict[str, int] = field(default_factory=dict)
+    """Per-parent label counts, so same-labelled children get ordinals in
+    request order as written (the first is bare, the second is `#2`)."""
 
     env: dict[str, str] = field(default_factory=lambda: _globals.base_env())
     """**This task's environment** — a complete one, not a diff.
@@ -1440,6 +1455,21 @@ def _run_callable(
         return code, out_buf.getvalue(), err_buf.getvalue()
 
 
+def _next_label(labels: dict[str, int], label: str) -> str:
+    """The next same-labelled sibling's spelling: bare first, `#2` after."""
+    n = labels.get(label, 0) + 1
+    labels[label] = n
+    return label if n == 1 else f"{label}#{n}"
+
+
+def _child_address(parent: Context, label: str) -> str:
+    """The tree-derived name of the next child with this label under
+    *parent* — deterministic, because a parent's requests are made from its
+    own control flow in written order."""
+    leaf = _next_label(parent._labels, label)
+    return f"{parent.address}/{leaf}" if parent.address else leaf
+
+
 @contextlib.contextmanager
 def _captured_streams(out_buf: io.StringIO, err_buf: io.StringIO) -> Iterator[None]:
     """Capture this thread's stdout/stderr into the two buffers — the same
@@ -2256,6 +2286,10 @@ def run(
         # is rather than a sentinel of footman's own invention. A Result *is*
         # its exit code, so this is chosen here, not assigned afterwards.
         code = 124
+    # The address label is the stable identity — a title names the record,
+    # the address names the node: the tool word, not the whole command line.
+    addr_leaf = (title or label).split()[0] if (title or label) else "run"
+    addr = _child_address(ctx, addr_leaf)
     # The audit: the verdict's provenance. The body entry is always present
     # and carries what the work itself produced; review entries follow.
     audit: tuple[AuditEntry, ...] = (AuditEntry("body", label, code),)
@@ -2289,6 +2323,7 @@ def run(
                     duration=duration,
                     raw=raw,
                     timed_out=timed_out,
+                    address=addr,
                     audit=(*audit, AuditEntry("review", hook, None)),
                 )
             )
@@ -2310,6 +2345,7 @@ def run(
         duration=duration,
         raw=raw,
         timed_out=timed_out,
+        address=addr,
         audit=audit,
     )
     if recorded:
@@ -2610,6 +2646,8 @@ def _run_thunks(
         buf = io.StringIO()
         child = replace(
             parent,
+            address=_child_address(parent, name),
+            _labels={},
             sink=buf,
             err_sink=buf,
             steps=[],

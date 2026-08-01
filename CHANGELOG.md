@@ -60,6 +60,14 @@ versions may include breaking changes.
 
 ### Added
 
+- **Every record carries its address.** A tree-derived name — the path of
+  requests that led to it, with an ordinal once a label repeats among
+  siblings (`check/typecheck`, `build/git`, `build/git#2`) — assigned in
+  request order as written, so it is deterministic across runs and hosts.
+  Rows and steps both carry it, `--json` includes it additively, and an
+  address prefix names a subtree. Diverged forwards read as `shared` and
+  `shared#2`: distinct work, distinctly named.
+
 - **`step()` — steps you make yourself, in three positions.** `@step` on
   a local function makes a *maker*: calling it **builds** a bound,
   deferrable piece of work (the `range(10)` precedent — nothing runs

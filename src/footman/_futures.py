@@ -270,6 +270,8 @@ def call(task: Any, args: tuple[Any, ...], kwargs: dict[str, Any]) -> Any:
         child = dataclasses.replace(
             parent,
             fn=task,
+            address=context._child_address(parent, label),
+            _labels={},
             env=dict(parent.env),
             cwd=None,  # let the callee's own cwd policy resolve
             sink=buf,
@@ -353,6 +355,11 @@ def call(task: Any, args: tuple[Any, ...], kwargs: dict[str, Any]) -> Any:
     if status is not None:
         status.unit_finished(label, True)
     row = _shared_result(cell.label, value, cell.record)
+    row.address = (
+        child.address
+        if child is not None
+        else context._child_address(context.current(), label)
+    )
     if handle is not None:
         post_error = _executor._exit_task_hooks(life, handle, row)
         if post_error is not None:
@@ -617,6 +624,8 @@ def _run_now(
         child = dataclasses.replace(
             parent,
             fn=task,
+            address=context._child_address(parent, label),
+            _labels={},
             env=dict(parent.env),
             cwd=None,  # let the callee's own cwd policy resolve
             sink=buf,

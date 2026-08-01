@@ -825,6 +825,7 @@ def _print_json(results: list[_executor.TaskResult], *, total: float) -> None:
     for r in results:
         entry: dict[str, object] = {
             "task": r.task,
+            "address": r.address,
             "ok": r.ok,
             "state": _executor.reported_state(r),
             "cancelled": r.cancelled,
@@ -834,6 +835,7 @@ def _print_json(results: list[_executor.TaskResult], *, total: float) -> None:
             "steps": [
                 {
                     "command": s.command,
+                    "address": s.address,
                     "code": s.code,
                     "duration_ms": round(s.duration * 1000, 3),
                     "stdout": s.stdout,

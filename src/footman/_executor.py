@@ -90,6 +90,10 @@ class TaskResult:
     thread_id: int = 0
     """The OS thread id (`threading.get_native_id`) of that worker, the key a
     profiler's timeline uses. `0` when nothing executed."""
+    address: str = ""
+    """The row's tree-derived name — the path of requests that led to it,
+    with an ordinal once a label repeats among siblings. Deterministic in
+    request order as written; empty outside a managed run."""
     eligible: float | None = None
     """When this node could first have started — its last prerequisite's
     finish, on the run's monotonic clock. `started - eligible` is launch
@@ -1602,6 +1606,7 @@ def run_bound(
             result.blocked_by = cell.label
         else:
             result = _futures.shared_result(seg.task, value, cell.record)
+            result.address = ctx.address  # the reference row is this request's
         if handle is not None:
             post_error = _exit_task_hooks(life, handle, result)
             if post_error is not None and result.ok:
@@ -1690,6 +1695,7 @@ def run_bound(
     duration = time.perf_counter() - start
     output = ctx.sink.getvalue() if isinstance(ctx.sink, io.StringIO) else ""
     result = _result(seg, code, returned, error, duration, output, ctx.steps)
+    result.address = ctx.address
     result.pristine = returned
     result.started = started
     result.thread = born
