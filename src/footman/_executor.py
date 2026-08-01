@@ -1468,17 +1468,17 @@ def _exit_task_hooks(
         except context.Failed as exc:
             if not result.audit:
                 result.audit.append(
-                    context.AuditEntry("body", result.task, result.code)
+                    context._audit_entry("body", result.task, result.code)
                 )
-            result.audit.append(context.AuditEntry("observe", name, exc.code))
+            result.audit.append(context._audit_entry("observe", name, exc.code))
             if first is None:
                 first = exc
         except Exception as exc:
             if not result.audit:
                 result.audit.append(
-                    context.AuditEntry("body", result.task, result.code)
+                    context._audit_entry("body", result.task, result.code)
                 )
-            result.audit.append(context.AuditEntry("observe", name, None))
+            result.audit.append(context._audit_entry("observe", name, None))
             if first is None:
                 first = _own_hook_error(hook, "post_task", handle.name, exc)
     if life is not None:
@@ -1495,17 +1495,17 @@ def _exit_task_hooks(
                     # The audit records the moment; the work's own story stays.
                     if not result.audit:
                         result.audit.append(
-                            context.AuditEntry("body", result.task, result.code)
+                            context._audit_entry("body", result.task, result.code)
                         )
-                    result.audit.append(context.AuditEntry("observe", name, exc.code))
+                    result.audit.append(context._audit_entry("observe", name, exc.code))
                     if first is None:
                         first = exc
                 except Exception as exc:
                     if not result.audit:
                         result.audit.append(
-                            context.AuditEntry("body", result.task, result.code)
+                            context._audit_entry("body", result.task, result.code)
                         )
-                    result.audit.append(context.AuditEntry("observe", name, None))
+                    result.audit.append(context._audit_entry("observe", name, None))
                     if first is None:
                         failure = HookFailed(
                             f"post_task hook {name!r} "
@@ -1737,7 +1737,7 @@ def run_bound(
         # observed, or reported. Reviewers run inside-out; the first failure
         # stops the walk and fails the task with the hook's own error —
         # nothing a broken review half-did is kept.
-        audit = [context.AuditEntry("body", seg.task, result.code)]
+        audit = [context._audit_entry("body", seg.task, result.code)]
         view = context.ResultView(
             title=seg.task,
             code=result.code,
@@ -1753,7 +1753,7 @@ def run_bound(
             try:
                 reviewer(view)
             except Exception as exc:
-                audit.append(context.AuditEntry("review", name, None))
+                audit.append(context._audit_entry("review", name, None))
                 failure = HookFailed(
                     f"pre_record hook {name!r} failed reviewing task "
                     f"{seg.task!r}: {type(exc).__name__}: {exc}"
@@ -1766,7 +1766,7 @@ def run_bound(
                 error = failure  # a waiter shares the failure, not a value
                 break
             audit.append(
-                context.AuditEntry(
+                context._audit_entry(
                     "review", name, view.code if "code" in view._touched else None
                 )
             )

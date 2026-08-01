@@ -38,6 +38,7 @@ from typing import (
     NoReturn,
     Protocol,
     TextIO,
+    TypeAlias,
     TypeVar,
     overload,
 )
@@ -68,6 +69,19 @@ class AuditEntry(NamedTuple):
     code: int | None
     """The code this moment left, or None for involvement without a verdict
     write."""
+
+
+_Moment: TypeAlias = Literal["bind", "enter", "body", "review", "observe"]
+"""The lifecycle vocabulary, closed at the PRODUCER side only: the public
+fields stay open strings (the `state` precedent — readers tolerate values
+they don't know), while footman's own write sites go through
+`_audit_entry`, so a misspelt moment in framework code is a type error
+before it is a test failure."""
+
+
+def _audit_entry(moment: _Moment, actor: str, code: int | None) -> AuditEntry:
+    """The one door framework code writes audit entries through."""
+    return AuditEntry(moment, actor, code)
 
 
 class Result(int):
@@ -2329,7 +2343,7 @@ def run(
     addr = _child_address(ctx, addr_leaf)
     # The audit: the verdict's provenance. The body entry is always present
     # and carries what the work itself produced; review entries follow.
-    audit: tuple[AuditEntry, ...] = (AuditEntry("body", label, code),)
+    audit: tuple[AuditEntry, ...] = (_audit_entry("body", label, code),)
     if pre_record is not None and recorded:
         # The review window: the work ran and the record is still a draft.
         # The reviewer reads what was captured and may amend the verdict —
@@ -2361,7 +2375,7 @@ def run(
                     raw=raw,
                     timed_out=timed_out,
                     address=addr,
-                    audit=(*audit, AuditEntry("review", hook, None)),
+                    audit=(*audit, _audit_entry("review", hook, None)),
                 )
             )
             raise RuntimeError(
@@ -2370,7 +2384,9 @@ def run(
             ) from exc
         audit = (
             *audit,
-            AuditEntry("review", hook, view.code if "code" in view._touched else None),
+            _audit_entry(
+                "review", hook, view.code if "code" in view._touched else None
+            ),
         )
         code = view.code
         label = view.title

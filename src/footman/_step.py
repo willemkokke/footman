@@ -26,7 +26,14 @@ from collections.abc import Callable, Generator
 from typing import Any, Generic, Literal, ParamSpec, TypeVar, cast, overload
 
 from footman import context as _context
-from footman.context import AuditEntry, Result, ResultView, RunFailed, RunTimeout
+from footman.context import (
+    AuditEntry,
+    Result,
+    ResultView,
+    RunFailed,
+    RunTimeout,
+    _audit_entry,
+)
 
 P = ParamSpec("P")
 R = TypeVar("R")
@@ -172,7 +179,7 @@ class _StepBlock:
             command=view.title,
             duration=duration,
             address=_context._child_address(ctx, view.title),
-            audit=(AuditEntry("body", view.title, code),),
+            audit=(_audit_entry("body", view.title, code),),
         )
         ctx.steps.append(result)
         return False  # an exception propagates; the record sealed first
@@ -343,7 +350,7 @@ def _pump(item: WorkItem[Any]) -> Any:
     view.code = code
     view._touched.discard("code")  # machinery write, not a review verdict
 
-    audit: tuple[AuditEntry, ...] = (AuditEntry("body", label, code),)
+    audit: tuple[AuditEntry, ...] = (_audit_entry("body", label, code),)
     reviewers = list(maker._reviewers)
     if o.get("pre_record") is not None:
         reviewers.append(o["pre_record"])  # the use site keeps the final word
@@ -362,7 +369,7 @@ def _pump(item: WorkItem[Any]) -> Any:
                         duration=duration,
                         timed_out=timed_out,
                         address=addr,
-                        audit=(*audit, AuditEntry("review", name, None)),
+                        audit=(*audit, _audit_entry("review", name, None)),
                     )
                 )
                 raise RuntimeError(
@@ -371,7 +378,7 @@ def _pump(item: WorkItem[Any]) -> Any:
                 ) from exc
             audit = (
                 *audit,
-                AuditEntry(
+                _audit_entry(
                     "review", name, view.code if "code" in view._touched else None
                 ),
             )
@@ -421,7 +428,7 @@ def _pump(item: WorkItem[Any]) -> Any:
                     duration=result.duration,
                     timed_out=result.timed_out,
                     address=result.address,
-                    audit=(*result.audit, AuditEntry("observe", name, exc.code)),
+                    audit=(*result.audit, _audit_entry("observe", name, exc.code)),
                 )
                 ctx.steps[-1] = amended
                 raise
@@ -434,7 +441,7 @@ def _pump(item: WorkItem[Any]) -> Any:
                     duration=result.duration,
                     timed_out=result.timed_out,
                     address=result.address,
-                    audit=(*result.audit, AuditEntry("observe", name, None)),
+                    audit=(*result.audit, _audit_entry("observe", name, None)),
                 )
                 ctx.steps[-1] = amended
                 raise RuntimeError(
