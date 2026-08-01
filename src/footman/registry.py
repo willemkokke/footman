@@ -48,6 +48,7 @@ from typing import (
 )
 
 if TYPE_CHECKING:
+    from footman._globals import Lane
     from footman.context import ResultView
 
 Task = Callable[..., Any]
@@ -288,6 +289,7 @@ _ATOMIC = "_footman_atomic"
 _INFINITE = "_footman_infinite"
 _SHARED = "_footman_shared"
 _HIDDEN = "_footman_hidden"
+_LANES = "_footman_lanes"
 _INTERACTIVE = "_footman_interactive"
 _PROGRESS = "_footman_progress"
 _CONFIRM = "_footman_confirm"
@@ -452,6 +454,7 @@ _OPTS_ATTRS = {
     "rel": _REL,
     "serial": _SERIAL,
     "exclusive": _EXCLUSIVE,
+    "lanes": _LANES,
 }
 
 
@@ -472,6 +475,7 @@ class TaskOpts(TypedDict, total=False):
     shared: bool | None
     cwd: str | Path | None
     rel: str | Path | None
+    lanes: tuple[Lane, ...]
     serial: bool
     exclusive: bool
 
@@ -730,6 +734,7 @@ def _apply_policy(
     serial: bool = False,
     exclusive: bool = False,
     hidden: bool | None = None,
+    lanes: Sequence[Any] = (),
 ) -> None:
     """Stamp a task's `_footman_*` policy attributes onto *fn*.
 
@@ -773,6 +778,8 @@ def _apply_policy(
         setattr(fn, _SERIAL, True)
     if exclusive:
         setattr(fn, _EXCLUSIVE, True)
+    if lanes:
+        setattr(fn, _LANES, tuple(lanes))
     _attach_lifecycle(fn)
 
 
@@ -1006,6 +1013,7 @@ class TaskDecorator(Protocol):
         serial: bool = False,
         exclusive: bool = False,
         hidden: bool | None = None,
+        lanes: Sequence[Lane] = (),
         uses: Sequence[GlobalOption] = (),
     ) -> Callable[[Callable[_P, _R_co]], TaskFn[_P, _R_co]]: ...
 
@@ -1151,6 +1159,7 @@ class Group:
         serial: bool = False,
         exclusive: bool = False,
         hidden: bool | None = None,
+        lanes: Sequence[Lane] = (),
         uses: Sequence[GlobalOption] = (),
     ) -> Callable[[Callable[_P, _R_co]], TaskFn[_P, _R_co]]: ...
 
@@ -1173,6 +1182,7 @@ class Group:
         serial: bool = False,
         exclusive: bool = False,
         hidden: bool | None = None,
+        lanes: Sequence[Lane] = (),
         uses: Sequence[GlobalOption] = (),
     ) -> Task | Callable[[Task], Task]:
         """Register a function as a task.
@@ -1292,6 +1302,7 @@ class Group:
                 serial=serial,
                 exclusive=exclusive,
                 hidden=hidden,
+                lanes=lanes,
             )
             if uses:
                 for used in uses:
@@ -1984,6 +1995,11 @@ def _gate(check: Check) -> Callable[[_F], _F]:
 
 
 _PRE_RECORD = "_footman_pre_record"
+
+
+def task_lanes(fn: Any) -> tuple[Any, ...]:
+    """The named lanes this task claims at its boundary, or ()."""
+    return tuple(getattr(fn, _LANES, ()))
 
 
 def pre_record(hook: Callable[[Any], None]) -> Callable[[_F], _F]:

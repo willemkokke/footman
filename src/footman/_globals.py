@@ -765,8 +765,108 @@ _console_holder: str | None = None
 _excl_waiting = 0
 
 
+class Lane:
+    """A serialised claim on one named resource: one holder at a time,
+    contending only with claimants of the SAME lane — unrelated work runs
+    untouched (nothing drains; that is `exclusive=`, a different regime).
+
+    Made by `footman.lane()` and claimed by handing the handle to a task's
+    or a step maker's `lanes=`: the import system is the registry, so a
+    misspelt lane is an undefined name, and sharing a resource across
+    modules is importing its binding. footman itself ships exactly two —
+    `cwd_lane` and `console_lane` — built with the same call.
+    """
+
+    __slots__ = ("name", "reason")
+
+    name: str
+    """The resource's one name — what the live line shows a wait on."""
+    reason: str | None
+    """Optional documentation on the declaration."""
+
+    def __init__(self, name: str, reason: str | None) -> None:
+        self.name = name
+        self.reason = reason
+
+    def __repr__(self) -> str:
+        return f"<lane {self.name}>"
+
+
+_lane_sites: dict[str, str] = {}  # lane name -> the declaration site
+
+
+def make_lane(name: str, *, reason: str | None = None) -> Lane:
+    """Declare a named resource to serialise on. One binding per resource:
+    re-declaring a taken name is a refusal naming both sites — reuse is
+    spelled by importing the handle, never by re-declaring. (The same
+    site re-executing — a module re-imported — is the same declaration.)
+    """
+    import inspect
+
+    frame = inspect.stack()[1]
+    site = f"{frame.filename}:{frame.lineno}"
+    taken = _lane_sites.get(name)
+    if taken is not None and taken != site:
+        raise ValueError(
+            f"lane {name!r} is already declared at {taken} — one binding per "
+            f"resource. Share it by importing that handle; a second "
+            f"declaration would make two lanes that never contend."
+        )
+    _lane_sites[name] = site
+    return Lane(name, reason)
+
+
+_named_holders: dict[str, str] = {}  # lane name -> holder, under _arb_cv
+
+
+def named_lanes(lanes: tuple[Lane, ...], name: str = "") -> Any:
+    """Hold *lanes* around one piece of work — a step's claims.
+
+    Granted atomically in a single predicate under the arbiter's one
+    condition variable (all lanes at once, no partial holds, so
+    hold-and-wait between lanes cannot be spelled), and released at the
+    one place the hold ends.
+    """
+    import contextlib
+
+    @contextlib.contextmanager
+    def _hold() -> Any:
+        if not lanes:
+            yield
+            return
+        wanted = {ln.name for ln in lanes}
+        with _arb_cv:
+            while (
+                any(w in _named_holders for w in wanted)
+                or _serial_holder is not None
+                or _excl_holder is not None
+                or _excl_waiting
+            ):
+                busy = next((w for w in wanted if w in _named_holders), None)
+                _wait_note(
+                    name,
+                    f"the {busy} lane" if busy else "the exclusive drain",
+                    _named_holders.get(busy or "") or _serial_holder or _excl_holder,
+                )
+            for w in wanted:
+                _named_holders[w] = name or "?"
+        try:
+            yield
+        finally:
+            with _arb_cv:
+                for w in wanted:
+                    _named_holders.pop(w, None)
+                _arb_cv.notify_all()
+
+    return _hold()
+
+
 def lane(
-    policy: str | None, name: str = "", inherited: bool = False, console: bool = False
+    policy: str | None,
+    name: str = "",
+    inherited: bool = False,
+    console: bool = False,
+    named: tuple[Lane, ...] = (),
 ) -> Any:
     """A context manager holding *policy*'s lane around one task body.
 
@@ -786,14 +886,18 @@ def lane(
         if not _installs:
             yield
             return
+        wanted = {ln.name for ln in named}
         with _arb_cv:
             if inherited:
                 pass  # a lineage extends every hold, the console included
             elif policy == "serial":
+                # serial= IS the all-lanes claim: it conflicts with every
+                # named holder, and every named claim waits on it.
                 while (
                     _serial_holder is not None
                     or _excl_holder is not None
                     or _excl_waiting
+                    or _named_holders
                     or (console and _console_holder is not None)
                 ):
                     _wait_note(name, "the serial lane", _serial_holder or _excl_holder)
@@ -805,6 +909,7 @@ def lane(
                         _excl_holder is not None
                         or _serial_holder is not None
                         or (_running - _parked) > 0
+                        or _named_holders
                         or (console and _console_holder is not None)
                     ):
                         _wait_note(name, "the exclusive drain", _serial_holder)
@@ -816,11 +921,19 @@ def lane(
                     _excl_holder is not None
                     or _excl_waiting
                     or (console and _console_holder is not None)
+                    or any(w in _named_holders for w in wanted)
                 ):
-                    what = "the console" if console else "the exclusive drain"
+                    busy = next((w for w in wanted if w in _named_holders), None)
+                    what = (
+                        f"the {busy} lane"
+                        if busy
+                        else ("the console" if console else "the exclusive drain")
+                    )
                     _wait_note(name, what, _console_holder or _excl_holder)
             if console and not inherited:
                 _console_holder = name or "?"
+            for w in wanted:
+                _named_holders[w] = name or "?"
             _running += 1
         claimed_console = console and not inherited
         if claimed_console:
@@ -837,6 +950,8 @@ def lane(
                         _excl_holder = None
                     if console:
                         _console_holder = None
+                for w in wanted:
+                    _named_holders.pop(w, None)
                 _arb_cv.notify_all()
             if claimed_console:
                 _suspend_status(False)
@@ -953,3 +1068,12 @@ def uninstall() -> None:
         _restore_popen()
         _restore_environ()
         _snapshot.clear()
+
+
+# The two lanes footman itself ships — the only core lanes there will ever
+# be, declared with the very call plugins and tasks files use. cwd is
+# opt-in: claiming it is knowingly giving up some parallelism, and the
+# import at the top of the file says so where reviewers read. The console
+# is claimed implicitly by `interactive=` and explicitly here.
+cwd_lane: Lane = make_lane("cwd", reason="the one real working directory")
+console_lane: Lane = make_lane("console", reason="the one terminal")

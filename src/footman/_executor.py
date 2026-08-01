@@ -1001,6 +1001,21 @@ def resolve_cwd(fn: Task, ctx: Context) -> tuple[Path | None, bool]:
 
 
 @contextlib.contextmanager
+def _cwd_hold(ctx: Context) -> Iterator[None]:
+    """The cwd lane's application: chdir to the task's resolved directory
+    and restore — legitimate only under the lane's sole occupancy. The
+    foreign-cwd guard then passes naturally: live and target agree."""
+    saved = _globals.real_getcwd()
+    try:
+        if ctx.cwd is not None and not ctx.cwd_unmanaged:
+            _globals.real_chdir(ctx.cwd)
+        yield
+    finally:
+        with contextlib.suppress(OSError):
+            _globals.real_chdir(saved)
+
+
+@contextlib.contextmanager
 def _serial_globals(ctx: Context) -> Iterator[None]:
     """A serial/exclusive body owns the real process globals.
 
@@ -1638,7 +1653,11 @@ def run_bound(
     # its ancestor's hold instead of contending with it.
     inherited = ctx.serial_active
     lane_policy = None if inherited else registry.task_lane(fn)
-    console = not inherited and registry.is_interactive(fn)
+    named = () if inherited else registry.task_lanes(fn)
+    console = not inherited and (
+        registry.is_interactive(fn) or any(ln.name == "console" for ln in named)
+    )
+    named = tuple(ln for ln in named if ln.name != "console")
 
     # Wear the task's name while it runs, so a sampling profiler's timeline
     # reads as tasks rather than `fm-worker_3`; a serial/exclusive hold is
@@ -1679,10 +1698,21 @@ def run_bound(
             code, returned, error = 1, None, hook_error
         else:
             with _globals.lane(
-                lane_policy, name=seg.task, inherited=inherited, console=console
+                lane_policy,
+                name=seg.task,
+                inherited=inherited,
+                console=console,
+                named=named,
             ):
                 if lane_policy is not None:
                     with _serial_globals(ctx):
+                        code, returned, error = _call(fn, args, kwargs, as_call)
+                elif any(ln.name == "cwd" for ln in named):
+                    # The cwd lane's hold: sole occupancy of the one real
+                    # working directory, applied with a real chdir for the
+                    # duration — the fourth exit in the foreign-cwd taught
+                    # list, now a first-class claim.
+                    with _cwd_hold(ctx):
                         code, returned, error = _call(fn, args, kwargs, as_call)
                 else:
                     code, returned, error = _call(fn, args, kwargs, as_call)

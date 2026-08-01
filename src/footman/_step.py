@@ -35,7 +35,7 @@ R_co = TypeVar("R_co", covariant=True)
 # The closed policy vocabulary a step maker's `.opts()` accepts — execution
 # policy only: a step is anonymous, so boundary policy (confirm, gates,
 # sharing) has no request boundary to resolve at and is not spellable here.
-_STEP_OPTS = ("title", "capture", "recorded", "timeout", "env", "pre_record")
+_STEP_OPTS = ("title", "capture", "recorded", "timeout", "env", "lanes", "pre_record")
 
 
 class WorkItem(Generic[R_co]):
@@ -233,6 +233,13 @@ def _pump(item: WorkItem[Any]) -> Any:
     recorded: bool = o.get("recorded", True)
     timeout: float | None = o.get("timeout")
     env: dict[str, str] | None = o.get("env")
+    lanes: tuple[Any, ...] = tuple(o.get("lanes", ()))
+    if any(getattr(ln, "name", "") == "console" for ln in lanes):
+        raise TypeError(
+            "the console follows interactive task bodies — claim it with "
+            "@task(interactive=True) (or lanes=(console_lane,) on the task); "
+            "a step-level console hold waits for a payload that needs one."
+        )
 
     addr = _context._child_address(ctx, label)
     if ctx.dry_run and recorded:
@@ -294,7 +301,7 @@ def _pump(item: WorkItem[Any]) -> Any:
         state = nullcontext()
     exit_code: int | None = None
     try:
-        with state:
+        with _globals.named_lanes(lanes, name=label), state:
             if capture:
                 with _context._captured_streams(out_buf, err_buf):
                     value = drive()

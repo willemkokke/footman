@@ -155,6 +155,51 @@ def legacy_build():
 Waiting is never silent: a task queued behind a serial or exclusive holder
 prints a note naming the holder after a couple of seconds.
 
+## Lanes: one resource, one holder
+
+`serial=` claims *everything*. When a task needs exactly one shared
+resource, claim exactly that — a **lane**: one holder at a time,
+contending only with other claimants of the same lane, everything
+unrelated running beside it untouched.
+
+A lane is a *binding*, made once and shared by importing it — the import
+system is the registry, so a misspelt lane is an undefined name, never a
+silently new lane that contends with nothing. Re-declaring a taken name
+is an error naming both sites:
+
+<!-- example: fragment -->
+```python
+from footman import lane, task
+
+db = lane("database", reason="serialises the shared dev DB")
+
+@task(lanes=(db,))
+def migrate(): ...
+
+@task(lanes=(db,))
+def seed(): ...          # queues behind migrate; everything else runs
+```
+
+Claims are made when the work starts — never midway through, which is
+the classic recipe for deadlock, and footman keeps that door closed by
+having no way to spell it. Steps claim through their maker:
+`convert.opts(lanes=(db,))`. Two lanes ship with footman, made with the
+same call (`Lane` is the handle's type):
+
+- **`cwd_lane`** — sole occupancy of the one real working directory.
+  Claiming it is knowingly giving up some parallelism, and the spelling
+  makes that legible; for the hold, footman applies the task's resolved
+  directory with a real chdir and restores it after — the fourth exit in
+  the foreign-directory error's list.
+- **`console_lane`** — the one terminal. Interactive tasks claim it
+  implicitly (`interactive=True` and `lanes=(console_lane,)` on a task
+  mean the same thing); it never attaches to a step, because the
+  terminal follows interactive *bodies*.
+
+A `serial=` task conflicts with every lane holder and vice versa —
+serial is the all-lanes claim, said in one word. Lane waits print the
+same named note serial waits do.
+
 ## The terminal
 
 The terminal is a process global too — one stdin, consumed rather than
