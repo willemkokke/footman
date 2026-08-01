@@ -1686,7 +1686,7 @@ def _list_phase(
     tools that could be read still deserve their walk, and the caller
     decides what an unreadable index costs.
     """
-    from footman import parallel
+    from footman import parallel, step
 
     listings: dict[str, list[_toolfetch.Release]] = {}
     unreachable: dict[str, str] = {}
@@ -1706,7 +1706,7 @@ def _list_phase(
         call.__name__ = f"list:{driver.key}"
         return call
 
-    calls = [look(driver) for driver in drivers]
+    calls = [step(look(driver))() for driver in drivers]
     if calls:
         parallel(*calls, keep_going=True)
     return listings, unreachable
@@ -1912,7 +1912,7 @@ def _gather(
     reports, which reads as a hole exactly like a release that would not
     install, with the traceback in the wave's output.
     """
-    from footman import parallel
+    from footman import parallel, step
     from footman.context import current
 
     surfaces: dict[str, dict[str, dict[str, Any] | None]] = {}
@@ -1937,7 +1937,7 @@ def _gather(
         call.__name__ = f"{driver.key}=={release.version}"
         return call
 
-    calls = [observing(driver, release) for driver, release in work]
+    calls = [step(observing(driver, release))() for driver, release in work]
     width = current().jobs or 8
     for start in range(0, len(calls), width):
         parallel(*calls[start : start + width], keep_going=True)

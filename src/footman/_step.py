@@ -35,7 +35,7 @@ R_co = TypeVar("R_co", covariant=True)
 # The closed policy vocabulary a step maker's `.opts()` accepts — execution
 # policy only: a step is anonymous, so boundary policy (confirm, gates,
 # sharing) has no request boundary to resolve at and is not spellable here.
-_STEP_OPTS = ("title", "capture", "recorded", "timeout", "pre_record")
+_STEP_OPTS = ("title", "capture", "recorded", "timeout", "env", "pre_record")
 
 
 class WorkItem(Generic[R_co]):
@@ -231,6 +231,7 @@ def _pump(item: WorkItem[Any]) -> Any:
     capture: bool = o.get("capture", True)
     recorded: bool = o.get("recorded", True)
     timeout: float | None = o.get("timeout")
+    env: dict[str, str] | None = o.get("env")
 
     if ctx.dry_run and recorded:
         # Dry-run fakes what footman owns and records: a deferred maker is
@@ -273,18 +274,51 @@ def _pump(item: WorkItem[Any]) -> Any:
                 gen.close()
                 return None
 
+    # Same env rule as every run(): `env=` is the whole environment, absent
+    # inherits the task's own — applied through the same overlay machinery.
+    # One honest exception keeps bare steps parallel: outside a routed run,
+    # with no env asked for, there is nothing to overlay — and the global
+    # patch would take a process-wide lock that serialises the pool.
+    from contextlib import nullcontext
+
+    from footman import _globals
+
+    overlay = dict(env) if env is not None else dict(ctx.env)
+    if _globals.active():
+        state: Any = _context._env_overlay(ctx, overlay)
+    elif env is not None:
+        state = _context._process_state(overlay)
+    else:
+        state = nullcontext()
+    exit_code: int | None = None
     try:
-        if capture:
-            with _context._captured_streams(out_buf, err_buf):
+        with state:
+            if capture:
+                with _context._captured_streams(out_buf, err_buf):
+                    value = drive()
+            else:
                 value = drive()
-        else:
-            value = drive()
+    except SystemExit as exc:  # the classic "fail this step" idiom, honoured
+        if isinstance(exc.code, int):
+            exit_code = exc.code
+        elif exc.code is None:
+            exit_code = 0
+        else:  # a string reason: print it, fail with 1 — sys.exit's contract
+            err_buf.write(f"{exc.code}\n")
+            exit_code = 1
     except Exception as exc:  # the body failed; the record still seals
         error = exc
         err_buf.write(traceback.format_exc())
 
     duration = time.perf_counter() - start
-    code = 124 if timed_out else (1 if error is not None else 0)
+    if timed_out:
+        code = 124
+    elif exit_code is not None:
+        code = exit_code
+    elif error is not None:
+        code = 1
+    else:
+        code = 0
     view._fill(out_buf.getvalue(), err_buf.getvalue(), duration)
     view.code = code
     view._touched.discard("code")  # machinery write, not a review verdict
@@ -332,6 +366,17 @@ def _pump(item: WorkItem[Any]) -> Any:
     )
     if recorded:
         ctx.steps.append(result)
+        if not ctx.quiet:
+            # The receipt, exactly as run() prints one — and the captured
+            # output replays when it matters (failure, or --verbose).
+            import sys as _sys
+
+            out = _sys.stdout
+            out.write(_context._step_line(ctx, result.code == 0, view.title, duration))
+            combined = result.stdout + result.stderr
+            if capture and combined and (result.code != 0 or ctx.verbose):
+                out.write(combined if combined.endswith("\n") else combined + "\n")
+            out.flush()
         for observer in maker._observers:
             name = getattr(observer, "__name__", repr(observer))
             try:

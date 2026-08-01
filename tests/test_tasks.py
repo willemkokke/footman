@@ -349,12 +349,26 @@ def test_the_gate_gives_every_run_its_own_coverage_file(monkeypatch):
     """Two `fm check` runs sharing the repo's .coverage — a hook racing a
     manual run — clobber the SQLite file mid-write, and the reporter then
     reports a bogus partial total with every test passing."""
+    import contextlib
+
     runs: list[dict[str, Any]] = []
+
+    class Block:
+        # The block form the migrated gate uses: swallow the queued task
+        # calls, run the one lifted step item so its run() is observed.
+        def __call__(self, item):
+            item()
+
+    @contextlib.contextmanager
+    def fake_parallel():
+        yield Block()
+
     monkeypatch.setattr(tasks, "run", lambda cmd, **kw: runs.append({"cmd": cmd, **kw}))
-    monkeypatch.setattr(tasks, "parallel", lambda *steps: [step() for step in steps])
+    monkeypatch.setattr(tasks, "parallel", fake_parallel)
     monkeypatch.setattr(tasks, "format", lambda check=False: None)
     monkeypatch.setattr(tasks, "lint", lambda: None)
     monkeypatch.setattr(tasks, "typecheck", lambda: None)
+    monkeypatch.setattr(tasks, "typecomplete", lambda: None)
 
     tasks.check()
     tasks.check()

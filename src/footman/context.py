@@ -46,6 +46,7 @@ from footman import _globals
 
 if TYPE_CHECKING:
     from footman import _step
+    from footman import registry as _registry_t
 
 
 class AuditEntry(NamedTuple):
@@ -2060,6 +2061,12 @@ def run(
     Dry-run never reviews (nothing ran, nothing captured), and a
     `recorded=False` call has no record to review (a note, not an error).
 
+    In-process work is a **step** now: `run()` runs commands. Lift a
+    callable instead — `@step` / `step(fn, title=…)` builds an item that
+    earns a receipt, and `with step("…"):` records a block where it
+    stands. (The tools bridge keeps its in-process lane through its own
+    private channel.)
+
     `_show` is an internal channel from the `tools.*` bridge: a structured
     view of the call, so the shown command line can be normalised and
     role-coloured while execution runs whatever the tool needs. An explicit
@@ -2073,6 +2080,13 @@ def run(
         raise ValueError(
             f"run({which}=True) only applies with a shell — it hardens a shell "
             f"run. Pass shell=True (or a shell name), or drop {which}."
+        )
+    if callable(cmd) and _show is None:
+        raise TypeError(
+            "run() runs commands; in-process work is a step. Lift the "
+            "callable — @step on a def, step(fn, title='…') around one you "
+            "didn't write, or `with step('…'):` over inline code — and it "
+            "earns a real receipt."
         )
     out = sys.stdout
     color = _colored(ctx)
@@ -2405,24 +2419,39 @@ class Fanout(list[int]):
         return self
 
     def also(self, call: Callable[..., Any], /, *args: Any, **kwargs: Any) -> Pending:
-        """Queue something that is *not* a task — a lambda, a plain function.
+        """Retired: the block runs tasks and steps, nothing anonymous.
 
-        A task call inside the block queues itself; anything else footman
-        does not own, so it says so out loud and joins the same fan-out:
+        Lift the code instead — a wrapper states intent, and the step it
+        makes earns a real receipt:
 
             with parallel() as p:
                 build("web")
-                p.also(shutil.rmtree, tmp)
-
-        Its return value lands in `results` with the rest, in written order.
+                p(step(shutil.rmtree)(tmp, ignore_errors=True))
         """
+        raise RuntimeError(
+            "parallel().also(...) is gone: the block runs tasks and steps, "
+            "nothing anonymous. Lift the call — p(step(fn)(args)) — and it "
+            "earns a receipt too."
+        )
+
+    def __call__(self, item: _step.WorkItem[Any], /) -> Pending:
+        """Queue a built step item for the block — the lifted counterpart of
+        a task call, which queues itself."""
+        from footman import _step as _step_mod
+
+        if not isinstance(item, _step_mod.WorkItem):
+            raise TypeError(
+                f"a parallel block queues built step items — p(step(fn)(…)) "
+                f"— got {type(item).__name__}. Task calls queue themselves; "
+                f"write them as ordinary calls."
+            )
         if _collecting.get() is not self._queued:
             raise RuntimeError(
-                "parallel().also(...) queues work for a block, so call it "
-                "inside the `with` — outside one there is nothing to join."
+                "p(item) queues work for a block, so call it inside the "
+                "`with` — outside one there is nothing to join."
             )
-        self._queued.append((call, args, kwargs))
-        return Pending(_call_name(call))
+        self._queued.append((item, (), {}))
+        return Pending(_call_name(item))
 
     def __exit__(self, exc_type: Any, exc: Any, tb: Any) -> Literal[False]:
         _collecting.reset(self._token)
@@ -2441,8 +2470,8 @@ class Fanout(list[int]):
             run.__name__ = _call_name(task)
             return run
 
-        codes = parallel(
-            *(thunk(i, t, a, k) for i, (t, a, k) in enumerate(self._queued)),
+        codes = _run_thunks(
+            [thunk(i, t, a, k) for i, (t, a, k) in enumerate(self._queued)],
             keep_going=self.keep_going,
         )
         self.results = values
@@ -2466,48 +2495,90 @@ def _queue_call(task: Any, args: tuple[Any, ...], kwargs: dict[str, Any]) -> Any
 def parallel(*, keep_going: bool = False) -> Fanout: ...
 @overload
 def parallel(
-    *calls: Callable[[], object] | _step.WorkItem[Any] | _step.StepFn[..., Any],
+    *calls: _step.WorkItem[Any]
+    | _step.StepFn[..., Any]
+    | _registry_t.TaskFn[..., Any]
+    | _registry_t.Group,
     keep_going: bool = False,
 ) -> list[int]: ...
 
 
 def parallel(
-    *calls: Callable[[], object] | _step.WorkItem[Any] | _step.StepFn[..., Any],
+    *calls: _step.WorkItem[Any]
+    | _step.StepFn[..., Any]
+    | _registry_t.TaskFn[..., Any]
+    | _registry_t.Group,
     keep_going: bool = False,
 ) -> Fanout | list[int]:
-    """Run task calls / thunks concurrently; wait; fail if any fail.
+    """Run tasks and steps concurrently; wait; fail if any fail.
 
-    Each call runs in a child of the current context with its own output buffer,
-    flushed atomically on completion so concurrent output never interleaves.
-    Pass task functions directly (`parallel(lint, typecheck)`) or thunks for
-    arguments (`parallel(lambda: build("web"), lambda: build("api"))`).
+    Each one runs in a child of the current context with its own output
+    buffer, flushed atomically on completion so concurrent output never
+    interleaves. Pass task functions directly (`parallel(lint, typecheck)`)
+    and built step items for everything else — `parallel(convert(images))`,
+    or `parallel(step(fn)(args))` for a function you didn't write. A bare
+    zero-argument maker is welcome too: `parallel(clean)` builds and runs
+    `clean()`.
+
+    Nothing anonymous runs: footman only schedules, records, and safely
+    cancels work it owns, and a bare callable is a stranger — no name for
+    the report, no place in the plan, no way to stop it cleanly. The lift
+    is one word, and it buys the step a receipt.
 
     With no arguments it is a **block** instead, and the calls inside it are
     the fan-out — written as ordinary calls, with their values afterwards:
 
         with parallel() as p:
             build("web")
-            build("api")
-        web, api = p.results
+            p(step(shutil.rmtree)(tmp, ignore_errors=True))
+        web, cleaned = p.results
 
     Inside the block a task call is *queued*, so it has no value there (using
-    one is a taught error); everything runs when the block ends, under the
-    same rules — sharing, hooks, `-s`/`-j`. A call to something that is not a
-    task cannot be queued (footman does not own its `__call__`) and runs
-    where it stands.
+    one is a taught error); a built step item joins through `p(item)`;
+    everything runs when the block ends, under the same rules — sharing,
+    hooks, `-s`/`-j`.
     """
-    from concurrent.futures import ThreadPoolExecutor
-
     from footman import _step
-
-    # A zero-argument maker is welcome bare: build its item here, so
-    # `parallel(covered)` and `parallel(covered())` mean the same thing.
-    calls = tuple(c() if isinstance(c, _step.StepFn) else c for c in calls)
 
     if not calls:
         # Nothing to run: the block form, which is also an empty list of exit
-        # codes — so `parallel(*thunks)` over an empty sequence is unchanged.
+        # codes — so `parallel(*items)` over an empty sequence is unchanged.
         return Fanout(keep_going=keep_going)
+
+    from footman import registry as _registry
+
+    accepted: list[Callable[[], Any]] = []
+    for c in calls:
+        if isinstance(c, _step.StepFn):
+            # A zero-argument maker is welcome bare: build its item here, so
+            # `parallel(covered)` and `parallel(covered())` mean the same.
+            c = c()
+        if isinstance(c, _step.WorkItem):
+            accepted.append(c)
+            continue
+        if getattr(c, "_footman_pre", None) is not None or isinstance(
+            c, _registry.Group
+        ):
+            accepted.append(c)  # a task, an opted reference, a runnable group
+            continue
+        label = _call_name(c) if callable(c) else type(c).__name__
+        raise TypeError(
+            f"parallel() runs tasks and steps — {label!r} is neither. "
+            f"footman only schedules, records, and safely cancels work it "
+            f"owns, and a bare callable is a stranger. Lift it and it earns "
+            f"a receipt too: parallel(step(fn)(…)), or step(fn, "
+            f"title='…') to name a lambda."
+        )
+    return _run_thunks(accepted, keep_going=keep_going)
+
+
+def _run_thunks(
+    calls: list[Callable[[], Any]], *, keep_going: bool = False
+) -> list[int]:
+    """The fan-out engine: run zero-argument callables the caller vouches
+    for. `parallel()` validates and lands here; the block's `__exit__`
+    drives it directly with the closures footman itself wrote."""
+    from concurrent.futures import ThreadPoolExecutor
 
     parent = current()
     dest = parent.sink or real_stdout()

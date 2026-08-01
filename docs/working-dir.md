@@ -84,11 +84,10 @@ the directory a call needs decides how that call runs:
 - A `tools.*` call that would run in-process but needs a *different*
   directory runs as its subprocess twin instead — same command, right
   directory, still parallel; the startup saving is the only loss.
-- A bare `run(callable, cwd=…)` pointing somewhere foreign is an error
-  naming the exits: use the subprocess form, build paths from
-  `footman.cwd()`, declare `@task(cwd="unmanaged")`, or pass
-  `cwd="unmanaged"` on the call itself if only that one call genuinely
-  doesn't care.
+- Other in-process work — a step — has no `cwd=` at all: build paths from
+  `footman.cwd()`, or run the command as a subprocess (which gets `cwd=`
+  for free). The real working directory is one per process, and footman
+  will not gamble it under a parallel run.
 
 `os.chdir` in a parallel task is an error for the same reason, and
 `os.getcwd` earns a one-time note pointing at `footman.cwd()` — in a

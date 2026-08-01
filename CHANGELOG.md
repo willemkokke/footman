@@ -9,6 +9,19 @@ versions may include breaking changes.
 
 ### Changed
 
+- **Breaking: nothing anonymous runs — `parallel()` and `run()` take only
+  tasks and steps.** footman only schedules, records, and safely cancels
+  work it owns, and a bare callable is a stranger: a lambda, a
+  `functools.partial`, or a plain function handed to `parallel()` is now a
+  taught error naming the one-word fix (`step(fn)(…)` — the lift buys a
+  receipt), `run(callable)` is retired the same way (in-process work is a
+  step; the tools bridge keeps its in-process lane), and `p.also` is gone
+  — a lifted item joins a block through `p(item)`. The partial-of-a-task
+  footgun that silently defeated interception dies with it. footman's own
+  gate migrated the same day it broke: `check` now fans out through the
+  block form, and the four checker functions are named steps with real
+  receipts instead of borrowed `__name__`s.
+
 - **Breaking: `post_task` observes a sealed record — observers see, never
   judge.** The observer's `result` view is now fully read-only:
   `set_returned` moved into the review window (`ResultView.set_returned`,

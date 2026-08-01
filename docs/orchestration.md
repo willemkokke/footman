@@ -271,39 +271,37 @@ gets.
 
 ## Fan out from inside a task
 
-`parallel()` runs task functions — or no-argument lambdas, when you need to
-bind arguments — concurrently, waits, and fails if any fail. It honours the same
-`-s` and `-j` as the scheduler (one worker under `-s`), so concurrency stays
-controlled in one place:
+`parallel()` runs **tasks and steps** concurrently, waits, and fails if any
+fail. It honours the same `-s` and `-j` as the scheduler (one worker under
+`-s`), so concurrency stays controlled in one place:
 
 <!-- example: revision -->
 ```python
-from footman import task, parallel
+from footman import task, parallel, step
+
+def clean(): ...
 
 @task
 def check():
-    parallel(lambda: fmt(check=True), lint, typecheck, test)
+    parallel(lint, typecheck, test, step(clean)())
 ```
 
-Four things can go in, and the difference is worth knowing:
+Three things can go in:
 
 | you pass | it runs as | reported as |
 | --- | --- | --- |
 | `lint` — a task | a full request | its own row, shares, hooks fire |
-| `functools.partial(fmt, check=True)` | a full request | same, under the task's name |
-| `lambda: fmt(check=True)` | a full request | same, but the *line* shows `…` |
-| `lambda: shutil.rmtree(d)` — a thunk | plain Python, in a child context | no row: it is not a task |
+| `convert(images)` — a built step item | the step, pumped in a child | its own receipt, reviewable |
+| `clean` — a zero-argument step maker | built here, then the same | same |
 
-A **task** reaching `parallel()` any of the first three ways is a request like
-any other: its own `TaskResult`, sharing with the rest of the run, the
-lifecycle hooks around it. Only the live status line can tell the spellings
-apart, because a lambda is opaque from the outside — it shows as `…` where a
-handle or a `functools.partial` shows the task's name. Counting is not
-affected: one piece of work is one unit whichever way you wrote it.
-
-A **plain callable** is honest work and runs happily, but it is not a task, so
-nothing task-shaped happens around it — no result row, no availability gate,
-no `confirm=`. Reach for one when there is genuinely no task to name.
+Nothing anonymous runs. footman only schedules, records, and safely
+cancels work it *owns*, and a bare callable is a stranger — no name for
+the report, no place in the plan, no way to stop it cleanly — so a lambda,
+a `functools.partial`, or a plain function is a taught error naming the
+one-word fix: `step(fn)(…)` lifts it, and the lift buys a receipt. A task
+with arguments belongs in the block form below, where owned calls carry
+them naturally. Counting is not affected either way: one piece of work is
+one unit whichever way you wrote it.
 
 ### The block form, when you want the values
 
@@ -329,15 +327,15 @@ own result row, sharing, hooks, `-s`/`-j`. `p.results` is in the order you
 wrote them; `p` itself is still the list of exit codes `parallel()` returns.
 
 footman only owns *its own* `__call__`, so a call to something that is not
-a task runs where it stands rather than joining the fan-out. When one
-straggler wants to come along, say so — `p.also(fn, *args)` queues it with
-the rest, and its return value lands in `results` in written order:
+a task runs where it stands rather than joining the fan-out. A lifted step
+joins through `p(item)`, and its value lands in `results` in written
+order:
 
 <!-- example: fragment -->
 ```python
 with parallel() as p:
     build("web")
-    p.also(shutil.rmtree, stale)
+    p(step(shutil.rmtree)(stale, ignore_errors=True))
 ```
 
 The one other difference from a plain call: a queued failure surfaces when
