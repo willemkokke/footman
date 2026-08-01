@@ -92,3 +92,26 @@ def test_parallel_children_branch_the_parents_path():
     with use_context(ctx):
         parallel(step(probe, title="x")(), step(probe, title="y")())
     assert seen == {"x": "go/x", "y": "go/y"}
+
+
+def test_command_leaves_carry_the_verb_and_never_the_flags():
+    ctx = Context()
+    ctx.address = "release"
+    with use_context(ctx):
+        run("git fetch", nofail=True)
+        run("git push", nofail=True)
+        run("git --version", nofail=True)
+    assert [s.address for s in ctx.steps] == [
+        "release/git-fetch",
+        "release/git-push",
+        "release/git",  # a flag is not a verb
+    ]
+
+
+def test_leaves_are_parse_safe():
+    from footman.context import _leaf
+
+    assert _leaf("./ship") == "ship"  # the separator cannot fake a level
+    assert _leaf("prepared 3 fixtures") == "prepared-3-fixtures"
+    assert _leaf("make target#2") == "make-target-2"  # ordinals stay ours
+    assert _leaf("///") == "step"  # never empty

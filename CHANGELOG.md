@@ -104,7 +104,12 @@ versions may include breaking changes.
   all-lanes claim, and the two regimes wait on each other symmetrically;
   lane waits print the same named notes.
 
-- **Every record carries its address.** A tree-derived name — the path of
+- **Every record carries its address.** Raw commands name by tool word
+  plus verb (`release/git-push` — flags never re-identify a step, and
+  `git fetch`/`git push` stay distinct across runs); owned work names by
+  its function, task, or title; leaves are parse-safe (the grammar's `/`
+  and `#` cannot be faked from a command token — `./ship` names `ship`,
+  while the record's `command` shows the original verbatim). A tree-derived name — the path of
   requests that led to it, with an ordinal once a label repeats among
   siblings (`check/typecheck`, `build/git`, `build/git#2`) — assigned in
   request order as written, so it is deterministic across runs and hosts.
