@@ -22,7 +22,7 @@ def drive(reg: Group, line: str):
 
 def test_a_body_call_shares_the_runs_execution():
     # `pre=[build]` then `build()` in the body is ONE build: the prerequisite's
-    # pristine return is memoised under (task, arguments), so the call is a
+    # body's return is memoised under (task, arguments), so the call is a
     # cache hit rather than a second execution.
     reg = Group("root")
     runs: list[str] = []

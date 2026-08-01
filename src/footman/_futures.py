@@ -449,7 +449,7 @@ def resolve(
     would leave a waiter blocked for the rest of the run. *record* is the
     execution's sealed row, when there is one: a shared answer is the record
     reused, so a later request's row copies what this one *reported* —
-    reviewed title, reported value, audit — not just the pristine value.
+    reviewed title, reported value, audit — not just the body's value.
     """
     if cell is None or cell.future.done():
         return
@@ -677,7 +677,7 @@ def _run_now(
         raise result.error
     if not result.ok:  # a bare `sys.exit(N)`, which carries no error object
         raise ChainError(f"{label} exited with code {result.code}")
-    # The pristine value, never the reported one: what a body caller
+    # The body's own return, never the reported one: what a body caller
     # receives was snapshotted at the body's exit, whatever a reviewer
     # later did to the report.
-    return result.pristine
+    return result.body_returned
