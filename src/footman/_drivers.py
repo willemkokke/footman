@@ -32,6 +32,35 @@ from footman._toolspec import ToolSpec, Verb
 
 
 @dataclass(frozen=True)
+class Manual:
+    """Where a `kind="man"` tool's per-release pages are published.
+
+    A manual is not a binary: the pages are the reading, so nothing is
+    installed and nothing is run — the fetch is a directory listing, an
+    archive per release, and a `man -M` tree to unpack it into. Two
+    publishers so far: kernel.org's per-release git manpage tarballs, and
+    OpenSSH's portable release tarballs (which carry `ssh.1` alongside the
+    sources). The pages are the same bytes everywhere — a manual has no
+    platform — so machines reading this tier cannot disagree.
+    """
+
+    index: str
+    """The directory listing the per-release archives appear in."""
+    archive: str
+    """The archive's filename with a `{version}` slot, joined to *index*."""
+    listing: str
+    """Regex over the listing naming each release: must bind
+    `(?P<version>…)`, and may bind `(?P<day>…)`/`(?P<month>…)`/`(?P<year>…)`
+    where the listing shows dates (kernel.org does; OpenSSH's does not, and
+    its patchlevels tie under `version_tuple` — `_order` breaks that tie on
+    the numeric `pN` suffix)."""
+    pages: tuple[str, ...] = ()
+    """Member basenames to pull into `man1/` (`("ssh.1",)` from a source
+    tarball). Empty means the archive already is a bare man tree, unpacked
+    whole (git's manpages tarball)."""
+
+
+@dataclass(frozen=True)
 class Provision:
     """How `fm tools.provision` fetches this tool's *latest* binary.
 
@@ -71,6 +100,9 @@ class Provision:
     """Extra packages to install *alongside* the tool (`uv --with`), so a
     plugin-extended CLI is read whole. pytest's `--cov*` flags come from
     `pytest-cov`; without it a bare provisioned pytest would stub none of them."""
+    manual: Manual | None = None
+    """Where the pages live, for `kind="man"` — required there, unused
+    elsewhere."""
 
     def target(self, name: str) -> str:
         """What to fetch: the explicit `package`/`repo`, else the tool *name*."""
@@ -204,8 +236,20 @@ DRIVERS: tuple[Driver, ...] = (
         "git",
         # Read from its manual, and a manual is not a binary: kernel.org
         # publishes the pages per release, so nothing is installed and
-        # nothing is run.
-        provision=Provision(kind="man"),
+        # nothing is run. One tarball of about a megabyte against the fifty
+        # a git build would cost, which is why this tier reaches back to
+        # 2013 rather than stopping at a horizon someone had to choose.
+        provision=Provision(
+            kind="man",
+            manual=Manual(
+                index="https://mirrors.edge.kernel.org/pub/software/scm/git/",
+                archive="git-manpages-{version}.tar.gz",
+                listing=(
+                    r'href="git-manpages-(?P<version>\d+(?:\.\d+)+)\.tar\.gz"'
+                    r".*?(?P<day>\d{2})-(?P<month>[A-Z][a-z]{2})-(?P<year>\d{4})"
+                ),
+            ),
+        ),
         url="https://git-scm.com/docs",
         help_flag="-h",
         man=True,
