@@ -29,16 +29,19 @@ class SshKeyscan(_Tool):
         SSH-KEYSCAN(1)
 
         Args:
-            D: Print keys found as SSHFP DNS records.
-            H: Hash all hostnames and addresses in the output.
-            O: Specify a key/value option.
-            T: Set the timeout for connection attempts.
-            c: Request certificates from target hosts instead of plain keys.
+            D: Print keys found as SSHFP DNS records. Added in 7.7p1.
+            H: Hash all hostnames and addresses in the output. Added in 4.0p1.
+            O: Specify a key/value option. Added in 9.3p1.
+            T: Set the timeout for connection attempts. Added in 3.0p1.
+            c: Request certificates from target hosts instead of plain keys. Added
+                in 7.2p1.
             f: Read hosts or "addrlist namelist" pairs from file, one per line.
-            p: Connect to port on the remote host.
+            p: Connect to port on the remote host. Added in 3.0p1.
             q: Quiet mode: do not print server host name and banners in comments.
+                Added in 9.8p1.
             t: Specify the type of the key to fetch from the scanned hosts. May be
                 repeated: a list emits the flag once per item.
-            v: Verbose mode: print debugging messages about progress.
+            v: Verbose mode: print debugging messages about progress. Added in
+                3.0p1.
         """
         ...
