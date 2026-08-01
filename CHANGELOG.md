@@ -37,6 +37,21 @@ versions may include breaking changes.
 
 ### Added
 
+- **`step()` — steps you make yourself, in three positions.** `@step` on
+  a local function makes a *maker*: calling it **builds** a bound,
+  deferrable piece of work (the `range(10)` precedent — nothing runs
+  until `parallel()` or a direct call executes it); `with step("title"):`
+  records a block of your own code where it stands, no execution boundary
+  created; `step(fn, title=…)` wraps a function you didn't write. Items
+  earn full records — receipt, captured output, audit, `--json` — and the
+  maker carries the step's policy: `.opts()` for per-use execution
+  policy, `.pre_record`/`.post_step` for its reviewer and observer. A
+  generator step's bare `yield`s are checkpoints — the only places
+  footman cancels it, for exactly three reasons (fail-fast, Ctrl-C, its
+  own `timeout=`), each arriving as "the loop never resumes" so cleanup
+  always runs. A step's return value is data, never an exit code;
+  dry-run fakes deferred makers like any subprocess.
+
 - **Every task's handle carries its own lifecycle.** `@build.pre_task`
   runs setup that belongs to build; `@build.pre_record` attaches its
   reviewer; `@build.post_task` watches its sealed record;

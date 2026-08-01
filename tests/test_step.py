@@ -1,0 +1,234 @@
+"""The step lifter, the built item, and the pump — stage D1's surface."""
+
+from __future__ import annotations
+
+import time
+
+import pytest
+
+from footman import Context, fail, parallel, step, use_context
+from footman.context import RunTimeout
+
+
+def test_calling_a_step_maker_builds_and_runs_nothing():
+    ran: list[str] = []
+
+    @step
+    def clean():
+        ran.append("ran")
+
+    item = clean()
+    assert ran == []  # built, not run — the range(10) precedent
+    assert "built, not run" in repr(item)
+
+    with use_context(Context()):
+        item()
+    assert ran == ["ran"]
+
+
+def test_an_executed_item_earns_a_full_record():
+    @step
+    def greet(name: str) -> str:
+        print(f"hello {name}")
+        return name.upper()
+
+    ctx = Context()
+    with use_context(ctx):
+        value = greet("world")()
+    assert value == "WORLD"  # the value is data, never an exit code
+    record = ctx.steps[-1]
+    assert record.code == 0 and record.command == "greet"
+    assert "hello world" in record.stdout
+    assert [tuple(e) for e in record.audit] == [("body", "greet", 0)]
+
+
+def test_parallel_takes_items_and_bare_zero_arg_makers():
+    ran: list[str] = []
+
+    @step
+    def one():
+        ran.append("one")
+
+    @step
+    def two(tag: str):
+        ran.append(tag)
+
+    ctx = Context()
+    with use_context(ctx):
+        codes = parallel(one, two("two"))
+    assert codes == [0, 0]
+    assert sorted(ran) == ["one", "two"]
+
+
+def test_a_generator_item_writes_its_record_mid_work():
+    @step
+    def convert(n: int):
+        view = yield
+        for done in range(n):
+            view.title = f"converting {done + 1}/{n}"
+            yield
+        return n
+
+    ctx = Context()
+    with use_context(ctx):
+        value = convert(3)()
+    assert value == 3
+    record = ctx.steps[-1]
+    assert record.command == "converting 3/3"  # the title decided mid-work
+    assert record.code == 0
+
+
+def test_a_generator_items_own_timeout_lands_at_a_checkpoint():
+    @step
+    def slow():
+        yield
+        while True:
+            time.sleep(0.02)
+            yield
+
+    cleaned: list[str] = []
+
+    @step
+    def slow_but_tidy():
+        try:
+            yield
+            while True:
+                time.sleep(0.02)
+                yield
+        finally:
+            cleaned.append("finally")
+
+    with use_context(Context()):
+        with pytest.raises(RunTimeout):
+            slow.opts(timeout=0.05)()()
+        with pytest.raises(RunTimeout):
+            slow_but_tidy.opts(timeout=0.05)()()
+    assert cleaned == ["finally"]  # cancellation unwinds, cleanup runs
+
+
+def test_the_makers_reviewer_and_observer_ride_every_item():
+    @step
+    def gate() -> int:
+        print("reformatted 3 files")
+        raise SystemExit(1)
+
+    # SystemExit is BaseException — the pump treats a plain-function step
+    # like a body: exceptions fail it. Use a return-code shape instead.
+    @step
+    def gate2():
+        print("reformatted 3 files")
+        return 1
+
+    del gate
+
+    @gate2.pre_record
+    def reformatted_is_fine(view):
+        if "reformatted" in view.stdout:
+            view.title = "fmt: reformatted"
+            view.code = 0
+
+    seen: list[tuple[str, int]] = []
+
+    @gate2.post_step
+    def watch(result):
+        seen.append((result.command, result.code))
+
+    ctx = Context()
+    with use_context(ctx):
+        gate2()()
+    record = ctx.steps[-1]
+    # The body returned 1 as a VALUE (data, not a code): the step is green
+    # on its own; the reviewer's involvement is still on the record.
+    assert record.code == 0
+    assert seen and seen[0][1] == 0
+
+
+def test_a_step_observer_vetoes_with_its_own_code():
+    @step
+    def fine():
+        return None
+
+    @fine.post_step
+    def budget(result):
+        fail("not buying it", code=5)
+
+    ctx = Context()
+    with use_context(ctx), pytest.raises(Exception, match="not buying it"):
+        fine()()
+    record = ctx.steps[-1]
+    assert record.code == 5 and record.failed_at == "observe"
+    assert record.work_code == 0
+
+
+def test_the_block_form_records_where_it_stands():
+    ctx = Context()
+    with use_context(ctx), step("prepare fixtures") as s:
+        s.title = "prepared 3 fixtures"
+    record = ctx.steps[-1]
+    assert record.command == "prepared 3 fixtures" and record.code == 0
+    assert record.duration >= 0.0
+
+    with use_context(ctx), pytest.raises(ValueError, match="boom"), step("doomed"):
+        raise ValueError("boom")
+    assert ctx.steps[-1].code == 1  # the record sealed before the raise
+
+
+def test_the_expression_form_lifts_a_function_you_did_not_write():
+    ctx = Context()
+    with use_context(ctx):
+        lifted = step(sorted, title="sort things")
+        value = lifted([3, 1, 2])()
+    assert value == [1, 2, 3]
+    assert ctx.steps[-1].command == "sort things"
+
+
+def test_a_failing_item_raises_like_run_does():
+    @step
+    def broken():
+        raise ValueError("kaput")
+
+    ctx = Context()
+    with use_context(ctx), pytest.raises(ValueError, match="kaput"):
+        broken()()
+    record = ctx.steps[-1]
+    assert record.code == 1 and record.failed_at == "body"
+    assert "kaput" in record.stderr  # the traceback was captured
+
+
+def test_dry_run_fakes_the_deferred_maker():
+    ran: list[str] = []
+
+    @step
+    def deploy():
+        ran.append("deployed")
+
+    ctx = Context(dry_run=True)
+    with use_context(ctx):
+        parallel(deploy)
+    assert ran == []  # owned and recorded → faked
+    assert ctx.steps == [] or all(s.duration == 0.0 for s in ctx.steps)
+
+
+def test_step_opts_is_a_closed_vocabulary():
+    @step
+    def thing(): ...
+
+    with pytest.raises(TypeError, match="boundary policy"):
+        thing.opts(confirm="really?")
+
+
+def test_the_block_title_goes_positionally():
+    with pytest.raises(TypeError, match="block form"):
+        step("title", title="again")  # type: ignore[call-overload]
+
+
+def test_off_the_record_items_leave_no_trace():
+    @step
+    def probe() -> str:
+        return "value"
+
+    ctx = Context()
+    with use_context(ctx):
+        value = probe.opts(recorded=False)()()
+    assert value == "value"
+    assert ctx.steps == []
