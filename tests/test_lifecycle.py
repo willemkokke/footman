@@ -1999,6 +1999,30 @@ def test_plugins_are_the_outer_ring_and_the_tasks_own_hooks_nest_inside():
     assert order == ["plugin-pre", "own-pre", "body", "own-post", "plugin-post"]
 
 
+def test_wrap_task_spans_nest_when_one_execution_reaches_another_inline():
+    # A body call with a different binding is a distinct execution, run
+    # inline on the caller's thread — the wrapper's span state is a stack,
+    # so the inner close takes the inner span and the outer still closes.
+    reg = Group("root")
+    spans: list[str] = []
+
+    @reg.task
+    def build(again: bool = False) -> int:
+        if not again:
+            build(again=True)
+        return 0
+
+    @build.wrap_task
+    def span():
+        spans.append("open")
+        yield
+        spans.append("close")
+
+    result = Runner().invoke("build", tasks=reg)
+    assert result.ok, result.stderr
+    assert spans == ["open", "open", "close", "close"]
+
+
 def test_wrap_task_sugar_on_the_handle_spans_one_execution():
     reg = Group("root")
     spans: list[object] = []
