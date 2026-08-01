@@ -172,6 +172,10 @@ class Driver:
     long form. Read only from `--help`, never a man page (its prose is noisy)."""
     url: str = ""
     """The tool's home, for the reference page's table."""
+    version_of: str = ""
+    """The sibling binary whose version answers for this tool, when it has
+    no version output of its own — ssh-keygen ships in lockstep with ssh,
+    and the OpenSSH release is the version of both."""
     man: bool = False
     """Read each verb's *manual* (`git help <verb>`) instead of its terse
     `-h`. git's `-h` omits about half its flags and prints an idiosyncratic
@@ -274,6 +278,40 @@ DRIVERS: tuple[Driver, ...] = (
             "restore",
             "worktree",
         ),
+    ),
+    Driver(
+        "ssh",
+        # OpenSSH has no `--help` at all: the manual is the only statement
+        # of its surface, and the portable release tarball carries the
+        # pages beside the sources. All-short options — the whole surface
+        # keys through the default shorts policy.
+        provision=Provision(
+            kind="man",
+            manual=Manual(
+                index="https://cdn.openbsd.org/pub/OpenBSD/OpenSSH/portable/",
+                archive="openssh-{version}.tar.gz",
+                listing=r'href="openssh-(?P<version>\d+\.\d+p\d+)\.tar\.gz"',
+                pages=("ssh.1",),
+            ),
+        ),
+        man=True,
+        url="https://man.openbsd.org/ssh.1",
+    ),
+    Driver(
+        "ssh-keygen",
+        attr="ssh_keygen",
+        version_of="ssh",
+        provision=Provision(
+            kind="man",
+            manual=Manual(
+                index="https://cdn.openbsd.org/pub/OpenBSD/OpenSSH/portable/",
+                archive="openssh-{version}.tar.gz",
+                listing=r'href="openssh-(?P<version>\d+\.\d+p\d+)\.tar\.gz"',
+                pages=("ssh-keygen.1",),
+            ),
+        ),
+        man=True,
+        url="https://man.openbsd.org/ssh-keygen.1",
     ),
     Driver(
         "docker",
@@ -544,9 +582,21 @@ def _read_version(name: str) -> tuple[str, str]:
     """
     from footman import tools
 
+    # A suite tool may name a sibling that answers for it: ssh-keygen has no
+    # version output at all, and ssh speaks for the OpenSSH release both
+    # ship in.
+    for sibling in DRIVERS:
+        if sibling.name == name and sibling.version_of:
+            name = sibling.version_of
+            break
     binary = _resolve(name)
     if binary is None:
         return "", "not on PATH"
+    # The probe's spelling is the baked tool's own: `ssh` only answers `-V`
+    # (`--version` is an illegal option), `cmd` spells it `/c ver`. An
+    # unbaked name resolves to a default `Tool`, whose spelling is the
+    # `--version` everyone else speaks.
+    spelling = getattr(tools, name.replace("-", "_"))._version_argv
     # A version read must never touch the network — see `_toolhelp.QUIET`.
     #
     # Through `run()`: `recorded=False` keeps a probe out of the run's story,
@@ -558,7 +608,7 @@ def _read_version(name: str) -> tuple[str, str]:
 
     try:
         done = _run(
-            [binary, "--version"],
+            [binary, *spelling],
             recorded=False,
             timeout=30,
             nofail=True,
@@ -632,7 +682,9 @@ def extract(driver: Driver, home: Path | None = None) -> ToolSpec:
             binary=_resolve(driver.name),
             verbs=driver.wanted,
             version=(
-                _toolhelp.man_version(Path(tree)) if tree else version(driver.name)
+                _toolhelp.man_version(Path(tree), driver.name)
+                if tree
+                else version(driver.name)
             ),
             in_process=in_process_capable(driver.name),
             flag=driver.help_flag,

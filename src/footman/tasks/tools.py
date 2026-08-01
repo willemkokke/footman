@@ -613,7 +613,9 @@ def _ignore(driver: _drivers.Driver, root: Path | None) -> str:
         return ""
     recorded = _header(stub)[0].partition(" ")[0]
     found = (
-        _toolhelp.man_version(Path(manual)) if manual else _drivers.version(driver.name)
+        _toolhelp.man_version(Path(manual), driver.name)
+        if manual
+        else _drivers.version(driver.name)
     )
     # One comparator, shared with the bridge: only the leading numeric run
     # counts, so a build tail can never read as "newer than its own base".

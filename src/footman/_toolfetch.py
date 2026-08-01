@@ -705,7 +705,15 @@ def _install_man(driver: Driver, release: Release, into: Path) -> Path | None:
     except (_provision.ProvisionError, OSError, ValueError, tarfile.TarError):
         return None
     proof = man.pages[0] if man.pages else f"{driver.name}.1"
-    return tree if any(tree.glob(f"man1/{proof}")) else None
+    if not any(tree.glob(f"man1/{proof}")):
+        return None
+    # The tree says which release it documents. git's pages carry it in
+    # their .TH line, but mdoc pages (OpenSSH's) state no version anywhere —
+    # the installer is the one who knows, so it stamps what it fetched.
+    # Per tool, because the provision tier merges every manual into one
+    # tree and git's release is not ssh's.
+    (tree / f"VERSION-{driver.name}").write_text(release.version, encoding="utf-8")
+    return tree
 
 
 def _pypi(driver: Driver) -> list[Release]:

@@ -1803,6 +1803,29 @@ def test_manual_multi_form_synopsis_reads_any():
     assert verb.positional == "any"  # two SYNOPSIS forms → no single shape
 
 
+def test_manual_synopsis_marks_the_wrapper():
+    # `ssh … destination [command [argument ...]]` forwards to the remote:
+    # the SYNOPSIS is the only place a manual says so (no usage line).
+    assert _toolhelp.parse_help(SSH_MAN, name="ssh", man=True).wraps
+    assert not _toolhelp.parse_help(KEYGEN_MAN, name="ssh_keygen", man=True).wraps
+    assert not _toolhelp.parse_help(GIT_MAN, name="clone", man=True).wraps
+
+
+def test_man_version_prefers_the_installers_stamp(tmp_path):
+    # mdoc pages state no version anywhere; the installer stamps what it
+    # fetched, per tool, because the merged tree holds several manuals.
+    (tmp_path / "VERSION-ssh").write_text("10.4p1", encoding="utf-8")
+    assert _toolhelp.man_version(tmp_path, "ssh") == "10.4p1"
+    # No stamp for this name: git's own .TH line still answers.
+    section = tmp_path / "man1"
+    section.mkdir()
+    (section / "git.1").write_text(
+        '.TH "GIT" "1" "2025-06-15" "Git 2\\&.50\\&.1" "Git Manual"\n',
+        encoding="utf-8",
+    )
+    assert _toolhelp.man_version(tmp_path, "git") == "2.50.1"
+
+
 def test_first_sentence_skips_abbreviations():
     assert _toolhelp._first_sentence("Use e.g. a value. Then stop.") == (
         "Use e.g. a value"

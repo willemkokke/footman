@@ -356,7 +356,12 @@ def _parse_default(text: str) -> str:
     match = _DEFAULT.search(text)
     if not match:
         return ""
-    return (match["clap"] or match["other"] or "").strip().strip("\"'")
+    # Folded before stripping, so a manual's typeset quotes (mdoc curls
+    # them around ssh's escape-char default) read as the quotes they are
+    # and come off with the ASCII ones — the value is the tilde alone, not
+    # a pair of curly marks the stub would then fail ASCII linting over.
+    value = (match["clap"] or match["other"] or "").translate(_TYPOGRAPHY)
+    return value.strip().strip("\"'")
 
 
 def _option(
@@ -588,14 +593,14 @@ def parse_help(
         options = _with_short_aliases(options)
     if not man:
         options = _arity_from_grammar(options, _usage_line(text))
-    positional, lead = _synopsis_shape(text, name) if man else _usage_shape(text)
+    positional, lead = _synopsis_shape(text) if man else _usage_shape(text)
     return Verb(
         name=name,
         help=_summary(text),
         options=tuple(sorted(_pair_negations(options), key=lambda o: o.name)),
         positional=positional,
         lead=lead,
-        wraps=_wraps(text),
+        wraps=_synopsis_wraps(text) if man else _wraps(text),
     )
 
 
@@ -780,28 +785,59 @@ def _grammar_shape(grammar: str) -> tuple[str, str]:
     return "required", base.replace("-", "_").lower()
 
 
-def _synopsis_shape(text: str, verb: str) -> tuple[str, str]:
-    """`(positional, lead)` from a man page's `SYNOPSIS`.
+def _synopsis_forms(text: str) -> list[str]:
+    """Each complete form a man page's `SYNOPSIS` states, as its grammar.
 
-    git's manual states each verb as one or more complete forms. A verb
-    with a *single* form has one grammar to read (`git clone … <repository>
-    [<directory>]` → required); a verb with several — `git checkout` lists,
-    detaches, creates, restores — has no single shape, so it stays `"any"`.
-    Counting the forms is just counting the lines that restate `git <verb>`;
-    the wrapped continuations don't.
+    The manual restates the command per form, and the command is the page's
+    own NAME — verbatim for a single-binary page (`ssh`, `ssh-keygen`), with
+    dashes as spaces for a subcommand page (`git-clone` states `git clone`).
+    A line that doesn't restate it is a wrapped continuation of the form
+    above, and joins it.
     """
     match = re.search(
         r"(?ms)^SYNOPSIS[ \t]*\n(?P<body>.*?)\n(?:[A-Z][A-Z ]+\n|\Z)", text
     )
     if not match:
-        return "any", ""
+        return []
     body = match["body"]
-    prog = f"git {verb}"
-    forms = re.findall(rf"(?m)^[ \t]*{re.escape(prog)}\b", body)
+    page = re.search(r"(?ms)^NAME[ \t]*\n[ \t]*(?P<name>[A-Za-z0-9._-]+)", text)
+    if not page:
+        return []
+    for prog in dict.fromkeys((page["name"], page["name"].replace("-", " "))):
+        pattern = rf"(?m)^[ \t]*{re.escape(prog)}(?=\s|$)"
+        if re.search(pattern, body):
+            chunks = re.split(pattern, body)
+            return [" ".join(chunk.split()) for chunk in chunks[1:]]
+    return []
+
+
+def _synopsis_shape(text: str) -> tuple[str, str]:
+    """`(positional, lead)` from a man page's `SYNOPSIS`.
+
+    A verb with a *single* form has one grammar to read (`git clone …
+    <repository> [<directory>]` → required); a verb with several — `git
+    checkout` lists, detaches, creates, restores; `ssh` connects and
+    queries — has no single shape, so it stays `"any"`.
+    """
+    forms = _synopsis_forms(text)
     if len(forms) != 1:
         return "any", ""  # multi-form (or unrecognised) — don't constrain
-    grammar = " ".join(body.split()).split(prog, 1)[1]
-    return _grammar_shape(grammar)
+    return _grammar_shape(forms[0])
+
+
+def _synopsis_wraps(text: str) -> bool:
+    """`_wraps`, read from the `SYNOPSIS`: a manual has no `usage:` line.
+
+    Any form ending in a command slot marks the wrapper — ssh's main form
+    is `ssh … destination [command [argument ...]]`, and the flags of a
+    call like that must precede the positionals or they land on the remote
+    command instead of on ssh.
+    """
+    return any(
+        re.split(r"[\[:]", token.strip("[]<>"))[0].lower() in _WRAP_METAVAR
+        for form in _synopsis_forms(text)
+        for token in _top_level_positionals(form)
+    )
 
 
 def _drop_usage(lines: list[str]) -> list[str]:
@@ -995,14 +1031,26 @@ NO_CONSOLE_WINDOW: int = (
 _OVERSTRIKE = re.compile(r".\x08")
 
 
-def man_version(tree: Path) -> str:
+def man_version(tree: Path, name: str = "git") -> str:
     """The version a fetched manual belongs to, from its own header.
 
-    `.TH "GIT" "1" "2025-06-15" "Git 2\\&.50\\&.1" "Git Manual"` — the tree
-    says which release it documents, so a reading names its own version
-    the way a binary does, and the guard against describing the wrong
-    release works unchanged.
+    The installer stamps the tree with the release it fetched, per tool
+    (`VERSION-ssh`) because the provision tier merges every manual into one
+    tree and git's release is not ssh's — and the stamp is the only
+    statement there is for mdoc pages, which say no version anywhere.
+    git's older trees predate the stamp and carry it in their `.TH` line
+    instead: `.TH "GIT" "1" "2025-06-15" "Git 2\\&.50\\&.1" "Git Manual"`.
+    Either way the tree says which release it documents, so a reading
+    names its own version the way a binary does, and the guard against
+    describing the wrong release works unchanged.
     """
+    stamp = tree / f"VERSION-{name}"
+    try:
+        stamped = stamp.read_text(encoding="utf-8").strip()
+    except OSError:
+        stamped = ""
+    if stamped:
+        return stamped
     page = tree / "man1" / "git.1"
     try:
         head = page.read_text(encoding="utf-8", errors="replace")[:4000]
@@ -1174,9 +1222,19 @@ def from_help(
         # precede the verb — what `.opts()` binds. Read them from there.
         manual = run_help([cmd, name], man=True)
         if manual:
-            root_verb = replace(
-                root_verb, options=parse_help(manual, man=True, shorts=shorts).options
-            )
+            from_manual = parse_help(manual, man=True, shorts=shorts)
+            root_verb = replace(root_verb, options=from_manual.options)
+            if not verbs:
+                # A verb-less manual tool (ssh) *is* its root: the manual's
+                # SYNOPSIS is the only statement of its shape, and whether
+                # it wraps a trailing command — the terse root read above
+                # had no usage line to say either.
+                root_verb = replace(
+                    root_verb,
+                    positional=from_manual.positional,
+                    lead=from_manual.lead,
+                    wraps=from_manual.wraps,
+                )
     parsed = [root_verb]
     for verb in verbs:
         text = run_help([cmd, *verb.split(".")], flag=flag, man=man)

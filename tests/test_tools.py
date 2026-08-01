@@ -299,6 +299,9 @@ def test_read_version_handles_the_grammars_tools_really_ship():
         "1.13.0.git.kitware.jobserver-pipe-1"
     )
     assert read("Microsoft Windows [Version 10.0.19045.3803]") == "10.0.19045.3803"
+    # OpenSSH glues its patchlevel: without the `pN` tail the match fails at
+    # `10.4` and falls through to LibreSSL's number — the wrong library's.
+    assert read("OpenSSH_10.4p1, LibreSSL 4.1.0") == "10.4p1"
     assert read("no numbers here") == ""
 
 
