@@ -9,6 +9,16 @@ versions may include breaking changes.
 
 ### Changed
 
+- **Breaking: diverging forwards make two nodes, not a refusal.** One
+  identity rule, everywhere: a piece of work is its declaration, its
+  option overrides, and its resolved arguments. Two dispatchers
+  forwarding *different* values to one shared prerequisite used to be a
+  `ChainError` ("run the forwarding tasks separately"); now each gets the
+  node it meant — the plan splits them exactly as the execution layer
+  always keyed them — while same-value dispatchers still share one
+  execution. What you meant is what runs, silently and correctly, on
+  every path.
+
 - **Breaking: nothing anonymous runs — `parallel()` and `run()` take only
   tasks and steps.** footman only schedules, records, and safely cancels
   work it owns, and a bare callable is a stranger: a lambda, a

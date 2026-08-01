@@ -4,11 +4,9 @@ from __future__ import annotations
 
 from typing import Annotated
 
-import pytest
-
 from footman import _manifest
 from footman._executor import forward_map, run_chain
-from footman._split import ChainError, Segment, split_chain
+from footman._split import Segment, split_chain
 from footman.params import Forward, forward
 from footman.registry import Group
 
@@ -91,11 +89,17 @@ def test_forward_reaches_post_prerequisites_too():
     assert seen["notify"] is True
 
 
-def test_conflicting_forwards_to_a_shared_prereq_is_taught():
+def test_diverging_forwards_make_two_nodes_not_a_refusal():
+    # One identity rule, everywhere: requests that resolve to different
+    # arguments are different work. Two dispatchers forwarding different
+    # values to one prerequisite each get the node they meant — silently,
+    # correctly — and same-value dispatchers still share one.
+    seen: list[bool] = []
+
     def tasks(reg):
         @reg.task
         def shared(fix: bool = False):
-            pass
+            seen.append(fix)
 
         @reg.task(pre=[shared])
         def a(fix: Forward[bool] = True):
@@ -105,8 +109,12 @@ def test_conflicting_forwards_to_a_shared_prereq_is_taught():
         def b(fix: Forward[bool] = False):
             pass
 
-    with pytest.raises(ChainError, match=r"forwarded with conflicting values"):
-        drive(tasks, "a b")
+        @reg.task(pre=[shared])
+        def c(fix: Forward[bool] = True):
+            pass
+
+    drive(tasks, "a b c")
+    assert sorted(seen) == [False, True]  # two executions, not three
 
 
 def test_forward_map_reads_cli_or_default_and_skips_required():
