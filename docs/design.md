@@ -244,7 +244,11 @@ firm: a reviewer sees exactly what was captured (an uncaptured run
 reviews the code alone); it may set the title and the code, and `ok`
 follows the code so the two can never disagree; a reviewer that raises
 *fails* the step with its error — a broken reviewer is a broken gate,
-not a shrug. Reviewers stack from the inside out — the one written
+not a shrug. A reviewer may also rewrite the *reported* return value —
+the summary a report shows, useful when the honest value is a secret or
+a wall of text — but never the value handed to the code that asked for
+the work. A redaction is a display decision, and display decisions do
+not change what a program computed with. Reviewers stack from the inside out — the one written
 closest to the function runs first, each outer one sees what the
 previous left, and a per-use `.opts(pre_record=...)` always has the
 final word.

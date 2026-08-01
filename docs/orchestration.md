@@ -338,6 +338,12 @@ with parallel() as p:
     p(step(shutil.rmtree)(stale, ignore_errors=True))
 ```
 
+Building an item runs nothing, so an item built inside the block and
+never handed to it would be work that silently doesn't happen — the
+classic forgotten `p(...)`. The block refuses instead: it raises before
+running anything, naming the dead items, so the mistake costs one taught
+error rather than a missing step nobody notices.
+
 The one other difference from a plain call: a queued failure surfaces when
 the block ends, not at the line that queued it.
 

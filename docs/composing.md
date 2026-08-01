@@ -413,7 +413,11 @@ write through:
 `output`, `steps` — and writes nothing: **observers see, never judge**. The
 record was sealed when the review window closed, and every write there —
 title, code, the reported value via `set_returned` — belongs to a
-`pre_record` reviewer, where it is attributed in the record's audit. An
+`pre_record` reviewer, where it is attributed in the record's audit.
+`set_returned` rewrites the *report* only: dependents and body callers
+always receive the body's own return, so a redaction or a summary never
+changes what a program computed with — and that untouched value stays
+readable beside the reported one as `result.body_returned`. An
 observer that finds a problem is not powerless: `footman.fail(reason,
 code)` from a `post_task` hook fails the task with the hook's own code, the
 failure named and the moment recorded. A `shared` row reports what the
@@ -564,7 +568,10 @@ def audit(inv, task):
 A failed bind arrives as the failure raised at the first yield, so the
 `try/finally` (or an `except`) around it observes it and still closes.
 Yield-count violations are taught, naming the wrapper: `wrap_task` takes
-exactly one, `wrap_bind` exactly two.
+exactly one, `wrap_bind` exactly two. Spans pair per execution, even
+nested ones: a body call with a different binding runs its execution
+inline, inside the caller's, and each span closes with its own record —
+the inner first, the outer still.
 
 One more contract, stated for the future: a pre hook's **return value is
 reserved** — the moment where a pre supplies the task's result and the body
