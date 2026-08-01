@@ -9,6 +9,16 @@ versions may include breaking changes.
 
 ### Changed
 
+- **Breaking: `--json` speaks one flat list — `items`.** The envelope's
+  `results` array (rows with nested `steps`) is now `items`: tasks and
+  steps as one creation-order list, every record carrying its `address`,
+  the tree recoverable from prefixes without making a reader recurse. A
+  row has `"task"`, a step has `"command"` — the kind test — and looking
+  a task up by name returns a list by contract, since one label can name
+  distinct work (distinct by address). Nobody consumes `--json` yet, so
+  the schema field stays `1`: footman launches with the shape rather
+  than migrating to it.
+
 - **`parallel()` returns sealed records.** Each entry of the returned
   list — and of the block form's own list — is a `Result`: named,
   addressed, timed, and *being* its exit code, so every code-reader

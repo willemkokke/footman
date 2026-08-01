@@ -119,7 +119,7 @@ def test_branded_cli_documents_itself(plugin_project):
 def test_page_rides_the_json_envelope(plugin_project, capsys):
     assert _app.run(["--json", "docs.page"]) == 0
     payload = json.loads(capsys.readouterr().out)
-    (entry,) = payload["results"]
+    (entry,) = [i for i in payload["items"] if "task" in i]
     assert entry["task"] == "docs.page"
     assert "# fm tasks" in entry["output"]  # the markdown, captured
 

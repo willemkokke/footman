@@ -156,9 +156,9 @@ def test_json_output(project, capsys):
     assert _app.run(["--json", "hi"]) == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["schema"] == 1
-    assert payload["results"][0]["task"] == "hi"
-    assert payload["results"][0]["ok"] is True
-    assert payload["total_ms"] >= payload["results"][0]["duration_ms"]
+    assert payload["items"][0]["task"] == "hi"
+    assert payload["items"][0]["ok"] is True
+    assert payload["total_ms"] >= payload["items"][0]["duration_ms"]
 
 
 def test_single_task_receipt_carries_the_time(project, capsys):
@@ -197,7 +197,7 @@ def test_systemexit_message_surfaces(project, capsys):
 def test_systemexit_message_reaches_json(project, capsys):
     assert _app.run(["--json", "refuse"]) == 1
     payload = json.loads(capsys.readouterr().out)
-    assert payload["results"][0]["error"] == "refused: no open PR to act on"
+    assert payload["items"][0]["error"] == "refused: no open PR to act on"
 
 
 def test_systemexit_int_code_stays_bare(project, capsys):
@@ -233,7 +233,7 @@ def test_fail_bare_falls_back_to_the_code_line(project, capsys):
 def test_fail_reason_reaches_json(project, capsys):
     assert _app.run(["--json", "refuse-fn"]) == 1
     payload = json.loads(capsys.readouterr().out)
-    assert payload["results"][0]["error"] == "no open PR to act on"
+    assert payload["items"][0]["error"] == "no open PR to act on"
 
 
 def test_unknown_task_is_teaching_error(project, capsys):
@@ -831,7 +831,7 @@ def test_json_refusal_envelope(project, capsys):
     assert payload["schema"] == 1
     assert payload["error"]["code"] == EX_USAGE
     assert "expected a task name" in payload["error"]["message"]
-    assert payload["results"] == []
+    assert payload["items"] == []
     assert "expected a task name" in captured.err  # stderr keeps the human copy
 
 
@@ -929,14 +929,14 @@ def test_json_interrupt_envelope(tmp_path, monkeypatch, capsys):
 
 def test_json_returned_value(project, capsys):
     assert _app.run(["--json", "data"]) == 0
-    entry = json.loads(capsys.readouterr().out)["results"][0]
+    entry = json.loads(capsys.readouterr().out)["items"][0]
     assert entry["ok"] is True
     assert entry["returned"] == {"n": 1, "flags": [True, False]}
 
 
 def test_json_none_return_omits_key(project, capsys):
     assert _app.run(["--json", "hi"]) == 0
-    entry = json.loads(capsys.readouterr().out)["results"][0]
+    entry = json.loads(capsys.readouterr().out)["items"][0]
     assert "returned" not in entry and "returned_error" not in entry
 
 
@@ -944,7 +944,7 @@ def test_json_int_return_is_exit_code_not_data(project, capsys):
     # An int return is the exit-code channel (duty's contract); it never
     # doubles as a returned payload.
     assert _app.run(["--json", "code3"]) == 3
-    entry = json.loads(capsys.readouterr().out)["results"][0]
+    entry = json.loads(capsys.readouterr().out)["items"][0]
     assert entry["code"] == 3
     assert "returned" not in entry
 
@@ -954,7 +954,7 @@ def test_json_unserialisable_return_teaches(project, capsys):
     # the entry, human-visibly on stderr, and the exit code stays the task's.
     assert _app.run(["--json", "opaque"]) == 0
     captured = capsys.readouterr()
-    entry = json.loads(captured.out)["results"][0]
+    entry = json.loads(captured.out)["items"][0]
     assert entry["ok"] is True
     assert "returned" not in entry
     assert "not JSON-serialisable" in entry["returned_error"]
@@ -991,7 +991,7 @@ def test_json_returned_mirrors_coercion_types(tmp_path, monkeypatch, capsys):
     from pathlib import Path
 
     assert _app.run(["--json", "artefacts"]) == 0
-    returned = json.loads(capsys.readouterr().out)["results"][0]["returned"]
+    returned = json.loads(capsys.readouterr().out)["items"][0]["returned"]
     assert returned["wheel"] == str(Path("dist") / "x.whl")  # OS-native separator
     assert returned["colour"] == "red"
     assert returned["when"] == "2026-07-19"

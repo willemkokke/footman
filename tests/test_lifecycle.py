@@ -1453,7 +1453,7 @@ def test_the_run_end_hook_reads_sealed_records_and_review_owns_the_rewrite():
     result = Runner().invoke("--json build", tasks=reg)
     assert result.ok, result.stderr
     envelope = json_mod.loads(result.stdout)
-    assert envelope["results"][0]["returned"] == "[redacted]"
+    assert envelope["items"][0]["returned"] == "[redacted]"
     assert seen == ["[redacted]"]  # the observer saw the sealed record
 
 
@@ -1557,7 +1557,7 @@ def test_launch_latency_is_recorded_and_reported():
     assert dependent.started >= dependent.eligible  # waited, never time-travelled
     assert rows["root_task" if "root_task" in rows else "root-task"].eligible is None
     envelope = json_mod.loads(result.stdout)
-    by_name = {e["task"]: e for e in envelope["results"]}
+    by_name = {e["task"]: e for e in envelope["items"] if "task" in e}
     assert "queued_ms" in by_name["after"]
     assert "queued_ms" not in by_name["root-task"]  # roots have no latency
 
@@ -1804,7 +1804,7 @@ def test_a_stacked_reviewer_amends_the_row_verdict(tmp_path):
     )
     result = Runner().invoke("--json fmt", cwd=tmp_path)
     assert result.ok, result.stderr
-    row = json.loads(result.stdout)["results"][0]
+    row = json.loads(result.stdout)["items"][0]
     assert row["ok"] is True and row["code"] == 0
     assert row["title"] == "fmt: reformatted"
     assert row["audit"] == [["body", "fmt", 1], ["review", "reformatted_is_fine", 0]]
@@ -1833,7 +1833,7 @@ def test_row_reviewers_run_inside_out_and_the_use_site_wins(tmp_path):
     )
     result = Runner().invoke("--json build", cwd=tmp_path)
     assert result.ok, result.stderr
-    row = json.loads(result.stdout)["results"][0]
+    row = json.loads(result.stdout)["items"][0]
     # Nearest the def runs first; each outer reviewer sees what it left.
     assert row["title"] == "build+inner+outer"
     assert [e[1] for e in row["audit"]] == ["build", "inner", "outer"]
@@ -1857,7 +1857,7 @@ def test_a_raising_row_reviewer_fails_the_task_with_its_own_error(tmp_path):
     )
     result = Runner().invoke("--json build", cwd=tmp_path)
     assert not result.ok
-    row = json.loads(result.stdout)["results"][0]
+    row = json.loads(result.stdout)["items"][0]
     assert row["ok"] is False
     assert "pre_record hook 'broken'" in (row["error"] or "")
     assert row["audit"][-1] == ["review", "broken", None]  # involved, then broke
@@ -1881,7 +1881,7 @@ def test_a_green_row_vetoed_in_review_keeps_its_earned_code(tmp_path):
     )
     result = Runner().invoke("--json build", cwd=tmp_path)
     assert not result.ok
-    row = json.loads(result.stdout)["results"][0]
+    row = json.loads(result.stdout)["items"][0]
     assert row["code"] == 3 and row["failed_at"] == "review"
     assert row["audit"][0] == ["body", "build", 0]  # the green it earned, kept
 

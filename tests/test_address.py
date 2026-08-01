@@ -49,7 +49,7 @@ def test_rows_and_body_calls_carry_the_request_path(tmp_path):
     )
     result = Runner().invoke("--json parent", cwd=tmp_path)
     assert result.ok, result.stderr
-    rows = json.loads(result.stdout)["results"]
+    rows = [i for i in json.loads(result.stdout)["items"] if "task" in i]
     addresses = {r["task"]: r["address"] for r in rows}
     assert addresses["parent"] == "parent"
     assert addresses["child"] == "parent/child"
@@ -74,7 +74,7 @@ def test_split_nodes_are_distinct_by_ordinal(tmp_path):
     )
     result = Runner().invoke("--json a b", cwd=tmp_path)
     assert result.ok, result.stderr
-    rows = json.loads(result.stdout)["results"]
+    rows = [i for i in json.loads(result.stdout)["items"] if "task" in i]
     shared_addresses = sorted(r["address"] for r in rows if r["task"] == "shared")
     assert shared_addresses == ["shared", "shared#2"]
 
