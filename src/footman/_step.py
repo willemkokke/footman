@@ -23,6 +23,7 @@ import io
 import time
 import traceback
 from collections.abc import Callable, Generator
+from contextvars import ContextVar
 from typing import Any, Generic, Literal, ParamSpec, TypeVar, cast, overload
 
 from footman import context as _context
@@ -39,6 +40,14 @@ P = ParamSpec("P")
 R = TypeVar("R")
 R_co = TypeVar("R_co", covariant=True)
 
+# Births inside a `with parallel()` block, so the block can refuse to run
+# while an item built in it was never handed over: building runs nothing,
+# and a dead item is almost always a forgotten `p(...)`. `None` outside a
+# block — the common case pays one contextvar read per build.
+_born: ContextVar[list[WorkItem[Any]] | None] = ContextVar(
+    "footman_step_births", default=None
+)
+
 # The closed policy vocabulary a step maker's `.opts()` accepts — execution
 # policy only: a step is anonymous, so boundary policy (confirm, gates,
 # sharing) has no request boundary to resolve at and is not spellable here.
@@ -54,7 +63,7 @@ class WorkItem(Generic[R_co]):
     so a failing item fails whatever asked for it.
     """
 
-    __slots__ = ("_args", "_kwargs", "_maker")
+    __slots__ = ("_args", "_claimed", "_kwargs", "_maker")
 
     def __init__(
         self, maker: StepFn[..., R_co], args: tuple[Any, ...], kwargs: dict[str, Any]
@@ -62,12 +71,17 @@ class WorkItem(Generic[R_co]):
         self._maker = maker
         self._args = args
         self._kwargs = kwargs
+        self._claimed = False
+        born = _born.get()
+        if born is not None:
+            born.append(self)
 
     @property
     def __name__(self) -> str:  # the label status lines and reports use
         return self._maker.__name__
 
     def __call__(self) -> R_co:
+        self._claimed = True
         return cast(R_co, _pump(self))
 
     def __repr__(self) -> str:

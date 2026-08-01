@@ -2549,9 +2549,14 @@ class Fanout(list[Result]):
         """What each queued call returned, in the order they were written."""
         self._queued: list[tuple[Any, tuple[Any, ...], dict[str, Any]]] = []
         self._token: Any = None
+        self._births: list[_step.WorkItem[Any]] = []
+        self._birth_token: Any = None
 
     def __enter__(self) -> Fanout:
+        from footman import _step as _step_mod
+
         self._token = _collecting.set(self._queued)
+        self._birth_token = _step_mod._born.set(self._births)
         return self
 
     def also(self, call: Callable[..., Any], /, *args: Any, **kwargs: Any) -> Pending:
@@ -2586,13 +2591,25 @@ class Fanout(list[Result]):
                 "p(item) queues work for a block, so call it inside the "
                 "`with` — outside one there is nothing to join."
             )
+        item._claimed = True
         self._queued.append((item, (), {}))
         return Pending(_call_name(item))
 
     def __exit__(self, exc_type: Any, exc: Any, tb: Any) -> Literal[False]:
+        from footman import _step as _step_mod
+
         _collecting.reset(self._token)
+        _step_mod._born.reset(self._birth_token)
         if exc_type is not None:
             return False  # the block itself failed: nothing to run
+        dead = [w for w in self._births if not w._claimed]
+        if dead:
+            names = ", ".join(w.__name__ for w in dead)
+            raise RuntimeError(
+                f"built inside the block but never handed to it: {names}. "
+                f"Building an item runs nothing — hand it to the block, "
+                f"p(item), or call it to run it in place. Nothing ran."
+            )
         values: list[Any] = [None] * len(self._queued)
 
         def thunk(

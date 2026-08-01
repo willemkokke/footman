@@ -839,7 +839,16 @@ def _attach_lifecycle(fn: Any) -> None:
                 f"@{task_name(fn)}.wrap_task {name!r} must be a generator "
                 f"function — write `result = yield` where the body runs"
             )
+        # A stack, not a slot: a task whose body reaches itself again runs
+        # the inner execution inline on the same thread, and a single slot
+        # would hand the outer span's generator to the inner close.
         tls = threading.local()
+
+        def _spans() -> list[Any]:
+            spans = getattr(tls, "spans", None)
+            if spans is None:
+                spans = tls.spans = []
+            return spans
 
         def _pre() -> None:
             gen = gen_fn()
@@ -851,13 +860,13 @@ def _attach_lifecycle(fn: Any) -> None:
                     f"yielding — exactly one `result = yield` marks where "
                     f"the body runs"
                 ) from None
-            tls.gen = gen
+            _spans().append(gen)
 
         def _post(result: Any) -> None:
-            gen = getattr(tls, "gen", None)
-            if gen is None:
+            spans = getattr(tls, "spans", None)
+            if not spans:
                 return  # the anchor never fired: no span open
-            tls.gen = None
+            gen = spans.pop()
             try:
                 gen.send(result)
             except StopIteration:
@@ -882,7 +891,17 @@ def _attach_lifecycle(fn: Any) -> None:
                 f"@{task_name(fn)}.wrap_bind {name!r} must be a generator "
                 f"function — two yields: the bind boundary, then the body"
             )
+        # Same stack discipline as wrap_task, with one more state per span:
+        # whether its bind half has been matched by the body half yet, so a
+        # hook firing without its own bind (a body call skips binding) never
+        # advances an outer execution's open span.
         tls = threading.local()
+
+        def _spans() -> list[list[Any]]:
+            spans = getattr(tls, "spans", None)
+            if spans is None:
+                spans = tls.spans = []
+            return spans
 
         def _bind() -> None:
             gen = gen_fn()
@@ -893,26 +912,28 @@ def _attach_lifecycle(fn: Any) -> None:
                     f"@{task_name(fn)}.wrap_bind {name!r} returned without "
                     f"yielding — two yields exactly"
                 ) from None
-            tls.gen = gen
+            _spans().append([gen, False])
 
         def _enter() -> None:
-            gen = getattr(tls, "gen", None)
-            if gen is None:
+            spans = getattr(tls, "spans", None)
+            if not spans or spans[-1][1]:
                 return  # a body call skips binding: the span never opened
+            span = spans[-1]
+            span[1] = True
             try:
-                gen.send(None)
+                span[0].send(None)
             except StopIteration:
-                tls.gen = None
+                spans.pop()
                 raise RuntimeError(
                     f"@{task_name(fn)}.wrap_bind {name!r} finished after one "
                     f"yield — two yields exactly (bind, then body)"
                 ) from None
 
         def _post(result: Any) -> None:
-            gen = getattr(tls, "gen", None)
-            if gen is None:
+            spans = getattr(tls, "spans", None)
+            if not spans or not spans[-1][1]:
                 return
-            tls.gen = None
+            gen, _ = spans.pop()
             try:
                 gen.send(result)
             except StopIteration:

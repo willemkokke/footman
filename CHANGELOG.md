@@ -7,6 +7,22 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Changed
+
+- **A `with parallel()` block refuses to run over a dead item.** A step
+  item built inside the block but never handed to it — not queued with
+  `p(item)`, not called in place — is a forgotten hand-off: building
+  runs nothing, so the work would silently not happen. The block now
+  raises before running anything, naming the dead items.
+
+### Fixed
+
+- **`wrap_task`/`wrap_bind` spans survive nested executions.** A body
+  call with a different binding runs its execution inline on the
+  caller's thread; the wrapper's span state is now a stack, so the
+  inner span closes with the inner record and the outer span still
+  closes with its own — previously the outer span was silently lost.
+
 ## [0.28.0] — 2026-08-01
 
 ### Changed

@@ -1261,6 +1261,56 @@ def test_a_queued_value_cannot_be_used_inside_the_block():
     assert "has not run yet" in result.stderr
 
 
+def test_an_item_built_in_the_block_but_never_handed_over_is_taught():
+    # Building runs nothing, so an item born inside the block that never
+    # reaches p() is a forgotten hand-off — the block refuses to run
+    # rather than silently dropping the work.
+    from footman import parallel, step
+
+    reg = Group("root")
+    ran: list[str] = []
+
+    @step
+    def tidy() -> None:
+        ran.append("tidy")
+
+    @reg.task
+    def build() -> None:
+        ran.append("build")
+
+    @reg.task
+    def go():
+        with parallel():
+            build()
+            tidy()  # built, never handed over: dead
+
+    result = drive(reg, "go")
+    assert not result.ok
+    assert "never handed to it: tidy" in result.stderr
+    assert ran == []  # nothing ran, the queued task included
+
+
+def test_an_item_pumped_in_place_inside_the_block_is_not_dead():
+    from footman import parallel, step
+
+    reg = Group("root")
+    ran: list[str] = []
+
+    @step
+    def tidy() -> None:
+        ran.append("tidy")
+
+    @reg.task
+    def go():
+        with parallel() as p:
+            p(tidy.opts(title="handed")())
+            tidy()()  # run in place: claimed by the call, not the block
+
+    result = drive(reg, "go")
+    assert result.ok, result.stderr
+    assert ran == ["tidy", "tidy"]
+
+
 def test_a_queued_call_is_a_real_request():
     # Queued or not, what runs is a task: it earns a row and shares with the
     # run, exactly as a call written outside the block would.
