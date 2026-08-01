@@ -38,7 +38,7 @@ $ fm --json check
     },
     {
       "command": "ruff check src tests",
-      "address": "lint/ruff",
+      "address": "lint/ruff-check",
       "code": 0,
       "duration_ms": 790.1,
       "stdout": "...",

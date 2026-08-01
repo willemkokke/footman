@@ -1462,6 +1462,26 @@ def _run_callable(
         return code, out_buf.getvalue(), err_buf.getvalue()
 
 
+def _leaf(text: str) -> str:
+    """An address leaf, made parse-safe: the address grammar reserves `/`
+    (tree levels) and `#` (ordinals), and leaves are minted from
+    user-influenced text — command tokens, titles. Anything outside the
+    safe alphabet maps to `-`, runs collapse, leading `.`/`-` strip (so
+    `./ship` names `ship`), and a leaf is never empty. Names only: the
+    record's `command`/title still show the original verbatim."""
+    out = []
+    last_dash = False
+    for ch in text:
+        if ch.isalnum() or ch in "_.-":
+            out.append(ch)
+            last_dash = ch == "-"
+        elif not last_dash:
+            out.append("-")
+            last_dash = True
+    leaf = "".join(out).strip(".-")
+    return leaf or "step"
+
+
 def _next_label(labels: dict[str, int], label: str) -> str:
     """The next same-labelled sibling's spelling: bare first, `#2` after."""
     n = labels.get(label, 0) + 1
@@ -1473,7 +1493,7 @@ def _child_address(parent: Context, label: str) -> str:
     """The tree-derived name of the next child with this label under
     *parent* — deterministic, because a parent's requests are made from its
     own control flow in written order."""
-    leaf = _next_label(parent._labels, label)
+    leaf = _next_label(parent._labels, _leaf(label))
     return f"{parent.address}/{leaf}" if parent.address else leaf
 
 
@@ -2294,8 +2314,18 @@ def run(
         # its exit code, so this is chosen here, not assigned afterwards.
         code = 124
     # The address label is the stable identity — a title names the record,
-    # the address names the node: the tool word, not the whole command line.
-    addr_leaf = (title or label).split()[0] if (title or label) else "run"
+    # the address names the node. A titled call is named whole; a raw
+    # command names by its tool word plus its verb when it has one
+    # (`git-push`, `uv-sync`) — descriptive enough to read and to keep
+    # `git fetch`/`git push` distinct across runs, while flags stay out so
+    # an option tweak never re-identifies the step.
+    if title:
+        addr_leaf = title
+    else:
+        tokens = label.split()
+        addr_leaf = tokens[0] if tokens else "run"
+        if len(tokens) > 1 and not tokens[1].startswith("-"):
+            addr_leaf = f"{addr_leaf}-{tokens[1]}"
     addr = _child_address(ctx, addr_leaf)
     # The audit: the verdict's provenance. The body entry is always present
     # and carries what the work itself produced; review entries follow.
