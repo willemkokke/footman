@@ -103,6 +103,12 @@ class TaskResult:
     title: str = ""
     """A reviewer's label for the row, when one set it (`@pre_record`).
     Empty means the task's name speaks for itself, as it always did."""
+    seq: int | None = None
+    """The request-order stamp: when this row's request was made, counted
+    run-wide — plan order for scheduled segments, the written line for a
+    `parallel()` block's queued calls, the call moment for body calls. The
+    report's tie-break for starts landing inside the same instant; `None`
+    for a row minted outside the request pipeline."""
     body_returned: Any = None
     """What the body actually returned — the value dependents and body
     callers receive, snapshotted at the body's exit. `returned` is its

@@ -2545,9 +2545,9 @@ class Pending:
 # The queue a `with parallel()` block collects into: a contextvar, so the
 # calls a *queued task* makes when it later runs (on a pool thread, which
 # starts from contextvar defaults) are ordinary calls, never re-collected.
-_collecting: ContextVar[list[tuple[Any, tuple[Any, ...], dict[str, Any]]] | None] = (
-    ContextVar("footman_parallel_block", default=None)
-)
+_collecting: ContextVar[
+    list[tuple[Any, tuple[Any, ...], dict[str, Any], int | None]] | None
+] = ContextVar("footman_parallel_block", default=None)
 
 
 class Fanout(list[Result]):
@@ -2565,7 +2565,7 @@ class Fanout(list[Result]):
         self.keep_going: bool = keep_going
         self.results: list[Any] = []
         """What each queued call returned, in the order they were written."""
-        self._queued: list[tuple[Any, tuple[Any, ...], dict[str, Any]]] = []
+        self._queued: list[tuple[Any, tuple[Any, ...], dict[str, Any], int | None]] = []
         self._token: Any = None
         self._births: list[_step.WorkItem[Any]] = []
         self._birth_token: Any = None
@@ -2610,7 +2610,7 @@ class Fanout(list[Result]):
                 "`with` — outside one there is nothing to join."
             )
         item._claimed = True
-        self._queued.append((item, (), {}))
+        self._queued.append((item, (), {}, None))
         return Pending(_call_name(item))
 
     def __exit__(self, exc_type: Any, exc: Any, tb: Any) -> Literal[False]:
@@ -2631,18 +2631,29 @@ class Fanout(list[Result]):
         values: list[Any] = [None] * len(self._queued)
 
         def thunk(
-            index: int, task: Any, args: tuple[Any, ...], kwargs: dict[str, Any]
+            index: int,
+            task: Any,
+            args: tuple[Any, ...],
+            kwargs: dict[str, Any],
+            seq: int | None,
         ) -> Callable[[], None]:
             def run() -> None:
                 # The value goes to the slot, never through the return: a task
-                # returning an int would read as an exit code out here.
-                values[index] = task(*args, **kwargs)
+                # returning an int would read as an exit code out here. The
+                # queue moment's request number rides back in with the call.
+                from footman import _futures
+
+                token = _futures._pending_seq.set(seq)
+                try:
+                    values[index] = task(*args, **kwargs)
+                finally:
+                    _futures._pending_seq.reset(token)
 
             run.__name__ = _call_name(task)
             return run
 
         codes = _run_thunks(
-            [thunk(i, t, a, k) for i, (t, a, k) in enumerate(self._queued)],
+            [thunk(i, t, a, k, q) for i, (t, a, k, q) in enumerate(self._queued)],
             keep_going=self.keep_going,
         )
         self.results = values
@@ -2650,13 +2661,17 @@ class Fanout(list[Result]):
         return False
 
 
-def _queue_call(task: Any, args: tuple[Any, ...], kwargs: dict[str, Any]) -> Any:
+def _queue_call(
+    task: Any, args: tuple[Any, ...], kwargs: dict[str, Any], seq: int | None = None
+) -> Any:
     """Queue a call for the enclosing `with parallel()` block, or `None` when
-    there is none — the one hook `_futures.call` needs."""
+    there is none — the one hook `_futures.call` needs. The queue moment IS
+    the request moment, so the caller's `seq` rides the tuple and the thunk
+    hands it back to the re-entering call."""
     queue = _collecting.get()
     if queue is None:
         return None
-    queue.append((task, args, kwargs))
+    queue.append((task, args, kwargs, seq))
     from footman import registry
 
     return Pending(registry.cli_name(getattr(task, "__name__", "task")))

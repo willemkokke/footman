@@ -30,6 +30,21 @@ versions may include breaking changes.
 
 ### Fixed
 
+- **The report's order is deterministic under parallel bursts.** Task
+  rows seat chronologically by start, as always — but starts landing
+  inside the same instant are worker-thread noise, so the tie now
+  breaks on request order: plan order for scheduled segments (minted
+  topologically, so a prerequisite always outranks its dependent), the
+  written line for a `parallel()` block's calls, the call moment for
+  body calls. A rerun can no longer shuffle the summary.
+
+- **A share copies what a body-claimed execution reported.** The
+  claimed body call now hands its sealed row to the shared cell before
+  the future resolves, so a later request's `shared` row carries the
+  reviewed title, reported value, and audit — previously it copied
+  nothing when the first execution came from a body call rather than
+  the scheduler, and it could seat before the execution it joined.
+
 - **Dry-run receipts carry addresses.** A faked `run()` record now
   gets the same tree-derived address its real twin would, so a
   rehearsal's `--json` items are prefix-filterable like a run's.

@@ -714,6 +714,34 @@ def test_a_node_reuses_what_a_body_call_already_did():
     assert states.index(("survey", "ok")) < states.index(("survey", "shared"))
 
 
+def test_a_share_copies_what_a_body_claimed_execution_reported():
+    # The claimed body call hands its sealed row to the cell BEFORE the
+    # future resolves, so a later sharer copies the reviewed report — not a
+    # bare value with the title lost.
+    from footman import pre_record
+
+    reg = Group("root")
+
+    def label(view):
+        view.title = "surveyed: 3 sites"
+
+    @reg.task
+    def survey() -> str:
+        return "measured"
+
+    pre_record(label)(survey)
+
+    @reg.task
+    def early():
+        assert survey() == "measured"
+
+    result = drive(reg, "early survey")
+    assert result.ok, result.stderr
+    shared = next(r for r in result.results if _executor.reported_state(r) == "shared")
+    assert shared.title == "surveyed: 3 sites"
+    assert [m for m, _a, _c in shared.audit] == ["body", "review"]
+
+
 def test_a_different_policy_is_different_work_and_runs():
     # A policy override makes a genuinely different invocation, so it is never
     # answered by the shared one — the sharing flag is the only override left
