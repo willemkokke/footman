@@ -68,6 +68,7 @@ fix the annotation.
 | You'll see | It means |
 | ---------- | -------- |
 | ``test: RunFailed: `pytest -q` exited with code 1`` (plus the replayed output) | a `run()` command failed; its captured output is shown only now |
+| `build: CommandNotFound: no executable 'buf' found on PATH — ...` | the command doesn't exist, so nothing ran — there is no exit code, and `nofail=` doesn't apply; install the tool, or gate the task with `@requires_tool` so it lists as unavailable instead |
 | `release: ValueError: 'nope' is not MAJOR.MINOR.PATCH` | the task (or a `check(fn)` validator) raised; type and message, no traceback |
 | `build: exited with code 3` | the task returned a non-zero int |
 | `up: Unavailable: requires docker on PATH` | a `@requires`-gated task was asked to run; the reason is live, not cached |

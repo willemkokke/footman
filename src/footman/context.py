@@ -779,6 +779,26 @@ class RunTimeout(RunFailed):
         )
 
 
+class CommandNotFound(FileNotFoundError):
+    """The executable for a `run()` does not exist — nothing was spawned.
+
+    A `FileNotFoundError`, so an existing `except FileNotFoundError` keeps
+    catching it. Deliberately *not* a `RunFailed`, and not silenced by
+    `nofail=True`: there is no exit code to interpret, because no command
+    ran — the environment is missing the tool, or the name is misspelled
+    (which the tools bridge cannot catch at attribute time: `tools.<name>`
+    mints a Tool for any spelling). Carries `.command`."""
+
+    def __init__(self, command: str) -> None:
+        self.command = command
+        super().__init__(
+            f"no executable {command!r} found on PATH — the tool is not "
+            f"installed here, or the name is misspelled. Install it, or gate "
+            f"the task with @footman.requires_tool({command!r}, reason='…') "
+            f"so it lists as unavailable instead of failing mid-run."
+        )
+
+
 class Failed(Exception):
     """A task chose to fail — the exception `footman.fail()` raises.
 
@@ -1703,6 +1723,18 @@ def terminate_live_children(
     threading.Thread(target=_escalate, daemon=True, name="fm-fail-fast-kill").start()
 
 
+def _argv0(argv: list[str] | str) -> str:
+    """The executable a spawn would have run — for the taught missing-tool
+    error. A string argv is the Windows single-command-line spelling, where
+    the program may sit in quotes ahead of its arguments."""
+    if isinstance(argv, list):
+        return argv[0]
+    line = argv.strip()
+    if line.startswith('"') and (end := line.find('"', 1)) > 0:
+        return line[1:end]
+    return line.split(None, 1)[0] if line else line
+
+
 def _run_subprocess(
     argv: list[str] | str,
     env: dict[str, str],
@@ -1753,17 +1785,22 @@ def _run_subprocess(
             group["creationflags"] = flags
     elif isolate:
         group["start_new_session"] = True
-    proc = subprocess.Popen(
-        argv,
-        env=env,
-        cwd=cwd,
-        stdout=subprocess.PIPE if capture else None,
-        stderr=subprocess.PIPE if capture else None,
-        text=True,
-        encoding=encoding,
-        errors="replace",
-        **group,
-    )
+    try:
+        proc = subprocess.Popen(
+            argv,
+            env=env,
+            cwd=cwd,
+            stdout=subprocess.PIPE if capture else None,
+            stderr=subprocess.PIPE if capture else None,
+            text=True,
+            encoding=encoding,
+            errors="replace",
+            **group,
+        )
+    except FileNotFoundError:
+        if cwd is not None and not cwd.is_dir():
+            raise  # the *directory* is what's missing — keep the honest OS error
+        raise CommandNotFound(_argv0(argv)) from None
     # An `@task(atomic=True)` opts its child out of the registry: fail-fast
     # never kills it, so a mid-write (a formatter rewriting a file) can't be
     # truncated. It runs to completion; the run waits for it.
