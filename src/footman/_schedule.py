@@ -472,6 +472,7 @@ def _gate_confirms(
     cfg = ctx_config or {}
     assume_yes = bool(cfg.get("assume_yes"))
     no_input = bool(cfg.get("no_input"))
+    dry_run = bool(cfg.get("dry_run"))
     kept: list[Segment] = []
     denied: list[_executor.TaskResult] = []
     answers: dict[Any, bool] = {}
@@ -483,12 +484,25 @@ def _gate_confirms(
             continue
         key = _dep_key(fn)
         if key not in answers:
-            answers[key] = assume_yes or _ask_confirm(message, no_input=no_input)
+            answers[key] = (
+                assume_yes
+                or (dry_run and _dry_confirm(seg.task, message))
+                or _ask_confirm(message, no_input=no_input)
+            )
         if answers[key]:
             kept.append(seg)
         else:
             denied.append(_not_confirmed(seg))
     return kept, denied, answers
+
+
+def _dry_confirm(task: str, message: str) -> bool:
+    """A rehearsal answers every gate yes — a gate answered no would hide
+    the very work the rehearsal exists to show — and says so, once."""
+    from footman import _globals
+
+    _globals._note(f"dry-confirm:{task}", f"dry-run: {message!r} — assumed yes")
+    return True
 
 
 def _gate_node_confirms(
@@ -506,13 +520,18 @@ def _gate_node_confirms(
     cfg = ctx_config or {}
     assume_yes = bool(cfg.get("assume_yes"))
     no_input = bool(cfg.get("no_input"))
+    dry_run = bool(cfg.get("dry_run"))
     for n in _toposort(nodes):
         message = task_confirm(n.fn)
         if not message or n.result is not None:
             continue
         key = _dep_key(n.fn)
         if key not in answers:
-            answers[key] = assume_yes or _ask_confirm(message, no_input=no_input)
+            answers[key] = (
+                assume_yes
+                or (dry_run and _dry_confirm(n.seg.task, message))
+                or _ask_confirm(message, no_input=no_input)
+            )
         if not answers[key]:
             n.result = _not_confirmed(n.seg)
             n.state = "done"
@@ -567,6 +586,9 @@ def confirm_gate(
     """
     message = task_confirm(fn)
     if not message or ctx.assume_yes:
+        return None
+    if ctx.dry_run:
+        _dry_confirm(seg.task, message)
         return None
     if _ask_confirm(message, no_input=ctx.no_input):
         return None

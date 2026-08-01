@@ -1663,6 +1663,45 @@ def test_confirm_gate_yes_bypasses():
     assert ran.get("it")
 
 
+def test_confirm_gate_under_dry_run_assumes_yes(monkeypatch, capsys):
+    # A rehearsal answers every gate yes — a gate answered no would hide
+    # the very work the rehearsal exists to show — and notes it did.
+    from footman import context
+
+    monkeypatch.setattr(context, "_stdin_is_tty", lambda: False)
+
+    ran = {}
+
+    def build(reg):
+        @reg.task(confirm="deploy to prod?")
+        def deploy():
+            ran["it"] = True
+
+    _, _, results = drive(build, "deploy", dry_run=True)
+    assert results[0].ok
+    assert ran.get("it")  # the body rehearsed
+    assert "assumed yes" in capsys.readouterr().err
+
+
+def test_prompt_layer_is_unattended_under_dry_run():
+    # A rehearsal is unattended by nature: defaults answer, and a prompt
+    # with no default fails loudly instead of hanging on input.
+    import pytest as _pytest
+
+    from footman import confirm as fm_confirm
+    from footman import prompt as fm_prompt
+    from footman import select as fm_select
+    from footman.context import Context, use_context
+
+    ctx = Context(dry_run=True, interactive=True, in_task=True)
+    with use_context(ctx):
+        assert fm_prompt("tag?", default="v1") == "v1"
+        assert fm_confirm("push?", default=True) is True
+        assert fm_select("which?", ["a", "b"], default="b") == "b"
+        with _pytest.raises(RuntimeError, match="dry-run is unattended"):
+            fm_prompt("tag?")
+
+
 def test_confirm_gate_off_a_terminal_denies(monkeypatch):
     from footman import context
 

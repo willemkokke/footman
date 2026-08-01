@@ -744,7 +744,10 @@ def test_env_written_in_pre_reaches_the_body():
     assert "HOOKED_VALUE" not in real_os.environ
 
 
-def test_dry_run_fires_no_hooks():
+def test_dry_run_is_a_rehearsal_hooks_included():
+    # A dry run rehearses the run: bodies execute, so the lifecycle fires —
+    # a hook is part of "what would happen". Only footman's own work (the
+    # recorded run() calls, the deferred steps) is faked.
     reg = Group("root")
     fired: list[str] = []
 
@@ -757,7 +760,7 @@ def test_dry_run_fires_no_hooks():
 
     result = Runner().invoke("--dry-run build", tasks=reg)
     assert result.ok, result.stderr
-    assert fired == []
+    assert fired == ["build"]
 
 
 def test_a_post_only_plugin_observes_every_execution():

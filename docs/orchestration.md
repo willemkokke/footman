@@ -31,14 +31,15 @@ def notify(): ...
 `fm format lint --fix test` runs three tasks from one line — duty's muscle
 memory, but with real flags. The split is driven by the manifest, so it is
 deterministic; `+` is always available as an explicit boundary, and `--dry-run`
-prints the parsed plan:
+rehearses the chain — bodies run with their bound values while footman's
+own work is faked into receipts, so the split shows itself in what each
+task would have run:
 
 ```console
 $ fm --dry-run format lint --fix test
-  globals: --dry-run
-  -> format
-  -> lint  --fix
-  -> test
+$ ruff format .
+$ ruff check --fix .
+$ pytest
 ```
 
 ## Parallel by default

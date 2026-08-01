@@ -181,7 +181,10 @@ computing. footman never wraps it in something fancier: the `Result` you
 get back from `run()` literally is that integer (with the captured
 output, timing, and command riding along), so `if run(...)`,
 `run(...) == 0`, and every shell-shaped habit you already have keep
-working.
+working. One default worth knowing before you lean on the habit: a
+non-zero exit *raises* unless the call says `nofail=True` — the shell
+idiom types, but a failure never slips past an unchecked call the way
+it does in a shell script.
 
 Sometimes execution is the *only* half you want. A task that reads the
 current git hash isn't telling the story of the run — it's learning
@@ -208,9 +211,11 @@ grand name — footman polices its own honesty, not yours — but the
 machinery itself never writes fiction.
 
 One consequence worth spelling out: `--dry-run` fakes precisely the
-things footman would have executed — the subprocess calls, the deferred
-steps — and nothing else. Your own inline code still runs, because it
-was never footman's to fake.
+things footman owns and records — the recorded subprocess calls, the
+deferred steps — and nothing else. Your own inline code still runs,
+because it was never footman's to fake; an off-the-record call runs
+too, because it is how a task learns something, and faking the learning
+would corrupt the recorded story downstream of it.
 
 ## The verdict is decided in the open
 
@@ -250,8 +255,10 @@ a wall of text — but never the value handed to the code that asked for
 the work. A redaction is a display decision, and display decisions do
 not change what a program computed with. Reviewers stack from the inside out — the one written
 closest to the function runs first, each outer one sees what the
-previous left, and a per-use `.opts(pre_record=...)` always has the
-final word.
+previous left, and on a tool or a step maker a per-use
+`.opts(pre_record=...)` has the final word. A *task's* reviewers attach
+on the handle and stay attached — a task is declared, and so is its
+review.
 
 Once the review window closes, the record is **sealed**. Whoever looks
 at it afterwards receives the sealed, immutable form. This is enforced
@@ -298,7 +305,7 @@ reads like this:
 
 ```json
 {
-  "title": "djlint: reformatted",
+  "command": "djlint: reformatted",
   "code": 1,
   "failed_at": "observe",
   "audit": [
@@ -341,15 +348,18 @@ arguments. `build("web")` twice is one build, shared; `build("web")` and
 dependency list, or a plain call inside another task's body,
 `artifact = build("web")` meets the same matching rule and shares the
 same single execution. There is one identity rule, not one per entrance.
+(Sharing is the default, not a cage: `@task(shared=False)` opts a task
+out, declared where the task lives like every other policy.)
 
 Separately from *sharing*, every piece of work in a run has an
 **address** — a path built from who asked for what, like
 `check/typecheck/mypy`, with a counter when the same name appears twice
 at the same spot. Addresses are deterministic: the same tasks.py
 produces the same addresses run after run, machine after machine. That
-is what makes per-step timing history possible — and later, [skipping
-work whose inputs haven't changed](#where-this-goes), which needs a
-stable way to say "this exact step, last time".
+is what will make per-step timing history possible, and — further out —
+[skipping work whose inputs haven't changed](#where-this-goes): both
+need a stable way to say "this exact step, last time", and neither is
+built yet.
 
 ## One report, one shape
 

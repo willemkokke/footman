@@ -714,7 +714,7 @@ you'd teach a new colleague — discover, validate, run, read the receipt:
 
 ```console
 fm --json --list                 # the full catalog: tasks, params, types, docs
-fm --json --dry-run deploy prod  # parse-check a line without running it
+fm --json --dry-run deploy prod  # rehearse: bodies run, footman's work is faked
 fm --json deploy prod            # one envelope: results, output, returned
 ```
 

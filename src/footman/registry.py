@@ -305,6 +305,26 @@ _EXCLUSIVE = "_footman_exclusive"
 CWD_TOKENS = ("root", "taskfile", "asinvoked", "unmanaged")
 
 
+def validate_lanes(value: Any) -> tuple[Any, ...]:
+    """Lanes are bindings, never strings: each entry must be a `Lane` handle.
+
+    Checked where lanes are declared, so a string dies as a taught error at
+    the declaration site instead of a raw crash in the arbiter mid-run."""
+    from footman._globals import Lane
+
+    lanes = tuple(value)
+    for entry in lanes:
+        if not isinstance(entry, Lane):
+            raise TypeError(
+                f"lanes= takes Lane handles, not {type(entry).__name__} "
+                f"({entry!r}). Declare the resource once — db = "
+                f"footman.lane('db', reason='…') — and pass the handle: "
+                f"lanes=(db,). Handles are what make a typo an undefined "
+                f"name instead of a second, silently distinct lane."
+            )
+    return lanes
+
+
 def _validate_cwd(value: str | Path) -> str | Path:
     """A cwd policy value: one of `CWD_TOKENS`, or an absolute path."""
     if isinstance(value, str) and value in CWD_TOKENS:
@@ -510,6 +530,8 @@ def _opts_overrides(kwargs: dict[str, Any]) -> dict[str, Any]:
             f"A task's own parameters go in the call — `t.opts(atomic=True)(x=1)` — "
             f"not in .opts()."
         )
+    if kwargs.get("lanes") is not None:
+        kwargs["lanes"] = validate_lanes(kwargs["lanes"])
     for name, value in kwargs.items():
         # Override values key the DAG's dedup identity, so they must be hashable.
         # Every real policy value is (bool / str / None); this turns a stray
@@ -779,7 +801,7 @@ def _apply_policy(
     if exclusive:
         setattr(fn, _EXCLUSIVE, True)
     if lanes:
-        setattr(fn, _LANES, tuple(lanes))
+        setattr(fn, _LANES, validate_lanes(lanes))
     _attach_lifecycle(fn)
 
 

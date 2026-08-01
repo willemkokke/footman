@@ -30,7 +30,7 @@ def test_fm_project_scaffolds_and_runs(pytester: pytest.Pytester):
             ''')
             result = fm.invoke("--dry-run release 1.2.0")
             assert result.ok
-            assert "release" in result.stdout
+            assert "git tag v1.2.0" in result.stdout  # the faked receipt
         """
     )
     pytester.runpytest_inprocess().assert_outcomes(passed=1)

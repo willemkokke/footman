@@ -114,8 +114,7 @@ def test_runner_group_chain_error_teaches():
 def test_runner_group_dry_run_matches_cli_semantics():
     result = Runner().invoke("--dry-run greet --name=x", tasks=_demo_group())
     assert result.ok
-    assert "greet" in result.stdout
-    assert "hello x" not in result.stdout  # planned, not executed
+    assert "hello x" in result.stdout  # rehearsed: the body runs, bound
 
 
 # Group mode now shares the real CLI's post-manifest tail (`run_group`), so

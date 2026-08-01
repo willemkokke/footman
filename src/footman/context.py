@@ -1103,8 +1103,9 @@ def prompt(
 
     Usable only inside an `@task(interactive=True)` task; called in an ordinary
     task body it raises a taught error naming the two fixes. Off a terminal,
-    under `--no-input`, or when it would otherwise block, it returns `default`
-    if given, else raises — an unattended run fails loudly. For a value a
+    under `--no-input` or `--dry-run`, or when it would otherwise block, it
+    returns `default` if given, else raises — an unattended run fails loudly,
+    and a rehearsal is unattended by nature. For a value a
     script must supply, take it as a task parameter (a CLI flag) instead.
 
     `secret=True` hides the typing (getpass) *and* returns a `Secret`, so the
@@ -1117,12 +1118,13 @@ def prompt(
     from footman.params import Secret
 
     ctx = _guard_interactive("prompt()")
-    if ctx.no_input:
+    if ctx.no_input or ctx.dry_run:
         if default is not None:
             return Secret(default) if secret else default
+        why = "--no-input is set" if ctx.no_input else "a dry-run is unattended"
         raise RuntimeError(
-            "prompt(): --no-input is set, so nothing can be asked. Pass a "
-            "default, or supply the value as a task parameter (a CLI flag)."
+            f"prompt(): {why}, so nothing can be asked. Pass a "
+            f"default, or supply the value as a task parameter (a CLI flag)."
         )
     answer = _prompt_core(message, default=default, secret=secret)
     return Secret(answer) if secret else answer
@@ -1130,12 +1132,12 @@ def prompt(
 
 def confirm(message: str, *, default: bool = False) -> bool:
     """Ask a yes/no question. `--yes` auto-answers yes; Enter alone takes
-    `default`; off a terminal or under `--no-input` the answer is `default`.
-    Guarded like `prompt()` — interactive tasks only."""
+    `default`; off a terminal or under `--no-input`/`--dry-run` the answer
+    is `default`. Guarded like `prompt()` — interactive tasks only."""
     ctx = _guard_interactive("confirm()")
     if ctx.assume_yes:
         return True
-    if ctx.no_input:
+    if ctx.no_input or ctx.dry_run:
         return default
     reply = _prompt_core(
         f"{message} {'[Y/n]' if default else '[y/N]'} ",
@@ -1192,12 +1194,16 @@ def select(
     `options` are strings, or `(label, value)` pairs to show one thing and
     return another. `multiple=True` returns the chosen subset as a list;
     otherwise one value is returned. Guarded like `prompt()` (interactive tasks
-    only), and off a terminal or under `--no-input` it returns `default`, or
-    raises if none was given.
+    only), and off a terminal or under `--no-input`/`--dry-run` it returns
+    `default`, or raises if none was given.
     """
     ctx = _guard_interactive("select()")
     return _select_core(
-        message, options, multiple=multiple, default=default, no_input=ctx.no_input
+        message,
+        options,
+        multiple=multiple,
+        default=default,
+        no_input=ctx.no_input or ctx.dry_run,
     )
 
 
@@ -1534,6 +1540,21 @@ def _next_label(labels: dict[str, int], label: str) -> str:
     n = labels.get(label, 0) + 1
     labels[label] = n
     return label if n == 1 else f"{label}#{n}"
+
+
+def _addr_leaf(title: str | None, label: str) -> str:
+    """A run() record's address leaf: a titled call is named whole; a raw
+    command names by its tool word plus its verb when it has one
+    (`git-push`, `uv-sync`) — descriptive enough to read and to keep
+    `git fetch`/`git push` distinct across runs, while flags stay out so
+    an option tweak never re-identifies the step."""
+    if title:
+        return title
+    tokens = label.split()
+    leaf = tokens[0] if tokens else "run"
+    if len(tokens) > 1 and not tokens[1].startswith("-"):
+        leaf = f"{leaf}-{tokens[1]}"
+    return leaf
 
 
 def _child_address(parent: Context, label: str) -> str:
@@ -2218,7 +2239,12 @@ def run(
         # is how the task learns something — and faking it would corrupt the
         # story that *is*: the real steps downstream would go on to record
         # whatever a blank answer produced (`git tag ` for a missing sha).
-        result = Result(0, command=label, raw=raw)
+        result = Result(
+            0,
+            command=label,
+            raw=raw,
+            address=_child_address(ctx, _addr_leaf(title, label)),
+        )
         ctx.steps.append(result)
         if not ctx.quiet:
             out.write(f"$ {shown if color else shown_plain}\n")
@@ -2361,19 +2387,8 @@ def run(
         # its exit code, so this is chosen here, not assigned afterwards.
         code = 124
     # The address label is the stable identity — a title names the record,
-    # the address names the node. A titled call is named whole; a raw
-    # command names by its tool word plus its verb when it has one
-    # (`git-push`, `uv-sync`) — descriptive enough to read and to keep
-    # `git fetch`/`git push` distinct across runs, while flags stay out so
-    # an option tweak never re-identifies the step.
-    if title:
-        addr_leaf = title
-    else:
-        tokens = label.split()
-        addr_leaf = tokens[0] if tokens else "run"
-        if len(tokens) > 1 and not tokens[1].startswith("-"):
-            addr_leaf = f"{addr_leaf}-{tokens[1]}"
-    addr = _child_address(ctx, addr_leaf)
+    # the address names the node (`_addr_leaf` for the naming rule).
+    addr = _child_address(ctx, _addr_leaf(title, label))
     # The audit: the verdict's provenance. The body entry is always present
     # and carries what the work itself produced; review entries follow.
     audit: tuple[AuditEntry, ...] = (_audit_entry("body", label, code),)

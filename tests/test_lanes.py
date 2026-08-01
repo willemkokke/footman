@@ -73,6 +73,35 @@ def test_the_cwd_lane_applies_the_directory_for_the_hold(tmp_path):
     assert os.path.realpath(str(row.body_returned)) == os.path.realpath(str(tmp_path))
 
 
+def test_a_string_in_lanes_is_taught_at_the_declaration():
+    # Handles, not strings: a typo'd handle is an undefined name, and a
+    # string dies here as a taught error, never a crash in the arbiter.
+    from footman import task
+
+    with pytest.raises(TypeError, match="Lane handles, not str"):
+
+        @task(lanes=("database",))  # type: ignore[arg-type]  # the taught path
+        def migrate(): ...
+
+
+def test_a_string_in_opts_lanes_is_taught():
+    from footman import task
+
+    @task
+    def migrate(): ...
+
+    with pytest.raises(TypeError, match="Lane handles, not str"):
+        migrate.opts(lanes=("database",))  # type: ignore[arg-type]
+
+
+def test_a_string_in_step_opts_lanes_is_taught():
+    @step
+    def convert(): ...
+
+    with pytest.raises(TypeError, match="Lane handles, not str"):
+        convert.opts(lanes=("database",))
+
+
 def test_console_on_a_step_is_taught():
     from footman._globals import console_lane
 
