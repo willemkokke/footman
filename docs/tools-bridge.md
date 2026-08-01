@@ -6,7 +6,7 @@ and keyword arguments translate into flags *mechanically*:
 
 ```python
 from footman import task
-from footman.tools import bun, docker, git, mkdocs, pytest, ruff, terraform, uv
+from footman.tools import bun, docker, git, mkdocs, pytest, ruff, ssh, terraform, uv
 
 @task
 def ship():
@@ -43,7 +43,21 @@ uv.run("pytest", "-q", frozen=True)   # → uv run --frozen pytest -q
 ```
 
 footman knows which verbs wrap (it reads each verb's usage line), so
-`--frozen` reaches uv while `pytest -q` passes through untouched. And a
+`--frozen` reaches uv while `pytest -q` passes through untouched. A tool
+can be a wrapper whole: everything after ssh's `destination` belongs to
+the remote shell, so its flags always lead and the remote command rides
+as a positional — the transport is the tool, the command is its payload:
+
+```python
+ssh("deploy@host", "mkdocs gh-deploy --force",
+    p=2222, o=("BatchMode=yes", "StrictHostKeyChecking=accept-new"))
+# → ssh -p 2222 -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+#       deploy@host 'mkdocs gh-deploy --force'
+```
+
+ssh's surface is all single-letter flags, and case distinguishes them the
+way the manual does: `p=` is the port and `P=` the tag, exactly as `-p`
+and `-P` are — neither is a typo of the other. And a
 tool's own **global** options — the ones that must precede the subcommand —
 go through `flags()`:
 

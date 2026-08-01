@@ -7,6 +7,31 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- **`tools.ssh` and `tools.ssh_keygen`.** OpenSSH joins the curated
+  tools, stubbed from its own manual pages — ssh has no `--help`, so
+  the pages are the surface. The whole surface is single-letter flags,
+  which the bridge already spells (`p=2222` → `-p 2222`; a tuple
+  repeats its flag: `o=("BatchMode=yes", …)` → `-o … -o …`). ssh is a
+  wrapper: everything after `destination` belongs to the remote
+  command, so the call's flags precede the positionals, and the remote
+  command itself rides as a positional — the transport is the tool,
+  the command is its payload. `ssh -V` (the whole version surface,
+  answered on stderr) backs `installed_version()`; ssh-keygen has no
+  version output of its own, so the ssh release answers for both.
+
+- **The man tier reads any published manual, not just git's.** Where a
+  `kind="man"` tool's pages live is now the driver's `Manual`
+  descriptor — index listing, archive name, page members — with git's
+  kernel.org fetch as the first instance and OpenSSH's portable
+  release tarballs as the second. Manuals with all-short options
+  (mdoc) extract fully: short-only flags key through the ordinary
+  `shorts` policy, a two-token head reads its bare metavar, and the
+  Go-style single-dash fallback no longer runs against manuals — it
+  fabricated options out of ssh-keygen's `-Y find-principals`-style
+  verb words.
+
 ### Changed
 
 - **Breaking: `--dry-run` is a rehearsal, not a parse echo.** The run
