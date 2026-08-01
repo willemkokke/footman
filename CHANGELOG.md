@@ -9,8 +9,19 @@ versions may include breaking changes.
 
 ### Added
 
-- **`tools.ssh`, `tools.ssh_keygen`, and `tools.ssh_keyscan`.** OpenSSH joins the curated
-  tools, stubbed from its own manual pages — ssh has no `--help`, so
+- **`run(input=…)` feeds a child's standard input.** The write side of
+  the process boundary: the string arrives whole and the pipe closes, so
+  a child that reads to EOF (`uv pip install -r -`) finishes rather than
+  waits; it is encoded the way the capture is decoded (`encoding=`).
+  Without `input=` the child inherits the process's stdin untouched. The
+  read side was always the `stdin`-marked parameter — between them a task
+  sits in the middle of a pipeline without a shell on either side. An
+  in-process tool has no standard input to feed, so `input=` on one is a
+  taught `TypeError`.
+
+- **`tools.ssh`, `tools.ssh_keygen`, and `tools.ssh_keyscan`.** OpenSSH
+  joins the curated tools, stubbed from its own manual pages — ssh has
+  no `--help`, so
   the pages are the surface. The whole surface is single-letter flags,
   which the bridge already spells (`p=2222` → `-p 2222`; a tuple
   repeats its flag: `o=("BatchMode=yes", …)` → `-o … -o …`). ssh is a

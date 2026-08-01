@@ -1741,6 +1741,7 @@ def _run_subprocess(
     cwd: Path | None,
     capture: bool,
     encoding: str | None = "utf-8",
+    input: str | None = None,
     killable: bool = True,
     isolate: bool = True,
     keep_going: bool = False,
@@ -1790,6 +1791,10 @@ def _run_subprocess(
             argv,
             env=env,
             cwd=cwd,
+            # A fed child reads a pipe; otherwise stdin is inherited
+            # untouched, so an uncaptured child keeps the terminal it
+            # always had.
+            stdin=subprocess.PIPE if input is not None else None,
             stdout=subprocess.PIPE if capture else None,
             stderr=subprocess.PIPE if capture else None,
             text=True,
@@ -1809,7 +1814,11 @@ def _run_subprocess(
     timed_out = False
     try:
         try:
-            out, err = proc.communicate(timeout=timeout)
+            # `input` is delivered whole and the pipe closed, so a child that
+            # reads to EOF (`uv pip install -r -`) never blocks waiting for
+            # more. The post-kill retries below stay bare: after a timeout
+            # the convention is to finish the reads without resending.
+            out, err = proc.communicate(input=input, timeout=timeout)
         except subprocess.TimeoutExpired:
             # The whole tree, not just the child: a hung tool's own workers
             # would otherwise outlive the call that bounded it. Same escalation
@@ -2172,6 +2181,7 @@ def run(
     nofail: bool = False,
     recorded: bool = True,
     capture: bool = True,
+    input: str | None = None,
     timeout: float | None = None,
     title: str | None = None,
     pre_record: Callable[[ResultView], None] | None = None,
@@ -2189,6 +2199,15 @@ def run(
     Subprocess output is decoded as UTF-8 by default; pass `encoding=` for a
     tool that speaks another code page, or `encoding=None` for the locale
     default. Ignored for callables (in-process, no bytes boundary).
+
+    `input=` feeds the child's standard input and closes it — the one lane a
+    payload can't take through argv (`uv pip install -r -` reads its
+    requirements there). A string, encoded the way the capture is decoded
+    (`encoding=`). The *read* side of the process boundary is a task
+    parameter marked `stdin`; this is the write side, so a task can sit in
+    the middle of a pipeline without a shell between it and either
+    neighbour. An in-process tool has no standard input to feed — `input=`
+    on one is a taught `TypeError`.
 
     `cwd=` roots this one call somewhere other than the task's directory;
     `rel=` appends a relative suffix to the base in force (`ctx.cwd`, or the
@@ -2252,6 +2271,14 @@ def run(
             "callable — @step on a def, step(fn, title='…') around one you "
             "didn't write, or `with step('…'):` over inline code — and it "
             "earns a real receipt."
+        )
+    if input is not None and callable(cmd):
+        # Reached only through the tools bridge's in-process lane: a
+        # subprocess has a stdin to feed, a Python call does not.
+        raise TypeError(
+            "run(input=…) feeds a subprocess's standard input, and an "
+            "in-process tool has none — spawn it (in_process=False) to "
+            "feed it, or pass the value as an argument"
         )
     out = sys.stdout
     color = _colored(ctx)
@@ -2406,6 +2433,7 @@ def run(
             cwd_path,
             capture,
             encoding,
+            input=input,
             timeout=timeout,
             killable=not ctx.atomic,
             # An interactive task owns the real terminal: keep its child in

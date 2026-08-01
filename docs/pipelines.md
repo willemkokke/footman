@@ -88,6 +88,27 @@ into a pipe. Prints and `run()` lines replay on stderr, where the summary
 already lives, so redirecting stdout captures exactly the document. The
 full rule set lives on [JSON output](json.md).
 
+## Feeding a child: `run(input=…)`
+
+The two sides above are the task at a pipeline's edge. In the middle of
+one, a task also *writes* a child's standard input — some payloads have no
+argv spelling at all (`uv pip install -r -` reads its requirements there):
+
+```python
+from footman import run, task
+
+@task
+def install(requirement: str) -> None:
+    run("uv pip install -r -", input=requirement)
+```
+
+The string arrives whole and the pipe closes, so a child that reads to EOF
+finishes rather than waits; it is encoded the way the capture is decoded
+(`encoding=`). Without `input=` the child inherits the stdin the process
+had — footman never opens an instantly-empty pipe on its behalf. An
+in-process tool has no standard input to feed, so `input=` on one is a
+taught `TypeError`.
+
 ## The exit code is the contract
 
 A caller reads the whole boundary from two observables:
