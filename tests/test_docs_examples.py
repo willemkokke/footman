@@ -225,9 +225,11 @@ def test_playground_module_evaluates(tmp_path: Path):
     the whole module at load: no run links on any page, a dead playground.
     Evaluate the module the way a browser import does, minimal DOM stubbed.
     """
-    node = shutil.which("node")
-    if node is None:  # pragma: no cover - present on every CI runner
-        pytest.skip("node not on PATH")
+    # bun is the repo's JS runtime; node is the fallback because GitHub
+    # runners preinstall it (and not bun), so the guard still runs in CI.
+    runtime = shutil.which("bun") or shutil.which("node")
+    if runtime is None:  # pragma: no cover - node is present on every CI runner
+        pytest.skip("no JS runtime (bun or node) on PATH")
     probe = tmp_path / "probe.mjs"
     probe.write_text(
         'import { pathToFileURL } from "node:url";\n'
@@ -242,7 +244,7 @@ def test_playground_module_evaluates(tmp_path: Path):
         encoding="utf-8",
     )
     out = subprocess.run(
-        [node, str(probe), str(DOCS / "assets" / "playground.js")],
+        [runtime, str(probe), str(DOCS / "assets" / "playground.js")],
         capture_output=True,
         text=True,
         timeout=60,
