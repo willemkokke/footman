@@ -30,6 +30,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import (
+    TYPE_CHECKING,
     Any,
     ClassVar,
     Literal,
@@ -42,6 +43,9 @@ from typing import (
 )
 
 from footman import _globals
+
+if TYPE_CHECKING:
+    from footman import _step
 
 
 class AuditEntry(NamedTuple):
@@ -299,6 +303,14 @@ class ResultView:
         record seals."""
         self._returned = value
         self._touched.add("returned")
+
+    def _fill(self, stdout: str, stderr: str, duration: float) -> None:
+        """Machinery-side: fill the captured streams and timing once the
+        work concluded — a generator item held its draft *during* the work,
+        before these were knowable. Never a review write."""
+        self._stdout = stdout
+        self._stderr = stderr
+        self._duration = duration
 
 
 @dataclass
@@ -1427,6 +1439,25 @@ def _run_callable(
         return code, out_buf.getvalue(), err_buf.getvalue()
 
 
+@contextlib.contextmanager
+def _captured_streams(out_buf: io.StringIO, err_buf: io.StringIO) -> Iterator[None]:
+    """Capture this thread's stdout/stderr into the two buffers — the same
+    dual strategy `_run_callable` uses: a thread-confined sink swap under
+    the router (parallel-safe), the classic global redirect outside a
+    routed run. The step pump drives generator items through this."""
+    ctx = current()
+    if _router is not None:
+        saved_out, saved_err = ctx.sink, ctx.err_sink
+        ctx.sink, ctx.err_sink = out_buf, err_buf
+        try:
+            yield
+        finally:
+            ctx.sink, ctx.err_sink = saved_out, saved_err
+        return
+    with contextlib.redirect_stdout(out_buf), contextlib.redirect_stderr(err_buf):
+        yield
+
+
 # Live subprocesses footman has spawned, so fail-fast can terminate the ones
 # still running when a sibling fails. A run in-process (a `tools` entry point,
 # a callable) registers nothing — there is no child to kill, and it finishes.
@@ -2434,11 +2465,15 @@ def _queue_call(task: Any, args: tuple[Any, ...], kwargs: dict[str, Any]) -> Any
 @overload
 def parallel(*, keep_going: bool = False) -> Fanout: ...
 @overload
-def parallel(*calls: Callable[[], object], keep_going: bool = False) -> list[int]: ...
+def parallel(
+    *calls: Callable[[], object] | _step.WorkItem[Any] | _step.StepFn[..., Any],
+    keep_going: bool = False,
+) -> list[int]: ...
 
 
 def parallel(
-    *calls: Callable[[], object], keep_going: bool = False
+    *calls: Callable[[], object] | _step.WorkItem[Any] | _step.StepFn[..., Any],
+    keep_going: bool = False,
 ) -> Fanout | list[int]:
     """Run task calls / thunks concurrently; wait; fail if any fail.
 
@@ -2462,6 +2497,12 @@ def parallel(
     where it stands.
     """
     from concurrent.futures import ThreadPoolExecutor
+
+    from footman import _step
+
+    # A zero-argument maker is welcome bare: build its item here, so
+    # `parallel(covered)` and `parallel(covered())` mean the same thing.
+    calls = tuple(c() if isinstance(c, _step.StepFn) else c for c in calls)
 
     if not calls:
         # Nothing to run: the block form, which is also an empty list of exit

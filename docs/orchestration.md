@@ -384,6 +384,63 @@ Reach for declared deps when you want the plan to *see* the work, and
     returns exit *codes*, not values, and the declared graph carries no data
     between tasks: `pre`/`post` are ordering, not a pipe.
 
+## Steps you make yourself
+
+`run()` makes a step out of a command. `step()` makes one out of *your own
+code* — one name, three positions:
+
+<!-- example: fragment -->
+```python
+from footman import step
+
+@step                         # 1. a function that IS a step
+def clean():
+    shutil.rmtree("build", ignore_errors=True)
+
+with step("prepare") as s:    # 2. record a block, where it stands
+    write_fixtures()
+    s.title = "prepared 3 fixtures"
+
+archive = step(make_archive, title="archive")   # 3. wrap someone else's
+```
+
+One honesty note, learned from Python itself: **calling a lifted function
+builds its step, it doesn't run it** — `clean()` hands you a bound piece
+of work ready to schedule, the same way `range(10)` hands you a range
+without counting anything. Hand it to `parallel(clean(), archive("dist"))`
+(a zero-argument maker is welcome bare: `parallel(clean, …)`), or call the
+built item to run it right here. Either way it earns a full record — a
+receipt with a real duration, captured output, a place in `--json` — and
+the maker carries the step's policy: `.opts(timeout=…, capture=…,
+recorded=…, title=…, pre_record=…)` per use, `@clean.pre_record` for its
+reviewer and `@clean.post_step` to watch its sealed record, permanently.
+
+A step can also be a generator, which buys two things with one keyword:
+
+<!-- example: fragment -->
+```python
+@step
+def convert(images: list[Path]):
+    view = yield                     # the step's own record, mid-work
+    for done, image in enumerate(images, start=1):
+        view.title = f"converting {done}/{len(images)}"
+        to_webp(image)
+        yield                        # a checkpoint, once per image
+```
+
+Every bare `yield` is a **checkpoint**: the only kind of place footman
+will ever cancel the step, and only for three reasons — the run is failing
+fast, Ctrl-C, or the step ran past its own `timeout=`. All three arrive
+the same way: the loop simply never resumes, any `try`/`finally` around
+the yield runs, and the worst case costs one trip around the loop. The
+value a step returns is **data, never an exit code** — a step fails by
+raising (or by what its reviewer rules), and a failing item raises
+`RunFailed` exactly as a failing command does. The `with step():` block is
+the one form that creates no execution boundary: its statements run
+exactly as they would bare — dry-run included — and only the record is
+new. Deferred makers, by contrast, are footman's to execute, so `--dry-run`
+fakes them like any subprocess.
+
 ## Runnable groups
 
 A group is a namespace: `fm lint.markdown` runs a task under `lint`, but bare

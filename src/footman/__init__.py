@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     from footman import tools as tools
     from footman._fetch import FetchError as FetchError
     from footman._fetch import fetch as fetch
+    from footman._step import step as step
     from footman.app import App as App
     from footman.app import Brand as Brand
     from footman.compose import include as include
@@ -162,6 +163,7 @@ __all__ = [
     "select",
     "stdin",
     "stdout",
+    "step",
     "suggest",
     "task",
     "tools",
@@ -232,6 +234,10 @@ def __getattr__(name: str) -> object:
         from footman import registry
 
         return getattr(registry, name)
+    if name == "step":
+        from footman import _step
+
+        return _step.step
     if name in ("Runner", "recording"):
         from footman import testing
 

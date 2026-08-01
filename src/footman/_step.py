@@ -1,0 +1,373 @@
+"""Steps you make yourself: the lifter, the built item, and the pump.
+
+`step()` is one name in three grammatical positions. Decorating a local
+function (plain or generator) makes a **maker**: calling the maker BUILDS
+a bound, deferrable piece of work — the `range(10)` precedent, owned — it
+runs nothing. `with step("title"):` records a block of your own code
+where it stands. `step(fn, title=…)` is the expression form of the
+decorator, for functions you didn't write.
+
+A built item is callable — calling it executes it here, under the current
+task's management — which is exactly what `parallel()` does with one. The
+pump drives generator items: every bare `yield` is a checkpoint, the one
+kind of place a running item can be cancelled (fail-fast, Ctrl-C, or its
+own `timeout=` — all three arrive as "the loop never resumes"), and every
+yield evaluates to the item's own draft, so a title decided mid-work is a
+plain attribute write.
+"""
+
+from __future__ import annotations
+
+import inspect
+import io
+import time
+import traceback
+from collections.abc import Callable, Generator
+from typing import Any, Generic, Literal, ParamSpec, TypeVar, cast, overload
+
+from footman import context as _context
+from footman.context import AuditEntry, Result, ResultView, RunFailed, RunTimeout
+
+P = ParamSpec("P")
+R = TypeVar("R")
+R_co = TypeVar("R_co", covariant=True)
+
+# The closed policy vocabulary a step maker's `.opts()` accepts — execution
+# policy only: a step is anonymous, so boundary policy (confirm, gates,
+# sharing) has no request boundary to resolve at and is not spellable here.
+_STEP_OPTS = ("title", "capture", "recorded", "timeout", "pre_record")
+
+
+class WorkItem(Generic[R_co]):
+    """A bound, deferrable piece of work with a record to come.
+
+    Building one runs nothing. Calling it executes it under the current
+    task — captured, timed, recorded, reviewable — and returns the body's
+    value; a non-zero verdict raises `RunFailed`, exactly as `run()` does,
+    so a failing item fails whatever asked for it.
+    """
+
+    __slots__ = ("_args", "_kwargs", "_maker")
+
+    def __init__(
+        self, maker: StepFn[..., R_co], args: tuple[Any, ...], kwargs: dict[str, Any]
+    ) -> None:
+        self._maker = maker
+        self._args = args
+        self._kwargs = kwargs
+
+    @property
+    def __name__(self) -> str:  # the label status lines and reports use
+        return self._maker.__name__
+
+    def __call__(self) -> R_co:
+        return cast(R_co, _pump(self))
+
+    def __repr__(self) -> str:
+        return f"<step {self.__name__} (built, not run)>"
+
+
+class StepFn(Generic[P, R_co]):
+    """What the lifter returns: calling it builds the bound item.
+
+    The maker carries the step's identity and policy: `.opts()` refines
+    execution policy per use; `.pre_record` attaches its reviewer and
+    `.post_step` its observer — permanently, wherever the maker travels.
+    """
+
+    __slots__ = ("_fn", "_is_gen", "_observers", "_opts", "_reviewers")
+
+    def __init__(
+        self,
+        fn: Callable[..., Any],
+        opts: dict[str, Any] | None = None,
+        reviewers: list[Callable[[ResultView], None]] | None = None,
+        observers: list[Callable[[Result], None]] | None = None,
+    ) -> None:
+        self._fn = fn
+        self._is_gen = inspect.isgeneratorfunction(fn)
+        self._opts: dict[str, Any] = opts or {}
+        # Shared by reference across `.opts()` copies: attachment is
+        # permanent — it changes what the step does for every user of the
+        # maker, exactly like a task's handle attachments.
+        self._reviewers = reviewers if reviewers is not None else []
+        self._observers = observers if observers is not None else []
+
+    @property
+    def __name__(self) -> str:
+        title = self._opts.get("title")
+        if isinstance(title, str) and title:
+            return title
+        return getattr(self._fn, "__name__", "step")
+
+    def __call__(self, *args: P.args, **kwargs: P.kwargs) -> WorkItem[R_co]:
+        return WorkItem(self, args, kwargs)
+
+    def opts(self, **overrides: Any) -> StepFn[P, R_co]:
+        """Per-use execution policy; the maker stays callable as itself."""
+        unknown = sorted(set(overrides) - set(_STEP_OPTS))
+        if unknown:
+            valid = ", ".join(_STEP_OPTS)
+            raise TypeError(
+                f"step .opts() got unknown option(s) {unknown}; valid options "
+                f"are {valid}. A step is anonymous, so boundary policy "
+                f"(confirm, sharing, gates) needs a declared task to live on."
+            )
+        return StepFn(
+            self._fn,
+            {**self._opts, **overrides},
+            self._reviewers,
+            self._observers,
+        )
+
+    def pre_record(
+        self, hook: Callable[[ResultView], None], /
+    ) -> Callable[[ResultView], None]:
+        """Attach this step's reviewer — the draft, before the record seals."""
+        self._reviewers.append(hook)
+        return hook
+
+    def post_step(self, hook: Callable[[Result], None], /) -> Callable[[Result], None]:
+        """Watch this step's sealed record — read-only; veto via `fail()`."""
+        self._observers.append(hook)
+        return hook
+
+
+class _StepBlock:
+    """`with step("title") as s:` — record a block of your own code.
+
+    The record-only lift: no execution boundary is created (the block's
+    statements run exactly as they would bare, dry-run included), so what
+    the record keeps is the title, the verdict, and the honest duration.
+    The handle is the block's own draft — self-review is writing to it.
+    """
+
+    __slots__ = ("_start", "_view")
+
+    def __init__(self, title: str) -> None:
+        self._view = ResultView(
+            title=title,
+            code=0,
+            stdout="",
+            stderr="",
+            duration=0.0,
+            raw="",
+            command=title,
+        )
+        self._start = 0.0
+
+    def __enter__(self) -> ResultView:
+        self._start = time.perf_counter()
+        return self._view
+
+    def __exit__(self, exc_type: Any, exc: Any, tb: Any) -> Literal[False]:
+        duration = time.perf_counter() - self._start
+        view = self._view
+        code = view.code
+        if exc_type is not None and "code" not in view._touched:
+            code = 1  # the block failed; a self-review that already ruled wins
+        ctx = _context.current()
+        result = Result(
+            code,
+            command=view.title,
+            duration=duration,
+            audit=(AuditEntry("body", view.title, code),),
+        )
+        ctx.steps.append(result)
+        return False  # an exception propagates; the record sealed first
+
+
+@overload
+def step(
+    target: Callable[P, Generator[None, ResultView, R]],
+    /,
+    *,
+    title: str | None = None,
+) -> StepFn[P, R]: ...
+@overload
+def step(target: Callable[P, R], /, *, title: str | None = None) -> StepFn[P, R]: ...
+@overload
+def step(target: str, /) -> _StepBlock: ...
+def step(target: Any = None, /, *, title: str | None = None) -> Any:
+    """One name, three positions: `@step` on a def, `with step("title"):`
+    over a block, `step(fn, title=…)` around a function you didn't write.
+
+    Decorator and expression positions are the same expression, so both
+    return the maker — calling it builds the item; nothing runs until
+    something executes it (`parallel()`, or calling the built item).
+    """
+    if isinstance(target, str):
+        if title is not None:
+            raise TypeError(
+                "step('title') is the block form — pass the title once, "
+                "positionally; title= belongs to the decorator/expression "
+                "forms (step(fn, title=…))"
+            )
+        return _StepBlock(target)
+    if target is None:
+        raise TypeError(
+            "step() needs its subject: a function to lift (@step / "
+            "step(fn, title=…)) or a title string for the block form "
+            "(with step('…'):)"
+        )
+    if not callable(target):
+        raise TypeError(
+            f"step() lifts a callable or opens a titled block; got "
+            f"{type(target).__name__}"
+        )
+    opts: dict[str, Any] = {}
+    if title is not None:
+        opts["title"] = title
+    return StepFn(target, opts)
+
+
+def _pump(item: WorkItem[Any]) -> Any:
+    """Execute a built item under the current task: capture, drive, review,
+    seal, observe — one record, committed once."""
+    maker = item._maker
+    ctx = _context.current()
+    label = maker.__name__
+    o = maker._opts
+    capture: bool = o.get("capture", True)
+    recorded: bool = o.get("recorded", True)
+    timeout: float | None = o.get("timeout")
+
+    if ctx.dry_run and recorded:
+        # Dry-run fakes what footman owns and records: a deferred maker is
+        # exactly that. Declared, not executed — an empty audit says so.
+        result = Result(0, command=label)
+        ctx.steps.append(result)
+        return None
+
+    view = ResultView(
+        title=label, code=0, stdout="", stderr="", duration=0.0, raw="", command=label
+    )
+    start = time.perf_counter()
+    deadline = start + timeout if timeout is not None else None
+    value: Any = None
+    error: BaseException | None = None
+    timed_out = False
+    out_buf, err_buf = io.StringIO(), io.StringIO()
+
+    def drive() -> Any:
+        nonlocal timed_out
+        if not maker._is_gen:
+            return maker._fn(*item._args, **item._kwargs)
+        gen: Generator[Any, Any, Any] = maker._fn(*item._args, **item._kwargs)
+        payload: Any = None
+        while True:
+            try:
+                gen.send(payload)
+            except StopIteration as stop:
+                return stop.value
+            payload = view  # every yield evaluates to the item's own draft
+            # The checkpoint: the only place a running item is cancelled —
+            # fail-fast/Ctrl-C aborts, or the item's own timeout. All three
+            # arrive the same way: the loop never resumes, the generator's
+            # own try/finally runs, nothing is left half-held.
+            if deadline is not None and time.perf_counter() > deadline:
+                timed_out = True
+                gen.close()
+                return None
+            if _context._aborting.is_set() and not ctx.keep_going:
+                gen.close()
+                return None
+
+    try:
+        if capture:
+            with _context._captured_streams(out_buf, err_buf):
+                value = drive()
+        else:
+            value = drive()
+    except Exception as exc:  # the body failed; the record still seals
+        error = exc
+        err_buf.write(traceback.format_exc())
+
+    duration = time.perf_counter() - start
+    code = 124 if timed_out else (1 if error is not None else 0)
+    view._fill(out_buf.getvalue(), err_buf.getvalue(), duration)
+    view.code = code
+    view._touched.discard("code")  # machinery write, not a review verdict
+
+    audit: tuple[AuditEntry, ...] = (AuditEntry("body", label, code),)
+    reviewers = list(maker._reviewers)
+    if o.get("pre_record") is not None:
+        reviewers.append(o["pre_record"])  # the use site keeps the final word
+    if recorded:
+        for reviewer in reviewers:
+            name = getattr(reviewer, "__name__", repr(reviewer))
+            try:
+                reviewer(view)
+            except Exception as exc:
+                ctx.steps.append(
+                    Result(
+                        code,
+                        command=label,
+                        stdout=out_buf.getvalue(),
+                        stderr=err_buf.getvalue(),
+                        duration=duration,
+                        timed_out=timed_out,
+                        audit=(*audit, AuditEntry("review", name, None)),
+                    )
+                )
+                raise RuntimeError(
+                    f"pre_record hook {name!r} failed reviewing {label!r}: "
+                    f"{type(exc).__name__}: {exc}"
+                ) from exc
+            audit = (
+                *audit,
+                AuditEntry(
+                    "review", name, view.code if "code" in view._touched else None
+                ),
+            )
+
+    result = Result(
+        view.code,
+        command=view.title,
+        stdout=out_buf.getvalue(),
+        stderr=err_buf.getvalue(),
+        duration=duration,
+        timed_out=timed_out,
+        audit=audit,
+    )
+    if recorded:
+        ctx.steps.append(result)
+        for observer in maker._observers:
+            name = getattr(observer, "__name__", repr(observer))
+            try:
+                observer(result)
+            except _context.Failed as exc:
+                amended = Result(
+                    exc.code,
+                    command=result.command,
+                    stdout=result.stdout,
+                    stderr=result.stderr,
+                    duration=result.duration,
+                    timed_out=result.timed_out,
+                    audit=(*result.audit, AuditEntry("observe", name, exc.code)),
+                )
+                ctx.steps[-1] = amended
+                raise
+            except Exception as exc:
+                amended = Result(
+                    result.code if result.code != 0 else 1,
+                    command=result.command,
+                    stdout=result.stdout,
+                    stderr=result.stderr,
+                    duration=result.duration,
+                    timed_out=result.timed_out,
+                    audit=(*result.audit, AuditEntry("observe", name, None)),
+                )
+                ctx.steps[-1] = amended
+                raise RuntimeError(
+                    f"post_step hook {name!r} failed observing {label!r}: "
+                    f"{type(exc).__name__}: {exc}"
+                ) from exc
+
+    if result.code != 0:
+        if timed_out:
+            raise RunTimeout(result, timeout or 0.0)
+        if error is not None:
+            raise error
+        raise RunFailed(result)
+    return value
