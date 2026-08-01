@@ -7,6 +7,8 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+## [0.29.0] — 2026-08-01
+
 ### Added
 
 - **`run(input=…)` feeds a child's standard input.** The write side of
@@ -3506,7 +3508,8 @@ versions may include breaking changes.
 
 - Placeholder release claiming the `footman` name on PyPI. Not tagged in git.
 
-[Unreleased]: https://github.com/willemkokke/footman/compare/v0.28.1...HEAD
+[Unreleased]: https://github.com/willemkokke/footman/compare/v0.29.0...HEAD
+[0.29.0]: https://github.com/willemkokke/footman/compare/v0.28.1...v0.29.0
 [0.28.1]: https://github.com/willemkokke/footman/compare/v0.28.0...v0.28.1
 [0.28.0]: https://github.com/willemkokke/footman/compare/v0.27.1...v0.28.0
 [0.27.1]: https://github.com/willemkokke/footman/compare/v0.27.0...v0.27.1
