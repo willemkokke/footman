@@ -23,6 +23,10 @@ if TYPE_CHECKING:
     from footman import tools as tools
     from footman._fetch import FetchError as FetchError
     from footman._fetch import fetch as fetch
+    from footman._globals import Lane as Lane
+    from footman._globals import console_lane as console_lane
+    from footman._globals import cwd_lane as cwd_lane
+    from footman._globals import make_lane as lane
     from footman._step import step as step
     from footman.app import App as App
     from footman.app import Brand as Brand
@@ -109,6 +113,7 @@ __all__ = [
     "Invocation",
     "IsDir",
     "IsFile",
+    "Lane",
     "Many",
     "NoSplit",
     "Result",
@@ -127,7 +132,9 @@ __all__ = [
     "chdir",
     "check",
     "confirm",
+    "console_lane",
     "cwd",
+    "cwd_lane",
     "doc",
     "docstrings",
     "env",
@@ -140,6 +147,7 @@ __all__ = [
     "inherited",
     "isdir",
     "isfile",
+    "lane",
     "main",
     "markdown",
     "nosplit",
@@ -238,6 +246,10 @@ def __getattr__(name: str) -> object:
         from footman import _step
 
         return _step.step
+    if name in ("Lane", "cwd_lane", "console_lane", "lane"):
+        from footman import _globals
+
+        return _globals.make_lane if name == "lane" else getattr(_globals, name)
     if name in ("Runner", "recording"):
         from footman import testing
 

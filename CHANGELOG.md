@@ -83,6 +83,20 @@ versions may include breaking changes.
 
 ### Added
 
+- **Lanes: one resource, one holder.** `footman.lane("database")` makes a
+  named resource to serialise on — a *binding*, shared by importing it
+  (a typo is an undefined name; re-declaring a taken name is an error
+  naming both sites). Claim it with `@task(lanes=(db,))` or a step
+  maker's `.opts(lanes=…)`: one holder at a time, contending only with
+  claimants of the same lane, granted atomically at the work's boundary
+  (mid-body escalation cannot be spelled), everything unrelated running
+  untouched. footman ships exactly two, built with the same call:
+  `cwd_lane` (sole occupancy of the real working directory, applied with
+  a real chdir for the hold) and `console_lane` (the one terminal —
+  `interactive=True`'s claim, now nameable). `serial=` remains the
+  all-lanes claim, and the two regimes wait on each other symmetrically;
+  lane waits print the same named notes.
+
 - **Every record carries its address.** A tree-derived name — the path of
   requests that led to it, with an ordinal once a label repeats among
   siblings (`check/typecheck`, `build/git`, `build/git#2`) — assigned in
