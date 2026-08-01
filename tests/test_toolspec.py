@@ -1672,6 +1672,137 @@ def test_multi_form_synopsis_stays_any():
     assert verb.positional == "any"  # two forms → no single shape
 
 
+# --- OpenSSH via its manual (mdoc, all-short options) ------------------------
+
+SSH_MAN = """\
+SSH(1)                      General Commands Manual                     SSH(1)
+
+NAME
+     ssh - OpenSSH remote login client
+
+SYNOPSIS
+     ssh [-46AaCqTv] [-B bind_interface] [-o option] [-p port]
+         [-W host:port] [-L address] destination [command [argument ...]]
+     ssh [-Q query_option]
+
+DESCRIPTION
+     ssh (SSH client) is a program for logging into a remote machine.
+
+     The options are as follows:
+
+     -4      Forces ssh to use IPv4 addresses only.
+
+     -A      Enables forwarding of connections from an authentication agent.
+
+     -B bind_interface
+             Bind to the address of bind_interface before attempting to
+             connect to the destination host.
+
+     -L [bind_address:]port:host:hostport
+     -L [bind_address:]port:remote_socket
+     -L local_socket:host:hostport
+             Specifies that connections to the given TCP port or Unix socket
+             on the local (client) host are to be forwarded.
+
+     -o option
+             Can be used to give options in the format used in the
+             configuration file.
+
+     -P tag  Specify a tag name that may be used to select configuration in
+             ssh_config(5).  Refer to the Tag and Match keywords in
+             ssh_config(5) for more information.
+     -p port
+             Port to connect to on the remote host.
+
+     -W host:port
+             Requests that standard input and output on the client be
+             forwarded to host on port over the secure channel.  Implies -N,
+             -T, ExitOnForwardFailure and ClearAllForwardings, though these
+             can be overridden in the configuration file.
+"""
+
+KEYGEN_MAN = """\
+SSH-KEYGEN(1)               General Commands Manual              SSH-KEYGEN(1)
+
+NAME
+     ssh-keygen - OpenSSH authentication key utility
+
+SYNOPSIS
+     ssh-keygen [-q] [-b bits] [-C comment]
+     ssh-keygen -Y find-principals -s signature_file -f allowed_signers_file
+
+DESCRIPTION
+     ssh-keygen generates, manages and converts authentication keys.
+
+     -b bits
+             Specifies the number of bits in the key to create.
+
+     -Y find-principals
+             Find the principal(s) associated with the public key of a
+             signature.
+"""
+
+
+def test_manual_short_only_options_are_keyed():
+    # ssh's whole surface is short-only; the `shorts` policy alone decides,
+    # and the default "only" describes exactly this shape.
+    got = flags(_toolhelp.parse_help(SSH_MAN, name="ssh", man=True))
+    assert {"A", "B", "L", "o", "P", "p", "W"} <= set(got)
+    assert "4" not in got  # a digit can't be a keyword; stays unspellable
+
+
+def test_manual_bare_metavar_read_from_a_two_token_head():
+    # mdoc typesets `-B bind_interface`: two plain tokens once rendered. The
+    # bare word is the value's name — but only in that exact head shape, so
+    # a prose sentence misread as a head still can't eat its next word.
+    got = flags(_toolhelp.parse_help(SSH_MAN, name="ssh", man=True))
+    assert got["B"].type_name == "str"
+    assert got["A"].type_name == "bool"
+    assert got["o"].type_name == "list[str]"  # "Can be used to give options…"
+
+
+def test_manual_head_flush_against_the_previous_block_still_opens():
+    # mandoc renders `-p port` with no blank line after `-P tag`'s paragraph
+    # (uniquely on the page). A head in the open block's own flag column is
+    # a head even without the paragraph break.
+    got = flags(_toolhelp.parse_help(SSH_MAN, name="ssh", man=True))
+    assert got["p"].help == "Port to connect to on the remote host"
+    assert got["P"].help.startswith("Specify a tag name")
+
+
+def test_manual_multi_form_head_keeps_the_shared_description():
+    # `-L` states three complete forms on consecutive head lines; only the
+    # last carries the description. The first form stays the option, the
+    # twins donate the help it lacks.
+    got = flags(_toolhelp.parse_help(SSH_MAN, name="ssh", man=True))
+    assert got["L"].help.startswith("Specifies that connections")
+
+
+def test_manual_comma_wrap_in_prose_does_not_smuggle_spellings():
+    # `-W`'s description wraps as "Implies -N,\n-T, …": the comma-join rule
+    # is for a *head's* wrapped spelling list, at the head's own indent — a
+    # description line ending in a comma must not add `-T` to `-W`.
+    got = flags(_toolhelp.parse_help(SSH_MAN, name="ssh", man=True))
+    assert got["W"].flags == ("-W",)
+    assert "T" not in got  # SSH_MAN never defines -T as a block of its own
+
+
+def test_manual_word_arguments_fabricate_nothing():
+    # `-Y find-principals`: the mid-word dash is a hyphen, not a spelling,
+    # and a manual never spells Go-style single-dash longs — without both
+    # guards this page yielded `-principals` as an option.
+    verb = _toolhelp.parse_help(KEYGEN_MAN, name="ssh_keygen", man=True)
+    got = flags(verb)
+    assert set(got) == {"b", "Y"}
+    assert got["Y"].type_name == "str"  # the verb-word is its value
+    assert got["b"].type_name == "str"
+
+
+def test_manual_multi_form_synopsis_reads_any():
+    verb = _toolhelp.parse_help(SSH_MAN, name="ssh", man=True)
+    assert verb.positional == "any"  # two SYNOPSIS forms → no single shape
+
+
 def test_first_sentence_skips_abbreviations():
     assert _toolhelp._first_sentence("Use e.g. a value. Then stop.") == (
         "Use e.g. a value"

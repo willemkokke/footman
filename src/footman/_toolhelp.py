@@ -90,6 +90,11 @@ _GO_TYPES = (
 )
 # The flag and any attached optional-value placeholder, shared by both forms.
 _FLAG = (
+    # A flag starts a word: a dash reached mid-word is a hyphen, not a
+    # spelling. Without the boundary, `-Y find-principals` (ssh-keygen's
+    # verb-word arguments) yields a phantom `-principals` that the Go-style
+    # fallback would happily promote to a keyword.
+    r"(?<![A-Za-z0-9-])"
     # A dot is allowed only *inside* the name (`--foo.bar`), never trailing:
     # clap prints a repeatable flag as `--verbose...`, and a greedy `.` would
     # swallow the ellipsis into the name (`verbose...` → keyword `verbose___`).
@@ -199,15 +204,34 @@ def _blocks(lines: Sequence[str], *, man: bool = False) -> list[tuple[str, str]]
             # in two — git-log's four parent filters share a description and
             # a line, and at 80 columns the line ends `--no-min-parents,`
             # with `--no-max-parents` below it.
-            if pending is not None and previous.rstrip().endswith(","):
+            if (
+                pending is not None
+                and previous.rstrip().endswith(",")
+                and head_indent == indent
+            ):
                 # Join it to the head it belongs to, rather than dropping it:
                 # the remainder carries spellings, and the description that
-                # follows is the whole block's.
+                # follows is the whole block's. Only from the head's own
+                # column — a *description* line that happens to end with a
+                # comma before a wrapped flag mention ("Implies -N, -T, …")
+                # sits at the help indent, and joining it would smuggle the
+                # mentioned flags into the head as extra spellings.
                 previous = line
                 pending = (f"{pending[0]} {match['body']}", pending[1])
                 head_indent = indent
                 continue
-            starts = not previous.strip() or head_indent == indent
+            starts = (
+                not previous.strip()
+                or head_indent == indent
+                # A head in the open block's own flag column is a head even
+                # without a blank line before it: mandoc renders ssh's
+                # `-p port` flush against `-P tag`'s paragraph, uniquely on
+                # the page, and the paragraph rule alone would close the
+                # block and drop `-p` on the floor. Prose can't be confused
+                # for this — a wrapped sentence lands at the help indent,
+                # not the flag column.
+                or (pending is not None and indent == flag_indent)
+            )
             head_indent = indent if starts else None
             if not starts:
                 match = None
@@ -351,17 +375,30 @@ def _option(
     long — `_short_alias` adds the extra keyword for that mode.
     """
     flags, meta, optional = _spellings(head, strict=strict, bare_meta=bare_meta)
+    if strict and not meta and not optional and not head.startswith("--"):
+        # The manual's flag column names a value with a bare word — mdoc
+        # typesets `-B bind_interface`, and rendered it is two plain tokens.
+        # Trusted only in that exact shape: one spelling, one following word
+        # that is not itself a flag. A prose paragraph misread as a head is a
+        # sentence and never that short, so the rule that keeps `--patch`
+        # from eating the next word keeps holding everywhere else.
+        parts = head.split()
+        if len(parts) == 2 and flags and not parts[1].startswith("-"):
+            meta = parts[1]
     longs = [f for f in flags if f.startswith("--")]
-    if not longs:
+    if not longs and not strict:
         # Go's stdlib `flag` spells even long options with one dash (`-color`,
         # `-no_gitignore`); read a multi-char single-dash flag as the keyword
-        # when there's no `--` form.
+        # when there's no `--` form. `--help` text only: a manual never
+        # spells Go-style longs, and promoting a manual's stray dash-words
+        # fabricates options that were never there.
         longs = [f for f in flags if len(f) > 2 and not f.startswith("--")]
-    if not longs and shorts != "none" and not strict:
-        # A short-only option (python's `-m`, `-c`, `-O`): the single char is
-        # the keyword — the bridge turns `m="build"` into `-m build`. Help text
-        # only (a man page's prose is too noisy to trust), and only a letter
-        # that forms a valid keyword (`-0` can't).
+    if not longs and shorts != "none":
+        # A short-only option (python's `-m`, ssh's whole surface): the
+        # single char is the keyword — the bridge turns `m="build"` into
+        # `-m build`. The `shorts` policy alone decides, from `--help` and
+        # manual alike; only a letter that forms a valid keyword (`-0`
+        # can't, ssh's `-4`/`-6` can't).
         longs = [f for f in flags if len(f) == 2 and f[1:].isidentifier()][:1]
     if not longs:
         return None  # nothing spellable
@@ -502,7 +539,7 @@ def parse_help(
     # wrong at worst — see `_spellings`.
     stated = set() if man else _grammar_values(_usage_line(text))
     options: list[Option] = []
-    seen: set[str] = set()
+    seen: dict[str, int] = {}
     for title, lines in sections.items():
         if _NOT_OPTIONS.search(title):
             continue  # `Commands:`, `Examples:` — dashes there aren't flags
@@ -522,13 +559,19 @@ def parse_help(
                 shorts=shorts,
                 bare_meta=not (first and first["flag"] in stated),
             )
-            if (
-                option is not None
-                and option.name not in _NOISE
-                and option.name not in seen
-            ):
-                seen.add(option.name)
-                options.append(option)
+            if option is None or option.name in _NOISE:
+                continue
+            if (kept := seen.get(option.name)) is not None:
+                # A manual may state one option as several complete forms on
+                # consecutive head lines (ssh's `-L` gives four), and only
+                # the last carries the description. The first form stays the
+                # option; a later twin only donates the help the kept one
+                # lacks.
+                if not options[kept].help and option.help:
+                    options[kept] = replace(options[kept], help=option.help)
+                continue
+            seen[option.name] = len(options)
+            options.append(option)
     if not options:
         # Go's `flag` prints its options under `Usage of <prog>:` — a section
         # `_NOT_OPTIONS` skips. Nothing parsed anywhere else, so scan every
@@ -538,7 +581,7 @@ def parse_help(
             for head, help_text in _blocks(lines, man=man):
                 option = _option(head, help_text, strict=man, shorts=shorts)
                 if option is not None and option.name not in _NOISE:
-                    seen.add(option.name)
+                    seen[option.name] = len(options)
                     options.append(option)
         options = list({o.name: o for o in options}.values())
     if shorts == "all":
