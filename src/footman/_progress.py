@@ -127,7 +127,7 @@ def record(cwd: Path, key: str, seconds: float, cmd_width: int = 0) -> None:
     entry = chains.get(key)
     old = entry.get("runs") if isinstance(entry, dict) else None
     runs = [r for r in old if isinstance(r, (int, float))] if old else []
-    runs.append(round(float(seconds), 3))
+    runs.append(round(seconds, 3))
     old_cmd = entry.get("cmd") if isinstance(entry, dict) else 0
     chains[key] = {"last": now, "runs": runs[-WINDOW:]}
     # The widest step label, for next run's alignment — a width-less record

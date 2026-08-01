@@ -327,7 +327,7 @@ _TYPE_PHRASE = {
 
 def type_phrase(tags: list[str]) -> str:
     """A human phrase for a list of type tags: `['int']` -> "an integer"."""
-    return " or ".join(str(_TYPE_PHRASE.get(t, t)) for t in tags)
+    return " or ".join(_TYPE_PHRASE.get(t, t) for t in tags)
 
 
 def element_choices(

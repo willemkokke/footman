@@ -25,7 +25,7 @@ import os
 import re
 import subprocess
 import tempfile
-from collections.abc import Iterator
+from collections.abc import Generator
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -148,7 +148,7 @@ def _fm_run(*args: Any, **kwargs: Any) -> Any:
 
 
 @contextlib.contextmanager
-def _fixture(binary: str, trigger: Trigger) -> Iterator[Path]:
+def _fixture(binary: str, trigger: Trigger) -> Generator[Path]:
     """A throwaway directory with the trigger's files (and a git repo if asked)."""
     with tempfile.TemporaryDirectory(prefix="fm-color-") as tmp:
         cwd = Path(tmp)

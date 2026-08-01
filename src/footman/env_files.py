@@ -32,8 +32,8 @@ ENV_FILE = GlobalOption(
 @footman.pre_tasks
 def load(inv: footman.Invocation) -> None:
     raw = inv.cli.get("env_file")
-    explicit = isinstance(raw, str)
-    path = Path(str(raw)) if explicit else Path(inv.cwd or ".") / ".env"
+    explicit = Path(raw) if isinstance(raw, str) else None
+    path = explicit if explicit is not None else Path(inv.cwd or ".") / ".env"
     if not path.is_file():
         if explicit:
             footman.fail(f"--env-file: {path} does not exist")

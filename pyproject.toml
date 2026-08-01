@@ -255,6 +255,15 @@ disable-project-excludes-heuristics = true
 python-platform = "all"
 python-version = "3.11"
 
+[tool.pyrefly.errors]
+# Warnings the gate holds at error, so they can't silently accumulate —
+# both classes were fixed to zero before being pinned. `deprecated` is
+# typeshed speaking (e.g. `@contextmanager` returning `Iterator` gave way
+# to `Generator`); `unnecessary-type-conversion` is a dead `str()`/`bool()`
+# on a value the annotations already prove.
+deprecated = "error"
+unnecessary-type-conversion = "error"
+
 [tool.basedpyright]
 # First-party code only. comparison/ exercises third-party runners (duty,
 # invoke, typer) whose stubs are incomplete and which are installed only in the

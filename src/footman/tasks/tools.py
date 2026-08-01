@@ -29,7 +29,7 @@ import re as _re
 import shutil
 import sys
 import threading
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from pathlib import Path
@@ -78,7 +78,7 @@ def _history_path(key: str) -> Path:
 
 
 @contextmanager
-def _on_path(prefix: str | Path) -> Iterator[None]:
+def _on_path(prefix: str | Path) -> Generator[None]:
     """Read binaries from *prefix*`/bin` for the duration — a
     `fm tools.provision` directory, so a task reads the provisioned set
     instead of whatever this machine happens to have.
@@ -179,7 +179,7 @@ def _fetched_home(driver: _drivers.Driver, placed: Path) -> Path | None:
 
 
 @contextmanager
-def _reading(driver: _drivers.Driver, placed: Path) -> Iterator[None]:
+def _reading(driver: _drivers.Driver, placed: Path) -> Generator[None]:
     """Point the extractor at what the install actually placed.
 
     Most tiers place binaries, and reading them means putting that one
@@ -197,7 +197,7 @@ def _reading(driver: _drivers.Driver, placed: Path) -> Iterator[None]:
 
 
 @contextmanager
-def _bin_on_path(bindir: Path) -> Iterator[None]:
+def _bin_on_path(bindir: Path) -> Generator[None]:
     """Read binaries from exactly *bindir* for the duration.
 
     `_on_path` speaks prefixes and appends `/bin` — right for a provision
@@ -213,7 +213,7 @@ def _bin_on_path(bindir: Path) -> Iterator[None]:
 
 
 @contextmanager
-def _overlay(**values: str) -> Iterator[None]:
+def _overlay(**values: str) -> Generator[None]:
     """Set environment variables for the duration, then put them back.
 
     Inside a run the overlay goes through `ctx.env`, which scopes it to this
@@ -241,7 +241,7 @@ def _overlay(**values: str) -> Iterator[None]:
 
 
 @contextmanager
-def _sandboxed(scratch: Path) -> Iterator[None]:
+def _sandboxed(scratch: Path) -> Generator[None]:
     """Keep everything a prime downloads inside *scratch*.
 
     uv writes to two places of its own accord, and neither is ours to fill:
