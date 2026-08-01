@@ -7,6 +7,33 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking: `--dry-run` is a rehearsal, not a parse echo.** The run
+  proceeds: task bodies execute with their bound arguments, and
+  everything footman owns and records — `run()` calls, tools, deferred
+  steps — is faked into plan-line receipts instead of executing. The
+  lifecycle fires (a hook is part of "what would happen"), `confirm=`
+  gates are assumed yes with a note, and the prompt layer is unattended
+  (defaults answer; a prompt with no default fails loudly). `--json
+  --dry-run` answers in the ordinary items envelope; the separate
+  `plan` envelope is gone. A typo'd chain still refuses with exit 64
+  before anything runs. Off-the-record calls (`recorded=False`) still
+  execute — they are how a task learns, and faking the learning would
+  corrupt the recorded story downstream.
+
+- **Breaking: `lanes=` refuses anything that is not a `Lane` handle.**
+  A string in `@task(lanes=…)`, `.opts(lanes=…)`, or a step maker's
+  `.opts(lanes=…)` is a taught `TypeError` at the declaration site —
+  handles, never strings, so a typo is an undefined name instead of a
+  crash in the arbiter mid-run.
+
+### Fixed
+
+- **Dry-run receipts carry addresses.** A faked `run()` record now
+  gets the same tree-derived address its real twin would, so a
+  rehearsal's `--json` items are prefix-filterable like a run's.
+
 ## [0.28.1] — 2026-08-01
 
 ### Changed

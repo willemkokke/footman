@@ -227,18 +227,25 @@ token spelling; see [Pipelines](pipelines.md)), plus whichever apply:
 This is one command's answer to "what can I run here?" — the discovery
 call for agents and tooling.
 
-## The plan: `fm --json --dry-run`
+## The rehearsal: `fm --json --dry-run`
 
-Validates a command line and prints what would run — nothing executes:
+A dry-run answers in the same items envelope a real run does, because a
+dry-run *is* a run — bodies execute, and footman's own recorded work is
+faked into plan-line records (empty audit, zero duration). A typo'd
+chain still refuses with the error envelope and exit 64 before anything
+runs:
 
 ```console
-$ fm --json --dry-run lint --fix test -- -x
+$ fm --json --dry-run release 1.2.0
 {
   "schema": 1,
-  "globals": ["--json", "--dry-run"],
-  "plan": [
-    {"task": "lint", "values": {"fix": true}, "variadic": [], "passthrough": null},
-    {"task": "test", "values": {}, "variadic": [], "passthrough": ["-x"]}
+  "total_ms": 3.7,
+  "items": [
+    {"task": "release", "address": "release", "ok": true, "code": 0, ...},
+    {"command": "git tag v1.2.0", "address": "release/git-tag",
+     "code": 0, "duration_ms": 0.0, "audit": [], "failed_at": null, ...},
+    {"command": "git push origin v1.2.0", "address": "release/git-push",
+     "code": 0, "duration_ms": 0.0, "audit": [], "failed_at": null, ...}
   ]
 }
 ```
@@ -292,5 +299,5 @@ fm --json coverage | jq -r '.results[] | select(.task == "coverage").returned.pe
 The envelope is versioned: `schema` is `1`, bumped only if a field ever has
 to change meaning. **Post-1.0, changes are additive only** — parse what you
 know, ignore what you don't, and pin `schema == 1` if you're strict.
-`--dry-run`'s *human* output carries no such promise; the plan envelope
-does.
+`--dry-run`'s *human* output carries no such promise; its items
+envelope does.

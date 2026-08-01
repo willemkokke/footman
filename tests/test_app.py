@@ -145,11 +145,21 @@ def test_list_with_no_segments(project, capsys):
     assert "hi" in out and "tools.echo" in out
 
 
-def test_dry_run_does_not_execute(project, capsys):
-    assert _app.run(["--dry-run", "hi", "--name=x"]) == 0
+def test_dry_run_runs_bodies_and_fakes_footmans_work(project, capsys):
+    # The rehearsal: inline code executes (it was never footman's to fake);
+    # the recorded run() is faked into a receipt and no subprocess spawns.
+    (project / "tasks.py").write_text(
+        "from footman import run, task\n"
+        "@task\n"
+        "def ship():\n"
+        "    print('inline ran')\n"
+        "    run('touch shipped.txt')\n"
+    )
+    assert _app.run(["--dry-run", "ship"]) == 0
     out = capsys.readouterr().out
-    assert "hi" in out
-    assert "hello x" not in out
+    assert "inline ran" in out  # the body executed
+    assert "touch shipped.txt" in out  # the faked receipt
+    assert not (project / "shipped.txt").exists()  # nothing actually spawned
 
 
 def test_json_output(project, capsys):
@@ -438,15 +448,16 @@ def test_keep_going_via_cli(project, capsys):
     assert "hello world" in capsys.readouterr().out  # hi ran despite boom failing
 
 
-def test_dry_run_flag_variadic_passthrough(project, capsys):
+def test_dry_run_binds_real_values(project, capsys):
+    # Rehearsed bodies run with their bound arguments — the parse is proven
+    # by execution, not echoed back.
     assert (
         _app.run(["--dry-run", "flag", "--no-fix", "+", "tools.echo", "a", "--", "b"])
         == 0
     )
     out = capsys.readouterr().out
-    assert "--no-fix" in out
-    assert "*a" in out
-    assert "[-- b]" in out
+    assert "fix=False" in out
+    assert "a" in out
 
 
 def test_tasks_file_override(tmp_path, monkeypatch, capsys):
@@ -497,7 +508,7 @@ def test_exception_is_reported(project, capsys):
 
 def test_dry_run_shows_true_flag(project, capsys):
     assert _app.run(["--dry-run", "flag", "--fix"]) == 0
-    assert "--fix" in capsys.readouterr().out
+    assert "fix=True" in capsys.readouterr().out
 
 
 def test_empty_task_list(tmp_path, monkeypatch, capsys):
@@ -895,21 +906,16 @@ def test_json_no_tasks_file(tmp_path, monkeypatch, capsys):
     assert "no tasks file found" in payload["error"]["message"]
 
 
-def test_json_dry_run_emits_plan(project, capsys):
+def test_json_dry_run_emits_the_report_envelope(project, capsys):
+    # One report, one shape: a rehearsal answers in the same items envelope
+    # a real run does — there is no separate plan schema to consume.
     line = ["--json", "-n", "hi", "--name=x", "tools.echo", "a", "--", "b"]
     assert _app.run(line) == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["schema"] == 1
-    assert payload["globals"] == ["--json", "--dry-run"]
-    assert payload["plan"][0] == {
-        "task": "hi",
-        "values": {"name": "x"},
-        "variadic": [],
-        "passthrough": None,
-    }
-    assert payload["plan"][1]["task"] == "tools.echo"
-    assert payload["plan"][1]["variadic"] == ["a"]
-    assert payload["plan"][1]["passthrough"] == ["b"]
+    tasks = [i["task"] for i in payload["items"] if "task" in i]
+    assert tasks == ["hi", "tools.echo"]
+    assert all(i["ok"] for i in payload["items"])
 
 
 def test_json_interrupt_envelope(tmp_path, monkeypatch, capsys):
@@ -1056,12 +1062,6 @@ def test_list_and_tree_paint_names(project, monkeypatch):
     assert "\033[1;36mtools.\033[0m" in text  # tree group
 
 
-def test_dry_run_plan_paints(project, monkeypatch):
-    out, _ = _tty_streams(monkeypatch)
-    assert _app.run(["-n", "hi"]) == 0
-    assert "\033[2m->\033[0m \033[1mhi\033[0m" in out.getvalue()
-
-
 def test_error_prefix_is_red_on_a_tty(project, monkeypatch):
     _, err = _tty_streams(monkeypatch)
     assert _app.run(["nosuchtask"]) == EX_USAGE
@@ -1094,9 +1094,14 @@ def test_resolve_color_precedence(monkeypatch):
 
 def test_color_always_paints_when_piped(project, capsys):
     # The whole point of `always`: colour even though stdout is not a terminal
-    # (a pipe into `less -R`). capsys' stdout fails isatty, yet the plan paints.
-    assert _app.run(["--color=always", "-n", "hi"]) == 0
-    assert "\033[2m->\033[0m \033[1mhi\033[0m" in capsys.readouterr().out
+    # (a pipe into `less -R`). capsys' stdout fails isatty, yet the rehearsed
+    # receipt paints.
+    (project / "tasks.py").write_text(
+        "from footman import run, task\n@task\ndef ship():\n    run('touch x')\n"
+    )
+    assert _app.run(["--color=always", "-n", "ship"]) == 0
+    out = capsys.readouterr().out
+    assert "touch x" in out and "\033[" in out
 
 
 def test_color_never_is_byte_clean_on_a_tty(project, monkeypatch):
@@ -1114,12 +1119,15 @@ def test_color_rejects_an_unknown_value(project, capsys):
 def test_force_color_env_paints_when_piped(project, monkeypatch, capsys):
     # FORCE_COLOR is the environment rung of `always`; NO_COLOR (higher, and the
     # never rung) still wins over it.
+    (project / "tasks.py").write_text(
+        "from footman import run, task\n@task\ndef ship():\n    run('touch x')\n"
+    )
     monkeypatch.delenv("NO_COLOR", raising=False)
     monkeypatch.setenv("FORCE_COLOR", "1")
-    assert _app.run(["-n", "hi"]) == 0
-    assert "\033[1mhi\033[0m" in capsys.readouterr().out
+    assert _app.run(["-n", "ship"]) == 0
+    assert "\033[" in capsys.readouterr().out
     monkeypatch.setenv("NO_COLOR", "1")
-    assert _app.run(["-n", "hi"]) == 0
+    assert _app.run(["-n", "ship"]) == 0
     assert "\033" not in capsys.readouterr().out
 
 

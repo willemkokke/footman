@@ -120,17 +120,24 @@ Everything after `--` is handed to the task as passthrough, reachable via a
 fm test -- -k my_test -x
 ```
 
-## Dry-run the plan
+## Dry-run: the rehearsal
 
-`-n/--dry-run` prints exactly what footman parsed without running anything:
+`-n/--dry-run` rehearses the run. Task bodies execute, and everything
+footman owns — recorded `run()` calls, tools, deferred steps — is faked
+into receipts instead of executing, so what prints is the real plan
+with real bound arguments:
 
 ```console
-$ fm --dry-run format lint --fix test
-  globals: --dry-run
-  -> format
-  -> lint  --fix
-  -> test
+$ fm --dry-run release 1.2.0
+$ git tag v1.2.0
+$ git push origin v1.2.0
 ```
+
+Because bodies run, your own inline code runs too — it was never
+footman's to fake. Side effects you lift into `run()` calls and steps
+are exactly the ones a rehearsal fakes, which is one more reason to
+lift them. `confirm=` gates are assumed yes (with a note saying so),
+and prompts take their defaults — a rehearsal is unattended by nature.
 
 ## Four words you'll meet everywhere
 

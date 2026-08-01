@@ -432,7 +432,7 @@ fared — so a span opened in a pre always closes, even when another plugin's
 pre killed the task. Failures are loud and named: a raising `pre_task` fails
 the task like a failed prerequisite (the body never runs), and a raising
 `post_task` fails an otherwise-green task — a reporter that crashed must not
-pass silently. Under `--dry-run` nothing executes, so nothing fires.
+pass silently. A `--dry-run` rehearses — bodies run, so the ladder fires exactly as it would live; only footman's own recorded work is faked.
 
 **The pair is per request; only the body is shared.** A request satisfied by
 an execution the run already performed still gets the whole ladder — its

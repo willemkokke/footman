@@ -37,7 +37,6 @@ from footman import (
     registry,
 )
 from footman._executor import EX_USAGE
-from footman._split import Segment
 from footman.app import DEFAULT_BRAND, Brand
 
 # The brand (names + version) in effect for the current invocation. Set at the
@@ -256,33 +255,6 @@ def _format_value(value: object) -> str:
     if isinstance(value, list):
         return "[" + ", ".join(str(v) for v in value) + "]"
     return str(value)
-
-
-def _plan_line(seg: Segment) -> str:
-    parts = []
-    for name, value in seg.values.items():
-        if value is True:
-            parts.append(f"--{name}")
-        elif value is False:
-            parts.append(f"--no-{name}")
-        else:
-            parts.append(f"{name}={_format_value(value)}")
-    if seg.variadic:
-        parts.append("*" + " ".join(seg.variadic))
-    arrow = _describe.dim("->", _color_out)
-    task = _describe.bold(seg.task, _color_out)
-    line = f"  {arrow} {task}  " + " ".join(parts)
-    if seg.passthrough is not None:
-        line += _describe.dim(f"  [-- {' '.join(seg.passthrough)}]", _color_out)
-    return line.rstrip()
-
-
-def _print_plan(globals_: list[str], segments: list[Segment]) -> None:
-    if globals_:
-        label = _describe.dim("globals:", _color_out)
-        print(f"  {label} {' '.join(globals_)}")
-    for seg in segments:
-        print(_plan_line(seg))
 
 
 def _print_footer() -> None:
@@ -1619,22 +1591,11 @@ def _run_tree(
             _print_footer()
         return 0
 
-    if g.get("dry_run"):
-        if json_mode:
-            plan = [
-                {
-                    "task": s.task,
-                    "values": s.values,
-                    "variadic": s.variadic,
-                    "passthrough": s.passthrough,
-                }
-                for s in segments
-            ]
-            payload = {"schema": 1, "globals": globals_, "plan": plan}
-            print(json.dumps(payload, indent=2))
-        else:
-            _print_plan(globals_, segments)
-        return 0
+    # --dry-run is a rehearsal, not a parse echo: the run proceeds with
+    # `dry_run` on the context, bodies run, and everything footman owns —
+    # recorded run() calls, tools, deferred steps — is faked into honest
+    # plan-line receipts. The report shapes (--json included) are the plan.
+    dry_run = bool(g.get("dry_run"))
     sequential = bool(g.get("sequential")) or bool(cfg.get("sequential"))
 
     # The parallel width: -j/--jobs wins, then config `jobs`, then the
@@ -1704,6 +1665,8 @@ def _run_tree(
         # refuses to prompt (a required prompt errors instead of hanging).
         "assume_yes": bool(g.get("yes")),
         "no_input": bool(g.get("no_input")),
+        # The rehearsal switch: bodies run, footman's own work is faked.
+        "dry_run": dry_run,
     }
 
     # The timing story: --no-progress (one run) or `progress = false` in
@@ -1711,7 +1674,11 @@ def _run_tree(
     # *predictable* when it's on, every task consented, and this is the real
     # cascade (-f runs pollute no cache, times included) — only then do we
     # estimate from history and record the outcome.
-    progress_on = not g.get("no_progress") and cfg.get("progress") is not False
+    # A rehearsal is near-instant and teaches nothing about durations: no
+    # bar, no eta, and (below) no recorded timing to pollute the history.
+    progress_on = (
+        not g.get("no_progress") and cfg.get("progress") is not False and not dry_run
+    )
     predictable = (
         progress_on
         and not g.get("tasks_file")
@@ -1733,7 +1700,7 @@ def _run_tree(
     if g.get("fail_fast"):
         cli_keep_going = False
 
-    # A pulled plugin's globals bind now — after every listing/dry-run exit,
+    # A pulled plugin's globals bind now — after every listing exit,
     # before anything runs — and freeze for the run; `.value` answers from
     # here. Released by the caller's finally, so an outside-a-run read goes
     # back to teaching.

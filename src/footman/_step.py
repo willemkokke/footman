@@ -134,6 +134,10 @@ class StepFn(Generic[P, R_co]):
                 f"are {valid}. A step is anonymous, so boundary policy "
                 f"(confirm, sharing, gates) needs a declared task to live on."
             )
+        if overrides.get("lanes") is not None:
+            from footman.registry import validate_lanes
+
+            overrides["lanes"] = validate_lanes(overrides["lanes"])
         return StepFn(
             self._fn,
             {**self._opts, **overrides},

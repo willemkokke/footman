@@ -91,8 +91,11 @@ commands to know:
 - `fm --json --list` (or bare `fm --json`) prints the whole task tree as an
   envelope — every task and group with its parameters, types, choices, and
   defaults. One call, full catalog.
-- `fm --json --dry-run <chain>` prints the parsed plan as an envelope — cheap
-  validation of a proposed command line, nothing executed.
+- `fm --json --dry-run <chain>` rehearses the chain and answers in the
+  ordinary items envelope — a typo still refuses with exit 64 before
+  anything runs, and what would run arrives as faked receipts. Bodies
+  execute (that is what makes the answer real), so rehearse chains whose
+  side effects live behind `run()` and steps.
 - `fm --help <task>` renders a task's full typed surface from the manifest,
   read-only, wherever `--help` appears on the line.
 
