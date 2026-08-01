@@ -314,6 +314,22 @@ DRIVERS: tuple[Driver, ...] = (
         url="https://man.openbsd.org/ssh-keygen.1",
     ),
     Driver(
+        "ssh-keyscan",
+        attr="ssh_keyscan",
+        version_of="ssh",
+        provision=Provision(
+            kind="man",
+            manual=Manual(
+                index="https://cdn.openbsd.org/pub/OpenBSD/OpenSSH/portable/",
+                archive="openssh-{version}.tar.gz",
+                listing=r'href="openssh-(?P<version>\d+\.\d+p\d+)\.tar\.gz"',
+                pages=("ssh-keyscan.1",),
+            ),
+        ),
+        man=True,
+        url="https://man.openbsd.org/ssh-keyscan.1",
+    ),
+    Driver(
         "docker",
         # Docker publishes static per-platform builds of every release, so
         # it is fetched like any other tool rather than read from the host.

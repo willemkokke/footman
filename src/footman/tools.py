@@ -836,6 +836,7 @@ gh = Tool("gh")
 # whole version surface (`--version` is an illegal option), answered on stderr.
 ssh = Tool("ssh", version_argv=("-V",))
 ssh_keygen = Tool("ssh-keygen")  # no version output of its own; ssh speaks for it
+ssh_keyscan = Tool("ssh-keyscan")  # same: the OpenSSH release answers for it
 eclint = Tool("eclint", single_dash=True)  # Go flag package: `-fix`, not `--fix`
 djlint = Tool("djlint")
 mypy = Tool("mypy")
