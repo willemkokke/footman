@@ -1,13 +1,17 @@
 # Tool option history → scheduled refresh → honest auto-release
 
-**Largely landed 2026-07-27.** Unifies two plans that were never separate: a
-JSON history of every tool's option surface, and the scheduled job that keeps
-it current and decides when a release is warranted.
+**Built. Reconciled against the repo 2026-08-02.** Unifies two plans that
+were never separate: a JSON history of every tool's option surface, and the
+scheduled job that keeps it current and decides when a release is warranted.
 
 Shipped: the format and its chain, five listable tiers including CPython, the
-backward walk (`fm tools.prime`), the forward walk (`fm tools.refresh`), and
-the release note the events write. What remains is configuration rather than
-design — see §7. Decision 5 was **reversed** in the building; its reasoning is
+backward walk (`fm tools.prime`), the forward walk (`fm tools.refresh`) and
+its matrix split (`gather`/`owed`/`assemble`), the release note the events
+write, `tools.prepare-release`, and 30 checked-in chains under
+`tool-history/`. **One thing stands between this and a job that runs itself:
+the cron has never fired** — every run so far was triggered by hand — and
+§7's local-first rollout is the step that would change that. What remains is
+configuration rather than design — see §7. Decision 5 was **reversed** in the building; its reasoning is
 kept in place rather than deleted, because the way it was wrong is the useful
 part.
 
@@ -20,10 +24,11 @@ numbers.
 
 ## 1. The file: a base at HEAD, deltas pointing backwards
 
-One JSON file per curated tool, under `_history/`. The **newest** observed
-release is stored whole; every older one is a delta describing how to step
-back to it. `since`/`until` are never stored — they are derived by walking
-the chain.
+One JSON file per curated tool, under **`tool-history/`** at the repo root
+(`_history/` was the sketch's name; §8 records why it landed outside `src/`).
+The **newest** observed release is stored whole; every older one is a delta
+describing how to step back to it. `since`/`until` are never stored — they
+are derived by walking the chain.
 
 Pointing the deltas *backwards* is what makes the format fit the work:
 
@@ -70,6 +75,12 @@ Real, from prek 0.4.11 (base) stepping back to 0.4.10:
 An empty delta is the common case and says something precise: that release
 was **observed** and changed nothing. It is not the same as a release nobody
 looked at, which simply is not in the file.
+
+The sketch above is one version behind what is checked in: a real file opens
+with `"schema": 1`, every observation carries `platforms`, and decision 7's
+`absent` sidecar rides beside the surface. Read a live one —
+`tool-history/python.json` walks nine deltas back to an `observed_from` of
+3.13.12 — rather than this example, which is kept for the shape of the idea.
 
 ### Why not the alternatives
 
@@ -144,7 +155,14 @@ that guesses attribution is worse than one that admits a floor.
 ## 3. The scheduled refresh
 
 **Shipped as `fm tools.refresh`** (2026-07-27), and rebuilt the same day as
-a **parallel gather on footman's own runtime**. Three phases: listings
+a **parallel gather on footman's own runtime**. It has since split along the
+seam a three-OS matrix needs: `tools.gather` observes what one platform has
+not yet accounted for, `tools.owed` answers what it *would* read without
+installing anything, and `tools.assemble` folds gathered observations into
+the store as the single writer. `tools.refresh` remains the one-machine
+spelling — gather and assemble in one call — and `tools.prepare-release`
+rolls the version and changelog the way the runbook does by hand. Three
+phases: listings
 fetched concurrently; every (tool, release) observed in parallel through a
 hidden `tools.observe` task, a bounded wave at a time; chains assembled
 single-threaded from whatever arrived, in whatever order — `insert` makes
@@ -384,8 +402,16 @@ Nothing blocking, and all of it configuration rather than design:
    `vars.AUTO_RELEASE`, default off. Rollout is local-first: gather on a real
    Windows and Linux machine, copy the documents back, assemble here, before
    cron is trusted.
+
+   **The cron has still never fired** (checked 2026-08-02). The workflow is
+   scheduled Mondays 06:00 UTC, and all seven runs to date are
+   `workflow_dispatch` — four green, three red, the last on 2026-07-29. The
+   repo has no variables set at all, so `AUTO_RELEASE` is unset by design.
+   The local-first rollout is therefore the one step between here and a job
+   that runs itself, and three failures in seven says it is the right order.
 2. **The `system` tier** — git and docker still read the host and have no
-   fetch source, so they are the two tools a refresh cannot speak for.
+   fetch source, so they are the two tools a refresh cannot speak for. All
+   30 other curated tools carry a chain in `tool-history/`.
 
 **Budget: ten releases per tool, pre-primed** (Willem, 2026-07-27), and not
 revisited until the workflow is actually running in CI — a budget tuned
@@ -436,32 +462,48 @@ bun). Real chains on all four — prek 21 releases, cspell 3, gh 3, eclint 3.
 `system` (git, docker) stays unlistable until their real sources are wired,
 and provisioned interpreters are not tool releases.
 
-What remains: the
-per-tool budget as a driver field, the release gate reading the deltas, and
-the scheduled refresh itself.
+**The rest landed too** (checked 2026-08-02): the per-tool budget sits on the
+driver, the release gate reads the deltas and writes its own CHANGELOG line,
+and the scheduled refresh exists as a three-OS matrix. `tool-history/` holds
+30 chains against 37 stubs — the seven without one are the hand-written shell
+stubs and the two `system`-tier tools. The chain-integrity debt §1 promised
+is paid in `tests/test_toolhistory.py`
+(`test_replay_reaches_every_release_in_a_chain`, and a second test that
+inserts a release at any position and replays again), and the refresh PR's
+own body says the gate is what replays every chain.
 
-Not the prime — it is the expensive, network-bound, most-likely-to-stall part.
-Start where the data already exists:
+The sequencing below is kept as history — it is how the build was ordered,
+and the reasoning is still the useful part:
 
-1. Seed each tool's `_history/<tool>.json` with a base and no deltas, at the
+1. Seed each tool's `<tool>.json` with a base and no deltas, at the
    version its current stub records — the surface is already extractable, and
    `observed_from` states the floor honestly. A history of one release is a
    valid history, which is the point: the format degrades to "what we know
    today" rather than requiring the prime to mean anything.
 2. Switch `_stubgen` to render from the history rather than a live `ToolSpec`.
    Nothing user-visible changes; the stubs should regenerate byte-identical
-   apart from the header, which proves the schema against all 32 tools.
+   apart from the header, which proves the schema against every tool.
 3. Only then teach the fetchers to walk backwards, which turns the seed into
    history and needs no change to anything above it.
 
-That sequencing makes the risky part optional: the refresh becomes "append to
-a file that already exists", the gate becomes "is this delta non-empty", and a tool
-that is never primed simply has a short history rather than a broken one.
+That sequencing made the risky part optional: the refresh became "append to
+a file that already exists", the gate became "is this delta non-empty", and a
+tool that is never primed simply has a short history rather than a broken one.
+The prime — the expensive, network-bound, most-likely-to-stall part — went
+last, which is why none of it stalled.
 
-## Until the job exists
+## Until the job existed
 
-Stubs are resynced **just before a release**, not when audit notices (Willem,
-2026-07-26), which is now step 2 of the Releasing runbook in `CLAUDE.md`:
+**Superseded 2026-08-02.** This was the interim policy, and the job it was
+waiting for exists: `CLAUDE.md`'s Releasing section now says the opposite in
+so many words — *"The tool stubs are not a release step. They move on their
+own schedule… A release ships whatever is checked in."* Retaking them by hand
+is something you may do when a reading looks wrong, not something a release
+waits for.
+
+The original, for the record. Stubs are resynced **just before a release**,
+not when audit notices (Willem, 2026-07-26), which is step 2 of the Releasing
+runbook in `CLAUDE.md`:
 
 ```sh
 fm tools.provision
