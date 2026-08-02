@@ -1247,14 +1247,16 @@ class Group:
 
         Three different things, worth keeping apart:
 
-        * `hidden=True` — **listed nowhere, callable as ever.** The task
-          drops out of `--list`, `--tree`, group help, the did-you-mean
-          index and completion, while `fm <name>` runs it exactly as
-          before. For the tasks a machine calls and a human never types: a
-          CI entry point, a release step another task drives. It is
-          presentation only — prerequisites still run it, a group's
-          empty-body fan-out still includes it, and `--json` reports it
-          *marked* rather than missing, because a machine is who calls it.
+        * `hidden=True` — **out of the listings, callable as ever.** The
+          task drops out of `--list`, `--tree` and group help (`--all`
+          brings it back), while `fm <name>` runs it exactly as before,
+          <kbd>Tab</kbd> completes it, and the did-you-mean index knows it:
+          a listing is prose about the project, completion is help with a
+          name you are already typing. For the tasks a machine calls and a
+          human never types: a CI entry point, a release step another task
+          drives. It is presentation only — prerequisites still run it, a
+          group's empty-body fan-out still includes it, and `--json` reports
+          it *marked* rather than missing, because a machine is who calls it.
           Unset inherits the enclosing group's answer, so
           `group("internal", hidden=True)` hides a whole subtree and a
           child can still say `hidden=False`.
@@ -1370,8 +1372,8 @@ class Group:
         """Create and register a nested command group, returning it.
 
         `hidden=True` keeps the whole subtree out of the human listings
-        (`--list`, `--tree`, help, completion) while leaving every address in
-        it callable — see `@task(hidden=…)`.
+        (`--list`, `--tree`, help — `--all` shows them) while leaving every
+        address in it callable and completable — see `@task(hidden=…)`.
         """
         key = cli_name(name)
         if key == "default":

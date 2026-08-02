@@ -312,8 +312,8 @@ def _address_band(rows: list[tuple[str, str]]) -> list[tuple[str, int, str]]:
     ]
 
 
-def _print_list(tree: dict[str, Any]) -> None:
-    rows = list(_describe.iter_tasks(tree))
+def _print_list(tree: dict[str, Any], show_hidden: bool = False) -> None:
+    rows = list(_describe.iter_tasks(tree, show_hidden=show_hidden))
     if not rows:
         print("No tasks defined.")
         return
@@ -321,8 +321,8 @@ def _print_list(tree: dict[str, Any]) -> None:
     _print_two_band(_address_band(rows))
 
 
-def _print_tree(node: dict[str, Any]) -> None:
-    rows = list(_describe.walk(node))
+def _print_tree(node: dict[str, Any], show_hidden: bool = False) -> None:
+    rows = list(_describe.walk(node, show_hidden=show_hidden))
     if not rows:
         # Mirror _print_list rather than printing zero bytes and exiting 0.
         print("No tasks defined.")
@@ -421,7 +421,9 @@ def _print_task_help(tree: dict[str, Any], path: list[str]) -> None:
         print(f"  {usage}")
 
 
-def _print_group_help(tree: dict[str, Any], path: list[str]) -> None:
+def _print_group_help(
+    tree: dict[str, Any], path: list[str], show_hidden: bool = False
+) -> None:
     node = tree
     for name in path:
         node = node["groups"][name]
@@ -437,7 +439,7 @@ def _print_group_help(tree: dict[str, Any], path: list[str]) -> None:
         print(f"\n  {node['help']}")
     if default:
         print(_describe.dim("\n  runs its default when no task is named", on))
-    rows = list(_describe.iter_tasks(node, f"{dotted}."))
+    rows = list(_describe.iter_tasks(node, f"{dotted}.", show_hidden=show_hidden))
     if default:
         # The bare-group spelling is itself a runnable, listed address —
         # described by its default action (docstring, or generated).
@@ -461,7 +463,7 @@ def _print_group_help(tree: dict[str, Any], path: list[str]) -> None:
             print(f"  {_describe.bold(label, on)}{pad}  {detail}".rstrip())
 
 
-def _print_global_help(tree: dict[str, Any]) -> None:
+def _print_global_help(tree: dict[str, Any], show_hidden: bool = False) -> None:
     prog = _brand.prog
     parts = [
         ("prog", prog),
@@ -485,7 +487,7 @@ def _print_global_help(tree: dict[str, Any]) -> None:
         pad = " " * (width - len(label))
         print(f"  {_describe.bold(label, _color_out)}{pad}  {help_text}")
     print()
-    _print_list(tree)
+    _print_list(tree, show_hidden)
     _print_footer()
 
 
@@ -553,7 +555,9 @@ def _help_targets(
     return targets, strays
 
 
-def _print_help(tree: dict[str, Any], argv: list[str]) -> int:
+def _print_help(
+    tree: dict[str, Any], argv: list[str], show_hidden: bool = False
+) -> int:
     """`--help` alone covers fm itself; with names, the named groups/tasks.
 
     A name that matches nothing is a refusal (exit EX_USAGE) with a suggestion —
@@ -564,7 +568,10 @@ def _print_help(tree: dict[str, Any], argv: list[str]) -> int:
     targets, strays = _help_targets(tree, argv)
     if not targets:
         if strays:
-            known = [name for name, _ in _describe.iter_tasks(tree)]
+            # Every address a human can type, hidden included: the index
+            # answers a typo, and a machine-facing task typo'd by hand
+            # deserves the same "did you mean" as any other.
+            known = [name for name, _ in _describe.iter_tasks(tree, show_hidden=True)]
             known += _describe.iter_group_paths(tree)
             # Help's *success* output is the one human-only surface; a refusal
             # still honours the envelope `--json` promised.
@@ -573,7 +580,7 @@ def _print_help(tree: dict[str, Any], argv: list[str]) -> int:
                 f"--help: unknown task or group {strays[0]!r}"
                 f"{_split._did_you_mean(strays[0], known)}",
             )
-        _print_global_help(tree)
+        _print_global_help(tree, show_hidden)
         return 0
     for index, (kind, path) in enumerate(targets):
         if index:
@@ -581,7 +588,7 @@ def _print_help(tree: dict[str, Any], argv: list[str]) -> int:
         if kind == "task":
             _print_task_help(tree, path)
         else:
-            _print_group_help(tree, path)
+            _print_group_help(tree, path, show_hidden)
     return 0
 
 
@@ -1524,8 +1531,10 @@ def _run_tree(
     if g.get("sort") or sort_cfg:
         tree = _describe.sort_tree(tree)
 
+    show_hidden = bool(g.get("all"))
+
     if _wants_help(argv):
-        return _print_help(tree, argv)
+        return _print_help(tree, argv, show_hidden)
 
     if g.get("plugins"):
         return _plugins_report(reg)
@@ -1584,9 +1593,9 @@ def _run_tree(
             print(json.dumps({"schema": 1, "tree": tree}, indent=2))
             return 0
         if g.get("tree"):
-            _print_tree(tree)
+            _print_tree(tree, show_hidden)
         else:
-            _print_list(tree)
+            _print_list(tree, show_hidden)
         if tree["tasks"] or tree["groups"]:
             _print_footer()
         return 0

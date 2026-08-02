@@ -16,6 +16,21 @@ versions may include breaking changes.
   runs is never policy, so it does not ride `.opts()`; and because the
   in-process lane runs the current interpreter, an `.at()` handle always
   spawns — `in_process=True` on one is a taught refusal.
+- **`--all` (`-a`) — the listings, hidden rows included.** One flag across
+  `--list`, `--tree`, global help and group help: show everything, not just
+  what you are meant to type.
+
+### Changed
+
+- **`hidden` is a listings word, not a completion one.** A hidden task now
+  completes and answers the did-you-mean index; what it stays out of is
+  `--list`, `--tree` and group help. A listing is prose about what a repo
+  does, and clutter there is the thing `hidden` was invented to remove;
+  completion is help with a name you are already typing, and a
+  machine-facing address — long, dotted, typed by hand exactly when
+  something has gone wrong — is the one most worth being spelled for you.
+  Nothing else moves: `--json` still reports hidden nodes marked, and the
+  generated task docs still badge them.
 
 ## [0.29.1] — 2026-08-01
 

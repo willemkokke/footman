@@ -1702,7 +1702,10 @@ def test_hidden_is_marked_not_omitted_under_json(hidden_project, capsys):
     assert "hidden" not in tree["groups"]["internal"]["tasks"]["rescued"]
 
 
-def test_hidden_is_absent_from_completion(hidden_project, capsys):
+def test_hidden_still_completes(hidden_project, capsys):
+    """`hidden` is a listings word. TAB offers every address that runs —
+    you are already typing a name, and a machine-facing one is exactly the
+    one worth being spelled for you."""
     from footman import _complete
 
     assert _app.run(["--json"]) == 0
@@ -1710,13 +1713,46 @@ def test_hidden_is_absent_from_completion(hidden_project, capsys):
 
     top = " ".join(_complete.complete(tree, [""]))
     assert "visible" in top
-    assert "machine-only" not in top  # never suggested, always callable
-    # The hidden group is still a reachable namespace, because a child opted
-    # back in — and descending offers that child alone.
+    assert "machine-only" in top
     assert "internal." in top
     inside = " ".join(_complete.complete(tree, ["internal."]))
     assert "internal.rescued" in inside
-    assert "internal.cleanup" not in inside
+    assert "internal.cleanup" in inside  # hidden by its group, still typed
+
+
+def test_all_shows_hidden_in_the_listings(hidden_project, capsys):
+    assert _app.run(["--list", "--all"]) == 0
+    out = capsys.readouterr().out
+    assert "machine-only" in out
+    assert "internal.cleanup" in out
+
+    assert _app.run(["--tree", "-a"]) == 0
+    tree_out = capsys.readouterr().out
+    assert "machine-only" in tree_out and "cleanup" in tree_out
+
+    # ...and the default listing is unchanged by its existence.
+    assert _app.run(["--list"]) == 0
+    assert "machine-only" not in capsys.readouterr().out
+
+
+def test_all_reaches_help_listings(hidden_project, capsys):
+    assert _app.run(["--help", "--all"]) == 0
+    assert "machine-only" in capsys.readouterr().out
+    assert _app.run(["--help"]) == 0
+    assert "machine-only" not in capsys.readouterr().out
+
+    # A group's own help honours it too, so one rule covers every listing.
+    assert _app.run(["--all", "--help", "internal"]) == 0
+    assert "internal.cleanup" in capsys.readouterr().out
+    assert _app.run(["--help", "internal"]) == 0
+    assert "internal.cleanup" not in capsys.readouterr().out
+
+
+def test_did_you_mean_knows_hidden_addresses(hidden_project, capsys):
+    """The typo index answers about everything a human can type — a
+    machine-facing task mistyped by hand earns the same suggestion."""
+    assert _app.run(["--help", "machine-onlyy"]) == 64
+    assert "machine-only" in capsys.readouterr().err
 
 
 def test_tree_draws_branches_and_skips_hidden(hidden_project, capsys):

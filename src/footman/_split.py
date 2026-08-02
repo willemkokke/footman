@@ -100,6 +100,7 @@ GLOBALS: list[tuple[str, str | None, str, str | None, str]] = [
     ("--list", "-l", "flag", None, "list tasks (flat)"),
     ("--tree", None, "flag", None, "list tasks grouped by command group"),
     ("--sort", None, "flag", None, "list tasks alphabetically (default: as defined)"),
+    ("--all", "-a", "flag", None, "include hidden tasks in the listings"),
     ("--where", None, "option", "TASK", "print the task's source file:line"),
     ("--plugins", None, "flag", None, "list installed footman.tasks plugins"),
     ("--dry-run", "-n", "flag", None, "rehearse: bodies run, footman's work is faked"),

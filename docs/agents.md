@@ -63,7 +63,8 @@ something to fix; anything else is display-only; and footman's own refusal
 *human* — a wiring problem never impersonates a verdict about the project.
 
 The tasks, in `tasks.py` — `hidden=True` keeps machine-called adapters out
-of `--list` and completion:
+of `--list` and `--tree`, while <kbd>Tab</kbd> still spells them for you
+when you run one by hand:
 
 ```python
 from dataclasses import dataclass, field
