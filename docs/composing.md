@@ -12,8 +12,8 @@ conditions re-check *live* when a task actually runs.
 Three different intents, and the difference is what happens when someone
 names the task anyway:
 
-**Hidden — listed nowhere, callable as ever.** For the tasks a machine calls
-and a human never types: a CI entry point, a step another task drives.
+**Hidden — out of the listings, callable as ever.** For the tasks a machine
+calls and a human never types: a CI entry point, a step another task drives.
 
 ```python
 from footman import task
@@ -22,13 +22,19 @@ from footman import task
 def ci_publish(): ...
 ```
 
-It drops out of `--list`, `--tree`, group help, the did-you-mean index and
-completion. Everything else is untouched: `fm ci-publish` runs it, a
-`pre=`/`post=` dependency runs it, a runnable group's empty-body fan-out
-still includes it, and `--json` reports it *marked* rather than missing —
-a machine is exactly who calls it, so the catalog keeps it. The generated
-task docs list it too, badged, because the docs are where you look up
-something the listings won't offer.
+It drops out of `--list`, `--tree` and group help — the listings a human
+reads to learn what a repo does. Everything else is untouched: `fm
+ci-publish` runs it, <kbd>Tab</kbd> completes it, the did-you-mean index
+knows it, a `pre=`/`post=` dependency runs it, a runnable group's
+empty-body fan-out still includes it, and `--json` reports it *marked*
+rather than missing — a machine is exactly who calls it, so the catalog
+keeps it. The generated task docs list it too, badged, because the docs are
+where you look up something the listings won't offer.
+
+Hiding and completing are different questions. A listing is prose about the
+project; completion is help with a name you are already typing, and a
+machine-facing address — long, dotted, typed by hand exactly when something
+has gone wrong — is the one most worth being spelled for you.
 
 `hidden` is inherited: unset means "whatever my group said", so one
 declaration hides a whole subtree, and a child can still come back.
@@ -48,6 +54,21 @@ def status(): ...                           # listed again, deliberately
 Setting it on a `@group.default` says the same thing about the group it
 speaks for. A group whose every task ends up hidden prints no heading at
 all, rather than an empty one.
+
+`--all` (`-a`) puts the hidden rows back, in `--list`, `--tree` and help
+alike — the one flag for "show me everything, including what I'm not meant
+to type":
+
+```console
+$ fm --list
+Tasks:
+  internal.status
+$ fm --list --all
+Tasks:
+  ci-publish
+  internal.sweep
+  internal.status
+```
 
 **Omitted — the task does not exist.** A tasks file is executed code, so an
 `if` does exactly what it says: no address, nothing to call, nothing to

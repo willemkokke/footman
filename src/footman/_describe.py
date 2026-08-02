@@ -284,17 +284,18 @@ def default_line(node: dict[str, Any]) -> str:
     return "run this group's default action"
 
 
-def listed(node: dict[str, Any]) -> bool:
+def listed(node: dict[str, Any], *, show_hidden: bool = False) -> bool:
     """Whether a task or group node belongs in a human listing.
 
     `hidden` is the only thing that takes one out — a task nobody is meant to
-    type. It stays callable, completes nothing, and shows up under `--json`
-    marked, because a machine is exactly who calls it.
+    read about. It stays callable, still completes, and shows up under `--json`
+    marked, because a machine is exactly who calls it. *show_hidden* is
+    `--all`: the listing asked to see everything.
     """
-    return not node.get("hidden")
+    return show_hidden or not node.get("hidden")
 
 
-def has_listed(node: dict[str, Any]) -> bool:
+def has_listed(node: dict[str, Any], *, show_hidden: bool = False) -> bool:
     """Whether anything under *node* is worth printing.
 
     Deliberately *not* short-circuited on the group's own `hidden`: hiding a
@@ -303,10 +304,12 @@ def has_listed(node: dict[str, Any]) -> bool:
     A group with nothing listed under it prints no heading at all, rather
     than one with nothing beneath it.
     """
-    if "default" in node and listed(node["default"]):
+    if "default" in node and listed(node["default"], show_hidden=show_hidden):
         return True
-    return any(listed(t) for t in node["tasks"].values()) or any(
-        has_listed(sub) for sub in node["groups"].values()
+    return any(
+        listed(t, show_hidden=show_hidden) for t in node["tasks"].values()
+    ) or any(
+        has_listed(sub, show_hidden=show_hidden) for sub in node["groups"].values()
     )
 
 
@@ -326,7 +329,11 @@ def ordered_tasks(node: dict[str, Any]) -> dict[str, Any]:
 
 
 def walk(
-    node: dict[str, Any], prefix: str = "", depth: int = 0
+    node: dict[str, Any],
+    prefix: str = "",
+    depth: int = 0,
+    *,
+    show_hidden: bool = False,
 ) -> Iterator[tuple[int, str, str, str, str]]:
     """The one traversal every human listing reads — `--list`, `--tree`, group
     help, and the did-you-mean index.
@@ -335,18 +342,24 @@ def walk(
     children, hidden nodes and empty groups already gone: `--list` renders the
     address and ignores the depth, `--tree` renders the leaf and indents by it.
     Two views of one walk, so a rule about what is listed cannot be true of
-    one and false of the other.
+    one and false of the other. *show_hidden* — `--all`, and the did-you-mean
+    index, which owes an answer about every address a human can type — keeps
+    the hidden rows in.
     """
     for name, task in ordered_tasks(node).items():
-        if listed(task):
+        if listed(task, show_hidden=show_hidden):
             yield depth, f"{prefix}{name}", name, task_line(task), "task"
     for name, sub in node["groups"].items():
-        if not has_listed(sub):
+        if not has_listed(sub, show_hidden=show_hidden):
             continue
         # A runnable group is itself a *runnable address* — the bare
         # `fm <group>` spelling, described by its default action — so it earns
         # a row in the flat listing. A plain group is only a heading.
-        runnable = listed(sub) and "default" in sub and listed(sub["default"])
+        runnable = (
+            listed(sub, show_hidden=show_hidden)
+            and "default" in sub
+            and listed(sub["default"], show_hidden=show_hidden)
+        )
         yield (
             depth,
             f"{prefix}{name}",
@@ -354,13 +367,17 @@ def walk(
             default_line(sub) if runnable else sub["help"],
             "runnable-group" if runnable else "group",
         )
-        yield from walk(sub, f"{prefix}{name}.", depth + 1)
+        yield from walk(sub, f"{prefix}{name}.", depth + 1, show_hidden=show_hidden)
 
 
-def iter_tasks(node: dict[str, Any], prefix: str = "") -> Iterator[tuple[str, str]]:
+def iter_tasks(
+    node: dict[str, Any], prefix: str = "", *, show_hidden: bool = False
+) -> Iterator[tuple[str, str]]:
     """`walk()` as the flat listing sees it: `(address, help)` for everything
     you can actually type, headings dropped."""
-    for _depth, address, _leaf, help_text, kind in walk(node, prefix):
+    for _depth, address, _leaf, help_text, kind in walk(
+        node, prefix, show_hidden=show_hidden
+    ):
         if kind != "group":
             yield address, help_text
 
