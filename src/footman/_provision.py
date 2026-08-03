@@ -147,10 +147,6 @@ def provision(
             continue
         by_kind.setdefault(driver.provision.kind, []).append(driver)
 
-    for driver in by_kind.get("system", []):
-        outcomes.append(
-            Outcome(driver.key, "system", "skip", f"uses the system {driver.name}")
-        )
     for driver in by_kind.get("deferred", []):
         outcomes.append(
             Outcome(driver.key, "deferred", "deferred", driver.provision.note)

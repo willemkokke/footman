@@ -1892,45 +1892,24 @@ def test_md_safe_touches_only_leading_header_and_quote():
     assert safe[2].endswith("mid # hash")  # a mid-line hash is not a block
 
 
-def test_resolve_prefers_homebrew_keg_for_host_tool(tmp_path, monkeypatch):
-    """A host-read tool on macOS is read from its Homebrew keg.
+def test_resolve_is_path_and_nothing_else(tmp_path, monkeypatch):
+    """`_resolve` is `shutil.which`, on every platform.
 
-    Stated against a name rather than a tool: no curated tool is read from
-    the host any more. git was the last one, and its manuals are fetched
-    per release now — so `_HOST_READ` is empty and the rule has nothing
-    real to apply to, until something joins that tier again.
+    There was a host-read tier once, and on macOS it preferred a Homebrew
+    keg over PATH so an unlinked build was still the one read. Nothing sits
+    on that tier now — docker fetches its own builds, git reads kernel.org's
+    manuals — so the branch went with it. Asserted on darwin, where the keg
+    rule used to apply and a stale `/opt/homebrew/bin` shim is the thing
+    that must never win: a provisioned tool comes from PATH (the prefix, or
+    the venv), whatever is installed beside it.
     """
     monkeypatch.setattr(sys, "platform", "darwin")
-    monkeypatch.setattr(_drivers, "_HOST_READ", frozenset({"hostly"}))
-    monkeypatch.setattr(_drivers, "_brew_prefixes", lambda: (str(tmp_path),))
-    keg = tmp_path / "opt" / "hostly" / "bin"
-    keg.mkdir(parents=True)
-    tool = keg / "hostly"
-    tool.write_text("#!/bin/sh\n")
-    tool.chmod(0o755)
-    assert _drivers._resolve("hostly") == str(tool)
-
-
-def test_resolve_ignores_homebrew_for_provisioned_tool(tmp_path, monkeypatch):
-    # A provisioned tool (ruff) is never read from Homebrew, even with a keg
-    # present — it comes from PATH (the provision prefix / venv), so a stale
-    # `/opt/homebrew/bin` shim can never shadow it.
-    monkeypatch.setattr(sys, "platform", "darwin")
-    monkeypatch.setattr(_drivers, "_brew_prefixes", lambda: (str(tmp_path),))
     keg = tmp_path / "opt" / "ruff" / "bin"
     keg.mkdir(parents=True)
     (keg / "ruff").write_text("#!/bin/sh\n")
     (keg / "ruff").chmod(0o755)
     monkeypatch.setattr(_drivers.shutil, "which", lambda n: f"/venv/bin/{n}")
     assert _drivers._resolve("ruff") == "/venv/bin/ruff"
-
-
-def test_resolve_host_tool_falls_back_to_path(tmp_path, monkeypatch):
-    # A host tool with no keg (docker is Docker Desktop) resolves on PATH.
-    monkeypatch.setattr(sys, "platform", "darwin")
-    monkeypatch.setattr(_drivers, "_brew_prefixes", lambda: (str(tmp_path),))
-    monkeypatch.setattr(_drivers.shutil, "which", lambda n: f"/usr/bin/{n}")
-    assert _drivers._resolve("docker") == "/usr/bin/docker"
 
 
 def test_resolve_off_macos_uses_path(monkeypatch):

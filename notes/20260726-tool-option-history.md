@@ -439,12 +439,20 @@ Nothing blocking, and all of it configuration rather than design:
    unnoticed; the docs suite now runs them.
 
    That leaves `AUTO_RELEASE`, unset by design, as the one remaining choice.
-2. ~~**The `system` tier**~~ — **emptied 2026-08-03.** git and docker were
-   the two tools that read the host; docker fetches its own releases now, and
-   git reads kernel.org's manuals on the `man` tier. `_HOST_READ` computes to
-   an empty set, so a refresh can speak for every curated tool. The machinery
-   survives unused — `_provision.py`'s skip branch, `_HOST_READ`, the `kind`
-   docstring — and whether to delete it is a tidy-up, not a gap.
+2. ~~**The `system` tier**~~ — **deleted 2026-08-03.** git and docker were the
+   two tools that read the host; docker fetches its own releases now, and git
+   reads kernel.org's manuals on the `man` tier. That left `_HOST_READ`
+   computing to an empty set, so the tier went out whole rather than sitting
+   there as a rule with nothing to apply to (Willem: *"that was never going
+   to be reproducible long term, it just got us started"*).
+
+   Out with it: `_provision.py`'s skip branch, the `kind` docstring's entry,
+   `tools.py`'s `!= "system"` guard, and — the only real loss —
+   **`_resolve`'s macOS Homebrew keg lookup**, whose sole caller was
+   `_HOST_READ`. A keg was preferred over `PATH` so an intentionally
+   unlinked build was still the one read; with nothing host-read, there was
+   nothing to prefer it for, and `_resolve` is now `shutil.which` on every
+   platform. A refresh can speak for every curated tool.
 
 **Budget: ten releases per tool, pre-primed** (Willem, 2026-07-27), and not
 revisited until the workflow is actually running in CI — a budget tuned

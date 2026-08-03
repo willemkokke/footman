@@ -602,11 +602,7 @@ def _ignore(driver: _drivers.Driver, root: Path | None) -> str:
     if not manual:
         if binary is None:
             return "not installed"
-        if (
-            root is not None
-            and driver.provision.kind != "system"
-            and not _from_prefix(binary, root)
-        ):
+        if root is not None and not _from_prefix(binary, root):
             return "not in the prefix"
     stub = _stub_path(driver.key)
     if not stub.exists():

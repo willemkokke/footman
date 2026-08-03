@@ -32,6 +32,18 @@ versions may include breaking changes.
   Nothing else moves: `--json` still reports hidden nodes marked, and the
   generated task docs still badge them.
 
+### Removed
+
+- **The `system` provisioning tier, and the Homebrew keg lookup it fed.**
+  It named the tools read straight off the machine because fetching them
+  per release was not yet possible — git and docker, latterly. docker
+  fetches its own static builds now and git is read from kernel.org's
+  manuals, so the tier stood empty: a rule with nothing to apply to. With
+  it goes `_resolve`'s macOS preference for a Homebrew **keg** over `PATH`,
+  which existed only to read host tools; resolution is now `shutil.which`
+  on every platform, so a provision prefix and a venv win as they always
+  did. Nothing a stub is generated from comes off the host any more.
+
 ## [0.29.1] — 2026-08-01
 
 ### Added
