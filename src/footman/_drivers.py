@@ -23,7 +23,6 @@ import os
 import re
 import shutil
 import subprocess
-import sys
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
@@ -78,7 +77,6 @@ class Provision:
     `docker` — a static build from docker's own per-platform index, which is
     a directory listing rather than an asset list. `man` — a release's
     manual pages, for a tool read from its manual rather than its `-h`.
-    `system` — already on PATH (the uv running this); never provisioned.
     `deferred` — parked whole, `note` saying why (tea sat here until its
     0.15.0 release; a per-release boundary wants `floor` instead)."""
     package: str = ""
@@ -532,43 +530,21 @@ DRIVERS: tuple[Driver, ...] = (
     ),
 )
 
-_HOST_READ = frozenset(d.name for d in DRIVERS if d.provision.kind == "system")
-"""Tools read straight off the host, never provisioned into an isolated prefix
-— the only ones for which Homebrew is consulted on macOS.
-
-Empty as it stands: git was the last, and its manuals come from kernel.org
-per release now, so every stub footman ships is read from something it
-fetched itself. The rule is kept for whatever joins that tier next."""
-
-
-def _brew_prefixes() -> tuple[str, ...]:
-    """Homebrew's prefixes, most-authoritative first: an explicit
-    `HOMEBREW_PREFIX`, then the Apple-silicon and Intel defaults."""
-    prefixes: list[str] = []
-    if "HOMEBREW_PREFIX" in os.environ:
-        prefixes.append(os.environ["HOMEBREW_PREFIX"])
-    for default in ("/opt/homebrew", "/usr/local"):
-        if default not in prefixes:
-            prefixes.append(default)
-    return tuple(prefixes)
-
 
 def _resolve(name: str) -> str | None:
-    """The executable to read a tool from.
+    """The executable to read a tool from: plain `shutil.which`, everywhere.
 
-    A *host-read* tool on macOS (git; docker and uv carry no keg) prefers its
-    Homebrew **keg** (`opt/<name>/bin/<name>`) — the newest build, and it
-    survives `brew unlink`, so an intentionally-off-`PATH` tool is still read;
-    a tool with no keg simply falls through. Everything else — every provisioned
-    tier (pip/uv/npm/release) and every platform but macOS — is plain
-    `shutil.which`, so a `provision --sync` prefix and a venv win, and a stale
-    `/opt/homebrew/bin` console-script shim is never picked.
+    There was a host-read tier once — tools taken off the machine because
+    fetching them per release was not yet possible — and on macOS it
+    preferred a Homebrew **keg** over `PATH`, so an intentionally unlinked
+    build was still the one read. Nothing is on that tier now: docker fetches
+    its own static builds and git reads kernel.org's manuals, so every stub
+    footman ships comes from something footman fetched. A resolver that
+    consults the host has nothing left to resolve, and one spelling of "which
+    binary" is worth more than a branch nobody reaches — a `provision --sync`
+    prefix and a venv win, and a stale `/opt/homebrew/bin` console-script
+    shim is never picked.
     """
-    if name in _HOST_READ and sys.platform == "darwin":
-        for prefix in _brew_prefixes():
-            keg = os.path.join(prefix, "opt", name, "bin", name)
-            if os.access(keg, os.X_OK) and not os.path.isdir(keg):
-                return keg
     return shutil.which(name)
 
 

@@ -274,10 +274,19 @@ events *are* the changelog entry ("prek 0.4.11 adds `--glob`").
   sources were deferred (git from source; docker via download.docker.com static
   builds). A refresh on a clean CI box has to fetch them properly anyway, so
   those sources fall out of this work rather than being tracked separately.
+
+    **They did, and the tier emptied** (2026-08-03). docker got its own
+    `Provision(kind="docker")`, and git went to the **`man`** tier, reading
+    kernel.org's manuals rather than a binary — the prediction above held,
+    the sources fell out of the work. No driver answers `kind="system"` any
+    more: `_HOST_READ` computes to an empty set, and the 36 curated tools
+    divide as uv 24, man 4, node 2, and one each of docker, bun, github,
+    gitea, gitlab and python. Nothing footman reads comes off the host.
 - **`main` is protected**, so the job cannot push a `chore(release)` commit
   directly; it lands through a PR like every other release.
 - `.tools-latest/` is gitignored; a full provision is ~27s locally, all 24
-  fetchable tools ok (6 shells are hand-written stubs, git/docker are `system`).
+  fetchable tools ok (6 shells are hand-written stubs, git/docker are `system`
+  — the tier that has since emptied, above).
 
 ## 6. Decided (2026-07-26)
 
@@ -418,11 +427,32 @@ Nothing blocking, and all of it configuration rather than design:
 
    The cron is Mondays 06:00 UTC and the workflow landed on a **Wednesday**,
    so no scheduled run has been due yet. **The first one is Monday
-   2026-08-03.** The repo still has no variables set, so `AUTO_RELEASE` is
-   unset by design — that, and not the rollout, is the remaining choice.
-2. **The `system` tier** — git and docker still read the host and have no
-   fetch source, so they are the two tools a refresh cannot speak for. All
-   30 other curated tools carry a chain in `tool-history/`.
+   2026-08-03.**
+
+   It fired at 07:21 UTC and **failed on all three legs in under 32
+   seconds** — not the job's fault. It reads `.results[]` out of `fm --json`,
+   and `2a415ae` had renamed that key to `items` two days earlier, in the
+   window where nothing exercised the pairing. Fixed, and the docs carried
+   the same two mistakes; the dispatch that followed ran green end to end
+   and opened the first real refresh PR. Nothing tested a jq recipe, which
+   is how a change flagged `!` for breaking still reached a Monday morning
+   unnoticed; the docs suite now runs them.
+
+   That leaves `AUTO_RELEASE`, unset by design, as the one remaining choice.
+2. ~~**The `system` tier**~~ — **deleted 2026-08-03.** git and docker were the
+   two tools that read the host; docker fetches its own releases now, and git
+   reads kernel.org's manuals on the `man` tier. That left `_HOST_READ`
+   computing to an empty set, so the tier went out whole rather than sitting
+   there as a rule with nothing to apply to (Willem: *"that was never going
+   to be reproducible long term, it just got us started"*).
+
+   Out with it: `_provision.py`'s skip branch, the `kind` docstring's entry,
+   `tools.py`'s `!= "system"` guard, and — the only real loss —
+   **`_resolve`'s macOS Homebrew keg lookup**, whose sole caller was
+   `_HOST_READ`. A keg was preferred over `PATH` so an intentionally
+   unlinked build was still the one read; with nothing host-read, there was
+   nothing to prefer it for, and `_resolve` is now `shutil.which` on every
+   platform. A refresh can speak for every curated tool.
 
 **Budget: ten releases per tool, pre-primed** (Willem, 2026-07-27), and not
 revisited until the workflow is actually running in CI — a budget tuned
@@ -471,7 +501,9 @@ in code rather than remembered.
 **The tiers landed 2026-07-27**: PyPI, npm, GitHub and GitLab (which covers
 bun). Real chains on all four — prek 21 releases, cspell 3, gh 3, eclint 3.
 `system` (git, docker) stays unlistable until their real sources are wired,
-and provisioned interpreters are not tool releases.
+and provisioned interpreters are not tool releases. *Those sources were
+wired: gitea, docker and `man` joined the list, and the `system` tier is now
+empty — see §5 and §7.*
 
 **The rest landed too** (checked 2026-08-02): the per-tool budget sits on the
 driver, the release gate reads the deltas and writes its own CHANGELOG line,

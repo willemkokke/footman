@@ -39,11 +39,7 @@ def test_only_takes_a_set_of_tools(tmp_path):
     release itself, so those two are all a refresh needs in its prefix.
     Fetching the other 26 was work nothing read — and 26 more chances for a
     dropped connection to cost a platform its observations."""
-    drivers = (
-        Driver("ruff"),
-        Driver("uv", provision=Provision(kind="system")),
-        Driver("bun", provision=Provision(kind="system")),
-    )
+    drivers = (Driver("ruff"), Driver("uv"), Driver("bun"))
     outcomes = _provision.provision(drivers, tmp_path / "p", only="uv,bun")
     assert sorted(o.key for o in outcomes) == ["bun", "uv"]
     # and one name still means one tool
@@ -120,15 +116,16 @@ def test_strict_turns_a_failed_tier_into_a_failed_run(tmp_path, monkeypatch):
     assert refused.value.code == 70
 
 
-def test_system_and_deferred_are_reported_not_fetched(tmp_path):
+def test_deferred_is_reported_not_fetched(tmp_path):
+    # `system` stood beside `deferred` here until the tier was deleted: it
+    # named tools taken off the host because fetching them per release was
+    # not yet possible, and nothing is in that position any more.
     drivers = (
-        Driver("git", provision=Provision(kind="system")),
         Driver(
             "tea", provision=Provision(kind="deferred", note="hangs until > 0.14.2")
         ),
     )
     by = {o.key: o for o in _provision.provision(drivers, tmp_path)}
-    assert by["git"].status == "skip" and "system git" in by["git"].detail
     assert by["tea"].status == "deferred" and "hangs" in by["tea"].detail
 
 

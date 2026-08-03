@@ -1244,9 +1244,10 @@ def test_installing_an_unlistable_tier_declines(tmp_path):
     from footman import _drivers, _toolfetch
 
     # No curated tool sits in a tier that cannot be fetched any more — git
-    # was the last, and it is read from kernel.org's manuals now. The rule
-    # still holds, so it is stated against a driver rather than a tool.
-    driver = _drivers.Driver("nope", provision=_drivers.Provision(kind="system"))
+    # was the last, and it is read from kernel.org's manuals now (the
+    # `system` tier it sat in is deleted). The rule still holds, so it is
+    # stated against a driver rather than a tool.
+    driver = _drivers.Driver("nope", provision=_drivers.Provision(kind="deferred"))
     release = _toolfetch.Release("2.50.0")
     assert _toolfetch.install(driver, release, tmp_path / "nope") is None
 

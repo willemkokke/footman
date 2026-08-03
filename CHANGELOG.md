@@ -32,6 +32,30 @@ versions may include breaking changes.
   Nothing else moves: `--json` still reports hidden nodes marked, and the
   generated task docs still badge them.
 
+### Fixed
+
+- **A word groff broke across lines is one word again.** A manual read for
+  a stub arrived carrying U+2010 — groff's own marker for a hyphen *it*
+  inserted, never the ASCII one a literal hyphen renders as — so ssh's stub
+  documented "authenticated en- cryption". Rejoining is exact rather than a
+  guess, because the character says who put it there; anywhere else it
+  becomes a plain `-`. The same character had failed CI two ways at once:
+  ruff reads it as ambiguous, and its UTF-8 tail byte is undefined in
+  cp1252, which is what Windows decodes with when a reader forgets to say
+  `encoding=`.
+
+### Removed
+
+- **The `system` provisioning tier, and the Homebrew keg lookup it fed.**
+  It named the tools read straight off the machine because fetching them
+  per release was not yet possible — git and docker, latterly. docker
+  fetches its own static builds now and git is read from kernel.org's
+  manuals, so the tier stood empty: a rule with nothing to apply to. With
+  it goes `_resolve`'s macOS preference for a Homebrew **keg** over `PATH`,
+  which existed only to read host tools; resolution is now `shutil.which`
+  on every platform, so a provision prefix and a venv win as they always
+  did. Nothing a stub is generated from comes off the host any more.
+
 ## [0.29.1] — 2026-08-01
 
 ### Added

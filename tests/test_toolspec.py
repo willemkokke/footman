@@ -1138,7 +1138,10 @@ def test_no_stub_carries_a_home_directory():
     guilty = {
         path.name
         for path in stubs.glob("*.pyi")
-        if looks_like_home.search(path.read_text())
+        # `encoding=` is not optional here: a stub carries whatever its tool's
+        # help does, and Windows decodes with cp1252 by default — where the
+        # UTF-8 tail byte of a man page's U+2010 is simply undefined.
+        if looks_like_home.search(path.read_text(encoding="utf-8"))
     }
     assert guilty == set()
 
@@ -1743,6 +1746,27 @@ DESCRIPTION
 """
 
 
+def test_groff_hyphenation_is_put_back_together():
+    """A word groff broke across lines is one word again, in ASCII.
+
+    U+2010 is groff's own marker for a hyphen it inserted — a literal one in
+    the source renders as plain `-` — so rejoining is exact, not a guess.
+    ssh's page broke "encryption" across lines with it, and that shipped in
+    a stub, where it cost two CI failures: ruff reads the character as
+    ambiguous (RUF002), and its UTF-8 tail byte 0x90 is undefined in cp1252,
+    which is what Windows decodes with unless a reader says `encoding=`.
+
+    Spelled as an escape throughout — writing it literally trips the very
+    rule this test is about.
+    """
+    hyphen = "\u2010"
+    joined = _toolhelp._dehyphenate(f"authenticated en{hyphen}\n            cryption)")
+    assert joined == "authenticated encryption)"
+    # Anywhere else it is still not a hyphen anyone typed.
+    assert _toolhelp._dehyphenate(f"cipher{hyphen}auth") == "cipher-auth"
+    assert hyphen not in joined
+
+
 def test_manual_short_only_options_are_keyed():
     # ssh's whole surface is short-only; the `shorts` policy alone decides,
     # and the default "only" describes exactly this shape.
@@ -1892,45 +1916,24 @@ def test_md_safe_touches_only_leading_header_and_quote():
     assert safe[2].endswith("mid # hash")  # a mid-line hash is not a block
 
 
-def test_resolve_prefers_homebrew_keg_for_host_tool(tmp_path, monkeypatch):
-    """A host-read tool on macOS is read from its Homebrew keg.
+def test_resolve_is_path_and_nothing_else(tmp_path, monkeypatch):
+    """`_resolve` is `shutil.which`, on every platform.
 
-    Stated against a name rather than a tool: no curated tool is read from
-    the host any more. git was the last one, and its manuals are fetched
-    per release now — so `_HOST_READ` is empty and the rule has nothing
-    real to apply to, until something joins that tier again.
+    There was a host-read tier once, and on macOS it preferred a Homebrew
+    keg over PATH so an unlinked build was still the one read. Nothing sits
+    on that tier now — docker fetches its own builds, git reads kernel.org's
+    manuals — so the branch went with it. Asserted on darwin, where the keg
+    rule used to apply and a stale `/opt/homebrew/bin` shim is the thing
+    that must never win: a provisioned tool comes from PATH (the prefix, or
+    the venv), whatever is installed beside it.
     """
     monkeypatch.setattr(sys, "platform", "darwin")
-    monkeypatch.setattr(_drivers, "_HOST_READ", frozenset({"hostly"}))
-    monkeypatch.setattr(_drivers, "_brew_prefixes", lambda: (str(tmp_path),))
-    keg = tmp_path / "opt" / "hostly" / "bin"
-    keg.mkdir(parents=True)
-    tool = keg / "hostly"
-    tool.write_text("#!/bin/sh\n")
-    tool.chmod(0o755)
-    assert _drivers._resolve("hostly") == str(tool)
-
-
-def test_resolve_ignores_homebrew_for_provisioned_tool(tmp_path, monkeypatch):
-    # A provisioned tool (ruff) is never read from Homebrew, even with a keg
-    # present — it comes from PATH (the provision prefix / venv), so a stale
-    # `/opt/homebrew/bin` shim can never shadow it.
-    monkeypatch.setattr(sys, "platform", "darwin")
-    monkeypatch.setattr(_drivers, "_brew_prefixes", lambda: (str(tmp_path),))
     keg = tmp_path / "opt" / "ruff" / "bin"
     keg.mkdir(parents=True)
     (keg / "ruff").write_text("#!/bin/sh\n")
     (keg / "ruff").chmod(0o755)
     monkeypatch.setattr(_drivers.shutil, "which", lambda n: f"/venv/bin/{n}")
     assert _drivers._resolve("ruff") == "/venv/bin/ruff"
-
-
-def test_resolve_host_tool_falls_back_to_path(tmp_path, monkeypatch):
-    # A host tool with no keg (docker is Docker Desktop) resolves on PATH.
-    monkeypatch.setattr(sys, "platform", "darwin")
-    monkeypatch.setattr(_drivers, "_brew_prefixes", lambda: (str(tmp_path),))
-    monkeypatch.setattr(_drivers.shutil, "which", lambda n: f"/usr/bin/{n}")
-    assert _drivers._resolve("docker") == "/usr/bin/docker"
 
 
 def test_resolve_off_macos_uses_path(monkeypatch):
