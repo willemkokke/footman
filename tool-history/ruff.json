@@ -3,8 +3,8 @@
  "tool": "ruff",
  "observed_from": "0.15.14",
  "base": {
-  "version": "0.16.0",
-  "date": "2026-07-29",
+  "version": "0.16.1",
+  "date": "2026-07-30",
   "platforms": [
    "Linux",
    "Windows",
@@ -531,6 +531,81 @@
       }
      }
     },
+    "clean": {
+     "help": "Clear any caches in the current directory and any subdirectories",
+     "wraps": false,
+     "positional": "none",
+     "lead": "",
+     "options": {
+      "color": {
+       "flags": [
+        "--color"
+       ],
+       "negation": "",
+       "help": "Control when colored output is used",
+       "type": "choice",
+       "default": null,
+       "choices": [
+        "auto",
+        "always",
+        "never"
+       ]
+      },
+      "config": {
+       "flags": [
+        "--config"
+       ],
+       "negation": "",
+       "help": "Either a path to a TOML configuration file (`pyproject.toml` or `ruff.toml`), or a TOML `<KEY> = <VALUE>` pair (such as you might find in a `ruff.toml` configuration file) overriding a specific configuration option (e.g., `--config \"lint.line-length = 100\"` or `--config \"format.quote-style = 'single'\"`)",
+       "type": "str",
+       "default": null,
+       "choices": []
+      },
+      "isolated": {
+       "flags": [
+        "--isolated"
+       ],
+       "negation": "",
+       "help": "Ignore all configuration files",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "quiet": {
+       "flags": [
+        "--quiet",
+        "-q"
+       ],
+       "negation": "",
+       "help": "Print diagnostics, but nothing else",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "silent": {
+       "flags": [
+        "--silent",
+        "-s"
+       ],
+       "negation": "",
+       "help": "Disable all logging (but still exit with status code \"1\" upon detecting diagnostics)",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      },
+      "verbose": {
+       "flags": [
+        "--verbose",
+        "-v"
+       ],
+       "negation": "",
+       "help": "Enable verbose logging",
+       "type": "bool",
+       "default": null,
+       "choices": []
+      }
+     }
+    },
     "format": {
      "help": "Run the Ruff formatter on the given files or directories",
      "wraps": false,
@@ -789,86 +864,20 @@
        "choices": []
       }
      }
-    },
-    "clean": {
-     "help": "Clear any caches in the current directory and any subdirectories",
-     "wraps": false,
-     "positional": "none",
-     "lead": "",
-     "options": {
-      "color": {
-       "flags": [
-        "--color"
-       ],
-       "negation": "",
-       "help": "Control when colored output is used",
-       "type": "choice",
-       "default": null,
-       "choices": [
-        "auto",
-        "always",
-        "never"
-       ]
-      },
-      "config": {
-       "flags": [
-        "--config"
-       ],
-       "negation": "",
-       "help": "Either a path to a TOML configuration file (`pyproject.toml` or `ruff.toml`), or a TOML `<KEY> = <VALUE>` pair (such as you might find in a `ruff.toml` configuration file) overriding a specific configuration option (e.g., `--config \"lint.line-length = 100\"` or `--config \"format.quote-style = 'single'\"`)",
-       "type": "str",
-       "default": null,
-       "choices": []
-      },
-      "isolated": {
-       "flags": [
-        "--isolated"
-       ],
-       "negation": "",
-       "help": "Ignore all configuration files",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "quiet": {
-       "flags": [
-        "--quiet",
-        "-q"
-       ],
-       "negation": "",
-       "help": "Print diagnostics, but nothing else",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "silent": {
-       "flags": [
-        "--silent",
-        "-s"
-       ],
-       "negation": "",
-       "help": "Disable all logging (but still exit with status code \"1\" upon detecting diagnostics)",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      },
-      "verbose": {
-       "flags": [
-        "--verbose",
-        "-v"
-       ],
-       "negation": "",
-       "help": "Enable verbose logging",
-       "type": "bool",
-       "default": null,
-       "choices": []
-      }
-     }
     }
    }
   }
  },
  "deltas": {
+  "0.16.0": {
+   "date": "2026-07-29",
+   "platforms": [
+    "Linux",
+    "Windows",
+    "macOS"
+   ],
+   "extractor": 2
+  },
   "0.15.22": {
    "date": "2026-07-16",
    "platforms": [

@@ -3,8 +3,8 @@
  "tool": "djlint",
  "observed_from": "1.40.8",
  "base": {
-  "version": "1.43.1",
-  "date": "2026-07-29",
+  "version": "1.43.2",
+  "date": "2026-08-01",
   "platforms": [
    "Linux",
    "Windows",
@@ -12,10 +12,10 @@
   ],
   "extractor": 2,
   "surface": {
-   "help": "djLint · HTML template linter and formatter.",
+   "help": "djLint � HTML template linter and formatter.",
    "verbs": {
     "": {
-     "help": "djLint · HTML template linter and formatter.",
+     "help": "djLint � HTML template linter and formatter.",
      "wraps": false,
      "positional": "required",
      "lead": "src",
@@ -499,6 +499,21 @@
   }
  },
  "deltas": {
+  "1.43.1": {
+   "date": "2026-07-29",
+   "platforms": [
+    "Linux",
+    "Windows",
+    "macOS"
+   ],
+   "extractor": 2,
+   "verbs": {
+    "": {
+     "help": "djLint · HTML template linter and formatter."
+    }
+   },
+   "help": "djLint · HTML template linter and formatter."
+  },
   "1.43.0": {
    "date": "2026-07-27",
    "platforms": [

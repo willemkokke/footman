@@ -3,8 +3,8 @@
  "tool": "tea",
  "observed_from": "0.15.0",
  "base": {
-  "version": "0.15.0",
-  "date": "2026-07-29",
+  "version": "0.15.1",
+  "date": "2026-08-02",
   "platforms": [
    "Linux",
    "Windows",
@@ -2668,5 +2668,15 @@
    }
   }
  },
- "deltas": {}
+ "deltas": {
+  "0.15.0": {
+   "date": "2026-07-29",
+   "platforms": [
+    "Linux",
+    "Windows",
+    "macOS"
+   ],
+   "extractor": 2
+  }
+ }
 }
