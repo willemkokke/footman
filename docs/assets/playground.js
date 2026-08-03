@@ -22,12 +22,13 @@ const REVISION_MARK = "example: revision";
 const DEFAULT_FILES = {
   "tasks.py": `from typing import Literal
 from footman import fail, run, task
-from footman.tools import pytest
+from footman.tools import pytest, ruff
 
 @task
 def lint(fix: bool = False):
     "Lint the source tree."
-    run("ruff check src" + (" --fix" if fix else ""))
+    # a typed wrapper: keywords become flags, False is omitted
+    ruff.check("src", fix=fix)
 
 @task(serial=True)   # in-process pytest touches the process globals
 def test():
@@ -250,7 +251,10 @@ if sys.platform == "emscripten" or os.environ.get("_FM_PLAYGROUND_SIM"):
             cmd = argv if isinstance(argv, str) else " ".join(argv)
             self._out = "[simulated] " + cmd + chr(10)
 
-        def communicate(self, timeout=None):
+        # Keyword-for-keyword what run() calls: it always passes input=
+        # (None unless the task feeds the child), so a positional-only
+        # signature here breaks every run() in the page.
+        def communicate(self, input=None, timeout=None):
             return self._out, ""
 
         def poll(self):
