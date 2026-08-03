@@ -8,10 +8,12 @@ Shipped: the format and its chain, five listable tiers including CPython, the
 backward walk (`fm tools.prime`), the forward walk (`fm tools.refresh`) and
 its matrix split (`gather`/`owed`/`assemble`), the release note the events
 write, `tools.prepare-release`, and 30 checked-in chains under
-`tool-history/`. **One thing stands between this and a job that runs itself:
-the cron has never fired** — every run so far was triggered by hand — and
-§7's local-first rollout is the step that would change that. What remains is
-configuration rather than design — see §7. Decision 5 was **reversed** in the building; its reasoning is
+`tool-history/`. The local-first rollout §7 asked for is **done**: the store
+was primed on three machines, and 26 of the 30 chains carry Linux, macOS and
+Windows in their base observation. The workflow has been driven by hand and
+lands green. **The first scheduled run is Monday 2026-08-03** — the cron has
+not fired only because no Monday has come round since the workflow landed on
+Wednesday 2026-07-29. What remains is configuration rather than design — see §7. Decision 5 was **reversed** in the building; its reasoning is
 kept in place rather than deleted, because the way it was wrong is the useful
 part.
 
@@ -403,12 +405,21 @@ Nothing blocking, and all of it configuration rather than design:
    Windows and Linux machine, copy the documents back, assemble here, before
    cron is trusted.
 
-   **The cron has still never fired** (checked 2026-08-02). The workflow is
-   scheduled Mondays 06:00 UTC, and all seven runs to date are
-   `workflow_dispatch` — four green, three red, the last on 2026-07-29. The
-   repo has no variables set at all, so `AUTO_RELEASE` is unset by design.
-   The local-first rollout is therefore the one step between here and a job
-   that runs itself, and three failures in seven says it is the right order.
+   **Rolled out, and waiting on the calendar** (checked 2026-08-02). The
+   prime ran on three local machines, which is what the store shows: 26 of
+   30 chains hold Linux, macOS and Windows in their base observation, and the
+   four that do not are tools one platform cannot install. The workflow was
+   then driven by hand seven times — all on 2026-07-29, the day it landed.
+   Three failed and four passed, but that reads as a build session rather
+   than a flaky job: the three reds produced three fixes committed the same
+   day (bash on every leg including Windows, provision-what-is-needed with a
+   retry for what merely dropped, and a week with nothing to read counting as
+   success), and the last run of the day is green.
+
+   The cron is Mondays 06:00 UTC and the workflow landed on a **Wednesday**,
+   so no scheduled run has been due yet. **The first one is Monday
+   2026-08-03.** The repo still has no variables set, so `AUTO_RELEASE` is
+   unset by design — that, and not the rollout, is the remaining choice.
 2. **The `system` tier** — git and docker still read the host and have no
    fetch source, so they are the two tools a refresh cannot speak for. All
    30 other curated tools carry a chain in `tool-history/`.
