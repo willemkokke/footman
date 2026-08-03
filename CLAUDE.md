@@ -132,6 +132,26 @@ reaches a docs page.
   `uv run ruff check --fix . && uv run ruff format .` (the whole repo, as CI
   lints it — `notes/` and `comparison/` are tracked too).
 
+## Work in a worktree, and clean up after yourself
+
+**Every agent session works in its own git worktree, from before its first
+edit.** The maintainer edits the main checkout live, so an agent editing
+there shares a tree with uncommitted work it did not write: `git add -A`
+sweeps someone else's half-finished change into your commit, a `git stash`
+around your own gate run takes their edits with it, and a failing test can
+belong to either of you with nothing to say which. All three happened in one
+afternoon. `EnterWorktree` before touching a file; the main checkout is the
+maintainer's.
+
+**A session cleans up what it created.** Before you finish: the worktree is
+removed (`ExitWorktree`, or `git worktree remove`), every branch you merged
+is deleted **locally and on the remote**, and `git worktree list` shows only
+the main checkout. A merged branch left on the remote is not inert — the
+refresh workflow names its branch for the date, and a leftover one made
+`git push` fail and then, once that was fixed, made a closed PR for the same
+head look like an open one. Leave `git branch -a` showing `main` and nothing
+else.
+
 ## Commits & identity
 
 - **Author/committer email is the maintainer's personal `mail@willem.net`, and
