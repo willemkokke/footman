@@ -200,8 +200,13 @@ jobs:
           git fetch origin "$branch" --depth=1 2>/dev/null || true
           git push --force-with-lease origin "$branch"
           # An open PR already points at this head: re-pushing updated it,
-          # and a second `gh pr create` would only fail. Ask first.
-          if gh pr view "$branch" --json number >/dev/null 2>&1; then
+          # and a second `gh pr create` would only fail. Ask first — and ask
+          # about *open* ones. `gh pr view <branch>` answers for a closed PR
+          # too, so discarding a bad refresh and re-running left the branch
+          # pushed, the guard satisfied by the PR that had just been closed,
+          # and no PR opened for the work.
+          if [ -n "$(gh pr list --head "$branch" --state open --json number \
+                     --jq '.[].number')" ]; then
             echo "refreshed the open PR for $branch"
             exit 0
           fi
