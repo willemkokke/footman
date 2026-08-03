@@ -31,6 +31,11 @@ versions may include breaking changes.
   something has gone wrong — is the one most worth being spelled for you.
   Nothing else moves: `--json` still reports hidden nodes marked, and the
   generated task docs still badge them.
+- **The playground's opening sample lints through the tools bridge.**
+  `lint` calls `ruff.check("src", fix=fix)` rather than assembling the
+  command line by hand, so the first thing a visitor reads shows a typed
+  wrapper turning a task parameter into a flag — and `fix=False` omitting
+  one — beside the `run()` that `deploy` still needs for a project script.
 
 ### Fixed
 
@@ -55,6 +60,16 @@ versions may include breaking changes.
   left a pair straddling a boundary to chance. It surfaced as a flaky test
   on a free-threaded build. The stamp now decides outright, and the clock
   breaks a tie only for a row minted outside the request pipeline.
+- **The playground runs its own sample again.** `run()` hands `input=` to
+  `communicate()` on every call, whether or not a task feeds the child —
+  and the browser sandbox's simulated child, written before there was a
+  stdin to feed, took only `timeout=`. Every `run()` in the page died with
+  a `TypeError` before the first `[simulated]` line, so the opening sample
+  failed at `lint` and nothing downstream of it ran. The simulated child
+  takes the keyword now, and a rehearsal drives the shipped driver over the
+  shipped sample in CPython under `_FM_PLAYGROUND_SIM` — the sandbox tracks
+  a real call surface, so the gate is where the next drift shows up, not
+  the page.
 - **A word groff broke across lines is one word again.** A manual read for
   a stub arrived carrying U+2010 — groff's own marker for a hyphen *it*
   inserted, never the ASCII one a literal hyphen renders as — so ssh's stub
