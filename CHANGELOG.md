@@ -22,6 +22,11 @@ versions may include breaking changes.
 
 ### Changed
 
+- **coverage 7.15.3** rewords 1 description. It also restates its own description.
+- **docker 29.7.0** adds `--compress`, `--cpu-period`, `--cpu-quota`, `--cpu-shares`, `--cpuset-cpus`, `--cpuset-mems`, `--force-rm`, `--isolation`, `--memory`, `--memory-swap`, `--rm` and `--security-opt`. It also rewords 12 descriptions.
+- **gh 2.97.0** adds `--allow-escape-sequences`.
+- **prek 0.4.12** adds `--force` and `--require-group`. It also drops `--overwrite` and rewords 4 descriptions.
+- **uv 0.12.1** adds `--prerelease-package`.
 - **`hidden` is a listings word, not a completion one.** A hidden task now
   completes and answers the did-you-mean index; what it stays out of is
   `--list`, `--tree` and group help. A listing is prose about what a repo

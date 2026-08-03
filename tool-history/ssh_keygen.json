@@ -6,14 +6,15 @@
   "version": "10.4p1",
   "date": "2026-08-01",
   "platforms": [
+   "Linux",
    "macOS"
   ],
   "extractor": 2,
   "surface": {
-   "help": "SSH-KEYGEN(1)               General Commands Manual              SSH-KEYGEN(1)",
+   "help": "SSH-KEYGEN(1)                                                                          General Commands Manual                                                                        SSH-KEYGEN(1)",
    "verbs": {
     "": {
-     "help": "SSH-KEYGEN(1)               General Commands Manual              SSH-KEYGEN(1)",
+     "help": "SSH-KEYGEN(1)                                                                          General Commands Manual                                                                        SSH-KEYGEN(1)",
      "wraps": false,
      "positional": "any",
      "lead": "",
@@ -447,6 +448,7 @@
   "10.3p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2,
@@ -466,6 +468,7 @@
   "10.2p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -473,6 +476,7 @@
   "10.1p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -480,6 +484,7 @@
   "10.0p2": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2,
@@ -499,6 +504,7 @@
   "10.0p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -506,6 +512,7 @@
   "9.9p2": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -513,6 +520,7 @@
   "9.9p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -520,6 +528,7 @@
   "9.8p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -527,6 +536,7 @@
   "9.7p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -534,6 +544,7 @@
   "9.6p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -541,6 +552,7 @@
   "9.5p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -548,6 +560,7 @@
   "9.4p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -555,6 +568,7 @@
   "9.3p2": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -562,6 +576,7 @@
   "9.3p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -569,6 +584,7 @@
   "9.2p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -576,6 +592,7 @@
   "9.1p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -583,6 +600,7 @@
   "9.0p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2,
@@ -612,6 +630,7 @@
   "8.9p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -619,6 +638,7 @@
   "8.8p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -626,6 +646,7 @@
   "8.7p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -633,6 +654,7 @@
   "8.6p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -640,6 +662,7 @@
   "8.5p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -647,6 +670,7 @@
   "8.4p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2,
@@ -669,6 +693,7 @@
   "8.3p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -676,6 +701,7 @@
   "8.2p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -683,6 +709,7 @@
   "8.1p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2,
@@ -735,7 +762,7 @@
       "-W"
      ],
      "negation": "",
-     "help": "Specify desired generator when testing candidate moduli for DH- GEX",
+     "help": "Specify desired generator when testing candidate moduli for DH-GEX",
      "type": "str",
      "default": null,
      "choices": []
@@ -797,6 +824,7 @@
   "8.0p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2,
@@ -819,6 +847,7 @@
   "7.9p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2,
@@ -878,6 +907,7 @@
   "7.8p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -885,6 +915,7 @@
   "7.7p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2,
@@ -916,6 +947,7 @@
   "7.6p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -923,6 +955,7 @@
   "7.5p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2,
@@ -945,6 +978,7 @@
   "7.4p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -952,6 +986,7 @@
   "7.3p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -959,6 +994,7 @@
   "7.2p2": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -966,6 +1002,7 @@
   "7.2p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -973,6 +1010,7 @@
   "7.1p2": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2,
@@ -1002,6 +1040,7 @@
   "7.1p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -1009,6 +1048,7 @@
   "7.0p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -1016,6 +1056,7 @@
   "6.9p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -1023,6 +1064,7 @@
   "6.8p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -1030,6 +1072,7 @@
   "6.7p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2,
@@ -1040,6 +1083,7 @@
   "6.6p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2,
@@ -1059,6 +1103,7 @@
   "6.5p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -1066,6 +1111,7 @@
   "6.4p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2,
@@ -1098,6 +1144,7 @@
   "6.3p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -1105,6 +1152,7 @@
   "6.2p2": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -1112,6 +1160,7 @@
   "6.2p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -1119,6 +1168,7 @@
   "6.1p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2,
@@ -1131,6 +1181,7 @@
   "6.0p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2,
@@ -1142,6 +1193,7 @@
   "5.9p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2,
@@ -1152,6 +1204,7 @@
   "5.8p2": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2,
@@ -1162,6 +1215,7 @@
   "5.8p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -1169,6 +1223,7 @@
   "5.7p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -1176,6 +1231,7 @@
   "5.6p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -1183,6 +1239,7 @@
   "5.5p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2,
@@ -1226,6 +1283,7 @@
   "5.4p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -1233,6 +1291,7 @@
   "5.3p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2,
@@ -1273,6 +1332,7 @@
   "5.2p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -1280,6 +1340,7 @@
   "5.1p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -1287,6 +1348,7 @@
   "5.0p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -1294,6 +1356,7 @@
   "4.9p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -1301,6 +1364,7 @@
   "4.7p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -1308,6 +1372,7 @@
   "4.6p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -1315,6 +1380,7 @@
   "4.5p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2,
@@ -1334,6 +1400,7 @@
   "4.4p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -1341,6 +1408,7 @@
   "4.3p2": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -1348,6 +1416,7 @@
   "4.3p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -1355,6 +1424,7 @@
   "4.2p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -1362,6 +1432,7 @@
   "4.1p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -1369,6 +1440,7 @@
   "4.0p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2,
@@ -1388,6 +1460,7 @@
   "3.9p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2,
@@ -1422,6 +1495,7 @@
   "3.8p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2,
@@ -1451,6 +1525,7 @@
   "3.7p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2,
@@ -1461,6 +1536,7 @@
   "3.6p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2,
@@ -1478,6 +1554,7 @@
   "3.5p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -1485,6 +1562,7 @@
   "3.4p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -1492,6 +1570,7 @@
   "3.3p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -1499,6 +1578,7 @@
   "3.1p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -1506,6 +1586,7 @@
   "3.0p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2,
@@ -1525,6 +1606,7 @@
   "2.9p2": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2,
@@ -1548,6 +1630,7 @@
   "2.9p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2

@@ -6,14 +6,15 @@
   "version": "10.4p1",
   "date": "2026-08-01",
   "platforms": [
+   "Linux",
    "macOS"
   ],
   "extractor": 2,
   "surface": {
-   "help": "SSH(1)                      General Commands Manual                     SSH(1)",
+   "help": "SSH(1)                                                                                 General Commands Manual                                                                               SSH(1)",
    "verbs": {
     "": {
-     "help": "SSH(1)                      General Commands Manual                     SSH(1)",
+     "help": "SSH(1)                                                                                 General Commands Manual                                                                               SSH(1)",
      "wraps": true,
      "positional": "any",
      "lead": "",
@@ -43,7 +44,7 @@
         "-C"
        ],
        "negation": "",
-       "help": "Requests compression of all data (including stdin, stdout, stderr, and data for forwarded X11, TCP and UNIX-domain connections)",
+       "help": "Requests compression of all data (including stdin, stdout, stderr, and data for forwarded X11, TCP and Unix-domain connections)",
        "type": "bool",
        "default": null,
        "choices": []
@@ -457,6 +458,7 @@
   "10.3p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -464,6 +466,7 @@
   "10.2p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -471,6 +474,7 @@
   "10.1p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -478,6 +482,7 @@
   "10.0p2": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -485,6 +490,7 @@
   "10.0p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -492,6 +498,7 @@
   "9.9p2": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -499,6 +506,7 @@
   "9.9p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -506,6 +514,7 @@
   "9.8p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -513,6 +522,7 @@
   "9.7p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -520,6 +530,7 @@
   "9.6p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -527,6 +538,7 @@
   "9.5p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2,
@@ -540,6 +552,7 @@
   "9.4p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -547,6 +560,7 @@
   "9.3p2": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2,
@@ -579,6 +593,7 @@
   "9.3p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -586,6 +601,7 @@
   "9.2p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -593,6 +609,7 @@
   "9.1p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -600,6 +617,7 @@
   "9.0p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -607,6 +625,7 @@
   "8.9p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -614,6 +633,7 @@
   "8.8p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -621,6 +641,7 @@
   "8.7p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -628,6 +649,7 @@
   "8.6p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2,
@@ -647,6 +669,7 @@
   "8.5p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -654,6 +677,7 @@
   "8.4p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -661,6 +685,7 @@
   "8.3p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -668,6 +693,7 @@
   "8.2p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -675,6 +701,7 @@
   "8.1p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2,
@@ -704,6 +731,7 @@
   "8.0p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -711,6 +739,7 @@
   "7.9p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2,
@@ -730,6 +759,7 @@
   "7.8p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -737,6 +767,7 @@
   "7.7p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -744,6 +775,7 @@
   "7.6p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2,
@@ -772,6 +804,7 @@
   "7.5p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2,
@@ -791,6 +824,7 @@
   "7.4p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -798,6 +832,7 @@
   "7.3p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -805,6 +840,7 @@
   "7.2p2": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2,
@@ -815,6 +851,7 @@
   "7.2p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -822,6 +859,7 @@
   "7.1p2": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2,
@@ -851,6 +889,7 @@
   "7.1p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -858,6 +897,7 @@
   "7.0p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -865,6 +905,7 @@
   "6.9p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2,
@@ -885,7 +926,7 @@
      ],
      "negation": "",
      "help": "Specifies that the given port on the remote (server) host is to be forwarded to the given host and port on the local side",
-     "type": "list[str]",
+     "type": "str",
      "default": null,
      "choices": []
     }
@@ -894,6 +935,7 @@
   "6.8p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2,
@@ -923,16 +965,30 @@
   "6.7p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2,
    "drop": [
     "\tG"
-   ]
+   ],
+   "revert": {
+    "\tR": {
+     "flags": [
+      "-R"
+     ],
+     "negation": "",
+     "help": "Specifies that the given port on the remote (server) host is to be forwarded to the given host and port on the local side",
+     "type": "list[str]",
+     "default": null,
+     "choices": []
+    }
+   }
   },
   "6.6p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2,
@@ -952,6 +1008,7 @@
   "6.5p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -959,6 +1016,7 @@
   "6.4p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2,
@@ -972,12 +1030,23 @@
      "type": "str",
      "default": null,
      "choices": []
+    },
+    "\tR": {
+     "flags": [
+      "-R"
+     ],
+     "negation": "",
+     "help": "Specifies that the given port on the remote (server) host is to be forwarded to the given host and port on the local side",
+     "type": "str",
+     "default": null,
+     "choices": []
     }
    }
   },
   "6.3p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -985,6 +1054,7 @@
   "6.2p2": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2,
@@ -996,6 +1066,7 @@
   "6.2p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -1003,6 +1074,7 @@
   "6.1p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -1010,6 +1082,7 @@
   "6.0p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -1017,6 +1090,7 @@
   "5.9p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -1024,13 +1098,27 @@
   "5.8p2": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
-   "extractor": 2
+   "extractor": 2,
+   "revert": {
+    "\tR": {
+     "flags": [
+      "-R"
+     ],
+     "negation": "",
+     "help": "Specifies that the given port on the remote (server) host is to be forwarded to the given host and port on the local side",
+     "type": "list[str]",
+     "default": null,
+     "choices": []
+    }
+   }
   },
   "5.8p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -1038,6 +1126,7 @@
   "5.7p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -1045,10 +1134,21 @@
   "5.6p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2,
    "revert": {
+    "\tR": {
+     "flags": [
+      "-R"
+     ],
+     "negation": "",
+     "help": "Specifies that the given port on the remote (server) host is to be forwarded to the given host and port on the local side",
+     "type": "str",
+     "default": null,
+     "choices": []
+    },
     "\ti": {
      "flags": [
       "-i"
@@ -1064,10 +1164,21 @@
   "5.5p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2,
    "revert": {
+    "\tR": {
+     "flags": [
+      "-R"
+     ],
+     "negation": "",
+     "help": "Specifies that the given port on the remote (server) host is to be forwarded to the given host and port on the local side",
+     "type": "list[str]",
+     "default": null,
+     "choices": []
+    },
     "\tS": {
      "flags": [
       "-S"
@@ -1083,6 +1194,7 @@
   "5.4p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2,
@@ -1102,6 +1214,7 @@
   "5.3p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2,
@@ -1124,13 +1237,27 @@
   "5.2p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
-   "extractor": 2
+   "extractor": 2,
+   "revert": {
+    "\tR": {
+     "flags": [
+      "-R"
+     ],
+     "negation": "",
+     "help": "Specifies that the given port on the remote (server) host is to be forwarded to the given host and port on the local side",
+     "type": "str",
+     "default": null,
+     "choices": []
+    }
+   }
   },
   "5.1p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2,
@@ -1141,6 +1268,7 @@
   "5.0p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -1148,6 +1276,7 @@
   "4.9p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -1155,6 +1284,7 @@
   "4.7p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -1162,6 +1292,7 @@
   "4.6p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2,
@@ -1172,6 +1303,7 @@
   "4.5p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -1179,6 +1311,7 @@
   "4.4p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -1186,6 +1319,7 @@
   "4.3p2": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2,
@@ -1205,6 +1339,7 @@
   "4.3p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -1212,6 +1347,7 @@
   "4.2p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2,
@@ -1249,6 +1385,16 @@
      "default": null,
      "choices": []
     },
+    "\tR": {
+     "flags": [
+      "-R"
+     ],
+     "negation": "",
+     "help": "Specifies that the given port on the remote (server) host is to be forwarded to the given host and port on the local side",
+     "type": "list[str]",
+     "default": null,
+     "choices": []
+    },
     "\te": {
      "flags": [
       "-e"
@@ -1264,6 +1410,7 @@
   "4.1p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2,
@@ -1283,6 +1430,7 @@
   "4.0p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -1290,6 +1438,7 @@
   "3.9p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2,
@@ -1300,6 +1449,7 @@
   "3.8p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2,
@@ -1323,6 +1473,7 @@
   "3.7p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2,
@@ -1365,6 +1516,7 @@
   "3.6p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2,
@@ -1387,6 +1539,7 @@
   "3.5p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -1394,6 +1547,7 @@
   "3.4p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2,
@@ -1413,6 +1567,7 @@
   "3.3p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -1420,6 +1575,7 @@
   "3.1p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2
@@ -1427,6 +1583,7 @@
   "3.0p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2,
@@ -1446,6 +1603,7 @@
   "2.9p2": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2,
@@ -1471,6 +1629,7 @@
   "2.9p1": {
    "date": "",
    "platforms": [
+    "Linux",
     "macOS"
    ],
    "extractor": 2

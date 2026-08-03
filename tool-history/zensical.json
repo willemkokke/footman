@@ -3,8 +3,8 @@
  "tool": "zensical",
  "observed_from": "0.0.41",
  "base": {
-  "version": "0.0.51",
-  "date": "2026-07-29",
+  "version": "0.0.52",
+  "date": "2026-07-30",
   "platforms": [
    "Linux",
    "Windows",
@@ -62,6 +62,13 @@
       }
      }
     },
+    "new": {
+     "help": "Create a new template project in the current or given directory.",
+     "wraps": false,
+     "positional": "any",
+     "lead": "",
+     "options": {}
+    },
     "serve": {
      "help": "Build and serve a project.",
      "wraps": false,
@@ -113,18 +120,20 @@
        "choices": []
       }
      }
-    },
-    "new": {
-     "help": "Create a new template project in the current or given directory.",
-     "wraps": false,
-     "positional": "any",
-     "lead": "",
-     "options": {}
     }
    }
   }
  },
  "deltas": {
+  "0.0.51": {
+   "date": "2026-07-29",
+   "platforms": [
+    "Linux",
+    "Windows",
+    "macOS"
+   ],
+   "extractor": 2
+  },
   "0.0.50": {
    "date": "2026-07-09",
    "platforms": [
