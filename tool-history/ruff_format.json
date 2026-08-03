@@ -3,8 +3,8 @@
  "tool": "ruff_format",
  "observed_from": "0.15.14",
  "base": {
-  "version": "0.16.0",
-  "date": "2026-07-29",
+  "version": "0.16.1",
+  "date": "2026-07-30",
   "platforms": [
    "Linux",
    "Windows",
@@ -277,6 +277,15 @@
   }
  },
  "deltas": {
+  "0.16.0": {
+   "date": "2026-07-29",
+   "platforms": [
+    "Linux",
+    "Windows",
+    "macOS"
+   ],
+   "extractor": 2
+  },
   "0.15.22": {
    "date": "2026-07-16",
    "platforms": [
