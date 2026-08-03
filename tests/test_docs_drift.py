@@ -9,6 +9,8 @@ own files, so they only run meaningfully from a source checkout.
 from __future__ import annotations
 
 import re
+import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -129,3 +131,106 @@ def test_foundations_pages_teach_their_guards():
         assert name in nav, f"{name} exists but is not in the nav"
         for needle in needles:
             assert needle in text, f"{name} lost its lesson: {needle!r}"
+
+
+# --- the documented jq recipes ------------------------------------------------
+# Prose about the JSON envelope is audited above; these run it. A recipe is a
+# consumer like any other, and the one thing no reader of a doc can do is
+# notice that the key it walks was renamed three commits ago.
+
+_JQ = re.compile(r"jq\s+(?:-[a-zA-Z]+\s+)*'([^']+)'", re.S)
+
+
+def _documented_jq() -> list[tuple[str, str]]:
+    """`(file:line, program)` for every jq recipe in the hand-written docs."""
+    found: list[tuple[str, str]] = []
+    for path in sorted(_handwritten_docs()):
+        text = path.read_text(encoding="utf-8")
+        for match in _JQ.finditer(text):
+            line = text[: match.start()].count("\n") + 1
+            found.append((f"{path.name}:{line}", match.group(1)))
+    return found
+
+
+RECIPES = _documented_jq()
+
+_ENVELOPE_TASKS = """
+import footman
+from footman import task
+
+
+@task
+def green():
+    "A task that shells out."
+    footman.run("echo hello")
+
+
+@task
+def red():
+    "A task that fails."
+    footman.fail("boom", 3)
+"""
+
+
+@pytest.fixture
+def envelope(tmp_path, monkeypatch, capsys) -> str:
+    """A real `--json` envelope carrying all three row shapes a recipe walks:
+    a task that passed, the step it ran, and a task that failed.
+
+    Real rather than a checked-in fixture, because a fixture would have gone
+    stale in exactly the way the recipes did.
+    """
+    from footman import _app, _paths
+
+    (tmp_path / "tasks.py").write_text(_ENVELOPE_TASKS, encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
+    _app.run(["--json", "-k", "green", "red"])
+    printed: str = capsys.readouterr().out  # capsys is Any-typed; name it once
+    return printed
+
+
+def _jq(program: str, text: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["jq", program], input=text, capture_output=True, text=True, check=False
+    )
+
+
+def test_the_docs_still_carry_jq_recipes():
+    """The regex above is load-bearing: if it stops matching, every test
+    below passes by finding nothing."""
+    assert len(RECIPES) >= 5, f"only found {RECIPES}"
+
+
+@pytest.mark.skipif(shutil.which("jq") is None, reason="jq is not installed")
+@pytest.mark.parametrize(("where", "program"), RECIPES, ids=[w for w, _ in RECIPES])
+def test_documented_jq_recipes_run_against_a_real_envelope(where, program, envelope):
+    """Every documented recipe walks keys that exist.
+
+    jq exits 2 on a usage problem, 3 on a compile error and 5 on a runtime
+    one; `-e` recipes exit 1 to *mean* false, which is an answer rather than
+    a failure. So the verdict is stderr — jq names what it could not do
+    there — and the three error codes.
+
+    This is the guard the `results` -> `items` rename went past: the docs
+    and the refresh workflow both kept reading a key that no longer existed,
+    and the first thing to notice was a scheduled job failing on a Monday.
+    """
+    done = _jq(program, envelope)
+    assert not done.stderr, f"{where}: jq refused this recipe — {done.stderr.strip()}"
+    assert done.returncode not in (2, 3, 5), f"{where}: jq exited {done.returncode}"
+
+
+@pytest.mark.skipif(shutil.which("jq") is None, reason="jq is not installed")
+def test_the_agent_gate_recipe_reports_only_real_failures(envelope):
+    """agents.md's hook feeds an agent the tasks that failed, filtering on
+    `select(.ok | not)`. The items envelope is one flat list, and a step row
+    carries no `ok` at all — `null | not` is true — so without a
+    `select(.task)` guard the recipe reports a task called `null`, on a gate
+    that was green. Exit codes cannot catch that one: jq is perfectly happy.
+    """
+    program = next(p for where, p in RECIPES if where.startswith("agents.md"))
+    done = _jq(program, envelope)
+    assert not done.stderr
+    assert "red" in done.stdout, "the task that really failed went unreported"
+    assert "null" not in done.stdout, "a step row was reported as a failed task"
