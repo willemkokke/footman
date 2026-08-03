@@ -62,9 +62,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           uv run fm --json tools.owed --prefix=.tools-latest > owed.json
-          total=$(jq '[.results[] | select(.task | endswith("owed"))
+          # `select(.task)` first: the items envelope is one flat list, so a
+          # step row (which carries `command`, not `task`) reaches the filter
+          # too and `endswith` refuses a null.
+          total=$(jq '[.items[] | select(.task) | select(.task | endswith("owed"))
                        | .returned.releases[] | length] | add // 0' owed.json)
-          blocked=$(jq '[.results[] | select(.task | endswith("owed"))
+          blocked=$(jq '[.items[] | select(.task) | select(.task | endswith("owed"))
                          | .returned.unreachable | length] | add // 0' owed.json)
           echo "total=$total blocked=$blocked"
           # An index that would not answer is not "nothing to do": a walk
@@ -163,7 +166,7 @@ jobs:
           else
             echo "changed=true" >> "$GITHUB_ENV"
           fi
-          jq -r '.results[] | select(.task | endswith("assemble"))
+          jq -r '.items[] | select(.task) | select(.task | endswith("assemble"))
                  | .returned | "release=\(.release)"' assembled.json >> "$GITHUB_ENV"
 
       - name: roll the release
@@ -174,7 +177,7 @@ jobs:
           && env.release == 'true' && vars.AUTO_RELEASE == 'true'
         run: |
           uv run fm --json tools.prepare-release > prepared.json
-          jq -r '.results[] | select(.task | endswith("prepare-release"))
+          jq -r '.items[] | select(.task) | select(.task | endswith("prepare-release"))
                  | .returned | "tag=v\(.version)"' prepared.json >> "$GITHUB_ENV"
           git add -A -- pyproject.toml src/footman/__init__.py docs/json.md CHANGELOG.md
 
@@ -192,7 +195,7 @@ jobs:
           gh pr create --base main --head "$branch" \
             --title "chore(tools): weekly tool refresh${tag:+ ($tag)}" \
             --body "$(printf 'Observed on ubuntu, macOS and Windows; folded by one assembler.\n\n```\n%s\n```\n\nAuto-merges once the gate is green — the gate is the reviewer here: it replays every chain, regenerates every stub, and runs the drift tests.' \
-              "$(jq -r '.results[] | select(.task | endswith("assemble")) | .output' assembled.json)")"
+              "$(jq -r '.items[] | select(.task) | select(.task | endswith("assemble")) | .output' assembled.json)")"
           # Opened, not merged. The gate replays every chain and
           # regenerates every stub, which proves the store is *consistent* —
           # not that the readings in it are true. A wrong reading passes it

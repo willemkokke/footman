@@ -171,7 +171,8 @@ its keep:
 out=$(uv run fm --json check) && exit 0
 printf '%s' "$out" | jq '{followup_message:
   ("fm check failed — fix these, then finish:\n" +
-   ([.results[] | select(.ok | not) | "\(.task): exit \(.code)\n\(.output)"] | join("\n")))}'
+   ([.items[] | select(.task) | select(.ok | not)
+     | "\(.task): exit \(.code)\n\(.output)"] | join("\n")))}'
 ```
 
 !!! warning "Cursor's hooks are beta"
