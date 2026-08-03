@@ -34,6 +34,16 @@ versions may include breaking changes.
 
 ### Fixed
 
+- **The report is ordered by when work was created, not by when it ran.**
+  `--json`'s items list and `inv.results` promised "the order the work was
+  created" and delivered it only approximately: rows sorted by start time,
+  with the request stamp breaking ties inside a 10ms bucket. Two independent
+  tasks in a parallel run start in whatever order the pool hands them
+  workers, so the report reshuffled between runs of the same command —
+  intermittently, because the bucket hid it for a pair that shared one and
+  left a pair straddling a boundary to chance. It surfaced as a flaky test
+  on a free-threaded build. The stamp now decides outright, and the clock
+  breaks a tie only for a row minted outside the request pipeline.
 - **A word groff broke across lines is one word again.** A manual read for
   a stub arrived carrying U+2010 — groff's own marker for a hyphen *it*
   inserted, never the ASCII one a literal hyphen renders as — so ssh's stub

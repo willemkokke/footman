@@ -82,7 +82,8 @@ class Invocation:
         `TaskView` edit uses. Editable at `pre_tasks`, when a hook may disable a
         task, add a prerequisite, or read provenance."""
         self.results: tuple[Any, ...] = ()
-        """The run's rows, chronological, as result views — filled for
+        """The run's rows, in the order the work was created, as result
+        views — filled for
         `post_tasks` (the run itself writes past the freeze; hooks read).
         Executions, `shared` rows, refusals and `skipped` nodes alike."""
         self.skipped: tuple[Any, ...] = ()

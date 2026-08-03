@@ -557,27 +557,35 @@ def _not_confirmed(seg: Segment) -> _executor.TaskResult:
     )
 
 
-def _chronological(results: list[_executor.TaskResult]) -> list[_executor.TaskResult]:
-    """The run's results in the order the run happened.
+def _in_request_order(
+    results: list[_executor.TaskResult],
+) -> list[_executor.TaskResult]:
+    """The run's results in the order the work was created.
 
-    Chronological is the only ordering that has a place for everything: a task
-    reached by a body call has no slot in a dependency listing, but it has a
-    moment. Sequential runs are unchanged, since running in dependency order
-    *is* chronological; only independent tasks in a parallel run move, to
-    wherever they actually ran.
+    Request order has a place for everything: a task reached by a body call
+    has no slot in a dependency listing, but it drew a stamp from the same
+    run-wide counter the plan did, at the moment it was asked for. Sequential
+    runs are unchanged, since requesting in dependency order *is* the order
+    they run in.
 
-    Something that never began has no moment of its own, so it sits directly
+    It is also the only ordering a reader can rely on. The clock cannot do
+    this job: two independent tasks in a parallel run start in whatever order
+    the pool hands them workers, so a report keyed on `started` reshuffles
+    between runs of the same command — and did, intermittently, on a
+    free-threaded build. Sorting by start time within a 10ms bucket hid it
+    for pairs that shared a bucket and left the pair that straddled a
+    boundary to chance, because the buckets are aligned to `perf_counter`'s
+    arbitrary origin rather than to anything about the run.
+
+    Something that never began has no stamp of its own, so it sits directly
     after whatever prevented it — the report reads as cause, then consequence.
     With nothing to blame (a gate answered before any task ran) it comes first.
     """
-    # Starts landing inside the same instant are scheduler noise — worker
-    # threads stamp `started` microseconds apart in an order that carries no
-    # information — so within a 10ms bucket the request order decides, and
-    # the shuffle a rerun would produce disappears.
+    # `started` breaks a tie only for a row minted outside the request
+    # pipeline, which carries no stamp to sort by.
     ran = sorted(
         (r for r in results if r.started is not None),
         key=lambda r: (
-            int((r.started or 0.0) * 100),
             r.seq if r.seq is not None else float("inf"),
             r.started or 0.0,
         ),
@@ -639,7 +647,7 @@ def run_plan(
         # A task reached by a body call ran as a real task, so its result joins
         # the run's. Every execution the run performed is reported, however it
         # was reached — and the whole report reads in the order it happened.
-        return _chronological([*results, *_futures.collected()])
+        return _in_request_order([*results, *_futures.collected()])
 
 
 def _run_plan(
@@ -805,7 +813,7 @@ def _run_plan(
     # for every node the plan had, not only the ones that ran. Marked
     # `skipped` by a sweep, or simply left pending when the run stopped
     # reaching for new work: either way it never began, so it has no moment
-    # of its own and `_chronological` seats it after its cause. A node whose
+    # of its own and `_in_request_order` seats it after its cause. A node whose
     # confirm was denied already has its refusal row.
     for n in ordered:
         # Launch latency, derivable after the fact: a node became eligible

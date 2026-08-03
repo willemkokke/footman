@@ -513,7 +513,8 @@ def digest(inv):
                f"{inv.total_ms:.0f} ms")
 ```
 
-`inv.results` is every row, chronological — executions, `shared` rows,
+`inv.results` is every row, in the order the work was created — executions,
+`shared` rows,
 refusals, and `skipped` nodes (`inv.skipped` is that subset). This is the
 moment that sees what never ran: a `post_task` reporter only meets requests
 whose ladder opened, so the run-level view is where "what didn't happen"
