@@ -191,7 +191,20 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -b "$branch"
           git commit -m "chore(tools): weekly refresh${tag:+ — release $tag}"
-          git push origin "$branch"
+          # The branch is named for the day, so a *second* run in one day
+          # meets its own leftovers and `git push` is rejected — which is
+          # every re-run after a failure or a discarded PR, and it cost one.
+          # `--force-with-lease` is the safe spelling: it refuses if someone
+          # else moved the branch since we fetched it, so a human's commits
+          # on an open refresh PR are never overwritten.
+          git fetch origin "$branch" --depth=1 2>/dev/null || true
+          git push --force-with-lease origin "$branch"
+          # An open PR already points at this head: re-pushing updated it,
+          # and a second `gh pr create` would only fail. Ask first.
+          if gh pr view "$branch" --json number >/dev/null 2>&1; then
+            echo "refreshed the open PR for $branch"
+            exit 0
+          fi
           gh pr create --base main --head "$branch" \
             --title "chore(tools): weekly tool refresh${tag:+ ($tag)}" \
             --body "$(printf 'Observed on ubuntu, macOS and Windows; folded by one assembler.\n\n```\n%s\n```\n\nAuto-merges once the gate is green — the gate is the reviewer here: it replays every chain, regenerates every stub, and runs the drift tests.' \

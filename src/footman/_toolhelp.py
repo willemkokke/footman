@@ -1005,7 +1005,47 @@ def run_help(
     except (OSError, subprocess.SubprocessError):
         return ""
     out, err = done.stdout or "", done.stderr or ""
-    return out if len(out) > len(err) else err
+    return _decoded(out if len(out) > len(err) else err, argv, flag, timeout)
+
+
+def _decoded(text: str, argv: list[str], flag: str, timeout: float) -> str:
+    """*text*, re-read in the machine's own code page if UTF-8 mangled it.
+
+    Captured output is decoded as UTF-8 because dev tools emit it whatever
+    the OS code page says — but *whatever* is doing a lot of work there.
+    djLint prints its banner's `·` as one cp1252 byte on Windows, and UTF-8
+    with `errors="replace"` turned that into U+FFFD: the reading went into
+    the store, the delta said the help text had changed, and djlint 1.43.2
+    was credited with an event it never had.
+
+    A replacement character is the decoder admitting it lost a byte, so it
+    is the signal to ask again with `encoding=None` — the locale codec,
+    which is what a tool that ignored UTF-8 was speaking. If that reading
+    is clean it wins; if it is not, the caller still sees a U+FFFD and the
+    observer refuses to record it rather than inventing a change.
+    """
+    if "�" not in text:
+        return text
+    try:
+        again = _run(
+            [*argv, flag],
+            recorded=False,
+            timeout=timeout,
+            nofail=True,
+            encoding=None,  # the locale codec: what the tool actually spoke
+            env={
+                **os.environ,
+                **QUIET,
+                "COLUMNS": "200",
+                "TERM": "dumb",
+                "NO_COLOR": "1",
+            },
+        )
+    except (OSError, subprocess.SubprocessError):
+        return text
+    out, err = again.stdout or "", again.stderr or ""
+    relocalised = out if len(out) > len(err) else err
+    return relocalised if "�" not in relocalised else text
 
 
 # A captured read must not expose the *caller's* console: a tool that

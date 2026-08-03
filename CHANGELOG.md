@@ -34,6 +34,17 @@ versions may include breaking changes.
 
 ### Fixed
 
+- **A reading that lost bytes is refused, not recorded.** Captured output is
+  decoded as UTF-8 because dev tools emit it whatever the OS code page says
+  — but djLint prints its banner's `·` as one cp1252 byte on Windows, and
+  `errors="replace"` turned that into U+FFFD. The store recorded it, the
+  delta said the help text had changed, and djlint 1.43.2 was credited with
+  an event it never had. Now a mangled read is taken again with the locale
+  codec, which is what a tool that ignored UTF-8 was speaking; and if a
+  surface still carries a replacement character, `surface_of` refuses it
+  outright. That costs one release on one platform, reported as a hole and
+  filled by the next run — against a store where nothing downstream can tell
+  a mangled byte from a real edit.
 - **The report is ordered by when work was created, not by when it ran.**
   `--json`'s items list and `inv.results` promised "the order the work was
   created" and delivered it only approximately: rows sorted by start time,
