@@ -75,8 +75,53 @@ def _option_fields(option: Option, **replaced: Any) -> dict[str, Any]:
     return {**option.__dict__, **replaced}
 
 
+class LossyReading(Exception):
+    """A reading that lost bytes on the way in, refused rather than stored.
+
+    U+FFFD is the decoder saying it could not represent something it read.
+    Whatever the tool printed there, this is not it — and because help text
+    is state, storing it manufactures an event: djLint's banner `·` arrived
+    as one cp1252 byte on Windows, decoded to U+FFFD under UTF-8, and the
+    store recorded 1.43.2 as having changed a description that never moved.
+
+    Refusing costs one release on one platform, reported as a hole and
+    filled by the next run. Recording costs the store its meaning, because
+    nothing downstream can tell a mangled byte from a real edit.
+    """
+
+
+def _refuse_lossy(spec: ToolSpec, surface: dict[str, Any]) -> None:
+    """Guard the one door every stored reading comes through."""
+    if "�" not in json.dumps(surface, ensure_ascii=False):
+        return
+    where = next(
+        (
+            verb.name
+            for verb in spec.verbs
+            if "�" in verb.help or any("�" in option.help for option in verb.options)
+        ),
+        "the tool's own help",
+    )
+    raise LossyReading(
+        f"{spec.name or 'tool'} {spec.version or ''}: the reading of {where} "
+        f"carries U+FFFD — bytes the decoder could not read. Refusing to "
+        f"record it: a mangled character is indistinguishable from a real "
+        f"change once it is in the history."
+    )
+
+
 def surface_of(spec: ToolSpec) -> dict[str, Any]:
-    """A ToolSpec reduced to what a release *is*, losing nothing else."""
+    """A ToolSpec reduced to what a release *is*, losing nothing else.
+
+    Refuses a reading that lost bytes — see `LossyReading`. This is the one
+    door every stored surface comes through, whichever task minted it.
+    """
+    surface = _surface(spec)
+    _refuse_lossy(spec, surface)
+    return surface
+
+
+def _surface(spec: ToolSpec) -> dict[str, Any]:
     return {
         "help": spec.help,
         "verbs": {

@@ -21,6 +21,30 @@ from footman import _toolhistory
 from footman._toolspec import Option, ToolSpec, Verb
 
 
+def test_a_reading_that_lost_bytes_is_refused(tmp_path):
+    """U+FFFD in a surface is the decoder admitting it could not read
+    something. Storing it manufactures an event, because help text is state
+    and nothing downstream can tell a mangled byte from a real edit — djLint
+    printed its banner separator as one cp1252 byte on Windows, UTF-8 turned
+    it into a replacement character, and the store credited 1.43.2 with a
+    description change that never happened.
+    """
+    lossy = _spec(help="djLint \ufffd HTML template linter and formatter.")
+    with pytest.raises(_toolhistory.LossyReading, match=r"U\+FFFD"):
+        _toolhistory.surface_of(lossy)
+
+    # Named where it is, so the report says which reading to distrust.
+    verbs = _spec().verbs
+    deep = _spec(
+        verbs=(verbs[0], Verb(name="build", help="Build it \ufffd fast.")),
+    )
+    with pytest.raises(_toolhistory.LossyReading, match="build"):
+        _toolhistory.surface_of(deep)
+
+    # A clean reading is untouched — the guard is a tripwire, not a filter.
+    assert _toolhistory.surface_of(_spec())["help"] == "A demo tool."
+
+
 def _spec(**over) -> ToolSpec:
     base = ToolSpec(
         name="demo",

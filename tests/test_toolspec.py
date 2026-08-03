@@ -1746,6 +1746,42 @@ DESCRIPTION
 """
 
 
+def test_a_mangled_read_is_taken_again_in_the_local_code_page(monkeypatch):
+    """UTF-8 first, the locale codec when UTF-8 lost bytes.
+
+    Captured output is decoded as UTF-8 because dev tools emit it whatever
+    the OS code page says — but djLint prints its banner separator as one
+    cp1252 byte on Windows, and `errors="replace"` turned that into U+FFFD.
+    A replacement character is the decoder admitting it lost something, so
+    it is the signal to ask again with the locale codec.
+    """
+    bad = "djLint \ufffd HTML template linter and formatter."
+    good = "djLint \u00b7 HTML template linter and formatter."
+    calls: list[object] = []
+
+    class _Done:
+        def __init__(self, out):
+            self.stdout, self.stderr = out, ""
+
+    def fake_run(argv, **kwargs):
+        calls.append(kwargs.get("encoding", "utf-8"))
+        return _Done(good)
+
+    monkeypatch.setattr(_toolhelp, "_run", fake_run)
+    assert _toolhelp._decoded(bad, ["djlint"], "--help", 5.0) == good
+    assert calls == [None]  # asked again with the locale codec, once
+
+    # A clean read never spawns a second process.
+    calls.clear()
+    assert _toolhelp._decoded(good, ["djlint"], "--help", 5.0) == good
+    assert calls == []
+
+    # And a re-read that is *also* mangled keeps the first answer rather
+    # than trading one unreadable reading for another.
+    monkeypatch.setattr(_toolhelp, "_run", lambda argv, **kw: _Done(bad))
+    assert _toolhelp._decoded(bad, ["djlint"], "--help", 5.0) == bad
+
+
 def test_groff_hyphenation_is_put_back_together():
     """A word groff broke across lines is one word again, in ASCII.
 
