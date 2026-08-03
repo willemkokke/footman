@@ -1478,7 +1478,8 @@ class Group:
                 slack.post(f"{len(failed)} failed of {len(inv.results)}, "
                            f"{inv.total_ms:.0f} ms")
 
-        `inv.results` is every row, chronological, as result views —
+        `inv.results` is every row, in the order the work was created, as
+        result views —
         executions, `shared` rows, refusals, and `skipped` nodes
         (`inv.skipped` is that subset; a `post_task`-only reporter never
         sees what never ran, which is why this moment exists). Under

@@ -84,9 +84,9 @@ _active: _Session | None = None
 # The run-wide request counter: every request for task-shaped work takes a
 # number at the moment it is *made* — plan order for scheduled segments, the
 # written line for a `parallel()` block's queued calls, the call moment for
-# body calls. The report's chronological order tie-breaks on it when two
-# starts land inside the same instant (worker threads stamp `started`
-# microseconds apart in an order that is scheduler noise, not information).
+# body calls. The report is ordered by it outright: the clock cannot do the
+# job, because two independent tasks start in whatever order the pool hands
+# them workers, and that reshuffles between runs of the same command.
 _seq = itertools.count()
 # A queued call re-enters `call()` on a pool worker; the queue moment (the
 # written line) already took its number, carried here around the invocation.

@@ -722,13 +722,20 @@ def test_near_simultaneous_starts_seat_in_request_order():
         row("first-written", 10.0001, 5),
         row("mid-written", 10.0092, 6),
     ]
-    ordered = _schedule._chronological(burst)
+    ordered = _schedule._in_request_order(burst)
     assert [r.task for r in ordered] == ["first-written", "mid-written", "late-written"]
 
 
-def test_genuinely_later_starts_keep_their_moment():
-    # Across buckets the clock still rules: a task requested early but
-    # started late (pool saturation) seats where it actually ran.
+def test_the_clock_never_overrules_the_request_stamp():
+    """A task requested first reports first, however late the pool ran it.
+
+    The clock used to rule across 10ms buckets, which made the report of a
+    parallel run a reading of the thread scheduler: two independent tasks
+    seat in whatever order they got workers, and that flips between runs of
+    the same command. It flipped in CI on a free-threaded build. The order
+    the work was created is the one thing a reader can rely on, so it is the
+    one the report uses — this row is half a second late and still first.
+    """
     from footman._executor import TaskResult
 
     def row(task, started, seq):
@@ -738,10 +745,10 @@ def test_genuinely_later_starts_keep_their_moment():
         row("requested-first-ran-last", 10.5, 1),
         row("requested-last-ran-first", 10.0, 9),
     ]
-    ordered = _schedule._chronological(rows)
+    ordered = _schedule._in_request_order(rows)
     assert [r.task for r in ordered] == [
-        "requested-last-ran-first",
         "requested-first-ran-last",
+        "requested-last-ran-first",
     ]
 
 

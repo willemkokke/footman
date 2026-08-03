@@ -564,7 +564,7 @@ def test_something_that_never_began_sits_after_what_prevented_it():
     skipped = TaskResult(task="publish", ok=False, blocked_by="build")
     denied = TaskResult(task="deploy", ok=False)  # nothing to blame: it leads
 
-    ordered = _schedule._chronological([ran_later, skipped, ran_first, denied])
+    ordered = _schedule._in_request_order([ran_later, skipped, ran_first, denied])
     assert [r.task for r in ordered] == ["deploy", "build", "publish", "notify"]
 
 
