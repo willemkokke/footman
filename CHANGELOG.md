@@ -32,6 +32,18 @@ versions may include breaking changes.
   Nothing else moves: `--json` still reports hidden nodes marked, and the
   generated task docs still badge them.
 
+### Fixed
+
+- **A word groff broke across lines is one word again.** A manual read for
+  a stub arrived carrying U+2010 — groff's own marker for a hyphen *it*
+  inserted, never the ASCII one a literal hyphen renders as — so ssh's stub
+  documented "authenticated en- cryption". Rejoining is exact rather than a
+  guess, because the character says who put it there; anywhere else it
+  becomes a plain `-`. The same character had failed CI two ways at once:
+  ruff reads it as ambiguous, and its UTF-8 tail byte is undefined in
+  cp1252, which is what Windows decodes with when a reader forgets to say
+  `encoding=`.
+
 ### Removed
 
 - **The `system` provisioning tier, and the Homebrew keg lookup it fed.**

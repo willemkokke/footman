@@ -1138,7 +1138,10 @@ def test_no_stub_carries_a_home_directory():
     guilty = {
         path.name
         for path in stubs.glob("*.pyi")
-        if looks_like_home.search(path.read_text())
+        # `encoding=` is not optional here: a stub carries whatever its tool's
+        # help does, and Windows decodes with cp1252 by default — where the
+        # UTF-8 tail byte of a man page's U+2010 is simply undefined.
+        if looks_like_home.search(path.read_text(encoding="utf-8"))
     }
     assert guilty == set()
 
@@ -1741,6 +1744,27 @@ DESCRIPTION
              Find the principal(s) associated with the public key of a
              signature.
 """
+
+
+def test_groff_hyphenation_is_put_back_together():
+    """A word groff broke across lines is one word again, in ASCII.
+
+    U+2010 is groff's own marker for a hyphen it inserted — a literal one in
+    the source renders as plain `-` — so rejoining is exact, not a guess.
+    ssh's page broke "encryption" across lines with it, and that shipped in
+    a stub, where it cost two CI failures: ruff reads the character as
+    ambiguous (RUF002), and its UTF-8 tail byte 0x90 is undefined in cp1252,
+    which is what Windows decodes with unless a reader says `encoding=`.
+
+    Spelled as an escape throughout — writing it literally trips the very
+    rule this test is about.
+    """
+    hyphen = "\u2010"
+    joined = _toolhelp._dehyphenate(f"authenticated en{hyphen}\n            cryption)")
+    assert joined == "authenticated encryption)"
+    # Anywhere else it is still not a hyphen anyone typed.
+    assert _toolhelp._dehyphenate(f"cipher{hyphen}auth") == "cipher-auth"
+    assert hyphen not in joined
 
 
 def test_manual_short_only_options_are_keyed():

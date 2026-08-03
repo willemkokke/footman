@@ -1030,6 +1030,28 @@ NO_CONSOLE_WINDOW: int = (
 # char-then-backspace pair leaves clean text, no `col` binary needed.
 _OVERSTRIKE = re.compile(r".\x08")
 
+# groff breaks a long word across lines with U+2010 HYPHEN — the typographic
+# one, never the ASCII hyphen-minus a literal hyphen in the source renders
+# as. So the character *is* the marker for "I inserted this here", and
+# putting the word back together is exact rather than a guess: ssh's page
+# read "authenticated en-\ncryption" with that character, and it reached a
+# shipped stub. It cost two CI failures — ruff reads U+2010 in a docstring as
+# ambiguous (RUF002), and its UTF-8 tail byte 0x90 is undefined in cp1252,
+# which is what Windows decodes with when a test forgets `encoding=`. Spelled
+# as an escape below, because writing it literally trips RUF001 right here.
+_U2010 = "\u2010"  # the character itself; escaped so ruff sees no ambiguity
+_SOFT_HYPHEN = re.compile(_U2010 + r"\n\s*")
+
+
+def _dehyphenate(text: str) -> str:
+    """Undo groff's line-breaking hyphenation, and keep the text ASCII.
+
+    A U+2010 anywhere else is still not a hyphen anyone typed, so it becomes
+    one: the stubs are read by ruff, by Windows, and by people grepping for
+    `--all-files`, and all three want the character on their keyboard.
+    """
+    return _SOFT_HYPHEN.sub("", text).replace(_U2010, "-")
+
 
 def man_version(tree: Path, name: str = "git") -> str:
     """The version a fetched manual belongs to, from its own header.
@@ -1122,7 +1144,7 @@ def _run_man(argv: list[str], timeout: float) -> str:
         )
     except (OSError, subprocess.SubprocessError):
         return ""
-    return _OVERSTRIKE.sub("", done.stdout or "")
+    return _dehyphenate(_OVERSTRIKE.sub("", done.stdout or ""))
 
 
 def _render_page(tree: str, page: str, timeout: float) -> str:
@@ -1148,7 +1170,7 @@ def _render_page(tree: str, page: str, timeout: float) -> str:
         )
     except (OSError, subprocess.SubprocessError):
         return ""
-    return _OVERSTRIKE.sub("", done.stdout or "")
+    return _dehyphenate(_OVERSTRIKE.sub("", done.stdout or ""))
 
 
 QUIET = {"GH_NO_UPDATE_NOTIFIER": "1"}
