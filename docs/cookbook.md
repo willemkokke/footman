@@ -695,9 +695,9 @@ def coverage() -> dict:
 ```
 
 ```console
-$ fm --json coverage | jq '.results[0].returned.percent'
+$ fm --json coverage | jq '.items[0].returned.percent'
 94.2
-$ fm --json coverage | jq -e '.results[0].returned.percent >= 90' > /dev/null \
+$ fm --json coverage | jq -e '.items[0].returned.percent >= 90' > /dev/null \
     || echo "coverage regression"
 ```
 
