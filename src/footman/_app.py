@@ -746,20 +746,23 @@ def _contract_entry(address: str, task: dict[str, Any]) -> dict[str, Any]:
 
 
 def _describe_contract(tree: dict[str, Any], target: object, argv_rest: bool) -> int:
-    """`--describe[=TASK]`: the input+output contract as one JSON document.
+    """`--describe[=ADDR]`: the input+output contract as one JSON document.
 
     Bare, it hands an agent the entire API — every task's params and declared
     return schema, sorted by address so a checked-in snapshot is invariant to
-    declaration order. With a value, one task's entry in the same envelope.
-    Plain JSON on stdout either way: like `--where`, the output already is
-    the machine format, so `--json` adds nothing.
+    declaration order. A task address answers with that one entry; a group
+    address answers for its whole subtree — the prefix-names-a-subtree rule
+    every address surface speaks — and a runnable group's default alone is
+    its real `group.default` address, the child the bare group runs. Plain
+    JSON on stdout either way: like `--where`, the output already is the
+    machine format, so `--json` adds nothing.
     """
     if target is True:
         if argv_rest:
             # `fm --describe check` reads as bare --describe plus a run of
             # `check` — surely not what was meant. Teach the `=` spelling
             # rather than silently describing everything.
-            _error("--describe: name the task in the value — --describe=<task>")
+            _error("--describe: name the address in the value — --describe=<addr>")
             return EX_USAGE
         entries = [
             _contract_entry(address, node)
@@ -776,18 +779,20 @@ def _describe_contract(tree: dict[str, Any], target: object, argv_rest: bool) ->
                 node = node["groups"][name]
             last = path[-1]
             if last in node["tasks"]:
-                found = node["tasks"][last]
+                entries = [_contract_entry(dotted, node["tasks"][last])]
             else:
-                # A runnable group's address describes its default action.
-                found = node["groups"][last]["default"]
+                sub = node["groups"][last]
+                entries = [
+                    _contract_entry(address, task)
+                    for address, task in sorted(_iter_task_nodes(sub, f"{dotted}."))
+                ]
         except (KeyError, IndexError):
-            names = _split.flat_addresses(tree)
+            names = _split.flat_addresses(tree) + list(_describe.iter_group_paths(tree))
             _error(
-                f"--describe: unknown task {dotted!r}"
+                f"--describe: unknown task or group {dotted!r}"
                 f"{_split._did_you_mean(dotted, names)}"
             )
             return EX_USAGE
-        entries = [_contract_entry(dotted, found)]
     print(json.dumps({"schema": 1, "tasks": entries}, indent=2))
     return 0
 

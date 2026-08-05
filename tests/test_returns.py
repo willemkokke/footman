@@ -445,7 +445,45 @@ def test_bare_describe_dumps_the_whole_contract_sorted():
     assert "returns" not in by_task["plain"]
 
 
-def test_describe_one_task_and_a_runnable_group():
+def grouped_tasks(reg):
+    docs = reg.group("docs", "documentation")
+
+    @docs.task
+    def build() -> bool:
+        return True
+
+    @docs.task
+    def serve():
+        pass
+
+    shots = docs.group("shots", "screenshots")
+
+    @shots.task
+    def cast() -> Literal["ok"]:
+        return "ok"
+
+    @reg.task
+    def top():
+        pass
+
+
+def test_describe_a_group_answers_for_its_subtree():
+    # The prefix-names-a-subtree rule, on the contract surface: a group
+    # address is every task under it, nested groups included, sorted —
+    # the wildcard-shaped ask without a glob in the grammar.
+    result = invoke(grouped_tasks, "--describe=docs")
+    doc = json.loads(result.stdout)
+    assert [e["task"] for e in doc["tasks"]] == [
+        "docs.build",
+        "docs.serve",
+        "docs.shots.cast",
+    ]
+    result = invoke(grouped_tasks, "--describe=docs.shots")
+    doc = json.loads(result.stdout)
+    assert [e["task"] for e in doc["tasks"]] == ["docs.shots.cast"]
+
+
+def test_describe_a_runnable_group_is_its_subtree_default_included():
     def tasks(reg):
         lint = reg.group("lint", "linters")
 
@@ -453,23 +491,38 @@ def test_describe_one_task_and_a_runnable_group():
         def run_all() -> Literal["clean", "dirty"]:
             return "clean"
 
+        @lint.task
+        def markdown():
+            pass
+
+    # The group address answers for the namespace; the default rides in it
+    # under its real child address, which also answers alone.
     result = invoke(tasks, "--describe=lint")
     doc = json.loads(result.stdout)
-    assert [e["task"] for e in doc["tasks"]] == ["lint"]
+    assert [e["task"] for e in doc["tasks"]] == ["lint.default", "lint.markdown"]
+    assert doc["tasks"][0]["returns"]["schema"] == {"enum": ["clean", "dirty"]}
+
+    result = invoke(tasks, "--describe=lint.default")
+    doc = json.loads(result.stdout)
+    assert [e["task"] for e in doc["tasks"]] == ["lint.default"]
     assert doc["tasks"][0]["returns"]["schema"] == {"enum": ["clean", "dirty"]}
 
 
-def test_describe_unknown_task_teaches():
+def test_describe_unknown_address_teaches_groups_too():
     result = invoke(tasks_returning_reports, "--describe=affceted")
     assert result.exit_code == EX_USAGE
-    assert "unknown task 'affceted'" in result.stderr
+    assert "unknown task or group 'affceted'" in result.stderr
     assert "did you mean 'affected'?" in result.stderr
+
+    result = invoke(grouped_tasks, "--describe=dcos")
+    assert result.exit_code == EX_USAGE
+    assert "did you mean 'docs'?" in result.stderr
 
 
 def test_bare_describe_with_a_trailing_task_teaches_the_spelling():
     result = invoke(tasks_returning_reports, "--describe affected")
     assert result.exit_code == EX_USAGE
-    assert "--describe=<task>" in result.stderr
+    assert "--describe=<addr>" in result.stderr
 
 
 def test_describe_drops_a_dynamic_completers_baked_choices():

@@ -25,13 +25,16 @@ versions may include breaking changes.
   rides the entry as a `returned_mismatch` note naming the first broken
   path. Loud but local, like `returned_error`: the value still serialises
   and the exit code never moves. Additive to schema 1.
-- **`fm --describe[=TASK]` — the contract without a run.** One JSON
+- **`fm --describe[=ADDR]` — the contract without a run.** One JSON
   document with every task's params and its return shape rendered as JSON
-  Schema (2020-12), plus the docstring's `Returns:` prose. Sorted by
-  address, hidden tasks included and marked, dynamic completer choices
-  dropped — built for checking into a consuming repo and diffing in CI,
-  so a producer-side rename becomes a visible diff at integration time.
-  The rendered schema is contract, not presentation.
+  Schema (2020-12), plus the docstring's `Returns:` prose. A task address
+  answers with one entry; a group address answers for its whole subtree
+  (the prefix-names-a-subtree rule, so no wildcard syntax is needed), and
+  a runnable group's default alone is its real `group.default` address.
+  Sorted by address, hidden tasks included and marked, dynamic completer
+  choices dropped — built for checking into a consuming repo and diffing
+  in CI, so a producer-side rename becomes a visible diff at integration
+  time. The rendered schema is contract, not presentation.
 - **`Returns:` docstring sections join the surface.** Google, NumPy, and
   Sphinx `Returns:` prose is parsed (`footman.docstrings` grows a
   `returns` field), baked as `returned_doc`, shown by `--help` on a
