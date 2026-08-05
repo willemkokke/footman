@@ -156,6 +156,30 @@ def _default_cell(p: dict[str, Any]) -> str:
     return ""
 
 
+def _returns_section(task: dict[str, Any]) -> list[str]:
+    """The output contract on a task page: the `Returns:` prose (or the
+    declared shape's phrase), and a field table when the shape has fields."""
+    returned = task.get("returned")
+    doc = task.get("returned_doc", "")
+    if returned is None and not doc:
+        return []
+    phrase = _describe.returns_phrase(returned) if returned is not None else ""
+    if doc and phrase:
+        head = f"**Returns:** {_cell(doc)} — {_cell(phrase)}"
+    else:
+        head = f"**Returns:** {_cell(doc or phrase)}"
+    parts = [head, ""]
+    if returned is not None and returned.get("fields"):
+        parts += ["| Field | Type |", "| --- | --- |"]
+        for name, fspec in returned["fields"].items():
+            optional = "" if fspec.get("required", True) else " *(optional)*"
+            parts.append(
+                f"| `{name}` | {_cell(_describe.returns_phrase(fspec))}{optional} |"
+            )
+        parts.append("")
+    return parts
+
+
 def _task_page(
     path: list[str], task: dict[str, Any], level: int, flavor: str, prog: str
 ) -> list[str]:
@@ -191,6 +215,8 @@ def _task_page(
             doc = _cell(p.get("doc", ""))
             parts.append(f"| {label} | {_type_cell(p)} | {_default_cell(p)} | {doc} |")
         parts.append("")
+
+    parts += _returns_section(task)
 
     invocation = _describe.example(path, task, prog)
     if flavor == "material":

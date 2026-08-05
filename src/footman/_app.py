@@ -16,7 +16,7 @@ import subprocess
 import sys
 import time
 import tomllib
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -405,6 +405,18 @@ def _print_task_help(tree: dict[str, Any], path: list[str]) -> None:
         for label, detail in rows:
             pad = " " * (width - len(label))
             print(f"  {_describe.bold(label, on)}{pad}  {detail}".rstrip())
+    returned = task.get("returned")
+    returned_doc = task.get("returned_doc", "")
+    if returned is not None or returned_doc:
+        # The output contract: the author's words bright, the shape dimmed
+        # beneath them — the same split every param row makes.
+        mech = _describe.returns_phrase(returned) if returned is not None else ""
+        detail = "  ".join(
+            bit
+            for bit in (returned_doc, _describe.dim(mech, on) if mech else "")
+            if bit
+        )
+        print(f"\n{_describe.bold('returns:', on)} {detail}")
     if uses := _describe.uses_line(task, tree):
         # The globals this task declared (`uses=`): mechanics, so dimmed.
         print(_describe.dim(f"\n  {uses}", on))
@@ -694,6 +706,92 @@ def _where(root: registry.Group, tree: dict[str, Any], dotted: str) -> int:
     return 0
 
 
+def _iter_task_nodes(
+    node: dict[str, Any], prefix: str
+) -> Iterator[tuple[str, dict[str, Any]]]:
+    """Every task node under *node* with its dotted address — a group's
+    `default` included, because it *is* the child task named `default`."""
+    for name, task in node["tasks"].items():
+        yield prefix + name, task
+    for name, sub in node["groups"].items():
+        yield from _iter_task_nodes(sub, f"{prefix}{name}.")
+
+
+def _contract_entry(address: str, task: dict[str, Any]) -> dict[str, Any]:
+    """One task's `--describe` entry: the input surface (the param specs,
+    volatile completer choices dropped) and the output contract (the declared
+    schema rendered as JSON Schema, plus the docstring's `Returns:` prose)."""
+    params = []
+    for p in task["params"]:
+        spec = dict(p)
+        if "dynamic" in spec:
+            # A dynamic completer's baked choices are runtime data (whatever
+            # the completer saw at build time), not contract — a snapshot
+            # that pinned them would flap between machines.
+            spec.pop("choices", None)
+        params.append(spec)
+    entry: dict[str, Any] = {"task": address, "help": task["help"], "params": params}
+    if task.get("hidden"):
+        entry["hidden"] = True
+    returned = task.get("returned")
+    doc = task.get("returned_doc")
+    if returned is not None or doc:
+        block: dict[str, Any] = {}
+        if returned is not None:
+            block["schema"] = _describe.returns_json_schema(returned)
+        if doc:
+            block["doc"] = doc
+        entry["returns"] = block
+    return entry
+
+
+def _describe_contract(tree: dict[str, Any], target: object, argv_rest: bool) -> int:
+    """`--describe[=TASK]`: the input+output contract as one JSON document.
+
+    Bare, it hands an agent the entire API — every task's params and declared
+    return schema, sorted by address so a checked-in snapshot is invariant to
+    declaration order. With a value, one task's entry in the same envelope.
+    Plain JSON on stdout either way: like `--where`, the output already is
+    the machine format, so `--json` adds nothing.
+    """
+    if target is True:
+        if argv_rest:
+            # `fm --describe check` reads as bare --describe plus a run of
+            # `check` — surely not what was meant. Teach the `=` spelling
+            # rather than silently describing everything.
+            _error("--describe: name the task in the value — --describe=<task>")
+            return EX_USAGE
+        entries = [
+            _contract_entry(address, node)
+            for address, node in sorted(_iter_task_nodes(tree, ""))
+        ]
+    else:
+        dotted = str(target)
+        path = dotted.split(".")
+        node: dict[str, Any] = tree
+        try:
+            if "" in path:
+                raise KeyError(dotted)
+            for name in path[:-1]:
+                node = node["groups"][name]
+            last = path[-1]
+            if last in node["tasks"]:
+                found = node["tasks"][last]
+            else:
+                # A runnable group's address describes its default action.
+                found = node["groups"][last]["default"]
+        except (KeyError, IndexError):
+            names = _split.flat_addresses(tree)
+            _error(
+                f"--describe: unknown task {dotted!r}"
+                f"{_split._did_you_mean(dotted, names)}"
+            )
+            return EX_USAGE
+        entries = [_contract_entry(dotted, found)]
+    print(json.dumps({"schema": 1, "tasks": entries}, indent=2))
+    return 0
+
+
 def _emit_document(value: object, inner: object) -> None:
     """The declared document, on stdout: text verbatim (plus a trailing
     newline), bytes raw, anything else JSON — pretty-printed on a terminal,
@@ -799,9 +897,52 @@ def _print_summary(
         print(took, file=sys.stderr)
 
 
-def _print_json(results: list[_executor.TaskResult], *, total: float) -> None:
+def _check_returns(
+    root: registry.Group, results: list[_executor.TaskResult]
+) -> dict[int, tuple[dict[str, Any], str | None]]:
+    """Per-result output contract: `{index: (native spec, mismatch note)}`.
+
+    The producer side of drift protection, paid only by declaring tasks
+    (~tens of µs per value): every reported return that has a declared
+    schema is walked against it, and a mismatch warns on stderr — in every
+    mode, so the rename goes red in the producer's own gate before any
+    consumer integrates — and rides the envelope as `returned_mismatch`.
+    A payload problem stays a note; the exit code never moves.
+    """
+    memo: dict[int, dict[str, Any] | None] = {}
+    out: dict[int, tuple[dict[str, Any], str | None]] = {}
+    for index, r in enumerate(results):
+        try:
+            fn = _executor.resolve(root, r.task.split("."))
+        except (KeyError, IndexError):
+            continue  # a synthetic row (a step-only shared node) has no task
+        if id(fn) not in memo:
+            memo[id(fn)] = _manifest.returned_spec(
+                _manifest.resolved_signature(fn).return_annotation
+            )
+        spec = memo[id(fn)]
+        if spec is None:
+            continue
+        value = r.returned
+        note = None
+        if value is not None and not (
+            isinstance(value, int) and not isinstance(value, bool)
+        ):
+            note = _describe.returned_mismatch(value, spec)
+            if note:
+                _error(f"{r.task}: return value breaks its declared shape — {note}")
+        out[index] = (spec, note)
+    return out
+
+
+def _print_json(
+    results: list[_executor.TaskResult],
+    *,
+    total: float,
+    returns: dict[int, tuple[dict[str, Any], str | None]] | None = None,
+) -> None:
     payload = []
-    for r in results:
+    for index, r in enumerate(results):
         entry: dict[str, object] = {
             "task": r.task,
             "address": r.address,
@@ -872,6 +1013,16 @@ def _print_json(results: list[_executor.TaskResult], *, total: float) -> None:
                 _error(f"{r.task}: --json: return value dropped — {exc}")
             else:
                 entry["returned"] = value
+        if (contract := (returns or {}).get(index)) is not None:
+            spec, note = contract
+            # The declared output contract, in the baked native form — data
+            # and how to read it, one call. Present whenever the task
+            # declares, value or no value (a failed run still has a shape).
+            entry["returned_schema"] = spec
+            if note:
+                # Loud but local: the value still serialises; the note says
+                # where it first breaks the declared shape.
+                entry["returned_mismatch"] = note
         payload.append(entry)
         # The children stand alone, right after their requester: ONE flat
         # list in creation order, the tree carried by every item's address
@@ -1575,6 +1726,10 @@ def _run_tree(
         # machine format.
         return _where(reg, tree, str(g["where"]))
 
+    if (describe := g.get("describe")) is not None:
+        _, after_globals = _split._parse_globals(argv, 0, lenient=True)
+        return _describe_contract(tree, describe, after_globals < len(argv))
+
     try:
         globals_, segments = _split.split_chain(tree, argv)
     except _split.ChainError as exc:
@@ -1776,8 +1931,12 @@ def _run_tree(
         # Green runs teach: the duration, and the step-alignment width.
         _progress.record(Path.cwd(), times_key, total, cmd_width=context.cmd_width())
 
+    # After the post hooks: what a `set_returned` rewrite reported is what
+    # the contract check reads, the same value the envelope carries.
+    returns_meta = _check_returns(reg, results)
+
     if json_mode:
-        _print_json(results, total=total)
+        _print_json(results, total=total, returns=returns_meta)
     else:
         if emitters:
             # The document run's receipts: everything that is not the

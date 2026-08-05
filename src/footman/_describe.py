@@ -425,6 +425,236 @@ def json_default(value: object) -> object:
     raise TypeError(f"{type(value).__name__} is not JSON-serialisable")
 
 
+# --- the output contract ------------------------------------------------------
+# Three pure functions over the `returned` spec `_manifest.returned_spec`
+# bakes: the JSON Schema renderer (the describe door's interop dialect), the
+# producer-side value check, and the phrase help/docs print. The native shape
+# never expresses anything JSON Schema cannot say — golden-pair tests hold the
+# renderer to that.
+
+_RETURN_SCHEMA: dict[str, dict[str, Any]] = {
+    "str": {"type": "string"},
+    "int": {"type": "integer"},
+    "float": {"type": "number"},
+    "bool": {"type": "boolean"},
+    "none": {"type": "null"},
+    "any": {},
+    "path": {"type": "string"},
+    "datetime": {"type": "string", "format": "date-time"},
+    "date": {"type": "string", "format": "date"},
+    "time": {"type": "string", "format": "time"},
+    "uuid": {"type": "string", "format": "uuid"},
+    "decimal": {"type": "string"},
+}
+
+
+def returns_json_schema(spec: dict[str, Any]) -> dict[str, Any]:
+    """Render a baked `returned` spec as JSON Schema (2020-12 vocabulary).
+
+    The describe door's dialect — and a *contract*, not presentation:
+    consumer snapshots pin this output, so a change here is envelope-grade
+    and belongs in the CHANGELOG, never a cosmetic tweak.
+    """
+    kind = spec["kind"]
+    if kind == "enum":
+        schema: dict[str, Any] = {"enum": list(spec["values"])}
+    elif kind == "list":
+        schema = {"type": "array", "items": returns_json_schema(spec["items"])}
+    elif kind == "map":
+        schema = {
+            "type": "object",
+            "additionalProperties": returns_json_schema(spec["values"]),
+        }
+    elif kind == "object":
+        fields: dict[str, Any] | None = spec.get("fields")
+        if not fields:
+            schema = {"type": "object"}  # no field claims (dict[str, Any])
+        else:
+            required = [n for n, f in fields.items() if f.get("required", True)]
+            schema = {
+                "type": "object",
+                "properties": {n: returns_json_schema(f) for n, f in fields.items()},
+                # A declared shape is the whole claim: a dataclass cannot
+                # carry extras, and an undeclared key is exactly the drift
+                # the schema exists to catch.
+                "additionalProperties": False,
+            }
+            if required:
+                schema["required"] = required
+    elif kind == "row":
+        items = [returns_json_schema(f) for f in spec["fields"].values()]
+        schema = {
+            "type": "array",
+            "prefixItems": items,
+            "minItems": len(items),
+            "maxItems": len(items),
+        }
+    else:
+        schema = dict(_RETURN_SCHEMA[kind])
+    if "name" in spec and kind in ("object", "row", "enum"):
+        schema = {"title": spec["name"], **schema}
+    if spec.get("nullable"):
+        return {"anyOf": [schema, {"type": "null"}]}
+    return schema
+
+
+def returned_mismatch(
+    value: Any, spec: dict[str, Any], path: str = "returned"
+) -> str | None:
+    """The first place *value* breaks its declared spec, or None.
+
+    The producer-side drift check: validated against the *serialised* shape
+    a consumer reads (a Path satisfies "path" because that is a JSON string
+    either way), walked recursively, first mismatch wins. A mismatch is a
+    loud-but-local note — never an exit-code change."""
+    if spec.get("nullable") and value is None:
+        return None
+    kind = spec["kind"]
+    checks: dict[str, tuple[Any, str]] = {
+        "str": (str, "text"),
+        "bool": (bool, "true/false"),
+        "none": (type(None), "null"),
+        "path": ((PurePath, str), "a path"),
+        "datetime": ((datetime.datetime, str), "a datetime"),
+        "time": ((datetime.time, str), "a time"),
+        "uuid": ((uuid.UUID, str), "a UUID"),
+        "decimal": ((decimal.Decimal, str), "a decimal string"),
+    }
+    if kind == "any":
+        return None
+    if kind == "int":
+        if isinstance(value, int) and not isinstance(value, bool):
+            return None
+        return f"{path}: expected an integer, got {_got(value)}"
+    if kind == "float":
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            return None
+        return f"{path}: expected a number, got {_got(value)}"
+    if kind == "date":
+        # `datetime.datetime` is a `date`; declared date, returned datetime
+        # still serialises to an ISO string.
+        if isinstance(value, (datetime.date, str)):
+            return None
+        return f"{path}: expected a date, got {_got(value)}"
+    if kind in checks:
+        expected, word = checks[kind]
+        if isinstance(value, expected):
+            return None
+        return f"{path}: expected {word}, got {_got(value)}"
+    if kind == "enum":
+        encoded = value.value if isinstance(value, enum.Enum) else value
+        if any(v == encoded for v in spec["values"]):
+            return None
+        return f"{path}: {encoded!r} is not one of the declared values"
+    if kind == "list":
+        if not isinstance(value, (list, tuple, set, frozenset)):
+            return f"{path}: expected a list, got {_got(value)}"
+        for i, element in enumerate(value):
+            if note := returned_mismatch(element, spec["items"], f"{path}[{i}]"):
+                return note
+        return None
+    if kind == "map":
+        if not isinstance(value, dict):
+            return f"{path}: expected a mapping, got {_got(value)}"
+        for key, element in value.items():
+            if not isinstance(key, str):
+                return f"{path}: key {key!r} is not a string"
+            if note := returned_mismatch(element, spec["values"], f"{path}[{key!r}]"):
+                return note
+        return None
+    if kind == "object":
+        return _object_mismatch(value, spec, path)
+    if kind == "row":
+        fields: dict[str, Any] = spec["fields"]
+        if not isinstance(value, (list, tuple)):
+            return f"{path}: expected {spec['name']} (a row), got {_got(value)}"
+        if len(value) != len(fields):
+            return (
+                f"{path}: expected {len(fields)} values "
+                f"({', '.join(fields)}), got {len(value)}"
+            )
+        for element, (name, fspec) in zip(value, fields.items(), strict=True):
+            if note := returned_mismatch(element, fspec, f"{path}.{name}"):
+                return note
+        return None
+    return None  # an unknown kind (a newer manifest) makes no claims here
+
+
+def _object_mismatch(value: Any, spec: dict[str, Any], path: str) -> str | None:
+    fields: dict[str, Any] | None = spec.get("fields")
+    if dataclasses.is_dataclass(value) and not isinstance(value, type):
+        # Read through `asdict`'s eyes without its deep conversion: the
+        # instance's own field names and values, one shallow mapping.
+        have = {f.name: getattr(value, f.name) for f in dataclasses.fields(value)}
+    elif isinstance(value, dict):
+        have = value
+    else:
+        shape = spec.get("name", "an object")
+        return f"{path}: expected {shape}, got {_got(value)}"
+    if not fields:
+        return None  # no field claims to check
+    for name, fspec in fields.items():
+        if name not in have:
+            if fspec.get("required", True):
+                return f"{path}: missing key {name!r}"
+            continue
+        if note := returned_mismatch(have[name], fspec, f"{path}.{name}"):
+            return note
+    # The declared shape is the whole claim — an undeclared key IS the
+    # silent-rename story, seen from the other side.
+    if extra := sorted(set(have) - set(fields)):
+        return f"{path}: undeclared key {extra[0]!r}"
+    return None
+
+
+def _got(value: Any) -> str:
+    return "null" if value is None else type(value).__name__
+
+
+_RETURN_WORD: dict[str, tuple[str, str]] = {
+    # (singular, plural) — the plural serves "a list of …".
+    "str": ("text", "text"),
+    "int": ("an integer", "integers"),
+    "float": ("a number", "numbers"),
+    "bool": ("true/false", "true/false"),
+    "none": ("null", "nulls"),
+    "any": ("anything", "anything"),
+    "path": ("a path", "paths"),
+    "datetime": ("a datetime", "datetimes"),
+    "date": ("a date", "dates"),
+    "time": ("a time", "times"),
+    "uuid": ("a UUID", "UUIDs"),
+    "decimal": ("a decimal", "decimals"),
+}
+
+
+def returns_phrase(spec: dict[str, Any], *, plural: bool = False) -> str:
+    """The one-line phrase for a `returned` spec — the returns line in
+    `--help` and the type cells on a docs page."""
+    kind = spec["kind"]
+    if kind == "enum":
+        core = "one of " + "|".join(str(v) for v in spec["values"])
+    elif kind == "object" and spec.get("fields"):
+        name = spec.get("name", "an object")
+        core = f"{name} {{{', '.join(spec['fields'])}}}"
+    elif kind == "object":
+        core = "an object"
+    elif kind == "row":
+        core = f"{spec['name']} ({', '.join(spec['fields'])})"
+    elif kind == "map":
+        core = "a mapping of " + returns_phrase(spec["values"], plural=True)
+    elif kind == "list":
+        core = ("lists of " if plural else "a list of ") + returns_phrase(
+            spec["items"], plural=True
+        )
+    else:
+        singular, plural_word = _RETURN_WORD[kind]
+        core = plural_word if plural else singular
+    if spec.get("nullable"):
+        core += " (or null)"
+    return core
+
+
 def redact(value: Any) -> Any:
     """Secrets never serialise: any `params.Secret` inside *value* becomes
     `***` before a JSON surface (the `--json` envelope, baked manifest

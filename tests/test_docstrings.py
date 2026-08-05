@@ -302,3 +302,73 @@ def test_prose_with_colons_is_not_params():
     d = parse("S.\n\nNote: this matters.\nAlso: that.\n")
     assert d.params == {}
     assert "Note: this matters." in d.long
+
+
+# --- Returns ------------------------------------------------------------------
+
+
+def test_google_returns_joins_to_one_line():
+    d = parse(
+        """Report the change.
+
+        Args:
+            since: the base commit
+
+        Returns:
+            Which tasks the change reaches,
+            and why.
+        """
+    )
+    assert d.returns == "Which tasks the change reaches, and why."
+    assert d.params == {"since": "the base commit"}
+
+
+def test_google_returns_ends_at_dedent():
+    d = parse("S.\n\nReturns:\n    the report\nNotes:\n    unrelated\n")
+    assert d.returns == "the report"
+
+
+def test_numpy_returns_takes_type_line_and_description():
+    d = parse(
+        """Report.
+
+        Parameters
+        ----------
+        since : str
+            the base commit
+
+        Returns
+        -------
+        PytestReport
+            The parsed report.
+
+        Notes
+        -----
+        Unrelated.
+        """
+    )
+    assert d.returns == "PytestReport The parsed report."
+    assert d.params == {"since": "the base commit"}
+
+
+def test_sphinx_returns_field_with_continuation():
+    d = parse(
+        """Report.
+
+        :param since: the base commit
+        :returns: the parsed report,
+            one dict per failure
+        :rtype: PytestReport
+        """
+    )
+    assert d.returns == "the parsed report, one dict per failure"
+    assert d.params == {"since": "the base commit"}
+
+
+def test_return_singular_spellings():
+    assert parse("S.\n\nReturn:\n    it\n").returns == "it"
+    assert parse("S.\n\n:return: it\n").returns == "it"
+
+
+def test_no_returns_section_is_empty():
+    assert parse("S.\n\nArgs:\n    a: first\n").returns == ""

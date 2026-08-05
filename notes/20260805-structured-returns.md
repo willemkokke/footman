@@ -1,9 +1,16 @@
 # Structured returns — the return annotation becomes the output contract
 
-Status: DESIGN CLOSED, 2026-08-05 — **all seven calls ruled the same
+Status: **BUILT, 2026-08-05** — the full-fat v1 landed the same day the
+design closed: `returned_spec` (annotation → native spec, baked in the
+manifest), `returned_schema`/`returned_mismatch` in the envelope, the
+producer-side check in every mode, `--describe[=TASK]` rendering JSON
+Schema, `Returns:` docstring prose (`returned_doc`), the `--help`
+returns line, and the markdown exporter's field table. The CHANGELOG's
+`[Unreleased]` entries carry what shipped; this note keeps the
+reasoning.
+Design closed 2026-08-05 — **all seven calls ruled the same
 day the note opened**, full-fat throughout; the last (`pre=`
-aggregation: per-entry) landed 2026-08-05. No opens. Nothing built —
-the build awaits its order.
+aggregation: per-entry) landed 2026-08-05. No opens.
 Supersedes the 2026-07-22 working draft (which predated `Stdout[T]`, the
 `items[]` envelope, and the per-parameter annotation fallback);
 prioritised ahead of the tools-dist split (2026-08-05, Willem: "more

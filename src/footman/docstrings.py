@@ -46,6 +46,9 @@ class Docstring:
     params: dict[str, str] = field(default_factory=dict)
     """Per-parameter help, keyed by the Python parameter name (not the
     CLI spelling): `{"fix": "apply safe fixes in place"}`."""
+    returns: str = ""
+    """The `Returns:` prose, joined to one line — what the value *means*,
+    beside whatever schema the return annotation declares."""
 
 
 _GOOGLE_HEADER = re.compile(r"^(?:args|arguments|parameters)\s*:\s*$", re.IGNORECASE)
@@ -59,6 +62,11 @@ _NUMPY_ENTRY = re.compile(
     r"^(\*{0,2}[A-Za-z_]\w*(?:\s*,\s*\*{0,2}[A-Za-z_]\w*)*)(?:\s*:.*)?$"
 )
 _SPHINX_PARAM = re.compile(r"^:(?:param|parameter|arg|argument)\s+([^:]+):\s*(.*)$")
+# `Returns:` alone on its line (Google), `Returns` over an underline (NumPy),
+# `:returns: text` (Sphinx) — the same three conventions the params take.
+_RETURNS_HEADER = re.compile(r"^returns?\s*:\s*$", re.IGNORECASE)
+_RETURNS_NUMPY = re.compile(r"^returns?\s*:?\s*$", re.IGNORECASE)
+_SPHINX_RETURNS = re.compile(r"^:returns?:\s*(.*)$")
 _SPHINX_FIELD = re.compile(r"^:[a-zA-Z]")  # any field ends the long description
 # Any Google-style section header (`Returns:`, `See Also:`, …) — alone on its
 # line — ends the long description, whether or not we extract from it.
@@ -73,6 +81,7 @@ def parse(text: str | None) -> Docstring:
     if not lines:
         return Docstring()
     summary, body = lines[0].strip(), lines[1:]
+    returns = _numpy_returns(body) or _google_returns(body) or _sphinx_returns(body)
 
     found: list[tuple[int, str]] = []
     if (i := _find_google(body)) is not None:
@@ -82,7 +91,8 @@ def parse(text: str | None) -> Docstring:
     if (i := _find_sphinx(body)) is not None:
         found.append((i, "sphinx"))
     if not found:
-        return Docstring(summary, _prose(body[: _long_end(body, len(body))]))
+        long = _prose(body[: _long_end(body, len(body))])
+        return Docstring(summary, long, returns=returns)
 
     start, kind = min(found)
     params = {
@@ -90,7 +100,7 @@ def parse(text: str | None) -> Docstring:
         "numpy": _numpy_params,
         "sphinx": _sphinx_params,
     }[kind](body, start)
-    return Docstring(summary, _prose(body[: _long_end(body, start)]), params)
+    return Docstring(summary, _prose(body[: _long_end(body, start)]), params, returns)
 
 
 def _long_end(body: list[str], stop: int) -> int:
@@ -250,3 +260,74 @@ def _sphinx_params(lines: list[str], start: int) -> dict[str, str]:
             fragments.append(line)
     _store(params, name, fragments)
     return params
+
+
+# --- the Returns section ------------------------------------------------------
+# Extracted independently of which params convention won: real docstrings mix
+# (a Google `Args:` above a bare `Returns:` note), and the section is prose
+# either way. NumPy is probed first because its header is the stricter shape
+# (an underline is required), so a Google `Returns:` can never match it.
+
+
+def _google_returns(lines: list[str]) -> str:
+    """Prose under a Google `Returns:` header, ended by a dedent to it."""
+    for i, line in enumerate(lines):
+        if _RETURNS_HEADER.match(line.strip()):
+            header_indent = _indent(line)
+            fragments = [
+                ln for ln in _until_dedent(lines[i + 1 :], header_indent) if ln.strip()
+            ]
+            return _join(fragments)
+    return ""
+
+
+def _until_dedent(lines: list[str], header_indent: int) -> list[str]:
+    """The lines of one indented section: everything up to the first non-blank
+    line at (or above) the header's indent."""
+    out: list[str] = []
+    for line in lines:
+        if line.strip() and _indent(line) <= header_indent:
+            break
+        out.append(line)
+    return out
+
+
+def _numpy_returns(lines: list[str]) -> str:
+    """Prose after a NumPy `Returns` underline, up to the next section.
+
+    The conventional `type` line and its indented description both join in —
+    "PytestReport The parsed report" reads fine as one line of prose."""
+    for i in range(len(lines) - 1):
+        if not (
+            _RETURNS_NUMPY.match(lines[i].strip())
+            and _UNDERLINE.match(lines[i + 1].strip())
+        ):
+            continue
+        header_indent = _indent(lines[i])
+        fragments: list[str] = []
+        for j in range(i + 2, len(lines)):
+            stripped = lines[j].strip()
+            if not stripped:
+                continue
+            after = lines[j + 1].strip() if j + 1 < len(lines) else ""
+            if _indent(lines[j]) <= header_indent and _UNDERLINE.match(after):
+                break  # the next underlined section header
+            fragments.append(lines[j])
+        return _join(fragments)
+    return ""
+
+
+def _sphinx_returns(lines: list[str]) -> str:
+    """A `:returns:`/`:return:` field's text, indented follow-ups joined."""
+    for i, line in enumerate(lines):
+        entry = _SPHINX_RETURNS.match(line.strip())
+        if entry is None:
+            continue
+        fragments = [entry[1]]
+        for follow in lines[i + 1 :]:
+            stripped = follow.strip()
+            if not stripped or stripped.startswith(":"):
+                break  # a blank line or the next field ends it
+            fragments.append(follow)
+        return _join(fragments)
+    return ""
