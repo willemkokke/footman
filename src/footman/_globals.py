@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import os
 import threading
+import time
 from collections.abc import Callable
 from contextvars import ContextVar
 from typing import Any
@@ -835,9 +836,10 @@ def named_lanes(lanes: tuple[Lane, ...], name: str = "") -> Any:
     @contextlib.contextmanager
     def _hold() -> Any:
         if not lanes:
-            yield
+            yield []
             return
         wanted = {ln.name for ln in lanes}
+        entered = time.monotonic()
         with _arb_cv:
             while (
                 any(w in _named_holders for w in wanted)
@@ -854,7 +856,7 @@ def named_lanes(lanes: tuple[Lane, ...], name: str = "") -> Any:
             for w in wanted:
                 _named_holders[w] = name or "?"
         try:
-            yield
+            yield _waited(",".join(sorted(wanted)), entered)
         finally:
             with _arb_cv:
                 for w in wanted:
@@ -887,9 +889,18 @@ def lane(
     def _lane() -> Any:
         global _running, _serial_holder, _excl_holder, _excl_waiting, _console_holder
         if not _installs:
-            yield
+            yield []
             return
         wanted = {ln.name for ln in named}
+        if inherited:
+            label = ""  # a lineage bypasses every bar, so it never waits
+        elif policy in ("serial", "exclusive"):
+            label = policy
+        elif wanted:
+            label = ",".join(sorted(wanted))
+        else:
+            label = "console" if console else "exclusive"
+        entered = time.monotonic()
         with _arb_cv:
             if inherited:
                 pass  # a lineage extends every hold, the console included
@@ -942,7 +953,7 @@ def lane(
         if claimed_console:
             _suspend_status(True)  # outside the cv: lock order is arb → status
         try:
-            yield
+            yield _waited(label, entered) if label else []
         finally:
             with _arb_cv:
                 _running -= 1
@@ -1002,6 +1013,17 @@ def _wait_note(name: str, what: str, holder: str | None) -> None:
     if not _arb_cv.wait(timeout=2.0):
         held = f" (held by {holder})" if holder else ""
         _note(f"lane-wait:{name}", f"task {name or '?'} waiting for {what}{held}")
+
+
+def _waited(label: str, entered: float) -> list[tuple[str, float]]:
+    """What this claim paid at the bar, for the run report.
+
+    One `(label, seconds)` row when the claim actually waited; empty when it
+    was granted on arrival (sub-millisecond is arrival). The claim's own
+    label, not the blocker-of-the-moment: a wait can pass through several
+    holders, and what the report answers is "what serialised *this*"."""
+    waited = time.monotonic() - entered
+    return [(label, waited)] if waited >= 0.001 else []
 
 
 def parked() -> Any:

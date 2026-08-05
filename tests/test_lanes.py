@@ -138,3 +138,42 @@ def test_step_opts_accepts_lanes_and_the_item_waits_its_turn():
     if order[0] == "a-start":
         assert idx["a-end"] < idx["b-start"]
     _ = first_end
+
+
+def test_lane_waits_land_in_the_json_report():
+    # "Which lane serialised what, for how long" is answerable from a --json
+    # run: the waiting claimant's row carries the lane and the wait, and a
+    # claim granted on arrival carries nothing.
+    import json as json_mod
+
+    from footman.registry import Group
+    from footman.testing import Runner
+
+    contended = lane("test-report-contended")
+    free = lane("test-report-free")
+    reg = Group("root")
+
+    @reg.task(lanes=(contended,))
+    def holder():
+        time.sleep(0.25)
+
+    @reg.task(lanes=(contended,))
+    def claimant():
+        time.sleep(0.25)
+
+    @reg.task(lanes=(free,))
+    def alone(): ...
+
+    result = Runner().invoke("--json --jobs=3 holder claimant alone", tasks=reg)
+    assert result.ok, result.stderr
+    envelope = json_mod.loads(result.stdout)
+    by_name = {e["task"]: e for e in envelope["items"] if "task" in e}
+    waits = [
+        w
+        for name in ("holder", "claimant")
+        for w in by_name[name].get("lane_waits", ())
+    ]
+    assert len(waits) == 1  # exactly one of the two paid at the bar
+    assert waits[0]["lane"] == "test-report-contended"
+    assert waits[0]["waited_ms"] > 0
+    assert "lane_waits" not in by_name["alone"]  # granted on arrival
