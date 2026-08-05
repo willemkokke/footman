@@ -636,39 +636,95 @@ def _gate_dir(session: str) -> Path:
 _QUOTED = re.compile(r"'(?:[^'\\]|\\.)*'|\"(?:[^\"\\]|\\.)*\"")
 _RUNS_FM = re.compile(r"^\s*(?:uv run(?: --\S+)* )?f(?:m|ootman)\b")
 _TRUNCATES = re.compile(r"\|\s*(?:tail|head)\b")
+_PUSHES = re.compile(r"^\s*git\s+(?:-C\s+(\S+)\s+)?push\b")
+_PUSH_EXEMPT = re.compile(r"\s(?:--delete|-d|--tags)\b|\bpush\s+(?:\S+\s+)?main\b")
+
+
+def _push_conflicts(repo: str | None) -> bool:
+    """Whether HEAD conflicts with `origin/main` — GitHub's test-merge, run
+    locally in milliseconds, before the push can create the silent state.
+
+    Fails open on every uncertainty: an offline fetch probes whatever
+    `origin/main` the clone last saw, and a repo with no such ref (a scratch
+    checkout, a fresh clone of something else) is not this guard's business.
+    Only a conflict — `merge-tree` exit 1, distinct from its other failures —
+    speaks.
+    """
+    import contextlib
+
+    git = ["git", *(("-C", repo) if repo else ())]
+    with contextlib.suppress(RunFailed):
+        # Offline / no remote: the last-seen origin/main still answers.
+        run([*git, "fetch", "--quiet", "origin", "main"], capture=True)
+    try:
+        run([*git, "rev-parse", "--verify", "-q", "origin/main^{commit}"], capture=True)
+    except RunFailed:
+        return False  # no origin/main at all: not this guard's business
+    try:
+        run([*git, "merge-tree", "--write-tree", "origin/main", "HEAD"], capture=True)
+    except RunFailed as exc:
+        # With the ref verified, exit 1 is merge-tree's one honest meaning:
+        # "merged, with conflicts". (Unverified, 1 also means "no such ref".)
+        return exc.result == 1
+    return False
 
 
 @hooks.task
 def pre_bash(event: Annotated[HookEvent, stdin]) -> None:
-    """Refuse a footman command piped into tail/head.
+    """Refuse the Bash commands that succeed while creating a silently broken
+    state: a footman gate piped into tail/head, and a `git push` of a branch
+    that conflicts with `origin/main`.
 
-    A gate's **exit code is its verdict**, and a pipe replaces it with the
-    filter's — so `fm check | tail -4` reports 0 whatever happened, and prints
-    the parallel step summary while the failing step scrolls past above. This
-    session called a red gate green exactly that way.
+    **The pipe guard.** A gate's **exit code is its verdict**, and a pipe
+    replaces it with the filter's — so `fm check | tail -4` reports 0
+    whatever happened, and prints the parallel step summary while the failing
+    step scrolls past above. This session called a red gate green exactly
+    that way.
 
-    Deliberately narrow. Command separators split first, so `fm check && echo
-    done | tail` stays legal; quoted spans are data, so `rg "fm check" | head`
-    passes. It is a nudge and not a sandbox: `grep`, `sed` and `wc` destroy a
-    verdict just as well and are not blocked, because widening it starts
-    eating honest pipes — `fm docs.page | head` previews generated markdown,
-    where stdout *is* the product.
+    **The push guard.** Several agent sessions share this repo, so `main`
+    moves while a branch is being built — and a branch pushed from a stale
+    base opens a CONFLICTING pull request, for which GitHub cannot build its
+    test-merge and therefore **spawns no CI at all**: no red X, no checks,
+    just an absence nothing points at (PR #304 sat exactly that way). The
+    guard runs the same test-merge locally (`git merge-tree --write-tree`)
+    before letting the push through. Tag pushes, deletions and pushes of
+    `main` itself pass untouched.
+
+    Both are deliberately narrow. Command separators split first, so `fm
+    check && echo done | tail` stays legal; quoted spans are data, so `rg "fm
+    check" | head` passes. Nudges, not a sandbox: `grep` destroys a verdict
+    just as well, and `--force` is still force — widening either guard
+    starts eating honest commands.
     """
     segments = re.split(r";|&&|\|\|", event.tool_input.command)
-    blind = (_QUOTED.sub('""', segment) for segment in segments)
-    if not any(
+    blind = [_QUOTED.sub('""', segment) for segment in segments]
+    if any(
         _TRUNCATES.search(segment[match.end() :])
         for segment in blind
         if (match := _RUNS_FM.search(segment)) is not None
     ):
-        return
-    fail(
-        "piping a footman command into tail/head replaces its exit code with "
-        "the filter's and hides the failing step — this session reported a red "
-        "gate as green that way. Run it unpiped and read the exit code; to "
-        "keep the output short, redirect to a file and slice the file.",
-        code=2,
-    )
+        fail(
+            "piping a footman command into tail/head replaces its exit code "
+            "with the filter's and hides the failing step — this session "
+            "reported a red gate as green that way. Run it unpiped and read "
+            "the exit code; to keep the output short, redirect to a file and "
+            "slice the file.",
+            code=2,
+        )
+    for segment in blind:
+        push = _PUSHES.search(segment)
+        if push is None or _PUSH_EXEMPT.search(segment):
+            continue
+        repo = push.group(1)  # a quoted -C path was blinded; probe the cwd then
+        if _push_conflicts(None if repo in (None, '""') else repo):
+            fail(
+                "git push refused: this branch conflicts with origin/main. A "
+                "conflicting PR spawns no CI at all — GitHub cannot build its "
+                "test-merge, so there is no red X, no checks, just silence "
+                "(PR #304 sat that way). Rebase (git fetch origin && git "
+                "rebase origin/main), re-run the gate, then push.",
+                code=2,
+            )
 
 
 @hooks.task
