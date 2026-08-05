@@ -1,9 +1,9 @@
 # Structured returns — the return annotation becomes the output contract
 
 Status: DESIGN PASS, 2026-08-05; **rulings landed the same day** (see
-Decided) — five of seven calls closed, full-fat throughout. Still open:
-the `pre=` aggregation question (re-explained below, awaiting the
-ruling) and a nod on the dialect reading under call 1. Nothing built.
+Decided) — six of seven calls closed, full-fat throughout, dialect
+included. The single open: the `pre=` aggregation question
+(re-explained below, awaiting the ruling). Nothing built.
 Supersedes the 2026-07-22 working draft (which predated `Stdout[T]`, the
 `items[]` envelope, and the per-parameter annotation fallback);
 prioritised ahead of the tools-dist split (2026-08-05, Willem: "more
@@ -157,8 +157,18 @@ of the describe surface, and the producer-side check ships with it. The
   the real tree when the generator exists; if a tree ever carries
   hundreds of declaring tasks, schemas can move to a sibling baked file
   the completion hot path never reads — an escape hatch, not the plan.
-  Dialect stays as the lean unless vetoed: native shape baked in the
-  manifest, standard JSON Schema *rendered* at the describe door.
+- **Dialect (1): decided — native baked, JSON Schema rendered at the
+  describe door** (Willem, 2026-08-05: "seems to have no downsides").
+  The two small costs, named so they stay paid: the renderer is a second
+  representation and gets **golden-pair tests**, under the discipline
+  that the native shape never expresses anything JSON Schema cannot say;
+  and the **rendered output is contract, not presentation** — hse-style
+  snapshots pin the describe output, so renderer changes are deliberate
+  and changelogged, envelope-grade, never cosmetic. Sub-decision that
+  falls out: the envelope's per-entry `returned_schema` carries the
+  *native* form (already baked, compact, one vocabulary with the param
+  specs); the describe door is the interop surface and the thing a
+  snapshot pins. The manifest itself stays an internal shape, as ever.
 - **Describe scope (2): as leaned.** Whole-tree contract dump allowed —
   bare `--describe` hands an agent the entire input+output API; it is
   also the file hse's snapshot pins.
@@ -201,8 +211,7 @@ consumer reads one row instead of three. That would need one of:
 The 07-22 lean, still standing: **per-entry is enough.** The consumer
 already keys by task; aggregation duplicates every report inside the
 same envelope; and the automatic variant forges a return. The cost of
-per-entry is one `jq` hop. Rule it and this note has no opens left
-(besides the dialect nod under Decided).
+per-entry is one `jq` hop. Rule it and this note has no opens left.
 
 ## Not in scope
 
