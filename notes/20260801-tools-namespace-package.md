@@ -184,8 +184,10 @@ gives it one — see versioning). **Open**, with a lean to same-repo.
    in each repo; toolroom releases on refresh events, footman on
    framework changes. Residual (sibling plan): refresh auto-tags vs
    human merges+tags.
-7. Where does `Argv` live after a split? (New with v0.30.0.) **The
-   last design open** — sharpened by the inversion; see its section.
+7. Where does `Argv` live after a split? (New with v0.30.0.) RULED
+   2026-08-05: **the twin — each package owns its own; the seam
+   speaks stdlib.** See the same-date section. All design opens are
+   now ruled.
 
 ## 2026-08-05 review — what v0.30.0 moved under this plan
 
@@ -362,3 +364,48 @@ This plan is now fully ruled except **question 7 — the
 Argv/vocabulary home** — plus two logistics residuals in the sibling
 plan (subtree export vs clean start; refresh auto-tags vs human).
 The build remains unordered.
+
+## 2026-08-05 — question 7 ruled: the twin; the seam speaks stdlib
+
+Ruled the same day ("it is so decreed"), after reading the actual
+class: each package is vocabulary-complete on its own, and the seam
+between them carries only stdlib shapes — `list[str]` in,
+int-with-attributes out. The zero-dependencies philosophy applied to
+the type layer.
+
+- `Argv` is fifteen lines of stdlib sugar over `list[str]`
+  (`.posix()` = `shlex.join`, `.windows()` = `list2cmdline`),
+  designed as "an ordinary `list[str]` everywhere in Python" — which
+  is the escape hatch: **no `ArgvLike` protocol is needed anywhere**;
+  toolroom's `Argv` flows into `run()` as the list it is.
+- footman keeps its `Argv` and `Result.to_argv()` untouched —
+  `to_argv()` is a footman-alone receipt feature (`run([...])`
+  records tokens with no bridge in sight). toolroom ships its own
+  fifteen lines, and the generated stubs anchor toolroom's.
+- Equality cooperates across the twins (`list.__eq__` compares
+  contents), so `assert cmd == ["git", "push"]` and even
+  cross-package `==` behave. The one class-identity dependence —
+  `run()`'s taught bare-container wording for a built command —
+  re-keys on shape (`hasattr(x, "posix")`: carrying shell renderers
+  is what makes it a built command).
+- `.posix()`/`.windows()` parity across the twins is locked by
+  toolroom's conformance test against a *released* footman — the
+  standing integration test the separate repo owns anyway.
+- Satellites land the same way: toolroom declares its own return
+  contract (int-ness, `stdout`/`stderr`/`ok`, the token tuple) as
+  the stubs' annotation, and footman's sealed `Result` satisfies it
+  structurally; each side's `to_argv()` mints its own `Argv`;
+  `container_error` stays shared *wording*, not shared code — one
+  copy per door, voice per package.
+
+Rejected on the way, recorded so they aren't re-proposed: toolroom
+owns `Argv` exclusively (amputates footman-alone `to_argv()`);
+conditional import — footman's class when detected, twin standalone
+(type indeterminism in the stubs); a shared vocabulary dist (a
+runtime dependency — zero-deps has no "just a small one" clause);
+vendored single-source (more sync machinery than the two one-line
+methods it protects, and vendoring buys no class identity anyway).
+
+With this, **every design open in this plan is ruled.** What remains
+before a build order: the sibling plan's two logistics calls
+(subtree export vs clean start; refresh auto-tags vs human).
