@@ -28,6 +28,7 @@ import time
 from collections.abc import Callable, Generator, Iterable, Iterator, Sequence, Sized
 from contextvars import ContextVar
 from dataclasses import dataclass, field, replace
+from datetime import datetime
 from pathlib import Path
 from typing import (
     TYPE_CHECKING,
@@ -159,6 +160,7 @@ class Result(int):
     _address: str
     _audit: tuple[AuditEntry, ...]
     _tokens: tuple[str, ...]
+    _started: float | None
 
     def __new__(
         cls,
@@ -173,10 +175,12 @@ class Result(int):
         address: str = "",
         audit: tuple[AuditEntry, ...] = (),
         tokens: tuple[str, ...] = (),
+        started: float | None = None,
     ) -> Result:
         self = super().__new__(cls, code)
         object.__setattr__(self, "_timed_out", timed_out)
         object.__setattr__(self, "_address", address)
+        object.__setattr__(self, "_started", started)
         object.__setattr__(self, "_command", command)
         object.__setattr__(self, "_stdout", stdout)
         object.__setattr__(self, "_stderr", stderr)
@@ -241,6 +245,13 @@ class Result(int):
     def duration(self) -> float:
         """Wall-clock seconds the step took."""
         return self._duration
+
+    @property
+    def started(self) -> float | None:
+        """When the step began, on the run's monotonic clock — the same clock
+        a task row's `started` reads, so a step places inside its task's
+        span. `None` for a record that never ran (a dry-run's rehearsal)."""
+        return self._started
 
     @property
     def raw(self) -> str:
@@ -604,6 +615,11 @@ class Context:
     steps: list[Result] = field(default_factory=list)
     """Every `run()` this task made, in order — what `recording()` and
     the `--json` envelope read."""
+    sections: list[Section] = field(default_factory=list)
+    """Task-authored profiling: what `section()`, `stream()` and `mark()`
+    recorded while this task ran, on the run's clock. Rides the task's
+    result row; a `parallel()` child's records fold into its requester's,
+    the way `steps` do."""
 
 
 _current: ContextVar[Context | None] = ContextVar("footman_context", default=None)
@@ -613,6 +629,163 @@ def current() -> Context:
     """The context of the running task (a fresh default one outside a run)."""
     ctx = _current.get()
     return ctx if ctx is not None else Context()
+
+
+_WALL_ANCHOR: tuple[float, float] = (time.time(), time.perf_counter())
+"""One sampling of both clocks, taken together, so a wall-clock moment maps
+onto the run clock every record in this module keeps: a retroactive
+`Stream.section(start=…, end=…)` window lands beside spans that were stamped
+live. Module-level on purpose — `perf_counter`'s origin is arbitrary but
+process-wide, so one anchor serves every run in the process."""
+
+
+@dataclass(frozen=True)
+class Section:
+    """One recorded interval of a task's time — what the `--json` envelope
+    carries and a profile renders. `stream` is `""` for the task's own
+    timeline (these nest and never overlap, by construction); a named stream
+    is its own parallel timeline, where overlap is legal. A `mark()` is a
+    section with no duration."""
+
+    name: str
+    started: float  # the run's monotonic clock, same as a task row's
+    duration: float  # seconds; 0.0 is an instant (a mark)
+    stream: str = ""
+
+
+class _SectionTimer:
+    """The context manager `section()` returns: entry stamps the clock, exit
+    records — a body that raised still spent the time, so the record is made
+    in `__exit__` unconditionally."""
+
+    __slots__ = ("_begin", "_ctx", "name", "stream")
+
+    _ctx: Context
+    name: str
+    stream: str
+    _begin: float
+
+    def __init__(self, ctx: Context, name: str, stream: str) -> None:
+        self._ctx = ctx
+        self.name = name
+        self.stream = stream
+        self._begin = 0.0
+
+    def __enter__(self) -> _SectionTimer:
+        self._begin = time.perf_counter()
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        self._ctx.sections.append(
+            Section(
+                self.name, self._begin, time.perf_counter() - self._begin, self.stream
+            )
+        )
+
+
+def _profiled_ctx(where: str) -> Context:
+    ctx = _current.get()
+    if ctx is None or not ctx.in_task:
+        raise RuntimeError(
+            f"{where} records timing on the *running task*, so it belongs "
+            f"inside a task body, during a run. From a helper thread, make "
+            f"the stream in the body and hand the handle over — the handle "
+            f"remembers its task."
+        )
+    return ctx
+
+
+def _run_clock(moment: datetime | float, arg: str) -> float:
+    """A wall-clock moment (datetime, or epoch seconds) on the run clock."""
+    if isinstance(moment, datetime):
+        wall = moment.timestamp()  # naive reads as local time, aware as itself
+    elif isinstance(moment, (int, float)) and not isinstance(moment, bool):
+        wall = float(moment)
+    else:
+        raise TypeError(
+            f"Stream.section({arg}=…) takes a datetime or epoch seconds "
+            f"(time.time()), got {type(moment).__name__}"
+        )
+    anchor_wall, anchor_clock = _WALL_ANCHOR
+    return anchor_clock + (wall - anchor_wall)
+
+
+def section(name: str) -> _SectionTimer:
+    """Time a section of the running task — `with footman.section("resolve"):`.
+
+    Records onto the task's own timeline, subdividing its span; nested
+    blocks nest. For work that overlaps — several waits in flight at once —
+    use `stream()`, where overlap is legal."""
+    return _SectionTimer(_profiled_ctx("section()"), name, "")
+
+
+def mark(name: str) -> None:
+    """Record an instant on the running task's timeline — a moment worth a
+    label, no duration."""
+    ctx = _profiled_ctx("mark()")
+    ctx.sections.append(Section(name, time.perf_counter(), 0.0))
+
+
+class Stream:
+    """A named parallel timeline of sections under the running task.
+
+    Made in the task body (`ci = footman.stream("ci")`); the handle remembers
+    its task, so a helper thread the body spawned may record through it.
+    Sections on a stream may overlap — that is what a stream is for."""
+
+    __slots__ = ("_ctx", "name")
+
+    _ctx: Context
+    name: str
+
+    def __init__(self, ctx: Context, name: str) -> None:
+        self._ctx = ctx
+        self.name = name
+
+    @overload
+    def section(self, name: str) -> _SectionTimer: ...
+    @overload
+    def section(
+        self, name: str, *, start: datetime | float, end: datetime | float
+    ) -> None: ...
+    def section(
+        self,
+        name: str,
+        *,
+        start: datetime | float | None = None,
+        end: datetime | float | None = None,
+    ) -> _SectionTimer | None:
+        """A section on this stream: bracketing (`with ci.section("poll"):`)
+        or retroactive — `ci.section("build", start=t0, end=t1)` records a
+        window learned after the fact (a CI check's real run, reported by
+        its API), placed by wall clock."""
+        if (start is None) != (end is None):
+            raise ValueError(
+                "Stream.section(): give both start= and end=, or neither — "
+                "half a window places nothing"
+            )
+        if start is None:
+            return _SectionTimer(self._ctx, name, self.name)
+        assert end is not None
+        begin = _run_clock(start, "start")
+        finish = _run_clock(end, "end")
+        if finish < begin:
+            raise ValueError(
+                f"Stream.section({name!r}): end is before start — the window "
+                f"is {begin - finish:.3f}s inside out"
+            )
+        self._ctx.sections.append(Section(name, begin, finish - begin, self.name))
+        return None
+
+
+def stream(name: str) -> Stream:
+    """A named parallel timeline under the running task — see `Stream`."""
+    if not name:
+        raise ValueError(
+            "stream(''): the empty name is the task's own timeline — "
+            "sections land there via footman.section()"
+        )
+    return Stream(_profiled_ctx("stream()"), name)
 
 
 @contextlib.contextmanager
@@ -2657,6 +2830,7 @@ def run(
                     address=addr,
                     audit=(*audit, _audit_entry("review", hook, None)),
                     tokens=tokens,
+                    started=start,
                 )
             )
             raise RuntimeError(
@@ -2682,6 +2856,7 @@ def run(
         address=addr,
         audit=audit,
         tokens=tokens,
+        started=start,
     )
     if recorded:
         ctx.steps.append(result)  # what --json, the report and recording() read
@@ -3033,6 +3208,7 @@ def _run_thunks(
             sink=buf,
             err_sink=buf,
             steps=[],
+            sections=[],
             task=name,
             name_width=width,
             # This child's unit is counted above; the first task request
@@ -3098,6 +3274,7 @@ def _run_thunks(
             # Surface the child's run() steps on the parent, in completion order,
             # so they appear in `--json` and `recording()` (F12).
             parent.steps.extend(child.steps)
+            parent.sections.extend(child.sections)
         if status is not None:
             status.unit_finished(name, error is None)
         # The caller's view of this child: a sealed record that IS its exit
@@ -3107,6 +3284,7 @@ def _run_thunks(
             command=name,
             address=child.address,
             duration=time.perf_counter() - child_start,
+            started=child_start,
         )
         return record, error
 

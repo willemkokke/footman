@@ -47,6 +47,18 @@ it can't run. Every gate is evaluated live, and all failures are collected.
 
 ::: footman.context.track
 
+## Profiling from inside a task
+
+::: footman.context.section
+
+::: footman.context.mark
+
+::: footman.context.stream
+
+::: footman.context.Stream
+
+::: footman.context.Section
+
 ## Asking the person running it
 
 ::: footman.context.prompt

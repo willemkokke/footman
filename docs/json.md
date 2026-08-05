@@ -79,7 +79,16 @@ row that executed carries `thread` and `thread_id` — the
 worker's stable name and its OS thread id, the correlation keys a profiler's
 timeline uses; while a task runs, its worker wears the task's name
 (`fm:build`, badged `[serial]`/`[exclusive]` under a lane hold), so a
-sampling profiler reads as tasks rather than pool threads.
+sampling profiler reads as tasks rather than pool threads. A row with
+prerequisites carries `after` — the addresses it waited for, the plan's
+edges. A task that recorded its own timing (see
+[Profiling a run](profiling.md)) carries `sections`:
+`[{"name": "resolve", "at_ms": 12.5, "duration_ms": 830.2}, …]`, each
+placed relative to the task's own start (`stream` names a parallel
+timeline when the record used one, and a negative `at_ms` is legal there —
+a retroactive window may predate the task). A step's entry carries the
+same placement as `at_ms`, so a reader can rebuild the timeline the
+profile plugin draws.
 
 ## `returned`: a task's own data
 

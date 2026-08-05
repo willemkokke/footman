@@ -39,17 +39,22 @@ if TYPE_CHECKING:
     from footman.context import Result as Result
     from footman.context import ResultView as ResultView
     from footman.context import RunFailed as RunFailed
+    from footman.context import Section as Section
+    from footman.context import Stream as Stream
     from footman.context import chdir as chdir
     from footman.context import confirm as confirm
     from footman.context import cwd as cwd
     from footman.context import fail as fail
     from footman.context import inherited as inherited
+    from footman.context import mark as mark
     from footman.context import parallel as parallel
     from footman.context import passthrough as passthrough
     from footman.context import progress as progress
     from footman.context import prompt as prompt
     from footman.context import run as run
+    from footman.context import section as section
     from footman.context import select as select
+    from footman.context import stream as stream
     from footman.context import track as track
     from footman.context import use_context as use_context
     from footman.invocation import Invocation as Invocation
@@ -123,8 +128,10 @@ __all__ = [
     "RunFailed",
     "Runner",
     "Secret",
+    "Section",
     "Stdin",
     "Stdout",
+    "Stream",
     "TaskView",
     "Tasks",
     "__version__",
@@ -170,10 +177,12 @@ __all__ = [
     "requires_env",
     "requires_tool",
     "run",
+    "section",
     "select",
     "stdin",
     "stdout",
     "step",
+    "stream",
     "suggest",
     "task",
     "tools",
@@ -325,6 +334,11 @@ def __getattr__(name: str) -> object:
         "Failed",
         "fail",
         "use_context",
+        "section",
+        "stream",
+        "mark",
+        "Section",
+        "Stream",
     ):
         from footman import context
 

@@ -128,3 +128,125 @@ def test_importing_footman_stays_lazy_under_the_plugin():
         [sys.executable, "-c", probe], capture_output=True, text=True, check=True
     )
     assert out.stdout.strip() == "False"
+
+
+# --- the profile fragment recorder -------------------------------------------
+
+
+def _report(
+    *,
+    when: str = "call",
+    nodeid: str = "test_a.py::t",
+    start: float = 1000.0,
+    stop: float = 1000.5,
+    worker: str | None = None,
+) -> pytest.TestReport:
+    from types import SimpleNamespace
+    from typing import cast
+
+    stub = SimpleNamespace(when=when, nodeid=nodeid, start=start, stop=stop)
+    if worker is not None:
+        stub.worker_id = worker
+    return cast(pytest.TestReport, stub)
+
+
+def test_recorder_records_phases_and_writes_a_fragment(tmp_path, monkeypatch):
+    import json
+
+    from footman.pytest_plugin import _TraceRecorder
+
+    monkeypatch.delenv("PYTEST_XDIST_WORKER", raising=False)
+    rec = _TraceRecorder(str(tmp_path))
+    rec.pytest_runtest_logreport(_report(when="setup", stop=1000.1))
+    rec.pytest_runtest_logreport(_report())
+    rec.pytest_runtest_logreport(_report(worker="gw1"))  # a controller's replay
+    rec.pytest_sessionfinish()
+
+    (fragment,) = tmp_path.glob("pytest-*.json")
+    events = json.loads(fragment.read_text(encoding="utf-8"))["traceEvents"]
+    tracks = {e["args"]["name"] for e in events if e.get("name") == "thread_name"}
+    assert tracks == {"pytest", "gw1"}
+    call = next(e for e in events if e.get("cat") == "test.call")
+    assert call["ts"] == 1000.0 * 1e6  # epoch microseconds, the convention
+    assert call["dur"] == 500_000.0
+
+
+def test_an_xdist_worker_is_never_armed(tmp_path, monkeypatch):
+    # The worker mark is process-local (`config.workerinput`), never the
+    # inherited environment: a pytest spawned *by a test* inherits the outer
+    # suite's PYTEST_XDIST_WORKER and must still record its own tests.
+    from types import SimpleNamespace
+    from typing import cast
+
+    from footman import pytest_plugin
+
+    registered: list[str] = []
+    monkeypatch.setenv("FM_PROFILE_DIR", str(tmp_path))
+    monkeypatch.setenv("PYTEST_XDIST_WORKER", "gw0")  # inherited noise
+    worker = cast(
+        pytest.Config,
+        SimpleNamespace(
+            workerinput={},
+            pluginmanager=SimpleNamespace(
+                register=lambda plug, name: registered.append(name)
+            ),
+        ),
+    )
+    pytest_plugin.pytest_configure(worker)
+    assert registered == []  # a real worker stays silent
+    fresh = cast(
+        pytest.Config,
+        SimpleNamespace(
+            pluginmanager=SimpleNamespace(
+                register=lambda plug, name: registered.append(name)
+            )
+        ),
+    )
+    pytest_plugin.pytest_configure(fresh)
+    assert registered == ["footman-profile-trace"]  # a nested controller records
+
+
+def test_recorder_skips_reports_without_timing_and_writes_nothing_empty(tmp_path):
+    from types import SimpleNamespace
+    from typing import cast
+
+    from footman.pytest_plugin import _TraceRecorder
+
+    rec = _TraceRecorder(str(tmp_path))
+    bare = cast(pytest.TestReport, SimpleNamespace(when="call", nodeid="x"))
+    rec.pytest_runtest_logreport(bare)
+    rec.pytest_sessionfinish()
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_a_broken_sink_is_a_note_never_a_failure(tmp_path, capsys, monkeypatch):
+    from footman.pytest_plugin import _TraceRecorder
+
+    monkeypatch.delenv("PYTEST_XDIST_WORKER", raising=False)
+    rec = _TraceRecorder(str(tmp_path / "never-made"))
+    rec.pytest_runtest_logreport(_report())
+    rec.pytest_sessionfinish()  # must not raise
+    assert "not written" in capsys.readouterr().err
+
+
+def test_configure_arms_only_under_a_profiled_run(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    from typing import cast
+
+    from footman import pytest_plugin
+
+    registered: list[str] = []
+    config = cast(
+        pytest.Config,
+        SimpleNamespace(
+            pluginmanager=SimpleNamespace(
+                register=lambda plug, name: registered.append(name)
+            )
+        ),
+    )
+    monkeypatch.delenv("FM_PROFILE_DIR", raising=False)
+    pytest_plugin.pytest_configure(config)
+    assert registered == []
+    monkeypatch.setenv("FM_PROFILE_DIR", str(tmp_path))
+    pytest_plugin.pytest_configure(config)
+    assert registered == ["footman-profile-trace"]

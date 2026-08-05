@@ -7,6 +7,53 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- **The `footman.profile` plugin — a run as a profiler trace.** Pull
+  `plugin("footman.profile")` and `fm --profile check` writes the run as
+  Chrome Trace Event JSON (`--profile=FILE` names it; bare `--profile`
+  writes `fm-profile.json`), readable at ui.perfetto.dev, chrome://tracing
+  and speedscope. One track per worker, a slice per task with `queue_ms` in
+  its args, lane waits at the head of the slot, every `run()` step nested
+  inside its task, task-authored sections and streams, an instant per mark,
+  a flow arrow per dependency edge — and the writer times its own
+  serialisation as the last slice. Anything that genuinely overlaps on one
+  track (a `parallel()` block's children, a stream's windows) renders as
+  async spans rather than mis-stacked slices.
+- **Profiling from inside a task: `section()`, `stream()`, `mark()`.**
+  `with footman.section("resolve"):` times a block on the task's own
+  timeline (nested blocks nest); `footman.mark("…")` drops a labelled
+  instant; `footman.stream("ci")` opens a named parallel timeline where
+  overlap is legal, with bracketing (`with ci.section("poll"):`) and
+  retroactive (`ci.section("build", start=t0, end=t1)`, datetimes or epoch
+  seconds) forms — the latter places a window learned after the fact, a CI
+  check's real run, by wall clock, even before the run began. Records are
+  `Section`s on the task's result row, in `--json` as `sections` with
+  task-relative `at_ms`, whether or not a profile is written.
+- **`after` in the `--json` report.** A row with prerequisites lists the
+  addresses it waited for — the plan's edges, what the profile draws its
+  arrows from. Steps carry `at_ms`, their placement inside the task's span.
+  Additive to schema 1.
+- **`GlobalOption(bare=…)` — value-optional plugin globals.** `bare=` names
+  what a bare mention means (`--profile` vs `--profile=out.json`), the
+  grammar footman's own `--install-completion` speaks; the value runs the
+  ordinary coercion pipeline, and a word following the bare form teaches
+  the `=`-attachment. Meaningless on a flag, refused at registration.
+- **Steps know when they started.** A `run()` step's `Result` carries
+  `started` on the run's clock, so a step places inside its task's span —
+  what the profile's nesting and the envelope's `at_ms` read.
+- **Children join the profile.** A profiled run exports `FM_PROFILE_DIR`
+  to every task's environment; any child may drop Chrome-trace fragments
+  there (`ts` in epoch microseconds, its own `pid`) and the writer embeds
+  each as its own process group, shifted onto the run clock. A malformed
+  drop is named on stderr and skipped, never fatal.
+- **pytest joins out of the box.** footman's pytest plugin, seeing
+  `FM_PROFILE_DIR`, records every test's setup/call/teardown and drops the
+  fragment on session finish — under xdist, once per test from the
+  controller, workers as named tracks. A profiled `fm --profile check`
+  shows the suite as thousands of individual test slices beside the
+  runner's own tracks; an unprofiled pytest pays one environment read.
+
 ### Fixed
 
 - **`tools.list` never claims a present tool is absent.** A tool that

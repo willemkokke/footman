@@ -19,6 +19,7 @@ nav = [
     { "Working directory & environment" = "working-dir.md" },
     { "Asking for input" = "input.md" },
     { "Progress & timing" = "progress.md" },
+    { "Profiling a run" = "profiling.md" },
     { "Running tools" = "tools.md" },
     { "The tools bridge" = "tools-bridge.md" },
     { "Monorepos & config" = "monorepos.md" },

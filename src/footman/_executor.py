@@ -125,6 +125,14 @@ class TaskResult:
     with what the task itself produced, then a review entry per reviewer, in
     execution order. Empty for an unreviewed row — the verdict is the
     body's, no one touched it."""
+    sections: list[context.Section] = field(default_factory=list)
+    """Task-authored profiling: the sections, streams and marks the body
+    recorded while it ran, on the run's clock. Empty for a task that
+    recorded nothing — most of them."""
+    after: tuple[str, ...] = ()
+    """The rows this one waited for, by address — the plan's edges into this
+    node, stamped by the scheduler. What a profile draws dependency arrows
+    from. Empty for a root, and for a row outside a managed run."""
 
     @property
     def failed_at(self) -> str | None:
@@ -1069,13 +1077,18 @@ def bind_global_options(options: Sequence[Any], tokens: Sequence[str]) -> str | 
         by_flag.setdefault("--" + opt.name, opt)
     values: dict[str, Any] = {}
     for tok in tokens:
-        name, _, raw = tok.partition("=")
+        name, eq, raw = tok.partition("=")
         opt = by_flag.get(name)
         if opt is None:
             continue
         if opt.annotation is bool:
             values[opt.name] = True
             continue
+        if not eq and opt.bare is not None:
+            # A bare mention of a value-optional option means the author's
+            # `bare=`, run through the ordinary pipeline so a `bare=` that
+            # would not coerce is taught, not smuggled.
+            raw = str(opt.bare)
         peeled = _coerce.peel(opt.annotation)
         try:
             values[opt.name] = _coerce_extra(raw, peeled, name)
@@ -1745,6 +1758,7 @@ def run_bound(
     result.thread = born
     result.thread_id = threading.get_native_id()
     result.lane_waits = lane_waits
+    result.sections = list(ctx.sections)
     reviewers = registry.task_reviewers(fn)
     if reviewers and hook_error is None:
         # The row's review window: the body concluded, the record is still a

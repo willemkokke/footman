@@ -822,6 +822,13 @@ def _run_plan(
         # waiting for a worker. Roots have no prerequisites and no latency.
         if n.result is None or n.result.started is None or not n.deps:
             continue
+        # The edges themselves, by row address — what a profile draws its
+        # dependency arrows from, and the `after` a `--json` reader gets.
+        n.result.after = tuple(
+            m.result.address or m.seg.task
+            for d in n.deps
+            if (m := by_key.get(d)) is not None and m.result is not None
+        )
         finishes = [
             m.result.started + m.result.duration
             for d in n.deps

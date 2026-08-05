@@ -16,6 +16,7 @@ from footman import (
     doc,
     fail,
     group,
+    lane,
     parallel,
     plugin,
     run,
@@ -45,14 +46,20 @@ if TYPE_CHECKING:
 # the gate and fail the build; tracking `notes/` proved it within minutes.
 SRC = (".",)
 
+# The light checks share one slot: pytest fans out `-n auto` workers of its
+# own, and checkers running wide beside them fight those workers for cores
+# (the `fm --profile check` trace drew it). Serialised against each other —
+# and only each other — their sum still fits inside the suite's shadow.
+CHECKERS = lane("checkers", reason="pytest -n auto owns the cores")
 
-@task
+
+@task(lanes=(CHECKERS,))
 def lint(fix: Annotated[bool, doc("apply safe fixes in place")] = False):
     """Lint with ruff."""
     ruff.check(*SRC, fix=fix)
 
 
-@task
+@task(lanes=(CHECKERS,))
 def format(check: bool = False):
     """Format with ruff.
 
@@ -62,7 +69,7 @@ def format(check: bool = False):
     ruff_format(*SRC, check=check)
 
 
-@task
+@task(lanes=(CHECKERS,))
 def typecheck():
     """Type-check with all four gating checkers, in parallel.
 
@@ -106,7 +113,7 @@ def typecheck():
     )
 
 
-@task
+@task(lanes=(CHECKERS,))
 def typecomplete():
     """Verify the public API is 100% type-complete (pyright --verifytypes).
 
@@ -729,3 +736,4 @@ def clean():
 # pulled last only so the file's own tasks list first.
 plugin("footman.docs")
 plugin("footman.tools")
+plugin("footman.profile")
