@@ -72,7 +72,7 @@ keeps its signature, so call it directly when you want parameter hints.
 
 The public surface is what the [API reference](api.md) documents: the
 `footman` namespace and the documented modules (`footman.testing`,
-`footman.tools`, `footman.params`, …). Everything underscore-prefixed is
+`footman.params`, …). Everything underscore-prefixed is
 implementation — it moves without notice, and the types deliberately
 don't invite you in. If something private turns out to be the only way to
 do something real, that's an issue worth opening, not an import worth

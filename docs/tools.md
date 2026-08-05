@@ -1,13 +1,15 @@
 # Running tools
 
-Task bodies run tools through `run()` and the typed wrappers imported from
-`footman.tools`. `run()` captures output and stays quiet on success,
+Task bodies run tools through `run()` — and, if you install the companion
+package [toolroom](https://willemkokke.github.io/toolroom/), through its
+typed tool handles, which detect footman and route every call through
+`run()` automatically. `run()` captures output and stays quiet on success,
 **replaying it only on failure** — so a green run is calm and a red one shows
 exactly what broke:
 
 ```python
 from footman import task, run
-from footman.tools import pytest, ruff
+from toolroom import pytest, ruff
 
 @task
 def check():
@@ -16,12 +18,12 @@ def check():
     run("mkdocs build --strict")       # any command; a callable also works
 ```
 
-Each tool is imported by name — `from footman.tools import git` gives you a
-typed `git` you call as `git.commit(…)`; a tool footman has never heard of
+Each toolroom handle is imported by name — `from toolroom import git` gives
+you a typed `git` you call as `git.commit(…)`; a tool nobody has heard of
 imports just the same and runs as a subprocess. This page covers `run()` and
-the task context. The tool wrappers — how the flag translation works,
-disabling flags, in-process execution, and why nothing is transcribed per
-tool — have their own page: [The tools bridge](tools-bridge.md).
+the task context; the handles — flag translation, disabling flags,
+in-process execution, and why nothing is transcribed per tool — are
+[toolroom's story](https://willemkokke.github.io/toolroom/usage/).
 
 ## `run()`
 
@@ -71,7 +73,7 @@ if you want the object — footman keeps it out of the CLI mapping:
 
 ```python
 from footman import Context, task
-from footman.tools import pytest
+from toolroom import pytest
 
 @task
 def test(ctx: Context):

@@ -589,7 +589,7 @@ def plugin(
     plugin("acme.devkit")                      # the import *: every group, top level
     plugin("acme.devkit.lint")                 # from acme_devkit import lint
     plugin("acme.ci", exclude=["deploy"])      # everything but one child
-    plugin("footman.tools", into="footman")    # built-ins are ordinary plugins
+    plugin("footman.docs", into="footman")     # built-ins are ordinary plugins
     plugin("acme.linters.default", into="lint")  # adopt a provider's default
     ```
 

@@ -7,6 +7,19 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Removed
+
+- **Breaking:** the tools bridge and everything behind it — `footman.tools`,
+  the generated stubs, the stub machinery, `tool-history/`, and the weekly
+  refresh workflow — moved to
+  [toolroom](https://willemkokke.github.io/toolroom/), footman's companion
+  package. Respell `from footman import tools` as `import toolroom` (or
+  import handles by name: `from toolroom import git`) after
+  `pip install toolroom`; calls detect the footman host and route through
+  `run()` exactly as the bridge did. The `footman.tools` plugin entry point
+  is gone with it, and there is no shim. footman's own gate runs through
+  toolroom as a dev dependency; the runtime keeps zero dependencies.
+
 ## [0.31.0] - 2026-08-05
 
 ### Added

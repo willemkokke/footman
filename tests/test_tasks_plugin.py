@@ -1,5 +1,5 @@
-"""The first-party `footman.docs`/`footman.tools` plugins: nested mounting,
-page/site tasks, hot path."""
+"""The first-party `footman.docs` plugin: nested mounting, page/site
+tasks, hot path."""
 
 from __future__ import annotations
 
@@ -23,7 +23,6 @@ def plugin_project(tmp_path, monkeypatch):
         "# pulled FIRST on purpose: the local group() below adopts the\n"
         "# pulled docs group — order must not matter\n"
         "plugin('footman.docs')\n"
-        "plugin('footman.tools')\n"
         "\n"
         "@task\n"
         "def greet(name: str = 'world'):\n"

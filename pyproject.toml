@@ -62,7 +62,6 @@ footman = "footman.pytest_plugin"
 # both in its own tasks.py, exactly as a user would.
 [project.entry-points."footman.tasks"]
 "footman.docs" = "footman.tasks.docs:tasks"
-"footman.tools" = "footman.tasks.tools:tasks"
 "footman.env_files" = "footman.env_files"
 "footman.profile" = "footman.profile"
 
@@ -75,6 +74,9 @@ dev = [
     # uv on every laptop and in CI. A mismatched *system* uv rewriting uv.lock is
     # the source of the one-line lockfile churn this removes.
     "uv",
+    # The typed tool surfaces footman's own tasks run through — the spun-out
+    # bridge, dogfooding the hosted lane. Dev-only: footman ships zero deps.
+    "toolroom>=0.1.0",
     "pytest>=8.0",
     # For the env_files plugin's tests only — the plugin itself imports it
     # lazily and teaches by name when absent; never a runtime dependency.

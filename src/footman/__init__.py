@@ -20,7 +20,6 @@ if TYPE_CHECKING:
     # on a bare `import footman` (the completion hot path).
     from footman import docstrings as docstrings
     from footman import markdown as markdown
-    from footman import tools as tools
     from footman._fetch import FetchError as FetchError
     from footman._fetch import fetch as fetch
     from footman._globals import Lane as Lane
@@ -185,7 +184,6 @@ __all__ = [
     "stream",
     "suggest",
     "task",
-    "tools",
     "track",
     "use_context",
     "wrap_bind",
@@ -265,10 +263,6 @@ def __getattr__(name: str) -> object:
         from footman import testing
 
         return getattr(testing, name)
-    if name == "tools":
-        import footman.tools
-
-        return footman.tools
     if name == "docstrings":
         import footman.docstrings
 

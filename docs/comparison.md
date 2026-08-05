@@ -29,9 +29,11 @@ Its `tools` library in particular is the direct inspiration for footman's: it
 is where I got the idea that a task runner should ship typed wrappers for the
 tools you actually call. footman's take separates the two halves duty fuses —
 wrapping a command-line utility is generic, and the type hints are a layer
-generated on top. So the code reads the same whether or not footman has heard
-of your tool: `tools.terraform("plan")` runs exactly like `tools.ruff.check()`,
-and a stub only decides whether your editor can help.
+generated on top. So the code reads the same whether or not a stub has heard
+of your tool: `toolroom.terraform("plan")` runs exactly like
+`toolroom.ruff.check()`, and a stub only decides whether your editor can
+help. The handles live in [toolroom](https://willemkokke.github.io/toolroom/),
+footman's companion package, and detect the footman host on every call.
 
 ## Completion latency
 

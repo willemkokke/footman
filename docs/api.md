@@ -35,6 +35,8 @@ it can't run. Every gate is evaluated live, and all failures are collected.
 
 ::: footman.context.Result
 
+::: footman.context.AuditEntry
+
 ::: footman.context.Argv
 
 ::: footman.context.parallel
@@ -154,16 +156,6 @@ a `TaskView` that reads and edits one task. The per-task pair — `@pre_task` an
 ::: footman.params.ask
 
 ::: footman.params.Secret
-
-## Tool versions
-
-What a tool reports about itself — see
-[Which version am I actually running?](tools-bridge.md#which-version-am-i-actually-running)
-for when to reach for which.
-
-::: footman.tools.read_version
-
-::: footman.tools.version_tuple
 
 ## Docstrings
 

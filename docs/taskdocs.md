@@ -40,8 +40,7 @@ plugin("footman.docs", into="footman")
 That's also the one-line demo of the [plugin system](composing.md): the
 entry point is the identity, `into=` is your placement, and after the pull
 `fm --list` shows `docs.page` and `docs.site`. (Cherry-pick
-with `only=`, or drop the `into=` to land the `docs` group at top level.
-The maintainer-facing stub toolkit is a separate plugin, `footman.tools`.)
+with `only=`, or drop the `into=` to land the `docs` group at top level.)
 
 ## One page: `fm docs.page`
 
@@ -170,7 +169,7 @@ docs = group("docs", help="Documentation")
 def docs_build(check: bool = False):
     "Build the docs site; regenerates the task reference first."
     from footman.tasks.docs import globals_, page, site
-    from footman.tools import zensical
+    from toolroom import zensical
 
     site(Path("docs/tasks"))
     page(target="docs", heading=3, out=Path("docs/_generated/tasks-page.md"))

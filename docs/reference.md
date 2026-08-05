@@ -106,10 +106,6 @@ def span(inv, task):
 | `env("VAR")`                 | fall back to an environment variable (CLI > env > default) |
 | `check(fn)`                  | custom post-coercion validator (`ValueError` rejects) |
 | `doc("…")`                   | one-line parameter help — shown in `--help`, completion, the catalog |
-| `footman.tools`                    | typed wrappers for ruff, basedpyright, pytest, uv, … |
-| `<tool>.installed_version()`       | what the binary this tool runs reports, as comparable ints |
-| `tools.read_version(text)`         | the version string inside `--version` output          |
-| `tools.version_tuple(v)`           | a version string as comparable ints (build tail ends the read) |
 | `footman.testing`            | `Runner`/`Result` + `recording()` — see [Testing](testing.md) |
 | `include`, `plugin`          | adopt tasks from modules/packages — see [Composing](composing.md) |
 | `inherited()`                | the task this one shadows in the cascade — call it to extend it |
