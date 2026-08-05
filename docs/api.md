@@ -35,6 +35,8 @@ it can't run. Every gate is evaluated live, and all failures are collected.
 
 ::: footman.context.Result
 
+::: footman.context.Argv
+
 ::: footman.context.parallel
 
 ::: footman.context.passthrough

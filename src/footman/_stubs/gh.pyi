@@ -2,849 +2,1063 @@
 #
 # Read from gh 2.97.0 on Linux, Windows and macOS. In-process: no.
 # Every verb ends in `**flags: Any`: the stub suggests what this tool
-# accepts, and can never forbid what the bridge would happily pass.
-from typing import Any, Self
+# accepts, and can never forbid what the bridge would happily pass. Each
+# verb is a class parameterised by what its call returns, which is how
+# `.argv` re-spells the same signature over `Argv` — same flags, same
+# checking, a built command line instead of a run.
+from typing import Any, Self, TypeVar
 
-from footman.tools import Result as _Result
+from footman.tools import Argv as _Argv
 from footman.tools import Tool as _Tool
 from footman.tools import _Flag, _Value
 
-class Gh(_Tool):
-    class Auth(_Tool):
-        def login(
+_R = TypeVar("_R")
+_R2 = TypeVar("_R2")
+_R3 = TypeVar("_R3")
+
+class Gh(_Tool[_R]):
+    class Auth(_Tool[_R2]):
+        class Login(_Tool[_R3]):
+            def __call__(  # type: ignore[override]
+                self,
+                *,
+                clipboard: _Flag = ...,
+                git_protocol: _Value = ...,
+                hostname: _Value = ...,
+                insecure_storage: _Flag = ...,
+                scopes: _Value = ...,
+                skip_ssh_key: _Flag = ...,
+                web: _Flag = ...,
+                with_token: _Flag = ...,
+                **flags: Any,
+            ) -> _R3:
+                """Authenticate with a GitHub host.
+
+                Args:
+                    clipboard: Copy one-time OAuth device code to clipboard.
+                    git_protocol: The protocol to use for git operations on this
+                        host: {ssh|https}.
+                    hostname: The hostname of the GitHub instance to authenticate
+                        with.
+                    insecure_storage: Save authentication credentials in plain text
+                        instead of credential store.
+                    scopes: Additional authentication scopes to request.
+                    skip_ssh_key: Skip generate/upload SSH key prompt.
+                    web: Open a browser to authenticate.
+                    with_token: Read token from standard input.
+                """
+                ...
+            @property
+            def argv(self) -> Gh.Auth.Login[_Argv]: ...
+
+        login: Login[_R2]
+        class Status(_Tool[_R3]):
+            def __call__(  # type: ignore[override]
+                self,
+                *,
+                active: _Flag = ...,
+                hostname: _Value = ...,
+                jq: _Value = ...,
+                json: _Value = ...,
+                show_token: _Flag = ...,
+                template: _Value = ...,
+                **flags: Any,
+            ) -> _R3:
+                """Display active account and authentication state on each known GitHub
+                host.
+
+                Args:
+                    active: Display the active account only.
+                    hostname: Check only a specific hostname's auth status.
+                    jq: Filter JSON output using a jq expression.
+                    json: Output JSON with the specified fields.
+                    show_token: Display the auth token.
+                    template: Format JSON output using a Go template; see "gh help
+                        formatting".
+                """
+                ...
+            @property
+            def argv(self) -> Gh.Auth.Status[_Argv]: ...
+
+        status: Status[_R2]
+        def __call__(  # type: ignore[override]
             self,
-            *,
-            clipboard: _Flag = ...,
-            git_protocol: _Value = ...,
+            *args: Any,
+            **flags: Any,
+        ) -> _R2: ...
+        @property
+        def argv(self) -> Gh.Auth[_Argv]: ...
+        def flags(
+            self,
+            **flags: Any,
+        ) -> Self:
+            """Bind tool-level global options before the subcommand.
+
+            `tools.docker.flags(host=...)` puts a tool's own
+            options ahead of the verb, where they belong."""
+            ...
+
+    auth: Auth[_R]
+    class Issue(_Tool[_R2]):
+        class Create(_Tool[_R3]):
+            def __call__(  # type: ignore[override]
+                self,
+                *,
+                assignee: _Value = ...,
+                blocked_by: _Value = ...,
+                blocking: _Value = ...,
+                body: _Value = ...,
+                body_file: _Value = ...,
+                editor: _Flag = ...,
+                label: _Value = ...,
+                milestone: _Value = ...,
+                parent: _Value = ...,
+                project: _Value = ...,
+                recover: _Value = ...,
+                repo: _Value = ...,
+                template: _Value = ...,
+                title: _Value = ...,
+                type: _Value = ...,
+                web: _Flag = ...,
+                **flags: Any,
+            ) -> _R3:
+                """Create an issue on GitHub.
+
+                Args:
+                    assignee: Assign people by their login.
+                    blocked_by: Mark the new issue as blocked by these issue numbers
+                        or URLs. Added in 2.94.0.
+                    blocking: Mark the new issue as blocking these issue numbers or
+                        URLs. Added in 2.94.0.
+                    body: Supply a body.
+                    body_file: Read body text from file (use "-" to read from
+                        standard input).
+                    editor: Skip prompts and open the text editor to write the title
+                        and body in.
+                    label: Add labels by name.
+                    milestone: Add the issue to a milestone by name.
+                    parent: Add the new issue as a sub-issue of the specified parent
+                        number or URL. Added in 2.94.0.
+                    project: Add the issue to projects by title.
+                    recover: Recover input from a failed run of create.
+                    repo: Select another repository using the [HOST/]OWNER/REPO
+                        format.
+                    template: Template name to use as starting body text.
+                    title: Supply a title.
+                    type: Set the issue type by name. Added in 2.94.0.
+                    web: Open the browser to create an issue.
+                """
+                ...
+            @property
+            def argv(self) -> Gh.Issue.Create[_Argv]: ...
+
+        create: Create[_R2]
+        class List(_Tool[_R3]):
+            def __call__(  # type: ignore[override]
+                self,
+                *,
+                app: _Value = ...,
+                assignee: _Value = ...,
+                author: _Value = ...,
+                jq: _Value = ...,
+                json: _Value = ...,
+                label: _Value = ...,
+                limit: _Value = ...,
+                mention: _Value = ...,
+                milestone: _Value = ...,
+                repo: _Value = ...,
+                search: _Value = ...,
+                state: _Value = ...,
+                template: _Value = ...,
+                type: _Value = ...,
+                web: _Flag = ...,
+                **flags: Any,
+            ) -> _R3:
+                """List issues in a GitHub repository. By default, this only lists open
+                issues.
+
+                Args:
+                    app: Filter by GitHub App author.
+                    assignee: Filter by assignee.
+                    author: Filter by author (use --app to filter by a GitHub App).
+                    jq: Filter JSON output using a jq expression.
+                    json: Output JSON with the specified fields.
+                    label: Filter by label.
+                    limit: Maximum number of issues to fetch. Defaults to `30`.
+                    mention: Filter by mention.
+                    milestone: Filter by milestone number or title.
+                    repo: Select another repository using the [HOST/]OWNER/REPO
+                        format.
+                    search: Search issues with query.
+                    state: Filter by state: {open|closed|all}. Defaults to `open`.
+                    template: Format JSON output using a Go template; see "gh help
+                        formatting".
+                    type: Filter by issue type name. Added in 2.94.0.
+                    web: List issues in the web browser.
+                """
+                ...
+            @property
+            def argv(self) -> Gh.Issue.List[_Argv]: ...
+
+        list: List[_R2]
+        class View(_Tool[_R3]):
+            def __call__(  # type: ignore[override]
+                self,
+                *args: str,
+                comments: _Flag = ...,
+                jq: _Value = ...,
+                json: _Value = ...,
+                repo: _Value = ...,
+                template: _Value = ...,
+                web: _Flag = ...,
+                **flags: Any,
+            ) -> _R3:
+                """Display the title, body, and other information about an issue.
+
+                Args:
+                    comments: View issue comments.
+                    jq: Filter JSON output using a jq expression.
+                    json: Output JSON with the specified fields.
+                    repo: Select another repository using the [HOST/]OWNER/REPO
+                        format.
+                    template: Format JSON output using a Go template; see "gh help
+                        formatting".
+                    web: Open an issue in the browser.
+                """
+                ...
+            @property
+            def argv(self) -> Gh.Issue.View[_Argv]: ...
+
+        view: View[_R2]
+        def __call__(  # type: ignore[override]
+            self,
+            *args: Any,
+            **flags: Any,
+        ) -> _R2: ...
+        @property
+        def argv(self) -> Gh.Issue[_Argv]: ...
+        def flags(
+            self,
+            **flags: Any,
+        ) -> Self:
+            """Bind tool-level global options before the subcommand.
+
+            `tools.docker.flags(host=...)` puts a tool's own
+            options ahead of the verb, where they belong."""
+            ...
+
+    issue: Issue[_R]
+    class Label(_Tool[_R2]):
+        class Create(_Tool[_R3]):
+            def __call__(  # type: ignore[override]
+                self,
+                name: str,
+                /,
+                *args: str,
+                color: _Value = ...,
+                description: _Value = ...,
+                force: _Flag = ...,
+                repo: _Value = ...,
+                **flags: Any,
+            ) -> _R3:
+                """Create a new label on GitHub, or update an existing one with
+                `--force`.
+
+                Args:
+                    color: Color of the label.
+                    description: Description of the label.
+                    force: Update the label color and description if label already
+                        exists.
+                    repo: Select another repository using the [HOST/]OWNER/REPO
+                        format.
+                """
+                ...
+            @property
+            def argv(self) -> Gh.Label.Create[_Argv]: ...
+
+        create: Create[_R2]
+        class List(_Tool[_R3]):
+            def __call__(  # type: ignore[override]
+                self,
+                *,
+                jq: _Value = ...,
+                json: _Value = ...,
+                limit: _Value = ...,
+                order: _Value = ...,
+                repo: _Value = ...,
+                search: _Value = ...,
+                sort: _Value = ...,
+                template: _Value = ...,
+                web: _Flag = ...,
+                **flags: Any,
+            ) -> _R3:
+                """Display labels in a GitHub repository.
+
+                Args:
+                    jq: Filter JSON output using a jq expression.
+                    json: Output JSON with the specified fields.
+                    limit: Maximum number of labels to fetch. Defaults to `30`.
+                    order: Order of labels returned: {asc|desc}. Defaults to `asc`.
+                    repo: Select another repository using the [HOST/]OWNER/REPO
+                        format.
+                    search: Search label names and descriptions.
+                    sort: Sort fetched labels: {created|name}. Defaults to
+                        `created`.
+                    template: Format JSON output using a Go template; see "gh help
+                        formatting".
+                    web: List labels in the web browser.
+                """
+                ...
+            @property
+            def argv(self) -> Gh.Label.List[_Argv]: ...
+
+        list: List[_R2]
+        def __call__(  # type: ignore[override]
+            self,
+            *args: Any,
+            **flags: Any,
+        ) -> _R2: ...
+        @property
+        def argv(self) -> Gh.Label[_Argv]: ...
+        def flags(
+            self,
+            **flags: Any,
+        ) -> Self:
+            """Bind tool-level global options before the subcommand.
+
+            `tools.docker.flags(host=...)` puts a tool's own
+            options ahead of the verb, where they belong."""
+            ...
+
+    label: Label[_R]
+    class Pr(_Tool[_R2]):
+        class Checkout(_Tool[_R3]):
+            def __call__(  # type: ignore[override]
+                self,
+                *args: str,
+                branch: _Value = ...,
+                detach: _Flag = ...,
+                force: _Flag = ...,
+                recurse_submodules: _Flag = ...,
+                repo: _Value = ...,
+                **flags: Any,
+            ) -> _R3:
+                """Check out a pull request in git
+
+                Args:
+                    branch: Local branch name to use. Defaults to `[the name of the
+                        head branch]`.
+                    detach: Checkout PR with a detached HEAD.
+                    force: Reset the existing local branch to the latest state of
+                        the pull request.
+                    recurse_submodules: Update all submodules after checkout.
+                    repo: Select another repository using the [HOST/]OWNER/REPO
+                        format.
+                """
+                ...
+            @property
+            def argv(self) -> Gh.Pr.Checkout[_Argv]: ...
+
+        checkout: Checkout[_R2]
+        class Create(_Tool[_R3]):
+            def __call__(  # type: ignore[override]
+                self,
+                *,
+                assignee: _Value = ...,
+                base: _Value = ...,
+                body: _Value = ...,
+                body_file: _Value = ...,
+                draft: _Flag = ...,
+                dry_run: _Flag = ...,
+                editor: _Flag = ...,
+                fill: _Flag = ...,
+                fill_first: _Flag = ...,
+                fill_verbose: _Flag = ...,
+                head: _Value = ...,
+                label: _Value = ...,
+                milestone: _Value = ...,
+                no_maintainer_edit: _Flag = ...,
+                project: _Value = ...,
+                recover: _Value = ...,
+                repo: _Value = ...,
+                reviewer: _Value = ...,
+                template: _Value = ...,
+                title: _Value = ...,
+                web: _Flag = ...,
+                **flags: Any,
+            ) -> _R3:
+                """Create a pull request on GitHub.
+
+                Args:
+                    assignee: Assign people by their login.
+                    base: The branch into which you want your code merged.
+                    body: Body for the pull request.
+                    body_file: Read body text from file (use "-" to read from
+                        standard input).
+                    draft: Mark pull request as a draft.
+                    dry_run: Print details instead of creating the PR.
+                    editor: Skip prompts and open the text editor to write the title
+                        and body in.
+                    fill: Use commit info for title and body.
+                    fill_first: Use first commit info for title and body.
+                    fill_verbose: Use commits msg+body for description.
+                    head: The branch that contains commits for your pull request.
+                        Defaults to `[current branch]`.
+                    label: Add labels by name.
+                    milestone: Add the pull request to a milestone by name.
+                    no_maintainer_edit: Disable maintainer's ability to modify pull
+                        request.
+                    project: Add the pull request to projects by title.
+                    recover: Recover input from a failed run of create.
+                    repo: Select another repository using the [HOST/]OWNER/REPO
+                        format.
+                    reviewer: Request reviews from people or teams by their handle.
+                    template: Template file to use as starting body text.
+                    title: Title for the pull request.
+                    web: Open the web browser to create a pull request.
+                """
+                ...
+            @property
+            def argv(self) -> Gh.Pr.Create[_Argv]: ...
+
+        create: Create[_R2]
+        class List(_Tool[_R3]):
+            def __call__(  # type: ignore[override]
+                self,
+                *,
+                app: _Value = ...,
+                assignee: _Value = ...,
+                author: _Value = ...,
+                base: _Value = ...,
+                draft: _Flag = ...,
+                head: _Value = ...,
+                jq: _Value = ...,
+                json: _Value = ...,
+                label: _Value = ...,
+                limit: _Value = ...,
+                repo: _Value = ...,
+                search: _Value = ...,
+                state: _Value = ...,
+                template: _Value = ...,
+                web: _Flag = ...,
+                **flags: Any,
+            ) -> _R3:
+                """List pull requests in a GitHub repository. By default, this only
+                lists open PRs.
+
+                Args:
+                    app: Filter by GitHub App author.
+                    assignee: Filter by assignee.
+                    author: Filter by author (use --app to filter by a GitHub App).
+                    base: Filter by base branch.
+                    draft: Filter by draft state.
+                    head: Filter by head branch ("<owner>:<branch>" syntax not
+                        supported).
+                    jq: Filter JSON output using a jq expression.
+                    json: Output JSON with the specified fields.
+                    label: Filter by label.
+                    limit: Maximum number of items to fetch. Defaults to `30`.
+                    repo: Select another repository using the [HOST/]OWNER/REPO
+                        format.
+                    search: Search pull requests with query.
+                    state: Filter by state: {open|closed|merged|all}. Defaults to
+                        `open`.
+                    template: Format JSON output using a Go template; see "gh help
+                        formatting".
+                    web: List pull requests in the web browser.
+                """
+                ...
+            @property
+            def argv(self) -> Gh.Pr.List[_Argv]: ...
+
+        list: List[_R2]
+        class Merge(_Tool[_R3]):
+            def __call__(  # type: ignore[override]
+                self,
+                *args: str,
+                admin: _Flag = ...,
+                author_email: _Value = ...,
+                auto: _Flag = ...,
+                body: _Value = ...,
+                body_file: _Value = ...,
+                delete_branch: _Flag = ...,
+                disable_auto: _Flag = ...,
+                match_head_commit: _Value = ...,
+                merge: _Flag = ...,
+                rebase: _Flag = ...,
+                repo: _Value = ...,
+                squash: _Flag = ...,
+                subject: _Value = ...,
+                **flags: Any,
+            ) -> _R3:
+                """Merge a pull request on GitHub.
+
+                Args:
+                    admin: Use administrator privileges to merge a pull request that
+                        does not meet requirements.
+                    author_email: Email text for merge commit author.
+                    auto: Automatically merge only after necessary requirements are
+                        met.
+                    body: Body text for the merge commit.
+                    body_file: Read body text from file (use "-" to read from
+                        standard input).
+                    delete_branch: Delete the local and remote branch after merge.
+                    disable_auto: Disable auto-merge for this pull request.
+                    match_head_commit: Commit SHA that the pull request head must
+                        match to allow merge.
+                    merge: Merge the commits with the base branch.
+                    rebase: Rebase the commits onto the base branch.
+                    repo: Select another repository using the [HOST/]OWNER/REPO
+                        format.
+                    squash: Squash the commits into one commit and merge it into the
+                        base branch.
+                    subject: Subject text for the merge commit.
+                """
+                ...
+            @property
+            def argv(self) -> Gh.Pr.Merge[_Argv]: ...
+
+        merge: Merge[_R2]
+        class View(_Tool[_R3]):
+            def __call__(  # type: ignore[override]
+                self,
+                *args: str,
+                comments: _Flag = ...,
+                jq: _Value = ...,
+                json: _Value = ...,
+                repo: _Value = ...,
+                template: _Value = ...,
+                web: _Flag = ...,
+                **flags: Any,
+            ) -> _R3:
+                """Display the title, body, and other information about a pull request.
+
+                Args:
+                    comments: View pull request comments.
+                    jq: Filter JSON output using a jq expression.
+                    json: Output JSON with the specified fields.
+                    repo: Select another repository using the [HOST/]OWNER/REPO
+                        format.
+                    template: Format JSON output using a Go template; see "gh help
+                        formatting".
+                    web: Open a pull request in the browser.
+                """
+                ...
+            @property
+            def argv(self) -> Gh.Pr.View[_Argv]: ...
+
+        view: View[_R2]
+        def __call__(  # type: ignore[override]
+            self,
+            *args: Any,
+            **flags: Any,
+        ) -> _R2: ...
+        @property
+        def argv(self) -> Gh.Pr[_Argv]: ...
+        def flags(
+            self,
+            **flags: Any,
+        ) -> Self:
+            """Bind tool-level global options before the subcommand.
+
+            `tools.docker.flags(host=...)` puts a tool's own
+            options ahead of the verb, where they belong."""
+            ...
+
+    pr: Pr[_R]
+    class Release(_Tool[_R2]):
+        class Create(_Tool[_R3]):
+            def __call__(  # type: ignore[override]
+                self,
+                *args: str,
+                discussion_category: _Value = ...,
+                draft: _Flag = ...,
+                fail_on_no_commits: _Flag = ...,
+                generate_notes: _Flag = ...,
+                latest: _Flag = ...,
+                notes: _Value = ...,
+                notes_file: _Value = ...,
+                notes_from_tag: _Flag = ...,
+                notes_start_tag: _Value = ...,
+                prerelease: _Flag = ...,
+                repo: _Value = ...,
+                target: _Value = ...,
+                title: _Value = ...,
+                verify_tag: _Flag = ...,
+                **flags: Any,
+            ) -> _R3:
+                """Create a new GitHub Release for a repository.
+
+                Args:
+                    discussion_category: Start a discussion in the specified
+                        category.
+                    draft: Save the release as a draft instead of publishing it.
+                    fail_on_no_commits: Fail if there are no commits since the last
+                        release (no impact on the first release).
+                    generate_notes: Automatically generate title and notes for the
+                        release via GitHub Release Notes API.
+                    latest: Mark this release as "Latest" .
+                    notes: Release notes.
+                    notes_file: Read release notes from file (use "-" to read from
+                        standard input).
+                    notes_from_tag: Fetch notes from the tag annotation or message
+                        of commit associated with tag.
+                    notes_start_tag: Tag to use as the starting point for generating
+                        release notes.
+                    prerelease: Mark the release as a prerelease.
+                    repo: Select another repository using the [HOST/]OWNER/REPO
+                        format.
+                    target: Target branch or full commit SHA. Defaults to `[main
+                        branch]`.
+                    title: Release title.
+                    verify_tag: Abort in case the git tag doesn't already exist in
+                        the remote repository.
+                """
+                ...
+            @property
+            def argv(self) -> Gh.Release.Create[_Argv]: ...
+
+        create: Create[_R2]
+        class List(_Tool[_R3]):
+            def __call__(  # type: ignore[override]
+                self,
+                *,
+                exclude_drafts: _Flag = ...,
+                exclude_pre_releases: _Flag = ...,
+                jq: _Value = ...,
+                json: _Value = ...,
+                limit: _Value = ...,
+                order: _Value = ...,
+                repo: _Value = ...,
+                template: _Value = ...,
+                **flags: Any,
+            ) -> _R3:
+                """List releases in a repository
+
+                Args:
+                    exclude_drafts: Exclude draft releases.
+                    exclude_pre_releases: Exclude pre-releases.
+                    jq: Filter JSON output using a jq expression.
+                    json: Output JSON with the specified fields.
+                    limit: Maximum number of items to fetch. Defaults to `30`.
+                    order: Order of releases returned: {asc|desc}. Defaults to
+                        `desc`.
+                    repo: Select another repository using the [HOST/]OWNER/REPO
+                        format.
+                    template: Format JSON output using a Go template; see "gh help
+                        formatting".
+                """
+                ...
+            @property
+            def argv(self) -> Gh.Release.List[_Argv]: ...
+
+        list: List[_R2]
+        class Upload(_Tool[_R3]):
+            def __call__(  # type: ignore[override]
+                self,
+                tag: str,
+                /,
+                *args: str,
+                clobber: _Flag = ...,
+                repo: _Value = ...,
+                **flags: Any,
+            ) -> _R3:
+                """Upload asset files to a GitHub Release.
+
+                Args:
+                    clobber: Delete and re-upload existing assets of the same name.
+                    repo: Select another repository using the [HOST/]OWNER/REPO
+                        format.
+                """
+                ...
+            @property
+            def argv(self) -> Gh.Release.Upload[_Argv]: ...
+
+        upload: Upload[_R2]
+        class View(_Tool[_R3]):
+            def __call__(  # type: ignore[override]
+                self,
+                *args: str,
+                jq: _Value = ...,
+                json: _Value = ...,
+                repo: _Value = ...,
+                template: _Value = ...,
+                web: _Flag = ...,
+                **flags: Any,
+            ) -> _R3:
+                """View information about a GitHub Release.
+
+                Args:
+                    jq: Filter JSON output using a jq expression.
+                    json: Output JSON with the specified fields.
+                    repo: Select another repository using the [HOST/]OWNER/REPO
+                        format.
+                    template: Format JSON output using a Go template; see "gh help
+                        formatting".
+                    web: Open the release in the browser.
+                """
+                ...
+            @property
+            def argv(self) -> Gh.Release.View[_Argv]: ...
+
+        view: View[_R2]
+        def __call__(  # type: ignore[override]
+            self,
+            *args: Any,
+            **flags: Any,
+        ) -> _R2: ...
+        @property
+        def argv(self) -> Gh.Release[_Argv]: ...
+        def flags(
+            self,
+            **flags: Any,
+        ) -> Self:
+            """Bind tool-level global options before the subcommand.
+
+            `tools.docker.flags(host=...)` puts a tool's own
+            options ahead of the verb, where they belong."""
+            ...
+
+    release: Release[_R]
+    class Repo(_Tool[_R2]):
+        class Clone(_Tool[_R3]):
+            def __call__(  # type: ignore[override]
+                self,
+                repository: str,
+                /,
+                *args: str,
+                no_upstream: _Flag = ...,
+                upstream_remote_name: _Value = ...,
+                **flags: Any,
+            ) -> _R3:
+                """Clone a GitHub repository locally. Pass additional `git clone` flags
+                by listing
+
+                Args:
+                    no_upstream: Do not add an upstream remote when cloning a fork.
+                    upstream_remote_name: Upstream remote name when cloning a fork.
+                        Defaults to `upstream`.
+                """
+                ...
+            @property
+            def argv(self) -> Gh.Repo.Clone[_Argv]: ...
+
+        clone: Clone[_R2]
+        class View(_Tool[_R3]):
+            def __call__(  # type: ignore[override]
+                self,
+                *args: str,
+                branch: _Value = ...,
+                jq: _Value = ...,
+                json: _Value = ...,
+                template: _Value = ...,
+                web: _Flag = ...,
+                **flags: Any,
+            ) -> _R3:
+                """Display the description and the README of a GitHub repository.
+
+                Args:
+                    branch: View a specific branch of the repository.
+                    jq: Filter JSON output using a jq expression.
+                    json: Output JSON with the specified fields.
+                    template: Format JSON output using a Go template; see "gh help
+                        formatting".
+                    web: Open a repository in the browser.
+                """
+                ...
+            @property
+            def argv(self) -> Gh.Repo.View[_Argv]: ...
+
+        view: View[_R2]
+        def __call__(  # type: ignore[override]
+            self,
+            *args: Any,
+            **flags: Any,
+        ) -> _R2: ...
+        @property
+        def argv(self) -> Gh.Repo[_Argv]: ...
+        def flags(
+            self,
+            **flags: Any,
+        ) -> Self:
+            """Bind tool-level global options before the subcommand.
+
+            `tools.docker.flags(host=...)` puts a tool's own
+            options ahead of the verb, where they belong."""
+            ...
+
+    repo: Repo[_R]
+    class Run(_Tool[_R2]):
+        class List(_Tool[_R3]):
+            def __call__(  # type: ignore[override]
+                self,
+                *,
+                all: _Flag = ...,
+                branch: _Value = ...,
+                commit: _Value = ...,
+                created: _Value = ...,
+                event: _Value = ...,
+                jq: _Value = ...,
+                json: _Value = ...,
+                limit: _Value = ...,
+                repo: _Value = ...,
+                status: _Value = ...,
+                template: _Value = ...,
+                user: _Value = ...,
+                workflow: _Value = ...,
+                **flags: Any,
+            ) -> _R3:
+                """List recent workflow runs.
+
+                Args:
+                    all: Include disabled workflows.
+                    branch: Filter runs by branch.
+                    commit: Filter runs by the SHA of the commit.
+                    created: Filter runs by the date it was created.
+                    event: Filter runs by which event triggered the run.
+                    jq: Filter JSON output using a jq expression.
+                    json: Output JSON with the specified fields.
+                    limit: Maximum number of runs to fetch. Defaults to `20`.
+                    repo: Select another repository using the [HOST/]OWNER/REPO
+                        format.
+                    status: Filter runs by status:
+                        {queued|completed|in_progress|requested|waiting|pending|action_required|cancelled|failure|neutral|skipped|stale|startup_failure|success|timed_out}.
+                    template: Format JSON output using a Go template; see "gh help
+                        formatting".
+                    user: Filter runs by user who triggered the run.
+                    workflow: Filter runs by workflow.
+                """
+                ...
+            @property
+            def argv(self) -> Gh.Run.List[_Argv]: ...
+
+        list: List[_R2]
+        class View(_Tool[_R3]):
+            def __call__(  # type: ignore[override]
+                self,
+                *args: str,
+                attempt: _Value = ...,
+                exit_status: _Flag = ...,
+                job: _Value = ...,
+                jq: _Value = ...,
+                json: _Value = ...,
+                log: _Flag = ...,
+                log_failed: _Flag = ...,
+                repo: _Value = ...,
+                template: _Value = ...,
+                verbose: _Flag = ...,
+                web: _Flag = ...,
+                **flags: Any,
+            ) -> _R3:
+                """View a summary of a workflow run.
+
+                Args:
+                    attempt: The attempt number of the workflow run.
+                    exit_status: Exit with non-zero status if run failed.
+                    job: View a specific job ID from a run.
+                    jq: Filter JSON output using a jq expression.
+                    json: Output JSON with the specified fields.
+                    log: View full log for either a run or specific job.
+                    log_failed: View the log for any failed steps in a run or
+                        specific job.
+                    repo: Select another repository using the [HOST/]OWNER/REPO
+                        format.
+                    template: Format JSON output using a Go template; see "gh help
+                        formatting".
+                    verbose: Show job steps.
+                    web: Open run in the browser.
+                """
+                ...
+            @property
+            def argv(self) -> Gh.Run.View[_Argv]: ...
+
+        view: View[_R2]
+        class Watch(_Tool[_R3]):
+            def __call__(  # type: ignore[override]
+                self,
+                run_id: str,
+                /,
+                *args: str,
+                compact: _Flag = ...,
+                exit_status: _Flag = ...,
+                interval: _Value = ...,
+                repo: _Value = ...,
+                **flags: Any,
+            ) -> _R3:
+                """Watch a run until it completes, showing its progress.
+
+                Args:
+                    compact: Show only relevant/failed steps.
+                    exit_status: Exit with non-zero status if run fails.
+                    interval: Refresh interval in seconds. Defaults to `3`.
+                    repo: Select another repository using the [HOST/]OWNER/REPO
+                        format.
+                """
+                ...
+            @property
+            def argv(self) -> Gh.Run.Watch[_Argv]: ...
+
+        watch: Watch[_R2]
+        def __call__(  # type: ignore[override]
+            self,
+            *args: Any,
+            **flags: Any,
+        ) -> _R2: ...
+        @property
+        def argv(self) -> Gh.Run[_Argv]: ...
+        def flags(
+            self,
+            **flags: Any,
+        ) -> Self:
+            """Bind tool-level global options before the subcommand.
+
+            `tools.docker.flags(host=...)` puts a tool's own
+            options ahead of the verb, where they belong."""
+            ...
+
+    run: Run[_R]
+    class Workflow(_Tool[_R2]):
+        class List(_Tool[_R3]):
+            def __call__(  # type: ignore[override]
+                self,
+                *,
+                all: _Flag = ...,
+                jq: _Value = ...,
+                json: _Value = ...,
+                limit: _Value = ...,
+                repo: _Value = ...,
+                template: _Value = ...,
+                **flags: Any,
+            ) -> _R3:
+                """List workflow files, hiding disabled workflows by default.
+
+                Args:
+                    all: Include disabled workflows.
+                    jq: Filter JSON output using a jq expression.
+                    json: Output JSON with the specified fields.
+                    limit: Maximum number of workflows to fetch. Defaults to `50`.
+                    repo: Select another repository using the [HOST/]OWNER/REPO
+                        format.
+                    template: Format JSON output using a Go template; see "gh help
+                        formatting".
+                """
+                ...
+            @property
+            def argv(self) -> Gh.Workflow.List[_Argv]: ...
+
+        list: List[_R2]
+        class Run(_Tool[_R3]):
+            def __call__(  # type: ignore[override]
+                self,
+                *args: str,
+                field: _Value = ...,
+                json: _Flag = ...,
+                raw_field: _Value = ...,
+                ref: _Value = ...,
+                repo: _Value = ...,
+                **flags: Any,
+            ) -> _R3:
+                """Create a `workflow_dispatch` event for a given workflow.
+
+                Args:
+                    field: Add a string parameter in key=value format, respecting @
+                        syntax (see "gh help api").
+                    json: Read workflow inputs as JSON via STDIN.
+                    raw_field: Add a string parameter in key=value format.
+                    ref: Branch or tag name which contains the version of the
+                        workflow file you'd like to run.
+                    repo: Select another repository using the [HOST/]OWNER/REPO
+                        format.
+                """
+                ...
+            @property
+            def argv(self) -> Gh.Workflow.Run[_Argv]: ...
+
+        run: Run[_R2]
+        def __call__(  # type: ignore[override]
+            self,
+            *args: Any,
+            **flags: Any,
+        ) -> _R2: ...
+        @property
+        def argv(self) -> Gh.Workflow[_Argv]: ...
+        def flags(
+            self,
+            **flags: Any,
+        ) -> Self:
+            """Bind tool-level global options before the subcommand.
+
+            `tools.docker.flags(host=...)` puts a tool's own
+            options ahead of the verb, where they belong."""
+            ...
+
+    workflow: Workflow[_R]
+    class Api(_Tool[_R2]):
+        def __call__(  # type: ignore[override]
+            self,
+            *args: str,
+            allow_escape_sequences: _Flag = ...,
+            cache: _Value = ...,
+            field: _Value = ...,
+            header: _Value = ...,
             hostname: _Value = ...,
-            insecure_storage: _Flag = ...,
-            scopes: _Value = ...,
-            skip_ssh_key: _Flag = ...,
-            web: _Flag = ...,
-            with_token: _Flag = ...,
-            **flags: Any,
-        ) -> _Result:
-            """Authenticate with a GitHub host.
-
-            Args:
-                clipboard: Copy one-time OAuth device code to clipboard.
-                git_protocol: The protocol to use for git operations on this host:
-                    {ssh|https}.
-                hostname: The hostname of the GitHub instance to authenticate with.
-                insecure_storage: Save authentication credentials in plain text
-                    instead of credential store.
-                scopes: Additional authentication scopes to request.
-                skip_ssh_key: Skip generate/upload SSH key prompt.
-                web: Open a browser to authenticate.
-                with_token: Read token from standard input.
-            """
-            ...
-        def status(
-            self,
-            *,
-            active: _Flag = ...,
-            hostname: _Value = ...,
+            include: _Flag = ...,
+            input: _Value = ...,
             jq: _Value = ...,
-            json: _Value = ...,
-            show_token: _Flag = ...,
-            template: _Value = ...,
-            **flags: Any,
-        ) -> _Result:
-            """Display active account and authentication state on each known GitHub
-            host.
-
-            Args:
-                active: Display the active account only.
-                hostname: Check only a specific hostname's auth status.
-                jq: Filter JSON output using a jq expression.
-                json: Output JSON with the specified fields.
-                show_token: Display the auth token.
-                template: Format JSON output using a Go template; see "gh help
-                    formatting".
-            """
-            ...
-        def flags(
-            self,
-            **flags: Any,
-        ) -> Self:
-            """Bind tool-level global options before the subcommand.
-
-            `tools.docker.flags(host=...)` puts a tool's own
-            options ahead of the verb, where they belong."""
-            ...
-
-    auth: Auth
-    class Issue(_Tool):
-        def create(
-            self,
-            *,
-            assignee: _Value = ...,
-            blocked_by: _Value = ...,
-            blocking: _Value = ...,
-            body: _Value = ...,
-            body_file: _Value = ...,
-            editor: _Flag = ...,
-            label: _Value = ...,
-            milestone: _Value = ...,
-            parent: _Value = ...,
-            project: _Value = ...,
-            recover: _Value = ...,
-            repo: _Value = ...,
-            template: _Value = ...,
-            title: _Value = ...,
-            type: _Value = ...,
-            web: _Flag = ...,
-            **flags: Any,
-        ) -> _Result:
-            """Create an issue on GitHub.
-
-            Args:
-                assignee: Assign people by their login.
-                blocked_by: Mark the new issue as blocked by these issue numbers or
-                    URLs. Added in 2.94.0.
-                blocking: Mark the new issue as blocking these issue numbers or
-                    URLs. Added in 2.94.0.
-                body: Supply a body.
-                body_file: Read body text from file (use "-" to read from standard
-                    input).
-                editor: Skip prompts and open the text editor to write the title and
-                    body in.
-                label: Add labels by name.
-                milestone: Add the issue to a milestone by name.
-                parent: Add the new issue as a sub-issue of the specified parent
-                    number or URL. Added in 2.94.0.
-                project: Add the issue to projects by title.
-                recover: Recover input from a failed run of create.
-                repo: Select another repository using the [HOST/]OWNER/REPO format.
-                template: Template name to use as starting body text.
-                title: Supply a title.
-                type: Set the issue type by name. Added in 2.94.0.
-                web: Open the browser to create an issue.
-            """
-            ...
-        def list(
-            self,
-            *,
-            app: _Value = ...,
-            assignee: _Value = ...,
-            author: _Value = ...,
-            jq: _Value = ...,
-            json: _Value = ...,
-            label: _Value = ...,
-            limit: _Value = ...,
-            mention: _Value = ...,
-            milestone: _Value = ...,
-            repo: _Value = ...,
-            search: _Value = ...,
-            state: _Value = ...,
-            template: _Value = ...,
-            type: _Value = ...,
-            web: _Flag = ...,
-            **flags: Any,
-        ) -> _Result:
-            """List issues in a GitHub repository. By default, this only lists open
-            issues.
-
-            Args:
-                app: Filter by GitHub App author.
-                assignee: Filter by assignee.
-                author: Filter by author (use --app to filter by a GitHub App).
-                jq: Filter JSON output using a jq expression.
-                json: Output JSON with the specified fields.
-                label: Filter by label.
-                limit: Maximum number of issues to fetch. Defaults to `30`.
-                mention: Filter by mention.
-                milestone: Filter by milestone number or title.
-                repo: Select another repository using the [HOST/]OWNER/REPO format.
-                search: Search issues with query.
-                state: Filter by state: {open|closed|all}. Defaults to `open`.
-                template: Format JSON output using a Go template; see "gh help
-                    formatting".
-                type: Filter by issue type name. Added in 2.94.0.
-                web: List issues in the web browser.
-            """
-            ...
-        def view(
-            self,
-            *args: str,
-            comments: _Flag = ...,
-            jq: _Value = ...,
-            json: _Value = ...,
-            repo: _Value = ...,
-            template: _Value = ...,
-            web: _Flag = ...,
-            **flags: Any,
-        ) -> _Result:
-            """Display the title, body, and other information about an issue.
-
-            Args:
-                comments: View issue comments.
-                jq: Filter JSON output using a jq expression.
-                json: Output JSON with the specified fields.
-                repo: Select another repository using the [HOST/]OWNER/REPO format.
-                template: Format JSON output using a Go template; see "gh help
-                    formatting".
-                web: Open an issue in the browser.
-            """
-            ...
-        def flags(
-            self,
-            **flags: Any,
-        ) -> Self:
-            """Bind tool-level global options before the subcommand.
-
-            `tools.docker.flags(host=...)` puts a tool's own
-            options ahead of the verb, where they belong."""
-            ...
-
-    issue: Issue
-    class Label(_Tool):
-        def create(
-            self,
-            name: str,
-            /,
-            *args: str,
-            color: _Value = ...,
-            description: _Value = ...,
-            force: _Flag = ...,
-            repo: _Value = ...,
-            **flags: Any,
-        ) -> _Result:
-            """Create a new label on GitHub, or update an existing one with `--force`.
-
-            Args:
-                color: Color of the label.
-                description: Description of the label.
-                force: Update the label color and description if label already
-                    exists.
-                repo: Select another repository using the [HOST/]OWNER/REPO format.
-            """
-            ...
-        def list(
-            self,
-            *,
-            jq: _Value = ...,
-            json: _Value = ...,
-            limit: _Value = ...,
-            order: _Value = ...,
-            repo: _Value = ...,
-            search: _Value = ...,
-            sort: _Value = ...,
-            template: _Value = ...,
-            web: _Flag = ...,
-            **flags: Any,
-        ) -> _Result:
-            """Display labels in a GitHub repository.
-
-            Args:
-                jq: Filter JSON output using a jq expression.
-                json: Output JSON with the specified fields.
-                limit: Maximum number of labels to fetch. Defaults to `30`.
-                order: Order of labels returned: {asc|desc}. Defaults to `asc`.
-                repo: Select another repository using the [HOST/]OWNER/REPO format.
-                search: Search label names and descriptions.
-                sort: Sort fetched labels: {created|name}. Defaults to `created`.
-                template: Format JSON output using a Go template; see "gh help
-                    formatting".
-                web: List labels in the web browser.
-            """
-            ...
-        def flags(
-            self,
-            **flags: Any,
-        ) -> Self:
-            """Bind tool-level global options before the subcommand.
-
-            `tools.docker.flags(host=...)` puts a tool's own
-            options ahead of the verb, where they belong."""
-            ...
-
-    label: Label
-    class Pr(_Tool):
-        def checkout(
-            self,
-            *args: str,
-            branch: _Value = ...,
-            detach: _Flag = ...,
-            force: _Flag = ...,
-            recurse_submodules: _Flag = ...,
-            repo: _Value = ...,
-            **flags: Any,
-        ) -> _Result:
-            """Check out a pull request in git
-
-            Args:
-                branch: Local branch name to use. Defaults to `[the name of the head
-                    branch]`.
-                detach: Checkout PR with a detached HEAD.
-                force: Reset the existing local branch to the latest state of the
-                    pull request.
-                recurse_submodules: Update all submodules after checkout.
-                repo: Select another repository using the [HOST/]OWNER/REPO format.
-            """
-            ...
-        def create(
-            self,
-            *,
-            assignee: _Value = ...,
-            base: _Value = ...,
-            body: _Value = ...,
-            body_file: _Value = ...,
-            draft: _Flag = ...,
-            dry_run: _Flag = ...,
-            editor: _Flag = ...,
-            fill: _Flag = ...,
-            fill_first: _Flag = ...,
-            fill_verbose: _Flag = ...,
-            head: _Value = ...,
-            label: _Value = ...,
-            milestone: _Value = ...,
-            no_maintainer_edit: _Flag = ...,
-            project: _Value = ...,
-            recover: _Value = ...,
-            repo: _Value = ...,
-            reviewer: _Value = ...,
-            template: _Value = ...,
-            title: _Value = ...,
-            web: _Flag = ...,
-            **flags: Any,
-        ) -> _Result:
-            """Create a pull request on GitHub.
-
-            Args:
-                assignee: Assign people by their login.
-                base: The branch into which you want your code merged.
-                body: Body for the pull request.
-                body_file: Read body text from file (use "-" to read from standard
-                    input).
-                draft: Mark pull request as a draft.
-                dry_run: Print details instead of creating the PR.
-                editor: Skip prompts and open the text editor to write the title and
-                    body in.
-                fill: Use commit info for title and body.
-                fill_first: Use first commit info for title and body.
-                fill_verbose: Use commits msg+body for description.
-                head: The branch that contains commits for your pull request.
-                    Defaults to `[current branch]`.
-                label: Add labels by name.
-                milestone: Add the pull request to a milestone by name.
-                no_maintainer_edit: Disable maintainer's ability to modify pull
-                    request.
-                project: Add the pull request to projects by title.
-                recover: Recover input from a failed run of create.
-                repo: Select another repository using the [HOST/]OWNER/REPO format.
-                reviewer: Request reviews from people or teams by their handle.
-                template: Template file to use as starting body text.
-                title: Title for the pull request.
-                web: Open the web browser to create a pull request.
-            """
-            ...
-        def list(
-            self,
-            *,
-            app: _Value = ...,
-            assignee: _Value = ...,
-            author: _Value = ...,
-            base: _Value = ...,
-            draft: _Flag = ...,
-            head: _Value = ...,
-            jq: _Value = ...,
-            json: _Value = ...,
-            label: _Value = ...,
-            limit: _Value = ...,
-            repo: _Value = ...,
-            search: _Value = ...,
-            state: _Value = ...,
-            template: _Value = ...,
-            web: _Flag = ...,
-            **flags: Any,
-        ) -> _Result:
-            """List pull requests in a GitHub repository. By default, this only lists
-            open PRs.
-
-            Args:
-                app: Filter by GitHub App author.
-                assignee: Filter by assignee.
-                author: Filter by author (use --app to filter by a GitHub App).
-                base: Filter by base branch.
-                draft: Filter by draft state.
-                head: Filter by head branch ("<owner>:<branch>" syntax not
-                    supported).
-                jq: Filter JSON output using a jq expression.
-                json: Output JSON with the specified fields.
-                label: Filter by label.
-                limit: Maximum number of items to fetch. Defaults to `30`.
-                repo: Select another repository using the [HOST/]OWNER/REPO format.
-                search: Search pull requests with query.
-                state: Filter by state: {open|closed|merged|all}. Defaults to
-                    `open`.
-                template: Format JSON output using a Go template; see "gh help
-                    formatting".
-                web: List pull requests in the web browser.
-            """
-            ...
-        def merge(
-            self,
-            *args: str,
-            admin: _Flag = ...,
-            author_email: _Value = ...,
-            auto: _Flag = ...,
-            body: _Value = ...,
-            body_file: _Value = ...,
-            delete_branch: _Flag = ...,
-            disable_auto: _Flag = ...,
-            match_head_commit: _Value = ...,
-            merge: _Flag = ...,
-            rebase: _Flag = ...,
-            repo: _Value = ...,
-            squash: _Flag = ...,
-            subject: _Value = ...,
-            **flags: Any,
-        ) -> _Result:
-            """Merge a pull request on GitHub.
-
-            Args:
-                admin: Use administrator privileges to merge a pull request that
-                    does not meet requirements.
-                author_email: Email text for merge commit author.
-                auto: Automatically merge only after necessary requirements are met.
-                body: Body text for the merge commit.
-                body_file: Read body text from file (use "-" to read from standard
-                    input).
-                delete_branch: Delete the local and remote branch after merge.
-                disable_auto: Disable auto-merge for this pull request.
-                match_head_commit: Commit SHA that the pull request head must match
-                    to allow merge.
-                merge: Merge the commits with the base branch.
-                rebase: Rebase the commits onto the base branch.
-                repo: Select another repository using the [HOST/]OWNER/REPO format.
-                squash: Squash the commits into one commit and merge it into the
-                    base branch.
-                subject: Subject text for the merge commit.
-            """
-            ...
-        def view(
-            self,
-            *args: str,
-            comments: _Flag = ...,
-            jq: _Value = ...,
-            json: _Value = ...,
-            repo: _Value = ...,
-            template: _Value = ...,
-            web: _Flag = ...,
-            **flags: Any,
-        ) -> _Result:
-            """Display the title, body, and other information about a pull request.
-
-            Args:
-                comments: View pull request comments.
-                jq: Filter JSON output using a jq expression.
-                json: Output JSON with the specified fields.
-                repo: Select another repository using the [HOST/]OWNER/REPO format.
-                template: Format JSON output using a Go template; see "gh help
-                    formatting".
-                web: Open a pull request in the browser.
-            """
-            ...
-        def flags(
-            self,
-            **flags: Any,
-        ) -> Self:
-            """Bind tool-level global options before the subcommand.
-
-            `tools.docker.flags(host=...)` puts a tool's own
-            options ahead of the verb, where they belong."""
-            ...
-
-    pr: Pr
-    class Release(_Tool):
-        def create(
-            self,
-            *args: str,
-            discussion_category: _Value = ...,
-            draft: _Flag = ...,
-            fail_on_no_commits: _Flag = ...,
-            generate_notes: _Flag = ...,
-            latest: _Flag = ...,
-            notes: _Value = ...,
-            notes_file: _Value = ...,
-            notes_from_tag: _Flag = ...,
-            notes_start_tag: _Value = ...,
-            prerelease: _Flag = ...,
-            repo: _Value = ...,
-            target: _Value = ...,
-            title: _Value = ...,
-            verify_tag: _Flag = ...,
-            **flags: Any,
-        ) -> _Result:
-            """Create a new GitHub Release for a repository.
-
-            Args:
-                discussion_category: Start a discussion in the specified category.
-                draft: Save the release as a draft instead of publishing it.
-                fail_on_no_commits: Fail if there are no commits since the last
-                    release (no impact on the first release).
-                generate_notes: Automatically generate title and notes for the
-                    release via GitHub Release Notes API.
-                latest: Mark this release as "Latest" .
-                notes: Release notes.
-                notes_file: Read release notes from file (use "-" to read from
-                    standard input).
-                notes_from_tag: Fetch notes from the tag annotation or message of
-                    commit associated with tag.
-                notes_start_tag: Tag to use as the starting point for generating
-                    release notes.
-                prerelease: Mark the release as a prerelease.
-                repo: Select another repository using the [HOST/]OWNER/REPO format.
-                target: Target branch or full commit SHA. Defaults to `[main
-                    branch]`.
-                title: Release title.
-                verify_tag: Abort in case the git tag doesn't already exist in the
-                    remote repository.
-            """
-            ...
-        def list(
-            self,
-            *,
-            exclude_drafts: _Flag = ...,
-            exclude_pre_releases: _Flag = ...,
-            jq: _Value = ...,
-            json: _Value = ...,
-            limit: _Value = ...,
-            order: _Value = ...,
-            repo: _Value = ...,
-            template: _Value = ...,
-            **flags: Any,
-        ) -> _Result:
-            """List releases in a repository
-
-            Args:
-                exclude_drafts: Exclude draft releases.
-                exclude_pre_releases: Exclude pre-releases.
-                jq: Filter JSON output using a jq expression.
-                json: Output JSON with the specified fields.
-                limit: Maximum number of items to fetch. Defaults to `30`.
-                order: Order of releases returned: {asc|desc}. Defaults to `desc`.
-                repo: Select another repository using the [HOST/]OWNER/REPO format.
-                template: Format JSON output using a Go template; see "gh help
-                    formatting".
-            """
-            ...
-        def upload(
-            self,
-            tag: str,
-            /,
-            *args: str,
-            clobber: _Flag = ...,
-            repo: _Value = ...,
-            **flags: Any,
-        ) -> _Result:
-            """Upload asset files to a GitHub Release.
-
-            Args:
-                clobber: Delete and re-upload existing assets of the same name.
-                repo: Select another repository using the [HOST/]OWNER/REPO format.
-            """
-            ...
-        def view(
-            self,
-            *args: str,
-            jq: _Value = ...,
-            json: _Value = ...,
-            repo: _Value = ...,
-            template: _Value = ...,
-            web: _Flag = ...,
-            **flags: Any,
-        ) -> _Result:
-            """View information about a GitHub Release.
-
-            Args:
-                jq: Filter JSON output using a jq expression.
-                json: Output JSON with the specified fields.
-                repo: Select another repository using the [HOST/]OWNER/REPO format.
-                template: Format JSON output using a Go template; see "gh help
-                    formatting".
-                web: Open the release in the browser.
-            """
-            ...
-        def flags(
-            self,
-            **flags: Any,
-        ) -> Self:
-            """Bind tool-level global options before the subcommand.
-
-            `tools.docker.flags(host=...)` puts a tool's own
-            options ahead of the verb, where they belong."""
-            ...
-
-    release: Release
-    class Repo(_Tool):
-        def clone(
-            self,
-            repository: str,
-            /,
-            *args: str,
-            no_upstream: _Flag = ...,
-            upstream_remote_name: _Value = ...,
-            **flags: Any,
-        ) -> _Result:
-            """Clone a GitHub repository locally. Pass additional `git clone` flags by
-            listing
-
-            Args:
-                no_upstream: Do not add an upstream remote when cloning a fork.
-                upstream_remote_name: Upstream remote name when cloning a fork.
-                    Defaults to `upstream`.
-            """
-            ...
-        def view(
-            self,
-            *args: str,
-            branch: _Value = ...,
-            jq: _Value = ...,
-            json: _Value = ...,
-            template: _Value = ...,
-            web: _Flag = ...,
-            **flags: Any,
-        ) -> _Result:
-            """Display the description and the README of a GitHub repository.
-
-            Args:
-                branch: View a specific branch of the repository.
-                jq: Filter JSON output using a jq expression.
-                json: Output JSON with the specified fields.
-                template: Format JSON output using a Go template; see "gh help
-                    formatting".
-                web: Open a repository in the browser.
-            """
-            ...
-        def flags(
-            self,
-            **flags: Any,
-        ) -> Self:
-            """Bind tool-level global options before the subcommand.
-
-            `tools.docker.flags(host=...)` puts a tool's own
-            options ahead of the verb, where they belong."""
-            ...
-
-    repo: Repo
-    class Run(_Tool):
-        def list(
-            self,
-            *,
-            all: _Flag = ...,
-            branch: _Value = ...,
-            commit: _Value = ...,
-            created: _Value = ...,
-            event: _Value = ...,
-            jq: _Value = ...,
-            json: _Value = ...,
-            limit: _Value = ...,
-            repo: _Value = ...,
-            status: _Value = ...,
-            template: _Value = ...,
-            user: _Value = ...,
-            workflow: _Value = ...,
-            **flags: Any,
-        ) -> _Result:
-            """List recent workflow runs.
-
-            Args:
-                all: Include disabled workflows.
-                branch: Filter runs by branch.
-                commit: Filter runs by the SHA of the commit.
-                created: Filter runs by the date it was created.
-                event: Filter runs by which event triggered the run.
-                jq: Filter JSON output using a jq expression.
-                json: Output JSON with the specified fields.
-                limit: Maximum number of runs to fetch. Defaults to `20`.
-                repo: Select another repository using the [HOST/]OWNER/REPO format.
-                status: Filter runs by status:
-                    {queued|completed|in_progress|requested|waiting|pending|action_required|cancelled|failure|neutral|skipped|stale|startup_failure|success|timed_out}.
-                template: Format JSON output using a Go template; see "gh help
-                    formatting".
-                user: Filter runs by user who triggered the run.
-                workflow: Filter runs by workflow.
-            """
-            ...
-        def view(
-            self,
-            *args: str,
-            attempt: _Value = ...,
-            exit_status: _Flag = ...,
-            job: _Value = ...,
-            jq: _Value = ...,
-            json: _Value = ...,
-            log: _Flag = ...,
-            log_failed: _Flag = ...,
-            repo: _Value = ...,
+            method: _Value = ...,
+            paginate: _Flag = ...,
+            preview: _Value = ...,
+            raw_field: _Value = ...,
+            silent: _Flag = ...,
+            slurp: _Flag = ...,
             template: _Value = ...,
             verbose: _Flag = ...,
-            web: _Flag = ...,
             **flags: Any,
-        ) -> _Result:
-            """View a summary of a workflow run.
+        ) -> _R2:
+            """Makes an authenticated HTTP request to the GitHub API and prints the
+            response.
 
             Args:
-                attempt: The attempt number of the workflow run.
-                exit_status: Exit with non-zero status if run failed.
-                job: View a specific job ID from a run.
-                jq: Filter JSON output using a jq expression.
-                json: Output JSON with the specified fields.
-                log: View full log for either a run or specific job.
-                log_failed: View the log for any failed steps in a run or specific
-                    job.
-                repo: Select another repository using the [HOST/]OWNER/REPO format.
-                template: Format JSON output using a Go template; see "gh help
-                    formatting".
-                verbose: Show job steps.
-                web: Open run in the browser.
-            """
-            ...
-        def watch(
-            self,
-            run_id: str,
-            /,
-            *args: str,
-            compact: _Flag = ...,
-            exit_status: _Flag = ...,
-            interval: _Value = ...,
-            repo: _Value = ...,
-            **flags: Any,
-        ) -> _Result:
-            """Watch a run until it completes, showing its progress.
-
-            Args:
-                compact: Show only relevant/failed steps.
-                exit_status: Exit with non-zero status if run fails.
-                interval: Refresh interval in seconds. Defaults to `3`.
-                repo: Select another repository using the [HOST/]OWNER/REPO format.
-            """
-            ...
-        def flags(
-            self,
-            **flags: Any,
-        ) -> Self:
-            """Bind tool-level global options before the subcommand.
-
-            `tools.docker.flags(host=...)` puts a tool's own
-            options ahead of the verb, where they belong."""
-            ...
-
-    run: Run
-    class Workflow(_Tool):
-        def list(
-            self,
-            *,
-            all: _Flag = ...,
-            jq: _Value = ...,
-            json: _Value = ...,
-            limit: _Value = ...,
-            repo: _Value = ...,
-            template: _Value = ...,
-            **flags: Any,
-        ) -> _Result:
-            """List workflow files, hiding disabled workflows by default.
-
-            Args:
-                all: Include disabled workflows.
-                jq: Filter JSON output using a jq expression.
-                json: Output JSON with the specified fields.
-                limit: Maximum number of workflows to fetch. Defaults to `50`.
-                repo: Select another repository using the [HOST/]OWNER/REPO format.
-                template: Format JSON output using a Go template; see "gh help
-                    formatting".
-            """
-            ...
-        def run(
-            self,
-            *args: str,
-            field: _Value = ...,
-            json: _Flag = ...,
-            raw_field: _Value = ...,
-            ref: _Value = ...,
-            repo: _Value = ...,
-            **flags: Any,
-        ) -> _Result:
-            """Create a `workflow_dispatch` event for a given workflow.
-
-            Args:
-                field: Add a string parameter in key=value format, respecting @
-                    syntax (see "gh help api").
-                json: Read workflow inputs as JSON via STDIN.
+                allow_escape_sequences: Allow printing terminal escape sequences.
+                    Added in 2.97.0.
+                cache: Cache the response, e.g. "3600s", "60m", "1h".
+                field: Add a typed parameter in key=value format (use "@<path>" or
+                    "@-" to read value from file or stdin).
+                header: Add a HTTP request header in key:value format.
+                hostname: The GitHub hostname for the request. Defaults to
+                    `github.com`.
+                include: Include HTTP response status line and headers in the
+                    output.
+                input: The file to use as body for the HTTP request (use "-" to read
+                    from standard input).
+                jq: Query to select values from the response using jq syntax.
+                method: The HTTP method for the request. Defaults to `GET`.
+                paginate: Make additional HTTP requests to fetch all pages of
+                    results.
+                preview: Opt into GitHub API previews (names should omit
+                    '-preview').
                 raw_field: Add a string parameter in key=value format.
-                ref: Branch or tag name which contains the version of the workflow
-                    file you'd like to run.
-                repo: Select another repository using the [HOST/]OWNER/REPO format.
+                silent: Do not print the response body.
+                slurp: Use with "--paginate" to return an array of all pages of
+                    either JSON arrays or objects.
+                template: Format JSON output using a Go template; see "gh help
+                    formatting".
+                verbose: Include full HTTP request and response in the output.
             """
             ...
-        def flags(
-            self,
-            **flags: Any,
-        ) -> Self:
-            """Bind tool-level global options before the subcommand.
+        @property
+        def argv(self) -> Gh.Api[_Argv]: ...
 
-            `tools.docker.flags(host=...)` puts a tool's own
-            options ahead of the verb, where they belong."""
-            ...
-
-    workflow: Workflow
+    api: Api[_R]
     def __call__(  # type: ignore[override]
         self,
         *args: str,
         **flags: Any,
-    ) -> _Result:
+    ) -> _R:
         """Work seamlessly with GitHub from the command line."""
         ...
-    def api(
-        self,
-        *args: str,
-        allow_escape_sequences: _Flag = ...,
-        cache: _Value = ...,
-        field: _Value = ...,
-        header: _Value = ...,
-        hostname: _Value = ...,
-        include: _Flag = ...,
-        input: _Value = ...,
-        jq: _Value = ...,
-        method: _Value = ...,
-        paginate: _Flag = ...,
-        preview: _Value = ...,
-        raw_field: _Value = ...,
-        silent: _Flag = ...,
-        slurp: _Flag = ...,
-        template: _Value = ...,
-        verbose: _Flag = ...,
-        **flags: Any,
-    ) -> _Result:
-        """Makes an authenticated HTTP request to the GitHub API and prints the
-        response.
-
-        Args:
-            allow_escape_sequences: Allow printing terminal escape sequences. Added
-                in 2.97.0.
-            cache: Cache the response, e.g. "3600s", "60m", "1h".
-            field: Add a typed parameter in key=value format (use "@<path>" or "@-"
-                to read value from file or stdin).
-            header: Add a HTTP request header in key:value format.
-            hostname: The GitHub hostname for the request. Defaults to `github.com`.
-            include: Include HTTP response status line and headers in the output.
-            input: The file to use as body for the HTTP request (use "-" to read
-                from standard input).
-            jq: Query to select values from the response using jq syntax.
-            method: The HTTP method for the request. Defaults to `GET`.
-            paginate: Make additional HTTP requests to fetch all pages of results.
-            preview: Opt into GitHub API previews (names should omit '-preview').
-            raw_field: Add a string parameter in key=value format.
-            silent: Do not print the response body.
-            slurp: Use with "--paginate" to return an array of all pages of either
-                JSON arrays or objects.
-            template: Format JSON output using a Go template; see "gh help
-                formatting".
-            verbose: Include full HTTP request and response in the output.
-        """
-        ...
+    @property
+    def argv(self) -> Gh[_Argv]: ...
     def flags(
         self,
         **flags: Any,

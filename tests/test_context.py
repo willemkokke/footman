@@ -2291,3 +2291,64 @@ def test_a_captured_windows_child_gets_no_console_window(monkeypatch):
     assert seen["no_window"] is False
 
     assert hasattr(sp, "CREATE_NO_WINDOW") == (sys.platform == "win32")
+
+
+def test_to_argv_returns_what_ran_as_requotable_tokens():
+    # `.raw` is quoted for the machine footman is standing on; to_argv() is
+    # the tokens themselves, which serialise for whichever shell will parse
+    # them — the one that matters when the string is going somewhere else.
+    from footman.testing import recording
+    from footman.tools import git
+
+    with recording():
+        result = git.commit(m="a message")
+    assert result.to_argv() == ["git", "commit", "-m", "a message"]
+    assert result.to_argv().posix() == "git commit -m 'a message'"
+    assert result.to_argv().windows() == 'git commit -m "a message"'
+
+
+def test_to_argv_teaches_when_no_argv_was_recorded():
+    # A command *string* was never taken apart, and splitting one back is
+    # platform-dependent guesswork — say so rather than guess.
+    from footman.testing import recording
+
+    with recording():
+        result = run("echo hi")
+    with pytest.raises(ValueError, match=r"no argv was recorded"):
+        result.to_argv()
+
+
+def test_run_takes_a_built_command_line_as_its_argv():
+    # An Argv IS run()'s input type — no adapter between building and running.
+    from footman.testing import recording
+    from footman.tools import docker
+
+    payload = docker.compose.up.argv(detach=True)
+    with recording() as steps:
+        run(payload)
+    assert steps[0].to_argv() == ["docker", "compose", "up", "--detach"]
+
+
+def test_run_serialised_payloads_spell_the_boundary():
+    # A payload inside a hand-written list crosses a machine boundary as one
+    # quoted token, named at the call site.
+    from footman.testing import recording
+    from footman.tools import docker
+
+    payload = docker.compose.up.argv(detach=True)
+    with recording() as steps:
+        run(["ssh", "app@host", payload.posix()])
+    assert steps[0].to_argv() == ["ssh", "app@host", "docker compose up --detach"]
+
+
+def test_run_refuses_a_bare_container_in_its_list():
+    # Stringified it becomes the one token "['a', 'b']", which fails late at
+    # the tool; `*` and `.posix()` are the two meant spellings, and the
+    # refusal names them.
+    from footman.tools import docker
+
+    payload = docker.compose.up.argv(detach=True)
+    with pytest.raises(TypeError, match=r"splat it \(`\*cmd`\)"):
+        run(["ssh", "app@host", payload])  # type: ignore[list-item]
+    with pytest.raises(TypeError, match=r"Spread it with `\*`"):
+        run(["echo", ["a", "b"]])  # type: ignore[list-item]

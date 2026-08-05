@@ -84,6 +84,61 @@ def _audit_entry(moment: _Moment, actor: str, code: int | None) -> AuditEntry:
     return AuditEntry(moment, actor, code)
 
 
+class Argv(list[str]):
+    """A command line built but not run — `tools.git.push.argv(force=True)`.
+
+    An ordinary `list[str]` everywhere in Python: it indexes, slices,
+    iterates, compares and prints exactly like the list it is, and `run(cmd)`
+    spawns it as-is. Always the raw tokens — the one shape of a command with
+    no shell in it. Passing the tokens on is plain Python: `run(cmd)` runs
+    them, a wrapper takes them splatted (`uv.run("--", *cmd)`), and stdlib
+    helpers take the list directly (`shlex.join(cmd)`).
+
+    The moment the line is about to cross into a shell, name that shell:
+
+    * `.posix()` — one string, `shlex`-quoted for `sh`/`bash`/`zsh`.
+    * `.windows()` — one string, quoted the way `CreateProcess` parses.
+
+    Naming it is the caller's job because footman cannot know it: the same
+    handle can target different hosts across calls, the OS does not determine
+    the shell, and the payload may reach no shell at all. The quoting is the
+    *destination's*, never this machine's — a line built on Windows for a
+    Linux box still comes back POSIX-quoted (which is why neither method is
+    the local-platform `_shell_quote`).
+
+    Lives here beside `Result` rather than in the bridge because `run()`
+    accepts one and `Result.to_argv()` returns one, and the bridge is the
+    layer that imports this one.
+    """
+
+    __slots__ = ()
+
+    def posix(self) -> str:
+        """This command as one string, quoted for a POSIX shell.
+
+        What an `ssh` payload wants: ssh joins its remaining arguments with
+        spaces and hands the remote shell **one string** to re-split, so the
+        only argument boundaries that survive are the ones quoted into it.
+
+            cmd = git.commit.argv(m="ship 1.2.0")
+            ssh("deploy@host", cmd.posix())
+
+        Quoting a built line that already carries a `.posix()` payload quotes
+        it once more, which is exactly what each further hop needs.
+        """
+        return shlex.join(self)
+
+    def windows(self) -> str:
+        """This command as one string, quoted the way `CreateProcess` parses.
+
+        The Windows counterpart of `.posix()`, for a payload headed to a
+        Windows box — `subprocess.list2cmdline` quoting, which `cmd` and
+        PowerShell both read. Chosen by the caller, never sniffed from the
+        machine footman happens to be standing on.
+        """
+        return subprocess.list2cmdline(self)
+
+
 class Result(int):
     """The outcome of one `run()` call — and the value `run()` returns.
 
@@ -103,6 +158,7 @@ class Result(int):
     _timed_out: bool
     _address: str
     _audit: tuple[AuditEntry, ...]
+    _tokens: tuple[str, ...]
 
     def __new__(
         cls,
@@ -116,6 +172,7 @@ class Result(int):
         timed_out: bool = False,
         address: str = "",
         audit: tuple[AuditEntry, ...] = (),
+        tokens: tuple[str, ...] = (),
     ) -> Result:
         self = super().__new__(cls, code)
         object.__setattr__(self, "_timed_out", timed_out)
@@ -126,7 +183,42 @@ class Result(int):
         object.__setattr__(self, "_duration", duration)
         object.__setattr__(self, "_raw", raw or command)
         object.__setattr__(self, "_audit", audit)
+        # The argv as separate tokens, kept so `to_argv()` can re-quote for a
+        # shell the caller names. `_raw` cannot stand in: it is quoted for the
+        # local platform, and `shlex` cannot reliably take a `list2cmdline`
+        # string apart again.
+        object.__setattr__(self, "_tokens", tokens)
         return self
+
+    def to_argv(self) -> Argv:
+        """What this call ran, as the tokens it was spawned from.
+
+        `.raw` shows the command line quoted for the machine footman is
+        standing on, which is right for a `--verbose` line and wrong the
+        moment the string is sent somewhere else. This returns the same
+        command as an `Argv` — raw tokens, re-quotable for whichever shell
+        will actually parse them:
+
+            r = git.commit(m="ship 1.2.0")
+            r.to_argv()          # ["git", "commit", "-m", "ship 1.2.0"]
+            r.to_argv().posix()  # "git commit -m 'ship 1.2.0'"
+
+        Named apart from the bridge's `.argv` on purpose: this one describes
+        a call that has **already run**, so `git.push().argv(…)` — meaning to
+        *build* a command line — is an `AttributeError` rather than a push
+        that quietly happened. For the same reason the two can differ by one
+        token: what ran may carry a forced-colour switch (git's
+        `-c color.ui=always`) that a line built to be sent elsewhere does not.
+        """
+        if not self._tokens:
+            raise ValueError(
+                f"to_argv(): no argv was recorded for `{self._command}`. Only a "
+                f"spawned command has separable tokens — an in-process call, a "
+                f"Python callable, or a `run()` given a command *string* never "
+                f"had them apart. Pass a list (`run(['git', 'push'])`) or use "
+                f"the tools bridge, whose calls always record their argv."
+            )
+        return Argv(self._tokens)
 
     @property
     def command(self) -> str:
@@ -1380,6 +1472,66 @@ def _shell_quote(text: str) -> str:
     return shlex.quote(text)
 
 
+def argv_tokens(cmd: Iterable[Any]) -> list[str]:
+    """A `run()` argv list as tokens, with a bare container refused.
+
+    An element that is itself a container has no command-line spelling of its
+    own — stringified it becomes the one token `"['a', 'b']"`, which survives
+    to the tool and fails there, late and confusingly. `*` already says
+    "these are tokens" (`run(["ssh", host, *cmd])`), and a whole command line
+    headed for a remote shell is one *quoted* token (`cmd.posix()`), so the
+    bare spelling can only be a mistake. Everything else keeps `str()`, which
+    is what `Path` and `int` want.
+    """
+    out: list[str] = []
+    for item in cmd:
+        if isinstance(item, _CONTAINERS):
+            raise TypeError(container_error(item, "run()"))
+        out.append(str(item))
+    return out
+
+
+# Concrete containers only — never `Iterable`, which would catch `str` and
+# explode it into characters. `dict` is here because a mapping has no
+# positional reading at all; `set`/`frozenset` because a splat of an
+# unordered value would produce a nondeterministic command line.
+_CONTAINERS = (list, tuple, set, frozenset, dict)
+
+
+def container_error(value: Any, where: str, *, example: str = "") -> str:
+    """The taught refusal for a bare container in an argv slot.
+
+    Shared by `run()` and the bridge (which passes the tool's name as
+    *where* and its own spelling as *example*), so the lesson reads the same
+    at both doors. An `Argv` gets its own wording: it is the one container
+    that plausibly lands here on purpose, and the fix differs by what was
+    meant.
+    """
+    if isinstance(value, Argv):
+        return (
+            f"{where}: a built command line (Argv) was passed as one "
+            f"positional argument, and that spelling is ambiguous. Say which "
+            f"you meant: splat it (`*cmd`) to pass its tokens — what a "
+            f"wrapper like `uv run` takes — or serialise it (`cmd.posix()` / "
+            f"`cmd.windows()`) to pass one quoted line for the shell that "
+            f"will parse it — what an `ssh` payload is."
+        )
+    kind = type(value).__name__
+    if isinstance(value, dict):
+        # `**` means flags at a bridge call; inside a `run()` list there is
+        # no dict spelling at all, so there is nothing to suggest spreading.
+        fix = f"Spread it with `**` to mean flags: `{example}`. " if example else ""
+    else:
+        star = example or "run(['…', *value])"
+        fix = f"Spread it with `*` to mean arguments: `{star}`. "
+    return (
+        f"{where}: a {kind} was passed as a positional argument, and a "
+        f"container has no command-line spelling of its own — it would "
+        f"become the one token {str(value)!r}. {fix}To build a whole "
+        f"command line to pass on, use `.argv`."
+    )
+
+
 def _exact(cmd: Any, args: tuple[Any, ...]) -> str:
     """The exact executed command line for a direct (non-bridge) `run()`.
 
@@ -1390,14 +1542,14 @@ def _exact(cmd: Any, args: tuple[Any, ...]) -> str:
         return _label(cmd, args)
     if isinstance(cmd, str):
         return cmd
-    return " ".join(_shell_quote(str(a)) for a in cmd)
+    return " ".join(_shell_quote(token) for token in argv_tokens(cmd))
 
 
 def _label(cmd: Any, args: tuple[Any, ...]) -> str:
     if callable(cmd):
         name = getattr(cmd, "__qualname__", getattr(cmd, "__name__", repr(cmd)))
         return " ".join([f"{name}()", *map(str, args)]).strip()
-    return cmd if isinstance(cmd, str) else " ".join(map(str, cmd))
+    return cmd if isinstance(cmd, str) else " ".join(argv_tokens(cmd))
 
 
 def _exit_code(exc: SystemExit) -> int:
@@ -2291,11 +2443,19 @@ def run(
         raw = _show.text(exact=True)
         shown = _show.painted(color=color, exact=ctx.verbose)
         shown_plain = _show.text(exact=ctx.verbose)
+        # The bridge already separated the argv; keep it for `to_argv()`.
+        tokens = tuple(_show.exact)
     else:
         label = title or _label(cmd, args)
         raw = _exact(cmd, args)
         shown = _dim(label, color)
         shown_plain = label
+        # A list `run()` has its tokens apart; a command *string* does not,
+        # and splitting one back is platform-dependent guesswork — `to_argv()`
+        # teaches that rather than guessing.
+        tokens = (
+            () if callable(cmd) or isinstance(cmd, str) else tuple(argv_tokens(cmd))
+        )
 
     if ctx.dry_run and recorded:
         # Record the step even when not executing: `dry_run` + `quiet` is the
@@ -2311,6 +2471,7 @@ def run(
             command=label,
             raw=raw,
             address=_child_address(ctx, _addr_leaf(title, label)),
+            tokens=tokens,
         )
         ctx.steps.append(result)
         if not ctx.quiet:
@@ -2409,7 +2570,10 @@ def run(
             # paths — hand the string straight to subprocess there.
             argv = cmd if sys.platform == "win32" else shlex.split(cmd)
         else:
-            argv = list(cmd)
+            # Tokens as given, with a bare container refused rather than
+            # stringified into the one token `"['a', 'b']"` — `*cmd` and
+            # `cmd.posix()` are the two meant spellings.
+            argv = argv_tokens(cmd)
         # `env=` is the child's environment, exactly as `subprocess` means it —
         # what you pass is what it gets. Otherwise the task's own, which
         # already carries the run-wide colour decision published at the run
@@ -2492,6 +2656,7 @@ def run(
                     timed_out=timed_out,
                     address=addr,
                     audit=(*audit, _audit_entry("review", hook, None)),
+                    tokens=tokens,
                 )
             )
             raise RuntimeError(
@@ -2516,6 +2681,7 @@ def run(
         timed_out=timed_out,
         address=addr,
         audit=audit,
+        tokens=tokens,
     )
     if recorded:
         ctx.steps.append(result)  # what --json, the report and recording() read

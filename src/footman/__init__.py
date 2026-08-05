@@ -32,6 +32,7 @@ if TYPE_CHECKING:
     from footman.app import Brand as Brand
     from footman.compose import include as include
     from footman.compose import plugin as plugin
+    from footman.context import Argv as Argv
     from footman.context import AuditEntry as AuditEntry
     from footman.context import Context as Context
     from footman.context import Failed as Failed
@@ -101,6 +102,7 @@ __version__ = "0.29.1"
 __all__ = [
     "App",
     "Arg",
+    "Argv",
     "AuditEntry",
     "Brand",
     "Context",
@@ -306,6 +308,7 @@ def __getattr__(name: str) -> object:
         "run",
         "parallel",
         "Context",
+        "Argv",
         "Result",
         "ResultView",
         "AuditEntry",

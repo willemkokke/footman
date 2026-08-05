@@ -1,17 +1,20 @@
 # Hand-written: a shell is invoked to run a command *string*, not for its own
 # flags, so `fm tools.sync` never touches this file (its driver is
 # `source="manual"`).
-from typing import Any
+from typing import Any, TypeVar
 
-from footman.tools import Result, Tool
+from footman.tools import Argv as _Argv
+from footman.tools import Tool
 
-class Bash(Tool):
+_R = TypeVar("_R")
+
+class Bash(Tool[_R]):
     def __call__(  # type: ignore[override]
         self,
         command: str,
         /,
         **flags: Any,
-    ) -> Result:
+    ) -> _R:
         """Run a command string in bash — `bash -c "<command>"`.
 
         A real shell: pipes, redirects, globbing and `$VAR` all work. Reach
@@ -22,3 +25,5 @@ class Bash(Tool):
             command: the command line to run in bash.
         """
         ...
+    @property
+    def argv(self) -> Bash[_Argv]: ...

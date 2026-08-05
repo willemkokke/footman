@@ -41,17 +41,21 @@ import re as _re
 import subprocess as _subprocess
 import sys as _sys
 import threading as _threading
+import types as _types
 from collections.abc import Iterator
 from pathlib import Path as _Path
 from typing import Any, NamedTuple
+from typing import cast as _cast
 
 # `Result` is public, unlike the private aliases: every tool call returns one, and
 # the generated stubs import it from here (`from footman.tools import Result`), so
 # it must resolve to the class — a real module binding beats `__getattr__`.
+from footman.context import Argv as Argv
 from footman.context import Invocation as _Invocation
 from footman.context import Result as Result
 from footman.context import _target_cwd as _target_cwd_of
 from footman.context import color_on as _color_on
+from footman.context import container_error as _container_error
 from footman.context import current as _current
 from footman.context import real_stderr as _real_stderr
 from footman.context import run as _run
@@ -382,7 +386,7 @@ def _show_parts(
             parts.append(("opt", token))
         else:
             parts.append(("group", token))
-    arg_parts = [("req", _quote(str(a))) for a in args]
+    arg_parts = [("req", _quote(token)) for token in _positionals(args, argv0)]
     flag_parts: list[tuple[str, str]] = []
     for flag, value in _emit(kwargs, argv0, single_dash=single_dash):
         if value is None:
@@ -415,6 +419,31 @@ def _quote(text: str) -> str:
     import shlex
 
     return shlex.quote(text)
+
+
+def _positionals(args: tuple[Any, ...], tool: str) -> list[str]:
+    """Positional arguments as argv tokens.
+
+    A bare container is refused — `Argv` included, since a built command
+    line in one positional slot is ambiguous between its two meant
+    spellings, `*cmd` (tokens) and `cmd.posix()` (one quoted line).
+    Everything else is `str()`-ed, which is what `Path` and `int` want.
+    """
+    out: list[str] = []
+    for arg in args:
+        if isinstance(arg, _CONTAINERS):
+            spread = "**" if isinstance(arg, dict) else "*"
+            raise TypeError(
+                _container_error(arg, tool, example=f"{tool}({spread}value)")
+            )
+        out.append(str(arg))
+    return out
+
+
+# Concrete containers only — never `Iterable`, which would catch `str` and
+# explode it into characters (the same tuple `run()` refuses; the wording
+# lives with it in `context.container_error`).
+_CONTAINERS = (list, tuple, set, frozenset, dict)
 
 
 def _console_entrypoint(name: str) -> Any | None:
@@ -555,6 +584,11 @@ class Tool:
     serves each call its own view of `sys.argv`.
     """
 
+    # The stub declares Tool generic over what a call returns, so a task
+    # annotation may say `Tool[Result]` — and the binder evaluates
+    # annotations (`eval_str`), so the subscript must be legal here too.
+    __class_getitem__ = classmethod(_types.GenericAlias)
+
     def __init__(
         self,
         name: str,
@@ -592,9 +626,13 @@ class Tool:
         # `--version`; Windows `cmd` has no such flag and spells it `cmd /c ver`.
         self._version_argv = tuple(version_argv)
 
-    def _sub(self, *tail: str) -> Tool:
-        """A chained tool sharing this one's executable, entry, mode, and policy."""
-        t = Tool(
+    def _sub(self, *tail: str, cls: type[Tool] | None = None) -> Tool:
+        """A chained tool sharing this one's executable, entry, mode, and policy.
+
+        The class rides along by default, so a verb chained off an `ArgvTool`
+        keeps building rather than quietly reverting to a running handle.
+        """
+        t = (cls or type(self))(
             self._argv0,
             *self._base,
             *tail,
@@ -664,7 +702,7 @@ class Tool:
         an `.at()` handle says not to do — so the handle always spawns, and
         an explicit `in_process=True` on one is a taught refusal.
         """
-        t = Tool(
+        t = type(self)(
             self._argv0,
             *self._base,
             in_process=False,
@@ -693,6 +731,52 @@ class Tool:
         (footman run-control — `nofail`, `capture`, … — goes in `.opts()`.)
         """
         return self._sub(*_flags(kwargs, self._argv0, single_dash=self._single_dash))
+
+    @property
+    def argv(self) -> ArgvTool:
+        """Build this call's command line instead of running it.
+
+        Insert `.argv` right before the parentheses — the call is otherwise
+        spelled exactly as it would be to run it, same verb, same flags,
+        same completion — and it hands back an `Argv` of raw tokens rather
+        than executing:
+
+            mkdocs.gh_deploy.argv(force=True)
+            #  -> Argv(['mkdocs', 'gh-deploy', '--force'])
+
+        The tokens serialise at the point they cross into a shell —
+        `cmd.posix()` / `cmd.windows()` — or splat on as tokens (`*cmd`):
+
+            inner = docker.compose.up.argv(detach=True)
+            ssh("app@host", inner.posix())
+
+        Like `.opts()`, it may sit anywhere earlier in the chain
+        (`docker.argv.compose.up(…)` builds too); before the parentheses is
+        where it reads best and how the docs spell it. The line it builds is
+        colour-free: the forced-colour switch a few tools need is injected
+        when spawning, so what runs may carry one more flag than this
+        returns.
+        """
+        return _cast("ArgvTool", self._sub(cls=ArgvTool))
+
+    def _tokens(self, args: tuple[Any, ...], kwargs: dict[str, Any]) -> list[str]:
+        """This call as argv tokens, without running it.
+
+        The same translation and the same placement rule `__call__` uses —
+        `_flags`, `_positionals`, and the wrapper-verb ordering — so a built
+        line cannot drift from what a real call would spawn.
+
+        The line leads with the tool's *name*, not `self._path`: a built
+        command line is made to be handed somewhere else, where a local
+        absolute path (`tools.python` resolves to this interpreter) means
+        nothing. That matches the shown line, which keeps the tool's own
+        name for `.at()` handles too.
+        """
+        flags = _flags(kwargs, self._argv0, single_dash=self._single_dash)
+        positionals = _positionals(args, self._argv0)
+        if _is_wrapper(self._argv0, self._base):
+            return [self._argv0, *self._base, *flags, *positionals]
+        return [self._argv0, *self._base, *positionals, *flags]
 
     def __call__(self, *args: Any, **kwargs: Any) -> Result:
         # Run-control comes from `.opts()` (policy), never the call — so every
@@ -725,7 +809,7 @@ class Tool:
                 )
             input_ = taken
         flags = _flags(kwargs, self._argv0, single_dash=self._single_dash)
-        positionals = list(map(str, args))
+        positionals = _positionals(args, self._argv0)
         wrapper = _is_wrapper(self._argv0, self._base)
 
         def _tail(fl: list[str]) -> list[str]:
@@ -927,6 +1011,27 @@ class Tool:
                 raise ValueError(f"could not read a version from `{' '.join(argv)}`")
             _version_cache[key] = version_tuple(found)
         return _version_cache[key]
+
+
+class ArgvTool(Tool):
+    """What `.argv` hands back: the same handle, whose call **builds**.
+
+    A `Tool` in every other respect — verbs chain, `.opts()`/`.flags()`
+    still apply, and `_sub` carries the class down the chain so a verb
+    reached through `.argv` keeps building rather than quietly reverting to
+    a running handle. It is a real class rather than a flag on `Tool` so
+    the typing stub can say what a built call returns without pretending a
+    `Tool` sometimes returns one thing and sometimes another.
+    """
+
+    __slots__ = ()
+
+    def __call__(self, *args: Any, **kwargs: Any) -> Result:
+        # Builds and answers before anything with a side effect happens —
+        # notably before a pending `input=` is consumed, since building a
+        # command line feeds no child. The cast keeps the inherited
+        # signature: the stub is where the return type tells the truth.
+        return _cast("Result", Argv(self._tokens(args, kwargs)))
 
 
 # Curated instances — the ones with a non-obvious executable name live here;

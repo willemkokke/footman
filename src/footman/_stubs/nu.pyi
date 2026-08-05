@@ -1,17 +1,20 @@
 # Hand-written: a shell is invoked to run a command *string*, not for its own
 # flags, so `fm tools.sync` never touches this file (its driver is
 # `source="manual"`).
-from typing import Any
+from typing import Any, TypeVar
 
-from footman.tools import Result, Tool
+from footman.tools import Argv as _Argv
+from footman.tools import Tool
 
-class Nu(Tool):
+_R = TypeVar("_R")
+
+class Nu(Tool[_R]):
     def __call__(  # type: ignore[override]
         self,
         command: str,
         /,
         **flags: Any,
-    ) -> Result:
+    ) -> _R:
         """Run a command string in nushell — `nu -c "<command>"`.
 
         A real shell: pipes, redirects, globbing and `$VAR` all work. Reach
@@ -22,3 +25,5 @@ class Nu(Tool):
             command: the command line to run in nushell.
         """
         ...
+    @property
+    def argv(self) -> Nu[_Argv]: ...

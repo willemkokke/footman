@@ -1094,3 +1094,143 @@ def test_at_refuses_an_in_process_demand():
         pytest.raises(ValueError, match=r"in_process=True on an .at\(\) handle"),
     ):
         tools.python.at(sys.executable).opts(in_process=True)("-c", "pass")
+
+
+# --------------------------------------------------------------------- .argv
+
+
+def test_argv_builds_without_running():
+    # The whole point: no context, no subprocess, no Result — a value.
+    built = tools.mkdocs.gh_deploy.argv(force=True, remote_branch="gh-pages")
+    assert built == ["mkdocs", "gh-deploy", "--force", "--remote-branch=gh-pages"]
+
+
+def test_argv_sits_anywhere_in_the_chain_like_opts():
+    # Documented right before the parentheses, tolerated anywhere earlier —
+    # every position builds the same tokens.
+    want = ["docker", "compose", "up", "--detach"]
+    assert tools.docker.compose.up.argv(detach=True) == want
+    assert tools.docker.compose.argv.up(detach=True) == want
+    assert tools.docker.argv.compose.up(detach=True) == want
+
+
+def test_argv_works_on_a_tool_with_no_verbs():
+    # 22 of the 36 stubbed tools are bare-call, ssh among them — a verb-only
+    # argv would miss the tool this feature exists to feed.
+    built = tools.ssh.argv("deploy@host", "uptime", p=2222)
+    assert built == ["ssh", "-p", "2222", "deploy@host", "uptime"]
+    assert built.posix() == "ssh -p 2222 deploy@host uptime"
+
+
+def test_the_value_serialises_for_the_shell_the_caller_names():
+    # Quoting is chosen by the destination, never sniffed from the machine
+    # this test runs on — that is what makes a payload survive the trip.
+    built = tools.git.commit.argv(m="a message")
+    assert built == ["git", "commit", "-m", "a message"]
+    assert built.posix() == "git commit -m 'a message'"
+    assert built.windows() == 'git commit -m "a message"'
+
+
+def test_posix_and_windows_disagree_exactly_where_shells_do():
+    # The characters a POSIX shell treats as live are inert to CreateProcess
+    # quoting, which is why the local platform's quoting cannot stand in.
+    built = tools.git.commit.argv(m="cost $HOME `today` back\\slash")
+    assert "'cost $HOME `today` back\\slash'" in built.posix()
+    assert '"cost $HOME `today` back\\slash"' in built.windows()
+
+
+def test_a_built_line_nests_through_two_hops():
+    # Each hop serialises once, at the boundary it crosses. Written by hand
+    # the outer line is sixteen consecutive quote characters; composed, it is
+    # three lines with `.posix()` at each machine boundary.
+    inner = tools.docker.compose.up.argv(detach=True)
+    middle = tools.ssh.argv("app@inner", inner.posix())
+    outer = tools.ssh.argv("jump@edge", middle.posix())
+    assert inner.posix() == "docker compose up --detach"
+    assert middle.posix() == "ssh app@inner 'docker compose up --detach'"
+    assert outer.posix() == (
+        "ssh jump@edge 'ssh app@inner '\"'\"'docker compose up --detach'\"'\"''"
+    )
+
+
+def test_argv_is_an_ordinary_list():
+    built = tools.git.log.argv(n=5)
+    assert isinstance(built, list)
+    assert built[0] == "git" and built[-1] == "5" and len(built) == 4
+    assert built[1:3] == ["log", "-n"]  # slicing, like any list
+
+
+def test_a_built_line_leads_with_the_tool_name_not_the_local_path():
+    # `tools.python` runs THIS interpreter, an absolute local path that means
+    # nothing on the machine the line is being built for.
+    assert tools.python.argv("-c", "pass")[0] == "python"
+
+
+def test_argv_never_consumes_a_pending_input():
+    # Building feeds no child, so the one-shot payload must still be armed.
+    handle = tools.terraform.opts(input="yes")
+    assert handle.argv("apply") == ["terraform", "apply"]
+    from footman.context import Context, use_context
+
+    with use_context(Context(dry_run=True, quiet=True)):
+        handle("apply")  # the payload is still armed, not spent on the build
+
+
+def test_tokens_pass_on_with_an_explicit_splat():
+    # Raw tokens travel as `*cmd` — plain Python, no recognition anywhere.
+    payload = tools.git.log.argv(n=1)
+    assert tools.ssh.argv("host", *payload) == [
+        "ssh",
+        "host",
+        "git",
+        "log",
+        "-n",
+        "1",
+    ]
+
+
+def test_a_bare_argv_in_a_positional_is_refused_with_both_spellings():
+    # One positional Argv is ambiguous between its two meanings, so the
+    # refusal teaches both rather than guessing either.
+    payload = tools.git.log.argv(n=1)
+    with pytest.raises(TypeError, match=r"splat it \(`\*cmd`\)") as err:
+        tools.ssh("host", payload)  # type: ignore[arg-type]
+    assert "cmd.posix()" in str(err.value)
+
+
+@pytest.mark.parametrize(
+    ("value", "spread"),
+    [(["a", "b"], r"\*"), (("a", "b"), r"\*"), ({"a"}, r"\*"), ({"a": 1}, r"\*\*")],
+)
+def test_a_bare_container_in_a_positional_is_refused(value, spread):
+    # Silently stringifying one produced "['a', 'b']" as a single token, which
+    # failed late at the tool with a confusing message.
+    with pytest.raises(TypeError, match=rf"Spread it with `{spread}`"):
+        tools.git.add.argv(value)
+
+
+def test_a_path_still_stringifies_in_a_positional():
+    # The refusal names concrete containers, never "iterable" — Path and int
+    # are what str() is for. (A dynamic tool: the stubbed ones narrow their
+    # positionals to str statically, which is its own, deliberate, teaching.)
+    assert tools.rsync.argv(Path("src"), 3) == ["rsync", "src", "3"]
+
+
+def test_a_flag_treats_an_argv_as_the_plain_list_it_is():
+    # No argv recognition in the keyword path: a list repeats the flag, and a
+    # serialised line is an ordinary string value.
+    payload = tools.git.log.argv(n=1)
+    assert tools.ruff.check.argv(".", config=payload.posix()) == [
+        "ruff",
+        "check",
+        ".",
+        "--config=git log -n 1",
+    ]
+    assert tools.git.commit.argv(trailer=payload) == [
+        "git",
+        "commit",
+        "--trailer=git",
+        "--trailer=log",
+        "--trailer=-n",
+        "--trailer=1",
+    ]
