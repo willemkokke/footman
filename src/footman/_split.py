@@ -103,8 +103,8 @@ GLOBALS: list[tuple[str, str | None, str, str | None, str]] = [
     ("--all", "-a", "flag", None, "include hidden tasks in the listings"),
     ("--where", None, "option", "TASK", "print the task's source file:line"),
     # The bracketed hint marks the value optional: bare `--describe` dumps
-    # the whole tree's contract.
-    ("--describe", None, "option", "[TASK]", "print the task contract as JSON"),
+    # the whole tree's contract; a group address answers for its subtree.
+    ("--describe", None, "option", "[ADDR]", "print task contracts as JSON"),
     ("--plugins", None, "flag", None, "list installed footman.tasks plugins"),
     ("--dry-run", "-n", "flag", None, "rehearse: bodies run, footman's work is faked"),
     ("--keep-going", "-k", "flag", None, "run every branch even if one fails"),

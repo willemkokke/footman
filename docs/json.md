@@ -211,9 +211,14 @@ a `returns:` line, and [task docs pages](taskdocs.md) render the fields.
 document, without running anything — every task's parameters (the same
 specs the catalog bakes) and its declared return shape rendered as **JSON
 Schema** (2020-12 vocabulary), with the `Returns:` prose beside it.
-`fm --describe=docs.build` answers for one task (a runnable group's
-address answers with its default action). Plain JSON on stdout either
-way, like `--where`: the output already is the machine format.
+`fm --describe=docs.build` answers for one task, and a group address
+answers for its whole subtree — the same prefix-names-a-subtree rule
+addresses speak everywhere, so `fm --describe=docs` is every task under
+`docs.`, nested groups included. A runnable group's default rides in that
+list under its real `group.default` address, which also answers alone.
+There is no wildcard syntax and none is needed: the group address *is*
+the pattern, and `jq` filters the rest. Plain JSON on stdout either way,
+like `--where`: the output already is the machine format.
 
 ```console
 $ fm --describe=affected
