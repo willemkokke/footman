@@ -524,9 +524,55 @@ def test_the_docs_tasks_regenerate_before_they_serve(monkeypatch):
     tasks.serve()
     assert order == ["llms", "zensical serve"]
 
-    order.clear()
-    tasks.coverage()
-    assert order == ["pytest --cov --cov-report=html:docs/htmlcov -q"]
+
+def test_coverage_returns_the_totals_it_measures(monkeypatch):
+    """`docs.coverage` is the structured-returns dogfood: the same pytest run
+    that writes the HTML also writes a JSON totals file, and the task returns
+    them as its declared `CoverageReport` rather than throwing them away."""
+    import json
+    import re
+
+    seen: list[str] = []
+
+    def fake_run(cmd: str, **kw: Any) -> None:
+        seen.append(cmd)
+        where = re.search(r"json:(\S+)", cmd)
+        assert where is not None
+        target = Path(where[1])
+        totals = {"percent_covered": 92.034, "num_statements": 9000}
+        target.write_text(
+            json.dumps({"totals": {**totals, "missing_lines": 717}}), "utf-8"
+        )
+
+    monkeypatch.setattr(tasks, "run", fake_run)
+    report = tasks.coverage()
+    assert seen[0].startswith("pytest --cov --cov-report=html:docs/htmlcov ")
+    assert seen[0].endswith(" -q")
+    assert report == tasks.CoverageReport(
+        percent=92.03,
+        statements=9000,
+        missing=717,
+        report=Path("docs/htmlcov/index.html"),
+    )
+
+
+def test_the_coverage_report_shape_stays_describable():
+    """The declared contract must actually bake: if `CoverageReport` (or an
+    import it needs, like a runtime `Path`) ever drifts outside the
+    describable set, the schema would silently vanish from the manifest,
+    the envelope, and `--describe` — this is the tripwire."""
+    from footman._manifest import returned_spec
+
+    assert returned_spec(tasks.CoverageReport) == {
+        "kind": "object",
+        "name": "CoverageReport",
+        "fields": {
+            "percent": {"kind": "float"},
+            "statements": {"kind": "int"},
+            "missing": {"kind": "int"},
+            "report": {"kind": "path"},
+        },
+    }
 
 
 # --- the scratch projects the documentation casts are recorded against -------
