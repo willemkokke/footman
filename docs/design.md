@@ -57,7 +57,7 @@ def test(coverage: bool = False):
     # tools), where flags become checked keyword arguments with
     # completion:
     #
-    #     tools.pytest(cov=coverage)
+    #     toolroom.pytest(cov=coverage)
     #
     # This page sticks to plain run() commands everyone already knows.
 ```

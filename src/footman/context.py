@@ -1674,13 +1674,13 @@ _CONTAINERS = (list, tuple, set, frozenset, dict)
 def container_error(value: Any, where: str, *, example: str = "") -> str:
     """The taught refusal for a bare container in an argv slot.
 
-    Shared by `run()` and the bridge (which passes the tool's name as
-    *where* and its own spelling as *example*), so the lesson reads the same
-    at both doors. An `Argv` gets its own wording: it is the one container
-    that plausibly lands here on purpose, and the fix differs by what was
-    meant.
+    toolroom's door teaches the same wording (its own copy, per the twin
+    ruling), so the lesson reads the same wherever it is met. An `Argv` —
+    footman's own, or any twin carrying the shell renderers (`.posix()`)
+    — gets its own wording: it is the one container that plausibly lands
+    here on purpose, and the fix differs by what was meant.
     """
-    if isinstance(value, Argv):
+    if isinstance(value, Argv) or callable(getattr(value, "posix", None)):
         return (
             f"{where}: a built command line (Argv) was passed as one "
             f"positional argument, and that spelling is ambiguous. Say which "

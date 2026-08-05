@@ -41,7 +41,7 @@ uv add --dev footman        # or: pip install footman
 ```python
 # tasks.py
 from footman import task, group, run
-from footman.tools import pytest, ruff
+from toolroom import pytest, ruff
 
 @task
 def lint(fix: bool = False):

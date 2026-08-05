@@ -9,8 +9,9 @@ from pathlib import Path
 from typing import Annotated, Literal
 
 import pytest
+import toolroom as tools
 
-from footman import _manifest, tools
+from footman import _manifest
 from footman._executor import run_chain
 from footman._split import split_chain
 from footman._step import step
@@ -2297,8 +2298,9 @@ def test_to_argv_returns_what_ran_as_requotable_tokens():
     # `.raw` is quoted for the machine footman is standing on; to_argv() is
     # the tokens themselves, which serialise for whichever shell will parse
     # them — the one that matters when the string is going somewhere else.
+    from toolroom import git
+
     from footman.testing import recording
-    from footman.tools import git
 
     with recording():
         result = git.commit(m="a message")
@@ -2320,8 +2322,9 @@ def test_to_argv_teaches_when_no_argv_was_recorded():
 
 def test_run_takes_a_built_command_line_as_its_argv():
     # An Argv IS run()'s input type — no adapter between building and running.
+    from toolroom import docker
+
     from footman.testing import recording
-    from footman.tools import docker
 
     payload = docker.compose.up.argv(detach=True)
     with recording() as steps:
@@ -2332,8 +2335,9 @@ def test_run_takes_a_built_command_line_as_its_argv():
 def test_run_serialised_payloads_spell_the_boundary():
     # A payload inside a hand-written list crosses a machine boundary as one
     # quoted token, named at the call site.
+    from toolroom import docker
+
     from footman.testing import recording
-    from footman.tools import docker
 
     payload = docker.compose.up.argv(detach=True)
     with recording() as steps:
@@ -2345,7 +2349,7 @@ def test_run_refuses_a_bare_container_in_its_list():
     # Stringified it becomes the one token "['a', 'b']", which fails late at
     # the tool; `*` and `.posix()` are the two meant spellings, and the
     # refusal names them.
-    from footman.tools import docker
+    from toolroom import docker
 
     payload = docker.compose.up.argv(detach=True)
     with pytest.raises(TypeError, match=r"splat it \(`\*cmd`\)"):

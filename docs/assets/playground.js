@@ -22,7 +22,7 @@ const REVISION_MARK = "example: revision";
 const DEFAULT_FILES = {
   "tasks.py": `from typing import Literal
 from footman import fail, run, task
-from footman.tools import pytest, ruff
+from toolroom import pytest, ruff
 
 @task
 def lint(fix: bool = False):
@@ -370,10 +370,10 @@ function loadRuntime(status) {
       status("loading Python — a few seconds, once per visit…");
       const { loadPyodide } = await import(PYODIDE_URL);
       const pyodide = await loadPyodide();
-      status("installing footman…");
+      status("installing footman + toolroom…");
       await pyodide.loadPackage("micropip");
       const micropip = pyodide.pyimport("micropip");
-      await micropip.install("footman");
+      await micropip.install(["footman", "toolroom"]);
       pyodide.runPython(BOOTSTRAP);
       return pyodide;
     })();

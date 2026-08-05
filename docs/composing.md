@@ -319,11 +319,9 @@ Design choices you can rely on:
   design.
 
 footman's own tooling follows the same rule — built-ins are ordinary,
-opt-in plugins. This repo's tasks.py pulls both of its first-party
-plugins: `plugin("footman.docs", into="footman")` is [your tasks,
-documented](taskdocs.md) (`fm docs.page` / `site`), and
-`plugin("footman.tools", into="footman")` is the maintainer-facing stub
-toolkit. A branded CLI writes `into="acme.tools"` instead — branding is a
+opt-in plugins. This repo's tasks.py pulls its first-party
+plugin: `plugin("footman.docs", into="footman")` is [your tasks,
+documented](taskdocs.md) (`fm docs.page` / `site`). A branded CLI writes `into="acme.tools"` instead — branding is a
 one-line authoring choice, not framework machinery. A naming symmetry to
 know: the `footman.tasks` entry-point *group* is served by the
 `footman.tasks` *package* — different namespaces, one product.

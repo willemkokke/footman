@@ -12,6 +12,18 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated, Any
 
+from toolroom import (
+    basedpyright,
+    mypy,
+    pyrefly,
+    pytest,
+    ruff,
+    ruff_format,
+    ty,
+    uv,
+    zensical,
+)
+
 from footman import (
     RunFailed,
     doc,
@@ -24,17 +36,6 @@ from footman import (
     stdin,
     step,
     task,
-)
-from footman.tools import (
-    basedpyright,
-    mypy,
-    pyrefly,
-    pytest,
-    ruff,
-    ruff_format,
-    ty,
-    uv,
-    zensical,
 )
 
 docs = group("docs", help="Documentation site (Zensical)")
@@ -468,12 +469,6 @@ def docs_build(check: bool = False):  # pragma: no cover — see below
     from footman.tasks.docs import errors as taskdocs_errors
 
     taskdocs_errors(out=Path("docs/_generated/errors.md"))
-    # One reference page per curated tool, rendered by mkdocstrings from
-    # the checked-in stubs — so the pages say what actually ships, and the
-    # build needs no tool on PATH.
-    from footman.tasks.tools import pages as toolpages
-
-    toolpages(Path("docs/_generated/tools"), nav=Path("zensical.toml"))
     _write_latest_changes()
     # Terminal screenshots, captured from the real CLI on a pty and framed
     # as SVGs — the pages show footman exactly as a terminal does, and a
@@ -815,10 +810,8 @@ def clean():
 
 # Dogfood: pull footman's own first-party plugins, exactly as a user would.
 # Each node lands under its own name and merges with what the file defines
-# — the docs tasks join the local `docs` group leaf by leaf, tools lands at
-# top level: one surface, no container. Order doesn't matter (a local
-# group() adopts a pulled one, and pulls compose with existing groups);
-# pulled last only so the file's own tasks list first.
+# — the docs tasks join the local `docs` group leaf by leaf. Order doesn't
+# matter (a local group() adopts a pulled one, and pulls compose with
+# existing groups); pulled last only so the file's own tasks list first.
 plugin("footman.docs")
-plugin("footman.tools")
 plugin("footman.profile")

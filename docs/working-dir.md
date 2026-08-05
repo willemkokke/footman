@@ -63,7 +63,7 @@ def bundle():
 Per call, `run()` and the tools bridge take the same pair:
 
 ```python
-from footman import tools
+import toolroom as tools
 
 run("npm run build", rel="web")             # this one call, in <cwd>/web
 tools.npm.opts(rel="web").run("build")      # same, through the bridge

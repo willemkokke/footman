@@ -26,10 +26,6 @@ grammar may break without a deprecation cycle.
   the moment it decides to spawn) must not import `footman` internals or user
   tasks — a TAB press is one file read + JSON parse + tree walk. `main()` in
   `__init__.py` dispatches `--complete` *before* importing anything.
-- **`tools.py` ↔ `tools.pyi` parity.** Every module-level runtime binding in
-  `tools.py` must be declared in the stub; `test_tools.py` enforces this with an
-  AST test. Module imports are aliased private (`import re as _re`, …) so
-  `tools.<name>` always resolves to a `Tool` via `__getattr__`.
 - **Coverage ≥ 92%.** Enforced in CI (`fail_under = 92`).
 
 ## The gate (run before every commit)
@@ -86,7 +82,6 @@ src/footman/
   _executor.py    bind + run one task
   _schedule.py    the DAG scheduler (parallel/sequential, live progress line)
   _config.py      [tool.footman] discovery
-  tools.py/.pyi   the tools.* bridge + its typing stub
   testing.py      Runner (in-process CLI) + recording()
 docs/             Zensical (mkdocs-like) site
 notes/            design plans, `YYYYMMDD-` prefixed — tracked, never published
@@ -206,12 +201,11 @@ PR, and only the merged commit is tagged. Don't tag before the bump is on
 6. Fast-forward local `main` (`git fetch` then `git merge --ff-only`), then tag
    that merged commit `vX.Y.Z` and push **only the tag**.
 
-**The tool stubs are not a release step.** They move on their own schedule —
-the weekly refresh workflow reads the tools, opens a PR, and its CHANGELOG
-lines land like any other change. A release ships whatever is checked in.
-Retaking them by hand (`tools.provision` → `tools.audit --prefix=…` →
-`tools.sync --prefix=…`) is a thing you can do when a reading looks wrong,
-not something a release waits for.
+**The typed tool surfaces live in toolroom** (the companion repo,
+`willemkokke/toolroom`): the bridge, the stubs, the machinery, and the
+weekly refresh all release on their own train there. footman's own tasks
+run through toolroom as a dev dependency; a footman release never waits
+on a stub reading.
 
 Pushing a `v*` tag triggers `.github/workflows/release.yml`: it runs full CI,
 verifies the version, builds the sdist + wheel, and publishes to PyPI

@@ -30,7 +30,7 @@ independent checks to `parallel()` and let the machine use its cores:
 ```python
 import functools
 from footman import task, parallel
-from footman.tools import basedpyright, pytest, ruff
+from toolroom import basedpyright, pytest, ruff
 
 @task
 def lint(fix: bool = False):
@@ -196,7 +196,7 @@ never a stale snapshot:
 from typing import Annotated
 from footman import task, run
 from footman.params import suggest
-from footman.tools import docker
+from toolroom import docker
 
 def branches() -> list[str]:
     import subprocess  # inside the body — importing tasks.py stays cheap
@@ -353,7 +353,7 @@ subcommands; keyword arguments translate mechanically (`detach=True` →
 `--detach`, lists repeat, trailing `_` escapes Python keywords):
 
 ```python
-from footman.tools import docker, mkdocs, terraform
+from toolroom import docker, mkdocs, terraform
 
 @task
 def up(detach: bool = True):
