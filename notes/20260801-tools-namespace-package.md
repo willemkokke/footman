@@ -419,3 +419,9 @@ interaction with this split — analysed and kept in
 [20260805-recording-failure-injection.md](20260805-recording-failure-injection.md)
 (verdict: lands footman-side, ideally pre-split; detection and
 seam-speaks-stdlib both hold under it).
+
+Ruled later the same day, recorded in the sibling plan: **the lean
+install** — the machinery is repo-only in toolroom, so
+`pip install toolroom` is the bridge and the stubs, nothing else; the
+inversion's user-facing entry point waits for a machinery dist that
+external demand has yet to order.

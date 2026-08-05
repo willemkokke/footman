@@ -303,3 +303,44 @@ folded into the list above): clean start, and the three-mode
 configurable release trigger shipping human-in-the-loop first.
 **Nothing in either plan remains open. The design phase of this
 thread is closed; the next act is the build order.**
+
+## 2026-08-05 — the build began; the lean install ruled
+
+The build was ordered the same day ("start toolroom, but don't make
+any changes to footman yet") and **stage 1 landed**: the toolroom
+repo carries the clean-start seed (verbatim from footman@da444ca,
+v0.31.0) plus the standalone rework — `_host.py` as the seam, the
+vocabulary twins, host detection, subprocess executor — with the
+ported bridge suite green as a hosted conformance run against
+released footman, 16 standalone-lane tests beside it, `fm check`
+dogfooding the hosted lane inside toolroom, CI across three OSes,
+and the Zensical site live at willemkokke.github.io/toolroom.
+footman is untouched.
+
+Then, ruled ("1 will do for a good while"): **the machinery is
+repo-only — `pip install toolroom` delivers the bridge, the stubs,
+and `py.typed`, nothing else, by default.** In stage 2 the machinery
+(~6,800 lines: `_drivers`/`_provision`/`_toolfetch`/`_stubgen`/
+`_toolhelp`/`_toolspec`/`_toolhistory` + the task definitions) moves
+into toolroom's *repo* but outside `src/` — the repo's own tasks and
+the refresh workflow are its only real users today, and neither
+ships. Two earlier rulings re-scope:
+
+- "Wholesale move" holds at the repo level and splits at the wheel
+  level: stage 1 already shipped the lean wheel; stage 2 adds the
+  machinery to the repo, never to the package.
+- The inversion's `plugin("toolroom")` entry point has no
+  user-facing carrier for now: `fm tools.*` become
+  toolroom-repo-internal tasks, and an entry point ships the day a
+  machinery dist does.
+
+The pre-decided escalation, if external demand appears (the store
+future — users generating surfaces for their own tools): a second
+dist carrying the machinery and the entry point, with
+`toolroom[machinery]` as extra sugar over it — an extra alone cannot
+ship modules, so lean-by-default forces the two-dist shape then, and
+not before.
+
+Also deferred, same day: docs feature parity with footman's site
+(the theme block — dark mode and friends) and, perhaps, a
+playground.
