@@ -1,7 +1,9 @@
 # footman.tools as a separately installable package
 
 Status: PLAN — nothing built. Decisions marked **open** await Willem's
-call. Sibling plan:
+call. **2026-08-05: the inversion ruling (bottom section) reverses
+this plan's mounts-under-footman premise — read bottom-up; the latest
+sections supersede.** Sibling plan:
 [20260801-tools-separate-repo.md](20260801-tools-separate-repo.md)
 explores the same split with the tools dist in its own repository, and
 carries the merits comparison between the two. Supersedes the "still thinking — don't build toward it" hold on
@@ -160,18 +162,27 @@ gives it one — see versioning). **Open**, with a lean to same-repo.
 
 ## Open questions (Willem's calls)
 
-1. Graft (A) vs shim (B) — pending the editable-install verification.
-2. Dist name. Front runner (2026-08-05): **`toolroom`** — see the
-   naming sweep below; `footman-tools` demoted to fallback. Not yet
-   ruled.
-3. Same-repo workspace vs separate repo.
-4. Does the future standalone re-badge shape anything now, or is it
-   explicitly out of scope?
-5. Do the machinery modules move in phase 2 or stay dev-side?
-6. Two-dist release choreography: tag scheme, and whether the weekly
-   refresh auto-releases footman-tools or keeps opening PRs.
-7. Where does `Argv` live after a split? (New with v0.30.0 — see the
-   review below.)
+1. Graft (A) vs shim (B) — SUPERSEDED by the 2026-08-05 inversion
+   ruling (below): the import name is `toolroom`, no namespace
+   surgery. Residual open: does footman keep a courtesy
+   `footman/tools.py` that teaches `pip install toolroom`, or break
+   clean?
+2. Dist name — RULED 2026-08-05: **`toolroom`**, reserved same day on
+   both registries (github.com/willemkokke/toolroom; PyPI via a 0.0.1
+   placeholder). Sweep below.
+3. Same-repo workspace vs separate repo — open; the inversion tilts
+   it hard toward separate, and the reservation repo exists. See the
+   sibling plan's 2026-08-05 section for the reweighed lean.
+4. RULED 2026-08-05 by the inversion: standalone-first IS the shape,
+   not a future re-badge kept merely possible.
+5. Machinery modules — the inversion leans "move to toolroom": the
+   plugin provides the `tools.*` tasks, and the machinery regenerates
+   the stubs that live beside it. Not yet ruled.
+6. Two-dist release choreography — collapses if 3 goes separate-repo
+   (toolroom releases on refresh events, footman on framework
+   changes); open pending 3.
+7. Where does `Argv` live after a split? (New with v0.30.0.) Now THE
+   design knot — sharpened by the inversion; see its section.
 
 ## 2026-08-05 review — what v0.30.0 moved under this plan
 
@@ -258,3 +269,72 @@ workshop board with a painted outline for every tool — the most exact
 stub metaphor, needs its explaining sentence). A real-word name rather
 than `footman-tools` presumes the standalone re-badge is wanted — this
 leans question 4 without ruling it. Question 2 stays open until ruled.
+(It was — same day; next section.)
+
+## 2026-08-05 — RULED: the inversion — toolroom provides the footman plugin
+
+Willem's call, same day as the naming: spin the no-dependencies story
+by structuring the footman integration as a footman plugin that
+toolroom provides — and, with the shape below laid out, "it's
+definitely the way to go". This REVERSES this plan's stated premise
+("`footman.tools` always mounts under footman, so there is always a
+host to inject the executor") and supersedes the packaging mechanics
+above; graft/shim/extend_path stay as the record of what was nearly
+built instead.
+
+The shape:
+
+- **Two zero-dependency packages.** footman never imports, ships, or
+  names toolroom — the zero-deps headline keeps no asterisk. toolroom
+  is stdlib-only too: the bridge already is, and the default executor
+  becomes plain `subprocess`. footman appears only in toolroom's dev
+  group (defining and testing the plugin tasks), never in
+  `dependencies`.
+- **`import toolroom` is the import name.** No graft, no namespace
+  surgery. The generated stubs' anchors become
+  `from toolroom import Argv as _Argv, Tool as _Tool`; hse eats an
+  import rename (pre-1.0; they integrated 0.30.0 same-day).
+- **The integration is an entry point toolroom provides** (the
+  `footman.tasks` group — "inert until a tasks.py pulls it", the
+  philosophy footman's own pyproject already states).
+  `plugin("toolroom")` mounts the machinery tasks
+  (`fm tools.provision/audit/sync/restub`). The plugin module imports
+  footman lazily and only ever runs when footman is loading it, so
+  footman is present by definition. The whole coupling is a string in
+  metadata; neither dist depends on the other.
+- **The task tree rides the plugin; the executor wiring must not.**
+  If `run()`-routing depended on the `plugin("toolroom")` line, the
+  same `tools.git(...)` call would produce receipts in one project
+  and silently subprocess in another — invisible to `recording()` and
+  `--dry-run`, and the forged-receipts arc says lie lanes get bent.
+  Instead: **host detection in the bridge** — footman context active
+  in this process → route through `run()` (receipts, capture,
+  dry-run, recording, lanes); otherwise the subprocess default. The
+  detection lives in toolroom: the provider knows its host, and
+  footman never learns toolroom's name (the
+  footman-doesn't-know-its-caller principle, kept). The Executor
+  protocol survives as toolroom's extension point — another host
+  registers the way footman is detected.
+
+What this sharpens:
+
+- **Question 7 is now the design knot.** With no footman→toolroom
+  arrow, footman cannot import toolroom's `Argv` — yet `run()`
+  accepts one and `Result.to_argv()` mints one with toolroom absent.
+  Either both sides speak structural `ArgvLike`/`ResultLike` and each
+  owns a concrete class, or one side vendors a twin. The policy
+  vocabulary `.opts()` passes across the seam is part of the same
+  contract, and `ResultLike` still needs the token tuple.
+- **The migration phases above are graft-shaped and need redrawing.**
+  Phase 1 — carve the executor seam in place — survives untouched: it
+  is the prerequisite of every variant and is still where the build
+  starts.
+- **The reservation exists.** github.com/willemkokke/toolroom
+  (public, MIT, placeholder 0.0.1 with py.typed, trusted-publishing
+  release.yml mirrored from footman), created 2026-08-05. A
+  placeholder serves either answer to question 3, so the repo alone
+  rules nothing.
+- **The dictionary agreed.** Merriam-Webster's tool room: where tools
+  are "made, stored, repaired, and issued" — stubgen, tool-history +
+  the stub store, the weekly refresh, the bridge and its plugin: one
+  verb each. The toolroom README carries the verb set.

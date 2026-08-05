@@ -6,6 +6,9 @@ same surface (`footman.tools`, graft-packaged, executor auto-wired),
 but the tools distribution lives in **its own repository** instead of a
 uv-workspace dist in this one. Ends with a merits comparison of the two
 plans. Decisions marked **open** await Willem's call.
+**2026-08-05: the inversion ruling changed the shared surface — read
+the dated section at the bottom before the body; the graft/auto-wired
+premises no longer hold.**
 
 ## What is identical to the namespace plan
 
@@ -225,8 +228,37 @@ Repo name follows the dist name: `willemkokke/footman-tools`.
 1. Straight to separate repo, or workspace-first-then-extract (the
    lean)?
 2. Dist/repo name: `footman-tools` (lean) vs reserving `equerry` for
-   a re-badge-shaped future.
+   a re-badge-shaped future. RULED 2026-08-05: **`toolroom`** — see
+   the section below; `equerry` stays rejected.
 3. History-preserving subtree export vs clean-start repo.
 4. The public registration point's name (`footman.hookpoints.…`?).
+   DISSOLVED 2026-08-05: the inversion replaces the registration
+   import with host detection owned by toolroom.
 5. Refresh auto-tags releases, or human merges+tags (inherited from
    the namespace plan's question 6, now single-repo-scoped).
+
+## 2026-08-05 — the inversion reweighs this plan
+
+The namespace plan's same-date section records the ruling: the name
+is **toolroom** (ruled and reserved — github.com/willemkokke/toolroom
+plus the PyPI placeholder), the package is standalone-first
+(`import toolroom`, subprocess default executor), and the footman
+integration is an entry-point plugin toolroom provides, with the
+bridge detecting its host rather than an auto-wired graft. That
+dissolves this plan's "identical to the namespace plan" block — no
+graft, no `footman.hookpoints` registration import, no floor pin in
+the bridge; the plugin module owns the footman-facing surface — and
+closes its Naming section.
+
+What survives unchanged: the repo-logistics inventory (what a
+separate repo carries), the CI shape, and the refresh-as-heartbeat
+versioning story. The merits comparison survives but its weights
+move: with no dependency arrow between the dists, **atomic contract
+evolution loses most of its weight** — the contract shrinks to a
+detection surface plus structural `ArgvLike`/`ResultLike` protocols,
+not a paired adapter and floor — while cadence independence and the
+standing integration test (the tools repo dogfooding a *released*
+footman as a dev dependency) arrive on day one of the inversion.
+Question 1 stays Willem's call, but the reservation repo existing and
+the workspace's biggest merit thinning move the lean from
+"workspace first, extract later" toward **straight to separate**.
