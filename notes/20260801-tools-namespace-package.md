@@ -164,25 +164,28 @@ gives it one — see versioning). **Open**, with a lean to same-repo.
 
 1. Graft (A) vs shim (B) — SUPERSEDED by the 2026-08-05 inversion
    ruling (below): the import name is `toolroom`, no namespace
-   surgery. Residual open: does footman keep a courtesy
-   `footman/tools.py` that teaches `pip install toolroom`, or break
-   clean?
+   surgery. Residual shim question RULED 2026-08-05: **no backwards
+   compatibility** — clean break, no courtesy `footman/tools.py`;
+   `import toolroom` is the only spelling.
 2. Dist name — RULED 2026-08-05: **`toolroom`**, reserved same day on
    both registries (github.com/willemkokke/toolroom; PyPI via a 0.0.1
    placeholder). Sweep below.
-3. Same-repo workspace vs separate repo — open; the inversion tilts
-   it hard toward separate, and the reservation repo exists. See the
-   sibling plan's 2026-08-05 section for the reweighed lean.
+3. Same-repo workspace vs separate repo — RULED 2026-08-05:
+   **"definitely separate repo"**. The sibling plan is the operative
+   one; the reservation repo is the home.
 4. RULED 2026-08-05 by the inversion: standalone-first IS the shape,
    not a future re-badge kept merely possible.
-5. Machinery modules — the inversion leans "move to toolroom": the
-   plugin provides the `tools.*` tasks, and the machinery regenerates
-   the stubs that live beside it. Not yet ruled.
-6. Two-dist release choreography — collapses if 3 goes separate-repo
-   (toolroom releases on refresh events, footman on framework
-   changes); open pending 3.
-7. Where does `Argv` live after a split? (New with v0.30.0.) Now THE
-   design knot — sharpened by the inversion; see its section.
+5. Machinery modules — RULED 2026-08-05: `fm tools.*` moves
+   **wholesale** — task tree, machinery trio, bridge, stubs, and (per
+   3) tool-history + the refresh workflow. The entry-point respelling
+   (`plugin("footman.tools")` → `plugin("toolroom")`) is accepted;
+   footman drops its entry point, the other first-party plugins stay.
+6. Two-dist release choreography — RESOLVED by 3: plain `vX.Y.Z` tags
+   in each repo; toolroom releases on refresh events, footman on
+   framework changes. Residual (sibling plan): refresh auto-tags vs
+   human merges+tags.
+7. Where does `Argv` live after a split? (New with v0.30.0.) **The
+   last design open** — sharpened by the inversion; see its section.
 
 ## 2026-08-05 review — what v0.30.0 moved under this plan
 
@@ -338,3 +341,24 @@ What this sharpens:
   are "made, stored, repaired, and issued" — stubgen, tool-history +
   the stub store, the weekly refresh, the bridge and its plugin: one
   verb each. The toolroom README carries the verb set.
+
+## 2026-08-05 — the remaining rulings
+
+Same day, following the inversion: **"plugin rename is acceptable, no
+backwards compatibility, definitely separate repo."** Folded into the
+list above: question 1 (clean break, no shim), 3 (separate repo — the
+sibling plan is now the operative one for logistics), 5 (`fm tools.*`
+moves wholesale, entry-point respelling accepted), 6 (resolved by 3).
+One behaviour clarification also recorded while answering "what
+changes without the plugin line": detection must key on footman being
+PRESENT in the process, not on a task running — `current()` already
+hands a fresh default Context outside a run, so
+outside-task-but-footman-present bridge calls route through `run()`
+today and must keep doing so; and `fm tools.*` is already
+entry-point-gated today, so skipping `plugin("toolroom")` costs
+exactly what skipping `plugin("footman.tools")` costs now.
+
+This plan is now fully ruled except **question 7 — the
+Argv/vocabulary home** — plus two logistics residuals in the sibling
+plan (subtree export vs clean start; refresh auto-tags vs human).
+The build remains unordered.

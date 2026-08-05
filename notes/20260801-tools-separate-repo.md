@@ -8,7 +8,9 @@ uv-workspace dist in this one. Ends with a merits comparison of the two
 plans. Decisions marked **open** await Willem's call.
 **2026-08-05: the inversion ruling changed the shared surface — read
 the dated section at the bottom before the body; the graft/auto-wired
-premises no longer hold.**
+premises no longer hold. Same day, RULED: "definitely separate repo"
+— this is the operative plan, adjusted for the inversion (dist and
+import name `toolroom`, no graft, no shim, wholesale move).**
 
 ## What is identical to the namespace plan
 
@@ -226,7 +228,8 @@ Repo name follows the dist name: `willemkokke/footman-tools`.
 ## Open questions (Willem's calls)
 
 1. Straight to separate repo, or workspace-first-then-extract (the
-   lean)?
+   lean)? RULED 2026-08-05: **straight to separate** ("definitely
+   separate repo") — the workspace phase never happens.
 2. Dist/repo name: `footman-tools` (lean) vs reserving `equerry` for
    a re-badge-shaped future. RULED 2026-08-05: **`toolroom`** — see
    the section below; `equerry` stays rejected.
@@ -262,3 +265,17 @@ footman as a dev dependency) arrive on day one of the inversion.
 Question 1 stays Willem's call, but the reservation repo existing and
 the workspace's biggest merit thinning move the lean from
 "workspace first, extract later" toward **straight to separate**.
+
+RULED, same day: **straight to separate** — with "plugin rename is
+acceptable, no backwards compatibility" alongside. So: the
+`fm tools.*` family moves wholesale (task tree, machinery trio,
+bridge + stubs + parity tests, `tool-history/`, the refresh
+workflow), footman drops its `footman.tools` entry point and ships no
+shim, and users respell `plugin("footman.tools")` →
+`plugin("toolroom")` and `footman.tools` → `import toolroom`. What
+remains open here: question 3 (subtree export vs clean start) and
+question 5 (refresh auto-tags vs human). The namespace plan keeps the
+last design open — the Argv/vocabulary home (its question 7). The
+build is not yet ordered; when it is, this plan's phases run with the
+graft parts replaced by the inversion shape (the extraction ships the
+`toolroom` package, not `src/footman/tools/`).
