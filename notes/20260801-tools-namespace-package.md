@@ -408,4 +408,8 @@ methods it protects, and vendoring buys no class identity anyway).
 
 With this, **every design open in this plan is ruled.** What remains
 before a build order: the sibling plan's two logistics calls
-(subtree export vs clean start; refresh auto-tags vs human).
+(subtree export vs clean start; refresh auto-tags vs human). (Both
+ruled later the same day — clean start, and a three-mode configurable
+release trigger shipping human-in-the-loop first; see the sibling
+plan. Nothing in either plan remains open; the next act is the build
+order.)
