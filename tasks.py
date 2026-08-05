@@ -9,7 +9,8 @@ from __future__ import annotations
 import dataclasses
 import re
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Annotated, Any
+from pathlib import Path
+from typing import Annotated, Any
 
 from footman import (
     RunFailed,
@@ -37,9 +38,6 @@ from footman.tools import (
 )
 
 docs = group("docs", help="Documentation site (Zensical)")
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 # The whole repo, as CI lints it (`ruff check .`). Anything narrower lets a
 # tracked file outside src/tests — a comparison script, a scratch demo — pass
@@ -390,10 +388,41 @@ def serve():
     run("zensical serve")
 
 
+# The output contract, dogfooded: the annotation below bakes this shape into
+# the manifest, `fm --json docs.coverage` carries it as `returned_schema`
+# beside the data, `fm --describe=docs.coverage` renders it as JSON Schema,
+# and a rename here goes red in our own gate via `returned_mismatch`.
+@dataclass
+class CoverageReport:
+    percent: float
+    statements: int
+    missing: int
+    report: Path
+
+
 @docs.task
-def coverage():
-    """Generate the coverage HTML report into docs/htmlcov (embedded in the site)."""
-    run("pytest --cov --cov-report=html:docs/htmlcov -q")
+def coverage() -> CoverageReport:
+    """Generate the coverage HTML report into docs/htmlcov (embedded in the site).
+
+    Returns:
+        The measured total and where the HTML report landed.
+    """
+    import json
+    import tempfile
+
+    with tempfile.TemporaryDirectory(prefix="fm-cov-totals-") as tmp:
+        totals_file = Path(tmp) / "coverage.json"
+        run(
+            "pytest --cov --cov-report=html:docs/htmlcov "
+            f"--cov-report=json:{totals_file} -q"
+        )
+        totals = json.loads(totals_file.read_text("utf-8"))["totals"]
+    return CoverageReport(
+        percent=round(totals["percent_covered"], 2),
+        statements=totals["num_statements"],
+        missing=totals["missing_lines"],
+        report=Path("docs/htmlcov/index.html"),
+    )
 
 
 @docs.task(name="build")
