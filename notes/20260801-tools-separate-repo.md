@@ -233,12 +233,28 @@ Repo name follows the dist name: `willemkokke/footman-tools`.
 2. Dist/repo name: `footman-tools` (lean) vs reserving `equerry` for
    a re-badge-shaped future. RULED 2026-08-05: **`toolroom`** — see
    the section below; `equerry` stays rejected.
-3. History-preserving subtree export vs clean-start repo.
+3. History-preserving subtree export vs clean-start repo. RULED
+   2026-08-05: **clean start** ("clean break") — one seed commit,
+   "extracted from footman@{sha}", stacked on the reservation repo;
+   footman's repo keeps the archaeology (which the export could only
+   half-move anyway: PRs, issues, and notes/ never transplant, and
+   tool-history/ self-documents via in-band provenance stamps).
 4. The public registration point's name (`footman.hookpoints.…`?).
    DISSOLVED 2026-08-05: the inversion replaces the registration
    import with host detection owned by toolroom.
 5. Refresh auto-tags releases, or human merges+tags (inherited from
-   the namespace plan's question 6, now single-repo-scoped).
+   the namespace plan's question 6, now single-repo-scoped). RULED
+   2026-08-05: **all three modes, built once, configurable** —
+   human-in-the-loop (refresh opens the PR, a human merges and the
+   merge releases), graded (pure-additions diffs auto-merge and
+   auto-release; removals or parse-shape changes wait for review),
+   and full auto (events → merge → tag → publish). Ships with
+   human-in-the-loop as the default until the lane has built trust;
+   switching modes is a config change, never a design conversation —
+   the dial exists precisely so this question does not reopen.
+   Choosing a mode above human-in-the-loop is also the trigger for
+   revisiting the ten-release budget (the standing
+   tool-option-history ruling).
 
 ## 2026-08-05 — the inversion reweighs this plan
 
@@ -281,3 +297,9 @@ design opens are now ruled; questions 3 and 5 here are the last
 calls before a build order.** When the build is ordered, this plan's
 phases run with the graft parts replaced by the inversion shape (the
 extraction ships the `toolroom` package, not `src/footman/tools/`).
+
+Questions 3 and 5 were then ruled as well (same day; the rulings are
+folded into the list above): clean start, and the three-mode
+configurable release trigger shipping human-in-the-loop first.
+**Nothing in either plan remains open. The design phase of this
+thread is closed; the next act is the build order.**
