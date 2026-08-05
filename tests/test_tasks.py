@@ -93,6 +93,122 @@ def test_pre_bash_allows_a_mention_or_an_honest_pipe(command):
     assert not _refuses(command)
 
 
+# --- the push guard ----------------------------------------------------------
+
+
+def test_pre_bash_refuses_a_conflicting_push(monkeypatch):
+    probed: list[str | None] = []
+
+    def conflict(repo):
+        probed.append(repo)
+        return True
+
+    monkeypatch.setattr(tasks, "_push_conflicts", conflict)
+    assert _refuses("git push")
+    assert _refuses("git push -u origin worktree-x")
+    assert probed == [None, None]  # plain pushes probe the cwd's checkout
+
+
+def test_pre_bash_hands_the_probe_a_dash_C_checkout(monkeypatch):
+    probed: list[str | None] = []
+
+    def conflict(repo):
+        probed.append(repo)
+        return True
+
+    monkeypatch.setattr(tasks, "_push_conflicts", conflict)
+    assert _refuses("git -C sub push")
+    assert probed == ["sub"]
+
+
+PUSH_EXEMPT = [
+    # Deletions, tags and main itself are not "publishing a stale branch".
+    "git push origin --delete worktree-x",
+    "git push -d origin worktree-x",
+    "git push --tags",
+    "git push origin main",
+    # Only the tag is pushed in the release flow.
+    "git push origin v0.31.0 --tags",
+    # A mention is not a push; a non-push git command is not this guard's.
+    'rg "git push" | cat',
+    "git pull",
+]
+
+
+@pytest.mark.parametrize("command", PUSH_EXEMPT)
+def test_pre_bash_exempts_what_is_not_a_stale_branch_publish(command, monkeypatch):
+    monkeypatch.setattr(tasks, "_push_conflicts", lambda repo: True)
+    assert not _refuses(command)
+
+
+def test_pre_bash_lets_a_clean_push_through(monkeypatch):
+    monkeypatch.setattr(tasks, "_push_conflicts", lambda repo: False)
+    assert not _refuses("git push -u origin worktree-x")
+
+
+def _scratch_git(repo, *args: str) -> str:
+    """Run git in the scratch repo, blind to the machine's own config — the
+    global config would sign every commit through 1Password."""
+    import os
+    import subprocess
+
+    done = subprocess.run(
+        ["git", "-C", str(repo), *args],
+        check=True,
+        capture_output=True,
+        text=True,
+        env={
+            **os.environ,
+            "GIT_CONFIG_GLOBAL": os.devnull,
+            "GIT_CONFIG_SYSTEM": os.devnull,
+            "GIT_AUTHOR_NAME": "t",
+            "GIT_AUTHOR_EMAIL": "t@t",
+            "GIT_COMMITTER_NAME": "t",
+            "GIT_COMMITTER_EMAIL": "t@t",
+        },
+    )
+    return done.stdout.strip()
+
+
+def test_the_probe_is_the_real_test_merge(tmp_path):
+    """`_push_conflicts` answers what GitHub's test-merge would: True only
+    when the branch genuinely conflicts with the last-seen origin/main.
+    The scratch repo has no remote, so the probe's fetch fails — covering
+    the fail-open path — and the ref answers, as an offline clone's would."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _scratch_git(repo, "init", "-q", "-b", "main")
+    (repo / "f.txt").write_text("base\n", encoding="utf-8")
+    _scratch_git(repo, "add", ".")
+    _scratch_git(repo, "commit", "-qm", "base")
+    _scratch_git(repo, "checkout", "-qb", "feature")
+    (repo / "f.txt").write_text("feature\n", encoding="utf-8")
+    _scratch_git(repo, "commit", "-aqm", "feature edit")
+    _scratch_git(repo, "checkout", "-q", "main")
+    (repo / "f.txt").write_text("moved\n", encoding="utf-8")
+    _scratch_git(repo, "commit", "-aqm", "main moved")
+    moved = _scratch_git(repo, "rev-parse", "main")
+    _scratch_git(repo, "update-ref", "refs/remotes/origin/main", moved)
+
+    _scratch_git(repo, "checkout", "-q", "feature")
+    assert tasks._push_conflicts(str(repo)) is True  # both edited f.txt
+
+    _scratch_git(repo, "checkout", "-q", "main")
+    assert tasks._push_conflicts(str(repo)) is False  # HEAD is origin/main
+
+
+def test_the_probe_stays_quiet_outside_its_jurisdiction(tmp_path):
+    """No origin/main to compare against — a scratch checkout, someone
+    else's clone — is not this guard's business: quiet, never a block."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _scratch_git(repo, "init", "-q", "-b", "main")
+    (repo / "f.txt").write_text("base\n", encoding="utf-8")
+    _scratch_git(repo, "add", ".")
+    _scratch_git(repo, "commit", "-qm", "base")
+    assert tasks._push_conflicts(str(repo)) is False
+
+
 def test_a_worktree_is_found_from_anywhere_inside_it(tmp_path):
     """A worktree's `.git` is a *file*, not a directory, so the test is
     `exists`. Getting that wrong sends every worktree's gate to the main
