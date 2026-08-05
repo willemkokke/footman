@@ -90,6 +90,48 @@ with plain `os.environ` rides into a raw `subprocess.Popen` child just as
 it would into `run()` — the child's copy is cut from the task's world, not
 the process's.
 
+## One variable, four hops
+
+Where an environment variable travels is easiest to see by following one
+all the way down. Say a task selects a test tier:
+
+<!-- example: fragment -->
+```python
+@task
+def gate():
+    os.environ["TIER"] = "smoke"     # hop 1: this task's overlay
+    run("pytest tests/fast")         # hop 2: the child sees TIER
+    instance_checks()                # hop 3: a nested task call
+```
+
+**Hop 1 — the task overlay.** The write scopes to `gate` and everything
+under it. Siblings running in parallel never see `TIER`; the process
+outside the run never does either.
+
+**Hop 2 — a `run()` child.** The child's environment is cut from the
+task's world, so `TIER` rides in. This is the hop most writes are aimed
+at, and for exactly one child the tighter spelling is
+`run(cmd, env={**os.environ, "TIER": "smoke"})` — scoped to the call, no
+overlay write at all.
+
+**Hop 3 — a nested task call.** `instance_checks()` gets its own context,
+and that context's environment is a **copy of the caller's** — overlay
+included. `TIER` flows down into the callee (writes never travel back
+up), and from the callee into everything *it* runs.
+
+**Hop 4 — the children of children.** If `instance_checks` runs pytest,
+and those tests spawn subprocesses of their own, plain OS inheritance
+carries `TIER` the rest of the way — footman is no longer involved, and
+nothing strips it.
+
+The bite is always the same shape: a variable aimed at hop 2 is still
+alive at hop 4, where some distant process changes behaviour on it — a
+test runner deselecting suites, a tool switching profiles. Flow-down
+never stops at a task boundary, so scope the write to match the reader:
+`env=` on the one call that needs it, or `ctx.env.pop("TIER", None)` /
+`del os.environ["TIER"]` before the nested call when the overlay was the
+right tool but the callee must not inherit it.
+
 ## The one rule
 
 **Environment flows down at spawn — say what a child should see with
