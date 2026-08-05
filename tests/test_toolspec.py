@@ -780,6 +780,28 @@ def test_list_installed_only_shows_what_is_present(capsys):
         assert "not installed" not in line
 
 
+def test_list_says_unreadable_when_a_present_tools_version_wont_read(
+    capsys, monkeypatch
+):
+    # Presence and readability are different facts: a tool that passes the
+    # installed filter but whose `--version` stalls must never render the
+    # false `not installed` — the contradiction two Windows CI slices caught
+    # in one minute when gh's spawn stalled past the probe timeout.
+    from footman import _drivers
+    from footman.tasks import tools as tools_tasks
+
+    monkeypatch.setattr(
+        _drivers, "_read_version", lambda name: ("", "timed out after 30s")
+    )
+    tools_tasks.list_(show="installed")
+    out = capsys.readouterr().out
+    body = out.splitlines()[1:]
+    assert body, "at least one tool is installed wherever the suite runs"
+    for line in body:
+        assert "not installed" not in line
+        assert "unreadable (timed out after 30s)" in line
+
+
 @needs_ruff
 def test_spec_prints_what_the_tool_says(capsys):
     from footman.tasks import tools as tools_tasks

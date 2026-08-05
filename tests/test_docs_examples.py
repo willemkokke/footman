@@ -249,7 +249,9 @@ def test_playground_module_evaluates(tmp_path: Path):
         [runtime, str(probe), str(DOCS / "assets" / "playground.js")],
         capture_output=True,
         text=True,
-        timeout=60,
+        # Generous on purpose: a loaded Windows CI runner has taken >60s to
+        # cold-start node and evaluate the module (the #295 merge-run flake).
+        timeout=120,
         check=False,
     )
     assert out.returncode == 0, out.stderr

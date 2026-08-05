@@ -521,6 +521,13 @@ def list_(
     Every curated tool is listed by default, absent ones included — the
     version column says `not installed`. `--show installed` narrows to what
     this machine can actually run, `--show missing` to what it can't.
+
+    A *present* tool whose version will not read is a different fact from an
+    absent one, and the column says which: `unreadable (timed out after
+    30s)`, never a false `not installed` — the CI contradiction that
+    conflation produced (a row both passing the installed filter and
+    claiming absence) is exactly what the diagnosis channel exists to
+    prevent.
     """
     on = wants_color(sys.stdout)
     rows: list[tuple[str, str, str, str]] = []
@@ -530,11 +537,14 @@ def list_(
             continue
         if show == "installed" and not here:
             continue
-        version = _drivers.version(driver.name) if here else ""
+        version = why = ""
+        if here:
+            version, why = _drivers._read_version(driver.name)
         capable = _drivers.in_process_capable(driver.name) if here else False
         mode = "in-process" if driver.in_process else ("capable" if capable else "—")
         stub = "yes" if _stub_path(driver.key).exists() else "no"
-        rows.append((driver.key, version or "not installed", mode, stub))
+        blank = f"unreadable ({why})" if here else "not installed"
+        rows.append((driver.key, version or blank, mode, stub))
     width = max((len(r[0]) for r in rows), default=4)
     print(bold(f"{'tool'.ljust(width)}  version      in-process  stub", on))
     for key, version, mode, stub in rows:
