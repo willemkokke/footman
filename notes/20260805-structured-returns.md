@@ -1,9 +1,9 @@
 # Structured returns — the return annotation becomes the output contract
 
-Status: DESIGN PASS, 2026-08-05; **rulings landed the same day** (see
-Decided) — six of seven calls closed, full-fat throughout, dialect
-included. The single open: the `pre=` aggregation question
-(re-explained below, awaiting the ruling). Nothing built.
+Status: DESIGN CLOSED, 2026-08-05 — **all seven calls ruled the same
+day the note opened**, full-fat throughout; the last (`pre=`
+aggregation: per-entry) landed 2026-08-05. No opens. Nothing built —
+the build awaits its order.
 Supersedes the 2026-07-22 working draft (which predated `Stdout[T]`, the
 `items[]` envelope, and the per-parameter annotation fallback);
 prioritised ahead of the tools-dist split (2026-08-05, Willem: "more
@@ -185,9 +185,9 @@ of the describe surface, and the producer-side check ships with it. The
   (notes/20260801-tools-namespace-package.md); v1's story is tasks
   returning their own types.
 
-## Open — the one remaining call
+## Decided last — `pre=` aggregation: per-entry (Willem, 2026-08-05)
 
-**`pre=` aggregation, re-explained.** Take `check` with
+**The question, as re-explained for the ruling.** Take `check` with
 `pre=[format, lint, test]`, where `test` returns a `PytestReport`.
 Today — and under everything decided above — the envelope carries **one
 entry per node**: `items[]` has a `test` row with its `returned` (and,
@@ -208,10 +208,13 @@ consumer reads one row instead of three. That would need one of:
   return value the body never wrote — receipts would claim data the
   task didn't produce).
 
-The 07-22 lean, still standing: **per-entry is enough.** The consumer
-already keys by task; aggregation duplicates every report inside the
-same envelope; and the automatic variant forges a return. The cost of
-per-entry is one `jq` hop. Rule it and this note has no opens left.
+**Ruled: per-entry.** No aggregation affordance, no automatic
+composition — a gate's row carries only what its body returned, the
+consumer keys `items[]` by task/address, and the cost is one `jq` hop.
+The two rejected mechanisms above stay rejected for the reasons given:
+a "collect my pre-results" parameter is new signature vocabulary
+nothing else needs, and automatic aggregation forges a return the body
+never wrote. This closed the note's last open.
 
 ## Not in scope
 
