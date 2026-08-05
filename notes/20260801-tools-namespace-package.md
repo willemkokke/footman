@@ -161,7 +161,9 @@ gives it one — see versioning). **Open**, with a lean to same-repo.
 ## Open questions (Willem's calls)
 
 1. Graft (A) vs shim (B) — pending the editable-install verification.
-2. Dist name: `footman-tools`?
+2. Dist name. Front runner (2026-08-05): **`toolroom`** — see the
+   naming sweep below; `footman-tools` demoted to fallback. Not yet
+   ruled.
 3. Same-repo workspace vs separate repo.
 4. Does the future standalone re-badge shape anything now, or is it
    explicitly out of scope?
@@ -219,3 +221,40 @@ stands on.
 - **`fm tools.restub` helps phase 3.** Every stub re-renders from the
   checked-in history — no tools, no network — so a separate dist's CI
   can regenerate after a renderer change without provisioning anything.
+
+## 2026-08-05 — naming sweep (question 2)
+
+The criterion, set against `footman` itself: a real word with a chance
+of being recognised straight away, explained in half a sentence. Two
+families tried; recording the sweep so it isn't redone.
+
+- **Household vocabulary is out.** livery, salver, tazza, dumbwaiter,
+  bootjack, whiteglove — all free on PyPI, all rejected: salver came
+  closest ("the tray a footman presents everything on") but nobody
+  gets it without investigating. equerry (free, checked 2026-08-01)
+  falls with them.
+- **PyPI is strip-mined of good single common words.** Taken:
+  quartermaster, toolsmith, jig, chuck, dovetail, wield, bridle, yoke,
+  veneer, splice, holster, loadout, kitbag, valet, toolbelt, toolbox,
+  toolchest, toolrack, toolshed — the last actively maintained ("Tools
+  for data", releases through 2026-02), so PEP 541 reclamation is off,
+  and Galaxy's Tool Shed owns the phrase in bioinformatics anyway.
+  hilt is free but Google's Android DI library of the same name owns
+  the search results.
+- **Free and plausible** (checked 2026-08-05): toolroom, toolcrib,
+  toolworks, toolstore, ironmonger(y), chandlery, outfitter,
+  shadowboard, sheath, handhold, pommel.
+
+**Front runner (Willem, 2026-08-05): `toolroom`.** The machine-shop
+sense covers all three lanes in one word — the toolroom is where
+precision tools are *made* (stubgen), *kept with their measurements*
+(store; calibration records are the provenance stamps), and *signed
+out for use* (bridge) — and "toolroom grade" already means
+highest-precision. Anyone parses tool+room on sight. Known collision,
+flagged when chosen: Toolroom Records, a UK dance label — zero domain
+overlap. Runners-up kept warm: toolcrib (the factory checkout cage —
+semantically the exact "tool store", clunkier word), shadowboard (the
+workshop board with a painted outline for every tool — the most exact
+stub metaphor, needs its explaining sentence). A real-word name rather
+than `footman-tools` presumes the standalone re-badge is wanted — this
+leans question 4 without ruling it. Question 2 stays open until ruled.
