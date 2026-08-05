@@ -360,6 +360,20 @@ today and must keep doing so; and `fm tools.*` is already
 entry-point-gated today, so skipping `plugin("toolroom")` costs
 exactly what skipping `plugin("footman.tools")` costs now.
 
+**Superseded the same evening, by production** (hse's portability
+sweep, fixed in toolroom 0.1.1): presence-keyed detection is
+process-wide — footman's pytest plugin auto-loads, so every call in a
+test process went hosted, and a truth-telling probe inside
+`recording()` would be faked into a cached wrong answer. Detection
+now keys on **orchestration**: a live footman context (task body,
+`parallel()` worker, `recording()` block). Bare calls take the
+standalone lane deterministically whatever the process imported;
+inside orchestration the routing cannot be bypassed; and harness
+infrastructure that must answer truthfully under `recording()` rides
+`.opts(recorded=False)` — the value-read lane executes where a story
+step is faked. The clarification above stays as the record of the
+step in between.
+
 This plan is now fully ruled except **question 7 — the
 Argv/vocabulary home** — plus two logistics residuals in the sibling
 plan (subtree export vs clean start; refresh auto-tags vs human).
