@@ -168,3 +168,54 @@ gives it one — see versioning). **Open**, with a lean to same-repo.
 5. Do the machinery modules move in phase 2 or stay dev-side?
 6. Two-dist release choreography: tag scheme, and whether the weekly
    refresh auto-releases footman-tools or keeps opening PRs.
+7. Where does `Argv` live after a split? (New with v0.30.0 — see the
+   review below.)
+
+## 2026-08-05 review — what v0.30.0 moved under this plan
+
+Scope of this section: the note updates, nothing builds; the open calls
+above stay open. `.argv` (notes/20260803-tool-command-lines.md) landed
+between the plan and now, and it touched exactly the ground this plan
+stands on.
+
+- **The construction lane grew a whole surface with zero executor
+  involvement.** `.argv` — a property on every tool and verb — builds an
+  `Argv` of raw tokens and answers before anything execution-shaped is
+  reached; `ArgvTool.__call__` never approaches the seam. In that
+  direction the split got *easier*: the build path is portable by
+  construction, and it is the surface a standalone re-badge would lead
+  with.
+- **But `Argv` sits on the execution side of the import graph.**
+  `context.py` defines it (deliberately beside `Result`: `run()` accepts
+  one, `Result.to_argv()` returns one) and the bridge imports it. After a
+  split it is shared vocabulary — the bridge mints it, footman consumes
+  it and mints it again from receipts. Three homes on offer: the tools
+  dist owns it and footman imports it back (inverting the one-way
+  dependency this plan keeps), footman keeps it and the seam grows an
+  `ArgvLike` protocol beside `ResultLike`, or a tiny shared-vocabulary
+  module both depend on. That is open question 7. `container_error` (the
+  container-refusal wording `run()` and the bridge share) is the same
+  shape in miniature and lands wherever Argv does.
+- **`ResultLike` needs the token tuple.** `Result.to_argv()` re-quotes
+  the executed argv from tokens threaded through `Result` construction;
+  if the seam's contract doesn't name that field, receipts lose
+  `to_argv()` across the split.
+- **The generated stubs' anchor import changed.** Verb classes are now
+  generic over what a call returns (`class Build(_Tool[_R2])`), so no
+  generated stub names `Result` at all — the anchors are
+  `Argv as _Argv` and `Tool as _Tool` plus the flag aliases. The
+  "what moves" items citing the `Result` anchor should read Argv/Tool.
+- **The hand stub imports `typing_extensions`** (PEP 696 `TypeVar`
+  default, so a bare `Tool` means `Tool[Result]` in all four checkers).
+  Stub-only — never imported at runtime, checkers bundle it — so the
+  "footman-tools: stdlib-only" line stays true at runtime and gains this
+  footnote.
+- **Inventory drift.** The bridge is 1,099 lines (was 868), the hand stub
+  277 (was 219). The module-level context imports are nine: `Argv`,
+  `Invocation`, `Result`, `_target_cwd`, `color_on`, `container_error`,
+  `current`, `real_stderr`, `run` — two newcomers (`Argv`,
+  `container_error`), and the fmt-era names came and went inside #297
+  without ever landing.
+- **`fm tools.restub` helps phase 3.** Every stub re-renders from the
+  checked-in history — no tools, no network — so a separate dist's CI
+  can regenerate after a renderer change without provisioning anything.
