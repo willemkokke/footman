@@ -7,6 +7,8 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+## [0.30.0] - 2026-08-05
+
 ### Added
 
 - **`lane_waits` in the `--json` report.** A task row whose lane claim
@@ -3664,7 +3666,8 @@ versions may include breaking changes.
 
 - Placeholder release claiming the `footman` name on PyPI. Not tagged in git.
 
-[Unreleased]: https://github.com/willemkokke/footman/compare/v0.29.1...HEAD
+[Unreleased]: https://github.com/willemkokke/footman/compare/v0.30.0...HEAD
+[0.30.0]: https://github.com/willemkokke/footman/compare/v0.29.1...v0.30.0
 [0.29.1]: https://github.com/willemkokke/footman/compare/v0.29.0...v0.29.1
 [0.29.0]: https://github.com/willemkokke/footman/compare/v0.28.1...v0.29.0
 [0.28.1]: https://github.com/willemkokke/footman/compare/v0.28.0...v0.28.1
