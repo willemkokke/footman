@@ -43,7 +43,8 @@ _GLOBALS = frozenset(
     {
         "--help", "-h", "--version", "-V", "--list", "-l", "--tree", "--sort",
         "--all", "-a",
-        "--where", "--plugins", "--dry-run", "-n", "--keep-going", "-k",
+        "--where", "--describe", "--plugins", "--dry-run", "-n",
+        "--keep-going", "-k",
         "--fail-fast", "--sequential", "-s", "--jobs", "-j", "--yes", "-y",
         "--no-input", "--quiet", "-q", "--verbose", "-v", "--color",
         "--no-color", "--no-progress", "--json", "--timings",

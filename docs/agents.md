@@ -27,14 +27,17 @@ it must exit 0.
 
 - Discover: `fm --list` (tasks + descriptions), or `fm --json --list`
   for the full tree with parameter types, choices, and defaults.
+- Contracts: `fm --describe` — the whole input+output API as one JSON
+  document, return shapes rendered as JSON Schema; `fm --describe=<task>`
+  for one task. Nothing runs.
 - Inspect: `fm --help <task>` — typed usage, options, and an example.
   `--help` anywhere on the line never executes anything.
 - Validate a command line: `fm --json --dry-run <chain>` — a typo refuses with exit 64; a valid chain rehearses (bodies run, footman's recorded work is faked) and answers in the items envelope.
 - Run for machines: `fm --json <chain>` — stdout is exactly one JSON
   envelope: {"schema": 1, "total_ms", "items": [{task, ok, code,
   duration_ms, output, steps, error, returned}]}. A task's return value
-  lands in `returned`; refusals put a taught message in a top-level
-  `error`.
+  lands in `returned`, its declared shape beside it as `returned_schema`;
+  refusals put a taught message in a top-level `error`.
 - Jump to a task's source: `fm --where <task>` prints file:line.
 
 Grammar: globals (`--json`, `-k`, …) go **before** the first task; a

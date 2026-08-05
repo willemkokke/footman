@@ -22,12 +22,17 @@ Parameter mapping (function signature -> CLI shape):
 from __future__ import annotations
 
 import dataclasses
+import datetime
+import decimal
+import enum
 import hashlib
 import inspect
 import json
 import os
+import typing
+import uuid
 import warnings
-from pathlib import Path
+from pathlib import Path, PurePath
 from typing import Any
 
 from footman import _binder, _coerce, _describe, _discover, _paths, docstrings, registry
@@ -418,6 +423,201 @@ def _marker_keys(
             spec["stdin"] = "text"
 
 
+class _Undescribable(Exception):
+    """Internal: a return annotation outside the describable set. Never a user
+    error — "describable" ⊆ "returnable", so the caller degrades to no spec."""
+
+
+def returned_spec(ann: Any) -> dict[str, Any] | None:
+    """The output spec a return annotation declares, or None for no claims.
+
+    The mirror of `param_spec` for the *output* side: the annotation is the
+    declaration, and the describable set is exactly what
+    `_describe.json_default` serialises — dataclasses (nested), TypedDict,
+    NamedTuple, `list`/`tuple[T, ...]`/`set`/`dict[str, …]`, the scalar
+    bridge types, `Literal`/`Enum` as choices, `T | None` as nullable. The
+    spec is footman's own compact shape (one vocabulary with the param
+    specs); `_describe.returns_json_schema` renders it as JSON Schema at the
+    describe door.
+
+    An annotation outside the set — a broken string, a wider union, an
+    exotic generic — yields `None`, never an error: the task still runs and
+    its value still serialises (or refuses) at runtime exactly as before, it
+    just makes no claims. Bare `int` is the exit-code channel, not data, so
+    it too declares nothing; `Stdout[T]` describes `T` — the document and
+    the returned value are one declaration.
+    """
+    if ann is inspect.Parameter.empty or ann is None or ann is type(None):
+        return None
+    # `emitted` fully normalises (Annotated *and* Optional stripped) — the
+    # right view for the bare-int test, where `int | None` is still the
+    # exit-code channel. The walk below gets the *original* annotation:
+    # it strips Annotated itself, so `Report | None` keeps its nullability.
+    _, flat = _coerce.emitted(ann)
+    if flat is int or flat is Any or flat is object:
+        return None  # exit-code channel / no claims — a schema would lie
+    try:
+        return _returned_of(ann, ())
+    except _Undescribable:
+        return None
+
+
+_RETURN_SCALARS: list[tuple[type, str]] = [
+    # Order matters where the types nest: datetime before date (a datetime
+    # *is* a date), bool before int (checked via `is`, so moot, but kept
+    # explicit in `_returned_of` below).
+    (datetime.datetime, "datetime"),
+    (datetime.date, "date"),
+    (datetime.time, "time"),
+    (uuid.UUID, "uuid"),
+    (decimal.Decimal, "decimal"),
+    (PurePath, "path"),
+]
+
+
+def _returned_of(ann: Any, seen: tuple[Any, ...]) -> dict[str, Any]:
+    """One node of the output spec — recursive, raising on the undescribable."""
+    while typing.get_origin(ann) is typing.Annotated:
+        # Markers (`Stdout`, a doc) never change the shape; unions survive.
+        ann = typing.get_args(ann)[0]
+    if ann is Any or ann is object:
+        return {"kind": "any"}  # a real "no claims here" inside a container
+    if ann is type(None):
+        return {"kind": "none"}
+    if _coerce._is_union(ann):
+        # T | None is nullable; a wider union has no json_default story to
+        # mirror, so it makes no claims at all rather than partial ones.
+        members = _coerce.union_members(ann)
+        if len(members) != 1:
+            raise _Undescribable
+        spec = _returned_of(members[0], seen)
+        spec["nullable"] = True
+        return spec
+    if typing.get_origin(ann) is typing.Literal:
+        values: list[Any] = []
+        nullable = False
+        for value in typing.get_args(ann):
+            if value is None:
+                nullable = True
+                continue
+            ok, encoded = _describe.jsonable(value)
+            if not ok:
+                raise _Undescribable
+            values.append(encoded)
+        if not values:
+            raise _Undescribable
+        literal: dict[str, Any] = {"kind": "enum", "values": values}
+        if nullable:
+            literal["nullable"] = True
+        return literal
+    if isinstance(ann, type) and issubclass(ann, enum.Enum):
+        if not len(ann):
+            raise _Undescribable  # an empty Enum has no values to claim
+        choices: list[Any] = []
+        for member in ann:
+            ok, encoded = _describe.jsonable(member)  # Enum → .value
+            if not ok:
+                raise _Undescribable
+            choices.append(encoded)
+        return {"kind": "enum", "name": ann.__name__, "values": choices}
+    if ann is bool:
+        return {"kind": "bool"}
+    if ann is int:
+        return {"kind": "int"}
+    if ann is float:
+        return {"kind": "float"}
+    if ann is str:
+        return {"kind": "str"}
+    if isinstance(ann, type):
+        for base, kind in _RETURN_SCALARS:
+            if issubclass(ann, base):
+                return {"kind": kind}
+    origin = typing.get_origin(ann)
+    if ann in (list, set, frozenset) or origin in (list, set, frozenset):
+        args = typing.get_args(ann)
+        element = args[0] if args else Any
+        return {"kind": "list", "items": _returned_of(element, seen)}
+    if origin is tuple:
+        args = typing.get_args(ann)
+        if len(args) == 2 and args[1] is Ellipsis:
+            return {"kind": "list", "items": _returned_of(args[0], seen)}
+        raise _Undescribable  # a heterogeneous tuple has no named positions
+    if ann is dict or origin is dict:
+        args = typing.get_args(ann)
+        if not args:
+            return {"kind": "object"}  # no field claims
+        key, value = args
+        if key is not str:
+            raise _Undescribable  # JSON object keys are strings
+        if value is Any or value is object:
+            return {"kind": "object"}
+        return {"kind": "map", "values": _returned_of(value, seen)}
+    if typing.is_typeddict(ann):
+        return _returned_fields(ann, seen, kind="object", typeddict=True)
+    if dataclasses.is_dataclass(ann) and isinstance(ann, type):
+        # Every dataclass field serialises (`asdict` has no optionality).
+        return _returned_fields(ann, seen, kind="object")
+    if isinstance(ann, type) and issubclass(ann, tuple) and hasattr(ann, "_fields"):
+        # A NamedTuple serialises as a JSON *array* (it is a tuple); "row"
+        # keeps that honest — named positions, not an object.
+        return _returned_fields(ann, seen, kind="row")
+    raise _Undescribable
+
+
+def _returned_fields(
+    cls: Any,
+    seen: tuple[Any, ...],
+    *,
+    kind: str,
+    typeddict: bool = False,
+) -> dict[str, Any]:
+    """An `object`/`row` spec for a dataclass, TypedDict, or NamedTuple.
+
+    Fields ride as a name-keyed mapping in declaration order (for a "row"
+    the order *is* the positions). A recursive shape has no finite spec to
+    bake, so re-entering a class under description bails the whole
+    annotation out to "no claims"."""
+    if any(cls is s for s in seen):
+        raise _Undescribable
+    # Read the class-level facts before any `is_dataclass` narrowing below
+    # can convince a type-checker `cls` no longer has them.
+    class_name = str(getattr(cls, "__name__", cls))
+    total = bool(getattr(cls, "__total__", True))
+    try:
+        # `include_extras` keeps `Required`/`NotRequired` visible: under
+        # `from __future__ import annotations` a TypedDict's own
+        # `__required_keys__` cannot see through the string forms, but the
+        # resolved wrappers can't lie.
+        hints = typing.get_type_hints(cls, include_extras=True)
+    except Exception as exc:
+        raise _Undescribable from exc  # a name in a field didn't resolve
+    if dataclasses.is_dataclass(cls):
+        names = [f.name for f in dataclasses.fields(cls)]
+    elif kind == "row":
+        names = list(cls._fields)
+    else:
+        names = list(hints)
+    fields: dict[str, Any] = {}
+    for name in names:
+        hint = hints[name]
+        required = True
+        if typeddict:
+            origin = typing.get_origin(hint)
+            if origin is typing.Required:
+                hint = typing.get_args(hint)[0]
+            elif origin is typing.NotRequired:
+                hint, required = typing.get_args(hint)[0], False
+            else:
+                required = total
+        spec = _returned_of(hint, (*seen, cls))
+        if not required:
+            spec["required"] = False
+        fields[name] = spec
+    if not fields:
+        raise _Undescribable  # a fieldless shape claims nothing worth baking
+    return {"kind": kind, "name": class_name, "fields": fields}
+
+
 def _run_completer(completer: suggest, memo: dict[int, list[str]]) -> list[str]:
     """Call a completer at most once per build (deduped by function identity).
 
@@ -546,6 +746,13 @@ def _task_node(fn: Any, memo: dict[int, list[str]]) -> dict[str, Any]:
                 f"stdout belongs to its return value. Drop one."
             )
         node["emits"] = True  # additive: this task's stdout is its return value
+    if (returned := returned_spec(sig.return_annotation)) is not None:
+        # Additive: the output contract the return annotation declares —
+        # static, so it bakes beside the param specs and every surface
+        # (envelope, --describe, help, docs) reads the same shape.
+        node["returned"] = returned
+    if parsed.returns:
+        node["returned_doc"] = parsed.returns  # additive: what the value means
     if infinite:
         node["infinite"] = True  # additive: listings and help say how it ends
     if interactive:

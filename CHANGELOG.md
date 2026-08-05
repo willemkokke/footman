@@ -9,6 +9,34 @@ versions may include breaking changes.
 
 ### Added
 
+- **Structured returns: the return annotation is the output contract.**
+  A task declaring `-> Affected` (a dataclass, `TypedDict`, `NamedTuple`,
+  container, `Literal`/`Enum`, scalar bridge type, or `T | None` of those)
+  gets an output schema derived from the annotation — no decorator, no
+  schema language — baked into the manifest beside the param specs. An
+  annotation outside the set declares nothing and changes nothing:
+  "describable" is a subset of "returnable", never a new gate. Bare `int`
+  stays the exit-code channel; `Stdout[T]` describes `T`.
+- **`returned_schema` and `returned_mismatch` in the `--json` envelope.**
+  A declaring task's entry carries its schema (footman's compact native
+  form) beside `returned` — data and how to read it, one call — and every
+  reported value is walked against the declared shape: a break (renamed
+  key, wrong type, undeclared extra) warns on stderr in every mode and
+  rides the entry as a `returned_mismatch` note naming the first broken
+  path. Loud but local, like `returned_error`: the value still serialises
+  and the exit code never moves. Additive to schema 1.
+- **`fm --describe[=TASK]` — the contract without a run.** One JSON
+  document with every task's params and its return shape rendered as JSON
+  Schema (2020-12), plus the docstring's `Returns:` prose. Sorted by
+  address, hidden tasks included and marked, dynamic completer choices
+  dropped — built for checking into a consuming repo and diffing in CI,
+  so a producer-side rename becomes a visible diff at integration time.
+  The rendered schema is contract, not presentation.
+- **`Returns:` docstring sections join the surface.** Google, NumPy, and
+  Sphinx `Returns:` prose is parsed (`footman.docstrings` grows a
+  `returns` field), baked as `returned_doc`, shown by `--help` on a
+  `returns:` line beside the declared shape, and rendered by the markdown
+  exporter with a field table on task pages.
 - **The `footman.profile` plugin — a run as a profiler trace.** Pull
   `plugin("footman.profile")` and `fm --profile check` writes the run as
   Chrome Trace Event JSON (`--profile=FILE` names it; bare `--profile`

@@ -131,6 +131,126 @@ In tests, the same value is `Runner.invoke(...).results[n].returned` — see
 [Testing your tasks](testing.md). Without `--json`, return values are
 simply ignored — unless the task claims stdout, below.
 
+## The declared shape: `returned_schema`
+
+The return *annotation* is the output contract, the same way a typed
+signature is the input contract — no decorator, no schema language:
+
+```python
+from dataclasses import dataclass
+from footman import task
+
+@dataclass
+class Affected:
+    tasks: list[str]
+    reason: str
+    since: str
+
+@task
+def affected() -> Affected:
+    """The tasks a change reaches.
+
+    Returns:
+        Which tasks the change reaches, and why.
+    """
+    ...
+```
+
+A declaring task's entry carries `returned_schema` beside `returned` —
+data and how to read it, one call — in footman's own compact shape (the
+same vocabulary the catalog speaks; `--describe`, below, renders standard
+JSON Schema):
+
+```console
+$ fm --json affected | jq '.items[0].returned_schema'
+{
+  "kind": "object",
+  "name": "Affected",
+  "fields": {
+    "tasks": {"kind": "list", "items": {"kind": "str"}},
+    "reason": {"kind": "str"},
+    "since": {"kind": "str"}
+  }
+}
+```
+
+The describable set is exactly the serialisable set above, recursively:
+dataclasses (nested), `TypedDict` (`NotRequired` fields marked),
+`NamedTuple` (described as a `row` — it serialises as an *array*),
+`list`/`tuple[T, ...]`/`set`/`dict[str, T]`, `Path`, `Enum` and `Literal`
+as choices, `datetime`/`date`/`time`, `UUID`, `Decimal`, and `T | None` as
+nullable. `dict[str, Any]` describes as an object with no field claims.
+An annotation *outside* the set — a wider union, an exotic generic, a
+broken name — simply declares nothing: the task runs and serialises
+exactly as it always did. "Describable" is a subset of "returnable",
+never a new gate. Bare `int` stays the exit-code channel, so it declares
+nothing either; `Stdout[T]` describes `T` — one declaration, two doors.
+
+Declaring buys **drift protection** on both sides of a repo boundary:
+
+- **Producer side.** Every reported value with a declared shape is walked
+  against it at the boundary. A break — a renamed key, a wrong type, an
+  undeclared extra — warns on stderr in every mode and rides the entry as
+  a `returned_mismatch` note naming the first broken path
+  (`"returned.tasks[1]: expected text, got int"`). Like `returned_error`,
+  it is loud but local: the value still serialises and the exit code never
+  moves. The rename goes red in your own gate, before any consumer
+  integrates.
+- **Consumer side.** Check the [`--describe`](#the-contract-without-a-run-describe)
+  output into the consuming repo and diff it in CI — a contract change
+  becomes a visible diff at integration time, replacing the hand-written
+  key-pinning test you never write again.
+
+The docstring's `Returns:` section (Google, NumPy, or Sphinx style) rides
+beside the schema as `returned_doc` in the manifest — `--help` shows it on
+a `returns:` line, and [task docs pages](taskdocs.md) render the fields.
+
+## The contract without a run: `--describe`
+
+`fm --describe` prints the whole tree's input+output API as one JSON
+document, without running anything — every task's parameters (the same
+specs the catalog bakes) and its declared return shape rendered as **JSON
+Schema** (2020-12 vocabulary), with the `Returns:` prose beside it.
+`fm --describe=docs.build` answers for one task (a runnable group's
+address answers with its default action). Plain JSON on stdout either
+way, like `--where`: the output already is the machine format.
+
+```console
+$ fm --describe=affected
+{
+  "schema": 1,
+  "tasks": [
+    {
+      "task": "affected",
+      "help": "The tasks a change reaches.",
+      "params": [],
+      "returns": {
+        "schema": {
+          "title": "Affected",
+          "type": "object",
+          "properties": {
+            "tasks": {"type": "array", "items": {"type": "string"}},
+            "reason": {"type": "string"},
+            "since": {"type": "string"}
+          },
+          "additionalProperties": false,
+          "required": ["tasks", "reason", "since"]
+        },
+        "doc": "Which tasks the change reaches, and why."
+      }
+    }
+  ]
+}
+```
+
+The document is built for pinning: tasks sort by address (invariant to
+declaration order), hidden tasks are included and marked (`"hidden":
+true` — a machine is exactly who calls them), availability is left out
+(it varies per machine), and a dynamic completer's baked choices are
+dropped from the params (runtime data, not contract). The rendered
+schema is itself **contract, not presentation** — snapshots pin it, so a
+rendering change is envelope-grade and belongs in the changelog.
+
 ## The document on stdout: `Stdout[T]`
 
 A task can declare that its return value *is* the document on stdout, in
@@ -306,6 +426,14 @@ Pull one task's data out of a pipeline:
 
 ```sh
 fm --json coverage | jq -r '.items[] | select(.task == "coverage").returned.percent'
+```
+
+Pin a producer's contract from a consuming repo — the snapshot is the
+version pin, and a rename over there becomes a visible diff over here:
+
+```sh
+fm --describe > tests/producer-contract.json   # once, checked in
+fm --describe | diff tests/producer-contract.json -   # in CI
 ```
 
 ## Stability
