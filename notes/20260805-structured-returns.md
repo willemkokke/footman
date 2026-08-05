@@ -1,11 +1,13 @@
 # Structured returns — the return annotation becomes the output contract
 
-Status: DESIGN PASS, 2026-08-05 — nothing built, every decision below
-marked **open** awaits Willem's call. Supersedes the 2026-07-22 working
-draft (which predated `Stdout[T]`, the `items[]` envelope, and the
-per-parameter annotation fallback); prioritised ahead of the tools-dist
-split (2026-08-05, Willem: "more utility than a separate tools library,
-though I still want that too").
+Status: DESIGN PASS, 2026-08-05; **rulings landed the same day** (see
+Decided) — five of seven calls closed, full-fat throughout. Still open:
+the `pre=` aggregation question (re-explained below, awaiting the
+ruling) and a nod on the dialect reading under call 1. Nothing built.
+Supersedes the 2026-07-22 working draft (which predated `Stdout[T]`, the
+`items[]` envelope, and the per-parameter annotation fallback);
+prioritised ahead of the tools-dist split (2026-08-05, Willem: "more
+utility than a separate tools library, though I still want that too").
 
 ## The ask, and who is asking
 
@@ -114,13 +116,15 @@ Two mechanisms, not exclusive:
   loud-but-local note (`returned_mismatch`, same family as
   `returned_error`) — the rename goes red in the *producer's* own gate,
   before any consumer integrates. The 07-22 draft ruled runtime
-  validation out; hse's cross-repo pain is the new fact that reopens it.
-  Cost: a recursive walk of the returned value per declaring task, paid
-  only by tasks that declare. Never an exit-code change — a payload
-  problem stays a note, per the existing rule.
+  validation out; hse's cross-repo pain is the new fact that reopened
+  it. Cost: a recursive walk of the returned value per declaring task,
+  paid only by tasks that declare — measured at ~34 µs for a 158-node
+  report. Never an exit-code change — a payload problem stays a note,
+  per the existing rule.
 
-Lean: snapshot-first (it is free once describe exists), producer-side
-check as a fast follow if silent breaks survive in practice. **Open.**
+**Decided (Willem, 2026-08-05): both, in v1** — the snapshot falls out
+of the describe surface, and the producer-side check ships with it. The
+07-22 no-runtime-validation ruling is formally overturned.
 
 ## Where it plugs in
 
@@ -139,41 +143,66 @@ check as a fast follow if silent breaks survive in practice. **Open.**
 - Zero runtime deps throughout: stdlib `dataclasses`/`typing`
   introspection, never pydantic.
 
-## Open calls — awaiting rulings
+## Decided (Willem, 2026-08-05)
 
-1. **Schema dialect.** (a) footman-native, shaped like the param specs
-   (consistent: inputs and outputs described in one vocabulary, compact
-   in the manifest); (b) standard JSON Schema (ecosystem validators work
-   out of the box — hse could `jsonschema.validate` a payload today);
-   (c) native in the manifest, JSON Schema *rendered* on request by the
-   describe surface. Lean: (c) — bake once compactly, respell at the
-   door that wants interop.
-2. **The describe spelling and scope.** A global (`fm --describe task`),
-   task-suffixed, or both; and whether a bare `fm --describe` dumps the
-   whole tree's input+output contract — the "hand an agent the entire
-   API" move, which is just a manifest walk. Lean: whole-tree allowed;
-   it is the version hse's snapshot wants anyway.
-3. **Drift protection.** Snapshot-only in v1, or producer-side
-   `returned_mismatch` too (the reopened 07-22 ruling — see above).
-4. **The describable-set edges.** `TypedDict`/`NamedTuple`: both
-   serialise today (they are dicts/tuples at runtime) — describe them
-   in v1 or start dataclass-only and widen? Plain `dict[str, Any]`
-   returns: schema as `object`, or no schema? Lean: dataclass +
-   scalars + containers in v1; `TypedDict` next; bare `dict` gets
-   `object` and no field claims.
-5. **`returned_doc`.** The 07-22 MVP (docstring `Returns:` surfaced as
-   prose) is no longer the point — hse wants keys, not prose — but it
-   is cheap garnish beside the schema. In v1 or dropped?
-6. **`pre=` aggregation.** Carried over, with the 07-22 lean intact:
-   per-entry reading is enough, the consumer keys by task/address —
-   `check` composing its prerequisites' reports needs a body and buys
-   little. Confirm the lean so it stops being open.
-7. **Adapters stay out.** The 07-22 draft's first-party adapter library
-   (pytest/ruff reports as dataclasses) and the "tools-bridge `report()`
-   verb" idea both defer — hse returns its *own* dataclasses, which is
-   the v1 story. The adapter question then lands naturally in the
-   tools-dist thread (notes/20260801-tools-namespace-package.md), where
-   `report()`-shaped verbs would live. Confirm deferral.
+- **Performance (was call 1's worry): measured, not a bottleneck, and
+  cached by construction.** Generation runs at *manifest build* — the
+  artifact that already rebuilds only when the tree hash moves, which is
+  the "most schemas rarely change" instinct, mechanized. Micro-bench on
+  a nested two-level report dataclass: **~25 µs to generate a schema**,
+  **~400 bytes compact** per declaring task (fifty declaring tasks ≈
+  +20 KB on an ~8 KB manifest — sub-millisecond extra TAB parse), and
+  **~34 µs** for the producer-side validation walk of a 158-node value,
+  per run, only for declaring tasks. Binding follow-up: re-measure on
+  the real tree when the generator exists; if a tree ever carries
+  hundreds of declaring tasks, schemas can move to a sibling baked file
+  the completion hot path never reads — an escape hatch, not the plan.
+  Dialect stays as the lean unless vetoed: native shape baked in the
+  manifest, standard JSON Schema *rendered* at the describe door.
+- **Describe scope (2): as leaned.** Whole-tree contract dump allowed —
+  bare `--describe` hands an agent the entire input+output API; it is
+  also the file hse's snapshot pins.
+- **Drift protection (3): full fat.** Snapshot *and* producer-side
+  `returned_mismatch` in v1 (see above).
+- **Describable set (4): full fat.** Dataclasses (nested), `TypedDict`,
+  `NamedTuple`, the scalar bridge types, containers, `Literal`,
+  `T | None` — the whole `json_default` mirror in v1. Bare
+  `dict[str, Any]` describes as `object` with no field claims.
+- **`returned_doc` (5): full fat.** The docstring `Returns:` prose ships
+  beside the schema.
+- **Adapters (7): deferral confirmed.** First-party adapters and the
+  `report()`-verb idea live in the tools-dist thread
+  (notes/20260801-tools-namespace-package.md); v1's story is tasks
+  returning their own types.
+
+## Open — the one remaining call
+
+**`pre=` aggregation, re-explained.** Take `check` with
+`pre=[format, lint, test]`, where `test` returns a `PytestReport`.
+Today — and under everything decided above — the envelope carries **one
+entry per node**: `items[]` has a `test` row with its `returned` (and,
+now, its `returned_schema`), a `lint` row, and a `check` row whose own
+`returned` is whatever `check`'s body returns (usually nothing — `check`
+is typically an empty gate). A consumer who wants the test report keys
+`items[]` by task/address and reads it off the `test` row directly.
+
+The question is whether `check` should additionally *compose* its
+prerequisites' reports into its own row — something like
+`check.returned = {"test": <PytestReport>, "lint": <RuffReport>}` — so a
+consumer reads one row instead of three. That would need one of:
+
+- an affordance for a gate's body to receive its prerequisites' returns
+  (a "collect my pre-results" parameter — new machinery, new signature
+  vocabulary), or
+- automatic aggregation for empty-bodied gates (footman inventing a
+  return value the body never wrote — receipts would claim data the
+  task didn't produce).
+
+The 07-22 lean, still standing: **per-entry is enough.** The consumer
+already keys by task; aggregation duplicates every report inside the
+same envelope; and the automatic variant forges a return. The cost of
+per-entry is one `jq` hop. Rule it and this note has no opens left
+(besides the dialect nod under Decided).
 
 ## Not in scope
 
