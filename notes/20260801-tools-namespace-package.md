@@ -413,3 +413,9 @@ ruled later the same day — clean start, and a three-mode configurable
 release trigger shipping human-in-the-loop first; see the sibling
 plan. Nothing in either plan remains open; the next act is the build
 order.)
+
+Related thread, same day: the recording failure-injection request's
+interaction with this split — analysed and kept in
+[20260805-recording-failure-injection.md](20260805-recording-failure-injection.md)
+(verdict: lands footman-side, ideally pre-split; detection and
+seam-speaks-stdlib both hold under it).
