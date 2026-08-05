@@ -26,9 +26,13 @@ import re as _re
 import subprocess as _subprocess  # noqa: F401
 import sys as _sys  # noqa: F401
 import threading as _threading
+import types as _types  # noqa: F401
 from collections.abc import Callable, Iterator, Sequence
 from pathlib import Path as _Path
-from typing import Any, NamedTuple, Self
+from typing import Any, Generic, NamedTuple, Self
+from typing import cast as _cast  # noqa: F401
+
+from typing_extensions import TypeVar
 
 from footman._stubs.basedpyright import Basedpyright as Basedpyright
 
@@ -69,11 +73,13 @@ from footman._stubs.ty import Ty as Ty
 from footman._stubs.uv import Uv as Uv
 from footman._stubs.zensical import Zensical as Zensical
 from footman._stubs.zsh import Zsh as Zsh
+from footman.context import Argv as Argv
 from footman.context import Invocation as _Invocation  # noqa: F401
 from footman.context import Result as Result
 from footman.context import ResultView as _ResultView
 from footman.context import _target_cwd as _target_cwd_of  # noqa: F401
 from footman.context import color_on as _color_on  # noqa: F401
+from footman.context import container_error as _container_error  # noqa: F401
 from footman.context import current as _current  # noqa: F401
 from footman.context import real_stderr as _real_stderr  # noqa: F401
 from footman.context import run as _run  # noqa: F401
@@ -149,7 +155,23 @@ _TOOL_OPTS: tuple[str, ...]
 
 def _opts_overrides(kwargs: dict[str, Any]) -> dict[str, Any]: ...
 
-class Tool:
+_CONTAINERS: tuple[type, ...]
+
+def _positionals(args: tuple[Any, ...], tool: str) -> list[str]: ...
+
+# `default=` (PEP 696) is why a bare `Tool(...)` construction and a bare
+# `Tool` annotation both mean `Tool[Result]` in every checker — running is
+# the default, `.argv` is how `Tool[Argv]` arises. `typing_extensions` in a
+# stub costs no runtime dependency: a .pyi is never imported.
+_R = TypeVar("_R", default=Result)
+
+# Generic over what a call returns. Every binding below fixes it to
+# `Result`; `.argv` answers with the same surface over `Argv`. Making the
+# parameter live on the *base* is what keeps every generated override —
+# `__call__` returning its class TypeVar, `argv` re-parameterising — a
+# plain covariant override rather than a Liskov violation needing
+# suppression in four type checkers.
+class Tool(Generic[_R]):
     _argv0: str
     _base: list[str]
     _prefer_in_process: bool
@@ -167,7 +189,7 @@ class Tool:
         version_argv: tuple[str, ...] = ...,
         policy: dict[str, Any] | None = None,
     ) -> None: ...
-    def __getattr__(self, verb: str) -> Tool: ...
+    def __getattr__(self, verb: str) -> Tool[_R]: ...
     # footman run-control policy — a closed vocabulary that rides beside the
     # call (never a tool flag). Returns Self, so a generated tool keeps its verb
     # completions: `git.opts(nofail=True).push()`.
@@ -196,43 +218,60 @@ class Tool:
     # tool's typed globals; the base takes any flag.
     def at(self, path: str | _Path) -> Self: ...
     def flags(self, **flags: Any) -> Self: ...
-    def __call__(self, *args: Any, **flags: Any) -> Result: ...
+    # Build this call's command line instead of running it — `.argv` slots in
+    # right before the parentheses. Generated stubs override it with the
+    # tool's own class re-parameterised to return `Argv` (a covariant
+    # narrowing, since every generated class derives from `Tool[_R]`), so a
+    # built call keeps its flag checking; the base answers with the untyped
+    # handle, whose calls all return `Argv`.
+    @property
+    def argv(self) -> Tool[Argv]: ...
+    def __call__(self, *args: Any, **flags: Any) -> _R: ...
     def installed_version(self) -> tuple[int, ...]: ...
 
-ruff: Ruff
-ruff_format: RuffFormat
-basedpyright: Basedpyright
-uv: Uv
-git: Git
-docker: Docker
-bun: Bun
-mkdocs: Mkdocs
-zensical: Zensical
-coverage: Coverage
-cspell: Cspell
-prek: Prek
-markdownlint: Markdownlint
-gh: Gh
-ssh: Ssh
-ssh_keygen: SshKeygen
-ssh_keyscan: SshKeyscan
-eclint: Eclint
-djlint: Djlint
-mypy: Mypy
-ty: Ty
-twine: Twine
-git_changelog: GitChangelog
-git_cliff: GitCliff
-build: Build
-cmake: Cmake
-ninja: Ninja
-pytest: Pytest
-python: Python
-bash: Bash
-zsh: Zsh
-fish: Fish
-pwsh: Pwsh
-nu: Nu
-cmd: Cmd
+# The building handle: a `Tool` whose calls answer in `Argv`. The class adds
+# nothing the parameterisation doesn't say — it exists so the runtime has a
+# concrete class to chain through `_sub`, and the annotation `Tool[Argv]`
+# is how the stubs spell it.
+class ArgvTool(Tool[Argv]): ...
 
-def __getattr__(name: str) -> Tool: ...
+# Parameterised by what a call returns: `Result` here, and `.argv` re-spells
+# the same class over `Argv` — one flag block serving both the run and the
+# build path.
+ruff: Ruff[Result]
+ruff_format: RuffFormat[Result]
+basedpyright: Basedpyright[Result]
+uv: Uv[Result]
+git: Git[Result]
+docker: Docker[Result]
+bun: Bun[Result]
+mkdocs: Mkdocs[Result]
+zensical: Zensical[Result]
+coverage: Coverage[Result]
+cspell: Cspell[Result]
+prek: Prek[Result]
+markdownlint: Markdownlint[Result]
+gh: Gh[Result]
+ssh: Ssh[Result]
+ssh_keygen: SshKeygen[Result]
+ssh_keyscan: SshKeyscan[Result]
+eclint: Eclint[Result]
+djlint: Djlint[Result]
+mypy: Mypy[Result]
+ty: Ty[Result]
+twine: Twine[Result]
+git_changelog: GitChangelog[Result]
+git_cliff: GitCliff[Result]
+build: Build[Result]
+cmake: Cmake[Result]
+ninja: Ninja[Result]
+pytest: Pytest[Result]
+python: Python[Result]
+bash: Bash[Result]
+zsh: Zsh[Result]
+fish: Fish[Result]
+pwsh: Pwsh[Result]
+nu: Nu[Result]
+cmd: Cmd[Result]
+
+def __getattr__(name: str) -> Tool[Result]: ...

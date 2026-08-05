@@ -109,6 +109,68 @@ a policy merge must change *how* a call runs, never *what*. And because
 the in-process lane runs the current interpreter, an `.at()` handle
 always spawns; demanding `in_process=True` on one is a taught refusal.
 
+## Building a command line: `.argv`
+
+Insert `.argv` right before the parentheses and the call **builds** instead
+of running — same verb, same flags, same completion and flag checking — and
+hands back an `Argv`: an ordinary `list[str]` of the raw tokens.
+
+```python
+from footman import run
+
+cmd = mkdocs.gh_deploy.argv(force=True)
+#  -> ['mkdocs', 'gh-deploy', '--force']
+
+run(cmd)                         # an Argv is exactly what run() takes
+uv.run("--", *cmd)               # tokens splat into a wrapper verb
+ssh("deploy@host", cmd.posix())  # one quoted line for the remote shell
+```
+
+Passing tokens on is plain Python. The moment the line is about to cross
+into a **shell**, name that shell: `.posix()` is one string `shlex`-quoted
+for `sh`/`bash`/`zsh`, `.windows()` one string quoted the way
+`CreateProcess` parses. The quoting is the *destination's*, never the
+machine footman is standing on — a line built on Windows for a Linux box
+still comes back POSIX-quoted. footman never sniffs the destination,
+because it cannot: the same handle targets different hosts across calls,
+the remote OS does not determine the remote shell, and a payload may reach
+no shell at all (a forced command in `authorized_keys`, `docker exec`, a
+systemd unit).
+
+Naming the boundary is what makes remote commands compose. ssh joins its
+remaining arguments with spaces and hands the remote shell **one string**
+to re-split, so every hop re-quotes the hop below it — by hand, a two-hop
+line with one spaced argument needs sixteen consecutive quote characters;
+composed, each `.posix()` sits exactly at the boundary it quotes for:
+
+```python
+inner  = docker.compose.up.argv(detach=True, file="/srv/app/compose.yml")
+middle = ssh.argv("app@inner", inner.posix())
+ssh("jump@edge", middle.posix())
+```
+
+A bare `Argv` in a positional slot is refused rather than guessed at: one
+value there is ambiguous between *N tokens* (`ssh("host", *cmd)` — what a
+wrapper wants) and *one quoted line* (`ssh("host", cmd.posix())` — what a
+remote shell wants), and the two disagree exactly when it hurts, on spaced
+arguments. The refusal names both spellings. Other bare containers refuse
+too — a list in a positional would otherwise become the single token
+`"['a', 'b']"` and fail late at the tool; `*` and `**` already say what
+you meant.
+
+Like `.opts()`, `.argv` is valid anywhere earlier in the chain
+(`docker.argv.compose.up(…)` builds the same tokens); right before the
+parentheses is how the docs spell it. A built line is colour-free — the
+forced-colour switch a few tools need is injected only when spawning — and
+it leads with the tool's *name*, not a resolved local path, because it is
+made to be handed somewhere the local path means nothing.
+
+For a call that already **ran**, `Result.to_argv()` answers with the same
+kind of value: the executed tokens, `.posix()`-able for a receipt or a
+reproduction elsewhere. It is named apart from `.argv` on purpose —
+`git.push().argv` would be a push that quietly happened, and the
+`AttributeError` says so.
+
 !!! note "Colour without a pty"
 
     footman captures a subprocess through a plain pipe, not a pseudo-terminal —
@@ -169,7 +231,11 @@ assert steps[0].raw == "ruff check src --select=E --select=F"      # the real ar
 Both are *spellings*, rendered per platform — Windows quotes differently
 than POSIX, by design. Parse a tool's **data** out of `stdout`, never out
 of `raw`: an assertion that parses `raw` passes on the machine that wrote
-it and fails on the next OS.
+it and fails on the next OS. For the same reason, never send `.raw` or
+`.command` across a machine boundary — they are quoted for the shell you
+are standing in. A line for *another* shell comes from
+[`.argv`](#building-a-command-line-argv) (`cmd.posix()`), or from
+`result.to_argv()` for a call that already ran.
 
 ## Disabling a flag that defaults on
 

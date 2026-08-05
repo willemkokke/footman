@@ -1,17 +1,20 @@
 # Hand-written: a shell is invoked to run a command *string*, not for its own
 # flags, so `fm tools.sync` never touches this file (its driver is
 # `source="manual"`).
-from typing import Any
+from typing import Any, TypeVar
 
-from footman.tools import Result, Tool
+from footman.tools import Argv as _Argv
+from footman.tools import Tool
 
-class Cmd(Tool):
+_R = TypeVar("_R")
+
+class Cmd(Tool[_R]):
     def __call__(  # type: ignore[override]
         self,
         command: str,
         /,
         **flags: Any,
-    ) -> Result:
+    ) -> _R:
         """Run a command string in the Windows command processor — `cmd /c "<command>"`.
 
         A real shell: pipes, redirects, and `%VAR%` all work. Windows only.
@@ -22,3 +25,5 @@ class Cmd(Tool):
             command: the command line to run in cmd.
         """
         ...
+    @property
+    def argv(self) -> Cmd[_Argv]: ...

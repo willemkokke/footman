@@ -676,6 +676,57 @@ def _sync(only: str, root: Path | None = None) -> None:
 
 
 @tasks.task
+def restub(
+    only: Annotated[str, doc("re-render just this tool")] = "",
+) -> dict[str, object]:
+    """Re-render every stub from the checked-in history — no tools, no network.
+
+    A stub is a *rendering* of a stored surface, and the two move for
+    different reasons. `sync` re-reads the tools and can change what is
+    stored; this changes only how what is already stored is written out.
+    Reach for it when the **renderer** moved — a new method on every verb, a
+    widened signature — where the readings themselves are exactly as they
+    were.
+
+    That separation is what keeps a delta readable. Regenerating through
+    `sync` would fold this machine's tool versions into the answer, so a
+    template change would arrive mixed with version drift and neither could
+    be reviewed. Here the store is opened read-only: whatever comes out
+    differs from what is checked in *only* because the renderer does.
+
+    The six shells (`bash`, `zsh`, `fish`, `nu`, `pwsh`, `cmd`) have
+    hand-written stubs and no history to render from, so they are listed as
+    left alone and edited by hand.
+    """
+    wrote, unchanged, no_history = [], [], []
+    for driver in _drivers.DRIVERS:
+        if only and driver.key != only:
+            continue
+        if driver.source == "manual":
+            no_history.append(driver.key)
+            continue
+        doc_ = _toolhistory.load(_history_path(driver.key))
+        if doc_ is None:
+            no_history.append(driver.key)
+            continue
+        path = _stub_path(driver.key)
+        # Exactly `assemble`'s call, so a re-render is byte-identical to what
+        # the refresh workflow would have written from the same history.
+        text = _stub_from(driver, doc_)
+        if path.exists() and path.read_text(encoding="utf-8") == text:
+            unchanged.append(driver.key)
+            continue
+        path.write_text(text, encoding="utf-8")
+        wrote.append(driver.key)
+    print(f"re-rendered {len(wrote)}: {', '.join(wrote) or 'none changed'}")
+    if unchanged:
+        print(f"unchanged: {len(unchanged)}")
+    if no_history:
+        print(f"no history (hand-written): {', '.join(no_history)}")
+    return {"rendered": wrote, "unchanged": unchanged, "no_history": no_history}
+
+
+@tasks.task
 def audit(
     only: Annotated[str, doc("check just this tool")] = "",
     fix: Annotated[bool, doc("take a fresh snapshot instead of reporting")] = False,
@@ -2315,18 +2366,21 @@ def _verb_tree(path: Path) -> dict[str, object]:
         out: dict[str, object] = {}
         for item in node.body:
             if isinstance(item, ast.FunctionDef) and not item.name.startswith("_"):
-                # `flags` is footman's own typed-globals accessor, written into
-                # every subcommand class by the generator — not a verb of the
-                # tool, and listing it once per group buries the real ones.
-                if item.name != "flags":
+                # `flags` and `argv` are footman's own accessors, written into
+                # the classes by the generator — not verbs of the tool, and
+                # listing them once per class buries the real ones.
+                if item.name not in ("flags", "argv"):
                     out[item.name] = None
-            elif (
-                isinstance(item, ast.AnnAssign)
-                and isinstance(item.target, ast.Name)
-                and isinstance(item.annotation, ast.Name)
-                and item.annotation.id in classes
-            ):
-                out[item.target.id] = walk(classes[item.annotation.id])
+            elif isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name):
+                # `build: Build[_R]` — every verb is a class, parameterised by
+                # what a call returns, so the annotation is a Subscript.
+                ann = item.annotation
+                if isinstance(ann, ast.Subscript):
+                    ann = ann.value
+                if isinstance(ann, ast.Name) and ann.id in classes:
+                    # A class with nothing under it is a leaf verb; one that
+                    # still holds names is a subcommand group.
+                    out[item.target.id] = walk(classes[ann.id]) or None
         return out
 
     tree = ast.parse(path.read_text(encoding="utf-8"))

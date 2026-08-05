@@ -2,62 +2,85 @@
 #
 # Read from zensical 0.0.52 on Linux, Windows and macOS. In-process: default.
 # Every verb ends in `**flags: Any`: the stub suggests what this tool
-# accepts, and can never forbid what the bridge would happily pass.
-from typing import Any, Self
+# accepts, and can never forbid what the bridge would happily pass. Each
+# verb is a class parameterised by what its call returns, which is how
+# `.argv` re-spells the same signature over `Argv` — same flags, same
+# checking, a built command line instead of a run.
+from typing import Any, Self, TypeVar
 
-from footman.tools import Result as _Result
+from footman.tools import Argv as _Argv
 from footman.tools import Tool as _Tool
 from footman.tools import _Flag, _Value
 
-class Zensical(_Tool):
+_R = TypeVar("_R")
+_R2 = TypeVar("_R2")
+
+class Zensical(_Tool[_R]):
+    class Build(_Tool[_R2]):
+        def __call__(  # type: ignore[override]
+            self,
+            *,
+            clean: _Flag = ...,
+            config_file: _Value = ...,
+            strict: _Flag = ...,
+            **flags: Any,
+        ) -> _R2:
+            """Build a project.
+
+            Args:
+                clean: Clean cache.
+                config_file: Path to config file.
+                strict: Enable strict mode - abort the build on warnings.
+            """
+            ...
+        @property
+        def argv(self) -> Zensical.Build[_Argv]: ...
+
+    build: Build[_R]
+    class New(_Tool[_R2]):
+        def __call__(  # type: ignore[override]
+            self,
+            *args: str,
+            **flags: Any,
+        ) -> _R2:
+            """Create a new template project in the current or given directory."""
+            ...
+        @property
+        def argv(self) -> Zensical.New[_Argv]: ...
+
+    new: New[_R]
+    class Serve(_Tool[_R2]):
+        def __call__(  # type: ignore[override]
+            self,
+            *,
+            config_file: _Value = ...,
+            dev_addr: _Value = ...,
+            open: _Flag = ...,
+            strict: _Flag = ...,
+            **flags: Any,
+        ) -> _R2:
+            """Build and serve a project.
+
+            Args:
+                config_file: Path to config file.
+                dev_addr: IP address and port. Defaults to `localhost:8000`.
+                open: Open preview in default browser.
+                strict: Strict mode (currently unsupported).
+            """
+            ...
+        @property
+        def argv(self) -> Zensical.Serve[_Argv]: ...
+
+    serve: Serve[_R]
     def __call__(  # type: ignore[override]
         self,
         *args: str,
         **flags: Any,
-    ) -> _Result:
+    ) -> _R:
         """Zensical - A modern static site generator."""
         ...
-    def build(
-        self,
-        *,
-        clean: _Flag = ...,
-        config_file: _Value = ...,
-        strict: _Flag = ...,
-        **flags: Any,
-    ) -> _Result:
-        """Build a project.
-
-        Args:
-            clean: Clean cache.
-            config_file: Path to config file.
-            strict: Enable strict mode - abort the build on warnings.
-        """
-        ...
-    def new(
-        self,
-        *args: str,
-        **flags: Any,
-    ) -> _Result:
-        """Create a new template project in the current or given directory."""
-        ...
-    def serve(
-        self,
-        *,
-        config_file: _Value = ...,
-        dev_addr: _Value = ...,
-        open: _Flag = ...,
-        strict: _Flag = ...,
-        **flags: Any,
-    ) -> _Result:
-        """Build and serve a project.
-
-        Args:
-            config_file: Path to config file.
-            dev_addr: IP address and port. Defaults to `localhost:8000`.
-            open: Open preview in default browser.
-            strict: Strict mode (currently unsupported).
-        """
-        ...
+    @property
+    def argv(self) -> Zensical[_Argv]: ...
     def flags(
         self,
         **flags: Any,

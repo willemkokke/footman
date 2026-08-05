@@ -2,15 +2,192 @@
 #
 # Read from mkdocs 1.6.1 on Linux, Windows and macOS. In-process: default.
 # Every verb ends in `**flags: Any`: the stub suggests what this tool
-# accepts, and can never forbid what the bridge would happily pass.
+# accepts, and can never forbid what the bridge would happily pass. Each
+# verb is a class parameterised by what its call returns, which is how
+# `.argv` re-spells the same signature over `Argv` — same flags, same
+# checking, a built command line instead of a run.
 from collections.abc import Sequence
-from typing import Any, Literal, Self
+from typing import Any, Literal, Self, TypeVar
 
-from footman.tools import Result as _Result
+from footman.tools import Argv as _Argv
 from footman.tools import Tool as _Tool
 from footman.tools import _Flag, _Value
 
-class Mkdocs(_Tool):
+_R = TypeVar("_R")
+_R2 = TypeVar("_R2")
+
+class Mkdocs(_Tool[_R]):
+    class Build(_Tool[_R2]):
+        def __call__(  # type: ignore[override]
+            self,
+            *,
+            clean: _Flag = ...,
+            config_file: _Value = ...,
+            quiet: _Flag = ...,
+            site_dir: _Value = ...,
+            strict: _Flag = ...,
+            theme: Literal["mkdocs", "readthedocs"]
+            | Sequence[Literal["mkdocs", "readthedocs"]]
+            | None = ...,
+            use_directory_urls: _Flag = ...,
+            verbose: _Flag = ...,
+            **flags: Any,
+        ) -> _R2:
+            """Build the MkDocs documentation.
+
+            Args:
+                clean: Remove old files from the site_dir before building (the
+                    default). Defaults on — `clean=off` emits `--dirty`.
+                config_file: Provide a specific MkDocs config. This can be a file
+                    name, or '-' to read from stdin.
+                quiet: Silence warnings.
+                site_dir: The directory to output the result of the documentation
+                    build.
+                strict: Enable strict mode. This will cause MkDocs to abort the
+                    build on any warnings. `strict=off` emits `--no-strict`.
+                theme: The theme to use when building your documentation.
+                use_directory_urls: Use directory URLs when building pages (the
+                    default). `use_directory_urls=off` emits `--no-directory-urls`.
+                verbose: Enable verbose output.
+            """
+            ...
+        @property
+        def argv(self) -> Mkdocs.Build[_Argv]: ...
+
+    build: Build[_R]
+    class GhDeploy(_Tool[_R2]):
+        def __call__(  # type: ignore[override]
+            self,
+            *,
+            clean: _Flag = ...,
+            config_file: _Value = ...,
+            force: _Flag = ...,
+            ignore_version: _Flag = ...,
+            message: _Value = ...,
+            no_history: _Flag = ...,
+            quiet: _Flag = ...,
+            remote_branch: _Value = ...,
+            remote_name: _Value = ...,
+            shell: _Flag = ...,
+            site_dir: _Value = ...,
+            strict: _Flag = ...,
+            theme: Literal["mkdocs", "readthedocs"]
+            | Sequence[Literal["mkdocs", "readthedocs"]]
+            | None = ...,
+            use_directory_urls: _Flag = ...,
+            verbose: _Flag = ...,
+            **flags: Any,
+        ) -> _R2:
+            """Deploy your documentation to GitHub Pages.
+
+            Args:
+                clean: Remove old files from the site_dir before building (the
+                    default). Defaults on — `clean=off` emits `--dirty`.
+                config_file: Provide a specific MkDocs config. This can be a file
+                    name, or '-' to read from stdin.
+                force: Force the push to the repository.
+                ignore_version: Ignore check that build is not being deployed with
+                    an older version of MkDocs.
+                message: A commit message to use when committing to the GitHub Pages
+                    remote branch. Commit {sha} and MkDocs {version} are available
+                    as expansions.
+                no_history: Replace the whole Git history with one new commit.
+                quiet: Silence warnings.
+                remote_branch: The remote branch to commit to for GitHub Pages. This
+                    overrides the value specified in config.
+                remote_name: The remote name to commit to for GitHub Pages. This
+                    overrides the value specified in config.
+                shell: Use the shell when invoking Git.
+                site_dir: The directory to output the result of the documentation
+                    build.
+                strict: Enable strict mode. This will cause MkDocs to abort the
+                    build on any warnings. `strict=off` emits `--no-strict`.
+                theme: The theme to use when building your documentation.
+                use_directory_urls: Use directory URLs when building pages (the
+                    default). `use_directory_urls=off` emits `--no-directory-urls`.
+                verbose: Enable verbose output.
+            """
+            ...
+        @property
+        def argv(self) -> Mkdocs.GhDeploy[_Argv]: ...
+
+    gh_deploy: GhDeploy[_R]
+    class New(_Tool[_R2]):
+        def __call__(  # type: ignore[override]
+            self,
+            project_directory: str,
+            /,
+            *args: str,
+            quiet: _Flag = ...,
+            verbose: _Flag = ...,
+            **flags: Any,
+        ) -> _R2:
+            """Create a new MkDocs project.
+
+            Args:
+                quiet: Silence warnings.
+                verbose: Enable verbose output.
+            """
+            ...
+        @property
+        def argv(self) -> Mkdocs.New[_Argv]: ...
+
+    new: New[_R]
+    class Serve(_Tool[_R2]):
+        def __call__(  # type: ignore[override]
+            self,
+            *,
+            clean: _Flag = ...,
+            config_file: _Value = ...,
+            dev_addr: _Value = ...,
+            dirty: _Flag = ...,
+            dirtyreload: _Flag = ...,
+            livereload: _Flag = ...,
+            no_livereload: _Flag = ...,
+            open: _Flag = ...,
+            quiet: _Flag = ...,
+            strict: _Flag = ...,
+            theme: Literal["mkdocs", "readthedocs"]
+            | Sequence[Literal["mkdocs", "readthedocs"]]
+            | None = ...,
+            use_directory_urls: _Flag = ...,
+            verbose: _Flag = ...,
+            watch: _Value = ...,
+            watch_theme: _Flag = ...,
+            **flags: Any,
+        ) -> _R2:
+            """Run the builtin development server.
+
+            Args:
+                clean: Build the site without any effects of `mkdocs serve` - pure
+                    `mkdocs build`, then serve. Added in 1.5.0.
+                config_file: Provide a specific MkDocs config. This can be a file
+                    name, or '-' to read from stdin.
+                dev_addr: IP address and port to serve documentation locally
+                    (default: localhost:8000).
+                dirty: Only re-build files that have changed. Added in 1.5.0.
+                no_livereload: Disable the live reloading in the development server.
+                    Added in 1.5.0.
+                open: Open the website in a Web browser after the initial build
+                    finishes. Added in 1.6.0.
+                quiet: Silence warnings.
+                strict: Enable strict mode. This will cause MkDocs to abort the
+                    build on any warnings. `strict=off` emits `--no-strict`.
+                theme: The theme to use when building your documentation.
+                use_directory_urls: Use directory URLs when building pages (the
+                    default). `use_directory_urls=off` emits `--no-directory-urls`.
+                verbose: Enable verbose output.
+                watch: A directory or file to watch for live reloading. Can be
+                    supplied multiple times. May be repeated: a list emits the flag
+                    once per item.
+                watch_theme: Include the theme in list of files to watch for live
+                    reloading. Ignored when live reload is not used.
+            """
+            ...
+        @property
+        def argv(self) -> Mkdocs.Serve[_Argv]: ...
+
+    serve: Serve[_R]
     def __call__(  # type: ignore[override]
         self,
         *args: str,
@@ -18,7 +195,7 @@ class Mkdocs(_Tool):
         quiet: _Flag = ...,
         verbose: _Flag = ...,
         **flags: Any,
-    ) -> _Result:
+    ) -> _R:
         """MkDocs - Project documentation with Markdown.
 
         Args:
@@ -28,155 +205,8 @@ class Mkdocs(_Tool):
             verbose: Enable verbose output. Gone since 1.6.1.
         """
         ...
-    def build(
-        self,
-        *,
-        clean: _Flag = ...,
-        config_file: _Value = ...,
-        quiet: _Flag = ...,
-        site_dir: _Value = ...,
-        strict: _Flag = ...,
-        theme: Literal["mkdocs", "readthedocs"]
-        | Sequence[Literal["mkdocs", "readthedocs"]]
-        | None = ...,
-        use_directory_urls: _Flag = ...,
-        verbose: _Flag = ...,
-        **flags: Any,
-    ) -> _Result:
-        """Build the MkDocs documentation.
-
-        Args:
-            clean: Remove old files from the site_dir before building (the default).
-                Defaults on — `clean=off` emits `--dirty`.
-            config_file: Provide a specific MkDocs config. This can be a file name,
-                or '-' to read from stdin.
-            quiet: Silence warnings.
-            site_dir: The directory to output the result of the documentation build.
-            strict: Enable strict mode. This will cause MkDocs to abort the build on
-                any warnings. `strict=off` emits `--no-strict`.
-            theme: The theme to use when building your documentation.
-            use_directory_urls: Use directory URLs when building pages (the
-                default). `use_directory_urls=off` emits `--no-directory-urls`.
-            verbose: Enable verbose output.
-        """
-        ...
-    def gh_deploy(
-        self,
-        *,
-        clean: _Flag = ...,
-        config_file: _Value = ...,
-        force: _Flag = ...,
-        ignore_version: _Flag = ...,
-        message: _Value = ...,
-        no_history: _Flag = ...,
-        quiet: _Flag = ...,
-        remote_branch: _Value = ...,
-        remote_name: _Value = ...,
-        shell: _Flag = ...,
-        site_dir: _Value = ...,
-        strict: _Flag = ...,
-        theme: Literal["mkdocs", "readthedocs"]
-        | Sequence[Literal["mkdocs", "readthedocs"]]
-        | None = ...,
-        use_directory_urls: _Flag = ...,
-        verbose: _Flag = ...,
-        **flags: Any,
-    ) -> _Result:
-        """Deploy your documentation to GitHub Pages.
-
-        Args:
-            clean: Remove old files from the site_dir before building (the default).
-                Defaults on — `clean=off` emits `--dirty`.
-            config_file: Provide a specific MkDocs config. This can be a file name,
-                or '-' to read from stdin.
-            force: Force the push to the repository.
-            ignore_version: Ignore check that build is not being deployed with an
-                older version of MkDocs.
-            message: A commit message to use when committing to the GitHub Pages
-                remote branch. Commit {sha} and MkDocs {version} are available as
-                expansions.
-            no_history: Replace the whole Git history with one new commit.
-            quiet: Silence warnings.
-            remote_branch: The remote branch to commit to for GitHub Pages. This
-                overrides the value specified in config.
-            remote_name: The remote name to commit to for GitHub Pages. This
-                overrides the value specified in config.
-            shell: Use the shell when invoking Git.
-            site_dir: The directory to output the result of the documentation build.
-            strict: Enable strict mode. This will cause MkDocs to abort the build on
-                any warnings. `strict=off` emits `--no-strict`.
-            theme: The theme to use when building your documentation.
-            use_directory_urls: Use directory URLs when building pages (the
-                default). `use_directory_urls=off` emits `--no-directory-urls`.
-            verbose: Enable verbose output.
-        """
-        ...
-    def new(
-        self,
-        project_directory: str,
-        /,
-        *args: str,
-        quiet: _Flag = ...,
-        verbose: _Flag = ...,
-        **flags: Any,
-    ) -> _Result:
-        """Create a new MkDocs project.
-
-        Args:
-            quiet: Silence warnings.
-            verbose: Enable verbose output.
-        """
-        ...
-    def serve(
-        self,
-        *,
-        clean: _Flag = ...,
-        config_file: _Value = ...,
-        dev_addr: _Value = ...,
-        dirty: _Flag = ...,
-        dirtyreload: _Flag = ...,
-        livereload: _Flag = ...,
-        no_livereload: _Flag = ...,
-        open: _Flag = ...,
-        quiet: _Flag = ...,
-        strict: _Flag = ...,
-        theme: Literal["mkdocs", "readthedocs"]
-        | Sequence[Literal["mkdocs", "readthedocs"]]
-        | None = ...,
-        use_directory_urls: _Flag = ...,
-        verbose: _Flag = ...,
-        watch: _Value = ...,
-        watch_theme: _Flag = ...,
-        **flags: Any,
-    ) -> _Result:
-        """Run the builtin development server.
-
-        Args:
-            clean: Build the site without any effects of `mkdocs serve` - pure
-                `mkdocs build`, then serve. Added in 1.5.0.
-            config_file: Provide a specific MkDocs config. This can be a file name,
-                or '-' to read from stdin.
-            dev_addr: IP address and port to serve documentation locally (default:
-                localhost:8000).
-            dirty: Only re-build files that have changed. Added in 1.5.0.
-            no_livereload: Disable the live reloading in the development server.
-                Added in 1.5.0.
-            open: Open the website in a Web browser after the initial build
-                finishes. Added in 1.6.0.
-            quiet: Silence warnings.
-            strict: Enable strict mode. This will cause MkDocs to abort the build on
-                any warnings. `strict=off` emits `--no-strict`.
-            theme: The theme to use when building your documentation.
-            use_directory_urls: Use directory URLs when building pages (the
-                default). `use_directory_urls=off` emits `--no-directory-urls`.
-            verbose: Enable verbose output.
-            watch: A directory or file to watch for live reloading. Can be supplied
-                multiple times. May be repeated: a list emits the flag once per
-                item.
-            watch_theme: Include the theme in list of files to watch for live
-                reloading. Ignored when live reload is not used.
-        """
-        ...
+    @property
+    def argv(self) -> Mkdocs[_Argv]: ...
     def flags(
         self,
         *,

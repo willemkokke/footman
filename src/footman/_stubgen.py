@@ -32,7 +32,10 @@ _HEADER = """\
 #
 # Read from {name} {version} on {platform}. In-process: {in_process}.
 # Every verb ends in `**flags: Any`: the stub suggests what this tool
-# accepts, and can never forbid what the bridge would happily pass.
+# accepts, and can never forbid what the bridge would happily pass. Each
+# verb is a class parameterised by what its call returns, which is how
+# `.argv` re-spells the same signature over `Argv` — same flags, same
+# checking, a built command line instead of a run.
 {imports}
 """
 
@@ -54,7 +57,7 @@ def render(
         in_process=in_process or ("available" if spec.in_process else "no"),
         imports=_imports(body),
     )
-    return f"{header}\n{body}"
+    return f"{header}\n{_typevars(body)}\n\n{body}"
 
 
 def _imports(body: str) -> str:
@@ -62,13 +65,14 @@ def _imports(body: str) -> str:
     typing = ["Any"] + (["Literal"] if "Literal[" in body else [])
     if "-> Self:" in body:
         typing.append("Self")
+    typing.append("TypeVar")
     aliases = ("_Flag", "_Value", "_ValuedFlag")
-    # footman's own two names are aliased private, because a subcommand group
-    # becomes a nested class named after the verb — and `uv tool` would
-    # otherwise generate `class Tool(Tool)`, which cannot derive from itself.
-    # A verb can never produce a leading underscore, so the collision is gone
-    # rather than dodged. (`Result` is every call's return type: always used.)
-    names = ["Result as _Result", "Tool as _Tool"] + [
+    # footman's own names are aliased private, because a subcommand becomes a
+    # nested class named after the verb — and `uv tool` would otherwise
+    # generate `class Tool(Tool)`, which cannot derive from itself. A verb
+    # can never produce a leading underscore, so the collision is gone
+    # rather than dodged.
+    names = ["Argv as _Argv", "Tool as _Tool"] + [
         n for n in aliases if re.search(rf"\b{n}\b", body)
     ]
     lines = []
@@ -78,6 +82,18 @@ def _imports(body: str) -> str:
     lines.append("")
     lines.append(f"from footman.tools import {', '.join(names)}")
     return "\n".join(lines)
+
+
+def _typevars(body: str) -> str:
+    """One `TypeVar` per nesting depth the body reaches.
+
+    Nested generic classes cannot rebind an enclosing class's TypeVar, so
+    each depth gets its own (`_R`, `_R2`, `_R3`, …). Underscore-private on
+    purpose: `ssh` really does have a flag named `R`, and a verb class can
+    never lead with an underscore.
+    """
+    used = sorted(set(re.findall(r"\b_R\d*\b", body)))
+    return "\n".join(f'{name} = TypeVar("{name}")' for name in used)
 
 
 def _class_name(name: str) -> str:
@@ -103,41 +119,77 @@ def _tree(verbs: Iterable[Verb]) -> dict[str, object]:
     return tree
 
 
-def _classes(tree: dict[str, object], name: str, depth: int = 0) -> str:
-    """One class, with every subgroup nested *inside* it.
+def _tv(depth: int) -> str:
+    """The TypeVar for classes at *depth* — a nested generic class cannot
+    rebind its encloser's, so each depth carries its own."""
+    return "_R" if depth == 0 else f"_R{depth + 1}"
 
-    A subcommand group belongs to its tool — `docker compose up` is not a
+
+def _classes(
+    tree: dict[str, object], name: str, depth: int = 0, path: tuple[str, ...] = ()
+) -> str:
+    """One class, with every subcommand — group or verb — nested *inside* it.
+
+    A subcommand belongs to its tool — `docker compose up` is not a
     `DockerCompose` that happens to sit beside `Docker`. Nesting says that
-    in the only place it can be said, and it earns two things beyond
-    tidiness: the reference page needs one directive rather than one per
-    group (the renderer walks members, and a nested class is a member), and
-    the names stop being invented — `Docker.Compose`, not `DockerCompose`,
-    with no way for two tools to collide.
+    in the only place it can be said, and the names stop being invented —
+    `Docker.Compose.Up`, not `DockerComposeUp`, with no way for two tools
+    to collide.
+
+    Every class is generic over what its call returns: the module binding in
+    `tools.pyi` fixes it to `Result`, and the `argv` property re-spells the
+    same class over `Argv`. A leaf verb is just a tree whose only entry is a
+    root verb, so one recursion renders tools, groups and verbs alike.
     """
+    here = (*path, name)
     body: list[str] = []
     for key in sorted(tree):
         node = tree[key]
         if isinstance(node, dict):
             child = key.title().replace("_", "")
             subtree = cast("dict[str, object]", node)
-            body.append(_indent(_classes(subtree, child, depth + 1)))
-            body.append(f"    {key}: {child}")
+            body.append(_indent(_classes(subtree, child, depth + 1, here)))
+            body.append(f"    {key}: {child}[{_tv(depth)}]")
     for key in sorted(tree):
         node = tree[key]
-        if isinstance(node, Verb):
-            body.append(_method(node, key, depth))
+        if isinstance(node, Verb) and key:
+            child = key.title().replace("_", "")
+            body.append(_indent(_classes({"": node}, child, depth + 1, here)))
+            body.append(f"    {key}: {child}[{_tv(depth)}]")
+    root = tree.get("")
+    body.append(_method(root if isinstance(root, Verb) else None, depth))
+    body.append(_argv_property(here, depth))
     # A tool with subcommands gets a typed `.flags()` returning `Self`, so a
     # globals-before-verb chain stays checked. The root verb's options are the
     # typed globals (git's `--git-dir`, docker's `--host`); a tool with none
     # still gets the override, for the chaining. `Self` rather than the class
-    # by name: a nested class cannot refer to itself from inside its own body,
-    # and Self is what the chain means anyway.
+    # by name: Self is what the chain means, and it keeps the parameterisation.
     # (footman run-control rides the inherited `.opts()`, typed on Tool.)
     if _has_subcommands(tree):
-        root = tree.get("")
         globals_ = root.options if isinstance(root, Verb) else ()
         body.append(_flags_method(globals_))
-    return f"class {name}(_Tool):\n" + ("\n".join(body) or "    ...")
+    # Deriving from the *parameterised* base is what makes every member a
+    # plain covariant override — `__call__` answers the inherited TypeVar
+    # and `argv` narrows `Tool[Argv]` to a subclass of it — so no checker
+    # needs a Liskov suppression.
+    return f"class {name}(_Tool[{_tv(depth)}]):\n" + "\n".join(body)
+
+
+def _argv_property(path: tuple[str, ...], depth: int) -> str:
+    """The `argv` accessor: this class again, answering in `Argv`.
+
+    The qualified name is spelled from module scope (`Docker.Compose.Up`)
+    because a method annotation never sees the class scopes around it. A
+    legal covariant override of the base property's `Tool[Argv]`, since
+    every class here derives from `_Tool[…]`.
+    """
+    qualified = ".".join(path)
+    line = f"    def argv(self) -> {qualified}[_Argv]: ..."
+    if len(line) + 4 * depth <= 88:
+        return f"    @property\n{line}"
+    return (
+        f"    @property\n    def argv(\n        self,\n    ) -> {qualified}[_Argv]: ..."
+    )
 
 
 def _indent(block: str) -> str:
@@ -175,15 +227,29 @@ def _flags_method(options: tuple[Option, ...]) -> str:
     return "\n".join(lines)
 
 
-def _method(verb: Verb, key: str, depth: int = 0) -> str:
-    """One verb as a stub method — or `__call__` for a tool's own flags.
+def _method(verb: Verb | None, depth: int = 0) -> str:
+    """A class's `__call__` — the verb's own signature, answering in the
+    class's TypeVar.
 
     footman run-control (nofail/capture/title/in_process/cwd/rel) lives on the inherited
     `.opts()`, never the call, so a call signature is pure flags — which also
-    means an option literally named `capture` (pytest's) types through here."""
-    name = key or "__call__"
-    override = "  # type: ignore[override]" if name == "__call__" else ""
-    header = f"    def {name}({override}" if override else f"    def {name}("
+    means an option literally named `capture` (pytest's) types through here.
+
+    With no root verb to read (a bare group), the signature stays as wide as
+    the inherited one — `*args: Any` — and adds only the return type, so
+    nothing the runtime accepts becomes a type error.
+    """
+    header = "    def __call__(  # type: ignore[override]"
+    if verb is None:
+        return "\n".join(
+            [
+                header,
+                "        self,",
+                "        *args: Any,",
+                "        **flags: Any,",
+                f"    ) -> {_tv(depth)}: ...",
+            ]
+        )
     positional = _positional_lines(verb)
     options = _unique(verb.options)
     # A bare `*,` must be followed by a keyword-only parameter; when the only
@@ -196,7 +262,7 @@ def _method(verb: Verb, key: str, depth: int = 0) -> str:
     for option in options:
         lines.append(f"        {_safe(option.name)}: {_annotation(option)} = ...,")
     lines.append("        **flags: Any,")
-    lines.append("    ) -> _Result:")
+    lines.append(f"    ) -> {_tv(depth)}:")
     doc = _docstring(verb, depth)
     if doc:
         lines.append(doc)

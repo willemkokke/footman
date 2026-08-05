@@ -2,14 +2,19 @@
 #
 # Read from ssh-keygen 10.4p1 on Linux and macOS. In-process: no.
 # Every verb ends in `**flags: Any`: the stub suggests what this tool
-# accepts, and can never forbid what the bridge would happily pass.
-from typing import Any
+# accepts, and can never forbid what the bridge would happily pass. Each
+# verb is a class parameterised by what its call returns, which is how
+# `.argv` re-spells the same signature over `Argv` — same flags, same
+# checking, a built command line instead of a run.
+from typing import Any, TypeVar
 
-from footman.tools import Result as _Result
+from footman.tools import Argv as _Argv
 from footman.tools import Tool as _Tool
 from footman.tools import _Flag, _Value
 
-class SshKeygen(_Tool):
+_R = TypeVar("_R")
+
+class SshKeygen(_Tool[_R]):
     def __call__(  # type: ignore[override]
         self,
         *args: str,
@@ -63,7 +68,7 @@ class SshKeygen(_Tool):
         y: _Flag = ...,
         z: _Value = ...,
         **flags: Any,
-    ) -> _Result:
+    ) -> _R:
         """SSH-KEYGEN(1)
         General Commands Manual
         SSH-KEYGEN(1)
@@ -160,3 +165,5 @@ class SshKeygen(_Tool):
                 5.6p1.
         """
         ...
+    @property
+    def argv(self) -> SshKeygen[_Argv]: ...

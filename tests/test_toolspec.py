@@ -547,8 +547,10 @@ def test_rendered_stub_is_valid_python():
     )
     text = _stubgen.render(spec, platform="Linux")
     ast.parse(text)  # a stub that doesn't parse is worse than no stub
-    assert "class Demo(_Tool):" in text
-    assert "def build(" in text
+    assert "class Demo(_Tool[_R]):" in text
+    assert "class Build(_Tool[_R2]):" in text  # the verb, as a generic class
+    assert "build: Build[_R]" in text  # named under its tool
+    assert "def argv(self) -> Demo.Build[_Argv]: ..." in text
     assert "**flags: Any" in text, "the stub must never be able to forbid"
 
 
@@ -580,9 +582,10 @@ def test_rendered_stub_imports_only_what_it_uses():
     plain = _stubgen.render(_spec(Option("quiet", ("--quiet",), type_name="bool")))
     assert "Literal" not in plain
     assert "_Value" not in plain, "no value option, so no value alias"
-    # Aliased private: a subcommand group becomes a class named after the
-    # verb, and `uv tool` would otherwise write `class Tool(Tool)`.
-    assert "from footman.tools import Result as _Result, Tool as _Tool, _Flag" in plain
+    assert "_Result" not in plain, "nothing returns Result; the TypeVar does"
+    # Aliased private: a subcommand becomes a class named after the verb,
+    # and `uv tool` would otherwise write `class Tool(Tool)`.
+    assert "from footman.tools import Argv as _Argv, Tool as _Tool, _Flag" in plain
 
     choosy = _stubgen.render(
         _spec(Option("color", ("--color",), type_name="choice", choices=("a", "b")))
@@ -634,8 +637,10 @@ def test_nested_verbs_become_nested_classes():
     ast.parse(text)
     # Inside `Docker`, not beside it: the group belongs to the tool, the name
     # is not invented, and one docs directive covers the whole tool.
-    assert "    class Compose(_Tool):" in text
-    assert "    compose: Compose" in text
+    assert "    class Compose(_Tool[_R2]):" in text
+    assert "    compose: Compose[_R]" in text
+    assert "        class Up(_Tool[_R3]):" in text  # the leaf, one deeper
+    assert "        up: Up[_R2]" in text
     assert "DockerCompose" not in text
 
 
@@ -858,7 +863,7 @@ def test_sync_writes_a_stub_and_audit_then_agrees(stubs, capsys):
     written = stubs / "ruff.pyi"
     assert written.exists()
     ast.parse(written.read_text())
-    assert "class Ruff(_Tool):" in written.read_text()
+    assert "class Ruff(_Tool[_R]):" in written.read_text()
     capsys.readouterr()
 
     tools_tasks.audit(only="ruff")
@@ -904,7 +909,9 @@ def test_audit_reports_a_behind_snapshot_without_failing(stubs, capsys):
     # ...and --fix takes the fresh snapshot instead of reporting it.
     tools_tasks.audit(only="ruff", fix=True)
     assert "took a fresh snapshot of 1" in capsys.readouterr().out
-    assert "class Ruff(_Tool):\n    def __call__(" in (stubs / "ruff.pyi").read_text()
+    fresh = (stubs / "ruff.pyi").read_text()
+    assert "class Ruff(_Tool[_R]):" in fresh
+    assert "def __call__(" in fresh
 
 
 @needs_ruff
@@ -1551,14 +1558,16 @@ def test_stub_renders_positional_only_and_keyword_only():
     )
     text = _stubgen.render(none)
     ast.parse(text)
-    assert "*,\n" in text and "*args" not in text  # keyword-only
+    # Keyword-only in the verb's own signature; the root class keeps its
+    # untyped `*args: Any` passthrough, which is not the verb's surface.
+    assert "*,\n" in text and "*args: str" not in text
 
     # With no options, `**flags` alone forbids a positional — no redundant `*,`
     # (which would be a syntax error with nothing keyword-only after it).
     bare = ToolSpec(name="x", verbs=(Verb(name="build", positional="none"),))
     text = _stubgen.render(bare)
     ast.parse(text)
-    assert "*args" not in text  # still accepts no positional
+    assert "*args: str" not in text  # the verb still accepts no positional
 
     req = ToolSpec(
         name="x", verbs=(Verb(name="run", positional="required", lead="image"),)
@@ -2113,13 +2122,18 @@ def test_subcommand_groups_are_nested_classes():
     roots = [n for n in tree.body if isinstance(n, ast.ClassDef)]
     assert [n.name for n in roots] == ["Docker"]  # one class at module level
     nested = [n.name for n in roots[0].body if isinstance(n, ast.ClassDef)]
-    assert nested == ["Compose"]  # not DockerCompose, and not a sibling
-    assert "compose: Compose" in source  # the attribute names the nested class
+    assert "Compose" in nested  # not DockerCompose, and not a sibling
+    assert "compose: Compose[_R]" in source  # the attribute names the class
+    # The group's leaves nest one level further down.
+    compose = next(
+        n for n in roots[0].body if isinstance(n, ast.ClassDef) and n.name == "Compose"
+    )
+    assert "Up" in {n.name for n in compose.body if isinstance(n, ast.ClassDef)}
 
-    # gh nests eight groups, all inside Gh.
+    # gh nests its eight groups (and now its leaf verbs), all inside Gh.
     gh = ast.parse(tools_tasks._stub_path("gh").read_text(encoding="utf-8"))
     gh_root = next(n for n in gh.body if isinstance(n, ast.ClassDef))
-    assert {n.name for n in gh_root.body if isinstance(n, ast.ClassDef)} == {
+    assert {
         "Auth",
         "Issue",
         "Label",
@@ -2128,7 +2142,7 @@ def test_subcommand_groups_are_nested_classes():
         "Repo",
         "Run",
         "Workflow",
-    }
+    } <= {n.name for n in gh_root.body if isinstance(n, ast.ClassDef)}
 
     # ...so the page needs exactly one directive, whatever the tool's shape.
     driver = _drivers.find("docker")

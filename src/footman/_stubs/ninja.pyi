@@ -2,14 +2,19 @@
 #
 # Read from ninja 1.13.0 on Linux, Windows and macOS. In-process: no.
 # Every verb ends in `**flags: Any`: the stub suggests what this tool
-# accepts, and can never forbid what the bridge would happily pass.
-from typing import Any
+# accepts, and can never forbid what the bridge would happily pass. Each
+# verb is a class parameterised by what its call returns, which is how
+# `.argv` re-spells the same signature over `Argv` — same flags, same
+# checking, a built command line instead of a run.
+from typing import Any, TypeVar
 
-from footman.tools import Result as _Result
+from footman.tools import Argv as _Argv
 from footman.tools import Tool as _Tool
 from footman.tools import _Flag, _Value
 
-class Ninja(_Tool):
+_R = TypeVar("_R")
+
+class Ninja(_Tool[_R]):
     def __call__(  # type: ignore[override]
         self,
         *args: str,
@@ -25,7 +30,7 @@ class Ninja(_Tool):
         verbose: _Flag = ...,
         w: _Value = ...,
         **flags: Any,
-    ) -> _Result:
+    ) -> _R:
         """if targets are unspecified, builds the 'default' target (see manual).
 
         Args:
@@ -44,3 +49,5 @@ class Ninja(_Tool):
             w: adjust warnings (use '-w list' to list warnings).
         """
         ...
+    @property
+    def argv(self) -> Ninja[_Argv]: ...

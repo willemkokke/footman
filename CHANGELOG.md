@@ -9,6 +9,40 @@ versions may include breaking changes.
 
 ### Added
 
+- **`.argv` on every tool and verb — build the command line instead of
+  running it.** Insert `.argv` right before the parentheses:
+  `mkdocs.gh_deploy.argv(force=True)` hands back an `Argv` — an ordinary
+  `list[str]` of the raw tokens — with the same flags, completion and type
+  checking the running call has. Tokens pass on as plain Python
+  (`run(cmd)`, `uv.run("--", *cmd)`); at a shell boundary the caller names
+  the shell — `cmd.posix()` (`shlex` quoting) or `cmd.windows()`
+  (`list2cmdline`) — so remote commands nest one quote-layer per hop
+  instead of by hand-written `'"'"'` runs. The chain position follows
+  `.opts()`: valid anywhere before the call, documented right before the
+  parentheses. Built lines are colour-free and lead with the tool's name,
+  not a resolved local path.
+- **`Result.to_argv()` — what a call ran, as re-quotable tokens.** The
+  executed argv of any spawned `run()` or bridge call, as the same `Argv`
+  value (`r.to_argv().posix()` for a receipt headed elsewhere); in-process
+  calls and command *strings* never had separable tokens, and the error
+  says so. Named apart from `.argv` so `git.push().argv` — a build that
+  would have executed — stays an `AttributeError`.
+- **A bare container in a positional is a taught refusal.** A `list`,
+  `tuple`, `set`, `frozenset` or `dict` passed positionally — to a bridge
+  call or inside a `run()` list — used to stringify into the single token
+  `"['a', 'b']"` and fail late at the tool. It now refuses at the call,
+  naming the meant spelling (`*value`, `**value`); a bare `Argv` refuses
+  with its own lesson, `*cmd` for tokens or `cmd.posix()` for one quoted
+  line, since one positional slot cannot say which was meant.
+- **Generated stubs type the build path.** Every verb is now a class
+  parameterised by what its call returns, so `.argv` re-spells the same
+  signature over `Argv` — flag typos and bad values are errors in the
+  build path too, and `.opts()` after a verb now type-checks (previously
+  a `MethodType` dead end, as the docs' own
+  `uv.pip.install.opts(input=…)` example was).
+- **`fm tools.restub` — re-render every stub from checked-in history.** No
+  tools read, no network: for when the *renderer* moves while the readings
+  stand, so a template change reviews apart from version drift.
 - **`.at(path)` on every tool — the identity channel.** Rebinds a handle
   to an executable while keeping everything else: verbs, bound flags,
   policy, the typed surface, the shown name. `tools.python.at(venv)` is
