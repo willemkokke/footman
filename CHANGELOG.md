@@ -9,6 +9,12 @@ versions may include breaking changes.
 
 ### Added
 
+- **`lane_waits` in the `--json` report.** A task row whose lane claim
+  actually waited records which lanes serialised it and for how long
+  (`[{"lane": "cspell-cache", "waited_ms": 812.4}]`; the claim's own label —
+  a named lane, `serial`, `exclusive`, `console`). "Why was this run slow"
+  is now answerable from the report; a claim granted on arrival records
+  nothing. Additive to schema 1.
 - **`.argv` on every tool and verb — build the command line instead of
   running it.** Insert `.argv` right before the parentheses:
   `mkdocs.gh_deploy.argv(force=True)` hands back an `Argv` — an ordinary
@@ -56,6 +62,15 @@ versions may include breaking changes.
 
 ### Changed
 
+- **One broken annotation degrades one parameter, not the task.**
+  `eval_str` is all-or-nothing, so a single unresolvable name used to cost
+  every parameter its types, choices and completion — and the pass-through
+  warning repeated once per parameter, every invocation. The fallback now
+  evaluates each annotation on its own: siblings keep their grammar, and
+  the warning is one line naming the task, the parameter and the
+  underlying error. Assertions matching the old `is not a usable type`
+  text for *string* annotations should match `did not resolve` instead;
+  the old wording still covers non-string oddities.
 - **coverage 7.15.3** rewords 1 description. It also restates its own description.
 - **docker 29.7.0** adds `--compress`, `--cpu-period`, `--cpu-quota`, `--cpu-shares`, `--cpuset-cpus`, `--cpuset-mems`, `--force-rm`, `--isolation`, `--memory`, `--memory-swap`, `--rm` and `--security-opt`. It also rewords 12 descriptions.
 - **gh 2.97.0** adds `--allow-escape-sequences`.

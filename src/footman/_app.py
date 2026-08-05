@@ -828,6 +828,13 @@ def _print_json(results: list[_executor.TaskResult], *, total: float) -> None:
             # worker, after its last prerequisite finished. Never part of
             # `duration_ms` — the task wasn't running.
             entry["queued_ms"] = round(max(r.started - r.eligible, 0.0) * 1000, 3)
+        if r.lane_waits:
+            # Which lanes serialised this task, for how long — present only
+            # when the claim actually waited. Additive to schema 1.
+            entry["lane_waits"] = [
+                {"lane": lane, "waited_ms": round(seconds * 1000, 3)}
+                for lane, seconds in r.lane_waits
+            ]
         if r.thread:
             # Where it ran: the worker's stable name and OS thread id — the
             # correlation keys a profiler's timeline uses. Absent for a row

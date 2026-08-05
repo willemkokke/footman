@@ -426,3 +426,37 @@ def test_serial_and_exclusive_carry_the_lane_key():
     assert tree["tasks"]["legacy"]["lane"] == "serial"
     assert tree["tasks"]["bench"]["lane"] == "exclusive"
     assert "lane" not in tree["tasks"]["plain"]
+
+
+def test_one_broken_annotation_degrades_only_its_parameter():
+    # `eval_str` is all-or-nothing, so the fallback resolves per parameter:
+    # the typo'd one passes through as text, the sibling keeps its type —
+    # previously one broken name cost the whole task its grammar.
+    def f(x="d", flag: bool = False): ...
+
+    f.__annotations__ = {"x": "NoSuchType", "flag": "bool"}  # PEP-563 strings
+    with pytest.warns(UserWarning, match=r"<x>.*'NoSuchType' did not resolve"):
+        by_name = {s["name"]: s for s in specs(f)}
+    assert by_name["flag"]["kind"] == "flag"  # the sibling survived
+    assert "types" not in by_name["x"]  # the broken one degraded to text
+    assert "choices" not in by_name["x"]
+
+
+def test_the_broken_annotation_warning_names_task_and_cause():
+    def deploy(tier="post"): ...
+
+    # What ruff once made of a quote-stripped Literal: a subtraction of two
+    # names, which is exactly as unresolvable as a typo.
+    deploy.__annotations__ = {"tier": "post - merge"}
+    with pytest.warns(UserWarning, match=r"deploy.*<tier>.*name 'post'"):
+        specs(deploy)
+
+
+def test_a_broken_return_annotation_degrades_alone():
+    def f(flag: bool = False): ...
+
+    f.__annotations__ = {"flag": "bool", "return": "Gone"}
+    with pytest.warns(UserWarning, match=r"<return>.*did not resolve"):
+        sig = _manifest.resolved_signature(f)
+    assert sig.parameters["flag"].annotation is bool
+    assert sig.return_annotation == "Gone"

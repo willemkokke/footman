@@ -30,6 +30,12 @@ nearest wins:
 | `"unmanaged"` | footman stays out: children inherit the live process cwd |
 | an absolute path | itself |
 
+The targets the tokens resolve are also plain data on the context —
+`ctx.root_dir` and `ctx.invoked_dir` — readable from any body whatever its
+own policy, so a task can anchor one branch of its work on the root while
+its arguments stay invocation-relative (the
+[cookbook shows the split](cookbook.md#the-task-that-anchors-one-branch-on-the-root)).
+
 `rel=` appends a relative suffix to the resolved base — a nearer `rel`
 replaces a farther one, never stacks. A relative `cwd=`, an absolute `rel=`,
 and `rel=` under `unmanaged` are errors that say what to use instead.

@@ -109,6 +109,13 @@ class TaskResult:
     `parallel()` block's queued calls, the call moment for body calls. The
     report's tie-break for starts landing inside the same instant; `None`
     for a row minted outside the request pipeline."""
+    lane_waits: list[tuple[str, float]] = field(default_factory=list)
+    """Lanes this task waited for before its body ran — `(lane, seconds)`
+    rows, recorded only when the claim actually waited. The label is the
+    claim's own (a named lane, `serial`, `exclusive`, `console`), so the
+    report answers "what serialised this task, for how long" without
+    re-running with eyes on the terminal. Never part of `duration` — the
+    body had not started."""
     body_returned: Any = None
     """What the body actually returned — the value dependents and body
     callers receive, snapshotted at the body's exit. `returned` is its
@@ -1696,6 +1703,7 @@ def run_bound(
         hook_error = _enter_task_hooks(life, handle)
     else:
         handle = None
+    lane_waits: list[tuple[str, float]] = []
     try:
         error: BaseException | None
         if hook_error is not None:
@@ -1709,7 +1717,7 @@ def run_bound(
                 inherited=inherited,
                 console=console,
                 named=named,
-            ):
+            ) as lane_waits:
                 if lane_policy is not None:
                     with _serial_globals(ctx):
                         code, returned, error = _call(fn, args, kwargs, as_call)
@@ -1736,6 +1744,7 @@ def run_bound(
     result.started = started
     result.thread = born
     result.thread_id = threading.get_native_id()
+    result.lane_waits = lane_waits
     reviewers = registry.task_reviewers(fn)
     if reviewers and hook_error is None:
         # The row's review window: the body concluded, the record is still a

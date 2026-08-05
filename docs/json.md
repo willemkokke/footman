@@ -70,7 +70,12 @@ ran; a `shared` row carries none of that blame — nothing blocked it, it
 was answered, and it seats at the moment it was. A row whose node waited on
 prerequisites also carries `queued_ms`: how long it sat ready after its last
 prerequisite finished, waiting for a worker — launch latency, never part of
-`duration_ms`. A row that executed carries `thread` and `thread_id` — the
+`duration_ms`. A row whose lane claim actually waited carries `lane_waits` —
+`[{"lane": "cspell-cache", "waited_ms": 812.4}, …]`, the claim's own label
+(a named lane, `serial`, `exclusive`, `console`) — so which lane serialised
+what, and for how long, is answerable from the report without re-running
+with eyes on the terminal; a claim granted on arrival records nothing. A
+row that executed carries `thread` and `thread_id` — the
 worker's stable name and its OS thread id, the correlation keys a profiler's
 timeline uses; while a task runs, its worker wears the task's name
 (`fm:build`, badged `[serial]`/`[exclusive]` under a lane hold), so a
