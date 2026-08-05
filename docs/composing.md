@@ -668,7 +668,12 @@ validated through the same pipeline as a task parameter — `Literal` choices,
 `Path` file completion, bounds and dynamic `suggest()` choices all work,
 because the manifest describes it with the same machinery and <kbd>Tab</kbd>
 answers from that (a dynamic completer is recomputed fresh at the keystroke,
-exactly as a task parameter's is). Read it anywhere in-run as
+exactly as a task parameter's is). `bare=` makes the value optional: it is
+what a bare mention means (`footman.profile`'s `--profile` →
+`fm-profile.json`, `--profile=out.json` → the attached value), the same
+grammar footman's own `--install-completion` speaks; a bare mention of an
+option without `bare=` stays the taught `=`-attachment error. Read it
+anywhere in-run as
 `ENV_FILE.value` (parsed once, frozen for the run; outside a run the read is
 a taught error). Cross-plugin use is an ordinary import of the singleton.
 

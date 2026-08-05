@@ -58,8 +58,8 @@ Advertise the module (or a specific `Group` in it) under the
 A target with an attribute (`pkg.mod:tasks`) names one `Group`; a bare
 module target contributes whatever the module registers — which is how a
 **lifecycle-only** plugin (hooks and options, not a single task) is a valid
-provider. footman's own `footman.docs`, `footman.tools` and
-`footman.env_files` are declared exactly this way.
+provider. footman's own `footman.docs`, `footman.tools`,
+`footman.env_files` and `footman.profile` are declared exactly this way.
 
 ## Being pulled
 

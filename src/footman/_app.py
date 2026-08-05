@@ -841,6 +841,23 @@ def _print_json(results: list[_executor.TaskResult], *, total: float) -> None:
             # that executed nothing (a `shared` row, a refusal).
             entry["thread"] = r.thread
             entry["thread_id"] = r.thread_id
+        if r.after:
+            # The plan's edges into this row, by address — what a profile
+            # draws dependency arrows from. Additive to schema 1.
+            entry["after"] = list(r.after)
+        if r.sections and r.started is not None:
+            # Task-authored profiling: `at_ms` places each section relative
+            # to the task's own start (negative is legal — a retroactive
+            # stream window may predate the task). Additive to schema 1.
+            entry["sections"] = [
+                {
+                    "name": s.name,
+                    **({"stream": s.stream} if s.stream else {}),
+                    "at_ms": round((s.started - r.started) * 1000, 3),
+                    "duration_ms": round(s.duration * 1000, 3),
+                }
+                for s in r.sections
+            ]
         value = r.returned
         # An int return is the exit-code channel (duty's contract), not data;
         # None is "nothing to say". Everything else — bools included — is data.
@@ -871,6 +888,13 @@ def _print_json(results: list[_executor.TaskResult], *, total: float) -> None:
                     "address": s.address,
                     "code": s.code,
                     "duration_ms": round(s.duration * 1000, 3),
+                    # Where the step sits inside its task's span — absent for
+                    # a record that never ran (dry-run). Additive to schema 1.
+                    **(
+                        {"at_ms": round((s.started - r.started) * 1000, 3)}
+                        if s.started is not None and r.started is not None
+                        else {}
+                    ),
                     "stdout": s.stdout,
                     "stderr": s.stderr,
                     "audit": [[e.moment, e.actor, e.code] for e in s.audit],

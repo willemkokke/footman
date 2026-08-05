@@ -300,14 +300,22 @@ def _parse_globals(
     the task chain.
 
     *plugin* maps a pulled plugin's long options (`--env-file`) to their
-    kinds, making them ordinary globals here. *lenient* carries an unknown
-    dash token through untouched instead of refusing — the pre-discovery
-    walk cannot know the plugins yet, so the authoritative post-discovery
-    parse is the one that teaches.
+    kinds — `option?` marks one whose bare form is itself meaningful
+    (`GlobalOption(bare=…)`), the `[SHELL]`-hint grammar footman's own
+    completion installers speak. *lenient* carries an unknown dash token
+    through untouched instead of refusing — the pre-discovery walk cannot
+    know the plugins yet, so the authoritative post-discovery parse is the
+    one that teaches.
     """
     known: dict[str, str] = dict(_GLOBAL_KIND)
+    value_optional = set(_VALUE_OPTIONAL)
     if plugin:
-        known.update(plugin)
+        for flag, kind in plugin.items():
+            if kind == "option?":
+                known[flag] = "option"
+                value_optional.add(flag)
+            else:
+                known[flag] = kind
     globals_: list[str] = []
     while i < len(argv) and argv[i].startswith("-") and argv[i] != "--":
         name = argv[i].split("=", 1)[0]
@@ -326,7 +334,7 @@ def _parse_globals(
         if (
             known[name] == "option"
             and "=" not in argv[i]
-            and canon not in _VALUE_OPTIONAL
+            and canon not in value_optional
         ):
             follower = (
                 argv[i + 1]
@@ -433,12 +441,18 @@ def _resolve_head(
                 i > 0
                 and (prev := argv[i - 1]).startswith("-")
                 and "=" not in prev
-                and _GLOBAL_KIND.get(prev) == "option"
+                and (
+                    _GLOBAL_KIND.get(prev) == "option"
+                    or any(
+                        "--" + g["name"] == prev and "bare" in g
+                        for g in tree.get("globals", ())
+                    )
+                )
             ):
                 # The word rode behind a bare value-optional global
-                # (`--install-completion zsh` — required-value globals
-                # already refused in _parse_globals): teach the attachment,
-                # never "unknown task 'zsh'".
+                # (`--install-completion zsh`, a plugin's `--profile out.json`
+                # — required-value globals already refused in _parse_globals):
+                # teach the attachment, never "unknown task 'zsh'".
                 raise ChainError(
                     _expects_value(None, prev, _GLOBAL_HINT.get(prev, "VALUE"), token)
                 )
@@ -552,7 +566,10 @@ def split_chain(
     tree: dict[str, Any], argv: list[str]
 ) -> tuple[list[str], list[Segment]]:
     """Split *argv* into leading globals and a list of resolved segments."""
-    plugin = {"--" + g["name"]: g["kind"] for g in tree.get("globals", ())}
+    plugin = {
+        "--" + g["name"]: ("option?" if "bare" in g else g["kind"])
+        for g in tree.get("globals", ())
+    }
     globals_, i = _parse_globals(argv, 0, plugin=plugin)
     segments: list[Segment] = []
     prev_group: tuple[str, dict[str, Any]] | None = None

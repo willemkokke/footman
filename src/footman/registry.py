@@ -88,6 +88,14 @@ class GlobalOption:
     because the manifest describes it with the same machinery. Read it
     anywhere in-run as `OPT.value` (frozen after parse); cross-plugin use is
     an ordinary import of the singleton.
+
+    `bare=` makes the value optional: it is what a bare mention means
+    (`--profile` → `bare`, `--profile=out.json` → the attached value), the
+    same grammar footman's own `--install-completion` speaks. Its string
+    form runs the ordinary coercion, so a `bare=` that would not survive the
+    option's own pipeline is a registration-time author error, taught at
+    parse. Meaningless on a flag — a flag is nothing but a bare mention —
+    and refused there.
     """
 
     __slots__ = (
@@ -95,6 +103,7 @@ class GlobalOption:
         "_reads",
         "_value",
         "annotation",
+        "bare",
         "default",
         "help",
         "name",
@@ -104,6 +113,7 @@ class GlobalOption:
     name: str
     annotation: Any
     default: Any
+    bare: Any
     help: str
     owner: str
 
@@ -113,6 +123,7 @@ class GlobalOption:
         annotation: Any = bool,
         *,
         default: Any = None,
+        bare: Any = None,
         help: str = "",  # matches the manifest's vocabulary
     ) -> None:
         if name.startswith("-"):
@@ -120,9 +131,16 @@ class GlobalOption:
                 f"GlobalOption({name!r}): give the bare name — the dashes are "
                 f"the grammar's (and plugin globals are long-form only)"
             )
+        if bare is not None and annotation is bool:
+            raise RegistrationError(
+                f"GlobalOption({name!r}): bare= names what a bare mention "
+                f"means, and a flag is nothing but a bare mention — give the "
+                f"option a value type, or drop bare="
+            )
         self.name = cli_name(name)
         self.annotation = annotation
         self.default = default if annotation is not bool else bool(default)
+        self.bare = bare
         self.help = help
         # The DEFINING module, never the importing capture: what a collision
         # names, what pairing and provenance key on.

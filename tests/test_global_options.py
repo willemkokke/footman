@@ -355,3 +355,65 @@ def test_task_help_lists_declared_globals():
     result = Runner().invoke("--help deploy", tasks=reg)
     assert result.ok, result.stderr
     assert "reads --region (from acme.devkit)" in result.stdout
+
+
+# --- bare= (the value a bare mention means) ----------------------------------
+
+
+def test_bare_names_what_a_bare_mention_means():
+    reg = Group("root")
+    opt = _adopt(reg, "out", Path, bare="o.json")
+
+    @reg.task(uses=[opt])
+    def build():
+        print(f"out={opt.value}")
+
+    bare = Runner().invoke("--out build", tasks=reg)
+    assert bare.ok, bare.stderr
+    assert "out=o.json" in bare.stdout  # the author's bare= value, coerced
+
+    attached = Runner().invoke("--out=x.json build", tasks=reg)
+    assert attached.ok, attached.stderr
+    assert "out=x.json" in attached.stdout  # an attached value still wins
+
+    absent = Runner().invoke("build", tasks=reg)
+    assert absent.ok, absent.stderr
+    assert "out=None" in absent.stdout  # bare= is not a default
+
+
+def test_bare_on_a_flag_is_refused():
+    with pytest.raises(RegistrationError, match=r"drop bare="):
+        GlobalOption("audit", bare="yes")
+
+
+def test_the_manifest_carries_bare():
+    reg = Group("root")
+    opt = _adopt(reg, "out", Path, bare="o.json")
+    spec = _manifest._global_spec(opt, {})
+    assert spec["bare"] == "o.json"
+    plain = _adopt(reg, "region", str, default="eu")
+    assert "bare" not in _manifest._global_spec(plain, {})
+
+
+def test_an_uncoercible_bare_is_taught_at_parse():
+    reg = Group("root")
+    _adopt(reg, "level", int, bare="deep")  # an author error, caught in use
+
+    @reg.task
+    def build(): ...
+
+    result = Runner().invoke("--level build", tasks=reg)
+    assert not result.ok
+    assert "--level" in result.stderr
+
+
+def test_a_word_after_a_bare_mention_teaches_attachment():
+    reg = Group("root")
+    _adopt(reg, "out", Path, bare="o.json")
+
+    @reg.task
+    def build(): ...
+
+    result = Runner().invoke("--out o.json build", tasks=reg)
+    assert not result.ok
+    assert "--out=o.json" in result.stderr
