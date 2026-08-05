@@ -425,3 +425,7 @@ install** — the machinery is repo-only in toolroom, so
 `pip install toolroom` is the bridge and the stubs, nothing else; the
 inversion's user-facing entry point waits for a machinery dist that
 external demand has yet to order.
+
+**2026-08-05, end of day: EXECUTED — the thread is complete.**
+toolroom 0.1.0 and footman 0.32.0 shipped both halves of the split;
+the sibling plan's closing section carries the record.

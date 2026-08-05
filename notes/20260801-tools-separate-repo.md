@@ -9,8 +9,9 @@ plans. Decisions marked **open** await Willem's call.
 **2026-08-05: the inversion ruling changed the shared surface — read
 the dated section at the bottom before the body; the graft/auto-wired
 premises no longer hold. Same day, RULED: "definitely separate repo"
-— this is the operative plan, adjusted for the inversion (dist and
-import name `toolroom`, no graft, no shim, wholesale move).**
+— and, by the end of that same day, EXECUTED: toolroom 0.1.0 and
+footman 0.32.0 shipped both halves. The bottom section records the
+completion.**
 
 ## What is identical to the namespace plan
 
@@ -344,3 +345,35 @@ not before.
 Also deferred, same day: docs feature parity with footman's site
 (the theme block — dark mode and friends) and, perhaps, a
 playground.
+
+## 2026-08-05 — EXECUTED. The thread is complete.
+
+Everything above shipped, in one day:
+
+- **toolroom 0.1.0 released** (trusted publishing; the debut carried
+  the extraction plus the first refresh's own harvest — djlint 1.44.0
+  observed by the machinery hours after it moved in).
+- **The refresh lane proved itself live**: gather on three platforms,
+  single-writer assemble, a real PR with a prepared bump and a green
+  gate; the tag is event-driven (`tag-refresh.yml` fires on the
+  merge, whenever it happens — the polling step could not survive
+  human mode).
+- **footman 0.32.0 released** with the breaking removal (PRs #319 +
+  #320): bridge, stubs, machinery, `tool-history/`, and the refresh
+  workflow gone; no shim; the `footman.tools` entry point dropped.
+  footman's own gate, playground, and docs all run through toolroom
+  as a dev dependency — the merged coverage bar held at 92%+ after
+  shedding ~9,000 tested lines.
+- **The Q7 twin ruling met production**: `run()`'s container door now
+  keys the Argv wording on shape (`.posix()`), so toolroom's twin
+  teaches the same lesson footman's own class does.
+- **The tool reference docs moved home**: 36 mkdocstrings pages
+  generated from the checked-in stubs into toolroom's site, the
+  sidebar regenerated between markers, the nav drift guard un-skipped
+  and enforcing.
+
+What remains is aftermath, not architecture: hse migrates its imports
+when it takes 0.32; the trigger escalates past human when trust
+accrues (branch protection + auto-merge, then `REFRESH_MODE`); docs
+theme parity and the playground stay on toolroom's wishlist. The
+split this note designed is done.
