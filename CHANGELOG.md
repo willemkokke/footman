@@ -7,6 +7,8 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+## [0.31.0] - 2026-08-05
+
 ### Added
 
 - **Structured returns: the return annotation is the output contract.**
@@ -3753,7 +3755,8 @@ versions may include breaking changes.
 
 - Placeholder release claiming the `footman` name on PyPI. Not tagged in git.
 
-[Unreleased]: https://github.com/willemkokke/footman/compare/v0.30.0...HEAD
+[Unreleased]: https://github.com/willemkokke/footman/compare/v0.31.0...HEAD
+[0.31.0]: https://github.com/willemkokke/footman/compare/v0.30.0...v0.31.0
 [0.30.0]: https://github.com/willemkokke/footman/compare/v0.29.1...v0.30.0
 [0.29.1]: https://github.com/willemkokke/footman/compare/v0.29.0...v0.29.1
 [0.29.0]: https://github.com/willemkokke/footman/compare/v0.28.1...v0.29.0

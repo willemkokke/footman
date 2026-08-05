@@ -393,7 +393,7 @@ $ fm --json --dry-run release 1.2.0
 
 ```console
 $ fm --json --version
-{"schema": 1, "name": "footman", "version": "0.30.0"}
+{"schema": 1, "name": "footman", "version": "0.31.0"}
 ```
 
 ## The two exceptions
