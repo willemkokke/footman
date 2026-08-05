@@ -274,8 +274,10 @@ workflow), footman drops its `footman.tools` entry point and ships no
 shim, and users respell `plugin("footman.tools")` →
 `plugin("toolroom")` and `footman.tools` → `import toolroom`. What
 remains open here: question 3 (subtree export vs clean start) and
-question 5 (refresh auto-tags vs human). The namespace plan keeps the
-last design open — the Argv/vocabulary home (its question 7). The
-build is not yet ordered; when it is, this plan's phases run with the
-graft parts replaced by the inversion shape (the extraction ships the
-`toolroom` package, not `src/footman/tools/`).
+question 5 (refresh auto-tags vs human). The namespace plan's
+question 7 — the Argv/vocabulary home — was RULED later the same day:
+the twin; the seam speaks stdlib (see that note's section). **All
+design opens are now ruled; questions 3 and 5 here are the last
+calls before a build order.** When the build is ordered, this plan's
+phases run with the graft parts replaced by the inversion shape (the
+extraction ships the `toolroom` package, not `src/footman/tools/`).
