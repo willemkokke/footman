@@ -7,6 +7,15 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Fixed
+
+- **`tools.list` never claims a present tool is absent.** A tool that
+  passes the installed filter but whose `--version` read fails (a stalled
+  spawn, a timeout, output with no version token) now renders the
+  diagnosis — `unreadable (timed out after 30s)` — instead of the false
+  `not installed`. Presence and readability are different facts, and the
+  version probe already knew which one failed.
+
 ## [0.30.0] - 2026-08-05
 
 ### Added
