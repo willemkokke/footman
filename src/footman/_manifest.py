@@ -64,13 +64,52 @@ def resolved_signature(fn: Any) -> inspect.Signature:
 
     `from __future__ import annotations` (and any PEP 563 usage) turns a
     tasks file's annotations into strings; `eval_str` turns them back into the
-    types the grammar reasons about. Falls back to the raw signature if a name
-    cannot be resolved (e.g. a type defined in a local scope).
+    types the grammar reasons about. `eval_str` is all-or-nothing — one name
+    that cannot resolve raises for the whole signature — so on failure each
+    annotation is evaluated on its own: one broken parameter degrades to
+    pass-through text, and the rest keep their types, choices and completion.
     """
     try:
         return inspect.signature(fn, eval_str=True)
     except (NameError, TypeError, AttributeError):
-        return inspect.signature(fn)
+        return _partially_resolved(fn)
+
+
+def _partially_resolved(fn: Any) -> inspect.Signature:
+    """The raw signature with every annotation that *can* resolve, resolved.
+
+    Evaluates each string annotation against the function's module globals —
+    the same environment `eval_str` uses — and leaves only the failing ones
+    as strings, warning once per broken parameter with the underlying error.
+    (`warnings` dedups an identical message per process, so the repeated
+    `resolved_signature` calls of one invocation say this once.)
+    """
+    sig = inspect.signature(fn)
+    module_globals = getattr(fn, "__globals__", {})
+    where = f"{getattr(fn, '__module__', '?')}.{getattr(fn, '__qualname__', fn)}"
+
+    def resolve(name: str, annotation: Any) -> Any:
+        if not isinstance(annotation, str):
+            return annotation
+        try:
+            # What `eval_str` does per annotation, minus the all-or-nothing.
+            return eval(annotation, module_globals)
+        except Exception as exc:  # any failure means "not a usable type"
+            warnings.warn(
+                f"footman: {where} <{name}>: annotation {annotation!r} did "
+                f"not resolve ({exc}); values pass through as text",
+                stacklevel=2,
+            )
+            return annotation
+
+    params = [
+        p.replace(annotation=resolve(p.name, p.annotation))
+        for p in sig.parameters.values()
+    ]
+    return sig.replace(
+        parameters=params,
+        return_annotation=resolve("return", sig.return_annotation),
+    )
 
 
 def call_signature(fn: Any) -> inspect.Signature:
@@ -281,14 +320,18 @@ def param_spec(param: inspect.Parameter) -> dict[str, Any]:
                 f"a stdin payload type and everything it names must be "
                 f"module-level, where `eval_str` can see them"
             )
-        # The annotation resolves to nothing footman can coerce (a string
-        # that never resolved, a value, an exotic generic): values will pass
-        # through as plain text. Silent degrade is a debugging tax — say so.
-        warnings.warn(
-            f"footman: parameter {param.name!r}: annotation {element!r} is "
-            f"not a usable type; values are passed through as text",
-            stacklevel=2,
-        )
+        # The annotation resolves to nothing footman can coerce (a value, an
+        # exotic generic): values will pass through as plain text. Silent
+        # degrade is a debugging tax — say so. A *string* landing here was
+        # already reported by `_partially_resolved`, which knows the task and
+        # the underlying error; repeating it per spec build would turn one
+        # broken name back into a warning block.
+        if not isinstance(element, str):
+            warnings.warn(
+                f"footman: parameter {param.name!r}: annotation {element!r} "
+                f"is not a usable type; values are passed through as text",
+                stacklevel=2,
+            )
     return spec
 
 

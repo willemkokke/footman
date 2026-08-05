@@ -518,5 +518,5 @@ def test_unresolvable_annotation_warns():
         go.__annotations__ = {"x": "NoSuchType"}
         reg.task(go)
 
-    with pytest.warns(UserWarning, match="not a usable type"):
+    with pytest.warns(UserWarning, match=r"<x>.*did not resolve"):
         build_tree(tasks)
