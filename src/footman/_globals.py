@@ -839,14 +839,20 @@ def named_lanes(lanes: tuple[Lane, ...], name: str = "") -> Any:
             yield []
             return
         wanted = {ln.name for ln in lanes}
-        entered = time.monotonic()
+        stalled = False
         with _arb_cv:
+            # Inside the lock on purpose: the clock must cover only the
+            # predicate wait. Started outside, a claim granted on arrival
+            # would book the mutex acquisition as a lane wait — a phantom
+            # row whenever the arbiter is briefly busy.
+            entered = time.monotonic()
             while (
                 any(w in _named_holders for w in wanted)
                 or _serial_holder is not None
                 or _excl_holder is not None
                 or _excl_waiting
             ):
+                stalled = True
                 busy = next((w for w in wanted if w in _named_holders), None)
                 _wait_note(
                     name,
@@ -856,7 +862,7 @@ def named_lanes(lanes: tuple[Lane, ...], name: str = "") -> Any:
             for w in wanted:
                 _named_holders[w] = name or "?"
         try:
-            yield _waited(",".join(sorted(wanted)), entered)
+            yield _waited(",".join(sorted(wanted)), entered) if stalled else []
         finally:
             with _arb_cv:
                 for w in wanted:
@@ -900,8 +906,12 @@ def lane(
             label = ",".join(sorted(wanted))
         else:
             label = "console" if console else "exclusive"
-        entered = time.monotonic()
+        stalled = False
         with _arb_cv:
+            # Inside the lock on purpose: the clock must cover only the
+            # predicate wait, or a claim granted on arrival books the mutex
+            # acquisition as a lane wait (a phantom row on a busy arbiter).
+            entered = time.monotonic()
             if inherited:
                 pass  # a lineage extends every hold, the console included
             elif policy == "serial":
@@ -914,6 +924,7 @@ def lane(
                     or _named_holders
                     or (console and _console_holder is not None)
                 ):
+                    stalled = True
                     _wait_note(name, "the serial lane", _serial_holder or _excl_holder)
                 _serial_holder = name or "?"
             elif policy == "exclusive":
@@ -926,6 +937,7 @@ def lane(
                         or _named_holders
                         or (console and _console_holder is not None)
                     ):
+                        stalled = True
                         _wait_note(name, "the exclusive drain", _serial_holder)
                 finally:
                     _excl_waiting -= 1
@@ -937,6 +949,7 @@ def lane(
                     or (console and _console_holder is not None)
                     or any(w in _named_holders for w in wanted)
                 ):
+                    stalled = True
                     busy = next((w for w in wanted if w in _named_holders), None)
                     what = (
                         f"the {busy} lane"
@@ -953,7 +966,7 @@ def lane(
         if claimed_console:
             _suspend_status(True)  # outside the cv: lock order is arb → status
         try:
-            yield _waited(label, entered) if label else []
+            yield _waited(label, entered) if stalled and label else []
         finally:
             with _arb_cv:
                 _running -= 1
@@ -1018,10 +1031,12 @@ def _wait_note(name: str, what: str, holder: str | None) -> None:
 def _waited(label: str, entered: float) -> list[tuple[str, float]]:
     """What this claim paid at the bar, for the run report.
 
-    One `(label, seconds)` row when the claim actually waited; empty when it
-    was granted on arrival (sub-millisecond is arrival). The claim's own
-    label, not the blocker-of-the-moment: a wait can pass through several
-    holders, and what the report answers is "what serialised *this*"."""
+    Called only after the claim's predicate genuinely stalled; the clock
+    started inside the arbiter lock, so mutex acquisition never counts. One
+    `(label, seconds)` row, unless the stall resolved inside a millisecond —
+    that is arrival, not serialisation. The claim's own label, not the
+    blocker-of-the-moment: a wait can pass through several holders, and what
+    the report answers is "what serialised *this*"."""
     waited = time.monotonic() - entered
     return [(label, waited)] if waited >= 0.001 else []
 
