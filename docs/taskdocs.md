@@ -1,6 +1,6 @@
 # Your tasks, documented
 
-footman ships a first-party plugin that renders a project's task tree as
+Footman ships a first-party plugin that renders a project's task tree as
 markdown — the same names, params, docstring help, defaults, and examples
 that `fm --help` shows, as pages you can publish. Everything on this page is
 dogfooded: the [task reference](tasks/index.md) in this site's nav is
@@ -8,7 +8,7 @@ generated output, and the sample further down is embedded live.
 
 ## Write plain prose
 
-footman surfaces a docstring — and a [`doc()`](typing.md#validation-markers)
+Footman surfaces a docstring — and a [`doc()`](typing.md#validation-markers)
 string — **as plain text**: verbatim in `fm --help`, so it reads in any terminal
 and survives a pipe (`fm --help build | less`) byte for byte, and as plain
 paragraphs in the exported markdown. It renders no rich markup in the terminal:
@@ -126,7 +126,7 @@ pseudo-terminal. Neither is a footman dependency: the task is gated with
 footman's own `@requires_dep("rich")`, so without rich it simply lists as
 `shots … (unavailable: requires rich)` and refuses to run with that
 message — add rich to your docs dependency group and it comes alive.
-footman documenting itself with its own availability machinery is exactly
+Footman documenting itself with its own availability machinery is exactly
 the use `@requires_dep` was built for.
 
 ## Animated sessions: `fm docs.cast`

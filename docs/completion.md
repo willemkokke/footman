@@ -3,14 +3,14 @@
 Completion answers from a JSON manifest cached per directory under
 `~/.cache/footman/` (or `$XDG_CACHE_HOME/footman/` where that's set — and
 `$FOOTMAN_CACHE_DIR` overrides both, moving every footman cache in one go),
-so each folder of a [monorepo](monorepos.md) caches its own merged cascade. The hot
+so each directory of a [monorepo](monorepos.md) caches its own merged cascade. The hot
 path is stdlib-only — it reads one file, parses JSON, and walks the tree; it
 **never imports footman or your tasks**.
 
 ## The latency story
 
 Measured cold-process on an M-series Mac — the row that matters is the last
-one, because it's the exact command the installed shell hooks run:
+one, because it's the exact command the installed completion hooks run:
 
 | variant                                    |   mean |
 | ------------------------------------------ | -----: |
@@ -23,14 +23,14 @@ So the honest headline is **~25 ms per <kbd>Tab</kbd>** for a structural answer
 — task names, options, `Literal` choices — of which ~17 ms is Python starting up
 at all. A [dynamic completer](#dynamic-completions-are-recomputed-fresh) or the
 [first build in a fresh directory](#keeping-the-cache-current) costs more, by
-design and bounded. footman regenerates the manifest for free on any
+design and bounded. Footman regenerates the manifest for free on any
 execution-path run (it is importing your code anyway) and rewrites it only when
 the command surface actually changed. Reproduce with
 `uv run python scripts/bench_completion.py`.
 
 ## How it stays fast
 
-footman's `main()` checks for `--complete` **before importing the framework or
+Footman's `main()` checks for `--complete` **before importing the framework or
 your tasks**, dispatching straight to the stdlib-only resolver. A bare
 `import footman` pays for nothing but the entry module. That is why completion is
 ~15× faster than runners that re-import your project on every keystroke. When a

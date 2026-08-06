@@ -31,8 +31,8 @@ writing any shared dict — last write wins, at a time nobody chose. And a
 runner that can run the same tool two ways has a subtler problem waiting: a
 tool run **in-process** reads the live `os.environ`, while the
 **subprocess** form of the very same call receives a constructed `env=` —
-two lanes of one tool call reading *different worlds*, so correct code
-breaks by switching lanes.
+two paths of one tool call reading *different worlds*, so correct code
+breaks by switching paths.
 
 ## What footman does about it
 
@@ -41,8 +41,8 @@ router** — the same move as its stdout router, applied to a second global:
 
 - **Each task owns a whole environment**, copied from the run's at the
   boundary — not a diff against something. `os.environ` answers from it,
-  every child footman spawns receives it, and the subprocess lane gets the
-  same value the in-process lane reads. The two lanes read one world.
+  every child footman spawns receives it, and the subprocess path gets the
+  same value the in-process path reads. The two paths read one world.
 - **Writes scope to the task.** `os.environ["API_KEY"] = "…"` is visible to
   this task's reads and to every child it spawns, and invisible to
   siblings. A one-time note names the deliberate spellings: `env=` for one

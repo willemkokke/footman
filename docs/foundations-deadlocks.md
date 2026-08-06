@@ -42,7 +42,7 @@ projects point every task at one directory, that setup is the *common
 case*, not a corner. No detection rule fires, because each rule is checked
 at the moment of one move, and the circle only exists across both.
 
-footman changes the ingredient instead. Serialisation is **declared on the
+Footman changes the ingredient instead. Serialisation is **declared on the
 task and granted at the task boundary**, before the body runs — the
 scheduler *orders* claims instead of letting bodies contend mid-flight. A
 resource acquired only at boundaries can always be scheduled; hold-and-wait

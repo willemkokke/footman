@@ -6,7 +6,7 @@
 uv add --dev footman        # or: pip install footman
 ```
 
-footman requires Python 3.11+ and has zero runtime dependencies. Installing it
+Footman requires Python 3.11+ and has zero runtime dependencies. Installing it
 puts two console scripts on your `PATH`: `footman` and the two-letter `fm`.
 
 You can also install it once, globally (`uv tool install "footman[uv]"`),

@@ -1,6 +1,6 @@
 # Completion on bash
 
-This is a recording of a real bash session — the hook loaded the way the
+This is a recording of a real bash session — the completion hook loaded the way the
 next section describes, <kbd>Tab</kbd> <kbd>Tab</kbd> listing the
 candidates (bash's default reveals the list on the second press; one
 press completes as far as the match reaches), a prefix completing.
@@ -36,7 +36,7 @@ eval "$(fm --setup-completion=bash)"
 
 ## Windows (git-bash)
 
-git-bash is a first-class target: `fm --install-completion` with no
+git-bash gets the full treatment: `fm --install-completion` with no
 argument detects it (via the `MSYSTEM` variable it exports — PowerShell's
 `PSModulePath` is machine-level and set inside git-bash too, so it can't
 be the tell), and the `source` line written into `~/.bashrc` uses the

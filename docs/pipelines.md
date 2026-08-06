@@ -1,6 +1,6 @@
 # Pipelines
 
-footman is a first-class citizen in a pipeline: stdin binds to typed
+Footman holds up its end of a pipeline: stdin binds to typed
 parameters, a task can own stdout with its return value, and the exit code
 distinguishes "footman did not understand you" from "the work failed". One
 signature, both directions:

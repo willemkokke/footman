@@ -15,8 +15,8 @@ key:
    it). Personal defaults for every project: a purist's `uv = false`, a
    permanent `progress = false`.
 3. **The project cascade** — walking from the repo root down to your
-   current directory, each folder may contribute settings; nearer folders
-   override farther ones. Within one folder, a standalone `footman.toml`
+   current directory, each directory may contribute settings; nearer directories
+   override farther ones. Within one directory, a standalone `footman.toml`
    overrides `[tool.footman]` in `pyproject.toml` — the customary
    dedicated-file-wins rule.
 4. **`--config PATH`** — total control over config: the named file
@@ -64,7 +64,7 @@ older footman.
 
 | Key          | Meaning                                                   |
 | ------------ | --------------------------------------------------------- |
-| `tasks`      | Filename to look for in each folder (default `tasks.py`). |
+| `tasks`      | Filename to look for in each directory (default `tasks.py`). |
 | `sequential` | Run tasks one at a time by default.                       |
 | `color`      | `always` / `never` / `auto` (default): when to emit ANSI colour, for footman's own output and the tools it spawns. `--color` / `--no-color` override it. |
 | `jobs`       | Max parallel tasks (default: cores - 1, never below 2).   |
@@ -74,7 +74,7 @@ older footman.
 | `completion.max_age` | Age before a background completion refresh (e.g. `"10m"`; `off` to disable). |
 | `fetch.backend` | Download engine for `fetch()`: `urllib` (default), `curl`, `httpx`, `requests`, or `auto`. |
 | `shell.default` | What `run(shell=True)` resolves to: `posix` (default — bash, then sh, git bash on Windows), `native` (the platform shell), `pwsh`, or a concrete shell name. |
-| `gc`         | `false` disables the daily cache collector. **User-level only**: honoured from the global file; in a project config it is ignored, with a note under `-v`. |
+| `gc`         | `false` disables the cache collector (it runs at most daily). **User-level only**: honoured from the global file; in a project config it is ignored, with a note under `-v`. |
 | `cascade`    | How far discovery ranges for task files *and* config: `none` (this directory only), `repo` (the repository — default), or `filesystem` (across repositories). **User-level only**, like `gc`; `FOOTMAN_CASCADE` overrides it per invocation. |
 
 ## Environment variables

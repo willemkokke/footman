@@ -1,6 +1,6 @@
 # Composing the task surface
 
-A tasks file doesn't have to be a flat list you write by hand. footman treats
+A tasks file doesn't have to be a flat list you write by hand. Footman treats
 a task tree as a *value*: you can hide tasks with plain Python, disable them
 with a reason, adopt tasks from other modules, and mount tasks a pip-installed
 package advertises. One contract ties it together: everything resolves when
@@ -105,28 +105,28 @@ fm: up: Unavailable: requires docker on PATH
 ```
 
 The name always completes and lists — the manifest stays stable — and every
-gate is re-evaluated **live** on every run, so the moment docker appears on
+availability gate is re-evaluated **live** on every run, so the moment docker appears on
 PATH, `fm up` works, whatever the cached manifest thought. `@requires_tool`,
-`@requires_dep`, and `@requires_env` are the common gates — a tool on `PATH`, a
+`@requires_dep`, and `@requires_env` are the common availability gates — a tool on `PATH`, a
 Python module importable, a variable set — and `@requires(predicate, reason=…)`
 is the generic they build on. Stack as many as apply: **every** failure is
 reported, each in its own words, so a task needing both a tool and a variable
-says both. A predicate that raises reads as unavailable (a broken gate must not
+says both. A predicate that raises reads as unavailable (a broken availability gate must not
 swing open).
 
-Keep the gates **below `@task`**, as above — `@task` on top, `@requires_*`
-stacked beneath it. Either order works, for a type checker too: a gate sets an
+Keep the availability gates **below `@task`**, as above — `@task` on top, `@requires_*`
+stacked beneath it. Either order works, for a type checker too: an availability gate sets an
 attribute on the same task object and hands back exactly what it wrapped, so
 the task's typed signature and `.opts()` stay in view whichever side of `@task`
 it stands on. This order simply reads the way it works: `@task` is the
-identity, the gates are modifiers under it.
+identity, the availability gates are modifiers under it.
 
 !!! warning "Keep a predicate cheap — it runs live"
 
-    A gate's predicate runs **every time the manifest is built** — on every
+    An availability gate's predicate runs **every time the manifest is built** — on every
     `fm --list`, every help render, and every background cache refresh — not
     only when the task runs. That liveness is the whole point (no stale
-    availability), but it means a slow gate slows *listing*, not just
+    availability), but it means a slow availability gate slows *listing*, not just
     execution. Keep predicates to a `which`, an `in os.environ`, a `find_spec`
     (which is what `@requires_tool`/`_env`/`_dep` already do); never a network
     call or a heavy import. The completion hot path is exempt — a `<Tab>` reads
@@ -197,9 +197,8 @@ of a module the way an import pulls one name. Then the engine grafts:
   copies, help text riding along). Matching is exact; the whole-group
   spelling `only=["docs"]` *is* the glob, and `only=["docs",
   "docs.build"]` is redundant, not an error. A group pruned empty is
-  dropped entirely. Default-ness survives only if the default survives —
-  the default is the child named `default`, so `only=["lint.default"]`
-  grafts *just* the default and `exclude=["lint.default"]` grafts
+  dropped entirely. The default action is just the child named `default`,
+  so `only=["lint.default"]` grafts *just* the default action and `exclude=["lint.default"]` grafts
   everything but it, readable without ever opening the provider's source.
 - **Typos are loud** — an unknown filter address errors per segment,
   naming what that level actually has.
@@ -318,7 +317,7 @@ Design choices you can rely on:
   (`acme.devkit`) — identity hygiene in the shared registry, not address
   design.
 
-footman's own tooling follows the same rule — built-ins are ordinary,
+Footman's own tooling follows the same rule — built-ins are ordinary,
 opt-in plugins. This repo's tasks.py pulls its first-party
 plugin: `plugin("footman.docs", into="footman")` is [your tasks,
 documented](taskdocs.md) (`fm docs.page` / `site`). A branded CLI writes `into="acme.tools"` instead — branding is a

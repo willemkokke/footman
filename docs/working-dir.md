@@ -1,8 +1,8 @@
 # Working directory & environment
 
-footman runs independent tasks in parallel, in one process. A process has
+Footman runs independent tasks in parallel, in one process. A process has
 exactly one working directory and one environment — so if tasks changed them
-directly, they would trample each other. footman's answer: **in a parallel
+directly, they would trample each other. Footman's answer: **in a parallel
 task, the working directory and the environment are per-task data, not
 process state.** Every task knows its own directory (`ctx.cwd`) and its own
 environment overlay (`ctx.env`); every subprocess a task spawns gets both
@@ -153,7 +153,7 @@ def legacy_build():
 
 - **`serial=True`** — the task owns the process globals. At most one serial
   task runs at a time, but it *overlaps* the parallel pool: everything else
-  keeps running. footman applies the task's resolved cwd with a real chdir
+  keeps running. Footman applies the task's resolved cwd with a real chdir
   and its overlay onto the real environment, restores both afterwards, and
   the guards stand down for the duration.
 - **`exclusive=True`** — the full drain, for benchmarks and migrations that

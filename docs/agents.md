@@ -1,9 +1,9 @@
 # AI agents
 
-footman's machine surface — one catalog call, taught refusals, a single-JSON
+Footman's machine surface — one catalog call, taught refusals, a single-JSON
 stdout, structured results with task-returned data — is what a coding agent
 needs to drive a project safely. This page packages it: a paste-ready
-instructions snippet, and hooks that keep an agent's work formatted, linted,
+instructions snippet, and agent hooks that keep its work formatted, linted,
 and gated.
 
 An agent-readable index of this whole site lives at

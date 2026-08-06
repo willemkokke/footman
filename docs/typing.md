@@ -1,6 +1,6 @@
 # Typed signatures
 
-footman reads your function signature and turns it into a CLI — the same idea
+Footman reads your function signature and turns it into a CLI — the same idea
 typer popularised, applied to a task runner. Types are validated *eagerly*, at
 parse time, with taught error messages.
 
@@ -191,7 +191,7 @@ flowing down.
 
 ## Or just write a docstring
 
-footman reads the parameter docs you already write — Google, NumPy, and
+Footman reads the parameter docs you already write — Google, NumPy, and
 Sphinx styles, auto-detected per docstring. Everything a `doc("…")` marker
 feeds (help lines, completion descriptions, the catalog) fills from the
 docstring instead, the body between the summary and the section renders in
@@ -257,7 +257,7 @@ environment is read.
 ## Dynamic completion
 
 `suggest` attaches a completer — a function that returns live values (git
-branches, deploy targets, the shares below). footman runs it **fresh** each time
+branches, deploy targets, the shares below). Footman runs it **fresh** each time
 you complete that value, in a short-lived subprocess, rather than serving a copy
 baked into the manifest: a value you <kbd>Tab</kbd> to answer a build-critical
 question must be current, not a snapshot from your last run. The recompute is

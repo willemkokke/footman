@@ -1,6 +1,6 @@
 # Troubleshooting
 
-footman treats error messages as product surface: every one names the
+Footman treats error messages as product surface: every one names the
 culprit, states the expectation, and proposes the fix. This page is the
 catalogue — each example below is real output, not paraphrase. If you ever
 hit a raw Python traceback instead of one of these, that's a footman bug;
@@ -100,7 +100,7 @@ file`), never silently ignored.
 The progress bar's estimates come from `*.times.json` files beside the
 completion manifests (`~/.cache/footman/`, or wherever
 `$FOOTMAN_CACHE_DIR` points). The cache also tends itself: at most once
-a day, a detached collector removes pairs whose directory no longer
+a day, the cache collector removes pairs whose directory no longer
 exists and pairs idle for 90 days — everything in the cache rebuilds on
 the next run, so collection can never lose anything that matters.
 Delete files by hand to reset a stale history, or

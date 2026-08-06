@@ -28,7 +28,7 @@ eval "$(fm --setup-completion=zsh)"
 
 ## What you get
 
-footman's zsh hook feeds candidates through `_describe`, the same completion
+Footman's zsh completion hook feeds candidates through `_describe`, the same completion
 builtin `_git` and `_npm` use. Task and group names carry their one-line
 docstring, right-aligned into a column:
 

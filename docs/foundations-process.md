@@ -30,7 +30,7 @@ operating system simply does not offer that.
 
 ## Why it matters to a task runner
 
-footman runs your independent tasks **in parallel, as threads of one
+Footman runs your independent tasks **in parallel, as threads of one
 process**. That is the right trade — tasks spend their time waiting on the
 subprocesses they spawn, so threads give real concurrency without paying
 for process isolation. But it means every parallel task shares one cwd, one

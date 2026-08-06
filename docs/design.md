@@ -144,7 +144,7 @@ the yield runs, claims are released, nothing is left half-converted,
 and the worst case costs one trip around the loop. Between checkpoints
 the step cannot be interrupted, and that is not timidity but Python's
 own rule — a running generator refuses to be closed from outside, by
-design. footman's contract says the same thing plainly: yield where it
+design. Footman's contract says the same thing plainly: yield where it
 is safe to stop, and footman will only ever stop you there.
 
 ## Nothing runs anonymously
@@ -157,7 +157,7 @@ parallel(lint, test, lambda: shutil.rmtree("build"))   # refused
 parallel(lint, test, step(clean, title="clear build/")) # one wrapper fixes it
 ```
 
-This looks strict, and it is — deliberately. footman can only schedule,
+This looks strict, and it is — deliberately. Footman can only schedule,
 record, deduplicate, and safely cancel work it *owns*, and a bare
 callable is a stranger: no name for the report, no place in the plan, no
 way to stop it cleanly. Older versions tried to be accommodating and ran
@@ -177,7 +177,7 @@ that record — the line you see in the report — is called a **receipt**.
 The record's verdict *is* the program's exit code. Every program ends by
 handing back a number — zero for "it worked", anything else for "it
 didn't" — and that number is the oldest, most portable piece of truth in
-computing. footman never wraps it in something fancier: the `Result` you
+computing. Footman never wraps it in something fancier: the `Result` you
 get back from `run()` literally is that integer (with the captured
 output, timing, and command riding along), so `if run(...)`,
 `run(...) == 0`, and every shell-shaped habit you already have keep
@@ -287,7 +287,7 @@ no arguments are bound and no request is resolved inside a step, and
 setup for a body you wrote yourself is simply its first line. Hooks
 with *no* task knowledge in them — a tracing exporter, a timing
 collector — register globally from a plugin instead, and the line
-between the two lanes is one sentence: the moment a global hook would
+between the two channels is one sentence: the moment a global hook would
 say "if this is task X", it belongs on X.
 
 The distinction matters enough to name: observers may **veto**, never
@@ -341,7 +341,7 @@ If two tasks both depend on `build`, `build` runs once and both get the
 answer — that is table stakes for anything with a dependency graph. The
 question with teeth is: what counts as "the same work"?
 
-footman's answer: the same declared task, asked with the same resolved
+Footman's answer: the same declared task, asked with the same resolved
 arguments. `build("web")` twice is one build, shared; `build("web")` and
 `build("api")` are two, correctly and silently. And the rule holds on
 *every* path — whether the request came from the command line, a
@@ -402,7 +402,7 @@ to corrupt a parallel run — every other task chdirs with you. (The
 [Foundations](foundations.md) pages tell this story properly; it is
 worth the detour.)
 
-footman's design splits the problem by resource, and the mechanism is
+Footman's design splits the problem by resource, and the mechanism is
 called a **lane**: a claim on one named resource, serialising only the
 work that claims it. The environment needs no lane at all — footman
 virtualises it, so tasks read and write their own view without touching
@@ -434,7 +434,7 @@ starts, never midway through — the pattern where a running task suddenly
 escalates to grab a resource is the classic recipe for deadlock, and
 footman keeps that door closed by having no way to spell it.
 
-footman itself will only ever build the two lanes it ships — the
+Footman itself will only ever build the two lanes it ships — the
 working directory and the terminal — using exactly the mechanism above.
 Anything further belongs to plugins and to you. One binding per real
 resource also means "two databases" is just two bindings; there is no
