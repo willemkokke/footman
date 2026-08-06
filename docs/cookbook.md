@@ -94,7 +94,7 @@ $ fm format lint --fix test
 `--fix` is lint's, because it follows `lint`. Independent tasks in a
 chain run in parallel by default; `-s` serialises the whole run (and
 reaches `parallel()` calls inside task bodies too), `-k` keeps going past
-failures, `-j 2` caps the width.
+failures, `-j=2` caps the width.
 
 ### Choices that teach
 

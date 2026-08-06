@@ -395,3 +395,97 @@ def test_our_docstrings_stay_google():
         if p.name != "docstrings.py" and rst.search(p.read_text(encoding="utf-8"))
     ]
     assert not offenders, f"Sphinx/RST markup in our own source: {offenders}"
+
+
+def _attached_value_globals() -> list[str]:
+    """The globals whose value is mandatory, from GLOBALS itself — so the
+    guard below tracks the grammar rather than a list someone maintains.
+    Optional-value globals (`--describe [ADDR]`) are excluded: a bare word
+    after one of those can legitimately be the next token."""
+    from footman._split import GLOBALS
+
+    names: list[str] = []
+    for long, short, kind, metavar, _help in GLOBALS:
+        if kind == "option" and metavar and not metavar.startswith("["):
+            names.append(long)
+            if short:
+                names.append(short)
+    return names
+
+
+ATTACHED = _attached_value_globals()
+_OPT = "|".join(map(re.escape, ATTACHED))
+# A CAPS value is metavar notation — `--jobs N`, `--where TASK` — which is
+# how footman's own --help prints it, so it stays legal everywhere.
+_NOT_METAVAR = r"(?![A-Z]+[`\s.,)])"
+# Inside an `fm …` line, whatever follows the option is its value, full
+# stop: a diagnostic never opens with `fm`.
+_ANY_VALUE = rf"{_NOT_METAVAR}[^\s=`|]"
+# A bare option span is judged conservatively, because docs also *quote*
+# footman's own error messages (`--where expects a value, attached: …`).
+# Only shapes no diagnostic uses count: a number, an <angled> placeholder,
+# or a dotted filename.
+_CLEAR_VALUE = r"(?:\d|<[^>\n]+>|[\w-]+\.[\w]+)"
+_SPACE_FORM = re.compile(
+    rf"(?:\$ |`)(?:fm|footman)\b[^`\n]*?\s(?:{_OPT})\s+{_ANY_VALUE}"
+    rf"|`(?:{_OPT})\s+{_CLEAR_VALUE}"
+)
+
+
+def test_the_attached_value_detector_works():
+    """The regex is load-bearing: if it stops matching, the guard below
+    passes by finding nothing."""
+    assert ATTACHED, "GLOBALS stopped declaring mandatory-value options"
+    assert _SPACE_FORM.search("`fm -j 2 check`"), "detector missed a known-bad line"
+    assert _SPACE_FORM.search("$ fm --where mytask"), "detector missed a console line"
+    # The two that actually shipped, in the shapes they shipped in:
+    assert _SPACE_FORM.search("failures, `-j 2` caps the width."), (
+        "detector missed the bare backticked option span"
+    )
+    assert _SPACE_FORM.search("- source: `fm --where <task>` prints file:line."), (
+        "detector missed an <angled> placeholder value"
+    )
+    assert _SPACE_FORM.search("<kbd>Tab</kbd> after `-f <file>` completes"), (
+        "detector missed an <angled> value in a bare span"
+    )
+    assert _SPACE_FORM.search("a typo like `--config prod.tmol` is reported"), (
+        "detector missed a dotted-filename value"
+    )
+    # Metavar notation, which mirrors footman's own --help, stays legal:
+    assert not _SPACE_FORM.search("- `-j/--jobs N` caps the width")
+    assert not _SPACE_FORM.search("`--where TASK` prints a bare file:line")
+    assert not _SPACE_FORM.search("    `-f/--tasks-file PATH` loads a single file")
+    # Quoted diagnostics are prose about an option, not invocations of it:
+    assert not _SPACE_FORM.search(
+        "| `--where expects a value, attached: --where=TASK` | given bare |"
+    )
+    assert not _SPACE_FORM.search("`--jobs (from $JOBS) must be between 1 and 32`")
+    assert not _SPACE_FORM.search("`fm -j=2 check`"), "detector flags the good form"
+    assert not _SPACE_FORM.search("- `-j/--jobs N` caps the width"), (
+        "detector flags metavar notation, which mirrors footman's own --help"
+    )
+
+
+def test_documented_invocations_attach_their_values():
+    """No documented `fm …` line passes a mandatory value across a space.
+
+    footman refuses that form — exit 64, `-j takes its value attached — did
+    you mean -j=2?` — so an example spelling it teaches a command line the
+    reader cannot run. Four shipped this way (`-j 2` in the cookbook,
+    `fm --where <task>` in agents.md, `-f <file>` in monorepos.md,
+    `--config prod.tmol` in troubleshooting.md); nothing tied the examples
+    to the grammar until this guard. Deliberately conservative on bare
+    option spans, because the docs also quote footman's own diagnostics:
+    only a number, an <angled> placeholder or a dotted filename counts
+    there, so a lowercase prose word after an option is left alone.
+    """
+    problems: list[str] = []
+    for path in sorted(_handwritten_docs()):
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            match = _SPACE_FORM.search(line)
+            if match:
+                problems.append(f"{path.name}:{number}: {match.group(0).strip()}")
+    assert not problems, (
+        "documented invocations using the refused space form "
+        "(values are always `=`-attached):\n" + "\n".join(problems)
+    )
