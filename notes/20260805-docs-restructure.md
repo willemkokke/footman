@@ -1,8 +1,16 @@
 # Docs restructure — the split, the ruled vocabulary, the composability story
 
-**Status: EXECUTING.** Reviews ran 2026-08-05; the 24 rulings below were made
-one by one on 2026-08-05/06; this note is step 1 of the execution sequence at
-the bottom. Related notes: [20260725-foundations-plan.md](20260725-foundations-plan.md)
+**Status: LANDED, 2026-08-06 — all eight steps merged the same day.** The
+note itself was step 1 (#323); then the correctness pass (#324), the
+`positional` rename with manifest schema 3 (#325), the generated API page —
+whose first refusal exported the forgotten `mark` (#326), the Basics/In
+depth restructure with execution-model.md and hooks.md (#327), the
+nomenclature sweeps and glossary rewrite (#328), the voice pass (#329),
+design.md's front-door growth (#330), and the seven drift guards (#331).
+Still open beyond this repo: the toolroom queue (colour table page,
+objects.inv exchange) and a release wrapping the src rename, on Willem's
+call. Reviews ran 2026-08-05; the 24 rulings below were made one by one on
+2026-08-05/06. Related notes: [20260725-foundations-plan.md](20260725-foundations-plan.md)
 (the Foundations section this plan leaves untouched),
 [20260805-structured-returns.md](20260805-structured-returns.md) and
 [20260731-work-item-spec.md](20260731-work-item-spec.md) (the era whose
