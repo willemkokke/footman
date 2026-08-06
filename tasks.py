@@ -572,6 +572,16 @@ _API_OMITTED: dict[str, str] = {}
 @docs.task
 def api(out: Path = Path("docs/api.md")):
     "Generate the API reference from the export table; refuse on drift."
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(_api_markdown(), encoding="utf-8")
+
+
+def _api_markdown() -> str:
+    """The API page content, validated against the export table.
+
+    Pure — no filesystem writes — so the docs-drift test can join the
+    generated page into its blob by construction: a fresh checkout has no
+    docs/api.md on disk until the docs build runs."""
     import ast
 
     src = Path("src/footman/__init__.py").read_text("utf-8")
@@ -623,8 +633,7 @@ def api(out: Path = Path("docs/api.md")):
             parts.append(f"\n{intro}\n")
         for name in names:
             parts.append(f"\n::: footman.{name}\n")
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text("".join(parts), encoding="utf-8")
+    return "".join(parts)
 
 
 @docs.task(name="build")

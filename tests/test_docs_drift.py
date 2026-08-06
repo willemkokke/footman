@@ -11,6 +11,7 @@ from __future__ import annotations
 import re
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -19,6 +20,15 @@ import footman
 
 ROOT = Path(__file__).resolve().parents[1]
 DOCS = ROOT / "docs"
+
+sys.path.insert(0, str(ROOT))
+
+from footman import registry as _registry  # noqa: E402
+
+# capture(): the repo's own tasks must not land in the process-global
+# registry (test_registry's leak guard trips when xdist co-schedules them).
+with _registry.capture():
+    import tasks
 
 
 def _handwritten_docs() -> list[Path]:
@@ -30,10 +40,14 @@ def _handwritten_docs() -> list[Path]:
 
 
 def test_every_public_symbol_is_documented():
-    """Every name re-exported from `footman` appears somewhere in the
-    hand-written docs. Catches a new public export that shipped undocumented —
-    the drift the reference cheatsheet hit with .opts()/forward/ask."""
+    """Every name re-exported from `footman` appears somewhere in the docs.
+    Catches a new public export that shipped undocumented — the drift the
+    reference cheatsheet hit with .opts()/forward/ask. The API page is
+    generated (`fm docs.api`), so its content joins the blob by construction
+    rather than from disk — a fresh checkout has no docs/api.md until the
+    docs build runs."""
     blob = "\n".join(p.read_text(encoding="utf-8") for p in _handwritten_docs())
+    blob += "\n" + tasks._api_markdown()
     exported = [n for n in footman.__all__ if not n.startswith("__")]
     missing = [n for n in exported if not re.search(rf"\b{re.escape(n)}\b", blob)]
     assert not missing, f"public symbols undocumented in docs/: {missing}"
