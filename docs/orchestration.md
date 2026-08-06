@@ -66,7 +66,7 @@ Two flags size the concurrency, and they reach **both** engines — the schedule
 and a `parallel()` inside a task body:
 
 - `-s/--sequential` runs one task at a time — no concurrency anywhere.
-- `-j/--jobs N` caps the width; unset, footman uses one less than your core
+- `-j/--jobs=N` caps the width; unset, footman uses one less than your core
   count, never below two.
 
 Set either permanently as `sequential` or `jobs` in `[tool.footman]`. A run

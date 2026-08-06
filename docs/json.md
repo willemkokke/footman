@@ -411,7 +411,7 @@ $ fm --json --version
 - `--help` always renders human text — its machine twin is
   `fm --json --list`. (A `--help` *refusal*, a typo'd name, still emits the
   error envelope.)
-- `--where TASK` prints a bare `file:line` — already a machine format.
+- `--where=TASK` prints a bare `file:line` — already a machine format.
 
 ## Exit codes
 

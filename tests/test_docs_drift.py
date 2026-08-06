@@ -397,38 +397,51 @@ def test_our_docstrings_stay_google():
     assert not offenders, f"Sphinx/RST markup in our own source: {offenders}"
 
 
-def _attached_value_globals() -> list[str]:
-    """The globals whose value is mandatory, from GLOBALS itself — so the
-    guard below tracks the grammar rather than a list someone maintains.
-    Optional-value globals (`--describe [ADDR]`) are excluded: a bare word
-    after one of those can legitimately be the next token."""
+def _value_globals(*, mandatory_only: bool) -> list[str]:
+    """Value-taking globals, read from GLOBALS itself so the guard below
+    tracks the grammar rather than a list someone maintains.
+
+    Every one of them prints `=`-attached in `--help`, optional values
+    included (`--describe=[ADDR]`), so notation is held to that
+    everywhere. *mandatory_only* narrows to the ones whose next token can
+    only ever be their value — `fm --describe lint` is genuinely
+    ambiguous, `fm --where lint` is not."""
     from footman._split import GLOBALS
 
     names: list[str] = []
     for long, short, kind, metavar, _help in GLOBALS:
-        if kind == "option" and metavar and not metavar.startswith("["):
-            names.append(long)
-            if short:
-                names.append(short)
+        if kind != "option" or not metavar:
+            continue
+        if mandatory_only and metavar.startswith("["):
+            continue
+        names.append(long)
+        if short:
+            names.append(short)
     return names
 
 
-ATTACHED = _attached_value_globals()
+ATTACHED = _value_globals(mandatory_only=True)
 _OPT = "|".join(map(re.escape, ATTACHED))
-# A CAPS value is metavar notation — `--jobs N`, `--where TASK` — which is
-# how footman's own --help prints it, so it stays legal everywhere.
-_NOT_METAVAR = r"(?![A-Z]+[`\s.,)])"
-# Inside an `fm …` line, whatever follows the option is its value, full
-# stop: a diagnostic never opens with `fm`.
-_ANY_VALUE = rf"{_NOT_METAVAR}[^\s=`|]"
-# A bare option span is judged conservatively, because docs also *quote*
-# footman's own error messages (`--where expects a value, attached: …`).
-# Only shapes no diagnostic uses count: a number, an <angled> placeholder,
-# or a dotted filename.
-_CLEAR_VALUE = r"(?:\d|<[^>\n]+>|[\w-]+\.[\w]+)"
+_ANY_OPT = "|".join(map(re.escape, _value_globals(mandatory_only=False)))
+# What a *value* looks like, positively: metavar notation (`N`, `PATH`), a
+# number, an <angled> placeholder, or a dotted filename. Stated as an
+# allowlist rather than "any token" because the docs also quote footman's
+# own diagnostics — `--where expects a value, attached: …` — where the
+# next word is English prose about the option, not a value for it.
+_VALUE = r"(?:[A-Z]+(?![a-z])|\[[A-Z]+\]|\d|<[^>\n]+>|[\w-]+\.[\w]+)"
+# Short options attach without a separator too — `-j2` is refused just as
+# `-j 2` is. Only a digit counts: the docs also name other tools' glued
+# flags (Clang's `-ftime-trace`), and those are none of our business.
+_SHORTS = "|".join(re.escape(s) for s in ATTACHED if len(s) == 2)
 _SPACE_FORM = re.compile(
-    rf"(?:\$ |`)(?:fm|footman)\b[^`\n]*?\s(?:{_OPT})\s+{_ANY_VALUE}"
-    rf"|`(?:{_OPT})\s+{_CLEAR_VALUE}"
+    # inside an `fm …` line any following token is the option's value —
+    # a quoted diagnostic never opens with `fm`:
+    rf"(?:\$ |`)(?:fm|footman)\b[^`\n]*?\s(?:{_OPT})\s+[^\s=`|]"
+    # in a bare option span — `-j/--jobs N` writes the short form first —
+    # only value-shaped tokens count:
+    rf"|`(?:-\w/)?(?:{_ANY_OPT})\s+{_VALUE}"
+    # and a short option glued to a numeric value:
+    rf"|`(?:{_SHORTS})\d"
 )
 
 
@@ -451,19 +464,25 @@ def test_the_attached_value_detector_works():
     assert _SPACE_FORM.search("a typo like `--config prod.tmol` is reported"), (
         "detector missed a dotted-filename value"
     )
-    # Metavar notation, which mirrors footman's own --help, stays legal:
-    assert not _SPACE_FORM.search("- `-j/--jobs N` caps the width")
-    assert not _SPACE_FORM.search("`--where TASK` prints a bare file:line")
-    assert not _SPACE_FORM.search("    `-f/--tasks-file PATH` loads a single file")
-    # Quoted diagnostics are prose about an option, not invocations of it:
+    assert _SPACE_FORM.search("keys on it, so `-j2` runs learn"), (
+        "detector missed a short option glued to its value"
+    )
+    # Metavar notation is held to the same rule, because `--help` prints it
+    # attached: a page showing `--jobs N` teaches a refused spelling.
+    assert _SPACE_FORM.search("- `-j/--jobs N` caps the width")
+    assert _SPACE_FORM.search("`--where TASK` prints a bare file:line")
+    assert _SPACE_FORM.search("    `-f/--tasks-file PATH` loads a single file")
+    assert _SPACE_FORM.search("`--describe [ADDR]` answers for one task")
+    # Quoted diagnostics are prose *about* an option, not invocations of it:
     assert not _SPACE_FORM.search(
         "| `--where expects a value, attached: --where=TASK` | given bare |"
     )
     assert not _SPACE_FORM.search("`--jobs (from $JOBS) must be between 1 and 32`")
+    # The good spellings, including alternation notation:
     assert not _SPACE_FORM.search("`fm -j=2 check`"), "detector flags the good form"
-    assert not _SPACE_FORM.search("- `-j/--jobs N` caps the width"), (
-        "detector flags metavar notation, which mirrors footman's own --help"
-    )
+    assert not _SPACE_FORM.search("- `-j/--jobs=N` caps the width")
+    assert not _SPACE_FORM.search("`-f/--tasks-file=PATH` loads a single file")
+    assert not _SPACE_FORM.search("`--describe=[ADDR]` answers for one task")
 
 
 def test_documented_invocations_attach_their_values():

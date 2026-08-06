@@ -326,7 +326,7 @@ def matrix():
 ```
 
 `-j` caps the fan-out's width from the command line; the timing history
-keys on it, so `-j2` runs learn their own duration.
+keys on it, so `-j=2` runs learn their own duration.
 
 ### An endless dev server
 
