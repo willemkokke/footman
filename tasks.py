@@ -453,8 +453,8 @@ _API_SECTIONS: list[tuple[str, str, list[str]]] = [
     (
         "Availability gates",
         "Stack these above `@task` to list a task as unavailable (with a "
-        "reason) where it can't run. Every gate is evaluated live, and all "
-        "failures are collected.",
+        "reason) where it can't run. Every availability gate is evaluated "
+        "live, and all failures are collected.",
         ["requires", "requires_dep", "requires_tool", "requires_env"],
     ),
     (

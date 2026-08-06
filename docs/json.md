@@ -14,7 +14,7 @@ links here.
 
 A run prints **one flat list of records, in the order the work was
 created** — tasks and their steps alike, every item carrying its
-`address`: the path of requests that led to it, with an ordinal once a
+request address (`address`): the path of requests that led to it, with an ordinal once a
 label repeats (`check/git`, `check/git#2`). An address prefix names a
 subtree, so the tree is always recoverable — it just never makes a reader
 recurse to ask a flat question. Flat is affordable because addresses are

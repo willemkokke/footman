@@ -38,7 +38,7 @@ in-process execution, and why nothing is transcribed per tool — are
 - Records a step for [`--json`](json.md) (command, code, duration, captured
   output); `capture=False` lets output through unbuffered and records an
   empty capture — for serve-style tasks that must not buffer.
-- Runs from the task's context cwd — in a [cascade](monorepos.md) the folder
+- Runs from the task's context cwd — in a [cascade](monorepos.md) the directory
   the task was defined in — with the task's context env, a complete
   environment rather than a diff. Subprocess and in-process tools honour
   this identically.
@@ -46,7 +46,7 @@ in-process execution, and why nothing is transcribed per tool — are
 ## Fetch and cache files: `fetch()`
 
 `fetch(url, sha256=…, into=…)` downloads into footman's own cache — the same
-directory `$FOOTMAN_CACHE_DIR` moves and the daily collector tends, so vendored
+directory `$FOOTMAN_CACHE_DIR` moves and the cache collector tends, so vendored
 artifacts for deleted projects clean themselves up:
 
 ```python

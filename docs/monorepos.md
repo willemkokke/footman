@@ -2,7 +2,7 @@
 
 ## The task cascade
 
-In a monorepo you rarely want one giant tasks file. footman collects every
+In a monorepo you rarely want one giant tasks file. Footman collects every
 `tasks.py` from the **repo root** (the nearest `.git` above you) down to your
 current directory and merges them into one command set:
 
@@ -16,7 +16,7 @@ Standing in `services/api`, `fm` sees `build*` (the local override), `test`,
 `lint`, `serve`, and `migrate`. The rules are the ones you'd guess:
 
 - a **new name appends**;
-- a name already defined higher up is **overridden** by the folder nearest you;
+- a name already defined higher up is **overridden** by the directory nearest you;
 - a **group present at both levels merges** — its tasks are overlaid the same
   way.
 
@@ -37,7 +37,7 @@ Standing in `services/api`, `fm` sees `build*` (the local override), `test`,
        one.
 
     From that ceiling **down to your cwd**, footman loads every `tasks.py` that
-    exists — root first, cwd last, so nearer files override — skipping folders
+    exists — root first, cwd last, so nearer files override — skipping directories
     that have none. The filename is the `tasks` [config key](#configuration), so
     a repo can look for something other than `tasks.py`. The walk's whole reach
     is the user-level `cascade` key — `none`, `repo` (the default above), or
@@ -46,7 +46,7 @@ Standing in `services/api`, `fm` sees `build*` (the local override), `test`,
 
 ## Where a task runs
 
-Every task **runs from the folder of the file that defined it**. Root's `build`
+Every task **runs from the directory of the file that defined it**. Root's `build`
 always builds from `repo/`, `api`'s `serve` from `services/api/`, wherever you
 invoke it:
 
@@ -60,11 +60,11 @@ fm test       # inherited from the root, running in repo/
 
 ## Sibling helpers
 
-Each `tasks.py` may `import helpers` (or any module) from **its own folder** at
-the top of the file — footman searches that folder first and gives each file
+Each `tasks.py` may `import helpers` (or any module) from **its own directory** at
+the top of the file — footman searches that directory first and gives each file
 its own copy, so `services/api/helpers.py` and the root `helpers.py` never
 collide. Import at module top; a deferred `import` inside a task body, in a
-project with same-named helpers in several folders, is a known limitation.
+project with same-named helpers in several directories, is a known limitation.
 
 ## Completion is per directory
 
@@ -83,7 +83,7 @@ The completion manifest is cached **per directory**, so <kbd>Tab</kbd> in
 
 ## Configuration
 
-footman discovers behavioural settings with the same upward walk it uses for
+Footman discovers behavioural settings with the same upward walk it uses for
 tasks files. It reads `[tool.footman]` from `pyproject.toml` and a standalone
 `footman.toml` (whole-file), from the repo root down to your cwd — **nearer
 files win**, so a package can override repo-wide defaults:

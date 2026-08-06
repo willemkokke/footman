@@ -2,7 +2,7 @@
 
 Tasks are code, so they deserve tests — and a task runner that makes you
 choose between "run it for real" and "don't test it" hasn't finished its job.
-footman gives you three altitudes, each a thin layer over the previous one.
+Footman gives you three altitudes, each a thin layer over the previous one.
 Everything on this page is stdlib-only footman; the pytest fixtures at the
 end auto-load when footman and pytest share an environment.
 
@@ -140,7 +140,7 @@ def test_release_records_the_tag(fm_record):
 - **`fm_record`** — a recording context for the whole test; steps append as
   task code runs.
 
-footman's own suite uses these fixtures and `Runner` — the harness tests the
+Footman's own suite uses these fixtures and `Runner` — the harness tests the
 framework that ships it, which is the strongest claim a testing story can
 make about itself.
 

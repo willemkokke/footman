@@ -1,6 +1,6 @@
 # Hooks & plugin options
 
-The moments a hook can attach to are not a plugin API bolted on: they are
+The moments a lifecycle hook can attach to are not a plugin API bolted on: they are
 [the execution model](execution-model.md)'s own request lifecycle — bind,
 body, record, report — exposed under stable names. A plugin rides the same
 moments every chain segment already passes through, which is why the rules
@@ -43,7 +43,7 @@ merged tree — iterate it for every task, or index it by command-line name
   `t.pre`, `t.post`, `t.disabled`;
 - **policy flags** — `t.keep_going`, `t.atomic`, `t.infinite`, `t.interactive`,
   `t.timed`, `t.confirm`;
-- **cascade provenance** — `t.defining_dir` (the folder it was defined in),
+- **cascade provenance** — `t.defining_dir` (the directory it was defined in),
   `t.shadowed` (the task it overrides one level up), `t.shadow_chain`, and
   `t.source_file`;
 - **edits** — `t.add_pre(…)`, `t.add_post(…)`, `t.disable("reason")`, and
@@ -54,7 +54,7 @@ merged tree — iterate it for every task, or index it by command-line name
 deliberately keeps footman's private task attributes out of your hooks.
 
 Provenance lets a hook decide by *where* a task came from. To gate every
-task defined under an `infra/` folder, regardless of its name:
+task defined under an `infra/` directory, regardless of its name:
 
 ```python
 @footman.pre_tasks
@@ -69,11 +69,11 @@ a runtime surprise: an added `pre` runs and shows in `fm <task> --dry-run`, and
 a disabled task drops from `--list`, `--help`, and <kbd>Tab</kbd> completion —
 exactly as if you had written it into the task.
 
-In a [monorepo](monorepos.md), a **root** `tasks.py` can edit a subfolder's
+In a [monorepo](monorepos.md), a **root** `tasks.py` can edit a subdirectory's
 tasks, because the hook sees the whole merged tree. When several files in the
 cascade each register a hook, they run in **cascade order** — root first,
-the folder nearest your cwd last, each seeing the previous edits — the same
-"local overrides global" precedence the cascade itself uses, so a subfolder
+the directory nearest your cwd last, each seeing the previous edits — the same
+"local overrides global" precedence the cascade itself uses, so a subdirectory
 refines what root did.
 
 ## Around every task: `@pre_task` and `@post_task`
@@ -98,7 +98,7 @@ def close_span(inv, task, result):
     task.state.span.end(ok=result.ok, took=result.duration)
 ```
 
-The `task` handle carries the execution's facts and the two lanes a hook may
+The `task` handle carries the execution's facts and the two channels a hook may
 write through:
 
 - **`task.name`** — the address the task was reached through; **`task.args`**
@@ -136,10 +136,10 @@ fared — so a span opened in a pre always closes, even when another plugin's
 pre killed the task. Failures are loud and named: a raising `pre_task` fails
 the task like a failed prerequisite (the body never runs), and a raising
 `post_task` fails an otherwise-green task — a reporter that crashed must not
-pass silently. A `--dry-run` rehearses — bodies run, so the ladder fires exactly as it would live; only footman's own recorded work is faked.
+pass silently. A `--dry-run` rehearses — bodies run, so the hooks fire exactly as they would live; only footman's own recorded work is faked.
 
 **The pair is per request; only the body is shared.** A request satisfied by
-an execution the run already performed still gets the whole ladder — its
+an execution the run already performed still gets the whole lifecycle — its
 `pre_task` fires post-bind, before the wait, and its `post_task` closes it
 with the `shared` row — so pairing never depends on sharing, and a span
 opened for a request always closes. `result.state == "shared"` is how a
@@ -165,16 +165,16 @@ def deploy(token: Annotated[str, env("DEPLOY_TOKEN")] = ""): ...
 
 Nothing is bound yet, so `task.args` is not readable here — read values in
 `pre_task`, the post-bind moment. The same handle carries through the whole
-ladder (`pre_bind → bind → pre_task → body → post_task`), so state set at
+lifecycle (`pre_bind → bind → pre_task → body → post_task`), so state set at
 `pre_bind` is there at `post_task`. A body call binds like a segment, and its
 binding sees the same injected environment.
 
 One boundary fact, stated plainly: **a bind failure still fires the posts**
 — the attempt concluded, a bind-time span needs closing — with the refusal
-as the result. Everything else follows the one rule above: the ladder is per
+as the result. Everything else follows the one rule above: the lifecycle is per
 request, only the body is shared.
 
-The window the ladder runs in is the task's managed window, opened before
+The window the lifecycle runs in is the task's managed window, opened before
 binding: hook code and validator code answer to the same rules a body does
 (an `os.environ` write lands in the task's own environment, a prompt outside
 an interactive task is refused), while footman's own prompts — `ask()`
@@ -200,7 +200,7 @@ def digest(inv):
 `shared` rows,
 refusals, and `skipped` nodes (`inv.skipped` is that subset). This is the
 moment that sees what never ran: a `post_task` reporter only meets requests
-whose ladder opened, so the run-level view is where "what didn't happen"
+whose lifecycle opened, so the run-level view is where "what didn't happen"
 becomes visible. Under `--json` anything a hook prints goes to stderr — the
 envelope owns stdout. Hooks run in cascade order; a raising hook is named
 and fails the invocation, exactly as a crashing reporter should.
@@ -310,7 +310,7 @@ def budget(result):
         fail(f"too slow: {result.duration:.0f}s")
 ```
 
-The line between the two lanes is one sentence: the moment a global hook
+The line between the two channels is one sentence: the moment a global hook
 would say "if this is task X", it belongs on X. Everything else follows
 the shapes above: attachment is permanent — the task changes for every
 requester, wherever the attaching module was imported from — and each
@@ -323,7 +323,7 @@ plugin wrappers, one task at a time.
 
 Plugins remain the outer ring: their pres run first and their posts run
 last, so a task's own hooks nest closest to the body — and the handle
-lane fires whether or not any plugin is registered. Reviewers compose
+channel fires whether or not any plugin is registered. Reviewers compose
 inside-out wherever they were attached: stacked `@pre_record` decorators
 first (nearest the `def` leading), handle attachments in the order they
 were made, a per-call `.opts(pre_record=…)` always last — the use site

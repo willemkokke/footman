@@ -55,7 +55,7 @@ parts that compound:
 - Independent tasks run in parallel by default, scheduled from the chain and
   each task's `pre`/`post` dependencies — duty and invoke run these one at a
   time.
-- A monorepo task cascade merges a `tasks.py` per folder, from the repo root
+- A monorepo task cascade merges a `tasks.py` per directory, from the repo root
   down to where you stand.
 
 The receipts live in the [comparison](comparison.md) — a measured

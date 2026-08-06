@@ -2,7 +2,7 @@
 
 Most values should be flags — typed, completable, and CI-safe. But some runs
 genuinely need to ask the person at the keyboard: a version string, a
-production confirmation, a pick from a list computed at run time. footman has
+production confirmation, a pick from a list computed at run time. Footman has
 three shapes for it, and all three are **CI-safe by construction** — off a
 terminal they fail loudly or take a supplied answer, never hang. (A fourth
 input is not a question at all: a document piped in on stdin — the last

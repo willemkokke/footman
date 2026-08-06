@@ -14,7 +14,7 @@ cannot drift from what your terminal will do:
 fm --install-completion=nushell     # `nu` works too
 ```
 
-This writes the hook to `$XDG_DATA_HOME/fm/completion.nu` and appends one
+This writes the completion hook to `$XDG_DATA_HOME/fm/completion.nu` and appends one
 guarded `source` line to the config nushell itself reports
 (`$nu.config-path`). The hook registers an **external completer** — and it
 *wraps* whatever external completer you already run (carapace, a fish

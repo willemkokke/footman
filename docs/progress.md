@@ -43,7 +43,7 @@ or when stderr is piped.
 ## Report a task's own progress: `track()` / `progress()`
 
 Some work knows exactly where it is — 23 of 150 migrations, bytes of a
-download — and that beats any duration history. Report it and the live
+download — and that beats any timing history. Report it and the live
 bar fills from the truth:
 
 ```python
@@ -79,7 +79,7 @@ break out early. Outside a run, both are no-ops.
 
 The progress bar's estimates come from `*.times.json` files beside the
 completion manifests (`~/.cache/footman/`, or wherever `$FOOTMAN_CACHE_DIR`
-points). The cache tends itself: at most once a day, a detached collector
+points). The cache tends itself: at most once a day, the cache collector — a detached child —
 removes pairs whose directory no longer exists and pairs idle for 90 days —
 everything in the cache rebuilds on the next run, so collection can never
 lose anything that matters. Delete files by hand to reset a stale history,
@@ -89,7 +89,7 @@ false` in `[tool.footman]` for good.
 ## In CI
 
 Without a TTY there is no progress bar, but timing still works both ways:
-CI runs are recorded into the duration history, and when footman has a
+CI runs are recorded into the timing history, and when footman has a
 confident estimate it prints a single `eta ~5.8s` line to stderr at run
 start. `--no-progress` (or `progress = false`) turns the line and the
 recording off. See [CI & automation](ci.md) for the rest of the

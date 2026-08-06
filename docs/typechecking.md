@@ -1,6 +1,6 @@
 # Type-checking your tasks
 
-footman is written for people who type their code. The package ships
+Footman is written for people who type their code. The package ships
 `py.typed`, every public symbol has a fully known type — pyright's
 `--verifytypes` scores the surface 100%, and footman's own gate fails if
 that ever slips — and the whole tree is kept clean under four checkers:
@@ -80,7 +80,7 @@ writing.
 
 ## Checked, not promised
 
-These are not aspirations; they are enforced. footman's gate type-checks
+These are not aspirations; they are enforced. Footman's gate type-checks
 its whole tree — tests included, as consumer code — under all four
 checkers on every platform's typeshed, verifies the public API 100%
 type-complete on every run, and holds a pair of consumer-shaped typing

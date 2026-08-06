@@ -1,6 +1,6 @@
 # Completion on fish
 
-This is a recording of a real fish session — the hook loaded the way
+This is a recording of a real fish session — the completion hook loaded the way
 the next section describes, <kbd>Tab</kbd> opening fish's pager with
 each task's description, a prefix completing. Regenerated from a live
 shell on every docs build, so it cannot drift from what your terminal

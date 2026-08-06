@@ -17,10 +17,10 @@ every `run("…")` child is **simulated** — it succeeds and its output says
 thing: parsing, eager validation, taught errors, scheduling, `--json`,
 `--dry-run` plans — and **`fm test` runs the real pytest**, on toolroom's
 in-process path, right here in the page. A browser has no processes to
-spawn, so the page is that path's proof by extremes: a first-class twin,
+spawn, so the page is that path's proof by extremes: a true twin,
 not a fallback. The prompt completes
 too: press <kbd>Tab</kbd> and the candidates come from the same manifest
-walk a shell hook consults, rebuilt from whatever the editor says.
+walk a shell completion hook consults, rebuilt from whatever the editor says.
 
 Press **Run**. The gate fails — one of the tests is wrong on purpose.
 Read pytest's diff, fix `fizzbuzz` (or the test), and run it green. Then

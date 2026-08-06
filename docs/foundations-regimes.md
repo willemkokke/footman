@@ -37,8 +37,8 @@ than the one below it:
   real `chdir` legal inside.
 - `exclusive=True` — owns the machine; nothing else in flight.
 
-Every rung is granted at task boundaries by one arbiter, in one atomic
-predicate, which is why claims can be scheduled instead of contended
+Every rung is granted at task boundaries by the scheduler, all at once,
+which is why claims can be scheduled instead of contended
 for — the deadlocks page is why that distinction earns its keep.
 
 ## The sentence to defend

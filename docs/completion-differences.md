@@ -24,7 +24,7 @@ Shells disagree about appending a space when exactly one candidate matches:
 - **bash** and **zsh** support per-candidate no-space behaviour.
 - **fish** and **nushell** append a space after any unique match.
 
-footman sidesteps the disagreement by never *needing* a no-space flag: when
+Footman sidesteps the disagreement by never *needing* a no-space flag: when
 your prefix matches a single namespace group, the resolver answers with the
 group's children as full addresses (`fm do<TAB>` → `docs.build`,
 `docs.serve`), so the candidate set stays non-unique and every shell holds

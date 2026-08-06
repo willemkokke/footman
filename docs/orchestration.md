@@ -47,7 +47,7 @@ $ pytest
 ## Parallel by default
 
 Independent tasks run **in parallel by default** — that is the concurrency
-model. footman builds a dependency graph (a DAG — no cycles allowed, and a
+model. Footman builds a dependency graph (a DAG — no cycles allowed, and a
 cycle is a taught error) from the chain and each task's declared dependencies,
 then runs everything that isn't waiting on something else concurrently. Tasks
 spend most of their life waiting on subprocesses — a `run()` call releases
@@ -242,7 +242,7 @@ with specific arguments, name it in the chain — `fm build --release deploy` ru
 
 Running defaulted is a *floor*, not a ceiling. Mark a parameter `forward` and
 its value threads to every task this one dispatches — its `pre`/`post`
-prerequisites and a [runnable group](#runnable-groups)'s surfaces — that declares
+prerequisites and a [runnable group](#runnable-groups)'s members — that declares
 a parameter of the same name:
 
 <!-- example: revision -->
@@ -263,7 +263,7 @@ def check(fix: Annotated[bool, forward] = False):
   run on their own defaults — `check --fix` fixes what's fixable and lints the
   rest.
 - **It chains.** A callee that re-declares `forward` passes the value on, so it
-  reaches a group's surfaces through the group's default.
+  reaches a group's members through its default.
 - **Overrides a default, never rescues a required one.** A prerequisite stays
   runnable on its own; forwarding only changes a value that already has a
   default.
@@ -301,7 +301,7 @@ Three things can go in:
 | `convert(images)` — a built step item | the step, pumped in a child | its own receipt, reviewable |
 | `clean` — a zero-argument step maker | built here, then the same | same |
 
-Nothing anonymous runs. footman only schedules, records, and safely
+Nothing anonymous runs. Footman only schedules, records, and safely
 cancels work it *owns*, and a bare callable is a stranger — no name for
 the report, no place in the plan, no way to stop it cleanly — so a lambda,
 a `functools.partial`, or a plain function is a taught error naming the
@@ -333,7 +333,7 @@ runs when the block ends, under exactly the rules a call has anywhere else:
 own result row, sharing, hooks, `-s`/`-j`. `p.results` is in the order you
 wrote them; `p` itself is still the list of exit codes `parallel()` returns.
 
-footman only owns *its own* `__call__`, so a call to something that is not
+Footman only owns *its own* `__call__`, so a call to something that is not
 a task runs where it stands rather than joining the fan-out. A lifted step
 joins through `p(item)`, and its value lands in `results` in written
 order:
@@ -382,7 +382,7 @@ earning a real receipt. The full contract lives on
 
 A group is a namespace: `fm lint.markdown` runs a task under `lint`, but bare
 `fm lint` is an error. Give the group a **default action** with `@group.default`
-and the bare form runs — while the surfaces stay addressable:
+and the bare form runs — while the members stay addressable:
 
 <!-- example: fresh-session -->
 ```python
@@ -401,13 +401,13 @@ def spelling():                  cspell("lint", "**/*")      # no --fix
 
 @lint.default
 def lint_all(fix: Forward[bool] = False):
-    "Lint everything; --fix reaches the surfaces that support it."
+    "Lint everything; --fix reaches the members that support it."
 ```
 
-- `fm lint` fans out every surface; `fm lint --fix` fixes what's fixable and
-  lints the rest (the `forward` marker carries `--fix` to the surfaces that take
+- `fm lint` fans out every member task; `fm lint --fix` fixes what's fixable and
+  lints the rest (the `forward` marker carries `--fix` to the members that take
   it — see [above](#forward-a-value-to-what-a-task-dispatches)).
-- `fm lint.markdown` / `fm lint.markdown --fix` runs one surface.
+- `fm lint.markdown` / `fm lint.markdown --fix` runs one member.
 - The default's **signature is the group's whole CLI surface, positionals
   included**: `fm lint src/` hands `src/` to the default the way any task
   takes an argument. There is no ambiguity to guard against — a nested task
@@ -429,13 +429,13 @@ def lint_all(fix: Forward[bool] = False):
   naming a task `default` *means something*, exactly like `tasks.py`
   itself does. A *group* named `default` is a load-time error (a
   group-typed default would make bare `fm lint` resolve to another bare
-  group — turtles).
+  group, which could point at another still — a regress with no floor).
 - An **empty body** fans out the group's own tasks; a non-empty body is the
   escape hatch where you write the fan-out yourself.
 - On an empty-body default, **mark a parameter `Forward` if you want it to reach
-  the surfaces.** The default has no body, so a plain parameter binds to it and
+  the members.** The default has no body, so a plain parameter binds to it and
   goes nowhere — `fix: bool` accepts `--fix` and then nothing happens with it.
-  `fix: Forward[bool]` threads the value to every surface that declares `fix`.
+  `fix: Forward[bool]` threads the value to every member that declares `fix`.
   (A parameter the default *does* use in a custom body needs no `Forward`; the
   marker is only for values that must travel onward.)
 - The default takes the same **policy options** as `@task` —
@@ -445,8 +445,8 @@ def lint_all(fix: Forward[bool] = False):
   body to own the terminal, and asking for one is a load-time error.
 
 The group tab-completes (`fm lint <Tab>` offers `--fix` and the surface names)
-and `fm --help lint` renders it as a first-class command. And it composes: a
-`check` gate reaches its surfaces through the group with one forwarded flag —
+and `fm --help lint` renders it as a command in its own right. And it composes: a
+`check` gate reaches its members through the group with one forwarded flag —
 `@task(pre=[format, lint, test]) def check(fix: Forward[bool])`, and
 `fm check --fix` threads all the way down.
 

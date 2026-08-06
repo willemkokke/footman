@@ -495,7 +495,7 @@ def release(version: Annotated[str, ask()]):
 ### Monorepo: root gate, leaf overrides
 
 `tasks.py` files cascade from the repo root down to wherever you stand;
-nearer definitions win, and every task runs from the folder that defined
+nearer definitions win, and every task runs from the directory that defined
 it:
 
 ```text
@@ -506,7 +506,7 @@ repo/
 ```
 
 From `svc/api`, `fm check` is the override; `fm -C=../.. check` is the
-root's. A deep folder can adjust behaviour with a two-line
+root's. A deep directory can adjust behaviour with a two-line
 `footman.toml` — the [configuration ladder](configuration.md) reaches
 everywhere the cascade does.
 
@@ -514,7 +514,7 @@ everywhere the cascade does.
 
 A tasks file can declare what it needs, inline, with a
 [PEP 723](https://peps.python.org/pep-0723/) header. Then it needs no
-project at all — drop it in any folder and run it:
+project at all — drop it in any directory and run it:
 
 <!-- example: fragment -->
 ```python
@@ -531,7 +531,7 @@ def health(url: str = "https://example.com"):
     print(httpx.get(url).status_code)
 ```
 
-`fm health` builds that environment once (uv does the work) and runs
+`fm health` builds that script environment once (uv does the work) and runs
 inside it; every later run is a warm cache hit. Name any file with
 `-f=deploy.py` and the same rule applies to that file's header. Because
 uv reads the block natively, everything it understands works — a
@@ -539,7 +539,7 @@ uv reads the block natively, everything it understands works — a
 ref or a local path.
 
 List footman itself among the dependencies: the file imports it, so the
-environment has to contain it. That is also the one thing footman
+script environment has to contain it. That is also the one thing footman
 refuses, because the environment provably could not run the file.
 
 Two touches make it a command in its own right:
@@ -626,7 +626,7 @@ That last line is the forwarding call, spelled out. Calling
 ### A bar that knows exactly where it is
 
 Some work knows its own progress — 23 of 150 migrations, bytes of a
-download — and that beats any duration history. Report it and the live
+download — and that beats any timing history. Report it and the live
 bar fills from the truth:
 
 ```python
@@ -658,7 +658,7 @@ story — the live status line, the timing history, the off switches — is on
 ### Fetch and cache a toolchain
 
 `fetch()` downloads into footman's own cache: the same directory
-`FOOTMAN_CACHE_DIR` moves and the daily collector tends, so vendored
+`FOOTMAN_CACHE_DIR` moves and the cache collector tends, so vendored
 artifacts for deleted projects clean themselves up.
 
 ```python
@@ -735,7 +735,7 @@ stays what it always was — an exit code.
 
 ### The coding-agent loop
 
-footman treats agents as first-class users, and the loop is the same one
+Footman treats agents as users in their own right, and the loop is the same one
 you'd teach a new colleague — discover, validate, run, read the receipt:
 
 ```console

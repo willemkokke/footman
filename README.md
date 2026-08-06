@@ -21,13 +21,13 @@ dependencies. Python 3.11+.
 `duty` gets a lot right — the `run()` capture model, the decorator
 ergonomics — and footman keeps those ideas. Where it pushes is the parts
 that compound: completion served from a cache instead of re-importing your
-project on every TAB (~15× faster, measured), eager type and choice
+project on every <kbd>Tab</kbd> (~15× faster, measured), eager type and choice
 validation with errors that teach, a DAG scheduler that runs independent
 tasks concurrently (the same four-step `check` lands ~4× sooner than duty
 or invoke, measured) with true fail-fast that kills in-flight work on the
 first failure, runnable command groups and parameter forwarding that make
-composite commands like `fm lint` and `check` first-class, a monorepo task
-cascade that merges a `tasks.py` per folder, and a first-party story for
+composite commands like `fm lint` and `check` real commands, a monorepo task
+cascade that merges a `tasks.py` per directory, and a first-party story for
 testing your tasks. The receipts live
 in the [comparison](https://willemkokke.github.io/footman/comparison/) —
 every number reproducible from [`comparison/`](comparison/).
@@ -74,7 +74,7 @@ $ fm --install-completion               # detects your shell; TAB answers in ~25
 
 A tasks file can declare what it needs inline
 ([PEP 723](https://peps.python.org/pep-0723/)), and then it needs no
-project at all — drop it in any folder and run it:
+project at all — drop it in any directory and run it:
 
 ```python
 #!/usr/bin/env -S uv run --script

@@ -22,12 +22,12 @@ Measured on duty 1.9.0, invoke 3.0.3, poethepoet 0.48.0, typer 0.27.0, CPython
 
 Before any table makes footman look clever: I've been running my projects on
 [duty](https://pawamoy.github.io/duty/) for nearly two years, and it's been a
-pleasure the whole way. footman exists *because* of duty — the `ctx.run` capture
+pleasure the whole way. Footman exists *because* of duty — the `ctx.run` capture
 model, the lazy tool wrappers, the decorator ergonomics are all ideas I'm
 happily standing on. This is a "here's what I wanted to tweak," not a takedown.
 Its `tools` library in particular is the direct inspiration for footman's: it
 is where I got the idea that a task runner should ship typed wrappers for the
-tools you actually call. footman's take separates the two halves duty fuses —
+tools you actually call. Footman's take separates the two halves duty fuses —
 wrapping a command-line utility is generic, and the type hints are a layer
 generated on top. So the code reads the same whether or not a stub has heard
 of your tool: `toolroom.terraform("plan")` runs exactly like
@@ -42,15 +42,15 @@ column is the one that matters: completion time with a 0.25 s project-import cos
 minus completion time without it. Re-import your tasks on every keystroke and
 you see the whole ~0.25 s; answer from a cache and you see roughly nothing.
 
-| runner  | completion (per TAB) | Δ import | re-imports every TAB?    |
+| runner  | completion (per <kbd>Tab</kbd>) | Δ import | re-imports every <kbd>Tab</kbd>? |
 | ------- | -------------------: | -------: | ------------------------ |
 | footman |            **23 ms** |    ~0 ms | no — cached manifest     |
 | poe     |                45 ms |    ~0 ms | no — reads TOML          |
 | duty    |               346 ms |   286 ms | yes                      |
 | invoke  |               360 ms |   289 ms | yes                      |
 
-duty and invoke reload your whole project on every TAB — their completion
-scripts call the tool, which imports your tasks before it can answer. footman
+duty and invoke reload your whole project on every <kbd>Tab</kbd> — their completion
+scripts call the tool, which imports your tasks before it can answer. Footman
 reads a cached JSON manifest instead, so the hot path imports nothing (a dynamic
 completer or the first build in a fresh directory spawns a bounded subprocess),
 and it lands about 15× faster. It pays the same import cost as everyone else,
@@ -106,7 +106,7 @@ typer's import really is ~6× heavier — it ships its own parser plus `rich` an
 `uv run --group comparison python scripts/bench_import.py`.) On a single launch you'd never notice (footman ~38 ms, typer
 ~40 ms; footman just spends its milliseconds on parsing instead of importing).
 The difference only shows up when a typer app does completion, because that
-re-runs the app — paying the typer import *and* your project import on every TAB,
+re-runs the app — paying the typer import *and* your project import on every <kbd>Tab</kbd>,
 where footman is answering from cache. Not a knock on typer; just a different job.
 
 ## Feature matrix

@@ -84,7 +84,7 @@ def release():
     build("dev")    # explicit, so env is never consulted
 ```
 
-footman sees the call before Python fills in defaults, so leaving a parameter
+Footman sees the call before Python fills in defaults, so leaving a parameter
 out is not the same request as passing the default's value yourself: an
 explicit value wins over env, exactly as a value on the command line does. And
 because resolution happens before the work is keyed, a segment, a prerequisite

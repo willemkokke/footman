@@ -1,6 +1,6 @@
 # Custom CLI
 
-footman is a library first: `fm` and `footman` are just the default-branded
+Footman is a library first: `fm` and `footman` are just the default-branded
 instance of a public `App`. Point your own console script at an `App` carrying
 your project's names and version, and every message the user sees — errors,
 `--version`, hints — uses *your* branding instead of footman's.
@@ -75,7 +75,7 @@ directory. Completion works through your binary too —
 ## The uv handoff follows the brand
 
 A globally installed branded CLI hands off exactly as `fm` does: when the
-project's `uv.lock` pins footman and you aren't inside its environment,
+project's `uv.lock` pins footman and you aren't inside its interpreter environment,
 the handoff re-execs the *(branded)* footman you invoked — `acme` hands
 off to the project's own `acme`, never to `fm`. The prog you typed is the
 prog that runs; only the version moves.
@@ -90,7 +90,7 @@ app = App(name="Acme", prog="acme", version="1.4.0", dist="acme-cli")
 
 With `dist` set, a tasks file carrying a
 [PEP 723](https://peps.python.org/pep-0723/) header runs in its own
-environment under `acme` too — and must list `acme-cli` among its
+script environment under `acme` too — and must list `acme-cli` among its
 dependencies, the way a footman one lists `footman`. Left unset, footman
-never guesses a distribution into an environment: the rule stays out of
+never guesses a distribution into a script environment: the rule stays out of
 your way, and your users' tasks files run exactly where they already did.
