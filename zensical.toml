@@ -88,7 +88,13 @@ extra_javascript = [
 ]
 
 [project.plugins.mkdocstrings.handlers.python]
-inventories = ["https://docs.python.org/3/objects.inv"]
+inventories = [
+  "https://docs.python.org/3/objects.inv",
+  # toolroom's symbols, so the pages that describe the seam link into it
+  # rather than describing it twice. toolroom resolves footman's the same
+  # way; neither package depends on the other.
+  "https://willemkokke.github.io/toolroom/objects.inv",
+]
 paths = ["src"]
 
 [project.plugins.mkdocstrings.handlers.python.options]

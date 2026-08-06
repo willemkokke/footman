@@ -9,6 +9,11 @@ versions may include breaking changes.
 
 ### Added
 
+- The docs resolve **toolroom's symbol inventory**, so the pages that
+  describe the seam link into it instead of describing it twice.
+  toolroom's site resolves footman's the same way — the two sites are
+  navigable in both directions, while neither package depends on the
+  other.
 - `mark` is importable from the package root. It was public all along —
   documented on the API page and served by the lazy loader — but missing
   from `__all__`, so `from footman import mark` type-checked while the
