@@ -17,7 +17,9 @@ created** — tasks and their steps alike, every item carrying its
 `address`: the path of requests that led to it, with an ordinal once a
 label repeats (`check/git`, `check/git#2`). An address prefix names a
 subtree, so the tree is always recoverable — it just never makes a reader
-recurse to ask a flat question. A row has `"task"`; a step has
+recurse to ask a flat question. Flat is affordable because addresses are
+deterministic: parentage lives in the name, so the tree derives from the
+list instead of nesting inside it. A row has `"task"`; a step has
 `"command"` — that is the kind test:
 
 ```console

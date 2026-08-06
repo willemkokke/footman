@@ -153,38 +153,10 @@ ownership window, so nothing scribbles over a prompt.
 
 ## Read the pipe: `stdin`
 
-A parameter marked `stdin` binds from whatever the caller piped in, which
-makes a task a real pipe target: `git diff | fm review` and
-`fm review < changes.patch` both work, with no flag to remember. The
-annotation decides how the bytes are interpreted:
-
-```python
-from typing import Annotated
-from footman import Stdin, stdin, task
-
-@task
-def review(diff: Annotated[str, stdin] = ""): ...        # the stream as text
-@task
-def digest(data: Annotated[bytes, stdin] = b""): ...     # raw bytes
-@task
-def submit(prompt: Annotated[str, stdin("prompt")] = ""): ...  # one JSON field
-@task
-def rm(paths: Annotated[list[str], stdin(lines=True)] = ()): ...  # a line each
-```
-
-`Stdin[str]` is the shorthand for the bare marker, like `Forward[T]` and
-`NoSplit[T]`. `stdin("field")` reads one top-level key of a JSON document;
-`stdin(lines=True)` turns each line into one list element, coerced exactly
-like a repeated flag — `list[int]` and `list[Path]` behave as they would on
-the command line.
-
-Precedence is **CLI > stdin > env > default > prompt**: an explicit option
-always wins, so one signature serves both spellings. The stream is read
-once, fully, at the boundary and shared by every parameter that asks —
-task bodies never touch stdin, so `stdin`-bound tasks stay fully parallel
-and need no `interactive=True`. A terminal on stdin means "not provided":
-nothing ever blocks on a read, a defaulted parameter falls back, and a
-required one refuses with a taught message naming the fix.
-
-In tests, `Runner.invoke(..., stdin="payload")` is the pipe; its absence
-means a terminal, so a test never reads the harness's own stream.
+A piped stdin binds to typed parameters — `Stdin[str]` for the text, a
+dataclass for a whole JSON document, `stdin(lines=True)` for one element
+per line — with precedence **CLI > stdin > env > default > prompt**, so one
+signature serves both spellings. The contract lives on
+[Pipelines](pipelines.md). In tests, `Runner.invoke(..., stdin="payload")`
+is the pipe; its absence means a terminal, so a test never reads the
+harness's own stream.

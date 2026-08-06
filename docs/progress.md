@@ -24,7 +24,9 @@ each unit starts. A **unit is a request** — a task in the chain, a
 prerequisite, a body call, a `parallel()` child — and a step item that
 runs no task counts as the one piece of work it is. So the same fan-out
 written `parallel(build)` or `parallel(step(lambda: build("web"))())`
-counts the same: how you spell a call never changes the total. It always clears itself before any output lands, so
+counts the same: how you spell a call never changes the total. The bar
+can count honestly because nothing anonymous runs — footman owns every
+unit, so the total is a fact, not a guess. It always clears itself before any output lands, so
 blocks and live step lines stay clean. Without a TTY, a confident
 estimate prints once as `eta ~5.8s` on stderr instead — the same honesty,
 one line.

@@ -501,12 +501,12 @@ _API_SECTIONS: list[tuple[str, str, list[str]]] = [
         "The invocation, and editing the discovered tree",
         "`@pre_tasks` runs a hook once per invocation, over the fully-merged "
         "cascade and before anything else — see "
-        "[Composing tasks](composing.md#editing-the-discovered-tree). It is "
+        "[Hooks & plugin options](hooks.md#editing-the-discovered-tree). It is "
         "handed the `Invocation`, whose `tasks` is a `Tasks` view; iterating "
         "or indexing that yields a `TaskView` that reads and edits one task. "
         "The per-task pair — `@pre_task` and `@post_task` — runs around every "
         "execution; see "
-        "[Around every task](composing.md#around-every-task-pre_task-and-post_task).",
+        "[Around every task](hooks.md#around-every-task-pre_task-and-post_task).",
         [
             "pre_tasks",
             "pre_bind",

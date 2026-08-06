@@ -89,7 +89,9 @@ the body's own return — the value dependents and body callers received —
 rides beside it as `.body_returned`, so a test can assert on either
 channel, or on the fact that a reviewer separated them. Taught errors land in `result.stderr` with exit code 64 —
 assert on them like any other product surface. The completion cache is
-isolated per invocation automatically, so tests never touch your real one.
+isolated per invocation automatically, so tests never touch your real one —
+that falls out of manifests keying per directory, not from test-only
+machinery.
 
 For a task that reads the pipe, `stdin=` *is* the pipe:
 `Runner().invoke("hooks.stop", stdin='{"stop_hook_active": true}')` binds

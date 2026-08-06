@@ -16,7 +16,9 @@ every `run("…")` child is **simulated** — it succeeds and its output says
 `[simulated]` — and runs are sequential. Everything else is the real
 thing: parsing, eager validation, taught errors, scheduling, `--json`,
 `--dry-run` plans — and **`fm test` runs the real pytest**, on toolroom's
-in-process path, right here in the page. The prompt completes
+in-process path, right here in the page. A browser has no processes to
+spawn, so the page is that path's proof by extremes: a first-class twin,
+not a fallback. The prompt completes
 too: press <kbd>Tab</kbd> and the candidates come from the same manifest
 walk a shell hook consults, rebuilt from whatever the editor says.
 
