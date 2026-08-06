@@ -214,7 +214,7 @@ ERROR_CASES = [
         "check + --json",
         "--json is a global option — it goes before the first task name",
     ),
-    ("render only-one", "render: missing required argument(s): <output>"),
+    ("render only-one", "render: missing required positional(s): <output>"),
     ("--nope check", "unknown global option --nope"),
     ("--sequential=false lint", "--sequential is a flag and takes no value"),
     ("--json=0 lint", "--json is a flag and takes no value"),

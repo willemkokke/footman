@@ -142,7 +142,7 @@ def test_many_positional_requires_at_least_one():
         @reg.task
         def build(targets: Many[str]): ...
 
-    with pytest.raises(ChainError, match="missing required argument"):
+    with pytest.raises(ChainError, match="missing required positional"):
         run(tasks, "build")
 
 

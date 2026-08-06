@@ -7,6 +7,15 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking:** the machine-surface kind of a positional parameter is
+  `positional` — in the `--json --list` catalog, in `--describe`, and in the
+  taught error (`missing required positional(s)`). Previously the kind was
+  spelled `argument`, which put one concept under three words across prose,
+  catalog, and error. Manifests rebuild themselves (schema 3); a consumer
+  matching on `"argument"` updates one string.
+
 ## [0.32.0] — 2026-08-05
 
 ### Removed

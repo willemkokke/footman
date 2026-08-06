@@ -388,7 +388,7 @@ def _print_task_help(tree: dict[str, Any], path: list[str]) -> None:
         print(_describe.dim("\n  runs until you stop it — Ctrl-C", on))
     if task.get("disabled"):
         print(_describe.dim(f"\n  unavailable here: {task['disabled']}", on))
-    positionals = [p for p in task["params"] if p["kind"] in ("argument", "variadic")]
+    positionals = [p for p in task["params"] if p["kind"] in ("positional", "variadic")]
     options = [p for p in task["params"] if p["kind"] in ("flag", "option")]
     for title, params in (("positionals", positionals), ("options", options)):
         if not params:
@@ -547,7 +547,7 @@ def _help_targets(
     `--help typo` instead of shrugging.
 
     The real splitter enforces arity — `--help add` must work even though
-    `add` alone would be "missing required argument(s)" — so this resolves
+    `add` alone would be "missing required positional(s)" — so this resolves
     dotted addresses only and skips every other token (option-shaped tokens
     and, once a target is found, its argument values).
     """

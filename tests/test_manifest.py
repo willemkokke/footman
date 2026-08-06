@@ -149,7 +149,7 @@ def test_help_is_allowed_when_it_is_not_an_option():
 
     def variadic(*help: str): ...
 
-    assert node(positional)["params"][0]["kind"] == "argument"
+    assert node(positional)["params"][0]["kind"] == "positional"
     assert node(variadic)["params"][0]["kind"] == "variadic"
 
 
@@ -173,7 +173,7 @@ def test_str_option_and_required_argument():
     def h(req): ...
 
     assert specs(g) == [{"name": "opt", "default": "a", "kind": "option"}]
-    assert specs(h) == [{"name": "req", "kind": "argument"}]
+    assert specs(h) == [{"name": "req", "kind": "positional"}]
 
 
 def test_keyword_only_without_default_is_a_required_option():
@@ -210,7 +210,7 @@ def test_typed_option():
 def test_literal_choices_positional():
     def f(env: Literal["a", "b"]): ...
 
-    assert specs(f) == [{"name": "env", "kind": "argument", "choices": ["a", "b"]}]
+    assert specs(f) == [{"name": "env", "kind": "positional", "choices": ["a", "b"]}]
 
 
 def test_repeatable_path_option():

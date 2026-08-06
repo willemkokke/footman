@@ -258,7 +258,9 @@ def _check_bounds(
 def _validate(where: str, p: dict[str, Any], value: str) -> None:
     """Eagerly validate a choice/typed value; raise a taught error if wrong."""
     label = (
-        f"<{p['name']}>" if p["kind"] in ("argument", "variadic") else f"--{p['name']}"
+        f"<{p['name']}>"
+        if p["kind"] in ("positional", "variadic")
+        else f"--{p['name']}"
     )
     bounds = (p.get("min"), p.get("max")) if "min" in p or "max" in p else None
     _check(
@@ -539,7 +541,7 @@ def _default_notes(
         return
     values: list[str] = list(seg.variadic)
     params = list(fixed)
-    if rest is not None and rest["kind"] == "argument":
+    if rest is not None and rest["kind"] == "positional":
         params.append(rest)
     for p in params:
         got = seg.values.get(p["name"])
@@ -591,13 +593,13 @@ def split_chain(
         fixed = [
             p
             for p in task["params"]
-            if p["kind"] == "argument" and not p.get("multiple")
+            if p["kind"] == "positional" and not p.get("multiple")
         ]
         rest = next(
             (
                 p
                 for p in task["params"]
-                if (p["kind"] == "argument" and p.get("multiple"))
+                if (p["kind"] == "positional" and p.get("multiple"))
                 or p["kind"] == "variadic"
             ),
             None,
@@ -633,11 +635,11 @@ def split_chain(
                 break  # arity satisfied: the next word starts a new segment
 
         missing = [f"<{p['name']}>" for p in fixed[filled:] if not p.get("optional")]
-        if rest is not None and rest["kind"] == "argument" and rest_count == 0:
+        if rest is not None and rest["kind"] == "positional" and rest_count == 0:
             missing.append(f"<{rest['name']}>")
         if missing:
             raise ChainError(
-                f"{seg.task}: missing required argument(s): {', '.join(missing)}"
+                f"{seg.task}: missing required positional(s): {', '.join(missing)}"
             )
 
         # Required options — a mapping or bool with no default. (Dicts are only
