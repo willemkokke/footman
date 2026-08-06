@@ -41,7 +41,7 @@ it must exit 0.
   A task's return value lands in `returned`, its declared shape beside
   it as `returned_schema`; refusals put a taught message in a top-level
   `error`.
-- Jump to a task's source: `fm --where <task>` prints file:line.
+- Jump to a task's source: `fm --where=<task>` prints file:line.
 
 Grammar: globals (`--json`, `-k`, …) go **before** the first task; a
 task's options come right after that task; several tasks on one line

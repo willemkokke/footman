@@ -92,7 +92,7 @@ fm: ignoring malformed config: /repo/footman.toml: Expected '=' after a key in a
 
 A file you named **explicitly** with `--config` is a hard error (exit 64) when
 it's malformed, unreadable, or missing — you asked for that file on purpose, so
-a typo like `--config prod.tmol` is reported (`--config: prod.tmol: no such
+a typo like `--config=prod.tmol` is reported (`--config: prod.tmol: no such
 file`), never silently ignored.
 
 ## Timing estimates
