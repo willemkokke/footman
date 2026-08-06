@@ -60,13 +60,13 @@ def bundle():
     out.mkdir(exist_ok=True)        # process's — safe under parallelism
 ```
 
-Per call, `run()` and the tools bridge take the same pair:
+Per call, `run()` and the toolroom handles take the same pair:
 
 ```python
 import toolroom as tools
 
 run("npm run build", rel="web")             # this one call, in <cwd>/web
-tools.npm.opts(rel="web").run("build")      # same, through the bridge
+tools.npm.opts(rel="web").run("build")      # same, through the handle
 web_npm = tools.npm.opts(rel="web")         # or bind it once
 ```
 
@@ -87,7 +87,7 @@ the directory a call needs decides how that call runs:
 
 - An in-process call whose target equals the live process cwd (the common
   single-package case) runs untouched, fully parallel.
-- A `tools.*` call that would run in-process but needs a *different*
+- A toolroom call that would run in-process but needs a *different*
   directory runs as its subprocess twin instead — same command, right
   directory, still parallel; the startup saving is the only loss.
 - Other in-process work — a step — has no `cwd=` at all: build paths from

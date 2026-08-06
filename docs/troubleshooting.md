@@ -109,7 +109,7 @@ turn the whole apparatus off — `--no-progress` for a run,
 
 ## Exit codes
 
-The two worth remembering here: **2 always means footman refused before or
+The two worth remembering here: **64 always means footman refused before or
 while binding** — a parse, tasks-file, config, or availability problem, and
 nothing ran — and any other non-zero code is the first failing task's own.
 The full table is part of the machine contract:

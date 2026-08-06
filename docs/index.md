@@ -42,7 +42,7 @@ The full history lives in the [changelog](changelog.md).
 
 ## Why
 
-`duty` gets a lot right — the `run()` capture model, the tools wrappers, the
+`duty` gets a lot right — the `run()` capture model, the
 decorator ergonomics — and footman keeps those ideas. Where it pushes is the
 parts that compound:
 

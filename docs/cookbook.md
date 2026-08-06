@@ -28,7 +28,6 @@ Every repo deserves one command that answers "is this fine?". Give the
 independent checks to `parallel()` and let the machine use its cores:
 
 ```python
-import functools
 from footman import task, parallel
 from toolroom import basedpyright, pytest, ruff
 
@@ -50,9 +49,11 @@ def test(*pytest_args: str):
 @task
 def check():
     "Lint, typecheck, and test — in parallel."
-    # partial, not a lambda: it keeps the callee's name, so the live
-    # status line and the step column say "lint" instead of "…".
-    parallel(functools.partial(lint, fix=False), typecheck, test)
+    # A call with arguments goes in the block form; bare tasks ride along.
+    with parallel():
+        lint(fix=False)
+        typecheck()
+        test()
 ```
 
 `fm check` fans out across cores, keeps every task's output in one
@@ -113,7 +114,7 @@ $ fm deploy produ
 fm: deploy: <target> must be one of dev|staging|prod (got 'produ') — did you mean 'prod'?
 ```
 
-Exit code 2, nothing executed, and the fix is in the message.
+Exit code 64, nothing executed, and the fix is in the message.
 
 ## Typed inputs & validation
 
@@ -283,7 +284,12 @@ def docs():
     "Render the API docs."
     run("./render-docs.sh")
 
-@task(pre=[build, docs], post=[lambda: run("./notify.sh done")])
+@task
+def notify():
+    "Announce the finished train."
+    run("./notify.sh done")
+
+@task(pre=[build, docs], post=[notify])
 def release():
     "The whole train."
 ```
@@ -295,13 +301,11 @@ to lie.
 
 ### A build matrix
 
-Thunks let you fan the same task over arguments; `keep_going` collects
+The block form fans the same task over arguments; `keep_going` collects
 every failure instead of stopping at the first:
 
 <!-- example: fresh-session -->
 ```python
-import functools
-
 from footman import parallel, run, task
 
 TARGETS = ("linux-x86_64", "linux-arm64", "darwin-arm64")
@@ -314,11 +318,10 @@ def build(target: str):
 @task
 def matrix():
     "Compile every target."
-    codes = parallel(
-        *(functools.partial(build, t) for t in TARGETS),
-        keep_going=True,
-    )
-    if any(codes):
+    with parallel(keep_going=True) as p:
+        for t in TARGETS:
+            build(t)
+    if any(p):  # the block is its list of codes
         raise SystemExit(1)
 ```
 
@@ -664,9 +667,8 @@ status line, the timing history, the off switches — is on
 artifacts for deleted projects clean themselves up.
 
 ```python
-import functools
 from pathlib import Path
-from footman import fetch, parallel, task
+from footman import fetch, parallel, step, task
 
 TOOLCHAIN = {
     "protoc": ("https://example.com/protoc-27.tar.gz", "9f86d081884c…"),
@@ -676,8 +678,10 @@ TOOLCHAIN = {
 @task
 def vendor():
     "Fetch the pinned toolchain, in parallel."
+    # step(fetch) lifts the helper into an owned item — each download
+    # gets its own receipt and its own worker.
     parallel(*(
-        functools.partial(fetch, url, sha256=digest, into=Path("vendor") / name)
+        step(fetch)(url, sha256=digest, into=Path("vendor") / name)
         for name, (url, digest) in TOOLCHAIN.items()
     ))
 ```

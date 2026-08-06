@@ -18,9 +18,9 @@ terminal, pager, and CI log agrees on.
 
 So write your help as prose. A sentence or two that reads straight is worth more
 than markup footman won't paint, and it exports cleanly either way. The one
-styling footman *does* apply is [colour](color-support.md) — to its own chrome
-(names, receipts, the progress line) and, through the tools it spawns, to their
-output — never injected into your text. Your task's own stdout is yours; footman
+styling footman *does* apply is [colour](configuration.md) — to what footman
+itself prints (names, receipts, the progress line) and, through the tools it
+spawns, to their output — never injected into your text. Your task's own stdout is yours; footman
 routes it untouched.
 
 (A future opt-in could render markdown in the terminal too — see the

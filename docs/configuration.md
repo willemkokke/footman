@@ -75,6 +75,7 @@ older footman.
 | `fetch.backend` | Download engine for `fetch()`: `urllib` (default), `curl`, `httpx`, `requests`, or `auto`. |
 | `shell.default` | What `run(shell=True)` resolves to: `posix` (default — bash, then sh, git bash on Windows), `native` (the platform shell), `pwsh`, or a concrete shell name. |
 | `gc`         | `false` disables the daily cache collector. **User-level only**: honoured from the global file; in a project config it is ignored, with a note under `-v`. |
+| `cascade`    | How far discovery ranges for task files *and* config: `none` (this directory only), `repo` (the repository — default), or `filesystem` (across repositories). **User-level only**, like `gc`; `FOOTMAN_CASCADE` overrides it per invocation. |
 
 ## Environment variables
 
@@ -84,6 +85,7 @@ older footman.
 | `FOOTMAN_CACHE_DIR` | Moves every footman cache (completion manifests, timing history). |
 | `FOOTMAN_NO_UV`     | Disables both uv handoffs (project and script environment), regardless of any config. |
 | `FOOTMAN_NO_GC`     | Disables the cache collector, regardless of any config. |
+| `FOOTMAN_CASCADE`   | Overrides the `cascade` key for one invocation (`none` / `repo` / `filesystem`). |
 | `NO_COLOR` / `TERM=dumb` | Disable ANSI styling — for footman and for every tool it spawns, which footman tells to stay monochrome too. |
 | `FORCE_COLOR`       | Force ANSI styling on, even piped (below `--color` and `[tool.footman] color` in the ladder). |
 

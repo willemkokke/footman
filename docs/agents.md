@@ -34,10 +34,12 @@ it must exit 0.
   `--help` anywhere on the line never executes anything.
 - Validate a command line: `fm --json --dry-run <chain>` — a typo refuses with exit 64; a valid chain rehearses (bodies run, footman's recorded work is faked) and answers in the items envelope.
 - Run for machines: `fm --json <chain>` — stdout is exactly one JSON
-  envelope: {"schema": 1, "total_ms", "items": [{task, ok, code,
-  duration_ms, output, steps, error, returned}]}. A task's return value
-  lands in `returned`, its declared shape beside it as `returned_schema`;
-  refusals put a taught message in a top-level `error`.
+  envelope: {"schema": 1, "total_ms", "items": [...]} — one flat list
+  where a task row carries {task, ok, code, duration_ms, output, error,
+  returned} and each recorded command is its own row keyed "command".
+  A task's return value lands in `returned`, its declared shape beside
+  it as `returned_schema`; refusals put a taught message in a top-level
+  `error`.
 - Jump to a task's source: `fm --where <task>` prints file:line.
 
 Grammar: globals (`--json`, `-k`, …) go **before** the first task; a

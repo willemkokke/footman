@@ -39,7 +39,10 @@ Standing in `services/api`, `fm` sees `build*` (the local override), `test`,
     From that ceiling **down to your cwd**, footman loads every `tasks.py` that
     exists — root first, cwd last, so nearer files override — skipping folders
     that have none. The filename is the `tasks` [config key](#configuration), so
-    a repo can look for something other than `tasks.py`.
+    a repo can look for something other than `tasks.py`. The walk's whole reach
+    is the user-level `cascade` key — `none`, `repo` (the default above), or
+    `filesystem` — with `FOOTMAN_CASCADE` as the per-invocation override; see
+    [Configuration](configuration.md#keys).
 
 ## Where a task runs
 

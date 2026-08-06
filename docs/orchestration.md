@@ -153,8 +153,8 @@ Three escape hatches for the kill:
 - An `@task(interactive=True)` task owns the real terminal, so its subprocess
   stays attached to it and isn't group-isolated — it keeps its controlling tty
   and its own `Ctrl-C`.
-- An **in-process** `run()` (a `tools.*` entry point, a plain callable) has no
-  subprocess to signal, so it always finishes on its own.
+- An **in-process** tool call (a toolroom handle on its in-process path) has
+  no subprocess to signal, so it always finishes on its own.
 
 ### Override a task's options per use: `.opts()`
 
@@ -172,12 +172,13 @@ def check(fix: Forward[bool] = False): ...
 
 `.opts()` returns the same task with the options overridden for that use only — a
 `pre=`/`post=` target, or a body call — and reads everywhere a bare task does:
-same name, same signature, same call. It takes the policy options `keep_going`,
-`atomic`, `interactive`, `progress`, `confirm`, and `infinite`.
+same name, same signature, same call. It takes the policy options —
+`keep_going`, `atomic`, `interactive`, `progress`, `confirm`, `infinite`,
+`shared`, `cwd`, `rel`, `lanes`, `serial`, and `exclusive`.
 
 It takes **policy, not parameters**. A task's own arguments go in the call; the
 options ride beside it — `deploy.opts(atomic=True)("prod")` — the same split
-`tools.*` draw with their `.opts()`. Passing a task parameter to `.opts()` is a
+toolroom handles draw with their `.opts()`. Passing a task parameter to `.opts()` is a
 taught error. A runnable group has `.opts()` too, riding its default action:
 `pre=[lint.opts(keep_going=True)]` scopes keep-going to that prerequisite's
 subtree (see per-subtree scoping above).
@@ -306,9 +307,9 @@ one unit whichever way you wrote it.
 
 ### The block form, when you want the values
 
-Passing arguments through thunks is fine for two or three; past that, writing
-the calls plainly reads better — and it is the only form that hands the
-return values back:
+Passing arguments through built step items works for two or three; past
+that, writing the calls plainly reads better — and the block form is the
+only one that hands the return values back:
 
 <!-- example: fragment -->
 ```python
@@ -384,7 +385,7 @@ Reach for declared deps when you want the plan to *see* the work, and
     Result data flows *within* a task — `run()` hands back a `Result` (the exit
     code, which the value *is*, plus `.stdout`/`.stderr`), a called function its
     return — and out of a `parallel()` fan-out through its block form
-    (`p.results`), or through a shared closure the thunks write to (they run
+    (`p.results`), or through a shared closure the calls write to (they run
     in-process, so a captured list just works). `parallel(*calls)` itself
     returns exit *codes*, not values, and the declared graph carries no data
     between tasks: `pre`/`post` are ordering, not a pipe.
