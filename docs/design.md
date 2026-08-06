@@ -40,6 +40,58 @@ Four commitments run through everything below:
 4. **Explicit beats implicit at every boundary.** Where that costs you a
    few characters, you get something back for them.
 
+## The front door
+
+Everything below happens *after* footman decides to run something. The
+decisions before that moment are older, and they carry more weight than
+their size suggests — most of what shipped later cost little precisely
+because these were never compromised.
+
+**Zero runtime dependencies.** Installing footman installs footman —
+nothing else, ever. A task runner sits underneath every project it
+serves, so anything it dragged in would be dragged into all of them; the
+rule has no "just a small one" clause, because small is how it starts.
+The price is paid inside — the binder, the coercion, the completion
+machinery are all standard library — and the dividend is that
+`uv add --dev footman` cannot change what your project depends on.
+
+**A keystroke never imports your code.** Completion answers from a baked
+file — one read, one JSON parse, a tree walk, ~25 ms — and `main()`
+checks for `--complete` before importing even footman itself. Your tasks
+file, its imports, its heavy dependencies: none of it runs on a
+<kbd>Tab</kbd>. The budget survives the only way budgets do — every
+feature that touches completion is checked against "what does the Tab
+pay", and a feature that would make the Tab pay gets built another way.
+
+**The manifest is written from declarations, never executions.** The
+baked file the <kbd>Tab</kbd> reads — the manifest — describes the task
+tree as your files declare it, and the chain parser reads the same file,
+which is what makes the split deterministic. Nothing that happens during
+a run can grow the CLI: a task made mid-run earns a place in the report,
+never an address on the command line. Completion, `--dry-run`, and
+`--help` stay in agreement with each other and with the files in your
+repo because they are all views of one declaration.
+
+**One spelling per concept.** A task's address is one dotted token —
+`fm docs.serve` — on every surface: running, help, completion, the
+report. The space form is taught against, never quietly accepted,
+because a second spelling is a second grammar to keep consistent
+forever. The same ruling repeats through the design: option values are
+`=`-attached, always; each lifecycle moment has one name; sharing within
+a run and caching across runs are two words because they are two things.
+And every time the rule held, something got simpler downstream: dotted-only
+addressing is why a group's default action can take positionals with no
+ambiguity rules at all, and `=`-only values are why the parser needs no
+arity tables — a whole two-pass grammar died unbuilt.
+
+**Refusals over guessing, written as teaching.** When a line is
+ambiguous or wrong, footman refuses it — exit 64, before anything runs —
+and the refusal names the culprit, states the expectation, and proposes
+the fix: `--mode strict` answers "did you mean `--mode=strict`?". An
+error message is product surface — it is the one part of the design
+every user eventually reads — and it is written so the reader ends up
+knowing more than before the mistake.
+
 ## Tasks and steps: one thing, two sizes
 
 You write a task by decorating a function. Its signature becomes a real
@@ -53,11 +105,11 @@ from footman import task, run
 def test(coverage: bool = False):
     """Run the test suite."""
     run("pytest --cov" if coverage else "pytest")
-    # footman also ships a full typed tools API (from footman import
+    # The typed tool handles live in toolroom (import toolroom as
     # tools), where flags become checked keyword arguments with
     # completion:
     #
-    #     toolroom.pytest(cov=coverage)
+    #     tools.pytest(cov=coverage)
     #
     # This page sticks to plain run() commands everyone already knows.
 ```
@@ -393,6 +445,12 @@ tasks; `-v` adds every step; but a failed task always expands to its
 failing step and its audit line, whatever the verbosity. You should
 never have to re-run something louder just to find out what went wrong.
 
+The channel discipline underneath all of this: **stdout is the answer,
+stderr is the commentary.** A task's own stdout is routed untouched; the
+summary, the status line, every footman remark rides stderr; and under
+`--json` the envelope owns stdout outright. Piping footman never captures
+its chatter, whichever form the answer takes.
+
 ## Sharing one process
 
 Parallel tasks live in one operating-system process, and a process has
@@ -472,6 +530,15 @@ on the record:
 - **No bare callables at the boundaries.** One wrapper word, in
   exchange for everything above applying uniformly to every piece of
   work footman touches.
+- **No configurable rightness.** Where one behaviour is correct, footman
+  ships it instead of a knob — the refusal code is 64 and not a setting.
+  A knob whose right value is knowable hands the decision to every user
+  separately, forever.
+- **No knowledge of its caller.** Footman never learns who is driving
+  it — not an editor, not an agent, not its own companion package. The
+  rule is enforced structurally (a test greps the source for caller
+  names), which is why integrations stay integrations instead of
+  becoming features.
 
 Each refusal is a feature that stays buildable *because* it was refused:
 the audit is only trustworthy because nothing writes records
