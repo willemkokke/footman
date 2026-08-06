@@ -149,7 +149,7 @@ def _type_cell(p: dict[str, Any]) -> str:
 def _default_cell(p: dict[str, Any]) -> str:
     # A positional argument is required by kind (a default would have made it
     # an option — the grammar's load-bearing rule); flags/options say so.
-    if p.get("required") or p["kind"] == "argument":
+    if p.get("required") or p["kind"] == "positional":
         return "*required*"
     if "default" in p and p["default"] is not None:
         return f"`{_cell(json.dumps(p['default']))}`"

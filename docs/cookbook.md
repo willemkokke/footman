@@ -255,7 +255,7 @@ def bundle(*entries: str, out: Path):
 ```console
 $ fm bundle web api worker --out=dist/app.tar
 $ fm bundle web
-fm: bundle: missing required option --out
+fm: bundle: missing required option(s): --out
 ```
 
 ## Orchestration & tools

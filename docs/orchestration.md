@@ -229,7 +229,7 @@ This is the **declared** graph: static, so `--dry-run` and completion show it
 without running anything, and deduped by identity — a cycle in it is a taught
 error naming the loop. A dep is named by reference, so it runs with its
 **defaults**: a task used as a prerequisite needs every parameter defaulted (a
-required one errors with `missing required argument(s)`). To run a prerequisite
+required one errors with `missing required positional(s)`). To run a prerequisite
 with specific arguments, name it in the chain — `fm build --release deploy` runs
 `build --release` once, and `deploy`'s `pre=[build]` waits on that same run.
 

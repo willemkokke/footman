@@ -353,7 +353,7 @@ $ fm --json --list
 }
 ```
 
-Each parameter always has `name` and `kind` (`flag` | `option` | `argument`
+Each parameter always has `name` and `kind` (`flag` | `option` | `positional`
 | `variadic` | `stdin` — the last is a whole-document parameter with no
 token spelling; see [Pipelines](pipelines.md)), plus whichever apply:
 `required`, `choices`, `types`, `multiple`, `mapping`, `nosplit`, `path`,

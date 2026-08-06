@@ -65,7 +65,7 @@ _DYNAMIC = "\x00dynamic"  # internal sentinel: a dynamic completer, recompute fr
 # A cache written by a different footman gets rebuilt, never walked: the first
 # TAB after an upgrade serves correct candidates instead of a traceback.
 # `test_completion_schema_mirrors_manifest` keeps the two from drifting.
-_SCHEMA = 2
+_SCHEMA = 3
 _DYNAMIC_TIMEOUT = 2.0  # seconds to wait for a fresh dynamic completer subprocess
 _COLD_TIMEOUT = 3.0  # seconds to wait for a first-time cwd manifest build
 _SHELLS = ("bash", "zsh", "fish", "pwsh", "nushell")
@@ -167,13 +167,13 @@ class _Segment:
                 "--" + p["name"]: p for p in params if p["kind"] in ("flag", "option")
             }
             self.fixed = [
-                p for p in params if p["kind"] == "argument" and not p.get("multiple")
+                p for p in params if p["kind"] == "positional" and not p.get("multiple")
             ]
             self.rest = next(
                 (
                     p
                     for p in params
-                    if (p["kind"] == "argument" and p.get("multiple"))
+                    if (p["kind"] == "positional" and p.get("multiple"))
                     or p["kind"] == "variadic"
                 ),
                 None,

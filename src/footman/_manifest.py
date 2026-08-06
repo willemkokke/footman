@@ -40,7 +40,7 @@ from footman.context import context_param_name
 from footman.params import suggest
 from footman.registry import Group
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 
 class ManifestError(Exception):
@@ -215,7 +215,7 @@ def param_spec(param: inspect.Parameter) -> dict[str, Any]:
             if not has_default:
                 spec["required"] = True
         else:
-            spec["kind"] = "argument"
+            spec["kind"] = "positional"
         return spec
 
     peeled = _coerce.peel(ann)
@@ -284,7 +284,7 @@ def param_spec(param: inspect.Parameter) -> dict[str, Any]:
                 f"many-valued positional is already optionalable as "
                 f"`Many[…]` with a default"
             )
-        spec["kind"] = "argument"
+        spec["kind"] = "positional"
         spec["optional"] = True
     elif (peeled.ask is not None or peeled.stdin is not None) and not has_default:
         # ask() and stdin both make a defaultless parameter a CLI-optional
@@ -298,7 +298,7 @@ def param_spec(param: inspect.Parameter) -> dict[str, Any]:
         if not has_default:
             spec["required"] = True
     else:
-        spec["kind"] = "argument"
+        spec["kind"] = "positional"
     _marker_keys(spec, peeled, param, has_default)
     if peeled.multiple:
         spec["multiple"] = True
@@ -685,8 +685,8 @@ def _task_node(fn: Any, memo: dict[int, list[str]]) -> dict[str, Any]:
     for spec in params:
         if seen_optional is not None and (
             spec["kind"] == "variadic"
-            or (spec["kind"] == "argument" and not spec.get("optional"))
-            or (spec["kind"] == "argument" and spec.get("multiple"))
+            or (spec["kind"] == "positional" and not spec.get("optional"))
+            or (spec["kind"] == "positional" and spec.get("multiple"))
         ):
             raise SpecError(
                 f"<{seen_optional}>: an Arg[…] optional positional must come "
@@ -694,7 +694,7 @@ def _task_node(fn: Any, memo: dict[int, list[str]]) -> dict[str, Any]:
                 f"to whom would be a guess. Reorder, or make "
                 f"<{spec['name']}> an option."
             )
-        if spec["kind"] == "argument" and spec.get("optional"):
+        if spec["kind"] == "positional" and spec.get("optional"):
             seen_optional = spec["name"]
     for spec in params:
         if spec["name"] == "help" and spec["kind"] in ("flag", "option"):

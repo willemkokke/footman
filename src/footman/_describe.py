@@ -237,7 +237,7 @@ def example_parts(
     flag_shown = False
     for p in task["params"]:
         kind = p["kind"]
-        if kind in ("argument", "variadic"):
+        if kind in ("positional", "variadic"):
             parts.append(("value", sample_value(p)))
         elif kind == "option" and p.get("required"):
             parts.append(("flag", f"--{p['name']}"))
