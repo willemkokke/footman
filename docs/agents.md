@@ -1,10 +1,11 @@
 # AI agents
 
-Footman's machine surface — one catalog call, taught refusals, a single-JSON
-stdout, structured results with task-returned data — is what a coding agent
-needs to drive a project safely. This page packages it: a paste-ready
-instructions snippet, and agent hooks that keep its work formatted, linted,
-and gated.
+An agent can drive a project with three commands: `fm --json --list` to
+learn the surface, `fm --json --dry-run <chain>` to validate a line, and
+`fm --json <chain>` to run it — refusals teach, stdout stays one JSON
+document, and results carry the task's own data. This page packages that:
+a paste-ready instructions snippet, and agent hooks that keep an agent's
+work formatted, linted, and gated.
 
 An agent-readable index of this whole site lives at
 [`llms.txt`](https://willemkokke.github.io/footman/llms.txt) (and the full

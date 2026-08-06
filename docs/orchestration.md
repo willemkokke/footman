@@ -188,11 +188,10 @@ taught error. A runnable group has `.opts()` too, riding its default action:
 `pre=[lint.opts(keep_going=True)]` scopes keep-going to that prerequisite's
 subtree (see per-subtree scoping above).
 
-An opted reference with a *different* policy is a distinct prerequisite from a
-bare one — a different policy is a different run, so both appear in the graph —
-while identical policies deduplicate to one node, exactly as a shared bare
-prerequisite runs once. Deduplication keys on `(task, options)`, so an empty
-`.opts()` is just the bare task, and options must be hashable values.
+Deduplication keys on `(task, options)`. Same policy: one node, exactly as
+a shared bare prerequisite runs once. Different policy: a different run, so
+both appear in the graph. An empty `.opts()` is just the bare task, and
+options must be hashable values.
 
 ## Interactive input
 

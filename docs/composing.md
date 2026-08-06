@@ -146,8 +146,8 @@ def check(): ...
 
 ## Two typed verbs over one engine
 
-Composition is two sibling verbs sharing one engine — resolution differs,
-everything after it (walk, land, filter, merge) is the same code:
+Composition is two sibling verbs. Where a pull comes from differs; what
+happens after it — walk, land, filter, merge — is identical:
 
 - **`plugin("acme.devkit.lint")`** pulls from an installed package's
   **`footman.tasks` entry point** — the console-script of task trees: a
@@ -290,7 +290,7 @@ plugin("acme.devkit")                        # a container of groups: the splat
 
 The longest installed entry-point name is the **identity** — consumed at
 resolve time, retained as provenance — and the rest of the string walks the
-advertised tree, dots continuing seamlessly. The pulled node lands under
+advertised tree, dot by dot. The pulled node lands under
 its **own name**: the identity (`acme.mkdocs`) never becomes an address,
 and placement is always yours (`into=`). A provider advertising a whole
 container of groups splats them — one line adopts a devkit, and a devkit

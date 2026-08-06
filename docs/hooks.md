@@ -118,9 +118,9 @@ write through:
 record was sealed when the review window closed, and every write there —
 title, code, the reported value via `set_returned` — belongs to a
 `pre_record` reviewer, where it is attributed in the record's audit.
-`set_returned` rewrites the *report* only: dependents and body callers
-always receive the body's own return, so a redaction or a summary never
-changes what a program computed with — and that untouched value stays
+`set_returned` rewrites the *report* only. Dependents and body callers
+always receive the body's own return — a redaction or a summary never
+changes what a program computed with — and the untouched value stays
 readable beside the reported one as `result.body_returned`. An
 observer that finds a problem is not powerless: `footman.fail(reason,
 code)` from a `post_task` hook fails the task with the hook's own code, the
@@ -251,8 +251,8 @@ def span(inv, task):
 is resumed with the `ResultView` — so every rule above is its rule too: per
 request (a request satisfied by an execution the run already performed is
 resumed with its `shared` row), reverse unwinding, a raising half failing
-the task, named. The family grammar: `pre_X` runs *before* moment X,
-`wrap_X` *enters at* X and rides to the end.
+the task, named. The names say it: a `pre_` hook runs *before* its
+moment; a `wrap_` hook *enters at* its moment and rides to the end.
 
 The one thing `wrap_task` cannot see is a task that failed to **bind** — its
 anchor moment never fires, so there is no generator to unwind. `wrap_bind`
