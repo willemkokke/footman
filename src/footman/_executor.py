@@ -668,10 +668,18 @@ def bind(
             kwargs[param.name] = raw
             continue
         if param.annotation is empty:
-            kwargs[param.name] = raw
-            continue
-
-        peeled = _coerce.peel(param.annotation)
+            # No annotation, but a basic default types the parameter anyway
+            # (`port=8000` is an int here exactly as it is to a type
+            # checker). Substituting the inferred type routes the value
+            # through the very path an annotated one takes — same coercion,
+            # same taught errors — rather than a parallel one.
+            inferred = _coerce.inferred_type(param.default)
+            if inferred is None:
+                kwargs[param.name] = raw
+                continue
+            peeled = _coerce.peel(inferred)
+        else:
+            peeled = _coerce.peel(param.annotation)
         label = f"--{cli}"
         if peeled.mapping:
             result: dict[Any, Any] = {}

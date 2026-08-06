@@ -43,6 +43,56 @@ def test_scalar_coercion():
     assert seen == {"n": 5, "ratio": 2.5, "out": Path("/tmp/x"), "fix": True}
 
 
+def test_a_basic_default_types_an_unannotated_parameter():
+    """`port=8000` binds an int, whether or not the flag was passed.
+
+    Without inference the default arrived as `8000` and the supplied value
+    as `'99'` — one parameter, two types, decided by whether someone typed
+    the flag. Every type checker already reads the default as `int`, so the
+    string was the odd one out.
+    """
+    seen: dict[str, object] = {}
+
+    def tasks(reg):
+        @reg.task
+        def build(port=8000, ratio=1.5, name="app"):
+            seen.update(port=port, ratio=ratio, name=name)
+
+    _run(tasks, "build --port=99 --ratio=2.5 --name=web")
+    assert seen == {"port": 99, "ratio": 2.5, "name": "web"}
+    assert [type(v).__name__ for v in seen.values()] == ["int", "float", "str"]
+
+
+def test_an_unannotated_basic_default_refuses_a_bad_value():
+    """The inferred type teaches like a written one."""
+
+    def tasks(reg):
+        @reg.task
+        def build(port=8000): ...
+
+    with pytest.raises(ChainError, match=r"--port expects an integer \(got 'abc'\)"):
+        _run(tasks, "build --port=abc")
+
+
+def test_inference_declines_where_a_type_checker_declines():
+    """`None`, containers and a bare positional stay strings.
+
+    The rule is *infer where the checker infers*: it reads `out=None` as
+    `Unknown | None` and a container default as `Unknown`, so footman reads
+    them as nothing at all and hands the value over untouched — exactly as
+    before inference existed.
+    """
+    seen: dict[str, object] = {}
+
+    def tasks(reg):
+        @reg.task
+        def build(target, out=None, paths=()):
+            seen.update(target=target, out=out, paths=paths)
+
+    _run(tasks, "build 42 --out=dist --paths=src")
+    assert seen == {"target": "42", "out": "dist", "paths": "src"}
+
+
 def test_literal_and_list_coercion():
     seen: dict[str, object] = {}
 

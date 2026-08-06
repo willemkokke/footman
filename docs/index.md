@@ -15,6 +15,11 @@ real flags and positionals, modules become nested command groups, and shell
 completion answers from a cached manifest in **~25 ms — without importing your
 code**.
 
+Annotations are how you get the most out of it, not the price of entry: a
+plain `def deploy(target, port=8000)` is already a working command with a
+positional, a typed option, and completion. [Annotate when you want
+more](typing.md#what-if-i-dont-like-annotating-types).
+
 ```sh
 fm lint --fix
 fm format lint --fix test          # a chain: three tasks, no separator
