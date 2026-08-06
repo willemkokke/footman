@@ -304,11 +304,17 @@ def test_every_docs_page_is_in_the_nav():
 
 
 def _slug(heading: str) -> str:
-    """The site's heading ids, closely enough: lowercase, keep word
-    characters (underscores survive — `#around-every-task-pre_task-and-
-    post_task` is real), collapse everything else to single hyphens."""
-    text = re.sub(r"[^a-z0-9_]+", "-", heading.lower())
-    return text.strip("-")
+    """The site's heading ids, by python-markdown's own toc algorithm:
+    punctuation is *dropped*, then whitespace and hyphens collapse to one
+    hyphen. Underscores survive as word characters, which is why
+    `#around-every-task-pre_task-and-post_task` is real.
+
+    An earlier version hyphenated punctuation instead of dropping it and
+    so demanded `#what-if-i-don-t-…` for a heading the site publishes as
+    `#what-if-i-dont-…` — a guard inventing a dead link of its own.
+    """
+    text = re.sub(r"[^\w\s-]", "", heading.lower())
+    return re.sub(r"[-\s]+", "-", text).strip("-")
 
 
 def test_internal_links_and_anchors_resolve():

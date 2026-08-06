@@ -31,6 +31,20 @@ versions may include breaking changes.
 
 ### Changed
 
+- **Breaking:** a parameter with no annotation but a **basic default** is
+  now typed by that default: `port=8000` binds an `int`, `ratio=1.5` a
+  `float`, `name="app"` a `str` (a `bool` default was already a flag).
+  Previously the default arrived as `8000` and the supplied value as
+  `'99'` — one parameter, two types, decided by whether anyone typed the
+  flag — while every type checker footman gates on had already read the
+  default as `int`. A bad value is now refused eagerly, with the taught
+  message an annotated parameter gets, and the `--json` catalog declares
+  the type. The rule is to infer exactly where Python's own inference is
+  definite: `None` defaults, containers empty or not, `Enum` members, and
+  parameters with no default at all are unchanged — the raw string still
+  reaches the body. A body doing string operations on an int-defaulted
+  parameter is the one thing that changes underfoot.
+
 - **Breaking:** the machine-surface kind of a positional parameter is
   `positional` — in the `--json --list` catalog, in `--describe`, and in the
   taught error (`missing required positional(s)`). Previously the kind was

@@ -216,6 +216,15 @@ def param_spec(param: inspect.Parameter) -> dict[str, Any]:
                 spec["required"] = True
         else:
             spec["kind"] = "positional"
+        # A basic default types the parameter as surely as an annotation
+        # would — `port=8000` is an int to Python and to every checker, so
+        # it is an int here. Recording the tags is what buys the eager
+        # refusal, the catalog's `types`, and the coercion at bind time;
+        # `str` is omitted like any other str-tagged spec, since it is the
+        # shape a bare command-line value already has.
+        inferred = _coerce.inferred_type(param.default)
+        if inferred is not None and (tags := _coerce.element_tags(inferred)) != ["str"]:
+            spec["types"] = tags
         return spec
 
     peeled = _coerce.peel(ann)

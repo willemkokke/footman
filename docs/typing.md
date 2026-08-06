@@ -41,6 +41,57 @@ sorts each parameter into a position or a flag.
     task running); rename the parameter — `show_help`, `explain` — to get a real
     flag.
 
+## What if I don't like annotating types?
+
+Then don't. Every rule above still holds, because the one that sorts a
+parameter into a position or a flag reads the *default*, not the
+annotation. This is a working CLI:
+
+```python
+from footman import task
+
+@task
+def ship(target, port=8000, ratio=1.5, name="web", verbose=False):
+    "Ship it."
+    print(target, port + 1, ratio, name, verbose)
+```
+
+`fm ship prod --port=9000 --verbose` gives you a required positional, three
+options, and a `--verbose`/`--no-verbose` flag pair — completed, listed, and
+documented like any other task. The four basic types read from their
+defaults: `port` arrives as an `int`, `ratio` as a `float`, `name` as a
+`str`, and a `bool` default becomes a flag. Passing `--port=abc` is refused
+before anything runs, with the same taught message an annotated `int` gets.
+
+The limit is what a bare default can't say. These stay strings:
+
+```python
+@task
+def stamp(out=None, paths=(), tags=["docs"]):
+    ...                      # out, paths and tags all arrive as `str`
+```
+
+A `None` default names no type, and a container's default says nothing about
+what belongs *in* it — so footman infers nothing and hands the value over as
+typed on the command line. That is deliberate: the rule is to infer exactly
+where Python's own inference is definite, which is also exactly where a type
+checker reading your file agrees. Anything less certain would be a guess, and
+a wrong guess is worse than a string.
+
+So annotate when you want what a default cannot express:
+
+| you want | annotate |
+| --- | --- |
+| a fixed set of choices, completed and validated | `Literal["dev", "prod"]` |
+| a bound | `Annotated[int, between(1, 32)]` |
+| a path that must exist | `Exists` / `IsFile` |
+| a list, and what goes in it | `list[Path]`, `Many[int]` |
+| a value from the environment | `Annotated[str, env("DEPLOY_ENV")]` |
+| a prompt when it is missing | `Annotated[str, ask("Target?")]` |
+
+Everything else on this page is that list expanded. None of it is required to
+get a good CLI out of a plain function.
+
 ## Unions and one-or-many values
 
 A parameter can accept a union of types; footman validates the value against the

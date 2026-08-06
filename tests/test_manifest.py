@@ -24,6 +24,35 @@ def test_flag():
     assert specs(f) == [{"name": "x", "default": False, "kind": "flag"}]
 
 
+def test_a_basic_default_types_an_unannotated_parameter():
+    """An unannotated `port=8000` records `int` — which is what buys the
+    eager refusal, the catalog's declared type, and the coercion at bind
+    time. `str` is omitted like every other str-tagged spec: it is the
+    shape a command-line value already has."""
+
+    def f(port=8000, ratio=1.5, name="app"): ...
+
+    assert specs(f) == [
+        {"name": "port", "default": 8000, "kind": "option", "types": ["int"]},
+        {"name": "ratio", "default": 1.5, "kind": "option", "types": ["float"]},
+        {"name": "name", "default": "app", "kind": "option"},
+    ]
+
+
+def test_inference_declines_where_a_type_checker_declines():
+    """`None` and containers carry no inferred type, so they behave as they
+    did before inference: the raw string reaches the body."""
+
+    def f(target, out=None, paths=(), flag=False): ...
+
+    assert specs(f) == [
+        {"name": "target", "kind": "positional"},
+        {"name": "out", "default": None, "kind": "option"},
+        {"name": "paths", "default": [], "kind": "option"},
+        {"name": "flag", "default": False, "kind": "flag"},
+    ]
+
+
 def test_doc_marker_lands_in_spec():
     def f(fix: Annotated[bool, doc("apply fixes in place")] = False): ...
 

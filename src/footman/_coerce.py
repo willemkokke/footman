@@ -300,6 +300,35 @@ def is_flag(element: Any) -> bool:
     return element is bool
 
 
+# The basic types a default may stand in for. Ordered because `bool` is a
+# subclass of `int` in Python — and excluded outright, since a bool default
+# is a flag the splitter resolves before coercion ever runs.
+_INFERRED_FROM_DEFAULT = (int, float, str, Path)
+
+
+def inferred_type(default: Any) -> type | None:
+    """The type a bare default stands in for, or `None` to infer nothing.
+
+    A parameter written `port=8000` carries no annotation, but Python's own
+    inference — and every type checker footman gates on — reads it as `int`.
+    Without this, the command line would hand the body `'99'` while the
+    checker had already concluded `int`: the same parameter arriving as two
+    types depending on whether it was passed.
+
+    The rule is *infer exactly where the checker infers*, so the cases it
+    declines to type are declined here too: `None` (it says
+    `Unknown | None`), containers empty or not (`Unknown`), and anything
+    exotic. An `Enum` member is excluded despite `IntEnum` passing the
+    `int` check — the value would coerce, but to the wrong kind of thing.
+    """
+    if default is None or isinstance(default, bool | enum.Enum):
+        return None
+    for basic in _INFERRED_FROM_DEFAULT:
+        if isinstance(default, basic):
+            return basic
+    return None
+
+
 def sort_tags(tags: list[str]) -> list[str]:
     return sorted(dict.fromkeys(tags), key=lambda t: _TAG_ORDER.get(t, 99))
 
