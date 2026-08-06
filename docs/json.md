@@ -53,44 +53,52 @@ $ fm --json check
 ```
 
 Top-level, `total_ms` is wall-clock for the whole run — the human summary's
-`took` line, as a number. Per task: `task` (dotted name), `address`, `ok`,
-`code`, `duration_ms`, `output` (all captured text), `error` (`null`, or
-the exception as a string) — and, when the task returns a value,
-`returned`. Its steps follow it in the list — one item per
-[`run()`, tool, or `step()`](tools.md) call, each with `command`,
-`address`, `code`, `duration_ms`, split `stdout`/`stderr`, its `audit`
-(the verdict's provenance: one `[moment, actor, code]` entry per actor
-that touched it), and `failed_at`, the moment a failure came from
-(`null` on success — a red tool reviewed green *is* green). Looking a
-task up **by name returns a list** by contract: the same label can name
-distinct pieces of work, distinct by address. `state` is the one word for what happened — `ok`, `failed`,
-`cancelled`, `shared`, `skipped` — and it is an **open set**: tolerate values
-you don't know. A node the run never started is a `skipped` row with
-`blocked_by` naming what prevented it, seated directly after that cause — so
-the envelope accounts for every node the plan had, not only the ones that
-ran; a `shared` row carries none of that blame — nothing blocked it, it
-was answered, and it seats at the moment it was. A row whose node waited on
-prerequisites also carries `queued_ms`: how long it sat ready after its last
-prerequisite finished, waiting for a worker — launch latency, never part of
-`duration_ms`. A row whose lane claim actually waited carries `lane_waits` —
-`[{"lane": "cspell-cache", "waited_ms": 812.4}, …]`, the claim's own label
-(a named lane, `serial`, `exclusive`, `console`) — so which lane serialised
-what, and for how long, is answerable from the report without re-running
-with eyes on the terminal; a claim granted on arrival records nothing. A
-row that executed carries `thread` and `thread_id` — the
-worker's stable name and its OS thread id, the correlation keys a profiler's
-timeline uses; while a task runs, its worker wears the task's name
-(`fm:build`, badged `[serial]`/`[exclusive]` under a lane hold), so a
-sampling profiler reads as tasks rather than pool threads. A row with
-prerequisites carries `after` — the addresses it waited for, the plan's
-edges. A task that recorded its own timing (see
-[Profiling a run](profiling.md)) carries `sections`:
-`[{"name": "resolve", "at_ms": 12.5, "duration_ms": 830.2}, …]`, each
-placed relative to the task's own start (`stream` names a parallel
-timeline when the record used one, and a negative `at_ms` is legal there —
-a retroactive window may predate the task). A step's entry carries the
-same placement as `at_ms`, so a reader can rebuild the timeline the
-profile plugin draws.
+`took` line, as a number.
+
+A **task row** carries `task` (the dotted name), its request address
+(`address`), `ok`, `code`, `duration_ms`, `output` (all captured text),
+`error` (`null`, or the exception as a string) — and, when the task returns
+a value, `returned`. Its steps follow it in the list, one item per
+[`run()`, tool, or `step()`](tools.md) call: `command`, the request
+address, `code`, `duration_ms`, split `stdout`/`stderr`, the `audit` (the
+verdict's provenance — one `[moment, actor, code]` entry per actor that
+touched it), and `failed_at`, the moment a failure came from (`null` on
+success — a red tool reviewed green *is* green). The same name can appear
+twice — distinct work, distinct request addresses — so looking a task up
+**by name returns a list**.
+
+`state` is the one word for what happened — `ok`, `failed`, `cancelled`,
+`shared`, `skipped` — and it is an **open set**: tolerate values you don't
+know. The remaining fields appear when they have something to say:
+
+- **`blocked_by`** — on a `skipped` row, what prevented it; the row seats
+  directly after its cause, so the envelope accounts for every node the
+  plan had, not only the ones that ran. A `shared` row carries no blame:
+  nothing blocked it, it was answered, and it seats at the moment it was.
+- **`queued_ms`** — how long a node sat ready after its last prerequisite
+  finished, waiting for a worker. Launch latency, never part of
+  `duration_ms`.
+- **`lane_waits`** — when a lane claim actually waited:
+  `[{"lane": "cspell-cache", "waited_ms": 812.4}, …]`, labelled with the
+  claim's own name (a named lane, `serial`, `exclusive`, `console`). Which
+  lane serialised what, and for how long, answerable from the report
+  without re-running with eyes on the terminal; a claim granted on arrival
+  records nothing.
+- **`thread` / `thread_id`** — on a row that executed, the worker's stable
+  name and OS thread id: the correlation keys a profiler's timeline uses.
+  While a task runs, its worker wears the task's name (`fm:build`, badged
+  `[serial]`/`[exclusive]` under a lane hold), so a sampling profiler
+  reads as tasks rather than pool threads.
+- **`after`** — on a row with prerequisites, the addresses it waited for:
+  the plan's edges.
+- **`sections`** — a task's own recorded timing (see
+  [Profiling a run](profiling.md)):
+  `[{"name": "resolve", "at_ms": 12.5, "duration_ms": 830.2}, …]`, each
+  placed relative to the task's start. `stream` names a parallel timeline
+  when the record used one, and a negative `at_ms` is legal there — a
+  retroactive window may predate the task. A step's entry carries the same
+  placement as `at_ms`, so a reader can rebuild the timeline the profile
+  plugin draws.
 
 ## `returned`: a task's own data
 
@@ -131,7 +139,7 @@ The rules, all of them:
 
 In tests, the same value is `Runner.invoke(...).results[n].returned` — see
 [Testing your tasks](testing.md). Without `--json`, return values are
-simply ignored — unless the task claims stdout, below.
+ignored — unless the task claims stdout, below.
 
 ## The declared shape: `returned_schema`
 
@@ -183,7 +191,7 @@ dataclasses (nested), `TypedDict` (`NotRequired` fields marked),
 as choices, `datetime`/`date`/`time`, `UUID`, `Decimal`, and `T | None` as
 nullable. `dict[str, Any]` describes as an object with no field claims.
 An annotation *outside* the set — a wider union, an exotic generic, a
-broken name — simply declares nothing: the task runs and serialises
+broken name — declares nothing: the task runs and serialises
 exactly as it always did. "Describable" is a subset of "returnable",
 never a new gate. Bare `int` stays the exit-code channel, so it declares
 nothing either; `Stdout[T]` describes `T` — one declaration, two doors.

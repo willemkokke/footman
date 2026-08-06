@@ -1,6 +1,6 @@
 # Custom CLI
 
-Footman is a library first: `fm` and `footman` are just the default-branded
+Footman is a library first: `fm` and `footman` are the default-branded
 instance of a public `App`. Point your own console script at an `App` carrying
 your project's names and version, and every message the user sees — errors,
 `--version`, hints — uses *your* branding instead of footman's.

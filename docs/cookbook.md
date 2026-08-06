@@ -566,7 +566,7 @@ runner installed at all.
 
 Checked into a project, nothing changes for people working in it: a
 project whose lockfile pins footman owns its runs, so the header is
-simply ignored there (`-v` mentions it). The file is portable *and* at
+ignored there (`-v` mentions it). The file is portable *and* at
 home in the repo.
 
 ### Extend an inherited task instead of replacing it
