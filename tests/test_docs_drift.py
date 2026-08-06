@@ -248,3 +248,150 @@ def test_the_agent_gate_recipe_reports_only_real_failures(envelope):
     assert not done.stderr
     assert "red" in done.stdout, "the task that really failed went unreported"
     assert "null" not in done.stdout, "a step row was reported as a failed task"
+
+
+# --- the restructure's guards -------------------------------------------------
+# Added with the docs restructure (notes/20260805-docs-restructure.md, ruling
+# 23): each one fences a class of drift the 2026-08-05 review actually found.
+
+
+def test_documented_envelope_walk_matches_reality(envelope):
+    """The docs teach one Python walk over the envelope (testing.md's golden
+    test): task rows discriminated by `"task" in row`, command rows by
+    `"command" in row`. Run that walk against a real envelope — and assert
+    the flat-model invariant whose violation shipped twice: no items row
+    nests a `steps` key."""
+    import json
+
+    payload = json.loads(envelope)
+    items = payload["items"]
+    tasks = [(t["task"], t["ok"]) for t in items if "task" in t]
+    commands = [s["command"] for s in items if "command" in s]
+    assert ("green", True) in tasks and ("red", False) in tasks
+    assert any("echo" in c for c in commands)
+    nested = [row for row in items if "steps" in row]
+    assert not nested, f"an items row nests 'steps' — the pre-0.28 shape: {nested}"
+    blob = "\n".join(p.read_text(encoding="utf-8") for p in _handwritten_docs())
+    assert 't["steps"]' not in blob, "a docs example walks the dead nested key"
+
+
+def test_every_docs_page_is_in_the_nav():
+    """A page in docs/ that the nav never mentions is published to nobody —
+    color-support.md sat orphaned for a release before anyone noticed."""
+    import tomllib
+
+    config = tomllib.loads((ROOT / "zensical.toml").read_text(encoding="utf-8"))
+
+    def walk(node) -> set[str]:
+        found: set[str] = set()
+        if isinstance(node, str) and node.endswith(".md"):
+            found.add(node)
+        elif isinstance(node, list):
+            for item in node:
+                found |= walk(item)
+        elif isinstance(node, dict):
+            for value in node.values():
+                found |= walk(value)
+        return found
+
+    nav = walk(config["project"]["nav"])
+    orphans = [
+        p.name
+        for p in DOCS.glob("*.md")
+        if p.name not in nav and not any(p.name in target for target in nav)
+    ]
+    assert not orphans, f"docs pages missing from the zensical.toml nav: {orphans}"
+
+
+def _slug(heading: str) -> str:
+    """The site's heading ids, closely enough: lowercase, keep word
+    characters (underscores survive — `#around-every-task-pre_task-and-
+    post_task` is real), collapse everything else to single hyphens."""
+    text = re.sub(r"[^a-z0-9_]+", "-", heading.lower())
+    return text.strip("-")
+
+
+def test_internal_links_and_anchors_resolve():
+    """Every `[text](page.md#anchor)` in the hand-written docs points at a
+    page that exists and a heading that page has. Clean when this guard
+    landed; unguarded links rot silently."""
+    link = re.compile(r"\]\(([\w.-]+\.md)(#[\w-]+)?\)")
+    problems: list[str] = []
+    for path in _handwritten_docs():
+        text = path.read_text(encoding="utf-8")
+        for match in link.finditer(text):
+            target, anchor = match.group(1), match.group(2)
+            target_path = path.parent / target
+            if not target_path.exists():
+                # api.md and the task pages are generated on a fresh
+                # checkout; existence is the docs build's assertion.
+                if target in ("api.md",) or target.startswith("tasks/"):
+                    continue
+                problems.append(f"{path.name}: {target} does not exist")
+                continue
+            if anchor:
+                headings = re.findall(
+                    r"^#+ (.+)$", target_path.read_text(encoding="utf-8"), re.M
+                )
+                slugs = {_slug(h) for h in headings}
+                if _slug(anchor[1:]) not in slugs:
+                    problems.append(f"{path.name}: {target}{anchor} has no heading")
+    assert not problems, "dead internal links:\n" + "\n".join(problems)
+
+
+def test_every_config_key_in_the_source_is_documented():
+    """Every key `_config.py`'s own docstring lists has a row in
+    configuration.md's Keys table — the `cascade` key was documented
+    nowhere while the page promised 'every key'."""
+    source = (ROOT / "src" / "footman" / "_config.py").read_text(encoding="utf-8")
+    keys = re.findall(r"^\* `(\w+)`", source, re.M)
+    assert keys, "the _config.py docstring stopped listing keys — update me"
+    table = (DOCS / "configuration.md").read_text(encoding="utf-8")
+    missing = [k for k in keys if f"| `{k}`" not in table]
+    assert not missing, f"config keys undocumented in configuration.md: {missing}"
+
+
+def test_refusal_exit_code_claims_track_the_constant():
+    """Hand-written claims about the refusal exit code follow `EX_USAGE`.
+    The pre-0.21 '2' survived on three pages for eleven releases because
+    nothing tied the prose to the constant."""
+    from footman._executor import EX_USAGE
+
+    blob = " ".join(
+        " ".join(p.read_text(encoding="utf-8").split()) for p in _handwritten_docs()
+    )
+    assert "2 always means footman refused" not in blob
+    assert "Exit code 2, nothing executed" not in blob
+    assert f"{EX_USAGE} always means footman refused" in blob, (
+        "troubleshooting.md no longer states the refusal code plainly"
+    )
+
+
+def test_glossary_inflections_share_their_definition():
+    """The abbreviations glossary carries inflected keys (chain/chains/
+    chained/…) so tooltips fire on every spelling; the copies must stay
+    textually identical to their stem's definition."""
+    lines = (DOCS / "includes" / "abbreviations.md").read_text(encoding="utf-8")
+    entries = re.findall(r"^\*\[(.+?)\]: (.+)$", lines, re.M)
+    assert entries, "the glossary went empty or changed format — update me"
+    by_stem: dict[str, set[str]] = {}
+    for key, definition in entries:
+        by_stem.setdefault(key.lower()[:4], set()).add(definition)
+    diverged = {stem: defs for stem, defs in by_stem.items() if len(defs) > 1}
+    assert not diverged, f"glossary inflections diverged: {sorted(diverged)}"
+    defs = dict(entries)
+    assert defs["shared"] == defs["unshared"], "shared/unshared drifted apart"
+
+
+def test_our_docstrings_stay_google():
+    """footman's own docstrings never use Sphinx fields or RST directives —
+    the parser (docstrings.py) legitimately contains them as data, and is
+    the one exemption. The rendered API page parses Google style, so a
+    violation would render as broken prose."""
+    rst = re.compile(r":param |:rtype:|:returns:|^\.\. \w+::", re.M)
+    offenders = [
+        p.name
+        for p in sorted((ROOT / "src" / "footman").glob("*.py"))
+        if p.name != "docstrings.py" and rst.search(p.read_text(encoding="utf-8"))
+    ]
+    assert not offenders, f"Sphinx/RST markup in our own source: {offenders}"
