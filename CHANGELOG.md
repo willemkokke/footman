@@ -7,6 +7,14 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- `mark` is importable from the package root. It was public all along —
+  documented on the API page and served by the lazy loader — but missing
+  from `__all__`, so `from footman import mark` type-checked while the
+  export table denied it. Found by the generated API page refusing to
+  build over the mismatch.
+
 ### Changed
 
 - **Breaking:** the machine-surface kind of a positional parameter is

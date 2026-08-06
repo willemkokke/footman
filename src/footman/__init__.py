@@ -157,6 +157,7 @@ __all__ = [
     "isfile",
     "lane",
     "main",
+    "mark",
     "markdown",
     "nosplit",
     "parallel",
