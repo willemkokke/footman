@@ -39,8 +39,9 @@ always wins, which buys the Unix `-` convention with no sentinel argument.
 The stream is read once, fully, at the boundary, and shared by every
 parameter in the run that asks; task bodies never touch stdin, so bound
 tasks stay fully parallel and need no `interactive=True`. A terminal on
-stdin means "not provided" — nothing ever blocks on a read. The full
-story of each form lives on [Asking for input](input.md).
+stdin means "not provided" — nothing ever blocks on a read. `ask()`,
+confirm gates, and the interactive forms live on
+[Asking for input](input.md).
 
 The dataclass form is the one to reach for when a machine sends you JSON —
 an agent-hook payload, a webhook body, another tool's `--json` output:

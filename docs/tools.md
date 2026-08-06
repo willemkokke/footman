@@ -89,13 +89,9 @@ def test(ctx: Context):
 `passthrough()` and `ctx.passthrough` are the same list two ways — the free
 function reads the current context so most tasks never declare `ctx` at all.
 
-One boundary to know: the ambient context follows footman's own concurrency
-(`parallel()` hands each worker a child context, steps and all) but **not
-threads you spawn yourself** — a raw `threading.Thread` starts with an empty
-context, so a `run()` inside it would see default state: wrong folder, no
-env overlay, no step recording. Fan out through `parallel()`, wrap your
-target with `contextvars.copy_context().run(...)`, or declare `ctx` and
-pass it in explicitly.
+One boundary to know: threads you spawn yourself don't inherit the task's
+context — see
+[Working directory & environment](working-dir.md#in-process-calls-and-the-directory).
 
 ## Machine-readable output
 

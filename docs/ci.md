@@ -38,11 +38,9 @@ captures exactly what the tasks produced, and a wrapper that treats stderr
 bytes as failure (cron's mail rule, say) should pass `-q` to silence the
 summary.
 
-Without a TTY there is no progress bar, but timing still works both ways:
-CI runs are recorded into the duration history, and when footman has a
-confident estimate it prints a single `eta ~5.8s` line to stderr at run
-start. `--no-progress` (or `progress = false` in `[tool.footman]`) turns
-the line and the recording off.
+Without a TTY there is no progress bar; timing still records, and a
+confident estimate prints one `eta` line to stderr at run start — the
+details live on [Progress & timing](progress.md#in-ci).
 
 ## `--json`: the machine surface
 
@@ -50,9 +48,11 @@ the line and the recording off.
 $ fm --json check
 {
   "schema": 1,
+  "total_ms": 812.4,
   "items": [
     {"task": "lint", "ok": true, "code": 0, "duration_ms": 812.4,
-     "output": "...", "steps": [...], "error": null}
+     "output": "...", "error": null},
+    {"command": "ruff check .", "code": 0, "duration_ms": 790.1}
   ]
 }
 ```

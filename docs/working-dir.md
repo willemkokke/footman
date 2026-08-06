@@ -90,6 +90,17 @@ the directory a call needs decides how that call runs:
 - A toolroom call that would run in-process but needs a *different*
   directory runs as its subprocess twin instead — same command, right
   directory, still parallel; the startup saving is the only loss.
+!!! note "Threads you spawn yourself"
+
+    The ambient context follows footman's own concurrency — `parallel()`
+    hands each worker a child context, steps and all — but **not threads
+    you spawn yourself**: a raw `threading.Thread` starts with an empty
+    context, so a `run()` inside it would see default state — wrong
+    directory, default environment, no step recording. Fan out through
+    `parallel()`, wrap your target with
+    `contextvars.copy_context().run(...)`, or declare `ctx` and pass it
+    in explicitly.
+
 - Other in-process work — a step — has no `cwd=` at all: build paths from
   `footman.cwd()`, or run the command as a subprocess (which gets `cwd=`
   for free). The real working directory is one per process, and footman

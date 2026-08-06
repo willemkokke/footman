@@ -651,13 +651,8 @@ def index(path: Path):
 ```
 
 Counted beats estimated, so a reporting task is honest on its *first*
-run, where the estimator would still be gathering samples. A reporter
-contributes a fractional unit to the run's bar — three tasks done and a
-fourth halfway is 3.5/4 — so a chain of reporters fills smoothly and a
-mixed chain is smooth where it can be. `track()` takes the total from
-`len()`, accepts `total=` for generators, and clears the report if you
-break out early. Outside a run, both are no-ops. The full story — the live
-status line, the timing history, the off switches — is on
+run, where the estimator would still be gathering samples. The full
+story — the live status line, the timing history, the off switches — is on
 [Progress & timing](progress.md).
 
 ### Fetch and cache a toolchain

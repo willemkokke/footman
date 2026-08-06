@@ -182,9 +182,8 @@ way `Many[T]` reads better than `list[T]`:
 Arg-taking markers (`suggest`, `between`, `env`, `check`, `doc`, `ask`) keep the
 full `Annotated[...]` form — their value can't ride in a type subscript.
 
-The `forward` marker threads a parameter's value to the tasks a task dispatches —
-its `pre`/`post` prerequisites and a runnable group's surfaces. It's an
-orchestration tool, covered in
+The `forward` marker is an orchestration tool — it threads a value onward to
+the tasks this one dispatches — and is covered in
 [Chaining & parallelism](orchestration.md#forward-a-value-to-what-a-task-dispatches).
 Markers compose by listing them: `Annotated[bool, ask("Fix?"), forward]` both
 prompts for the value and forwards it — one prompt at the top, the answer
