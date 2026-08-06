@@ -74,11 +74,11 @@ fm --json check | jq -e '.error == null and ([.items[] | select(.task)] | all(.o
 ## Exit codes
 
 `0` all green · `1` a task raised · `N` a task (or its `run()` command)
-exited N · `2` footman refused (a taught message says why) · `130`
+exited N · `64` footman refused (a taught message says why) · `130`
 interrupted. The full table is part of the machine contract:
 [JSON output § exit codes](json.md#exit-codes).
 
-Exit 2 before anything runs is a *feature* in CI: a typo'd workflow fails in
+Exit 64 before anything runs is a *feature* in CI: a typo'd workflow fails in
 milliseconds with a taught message, not after twenty minutes of setup.
 
 ## Agents

@@ -88,10 +88,10 @@ def span(inv, task):
 
 | Import                       | Purpose                                              |
 | ---------------------------- | ---------------------------------------------------- |
-| `run(cmd, ...)`              | run a command or callable in the task context        |
+| `run(cmd, ...)`              | run a command in the task context                    |
 | `run(..., recorded=False)`       | run it, return the result, record and show nothing    |
 | `run(..., timeout=30)`       | kill the process tree after 30s; raises `RunTimeout`  |
-| `parallel(*calls)`           | fan tasks/thunks out concurrently                    |
+| `parallel(*calls)`           | fan tasks and step items out concurrently            |
 | `with parallel() as p:`      | the same fan-out written as plain calls; `p.results` |
 | `passthrough()`              | arguments after `--` on the command line             |
 | `Context`, `use_context`     | the task context; install one from your own code     |

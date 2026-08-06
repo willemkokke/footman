@@ -38,7 +38,7 @@ children, or a killed build leaves its compiler grandchildren running.
 
 ## What footman does about it
 
-`run()` and the `tools.*` bridge spawn with the task's world applied
+`run()` and the toolroom handles spawn with the task's world applied
 per-child, group-isolate what they spawn (so fail-fast's signal reaches the
 whole tree), and register every child so an abort can find it. Beyond its
 own calls:

@@ -41,22 +41,28 @@ def test_release_tags_and_pushes():
     ]
 ```
 
-This works for the tool wrappers too — every one funnels through `run()`. One
-caveat, stated out loud: a Python *callable* passed to `run(fn)` is also
-skipped under recording — that is the point, but remember it when a task
-mixes subprocesses with in-process work.
+This works for the tool handles too — every one funnels through `run()`. One
+caveat, stated out loud: steps are faked under recording just like
+commands — a `step(fn)(…)` or a `fetch()` produces a receipt, not an
+effect — while the body's own inline Python still runs for real. Remember
+it when a task mixes subprocesses with in-process work.
 
 Under the hood this is `Context(dry_run=True, quiet=True)` installed with
 `use_context()` — both public, so you can compose your own variants:
 
 <!-- example: fragment -->
 ```python
+import os
+
 from footman import Context, use_context
 
-with use_context(Context(env={"CI": "1"})) as ctx:
+with use_context(Context(env={**os.environ, "CI": "1"})) as ctx:
     deploy()                      # runs for real, with CI=1 in its env
 assert ctx.steps[-1].code == 0
 ```
+
+`Context.env` is the task's *whole* environment, not a diff — spread
+`os.environ` in unless an empty world is the point.
 
 ## Drive the CLI
 
@@ -147,15 +153,10 @@ import json
 
 def test_check_pipeline_shape(fm):
     payload = json.loads(fm.invoke("--json check").stdout)
-    shape = [
-        (t["task"], t["ok"], [s["command"] for s in t["steps"]])
-        for t in payload["items"]
-        if "task" in t
-    ]
-    assert shape == [
-        ("lint", True, ["ruff check ."]),
-        ("test", True, ["pytest -q"]),
-    ]
+    tasks = [(t["task"], t["ok"]) for t in payload["items"] if "task" in t]
+    commands = [s["command"] for s in payload["items"] if "command" in s]
+    assert tasks == [("lint", True), ("test", True)]
+    assert commands == ["ruff check .", "pytest -q"]
 ```
 
 `--dry-run` output stays human-oriented — snapshot it within a pinned version

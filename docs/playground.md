@@ -15,8 +15,8 @@ The browser sandbox, said plainly: it has no processes and one thread, so
 every `run("…")` child is **simulated** — it succeeds and its output says
 `[simulated]` — and runs are sequential. Everything else is the real
 thing: parsing, eager validation, taught errors, scheduling, `--json`,
-`--dry-run` plans — and **`fm test` runs the real pytest**, in-process
-through the tools bridge, right here in the page. The prompt completes
+`--dry-run` plans — and **`fm test` runs the real pytest**, on toolroom's
+in-process path, right here in the page. The prompt completes
 too: press <kbd>Tab</kbd> and the candidates come from the same manifest
 walk a shell hook consults, rebuilt from whatever the editor says.
 

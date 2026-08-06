@@ -15,7 +15,7 @@ from toolroom import pytest, ruff
 def check():
     ruff("check", "src", fix=False)   # subprocess (ruff is a binary)
     pytest("-x")                       # in-process via pytest.main
-    run("mkdocs build --strict")       # any command; a callable also works
+    run("mkdocs build --strict")       # any command at all
 ```
 
 Each toolroom handle is imported by name — `from toolroom import git` gives
@@ -27,15 +27,21 @@ in-process execution, and why nothing is transcribed per tool — are
 
 ## `run()`
 
-- Takes a command (string or list) or a Python callable.
-- Raises on a non-zero exit; `.opts(nofail=True)` returns the code instead.
+- Takes a command (string or list). In-process work is a step —
+  `step(fn)(…)` — never a `run()` argument.
+- Raises on a non-zero exit; `nofail=True` returns the code instead.
+- Answers with a `Result` — the exit code (the value *is* the code),
+  carrying `.stdout`/`.stderr`, `.timed_out` (code 124 when a `timeout=`
+  expired), and `.to_argv()` — the command back as raw tokens, re-quotable
+  for whichever shell will actually parse them.
 - Honours `--dry-run` (prints the command instead of running it).
 - Records a step for [`--json`](json.md) (command, code, duration, captured
   output); `capture=False` lets output through unbuffered and records an
   empty capture — for serve-style tasks that must not buffer.
 - Runs from the task's context cwd — in a [cascade](monorepos.md) the folder
-  the task was defined in — with the context env overlay applied. Subprocess
-  and in-process tools honour this identically.
+  the task was defined in — with the task's context env, a complete
+  environment rather than a diff. Subprocess and in-process tools honour
+  this identically.
 
 ## Fetch and cache files: `fetch()`
 

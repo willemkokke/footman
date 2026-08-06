@@ -549,7 +549,8 @@ versions may include breaking changes.
   success — a red tool reviewed green *is* green), and `work_code` keeps
   the code the work had earned when a later moment failed it (a green run
   failed in review shows its 0, visible rather than inferred). `--json`
-  steps carry both, additively. `AuditEntry` is public.
+  steps carry `failed_at`, additively; `work_code` is a reading on the
+  Python `Result`. `AuditEntry` is public.
 
 - **`run(..., pre_record=…)` — the review window.** Some tools speak exit
   codes that need interpreting: `djlint --reformat` exits 1 when it changed
