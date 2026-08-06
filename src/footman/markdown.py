@@ -41,7 +41,10 @@ def globals_table(*, prog: str = "fm") -> str:
 
     rows = []
     for name, alias, _kind, hint, help_text in _split.GLOBALS:
-        main = f"`{name} {hint}`" if hint else f"`{name}`"
+        # `=`-attached, exactly as `--help` prints it: a value is always
+        # attached in this grammar, so notation that shows a space teaches
+        # a command line the runner refuses.
+        main = f"`{name}={hint}`" if hint else f"`{name}`"
         label = f"`{alias}`, {main}" if alias else main
         rows.append((label, _cell(help_text.replace("{prog}", prog))))
     width = max(len(label) for label, _ in rows)

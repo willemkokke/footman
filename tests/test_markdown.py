@@ -120,7 +120,10 @@ def test_globals_table_mirrors_the_grammar():
         if alias:
             assert f"`{alias}`" in line
         if hint:
-            assert hint in line
+            # Attached, never spaced: the table shipped `--jobs N` while
+            # `--help` printed `--jobs=N`, so the page taught a spelling
+            # the splitter refuses with exit 64.
+            assert f"{name}={hint}" in line, f"{name}: hint must be `=`-attached"
     assert "{prog}" not in text  # placeholders always filled
 
 

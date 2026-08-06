@@ -73,8 +73,8 @@ The completion manifest is cached **per directory**, so <kbd>Tab</kbd> in
 
 ??? tip "Load exactly one file"
 
-    `-f/--tasks-file PATH` loads a single tasks file, with **no tasks cascade** —
-    the tasks-side mirror of `--config PATH` for config. The two are orthogonal:
+    `-f/--tasks-file=PATH` loads a single tasks file, with **no tasks cascade** —
+    the tasks-side mirror of `--config=PATH` for config. The two are orthogonal:
     `-f` alone still reads the cwd's config (and any plugins it declares add
     tasks), so pass both for total control. <kbd>Tab</kbd> after `-f=<file>`
     completes *that file's* tasks: a `-f` run caches its manifest under a key
@@ -101,7 +101,7 @@ sequential = true      # this package prefers one task at a time
 ```
 
 Within one directory, `footman.toml` wins over `pyproject.toml`'s
-`[tool.footman]`. `--config PATH` points at a single TOML file that overrides
+`[tool.footman]`. `--config=PATH` points at a single TOML file that overrides
 everything else. Unknown keys are ignored, so a newer setting never breaks an
 older footman.
 

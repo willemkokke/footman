@@ -15,6 +15,15 @@ versions may include breaking changes.
   export table denied it. Found by the generated API page refusing to
   build over the mismatch.
 
+### Fixed
+
+- The generated global-options table writes values `=`-attached
+  (`--jobs=N`), matching what `--help` prints. It had rendered them across
+  a space (`--jobs N`) — a spelling the splitter refuses with exit 64 —
+  while its own docstring promised "the same words `--help` prints … can
+  never drift from the runner". Every page that regenerates the table is
+  corrected with it.
+
 ### Changed
 
 - **Breaking:** the machine-surface kind of a positional parameter is

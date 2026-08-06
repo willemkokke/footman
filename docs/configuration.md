@@ -19,7 +19,7 @@ key:
    override farther ones. Within one directory, a standalone `footman.toml`
    overrides `[tool.footman]` in `pyproject.toml` — the customary
    dedicated-file-wins rule.
-4. **`--config PATH`** — total control over config: the named file
+4. **`--config=PATH`** — total control over config: the named file
    *replaces* the user file and the config cascade entirely (the tasks side
    has the same escape hatch, `-f/--tasks-file`). You said exactly what
    applies.
