@@ -1,12 +1,42 @@
 # One typing pass — the same types on every channel
 
-**Status: DESIGNED, not built.** Willem ruled the command-line grammar and
-the scope on 2026-08-07 in conversation; the hidden-parameter half is
-leaned but **unruled** and marked so. Started as "fixed-arity tuples and
-hidden parameters" — the last after-1.0 backlog row — and grew when the
-same question was asked of each input channel and got three different
-answers. Renamed from `20260807-typing-extensions.md`; the date is when
-the thread opened.
+**Status: LANDED, all five steps, 2026-08-07.** Willem ruled the
+command-line grammar and the scope in conversation, then ruled the
+hidden-parameter half (which this note had left leaned but unruled).
+Started as "fixed-arity tuples and hidden parameters" — the last after-1.0
+backlog row — and grew when the same question was asked of each input
+channel and got three different answers. Renamed from
+`20260807-typing-extensions.md`; the date is when the thread opened.
+
+Shipped as PRs #348 (stdin honours its annotation), #349 (the matrix),
+#350 (`tuple[T, ...]`), #351 (fixed-arity groups), #352 (sets, and the
+last silent stdin row), #353 (the machine-readable document schema),
+#354 (`hidden`), #355 (eager grouping + the docs pass). The CHANGELOG
+carries what shipped; what follows is the reasoning, kept because the
+wrong versions are the tempting ones.
+
+**Two things happened that this plan did not predict**, both worth
+keeping:
+
+- **A sixth step appeared mid-flight (#353).** Willem asked whether a
+  machine could read the stdin schema from `--describe`. It could not —
+  it got a type *name* — and the three record kinds each described
+  themselves differently, which was the manifest still holding the
+  opinion about records that #348 had already made the binder give up.
+  The fix was the same shape as every other fix here: one
+  `_coerce.fields_of`, read positionally by `group_of`, by name by the
+  binder, and rendered by the manifest. **The lesson: the sweep in this
+  note looked at the two *input* channels and never asked what the
+  machine-facing *description* of them said.** A channel nobody thought
+  to audit is exactly where the third different answer was hiding.
+- **The audit found bugs the tests could not.** `group_of` read any
+  two-argument constructor as a group, so a `uuid.UUID` parameter
+  advertised `--u=hex,bytes,bytes_le,…` and comma-split — bound
+  correctly for one token by luck, so nothing failed. And grouped shapes
+  refused at *binding* time, printing `ValueError:` like a crash, in a
+  page whose first line promises parse-time validation. Both were found
+  by reading output, not by a red test. The rule that fixed the first is
+  the one this pass rests on: **footman groups a shape it can type.**
 
 Related: [20260726-plugin-architecture.md](20260726-plugin-architecture.md)
 (the lexical-grammar ruling — no escaping, no second pass),
@@ -166,7 +196,7 @@ Verified, so the binder work does not quietly regress them:
   one signature serve both spellings — pipe in CI, override one field by
   hand — with no sentinel argument and no second code path.
 
-## Hidden parameters — LEANED, UNRULED
+## Hidden parameters — RULED, SHIPPED (#354)
 
 No prior art: no code, no docs, and the `hidden` marker slot is free. The
 design should transpose the task-level rule rather than invent one.
