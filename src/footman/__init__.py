@@ -102,7 +102,7 @@ if TYPE_CHECKING:
     from footman.testing import Runner as Runner
     from footman.testing import recording as recording
 
-__version__ = "0.32.0"
+__version__ = "0.33.0"
 __all__ = [
     "App",
     "Arg",
