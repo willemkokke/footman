@@ -60,6 +60,14 @@ versions may include breaking changes.
   because `--v=1,2` does. A *named* record still binds from a JSON object,
   which is the spelling its field names earn it.
 
+- **Only a *typed* shape groups.** A `uuid.UUID` parameter advertised
+  itself as `--u=hex,bytes,bytes_le,… ` and comma-split, because `UUID`
+  takes seven optional constructor arguments and every multi-argument
+  constructor was being read as a group. A shape footman groups is one it
+  can type, which every dataclass, `NamedTuple` and annotated `__init__`
+  is by construction; an unannotated constructor keeps its single-token
+  spelling. (Unreleased regression.)
+
 - **Fixed-arity shapes fill from the command line.** A `NamedTuple`, a
   dataclass, a plain class, or a `tuple[X, Y]` now binds from grouped
   values — `--at=1,2`, `--size=800,600` — where before the whole text

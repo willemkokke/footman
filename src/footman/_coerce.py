@@ -392,8 +392,16 @@ def group_of(ann: Any) -> Group | None:
     for param in sig.parameters.values():
         if param.kind in (param.VAR_POSITIONAL, param.VAR_KEYWORD):
             return None  # no fixed arity to group by
+        if param.name not in hints:
+            # An *untyped* constructor is not a typed shape, and grouping one
+            # would invent a spelling its author never wrote: `uuid.UUID` takes
+            # seven optional arguments, so a UUID parameter advertised itself
+            # as `--u=hex,bytes,bytes_le,…` and comma-split. A shape footman
+            # can group is one it can type — which every dataclass, NamedTuple
+            # and annotated `__init__` is, by construction.
+            return None
         names.append(param.name)
-        types.append(hints.get(param.name, str))
+        types.append(hints[param.name])
         if param.default is inspect.Parameter.empty:
             required += 1
     if len(names) < 2:
