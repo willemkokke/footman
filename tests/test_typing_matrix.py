@@ -75,8 +75,11 @@ class Unsupported:
 
     Honest-but-poor: the reader is told. Distinct from `Refused` because
     the value still arrives, and distinct from a bound value because the
-    annotation was not honoured. Every one of these is a cell the typing
-    pass intends to flip.
+    annotation was not honoured.
+
+    The vocabulary outlives the cells: when a gap is found, the honest move
+    is to add it here as `Unsupported` and then flip it, rather than leave
+    the shape untested because it does not work yet.
     """
 
 
@@ -135,11 +138,14 @@ CASES: tuple[tuple[Any, str, Any, Any], ...] = (
     # `tuple[T, ...]` is a list's grammar with a tuple handed back.
     (tuple[str, ...], CLI, "--v=a,b", ("a", "b")),
     (tuple[str, ...], STDIN, b'["a", "b"]', ("a", "b")),
-    # --- the pass's to-do list ----------------------------------------------
     (tuple[int, int], CLI, "--v=1,2", (1, 2)),
-    (tuple[int, int], STDIN, b"[1, 2]", Unsupported()),
-    (set[str], CLI, "--v=a,b", Unsupported()),
-    (set[str], STDIN, b'["a", "b"]', Unsupported()),
+    # A JSON array is the grouped stream in another dress, so a fixed-arity
+    # shape reads the same either way.
+    (tuple[int, int], STDIN, b"[1, 2]", (1, 2)),
+    # A set is a list's grammar with a different container handed back — and
+    # the reason to name one is de-duplication, so a repeat is asserted here.
+    (set[str], CLI, "--v=a,b,a", {"a", "b"}),
+    (set[str], STDIN, b'["a", "b", "a"]', {"a", "b"}),
 )
 
 

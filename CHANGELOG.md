@@ -41,6 +41,25 @@ versions may include breaking changes.
   shape, so the input side rejecting it was an asymmetry between footman's
   own channels.
 
+- **`set[T]` and `frozenset[T]` work as parameters**, on the command line
+  and from stdin. Every collection shares one grammar — one or many, comma
+  or repetition, `nosplit` and all — and differs only in the container the
+  body is handed, which is now the only thing the annotation decides. A
+  bare `set`, `frozenset`, `list` or `tuple` means a collection of `str`.
+  `set[Spot]` where `Spot` cannot hash is refused by name rather than
+  raising a bare `TypeError` from inside binding.
+
+  Sets already serialised (sorted) on the way *out*, so refusing them on
+  the way in was an asymmetry in footman's own channels.
+
+- **A fixed-arity shape binds from a JSON array.** `Stdin[tuple[int, int]]`
+  fed `[1, 2]` used to hand the body the *string* `'[1, 2]'`; it now binds
+  `(1, 2)`. A JSON array is the grouped stream in another dress, so both
+  channels group it the same way and report the same errors — including
+  agreeing that `[1, 2]` for a `tuple[str, str]` binds `("1", "2")`,
+  because `--v=1,2` does. A *named* record still binds from a JSON object,
+  which is the spelling its field names earn it.
+
 - **Fixed-arity shapes fill from the command line.** A `NamedTuple`, a
   dataclass, a plain class, or a `tuple[X, Y]` now binds from grouped
   values — `--at=1,2`, `--size=800,600` — where before the whole text

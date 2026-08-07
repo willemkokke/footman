@@ -292,7 +292,7 @@ def _env_value(
 
     if peeled.multiple:
         parts = [raw] if peeled.nosplit else [p for p in raw.split(",") if p] or [raw]
-        return _container(peeled, [one(p) for p in parts])
+        return _container(peeled, [one(p) for p in parts], label)
     return one(raw)
 
 
@@ -343,11 +343,24 @@ def _bind_group(
     return built if many else built[0]
 
 
-def _container(peeled: _coerce.Peeled, values: list[Any]) -> Any:
-    """The collection the annotation named. `tuple[T, ...]` shares every bit
-    of a list's grammar and differs only here — handing back a list would
-    give the body a container its annotation does not name."""
-    return tuple(values) if peeled.as_tuple else values
+def _container(peeled: _coerce.Peeled, values: list[Any], label: str = "") -> Any:
+    """The collection the annotation named. Every collection shares a list's
+    grammar and differs only here — handing back a list would give the body a
+    container its annotation does not name.
+
+    A set of an unhashable element is the one way this can fail, and it fails
+    at the annotation rather than at the value, so it is taught rather than
+    raised as a bare `TypeError` from deep inside binding."""
+    if peeled.container is list:
+        return values
+    try:
+        return peeled.container(values)
+    except TypeError as exc:  # set[T] where T does not hash
+        name = getattr(peeled.element, "__name__", peeled.element)
+        raise ValueError(
+            f"{label} cannot be a {peeled.container.__name__} of {name}: "
+            f"{name} is not hashable"
+        ) from exc
 
 
 def _decode_stdin(payload: bytes) -> str:
@@ -428,10 +441,30 @@ def _stdin_value(
         bound = _binder.bind_document(_stdin_json(payload), target, param.name)
         if isinstance(bound, list):
             return _container(
-                peeled, [_run_checks(v, peeled, label, params) for v in bound]
+                peeled, [_run_checks(v, peeled, label, params) for v in bound], label
             )
         if isinstance(bound, dict):
             return {k: _run_checks(v, peeled, label, params) for k, v in bound.items()}
+        return _run_checks(bound, peeled, label, params)
+
+    if (group := _coerce.group_of(peeled.element)) is not None:
+        # A fixed-arity shape with no field names — a plain `tuple[X, Y]`. A
+        # JSON array is its grouped stream in another dress, so `[1, 2]` fills
+        # it exactly as `--v=1,2` does. A *named* record never reaches here:
+        # `is_document_target` claims it above and binds it from an object,
+        # which is the spelling its field names earn it.
+        raw = _stdin_json(payload)
+        items = raw if isinstance(raw, list) else [raw]
+        # JSON's own scalars are rendered back to the text the command line
+        # would have delivered, so both channels share one grouping and one
+        # set of messages. It also keeps the two agreeing about `[1, 2]` for
+        # a `tuple[str, str]`: `--v=1,2` binds `("1", "2")`, so this does.
+        bound = _bind_group(
+            group,
+            [i if isinstance(i, str) else json.dumps(i) for i in items],
+            peeled.multiple,
+            label,
+        )
         return _run_checks(bound, peeled, label, params)
 
     # The scalar fall-through. It used to validate without coercing, so
@@ -760,8 +793,9 @@ def bind(
             kwargs[param.name] = result
         elif (group := _coerce.group_of(peeled.element)) is not None:
             items = raw if isinstance(raw, list) else [raw]
+            bound = _bind_group(group, items, peeled.multiple, label)
             kwargs[param.name] = _run_checks(
-                _bind_group(group, items, peeled.multiple, label),
+                _container(peeled, bound, label) if peeled.multiple else bound,
                 peeled,
                 label,
                 siblings,
@@ -776,6 +810,7 @@ def bind(
                     )
                     for v in items
                 ],
+                label,
             )
         else:
             kwargs[param.name] = _run_checks(
