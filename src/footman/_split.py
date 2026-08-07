@@ -105,12 +105,30 @@ GLOBALS: list[tuple[str, str | None, str, str | None, str]] = [
     # The bracketed hint marks the value optional: bare `--describe` dumps
     # the whole tree's contract; a group address answers for its subtree.
     ("--describe", None, "option", "[ADDR]", "print task contracts as JSON"),
-    ("--plugins", None, "flag", None, "list installed footman.tasks plugins"),
+    (
+        "--plugins",
+        None,
+        "flag",
+        None,
+        "list installed footman.tasks plugins, pulled or not",
+    ),
     ("--dry-run", "-n", "flag", None, "rehearse: bodies run, footman's work is faked"),
     ("--keep-going", "-k", "flag", None, "run every branch even if one fails"),
     ("--fail-fast", None, "flag", None, "stop at the first failure"),
-    ("--sequential", "-s", "flag", None, "run one at a time (default: parallel)"),
-    ("--jobs", "-j", "option", "N", "max parallel tasks (default: cores - 1)"),
+    (
+        "--sequential",
+        "-s",
+        "flag",
+        None,
+        "run one at a time, parallel() blocks included",
+    ),
+    (
+        "--jobs",
+        "-j",
+        "option",
+        "N",
+        "max parallel tasks (default: cores - 1, never below 2)",
+    ),
     ("--yes", "-y", "flag", None, "assume yes to every confirm() gate"),
     ("--no-input", None, "flag", None, "never prompt; error if input is required"),
     ("--quiet", "-q", "flag", None, "suppress the per-task summary"),

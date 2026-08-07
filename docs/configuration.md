@@ -62,20 +62,10 @@ older footman.
 
 ## Keys
 
-| Key          | Meaning                                                   |
-| ------------ | --------------------------------------------------------- |
-| `tasks`      | Filename to look for in each directory (default `tasks.py`). |
-| `sequential` | Run tasks one at a time by default.                       |
-| `color`      | `always` / `never` / `auto` (default): when to emit ANSI colour, for footman's own output and the tools it spawns. `--color` / `--no-color` override it. |
-| `jobs`       | Max parallel tasks (default: cores - 1, never below 2).   |
-| `sort`       | `true` lists tasks alphabetically — in `--list`, `--tree`, help, and the generated docs pages. Default `false`: definition order, so the file's own order is the listing's. `--sort` does the same for one invocation. Presentation only; never changes what runs or when. |
-| `progress`   | `false` permanently disables the progress bar, eta line, and timing capture. |
-| `uv`         | `false` disables both uv handoffs: a globally-installed `fm` re-running itself via `uv run` when the project's lockfile pins footman, and the script environment of a tasks file that carries its own [PEP 723](https://peps.python.org/pep-0723/) dependencies. |
-| `completion.max_age` | Age before a background completion refresh (e.g. `"10m"`; `off` to disable). |
-| `fetch.backend` | Download engine for `fetch()`: `urllib` (default), `curl`, `httpx`, `requests`, or `auto`. |
-| `shell.default` | What `run(shell=True)` resolves to: `posix` (default — bash, then sh, git bash on Windows), `native` (the platform shell), `pwsh`, or a concrete shell name. |
-| `gc`         | `false` disables the cache collector (it runs at most daily). **User-level only**: honoured from the global file; in a project config it is ignored, with a note under `-v`. |
-| `cascade`    | How far discovery ranges for task files *and* config: `none` (this directory only), `repo` (the repository — default), or `filesystem` (across repositories). **User-level only**, like `gc`; `FOOTMAN_CASCADE` overrides it per invocation. |
+Every key the runner recognises, rendered from its own list on each docs
+build — so this table can neither invent a key nor miss one:
+
+--8<-- "docs/_generated/config.md"
 
 ## Environment variables
 

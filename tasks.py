@@ -659,6 +659,7 @@ def docs_build(check: bool = False):  # pragma: no cover — see below
     # nav includes the generated tasks/ pages — generate them first.
     from pathlib import Path
 
+    from footman.tasks.docs import config as taskdocs_config
     from footman.tasks.docs import globals_ as taskdocs_globals
     from footman.tasks.docs import page as taskdocs_page
     from footman.tasks.docs import shots as taskdocs_shots
@@ -677,6 +678,9 @@ def docs_build(check: bool = False):  # pragma: no cover — see below
     # The CLI reference's global-options table, from the grammar itself —
     # reference.md snippet-includes it, so it can't drift from --help.
     taskdocs_globals(out=Path("docs/_generated/globals.md"))
+    # The [tool.footman] key table, from the keys the runner recognises —
+    # configuration.md snippet-includes it, so it can't fall behind.
+    taskdocs_config(out=Path("docs/_generated/config.md"))
     # Every error and note the runtime can say, extracted from the source —
     # a reference page that regenerates each build and so can never drift.
     from footman.tasks.docs import errors as taskdocs_errors

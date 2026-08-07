@@ -7,6 +7,26 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- **A generated `[tool.footman]` reference.** `_config.KEYS` holds the
+  recognised keys as data — name, accepted values, default, meaning — and
+  `fm docs.config` renders them as the table Configuration includes, so
+  the page can neither invent a key nor miss one. It found a real gap on
+  the first run: **`cwd`**, a validated run-wide working-directory policy
+  (`taskfile`, `root`, `asinvoked`, `unmanaged`, or an absolute path), had
+  never been documented anywhere — the only list of keys was prose in a
+  module docstring, and prose is what nobody updates.
+
+### Changed
+
+- Three global help strings now carry the whole truth, which reaches
+  `--help`, completion menus and the generated reference table at once:
+  `--jobs` names the floor of 2, `-s/--sequential` says it reaches
+  `parallel()` blocks inside task bodies (not just the chain), and
+  `--plugins` says it lists installed plugins *pulled or not* — the
+  comparison that makes the flag worth running.
+
 ## [0.33.0] — 2026-08-07
 
 ### Added

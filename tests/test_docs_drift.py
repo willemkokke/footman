@@ -345,16 +345,32 @@ def test_internal_links_and_anchors_resolve():
     assert not problems, "dead internal links:\n" + "\n".join(problems)
 
 
-def test_every_config_key_in_the_source_is_documented():
-    """Every key `_config.py`'s own docstring lists has a row in
-    configuration.md's Keys table — the `cascade` key was documented
-    nowhere while the page promised 'every key'."""
-    source = (ROOT / "src" / "footman" / "_config.py").read_text(encoding="utf-8")
-    keys = re.findall(r"^\* `(\w+)`", source, re.M)
-    assert keys, "the _config.py docstring stopped listing keys — update me"
-    table = (DOCS / "configuration.md").read_text(encoding="utf-8")
-    missing = [k for k in keys if f"| `{k}`" not in table]
-    assert not missing, f"config keys undocumented in configuration.md: {missing}"
+def test_every_config_key_is_live_and_documented():
+    """`_config.KEYS` is the documented key set, and the docs table renders
+    from it — so the interesting drift is no longer "documented?" but
+    "real?": a key listed here that the runner never reads again.
+
+    The earlier version of this guard read a prose list in the module
+    docstring, which is why it never noticed `cwd`: the key was read by
+    `_app.py` and had simply never been written down. Reading the source
+    for each name closes that direction.
+    """
+    from footman import _config
+
+    assert _config.KEYS, "_config.KEYS went empty — update me"
+    src = "\n".join(
+        p.read_text(encoding="utf-8") for p in (ROOT / "src" / "footman").glob("*.py")
+    )
+    # A dotted key is a sub-table: `fetch.backend` is read as `fetch` then
+    # `backend`, so check the leaf — the part a `.get()` actually names.
+    dead = [name for name, *_ in _config.KEYS if f'"{name.split(".")[-1]}"' not in src]
+    assert not dead, f"_config.KEYS lists keys nothing reads: {dead}"
+    # The page must actually pull the generated table in; a hand-written
+    # copy would drift the moment a key changed.
+    page = (DOCS / "configuration.md").read_text(encoding="utf-8")
+    assert '--8<-- "docs/_generated/config.md"' in page, (
+        "configuration.md stopped including the generated key table"
+    )
 
 
 def test_refusal_exit_code_claims_track_the_constant():

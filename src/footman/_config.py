@@ -3,23 +3,12 @@
 footman reads `[tool.footman]` from `pyproject.toml` and a standalone
 `footman.toml` (whole-file), walking from the repo root down to the current
 directory. Nearer files win, so a package can override repo-wide defaults; a
-`--config PATH` on the command line overrides everything. Recognised keys:
+`--config PATH` on the command line overrides everything.
 
-* `tasks` — name of the task file to look for in the cascade (default
-  `tasks.py`).
-* `sequential` — run tasks one at a time by default (`fm` still overrides
-  with `-s` / a parallel default).
-* `color` — `always` | `never` | `auto` (default): when to emit ANSI colour,
-  for footman's own output and the tools it spawns. `--color` / `--no-color`
-  override it; `NO_COLOR` / `FORCE_COLOR` in the environment are consulted
-  below it.
-* `cascade` — `none` | `repo` (default) | `filesystem`: how far discovery
-  ranges for task files *and* config. User-level-only (see
-  `USER_LEVEL_KEYS`); `FOOTMAN_CASCADE` overrides it per invocation.
-* `sort` — `true` lists tasks alphabetically (in `--list`, `--tree`, help,
-  and the generated docs pages); the `--sort` global does the same for one
-  invocation. Default `false`: definition order — the task file is an
-  authored page, and its order is the author's.
+**`KEYS` below is the list of recognised keys** — name, accepted values,
+default and description, as data. The docs table renders from it, so the
+reference page and the runner cannot disagree; add a key there and it
+documents itself.
 
 Unknown keys are kept but ignored, so newer settings never break an older
 footman.
@@ -46,6 +35,108 @@ FOOTMAN_TOML = "footman.toml"
 # someone. Stripped from cascade files, with a note under -v; an explicit
 # `--config` file keeps them — the user named that file on purpose.
 USER_LEVEL_KEYS = frozenset({"gc", "cascade"})
+
+# Every recognised key, as data — the source the docs table renders from, so
+# a reference page cannot describe a key set the runner doesn't have. The
+# `cwd` key went undocumented for four releases because the only list was
+# prose in a docstring; a table nothing reads is a table nobody updates.
+#
+# (name, values, default, help). `name` uses dotted form for a sub-table key.
+KEYS: tuple[tuple[str, str, str, str], ...] = (
+    (
+        "tasks",
+        "filename",
+        "`tasks.py`",
+        "Task file to look for in each directory of the cascade.",
+    ),
+    (
+        "sequential",
+        "`true` / `false`",
+        "`false`",
+        "Run tasks one at a time by default; `-s` does it for one invocation.",
+    ),
+    (
+        "jobs",
+        "integer",
+        "cores - 1",
+        "Max parallel tasks, never below 2. `-j=N` overrides it.",
+    ),
+    (
+        "color",
+        "`always` / `never` / `auto`",
+        "`auto`",
+        "When to emit ANSI colour, for footman's own output and the tools it "
+        "spawns. `--color`/`--no-color` override it.",
+    ),
+    (
+        "cwd",
+        "policy token / absolute path",
+        "`taskfile`",
+        "Where tasks run by default: `taskfile` (the directory of the file "
+        "that defined the task), `root` (the cascade's top), `asinvoked` "
+        "(where you typed the command), `unmanaged` (footman holds no "
+        "opinion), or an absolute path. A relative suffix belongs on a "
+        "task's `rel=`.",
+    ),
+    (
+        "sort",
+        "`true` / `false`",
+        "`false`",
+        "List tasks alphabetically in `--list`, `--tree`, help and the "
+        "generated docs pages. Default: definition order, so the file's own "
+        "order is the listing's. Presentation only — never changes what runs.",
+    ),
+    (
+        "progress",
+        "`true` / `false`",
+        "`true`",
+        "`false` permanently disables the progress bar, the eta line, and "
+        "timing capture.",
+    ),
+    (
+        "uv",
+        "`true` / `false`",
+        "`true`",
+        "`false` disables both uv handoffs: re-running through the project's "
+        "pinned footman, and the script environment of a tasks file carrying "
+        "its own PEP 723 dependencies.",
+    ),
+    (
+        "completion.max_age",
+        "duration / `off`",
+        "`10m`",
+        'Age before a background completion refresh (e.g. `"10m"`; `off` to disable).',
+    ),
+    (
+        "fetch.backend",
+        "`urllib` / `curl` / `httpx` / `requests` / `auto`",
+        "`urllib`",
+        "Download engine for `fetch()`.",
+    ),
+    (
+        "shell.default",
+        "`posix` / `native` / `pwsh` / a shell name",
+        "`posix`",
+        "What `run(shell=True)` resolves to. `posix` is bash, then sh — git "
+        "bash on Windows.",
+    ),
+    (
+        "gc",
+        "`true` / `false`",
+        "`true`",
+        "`false` disables the cache collector (it runs at most daily). "
+        "**User-level only** — ignored in a project config, with a note "
+        "under `-v`.",
+    ),
+    (
+        "cascade",
+        "`none` / `repo` / `filesystem`",
+        "`repo`",
+        "How far discovery ranges for task files *and* config: this directory "
+        "only, the repository, or across repositories. **User-level only**; "
+        "`FOOTMAN_CASCADE` overrides it per invocation.",
+    ),
+)
 
 
 class ConfigError(Exception):
