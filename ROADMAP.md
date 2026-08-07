@@ -7,20 +7,23 @@ posterity — the original audit preserved item by item, each with the release
 that closed it. The full stories live in the
 [changelog](https://willemkokke.github.io/footman/changelog/).
 
-**Where footman stands (2026-07-20, v0.15.0, Beta on PyPI).** The typed core
+**Where footman stands (2026-08-07, v0.33.0, Beta on PyPI).** The typed core
 — coercion, chain grammar, manifest, scheduler, cascade — held up; everything
 since has been built on it without structural change. The runner now has a
 real help story, a testing story, a composition story, completion installed
-and functionally tested on five real shells, a tools bridge with typed stubs,
-one `--json` envelope for machines, docstring-driven parameter docs, markdown
-export of the task surface, a progress bar that earns its confidence from
-duration history, and one colour palette across the whole CLI. Coverage is
-enforced at ≥ 92%, CI runs 3 OS × Python 3.11–3.14 including free-threaded,
-and a tag cannot publish unless CI and the version checks agree.
+and functionally tested on five real shells, one `--json` envelope for
+machines, docstring-driven parameter docs, markdown export of the task
+surface, a progress bar that earns its confidence from duration history, and
+one colour palette across the whole CLI. The typed tool surface moved to
+[toolroom](https://willemkokke.github.io/toolroom/), which footman neither
+imports nor names. Coverage is enforced at ≥ 92%, CI runs 3 OS × Python
+3.11–3.14 including free-threaded, and a tag cannot publish unless CI and
+the version checks agree.
 
 ## The road to 1.0
 
-What actually remains, in order:
+Two items remain — the rest of this list is struck, kept with the evidence
+that closed it:
 
 - ~~**Help strings that carry the whole truth.**~~ **Done.** The pass
   landed: `--jobs` names the floor of 2, `-s` says it reaches `parallel()`
@@ -28,18 +31,16 @@ What actually remains, in order:
   *pulled or not* — the comparison that makes the flag worth running. The
   strings feed `--help`, completion menus and the generated docs table from
   one source, so each fix lands in three places at once.
-- **The tools surface, properly** — the 1.0 headline, and the last
-  known wart. Stubs generated from each tool's own metadata (click
-  exposes `opts`, `secondary_opts`, defaults, and help as data;
-  argparse and `--help` drivers behind the same interface), a
-  reference page per tool, and a `tools audit` task that diffs the
-  committed stubs against the installed tools so drift fails a check
-  instead of lying. It also fixes `off`: the negation is per-flag data
-  only the tool knows — `mkdocs build --no-clean` is rejected, the real
-  flag is `--dirty`, and 5 of mkdocs' 8 negatable flags disagree with
-  the `--no-<name>` assumption. Built next, then pressure-tested
-  through the work migration alongside the rest of the runner — 1.0
-  ships the tools tested, not merely written.
+- ~~**The tools surface, properly**~~ — **delivered, and no longer
+  footman's to ship.** The surface moved to
+  [toolroom](https://willemkokke.github.io/toolroom/) unchanged in what it
+  does, and every clause of this item landed there: stubs generated from
+  each tool's own metadata (click's `opts`/`secondary_opts` read as data),
+  a reference page per tool, a `tools.audit` task that fails on drift, and
+  the `off` fix — `mkdocs` `clean=off` emits `--dirty`, not the
+  `--no-clean` the convention would have guessed. Verified 2026-08-07
+  against the generated stub. toolroom releases on its own train; footman
+  neither imports nor names it.
 - **The stability promise, written down**: decorator surface, CLI grammar,
   `--json` schema additive-only, manifest format additive-only. Then a bake
   cycle with no breaking changes.

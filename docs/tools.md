@@ -1,9 +1,24 @@
 # Running tools
 
-Task bodies run tools through `run()` — and, if you install the companion
-package [toolroom](https://willemkokke.github.io/toolroom/), through its
-typed tool handles, which detect footman and route every call through
-`run()` automatically. `run()` captures output and stays quiet on success,
+A task runner exists, in the end, to call other command-line applications:
+whatever else `check` does, it eventually shells out to ruff, to pytest, to
+git. So making that one act ergonomic was worth real effort — and the result
+turned out not to need a task runner at all. It is just as useful in a
+script or a test, so it lives in its own package now:
+**[toolroom](https://willemkokke.github.io/toolroom/)**, unchanged in what
+it does, depending on nothing — least of all footman.
+
+Use them together. footman never imports or names toolroom, and toolroom
+works with footman absent; but a toolroom call made inside a task detects
+the run and routes through `run()` on its own, so it earns a receipt,
+obeys `--dry-run`, and shows up in `recording()` without opting in. That
+is the whole seam, and it is why this page can describe `run()` and leave
+the handles to
+[toolroom's own docs](https://willemkokke.github.io/toolroom/).
+
+Task bodies run tools through `run()` — and, with toolroom installed,
+through its typed tool handles, which detect footman and route every call
+through `run()` automatically. `run()` captures output and stays quiet on success,
 **replaying it only on failure** — so a green run is calm and a red one shows
 exactly what broke:
 
