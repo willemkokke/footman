@@ -112,7 +112,7 @@ class Peeled:
     forward: bool = False  # thread this value to dispatched tasks (forward)
     optional: bool = False  # Arg[T]: an optional trailing positional
     stdin: _stdin_marker | None = None  # bind from the boundary's stdin read
-    as_tuple: bool = False  # `tuple[T, ...]`: same grammar as a list, tuple out
+    container: type = list  # the collection named: list/tuple/set/frozenset
 
 
 class _Markers(TypedDict):
@@ -128,6 +128,28 @@ class _Markers(TypedDict):
     forward: bool
     optional: bool
     stdin: _stdin_marker | None
+
+
+def collection_of(ann: Any) -> type | None:
+    """The collection *ann* names, or `None` if it names none.
+
+    `list[T]`, `set[T]`, `frozenset[T]` and `tuple[T, ...]` share one grammar
+    — one or many, comma or repetition, `nosplit` and all — and differ only in
+    what the body is handed. A *fixed-arity* `tuple[X, Y]` is a shape rather
+    than a collection: its values are grouped, not accumulated, so `group_of`
+    answers for it and this returns `None`.
+
+    A bare `list` / `set` / `frozenset` / `tuple` means a collection of `str`,
+    the way a bare annotation always does here.
+    """
+    origin = typing.get_origin(ann) or ann
+    if origin is list or origin is set or origin is frozenset:
+        return origin
+    if origin is tuple:
+        args = typing.get_args(ann)
+        if not args or (len(args) == 2 and args[1] is Ellipsis):
+            return tuple
+    return None
 
 
 def peel(ann: Any) -> Peeled:
@@ -243,30 +265,28 @@ def peel(ann: Any) -> Peeled:
             stdin=stdin_marker,
         )
 
-    if ann is list or typing.get_origin(ann) is list:  # list[X] / Many[X] / bare
+    if (kind := collection_of(ann)) is not None:  # list/set/frozenset/tuple[T, ...]
         element = (typing.get_args(ann) or (str,))[0]
-        return Peeled(True, element, completer, is_nosplit, **markers)
-
-    # `tuple[T, ...]` is `list[T]`'s grammar exactly — one-or-many, comma or
-    # repetition — and differs only in what the body is handed. Coercing it
-    # to a list would hand back the container the annotation does not name,
-    # which is the failure class 0.33.0's default inference removed.
-    if typing.get_origin(ann) is tuple:
-        args = typing.get_args(ann)
-        if len(args) == 2 and args[1] is Ellipsis:
-            return Peeled(
-                True, args[0], completer, is_nosplit, as_tuple=True, **markers
-            )
+        return Peeled(True, element, completer, is_nosplit, container=kind, **markers)
 
     if _is_union(ann):
         members = _strip_none(list(typing.get_args(ann)))
-        lists = [m for m in members if m is list or typing.get_origin(m) is list]
-        if lists:  # list[X] | scalar... -> a list of the merged element types
+        collections = [(m, k) for m in members if (k := collection_of(m)) is not None]
+        if collections:  # set[X] | scalar... -> that collection, elements merged
             parts: list[Any] = []
-            for lm in lists:
-                parts += list(typing.get_args(lm)) or [str]
-            parts += [m for m in members if typing.get_origin(m) is not list]
-            return Peeled(True, _union_of(parts), completer, is_nosplit, **markers)
+            for member, _ in collections:
+                parts += [a for a in typing.get_args(member) if a is not Ellipsis] or [
+                    str
+                ]
+            parts += [m for m in members if collection_of(m) is None]
+            return Peeled(
+                True,
+                _union_of(parts),
+                completer,
+                is_nosplit,
+                container=collections[0][1],
+                **markers,
+            )
         return Peeled(False, ann, completer, is_nosplit, **markers)  # scalar union
 
     return Peeled(False, ann, completer, is_nosplit, **markers)  # plain scalar

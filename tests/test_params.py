@@ -956,3 +956,48 @@ def test_a_named_shape_names_the_slot_that_is_wrong():
     results = run(plain, "show --size=800,tall")
     assert results[0].code == EX_USAGE
     assert "value 2 expects an integer" in str(results[0].error)
+
+
+def test_a_set_is_a_list_grammar_with_a_set_handed_back():
+    """Every collection accumulates the same way — comma or repetition — and
+    differs only in the container the body receives."""
+    seen: dict[str, object] = {}
+
+    def tasks(reg):
+        @reg.task
+        def tag(names: set[str] = (), ports: frozenset[int] = ()):  # type: ignore[assignment]
+            seen.update(names=names, ports=ports)
+
+    run(tasks, "tag --names=a,b,a --ports=80 --ports=8080 --ports=80")
+    assert seen["names"] == {"a", "b"}
+    assert type(seen["names"]) is set
+    assert seen["ports"] == frozenset({80, 8080})
+    assert type(seen["ports"]) is frozenset
+
+
+def test_a_bare_collection_holds_strings():
+    """`set` says as much about its element as `list` does — which is
+    nothing, so both mean `str`."""
+    seen: dict[str, object] = {}
+
+    def tasks(reg):
+        @reg.task
+        def tag(names: set = ()):  # type: ignore[assignment,type-arg]
+            seen["names"] = names
+
+    run(tasks, "tag --names=x,y")
+    assert seen["names"] == {"x", "y"}
+
+
+def test_a_set_of_an_unhashable_element_is_taught():
+    """A plain dataclass has `__hash__ = None`, so `set[Spot]` is a shape
+    that cannot exist. The annotation is wrong rather than the value, so the
+    refusal says so instead of surfacing a bare TypeError from binding."""
+
+    def tasks(reg):
+        @reg.task
+        def tag(spots: set[Spot] = ()): ...  # type: ignore[assignment]
+
+    results = run(tasks, "tag --spots=1,2,3,4")
+    assert results[0].code == EX_USAGE
+    assert "not hashable" in str(results[0].error)
