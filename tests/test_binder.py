@@ -12,7 +12,7 @@ from __future__ import annotations
 import datetime
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, NamedTuple, TypedDict
 
 import pytest
 
@@ -26,6 +26,17 @@ from footman.testing import Runner
 
 
 # Payload shapes live at module level, where `eval_str` can see them.
+class Size(NamedTuple):
+    width: int
+    height: int
+    label: str = "px"
+
+
+class Opts(TypedDict):
+    name: str
+    port: int
+
+
 @dataclass
 class ToolInput:
     file_path: str = ""
@@ -306,3 +317,52 @@ def test_runner_replays_a_fixture_payload():
         "hook", tasks=reg, stdin='{"tool_name": "Stop", "stop_hook_active": true}'
     )
     assert result.ok and "active" in result.stdout
+
+
+def test_a_named_tuple_binds_from_a_json_object(piped):
+    """A `NamedTuple` is a record like a dataclass, and binds like one.
+
+    It used to fail every test in `is_document_target` — a `tuple`
+    subclass, so `get_origin` is `None` — fall through to the text path,
+    and hand the body a raw string with no warning at all.
+    """
+    seen = {}
+
+    def tasks(reg):
+        @reg.task
+        def show(s: Annotated[Size, stdin]):
+            seen["s"] = s
+
+    piped('{"width": 800, "height": 600}')
+    run(tasks, "show")
+    assert seen["s"] == Size(800, 600, "px")
+    assert isinstance(seen["s"], Size)
+
+
+def test_a_typed_dict_binds_from_a_json_object(piped):
+    """A `TypedDict` is a record too; called with keywords it is the dict
+    it always was at runtime."""
+    seen = {}
+
+    def tasks(reg):
+        @reg.task
+        def show(o: Annotated[Opts, stdin]):
+            seen["o"] = o
+
+    piped('{"name": "web", "port": 8080}')
+    run(tasks, "show")
+    assert seen["o"] == {"name": "web", "port": 8080}
+
+
+def test_a_record_still_refuses_a_missing_required_field(piped):
+    """The defaulted field is optional, the others are not — the same rule
+    dataclasses already followed, now read from one helper."""
+
+    def tasks(reg):
+        @reg.task
+        def show(s: Annotated[Size, stdin]): ...
+
+    piped('{"width": 800}')
+    results = run(tasks, "show")
+    assert results[0].code == EX_USAGE
+    assert "no 'height' field" in str(results[0].error)
