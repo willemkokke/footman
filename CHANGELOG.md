@@ -60,6 +60,14 @@ versions may include breaking changes.
   because `--v=1,2` does. A *named* record still binds from a JSON object,
   which is the spelling its field names earn it.
 
+- **A grouped shape is refused at parse time**, like every other typed
+  value. Its arity and its per-position types are in the manifest, so
+  `--size=800,tall` and `--points=1,2,3` are taught before anything runs
+  rather than raising from inside binding — which also means the message
+  is a taught refusal instead of a `ValueError`. The binding-time check
+  stays as the backstop for the channels the splitter never sees: stdin,
+  `env(...)`, and a direct call.
+
 - **`hidden` on a parameter** (and `Hidden[T]`), meaning what `hidden=True`
   already means on a task: out of the listings a human reads, and out of
   nothing else. It still binds, it still completes, `--describe` marks it

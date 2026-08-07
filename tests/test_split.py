@@ -2,9 +2,24 @@
 
 from __future__ import annotations
 
+from typing import NamedTuple
+
 import pytest
 
+from footman import _manifest
 from footman._split import ChainError, split_chain
+from footman.registry import Group
+
+
+class Box(NamedTuple):
+    width: int
+    height: int
+
+
+def build_tree(build):
+    reg = Group("root")
+    build(reg)
+    return reg, _manifest.build_manifest(reg)["tree"]
 
 
 def segs(tree, line):
@@ -237,3 +252,30 @@ def test_unmatchable_typo_gets_no_suggestion(tree):
     with pytest.raises(ChainError) as excinfo:
         split_chain(tree, ["zzzzzzzz"])
     assert "did you mean" not in str(excinfo.value)
+
+
+def test_a_grouped_shape_is_refused_before_anything_runs():
+    """The manifest carries a group's arity and per-slot types, so a wrong
+    value never needs a run to be found — the same eager treatment every
+    other typed parameter gets."""
+
+    def tasks(reg):
+        @reg.task
+        def render(size: Box = Box(0, 0)): ...
+
+        @reg.task
+        def route(points: list[Box] = ()): ...  # type: ignore[assignment]
+
+    _, tree = build_tree(tasks)
+
+    with pytest.raises(ChainError, match=r"height expects an integer"):
+        split_chain(tree, ["render", "--size=800,tall"])
+    with pytest.raises(ChainError, match=r"--size takes width,height — got 1"):
+        split_chain(tree, ["render", "--size=800"])
+    with pytest.raises(ChainError, match=r"groups of 2 \(width,height\)"):
+        split_chain(tree, ["route", "--points=1,2,3"])
+    # Repetition and commas feed one stream, so the arity is only final at
+    # the end of the segment — these are the same three values.
+    with pytest.raises(ChainError, match=r"leaves 1 over"):
+        split_chain(tree, ["route", "--points=1,2", "--points=3"])
+    split_chain(tree, ["route", "--points=1,2", "--points=3,4"])  # whole: fine

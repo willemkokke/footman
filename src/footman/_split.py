@@ -273,14 +273,31 @@ def _check_bounds(
         raise ChainError(f"{where}: {label} must be {expect} (got {value!r})")
 
 
-def _validate(where: str, p: dict[str, Any], value: str) -> None:
-    """Eagerly validate a choice/typed value; raise a taught error if wrong."""
+def _validate(where: str, p: dict[str, Any], value: str, at: int = 0) -> None:
+    """Eagerly validate a choice/typed value; raise a taught error if wrong.
+
+    *at* is the value's index in the stream, which only matters to a grouped
+    shape: its positions have a type each, so the check has to know which slot
+    this token is filling. `--size=800,tall` is refused before anything runs,
+    naming `height` — the same eager treatment every other typed parameter
+    gets, rather than a crash from inside binding.
+    """
     label = (
         f"<{p['name']}>"
         if p["kind"] in ("positional", "variadic")
         else f"--{p['name']}"
     )
     bounds = (p.get("min"), p.get("max")) if "min" in p or "max" in p else None
+    if group := p.get("group"):
+        slot = at % group["max"]
+        names = group["names"]
+        _check(
+            where,
+            f"{label}: {names[slot] if names else f'value {slot + 1}'}",
+            value,
+            types=group["types"][slot],
+        )
+        return
     _check(
         where,
         label,
@@ -291,6 +308,33 @@ def _validate(where: str, p: dict[str, Any], value: str) -> None:
         path=p.get("path"),
         bounds=bounds,
     )
+
+
+def _check_arity(
+    where: str, p: dict[str, Any], group: dict[str, Any], count: int
+) -> None:
+    """A grouped shape's arity, checked once the whole stream is in.
+
+    Values accumulate from commas and repetition, so the count is only final
+    at the end of the segment — but it is knowable from the manifest alone,
+    which is what makes it a parse-time refusal rather than a binding crash.
+    """
+    label = f"--{p['name']}"
+    size = group["max"]
+    if group["many"]:
+        if count % size:
+            raise ChainError(
+                f"{where}: {label} takes values in groups of {size} "
+                f"({group['label']}) — got {count}, which leaves "
+                f"{count % size} over"
+            )
+    elif not group["min"] <= count <= size:
+        want = (
+            group["label"]
+            if group["min"] == size
+            else f"{group['min']} to {size} values ({group['label']})"
+        )
+        raise ChainError(f"{where}: {label} takes {want} — got {count}")
 
 
 def _expects_value(
@@ -671,6 +715,13 @@ def split_chain(
             raise ChainError(
                 f"{seg.task}: missing required option(s): {', '.join(missing_opts)}"
             )
+        for spec in task["params"]:
+            if (group := spec.get("group")) is None:
+                continue
+            given = seg.values.get(spec["name"])
+            if given is None:
+                continue  # absent: the default stands
+            _check_arity(seg.task, spec, group, len(given))
         if group_node is not None:
             _default_notes(seg, group_node, fixed, rest)
         segments.append(seg)
@@ -725,7 +776,7 @@ def _consume_option(
             _consume_pair(seg, p, cli, pair)
     elif p.get("multiple"):
         for part in _values(p, value):
-            _validate(seg.task, p, part)
+            _validate(seg.task, p, part, at=len(seg.values.get(cli, ())))
             seg.values.setdefault(cli, []).append(part)
     else:
         _validate(seg.task, p, value)

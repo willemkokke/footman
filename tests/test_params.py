@@ -929,15 +929,18 @@ def test_a_container_of_groups_chunks_by_arity():
 
 def test_a_remainder_is_taught_never_rounded():
     """Chunking is not guessing — the arity is declared, so a leftover is a
-    refusal rather than a silently dropped value."""
+    refusal rather than a silently dropped value.
+
+    Refused at *parse* time, like every other typed value: the arity is
+    knowable from the manifest, so nothing has to run to find out.
+    """
 
     def tasks(reg):
         @reg.task
         def route(points: list[Spot] = ()): ...  # type: ignore[assignment]
 
-    results = run(tasks, "route --points=1,2,3")
-    assert results[0].code == EX_USAGE  # a binding-time refusal
-    assert "groups of 2 (x,y)" in str(results[0].error)
+    with pytest.raises(ChainError, match=r"groups of 2 \(x,y\)"):
+        run(tasks, "route --points=1,2,3")
 
 
 def test_a_named_shape_names_the_slot_that_is_wrong():
@@ -948,17 +951,15 @@ def test_a_named_shape_names_the_slot_that_is_wrong():
         @reg.task
         def show(size: Box = Box(0, 0)): ...
 
-    results = run(tasks, "show --size=800,tall")
-    assert results[0].code == EX_USAGE
-    assert "height expects an integer" in str(results[0].error)
+    with pytest.raises(ChainError, match=r"height expects an integer"):
+        run(tasks, "show --size=800,tall")
 
     def plain(reg):
         @reg.task
         def show(size: tuple[int, int] = (0, 0)): ...
 
-    results = run(plain, "show --size=800,tall")
-    assert results[0].code == EX_USAGE
-    assert "value 2 expects an integer" in str(results[0].error)
+    with pytest.raises(ChainError, match=r"value 2 expects an integer"):
+        run(plain, "show --size=800,tall")
 
 
 def test_a_set_is_a_list_grammar_with_a_set_handed_back():
