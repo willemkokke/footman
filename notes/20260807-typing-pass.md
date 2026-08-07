@@ -22,14 +22,20 @@ meant to be one vocabulary. They are not, and the gaps are invisible until
 they bite — one warns, one is silent, one is a hard error, for the same
 annotation.
 
-Measured against 0.33.0, not remembered:
+Measured against 0.33.0, not remembered — a sweep of every combination
+that looked plausible, bind-tested rather than trusted to build cleanly:
 
 | shape | return (`--describe`) | stdin (bind) | command line |
 | --- | --- | --- | --- |
 | `dataclass` | describes | **binds, nested** | hard `ValueError` |
-| `NamedTuple` | describes as `row` | **silently a string** | passes text through |
+| `list[dataclass]` | describes | **binds** | hard `ValueError` |
+| `NamedTuple` | describes as `row` | **silent string** | passes text through |
+| `TypedDict` | describes | **silent string** | hard `ValueError` |
 | `tuple[X, Y]` | describes as `row` | warns, string | warns, string |
 | `tuple[T, ...]` | describes | warns, string | warns, string |
+| `set` / `frozenset` | serialises (sorted) | — | **warns**, unusable |
+| `Stdin[int]`, `Stdin[Enum]` | — | **silent string** | n/a |
+| `Literal[1, 2, 3]` | describes | — | works |
 | one-arg custom type | — | — | works (`T(value)`) |
 
 The evidence, verbatim from a scratch project:
@@ -45,9 +51,37 @@ The evidence, verbatim from a scratch project:
 - All three tuple forms warn *"annotation … is not a usable type; values
   are passed through as text"* on both input channels.
 
-The `NamedTuple` case is the worst kind: the type checker concludes `Size`,
-the body receives `str`, and nothing says so — the same failure class as the
-basic-default asymmetry fixed in 0.33.0, but silent rather than warned.
+- **Scalars on stdin are not coerced at all.** `Annotated[int, stdin]` fed
+  `42` yields the *string* `'42'`; fed by `echo`, the string `'42\n'`.
+  `Annotated[Colour, stdin]` yields `'red'`, not `Colour.RED`.
+- **Validation and coercion have come apart on that path.**
+  `Stdin[Colour]` with a trailing newline *does* raise `must be one of red
+  (got 'red\n')` — the choices check runs against raw text — but when it
+  passes, the body still receives a string. Half the contract is enforced
+  and the other half dropped.
+- `set[str]` and `frozenset[str]` warn and are unusable as parameters,
+  while json.md documents sets as serialising (sorted) on the way out.
+
+### The diagnosis that unifies them
+
+**The command-line path warns on a type it cannot use; the stdin path
+silently degrades to a string.** That is why the tuple gaps were noticed
+years-of-releases ago and the stdin gaps were not: nothing ever said
+anything. The `NamedTuple` and `TypedDict` cases are the worst kind — the
+checker concludes `Size`, the body receives `str`, the run reports `ok` —
+the same failure class as the basic-default asymmetry fixed in 0.33.0, but
+silent rather than warned.
+
+Whatever else this pass does: **the stdin binder must refuse or warn on an
+annotation it cannot honour, exactly as the manifest does.** That single
+change would have surfaced every silent row in the table above.
+
+### `echo` is the common case, and it is broken
+
+`echo 42 | fm task` keeps the trailing newline, so any *validated* scalar
+fails on it (`got 'red\n'`). Piping a value in is the entire point of the
+channel. Stripping one trailing newline for coerced scalars is a small fix
+with an outsized effect, and it belongs in this pass.
 
 ## The shape of the fix
 
@@ -186,15 +220,19 @@ That is the usual tell.
 - **Refusing `Many[tuple[...]]`** at registration. Too blunt; the shape is
   fine whenever values carry no commas, which is most of the time.
 - **Silently chunking a remainder.** That *would* be guessing.
-- **Fixing the silent `NamedTuple` binding as its own PR.** Ruled against:
-  one pass, one consistent standard, so the channels move together.
+- **Fixing the silent bindings as their own PRs.** Ruled against: one
+  pass, one consistent standard, so the channels move together. That
+  covers the silent `NamedTuple`/`TypedDict` bindings, uncoerced stdin
+  scalars, the trailing newline, and sets.
 
 ## Opens
 
-- **`NamedTuple` as the blessed named form?** Its errors name a position
-  (`--size: height expects an integer`) where a plain tuple can only count
-  (`2nd value`). Lean: show it first in the typing table, the way `Literal`
-  precedes a bare `str`.
+- ~~**`NamedTuple` as the blessed named form?**~~ **Ruled: yes.**
+  `NamedTuple` is the preferred form in every docs example, and a short
+  section explains that plain tuples behave *exactly* the same but with
+  less informative errors — `--size: 2nd value expects an integer` where
+  the named form says `--size: height expects an integer`. Shown first the
+  way `Literal` precedes a bare `str`.
 - **`hidden` semantics** — the task-rule transposition above, or the
   narrower "not a CLI surface" reading.
 - **Hidden parameters in the generated task docs?** Hidden *tasks* appear
