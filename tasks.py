@@ -657,6 +657,7 @@ def docs_build(check: bool = False):  # pragma: no cover — see below
     # embeds (page mode). Plain calls — @task returns plain functions.
     # Order matters on a fresh checkout: llms.txt walks the nav, and the
     # nav includes the generated tasks/ pages — generate them first.
+    import shutil
     from pathlib import Path
 
     from footman.tasks.docs import config as taskdocs_config
@@ -664,6 +665,17 @@ def docs_build(check: bool = False):  # pragma: no cover — see below
     from footman.tasks.docs import page as taskdocs_page
     from footman.tasks.docs import shots as taskdocs_shots
     from footman.tasks.docs import site as taskdocs_site
+
+    # Start from nothing, which is the only state that ever gets validated:
+    # both trees are gitignored, so CI builds them from an empty checkout
+    # while a working copy accumulates whatever an older layout left behind.
+    # A stale `docs/_generated/tools/` — pages for stubs that moved out to
+    # toolroom releases ago — failed a local strict build with
+    # `Could not collect 'footman._stubs.nu.Nu'`, a module this repo has not
+    # had in months. Clearing costs nothing: every file below is rewritten
+    # unconditionally anyway.
+    for stale in (Path("docs/_generated"), Path("docs/tasks")):
+        shutil.rmtree(stale, ignore_errors=True)
 
     # The API reference regenerates from the export table every build — the
     # page cannot omit an export, because the generator refuses to.
