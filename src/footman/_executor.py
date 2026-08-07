@@ -296,6 +296,53 @@ def _env_value(
     return one(raw)
 
 
+def _bind_group(
+    group: _coerce.Group,
+    parts: list[str],
+    many: bool,
+    label: str,
+) -> Any:
+    """Group a flat stream by a declared arity and build each group.
+
+    Commas and repetition both feed one stream; the arity says where each
+    group ends. Nothing is inferred — the arity is declared, so a leftover
+    is a refusal rather than a rounding.
+    """
+    size = group.total
+    if many:
+        if len(parts) % size:
+            raise ValueError(
+                f"{label} takes values in groups of {size} ({group.label()}) "
+                f"— got {len(parts)}, which leaves {len(parts) % size} over"
+            )
+        chunks = [parts[i : i + size] for i in range(0, len(parts), size)]
+    else:
+        # One group, so the count settles a variable arity on its own: any
+        # length between required and total is unambiguous here, which is
+        # why optional constructor parameters are allowed bare and refused
+        # inside a container.
+        if not group.required <= len(parts) <= size:
+            want = (
+                f"{group.label()}"
+                if group.required == size
+                else f"{group.required} to {size} values ({group.label()})"
+            )
+            raise ValueError(f"{label} takes {want} — got {len(parts)}")
+        chunks = [parts]
+
+    built = []
+    for chunk in chunks:
+        values = []
+        for index, token in enumerate(chunk):
+            slot = group.names[index] if group.names else f"value {index + 1}"
+            try:
+                values.append(_coerce.coerce_checked(token, group.types[index]))
+            except ValueError as exc:
+                raise ValueError(f"{label}: {slot} {exc}") from exc
+        built.append(group.build(values))
+    return built if many else built[0]
+
+
 def _container(peeled: _coerce.Peeled, values: list[Any]) -> Any:
     """The collection the annotation named. `tuple[T, ...]` shares every bit
     of a list's grammar and differs only here — handing back a list would
@@ -711,6 +758,14 @@ def bind(
                 else:
                     result[k] = v
             kwargs[param.name] = result
+        elif (group := _coerce.group_of(peeled.element)) is not None:
+            items = raw if isinstance(raw, list) else [raw]
+            kwargs[param.name] = _run_checks(
+                _bind_group(group, items, peeled.multiple, label),
+                peeled,
+                label,
+                siblings,
+            )
         elif peeled.multiple:
             items = raw if isinstance(raw, list) else [raw]
             kwargs[param.name] = _container(

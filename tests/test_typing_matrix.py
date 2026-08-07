@@ -126,16 +126,17 @@ CASES: tuple[tuple[Any, str, Any, Any], ...] = (
     (Size, STDIN, b'{"width": 800, "height": 600}', Size(800, 600)),
     (Opts, STDIN, b'{"name": "web", "port": 8080}', {"name": "web", "port": 8080}),
     (Point, STDIN, b'{"x": 1, "y": 2}', Point(1.0, 2.0)),
-    # A multi-argument shape on the command line is step 2's business; today
-    # it reaches `T(value)` with one token and the constructor refuses.
-    (Size, CLI, "--v=800,600", Refused("not a valid Size")),
+    # A fixed-arity shape fills from the grouped stream, whichever way it
+    # was spelled. `Opts` stays refused: a TypedDict has no positional
+    # arity to group by — its keys are named, so stdin is its channel.
+    (Size, CLI, "--v=800,600", Size(800, 600)),
+    (Point, CLI, "--v=1,2", Point(1.0, 2.0)),
     (Opts, CLI, "--v=name=web", Refused("not a valid Opts")),
-    (Point, CLI, "--v=1,2", Refused("not a valid Point")),
     # `tuple[T, ...]` is a list's grammar with a tuple handed back.
     (tuple[str, ...], CLI, "--v=a,b", ("a", "b")),
     (tuple[str, ...], STDIN, b'["a", "b"]', ("a", "b")),
     # --- the pass's to-do list ----------------------------------------------
-    (tuple[int, int], CLI, "--v=1,2", Unsupported()),
+    (tuple[int, int], CLI, "--v=1,2", (1, 2)),
     (tuple[int, int], STDIN, b"[1, 2]", Unsupported()),
     (set[str], CLI, "--v=a,b", Unsupported()),
     (set[str], STDIN, b'["a", "b"]', Unsupported()),

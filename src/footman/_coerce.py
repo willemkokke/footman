@@ -308,6 +308,86 @@ def emission_mode(inner: Any) -> str:
     return "json"
 
 
+@dataclass(frozen=True)
+class Group:
+    """A fixed-arity shape: what to build, from which positions.
+
+    One reading covers four spellings, because `inspect.signature` answers
+    identically for all of them — `tuple[X, Y]` from its subscript, a
+    `NamedTuple` and a dataclass from their fields, a plain class from its
+    `__init__`. They are one case, not four.
+    """
+
+    target: Any  # the callable that builds it (`tuple` builds from an iterable)
+    names: tuple[str, ...] | None  # field names; None for a bare tuple
+    types: tuple[Any, ...]  # the annotation at each position
+    required: int  # positions that must be filled
+    from_iterable: bool  # `tuple(values)` rather than `T(*values)`
+
+    @property
+    def total(self) -> int:
+        return len(self.types)
+
+    def build(self, values: list[Any]) -> Any:
+        return self.target(values) if self.from_iterable else self.target(*values)
+
+    def label(self) -> str:
+        """How the arity reads in an error: `width,height`, or `2 values`.
+
+        The named form is the whole argument for preferring `NamedTuple`:
+        a plain tuple can only count, and counting errors read poorly.
+        """
+        if self.names:
+            return ",".join(self.names)
+        return f"{self.total} values"
+
+
+def group_of(ann: Any) -> Group | None:
+    """The fixed-arity shape *ann* names, or `None` if it is not one.
+
+    A one-parameter constructor is deliberately not a group: it keeps
+    today's `T(value)` behaviour, where the whole token reaches the type.
+    That is what makes this non-breaking — only shapes that are a hard
+    error today start grouping.
+    """
+    import inspect
+
+    if typing.get_origin(ann) is tuple:
+        args = typing.get_args(ann)
+        if not args or (len(args) == 2 and args[1] is Ellipsis):
+            return None  # variadic: a list's grammar, handled by `peel`
+        return Group(tuple, None, args, len(args), from_iterable=True)
+
+    if not isinstance(ann, type) or ann in (str, bytes) or issubclass(ann, enum.Enum):
+        return None
+    try:
+        sig = inspect.signature(ann)
+        hints = typing.get_type_hints(ann.__init__ if not _is_record(ann) else ann)
+    except (TypeError, ValueError, NameError):
+        return None
+
+    names: list[str] = []
+    types: list[Any] = []
+    required = 0
+    for param in sig.parameters.values():
+        if param.kind in (param.VAR_POSITIONAL, param.VAR_KEYWORD):
+            return None  # no fixed arity to group by
+        names.append(param.name)
+        types.append(hints.get(param.name, str))
+        if param.default is inspect.Parameter.empty:
+            required += 1
+    if len(names) < 2:
+        return None  # one parameter keeps the whole token, as it does today
+    return Group(ann, tuple(names), tuple(types), required, from_iterable=False)
+
+
+def _is_record(ann: Any) -> bool:
+    """A shape whose annotations live on the class, not on `__init__`."""
+    import dataclasses
+
+    return dataclasses.is_dataclass(ann) or hasattr(ann, "_fields") or False
+
+
 def is_flag(element: Any) -> bool:
     return element is bool
 
@@ -451,6 +531,33 @@ def coerce_one(value: str, element: Any) -> Any:
     if tags:
         ok, out = coerce_scalar(value, tags)
         return out if ok else value
+    return coerce_custom(value, element)
+
+
+def coerce_checked(value: str, element: Any) -> Any:
+    """Coerce a token, refusing rather than falling back to the raw string.
+
+    `coerce_one` is best-effort on purpose: on the ordinary path the
+    splitter has already validated the token eagerly, so its fall-through
+    is unreachable. A grouped position has no such pre-check — the
+    splitter validates a parameter against one type, and a group's
+    positions have one each — so it needs the strict form, or a
+    `tuple[str, int]` would quietly accept `height='tall'`.
+    """
+    _choices, enum_cls, literal = element_choices(element)
+    if enum_cls is not None:
+        return coerce_one(value, element)  # `enum_cls(value)` refuses its own
+    if literal is not None:
+        if not any(str(lit) == value for lit in literal):
+            spelled = "|".join(str(lit) for lit in literal)
+            raise ValueError(f"must be one of {spelled} (got {value!r})")
+        return coerce_one(value, element)
+    tags = element_tags(element)
+    if tags:
+        ok, out = coerce_scalar(value, tags)
+        if not ok:
+            raise ValueError(f"expects {type_phrase(tags)} (got {value!r})")
+        return out
     return coerce_custom(value, element)
 
 
