@@ -49,6 +49,19 @@ this ledger as law.
    spellings; glossary keys gain inflected variants (*chains*, *chained*,
    *serialises*, …) plus a drift test asserting inflected entries stay
    textually identical to their singular. "We can always undo it."
+   **Amendment, 2026-08-07 — and undone for one stem.** *serialise /
+   serialises / serialised* are removed; the bare adjective *serial*
+   stays. An inflection is only worth a tooltip if the spelling means
+   footman's thing wherever it appears, and this verb has an older, more
+   common English sense the docs themselves use more often: of twelve
+   prose fires, nine were the JSON sense or a whole-run one, two were
+   right in sentences that already said "lane", and two landed on
+   sentences about a *sequential run* — which the definition explicitly
+   contrasts itself with. `serial task` / `serial lane` / `serial=True`
+   have no such twin, so the adjective keeps its entry. **The rule this
+   yields: an inflection earns a tooltip only where the word has one
+   meaning in English, not merely one meaning in footman.** No guard
+   follows — the failure is a wrong *sense*, and no test reads sense.
 4. **Glossary membership.** Add six: *context, refusal, envelope, receipt,
    lane, shared*. First-use inline instead for seven: *step, record,
    verdict, reviewer, sealed, audit, observer* — step/record because ~91

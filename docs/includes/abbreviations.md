@@ -16,9 +16,6 @@
 *[sequential]: The run-wide mode (-s/--sequential, or sequential = true in config): no pool at all, every task one at a time, output live.
 *[sequentially]: The run-wide mode (-s/--sequential, or sequential = true in config): no pool at all, every task one at a time, output live.
 *[serial]: One task's lane (@task(serial=True)): the scheduler grants it the process globals, at most one holder at a time — and unlike a sequential run, the parallel pool keeps running around it.
-*[serialise]: One task's lane (@task(serial=True)): the scheduler grants it the process globals, at most one holder at a time — and unlike a sequential run, the parallel pool keeps running around it.
-*[serialises]: One task's lane (@task(serial=True)): the scheduler grants it the process globals, at most one holder at a time — and unlike a sequential run, the parallel pool keeps running around it.
-*[serialised]: One task's lane (@task(serial=True)): the scheduler grants it the process globals, at most one holder at a time — and unlike a sequential run, the parallel pool keeps running around it.
 *[context]: The per-task state behind run() — its working directory, its environment, its records; read it with Context/use_context, though most tasks never touch it directly.
 *[contexts]: The per-task state behind run() — its working directory, its environment, its records; read it with Context/use_context, though most tasks never touch it directly.
 *[refusal]: footman declining a command line before anything runs — exit 64, with a taught message naming the fix.
