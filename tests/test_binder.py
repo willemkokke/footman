@@ -52,6 +52,24 @@ class Event:
 
 
 @dataclass
+class Config:
+    name: str
+    port: int = 8080
+
+
+@dataclass
+class Nest:
+    inner: Config
+    label: str = ""
+
+
+@dataclass
+class Node:
+    label: str
+    children: list[Node]
+
+
+@dataclass
 class Row:
     name: str
     score: float
@@ -275,9 +293,23 @@ def test_the_manifest_records_the_shape():
     spec = tree["tasks"]["hook"]["params"][0]
     assert spec["kind"] == "stdin"
     assert spec["stdin"] == "json"
-    assert spec["shape"] == "Event"
     assert usage_fragment(spec) == ""  # no token spelling in usage
     assert "reads stdin (JSON document → Event)" in param_detail(spec)
+    # The shape is data a machine can build the document from, not a name it
+    # has to already know the meaning of.
+    assert spec["shape"]["name"] == "Event"
+    fields = {f["name"]: f for f in spec["shape"]["fields"]}
+    assert fields["tool_name"] == {
+        "name": "tool_name",
+        "types": ["str"],
+        "required": True,
+    }
+    assert fields["stop_hook_active"] == {"name": "stop_hook_active", "types": ["bool"]}
+    assert fields["cwd"] == {"name": "cwd", "types": ["path"]}
+    # A nested record is described in turn, so a reader never has to already
+    # know what a `ToolInput` is.
+    assert fields["tool_input"]["shape"]["name"] == "ToolInput"
+    assert fields["tool_input"]["shape"]["fields"]
 
 
 def test_required_document_without_a_pipe_teaches_the_fixture(piped):
@@ -366,3 +398,81 @@ def test_a_record_still_refuses_a_missing_required_field(piped):
     results = run(tasks, "show")
     assert results[0].code == EX_USAGE
     assert "no 'height' field" in str(results[0].error)
+
+
+def test_the_shape_describes_every_record_the_same_way():
+    """A dataclass, a NamedTuple and a TypedDict all bind the same JSON
+    object, so they describe themselves the same way. They used not to: only
+    a dataclass carried a shape at all, which is the manifest holding the
+    opinion about records that the binder had already given up."""
+
+    def tasks(reg):
+        @reg.task
+        def one(v: Annotated[Config, stdin]): ...
+
+        @reg.task
+        def two(v: Annotated[Size, stdin]): ...
+
+        @reg.task
+        def three(v: Annotated[Opts, stdin]): ...
+
+    _, tree = build_tree(tasks)
+    shapes = {
+        name: tree["tasks"][name]["params"][0]["shape"]
+        for name in ("one", "two", "three")
+    }
+    assert [f["name"] for f in shapes["one"]["fields"]] == ["name", "port"]
+    assert [f["name"] for f in shapes["two"]["fields"]] == [
+        "width",
+        "height",
+        "label",
+    ]
+    assert [f["name"] for f in shapes["three"]["fields"]] == ["name", "port"]
+    # Required is per-field and comes from the shape's own rules: a default,
+    # a `_field_defaults` entry, a TypedDict's `__required_keys__`.
+    assert shapes["one"]["fields"][1].get("required") is None  # port defaults
+    assert shapes["two"]["fields"][1]["required"] is True  # height has none
+    assert shapes["two"]["fields"][2].get("required") is None  # label = "px"
+    assert shapes["three"]["fields"][1]["required"] is True  # a total TypedDict
+
+
+def test_a_shape_with_a_command_line_spelling_keeps_it():
+    """A record whose slots are all scalars can be typed as well as piped,
+    and the command line wins when both are given. A record holding another
+    record cannot: no token can say where the inner one ends."""
+
+    def tasks(reg):
+        @reg.task
+        def flat(v: Annotated[Config, stdin]): ...
+
+        @reg.task
+        def nested(v: Annotated[Nest, stdin]): ...
+
+    _, tree = build_tree(tasks)
+    flat = tree["tasks"]["flat"]["params"][0]
+    nested = tree["tasks"]["nested"]["params"][0]
+    assert flat["kind"] == "option"
+    assert flat["group"]["label"] == "name,port"
+    assert usage_fragment(flat) == "[--v=name,port]"
+    assert nested["kind"] == "stdin"
+    assert "group" not in nested
+    assert usage_fragment(nested) == ""
+    # Either way the document schema is there, because either way it reads
+    # the pipe.
+    assert flat["shape"]["name"] == "Config"
+    assert nested["shape"]["fields"][0]["shape"]["name"] == "Config"
+
+
+def test_a_recursive_shape_is_named_rather_than_expanded():
+    """`Node.children` is a list of `Node`. There is no finite expansion, and
+    the shape appears in full above, so the name is the description."""
+
+    def tasks(reg):
+        @reg.task
+        def walk(v: Annotated[Node, stdin]): ...
+
+    _, tree = build_tree(tasks)
+    shape = tree["tasks"]["walk"]["params"][0]["shape"]
+    children = shape["fields"][1]
+    assert children["many"] == "list"
+    assert children["shape"] == {"name": "Node"}  # named, not expanded

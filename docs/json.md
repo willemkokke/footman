@@ -368,13 +368,58 @@ Each parameter always has `name` and `kind` (`flag` | `option` | `positional`
 token spelling; see [Pipelines](pipelines.md)), plus whichever apply:
 `required`, `choices`, `types`, `multiple`, `mapping`, `nosplit`, `path`,
 `min`/`max`, `env`, `stdin` (how the value binds the pipe), `shape`,
-`dynamic`, and `doc` — the author's
+`group`, `dynamic`, and `doc` — the author's
 [per-parameter help](typing.md#validation-markers), whether from a
 `doc("…")` marker or a parsed docstring. A task node carries
 `help` (the docstring's first line) and, when the docstring has a body,
 `long`.
 This is one command's answer to "what can I run here?" — the discovery
 call for agents and tooling.
+
+### The shape a pipe expects
+
+A parameter that reads a JSON document carries `shape`: the document's
+structure as data, so a caller can build the JSON without knowing the
+Python behind it.
+
+```json
+{
+  "name": "cfg",
+  "kind": "option",
+  "stdin": "json",
+  "shape": {
+    "name": "Config",
+    "fields": [
+      {"name": "name", "types": ["str"], "required": true},
+      {"name": "port", "types": ["int"]},
+      {"name": "at", "shape": {"name": "Point", "fields": [
+        {"name": "x", "types": ["float"], "required": true},
+        {"name": "y", "types": ["float"], "required": true}
+      ]}},
+      {"name": "tags", "many": "list", "types": ["str"]}
+    ]
+  }
+}
+```
+
+A field carries `types` when footman coerces it, `choices` when it is an
+enum or a `Literal`, `many` when it holds a collection (the name of the
+container), `shape` when it is itself a record, and `required` when it has
+no default. A field with none of those is one footman does not coerce:
+whatever JSON holds arrives as it is. A recursive shape — a field whose
+type is the record it sits in — is emitted as a bare `{"name": "…"}`,
+since it appears in full higher up.
+
+Every record is described the same way, whether it is a dataclass, a
+`NamedTuple`, a `TypedDict`, or a class with an annotated `__init__`.
+
+A shape whose fields are all scalars also has a command-line spelling, and
+then the parameter is an ordinary `option` carrying a `group` — its
+positional view: `names`, per-position `types`, `min`/`max` arity, and the
+`label` help prints. Give it either way; the command line wins. A shape
+holding a record or a collection has no command-line spelling — no token
+can say where the inner one ends — so its `kind` is `stdin` and the pipe
+is the only channel.
 
 ## The rehearsal: `fm --json --dry-run`
 

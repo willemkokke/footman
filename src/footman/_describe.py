@@ -79,6 +79,10 @@ def value_hint(p: dict[str, Any]) -> str:
     """The value placeholder shown for an option/argument in help output."""
     if p.get("mapping"):
         return "KEY=VALUE"
+    if group := p.get("group"):
+        # `--size=width,height` beats `--size=VALUE`: the shape named its own
+        # slots, so the help can too.
+        return str(group["label"])
     choices = p.get("choices")
     if choices:
         return "{" + "|".join(choices) + "}"
@@ -86,6 +90,18 @@ def value_hint(p: dict[str, Any]) -> str:
     if types:
         return "|".join(t.upper() for t in types)
     return "VALUE"
+
+
+def _repeats(p: dict[str, Any]) -> bool:
+    """Whether the parameter takes a *stream* of values rather than one.
+
+    A grouped shape is `multiple` to the splitter because its values
+    accumulate the same way, but `--size=width,height` takes one size — the
+    `...` belongs only to a container of them.
+    """
+    if group := p.get("group"):
+        return bool(group["many"])
+    return bool(p.get("multiple"))
 
 
 def usage_fragment(p: dict[str, Any]) -> str:
@@ -97,7 +113,7 @@ def usage_fragment(p: dict[str, Any]) -> str:
         return f"--{p['name']}" if required else f"[--{p['name']}]"
     if kind == "option":
         core = f"--{p['name']}={value_hint(p)}"
-        if p.get("multiple") or p.get("mapping"):
+        if _repeats(p) or p.get("mapping"):
             core += " ..."
         return core if required else f"[{core}]"
     if kind == "variadic":
@@ -138,7 +154,15 @@ def _mechanics(p: dict[str, Any]) -> str:
         bits.append(" or ".join(TYPE_WORD.get(str(t), str(t)) for t in p["types"]))
     if p.get("mapping"):
         bits.append("KEY=VALUE pairs (repeat appends)")
-    if p.get("multiple") or p.get("mapping"):
+    if group := p.get("group"):
+        # A grouped shape is `multiple` to the splitter — commas and repetition
+        # feed one stream — but saying "comma-split" would describe the wiring
+        # rather than the spelling. What a reader needs is the arity.
+        if group["many"]:
+            bits.append(f"repeatable in groups of {group['max']}")
+        elif group["min"] < group["max"]:
+            bits.append(f"{group['min']} to {group['max']} values")
+    elif p.get("multiple") or p.get("mapping"):
         bits.append("repeatable" if p.get("nosplit") else "repeatable/comma-split")
     if p["kind"] == "variadic":
         bits.append("extra arguments (also receives everything after --)")
@@ -152,7 +176,8 @@ def _mechanics(p: dict[str, Any]) -> str:
             note = "reads stdin (raw bytes)"
         elif source == "json":
             shape = p.get("shape")
-            note = f"reads stdin (JSON document{' → ' + shape if shape else ''})"
+            named = f" → {shape['name']}" if shape else ""
+            note = f"reads stdin (JSON document{named})"
         else:
             note = "reads stdin (text)"
         bits.append(note)
