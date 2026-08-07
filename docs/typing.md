@@ -13,6 +13,8 @@ parse time, with taught error messages.
 | `mode: Literal["a", "b"]`       | completable, eagerly-validated choices              |
 | `count: int = 100`              | typed option, validated at parse time               |
 | `paths: list[Path] = ()`        | repeatable or comma-separated (`--paths=a,b`)       |
+| `tags: set[str] = frozenset()`  | the same, handed back as a `set`                    |
+| `size: Size` (a `NamedTuple`)   | one option filling every field (`--size=800,600`)   |
 | `env: dict[str, int]`           | `--env=KEY=VAL` pairs (repeatable or comma-separated)|
 | `template: Path`                | required positional (consumed by exact count)       |
 | `*cmd: str`                     | variadic trailing passthrough                       |
@@ -86,6 +88,7 @@ So annotate when you want what a default cannot express:
 | a bound | `Annotated[int, between(1, 32)]` |
 | a path that must exist | `Exists` / `IsFile` |
 | a list, and what goes in it | `list[Path]`, `Many[int]` |
+| several fields filled from one option | a `NamedTuple` |
 | a value from the environment | `Annotated[str, env("DEPLOY_ENV")]` |
 | a prompt when it is missing | `Annotated[str, ask("Target?")]` |
 
@@ -119,12 +122,23 @@ def build(targets: Many[str]): ...   # fm build web     -> ["web"]
                                       # fm build web api -> ["web", "api"]
 ```
 
+`set[T]`, `frozenset[T]` and `tuple[T, ...]` accept values exactly the same
+way. They differ only in the container your function receives — which is the
+point of naming one:
+
+```python
+@task
+def label(tags: set[str] = frozenset()): ...   # fm label --tags=a,b,a -> {"a", "b"}
+```
+
+A bare `list`, `set`, `frozenset` or `tuple` means a collection of `str`.
+
 ## Comma-splitting and `nosplit`
 
-Every collection parameter (list or dict) splits a single token on commas **by
-default**, on top of the repeatable form — so `--tag=a,b,c` and
-`--tag=a --tag=b --tag=c` both work. Only `,` is a separator (no alternatives),
-and it is shell-portable, including PowerShell:
+Values accumulate from commas and from repetition into **one stream**, so
+`--tag=a,b,c` and `--tag=a --tag=b --tag=c` are the same three values. Only
+`,` is a separator (no alternatives), and it is shell-portable, including
+PowerShell:
 
 ```python
 @task
@@ -147,6 +161,9 @@ same marker, less to type. Every bare marker has a subscript form like this;
 [Terse aliases](#terse-aliases-and-forwarding) below has the full set and the
 rule for which markers can have one.
 
+One stream is the whole rule. A collection takes all of it; a shape with a
+declared arity takes it in groups of that size, which is the next section.
+
 ## Dictionaries
 
 `dict[K, V]` maps `KEY=VALUE` pairs, and it composes with the rest of the type
@@ -157,10 +174,130 @@ system — `dict[str, int | str]`, and even `dict[str, list[...]]`:
 def env(vars: dict[str, int | str]): ...   # fm env --vars=port=8080 --vars=name=web
 ```
 
+## Fixed-arity values
+
+A shape that declares how many fields it has takes that many values from one
+option. Prefer a `NamedTuple` — it names its fields, and the names do real
+work:
+
+```python
+from typing import NamedTuple
+from footman import task
+
+class Size(NamedTuple):
+    width: int
+    height: int
+
+@task
+def render(size: Size = Size(1920, 1080)): ...   # fm render --size=800,600
+```
+
+`--size=800,600` fills `width` and `height`. So does `--size=800 --size=600`,
+because there is only ever one stream of values and the declared arity groups
+it. That is also what makes a *container* of shapes work:
+
+```python
+class Spot(NamedTuple):
+    x: float
+    y: float
+
+@task
+def route(points: list[Spot] = ()): ...
+# fm route --points=1,2 --points=3,4   -> [Spot(1.0, 2.0), Spot(3.0, 4.0)]
+# fm route --points=1,2,3,4            -> the same two points
+```
+
+Nothing is guessed. `--points=1,2,3` cannot be a whole number of points, so it
+is refused rather than rounded:
+
+```console
+$ fm route --points=1,2,3
+fm: route: --points takes values in groups of 2 (x,y) — got 3, which leaves 1 over
+```
+
+**A plain `tuple[int, int]` behaves identically** — same grouping, same
+chunking, same refusals. Only the messages are poorer, because a plain tuple
+has no field names to report with:
+
+```console
+$ fm render --size=800,tall
+fm: render: --size: height expects an integer (got 'tall')   # a NamedTuple
+fm: render: --size: value 2 expects an integer (got 'tall')  # tuple[int, int]
+```
+
+That is the whole argument for preferring the named form.
+
+A dataclass, or any class with an annotated `__init__`, works the same way —
+the constructor's parameters are the fields:
+
+```python
+from dataclasses import dataclass
+
+@dataclass
+class Window:
+    title: str
+    width: int = 800
+
+@task
+def open_(window: Window = Window("footman")): ...   # fm open --window=Docs,1024
+```
+
+### Arity ranges
+
+When a shape has optional fields, the count settles it: `Window` above takes
+one value or two, and `--window=Docs` leaves `width` at its default. `--help`
+says so — `1 to 2 values`.
+
+Inside a *container* that flexibility goes away: every field must be given.
+One group can let the count settle it, but two cannot —
+`--windows=Docs,1024,Notes` could be one window and a second one, or two
+windows of one field each, and guessing is what this design refuses to do. So
+a container groups by the full arity and says so:
+
+```console
+$ fm many --windows=Docs,1024,Notes
+fm: many: --windows takes values in groups of 2 (title,width) — got 3, which leaves 1 over
+```
+
+Give every field a value, or bind the list from [stdin](pipelines.md), where
+JSON's own brackets say where each one ends.
+
+### What is refused, and where to go instead
+
+A shape only takes a command-line spelling when **one token can fill each of
+its fields**. Two things put a shape out of reach, both with somewhere to go:
+
+- **A field that is itself a shape or a collection.** `Line(start: Point, end:
+  Point)` has no comma spelling — nothing in `--line=1,2,3,4` says which pair
+  is the start. Pipe it as JSON instead: a nested document binds in full.
+- **An untyped or `*args` constructor.** Footman groups a shape it can *type*;
+  a constructor that describes none of its parameters is not one, and keeps
+  the single-token `T(value)` form below.
+
+Both are pipe-able today, and `fm --describe` prints the exact JSON a task
+expects — see [JSON](json.md#the-shape-a-pipe-expects).
+
+## The same annotation, whichever channel
+
+A parameter's type means the same thing wherever the value comes from. The
+command line and a JSON document on stdin are two spellings of one contract:
+`Size` is a `Size` whether it arrived as `--size=800,600` or as
+`{"width": 800, "height": 600}`, and a `list[Spot]` is a list of `Spot`
+either way.
+
+Where they differ is only in what a spelling can *express*. A command line has
+commas; JSON has brackets — so a shape holding another shape has no
+command-line form and is pipe-only, and a shape whose fields are all scalars
+has both. Nothing is silently downgraded in either direction: a shape footman
+cannot honour on a channel says so.
+
+[Pipelines](pipelines.md) covers the boundary itself.
+
 ## Custom types
 
-Any type with a typed constructor works — footman calls it. `datetime` uses
-`fromisoformat`; everything else is constructed as `T(value)`:
+Any type footman can construct from a **single token** works — it is called
+with that token. `datetime` uses `fromisoformat`; everything else is
+constructed as `T(value)`:
 
 ```python
 from uuid import UUID
@@ -170,6 +307,10 @@ from datetime import datetime
 @task
 def record(id: UUID, amount: Decimal, when: datetime): ...
 ```
+
+This is the one-field case of the rule above: a type with a single constructor
+parameter takes the whole token, and a type with two or more annotated ones is
+filled from a group instead.
 
 ## Validation markers
 
