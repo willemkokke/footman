@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import datetime
 import uuid
-from typing import Annotated, Any
+from dataclasses import dataclass
+from typing import Annotated, Any, NamedTuple
 
 import pytest
 
@@ -58,6 +59,17 @@ def build_tree(build):
     reg = Group("root")
     build(reg)
     return reg, _manifest.build_manifest(reg)["tree"]
+
+
+class Box(NamedTuple):
+    width: int
+    height: int
+
+
+@dataclass
+class Spot:
+    x: float
+    y: float
 
 
 def run(build, line):
@@ -878,3 +890,69 @@ def test_a_variadic_tuple_is_a_lists_grammar_with_a_tuple_out():
     assert seen["names"] == ("a", "b") and isinstance(seen["names"], tuple)
     run(tasks, "build --names=a --names=b")
     assert seen["names"] == ("a", "b") and isinstance(seen["names"], tuple)
+
+
+def test_a_fixed_arity_shape_fills_from_the_grouped_stream():
+    """One rule reads four spellings: a subscript, a NamedTuple's fields, a
+    dataclass's fields, a plain class's `__init__`. Commas and repetition
+    both feed one stream and the declared arity groups it."""
+    seen: dict[str, object] = {}
+
+    def tasks(reg):
+        @reg.task
+        def plot(at: Spot = Spot(0.0, 0.0), size: Box = Box(0, 0)):
+            seen.update(at=at, size=size)
+
+    run(tasks, "plot --at=1,2 --size=800,600")
+    assert seen["at"] == Spot(1.0, 2.0)
+    assert seen["size"] == Box(800, 600)
+
+
+def test_a_container_of_groups_chunks_by_arity():
+    """`--p=1,2 --p=3,4` and `--p=1,2,3,4` are the same stream, so they are
+    the same two points."""
+    seen: dict[str, object] = {}
+
+    def tasks(reg):
+        @reg.task
+        def route(points: list[Spot] = ()):  # type: ignore[assignment]
+            seen["points"] = points
+
+    run(tasks, "route --points=1,2 --points=3,4")
+    assert seen["points"] == [Spot(1.0, 2.0), Spot(3.0, 4.0)]
+    run(tasks, "route --points=1,2,3,4")
+    assert seen["points"] == [Spot(1.0, 2.0), Spot(3.0, 4.0)]
+
+
+def test_a_remainder_is_taught_never_rounded():
+    """Chunking is not guessing — the arity is declared, so a leftover is a
+    refusal rather than a silently dropped value."""
+
+    def tasks(reg):
+        @reg.task
+        def route(points: list[Spot] = ()): ...  # type: ignore[assignment]
+
+    results = run(tasks, "route --points=1,2,3")
+    assert results[0].code == EX_USAGE  # a binding-time refusal
+    assert "groups of 2 (x,y)" in str(results[0].error)
+
+
+def test_a_named_shape_names_the_slot_that_is_wrong():
+    """The whole argument for preferring `NamedTuple`: a plain tuple can
+    only count the position, a named one says which field it is."""
+
+    def tasks(reg):
+        @reg.task
+        def show(size: Box = Box(0, 0)): ...
+
+    results = run(tasks, "show --size=800,tall")
+    assert results[0].code == EX_USAGE
+    assert "height expects an integer" in str(results[0].error)
+
+    def plain(reg):
+        @reg.task
+        def show(size: tuple[int, int] = (0, 0)): ...
+
+    results = run(plain, "show --size=800,tall")
+    assert results[0].code == EX_USAGE
+    assert "value 2 expects an integer" in str(results[0].error)

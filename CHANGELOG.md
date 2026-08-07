@@ -41,6 +41,21 @@ versions may include breaking changes.
   shape, so the input side rejecting it was an asymmetry between footman's
   own channels.
 
+- **Fixed-arity shapes fill from the command line.** A `NamedTuple`, a
+  dataclass, a plain class, or a `tuple[X, Y]` now binds from grouped
+  values — `--at=1,2`, `--size=800,600` — where before the whole text
+  reached the constructor as one argument and it refused. One rule reads
+  all four spellings: whatever the signature declares as its positions is
+  the group.
+
+  Values still accumulate from commas and repetition into one stream, and
+  the declared arity chunks it, so a container of shapes reads either
+  spelling — `--p=1,2 --p=3,4` and `--p=1,2,3,4` are the same two points.
+  A remainder is taught rather than rounded: `--p=1,2,3` says it takes
+  values in groups of 2 and names them. Prefer a `NamedTuple`, because a
+  named shape names the slot that is wrong (`height expects an integer`)
+  where a plain tuple can only count it (`value 2 expects an integer`).
+
 - **A generated `[tool.footman]` reference.** `_config.KEYS` holds the
   recognised keys as data — name, accepted values, default, meaning — and
   `fm docs.config` renders them as the table Configuration includes, so

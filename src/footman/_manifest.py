@@ -309,6 +309,26 @@ def param_spec(param: inspect.Parameter) -> dict[str, Any]:
     else:
         spec["kind"] = "positional"
     _marker_keys(spec, peeled, param, has_default)
+    # A fixed-arity shape accumulates values exactly as a collection does —
+    # commas and repetition both feed one stream — and the declared arity
+    # groups that stream. So it is `multiple` to the splitter, plus a
+    # `group` the splitter and `--help` read for arity and per-position
+    # types. The class itself is not in the manifest (it is not JSON); the
+    # executor reads it back off the annotation when it builds.
+    group = _coerce.group_of(peeled.element)
+    if group is not None:
+        spec["multiple"] = True
+        spec["group"] = {
+            "names": list(group.names) if group.names else None,
+            "types": [_coerce.element_tags(t) for t in group.types],
+            "min": group.required,
+            "max": group.total,
+            "many": peeled.multiple,
+            "label": group.label(),
+        }
+        if peeled.nosplit:
+            spec["nosplit"] = True
+        return spec
     if peeled.multiple:
         spec["multiple"] = True
         if peeled.nosplit:
