@@ -100,13 +100,28 @@ Not gating anything, carried forward minus the entries that shipped
 - From the typing table's "post-1.0" rows: hidden parameters, and fixed-arity
   `tuple[X, Y]` in comma form (`--size 800,600`).
 
-The "never" list from the audit is still never, for the same reasons:
-prompts/confirmation (a chained, parallel, CI-first runner is the most
-hostile environment interactivity has ever met), counting flags (`-vvv`
-belongs to the runner, not task params), and short aliases for task
-parameters (collision-prone across cascade merges, and they steal
-negative-number positionals). Saying never here is what keeps the grammar
-deterministic — the thing that makes separator-free chaining possible.
+Two of the audit's three "never"s are still never, for the same reasons:
+counting flags (`-vvv` belongs to the runner, not task params), and short
+aliases for task parameters (collision-prone across cascade merges, and they
+steal negative-number positionals). Saying never to those is what keeps the
+grammar deterministic — the thing that makes separator-free chaining
+possible.
+
+The third — **prompts and confirmation** — was reversed, and shipped. The
+objection was real: a chained, parallel, CI-first runner is the most hostile
+environment interactivity has ever met. The answer was not to drop the
+feature but to make that hostility structural, so the awkward cases cannot
+arise. `ask()` for a value, `@task(confirm=…)` for a gate, and
+`@task(interactive=True)` for a task that owns the terminal — the last of
+which forces the run sequential, because a task holding the real terminal
+cannot share it. Without a TTY nothing hangs and nothing silently
+proceeds: a defaulted parameter falls back, a required one refuses with a
+taught message naming the flag, and `--yes` / `--no-input` decide for CI up
+front. See [Asking for input](https://willemkokke.github.io/footman/input/).
+
+Recording the reversal rather than quietly deleting the line: a "never"
+that a later design answers is worth more as a worked example than as an
+embarrassment.
 
 ---
 
@@ -198,7 +213,8 @@ stance held — no kwarg was ever added.
 | `check(fn)` validator | 0.6.0 — post-coercion, per element |
 | Silent `str` degrade of unknown annotations | 0.6.0 — warns |
 | Hidden params, `tuple[X, Y]` | still post-1.0 (backlog above) |
-| Prompts, counting flags, short aliases | still never |
+| Prompts | **reversed** — shipped as `ask()`, `confirm=`, `interactive=True`, CI-safe by construction |
+| Counting flags, short aliases for task params | still never |
 
 ### §8 Completion and CLI polish
 
