@@ -36,6 +36,7 @@ from footman.params import (
 from footman.params import _arg as _ARG
 from footman.params import ask as _ask_marker
 from footman.params import forward as _FORWARD
+from footman.params import hidden as _HIDDEN
 from footman.params import nosplit as _NOSPLIT
 from footman.params import stdin as _stdin_marker
 from footman.params import stdout as _STDOUT
@@ -113,6 +114,7 @@ class Peeled:
     forward: bool = False  # thread this value to dispatched tasks (forward)
     optional: bool = False  # Arg[T]: an optional trailing positional
     stdin: _stdin_marker | None = None  # bind from the boundary's stdin read
+    hidden: bool = False  # out of the listings; still binds, still completes
     container: type = list  # the collection named: list/tuple/set/frozenset
 
 
@@ -129,6 +131,7 @@ class _Markers(TypedDict):
     forward: bool
     optional: bool
     stdin: _stdin_marker | None
+    hidden: bool
 
 
 def collection_of(ann: Any) -> type | None:
@@ -164,6 +167,7 @@ def peel(ann: Any) -> Peeled:
     doc_text: str | None = None
     ask_marker: ask | None = None
     is_forward = False
+    is_hidden = False
     is_optional = False
     stdin_marker: _stdin_marker | None = None
 
@@ -194,6 +198,8 @@ def peel(ann: Any) -> Peeled:
                     doc_text = mark.text
                 elif isinstance(mark, ask):
                     ask_marker = mark
+                elif mark is _HIDDEN:
+                    is_hidden = True
                 elif mark is _FORWARD:
                     is_forward = True
                 elif mark is _ARG:
@@ -239,6 +245,7 @@ def peel(ann: Any) -> Peeled:
         "forward": is_forward,
         "optional": is_optional,
         "stdin": stdin_marker,
+        "hidden": is_hidden,
     }
 
     if ann is dict or typing.get_origin(ann) is dict:  # dict[K, V] or bare dict

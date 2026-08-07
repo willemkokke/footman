@@ -369,7 +369,9 @@ def _last_of_each_branch(rows: Sequence[tuple[Any, ...]]) -> list[bool]:
     return flags
 
 
-def _print_task_help(tree: dict[str, Any], path: list[str]) -> None:
+def _print_task_help(
+    tree: dict[str, Any], path: list[str], show_hidden: bool = False
+) -> None:
     # All phrasing (labels, details, examples) lives in `_describe`, shared
     # with the markdown exporter so help text and pages can never drift.
     node = tree
@@ -377,7 +379,9 @@ def _print_task_help(tree: dict[str, Any], path: list[str]) -> None:
         node = node["groups"][name]
     task = node["tasks"][path[-1]]
     on = _color_out
-    usage = _describe.paint_cli(_describe.usage_parts(_brand.prog, path, task), on)
+    usage = _describe.paint_cli(
+        _describe.usage_parts(_brand.prog, path, task, show_hidden=show_hidden), on
+    )
     print(f"usage: {usage}")
     if task["help"]:
         print(f"\n  {task['help']}")
@@ -388,8 +392,9 @@ def _print_task_help(tree: dict[str, Any], path: list[str]) -> None:
         print(_describe.dim("\n  runs until you stop it — Ctrl-C", on))
     if task.get("disabled"):
         print(_describe.dim(f"\n  unavailable here: {task['disabled']}", on))
-    positionals = [p for p in task["params"] if p["kind"] in ("positional", "variadic")]
-    options = [p for p in task["params"] if p["kind"] in ("flag", "option")]
+    shown = _describe.listed_params(task, show_hidden=show_hidden)
+    positionals = [p for p in shown if p["kind"] in ("positional", "variadic")]
+    options = [p for p in shown if p["kind"] in ("flag", "option")]
     for title, params in (("positionals", positionals), ("options", options)):
         if not params:
             continue
@@ -428,7 +433,8 @@ def _print_task_help(tree: dict[str, Any], path: list[str]) -> None:
         where = shadows.get("where") or "the cascade"
         print(_describe.dim(f"\nshadows {where} — inherited() calls it", on))
         usage = _describe.paint_cli(
-            _describe.usage_parts(_brand.prog, path, shadows), on
+            _describe.usage_parts(_brand.prog, path, shadows, show_hidden=show_hidden),
+            on,
         )
         print(f"  {usage}")
 
@@ -459,7 +465,9 @@ def _print_group_help(
     if rows:
         print(f"\n{_describe.bold('tasks:', on)}")
         _print_two_band(_address_band(rows))
-    params = default["params"] if default else []
+    params = (
+        _describe.listed_params(default, show_hidden=show_hidden) if default else []
+    )
     options = [p for p in params if p["kind"] in ("flag", "option")]
     if options:
         rows2 = []
@@ -598,7 +606,7 @@ def _print_help(
         if index:
             print()
         if kind == "task":
-            _print_task_help(tree, path)
+            _print_task_help(tree, path, show_hidden)
         else:
             _print_group_help(tree, path, show_hidden)
     return 0

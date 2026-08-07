@@ -437,6 +437,11 @@ def _marker_keys(
     serialize (the same reason `_finish` strips `_completer`); it runs at
     binding time instead.
     """
+    if peeled.hidden:
+        # Marked, never missing — the same rule a hidden *task* follows. A
+        # machine reading the manifest is exactly who is meant to find it;
+        # only the listing a human reads leaves it out.
+        spec["hidden"] = True
     if peeled.ask is not None and peeled.ask.secret:
         # A secret parameter never publishes values: no baked choices, no
         # completer run — the flag completes, its value stays yours.

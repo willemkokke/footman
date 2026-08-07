@@ -13,6 +13,7 @@ import pytest
 from footman import _manifest
 from footman._coerce import peel
 from footman._complete import complete
+from footman._describe import example_parts, listed_params, usage_parts
 from footman._executor import EX_USAGE, run_chain
 from footman._split import ChainError, split_chain
 from footman.params import (
@@ -24,6 +25,7 @@ from footman.params import (
     Many,
     NoSplit,
     forward,
+    hidden,
     nosplit,
     suggest,
 )
@@ -1025,3 +1027,56 @@ def test_an_untyped_constructor_is_not_a_grouped_shape():
     run(tasks, "ident --u=12345678-1234-5678-1234-567812345678 --amount=1.50")
     assert seen["u"] == uuid.UUID("12345678-1234-5678-1234-567812345678")
     assert seen["amount"] == Decimal("1.50")
+
+
+def test_a_hidden_parameter_is_out_of_the_listings_and_nothing_else():
+    """`hidden` on a parameter means what `hidden=True` means on a task: out
+    of what a human reads, and out of nothing else. It still binds, it still
+    completes, and the manifest marks it rather than dropping it — an agent
+    reading the contract is exactly who is meant to find it."""
+    seen: dict[str, object] = {}
+
+    def tasks(reg):
+        @reg.task
+        def deploy(target: str, legacy: Annotated[str, hidden] = ""):
+            seen.update(target=target, legacy=legacy)
+
+    _, tree = build_tree(tasks)
+    task = tree["tasks"]["deploy"]
+    spec = {p["name"]: p for p in task["params"]}["legacy"]
+    assert spec["hidden"] is True  # marked, never missing
+    assert spec["kind"] == "option"  # an ordinary option in every other way
+
+    shown = [p["name"] for p in listed_params(task)]
+    assert shown == ["target"]
+    assert [p["name"] for p in listed_params(task, show_hidden=True)] == [
+        "target",
+        "legacy",
+    ]
+    assert "--legacy" not in " ".join(f for _, f in usage_parts("fm", ["deploy"], task))
+    assert "--legacy" in " ".join(
+        f for _, f in usage_parts("fm", ["deploy"], task, show_hidden=True)
+    )
+
+    # Hiding and completing are different questions — a long machine-facing
+    # flag is the one you most want spelled for you.
+    assert "--legacy" in complete(tree, ["fm", "deploy", "x", "--"])
+
+    run(tasks, "deploy prod --legacy=old")
+    assert seen == {"target": "prod", "legacy": "old"}
+
+
+def test_a_hidden_parameter_stays_out_of_the_synthesised_example():
+    """The example teaches the invocation, and a hidden parameter is
+    deliberately not being taught."""
+
+    def tasks(reg):
+        @reg.task
+        def deploy(
+            target: str, token: Annotated[str, hidden] = "", verbose: bool = False
+        ): ...
+
+    _, tree = build_tree(tasks)
+    parts = example_parts(["deploy"], tree["tasks"]["deploy"], "fm")
+    assert "--token" not in " ".join(f for _, f in parts)
+    assert "--verbose" in " ".join(f for _, f in parts)  # the shown flag still is

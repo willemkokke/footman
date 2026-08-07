@@ -97,6 +97,7 @@ def span(inv, task):
 | `Context`, `use_context`     | the task context; install one from your own code     |
 | `Many[T]`, `NoSplit[T]`      | one-or-many; opt a collection out of comma-splitting (the `nosplit` marker, subscripted) |
 | `forward`, `Forward[T]`      | thread a value to the tasks/groups this task dispatches — see [Chaining & parallelism](orchestration.md#forward-a-value-to-what-a-task-dispatches) |
+| `hidden`, `Hidden[T]`        | keep a parameter out of the listings — it still binds and completes; `--all` shows it |
 | `ask("prompt")`              | prompt for a missing value (CLI > env > default > prompt); CI-safe |
 | `prompt()`, `confirm()`, `select()` | mid-task questions — only inside an `interactive=True` task |
 | `.opts(**policy)`            | per-use policy override (`keep_going`, `atomic`, …) on a task or group |

@@ -60,6 +60,13 @@ versions may include breaking changes.
   because `--v=1,2` does. A *named* record still binds from a JSON object,
   which is the spelling its field names earn it.
 
+- **`hidden` on a parameter** (and `Hidden[T]`), meaning what `hidden=True`
+  already means on a task: out of the listings a human reads, and out of
+  nothing else. It still binds, it still completes, `--describe` marks it
+  rather than dropping it, and `--all` reveals it. For a deprecated flag
+  kept working but unadvertised, a debug switch, or a flag a wrapper
+  script passes. See [Typing](typing.md#keeping-a-parameter-out-of-the-listings).
+
 - **`--describe` says what a pipe expects.** A whole-document parameter
   used to carry the *name* of its type and nothing else, so a caller
   learned the JSON was called a `Config` and had to guess the rest. It now

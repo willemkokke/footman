@@ -229,6 +229,7 @@ way `Many[T]` reads better than `list[T]`:
 - `Exists`, `IsFile`, `IsDir` ≡ `Annotated[Path, exists/isfile/isdir]` — bare,
   no subscript, since the type is always `Path`: `def rm(target: Exists)`.
 - `Forward[T]` ≡ `Annotated[T, forward]`.
+- `Hidden[T]` ≡ `Annotated[T, hidden]`.
 
 Arg-taking markers (`suggest`, `between`, `env`, `check`, `doc`, `ask`) keep the
 full `Annotated[...]` form — their value can't ride in a type subscript.
@@ -239,6 +240,35 @@ the tasks this one dispatches — and is covered in
 Markers compose by listing them: `Annotated[bool, ask("Fix?"), forward]` both
 prompts for the value and forwards it — one prompt at the top, the answer
 flowing down.
+
+## Keeping a parameter out of the listings
+
+`hidden` takes a parameter out of what a human reads, and out of nothing
+else:
+
+```python
+from typing import Annotated
+from footman import task
+from footman.params import hidden
+
+@task
+def publish(target: str, legacy: Annotated[str, hidden] = ""):
+    """Ship it."""
+```
+
+`fm --help publish` shows `<target>` and stops there — no `--legacy`, and the
+synthesised example does not use it. Everything else about it is unchanged:
+it still binds, it still completes when you type `--l<TAB>`, and
+`fm --describe` carries it marked `"hidden": true` rather than dropping it.
+`fm --all --help publish` lists it.
+
+That is the same rule `hidden=True` follows on a task, one level down. Hiding
+and completing are different questions — a long machine-facing flag is the one
+you most want spelled for you — and a machine reading the contract is exactly
+who is meant to still find it.
+
+For a deprecated flag you keep working but stop advertising, a debug switch, or
+a flag a wrapper script passes.
 
 ## Or just write a docstring
 
