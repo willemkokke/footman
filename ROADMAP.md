@@ -77,7 +77,13 @@ Not gating anything, carried forward minus the entries that shipped
   want per-event lines as tasks start and finish.
 - **Fingerprint-based skipping** — "inputs unchanged, skip the task"
   (doit/turborepo territory; big, and the DAG is already in place).
-- **Per-task timeout and retry** — `@task(timeout=120, retries=2)`.
+- **Per-*task* timeout, and retry** — `@task(timeout=120, retries=2)`.
+  Half of this shipped: `run(..., timeout=30)` and a step maker's
+  `.opts(timeout=…)` already kill the tree at the deadline, answering exit
+  124 with `Result.timed_out` set. What is missing is the *task* level —
+  `TaskOpts` has no `timeout` — and retry entirely, which is the harder
+  half: a retried task has to decide what its record says (one row that
+  succeeded, or every attempt), and the report is not allowed to lie.
 - **Clean environment per task** — run a task's subprocesses with a
   reconstructed/allowlisted environment (tox's `passenv`, invoke's
   `replace_env`) so a polluted parent env can't leak into a build — the same
