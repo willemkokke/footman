@@ -29,10 +29,45 @@ from footman import _coerce
 _MISSING = dataclasses.MISSING
 
 
+def record_fields(target: Any) -> tuple[tuple[str, ...], frozenset[str]] | None:
+    """`(field names, the ones with no default)` for the three shapes a JSON
+    object binds to — a dataclass, a `NamedTuple`, a `TypedDict` — or `None`
+    for anything else.
+
+    One helper so `is_document_target` and the binding branch cannot
+    disagree about what a record is. They did: a `NamedTuple` failed every
+    test in the old `is_document_target` (it is a `tuple` subclass, so
+    `get_origin` is `None`), fell through to the text path, and handed the
+    body a raw string with no warning at all.
+    """
+    if dataclasses.is_dataclass(target) and isinstance(target, type):
+        fields = dataclasses.fields(target)
+        return (
+            tuple(f.name for f in fields),
+            frozenset(
+                f.name
+                for f in fields
+                if f.default is _MISSING and f.default_factory is _MISSING
+            ),
+        )
+    if isinstance(target, type) and issubclass(target, tuple):
+        names = getattr(target, "_fields", None)
+        if names is not None:  # a NamedTuple, not a bare tuple
+            defaults = getattr(target, "_field_defaults", {})
+            return tuple(names), frozenset(n for n in names if n not in defaults)
+    if typing.is_typeddict(target):
+        # getattr: the checkers narrow `target` from the branches above and
+        # lose sight of the TypedDict attributes here.
+        required: frozenset[str] = getattr(target, "__required_keys__", frozenset())
+        return tuple(getattr(target, "__annotations__", {})), frozenset(required)
+    return None
+
+
 def is_document_target(ann: Any) -> bool:
     """Whether an annotation names a shape a JSON document binds to — a
-    dataclass, a `dict`, or a `list` (bare or subscripted)."""
-    if dataclasses.is_dataclass(ann):
+    record (dataclass / `NamedTuple` / `TypedDict`), a `dict`, or a `list`
+    (bare or subscripted)."""
+    if record_fields(ann) is not None:
         return True
     origin = typing.get_origin(ann)
     return ann in (dict, list) or origin in (dict, list)
@@ -91,7 +126,9 @@ def bind_document(value: Any, target: Any, path: str) -> Any:
     if member is not None:
         return None if value is None else bind_document(value, member, path)
 
-    if dataclasses.is_dataclass(target) and isinstance(target, type):
+    record = record_fields(target)
+    if record is not None:
+        names, required = record
         if not isinstance(value, dict):
             raise ValueError(
                 f"{path}: expected an object for {target.__name__}, "
@@ -99,16 +136,18 @@ def bind_document(value: Any, target: Any, path: str) -> Any:
             )
         hints = _field_types(target, path)
         kwargs: dict[str, Any] = {}
-        for f in dataclasses.fields(target):
-            if f.name in value:
-                kwargs[f.name] = bind_document(
-                    value[f.name], hints.get(f.name, Any), f"{path}.{f.name}"
+        for name in names:
+            if name in value:
+                kwargs[name] = bind_document(
+                    value[name], hints.get(name, Any), f"{path}.{name}"
                 )
-            elif f.default is _MISSING and f.default_factory is _MISSING:
+            elif name in required:
                 raise ValueError(
-                    f"{path}: the document has no {f.name!r} field and "
-                    f"{target.__name__}.{f.name} has no default"
+                    f"{path}: the document has no {name!r} field and "
+                    f"{target.__name__}.{name} has no default"
                 )
+        # A dataclass and a NamedTuple construct from keywords; a TypedDict
+        # called this way is simply the dict it always was at runtime.
         return target(**kwargs)
 
     origin = typing.get_origin(target)

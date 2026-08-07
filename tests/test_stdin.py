@@ -9,6 +9,7 @@ is never in play.
 
 from __future__ import annotations
 
+import enum
 from pathlib import Path
 from typing import Annotated
 
@@ -33,6 +34,11 @@ def run(build, line):
     reg, tree = build_tree(build)
     _, segments = split_chain(tree, line.split())
     return run_chain(reg, segments)
+
+
+class Shade(enum.Enum):
+    RED = "red"
+    BLUE = "blue"
 
 
 @pytest.fixture
@@ -116,6 +122,42 @@ def test_text_normalises_newlines(piped):
     piped(b"a\r\nb\rc\n")
     run(tasks, "wc")
     assert seen["text"] == "a\nb\nc\n"
+
+
+def test_a_coerced_scalar_arrives_typed(piped):
+    """`Stdin[int]` is an int, not the text that spelled it.
+
+    The fall-through used to validate without coercing, so a scalar
+    reached the body as a string while the annotation — and every type
+    checker — said otherwise.
+    """
+    seen = {}
+
+    def tasks(reg):
+        @reg.task
+        def port(n: Stdin[int] = 0):
+            seen["n"] = n
+
+    piped(b"42")
+    run(tasks, "port")
+    assert seen["n"] == 42 and isinstance(seen["n"], int)
+
+
+def test_a_coerced_scalar_ignores_the_shell_s_newline(piped):
+    """`echo 42 |` is the ordinary way to pipe a value, and its newline is
+    the shell's punctuation rather than part of the value. Text keeps its
+    newline (see `test_text_normalises_newlines`); a coerced scalar does
+    not, which is what made every validated scalar fail on `echo`."""
+    seen = {}
+
+    def tasks(reg):
+        @reg.task
+        def pick(colour: Stdin[Shade] = Shade.RED):
+            seen["colour"] = colour
+
+    piped(b"blue\n")
+    run(tasks, "pick")
+    assert seen["colour"] is Shade.BLUE
 
 
 def test_empty_pipe_is_a_value_for_text(piped):

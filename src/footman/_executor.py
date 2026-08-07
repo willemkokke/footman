@@ -378,8 +378,17 @@ def _stdin_value(
             return {k: _run_checks(v, peeled, label, params) for k, v in bound.items()}
         return _run_checks(bound, peeled, label, params)
 
+    # The scalar fall-through. It used to validate without coercing, so
+    # `Stdin[Colour]` refused 'red\n' but handed the body the *string*
+    # 'red' when it passed — half the contract enforced, half dropped.
+    # Coercing here is what the `marker.field` branch above already does.
     text = _decode_stdin(payload)
-    return _run_checks(_validate_value(text, peeled, label), peeled, label, params)
+    if peeled.element in (str, Any) or peeled.element is None:
+        return _run_checks(_validate_value(text, peeled, label), peeled, label, params)
+    # One trailing newline is the shell's, not the value's: `echo 42 |` is
+    # the ordinary way to pipe a value, and keeping the newline made every
+    # validated scalar fail on it.
+    return _coerce_extra(text.removesuffix("\n"), peeled, label, params)
 
 
 def _document_shape(peeled: _coerce.Peeled) -> Any:

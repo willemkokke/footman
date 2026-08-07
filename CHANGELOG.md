@@ -7,6 +7,30 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The stdin channel honours its annotation.** Three shapes silently
+  handed the body a raw string where the type checker had concluded
+  otherwise — the same failure class 0.33.0's basic-default inference
+  fixed, but with no warning at all:
+  - a **`NamedTuple`** parameter (it failed every test in the document
+    binder — a `tuple` subclass, so `get_origin` is `None`);
+  - a **`TypedDict`** parameter;
+  - any **coerced scalar**, so `Stdin[int]` was the text `'42'` and
+    `Stdin[Colour]` the text `'red'`. Validation ran on that path but
+    coercion did not, so a wrong value was refused while a right one
+    arrived as the wrong type.
+
+  All three now bind. `NamedTuple` and `TypedDict` are records like a
+  dataclass — one helper decides what a record is, so the binder and its
+  gate can no longer disagree — and the scalar path coerces the way the
+  `stdin("field")` branch beside it already did.
+- **`echo 42 | fm task` works.** A coerced scalar ignores one trailing
+  newline, which is the shell's punctuation rather than part of the
+  value; piping a value in is the point of the channel, and every
+  validated scalar used to fail on it. Text parameters are unchanged: a
+  `Stdin[str]` still receives the stream verbatim, newline included.
+
 ### Added
 
 - **A generated `[tool.footman]` reference.** `_config.KEYS` holds the
