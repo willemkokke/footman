@@ -315,14 +315,75 @@ parameters that have one, which is rare, and the hot path never reads it
 But it is a real addition to the one file with a latency budget, and the
 build should measure the manifest before and after rather than assume.
 
+## The docs half — typing.md needs a thorough pass
+
+The page is 2,081 words across ten sections and was written before any of
+this. It is not a matter of adding a tuple row; several of its claims stop
+being true, and its biggest gap is one it never knew it had.
+
+**Wrong or incomplete after the pass:**
+
+- **The core mapping table** (`## The core mapping`) has no row for a
+  fixed-arity value at all. It gains one, and by the `NamedTuple` ruling
+  the named form leads — the way `Literal` already precedes a bare `str`
+  in that table.
+- **`## Custom types`** says *"Any type with a typed constructor works —
+  footman calls it"* and then shows `T(value)`. The sentence is false today
+  past one parameter and stays subtly wrong after: it needs the arity story
+  (one parameter takes the whole token; more are filled from the group) and
+  the refusals with their signposts.
+- **`## Comma-splitting and `nosplit`** describes splitting for collections
+  only. It becomes the general rule — one stream, commas and repetition
+  both feeding it — with the arity doing the grouping.
+- **`## Unions and one-or-many values`** is where `tuple[T, ...]` belongs
+  beside `Many[T]`, with the honest note that they differ only in the
+  container handed to the body.
+
+**New sections:**
+
+- **Fixed-arity values.** `NamedTuple` first, then the short caveat Willem
+  asked for: a plain tuple behaves *exactly* the same and only its errors
+  are poorer (`2nd value` where the named form says `height`).
+- **Arity ranges**, and why a shape with optional constructor parameters
+  may be used bare but not inside a container — one group means the count
+  decides; two groups means a guess.
+- **What is refused, and where to go instead.** Non-scalar positions and
+  `*args` constructors, each pointing at the stdin channel, which already
+  binds nested structures today.
+
+**The gap the page never knew it had: which shapes work on which channel.**
+Nothing on the page tells a reader that `list[dataclass]` binds from stdin
+but is a hard error on the command line, or that a `NamedTuple` on stdin
+silently hands back a string. That asymmetry is undiscoverable today —
+there is no page where a reader could have found it. After the pass the
+channels agree, so the page's job is smaller: state once that the same
+annotation means the same thing wherever the value comes from, and let
+[Pipelines](../docs/pipelines.md) keep the details of the boundary.
+
+**Elsewhere:**
+
+- **pipelines.md** gains the coerced-scalar story (`Stdin[int]` really is
+  an `int`) and loses nothing.
+- **json.md**'s describable-set paragraph needs whatever `--describe`
+  settles on for parameter shapes.
+- **reference.md**'s marker table gains `hidden`.
+- The **"What if I don't like annotating types?"** section added in 0.33.0
+  should be re-read once tuples land: it currently says containers stay
+  strings, which stays true, but its framing of "the four basic types" sits
+  next to a new fixed-arity story and should not read as contradicting it.
+
 ## Opens
 
 Everything else is ruled. What remains:
 
-- **Hidden parameters in the generated task docs?** Hidden *tasks* appear
-  there, badged, *"because the docs are where you look up something the
-  listings won't offer"*. Symmetry says yes, badged — but it is untested
-  against how the page renders a badged parameter row.
+- **Hidden parameters in the generated task docs?** Leaning yes, badged,
+  and the live behaviour of hidden *groups* settles most of it: this
+  repo's own `hooks` group is `hidden=True`, and `fm --tree` omits it,
+  `--tree --all` restores it with its tasks, `fm --help hooks` works
+  regardless, and `--json --list` carries it with `hidden: true` —
+  **marked, not missing**. A parameter should copy that. What is still
+  untested is only the rendering: how a badged parameter row looks in a
+  generated task page.
 - **Sequencing.** The pass has grown well past its backlog row: silent
   bindings on three shapes, scalar coercion on stdin, the newline, sets,
   the constructor generalisation, the grammar, and hidden parameters. One
