@@ -112,6 +112,7 @@ class Peeled:
     forward: bool = False  # thread this value to dispatched tasks (forward)
     optional: bool = False  # Arg[T]: an optional trailing positional
     stdin: _stdin_marker | None = None  # bind from the boundary's stdin read
+    as_tuple: bool = False  # `tuple[T, ...]`: same grammar as a list, tuple out
 
 
 class _Markers(TypedDict):
@@ -245,6 +246,17 @@ def peel(ann: Any) -> Peeled:
     if ann is list or typing.get_origin(ann) is list:  # list[X] / Many[X] / bare
         element = (typing.get_args(ann) or (str,))[0]
         return Peeled(True, element, completer, is_nosplit, **markers)
+
+    # `tuple[T, ...]` is `list[T]`'s grammar exactly — one-or-many, comma or
+    # repetition — and differs only in what the body is handed. Coercing it
+    # to a list would hand back the container the annotation does not name,
+    # which is the failure class 0.33.0's default inference removed.
+    if typing.get_origin(ann) is tuple:
+        args = typing.get_args(ann)
+        if len(args) == 2 and args[1] is Ellipsis:
+            return Peeled(
+                True, args[0], completer, is_nosplit, as_tuple=True, **markers
+            )
 
     if _is_union(ann):
         members = _strip_none(list(typing.get_args(ann)))

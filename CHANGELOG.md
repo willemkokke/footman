@@ -33,6 +33,14 @@ versions may include breaking changes.
 
 ### Added
 
+- **`tuple[T, ...]` works as a parameter**, on the command line and from
+  stdin. It shares every bit of `list[T]`'s grammar — one or many, comma
+  or repetition — and differs only in the container the body receives,
+  which is the point: coercing it to a list would hand back a type the
+  annotation does not name. The return side has always described this
+  shape, so the input side rejecting it was an asymmetry between footman's
+  own channels.
+
 - **A generated `[tool.footman]` reference.** `_config.KEYS` holds the
   recognised keys as data — name, accepted values, default, meaning — and
   `fm docs.config` renders them as the table Configuration includes, so

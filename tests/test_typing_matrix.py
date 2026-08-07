@@ -97,6 +97,7 @@ SHAPES: tuple[Any, ...] = (
     Opts,
     Point,
     tuple[int, int],
+    tuple[str, ...],
     set[str],
 )
 
@@ -130,6 +131,9 @@ CASES: tuple[tuple[Any, str, Any, Any], ...] = (
     (Size, CLI, "--v=800,600", Refused("not a valid Size")),
     (Opts, CLI, "--v=name=web", Refused("not a valid Opts")),
     (Point, CLI, "--v=1,2", Refused("not a valid Point")),
+    # `tuple[T, ...]` is a list's grammar with a tuple handed back.
+    (tuple[str, ...], CLI, "--v=a,b", ("a", "b")),
+    (tuple[str, ...], STDIN, b'["a", "b"]', ("a", "b")),
     # --- the pass's to-do list ----------------------------------------------
     (tuple[int, int], CLI, "--v=1,2", Unsupported()),
     (tuple[int, int], STDIN, b"[1, 2]", Unsupported()),
