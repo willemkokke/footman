@@ -372,6 +372,39 @@ annotation means the same thing wherever the value comes from, and let
   strings, which stays true, but its framing of "the four basic types" sits
   next to a new fixed-arity story and should not read as contradicting it.
 
+## Sequencing
+
+Ruled after reading the code rather than the design, which changed the
+shape: the three stdin fixes all live in the same three functions
+(`_binder.is_document_target`, `_executor._document_shape`, and the text
+fall-through in `_stdin_value`), so they are one change, not three.
+
+**1. The stdin channel keeps its contract.** `is_document_target` learns
+`NamedTuple` and `TypedDict`; the text fall-through coerces scalars and
+strips one trailing newline; anything still unhonourable **warns like the
+manifest does** instead of silently becoming a string. Small, confined,
+and it converts every silent row in the table into a loud one — so it
+de-risks everything after it and proves the type machinery end to end on
+the simpler channel first.
+
+**2. The command line learns fixed arity.** The grouping rule, with arity
+read from a subscript, fields, or a constructor; `tuple[T, ...]` via the
+existing list path plus a cast; the manifest spec and whatever
+`--describe` settles on. The bulk of the work, and the headline.
+
+**3. Sets, on both channels.** Small, and deliberately after 1 and 2 so it
+is an addition to established machinery rather than a fourth special case.
+
+**4. Hidden parameters.** Independent of all of the above; sequenced late
+only because it competes with step 2 for the same manifest spec code.
+
+**5. The docs pass.** After the behaviour is settled, per the checklist
+above.
+
+Each step leaves the tree green and is independently valuable. If the pass
+stops early, the value stops in a coherent place: after 1 nothing lies
+silently, after 2 the headline feature exists.
+
 ## Opens
 
 Everything else is ruled. What remains:
