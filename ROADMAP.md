@@ -22,10 +22,12 @@ and a tag cannot publish unless CI and the version checks agree.
 
 What actually remains, in order:
 
-- **Help strings that carry the whole truth.** The CLI reference table is now
-  generated from the grammar, so the help strings are the single source for
-  `--help`, completion menus, and the docs at once. A short pass to make them
-  worthy of that job (for example, `--jobs` doesn't mention the floor of 2).
+- ~~**Help strings that carry the whole truth.**~~ **Done.** The pass
+  landed: `--jobs` names the floor of 2, `-s` says it reaches `parallel()`
+  blocks inside bodies, and `--plugins` says it lists installed plugins
+  *pulled or not* — the comparison that makes the flag worth running. The
+  strings feed `--help`, completion menus and the generated docs table from
+  one source, so each fix lands in three places at once.
 - **The tools surface, properly** — the 1.0 headline, and the last
   known wart. Stubs generated from each tool's own metadata (click
   exposes `opts`, `secondary_opts`, defaults, and help as data;
@@ -50,12 +52,18 @@ What actually remains, in order:
 Ideas that came out of building the last eight releases, not in the original
 plan:
 
-- **A generated `[tool.footman]` reference.** The same never-drift treatment
-  the global-options table got in `fm footman docs globals`: render the
-  config keys and defaults from the source, snippet-include them in the docs.
-- **Dedup the branch-vs-PR CI runs.** A PR from an in-repo branch triggers
-  the suite twice — once for the push, once for the PR. A concurrency group
-  or a branch filter should make it one.
+- ~~**A generated `[tool.footman]` reference.**~~ **Landed** (see the
+  changelog for the release).
+  `_config.KEYS` is the key set as data, `fm docs.config` renders it, and
+  configuration.md snippet-includes the result. Found the bug that
+  motivated it: `cwd` — a real, validated run-wide policy key — had never
+  been written down anywhere, because the only list was prose in a
+  docstring.
+- ~~**Dedup the branch-vs-PR CI runs.**~~ **Already resolved — do not
+  re-add.** `ci.yml` scopes `push:` to `branches: [main]`, so an in-repo
+  PR branch fires the `pull_request` event only; a `concurrency` group
+  keyed on `github.ref` with `cancel-in-progress` supersedes the rest.
+  Verified 2026-08-07 against the workflow.
 
 ## After 1.0 — the backlog
 
@@ -77,8 +85,6 @@ Not gating anything, carried forward minus the entries that shipped
   the built environment (so the colour contract survives the wipe) and be a
   taught error for an in-process task — code in footman's own process can't be
   handed an isolated environment.
-- **`fm --plugins`** — list installed `footman.tasks` entry points with
-  dist, version, and enabled state.
 - **`fm new`** — scaffold a tasks.py that demonstrates the good idioms.
 - **Optional rich terminal output** — a lazily-imported renderer, behind a
   stacked `@requires_dep` (the one blessed zero-dep exception), that paints
@@ -245,7 +251,8 @@ Beta).
 | Task-customizable `--json` payloads | shipped, 0.10.0 — `returned`, symmetric with what footman coerces in |
 | A TTY progress UI for the DAG | shipped, 0.12.0 — and it learned to estimate from duration history |
 | PowerShell/nushell completion | shipped, 0.8.0 |
-| Watch mode, JSONL streaming, fingerprint skipping, timeout/retry, `fm --plugins`, `fm new` | open — carried in the backlog above |
+| Watch mode, JSONL streaming, fingerprint skipping, timeout/retry, `fm new` | open — carried in the backlog above |
+| `fm --plugins` | shipped — lists entry points, pulled or not |
 
 ---
 

@@ -854,6 +854,26 @@ def errors(out: Path | None = None) -> list[str] | None:
     return [str(out)]
 
 
+@tasks.task
+def config(out: Path | None = None) -> list[str] | None:
+    """Render the `[tool.footman]` keys as a markdown table.
+
+    The rows come from `_config.KEYS`, the list the runner itself
+    recognises, so a reference page that regenerates this on each docs
+    build can neither describe a key footman lacks nor miss one it has —
+    which is how `cwd` went four releases undocumented. Without --out the
+    table is the task's stdout; with --out it is written to the file.
+    """
+    text = markdown.config_table()
+    if out is None:
+        print(text, end="")
+        return None
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(text, encoding="utf-8")
+    print(f"wrote {out}")
+    return [str(out)]
+
+
 @tasks.task(name="globals")
 def globals_(
     out: Path | None = None,

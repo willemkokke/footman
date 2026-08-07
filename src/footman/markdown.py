@@ -25,7 +25,40 @@ from typing import Any
 
 from footman import _describe
 
-__all__ = ["globals_table", "render_page", "render_site"]
+__all__ = ["config_table", "globals_table", "render_page", "render_site"]
+
+
+def config_table() -> str:
+    """The `[tool.footman]` keys as a markdown pipe table.
+
+    Rendered from `_config.KEYS`, the same list the runner recognises, so a
+    docs page that regenerates this on each build can never describe a key
+    set footman doesn't have — nor miss one, which is how `cwd` stayed
+    undocumented for four releases.
+    """
+    from footman import _config
+
+    rows = [
+        (f"`{name}`", values, default, _cell(help_text))
+        for name, values, default, help_text in _config.KEYS
+    ]
+    widths = [max(len(row[i]) for row in rows) for i in range(3)]
+    head = ("key", "values", "default")
+    # Annotated: the header rows are all literals, so inference narrows to
+    # `list[LiteralString]` and the `+=` of real rows below stops type-checking.
+    lines: list[str] = [
+        "| "
+        + " | ".join(h.ljust(w) for h, w in zip(head, widths, strict=True))
+        + " | meaning |",
+        "| " + " | ".join("-" * w for w in widths) + " | ------- |",
+    ]
+    lines += [
+        "| "
+        + " | ".join(c.ljust(w) for c, w in zip(row[:3], widths, strict=True))
+        + f" | {row[3]} |"
+        for row in rows
+    ]
+    return "\n".join(lines) + "\n"
 
 
 def globals_table(*, prog: str = "fm") -> str:
