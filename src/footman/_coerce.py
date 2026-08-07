@@ -14,6 +14,7 @@ into `5` and `"x"` into `"x"`.
 
 from __future__ import annotations
 
+import dataclasses as _dataclasses
 import datetime as _datetime
 import enum
 import types
@@ -362,6 +363,92 @@ class Group:
         return f"{self.total} values"
 
 
+@dataclass(frozen=True)
+class Field:
+    """One field a record declares: its name, its type, whether it must be
+    given."""
+
+    name: str
+    type: Any
+    required: bool
+
+
+def fields_of(target: Any) -> tuple[Field, ...] | None:
+    """The fields *target* declares, or `None` if it is not a record.
+
+    One answer for the four ways a record is spelled — a dataclass, a
+    `NamedTuple`, a `TypedDict`, a class with an annotated `__init__` — read
+    three ways: positionally by `group_of` for the command line, by name by
+    the stdin binder for a JSON object, and rendered into the manifest so a
+    machine can read the shape a pipe expects. They cannot disagree about
+    what a record is, which is exactly how a `NamedTuple` once got lost.
+
+    An *untyped* constructor is not a record. `uuid.UUID` takes seven
+    optional arguments and describes none of them, so reading it as a shape
+    invents a spelling its author never wrote.
+    """
+    import inspect
+
+    if not isinstance(target, type) or target in (str, bytes):
+        return None
+    if typing.is_typeddict(target):
+        hints = typing.get_type_hints(target)
+        # getattr: the checkers narrow `target` to `type` here and lose sight
+        # of the TypedDict attributes.
+        required: frozenset[str] = getattr(target, "__required_keys__", frozenset())
+        return tuple(Field(n, t, n in required) for n, t in hints.items())
+    if issubclass(target, enum.Enum):
+        return None
+    if _dataclasses.is_dataclass(target):
+        hints = typing.get_type_hints(target)
+        return tuple(
+            Field(
+                f.name,
+                hints.get(f.name, str),
+                f.default is _dataclasses.MISSING
+                and f.default_factory is _dataclasses.MISSING,
+            )
+            for f in _dataclasses.fields(target)
+        )
+    names = getattr(target, "_fields", None)
+    if names is not None and issubclass(target, tuple):  # a NamedTuple
+        hints = typing.get_type_hints(target)
+        defaults = getattr(target, "_field_defaults", {})
+        return tuple(Field(n, hints.get(n, str), n not in defaults) for n in names)
+    try:
+        sig = inspect.signature(target)
+        hints = typing.get_type_hints(target.__init__)
+    except (TypeError, ValueError, NameError):
+        return None
+    fields: list[Field] = []
+    for param in sig.parameters.values():
+        if param.kind in (param.VAR_POSITIONAL, param.VAR_KEYWORD):
+            return None  # no declared fields to read
+        if param.name not in hints:
+            return None  # untyped: see above
+        fields.append(
+            Field(param.name, hints[param.name], param.default is param.empty)
+        )
+    return tuple(fields) or None
+
+
+def _spellable(slot: Any) -> bool:
+    """Whether one command-line token can fill a slot of this type.
+
+    A record or a collection cannot say where it ends inside a
+    comma-separated group — `--line=1,2,3,4` has no way to mark which pair
+    is the start — so a shape holding one has no command-line spelling and
+    lives on the document channel, where JSON's own brackets do the saying.
+
+    A *one-field* record stays spellable: that is the `T(value)` behaviour a
+    single-parameter constructor has always had.
+    """
+    if collection_of(slot) is not None:
+        return False
+    fields = fields_of(slot)
+    return fields is None or (len(fields) < 2 and not typing.is_typeddict(slot))
+
+
 def group_of(ann: Any) -> Group | None:
     """The fixed-arity shape *ann* names, or `None` if it is not one.
 
@@ -370,35 +457,28 @@ def group_of(ann: Any) -> Group | None:
     That is what makes this non-breaking — only shapes that are a hard
     error today start grouping.
     """
-    import inspect
-
     if typing.get_origin(ann) is tuple:
         args = typing.get_args(ann)
         if not args or (len(args) == 2 and args[1] is Ellipsis):
             return None  # variadic: a list's grammar, handled by `peel`
+        if not all(_spellable(a) for a in args):
+            return None
         return Group(tuple, None, args, len(args), from_iterable=True)
 
-    if not isinstance(ann, type) or ann in (str, bytes) or issubclass(ann, enum.Enum):
-        return None
-    try:
-        sig = inspect.signature(ann)
-        hints = typing.get_type_hints(ann.__init__ if not _is_record(ann) else ann)
-    except (TypeError, ValueError, NameError):
-        return None
-
-    names: list[str] = []
-    types: list[Any] = []
-    required = 0
-    for param in sig.parameters.values():
-        if param.kind in (param.VAR_POSITIONAL, param.VAR_KEYWORD):
-            return None  # no fixed arity to group by
-        names.append(param.name)
-        types.append(hints.get(param.name, str))
-        if param.default is inspect.Parameter.empty:
-            required += 1
-    if len(names) < 2:
+    if typing.is_typeddict(ann):
+        return None  # named keys, not positions: no arity to group by
+    fields = fields_of(ann)
+    if fields is None or len(fields) < 2:
         return None  # one parameter keeps the whole token, as it does today
-    return Group(ann, tuple(names), tuple(types), required, from_iterable=False)
+    if not all(_spellable(f.type) for f in fields):
+        return None  # a slot no single token can fill: the document channel
+    return Group(
+        ann,
+        tuple(f.name for f in fields),
+        tuple(f.type for f in fields),
+        sum(1 for f in fields if f.required),
+        from_iterable=False,
+    )
 
 
 def _is_record(ann: Any) -> bool:

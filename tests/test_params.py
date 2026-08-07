@@ -5,6 +5,7 @@ from __future__ import annotations
 import datetime
 import uuid
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import Annotated, Any, NamedTuple
 
 import pytest
@@ -1001,3 +1002,26 @@ def test_a_set_of_an_unhashable_element_is_taught():
     results = run(tasks, "tag --spots=1,2,3,4")
     assert results[0].code == EX_USAGE
     assert "not hashable" in str(results[0].error)
+
+
+def test_an_untyped_constructor_is_not_a_grouped_shape():
+    """`uuid.UUID` takes seven optional arguments, so treating any
+    multi-argument constructor as a group advertised a UUID parameter as
+    `--u=hex,bytes,bytes_le,…` and comma-split it. A shape footman groups is
+    one it can *type*."""
+    seen: dict[str, object] = {}
+
+    def tasks(reg):
+        @reg.task
+        def ident(u: uuid.UUID = uuid.UUID(int=0), amount: Decimal = Decimal(0)):
+            seen.update(u=u, amount=amount)
+
+    _, tree = build_tree(tasks)
+    specs = {p["name"]: p for p in tree["tasks"]["ident"]["params"]}
+    assert "group" not in specs["u"]
+    assert not specs["u"].get("multiple")  # one value, not a comma-split stream
+    assert "group" not in specs["amount"]
+
+    run(tasks, "ident --u=12345678-1234-5678-1234-567812345678 --amount=1.50")
+    assert seen["u"] == uuid.UUID("12345678-1234-5678-1234-567812345678")
+    assert seen["amount"] == Decimal("1.50")

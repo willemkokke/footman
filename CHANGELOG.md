@@ -60,6 +60,41 @@ versions may include breaking changes.
   because `--v=1,2` does. A *named* record still binds from a JSON object,
   which is the spelling its field names earn it.
 
+- **`--describe` says what a pipe expects.** A whole-document parameter
+  used to carry the *name* of its type and nothing else, so a caller
+  learned the JSON was called a `Config` and had to guess the rest. It now
+  carries the structure: each field's name, its types (or `choices`), its
+  container if it holds one, its own shape if it is a record, and whether
+  it is required. A recursive record is emitted by name, since it appears
+  in full higher up. See [JSON](json.md#the-shape-a-pipe-expects).
+
+  Every record is described the same way, whether it is a dataclass, a
+  `NamedTuple`, a `TypedDict`, or a class with an annotated `__init__` —
+  where before only a dataclass was described at all. That was the
+  manifest holding an opinion about records the binder had already given
+  up.
+
+- **A document parameter keeps its command-line spelling.** A record whose
+  fields are all scalars can be typed as well as piped —
+  `--cfg=name,port`, and the command line wins when both are given. Only a
+  shape that holds another record or a collection is pipe-only, because no
+  token can say where the inner one ends. Before, every dataclass document
+  was pipe-only and every `NamedTuple` was not, which was a difference
+  between spellings rather than between shapes.
+
+- **Help prints a shape's own slot names.** `--size=width,height` rather
+  than `--size=VALUE ...`, with `repeatable in groups of 2` for a
+  container of them — a grouped shape is one value, so the `...` no longer
+  claims otherwise.
+
+- **Only a *typed* shape groups.** A `uuid.UUID` parameter advertised
+  itself as `--u=hex,bytes,bytes_le,… ` and comma-split, because `UUID`
+  takes seven optional constructor arguments and every multi-argument
+  constructor was being read as a group. A shape footman groups is one it
+  can type, which every dataclass, `NamedTuple` and annotated `__init__`
+  is by construction; an unannotated constructor keeps its single-token
+  spelling. (Unreleased regression.)
+
 - **Fixed-arity shapes fill from the command line.** A `NamedTuple`, a
   dataclass, a plain class, or a `tuple[X, Y]` now binds from grouped
   values — `--at=1,2`, `--size=800,600` — where before the whole text

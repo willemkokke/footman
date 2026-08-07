@@ -249,21 +249,31 @@ def param_spec(param: inspect.Parameter) -> dict[str, Any]:
         return spec
 
     element = peeled.element
-    if (
+    reads_document = (
         peeled.stdin is not None
         and peeled.stdin.field is None
         and not peeled.stdin.lines
-        and not peeled.multiple
-        and dataclasses.is_dataclass(element)
-        and isinstance(element, type)
-    ):
-        # A whole-document parameter is boundary-only, not a CLI surface: a
-        # document is not one token, and exploding it into per-field flags
-        # founders on nesting. The splitter and completion both key on the
-        # known kinds, so `"stdin"` is invisible to them by construction;
-        # help still lists it, with the shape it binds.
+        and element is not bytes
+    )
+    record = _coerce.fields_of(element) if reads_document else None
+    if record is not None:
+        # What a machine needs to build the JSON this parameter expects: the
+        # shape's name, its fields, each field's coercion tags and whether it
+        # must be given. A name alone — which is all this used to carry — told
+        # a reader the pipe wanted a `Config` and nothing whatever about what
+        # a `Config` is.
+        spec["shape"] = _shape_spec(element)
+    if record is not None and not peeled.multiple and _coerce.group_of(element) is None:
+        # No command-line spelling, so no token spelling: a shape with a
+        # nested record or a collection in it cannot say where a slot ends
+        # inside a comma-separated group, and a TypedDict has named keys
+        # rather than positions. The splitter and completion key on the known
+        # kinds, so `"stdin"` is invisible to them by construction; help still
+        # lists it, with the shape it binds.
+        #
+        # A shape that *does* group keeps its `--opt=a,b` spelling and reads
+        # the pipe too — the command line wins when both are given.
         spec["kind"] = "stdin"
-        spec["shape"] = element.__name__
         _marker_keys(spec, peeled, param, has_default)
         return spec
 
@@ -371,6 +381,48 @@ def param_spec(param: inspect.Parameter) -> dict[str, Any]:
                 stacklevel=2,
             )
     return spec
+
+
+def _shape_spec(target: Any, seen: tuple[Any, ...] = ()) -> dict[str, Any]:
+    """The JSON a document parameter expects, as data a machine can act on:
+    the shape's name and, for each field, its name, its type, whether it must
+    be given, and — when the field is itself a record — that field's shape in
+    turn.
+
+    A field with no `types`, `choices` or `shape` is one footman does not
+    coerce: whatever JSON holds arrives as it is. That is a description, not
+    an omission.
+
+    A shape already on the way down is emitted by name alone. A
+    self-referential record has no finite expansion, and every shape appears
+    in full somewhere above, so the name resolves.
+    """
+    spec: dict[str, Any] = {"name": getattr(target, "__name__", str(target))}
+    if target in seen:
+        return spec  # recursive: named above, expanded there
+    fields = _coerce.fields_of(target)
+    if fields is None:
+        return spec
+    spec["fields"] = [_field_spec(f, (*seen, target)) for f in fields]
+    return spec
+
+
+def _field_spec(field: _coerce.Field, seen: tuple[Any, ...]) -> dict[str, Any]:
+    out: dict[str, Any] = {"name": field.name}
+    inner = field.type
+    if (collection := _coerce.collection_of(inner)) is not None:
+        inner = (typing.get_args(inner) or (str,))[0]
+        out["many"] = collection.__name__
+    if _coerce.fields_of(inner) is not None:
+        out["shape"] = _shape_spec(inner, seen)
+    else:
+        if (choices := _coerce.all_choices(inner)) is not None:
+            out["choices"] = choices
+        if tags := _coerce.element_tags(inner):
+            out["types"] = tags
+    if field.required:
+        out["required"] = True
+    return out
 
 
 def _marker_keys(

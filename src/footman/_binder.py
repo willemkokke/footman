@@ -30,37 +30,22 @@ _MISSING = dataclasses.MISSING
 
 
 def record_fields(target: Any) -> tuple[tuple[str, ...], frozenset[str]] | None:
-    """`(field names, the ones with no default)` for the three shapes a JSON
-    object binds to — a dataclass, a `NamedTuple`, a `TypedDict` — or `None`
-    for anything else.
+    """`(field names, the ones with no default)` for a record — the named
+    view of `_coerce.fields_of`, which is what a JSON object binds to.
 
-    One helper so `is_document_target` and the binding branch cannot
+    One source so `is_document_target` and the binding branch cannot
     disagree about what a record is. They did: a `NamedTuple` failed every
     test in the old `is_document_target` (it is a `tuple` subclass, so
     `get_origin` is `None`), fell through to the text path, and handed the
     body a raw string with no warning at all.
     """
-    if dataclasses.is_dataclass(target) and isinstance(target, type):
-        fields = dataclasses.fields(target)
-        return (
-            tuple(f.name for f in fields),
-            frozenset(
-                f.name
-                for f in fields
-                if f.default is _MISSING and f.default_factory is _MISSING
-            ),
-        )
-    if isinstance(target, type) and issubclass(target, tuple):
-        names = getattr(target, "_fields", None)
-        if names is not None:  # a NamedTuple, not a bare tuple
-            defaults = getattr(target, "_field_defaults", {})
-            return tuple(names), frozenset(n for n in names if n not in defaults)
-    if typing.is_typeddict(target):
-        # getattr: the checkers narrow `target` from the branches above and
-        # lose sight of the TypedDict attributes here.
-        required: frozenset[str] = getattr(target, "__required_keys__", frozenset())
-        return tuple(getattr(target, "__annotations__", {})), frozenset(required)
-    return None
+    fields = _coerce.fields_of(target)
+    if fields is None:
+        return None
+    return (
+        tuple(f.name for f in fields),
+        frozenset(f.name for f in fields if f.required),
+    )
 
 
 def is_document_target(ann: Any) -> bool:
