@@ -861,3 +861,20 @@ def test_arg_completion_offers_the_boundary():
 
     _, tree = build_tree(tasks)
     assert "+" in complete(tree, ["files", ""])  # the boundary documents itself
+
+
+def test_a_variadic_tuple_is_a_lists_grammar_with_a_tuple_out():
+    """`tuple[T, ...]` takes comma or repetition exactly as `list[T]` does,
+    and differs only in the container the body receives — handing back a
+    list would name a type the annotation does not."""
+    seen = {}
+
+    def tasks(reg):
+        @reg.task
+        def build(names: tuple[str, ...] = ()):
+            seen["names"] = names
+
+    run(tasks, "build --names=a,b")
+    assert seen["names"] == ("a", "b") and isinstance(seen["names"], tuple)
+    run(tasks, "build --names=a --names=b")
+    assert seen["names"] == ("a", "b") and isinstance(seen["names"], tuple)

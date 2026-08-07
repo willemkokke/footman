@@ -292,8 +292,15 @@ def _env_value(
 
     if peeled.multiple:
         parts = [raw] if peeled.nosplit else [p for p in raw.split(",") if p] or [raw]
-        return [one(p) for p in parts]
+        return _container(peeled, [one(p) for p in parts])
     return one(raw)
+
+
+def _container(peeled: _coerce.Peeled, values: list[Any]) -> Any:
+    """The collection the annotation named. `tuple[T, ...]` shares every bit
+    of a list's grammar and differs only here — handing back a list would
+    give the body a container its annotation does not name."""
+    return tuple(values) if peeled.as_tuple else values
 
 
 def _decode_stdin(payload: bytes) -> str:
@@ -373,7 +380,9 @@ def _stdin_value(
     if target is not None:
         bound = _binder.bind_document(_stdin_json(payload), target, param.name)
         if isinstance(bound, list):
-            return [_run_checks(v, peeled, label, params) for v in bound]
+            return _container(
+                peeled, [_run_checks(v, peeled, label, params) for v in bound]
+            )
         if isinstance(bound, dict):
             return {k: _run_checks(v, peeled, label, params) for k, v in bound.items()}
         return _run_checks(bound, peeled, label, params)
@@ -704,12 +713,15 @@ def bind(
             kwargs[param.name] = result
         elif peeled.multiple:
             items = raw if isinstance(raw, list) else [raw]
-            kwargs[param.name] = [
-                _run_checks(
-                    _coerce.coerce_one(v, peeled.element), peeled, label, siblings
-                )
-                for v in items
-            ]
+            kwargs[param.name] = _container(
+                peeled,
+                [
+                    _run_checks(
+                        _coerce.coerce_one(v, peeled.element), peeled, label, siblings
+                    )
+                    for v in items
+                ],
+            )
         else:
             kwargs[param.name] = _run_checks(
                 _coerce.coerce_one(raw, peeled.element), peeled, label, siblings
@@ -773,7 +785,9 @@ def forward_map(
             out[param.name] = raw
         elif peeled.multiple:
             items = raw if isinstance(raw, list) else [raw]
-            out[param.name] = [_coerce.coerce_one(v, peeled.element) for v in items]
+            out[param.name] = _container(
+                peeled, [_coerce.coerce_one(v, peeled.element) for v in items]
+            )
         else:
             out[param.name] = _coerce.coerce_one(raw, peeled.element)
     return out
