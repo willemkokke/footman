@@ -32,7 +32,18 @@ annotation decides how the bytes are interpreted:
 | `Annotated[bytes, stdin]` | raw bytes |
 | `Annotated[str, stdin("prompt")]` | one top-level key of a JSON document |
 | `Annotated[list[int], stdin(lines=True)]` | one line per element, each line coerced like a CLI token |
-| a dataclass / `dict` / `list` | the whole JSON document, typed |
+| a record / `dict` / `list` | the whole JSON document, typed |
+| any other type | the stream as one value, coerced to it |
+
+A **record** is a dataclass, a `NamedTuple`, a `TypedDict`, or a class with an
+annotated `__init__` — all four bind from a JSON object the same way.
+
+The last row is the ordinary case and worth stating plainly: `Stdin[int]` fed
+`42` is the **`int` 42**, `Stdin[Colour]` fed `red` is `Colour.RED`. The value
+goes through the same coercion, choices, bounds and `check(fn)` validators a
+command-line token would, and one trailing newline is ignored — `echo 42 |` is
+how you pipe a value, and the newline is the shell's punctuation, not part of
+it. A `Stdin[str]` gets the stream verbatim, newline included.
 
 Precedence is **CLI > stdin > env > default > prompt** — an explicit option
 always wins, which buys the Unix `-` convention with no sentinel argument.
@@ -66,9 +77,10 @@ def on_edit(event: Annotated[Event, stdin]) -> None:
 
 Unknown keys are ignored (a producer may grow fields without breaking
 you), missing keys follow the dataclass's own defaults, nested access is
-plain attributes, and every refusal names the exact JSON path. A dataclass
-parameter is **boundary-only** — a document is not one token, so there is
-no `--event` flag; the pipe is its source, and
+plain attributes, and every refusal names the exact JSON path. `Event` is
+**boundary-only** — it holds another record, and no comma-separated token can
+say where the inner one ends — so there is no `--event` flag; the pipe is its
+source, and
 
 ```console
 $ fm on-edit < fixture.json
@@ -77,6 +89,18 @@ $ fm on-edit < fixture.json
 replays the real parse — keep a fixture next to the wiring and every hook
 is testable by hand. In tests, `Runner.invoke("on-edit", stdin=payload)`
 is the same replay in-process.
+
+A **flat** record — every field a scalar — has both spellings, and the command
+line wins when you use it:
+
+```console
+$ echo '{"name": "api", "port": 80}' | fm deploy      # Config(name='api', port=80)
+$ fm deploy --cfg=web,9000                             # Config(name='web', port=9000)
+```
+
+`fm --describe` prints the exact JSON each task expects, field by field, so a
+caller never has to read the Python — see
+[JSON](json.md#the-shape-a-pipe-expects).
 
 ## The pipe out: `Stdout[T]`
 
