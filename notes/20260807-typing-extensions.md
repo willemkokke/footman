@@ -62,6 +62,51 @@ token means different things by position: `mytype = Many[tuple[str, int]]`
 with `--mytype=1,1` yields `[("1", 1)]` — a `str` in slot 0, an `int` in
 slot 1. That is the one-line example for the docs; a list cannot express it.
 
+### The arity can come from a constructor
+
+`inspect.signature(T)` returns the same `[(x, float), (y, float)]` for a
+dataclass, a `NamedTuple`, and a plain class with `__init__(self, x: float,
+y: float)`. They are not three cases; they are one, and the grouping rule
+reads all of them the same way:
+
+| annotation | arity + types from |
+| --- | --- |
+| `tuple[float, float]` | the subscript |
+| `NamedTuple` | its fields |
+| `@dataclass` | its fields |
+| `Point(x: float, y: float)` | its `__init__` |
+
+So `--at=1,2` builds `Point(1.0, 2.0)`, `Many[Point]` takes `--at=1,2
+--at=3,4`, and the errors get names from the constructor for free:
+`--at takes x,y`, `--at: y expects a number (got 'tall')`. It is the house
+thesis one level down — the typed signature is the contract, including a
+constructor's.
+
+**This is not new scope; it is an existing promise made true.** typing.md
+says *"Any type with a typed constructor works — footman calls it"*, and
+then implements it as `T(value)` — which silently narrows "any type" to
+"any one-parameter type". Today a two-parameter type is a hard error
+(`ValueError: '1,2' is not a valid Point`), so the claim is already false
+and nothing says so.
+
+**Non-breaking, because arity decides.** A one-parameter constructor keeps
+today's exact behaviour — the whole token, uncoerced, `T(value)` — which is
+the documented `Version("1.2.3")` case. Only multi-parameter constructors
+change, and those are currently a dead end.
+
+Boundaries (UNRULED):
+
+- **Optional constructor parameters** (`Point(x, y, z=0)`) — a group cannot
+  be "2 or 3" without guessing. Lean: the group is the *required* count and
+  optionals are not fillable from the command line. The alternative is
+  refusing such types from grouping entirely.
+- **Non-scalar positions** (`Line(a: Point, b: Point)`) — stop at one level.
+  Recursion needs four values and a nesting rule, which is the ambiguity
+  this whole design avoids. Positions must be scalar-coercible or the type
+  does not group.
+- **`*args` constructors** — no fixed arity, so no grouping; falls back to
+  the one-value path.
+
 ### Why this is not guessing
 
 Chunking looks like inference and is not. **Guessing would be inferring the
