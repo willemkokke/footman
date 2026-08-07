@@ -65,7 +65,7 @@ _DYNAMIC = "\x00dynamic"  # internal sentinel: a dynamic completer, recompute fr
 # A cache written by a different footman gets rebuilt, never walked: the first
 # TAB after an upgrade serves correct candidates instead of a traceback.
 # `test_completion_schema_mirrors_manifest` keeps the two from drifting.
-_SCHEMA = 3
+_SCHEMA = 4
 _DYNAMIC_TIMEOUT = 2.0  # seconds to wait for a fresh dynamic completer subprocess
 _COLD_TIMEOUT = 3.0  # seconds to wait for a first-time cwd manifest build
 _SHELLS = ("bash", "zsh", "fish", "pwsh", "nushell")

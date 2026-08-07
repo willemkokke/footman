@@ -156,7 +156,7 @@ def test_the_manifest_bakes_globals_and_uses(tmp_path):
     def build(): ...
 
     data = _manifest.build_manifest(reg)
-    assert data["schema"] == 3
+    assert data["schema"] == 4
     (entry,) = data["tree"]["globals"]
     assert entry["name"] == "env-file"
     assert entry["kind"] == "option"

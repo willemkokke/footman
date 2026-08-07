@@ -478,7 +478,9 @@ def test_complete_cli_exits_files_for_a_path_value(tmp_path, capsys):
     from footman._complete import _EXIT_FILES
 
     m = tmp_path / "m.json"
-    m.write_text('{"schema": 3, "tree": {"tasks": {}, "groups": {}}}')
+    m.write_text(
+        f'{{"schema": {_complete._SCHEMA}, "tree": {{"tasks": {{}}, "groups": {{}}}}}}'
+    )
     rc = complete_cli(["--manifest", str(m), "--", "-f="])
     assert rc == _EXIT_FILES
     assert capsys.readouterr().out == ""
@@ -838,7 +840,9 @@ def test_completion_output_is_lf_only(tree, tmp_path, monkeypatch, capsysbinary)
     import json
 
     manifest = tmp_path / "m.json"
-    manifest.write_text(json.dumps({"schema": 3, "tree": tree}), encoding="utf-8")
+    manifest.write_text(
+        json.dumps({"schema": _complete._SCHEMA, "tree": tree}), encoding="utf-8"
+    )
     complete_cli(["--manifest", str(manifest), "--", ""])
     out = capsysbinary.readouterr().out
     assert out, "the fixture tree should complete to something"

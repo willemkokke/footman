@@ -40,7 +40,7 @@ from footman.context import context_param_name
 from footman.params import suggest
 from footman.registry import Group
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 
 class ManifestError(Exception):
