@@ -136,6 +136,12 @@ versions may include breaking changes.
 
 ### Changed
 
+- **Manifest schema 4.** A parameter spec gained `group` (a shape's
+  positional arity and per-slot types), gained `hidden`, and `shape`
+  became an object describing the document rather than a bare type name.
+  Stale completion caches refresh themselves; a consumer reading `shape`
+  as a string reads `shape["name"]` instead.
+
 - Three global help strings now carry the whole truth, which reaches
   `--help`, completion menus and the generated reference table at once:
   `--jobs` names the floor of 2, `-s/--sequential` says it reaches
