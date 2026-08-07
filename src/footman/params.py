@@ -120,6 +120,38 @@ NoSplit = Annotated[_T, nosplit]
 out of comma-splitting (see `nosplit`)."""
 
 
+class HiddenMarker:
+    """Marker for `hidden`."""
+
+    __slots__ = ()
+
+    def __repr__(self) -> str:
+        return "hidden"
+
+
+hidden: Final[HiddenMarker] = HiddenMarker()
+"""Keep a parameter out of the listings a human reads, via `Annotated`:
+
+```python
+def deploy(target: str, legacy: Annotated[str, hidden] = ""): ...
+```
+
+It means on a parameter what `hidden=True` means on a task. `--help` does not
+list it and the synthesised example does not use it, but it still binds, still
+completes, and `--all` reveals it. The manifest marks it rather than dropping
+it, so an agent reading `--describe` still learns it exists — hiding and
+completing are different questions, and a long machine-facing flag is the one
+you most want spelled for you.
+
+For a deprecated flag kept working but unadvertised, a debug switch, or a flag
+a wrapper script passes. `Hidden[str]` is the terser spelling."""
+
+
+Hidden = Annotated[_T, hidden]
+"""Shorthand for `Annotated[T, hidden]`: `Hidden[str]` keeps a parameter out of
+the listings while it still binds and completes (see `hidden`)."""
+
+
 class ForwardMarker:
     """Marker for `forward`."""
 

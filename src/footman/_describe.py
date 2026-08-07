@@ -237,11 +237,24 @@ def invocation_parts(prog: str, path: list[str]) -> list[tuple[str, str]]:
     return parts
 
 
+def listed_params(
+    task: dict[str, Any], *, show_hidden: bool = False
+) -> list[dict[str, Any]]:
+    """The parameters a listing shows — everything but the hidden ones.
+
+    The task-level rule, one level down: `hidden` takes a parameter out of
+    what a human reads and out of nothing else. It still binds, it still
+    completes, and the manifest still carries it marked, because hiding and
+    completing are different questions. `--all` shows it.
+    """
+    return [p for p in task["params"] if show_hidden or not p.get("hidden")]
+
+
 def usage_parts(
-    prog: str, path: list[str], task: dict[str, Any]
+    prog: str, path: list[str], task: dict[str, Any], *, show_hidden: bool = False
 ) -> list[tuple[str, str]]:
     parts = invocation_parts(prog, path)
-    for p in task["params"]:
+    for p in listed_params(task, show_hidden=show_hidden):
         fragment = usage_fragment(p)
         if fragment:
             kind = "opt" if fragment.startswith("[") else "req"
@@ -260,7 +273,7 @@ def example_parts(
     """
     parts = invocation_parts(prog, path)
     flag_shown = False
-    for p in task["params"]:
+    for p in listed_params(task):
         kind = p["kind"]
         if kind in ("positional", "variadic"):
             parts.append(("value", sample_value(p)))

@@ -532,6 +532,8 @@ _API_SECTIONS: list[tuple[str, str, list[str]]] = [
             "forward",
             "NoSplit",
             "nosplit",
+            "Hidden",
+            "hidden",
             "suggest",
             "exists",
             "isfile",
