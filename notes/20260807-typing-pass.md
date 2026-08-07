@@ -225,28 +225,125 @@ That is the usual tell.
   covers the silent `NamedTuple`/`TypedDict` bindings, uncoerced stdin
   scalars, the trailing newline, and sets.
 
+## Arity ranges, nesting, and `--describe`
+
+Three things the grouping rule needs stated precisely, because each is a
+place where "support it all" meets a real edge.
+
+### A variable-arity shape is allowed where there is one group to fill
+
+`Point(x: float, y: float, z: float = 0)` accepts 2 **or** 3 values. That
+is only ambiguous when something has to decide where one group ends and
+the next begins — which happens **only inside a container**:
+
+    Point(x, y, z=0)   --at=1,2       → Point(1,2)     one group, ≥ required
+                       --at=1,2,3     → Point(1,2,3)   one group, ≤ total
+                       --at=1         → error: below required
+                       --at=1,2,3,4   → error: above total
+    Many[Point]        --at=1,2,3,4   → two groups of 2? one of 3 + remainder?
+
+Bare, the stream must make exactly one group, so the *count is the answer*
+and every case is decided. In a container it genuinely is not.
+
+**Ruled:** a shape whose arity is a range may be used bare, where its
+group size is settled by the count; inside a container the group size must
+be **fixed** (every constructor parameter required). The manifest can see
+the constructor's signature at load, so `Many[Point]` with an optional
+parameter is a **registration-time** taught error naming both ways out —
+make the parameter required, or take the value on stdin.
+
+### Non-scalar positions: refused for readability, not for ambiguity
+
+`Line(a: Point, b: Point)` is worth explaining carefully, because the
+obvious objection is wrong. With fixed arities all the way down the split
+*is* computable: `Line` is 2 positions, each `Point` is 2 floats, so
+`--line=1,2,3,4` is deterministically `Line(Point(1,2), Point(3,4))`. No
+guessing required.
+
+It is refused for three better reasons:
+
+1. **It stops being readable.** `--line=1,2,3,4` gives a person nothing to
+   see the structure by. The design's bar is a command line someone can
+   read back; a flat run of four numbers standing for two points is not
+   one, however well-defined.
+2. **Errors lose the thing that made them good.** The whole argument for
+   `NamedTuple` was that `--size: height expects an integer` beats
+   `2nd value`. Nested, the honest message is `--line: 3rd value` — third
+   of what? Naming it `a.y` needs a path vocabulary the flat grammar does
+   not have.
+3. **It compounds with the rule above.** One optional parameter anywhere in
+   the tree turns the computable split back into a guess, so the exception
+   would have to be "nesting is fine unless any level has a default",
+   which nobody could hold in their head.
+
+And the alternative already works: **nested structures are what the stdin
+channel is for.** `{"a":{"x":1,"y":2},"b":{"x":3,"y":4}}` binds today —
+verified — and it is readable. So the refusal is a signpost, not a dead
+end: a registration-time taught error naming stdin.
+
+`*args` constructors are refused on the simpler ground that they have no
+arity at all.
+
+### `--describe`: reuse `row`, and what it costs
+
+A parameter spec today is a **flat** vocabulary — `name`, `kind`
+(`flag`/`option`/`positional`/`variadic`/`stdin`), `types` as a list of
+scalar tags, plus `choices`, `multiple`, `mapping`. It has no way to say
+"three positions, of these types, with these names".
+
+The return side already does, as the `row` kind, and already renders the
+right JSON Schema for it:
+
+    {"type": "array", "prefixItems": [...],
+     "minItems": n, "maxItems": n}
+
+**The choice:** embed that same shape document in the parameter spec, or
+invent a flatter input-side spelling (say `types: [["float"], ["float"]]`).
+
+**Lean: reuse `row`.** The alternative is a second vocabulary for a concept
+that already has one, and one-spelling-per-concept has been the right call
+every time it has come up here. Reuse also means an agent reading
+`--describe` learns one shape language for inputs and outputs, and gets
+`prefixItems` for a *parameter* exactly as it does for a return.
+
+**The cost, stated rather than waved at:** the parameter specs live in the
+**manifest**, which is the file the completion hot path reads on every
+<kbd>Tab</kbd>. Embedding a recursive shape document per parameter grows
+that file. Two things keep it proportionate — the shape appears only for
+parameters that have one, which is rare, and the hot path never reads it
+(TAB needs "does this take a value" and any `choices`, nothing deeper).
+But it is a real addition to the one file with a latency budget, and the
+build should measure the manifest before and after rather than assume.
+
 ## Opens
 
-- ~~**`NamedTuple` as the blessed named form?**~~ **Ruled: yes.**
-  `NamedTuple` is the preferred form in every docs example, and a short
-  section explains that plain tuples behave *exactly* the same but with
-  less informative errors — `--size: 2nd value expects an integer` where
-  the named form says `--size: height expects an integer`. Shown first the
-  way `Literal` precedes a bare `str`.
-- **`hidden` semantics** — the task-rule transposition above, or the
-  narrower "not a CLI surface" reading.
+Everything else is ruled. What remains:
+
 - **Hidden parameters in the generated task docs?** Hidden *tasks* appear
   there, badged, *"because the docs are where you look up something the
-  listings won't offer"*. Symmetry says yes, badged.
-- **Optional constructor parameters** (`Point(x, y, z=0)`) — a group cannot
-  be "2 or 3" without guessing. Lean: the group is the *required* count and
-  optionals are not fillable from the command line.
-- **Non-scalar positions** (`Line(a: Point, b: Point)`) — stop at one level;
-  recursion needs a nesting rule, which is the ambiguity this design
-  avoids. `*args` constructors do not group either.
-- **`--describe` for a fixed tuple**: reuse `row` verbatim, or a distinct
-  input-side kind? Reuse means one vocabulary for "fixed-length
-  heterogeneous array" across input and output.
-- Whether `tuple[T, ...]` is *supported* or *taught away* in favour of
-  `Many[T]`. Leaning support: refusing a shape the return side accepts is
-  the asymmetry this note opened with.
+  listings won't offer"*. Symmetry says yes, badged — but it is untested
+  against how the page renders a badged parameter row.
+- **Sequencing.** The pass has grown well past its backlog row: silent
+  bindings on three shapes, scalar coercion on stdin, the newline, sets,
+  the constructor generalisation, the grammar, and hidden parameters. One
+  standard, but plausibly two or three PRs. Willem: a sequencing step once
+  the plan is done.
+
+## Ruled
+
+- **`NamedTuple` is the preferred form** in every docs example, with a
+  short section noting plain tuples behave identically but report
+  `2nd value` where the named form says `height`.
+- **`hidden` on a parameter means what `hidden` means on a task** — out of
+  the listings, still bindable, still completed, marked rather than
+  missing in `--json`, revealed by `--all`. Chosen for consistency; the
+  narrower "not a CLI surface" reading is a different feature and would
+  need a different name.
+- **`tuple[T, ...]` is supported**, not taught away in favour of
+  `Many[T]` — refusing a shape the return side accepts is the asymmetry
+  this note opened with.
+- **Variable-arity shapes are bare-only** (above).
+- **Non-scalar positions and `*args` constructors are refused**, with a
+  taught error pointing at stdin (above).
+- **The silent bindings, uncoerced stdin scalars, the trailing newline and
+  sets belong to this pass**, not to separate fixes.
