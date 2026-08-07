@@ -7,6 +7,8 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+## [0.34.0] — 2026-08-07
+
 ### Fixed
 
 - **The stdin channel honours its annotation.** Three shapes silently
@@ -60,20 +62,12 @@ versions may include breaking changes.
   because `--v=1,2` does. A *named* record still binds from a JSON object,
   which is the spelling its field names earn it.
 
-- **A grouped shape is refused at parse time**, like every other typed
-  value. Its arity and its per-position types are in the manifest, so
-  `--size=800,tall` and `--points=1,2,3` are taught before anything runs
-  rather than raising from inside binding — which also means the message
-  is a taught refusal instead of a `ValueError`. The binding-time check
-  stays as the backstop for the channels the splitter never sees: stdin,
-  `env(...)`, and a direct call.
-
 - **`hidden` on a parameter** (and `Hidden[T]`), meaning what `hidden=True`
   already means on a task: out of the listings a human reads, and out of
   nothing else. It still binds, it still completes, `--describe` marks it
   rather than dropping it, and `--all` reveals it. For a deprecated flag
   kept working but unadvertised, a debug switch, or a flag a wrapper
-  script passes. See [Typing](typing.md#keeping-a-parameter-out-of-the-listings).
+  script passes. See [Typing](https://willemkokke.github.io/footman/typing/#keeping-a-parameter-out-of-the-listings).
 
 - **`--describe` says what a pipe expects.** A whole-document parameter
   used to carry the *name* of its type and nothing else, so a caller
@@ -81,7 +75,7 @@ versions may include breaking changes.
   carries the structure: each field's name, its types (or `choices`), its
   container if it holds one, its own shape if it is a record, and whether
   it is required. A recursive record is emitted by name, since it appears
-  in full higher up. See [JSON](json.md#the-shape-a-pipe-expects).
+  in full higher up. See [JSON](https://willemkokke.github.io/footman/json/#the-shape-a-pipe-expects).
 
   Every record is described the same way, whether it is a dataclass, a
   `NamedTuple`, a `TypedDict`, or a class with an annotated `__init__` —
@@ -102,14 +96,6 @@ versions may include breaking changes.
   container of them — a grouped shape is one value, so the `...` no longer
   claims otherwise.
 
-- **Only a *typed* shape groups.** A `uuid.UUID` parameter advertised
-  itself as `--u=hex,bytes,bytes_le,… ` and comma-split, because `UUID`
-  takes seven optional constructor arguments and every multi-argument
-  constructor was being read as a group. A shape footman groups is one it
-  can type, which every dataclass, `NamedTuple` and annotated `__init__`
-  is by construction; an unannotated constructor keeps its single-token
-  spelling. (Unreleased regression.)
-
 - **Fixed-arity shapes fill from the command line.** A `NamedTuple`, a
   dataclass, a plain class, or a `tuple[X, Y]` now binds from grouped
   values — `--at=1,2`, `--size=800,600` — where before the whole text
@@ -124,6 +110,17 @@ versions may include breaking changes.
   values in groups of 2 and names them. Prefer a `NamedTuple`, because a
   named shape names the slot that is wrong (`height expects an integer`)
   where a plain tuple can only count it (`value 2 expects an integer`).
+
+  A shape footman groups is one it can **type** — every dataclass,
+  `NamedTuple` and annotated `__init__` by construction. An unannotated
+  constructor (`uuid.UUID`, `Decimal`) keeps its single-token spelling
+  rather than having positions invented for it.
+
+  All of it is refused at *parse* time, like every other typed value: the
+  arity and the per-slot types are in the manifest, so nothing has to run
+  for `--size=800,tall` to be taught. The binding-time check stays as the
+  backstop for the channels the splitter never sees — stdin, `env(...)`,
+  and a direct call.
 
 - **A generated `[tool.footman]` reference.** `_config.KEYS` holds the
   recognised keys as data — name, accepted values, default, meaning — and
@@ -3960,7 +3957,8 @@ versions may include breaking changes.
 
 - Placeholder release claiming the `footman` name on PyPI. Not tagged in git.
 
-[Unreleased]: https://github.com/willemkokke/footman/compare/v0.33.0...HEAD
+[Unreleased]: https://github.com/willemkokke/footman/compare/v0.34.0...HEAD
+[0.34.0]: https://github.com/willemkokke/footman/compare/v0.33.0...v0.34.0
 [0.33.0]: https://github.com/willemkokke/footman/compare/v0.32.0...v0.33.0
 [0.32.0]: https://github.com/willemkokke/footman/compare/v0.31.0...v0.32.0
 [0.31.0]: https://github.com/willemkokke/footman/compare/v0.30.0...v0.31.0

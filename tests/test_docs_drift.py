@@ -530,3 +530,35 @@ def test_documented_invocations_attach_their_values():
         "documented invocations using the refused space form "
         "(values are always `=`-attached):\n" + "\n".join(problems)
     )
+
+
+def test_the_newest_changelog_entries_carry_no_relative_links():
+    """`_write_latest_changes` lifts the newest release's entries into
+    `docs/_generated/latest-changes.md`, which the home page includes but
+    which is *validated as its own page* — so a relative `typing.md#…`
+    resolves from `_generated/` and does not exist.
+
+    The generator says so in a comment, and nothing enforced it. The trap is
+    the timing: an entry can sit under `[Unreleased]` looking fine for weeks,
+    because the generator only ever lifts a *released* section — and then the
+    release runbook renames that heading and the strict docs build fails,
+    mid-release, on prose written long before. Use the full site URL.
+    """
+    import re
+
+    text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    # Both sections, not one: the generator lifts the newest *released*
+    # section, and `[Unreleased]` is where the offending entry is written
+    # weeks earlier. Checking only the first would have passed here — an
+    # empty `[Unreleased]` sits above a freshly rolled release.
+    sections = re.split(r"^## \[", text, flags=re.M)[1:3]
+    relative = [
+        link
+        for section in sections
+        for link in re.findall(r"\]\((?!https?:)([^)]*\.md[^)]*)\)", section)
+    ]
+    assert not relative, (
+        f"the newest changelog entries link relatively to {relative} — these "
+        f"break the generated latest-changes page, which is validated on its "
+        f"own. Use https://willemkokke.github.io/footman/<page>/#<anchor>."
+    )
