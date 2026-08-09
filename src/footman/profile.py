@@ -48,8 +48,8 @@ from footman._executor import reported_state
 PROFILE = GlobalOption(
     "profile",
     Path,
-    bare=Path("fm-profile.json"),
-    help="write the run as a trace for ui.perfetto.dev (default: fm-profile.json)",
+    default=Path("fm-profile.json"),
+    help="write the run as a trace for ui.perfetto.dev",
 )
 
 _PID = 1
@@ -313,9 +313,12 @@ def _sweep_children(zero: float) -> list[dict[str, Any]]:
 
 @footman.post_tasks
 def write(inv: footman.Invocation) -> None:
-    target = PROFILE.value
-    if target is None:
+    # Three outcomes from one declared value: `.given` says whether a profile
+    # was asked for at all, `.value` says where it goes — the declared default
+    # when `--profile` was named bare, the attached path when it was not.
+    if not PROFILE.given:
         return
+    target = PROFILE.value
     begin = time.perf_counter()
     events, zero = _events(inv.results)
     events += _sweep_children(zero)

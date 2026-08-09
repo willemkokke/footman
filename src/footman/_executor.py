@@ -1269,38 +1269,77 @@ def bind_global_options(options: Sequence[Any], tokens: Sequence[str]) -> str | 
     """Deliver the parsed leading globals to their owning plugin options.
 
     Every option gets a value for the run — a flag's presence, an option's
-    coerced `=`-attached value, or its default — and freezes, so `.value`
-    answers anywhere in-run. The value string runs the same coercion,
-    bounds, choices and `check(fn)` pipeline a task parameter's would.
-    Returns the teaching message for a value that will not _coerce.
+    coerced `=`-attached value, or what an absent one falls back to — and
+    freezes, so `.value` answers anywhere in-run. The value string runs the same
+    coercion, bounds, choices and `check(fn)` pipeline a task parameter's would.
+    Returns the teaching message for a value that will not coerce.
+
+    Presence freezes alongside it. A mention with no value contributes exactly
+    that — the option was asked for, and `.value` is whatever it would have been
+    anyway — which is what lets one declared value cover absent, named, and
+    named-with-a-value.
+
+    An absent option runs the same ladder a task parameter's does, **env >
+    `default(fn)` > the declared default**, through the very helpers `bind`
+    uses. That marker was already accepted on a global's annotation and reached
+    the manifest, so help would have advertised a fallback that never happened.
     """
     by_flag: dict[str, Any] = {}
     for opt in options:
         by_flag.setdefault("--" + opt.name, opt)
     values: dict[str, Any] = {}
+    given: set[str] = set()
     for tok in tokens:
         name, eq, raw = tok.partition("=")
         opt = by_flag.get(name)
         if opt is None:
             continue
+        given.add(opt.name)
         if opt.annotation is bool:
             values[opt.name] = True
             continue
-        if not eq and opt.bare is not None:
-            # A bare mention of a value-optional option means the author's
-            # `bare=`, run through the ordinary pipeline so a `bare=` that
-            # would not coerce is taught, not smuggled.
-            raw = str(opt.bare)
+        if not eq:
+            # Named without a value: presence is the whole content, so leave the
+            # value to the absent ladder below — the same reading a task option
+            # gives a bare mention.
+            continue
         peeled = _coerce.peel(opt.annotation)
         try:
             values[opt.name] = _coerce_extra(raw, peeled, name)
         except ValueError as exc:
             return str(exc)
     for opt in by_flag.values():
-        fallback = False if opt.annotation is bool else opt.default
-        opt._value = values.get(opt.name, fallback)
+        opt._given = opt.name in given
         opt._frozen = True
+        if opt.name in values:
+            opt._value = values[opt.name]
+            continue
+        if opt.annotation is bool:
+            opt._value = False
+            continue
+        opt._value = _absent_global(opt)
     return None
+
+
+def _absent_global(opt: Any) -> Any:
+    """A global option's value when the line carried none: env, then a computed
+    default, then the declared one — the ladder `bind` runs for a task
+    parameter, on the synthetic parameter `_global_spec` already builds for the
+    manifest, so the two cannot drift into different answers."""
+    peeled = _coerce.peel(opt.annotation)
+    param = inspect.Parameter(
+        opt.name.replace("-", "_"),
+        inspect.Parameter.KEYWORD_ONLY,
+        annotation=opt.annotation,
+        default=opt.default,
+    )
+    if peeled.env is not None:
+        value = _env_value(param, peeled)
+        if value is not _MISSING:
+            return value
+    if peeled.default_fn is not None:
+        return peeled.default_fn.fn()
+    return opt.default
 
 
 def _advise_unread_uses(ctx: Context, fn: Task) -> None:

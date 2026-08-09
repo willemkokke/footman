@@ -11,9 +11,13 @@ import pytest
 
 from footman import _manifest, registry
 from footman._complete import _DYNAMIC, _FILES, complete
-from footman.params import suggest
+from footman.params import env, suggest
 from footman.registry import GlobalOption, Group, RegistrationError
 from footman.testing import Runner
+
+# Module level: `from __future__ import annotations` makes an annotation a
+# string resolved against module globals, so a local alias never resolves.
+EnvRegion = Annotated[str, env("BUILD_REGION")]
 
 
 def _adopt(reg: Group, *args, **kwargs) -> GlobalOption:
@@ -255,7 +259,7 @@ def test_suggest_answers_a_global_by_name(tmp_path, monkeypatch):
             from typing import Annotated
 
             from footman import GlobalOption, task
-            from footman.params import suggest
+            from footman.params import env, suggest
 
             def _targets():
                 return Path("targets.txt").read_text().split()
@@ -357,59 +361,61 @@ def test_task_help_lists_declared_globals():
     assert "reads --region (from acme.devkit)" in result.stdout
 
 
-# --- bare= (the value a bare mention means) ----------------------------------
+# --- bare mentions, presence, and the absent ladder -------------------------
 
 
-def test_bare_names_what_a_bare_mention_means():
+def test_a_bare_mention_is_presence_not_a_second_declared_value():
     reg = Group("root")
-    opt = _adopt(reg, "out", Path, bare="o.json")
+    opt = _adopt(reg, "out", Path, default="o.json")
 
     @reg.task(uses=[opt])
     def build():
-        print(f"out={opt.value}")
+        print(f"out={opt.value} given={opt.given}")
+
+    # Three outcomes from ONE declared value, which is what retired `bare=`:
+    # absent, named, named with a value.
+    absent = Runner().invoke("build", tasks=reg)
+    assert "out=o.json given=False" in absent.stdout
 
     bare = Runner().invoke("--out build", tasks=reg)
-    assert bare.ok, bare.stderr
-    assert "out=o.json" in bare.stdout  # the author's bare= value, coerced
+    assert "out=o.json given=True" in bare.stdout
 
     attached = Runner().invoke("--out=x.json build", tasks=reg)
-    assert attached.ok, attached.stderr
-    assert "out=x.json" in attached.stdout  # an attached value still wins
-
-    absent = Runner().invoke("build", tasks=reg)
-    assert absent.ok, absent.stderr
-    assert "out=None" in absent.stdout  # bare= is not a default
+    assert "out=x.json given=True" in attached.stdout
 
 
-def test_bare_on_a_flag_is_refused():
-    with pytest.raises(RegistrationError, match=r"drop bare="):
-        GlobalOption("audit", bare="yes")
-
-
-def test_the_manifest_carries_bare():
+def test_a_flag_reads_as_given_when_it_is_named():
     reg = Group("root")
-    opt = _adopt(reg, "out", Path, bare="o.json")
-    spec = _manifest._global_spec(opt, {})
-    assert spec["bare"] == "o.json"
-    plain = _adopt(reg, "region", str, default="eu")
-    assert "bare" not in _manifest._global_spec(plain, {})
+    opt = _adopt(reg, "audit", bool)
+
+    @reg.task(uses=[opt])
+    def build():
+        print(f"audit={opt.value} given={opt.given}")
+
+    assert "audit=False given=False" in Runner().invoke("build", tasks=reg).stdout
+    assert "audit=True given=True" in Runner().invoke("--audit build", tasks=reg).stdout
 
 
-def test_an_uncoercible_bare_is_taught_at_parse():
+def test_a_global_option_honours_its_env_fallback(monkeypatch):
+    # The marker reached the manifest and was never applied, so help would have
+    # advertised a fallback that did not happen.
+    monkeypatch.setenv("BUILD_REGION", "us")
     reg = Group("root")
-    _adopt(reg, "level", int, bare="deep")  # an author error, caught in use
+    opt = _adopt(reg, "region", EnvRegion, default="eu")
 
-    @reg.task
-    def build(): ...
+    @reg.task(uses=[opt])
+    def build():
+        print(f"region={opt.value} given={opt.given}")
 
-    result = Runner().invoke("--level build", tasks=reg)
-    assert not result.ok
-    assert "--level" in result.stderr
+    # The environment supplies the value and claims nothing about presence.
+    assert "region=us given=False" in Runner().invoke("build", tasks=reg).stdout
+    attached = Runner().invoke("--region=ap build", tasks=reg)
+    assert "region=ap given=True" in attached.stdout
 
 
 def test_a_word_after_a_bare_mention_teaches_attachment():
     reg = Group("root")
-    _adopt(reg, "out", Path, bare="o.json")
+    _adopt(reg, "out", Path, default="o.json")
 
     @reg.task
     def build(): ...

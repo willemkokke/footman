@@ -549,7 +549,7 @@ def _resolve_head(
                 and (
                     _GLOBAL_KIND.get(prev) == "option"
                     or any(
-                        "--" + g["name"] == prev and "bare" in g
+                        "--" + g["name"] == prev and g["kind"] != "flag"
                         for g in tree.get("globals", ())
                     )
                 )
@@ -672,7 +672,9 @@ def split_chain(
 ) -> tuple[list[str], list[Segment]]:
     """Split *argv* into leading globals and a list of resolved segments."""
     plugin = {
-        "--" + g["name"]: ("option?" if "bare" in g else g["kind"])
+        # Every value-taking plugin global may be named bare: presence is
+        # a reading on its own, since the owner can ask `.given`.
+        "--" + g["name"]: ("flag" if g["kind"] == "flag" else "option?")
         for g in tree.get("globals", ())
     }
     globals_, i = _parse_globals(argv, 0, plugin=plugin)

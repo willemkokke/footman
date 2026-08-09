@@ -160,10 +160,6 @@ def _global_spec(opt: Any, memo: dict[int, list[str]]) -> dict[str, Any]:
     spec["name"] = opt.name  # the cli spelling is the identity
     if opt.help:
         spec["help"] = opt.help
-    if opt.bare is not None:
-        # The value a bare mention means — its presence is what marks the
-        # option value-optional to the splitter and the completer.
-        spec["bare"] = str(opt.bare)
     spec["owner"] = opt.owner
     return spec
 
