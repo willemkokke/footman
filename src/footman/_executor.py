@@ -1024,10 +1024,16 @@ def _call_plan(fn: Task) -> _CallPlan:
             or peeled.path_req is not None
             or _coerce.all_choices(peeled.element) is not None
         )
+        # Every source `bind` would consult for an omitted parameter, or a body
+        # call silently skips it and the body sees the sentinel default the
+        # marker was meant to replace. `ask()` counts whether or not there is a
+        # default now that a default is its *offer* rather than a reason not to
+        # ask; `default(fn)` counts because computing it is the whole point.
         sources = param.kind is not inspect.Parameter.VAR_POSITIONAL and (
             peeled.stdin is not None
             or peeled.env is not None
-            or (peeled.ask is not None and param.default is empty)
+            or peeled.ask is not None
+            or peeled.default_fn is not None
         )
         if validates or sources:
             entries.append(_PlanParam(param, peeled, validates, sources))

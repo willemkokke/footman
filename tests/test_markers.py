@@ -342,6 +342,26 @@ def test_default_fn_is_computed_at_bind_not_import():
     assert seen["tag"] == "explicit"  # the command line still outranks it
 
 
+def test_default_fn_is_computed_for_a_body_call_too():
+    seen: dict[str, Any] = {}
+
+    def tasks(reg):
+        @reg.task
+        def build(*, tag: ComputedTag = "") -> None:
+            seen["tag"] = tag
+
+        @reg.task
+        def wrap() -> None:
+            build()
+
+    run(tasks, "wrap")
+    # A parameter whose only marker is `default(fn)` has nothing to validate,
+    # so it never entered the call plan and a body call skipped the ladder
+    # entirely — handing the body the sentinel the marker exists to replace.
+    # footman's own `docs.build` found this by calling `docs.shots`.
+    assert seen["tag"] != ""
+
+
 def test_default_fn_without_a_declared_default_is_a_spec_error():
     def tasks(reg):
         @reg.task

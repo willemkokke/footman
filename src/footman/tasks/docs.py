@@ -29,8 +29,15 @@ from footman import (
     markdown,
     registry,
 )
-from footman.params import between, doc
+from footman.params import between, default, doc
 from footman.registry import Group, requires, requires_dep
+
+_invoking_cli = default(lambda: context.current().prog)
+"""The default for every `prog`/`cmd` parameter here: the CLI that invoked
+us, so a branded runner documents itself. Resolved when the task runs — it
+is a property of the invocation, which is exactly what an import-time
+default cannot see, and what `--help` now prints instead of prose."""
+
 
 tasks: Group = Group("docs", help="Generate markdown docs for this project's tasks")
 
@@ -91,9 +98,7 @@ def page(
         doc("plain CommonMark, or material/zensical extras"),
     ] = "plain",
     out: Path | None = None,
-    prog: Annotated[
-        str, doc("command name in usage and examples (default: the invoking CLI)")
-    ] = "",
+    prog: Annotated[str, _invoking_cli, doc("command name in usage and examples")] = "",
     all: Annotated[bool, doc("include footman's own mounted tasks")] = False,
 ) -> list[str] | None:
     """Render the task tree (or one group/task) as one markdown page.
@@ -104,7 +109,6 @@ def page(
     drops into zensical/mkdocs via a snippet include.
     """
     tree = _project_tree(all)
-    prog = prog or context.current().prog  # a branded CLI documents itself
     text = markdown.render_page(
         tree, path=_path_of(target), heading=heading, flavor=flavor, prog=prog
     )
@@ -127,9 +131,7 @@ def site(
         Literal["plain", "material"],
         doc("material fits zensical/mkdocs; plain is portable"),
     ] = "material",
-    prog: Annotated[
-        str, doc("command name in usage and examples (default: the invoking CLI)")
-    ] = "",
+    prog: Annotated[str, _invoking_cli, doc("command name in usage and examples")] = "",
     all: Annotated[bool, doc("include footman's own mounted tasks")] = False,
 ) -> list[str]:
     """Render the task tree as linked pages: index.md per group, one file per task.
@@ -138,7 +140,6 @@ def site(
     to the nav. Regenerate on each docs build so they can't drift.
     """
     tree = _project_tree(all)
-    prog = prog or context.current().prog  # a branded CLI documents itself
     files = markdown.render_site(tree, path=_path_of(target), flavor=flavor, prog=prog)
     written: list[str] = []
     for rel, content in files.items():
@@ -174,9 +175,9 @@ def reduce_frames(raw: str) -> str:
 def shots(
     *argv: str,
     out: Annotated[Path, doc("the SVG file to write")],
-    title: Annotated[str, doc("window title (default: the command line)")] = "",
+    title: Annotated[str, doc("window title; empty takes the command line")] = "",
     width: Annotated[int, between(40, 200), doc("terminal columns")] = 72,
-    cmd: Annotated[str, doc("executable to run (default: the invoking CLI)")] = "",
+    cmd: Annotated[str, _invoking_cli, doc("executable to run")] = "",
 ) -> list[str]:
     """Run the CLI on a pseudo-terminal and save a framed SVG screenshot.
 
@@ -197,7 +198,7 @@ def shots(
     import struct
     import termios
 
-    prog = cmd or context.current().prog
+    prog = cmd
     exe = shutil.which(prog)
     if exe is None:
         raise RuntimeError(f"{prog!r} is not on PATH")
@@ -690,14 +691,12 @@ def cast(
         Literal["zsh", "bash", "fish", "pwsh", "nushell"],
         doc("interactive shell to drive"),
     ] = "zsh",
-    title: Annotated[str, doc("window title (default: '<shell> · completion')")] = "",
+    title: Annotated[str, doc("window title; empty takes '<shell> · completion'")] = "",
     width: Annotated[int, between(40, 200), doc("terminal columns")] = 72,
     height: Annotated[int, between(4, 50), doc("terminal rows")] = 14,
-    prog: Annotated[
-        str, doc("CLI whose completion is installed (default: the invoking CLI)")
-    ] = "",
+    prog: Annotated[str, _invoking_cli, doc("CLI whose completion is installed")] = "",
     cwd: Annotated[
-        Path | None, doc("directory the shell starts in (default: here)")
+        Path | None, doc("directory the shell starts in; empty takes here")
     ] = None,
     max_frames: Annotated[int, between(2, 120), doc("frame budget")] = 60,
 ) -> list[str]:
@@ -715,7 +714,6 @@ def cast(
         raise RuntimeError("docs cast needs a POSIX pseudo-terminal")
     import tempfile
 
-    prog = prog or context.current().prog
     if shutil.which(prog) is None:
         raise RuntimeError(f"{prog!r} is not on PATH")
     if shutil.which(_CAST_BOOT.get(shell, shell)) is None:
@@ -877,9 +875,7 @@ def config(out: Path | None = None) -> list[str] | None:
 @tasks.task(name="globals")
 def globals_(
     out: Path | None = None,
-    prog: Annotated[
-        str, doc("command name in the table (default: the invoking CLI)")
-    ] = "",
+    prog: Annotated[str, _invoking_cli, doc("command name in the table")] = "",
 ) -> list[str] | None:
     """Render the runner's global options as a markdown table.
 
@@ -888,7 +884,6 @@ def globals_(
     can never drift from the runner. Without --out the table is the task's
     stdout; with --out it is written to the file.
     """
-    prog = prog or context.current().prog  # a branded CLI documents itself
     text = markdown.globals_table(prog=prog)
     if out is None:
         print(text, end="")
