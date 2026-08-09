@@ -431,7 +431,7 @@ def _value_globals(*, mandatory_only: bool) -> list[str]:
     from footman._split import GLOBALS
 
     names: list[str] = []
-    for long, short, kind, metavar, _help in GLOBALS:
+    for long, short, kind, metavar, _default, _help in GLOBALS:
         if kind != "option" or not metavar:
             continue
         if mandatory_only and metavar.startswith("["):
@@ -561,4 +561,54 @@ def test_the_newest_changelog_entries_carry_no_relative_links():
         f"the newest changelog entries link relatively to {relative} — these "
         f"break the generated latest-changes page, which is validated on its "
         f"own. Use https://willemkokke.github.io/footman/<page>/#<anchor>."
+    )
+
+
+def test_every_boolean_config_key_has_both_cli_spellings():
+    """A project setting is a *default*, never a one-way door.
+
+    Five keys were settable in one direction only, so config could turn
+    something on (or off) with nothing to countermand it for a single run — the
+    `progress` key documented itself as disabling the bar *permanently*, which
+    was accurate and should not have been. Derived from both tables rather than
+    a list someone maintains, because the same gap opened five separate times.
+    """
+    from footman._config import KEYS, USER_LEVEL_KEYS
+    from footman._split import GLOBALS
+
+    # User-level keys are exempt: they govern machine-wide behaviour (the cache
+    # collector sweeps one cache for every project), so "for this invocation"
+    # is not a thing they can mean. This guard is about *project* policy.
+    flags = {name for name, _, kind, _, _, _ in GLOBALS if kind == "flag"}
+    missing = [
+        spelling
+        for name, values, _default, _help in KEYS
+        if values == "`true` / `false`" and name not in USER_LEVEL_KEYS
+        for spelling in (f"--{name}", f"--no-{name}")
+        if spelling not in flags
+    ]
+    assert not missing, (
+        f"boolean config keys with no way to countermand them from the command "
+        f"line: {missing}. Add the flag to _split.GLOBALS and resolve it "
+        f"through `_switch`, so config stays a default."
+    )
+
+
+def test_every_switch_resolves_a_documented_config_key():
+    """`_switch(g, cfg, "name", …)` reads `[tool.footman] name`, so every name
+    it is called with has to be a documented key.
+
+    The `KEYS` table exists because `cwd` went undocumented for four releases.
+    It is read *by the docs*, and nothing read it against the code — which is
+    how a live key could go unlisted all over again.
+    """
+    from footman._config import KEYS
+
+    source = (ROOT / "src" / "footman" / "_app.py").read_text(encoding="utf-8")
+    used = set(re.findall(r'_switch\(\s*g,\s*cfg,\s*"([a-z_]+)"', source))
+    documented = {name for name, *_ in KEYS}
+    assert used, "the _switch call-site scan matched nothing — the guard is inert"
+    assert used <= documented, (
+        f"resolved from config but absent from the KEYS table, so absent from "
+        f"the reference page: {sorted(used - documented)}"
     )

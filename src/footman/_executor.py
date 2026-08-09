@@ -518,16 +518,29 @@ def _prompt_param(
     peeled: _coerce.Peeled,
     ctx: Context | None,
     params: dict[str, Any] | None = None,
+    default: Any = _MISSING,
 ) -> tuple[str, Any]:
-    """Resolve a defaultless `ask()` parameter by prompting, coercing the answer
-    through the same pipeline as a CLI token and re-asking on a bad value. Off a
-    terminal or under `--no-input`/`--json` it raises instead — the value must
-    then be supplied on the command line. Returns `(raw, value)`: the accepted
-    token and its coerced value — bind uses the value, the ask front-loader
-    records the raw token so binding re-runs the one pipeline."""
+    """Resolve an `ask()` parameter by prompting, coercing the answer through
+    the same pipeline as a CLI token and re-asking on a bad value.
+
+    *default* is the parameter's declared default, or `_MISSING` when it has
+    none. With one, the prompt offers it and Enter accepts — and where nobody
+    can be asked (off a terminal, `--no-input`, `--json`) it is simply used. So
+    `ask()` is safe on any parameter: a person gets asked, an unattended run
+    gets the default. Without one there is no other answer, so those cases still
+    raise.
+
+    A secret never shows its default — that would defeat the point — though
+    Enter still accepts it.
+
+    Returns `(raw, value)`: the accepted token and its coerced value — bind uses
+    the value, the ask front-loader records the raw token so binding re-runs the
+    one pipeline."""
     marker = peeled.ask
     assert marker is not None  # bind only calls this when ask() is present
     if (ctx is not None and ctx.no_input) or not context._stdin_is_tty():
+        if default is not _MISSING:
+            return "", default
         raise ValueError(
             f"--{cli} is required and nothing supplied it — pass --{cli} "
             f"(a terminal is needed to prompt; --no-input and --json never ask)."
@@ -589,9 +602,12 @@ def _prompt_param(
     if hints and len(hints) > 6:
         hints = [*hints[:6], "…"]
     hint = f" ({'/'.join(hints)})" if hints else ""
-    text = marker.prompt or f"{cli}{hint}: "
+    offered = f" [{default}]" if default is not _MISSING and not marker.secret else ""
+    text = marker.prompt or f"{cli}{hint}{offered}: "
     while True:
         raw = context._prompt_core(text, secret=marker.secret)
+        if not raw and default is not _MISSING:
+            return "", default  # Enter accepts what was offered
         if choices is not None and raw not in choices:
             note(f"  choose one of {', '.join(choices)}")
             continue
@@ -652,16 +668,27 @@ def resolve_asks(fn: Task, seg: Segment, ctx: Context | None) -> None:
         if cli in seg.values:
             continue
         peeled = _coerce.peel(param.annotation)
-        if peeled.ask is None or param.default is not empty:
-            continue
+        if peeled.ask is None or cli in seg.bare:
+            continue  # bare: the caller already said "the declared one"
         if peeled.completer is not None:
             continue  # a live suggest may need a prerequisite's effects
         if peeled.stdin is not None and _stdin_fillable(peeled):
             continue  # the piped payload fills it at bind time
         if peeled.env is not None and os.environ.get(peeled.env) is not None:
             continue  # the env variable fills it at bind time
-        raw, _value = _prompt_param(cli, peeled, ctx, None)
-        seg.values[cli] = raw
+        raw, _value = _prompt_param(
+            cli,
+            peeled,
+            ctx,
+            None,
+            _MISSING if param.default is empty else param.default,
+        )
+        if raw or param.default is empty:
+            seg.values[cli] = raw
+        else:
+            # Enter, or nobody to ask: the declared default stands, and
+            # recording nothing lets bind reach it by the ordinary route.
+            seg.bare.add(cli)
 
 
 def bind(
@@ -669,7 +696,8 @@ def bind(
     fn: Task,
     ctx: Context | None = None,
     forwarded: dict[str, Any] | None = None,
-) -> tuple[list[Any], dict[str, Any]]:
+    forwarded_given: frozenset[str] = frozenset(),
+) -> tuple[list[Any], dict[str, Any], frozenset[str]]:
     """Turn a segment's string values into `(*args, **kwargs)` for *fn*.
 
     Coercion (union member selection, list handling, one-or-many collapse) goes
@@ -678,14 +706,22 @@ def bind(
     fall back to their `env()` variable before their default.
 
     *forwarded* carries values a dispatching task passed down via the `forward`
-    marker. Precedence is CLI value > forwarded > env > default: a forwarded
-    value overrides only a parameter that *has* a default (it never rescues a
-    required one — a prerequisite must still be independently runnable).
+    marker, and *forwarded_given* which of them its own caller asked for.
+    Precedence is CLI value > forwarded > env > default, and a forwarded value
+    can satisfy a defaultless parameter as well as a defaulted one.
+
+    The third return is the **presence set**: the parameters the caller
+    supplied, as opposed to the ones footman inferred. A CLI value counts (bare
+    or attached — naming an option is asking for it), so does a piped `stdin`
+    payload and an answered `ask()` prompt; an `env()` fallback and a default do
+    not, because nobody asked for those. `Context.given` is stamped from it, and
+    it is what lets a task tell "the default one, please" from "no opinion".
     """
     sig = resolved_signature(fn)
     empty = inspect.Parameter.empty
     var_args: list[Any] = []
     kwargs: dict[str, Any] = {}
+    supplied: set[str] = set()
 
     for param in sig.parameters.values():
         # The parameters bound to this one's left, at their effective values,
@@ -702,14 +738,21 @@ def bind(
             continue
 
         cli = registry.cli_name(param.name)
+        if cli in seg.bare:
+            # Named without a value: the mention *is* the content. The ladder
+            # below still runs, so the value is whatever absence would have
+            # given — what changes is that someone asked for it.
+            supplied.add(param.name)
         if cli not in seg.values:
-            # A forwarded value overrides a defaulted parameter (never a
-            # required one — the guard on `param.default`), ahead of env/default.
-            if (
-                forwarded is not None
-                and param.name in forwarded
-                and param.default is not empty
-            ):
+            # A forwarded value outranks env and the default, and may satisfy a
+            # defaultless parameter too: `ask()` and `stdin` already do, and
+            # refusing here only pushed authors into giving the receiving
+            # parameter a default it did not want — weakening its contract when
+            # the task is run on its own, to work around a rule meant to protect
+            # exactly that.
+            if forwarded is not None and param.name in forwarded:
+                if param.name in forwarded_given:
+                    supplied.add(param.name)  # someone asked, further upstream
                 kwargs[param.name] = forwarded[param.name]
                 continue
             if param.annotation is not empty:
@@ -720,6 +763,10 @@ def bind(
                 if peeled.stdin is not None:
                     value = _stdin_value(param, peeled, siblings)
                     if value is not _MISSING:
+                        # A piped payload is the caller handing the value over,
+                        # so it counts as supplied — unlike the env fallback
+                        # below, which is ambient and answers for nobody.
+                        supplied.add(param.name)
                         kwargs[param.name] = value
                         continue
                 if peeled.env is not None:
@@ -727,10 +774,33 @@ def bind(
                     if value is not _MISSING:
                         kwargs[param.name] = value
                         continue
+                if peeled.default_fn is not None:
+                    # A default computed now rather than at import. Used as it
+                    # comes back — it is a real object, and coercion exists for
+                    # command-line strings — but still validated, so one that
+                    # would be refused as a typed value is refused here too.
+                    computed = peeled.default_fn.fn()
+                    _validate_explicit(computed, peeled, f"--{cli}", siblings)
+                    kwargs[param.name] = computed
+                    continue
                 # ask(): prompt for a required (defaultless) param nothing
                 # else filled — the prompt is the last resort.
-                if peeled.ask is not None and param.default is empty:
-                    _, kwargs[param.name] = _prompt_param(cli, peeled, ctx, siblings)
+                if peeled.ask is not None and cli not in seg.bare:
+                    # A bare mention is the caller saying "the declared one" —
+                    # they have answered already, so asking again would be
+                    # footman not listening.
+                    asked, value = _prompt_param(
+                        cli,
+                        peeled,
+                        ctx,
+                        siblings,
+                        _MISSING if param.default is empty else param.default,
+                    )
+                    if asked or param.default is empty:
+                        # Answered by a person; a silent fall back to the
+                        # default in an unattended run is not someone asking.
+                        supplied.add(param.name)
+                    kwargs[param.name] = value
                     continue
                 if peeled.stdin is not None and param.default is empty:
                     # Required, reads stdin, and nothing supplied it. A taught
@@ -761,6 +831,9 @@ def bind(
                         f"pass --{cli}"
                     )
             continue
+        # Named on the line — with a value or bare, both of which are the
+        # caller asking for this parameter rather than footman inferring it.
+        supplied.add(param.name)
         raw = seg.values[cli]
         if isinstance(raw, bool):  # a flag, already resolved by the splitter
             kwargs[param.name] = raw
@@ -839,37 +912,58 @@ def bind(
 
     # `--` passthrough always has a home now: a task's *args, and/or the run
     # context (`passthrough()` / `ctx.passthrough`). So it is never an error.
-    return [*pos, *var_args], kwargs
+    return [*pos, *var_args], kwargs, frozenset(supplied)
 
 
 def forward_map(
-    fn: Task, seg: Segment, received: dict[str, Any] | None = None
-) -> dict[str, Any]:
+    fn: Task,
+    seg: Segment,
+    received: dict[str, Any] | None = None,
+    received_given: frozenset[str] = frozenset(),
+) -> tuple[dict[str, Any], frozenset[str]]:
     """The `forward`-marked parameter values *fn* passes to what it dispatches.
 
     Read from the segment's CLI value or the parameter's default — never by
-    prompting, so building the map is side-effect free. Only defaulted
-    parameters contribute; a required one is never forwarded (matching `bind`).
+    prompting, so building the map is side-effect free. A defaultless parameter
+    contributes when the line carried one: it has a value, and refusing to pass
+    it on would only push authors into giving the receiving end a default it
+    does not want.
 
     A value *fn* itself *received* via forwarding wins over its segment/default,
     so a forwarded value chains through a callee that re-declares the marker.
+
+    Returns `(values, given)` — **two channels**. The value always travels, so
+    what a prerequisite receives is unchanged; presence travels beside it, so
+    `given()` reads the same sentence in a task, a `pre_task` and a `post_task`.
+    Forwarding only the values someone asked for would have been the simpler
+    rule and is wrong: it drops `env()`-sourced values, leaving a prerequisite
+    on its own default when the environment plainly said otherwise.
     """
     sig = resolved_signature(fn)
     empty = inspect.Parameter.empty
     out: dict[str, Any] = {}
+    asked: set[str] = set()
     for param in sig.parameters.values():
-        if param.annotation is empty or param.default is empty:
+        if param.annotation is empty:
             continue
         peeled = _coerce.peel(param.annotation)
         if not peeled.forward:
             continue
         if received is not None and param.name in received:
             out[param.name] = received[param.name]
+            if param.name in received_given:
+                asked.add(param.name)
             continue
         cli = registry.cli_name(param.name)
         if cli not in seg.values:
+            if param.default is empty:
+                # Nothing to send: no token on the line and no default to fall
+                # back on. Its value will come from env/ask when *fn* binds,
+                # which is after this map is built.
+                continue
             out[param.name] = param.default
             continue
+        asked.add(param.name)  # named on the dispatcher's own segment
         raw = seg.values[cli]
         if isinstance(raw, bool):
             out[param.name] = raw
@@ -880,7 +974,7 @@ def forward_map(
             )
         else:
             out[param.name] = _coerce.coerce_one(raw, peeled.element)
-    return out
+    return out, frozenset(asked)
 
 
 @dataclass(frozen=True)
@@ -971,7 +1065,7 @@ def _validate_explicit(
 
 def bind_call(
     fn: Task, args: tuple[Any, ...], kwargs: dict[str, Any]
-) -> tuple[tuple[Any, ...], dict[str, Any]]:
+) -> tuple[tuple[Any, ...], dict[str, Any], frozenset[str]]:
     """A body call's arguments through the same ladder `bind` runs.
 
     The handle sees the call before Python applies defaults, so an omitted
@@ -982,16 +1076,31 @@ def bind_call(
     annotation's validators but are never coerced.
 
     Called before the work key is computed, so identity reads the values the
-    body will actually receive: a segment, a prerequisite and a body call
-    that resolve to the same values are one piece of work.
+    body will actually receive: a segment, a prerequisite and a body call that
+    resolve to the same values *and were asked for the same way* are one piece
+    of work. Presence is the second half of that — omitting a parameter and
+    passing exactly its default resolve alike but are different requests.
+
+    The third return is the **presence set**, the same one `bind` produces from
+    a segment — so `build(profile=<the default>)` and `fm build --profile` say
+    the same thing about their caller, and `build()` and `fm build` say the same
+    thing about theirs. `bind_partial` is what makes it knowable: it records
+    only what was passed, and it runs before `apply_defaults()` fills the rest.
     """
     plan = _call_plan(fn)
-    if not plan.entries:
-        return args, kwargs
     try:
         bound = plan.sig.bind_partial(*args, **kwargs)
     except TypeError:
-        return args, kwargs  # won't bind: let the call raise where it is made
+        # Won't bind: let the call raise where it is made, and claim nothing
+        # about presence for arguments we could not match to parameters.
+        return args, kwargs, frozenset()
+    # Bound before anything fills a gap: the one moment on this path where what
+    # the caller named is distinguishable from what footman is about to infer.
+    # Read ahead of the `entries` shortcut, because a task with nothing to
+    # validate and no sources to consult still has a caller with intentions.
+    supplied: set[str] = set(bound.arguments)
+    if not plan.entries:
+        return args, kwargs, frozenset(supplied)
     name = getattr(fn, "__name__", str(fn))
     empty = inspect.Parameter.empty
     for entry in plan.entries:
@@ -1015,20 +1124,36 @@ def bind_call(
         if peeled.stdin is not None:
             value = _stdin_value(param, peeled, siblings)
             if value is not _MISSING:
+                supplied.add(param.name)  # piped in: handed over, not inferred
                 bound.arguments[param.name] = value
                 continue
         if peeled.env is not None:
             value = _env_value(param, peeled, siblings)
             if value is not _MISSING:
+                # Deliberately not `supplied`: the environment is ambient, and
+                # answers for nobody in particular.
                 bound.arguments[param.name] = value
                 continue
-        if peeled.ask is not None and param.default is empty:
+        if peeled.default_fn is not None:
+            computed = peeled.default_fn.fn()
+            label = f"{name}({param.name}=…)"
+            _validate_explicit(computed, peeled, label, siblings)
+            bound.arguments[param.name] = computed  # inferred, so not `supplied`
+            continue
+        if peeled.ask is not None:
             cli = registry.cli_name(param.name)
-            _, bound.arguments[param.name] = _prompt_param(
-                cli, peeled, context._current.get(), siblings
+            asked, value = _prompt_param(
+                cli,
+                peeled,
+                context._current.get(),
+                siblings,
+                _MISSING if param.default is empty else param.default,
             )
+            if asked or param.default is empty:
+                supplied.add(param.name)  # asked and answered
+            bound.arguments[param.name] = value
     bound.apply_defaults()
-    return bound.args, dict(bound.kwargs)
+    return bound.args, dict(bound.kwargs), frozenset(supplied)
 
 
 def _call(
@@ -1188,38 +1313,77 @@ def bind_global_options(options: Sequence[Any], tokens: Sequence[str]) -> str | 
     """Deliver the parsed leading globals to their owning plugin options.
 
     Every option gets a value for the run — a flag's presence, an option's
-    coerced `=`-attached value, or its default — and freezes, so `.value`
-    answers anywhere in-run. The value string runs the same coercion,
-    bounds, choices and `check(fn)` pipeline a task parameter's would.
-    Returns the teaching message for a value that will not _coerce.
+    coerced `=`-attached value, or what an absent one falls back to — and
+    freezes, so `.value` answers anywhere in-run. The value string runs the same
+    coercion, bounds, choices and `check(fn)` pipeline a task parameter's would.
+    Returns the teaching message for a value that will not coerce.
+
+    Presence freezes alongside it. A mention with no value contributes exactly
+    that — the option was asked for, and `.value` is whatever it would have been
+    anyway — which is what lets one declared value cover absent, named, and
+    named-with-a-value.
+
+    An absent option runs the same ladder a task parameter's does, **env >
+    `default(fn)` > the declared default**, through the very helpers `bind`
+    uses. That marker was already accepted on a global's annotation and reached
+    the manifest, so help would have advertised a fallback that never happened.
     """
     by_flag: dict[str, Any] = {}
     for opt in options:
         by_flag.setdefault("--" + opt.name, opt)
     values: dict[str, Any] = {}
+    given: set[str] = set()
     for tok in tokens:
         name, eq, raw = tok.partition("=")
         opt = by_flag.get(name)
         if opt is None:
             continue
+        given.add(opt.name)
         if opt.annotation is bool:
             values[opt.name] = True
             continue
-        if not eq and opt.bare is not None:
-            # A bare mention of a value-optional option means the author's
-            # `bare=`, run through the ordinary pipeline so a `bare=` that
-            # would not coerce is taught, not smuggled.
-            raw = str(opt.bare)
+        if not eq:
+            # Named without a value: presence is the whole content, so leave the
+            # value to the absent ladder below — the same reading a task option
+            # gives a bare mention.
+            continue
         peeled = _coerce.peel(opt.annotation)
         try:
             values[opt.name] = _coerce_extra(raw, peeled, name)
         except ValueError as exc:
             return str(exc)
     for opt in by_flag.values():
-        fallback = False if opt.annotation is bool else opt.default
-        opt._value = values.get(opt.name, fallback)
+        opt._given = opt.name in given
         opt._frozen = True
+        if opt.name in values:
+            opt._value = values[opt.name]
+            continue
+        if opt.annotation is bool:
+            opt._value = False
+            continue
+        opt._value = _absent_global(opt)
     return None
+
+
+def _absent_global(opt: Any) -> Any:
+    """A global option's value when the line carried none: env, then a computed
+    default, then the declared one — the ladder `bind` runs for a task
+    parameter, on the synthetic parameter `_global_spec` already builds for the
+    manifest, so the two cannot drift into different answers."""
+    peeled = _coerce.peel(opt.annotation)
+    param = inspect.Parameter(
+        opt.name.replace("-", "_"),
+        inspect.Parameter.KEYWORD_ONLY,
+        annotation=opt.annotation,
+        default=opt.default,
+    )
+    if peeled.env is not None:
+        value = _env_value(param, peeled)
+        if value is not _MISSING:
+            return value
+    if peeled.default_fn is not None:
+        return peeled.default_fn.fn()
+    return opt.default
 
 
 def _advise_unread_uses(ctx: Context, fn: Task) -> None:
@@ -1667,7 +1831,11 @@ def _exit_task_hooks(
 
 
 def run_task(
-    fn: Task, seg: Segment, ctx: Context, forwarded: dict[str, Any] | None = None
+    fn: Task,
+    seg: Segment,
+    ctx: Context,
+    forwarded: dict[str, Any] | None = None,
+    forwarded_given: frozenset[str] = frozenset(),
 ) -> TaskResult:
     """Bind *seg* to *fn* and run it within *ctx* (contextvar set for run()).
 
@@ -1701,7 +1869,7 @@ def run_task(
             _exit_task_hooks(life, handle, result)
             return result
         try:
-            args, kwargs = bind(seg, fn, ctx, forwarded)
+            args, kwargs, ctx.given = bind(seg, fn, ctx, forwarded, forwarded_given)
         except ChainError:
             raise  # e.g. passthrough with no *args — reported by the app layer
         except Exception as exc:  # a coercion failure (custom-type constructor)
@@ -1743,7 +1911,14 @@ def run_bound(
     # `as_call` means the cell layer is already holding this work's cell (it
     # claimed before delegating here) and will resolve it — claiming again from
     # the same thread would read as this task waiting on itself.
-    work = _futures.work_of(fn, args, kwargs) if ctx.shared and not as_call else None
+    # `ctx.given` was stamped by `bind` above, so a segment and a body call that
+    # resolve to the same values still name different work when one of them
+    # asked for a parameter and the other merely got its default.
+    work = (
+        _futures.work_of(fn, args, kwargs, ctx.given)
+        if ctx.shared and not as_call
+        else None
+    )
     claimed, cell = _futures.claim(work, seg.task)
     if not claimed:
         # The pair is per request — only the body is shared. The pre fires

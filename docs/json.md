@@ -329,7 +329,7 @@ $ fm --json chekc
   "schema": 1,
   "error": {
     "code": 64,
-    "message": "expected a task name, got 'chekc' — did you mean 'check'? (know: docs, lint, test, check)"
+    "message": "no task named 'chekc' — did you mean 'check'? (know: docs, lint, test, check)"
   },
   "items": []
 }

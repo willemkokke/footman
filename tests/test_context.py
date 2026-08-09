@@ -1532,13 +1532,52 @@ def test_ask_cli_value_wins_over_the_prompt(monkeypatch):
     assert got["v"] == "9.9.9"
 
 
-def test_ask_default_short_circuits_the_prompt(monkeypatch):
+def test_ask_offers_the_default_and_enter_accepts_it(monkeypatch):
     from footman import context
 
-    # A default is the answer (CLI > env > default > prompt): no prompt fires.
+    # A default no longer silences the question — it becomes the offer, so
+    # `ask()` is usable on any parameter rather than defaultless ones only.
     monkeypatch.setattr(context, "_stdin_is_tty", lambda: True)
-    monkeypatch.setattr(sys, "stdin", io.StringIO("WRONG\n"))
+    monkeypatch.setattr(sys, "stdin", io.StringIO("\n"))  # Enter
     monkeypatch.setattr(context, "real_stderr", io.StringIO)
+
+    got = {}
+
+    def build(reg):
+        @reg.task
+        def release(version: Annotated[str, ask()] = "patch"):
+            got["v"] = version
+
+    _, _, results = drive(build, "release")
+    assert results[0].ok
+    assert got["v"] == "patch"
+
+
+def test_ask_takes_the_answer_over_the_default(monkeypatch):
+    from footman import context
+
+    monkeypatch.setattr(context, "_stdin_is_tty", lambda: True)
+    monkeypatch.setattr(sys, "stdin", io.StringIO("minor\n"))
+    monkeypatch.setattr(context, "real_stderr", io.StringIO)
+
+    got = {}
+
+    def build(reg):
+        @reg.task
+        def release(version: Annotated[str, ask()] = "patch"):
+            got["v"] = version
+
+    _, _, results = drive(build, "release")
+    assert results[0].ok
+    assert got["v"] == "minor"
+
+
+def test_ask_with_a_default_falls_back_where_nobody_can_be_asked(monkeypatch):
+    from footman import context
+
+    # No terminal, but there *is* another answer, so this is not a refusal:
+    # a person gets asked, an unattended run gets the default.
+    monkeypatch.setattr(context, "_stdin_is_tty", lambda: False)
 
     got = {}
 

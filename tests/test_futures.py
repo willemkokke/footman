@@ -79,10 +79,13 @@ def test_the_memo_keys_on_arguments_not_just_the_task():
         assert render("web") == "WEB"
         assert render(target="web") == "WEB"  # same work, other spelling
         assert render("api") == "API"  # different work
-        assert render() == "WEB"  # the default is the same work as "web"
+        # Omitting is *not* the same request as passing the default: `given()`
+        # tells the two apart, so identity has to as well, or a body that
+        # branches on presence would be answered by the wrong execution.
+        assert render() == "WEB"
 
     assert drive(reg, "build-all").ok
-    assert seen == ["web", "api"]
+    assert seen == ["web", "api", "web"]
 
 
 def test_an_unshared_task_runs_on_every_call():
@@ -834,11 +837,13 @@ def test_a_ctx_tasks_call_keys_on_the_callers_arguments():
     def build_all():
         assert render("web") == "WEB"
         assert render("api") == "API"  # different work, not a stale hit
-        # ctx is injected, never passed — the static signature still lists it
+        # ctx is injected, never passed — the static signature still lists it.
+        # Its own execution, because omitting a parameter and passing its
+        # default are different requests (see the memo-keying test).
         assert render() == "WEB"  # type: ignore[call-arg]
 
     assert drive(reg, "build-all").ok
-    assert seen == ["web", "api"]
+    assert seen == ["web", "api", "web"]
 
 
 def test_a_call_reads_the_env_fallback_when_the_parameter_is_omitted(monkeypatch):

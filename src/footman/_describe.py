@@ -110,7 +110,8 @@ def usage_fragment(p: dict[str, Any]) -> str:
     if kind == "stdin":
         return ""  # a whole-document parameter has no token spelling
     if kind == "flag":
-        return f"--{p['name']}" if required else f"[--{p['name']}]"
+        name = f"no-{p['name']}" if p.get("default") is True else p["name"]
+        return f"--{name}" if required else f"[--{name}]"
     if kind == "option":
         core = f"--{p['name']}={value_hint(p)}"
         if _repeats(p) or p.get("mapping"):
@@ -125,7 +126,7 @@ def usage_fragment(p: dict[str, Any]) -> str:
 def param_label(p: dict[str, Any]) -> str:
     kind = p["kind"]
     if kind == "flag":
-        return f"--{p['name']}"
+        return f"--no-{p['name']}" if p.get("default") is True else f"--{p['name']}"
     if kind == "option":
         return f"--{p['name']}={value_hint(p)}"
     suffix = "..." if kind == "variadic" or p.get("multiple") else ""
@@ -143,10 +144,37 @@ def param_detail_parts(p: dict[str, Any]) -> tuple[str, str]:
     return p.get("doc", ""), _mechanics(p)
 
 
+def default_text(p: dict[str, Any]) -> str:
+    """The declared default, spelled the way the command line spells values, or
+    `""` when there is nothing worth printing.
+
+    `None` prints as nothing rather than "None": absence is what it means, and
+    "the default is None" tells a reader less than saying nothing does. An empty
+    string is printed as `""`, because there it is the value.
+    """
+    if "default" not in p or p.get("required"):
+        return ""
+    value = p["default"]
+    if value is None:
+        return ""
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (list, tuple)):
+        return ",".join(str(v) for v in value) if value else "(none)"
+    if isinstance(value, dict):
+        return ",".join(f"{k}={v}" for k, v in value.items()) if value else "(none)"
+    return str(value) if value != "" else '""'
+
+
 def _mechanics(p: dict[str, Any]) -> str:
     bits: list[str] = []
     if p["kind"] == "flag":
-        bits.append(f"flag (--no-{p['name']} to disable)")
+        # A flag defaulting true is only ever *turned off*, so the spelling
+        # that does something leads, and the inert one is the parenthetical.
+        if p.get("default") is True:
+            bits.append(f"flag (--{p['name']} to enable)")
+        else:
+            bits.append(f"flag (--no-{p['name']} to disable)")
     choices = p.get("choices")
     if choices:
         bits.append("one of " + "|".join(choices))
@@ -181,6 +209,16 @@ def _mechanics(p: dict[str, Any]) -> str:
         else:
             note = "reads stdin (text)"
         bits.append(note)
+    # In ladder order, so the line reads the way resolution happens: the
+    # environment answers first, the declared default last. Both were in the
+    # manifest all along and neither was ever printed — a help page that knows
+    # a parameter falls back to $DEPLOY_ENV and does not say so is holding out.
+    if (var := p.get("env")) is not None:
+        bits.append(f"from ${var}")
+    # A flag's default is already said twice over by the label and its
+    # parenthetical, so printing it again would be noise.
+    if p["kind"] != "flag" and (shown := default_text(p)):
+        bits.append(f"default: {shown}")
     if p.get("required"):
         bits.append("required")
     return "; ".join(bits)

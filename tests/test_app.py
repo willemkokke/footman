@@ -87,6 +87,10 @@ def fix(dry: Annotated[bool, doc("plan only, change nothing")] = False):
     """
 
 @task
+def publish(cache: bool = True):
+    """Publish it."""
+
+@task
 def sync(force: bool = False):
     """Sync the things.
 
@@ -248,7 +252,7 @@ def test_fail_reason_reaches_json(project, capsys):
 
 def test_unknown_task_is_teaching_error(project, capsys):
     assert _app.run(["nope"]) == EX_USAGE
-    assert "expected a task name" in capsys.readouterr().err
+    assert "no task named" in capsys.readouterr().err
 
 
 def test_where(project, capsys):
@@ -563,6 +567,34 @@ def test_help_shows_long_description_and_docstring_doc(project, capsys):
     assert "Args:" not in out  # the section header is structure, not prose
 
 
+def test_help_shows_the_declared_default(project, capsys):
+    # The manifest carried `default` all along and help never printed it, so a
+    # reader had to run the task to find out what `--name` would be.
+    assert _app.run(["--help", "hi"]) == 0
+    assert "default: world" in capsys.readouterr().out
+
+
+def test_help_leads_with_the_spelling_that_does_something(project, capsys):
+    # `--dry` defaults false, so the useful spelling is the positive one.
+    assert _app.run(["--help", "fix"]) == 0
+    out = capsys.readouterr().out
+    assert "--dry " in out
+    assert "(--no-dry to disable)" in out
+    # A flag's default is said by the label and the parenthetical; saying
+    # "default: false" as well would be the same fact three times.
+    assert "default: false" not in out
+
+
+def test_help_leads_a_default_true_flag_with_its_negative(project, capsys):
+    # `--cache` defaults true, so typing it changes nothing and `--no-cache` is
+    # the only spelling that does. Leading with the inert one buried the useful
+    # one in a parenthetical.
+    assert _app.run(["--help", "publish"]) == 0
+    out = capsys.readouterr().out
+    assert "--no-cache" in out
+    assert "(--cache to enable)" in out
+
+
 def test_help_shows_positionals_and_types(project, capsys):
     assert _app.run(["--help", "add"]) == 0
     out = capsys.readouterr().out
@@ -841,9 +873,9 @@ def test_json_refusal_envelope(project, capsys):
     payload = json.loads(captured.out)
     assert payload["schema"] == 1
     assert payload["error"]["code"] == EX_USAGE
-    assert "expected a task name" in payload["error"]["message"]
+    assert "no task named" in payload["error"]["message"]
     assert payload["items"] == []
-    assert "expected a task name" in captured.err  # stderr keeps the human copy
+    assert "no task named" in captured.err  # stderr keeps the human copy
 
 
 def test_json_refusal_on_unknown_global(project, capsys):

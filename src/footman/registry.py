@@ -89,21 +89,19 @@ class GlobalOption:
     anywhere in-run as `OPT.value` (frozen after parse); cross-plugin use is
     an ordinary import of the singleton.
 
-    `bare=` makes the value optional: it is what a bare mention means
-    (`--profile` → `bare`, `--profile=out.json` → the attached value), the
-    same grammar footman's own `--install-completion` speaks. Its string
-    form runs the ordinary coercion, so a `bare=` that would not survive the
-    option's own pipeline is a registration-time author error, taught at
-    parse. Meaningless on a flag — a flag is nothing but a bare mention —
-    and refused there.
+    A mention with no value is legal — `--profile` beside `--profile=out.json`
+    — and carries presence rather than a value: `.value` is then whatever the
+    option would have had anyway, and `.given` says someone asked. That is what
+    lets one declared value cover three outcomes (off, the default file, a named
+    file) where a second declared value used to be needed.
     """
 
     __slots__ = (
         "_frozen",
+        "_given",
         "_reads",
         "_value",
         "annotation",
-        "bare",
         "default",
         "help",
         "name",
@@ -113,7 +111,6 @@ class GlobalOption:
     name: str
     annotation: Any
     default: Any
-    bare: Any
     help: str
     owner: str
 
@@ -123,7 +120,6 @@ class GlobalOption:
         annotation: Any = bool,
         *,
         default: Any = None,
-        bare: Any = None,
         help: str = "",  # matches the manifest's vocabulary
     ) -> None:
         if name.startswith("-"):
@@ -131,16 +127,9 @@ class GlobalOption:
                 f"GlobalOption({name!r}): give the bare name — the dashes are "
                 f"the grammar's (and plugin globals are long-form only)"
             )
-        if bare is not None and annotation is bool:
-            raise RegistrationError(
-                f"GlobalOption({name!r}): bare= names what a bare mention "
-                f"means, and a flag is nothing but a bare mention — give the "
-                f"option a value type, or drop bare="
-            )
         self.name = cli_name(name)
         self.annotation = annotation
         self.default = default if annotation is not bool else bool(default)
-        self.bare = bare
         self.help = help
         # The DEFINING module, never the importing capture: what a collision
         # names, what pairing and provenance key on.
@@ -149,6 +138,7 @@ class GlobalOption:
         frame = _sys._getframe(1)
         self.owner = frame.f_globals.get("__name__", "<unknown>")
         self._value: Any = _UNBOUND
+        self._given = False
         self._frozen = False
         self._reads: set[str] = set()
         root.contributions["globals"].append(self)
@@ -167,6 +157,32 @@ class GlobalOption:
             )
         self._mark_read()
         return self._value
+
+    @property
+    def given(self) -> bool:
+        """Whether this option was named on the command line, with or without a
+        value — the twin of `value`, and the half a value cannot express.
+
+        ```python
+        PROFILE = GlobalOption("profile", Path, default=Path("fm-profile.json"))
+        if PROFILE.given:            # `--profile` writes the default file,
+            write_trace(PROFILE.value)   # no `--profile` writes nothing
+        ```
+
+        Three outcomes from one declared value: absent, named, named with a
+        value. `value` answers *what*, `given` answers *whether anyone asked* —
+        and an `env` fallback fills the first without ever touching the second,
+        so a caller who wants the environment alone to count can say so, and one
+        who does not can say that instead.
+        """
+        if not self._frozen:
+            raise RuntimeError(
+                f"--{self.name} has no answer here — a global option is parsed "
+                f"from the command line, so read {type(self).__name__}.given "
+                f"inside a task or lifecycle hook, during a run"
+            )
+        self._mark_read()
+        return self._given
 
     def _mark_read(self) -> None:
         # Read-marking for the notes lane: an in-task read is attributed to

@@ -117,21 +117,29 @@ def test_diverging_forwards_make_two_nodes_not_a_refusal():
     assert sorted(seen) == [False, True]  # two executions, not three
 
 
-def test_forward_map_reads_cli_or_default_and_skips_required():
-    # `forward_map` is side-effect free and only defaulted params contribute:
-    # a required one is never forwarded (the conservative rule).
+def test_forward_map_reads_cli_or_default_and_carries_presence():
+    # Two channels: the value always travels, and whether anyone asked for it
+    # travels beside it. `forward_map` stays side-effect free — it reads the
+    # segment and the declared default, never a prompt.
     reg = Group("root")
 
     @reg.task
     def deploy(target: Forward[str], fix: Forward[bool] = False):
         pass
 
-    # even with a CLI value present, the required `target` is excluded.
+    # A defaultless parameter contributes when the line carried one: refusing
+    # only pushed authors into giving the receiving task a default it did not
+    # want. Both were named, so both are asked-for.
     seg = Segment(
         task="deploy", path=["deploy"], values={"target": "prod", "fix": True}
     )
-    assert forward_map(deploy, seg) == {"fix": True}
-    # bare segment: the defaulted `fix` contributes its default.
-    assert forward_map(deploy, Segment(task="deploy", path=["deploy"])) == {
-        "fix": False
-    }
+    assert forward_map(deploy, seg) == (
+        {"target": "prod", "fix": True},
+        frozenset({"target", "fix"}),
+    )
+    # Bare segment: the defaulted `fix` sends its default and nobody asked for
+    # it; the defaultless `target` has nothing to send at all.
+    assert forward_map(deploy, Segment(task="deploy", path=["deploy"])) == (
+        {"fix": False},
+        frozenset(),
+    )

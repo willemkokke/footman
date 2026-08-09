@@ -25,8 +25,9 @@ parsed: the error path detects it and answers with the dotted spelling.
 
 from __future__ import annotations
 
+import contextlib
 import difflib
-from collections.abc import Iterable
+from collections.abc import Callable, Generator, Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -91,77 +92,198 @@ class ChainError(Exception):
     """A malformed command line, carrying a teaching message for the user."""
 
 
+def _default_jobs() -> int:
+    """The parallel width nobody chose, imported at the call rather than at
+    module scope — `_progress` takes `Segment` from here, so importing it up
+    top would close the cycle."""
+    from footman._progress import default_jobs
+
+    return default_jobs()
+
+
 # Global options bind to `fm` itself and must precede the first task name
 # (`--help`/`-h` is the one exception: anywhere before `--`, it wins).
-# (canonical, short alias, kind, value-hint, help)
-GLOBALS: list[tuple[str, str | None, str, str | None, str]] = [
-    ("--help", "-h", "flag", None, "help for {prog}, or the named group/task"),
-    ("--version", "-V", "flag", None, "print the version and exit"),
-    ("--list", "-l", "flag", None, "list tasks (flat)"),
-    ("--tree", None, "flag", None, "list tasks grouped by command group"),
-    ("--sort", None, "flag", None, "list tasks alphabetically (default: as defined)"),
-    ("--all", "-a", "flag", None, "include hidden tasks in the listings"),
-    ("--where", None, "option", "TASK", "print the task's source file:line"),
+# (canonical, short alias, kind, value-hint, default, help). `default` is what
+# a bare mention means — `None` for an option that has no reading without a
+# value, which is the same question a task option answers with `required`.
+#
+# A literal where the default is a constant (`--color` → `auto`); a callable
+# where it depends on the machine, deferred because `_progress` imports from
+# here and a module-level import would close the cycle — the `default(fn)` a
+# task parameter declares, in the form a static table can hold. `""` where the
+# reading exists but has no spelling of its own: `--describe` means "the whole
+# tree", `--install-completion` means "whichever shell is asking".
+GlobalDefault = str | Callable[[], str] | None
+GLOBALS: list[tuple[str, str | None, str, str | None, GlobalDefault, str]] = [
+    ("--help", "-h", "flag", None, None, "help for {prog}, or the named group/task"),
+    ("--version", "-V", "flag", None, None, "print the version and exit"),
+    ("--list", "-l", "flag", None, None, "list tasks (flat)"),
+    ("--tree", None, "flag", None, None, "list tasks grouped by command group"),
+    (
+        "--sort",
+        None,
+        "flag",
+        None,
+        None,
+        "list tasks alphabetically (default: as defined)",
+    ),
+    ("--no-sort", None, "flag", None, None, "list tasks in definition order"),
+    ("--all", "-a", "flag", None, None, "include hidden tasks in the listings"),
+    ("--where", None, "option", "TASK", None, "print the task's source file:line"),
     # The bracketed hint marks the value optional: bare `--describe` dumps
     # the whole tree's contract; a group address answers for its subtree.
-    ("--describe", None, "option", "[ADDR]", "print task contracts as JSON"),
+    ("--describe", None, "option", "[ADDR]", "", "print task contracts as JSON"),
     (
         "--plugins",
         None,
         "flag",
         None,
+        None,
         "list installed footman.tasks plugins, pulled or not",
     ),
-    ("--dry-run", "-n", "flag", None, "rehearse: bodies run, footman's work is faked"),
-    ("--keep-going", "-k", "flag", None, "run every branch even if one fails"),
-    ("--fail-fast", None, "flag", None, "stop at the first failure"),
+    (
+        "--dry-run",
+        "-n",
+        "flag",
+        None,
+        None,
+        "rehearse: bodies run, footman's work is faked",
+    ),
+    ("--keep-going", "-k", "flag", None, None, "run every branch even if one fails"),
+    ("--fail-fast", None, "flag", None, None, "stop at the first failure"),
     (
         "--sequential",
         "-s",
         "flag",
         None,
+        None,
         "run one at a time, parallel() blocks included",
     ),
+    ("--no-sequential", None, "flag", None, None, "run in parallel (undo config)"),
     (
         "--jobs",
         "-j",
         "option",
         "N",
-        "max parallel tasks (default: cores - 1, never below 2)",
+        lambda: str(_default_jobs()),
+        "max parallel tasks",
     ),
-    ("--yes", "-y", "flag", None, "assume yes to every confirm() gate"),
-    ("--no-input", None, "flag", None, "never prompt; error if input is required"),
-    ("--quiet", "-q", "flag", None, "suppress the per-task summary"),
-    ("--verbose", "-v", "flag", None, "replay captured output even on success"),
-    ("--color", None, "option", "WHEN", "when to colour: always|never|auto (default)"),
-    ("--no-color", None, "flag", None, "disable ANSI colour (same as --color=never)"),
-    ("--no-progress", None, "flag", None, "no progress bar, eta, or timing capture"),
-    ("--json", None, "flag", None, "stdout is one JSON document (captures output)"),
-    ("--timings", None, "flag", None, "show per-task durations"),
-    ("--directory", "-C", "option", "PATH", "run as if launched from PATH"),
-    ("--tasks-file", "-f", "option", "PATH", "only this tasks file, no tasks cascade"),
-    ("--config", None, "option", "PATH", "only this config file, no config cascade"),
+    ("--yes", "-y", "flag", None, None, "assume yes to every confirm() gate"),
+    (
+        "--no-input",
+        None,
+        "flag",
+        None,
+        None,
+        "never prompt; error if input is required",
+    ),
+    ("--input", None, "flag", None, None, "allow prompting (undo config)"),
+    ("--quiet", "-q", "flag", None, None, "suppress the per-task summary"),
+    ("--verbose", "-v", "flag", None, None, "replay captured output even on success"),
+    (
+        "--color",
+        None,
+        "option",
+        "WHEN",
+        "auto",
+        "when to colour: always|never|auto",
+    ),
+    (
+        "--no-color",
+        None,
+        "flag",
+        None,
+        None,
+        "disable ANSI colour (same as --color=never)",
+    ),
+    (
+        "--no-progress",
+        None,
+        "flag",
+        None,
+        None,
+        "no progress bar, eta, or timing capture",
+    ),
+    (
+        "--progress",
+        None,
+        "flag",
+        None,
+        None,
+        "progress bar, eta and timing (undo config)",
+    ),
+    ("--no-uv", None, "flag", None, None, "skip the uv handoffs for this run"),
+    ("--uv", None, "flag", None, None, "take the uv handoffs (undo config)"),
+    (
+        "--json",
+        None,
+        "flag",
+        None,
+        None,
+        "stdout is one JSON document (captures output)",
+    ),
+    ("--timings", None, "flag", None, None, "show per-task durations"),
+    ("--directory", "-C", "option", "PATH", None, "run as if launched from PATH"),
+    (
+        "--tasks-file",
+        "-f",
+        "option",
+        "PATH",
+        None,
+        "only this tasks file, no tasks cascade",
+    ),
+    (
+        "--config",
+        None,
+        "option",
+        "PATH",
+        None,
+        "only this config file, no config cascade",
+    ),
     # The bracketed hint marks the value optional: bare `--install-completion`
     # / `--setup-completion` detect the invoking shell.
-    ("--install-completion", None, "option", "[SHELL]", "install shell completion"),
-    ("--setup-completion", None, "option", "[SHELL]", "print completion for eval"),
+    ("--install-completion", None, "option", "[SHELL]", "", "install shell completion"),
+    ("--setup-completion", None, "option", "[SHELL]", "", "print completion for eval"),
     (
         "--uninstall-completion",
         None,
         "option",
         "[SHELL]",
+        "",
         "remove the completion hook",
     ),
 ]
-_GLOBAL_KIND = {name: kind for name, _, kind, _, _ in GLOBALS}
-_GLOBAL_KIND.update({alias: kind for _, alias, kind, _, _ in GLOBALS if alias})
-_CANON = {alias: name for name, alias, _, _, _ in GLOBALS if alias}
-_GLOBAL_HINT = {name: hint for name, _, _, hint, _ in GLOBALS if hint}
-# Options whose bare form is itself meaningful (`--install-completion` detects
-# the invoking shell), so a missing `=value` is not an error.
-_VALUE_OPTIONAL = frozenset(
-    name for name, _, _, hint, _ in GLOBALS if hint and hint.startswith("[")
-)
+_GLOBAL_KIND = {name: kind for name, _, kind, _, _, _ in GLOBALS}
+_GLOBAL_KIND.update({alias: kind for _, alias, kind, _, _, _ in GLOBALS if alias})
+_CANON = {alias: name for name, alias, _, _, _, _ in GLOBALS if alias}
+_GLOBAL_HINT = {name: hint for name, _, _, hint, _, _ in GLOBALS if hint}
+# A global may be named bare exactly when it has a default — something for the
+# mention to mean. That is the same question a task option answers with
+# `required`, asked of the table instead of a signature: `--describe` and the
+# completion trio have readings, `--where` names a task to locate and there is
+# no default task, so a word behind it is taught rather than quietly becoming
+# the task to run. The bracketed metavar is help notation now, not the rule.
+_GLOBAL_DEFAULT = {name: d for name, _, _, _, d, _ in GLOBALS if d is not None}
+_VALUE_OPTIONAL = frozenset(_GLOBAL_DEFAULT)
+
+
+def global_default_text(name: str) -> str:
+    """A global's default, spelled the way the command line spells values, for
+    `--help` to print — and resolved *now*, so a computed one says what this
+    machine will actually do rather than what some other one would.
+
+    Empty when there is nothing worth printing: an option that must be given a
+    value, or one whose bare form means something with no spelling of its own
+    (`--describe` is "the whole tree", `--install-completion` is "whichever
+    shell is asking"). Those two say it in their help text, where it reads.
+    """
+    value = _GLOBAL_DEFAULT.get(name)
+    if value is None:
+        return ""
+    # `isinstance(str)` rather than `callable()`: narrowing on the string side
+    # leaves a concrete callable type, where `callable()` widens to "any
+    # callable at all" and cannot be called safely.
+    return value if isinstance(value, str) else value()
 
 
 @dataclass
@@ -171,6 +293,12 @@ class Segment:
     task: str  # dotted path, e.g. "docs.build"
     path: list[str]  # ["docs", "build"]
     values: dict[str, Any] = field(default_factory=dict)  # cli-name -> value
+    bare: set[str] = field(default_factory=set)
+    """Options named without a value (`--profile`). They carry no value — the
+    binder runs the same ladder an absent option would — so what a bare mention
+    contributes is *presence*: the caller asked for this parameter and meant
+    whatever it would have got anyway, which `given()` reads and a value alone
+    cannot say."""
     variadic: list[str] = field(default_factory=list)
     passthrough: list[str] | None = None
     # Advisory stderr lines the app prints before running — `{prog}` is
@@ -355,6 +483,27 @@ def _expects_value(
     return f"{prefix}{given} expects a value, attached: {given}={hint}"
 
 
+@contextlib.contextmanager
+def _hint_attachment(bare: str | None, token: str) -> Generator[None]:
+    """Add the `=`-attachment hint to a failure caused by the token that rode
+    behind a bare mention.
+
+    The space form is not a value spelling in this grammar — `--mode` binds its
+    default and `strict` is simply the next token, which is the only reading
+    available — but it is still what a hand types out of habit. So when that
+    next token goes on to fail, the failure also says what was probably meant.
+    Never on a line that parses: a working invocation has nothing to
+    second-guess, and guessing at one would be footman overruling the tokens.
+    """
+    if bare is None:
+        yield
+        return
+    try:
+        yield
+    except ChainError as exc:
+        raise ChainError(f"{exc} — did you mean {bare}={token}?") from None
+
+
 def _parse_globals(
     argv: list[str],
     i: int,
@@ -366,13 +515,18 @@ def _parse_globals(
     self-contained (a value is `=`-attached), and the first bare word starts
     the task chain.
 
+    A global whose bare form has a reading may be named bare — `_VALUE_OPTIONAL`
+    says which, the same question a task option answers with `required`. One
+    without a reading still refuses: `--where` names a task to locate, and there
+    is no default task, so a word behind it is taught rather than quietly
+    becoming the task to run.
+
     *plugin* maps a pulled plugin's long options (`--env-file`) to their
     kinds — `option?` marks one whose bare form is itself meaningful
-    (`GlobalOption(bare=…)`), the `[SHELL]`-hint grammar footman's own
-    completion installers speak. *lenient* carries an unknown dash token
-    through untouched instead of refusing — the pre-discovery walk cannot
-    know the plugins yet, so the authoritative post-discovery parse is the
-    one that teaches.
+    (`GlobalOption(bare=…)`). *lenient* carries an unknown dash token through
+    untouched instead of refusing — the pre-discovery walk cannot know the
+    plugins yet, so the authoritative post-discovery parse is the one that
+    teaches.
     """
     known: dict[str, str] = dict(_GLOBAL_KIND)
     value_optional = set(_VALUE_OPTIONAL)
@@ -511,7 +665,7 @@ def _resolve_head(
                 and (
                     _GLOBAL_KIND.get(prev) == "option"
                     or any(
-                        "--" + g["name"] == prev and "bare" in g
+                        "--" + g["name"] == prev and g["kind"] != "flag"
                         for g in tree.get("globals", ())
                     )
                 )
@@ -534,10 +688,12 @@ def _resolve_head(
         hint = _did_you_mean(token, flat_addresses(tree))
         scope = f"{'.'.join(path)} has" if path else "know"
         known = ", ".join(_children(node, f"{'.'.join(path)}." if path else ""))
+        # One lead for both branches. They used to differ — "no task at" for a
+        # dotted address, "expected a task name, got" at the root — but the
+        # scope clause after already carries that distinction (`docs has:` vs
+        # `know:`), and someone who typed `docs.sevre` thinks of it as a name.
         raise ChainError(
-            f"no task at {bad!r}{hint} ({scope}: {known})"
-            if path
-            else f"expected a task name, got {token!r}{hint} ({scope}: {known})"
+            f"no task named {(bad if path else token)!r}{hint} ({scope}: {known})"
         )
 
     # The whole token named a group. Runnable — one with `@group.default` —
@@ -634,15 +790,23 @@ def split_chain(
 ) -> tuple[list[str], list[Segment]]:
     """Split *argv* into leading globals and a list of resolved segments."""
     plugin = {
-        "--" + g["name"]: ("option?" if "bare" in g else g["kind"])
+        # Every value-taking plugin global may be named bare: presence is
+        # a reading on its own, since the owner can ask `.given`.
+        "--" + g["name"]: ("flag" if g["kind"] == "flag" else "option?")
         for g in tree.get("globals", ())
     }
     globals_, i = _parse_globals(argv, 0, plugin=plugin)
     segments: list[Segment] = []
     prev_group: tuple[str, dict[str, Any]] | None = None
+    # The option a bare mention just named, alive for exactly the token after
+    # it — including across a segment boundary, since a word with nowhere left
+    # to go in this segment is tried as the next task's name.
+    bare_before: str | None = None
 
     while i < len(argv):
-        task, path, group_node, i = _resolve_head(tree, argv, i, prev_group)
+        with _hint_attachment(bare_before, argv[i]):
+            task, path, group_node, i = _resolve_head(tree, argv, i, prev_group)
+        bare_before = None
         prev_group = (".".join(path), group_node) if group_node is not None else None
 
         opts = {
@@ -680,21 +844,31 @@ def split_chain(
                 i = len(argv)
                 break
             if tok.startswith("--"):
+                before = len(seg.bare)
                 i = _consume_option(seg, opts, argv, i)
-            elif filled < len(fixed):
-                _consume_positional(seg, tree, fixed[filled], tok)
-                filled += 1
-                i += 1
-            elif rest is not None:
-                if rest["kind"] == "variadic":
-                    _validate(seg.task, rest, tok)  # eager, like every positional
-                    seg.variadic.append(tok)
+                # Remember a bare mention for exactly one token. If the word
+                # after it goes on to fail, the failure gets the attachment
+                # hint — the space form is not a value spelling in this grammar,
+                # but it is still what a hand types out of habit, and a line
+                # that was going to error anyway can afford to say so.
+                bare_before = tok if len(seg.bare) > before else None
+                continue
+            with _hint_attachment(bare_before, tok):
+                if filled < len(fixed):
+                    _consume_positional(seg, tree, fixed[filled], tok)
+                    filled += 1
+                    i += 1
+                elif rest is not None:
+                    if rest["kind"] == "variadic":
+                        _validate(seg.task, rest, tok)  # eager, like a positional
+                        seg.variadic.append(tok)
+                    else:
+                        _consume_positional(seg, tree, rest, tok)
+                    rest_count += 1
+                    i += 1
                 else:
-                    _consume_positional(seg, tree, rest, tok)
-                rest_count += 1
-                i += 1
-            else:
-                break  # arity satisfied: the next word starts a new segment
+                    break  # arity satisfied: the next word starts a new segment
+            bare_before = None
 
         missing = [f"<{p['name']}>" for p in fixed[filled:] if not p.get("optional")]
         if rest is not None and rest["kind"] == "positional" and rest_count == 0:
@@ -759,16 +933,23 @@ def _consume_option(
         seg.values[cli] = not negated
         return i + 1
 
-    # value-bearing option: the value is always `=`-attached
+    # A value is always `=`-attached, so a bare mention is unambiguous: it
+    # cannot be reading the next token, because that spelling is not in this
+    # grammar. It is legal wherever absence is legal, and records no value —
+    # only presence. A *required* option has no absence to mean, so it still
+    # refuses, with the same teaching it always gave.
     if "=" not in tok:
-        follower = (
-            argv[i + 1]
-            if i + 1 < len(argv)
-            and argv[i + 1] not in ("--", "+")
-            and not argv[i + 1].startswith("-")
-            else None
-        )
-        raise ChainError(_expects_value(seg.task, name, "VALUE", follower))
+        if p.get("required"):
+            follower = (
+                argv[i + 1]
+                if i + 1 < len(argv)
+                and argv[i + 1] not in ("--", "+")
+                and not argv[i + 1].startswith("-")
+                else None
+            )
+            raise ChainError(_expects_value(seg.task, name, "VALUE", follower))
+        seg.bare.add(cli)
+        return i + 1
     value = tok.split("=", 1)[1]
     i += 1
     if p.get("mapping"):

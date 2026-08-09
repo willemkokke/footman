@@ -7,6 +7,105 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- **A bare mention of an option is legal, and means the caller asked for it.**
+  `fm build --target` no longer errors. It binds exactly what absence would
+  have bound — the same env/default ladder runs — and adds the one thing a
+  value cannot carry: that someone named it. The refusal dated from before
+  0.22.0, when `--target prod` was a value spelling and a bare mention was
+  genuinely ambiguous; a value has been `=`-attached ever since, so `--target`
+  alone cannot be reading its neighbour and the line has exactly one parse.
+  A *required* option has no absence to mean, so it still refuses.
+- **`given("name")` — did the caller supply this, or did footman fill it in?**
+  A value alone cannot tell "the default one, please" from "no opinion": both
+  hand the body the same thing. `given()` separates them, which is what makes
+  a tri-state like `--profile` (write nothing / write the default file / write
+  this file) expressible from one declared default.
+
+  ```python
+  @task
+  def build(*, profile: Path = Path("build-profile.json")):
+      if given("profile"):
+          trace_to(profile)
+  ```
+
+  Supplied means the caller: an option on the line (bare or attached), a
+  keyword on a body call, a piped stdin payload, an answered `ask()` prompt.
+  Not supplied means footman inferred it: an `env()` fallback, which is ambient
+  and answers for nobody, or the declared default. A command line and a body
+  call say the same thing — `fm build --profile` and
+  `build(profile=<the default>)` are both "given" — and a called task never
+  inherits its caller's answer.
+- **`default(fn)` — a default computed when the task runs.** A Python default
+  is evaluated once, at import: fine for a constant, wrong for anything that
+  depends on the machine, the environment or the clock, which used to need a
+  sentinel default and a rebuild inside the body where `--help` could not see
+  it. It sits one rung above the declared default (**CLI > env > `default(fn)`
+  > declared**) and, like `env()`, needs a declared default to sit on.
+- **`--help` shows the default and the environment fallback.** Both were in the
+  manifest all along and neither was ever printed, so a reader had to run a
+  task to learn what `--name` would be, and a parameter that quietly falls back
+  to `$DEPLOY_ENV` said nothing about it. They print in ladder order —
+  `from $DEPLOY_ENV; default: world` — with `None` printing as nothing, because
+  naming absence tells a reader less than silence does.
+- **`GlobalOption.given`**, the twin of `.value`, so a plugin can tell a global
+  that was named from one that merely has a default.
+- **`ask()` works on a parameter that has a default**, which makes it safe to
+  put on anything. The default becomes the *offer* — `version [patch]:`, Enter
+  accepts — instead of a reason not to ask, and where nobody can be asked (off
+  a terminal, `--no-input`, `--json`) it is quietly used. A parameter with no
+  default still errors naming the flag, because there is no other answer. So a
+  person gets asked and an unattended run gets the default. Naming the option
+  bare skips the question: the caller has already said "the declared one".
+
+### Changed
+
+- **BREAKING: `GlobalOption(bare=…)` is gone**, replaced by `.given`. It existed
+  because three outcomes need two declared values — unless presence carries one
+  of them, which it now does. `footman.profile` shows the shape:
+  `default=Path("fm-profile.json")` plus `if PROFILE.given`.
+- **BREAKING: forwarding carries presence, and may satisfy a required
+  parameter.** Both defaultless guards are gone. "A prerequisite must still be
+  independently runnable" was never the rule it claimed to be — `ask()` and
+  `stdin` already satisfy defaultless parameters — and refusing only pushed
+  authors into giving the receiving parameter a default it did not want,
+  weakening its contract when the task runs alone. The value channel is
+  unchanged: everything still travels, because forwarding only what was asked
+  for would drop `env()`-sourced values.
+- **BREAKING: passing a value equal to a parameter's default is no longer the
+  same work as omitting it.** Presence joins the dedup key, because a body that
+  branches on `given()` does different work for each and would otherwise be
+  answered silently by the wrong execution. Nothing else about identity moves:
+  different values already keyed differently, and positional-versus-keyword
+  spelling still names one execution.
+- **Every boolean config key now has both CLI spellings**, so a project setting
+  is a default rather than a one-way door. Five could only be set in one
+  direction: `sequential` and `sort` had no `--no-` counterpart, `progress` had
+  no `--progress` (its own documentation said `false` disabled the bar
+  *permanently*), `uv` had no flag at all, and `input` was not a config key.
+  All five resolve through one rule — **CLI > config > the default** — and two
+  guards keep it that way: every boolean project key must have both spellings,
+  and every key resolved from config must appear in the reference table.
+- **A global is bare-legal exactly when it has a default**, declared in the
+  grammar table beside its metavar. That is the same rule task options follow
+  (absence is legal when there is a default), so both surfaces now answer the
+  question the same way instead of one keying on a bracketed metavar. `--jobs`
+  and `--color` gain a bare form; `--where`, `-C`, `-f` and `--config` have no
+  reading without a value and still refuse.
+- **An absent global option runs the same ladder a task parameter does** — env,
+  then `default(fn)`, then the declared default. `env()` was accepted on a
+  global's annotation and reached the manifest but was never applied, so the
+  new help rendering would have advertised a fallback that never happened.
+- **A bool flag defaulting to `true` is shown as `--no-x`.** Typing `--x` there
+  changes nothing, so the only spelling that acts was buried in a parenthetical
+  while the inert one led.
+- **The space-form teaching is demoted, not deleted.** It was a diagnostic for a
+  spelling outside the grammar; now that a bare mention parses, it rides along
+  only on a line that fails anyway — `lint --mode strict` answers
+  `expected a task name, got 'strict' … — did you mean --mode=strict?`. It never
+  turns a working invocation into a refusal.
+
 ## [0.34.0] — 2026-08-07
 
 ### Fixed

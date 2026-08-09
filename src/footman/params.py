@@ -86,6 +86,37 @@ class suggest:
         self.strict = strict
 
 
+class default:
+    """Compute a parameter's default when the task runs, via `Annotated`:
+
+    ```python
+    def install(shell: Annotated[str, default(detect_shell)] = ""): ...
+    ```
+
+    A Python default is evaluated once, at import — fine for a constant, wrong
+    for anything that depends on the machine, the environment or the clock.
+    `default(fn)` calls `fn()` at bind time instead, so `--help` and the run
+    agree and both are current.
+
+    It sits in the ladder just above the Python default — **CLI value > env >
+    `default(fn)` > the declared default** — and, like `env()`, it needs a
+    declared default to sit on: a plain Python call of the task, outside any
+    run, has to keep working.
+
+    The value is used as it comes back, not coerced: `fn()` returns a real
+    object, and coercion exists because the command line only has strings. It
+    still runs the annotation's validators, so a `default(fn)` that would be
+    refused as a typed value is refused here too rather than smuggled in.
+    """
+
+    __slots__ = ("fn",)
+
+    fn: Callable[[], Any]
+
+    def __init__(self, fn: Callable[[], Any]) -> None:
+        self.fn = fn
+
+
 # `Many[T]` is exactly `list[T]`: a parameter that is *always* a list — one or
 # more values, variadic when positional. It reads more intentfully than a bare
 # `list[T]` at a call site, but carries no runtime marker of its own.
@@ -485,14 +516,23 @@ class ask:
     def release(version: Annotated[str, ask()]): ...
     ```
 
-    A *required* (defaultless) parameter marked `ask()` is prompted for when it
-    is not given on the command line and no `env` fills it — the answer runs
-    through the same coercion and validation as a CLI token, re-asking on a bad
-    value. Precedence stays CLI > env > default > prompt, so `ask()` only
-    prompts a parameter with **no default** (a default is the answer). Off a
-    terminal, under `--no-input`, or in `--json` it errors naming the flag
-    rather than hanging. `secret=True` hides the input (getpass); `prompt="…"`
-    overrides the question text.
+    A parameter marked `ask()` is prompted for when the command line does not
+    give it and no `env` fills it — the answer runs through the same coercion
+    and validation as a CLI token, re-asking on a bad value. Precedence is
+    **CLI > env > prompt (offering the default) > the default**.
+
+    A declared default becomes the *offer*: the prompt shows it, Enter accepts
+    it, and where nobody can be asked — off a terminal, under `--no-input`, in
+    `--json` — it is simply used. So `ask()` is safe on any parameter: a person
+    gets asked, an unattended run gets the default. Without a default there is
+    no other answer, so those cases error naming the flag rather than hanging.
+
+    Naming the option bare (`--version`) skips the question: the caller has
+    already said "the declared one", and asking again would be footman not
+    listening.
+
+    `secret=True` hides the input (getpass) and never shows the default, though
+    Enter still accepts it; `prompt="…"` overrides the question text.
     """
 
     __slots__ = ("prompt", "secret")

@@ -11,7 +11,7 @@ Parameter mapping (function signature -> CLI shape):
 | Signature                | CLI shape                                 |
 | ------------------------ | ----------------------------------------- |
 | `fix: bool = False`      | flag `--fix` / `--no-fix`                 |
-| `mode: str = "loose"`    | option `--mode VALUE`                     |
+| `mode: str = "loose"`    | option `--mode=VALUE`, bare `--mode` ok   |
 | `env: Literal[...]`      | completable, eagerly-validated choices    |
 | `count: int = 100`       | typed option, validated at parse time     |
 | `paths: list[Path] = ()` | repeatable option (`--paths a --paths b`) |
@@ -21,6 +21,7 @@ Parameter mapping (function signature -> CLI shape):
 
 from __future__ import annotations
 
+import contextlib
 import dataclasses
 import datetime
 import decimal
@@ -159,10 +160,6 @@ def _global_spec(opt: Any, memo: dict[int, list[str]]) -> dict[str, Any]:
     spec["name"] = opt.name  # the cli spelling is the identity
     if opt.help:
         spec["help"] = opt.help
-    if opt.bare is not None:
-        # The value a bare mention means — its presence is what marks the
-        # option value-optional to the splitter and the completer.
-        spec["bare"] = str(opt.bare)
     spec["owner"] = opt.owner
     return spec
 
@@ -456,6 +453,22 @@ def _marker_keys(
             spec["min"] = lo
         if hi is not None:
             spec["max"] = hi
+    if peeled.default_fn is not None:
+        if not has_default:
+            raise SpecError(
+                f"<{param.name}>: default(…) needs a declared default to sit "
+                f"on — a plain Python call of the task, with no run around it, "
+                f"has nothing else to fall back to"
+            )
+        # Called here, on the execution path, so `--help` prints what this run
+        # would actually use rather than a value baked whenever a cache was
+        # last built. A raising computer is left to raise at bind time instead
+        # of taking the whole tree's help down with it.
+        ok_computed, computed = False, None
+        with contextlib.suppress(Exception):  # help degrades; the run teaches
+            ok_computed, computed = _describe.jsonable(peeled.default_fn.fn())
+        if ok_computed:
+            spec["default"] = computed
     if peeled.env is not None:
         if spec.get("mapping"):
             raise SpecError(

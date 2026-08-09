@@ -48,8 +48,8 @@ from footman._executor import reported_state
 PROFILE = GlobalOption(
     "profile",
     Path,
-    bare=Path("fm-profile.json"),
-    help="write the run as a trace for ui.perfetto.dev (default: fm-profile.json)",
+    default=Path("fm-profile.json"),
+    help="write the run as a trace for ui.perfetto.dev",
 )
 
 _PID = 1
@@ -67,10 +67,15 @@ def arm(inv: footman.Invocation) -> None:
 
     Reads `inv.cli`, not `PROFILE.value`: the manifest refresh child runs
     this hook with no command line at all, and there the answer must be
-    "not profiling" rather than an unbound-value error."""
+    "not profiling" rather than an unbound-value error.
+
+    Asks whether the option was *mentioned*, not whether its value is truthy.
+    Those coincided only while a bare mention arrived as `True`; the question
+    was always presence, and a value can be empty and still have been asked
+    for."""
     global _child_dir
     _child_dir = None
-    if not inv.cli.get("profile"):
+    if "profile" not in inv.cli:
         return
     _child_dir = tempfile.mkdtemp(prefix="fm-profile-")
     # The single-threaded moment: what lands in the environment here is in
@@ -308,9 +313,12 @@ def _sweep_children(zero: float) -> list[dict[str, Any]]:
 
 @footman.post_tasks
 def write(inv: footman.Invocation) -> None:
-    target = PROFILE.value
-    if target is None:
+    # Three outcomes from one declared value: `.given` says whether a profile
+    # was asked for at all, `.value` says where it goes — the declared default
+    # when `--profile` was named bare, the attached path when it was not.
+    if not PROFILE.given:
         return
+    target = PROFILE.value
     begin = time.perf_counter()
     events, zero = _events(inv.results)
     events += _sweep_children(zero)

@@ -132,9 +132,35 @@ def _globals_to_dict(tokens: list[str]) -> dict[str, object]:
         key = name.lstrip("-").replace("-", "_")
         if "=" in tok:  # a value attached by the splitter (--name=value)
             result[key] = tok.split("=", 1)[1]
-        else:  # a flag, or a value-optional option given bare
+        elif _split._GLOBAL_KIND.get(name) == "flag":
             result[key] = True
+        else:
+            # A value-taking global named bare. It carries presence and no
+            # value, so it reads as the empty string and the consumer resolves
+            # what that means — `--describe` the whole tree, `--color` the
+            # ambient decision. It used to read as `True`, which made every
+            # consumer test the *type* of the value to learn how it was
+            # spelled; that union is what this removes.
+            result[key] = ""
     return result
+
+
+def _switch(
+    g: dict[str, object], cfg: dict[str, Any], name: str, default: bool
+) -> bool:
+    """A boolean policy resolved once: **CLI > config > the default**.
+
+    Every boolean config key has both CLI spellings, `--x` and `--no-x`, so a
+    project setting can always be countermanded for one invocation. Without the
+    counter-spelling, config could only ever be a one-way door — which is why
+    the `progress` key was documented as disabling the bar *permanently*.
+    """
+    if g.get(name):  # `--x`
+        return True
+    if g.get("no_" + name):  # `--no-x`
+        return False
+    value = cfg.get(name)
+    return default if not isinstance(value, bool) else value
 
 
 def _config_arg(g: dict[str, object]) -> str | None:
@@ -250,7 +276,7 @@ def _discover_files(
 
 
 def _format_value(value: object) -> str:
-    if value is True:
+    if value is True:  # a flag: its presence is the whole message
         return ""
     if isinstance(value, list):
         return "[" + ", ".join(str(v) for v in value) + "]"
@@ -495,13 +521,19 @@ def _print_global_help(tree: dict[str, Any], show_hidden: bool = False) -> None:
     print(f"usage: {_describe.paint_cli(parts, _color_out)}")
     print(f"\n{_describe.bold('globals (before the first task):', _color_out)}")
     rows = []
-    for name, alias, _kind, hint, help_text in _split.GLOBALS:
+    for name, alias, _kind, hint, _default, help_text in _split.GLOBALS:
         label = f"{alias}, {name}" if alias else f"    {name}"
         if hint:
             label += f"={hint}"  # values are always `=`-attached
         # `.replace` (not `.format`) so a help string containing braces can
         # never crash help output.
-        rows.append((label, help_text.replace("{prog}", prog)))
+        detail = help_text.replace("{prog}", prog)
+        # The same thing task parameters gained: say what you get when you say
+        # nothing. Computed defaults resolve here, so `--jobs` reports this
+        # machine's width rather than a number from the author's.
+        if shown := _split.global_default_text(name):
+            detail += f"; default: {shown}"
+        rows.append((label, detail))
     width = max(len(label) for label, _ in rows)
     for label, help_text in rows:
         pad = " " * (width - len(label))
@@ -765,7 +797,7 @@ def _describe_contract(tree: dict[str, Any], target: object, argv_rest: bool) ->
     JSON on stdout either way: like `--where`, the output already is the
     machine format, so `--json` adds nothing.
     """
-    if target is True:
+    if not target:  # named bare: the whole tree's contract
         if argv_rest:
             # `fm --describe check` reads as bare --describe plus a run of
             # `check` — surely not what was meant. Teach the `=` spelling
@@ -1079,13 +1111,13 @@ def _print_json(
 def _resolve_shell(shell: object, flag: str) -> str | None:
     """Resolve *shell* to a supported name for *flag*, or None after `_error`.
 
-    A bare flag (`shell is True`) detects the invoking shell; an explicit value
+    A bare mention (no value) detects the invoking shell; an explicit value
     is lowercased and de-aliased (`nu`→`nushell`, `powershell`→`pwsh`).
     """
     from footman import _shellcomp
 
     supported = "|".join(_shellcomp.SHELLS)
-    if shell is True:
+    if not shell:  # named bare: work out which shell is asking
         name = _shellcomp.detect_shell()
         if name is None:
             _error(
@@ -1109,7 +1141,7 @@ def _install_completion(shell: object) -> int:
     name = _resolve_shell(shell, "--install-completion")
     if name is None:
         return EX_USAGE
-    if shell is True:
+    if not shell:  # named bare: say which shell we worked out
         print(f"detected shell: {name}")
     try:
         lines = _shellcomp.install(name, _brand.prog)
@@ -1127,7 +1159,7 @@ def _uninstall_completion(shell: object) -> int:
     name = _resolve_shell(shell, "--uninstall-completion")
     if name is None:
         return EX_USAGE
-    if shell is True:
+    if not shell:  # named bare: say which shell we worked out
         print(f"detected shell: {name}")
     try:
         lines = _shellcomp.uninstall(name, _brand.prog)
@@ -1151,7 +1183,7 @@ def _setup_completion(shell: object) -> int:
     name = _resolve_shell(shell, "--setup-completion")
     if name is None:
         return EX_USAGE
-    if shell is True:
+    if not shell:  # named bare: say which shell we worked out
         print(f"detected shell: {name}", file=sys.stderr)
     print(_shellcomp.script_for(name, _brand.prog))
     return 0
@@ -1397,7 +1429,7 @@ def _script_handoff(
         )
     except _config.ConfigError:
         return None  # the real run reports the broken --config properly
-    if cfg.get("uv") is False:
+    if not _switch(g, cfg, "uv", True):
         return None
     if _brand.dist is None:
         # A branded runner can't know which distribution ships it, so it
@@ -1495,7 +1527,7 @@ def _uv_handoff(argv: list[str], g: dict[str, object]) -> int | None:
         )
     except _config.ConfigError:
         return None  # the real run reports the broken --config properly
-    if cfg.get("uv") is False:
+    if not _switch(g, cfg, "uv", True):
         return None
     if g.get("verbose"):
         print(
@@ -1536,10 +1568,11 @@ def _run(
     for key, run_action in actions.items():
         if key in g and not wants_help:
             value = g.get(key)
-            if value is True and after < len(argv) and not argv[after].startswith("-"):
-                # A detached word behind the bare action is a value that
-                # failed to attach (`--install-completion zsh`): teach the
-                # `=` form — never act on the detected shell instead.
+            if not value and after < len(argv) and not argv[after].startswith("-"):
+                # A word behind the bare action has nowhere else to go — these
+                # end the invocation, so there is no task chain for it to be
+                # part of. Teach the `=` form rather than acting on the
+                # detected shell and leaving the word unexplained.
                 flag = "--" + key.replace("_", "-")
                 return _refuse(
                     bool(g.get("json")),
@@ -1723,7 +1756,7 @@ def _run_tree(
         sort_cfg = _config.sort_listing(cfg)
     except _config.ConfigError as exc:
         return _refuse(json_mode, str(exc))
-    if g.get("sort") or sort_cfg:
+    if _switch(g, cfg, "sort", sort_cfg):
         tree = _describe.sort_tree(tree)
 
     show_hidden = bool(g.get("all"))
@@ -1804,7 +1837,7 @@ def _run_tree(
     # recorded run() calls, tools, deferred steps — is faked into honest
     # plan-line receipts. The report shapes (--json included) are the plan.
     dry_run = bool(g.get("dry_run"))
-    sequential = bool(g.get("sequential")) or bool(cfg.get("sequential"))
+    sequential = _switch(g, cfg, "sequential", False)
 
     # The parallel width: -j/--jobs wins, then config `jobs`, then the
     # cores-minus-one default. Caps both engines (the scheduler's pool and
@@ -1872,21 +1905,20 @@ def _run_tree(
         # Interactivity globals: --yes auto-answers confirm() gates, --no-input
         # refuses to prompt (a required prompt errors instead of hanging).
         "assume_yes": bool(g.get("yes")),
-        "no_input": bool(g.get("no_input")),
+        "no_input": not _switch(g, cfg, "input", True),
         # The rehearsal switch: bodies run, footman's own work is faked.
         "dry_run": dry_run,
     }
 
-    # The timing story: --no-progress (one run) or `progress = false` in
-    # config (permanently) turns the whole apparatus off. A run is
+    # The timing story: `--no-progress` or `progress = false` in config turns
+    # the whole apparatus off, and `--progress` turns it back on for one run —
+    # config is a default, never a one-way door. A run is
     # *predictable* when it's on, every task consented, and this is the real
     # cascade (-f runs pollute no cache, times included) — only then do we
     # estimate from history and record the outcome.
     # A rehearsal is near-instant and teaches nothing about durations: no
     # bar, no eta, and (below) no recorded timing to pollute the history.
-    progress_on = (
-        not g.get("no_progress") and cfg.get("progress") is not False and not dry_run
-    )
+    progress_on = _switch(g, cfg, "progress", True) and not dry_run
     predictable = (
         progress_on
         and not g.get("tasks_file")

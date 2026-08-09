@@ -42,12 +42,14 @@ if TYPE_CHECKING:
 _GLOBALS = frozenset(
     {
         "--help", "-h", "--version", "-V", "--list", "-l", "--tree", "--sort",
-        "--all", "-a",
+        "--no-sort", "--all", "-a",
         "--where", "--describe", "--plugins", "--dry-run", "-n",
         "--keep-going", "-k",
-        "--fail-fast", "--sequential", "-s", "--jobs", "-j", "--yes", "-y",
-        "--no-input", "--quiet", "-q", "--verbose", "-v", "--color",
-        "--no-color", "--no-progress", "--json", "--timings",
+        "--fail-fast", "--sequential", "-s", "--no-sequential",
+        "--jobs", "-j", "--yes", "-y",
+        "--no-input", "--input", "--quiet", "-q", "--verbose", "-v", "--color",
+        "--no-color", "--no-progress", "--progress", "--no-uv", "--uv",
+        "--json", "--timings",
         "--directory", "-C", "--tasks-file", "-f", "--config",
         "--install-completion", "--setup-completion", "--uninstall-completion",
     }

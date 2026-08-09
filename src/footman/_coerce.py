@@ -35,6 +35,7 @@ from footman.params import (
 )
 from footman.params import _arg as _ARG
 from footman.params import ask as _ask_marker
+from footman.params import default as _default_marker
 from footman.params import forward as _FORWARD
 from footman.params import hidden as _HIDDEN
 from footman.params import nosplit as _NOSPLIT
@@ -115,6 +116,7 @@ class Peeled:
     optional: bool = False  # Arg[T]: an optional trailing positional
     stdin: _stdin_marker | None = None  # bind from the boundary's stdin read
     hidden: bool = False  # out of the listings; still binds, still completes
+    default_fn: _default_marker | None = None  # computed default (default(fn))
     container: type = list  # the collection named: list/tuple/set/frozenset
 
 
@@ -132,6 +134,7 @@ class _Markers(TypedDict):
     optional: bool
     stdin: _stdin_marker | None
     hidden: bool
+    default_fn: _default_marker | None
 
 
 def collection_of(ann: Any) -> type | None:
@@ -170,6 +173,7 @@ def peel(ann: Any) -> Peeled:
     is_hidden = False
     is_optional = False
     stdin_marker: _stdin_marker | None = None
+    default_marker: _default_marker | None = None
 
     # Strip Annotated and Optional wrappers in any order/nesting, e.g. both
     # `Annotated[list[X], nosplit] | None` and `Annotated[list[X] | None, nosplit]`.
@@ -196,6 +200,8 @@ def peel(ann: Any) -> Peeled:
                     checks = (*checks, mark.fn)
                 elif isinstance(mark, doc):
                     doc_text = mark.text
+                elif isinstance(mark, _default_marker):
+                    default_marker = mark
                 elif isinstance(mark, ask):
                     ask_marker = mark
                 elif mark is _HIDDEN:
@@ -246,6 +252,7 @@ def peel(ann: Any) -> Peeled:
         "optional": is_optional,
         "stdin": stdin_marker,
         "hidden": is_hidden,
+        "default_fn": default_marker,
     }
 
     if ann is dict or typing.get_origin(ann) is dict:  # dict[K, V] or bare dict

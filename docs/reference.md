@@ -105,6 +105,8 @@ def span(inv, task):
 | `exists`, `isfile`, `isdir`  | require a `Path` value to exist on disk              |
 | `between(lo, hi)`            | inclusive numeric bounds (a bare `range` works too)  |
 | `env("VAR")`                 | fall back to an environment variable (CLI > env > default) |
+| `default(fn)`                | compute the default when the task runs, not at import |
+| `given("name")`              | did the caller supply this parameter, or did footman fill it in? |
 | `check(fn)`                  | custom post-coercion validator (`ValueError` rejects) |
 | `doc("…")`                   | one-line parameter help — shown in `--help`, completion, the catalog |
 | `footman.testing`            | `Runner`/`Result` + `recording()` — see [Testing](testing.md) |

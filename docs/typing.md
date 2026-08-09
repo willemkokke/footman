@@ -43,6 +43,68 @@ sorts each parameter into a position or a flag.
     task running); rename the parameter — `show_help`, `explain` — to get a real
     flag.
 
+## Naming an option without a value
+
+Every option may be named on its own:
+
+```sh
+fm build --target        # the default, and asked for on purpose
+fm build                 # the default, with no opinion expressed
+fm build --target=prod   # a value
+```
+
+A bare `--target` binds exactly what absence would have bound — the same
+`env()`-then-default ladder runs — so on its own it changes nothing. What it
+adds is that somebody named it, which `given()` reports:
+
+<!-- example: fragment -->
+
+```python
+from footman import task, given
+
+@task
+def build(*, profile: Path = Path("build-profile.json")):
+    """Build, and write a trace when asked for one."""
+    if given("profile"):
+        trace_to(profile)
+```
+
+`fm build` writes no trace. `fm build --profile` writes the declared default.
+`fm build --profile=other.json` writes there. Three outcomes from one declared
+default — a value alone could never separate the first two, because both hand
+the body the same path.
+
+**Supplied means the caller**: an option on the line (bare or attached), a
+keyword on a body call, a piped `stdin` payload, an answered `ask()` prompt.
+**Not supplied means footman worked it out**: an `env()` fallback, which is
+ambient and answers for nobody in particular, or the declared default. A body
+call says the same thing a command line does — `build(profile=…)` reads as
+given, `build()` does not — and a called task never inherits its caller's
+answer.
+
+A parameter with no default has no absence to mean, so naming it bare is still
+the taught `=`-attachment error.
+
+## A default computed when the task runs
+
+A Python default is evaluated once, when the module is imported — fine for a
+constant, wrong for anything that depends on the machine, the environment or
+the clock. `default(fn)` calls `fn()` at bind time instead:
+
+<!-- example: fragment -->
+
+```python
+@task
+def install(*, shell: Annotated[str, default(detect_shell)] = ""):
+    ...
+```
+
+It sits one rung above the declared default — **CLI value > `env()` >
+`default(fn)` > the declared default** — and, like `env()`, needs a declared
+default to sit on, because a plain Python call of the task with no run around
+it has to keep working. `--help` prints what it computes, since the manifest is
+built on the execution path: what help shows is what this run would use.
+
 ## What if I don't like annotating types?
 
 Then don't. Every rule above still holds, because the one that sorts a

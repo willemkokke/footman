@@ -44,6 +44,7 @@ if TYPE_CHECKING:
     from footman.context import confirm as confirm
     from footman.context import cwd as cwd
     from footman.context import fail as fail
+    from footman.context import given as given
     from footman.context import inherited as inherited
     from footman.context import mark as mark
     from footman.context import parallel as parallel
@@ -71,6 +72,7 @@ if TYPE_CHECKING:
     from footman.params import ask as ask
     from footman.params import between as between
     from footman.params import check as check
+    from footman.params import default as default
     from footman.params import doc as doc
     from footman.params import env as env
     from footman.params import exists as exists
@@ -146,6 +148,7 @@ __all__ = [
     "console_lane",
     "cwd",
     "cwd_lane",
+    "default",
     "doc",
     "docstrings",
     "env",
@@ -153,6 +156,7 @@ __all__ = [
     "fail",
     "fetch",
     "forward",
+    "given",
     "group",
     "hidden",
     "include",
@@ -295,6 +299,7 @@ def __getattr__(name: str) -> object:
         "between",
         "env",
         "check",
+        "default",
         "doc",
         "ask",
         "forward",
@@ -323,6 +328,7 @@ def __getattr__(name: str) -> object:
         "ResultView",
         "AuditEntry",
         "inherited",
+        "given",
         "passthrough",
         "progress",
         "prompt",
