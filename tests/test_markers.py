@@ -46,6 +46,12 @@ Watched = Annotated[str, check(_record_view)]
 WatchedList = Annotated[list[str], check(_record_view)]
 
 
+ReadsRight = Annotated[str, check(lambda _v, p: p["later"])]
+GetsRight = Annotated[str, check(lambda _v, p: p.get("later"))]
+ReadsSelf = Annotated[str, check(lambda _v, p: p["me"])]
+ReadsNothing = Annotated[str, check(lambda _v, p: p["no_such_parameter"])]
+
+
 def _raises_type_error(_value: str) -> None:
     raise TypeError("a bug inside the validator, not an arity mismatch")
 
@@ -609,6 +615,53 @@ def test_wants_context_handles_a_signatureless_callable(monkeypatch):
 # `bound.arguments` on the body-call side. Every test below pins the two paths
 # to the same answer, because the one bug this area has actually had was them
 # quietly disagreeing.
+
+
+def test_reaching_rightwards_is_taught_not_a_bare_key_error():
+    def tasks(reg):
+        @reg.task
+        def build(me: ReadsRight = "x", later: str = "z") -> None: ...
+
+    results = run(tasks, "build --me=x --later=given")
+    assert not results[0].ok
+    message = str(results[0].error)
+    # The parameter exists, so a typo is not the explanation — name the real
+    # constraint and the fix, rather than raising `KeyError: 'later'`.
+    assert "may only read parameters declared before it" in message
+    assert "Move 'later' above 'me'" in message
+
+
+def test_reaching_rightwards_through_get_is_taught_too():
+    # The dangerous spelling: a plain dict answered `.get()` with `None` and the
+    # run *succeeded*, feeding the body a value nobody chose.
+    def tasks(reg):
+        @reg.task
+        def build(me: GetsRight = "x", later: str = "z") -> None: ...
+
+    results = run(tasks, "build --me=x --later=given")
+    assert not results[0].ok
+    assert "comes after" in str(results[0].error)
+
+
+def test_reading_your_own_value_is_taught():
+    def tasks(reg):
+        @reg.task
+        def build(me: ReadsSelf = "x") -> None: ...
+
+    results = run(tasks, "build --me=x")
+    assert not results[0].ok
+    assert "cannot read its own value" in str(results[0].error)
+
+
+def test_an_unknown_name_is_still_an_ordinary_key_error():
+    # Only a *declared* parameter earns the taught message; a typo is a
+    # different mistake and keeps the mapping's own behaviour.
+    def tasks(reg):
+        @reg.task
+        def build(me: ReadsNothing = "x") -> None: ...
+
+    results = run(tasks, "build --me=x")
+    assert isinstance(results[0].error, KeyError)
 
 
 def test_a_check_runs_on_supplied_values_not_on_the_default():

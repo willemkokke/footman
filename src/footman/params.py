@@ -131,10 +131,13 @@ class default:
              title: Annotated[str, default(lambda p: f"{p['shell']} · x")] = ""): ...
     ```
 
-    Read-only, and only what is to its *left* in the signature, so a default can
-    never depend on something not resolved yet. `--help` cannot show such a
-    default — there is no invocation to read — so it shows none rather than one
-    it would have to invent.
+    Read-only, and only what is to its *left* in the signature. The view holds
+    *effective* values — what each parameter will actually be — and only a left
+    one has that yet, which is also why a cycle cannot be written down: the
+    signature fixes a total order and binding walks it. Reaching rightwards is
+    a taught error, through `p["x"]` and `p.get("x")` alike. `--help` cannot
+    show such a default — there is no invocation to read — so it shows none
+    rather than one it would have to invent.
 
     The value is used as it comes back, not coerced: `fn()` returns a real
     object, and coercion exists because the command line only has strings. It
