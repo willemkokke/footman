@@ -120,10 +120,29 @@ def cast(
 ): ...
 ```
 
-Read-only, and only what is to its *left* in the signature, so a default can
-never depend on something not resolved yet. `--help` shows no default for one
-of these — there is no invocation to read, and a guess would be worse than
-silence.
+Read-only, and only what is to its *left* in the signature. The view holds
+*effective* values — what each parameter will actually be, from whichever rung
+of the ladder supplied it — and only a left parameter has one yet. That is also
+why a cycle cannot be written down: the signature fixes a total order and
+binding walks it, so nothing can depend on something unresolved.
+
+Reaching rightwards is a taught error rather than a silent surprise, through
+`p["later"]` and `p.get("later")` alike:
+
+```text
+'title' may only read parameters declared before it, and 'cmd' comes after
+— so it has no value yet. Move 'cmd' above 'title' in the signature.
+```
+
+`--help` shows no default for a sibling-reading one — there is no invocation to
+read — but it does say there is one, as `default computed`. A computed default
+that *can* be resolved is marked too, because a bare number reads as an
+arbitrary constant when it is really this machine's:
+
+```text
+  -j, --jobs=N       max parallel tasks; default: 13 (computed)
+      --color=WHEN   when to colour: always|never|auto; default: auto
+```
 
 ## What if I don't like annotating types?
 

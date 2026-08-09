@@ -185,7 +185,20 @@ current version keeps footman zero-dependency: you bring the lookup and the
 comparison, footman turns your `ValueError` into a taught error. The first
 parameter's check sees an empty dict; a sibling left at its default shows that
 default (so your check never re-hardcodes it); a plain one-argument `check` is
-unchanged.
+unchanged. A `*args` parameter is in there too, as a tuple under its own name.
+
+**Left only, and footman says so if you forget.** A parameter declared *after*
+this one has no value yet, so asking for it is an error with the fix in it
+rather than a silent `None`:
+
+```text
+'version' may only read parameters declared before it, and 'channel' comes
+after — so it has no value yet. Move 'channel' above 'version' in the signature.
+```
+
+The same view, and the same rule, is what
+[`default(fn)`](typing.md#a-default-computed-when-the-task-runs) reads when it
+declares one parameter.
 
 ### TAB completes your git branches
 

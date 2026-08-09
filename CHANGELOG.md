@@ -51,6 +51,17 @@ versions may include breaking changes.
   naming absence tells a reader less than silence does.
 - **`GlobalOption.given`**, the twin of `.value`, so a plugin can tell a global
   that was named from one that merely has a default.
+- **`--help` says when a default is computed.** `default: 13` reads as an
+  arbitrary constant when it is this machine's cores minus one, so a computed
+  one is marked — `default: 13 (computed)` — and one that reads its siblings,
+  which only an invocation knows, says `default computed` with no value.
+- **Reaching rightwards in a sibling view is taught.** A `check(fn)` or
+  `default(fn)` that asks for a parameter declared *after* it now gets a
+  message naming the constraint and the fix, through `p["x"]` and `p.get("x")`
+  alike. The second spelling used to answer `None` in silence and let the run
+  succeed, which fed the body a value nobody chose. Reading your own name is
+  named separately; an *undeclared* name stays an ordinary `KeyError`, because
+  a typo is a different mistake.
 - **A `default(fn)` may read its sibling parameters**, the way `check(fn)`
   already could — declare one positional argument and it receives the values
   resolved to its *left*, read-only. A default is often a function of the
