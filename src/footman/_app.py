@@ -1640,9 +1640,12 @@ def _execute(
     json_mode = bool(g.get("json"))
 
     base = registry.Group("root")
-    if cfg.get("plugins"):
-        # The config key died with the composition rework: pulls are authored
-        # in tasks.py, where placement, filtering, and overrides live.
+    plugins_cfg = cfg.get("plugins")
+    if plugins_cfg and not isinstance(plugins_cfg, dict):
+        # The old list-valued key died with the composition rework: pulls are
+        # authored in tasks.py, where placement, filtering, and overrides
+        # live. A *table* is the reserved sections child instead —
+        # `[tool.footman.plugins.<section>]` holds a provider's own settings.
         return _refuse(
             json_mode,
             "the [tool.footman] plugins key was removed — pull plugins from "
@@ -1954,7 +1957,9 @@ def _run_tree(
     # here. Released by the caller's finally, so an outside-a-run read goes
     # back to teaching.
     if (
-        bad := _executor.bind_global_options(reg.contributions["globals"], globals_)
+        bad := _executor.bind_global_options(
+            reg.contributions["globals"], globals_, config=cfg
+        )
     ) is not None:
         return _refuse(json_mode, bad)
     start = time.perf_counter()

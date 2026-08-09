@@ -91,6 +91,7 @@ if TYPE_CHECKING:
     from footman.registry import Tasks as Tasks
     from footman.registry import TaskView as TaskView
     from footman.registry import capture as capture
+    from footman.registry import config_section as config_section
     from footman.registry import group as group
     from footman.registry import post_task as post_task
     from footman.registry import post_tasks as post_tasks
@@ -147,6 +148,7 @@ __all__ = [
     "capture",
     "chdir",
     "check",
+    "config_section",
     "confirm",
     "console_lane",
     "cwd",
@@ -253,6 +255,7 @@ def __getattr__(name: str) -> object:
         "group",
         "Group",
         "capture",
+        "config_section",
         "GlobalOption",
         "pre_tasks",
         "pre_record",

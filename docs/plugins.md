@@ -108,39 +108,57 @@ beside the flag itself.
 
 ## Configuration
 
-`inv.config` carries the merged settings table. The convention is one
-sub-table per plugin, named by the entry point:
+A global option opts into project config with `config=True`, and a project
+sets its default under the plugin's own section of the reserved `plugins.`
+child:
+
+<!-- example: fragment -->
+
+```python
+REGION = GlobalOption("region", str, default="eu", config=True,
+                      help="deployment region")
+```
 
 ```toml
-[tool.footman."acme.devkit"]
+[tool.footman.plugins.acme-devkit]
 region = "us"
 ```
 
-```python
-import footman
+That key sits in the one ladder every option resolves through — **CLI >
+`env()` > config > `default(fn)` > declared** — so `--region=ap` beats it
+for an invocation, an exported variable beats it too, and a broken value
+(`region = 7` where choices say otherwise) is a taught refusal on every
+invocation, not a silent fallback.
 
-@footman.pre_tasks
-def configure(inv):
-    settings = inv.config.get("acme.devkit", {})
-```
-
-The name is the identity users already typed in `plugin(...)`, so nothing
-new has to be learned or collided.
+**The section is the entry point's name, de-dotted**: `acme.devkit` becomes
+`acme-devkit`, because TOML's dot is its nesting operator and the quoted
+spelling fails silently the day someone omits the quotes. Two overrides
+exist, one per grain. `footman.config_section("...")` names the whole
+section — for an `include()`d module, which has no entry point to derive
+from, or a derivation that reads wrong. `config="key"` names one option's
+key — for a flag renamed around a collision, since flag and key are
+different namespaces and only the flag's is shared across the tree.
 
 !!! note "Under a branded CLI, the outer table is the brand's"
 
     A [custom CLI](custom-cli.md) reads `[tool.acme]`, not `[tool.footman]` —
     two branded runners in one repo keep their own settings instead of
-    fighting over one table. Your sub-table follows it, so the same plugin is
-    configured at `[tool.acme."acme.devkit"]` there. Write the outer name your
-    users' runner answers to; the inner one is yours either way.
+    fighting over one table. Your section follows it: the same plugin is
+    configured at `[tool.acme.plugins.acme-devkit]` there. Write the outer
+    name your users' runner answers to; the inner one is yours either way.
 
-A sub-table is also what keeps plugins from colliding over settings: two
-plugins may both read a `region` key, because each reads its own. Their
-*flags* are a different namespace — `--region` is claimed once across the whole
-tree, and two plugins asking for it is a taught refusal naming both. So a
-plugin whose flag has to be `--acme-region` can still call the setting `region`
-inside its own section, where nothing else can see it.
+A section per provider is also what keeps plugins from colliding over
+settings: two plugins may both read a `region` key, because each reads its
+own. Their *flags* are a different namespace — `--region` is claimed once
+across the whole tree, and two plugins asking for it is a taught refusal
+naming both. So a plugin whose flag has to be `--acme-region` can still call
+the setting `region` inside its own section, where nothing else can see it —
+and two providers whose sections would collide are refused at discovery
+naming both, never resolved by pull order.
+
+A hook that wants settings with no CLI surface at all still reads
+`inv.config` directly — its own section under `plugins.` is the convention
+there too, so one namespace serves both.
 
 ## Optional dependencies
 

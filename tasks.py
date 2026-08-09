@@ -529,6 +529,7 @@ _API_SECTIONS: list[tuple[str, str, list[str]]] = [
             "post_task",
             "post_tasks",
             "GlobalOption",
+            "config_section",
             "wrap_task",
             "wrap_bind",
             "Invocation",

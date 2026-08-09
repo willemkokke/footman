@@ -173,6 +173,20 @@ versions may include breaking changes.
   both spellings in the collision law, so a literal `no-x` beside a bool `x`
   is refused at discovery naming both.
 
+- **A plugin's global option reads project config.** `GlobalOption(...,
+  config=True)` gives the option a config rung in the one ladder, reading
+  the key named like the option from the provider's own section under the
+  brand table's reserved `plugins.` child — `[tool.footman.plugins
+  .acme-devkit] region = "us"` for the `acme.devkit` entry point, the dot
+  becoming a hyphen because TOML's dot is its nesting operator. The section
+  derives from the entry point the pull already knew; `footman.
+  config_section("...")` names it explicitly (an `include()`d module has no
+  entry point to derive from), and `config="key"` renames one option's key.
+  Ambiguity refuses at discovery naming the remedy — a singleton reached
+  through two different pulls, or two providers deriving one section — and
+  a broken value is the same taught refusal core's config keys get, on
+  every invocation.
+
 ### Changed
 
 - **BREAKING: `GlobalOption(bare=…)` is gone**, replaced by `.given`. It existed
@@ -244,6 +258,13 @@ versions may include breaking changes.
   only on a line that fails anyway — `lint --mode strict` answers
   `expected a task name, got 'strict' … — did you mean --mode=strict?`. It never
   turns a working invocation into a refusal.
+- **The documented `[tool.footman."acme.devkit"]` sub-table convention is
+  retired** in favour of the reserved `plugins.` child above. It was
+  documentation only — nothing shipped ever read it — and the quoted-dotted
+  spelling fails silently the day someone omits the quotes, where a bare
+  de-dotted name directly under the brand table can collide with a scalar
+  key as a whole-file TOML parse error. `plugins.` gives provider sections
+  their own namespace, where neither failure is representable.
 
 ## [0.34.0] — 2026-08-07
 
