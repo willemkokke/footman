@@ -149,85 +149,91 @@ def test_stock_footman_pins_its_prefix():
     assert DEFAULT_BRAND.env("CACHE_DIR") == "FOOTMAN_CACHE_DIR"
 
 
-def test_a_home_holds_everything_the_cli_owns(tmp_path, monkeypatch):
-    home = tmp_path / "world"
+def test_the_two_folders_are_placed_independently(tmp_path, monkeypatch):
+    # The point of two fields rather than one home: a product puts its cache
+    # in its own cache area and its data somewhere else entirely.
+    cache, data = tmp_path / "prod" / ".cache" / "acme-cli", tmp_path / "prod" / "acme"
     _project(tmp_path)
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / "xdg-cache")
-    Runner(App(name="acme", prog="acme", home=home)).invoke("--list")
-    assert list((home / "cache").glob("*.json"))  # its manifest landed here
+    Runner(App(name="acme", prog="acme", cache_dir=cache, data_dir=data)).invoke(
+        "--list"
+    )
+    assert list(cache.glob("*.json"))  # its manifest landed here
     assert not (tmp_path / "xdg-cache").exists()  # and nothing under XDG
 
 
 def test_stock_variables_never_move_a_branded_client(tmp_path, monkeypatch):
     # The whole point: someone debugging `fm` must not relocate a product.
-    elsewhere, home = tmp_path / "stock", tmp_path / "world"
+    elsewhere, cache = tmp_path / "stock", tmp_path / "mine"
     _project(tmp_path)
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FOOTMAN_CACHE_DIR", str(elsewhere))
-    Runner(App(name="acme", prog="acme", home=home)).invoke("--list")
+    Runner(App(name="acme", prog="acme", cache_dir=cache)).invoke("--list")
     assert not elsewhere.exists()
-    assert list((home / "cache").glob("*.json"))
+    assert list(cache.glob("*.json"))
 
 
-def test_a_brand_reads_its_own_cache_variable(tmp_path, monkeypatch):
+def test_a_brands_own_variables_win_over_its_declared_folders(tmp_path, monkeypatch):
+    # The environment beats the brand — that is what lets two installations
+    # run side by side under different identities.
     theirs = tmp_path / "theirs"
     _project(tmp_path)
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("ACME_CACHE_DIR", str(theirs))
-    Runner(App(name="acme", prog="acme", home=tmp_path / "world")).invoke("--list")
-    assert list(theirs.glob("*.json"))  # the specific variable beats the home
-
-
-def test_prefix_home_overrides_the_home(tmp_path, monkeypatch):
-    # Two installations logged in as different identities, side by side —
-    # through the same prefix that governs every other variable.
-    _project(tmp_path)
-    monkeypatch.chdir(tmp_path)
-    monkeypatch.setenv("ACME_HOME", str(tmp_path / "user-b"))
-    app = App(name="acme", prog="acme", home=tmp_path / "user-a")
+    app = App(name="acme", prog="acme", cache_dir=tmp_path / "declared")
     Runner(app).invoke("--list")
-    assert list((tmp_path / "user-b" / "cache").glob("*.json"))
-    assert not (tmp_path / "user-a").exists()
+    assert list(theirs.glob("*.json"))
+    assert not (tmp_path / "declared").exists()
 
 
-def test_a_brand_can_hold_its_prefix_clear_of_its_own_variables(tmp_path, monkeypatch):
-    # `<PREFIX>_HOME` is read like everything else, so a product whose own
-    # `ACME_HOME` means something broader keeps the namespaces apart by
-    # naming this one — and computes `home` from its own variable.
+def test_data_dir_defaults_to_xdg_data_home(tmp_path, monkeypatch):
+    # ~/.local/share, where footman's completion scripts already live.
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "share"))
+    before = _paths.child_args()
+    try:
+        _paths.configure(prefix="ACME", config_name="acme")
+        assert _paths.footman_data_dir() == tmp_path / "share" / "acme"
+        monkeypatch.setenv("ACME_DATA_DIR", str(tmp_path / "elsewhere"))
+        assert _paths.footman_data_dir() == tmp_path / "elsewhere"
+    finally:
+        _paths.configure_child(*before)
+
+
+def test_the_accessors_create_the_directory(tmp_path, monkeypatch):
+    # A task writing into these should not have to mkdir first.
+    import footman
+
+    before = _paths.child_args()
+    try:
+        _paths.configure(
+            cache_dir=tmp_path / "c" / "deep", data_dir=tmp_path / "d" / "deep"
+        )
+        assert footman.cache_dir().is_dir()
+        assert footman.data_dir().is_dir()
+    finally:
+        _paths.configure_child(*before)
+
+
+def test_the_cache_and_data_directories_must_differ(tmp_path, monkeypatch):
+    # The collector deletes from the cache by age; pointed at the data
+    # directory it would eventually delete credentials. Refuse, don't warn.
+    same = tmp_path / "both"
     _project(tmp_path)
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setenv("ACME_HOME", str(tmp_path / "product-world"))
-    app = App(
-        name="acme",
-        prog="acme",
-        env_prefix="ACME_RUNNER",
-        home=tmp_path / "product-world" / "runner",
-    )
-    Runner(app).invoke("--list")
-    assert list((tmp_path / "product-world" / "runner" / "cache").glob("*.json"))
-    # ACME_HOME did not become the runner's home — ACME_RUNNER_HOME would have
-    assert not (tmp_path / "product-world" / "cache").exists()
+    app = App(name="acme", prog="acme", cache_dir=same, data_dir=same)
+    result = Runner(app).invoke("--list")
+    assert result.exit_code == EX_USAGE
+    assert "must differ" in result.stderr
+    assert "ACME_CACHE_DIR" in result.stderr and "ACME_DATA_DIR" in result.stderr
 
 
-def test_another_brands_home_variable_is_ignored(tmp_path, monkeypatch):
-    # Only this CLI's own prefix is read — `<OTHER>_HOME` is someone else's.
+def test_footman_cache_dir_relocates_stock_footman(tmp_path, monkeypatch):
     _project(tmp_path)
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setenv("FOOTMAN_HOME", str(tmp_path / "not-mine"))
-    Runner(App(name="acme", prog="acme", home=tmp_path / "world")).invoke("--list")
-    assert not (tmp_path / "not-mine").exists()
-    assert list((tmp_path / "world" / "cache").glob("*.json"))
-
-
-def test_footman_home_relocates_stock_footman(tmp_path, monkeypatch):
-    # Stock footman gets this from the same rule every brand follows —
-    # `<PREFIX>_HOME`, where its pinned prefix happens to be FOOTMAN.
-    _project(tmp_path)
-    monkeypatch.chdir(tmp_path)
-    monkeypatch.setenv("FOOTMAN_HOME", str(tmp_path / "fmhome"))
+    monkeypatch.setenv("FOOTMAN_CACHE_DIR", str(tmp_path / "fmcache"))
     Runner(App(env_prefix="FOOTMAN")).invoke("--list")
-    assert list((tmp_path / "fmhome" / "cache").glob("*.json"))
+    assert list((tmp_path / "fmcache").glob("*.json"))
 
 
 def test_the_config_table_is_the_brands(tmp_path, monkeypatch):
@@ -301,43 +307,59 @@ def test_a_brands_tasks_file_reaches_the_cascade_ceiling(tmp_path, monkeypatch):
 
 
 def test_the_user_tasks_file_answers_where_a_project_has_none(tmp_path, monkeypatch):
-    home, empty = tmp_path / "world", tmp_path / "empty"
-    home.mkdir()
+    # Beside the user's config file, because both are the user's own writing
+    # — not somewhere the brand placed.
+    cfg, empty = tmp_path / "cfg", tmp_path / "empty"
+    (cfg / "acme").mkdir(parents=True)
     empty.mkdir()
-    (home / "tasks.py").write_text(TASKS)
+    (cfg / "acme" / "tasks.py").write_text(TASKS)
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(cfg))
     monkeypatch.chdir(empty)
-    out = Runner(App(name="acme", prog="acme", home=home)).invoke("--list").stdout
+    out = Runner(App(name="acme", prog="acme")).invoke("--list").stdout
     assert "ship" in out
 
 
 def test_a_project_cascade_beats_the_user_tasks_file(tmp_path, monkeypatch):
     # A fallback, not a rung: there is one way to get tasks into a project
     # tree, and that is pulling them in a tasks file.
-    home = tmp_path / "world"
-    home.mkdir()
-    (home / "tasks.py").write_text(
+    cfg = tmp_path / "cfg"
+    (cfg / "acme").mkdir(parents=True)
+    (cfg / "acme" / "tasks.py").write_text(
         'from footman import task\n\n@task\ndef mine():\n    "Personal."\n'
     )
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(cfg))
     _project(tmp_path)
     monkeypatch.chdir(tmp_path)
-    out = Runner(App(name="acme", prog="acme", home=home)).invoke("--list").stdout
+    out = Runner(App(name="acme", prog="acme")).invoke("--list").stdout
     assert "ship" in out and "mine" not in out
 
 
 def test_child_argv_carries_the_resolved_locations(tmp_path):
     # Children inherit the environment but not the brand, so they are told
-    # where the cache is rather than re-deriving it wrongly.
+    # where the folders are rather than re-deriving them wrongly.
+    cache, data = tmp_path / "c", tmp_path / "d"
     before = _paths.child_args()
     try:
         _paths.configure(
-            prefix="ACME", home=tmp_path, config_name="acme", tasks_file="acme.py"
+            prefix="ACME",
+            cache_dir=cache,
+            data_dir=data,
+            config_name="acme",
+            tasks_file="acme.py",
         )
-        assert _paths.child_args() == ["ACME", str(tmp_path), "acme", "acme.py"]
+        assert _paths.child_args() == [
+            "ACME",
+            str(cache),
+            str(data),
+            "acme",
+            "acme.py",
+        ]
         _paths.configure_child(*_paths.child_args())
         assert _paths.env_var("NO_GC") == "ACME_NO_GC"
-        assert _paths.footman_cache_dir() == tmp_path / "cache"
+        assert _paths.footman_cache_dir() == cache
+        assert _paths.footman_data_dir() == data
         _paths.configure_child()  # empty words mean stock footman
         assert _paths.env_var("NO_GC") == "FOOTMAN_NO_GC"
-        assert _paths.brand_home() is None
+        assert _paths.footman_cache_dir() == _paths.cache_home() / "footman"
     finally:
         _paths.configure_child(*before)

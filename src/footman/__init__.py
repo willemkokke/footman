@@ -40,9 +40,11 @@ if TYPE_CHECKING:
     from footman.context import RunFailed as RunFailed
     from footman.context import Section as Section
     from footman.context import Stream as Stream
+    from footman.context import cache_dir as cache_dir
     from footman.context import chdir as chdir
     from footman.context import confirm as confirm
     from footman.context import cwd as cwd
+    from footman.context import data_dir as data_dir
     from footman.context import fail as fail
     from footman.context import given as given
     from footman.context import inherited as inherited
@@ -141,6 +143,7 @@ __all__ = [
     "__version__",
     "ask",
     "between",
+    "cache_dir",
     "capture",
     "chdir",
     "check",
@@ -148,6 +151,7 @@ __all__ = [
     "console_lane",
     "cwd",
     "cwd_lane",
+    "data_dir",
     "default",
     "doc",
     "docstrings",
@@ -218,13 +222,12 @@ def main(tasks_file: str | None = None) -> None:
     argv = sys.argv[1:]
     if argv and argv[0] == "--complete":
         # Still first: the hot path answers before anything else is decided.
-        # `configure`'s defaults *are* stock footman's, so only the home has
-        # to be read here — and reading it through `_paths` keeps `footman.app`
-        # (and the dataclass machinery) off a TAB press.
-        from footman import _paths
+        # No `configure` call — `_paths`' module defaults *are* stock
+        # footman's locations, and the environment overrides resolve inside
+        # them. That keeps `footman.app` (and the dataclass machinery) off a
+        # TAB press entirely.
         from footman._complete import complete_cli
 
-        _paths.configure(home=_paths.home_from_env("FOOTMAN_HOME"))
         raise SystemExit(complete_cli(argv[1:]))
     if tasks_file is not None and not any(
         a.startswith(("-f=", "--tasks-file=")) for a in argv
@@ -345,7 +348,9 @@ def __getattr__(name: str) -> object:
         "prompt",
         "chdir",
         "confirm",
+        "cache_dir",
         "cwd",
+        "data_dir",
         "select",
         "track",
         "RunFailed",

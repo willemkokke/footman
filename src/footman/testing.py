@@ -190,7 +190,8 @@ class Runner:
 
             _paths.configure(
                 prefix=self.app.brand.prefix,
-                home=self.app.brand.resolved_home(),
+                cache_dir=self.app.brand.cache_dir,
+                data_dir=self.app.brand.data_dir,
                 config_name=self.app.brand.config_name,
                 tasks_file=self.app.brand.tasks_file,
             )

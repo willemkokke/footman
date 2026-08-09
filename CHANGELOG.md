@@ -32,36 +32,47 @@ versions may include breaking changes.
   took its cascade ceiling from the nearest `pyproject.toml`, which in a
   monorepo is the wrong directory rather than merely a vaguer one.
 
-- **A branded CLI keeps its own things in its own place.** `App(home=…)` names a
-  directory that holds everything the CLI owns — completion manifests, timing
-  history, fetched files, the collector stamp, the user-level config file, and
-  the user tasks file. The brand computes the path, so footman never guesses at
-  a product's layout. `<PREFIX>_HOME` overrides it at run time, which is what
-  lets two installations run side by side under different identities. Unset,
-  locations fall back to `~/.cache` and `~/.config` exactly as before.
-- **Environment variables follow the brand.** A CLI named `acme` reads
-  `ACME_HOME`, `ACME_CACHE_DIR`, `ACME_CONFIG`, `ACME_CASCADE`, `ACME_NO_GC`
-  and `ACME_NO_UV`, and its error messages name those spellings rather than
-  teaching a variable that does nothing for its users. The prefix is `prog`
-  uppercased — the command is `acme`, so the variables are `ACME_*` —
-  and `env_prefix=` overrides it. A branded CLI reads **only** its own prefix,
-  so debugging `fm` with `FOOTMAN_CACHE_DIR` set can no longer relocate
-  someone else's product. By the same token, keeping that namespace clear of a
-  product's other variables is the brand's to arrange: a CLI whose `ACME_HOME`
-  already means something broader gives the runner its own
-  (`env_prefix="ACME_RUNNER"`) and computes `home` from the product's variable.
+- **A branded CLI keeps its own things in its own place.** `App(cache_dir=…)`
+  and `App(data_dir=…)` place the two folders a CLI uses. **Cache** is derived
+  data — completion manifests, timing history, the collector stamp — swept by
+  the collector; **data** is durable and machine-local (credentials, tokens,
+  generated assets) and is never collected. The brand places each, so footman
+  never guesses at a product's layout, and they are not anchored to each other:
+  a product that already has a cache area can put its cache there and its data
+  elsewhere. `<PREFIX>_CACHE_DIR` / `<PREFIX>_DATA_DIR` override them at run
+  time, which is what lets two installations run side by side under different
+  identities. Unset, they fall back to `~/.cache/<name>` and
+  `~/.local/share/<name>`.
+
+  footman **refuses to start** if the two resolve to the same directory: the
+  collector deletes from the cache by age, and pointed at the data directory it
+  would eventually delete credentials.
+- **`footman.cache_dir()` and `footman.data_dir()`** — a task asks for the kind
+  of folder it wants and gets one that exists, with no idea whether the two
+  share a parent or where the CLI put them. Both create the directory, so a task
+  never writes a `mkdir` of its own.
+- **Environment variables follow the brand.** A CLI whose command is `acme`
+  reads `ACME_CACHE_DIR`, `ACME_DATA_DIR`, `ACME_CONFIG`, `ACME_CASCADE`,
+  `ACME_NO_GC` and `ACME_NO_UV`, and its error messages name those spellings
+  rather than teaching a variable that does nothing for its users. The prefix is
+  `prog` uppercased, and `env_prefix=` overrides it. A branded CLI reads **only**
+  its own prefix, so debugging `fm` with `FOOTMAN_CACHE_DIR` set can no longer
+  relocate someone else's product — and by the same token, keeping that
+  namespace clear of a product's own variables is the brand's to arrange.
 - **Config files follow the brand.** `App(config_name=…)`, defaulting to `name`,
   gives `acme.toml` and `[tool.acme]` from one field so the two cannot drift.
-  Two branded CLIs can share a repository, each reading its own settings.
-- **`FOOTMAN_HOME` relocates stock footman**, through the same `<PREFIX>_HOME`
-  rule every brand follows. footman pins its prefix rather than deriving `FM_*`
-  from its command, and not for compatibility: `FOOTMAN_HOME` says what it
-  belongs to and can be searched for, where `FM_HOME` is opaque. A terse
-  command is exactly when to set `env_prefix` to something longer.
-- **A user tasks file.** With a home set, `<home>/tasks.py` holds tasks
-  available wherever there is no project. It is a fallback, not a rung: a
-  project's cascade wins outright, so there is still exactly one way to get
-  tasks into a project tree.
+  Two branded CLIs can share a repository, each reading its own settings. The
+  *user-level* config file is deliberately not brand-placed: it stays at
+  `~/.config/<name>/config.toml`, where a user looks for their own settings.
+- **footman pins its own prefix** rather than deriving `FM_*` from its command,
+  and not for compatibility: `FOOTMAN_CACHE_DIR` says what it belongs to and can
+  be searched for, where `FM_CACHE_DIR` is opaque. A terse command is exactly
+  when to set `env_prefix` to something longer.
+- **A user tasks file.** `~/.config/<name>/tasks.py` holds tasks available
+  wherever there is no project — beside the user-level config file, because
+  both are the user's own writing rather than anything the brand places. It is
+  a fallback, not a rung: a project's cascade wins outright, so there is still
+  exactly one way to get tasks into a project tree.
 
 - **A bare mention of an option is legal, and means the caller asked for it.**
   `fm build --target` no longer errors. It binds exactly what absence would

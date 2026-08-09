@@ -867,6 +867,53 @@ def chdir(
         ctx.cwd = saved_ctx
 
 
+def cache_dir() -> Path:
+    """This CLI's cache directory, created if it isn't there yet.
+
+    Derived data, safe to delete: footman's collector sweeps this folder by
+    age, so put nothing here you would mind losing.
+
+    ```python
+    (footman.cache_dir() / "index.json").write_text(payload)
+    ```
+
+    Where it lands is the branded CLI's business — its own folder, or
+    `~/.cache/<name>` by default. A task asks for the kind of folder it
+    wants and gets one that exists.
+    """
+    from footman import _paths
+
+    return _make(_paths.footman_cache_dir())
+
+
+def data_dir() -> Path:
+    """This CLI's data directory, created if it isn't there yet.
+
+    Durable and machine-local — credentials, tokens, generated assets. The
+    collector never touches it, which is the whole difference from
+    `cache_dir()`.
+
+    ```python
+    (footman.data_dir() / "credentials.json").write_text(token)
+    ```
+    """
+    from footman import _paths
+
+    return _make(_paths.footman_data_dir())
+
+
+def _make(path: Path) -> Path:
+    """Return *path*, having made sure it exists.
+
+    The accessors create rather than merely resolve: every caller would
+    otherwise write the same `mkdir`, and forgetting it fails at the write
+    rather than here. `_paths` itself stays resolution-only — it is on the
+    completion hot path, which must not touch the disk.
+    """
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
 def cwd() -> Path:
     """The current task's working directory, always concrete.
 

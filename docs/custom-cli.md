@@ -95,28 +95,78 @@ dependencies, the way a footman one lists `footman`. Left unset, footman
 never guesses a distribution into a script environment: the rule stays out of
 your way, and your users' tasks files run exactly where they already did.
 
-## A home of your own
+## Two folders of your own
 
-Your CLI is a product; footman is a dependency inside it. Give it a `home` and
-everything it keeps goes there — completion manifests, timing history, the
-collector's stamp, the user-level config file, and the user tasks file:
+Your CLI is a product; footman is a dependency inside it. It keeps things in
+exactly two folders, and you place each one:
 
 ```python
 from pathlib import Path
 
-app = App(name="Acme", prog="acme", home=Path.home() / ".acme")
+app = App(
+    name="Acme",
+    prog="acme",
+    cache_dir=Path.home() / ".acme" / "cache",
+    data_dir=Path.home() / ".acme" / "data",
+)
 ```
 
-**You** compute the path, so footman never has to guess at your product's
-layout. `ACME_HOME` overrides it at run time, which is what lets two
-installations run side by side under different identities.
+**Cache** is derived data — completion manifests, timing history, the
+collector's stamp. It is safe to delete, and footman's collector sweeps it by
+age. **Data** is durable and machine-local: credentials, tokens, generated
+assets. Nothing ever collects it.
 
-Left unset, with that variable unset too, locations fall back to `~/.cache` and
-`~/.config` as they always have.
+They are not anchored to each other, which matters when your product already
+has somewhere for one of them:
+
+```python
+import os
+
+acme_home = Path(os.environ.get("ACME_HOME", Path.home() / ".acme"))
+app = App(
+    name="Acme", prog="acme",
+    cache_dir=acme_home / ".cache" / "acme-cli",
+    data_dir=acme_home / "acme-cli",
+)
+```
+
+`ACME_CACHE_DIR` and `ACME_DATA_DIR` override them at run time, which is what
+lets two installations run side by side under different identities. Left unset
+with those variables unset, they fall back to `~/.cache/acme` and
+`~/.local/share/acme`.
+
+!!! danger "The two must differ"
+
+    footman refuses to start if the cache and data directories resolve to the
+    same place. The collector deletes from the cache by age; pointed at your
+    data it would eventually delete credentials.
+
+## Task authors just ask for a folder
+
+None of the above is a task author's problem. They ask for the kind of folder
+they want and get one that exists:
+
+```python
+import footman
+from footman import task
+
+
+@task
+def login(token: str):
+    (footman.data_dir() / "credentials.json").write_text(token)
+
+
+@task
+def index():
+    (footman.cache_dir() / "index.json").write_text("{}")
+```
+
+Both create the directory if it isn't there, so a task never writes a `mkdir`
+of its own — and neither knows or cares whether the two share a parent.
 
 ## Environment variables follow the brand
 
-`acme` reads `ACME_HOME`, `ACME_CACHE_DIR`, `ACME_CONFIG`, `ACME_CASCADE`,
+`acme` reads `ACME_CACHE_DIR`, `ACME_DATA_DIR`, `ACME_CONFIG`, `ACME_CASCADE`,
 `ACME_NO_GC` and `ACME_NO_UV` — never footman's. That isolation is the point:
 someone debugging `fm` with `FOOTMAN_CACHE_DIR` set must not silently relocate
 your product's cache. Error messages name your spelling too, so a user is never
@@ -127,31 +177,17 @@ The prefix is `prog` uppercased — the command is `acme`, so the variables are
 reasons.
 
 **A terse command makes a poor variable.** footman's own command is `fm`, but
-its variables are `FOOTMAN_*`: `FOOTMAN_HOME` tells a reader who has never
+its variables are `FOOTMAN_*`: `FOOTMAN_CACHE_DIR` tells a reader who has never
 heard of the tool what it belongs to, and is something they can search for.
-`FM_HOME` is neither. If your command is two or three letters, pin a longer
+`FM_CACHE_DIR` is neither. If your command is two or three letters, pin a longer
 prefix.
 
-!!! warning "The namespace is yours to keep clear"
+**Or the namespace collides with your product's own.** Keeping it clear is
+yours to arrange — footman never guesses which of your variables is which:
 
-    Because `ACME_HOME` is read like every other variable, a product that
-    already uses `ACME_HOME` to mean something broader should give the runner
-    its own namespace and compute `home` from the product's variable:
-
-    ```python
-    import os
-    from pathlib import Path
-
-    app = App(
-        name="Acme",
-        prog="acme",
-        env_prefix="ACME_RUNNER",
-        home=Path(os.environ.get("ACME_HOME", Path.home() / ".acme")) / "runner",
-    )
-    ```
-
-    footman never guesses which of your variables is which — one prefix, and
-    where it points is your decision.
+```python
+app = App(name="Acme", prog="acme", env_prefix="ACME_RUNNER")
+```
 
 ## Config files follow the brand too
 
@@ -165,9 +201,13 @@ app = App(name="Acme", prog="acme", config_name="acme")   # the default is `name
 Two branded CLIs can then live in one repository, each reading its own
 settings instead of fighting over a shared table.
 
+The *user-level* config file is deliberately not yours to place. It stays at
+`~/.config/acme/config.toml`, where a user looks for their own settings, with
+`ACME_CONFIG` naming another.
+
 ## Your users' own tasks
 
-With a home set, `<home>/tasks.py` (or whatever your `tasks_file` is called)
+`~/.config/acme/tasks.py` — beside that config file, and for the same reason —
 holds a user's personal tasks, available wherever they have no project.
 
 It is a *fallback*, not a rung: the moment a project's cascade finds a tasks
