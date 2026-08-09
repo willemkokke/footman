@@ -87,6 +87,10 @@ def fix(dry: Annotated[bool, doc("plan only, change nothing")] = False):
     """
 
 @task
+def publish(cache: bool = True):
+    """Publish it."""
+
+@task
 def sync(force: bool = False):
     """Sync the things.
 
@@ -561,6 +565,34 @@ def test_help_shows_long_description_and_docstring_doc(project, capsys):
     assert "Runs the whole pipeline," in out and "twice if needed." in out
     assert "skip the freshness check" in out  # docstring-sourced option line
     assert "Args:" not in out  # the section header is structure, not prose
+
+
+def test_help_shows_the_declared_default(project, capsys):
+    # The manifest carried `default` all along and help never printed it, so a
+    # reader had to run the task to find out what `--name` would be.
+    assert _app.run(["--help", "hi"]) == 0
+    assert "default: world" in capsys.readouterr().out
+
+
+def test_help_leads_with_the_spelling_that_does_something(project, capsys):
+    # `--dry` defaults false, so the useful spelling is the positive one.
+    assert _app.run(["--help", "fix"]) == 0
+    out = capsys.readouterr().out
+    assert "--dry " in out
+    assert "(--no-dry to disable)" in out
+    # A flag's default is said by the label and the parenthetical; saying
+    # "default: false" as well would be the same fact three times.
+    assert "default: false" not in out
+
+
+def test_help_leads_a_default_true_flag_with_its_negative(project, capsys):
+    # `--cache` defaults true, so typing it changes nothing and `--no-cache` is
+    # the only spelling that does. Leading with the inert one buried the useful
+    # one in a parenthetical.
+    assert _app.run(["--help", "publish"]) == 0
+    out = capsys.readouterr().out
+    assert "--no-cache" in out
+    assert "(--cache to enable)" in out
 
 
 def test_help_shows_positionals_and_types(project, capsys):
