@@ -78,12 +78,25 @@ stamped, and `fm --plugins` lists what is installed against what is pulled.
 A `GlobalOption` exists on the command line exactly when its owner is
 pulled; unpulled, it is an unknown option, taught.
 
-`bare=` gives an option a meaning for a bare mention: `--profile` means the
-`bare=` value, `--profile=out.json` the attached one — the same grammar
-footman's own `--install-completion` speaks. The `bare=` value runs the
-option's ordinary coercion, so one that could not survive it is a taught
-author error at registration; on a flag it is refused, since a flag is
-nothing *but* a bare mention.
+An option may be named without a value: `--profile` beside
+`--profile=out.json`. A bare mention carries no value — `.value` is whatever
+the option would have had anyway — and carries *presence*, which `.given`
+reports:
+
+<!-- example: fragment -->
+
+```python
+PROFILE = GlobalOption("profile", Path, default=Path("fm-profile.json"))
+
+if PROFILE.given:            # `--profile` writes the default file,
+    write_trace(PROFILE.value)   # no `--profile` writes nothing at all
+```
+
+Three outcomes from one declared value: absent, named, named with a value.
+`.value` answers *what*, `.given` answers *whether anyone asked* — and an
+`env()` fallback fills the first without touching the second, so a plugin that
+wants the environment alone to count can say so, and one that does not can say
+that instead.
 
 ## Configuration
 

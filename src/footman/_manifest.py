@@ -11,7 +11,7 @@ Parameter mapping (function signature -> CLI shape):
 | Signature                | CLI shape                                 |
 | ------------------------ | ----------------------------------------- |
 | `fix: bool = False`      | flag `--fix` / `--no-fix`                 |
-| `mode: str = "loose"`    | option `--mode VALUE`                     |
+| `mode: str = "loose"`    | option `--mode=VALUE`, bare `--mode` ok   |
 | `env: Literal[...]`      | completable, eagerly-validated choices    |
 | `count: int = 100`       | typed option, validated at parse time     |
 | `paths: list[Path] = ()` | repeatable option (`--paths a --paths b`) |
