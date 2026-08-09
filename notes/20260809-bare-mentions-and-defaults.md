@@ -1,6 +1,8 @@
 # Bare mentions, declared defaults, and the end of `bare=`
 
-*Status: proposed 2026-08-09 — awaiting the go. Nothing built.*
+*Status: BUILT 2026-08-09, on `worktree-bare-mentions-and-defaults`. The plan
+below is what was agreed; "What the build changed" at the end records where
+reality disagreed with it.*
 
 ## The report that opened it
 
@@ -449,3 +451,62 @@ put a rewrite of how config and globals are declared into a diff that already
 touches five executor paths. Nothing is done twice: the uniform hand-wiring
 landed now is exactly what the declaration replaces, and the intermediate state
 is already correct.
+
+## What the build changed
+
+Four places where writing it disagreed with planning it.
+
+### Globals are not all bare-legal after all
+
+The plan said `_VALUE_OPTIONAL` would go and every value-taking global would
+become bare-legal, on the grounds that a task option is bare-legal whenever
+absence is legal and absence is always legal for a global. Built, that let
+`fm --where lint` parse as a bare `--where` followed by a task — **silently
+running lint** instead of teaching the attachment.
+
+`--where` names a task to locate, and there is no default task, so its bare
+form has no reading at all. `_VALUE_OPTIONAL` stays, and it turns out to be the
+*same* question a task option answers with `required`, asked in the vocabulary
+each has: a task option may be named bare when absence is legal, a global when
+its bare mention means something. The bracketed metavar (`[SHELL]`, `[ADDR]`)
+is how the table declares it.
+
+Plugin globals *are* all bare-legal, because their owner can always ask
+`.given` — so the reading exists by construction.
+
+### The GLOBALS default column moved to the follow-on
+
+The five one-way config keys got a `_switch(g, cfg, name, default)` helper
+instead: **CLI > config > the declared default**, replacing three hand-written
+spellings of that idea. A default *column* only earns its place once config
+backing is declared rather than wired, which is exactly the follow-on — adding
+it now would have meant a column of empty strings and half the next change,
+built badly.
+
+### Presence in the work key has one visible consequence
+
+Narrower than feared, and worth stating: **passing a value equal to a
+parameter's default is no longer the same work as omitting it.** Nothing else
+about identity moves — different values already keyed differently, and
+positional-versus-keyword spelling still names one execution. Two tests
+asserted the old property in passing (`assert render() == "WEB"  # the default
+is the same work as "web"`).
+
+### The bug the design predicted, found in footman's own plugin
+
+`footman.profile` armed on `if not inv.cli.get("profile")` — truthiness of the
+value standing in for presence, which worked only while a bare mention arrived
+as `True`. It now asks `if "profile" not in inv.cli`, the question it always
+meant. The design's whole premise, sitting in the codebase already.
+
+### Smaller things
+
+- `_thread`'s merge condition must compare presence **only for names the
+  dependent has already seen**; comparing unconditionally made every first
+  thread look like a conflict and split instead of merging, which the
+  forwarding tests caught immediately.
+- `test_source_never_names_a_caller` fails if `src/footman/` contains "claude"
+  anywhere — the docstring examples here were written around `--agent`
+  originally and had to move to `--profile`, which is the better example.
+- pyrefly wants `Generator[None]` where basedpyright accepts `Iterator[None]`
+  on a `@contextmanager`.
