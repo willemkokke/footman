@@ -32,6 +32,7 @@ those are deferred into `App.run`.
 from __future__ import annotations
 
 import sys
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -137,6 +138,17 @@ class Brand:
     data_dir: Path | None = None
     env_prefix: str | None = None
     config_name: str | None = None
+    builtin: tuple[str, ...] = ()
+    """The brand's own task surface where there is no project — a tuple of
+    `footman.tasks` entry-point names, mounted as the base of the tree
+    exactly when discovery finds no project task files. The ladder is
+    project > user > built-in: a project ignores the base outright (its
+    tasks file mounts what it wants — nothing is privileged, nothing lost),
+    and the user tasks file overlays it. Strings, never live objects: the
+    detached refresh child rebuilds manifests in a bare process, and a name
+    rides argv where an object cannot. Curate a small global surface — what
+    does this CLI offer someone with no project? — rather than aiming it at
+    the everyday tasks, which belong where their probes work."""
 
     @property
     def prefix(self) -> str:
@@ -190,6 +202,7 @@ class App:
         data_dir: Path | str | None = None,
         env_prefix: str | None = None,
         config_name: str | None = None,
+        builtin: Sequence[str] = (),
     ) -> None:
         # The stock pins: an `App` that kept the `fm` command *is* stock
         # footman, and stock pins the long words its two-letter command
@@ -215,6 +228,7 @@ class App:
             data_dir=Path(data_dir).expanduser() if data_dir is not None else None,
             env_prefix=env_prefix,
             config_name=config_name,
+            builtin=tuple(builtin),
         )
 
     def run(self, argv: list[str] | None = None) -> int:

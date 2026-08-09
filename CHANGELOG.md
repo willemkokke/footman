@@ -7,6 +7,22 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- **`App(builtin=…)` — tasks built into the product.** A branded CLI used to
+  be empty outside a project, and the tasks someone needs *before* a project
+  exists — log in, create a project — were exactly the unreachable ones. The
+  brand names `footman.tasks` entry points (strings, never live objects: a
+  name rides the refresh child's argv where an object cannot), and they
+  become the base of the tree exactly when discovery finds no project task
+  files. The ladder is **project > user > built-in**: the user tasks file
+  overlays the base, and a project ignores it outright — nothing is
+  privileged and nothing is lost, because the set is an ordinary entry point
+  a project mounts like any other (`plugin("acme.global")`). Naming a
+  built-in inside a project teaches exactly that mount; a brand naming an
+  uninstalled entry point is refused naming the brand; `--plugins` reports
+  the set as `built in`.
+
 ### Changed
 
 - **BREAKING: the user tasks file is the cascade's outermost rung.** It used

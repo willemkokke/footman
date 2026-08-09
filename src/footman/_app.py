@@ -245,6 +245,65 @@ def resolve_task_files(
     return Discovery(files, cfg, root, None)
 
 
+def _base_tree(names: tuple[str, ...], json_mode: bool) -> registry.Group | int:
+    """The brand's built-in base: each `footman.tasks` entry point mounted
+    into a fresh tree, exactly as a tasks file's `plugin(...)` would mount
+    it — so a project that wants the same set mounts it the ordinary way.
+
+    Built only when discovery found no project task files. A name that does
+    not mount is a refusal naming the brand — the brand declared it, so the
+    brand's install is what is broken — never a crash."""
+    from footman import compose
+
+    with registry.capture() as base:
+        for name in names:
+            try:
+                compose.plugin(name)
+            except Exception as exc:
+                return _refuse(
+                    json_mode,
+                    f"{_brand.name} declares built-in tasks from {name!r}, "
+                    f"which did not mount: {exc}",
+                )
+    return base
+
+
+def _builtin_remedy(unknown: str) -> str:
+    """The fix, when an unknown task is one of the brand's built-ins: the
+    built-ins exist only outside a project, and the ordinary mount brings
+    the set into this one — a real remedy precisely because the set is an
+    ordinary entry point. Empty when the name is nobody's."""
+    from footman import compose
+
+    def addresses(node: object, prefix: str) -> list[str]:
+        if not isinstance(node, registry.Group):
+            return [prefix.rstrip(".")] if prefix else []
+        out: list[str] = [f"{prefix}{name}" for name in node.tasks]
+        for name, sub in node.groups.items():
+            out.extend(addresses(sub, f"{prefix}{name}."))
+        return out
+
+    for name in _brand.builtin:
+        try:
+            _ident, node = compose._resolve_plugin(name)
+        except Exception:
+            continue  # an unmountable entry teaches at mount time, not here
+        if isinstance(node, registry.Group):
+            # An anonymous container mounts its children at the top level;
+            # a named group lands under its own name — the same landing
+            # rule `plugin()` applies, so the remedy speaks real addresses.
+            start = "" if node.name == "root" else f"{node.name}."
+            known = addresses(node, start)
+        else:
+            known = [name.rsplit(".", 1)[-1]]
+        if unknown in known:
+            return (
+                f" — {unknown!r} is built into {_brand.prog} via {name!r}; "
+                f"mount it in this project's tasks file: plugin({name!r})"
+            )
+    return ""
+
+
 def _discover_files(
     g: dict[str, object], wants_help: bool, bare: bool
 ) -> Discovery | int:
@@ -270,6 +329,14 @@ def _discover_files(
         return _refuse(bool(g.get("json")), f"--config: {exc}")
 
     if found.files:
+        return found
+
+    if _brand.builtin and not g.get("tasks_file"):
+        # Global mode: the brand's built-ins answer where nothing else does,
+        # so listings, help, and runs proceed over the mounted base. The
+        # empty-tree teaching below is for a runner with no base at all.
+        # (`-f` names a file that wasn't there — total control includes the
+        # miss, so it keeps today's teaching rather than a surprise base.)
         return found
 
     cfg = found.cfg
@@ -712,7 +779,13 @@ def _plugins_report(reg: registry.Group) -> int:
     rows: list[tuple[str, str, str]] = []
     for ep in eps:
         where = landed.get(ep.name)
-        if where:
+        if ep.name in _brand.builtin:
+            # The brand's own surface: part of the product wherever there is
+            # no project, and an ordinary mount inside one.
+            meta = getattr(ep.dist, "metadata", None)
+            summary = (meta.get("Summary", "") if meta else "") or ""
+            rows.append((ep.name, "built in", described(where) if where else summary))
+        elif where:
             rows.append(
                 (ep.name, f"mounted at {', '.join(sorted(where))}", described(where))
             )
@@ -1662,6 +1735,16 @@ def _execute(
     json_mode = bool(g.get("json"))
 
     base = registry.Group("root")
+    if _brand.builtin and not found.root and not g.get("tasks_file"):
+        # No project: the brand's built-ins are the base of the tree, and
+        # the user rung (already leading `files`) overlays them — the full
+        # ladder is project > user > built-in. A project ignores the base
+        # outright: its tasks file mounts what it wants, so nothing is
+        # privileged and nothing is lost.
+        built = _base_tree(_brand.builtin, json_mode)
+        if isinstance(built, int):
+            return built
+        base = built
     plugins_cfg = cfg.get("plugins")
     if plugins_cfg and not isinstance(plugins_cfg, dict):
         # The old list-valued key died with the composition rework: mounts are
@@ -1827,7 +1910,12 @@ def _run_tree(
     try:
         globals_, segments = _split.split_chain(tree, argv)
     except _split.ChainError as exc:
-        return _refuse(json_mode, str(exc))
+        message = str(exc)
+        if exc.unknown and _brand.builtin and root_dir:
+            # Inside a project the base is ignored, so a built-in's name
+            # reads as a command that vanished — teach the mount instead.
+            message += _builtin_remedy(exc.unknown)
+        return _refuse(json_mode, message)
 
     # A task whose signature claims stdout (`-> Stdout[T]`) makes this a
     # *document run*: stdout carries exactly the addressed task's return

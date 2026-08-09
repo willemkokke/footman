@@ -92,7 +92,13 @@ def _misplaced_global(token: str) -> str | None:
 
 
 class ChainError(Exception):
-    """A malformed command line, carrying a teaching message for the user."""
+    """A malformed command line, carrying a teaching message for the user.
+
+    `unknown` carries the unresolved head token when the failure was a
+    task that isn't there — structured, so a catcher can add a remedy (the
+    brand's built-ins) without parsing its own error text."""
+
+    unknown: str | None = None
 
 
 def _default_jobs() -> int:
@@ -822,9 +828,11 @@ def _resolve_head(
         # dotted address, "expected a task name, got" at the root — but the
         # scope clause after already carries that distinction (`docs has:` vs
         # `know:`), and someone who typed `docs.sevre` thinks of it as a name.
-        raise ChainError(
+        err = ChainError(
             f"no task named {(bad if path else token)!r}{hint} ({scope}: {known})"
         )
+        err.unknown = token
+        raise err
 
     # The whole token named a group. Runnable — one with `@group.default` —
     # resolves to its default action: `fm lint` / `fm lint --fix` run it,

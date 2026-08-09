@@ -477,6 +477,91 @@ def test_the_user_rung_claims_no_root(tmp_path, monkeypatch):
     assert f"file-cwd={(cfg / 'acme').resolve()}" in filed.stdout
 
 
+def test_builtin_tasks_answer_where_nothing_else_does(tmp_path, monkeypatch):
+    # Global mode: no project, no user file — the brand's built-ins are the
+    # tree. `footman.docs` is a real installed entry point, so this is the
+    # whole path: resolve, mount, list.
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    monkeypatch.chdir(empty)
+    monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
+    acme = Runner(App(name="acme", prog="acme", builtin=["footman.docs"]))
+    out = acme.invoke("--list").stdout
+    assert "docs" in out
+
+
+def test_no_builtin_and_no_files_keeps_todays_refusal(tmp_path, monkeypatch):
+    # `builtin=()` is byte-identical to before the feature existed.
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    monkeypatch.chdir(empty)
+    result = Runner(App(name="acme", prog="acme")).invoke("whatever")
+    assert result.exit_code == EX_USAGE
+    assert "no tasks file found" in result.stderr.lower()
+
+
+def test_a_project_ignores_the_builtin_base(tmp_path, monkeypatch):
+    # Nothing is privileged: inside a project, the tasks file mounts what
+    # it wants and the base is simply not there.
+    _project(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
+    acme = Runner(App(name="acme", prog="acme", builtin=["footman.docs"]))
+    out = acme.invoke("--list").stdout
+    assert "ship" in out and "docs" not in out
+
+
+def test_an_unknown_builtin_teaches_the_mount(tmp_path, monkeypatch):
+    _project(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
+    acme = Runner(App(name="acme", prog="acme", builtin=["footman.docs"]))
+    result = acme.invoke("docs.page")
+    assert result.exit_code == EX_USAGE
+    assert "no task named 'docs.page'" in result.stderr
+    assert "built into acme via 'footman.docs'" in result.stderr
+    assert "plugin('footman.docs')" in result.stderr
+
+
+def test_the_user_rung_overlays_the_builtins(tmp_path, monkeypatch):
+    # The bottom two rungs of project > user > built-in.
+    cfg = tmp_path / "cfg"
+    (cfg / "acme").mkdir(parents=True)
+    (cfg / "acme" / "tasks.py").write_text(
+        'from footman import task\n\n@task\ndef mine():\n    "Personal."\n'
+    )
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(cfg))
+    monkeypatch.chdir(empty)
+    monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
+    acme = Runner(App(name="acme", prog="acme", builtin=["footman.docs"]))
+    out = acme.invoke("--list").stdout
+    assert "mine" in out and "docs" in out
+
+
+def test_an_uninstalled_builtin_refuses_naming_the_brand(tmp_path, monkeypatch):
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    monkeypatch.chdir(empty)
+    result = Runner(App(name="acme", prog="acme", builtin=["acme.nope"])).invoke(
+        "--list"
+    )
+    assert result.exit_code == EX_USAGE
+    assert "acme declares built-in tasks from 'acme.nope'" in result.stderr
+
+
+def test_the_plugins_report_shows_built_in(tmp_path, monkeypatch):
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    monkeypatch.chdir(empty)
+    monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
+    acme = Runner(App(name="acme", prog="acme", builtin=["footman.docs"]))
+    result = acme.invoke("--plugins")
+    assert result.ok, result.stderr
+    assert "built in" in result.stdout
+
+
 def test_a_user_tasks_cwd_root_means_the_project_it_landed_in(tmp_path, monkeypatch):
     cfg = tmp_path / "cfg"
     (cfg / "acme").mkdir(parents=True)
