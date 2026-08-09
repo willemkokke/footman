@@ -21,6 +21,12 @@ versions may include breaking changes.
   that can override it per project — that key lives in a config file, and
   finding config needs the very ceiling this computes.
 
+- **An in-memory `Runner` drive records no timing history.** The
+  estimate/record path treated a synthetic tree like a real invocation and
+  wrote `*.times.json` — keyed by an ephemeral test directory — into the real
+  user cache from a consumer's own test suite. In-memory runs now pollute no
+  cache, times included, the rule `-f` runs already followed.
+
 ### Added
 
 - **The cascade stops at any version-control boundary, not only git.**
@@ -50,7 +56,9 @@ versions may include breaking changes.
 - **`footman.cache_dir()` and `footman.data_dir()`** — a task asks for the kind
   of folder it wants and gets one that exists, with no idea whether the two
   share a parent or where the CLI put them. Both create the directory, so a task
-  never writes a `mkdir` of its own.
+  never writes a `mkdir` of its own. The data directory is created owner-only
+  (`0o700`), like `~/.ssh` — credentials are exactly what it is documented to
+  hold.
 - **Environment variables follow the brand.** A CLI whose command is `acme`
   reads `ACME_CACHE_DIR`, `ACME_DATA_DIR`, `ACME_CONFIG_DIR`, `ACME_CONFIG`,
   `ACME_CASCADE`,
@@ -60,11 +68,15 @@ versions may include breaking changes.
   its own prefix, so debugging `fm` with `FOOTMAN_CACHE_DIR` set can no longer
   relocate someone else's product — and by the same token, keeping that
   namespace clear of a product's own variables is the brand's to arrange.
-- **Config files follow the brand.** `App(config_name=…)`, defaulting to `name`,
-  gives `acme.toml` and `[tool.acme]` from one field so the two cannot drift.
-  Two branded CLIs can share a repository, each reading its own settings. The
-  *user-level* config file is deliberately not brand-placed: it stays at
-  `~/.config/<name>/config.toml`, where a user looks for their own settings.
+- **Config files follow the brand.** `App(config_name=…)`, defaulting to
+  `prog` — the machine word, exactly as the env prefix derives, never the
+  display name, which is free text — gives `acme.toml`, `[tool.acme]` and the
+  `~/.config/acme/` corner from one field so the three cannot drift. Two
+  branded CLIs can share a repository, each reading its own settings. footman
+  pins its own (`footman.toml`, not `fm.toml`) for the same reason it pins
+  `FOOTMAN` over `FM`. The *user-level* config file is deliberately not
+  brand-placed: it stays at `~/.config/acme/config.toml`, where a user looks
+  for their own settings.
   `<PREFIX>_CONFIG_DIR` relocates that corner — the config file and the user
   tasks file together — without `XDG_CONFIG_HOME`'s side effect of moving
   every other application's config along with it.

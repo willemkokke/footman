@@ -25,9 +25,10 @@ def main() -> None:
 ```
 
 A brand can also rename the tasks file its users write:
-`App(..., tasks_file="acmetasks.py")`. Per-project config (`tasks` in
-`[tool.footman]`) still overrides it, and background completion
-refreshes honour it — the filename rides inside the cached manifest.
+`App(..., tasks_file="acmetasks.py")`. Per-project config (the `tasks` key,
+in *your* brand's table — see below) still overrides it, and background
+completion refreshes honour it — the filename rides inside the cached
+manifest.
 
 Register it as a console script in your package:
 
@@ -206,11 +207,17 @@ Your users write `acme.toml`, or a `[tool.acme]` table in `pyproject.toml` —
 not footman's. Both come from one field, so they cannot drift apart:
 
 ```python
-app = App(name="Acme", prog="acme", config_name="acme")   # the default is `name`
+app = App(name="Acme", prog="acme")   # config_name defaults to prog: `acme`
 ```
 
 Two branded CLIs can then live in one repository, each reading its own
 settings instead of fighting over a shared table.
+
+`config_name` is the machine word, the same rule the env prefix follows —
+never the display name, which is free text nobody would type into a TOML
+table. Set it when the identity your users should write isn't the command:
+footman's own command is `fm`, but its config is `footman.toml` /
+`[tool.footman]`, pinned for the same reason its variables are `FOOTMAN_*`.
 
 The *user-level* config file is deliberately not yours to place. It stays at
 `~/.config/acme/config.toml`, where a user looks for their own settings.
