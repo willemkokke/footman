@@ -636,6 +636,33 @@ class Context:
     result row; a `parallel()` child's records fold into its requester's,
     the way `steps` do."""
 
+    def child(self, label: str, **overrides: Any) -> Context:
+        """One birth for every child context — a body callee's, a
+        `parallel()` child's — so the sites can never drift on which fields
+        reset.
+
+        Identity is fresh: the address and sibling labels, the step and
+        section records, the unit flag. The environment is a COPY — a
+        child's writes are its own, which is the router's "children see it,
+        siblings don't" made structural. Everything else inherits until
+        *overrides* says otherwise. `given` deliberately inherits here: the
+        futures layer stamps the callee's own set where binding computes
+        it, and a step child has no binding to compute one.
+        """
+        born = replace(
+            self,
+            address=_child_address(self, label),
+            _labels={},
+            env=dict(self.env),
+            steps=[],
+            sections=[],
+            task=label,
+            unit_pending=False,
+        )
+        for name, value in overrides.items():
+            setattr(born, name, value)
+        return born
+
 
 _current: ContextVar[Context | None] = ContextVar("footman_context", default=None)
 
@@ -3348,15 +3375,10 @@ def _run_thunks(
         # this child's stdout/stderr in order; a run() inside it still splits the
         # step's streams via a temporary swap.
         buf = io.StringIO()
-        child = replace(
-            parent,
-            address=_child_address(parent, name),
-            _labels={},
+        child = parent.child(
+            name,
             sink=buf,
             err_sink=buf,
-            steps=[],
-            sections=[],
-            task=name,
             name_width=width,
             # This child's unit is counted above; the first task request
             # inside claims it instead of counting its own.

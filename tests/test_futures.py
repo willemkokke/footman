@@ -20,6 +20,32 @@ def drive(reg: Group, line: str):
     return Runner().invoke(line, tasks=reg)
 
 
+def test_a_body_callee_carries_only_its_own_sections():
+    # The callee's context is its own birth, not a window onto the caller's:
+    # its row must never snapshot sections the caller recorded before the
+    # call, and the caller's row keeps its own either way.
+    import footman
+
+    reg = Group("root")
+
+    @reg.task
+    def callee():
+        with footman.section("theirs"):
+            pass
+
+    @reg.task
+    def caller():
+        with footman.section("mine"):
+            pass
+        callee()
+
+    result = drive(reg, "caller")
+    assert result.ok, result.stderr
+    rows = {r.task: r for r in result.results}
+    assert [s.name for s in rows["callee"].sections] == ["theirs"]
+    assert [s.name for s in rows["caller"].sections] == ["mine"]
+
+
 def test_a_body_call_shares_the_runs_execution():
     # `pre=[build]` then `build()` in the body is ONE build: the prerequisite's
     # body's return is memoised under (task, arguments), so the call is a

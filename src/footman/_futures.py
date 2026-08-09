@@ -31,7 +31,6 @@ acquisition stays at the task boundary, so a body call to a `serial=`/
 
 from __future__ import annotations
 
-import dataclasses
 import io
 import itertools
 import threading
@@ -297,19 +296,12 @@ def call(task: Any, args: tuple[Any, ...], kwargs: dict[str, Any]) -> Any:
     if life is not None or registry.has_own_hooks(task):
         parent = context.current()
         buf = io.StringIO()
-        child = dataclasses.replace(
-            parent,
+        child = parent.child(
+            label,
             fn=task,
-            address=context._child_address(parent, label),
-            _labels={},
-            env=dict(parent.env),
             cwd=None,  # let the callee's own cwd policy resolve
             sink=buf,
             err_sink=buf,
-            steps=[],
-            task=label,
-            shared=parent.shared,  # refined per branch below
-            unit_pending=False,  # the callee's own calls count for themselves
         )
         handle = _executor.TaskHandle(task, seg, child)
         if (err := _executor._enter_bind_hooks(life, handle)) is not None:
@@ -701,24 +693,18 @@ def _run_now(
         raise denial.error or ChainError(f"{label} was not confirmed")
     if child is None:
         buf = io.StringIO()
-        child = dataclasses.replace(
-            parent,
+        child = parent.child(
+            label,
             fn=task,
-            address=context._child_address(parent, label),
-            _labels={},
-            env=dict(parent.env),
             cwd=None,  # let the callee's own cwd policy resolve
             sink=buf,
             err_sink=buf,
-            steps=[],
-            task=label,
-            unit_pending=False,  # the callee's own calls count for themselves
         )
     else:
         buf = child.sink
-    # Presence is the callee's own, never the caller's: `dataclasses.replace`
-    # copies every field, so a child born from a parent that was given `--agent`
-    # would otherwise inherit the claim that *it* was given one.
+    # Presence is the callee's own, never the caller's: the birth inherits
+    # every unlisted field, so a child born from a parent that was given
+    # `--agent` would otherwise inherit the claim that *it* was given one.
     child.given = given
     # Unsharedness propagates: what this callee asks for is asked the same
     # way, unless that task declares its own answer.
