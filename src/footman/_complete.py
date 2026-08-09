@@ -477,11 +477,15 @@ def complete(tree: dict[str, Any], words: list[str]) -> list[str]:
         # noise there.
         if not prior and partial.startswith("-"):
             out += [g for g in sorted(_GLOBALS) if g.startswith(partial)]
-            out += [
-                flag
-                for g in tree.get("globals", ())
-                if (flag := "--" + g["name"]).startswith(partial)
-            ]
+            for g in tree.get("globals", ()):
+                if (flag := "--" + g["name"]).startswith(partial):
+                    out.append(flag)
+                # A bool answers to `--no-x` too — offer the off spelling
+                # exactly as the splitter accepts it.
+                if g["kind"] == "flag" and (
+                    (no := "--no-" + g["name"]).startswith(partial)
+                ):
+                    out.append(no)
         return out
 
     # An attached `--opt=value` partial: the one value position the grammar

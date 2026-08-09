@@ -830,12 +830,16 @@ def split_chain(
     tree: dict[str, Any], argv: list[str]
 ) -> tuple[list[str], list[Segment]]:
     """Split *argv* into leading globals and a list of resolved segments."""
-    plugin = {
-        # Every value-taking plugin global may be named bare: presence is
-        # a reading on its own, since the owner can ask `.given`.
-        "--" + g["name"]: ("flag" if g["kind"] == "flag" else "option?")
-        for g in tree.get("globals", ())
-    }
+    plugin: dict[str, str] = {}
+    for g in tree.get("globals", ()):
+        if g["kind"] == "flag":
+            # A bool answers to both spellings, like every task flag.
+            plugin["--" + g["name"]] = "flag"
+            plugin["--no-" + g["name"]] = "flag"
+        else:
+            # Every value-taking plugin global may be named bare: presence
+            # is a reading on its own, since the owner can ask `.given`.
+            plugin["--" + g["name"]] = "option?"
     globals_, i = _parse_globals(argv, 0, plugin=plugin)
     segments: list[Segment] = []
     prev_group: tuple[str, dict[str, Any]] | None = None

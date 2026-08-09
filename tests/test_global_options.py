@@ -11,7 +11,7 @@ import pytest
 
 from footman import _manifest, registry
 from footman._complete import _DYNAMIC, _FILES, complete
-from footman.params import env, suggest
+from footman.params import env, nosplit, suggest
 from footman.registry import GlobalOption, Group, RegistrationError
 from footman.testing import Runner
 
@@ -423,3 +423,122 @@ def test_a_word_after_a_bare_mention_teaches_attachment():
     result = Runner().invoke("--out o.json build", tasks=reg)
     assert not result.ok
     assert "--out=o.json" in result.stderr
+
+
+def test_a_collection_global_accumulates_like_a_task_option():
+    # `--tag=a --tag=b` and `--tag=a,b` are one list: mentions accumulate and
+    # each value comma-splits, the reading every task option already has.
+    # These used to bind last-mention-wins with the commas kept — a latent
+    # bug the bare-mentions note recorded, not a decision.
+    reg = Group("root")
+    opt = _adopt(reg, "tag", list[str])
+
+    @reg.task(uses=[opt])
+    def build():
+        print(f"tags={opt.value} given={opt.given}")
+
+    repeated = Runner().invoke("--tag=a --tag=b build", tasks=reg)
+    assert repeated.ok, repeated.stderr
+    assert "tags=['a', 'b'] given=True" in repeated.stdout
+    joined = Runner().invoke("--tag=a,b build", tasks=reg)
+    assert "tags=['a', 'b']" in joined.stdout
+    absent = Runner().invoke("build", tasks=reg)
+    assert "tags=None given=False" in absent.stdout
+
+
+def test_nosplit_keeps_a_collection_globals_commas():
+    reg = Group("root")
+    opt = _adopt(reg, "header", Annotated[list[str], nosplit])
+
+    @reg.task(uses=[opt])
+    def build():
+        print(f"headers={opt.value}")
+
+    result = Runner().invoke("--header=a,b --header=c build", tasks=reg)
+    assert result.ok, result.stderr
+    assert "headers=['a,b', 'c']" in result.stdout
+
+
+def test_a_mapping_global_binds_pairs_and_teaches():
+    reg = Group("root")
+    opt = _adopt(reg, "define", dict[str, int])
+
+    @reg.task(uses=[opt])
+    def build():
+        print(f"defines={opt.value}")
+
+    result = Runner().invoke("--define=k=1 --define=j=2,i=3 build", tasks=reg)
+    assert result.ok, result.stderr
+    assert "defines={'k': 1, 'j': 2, 'i': 3}" in result.stdout
+
+    pairless = Runner().invoke("--define=k build", tasks=reg)
+    assert not pairless.ok
+    assert "KEY=VALUE" in pairless.stderr
+    badvalue = Runner().invoke("--define=k=deep build", tasks=reg)
+    assert not badvalue.ok
+    assert "--define value" in badvalue.stderr and "'deep'" in badvalue.stderr
+
+
+def test_a_repeated_scalar_global_is_last_wins():
+    # Not a collection: repeating a scalar means the later mention, exactly
+    # as a repeated task option reads.
+    reg = Group("root")
+    opt = _adopt(reg, "level", int, default=1)
+
+    @reg.task(uses=[opt])
+    def build():
+        print(f"level={opt.value}")
+
+    result = Runner().invoke("--level=2 --level=3 build", tasks=reg)
+    assert result.ok, result.stderr
+    assert "level=3" in result.stdout
+
+
+def test_a_bool_global_answers_to_no_x():
+    # The negation every task flag already has: `--no-audit` is off out
+    # loud — given, value False — and last mention wins between spellings.
+    reg = Group("root")
+    opt = _adopt(reg, "audit")
+
+    @reg.task(uses=[opt])
+    def build():
+        print(f"audit={opt.value} given={opt.given}")
+
+    off = Runner().invoke("--no-audit build", tasks=reg)
+    assert off.ok, off.stderr
+    assert "audit=False given=True" in off.stdout
+    last = Runner().invoke("--audit --no-audit build", tasks=reg)
+    assert "audit=False given=True" in last.stdout
+    relit = Runner().invoke("--no-audit --audit build", tasks=reg)
+    assert "audit=True given=True" in relit.stdout
+
+
+def test_a_negation_completes_beside_its_flag():
+    reg = Group("root")
+    _adopt(reg, "audit")
+    _adopt(reg, "level", int, default=1)  # value-taking: no negation offered
+
+    @reg.task
+    def build(): ...
+
+    tree = _manifest.build_manifest(reg)["tree"]
+    names = complete(tree, ["--"])
+    assert "--audit" in names and "--no-audit" in names
+    assert "--level" in names and "--no-level" not in names
+
+
+def test_a_literal_no_x_beside_a_bool_x_is_refused():
+    # A bool claims its off spelling, so the clash is loud at discovery
+    # instead of order-dependent at parse.
+    reg = Group("root")
+    flag = _adopt(reg, "verify")
+    literal = _adopt(reg, "no-verify")
+    flag.owner, literal.owner = "acme.devkit", "other.kit"
+
+    @reg.task
+    def build(): ...
+
+    result = Runner().invoke("build", tasks=reg)
+    assert not result.ok
+    assert "--no-verify" in result.stderr
+    assert "acme.devkit" in result.stderr and "other.kit" in result.stderr

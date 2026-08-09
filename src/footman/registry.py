@@ -248,27 +248,38 @@ def validate_global_options(options: Sequence[GlobalOption]) -> str | None:
     """The collision law for plugin globals, applied to the merged tree.
 
     A name owned by footman itself is refused naming footman; two plugins
-    claiming one name are refused naming both. The same singleton reached
-    through two pulls is one option, not a clash. Returns the teaching
-    message, or `None` when the set is sound."""
+    claiming one name are refused naming both. A bool option also claims its
+    `--no-x` spelling, so a literal `no-x` beside a bool `x` is a clash too —
+    loud at discovery, never order-dependent at parse. The same singleton
+    reached through two pulls is one option, not a clash. Returns the
+    teaching message, or `None` when the set is sound."""
     from footman._split import _GLOBAL_KIND
 
-    seen: dict[str, GlobalOption] = {}
+    seen: dict[str, tuple[GlobalOption, str]] = {}
     for opt in options:
-        flag = f"--{opt.name}"
-        if flag in _GLOBAL_KIND:
-            return (
-                f"{flag} (from {opt.owner}) collides with footman's own "
-                f"global option — plugin globals need their own names"
+        spellings = [f"--{opt.name}"]
+        if opt.annotation is bool:
+            spellings.append(f"--no-{opt.name}")
+        for flag in spellings:
+            derived = (
+                ""
+                if flag == f"--{opt.name}"
+                else f" (the off spelling of --{opt.name})"
             )
-        other = seen.get(opt.name)
-        if other is not None and other is not opt:
-            return (
-                f"--{opt.name} is claimed by both {other.owner} and "
-                f"{opt.owner} — two plugins, one name; rename one, or pull "
-                f"only one of them"
-            )
-        seen[opt.name] = opt
+            if flag in _GLOBAL_KIND:
+                return (
+                    f"{flag}{derived} (from {opt.owner}) collides with "
+                    f"footman's own global option — plugin globals need "
+                    f"their own names"
+                )
+            other = seen.get(flag)
+            if other is not None and other[0] is not opt:
+                return (
+                    f"{flag} is claimed by both {other[0].owner}{other[1]} "
+                    f"and {opt.owner}{derived} — two plugins, one spelling; "
+                    f"rename one, or pull only one of them"
+                )
+            seen[flag] = (opt, derived)
     return None
 
 

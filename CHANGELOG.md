@@ -27,6 +27,15 @@ versions may include breaking changes.
   user cache from a consumer's own test suite. In-memory runs now pollute no
   cache, times included, the rule `-f` runs already followed.
 
+- **A collection-valued plugin global binds like a task option.** A
+  `list`/`dict` annotation parsed fine and described correctly in the
+  manifest, then bound wrong: mentions were last-wins and commas rode through
+  whole, so `--tag=a --tag=b` bound `"b"` and `--tag=a,b` bound the string
+  `"a,b"`. Mentions now accumulate, each value comma-splits unless `nosplit`
+  opts out, and a mapping takes `KEY=VALUE` pairs (`dict[K, list[V]]`
+  accumulates per key) — every part through the same strict coercion and
+  checks an `env()` fallback already ran.
+
 ### Added
 
 - **The cascade stops at any version-control boundary, not only git.**
@@ -156,6 +165,13 @@ versions may include breaking changes.
   default still errors naming the flag, because there is no other answer. So a
   person gets asked and an unattended run gets the default. Naming the option
   bare skips the question: the caller has already said "the declared one".
+
+- **A bool plugin global answers to `--no-x`.** Every task flag has its off
+  spelling; a plugin's flag needed a second declaration to be turn-off-able.
+  `--no-x` parses, completes beside `--x`, binds last-mention-wins between
+  the two spellings, and counts as *given* — off, out loud. A bool claims
+  both spellings in the collision law, so a literal `no-x` beside a bool `x`
+  is refused at discovery naming both.
 
 ### Changed
 
