@@ -74,6 +74,31 @@ def test_collect_ages_orphan_times_files(tmp_path):
     assert (cache / "warm.times.json").exists()
 
 
+def test_collect_ages_the_fetch_room(tmp_path):
+    # Rule 3: bodies and sidecars age as pairs, orphan sidecars age alone,
+    # and a warm body (a recent serve touched it) survives with its sidecar.
+    cache = tmp_path / "cache"
+    room = cache / "fetch"
+    room.mkdir(parents=True)
+    then = time.time() - (_gc.IDLE_DAYS + 5) * 86400
+    for name in ("stale.bin", "stale.meta.json", "orphan.meta.json"):
+        p = room / name
+        p.write_text("x")
+        os.utime(p, (then, then))
+    (room / "warm.bin").write_text("x")
+    (room / "warm.meta.json").write_text("{}")
+    os.utime(room / "warm.meta.json", (then, then))  # the pair's newest wins
+
+    removed = _gc.collect(cache)
+
+    assert removed == 3
+    assert not (room / "stale.bin").exists()
+    assert not (room / "stale.meta.json").exists()
+    assert not (room / "orphan.meta.json").exists()
+    assert (room / "warm.bin").exists()
+    assert (room / "warm.meta.json").exists()
+
+
 def test_collect_tolerates_garbage_manifests(tmp_path):
     cache = tmp_path / "cache"
     cache.mkdir()

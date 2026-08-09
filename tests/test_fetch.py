@@ -145,6 +145,37 @@ def test_fetch_records_a_step(server):
     assert step.code == 0
 
 
+def test_a_download_is_never_reported_cached(server):
+    # `cached` used to derive from "no validators came back", which read a
+    # curl download — validator-less by design — as cached on the first-ever
+    # fetch. Downloaded and cached are separate facts now, on every backend.
+    _skip_unless_available("curl")
+    with use_context(Context(fetch_backend="curl")) as ctx:
+        _fetch.fetch(server)
+        assert ctx.steps[-1].stdout == ""  # a real download says so
+        _fetch.fetch(server)
+        assert ctx.steps[-1].stdout == ""  # re-fetch is honest: still not cached
+
+
+def test_a_revalidated_serve_counts_as_use(server):
+    # The collector's idle rule reads mtimes and a 304 writes nothing of its
+    # own — the serve itself must keep the pair warm, or a daily-fetched file
+    # would age out at IDLE_DAYS and force a pointless re-download.
+    import os
+    import time as _time
+
+    with use_context(Context()) as ctx:
+        _fetch.fetch(server)
+        body, sidecar = _fetch._paths_for(server)
+        then = _time.time() - 400
+        os.utime(body, (then, then))
+        os.utime(sidecar, (then, then))
+        _fetch.fetch(server)
+        assert ctx.steps[-1].stdout == "cached"
+    assert body.stat().st_mtime > then + 100
+    assert sidecar.stat().st_mtime > then + 100
+
+
 def test_dry_run_downloads_nothing(server, capsys):
     with use_context(Context(dry_run=True)) as ctx:
         path = _fetch.fetch(server)
@@ -182,7 +213,7 @@ def test_backend_comes_from_the_config_ladder(server, monkeypatch):
     def spy(backend, url, dest, meta):
         seen["backend"] = backend
         dest.write_bytes(BODY)
-        return {}
+        return True, {}  # downloaded, no validators — the _download contract
 
     monkeypatch.setattr(_fetch, "_download", spy)
     with use_context(Context(fetch_backend="curl")):
