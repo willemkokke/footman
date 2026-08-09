@@ -555,6 +555,17 @@ def _pull(
     # (a `@pre_tasks` hook edits the tree in place), so they belong on the live
     # root that discovery collects from, never the grafted subtree.
     for kind, bucket in fork.contributions.items():
+        if kind == "globals" and verb == "plugin":
+            for opt in bucket:
+                # The entry-point identity, written down for the config
+                # section derivation — the pull always knew it, it just
+                # never said so. One singleton reached through two
+                # *different* pulls has no single derivation, and records
+                # that instead (config= on it then refuses, naming the fix).
+                if opt._pulled is None:
+                    opt._pulled = identity
+                elif opt._pulled != identity:
+                    opt._pulled = registry._MANY_PULLS
         registry.root.contributions[kind].extend(bucket)
         bucket.clear()
     if fork.name == "root":

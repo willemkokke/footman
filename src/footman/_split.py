@@ -138,7 +138,11 @@ class _CoreOption(registry.GlobalOption):
     `=`-attached value, exactly as for plugins.
     """
 
-    __slots__ = ("alias", "choices", "config", "hint", "paired_off_help")
+    __slots__ = ("alias", "choices", "hint", "paired_off_help")
+
+    # Core's config keys live directly in the brand table (`[tool.footman]
+    # jobs`), not under the `plugins.` child a provider's section gets.
+    _config_scope = "root"
 
     def __init__(
         self,
@@ -154,14 +158,13 @@ class _CoreOption(registry.GlobalOption):
     ) -> None:
         self.alias = alias
         self.hint = hint
-        self.config = config
         self.paired_off_help = paired_off_help
         choices = None
         if annotation is not bool:
             found = _coerce.all_choices(_coerce.peel(annotation).element)
             choices = tuple(found) if found else None
         self.choices = choices
-        super().__init__(name, annotation, default=default, help=help)
+        super().__init__(name, annotation, default=default, config=config, help=help)
 
     def _register(self) -> None:
         """Off the carriage — see the class docstring."""

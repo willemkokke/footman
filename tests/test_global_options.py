@@ -542,3 +542,155 @@ def test_a_literal_no_x_beside_a_bool_x_is_refused():
     assert not result.ok
     assert "--no-verify" in result.stderr
     assert "acme.devkit" in result.stderr and "other.kit" in result.stderr
+
+
+_SECTIONED = """
+import footman
+from footman import GlobalOption, task
+
+footman.config_section("devkit")
+REGION = GlobalOption("region", str, default="eu", config=True)
+
+@task(uses=[REGION])
+def build():
+    print(f"region={REGION.value} given={REGION.given}")
+"""
+
+
+def test_a_config_backed_global_reads_its_section(tmp_path):
+    # The one ladder's config rung, from the provider's own section under
+    # the reserved `plugins.` child — and config-sourced is not `given`,
+    # exactly as env-sourced is not.
+    (tmp_path / "tasks.py").write_text(_SECTIONED)
+    (tmp_path / "pyproject.toml").write_text(
+        "[tool.footman.plugins.devkit]\nregion = 'us'\n"
+    )
+    result = Runner().invoke("build", tasks=tmp_path / "tasks.py", cwd=tmp_path)
+    assert result.ok, result.stderr
+    assert "region=us given=False" in result.stdout
+    cli = Runner().invoke(
+        "--region=ap build", tasks=tmp_path / "tasks.py", cwd=tmp_path
+    )
+    assert "region=ap given=True" in cli.stdout  # the line outranks config
+
+
+def test_env_outranks_config_for_a_global(tmp_path, monkeypatch):
+    # An exported variable aims at this invocation, a project setting at
+    # every invocation — the specific beats the general.
+    (tmp_path / "tasks.py").write_text(
+        textwrap.dedent(
+            """
+            import footman
+            from typing import Annotated
+            from footman import GlobalOption, task
+            from footman.params import env
+
+            footman.config_section("devkit")
+            REGION = GlobalOption(
+                "region", Annotated[str, env("BUILD_REGION")],
+                default="eu", config=True,
+            )
+
+            @task(uses=[REGION])
+            def build():
+                print(f"region={REGION.value}")
+            """
+        )
+    )
+    (tmp_path / "pyproject.toml").write_text(
+        "[tool.footman.plugins.devkit]\nregion = 'us'\n"
+    )
+    monkeypatch.setenv("BUILD_REGION", "ap")
+    result = Runner().invoke("build", tasks=tmp_path / "tasks.py", cwd=tmp_path)
+    assert result.ok, result.stderr
+    assert "region=ap" in result.stdout
+
+
+def test_a_broken_plugin_config_value_teaches_with_the_keys_address(tmp_path):
+    (tmp_path / "tasks.py").write_text(
+        textwrap.dedent(
+            """
+            import footman
+            from footman import GlobalOption, task
+
+            footman.config_section("devkit")
+            LEVEL = GlobalOption("level", int, default=1, config=True)
+
+            @task(uses=[LEVEL])
+            def build():
+                print(LEVEL.value)
+            """
+        )
+    )
+    (tmp_path / "pyproject.toml").write_text(
+        "[tool.footman.plugins.devkit]\nlevel = 'deep'\n"
+    )
+    result = Runner().invoke("build", tasks=tmp_path / "tasks.py", cwd=tmp_path)
+    assert not result.ok
+    assert "config key 'plugins.devkit.level'" in result.stderr
+    # Validated even when the line decides — the sort rule, for plugins too.
+    still = Runner().invoke(
+        "--level=2 build", tasks=tmp_path / "tasks.py", cwd=tmp_path
+    )
+    assert not still.ok
+    assert "config key 'plugins.devkit.level'" in still.stderr
+
+
+def test_the_section_derives_from_the_pulled_entry_point():
+    # `acme.devkit` de-dots to `acme-devkit` — the pull stamps the identity,
+    # the derivation reads it, and `config="key"` renames one option's key.
+    reg = Group("root")
+    opt = _adopt(reg, "region", str, default="eu", config="zone")
+    opt._pulled = "acme.devkit"
+
+    @reg.task(uses=[opt])
+    def build():
+        print(f"region={opt.value}")
+
+    result = Runner().invoke("build", tasks=reg)
+    assert result.ok, result.stderr
+    assert opt._section == "acme-devkit"
+
+
+def test_config_without_a_section_source_is_refused():
+    reg = Group("root")
+    _adopt(reg, "region", str, default="eu", config=True)
+
+    @reg.task
+    def build(): ...
+
+    result = Runner().invoke("build", tasks=reg)
+    assert not result.ok
+    assert "nothing names its section" in result.stderr
+    assert "config_section" in result.stderr
+
+
+def test_config_through_two_pulls_is_refused():
+    reg = Group("root")
+    opt = _adopt(reg, "region", str, default="eu", config=True)
+    opt._pulled = registry._MANY_PULLS
+
+    @reg.task
+    def build(): ...
+
+    result = Runner().invoke("build", tasks=reg)
+    assert not result.ok
+    assert "more than one pull" in result.stderr
+
+
+def test_two_providers_one_section_is_refused():
+    # `acme.devkit` and `acme-devkit` de-dot to one section: loud at
+    # discovery naming both, never resolved by pull order.
+    reg = Group("root")
+    first = _adopt(reg, "region", str, default="eu", config=True)
+    second = _adopt(reg, "zone", str, default="eu", config=True)
+    first.owner, second.owner = "acme.devkit", "other.kit"
+    first._pulled, second._pulled = "acme.devkit", "acme-devkit"
+
+    @reg.task
+    def build(): ...
+
+    result = Runner().invoke("build", tasks=reg)
+    assert not result.ok
+    assert "plugins.acme-devkit" in result.stderr
+    assert "acme.devkit" in result.stderr and "other.kit" in result.stderr

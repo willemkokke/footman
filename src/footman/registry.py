@@ -94,14 +94,29 @@ class GlobalOption:
     option would have had anyway, and `.given` says someone asked. That is what
     lets one declared value cover three outcomes (off, the default file, a named
     file) where a second declared value used to be needed.
+
+    `config=True` gives the option a project-config rung — the one ladder,
+    **CLI > `env()` > config > `default(fn)` > declared** — reading the key
+    named like the option from this provider's own section under the brand
+    table's reserved `plugins.` child: `[tool.footman.plugins.acme-devkit]`
+    for the `acme.devkit` entry point (the dot becomes a hyphen, because
+    TOML's dot is its nesting operator). `config="key"` names the key
+    instead, for a flag renamed around a collision — flag and key are
+    different namespaces, and only the flag's is shared. The section is the
+    entry point's, de-dotted; `footman.config_section("...")` names it
+    explicitly where there is nothing to derive from (an `include()`d
+    module) or the derivation reads wrong.
     """
 
     __slots__ = (
         "_frozen",
         "_given",
+        "_pulled",
         "_reads",
+        "_section",
         "_value",
         "annotation",
+        "config",
         "default",
         "help",
         "name",
@@ -111,8 +126,14 @@ class GlobalOption:
     name: str
     annotation: Any
     default: Any
+    config: bool | str
     help: str
     owner: str
+
+    # Where a config-backed option's key lives: core's own declarations read
+    # the brand table directly ("root"); a plugin's read its section under
+    # the reserved `plugins.` child.
+    _config_scope = "plugins"
 
     def __init__(
         self,
@@ -120,6 +141,7 @@ class GlobalOption:
         annotation: Any = bool,
         *,
         default: Any = None,
+        config: bool | str = False,
         help: str = "",  # matches the manifest's vocabulary
     ) -> None:
         if name.startswith("-"):
@@ -130,7 +152,13 @@ class GlobalOption:
         self.name = cli_name(name)
         self.annotation = annotation
         self.default = default if annotation is not bool else bool(default)
+        self.config = config
         self.help = help
+        # Provenance the pull writes down (the entry-point identity), and
+        # the config section resolved from it at discovery — the derivation
+        # `config=` rides on.
+        self._pulled: str | None = None
+        self._section: str | None = None
         # The DEFINING module, never the importing capture: what a collision
         # names, what pairing and provenance key on.
         import sys as _sys
@@ -221,6 +249,30 @@ _UNBOUND = object()
 
 _USES = "_footman_uses"
 
+# The pull writes this in place of an identity when one singleton is reached
+# through two *different* pulls: its derived section would depend on pull
+# order, so a config-backed option carrying it must name a section instead.
+_MANY_PULLS = "<multiple pulls>"
+
+# Module name -> the config section that module's options claim, declared by
+# `config_section()` beside the options themselves. Keyed the way `owner` is
+# stamped, so resolution needs no second identity.
+_CONFIG_SECTIONS: dict[str, str] = {}
+
+
+def config_section(name: str) -> None:
+    """Name this provider module's config section — the `<name>` of
+    `[tool.footman.plugins.<name>]` — instead of the entry-point derivation.
+
+    Module-level, beside the module's `GlobalOption`s. For an `include()`d
+    module (no entry point to derive from), or a derivation that reads
+    wrong or ugly. The name is claimed at discovery, so two providers
+    naming one section refuse loudly, never resolve by order."""
+    import sys as _sys
+
+    module = _sys._getframe(1).f_globals.get("__name__", "<unknown>")
+    _CONFIG_SECTIONS[module] = cli_name(name)
+
 
 def _note_if_ephemeral(group: Group, key: str, previous: Task | None) -> None:
     """Record a task that was defined *while a run is in flight*, so the run
@@ -280,6 +332,48 @@ def validate_global_options(options: Sequence[GlobalOption]) -> str | None:
                     f"rename one, or pull only one of them"
                 )
             seen[flag] = (opt, derived)
+    return _resolve_config_sections(options)
+
+
+def _resolve_config_sections(options: Sequence[GlobalOption]) -> str | None:
+    """Give every config-backed plugin option its section, or the teaching
+    message for one that cannot have a single answer.
+
+    Explicit `config_section(...)` wins; else the entry-point identity the
+    pull stamped, de-dotted (`acme.devkit` → `acme-devkit`). Nothing to
+    derive from, or two pulls disagreeing, is a refusal naming the remedy —
+    loud at discovery, never resolved by pull order. Two providers claiming
+    one section refuse naming both, the flag-collision law's habit."""
+    claimed: dict[str, GlobalOption] = {}
+    for opt in options:
+        if not opt.config or opt._config_scope != "plugins":
+            continue
+        section = _CONFIG_SECTIONS.get(opt.owner)
+        if section is None:
+            if opt._pulled is None:
+                return (
+                    f"--{opt.name} (from {opt.owner}) declares config= but "
+                    f"nothing names its section — no entry point to derive "
+                    f"one from; declare footman.config_section('...') in the "
+                    f"defining module"
+                )
+            if opt._pulled == _MANY_PULLS:
+                return (
+                    f"--{opt.name} declares config= and is reached through "
+                    f"more than one pull, so its derived section would "
+                    f"depend on pull order — declare "
+                    f"footman.config_section('...') in the defining module"
+                )
+            section = opt._pulled.replace(".", "-")
+        other = claimed.get(section)
+        if other is not None and other.owner != opt.owner:
+            return (
+                f"config section 'plugins.{section}' is claimed by both "
+                f"{other.owner} and {opt.owner} — two providers, one "
+                f"section; footman.config_section('...') renames either"
+            )
+        claimed[section] = opt
+        opt._section = section
     return None
 
 
@@ -1913,7 +2007,13 @@ wrap_bind: Final[HookRegistrar] = root.wrap_bind
 
 
 def reset() -> None:
-    """Clear the global `root` registry (used by the test-suite)."""
+    """Clear the global `root` registry (used by the test-suite, and by
+    `_discover` between file imports).
+
+    `_CONFIG_SECTIONS` deliberately survives: it is keyed by module name —
+    a re-import overwrites its own entry — and the cascade resets between
+    files, so clearing here would erase one file's declaration while the
+    next imports."""
     root.tasks.clear()
     root.groups.clear()
     for bucket in root.contributions.values():

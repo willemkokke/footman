@@ -1458,9 +1458,27 @@ def bind_global_options(
     cfg_values: dict[str, Any] = {}
     if config:
         for opt in options:
-            if getattr(opt, "config", False) and opt.name in config:
+            spec = getattr(opt, "config", False)
+            if not spec:
+                continue
+            key = spec if isinstance(spec, str) else opt.name
+            if opt._config_scope == "root":
+                table: Any = config
+                label = f"config key '{key}'"
+            else:
+                # A provider's section under the reserved `plugins.` child —
+                # resolved and refused at discovery, so absence here only
+                # means the project wrote nothing.
+                plugins_tbl = config.get("plugins")
+                table = (
+                    plugins_tbl.get(opt._section)
+                    if isinstance(plugins_tbl, dict) and opt._section
+                    else None
+                )
+                label = f"config key 'plugins.{opt._section}.{key}'"
+            if isinstance(table, dict) and key in table:
                 try:
-                    cfg_values[opt.name] = _config_value(opt, config[opt.name])
+                    cfg_values[opt.name] = _config_value(opt, table[key], label)
                 except ValueError as exc:
                     return str(exc)
     by_flag: dict[str, Any] = {}
@@ -1517,13 +1535,13 @@ def bind_global_options(
     return None
 
 
-def _config_value(opt: Any, raw: object) -> Any:
+def _config_value(opt: Any, raw: object, label: str) -> Any:
     """One config value through the option's own pipeline, so a bad TOML
     value is taught rather than silently wrong. TOML types narrow first —
     a bool key must hold a bool, a value option must not hold one — then
     the string pipeline runs the same coercion, bounds and choices a CLI
-    token gets."""
-    label = f"config key '{opt.name}'"
+    token gets. *label* names the key where the project wrote it
+    (`config key 'plugins.acme-devkit.region'`), not the flag."""
     if opt.annotation is bool:
         if isinstance(raw, bool):
             return raw
