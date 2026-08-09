@@ -12,6 +12,11 @@ a rebuild. Two rules, in order:
    there any more (background refreshes keep a visited manifest's mtime
    fresh) — collected. Manifests from before the ``cwd`` key rely on this
    rule alone.
+3. **The fetch room ages the same way.** ``fetch/`` holds cached downloads
+   keyed by URL — no ``cwd`` to test, so idleness is the whole rule. A cache
+   serve touches the pair's mtimes (`_fetch._touch`), so idle genuinely means
+   nothing asked in `IDLE_DAYS`, and the worst outcome of a deletion stays a
+   re-download.
 
 The invoking directory's own pair is never touched, and every failure is
 silent — a concurrently-reading completion child on Windows may hold a file
@@ -75,6 +80,22 @@ def collect(cache_dir: Path, skip_stem: str = "") -> int:
             continue
         if _idle(now, times_path):
             unlink(times_path)
+
+    # Rule 3, the fetch room: a body and its validator sidecar age as a
+    # pair; a sidecar whose body is already gone ages alone. A mid-flight
+    # download is never at risk — its mtime is seconds old.
+    fetch_room = cache_dir / "fetch"
+    for body in fetch_room.glob("*.bin"):
+        sidecar = fetch_room / f"{body.stem}.meta.json"
+        if _idle(now, body, sidecar):
+            unlink(body)
+            unlink(sidecar)
+    for sidecar in fetch_room.glob("*.meta.json"):
+        stem = sidecar.name[: -len(".meta.json")]
+        if (fetch_room / f"{stem}.bin").exists():
+            continue
+        if _idle(now, sidecar):
+            unlink(sidecar)
 
     return removed
 

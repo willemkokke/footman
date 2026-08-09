@@ -34,8 +34,10 @@ belongs in a real curl call — `run(["curl", ...])`, or toolroom's typed
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
+import os
 import shutil
 import time
 import urllib.error
@@ -117,8 +119,14 @@ def _available(name: str) -> bool:
 
 def _download(
     backend: str, url: str, dest: Path, meta: dict[str, Any]
-) -> dict[str, Any]:
-    """Fetch *url* into *dest*; return the new metadata (empty = unchanged)."""
+) -> tuple[bool, dict[str, Any]]:
+    """Fetch *url* into *dest*; returns `(downloaded, validators)`.
+
+    Two separate facts that used to share one value: whether bytes moved
+    (what the receipt reports), and the validators to persist for the next
+    revalidation (what the sidecar stores). curl is why they split — it
+    downloads every time and offers no validators, which under the shared
+    value read as "cached" on a first-ever fetch."""
     if backend == "curl":
         return _download_curl(url, dest, meta)
     if backend in ("httpx", "requests"):
@@ -135,7 +143,9 @@ def _conditional_headers(meta: dict[str, Any]) -> dict[str, str]:
     return headers
 
 
-def _download_urllib(url: str, dest: Path, meta: dict[str, Any]) -> dict[str, Any]:
+def _download_urllib(
+    url: str, dest: Path, meta: dict[str, Any]
+) -> tuple[bool, dict[str, Any]]:
     request = urllib.request.Request(url, headers=_conditional_headers(meta))
     try:
         with urllib.request.urlopen(request) as response:
@@ -149,13 +159,13 @@ def _download_urllib(url: str, dest: Path, meta: dict[str, Any]) -> dict[str, An
                         context.progress(received, total)
             if total:
                 context.progress(0, 0)  # done reporting: back to the estimate
-            return {
+            return True, {
                 "etag": response.headers.get("ETag"),
                 "last_modified": response.headers.get("Last-Modified"),
             }
     except urllib.error.HTTPError as exc:
         if exc.code == 304:  # not modified: the cached copy stands
-            return {}
+            return False, {}
         raise FetchError(f"fetch: {url} — HTTP {exc.code} {exc.reason}") from exc
     except urllib.error.URLError as exc:
         raise FetchError(
@@ -166,7 +176,9 @@ def _download_urllib(url: str, dest: Path, meta: dict[str, Any]) -> dict[str, An
         ) from exc
 
 
-def _download_curl(url: str, dest: Path, meta: dict[str, Any]) -> dict[str, Any]:
+def _download_curl(
+    url: str, dest: Path, meta: dict[str, Any]
+) -> tuple[bool, dict[str, Any]]:
     import subprocess
 
     argv = ["curl", "-fsSL", "--retry", "2", "-o", str(dest), url]
@@ -175,12 +187,14 @@ def _download_curl(url: str, dest: Path, meta: dict[str, Any]) -> dict[str, Any]
     done = subprocess.run(argv, capture_output=True, text=True)
     if done.returncode != 0:
         raise FetchError(f"fetch: {url} — curl: {done.stderr.strip()}")
-    return {}  # curl's revalidation story is its own; re-fetch is honest
+    # Downloaded every time, no validators to keep: curl's revalidation story
+    # is its own, re-fetch is honest — and so is the receipt saying so.
+    return True, {}
 
 
 def _download_lib(
     name: str, url: str, dest: Path, meta: dict[str, Any]
-) -> dict[str, Any]:
+) -> tuple[bool, dict[str, Any]]:
     import importlib
 
     client = importlib.import_module(name)
@@ -190,11 +204,11 @@ def _download_lib(
         else client.get(url, headers=_conditional_headers(meta), allow_redirects=True)
     )
     if response.status_code == 304:
-        return {}
+        return False, {}
     if response.status_code >= 400:
         raise FetchError(f"fetch: {url} — HTTP {response.status_code}")
     dest.write_bytes(response.content)
-    return {
+    return True, {
         "etag": response.headers.get("ETag"),
         "last_modified": response.headers.get("Last-Modified"),
     }
@@ -247,16 +261,29 @@ def fetch(
     cache_dir().mkdir(parents=True, exist_ok=True)
     meta = {} if refresh else _load_meta(sidecar)
     try:
-        fresh = _download(chosen, url, body, meta if body.exists() else {})
+        downloaded, fresh = _download(chosen, url, body, meta if body.exists() else {})
     except FetchError:
         if body.exists():  # a cached copy beats a failed refresh
+            _touch(body, sidecar)
             _record(ctx, label, started, cached=True)
             return _deliver(body, destination, sha256, url)
         raise
     if fresh:
         sidecar.write_text(json.dumps(fresh), encoding="utf-8")
-    _record(ctx, label, started, cached=not fresh)
+    if not downloaded:
+        # A serve is a use: the collector's idle rule reads mtimes, and a
+        # 304 writes nothing of its own — untouched, a daily-fetched file
+        # would age out and force a pointless re-download.
+        _touch(body, sidecar)
+    _record(ctx, label, started, cached=not downloaded)
     return _deliver(body, destination, sha256, url)
+
+
+def _touch(*paths: Path) -> None:
+    """Mark a cache serve as use, for the collector's idle rule."""
+    for path in paths:
+        with contextlib.suppress(OSError):
+            os.utime(path)
 
 
 def _configured_backend(ctx: context.Context) -> str:

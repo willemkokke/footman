@@ -38,6 +38,19 @@ versions may include breaking changes.
   refuse, where plain absence still shrugs. The default is declared on the
   option now, so `--help` renders it instead of hand-written prose.
 
+- **A curl-backend download is never reported "cached".** The receipt derived
+  "cached" from "no validators came back", and curl offers none by design —
+  so with `backend = "curl"` every fetch, the first one included, read as
+  cached in the grid, `--json`, and `recording()`. Downloaded and cached are
+  two facts now, answered separately by every backend.
+
+- **The collector actually tends the fetch cache.** `fetch()`'s docs always
+  promised it; the sweep only ever visited manifests and timing history. The
+  `fetch/` room now ages the same way — idle pairs out after the same window,
+  orphan sidecars alone — and a revalidated serve touches the pair's mtimes,
+  so a file fetched daily never reads idle just because the server kept
+  saying 304.
+
 - **A schema bump rewrites an unchanged tree's manifest.** The rewrite
   guard compared only the tree hash, so upgrading footman left every
   old-schema manifest on disk forever: each <kbd>Tab</kbd> refused it,
