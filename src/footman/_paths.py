@@ -216,21 +216,38 @@ def config_home() -> Path:
     return Path(xdg) if xdg else Path.home() / ".config"
 
 
+def footman_config_dir() -> Path:
+    """This CLI's config directory: `<PREFIX>_CONFIG_DIR`, else
+    `<config home>/<name>`.
+
+    The user's own writing lives here — the user-level config file and the
+    user tasks file, which travel together. It is never placed by the brand:
+    `~/.config/<name>/` is where a user looks for their own files, whatever
+    the brand does with its cache and data.
+
+    The environment override exists because the only XDG-level lever is
+    `XDG_CONFIG_HOME`, which moves every other application's config too. A
+    task runner should be able to relocate its own corner — a second
+    installation under a different identity — without dragging the rest of
+    the machine along.
+    """
+    override = os.environ.get(env_var("CONFIG_DIR"))
+    if override:
+        return Path(override).expanduser()
+    return config_home() / _config_name
+
+
 def footman_config_file() -> Path:
     """The user-level config file: this brand's `<PREFIX>_CONFIG` (a file
-    path, since this is one file — unlike `<PREFIX>_CACHE_DIR`'s directory),
-    else `<config home>/<name>/config.toml`.
-
-    Deliberately *not* placed by the brand. It is the user's own file, and
-    `~/.config/<name>/` is where a user looks for their own settings — so it
-    stays there whatever the brand does with its cache and data.
+    path, since this is one file — unlike `<PREFIX>_CONFIG_DIR`'s directory),
+    else `<config dir>/config.toml`.
 
     The bottom rung of the precedence ladder: project config cascades over
     it, `--config` replaces it."""
     override = os.environ.get(env_var("CONFIG"))
     if override:
         return Path(override).expanduser()
-    return config_home() / _config_name / "config.toml"
+    return footman_config_dir() / "config.toml"
 
 
 def footman_cache_dir() -> Path:
@@ -271,35 +288,43 @@ def footman_data_dir() -> Path:
 
 
 def check_locations() -> None:
-    """Refuse a cache and data directory that are the same place.
+    """Refuse a cache directory that coincides with the data or config one.
 
-    The collector deletes from the cache by age. Pointed at the data
-    directory it would delete durable things — credentials among them — so
-    this is a refusal at startup rather than a surprise ninety days later.
+    The collector deletes from the cache by age. Pointed at either of the
+    other two it would delete durable things — credentials, the user's own
+    files — so this is a refusal at startup rather than a surprise ninety
+    days later. Data and config may share (nothing destructive runs in
+    either); only the cache is dangerous company.
     """
-    cache, data = footman_cache_dir(), footman_data_dir()
-    try:
-        same = cache.resolve() == data.resolve()
-    except OSError:  # unresolvable (a broken symlink); compare as written
-        same = cache == data
-    if same:
-        raise LocationError(
-            f"the cache and data directories are both {cache} — they must "
-            f"differ, because the collector deletes from the cache by age and "
-            f"would eventually delete durable data. Set {env_var('CACHE_DIR')} "
-            f"or {env_var('DATA_DIR')}, or place them apart in the App(...)."
-        )
+    cache = footman_cache_dir()
+    for other, what, var in (
+        (footman_data_dir(), "data", "DATA_DIR"),
+        (footman_config_dir(), "config", "CONFIG_DIR"),
+    ):
+        try:
+            same = cache.resolve() == other.resolve()
+        except OSError:  # unresolvable (a broken symlink); compare as written
+            same = cache == other
+        if same:
+            raise LocationError(
+                f"the cache and {what} directories are both {cache} — they "
+                f"must differ, because the collector deletes from the cache "
+                f"by age and would eventually delete durable {what}. Set "
+                f"{env_var('CACHE_DIR')} or {env_var(var)}, or place them "
+                f"apart in the App(...)."
+            )
 
 
 def user_tasks_file(filename: str = DEFAULT_TASKS_FILE) -> Path:
-    """This CLI's user-level tasks file — `<config home>/<name>/<tasks_file>`.
+    """This CLI's user-level tasks file — `<config dir>/<tasks_file>`.
 
     Beside the user-level config file, because both are the *user's* own
-    writing rather than anything the brand places. It is a *fallback*, not a
-    rung: a project's cascade wins outright, because there is one way to get
-    tasks into a project tree and that is pulling them in a tasks file.
+    writing rather than anything the brand places — and both move together
+    under `<PREFIX>_CONFIG_DIR`. It is a *fallback*, not a rung: a project's
+    cascade wins outright, because there is one way to get tasks into a
+    project tree and that is pulling them in a tasks file.
     """
-    return config_home() / _config_name / filename
+    return footman_config_dir() / filename
 
 
 def _dir_key(key_dir: Path) -> str:

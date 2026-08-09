@@ -166,11 +166,22 @@ of its own — and neither knows or cares whether the two share a parent.
 
 ## Environment variables follow the brand
 
-`acme` reads `ACME_CACHE_DIR`, `ACME_DATA_DIR`, `ACME_CONFIG`, `ACME_CASCADE`,
-`ACME_NO_GC` and `ACME_NO_UV` — never footman's. That isolation is the point:
-someone debugging `fm` with `FOOTMAN_CACHE_DIR` set must not silently relocate
-your product's cache. Error messages name your spelling too, so a user is never
-taught a variable that does nothing for them.
+`acme` reads `ACME_CACHE_DIR`, `ACME_DATA_DIR`, `ACME_CONFIG_DIR`,
+`ACME_CONFIG`, `ACME_CASCADE`, `ACME_NO_GC` and `ACME_NO_UV` — never footman's.
+That isolation is the point: someone debugging `fm` with `FOOTMAN_CACHE_DIR`
+set must not silently relocate your product's cache. Error messages name your
+spelling too, so a user is never taught a variable that does nothing for them.
+
+!!! note "XDG is honoured, and never scrubbed"
+
+    The `XDG_*` variables move the *defaults* — a user who set
+    `XDG_CONFIG_HOME` in their profile asked every application to relocate,
+    and `acme` follows like the rest. The brand's placements and the
+    `ACME_*` variables outrank it, because the specific beats the general.
+    And footman never unsets `XDG_*` for the processes it launches: those
+    are the user's own tools, and the variable is the user's message to all
+    of them. The only environment footman touches in a child is its own
+    `ACME_*` namespace.
 
 The prefix is `prog` uppercased — the command is `acme`, so the variables are
 `ACME_*`. Set `env_prefix` when that isn't what you want, for either of two
@@ -202,13 +213,16 @@ Two branded CLIs can then live in one repository, each reading its own
 settings instead of fighting over a shared table.
 
 The *user-level* config file is deliberately not yours to place. It stays at
-`~/.config/acme/config.toml`, where a user looks for their own settings, with
-`ACME_CONFIG` naming another.
+`~/.config/acme/config.toml`, where a user looks for their own settings.
+`ACME_CONFIG_DIR` relocates that corner — the config file and the user tasks
+file together — without touching `XDG_CONFIG_HOME`, which would drag every
+other application along; `ACME_CONFIG` names a single file, finer still.
 
 ## Your users' own tasks
 
-`~/.config/acme/tasks.py` — beside that config file, and for the same reason —
-holds a user's personal tasks, available wherever they have no project.
+`~/.config/acme/tasks.py` — beside that config file, and moving with it under
+`ACME_CONFIG_DIR` — holds a user's personal tasks, available wherever they
+have no project.
 
 It is a *fallback*, not a rung: the moment a project's cascade finds a tasks
 file, that cascade wins outright. There is one way to get tasks into a project

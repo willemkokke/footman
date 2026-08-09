@@ -319,6 +319,58 @@ def test_the_user_tasks_file_answers_where_a_project_has_none(tmp_path, monkeypa
     assert "ship" in out
 
 
+def test_config_dir_moves_the_users_writing_together(tmp_path, monkeypatch):
+    # `ACME_CONFIG_DIR` relocates the brand's config corner — config file and
+    # user tasks file travel together. The narrow, brand-scoped alternative
+    # to `XDG_CONFIG_HOME`, which would move every other application's config
+    # along with it: a task runner relocates its own corner, not the desktop.
+    identity = tmp_path / "identity-b"
+    identity.mkdir()
+    # The config file renames the tasks file; the tasks file defines `ship`.
+    # `ship` listing proves BOTH were read from the relocated directory.
+    (identity / "config.toml").write_text('tasks = "mine.py"\n')
+    (identity / "mine.py").write_text(TASKS)
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    monkeypatch.setenv("ACME_CONFIG_DIR", str(identity))
+    monkeypatch.chdir(empty)
+    out = Runner(App(name="acme", prog="acme")).invoke("--list").stdout
+    assert "ship" in out
+
+
+def test_the_config_file_variable_is_finer_than_the_dir(tmp_path, monkeypatch):
+    # `ACME_CONFIG` names one file and wins over `ACME_CONFIG_DIR`'s
+    # config.toml — the specific beats the general, same as everywhere else.
+    d = tmp_path / "dir"
+    d.mkdir()
+    (d / "config.toml").write_text('tasks = "wrong.py"\n')
+    finer = tmp_path / "finer.toml"
+    finer.write_text('tasks = "mine.py"\n')
+    (tmp_path / "mine.py").write_text(TASKS)
+    (tmp_path / "wrong.py").write_text(
+        'from footman import task\n\n@task\ndef wrong():\n    "Not this one."\n'
+    )
+    monkeypatch.setenv("ACME_CONFIG_DIR", str(d))
+    monkeypatch.setenv("ACME_CONFIG", str(finer))
+    monkeypatch.chdir(tmp_path)
+    out = Runner(App(name="acme", prog="acme")).invoke("--list").stdout
+    assert "ship" in out and "wrong" not in out
+
+
+def test_the_cache_and_config_directories_must_differ(tmp_path, monkeypatch):
+    # Same reasoning as cache vs data: the collector deletes from the cache
+    # by age, and the config dir holds the user's own files.
+    same = tmp_path / "both"
+    _project(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("ACME_CONFIG_DIR", str(same))
+    app = App(name="acme", prog="acme", cache_dir=same)
+    result = Runner(app).invoke("--list")
+    assert result.exit_code == EX_USAGE
+    assert "must differ" in result.stderr
+    assert "ACME_CACHE_DIR" in result.stderr and "ACME_CONFIG_DIR" in result.stderr
+
+
 def test_a_project_cascade_beats_the_user_tasks_file(tmp_path, monkeypatch):
     # A fallback, not a rung: there is one way to get tasks into a project
     # tree, and that is pulling them in a tasks file.

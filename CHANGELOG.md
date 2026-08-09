@@ -52,7 +52,8 @@ versions may include breaking changes.
   share a parent or where the CLI put them. Both create the directory, so a task
   never writes a `mkdir` of its own.
 - **Environment variables follow the brand.** A CLI whose command is `acme`
-  reads `ACME_CACHE_DIR`, `ACME_DATA_DIR`, `ACME_CONFIG`, `ACME_CASCADE`,
+  reads `ACME_CACHE_DIR`, `ACME_DATA_DIR`, `ACME_CONFIG_DIR`, `ACME_CONFIG`,
+  `ACME_CASCADE`,
   `ACME_NO_GC` and `ACME_NO_UV`, and its error messages name those spellings
   rather than teaching a variable that does nothing for its users. The prefix is
   `prog` uppercased, and `env_prefix=` overrides it. A branded CLI reads **only**
@@ -64,6 +65,9 @@ versions may include breaking changes.
   Two branded CLIs can share a repository, each reading its own settings. The
   *user-level* config file is deliberately not brand-placed: it stays at
   `~/.config/<name>/config.toml`, where a user looks for their own settings.
+  `<PREFIX>_CONFIG_DIR` relocates that corner — the config file and the user
+  tasks file together — without `XDG_CONFIG_HOME`'s side effect of moving
+  every other application's config along with it.
 - **footman pins its own prefix** rather than deriving `FM_*` from its command,
   and not for compatibility: `FOOTMAN_CACHE_DIR` says what it belongs to and can
   be searched for, where `FM_CACHE_DIR` is opaque. A terse command is exactly
