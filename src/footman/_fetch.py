@@ -260,8 +260,7 @@ def fetch(
 
 def _configured_backend(ctx: context.Context) -> str:
     """`[fetch] backend` from the config ladder, defaulting to urllib."""
-    configured = getattr(ctx, "fetch_backend", "") or ""
-    return str(configured) or "urllib"
+    return ctx.fetch_backend or "urllib"
 
 
 def _deliver(body: Path, destination: Path, sha256: str, url: str) -> Path:

@@ -185,11 +185,6 @@ def load_tree(
     return merged
 
 
-def load_single(path: Path) -> Group:
-    """Load exactly one tasks file (the `-f/--tasks-file` escape hatch)."""
-    return load_tree([path])
-
-
 def defining_dir(fn: Task) -> str | None:
     """The folder the task was defined in, if the cascade tagged it."""
     return getattr(fn, DEFINING_DIR, None)

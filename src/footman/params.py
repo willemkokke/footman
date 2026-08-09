@@ -246,10 +246,12 @@ def check(fix: Annotated[bool, forward] = False): ...
 A `forward`-marked parameter's value is passed to every task this one
 dispatches — its `pre`/`post` prerequisites, and a runnable group's fan-out —
 that declares a parameter of the same name; tasks that don't declare it run on
-their own defaults. The forwarded value overrides the callee's default, and it
-chains through callees that re-declare the marker. Forwarding supplies a
-*value*, never runnability: a prerequisite must still be independently runnable
-(every parameter defaulted)."""
+their own defaults. The forwarded value overrides the callee's default, chains
+through callees that re-declare the marker, and may satisfy a defaultless
+parameter — the same courtesy `ask()` and `stdin` extend, so a receiver never
+needs a fake default just to be reachable. Presence travels beside the value,
+so `given()` reads the same sentence in the dispatcher and in what it
+dispatched."""
 
 
 class ArgMarker:

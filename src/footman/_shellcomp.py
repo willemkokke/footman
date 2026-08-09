@@ -31,6 +31,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from footman import _paths
+
 SHELLS = ("bash", "zsh", "fish", "pwsh", "nushell")
 
 
@@ -254,14 +256,6 @@ def script_for(shell: str, prog: str) -> str:
     """The completion script for *shell*, branded for *prog*."""
     fn = prog.replace("-", "_")
     return _TEMPLATES[shell].format(prog=prog, fn=fn)
-
-
-def _data_home() -> Path:
-    return Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share")
-
-
-def _config_home() -> Path:
-    return Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config")
 
 
 def _sniff_encoding(raw: bytes) -> tuple[str, str]:
@@ -521,7 +515,7 @@ def install(shell: str, prog: str) -> list[str]:
     script = script_for(shell, prog)
 
     if shell == "fish":
-        target = _config_home() / "fish" / "completions" / f"{prog}.fish"
+        target = _paths.config_home() / "fish" / "completions" / f"{prog}.fish"
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(script, encoding="utf-8")
         return [
@@ -530,7 +524,7 @@ def install(shell: str, prog: str) -> list[str]:
         ]
 
     suffix = {"pwsh": "ps1", "nushell": "nu"}.get(shell, shell)
-    target = _data_home() / prog / f"completion.{suffix}"
+    target = _paths.data_home() / prog / f"completion.{suffix}"
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(script, encoding="utf-8")
     if shell == "pwsh":
@@ -563,14 +557,14 @@ def uninstall(shell: str, prog: str) -> list[str]:
     by hand is one paste.
     """
     if shell == "fish":
-        target = _config_home() / "fish" / "completions" / f"{prog}.fish"
+        target = _paths.config_home() / "fish" / "completions" / f"{prog}.fish"
         if target.exists():
             target.unlink()
             return [f"removed {target}"]
         return [f"nothing to remove ({target} was not installed)"]
 
     suffix = {"pwsh": "ps1", "nushell": "nu"}.get(shell, shell)
-    target = _data_home() / prog / f"completion.{suffix}"
+    target = _paths.data_home() / prog / f"completion.{suffix}"
     # bash/zsh must match install()'s spelling exactly, or uninstall would
     # remove the script and leave its rc line behind, sourcing nothing.
     hook = {

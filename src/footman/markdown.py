@@ -182,7 +182,7 @@ def _type_cell(p: dict[str, Any]) -> str:
         bits.append(" \\| ".join(f"`{c}`" for c in choices))
     elif p.get("types"):
         bits.append(" \\| ".join(p["types"]))
-    if p.get("multiple") or p.get("mapping"):
+    if p.get("multiple"):  # a mapping returned early above
         bits.append("repeatable")
     if p["kind"] == "variadic":
         bits.append("variadic")
