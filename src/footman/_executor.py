@@ -1000,8 +1000,10 @@ def bind_call(
     annotation's validators but are never coerced.
 
     Called before the work key is computed, so identity reads the values the
-    body will actually receive: a segment, a prerequisite and a body call
-    that resolve to the same values are one piece of work.
+    body will actually receive: a segment, a prerequisite and a body call that
+    resolve to the same values *and were asked for the same way* are one piece
+    of work. Presence is the second half of that — omitting a parameter and
+    passing exactly its default resolve alike but are different requests.
 
     The third return is the **presence set**, the same one `bind` produces from
     a segment — so `build(profile=<the default>)` and `fm build --profile` say
@@ -1778,7 +1780,14 @@ def run_bound(
     # `as_call` means the cell layer is already holding this work's cell (it
     # claimed before delegating here) and will resolve it — claiming again from
     # the same thread would read as this task waiting on itself.
-    work = _futures.work_of(fn, args, kwargs) if ctx.shared and not as_call else None
+    # `ctx.given` was stamped by `bind` above, so a segment and a body call that
+    # resolve to the same values still name different work when one of them
+    # asked for a parameter and the other merely got its default.
+    work = (
+        _futures.work_of(fn, args, kwargs, ctx.given)
+        if ctx.shared and not as_call
+        else None
+    )
     claimed, cell = _futures.claim(work, seg.task)
     if not claimed:
         # The pair is per request — only the body is shared. The pre fires

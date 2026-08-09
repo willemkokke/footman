@@ -128,6 +128,26 @@ def test_a_called_task_does_not_inherit_its_callers_presence():
     assert seen == {"outer": True, "inner": False}
 
 
+def test_the_same_value_asked_for_and_not_is_two_pieces_of_work():
+    calls: list[bool] = []
+
+    def tasks(reg):
+        @reg.task
+        def build(*, target: str = "fallback") -> None:
+            calls.append(given("target"))
+
+        @reg.task
+        def wrap() -> None:
+            build()  # the default, nobody asked
+            build(target="fallback")  # the same value, asked for
+
+    _run(tasks, "wrap")
+    # Keyed on arguments alone these share a cell — `apply_defaults()` makes
+    # them identical — and the second is answered by the first, silently doing
+    # the wrong thing for a body that branches on presence.
+    assert calls == [False, True]
+
+
 def test_given_outside_a_task_is_taught_not_false():
     with pytest.raises(RuntimeError, match=r"given\('target'\) has no answer here"):
         given("target")

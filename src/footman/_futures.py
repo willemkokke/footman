@@ -184,11 +184,21 @@ def unshared(task: Any) -> bool:
     return ctx is not None and not ctx.shared
 
 
-def _key(task: Any, args: Any, kwargs: dict[str, Any]) -> Any | None:
-    """The cell key for this work: the task's dedup identity plus its arguments
-    in the same normal form binding produces, so a DAG node and a body call that
-    resolve to the same arguments name one piece of work. `None` when the
-    arguments have no frozen form.
+def _key(
+    task: Any, args: Any, kwargs: dict[str, Any], given: frozenset[str] = frozenset()
+) -> Any | None:
+    """The cell key for this work: the task's dedup identity, its arguments in
+    the same normal form binding produces, and what its caller actually asked
+    for — so a DAG node and a body call that resolve to the same arguments the
+    same way name one piece of work. `None` when the arguments have no frozen
+    form.
+
+    *given* joins the key because `apply_defaults()` below erases the very
+    distinction `given()` reads: `build()` and `build(profile=<the default>)`
+    freeze to identical arguments, and a task that branches on presence does
+    different work for each. Keyed on values alone they would silently share a
+    cell, and the second request would be answered by the first — no error, and
+    nothing in the report to say the two were ever different.
     """
     from footman import _manifest
 
@@ -204,7 +214,7 @@ def _key(task: Any, args: Any, kwargs: dict[str, Any]) -> Any | None:
     frozen = tuple((name, _freeze(value)) for name, value in bound.arguments.items())
     if any(value is _UNKEYABLE for _, value in frozen):
         return None
-    return (registry.work_key(task), frozen)
+    return (registry.work_key(task), frozen, given)
 
 
 def _deadlock(run: _Session, key: Any, me: int) -> list[str] | None:
@@ -325,7 +335,7 @@ def call(task: Any, args: tuple[Any, ...], kwargs: dict[str, Any]) -> Any:
         child.given = supplied
     else:
         args, kwargs, supplied = _executor.bind_call(task, args, kwargs)
-    key = _key(task, args, kwargs)
+    key = _key(task, args, kwargs, supplied)
     if key is None:  # arguments with no frozen form: honest work every time
         return _run_now(
             task,
@@ -454,9 +464,11 @@ def _claim(run: _Session, key: Any, me: int, label: str) -> tuple[bool, _Cell]:
         return False, cell
 
 
-def work_of(task: Any, args: Any, kwargs: dict[str, Any]) -> Any | None:
+def work_of(
+    task: Any, args: Any, kwargs: dict[str, Any], given: frozenset[str] = frozenset()
+) -> Any | None:
     """This request's cell key, or `None` when it cannot have one."""
-    return _key(task, tuple(args), kwargs)
+    return _key(task, tuple(args), kwargs, given)
 
 
 def claim(key: Any, label: str) -> tuple[bool, Any]:
