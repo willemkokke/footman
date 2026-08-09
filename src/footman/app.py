@@ -31,7 +31,6 @@ those are deferred into `App.run`.
 
 from __future__ import annotations
 
-import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -78,38 +77,48 @@ class Brand:
     own PEP 723 dependencies must declare. Left `None` (the default for a
     custom brand), both handoffs simply stay out of your way.
 
-    `home` is where this CLI keeps everything it owns — completion
-    manifests, timing history, fetched files, the collector stamp, the
-    user-level config file and the user tasks file. **You** compute it, so
-    footman never has to guess at your product's layout:
+    `cache_dir` and `data_dir` are the two folders this CLI keeps things
+    in, and **you** place them, so footman never guesses at your product's
+    layout:
 
     ```python
-    home=Path(os.environ.get("ACME_HOME", Path.home() / ".acme")) / "runner"
+    cache_dir=Path(os.environ["ACME_HOME"]) / ".cache" / "acme-cli",
+    data_dir=Path(os.environ["ACME_HOME"]) / "acme-cli",
     ```
 
-    `<PREFIX>_HOME` overrides it at run time — `ACME_HOME` for `acme` —
-    which is how two installations run side by side under different
-    identities. Left `None` with that variable unset, locations fall back
-    to XDG, exactly as footman has always behaved.
+    They are not anchored to each other — put them wherever each belongs in
+    your world. **Cache** is derived data, safe to delete, and the
+    collector sweeps it; **data** is durable and machine-local (credentials,
+    tokens, generated assets) and is never collected. footman refuses to
+    start if the two name the same directory, because that would point the
+    collector at things it must not delete.
 
-    `env_prefix` is the namespace for **every** variable this CLI reads,
-    `<PREFIX>_HOME` included, and defaults to `prog` uppercased: the
-    command is `acme`, so the variables are `ACME_*`. A branded CLI reads
-    only its own prefix, so a stray `FOOTMAN_CACHE_DIR` can never move
-    someone else's product.
+    `<PREFIX>_CACHE_DIR` and `<PREFIX>_DATA_DIR` override them at run time,
+    which is how two installations run side by side under different
+    identities. Left unset with those variables unset, both fall back to
+    XDG — `~/.cache/acme` and `~/.local/share/acme`.
+
+    Task authors never see any of this: they call `footman.cache_dir()` and
+    `footman.data_dir()` and get a directory that exists.
+
+    `env_prefix` is the namespace for every variable this CLI reads, and
+    defaults to `prog` uppercased: the command is `acme`, so the variables
+    are `ACME_*`. A branded CLI reads only its own prefix, so a stray
+    `FOOTMAN_CACHE_DIR` can never move someone else's product.
 
     Set it explicitly for either of two reasons. **A terse command makes a
     poor variable**: footman's own is `fm`, but its variables are
-    `FOOTMAN_*`, because `FOOTMAN_HOME` tells a reader who has never heard
-    of the tool what it belongs to and `FM_HOME` tells them nothing.
-    **Or the namespace collides with your product's own** — keeping it
-    clear is yours to arrange, so if `ACME_HOME` already means something
-    broader in your world, name this one `ACME_RUNNER` and compute `home`
-    from your own variable.
+    `FOOTMAN_*`, because `FOOTMAN_CACHE_DIR` tells a reader who has never
+    heard of the tool what it belongs to and `FM_CACHE_DIR` tells them
+    nothing. **Or the namespace collides with your product's own** —
+    keeping it clear is yours to arrange.
 
     `config_name` names both the standalone config file (`acme.toml`) and
     the table inside `pyproject.toml` (`[tool.acme]`), from one field so
-    the two cannot drift apart.
+    the two cannot drift apart. The *user-level* config file is not placed
+    by the brand: it stays at `<config home>/<name>/config.toml`, where a
+    user looks for their own settings, with `<PREFIX>_CONFIG` naming
+    another.
     """
 
     name: str = "footman"
@@ -117,7 +126,8 @@ class Brand:
     version: str = __version__
     tasks_file: str = "tasks.py"
     dist: str | None = "footman"
-    home: Path | None = None
+    cache_dir: Path | None = None
+    data_dir: Path | None = None
     env_prefix: str | None = None
     config_name: str = "footman"
 
@@ -129,17 +139,6 @@ class Brand:
     def env(self, suffix: str) -> str:
         """This brand's spelling of an environment variable: `ACME_CACHE_DIR`."""
         return f"{self.prefix}_{suffix}"
-
-    def resolved_home(self) -> Path | None:
-        """`<PREFIX>_HOME` when set, else `home`; `None` means XDG fallback.
-
-        Read per invocation rather than cached, so two processes launched
-        with different values genuinely get different homes.
-        """
-        override = os.environ.get(self.env("HOME"))
-        if override:
-            return Path(override).expanduser()
-        return self.home
 
     def config_file(self) -> str:
         """This brand's standalone config filename — `acme.toml`."""
@@ -165,7 +164,8 @@ class App:
         version: str | None = None,
         tasks_file: str = "tasks.py",
         dist: str | None = None,
-        home: Path | str | None = None,
+        cache_dir: Path | str | None = None,
+        data_dir: Path | str | None = None,
         env_prefix: str | None = None,
         config_name: str | None = None,
     ) -> None:
@@ -179,7 +179,8 @@ class App:
             version=version or __version__,
             tasks_file=tasks_file,
             dist=dist,
-            home=Path(home).expanduser() if home is not None else None,
+            cache_dir=Path(cache_dir).expanduser() if cache_dir is not None else None,
+            data_dir=Path(data_dir).expanduser() if data_dir is not None else None,
             env_prefix=env_prefix,
             # Default to `name`, so a branded CLI's users write `acme.toml`
             # rather than a config file named after a dependency.
@@ -199,7 +200,8 @@ class App:
 
         _paths.configure(
             prefix=self.brand.prefix,
-            home=self.brand.resolved_home(),
+            cache_dir=self.brand.cache_dir,
+            data_dir=self.brand.data_dir,
             config_name=self.brand.config_name,
             tasks_file=self.brand.tasks_file,
         )

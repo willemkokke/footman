@@ -494,6 +494,15 @@ _API_SECTIONS: list[tuple[str, str, list[str]]] = [
         "",
         ["cwd", "chdir", "Lane", "lane", "cwd_lane", "console_lane"],
     ),
+    (
+        "Where a task keeps things",
+        "Two folders, both created on access. `cache_dir()` is derived data "
+        "the collector sweeps by age; `data_dir()` is durable and "
+        "machine-local — credentials, tokens, generated assets — and is never "
+        "collected. Where each one lands is the CLI's business, not the "
+        "task's; see [Custom CLIs](custom-cli.md#two-folders-of-your-own).",
+        ["cache_dir", "data_dir"],
+    ),
     ("Fetching", "", ["fetch", "FetchError"]),
     (
         "The task context",

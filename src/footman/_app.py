@@ -1560,6 +1560,12 @@ def _run(
     global _brand
     _brand = brand
     try:
+        # Before anything writes: a cache and a data directory that are the
+        # same place would have the collector deleting durable things.
+        _paths.check_locations()
+    except _paths.LocationError as exc:
+        return _refuse(_wants_json(argv), str(exc))
+    try:
         pre_globals, after = _split._parse_globals(argv, 0, lenient=True)
     except _split.ChainError as exc:
         return _refuse(_wants_json(argv), str(exc))

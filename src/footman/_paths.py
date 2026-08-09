@@ -101,29 +101,36 @@ def task_files(
 # Plain strings and a path, never a `Brand`: this module is imported on every
 # TAB press and must not reach for the framework.
 _prefix = "FOOTMAN"
-_home: Path | None = None
+_cache_dir: Path | None = None
+_data_dir: Path | None = None
 _config_name = "footman"
 _tasks_file = DEFAULT_TASKS_FILE
+
+
+class LocationError(Exception):
+    """Two locations that must differ were pointed at the same directory."""
 
 
 def configure(
     *,
     prefix: str = "FOOTMAN",
-    home: Path | None = None,
+    cache_dir: Path | None = None,
+    data_dir: Path | None = None,
     config_name: str = "footman",
     tasks_file: str = DEFAULT_TASKS_FILE,
 ) -> None:
-    """Point every location at one brand's world.
+    """Point this CLI's locations at one brand's world.
 
-    *home* is where that CLI keeps what it owns; `None` keeps the XDG
-    fallback. *prefix* namespaces the environment variables, so a stray
-    `FOOTMAN_CACHE_DIR` cannot move another product's cache. *config_name*
-    and *tasks_file* name the files this brand's users write, which are also
-    what mark a project root. Detached children are handed the resolved
-    values rather than re-deriving them.
+    *cache_dir* and *data_dir* are placed by the brand and are unrelated to
+    each other; `None` keeps the XDG fallback for that one. *prefix*
+    namespaces the environment variables, so a stray `FOOTMAN_CACHE_DIR`
+    cannot move another product's cache. *config_name* and *tasks_file* name
+    the files this brand's users write, which are also what mark a project
+    root. Detached children are handed the resolved values rather than
+    re-deriving them.
     """
-    global _prefix, _home, _config_name, _tasks_file
-    _prefix, _home = prefix, home
+    global _prefix, _cache_dir, _data_dir, _config_name, _tasks_file
+    _prefix, _cache_dir, _data_dir = prefix, cache_dir, data_dir
     _config_name, _tasks_file = config_name, tasks_file
 
 
@@ -131,34 +138,34 @@ def child_args() -> list[str]:
     """The configured locations as argv words for a detached child.
 
     Children inherit the environment but not the brand, and re-deriving a
-    home from the environment would be re-deriving it *wrongly* — the brand
-    computed it. So the parent hands over resolved values instead, and the
-    child never reads a variable of its own.
+    location from the environment would be re-deriving it *wrongly* — the
+    brand placed it. So the parent hands over resolved values instead, and
+    the child never reads a variable of its own.
     """
     return [
         _prefix,
-        str(_home) if _home is not None else "",
+        str(_cache_dir) if _cache_dir is not None else "",
+        str(_data_dir) if _data_dir is not None else "",
         _config_name,
         _tasks_file,
     ]
 
 
 def configure_child(
-    prefix: str = "", home: str = "", config_name: str = "", tasks_file: str = ""
+    prefix: str = "",
+    cache_dir: str = "",
+    data_dir: str = "",
+    config_name: str = "",
+    tasks_file: str = "",
 ) -> None:
     """The other side of `child_args` — empty strings mean stock defaults."""
     configure(
         prefix=prefix or "FOOTMAN",
-        home=Path(home) if home else None,
+        cache_dir=Path(cache_dir) if cache_dir else None,
+        data_dir=Path(data_dir) if data_dir else None,
         config_name=config_name or "footman",
         tasks_file=tasks_file or DEFAULT_TASKS_FILE,
     )
-
-
-def home_from_env(var: str) -> Path | None:
-    """A home read from environment variable *var*, or `None` when unset."""
-    value = os.environ.get(var)
-    return Path(value).expanduser() if value else None
 
 
 def env_prefix() -> str:
@@ -171,9 +178,15 @@ def env_var(suffix: str) -> str:
     return f"{_prefix}_{suffix}"
 
 
-def brand_home() -> Path | None:
-    """The configured home, or `None` when locations fall back to XDG."""
-    return _home
+def data_home() -> Path:
+    """Base data directory, honouring `XDG_DATA_HOME`.
+
+    `~/.local/share`, where footman's own completion scripts already live —
+    the durable sibling of `cache_home`, for things that must survive a
+    cache sweep.
+    """
+    xdg = os.environ.get("XDG_DATA_HOME")
+    return Path(xdg) if xdg else Path.home() / ".local" / "share"
 
 
 def config_basename() -> str:
@@ -204,47 +217,89 @@ def config_home() -> Path:
 
 
 def footman_config_file() -> Path:
-    """The user-level config file, most specific answer first: this brand's
-    `<PREFIX>_CONFIG` (a file path, since this is one file — unlike
-    `<PREFIX>_CACHE_DIR`'s directory), then `<home>/config.toml` when the
-    brand set a home, else `<config home>/<name>/config.toml`.
+    """The user-level config file: this brand's `<PREFIX>_CONFIG` (a file
+    path, since this is one file — unlike `<PREFIX>_CACHE_DIR`'s directory),
+    else `<config home>/<name>/config.toml`.
+
+    Deliberately *not* placed by the brand. It is the user's own file, and
+    `~/.config/<name>/` is where a user looks for their own settings — so it
+    stays there whatever the brand does with its cache and data.
 
     The bottom rung of the precedence ladder: project config cascades over
     it, `--config` replaces it."""
     override = os.environ.get(env_var("CONFIG"))
     if override:
         return Path(override).expanduser()
-    if _home is not None:
-        return _home / "config.toml"
     return config_home() / _config_name / "config.toml"
 
 
 def footman_cache_dir() -> Path:
-    """This CLI's cache directory, most specific answer first: its own
-    `<PREFIX>_CACHE_DIR`, then `<home>/cache` when the brand set a home,
-    else `<cache home>/<name>`.
+    """This CLI's cache directory: `<PREFIX>_CACHE_DIR`, else where the brand
+    placed it, else `<cache home>/<name>`.
 
-    One override moves every cache — completion manifests and timing history
-    alike — and the completion hot path resolves through here too, so TAB
-    follows it with no re-install.
+    Derived data, safe to delete — the collector sweeps this and nothing else.
+    One override moves every cache (completion manifests, timing history), and
+    the completion hot path resolves through here too, so TAB follows it with
+    no re-install.
+
+    Resolution only: this is on the hot path, so it never creates anything.
+    The public `footman.cache_dir()` is what makes the directory.
     """
     override = os.environ.get(env_var("CACHE_DIR"))
     if override:
         return Path(override)
-    if _home is not None:
-        return _home / "cache"
+    if _cache_dir is not None:
+        return _cache_dir
     return cache_home() / _config_name
 
 
-def user_tasks_file(filename: str = DEFAULT_TASKS_FILE) -> Path | None:
-    """This CLI's user-level tasks file, or `None` when it has no home.
+def footman_data_dir() -> Path:
+    """This CLI's data directory: `<PREFIX>_DATA_DIR`, else where the brand
+    placed it, else `<data home>/<name>`.
 
-    `<home>/<tasks_file>` — your own tasks, without a project. It is a
-    *fallback*, not a rung: a project's cascade wins outright, because there
-    is one way to get tasks into a project tree and that is pulling them in
-    a tasks file.
+    Durable and machine-local — credentials, tokens, generated assets. Never
+    collected, which is exactly what separates it from the cache.
+
+    Resolution only; the public `footman.data_dir()` creates it.
     """
-    return None if _home is None else _home / filename
+    override = os.environ.get(env_var("DATA_DIR"))
+    if override:
+        return Path(override)
+    if _data_dir is not None:
+        return _data_dir
+    return data_home() / _config_name
+
+
+def check_locations() -> None:
+    """Refuse a cache and data directory that are the same place.
+
+    The collector deletes from the cache by age. Pointed at the data
+    directory it would delete durable things — credentials among them — so
+    this is a refusal at startup rather than a surprise ninety days later.
+    """
+    cache, data = footman_cache_dir(), footman_data_dir()
+    try:
+        same = cache.resolve() == data.resolve()
+    except OSError:  # unresolvable (a broken symlink); compare as written
+        same = cache == data
+    if same:
+        raise LocationError(
+            f"the cache and data directories are both {cache} — they must "
+            f"differ, because the collector deletes from the cache by age and "
+            f"would eventually delete durable data. Set {env_var('CACHE_DIR')} "
+            f"or {env_var('DATA_DIR')}, or place them apart in the App(...)."
+        )
+
+
+def user_tasks_file(filename: str = DEFAULT_TASKS_FILE) -> Path:
+    """This CLI's user-level tasks file — `<config home>/<name>/<tasks_file>`.
+
+    Beside the user-level config file, because both are the *user's* own
+    writing rather than anything the brand places. It is a *fallback*, not a
+    rung: a project's cascade wins outright, because there is one way to get
+    tasks into a project tree and that is pulling them in a tasks file.
+    """
+    return config_home() / _config_name / filename
 
 
 def _dir_key(key_dir: Path) -> str:
