@@ -729,13 +729,20 @@ def _print_help(
 
 
 def _plugins_report(reg: registry.Group) -> int:
-    """`--plugins`: installed `footman.tasks` entry points, mounted or not.
+    """`--plugins`: installed `footman.tasks` entry points, mounted or not,
+    grouped by the distribution that ships them.
 
-    "Installed but nobody mounted it" becomes visible. Descriptions are
-    two-tier: a mounted plugin shows its landed tree's own help; an unmounted
-    one shows its distribution's Summary (the entry-point record itself
-    cannot carry a description — the packaging spec is strictly
-    `name = "module:attr"`), read from metadata with zero imports.
+    "Installed but nobody mounted it" becomes visible. The entry-point
+    record itself cannot carry a description (the packaging spec is strictly
+    `name = "module:attr"`), and a distribution's Summary describes the
+    *package* — so it prints once, on the package's header line, instead of
+    repeating identically beside every entry the package ships. An entry
+    then describes itself only where footman genuinely knows it: a mounted
+    entry from its landed tree, a declared built-in from its advertised tree
+    (the brand vouches for importing its own declarations). A plain
+    unmounted entry shows its state alone — importing unmounted third-party
+    code could crash a listing, and a repeated package summary taught
+    nothing.
     """
     from importlib.metadata import entry_points
 
@@ -776,34 +783,74 @@ def _plugins_report(reg: registry.Group) -> int:
         doc = (getattr(node, "__doc__", "") or "").strip()
         return doc.splitlines()[0] if doc else ""
 
-    rows: list[tuple[str, str, str]] = []
+    def advertised(entry: str) -> str:
+        """A declared built-in's own line, from the tree it advertises —
+        resolved on demand, exactly as the unknown-task remedy resolves it.
+        Empty on any failure: the report never crashes."""
+        try:
+            _ident, node = compose._resolve_plugin(entry)
+        except Exception:
+            return ""
+        if isinstance(node, registry.Group):
+            if node.help:
+                return node.help
+            if not node.groups and len(node.tasks) == 1:
+                # A single-task splat: the task's own line is the answer.
+                (fn,) = node.tasks.values()
+                doc = (getattr(fn, "__doc__", "") or "").strip()
+                return doc.splitlines()[0] if doc else ""
+            return ""
+        doc = (getattr(node, "__doc__", "") or "").strip()
+        return doc.splitlines()[0] if doc else ""
+
+    def mount_points(where: list[str]) -> str:
+        tops = sorted(where)
+        if len(tops) > 3:
+            return f"mounted at {', '.join(tops[:3])} (+{len(tops) - 3} more)"
+        return f"mounted at {', '.join(tops)}"
+
+    dists: dict[str, tuple[str, str]] = {}  # name -> (version, summary)
+    grouped: dict[str, list[tuple[str, str, str]]] = {}
     for ep in eps:
+        meta = getattr(ep.dist, "metadata", None)
+        dist_name = (meta.get("Name", "") if meta else "") or "(unknown)"
+        dists.setdefault(
+            dist_name,
+            (
+                getattr(ep.dist, "version", "") or "",
+                (meta.get("Summary", "") if meta else "") or "",
+            ),
+        )
         where = landed.get(ep.name)
         if ep.name in _brand.builtin:
             # The brand's own surface: part of the product wherever there is
             # no project, and an ordinary mount inside one.
-            meta = getattr(ep.dist, "metadata", None)
-            summary = (meta.get("Summary", "") if meta else "") or ""
-            rows.append((ep.name, "built in", described(where) if where else summary))
+            desc = described(where) if where else advertised(ep.name)
+            grouped.setdefault(dist_name, []).append((ep.name, "built in", desc))
         elif where:
-            rows.append(
-                (ep.name, f"mounted at {', '.join(sorted(where))}", described(where))
+            grouped.setdefault(dist_name, []).append(
+                (ep.name, mount_points(where), described(where))
             )
         else:
-            meta = getattr(ep.dist, "metadata", None)
-            summary = (meta.get("Summary", "") if meta else "") or ""
-            rows.append((ep.name, "(not mounted)", summary))
-    name_w = max(len(name) for name, _, _ in rows)
-    state_w = max(len(state) for _, state, _ in rows)
+            grouped.setdefault(dist_name, []).append((ep.name, "(not mounted)", ""))
+    every = [row for rows in grouped.values() for row in rows]
+    name_w = max(len(name) for name, _, _ in every)
+    state_w = max(len(state) for _, state, _ in every)
     on = _color_out
-    for name, state, desc in rows:
-        line = (
-            f"  {_describe.bold(name, on)}{' ' * (name_w - len(name))}"
-            f"  {state}{' ' * (state_w - len(state))}"
-        )
-        if desc:
-            line += f"  {_describe.dim(f'— {desc}', on)}"
-        print(line.rstrip())
+    for dist_name in sorted(grouped):
+        version, summary = dists[dist_name]
+        header = f"{_describe.bold(dist_name, on)} {version}".rstrip()
+        if summary:
+            header += f"  {_describe.dim(f'— {summary}', on)}"
+        print(header)
+        for name, state, desc in grouped[dist_name]:
+            line = (
+                f"  {name}{' ' * (name_w - len(name))}"
+                f"  {state}{' ' * (state_w - len(state))}"
+            )
+            if desc:
+                line += f"  {_describe.dim(f'— {desc}', on)}"
+            print(line.rstrip())
     return 0
 
 
