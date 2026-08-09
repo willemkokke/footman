@@ -185,6 +185,27 @@ def test_run_color_overrides_the_run_ambient_per_call(monkeypatch):
     assert "FC=1 NC=None" in results[0].steps[0].stdout
 
 
+def test_a_toolroom_color_opt_reaches_an_env_reading_child(monkeypatch):
+    # The colour seam end to end, both halves: toolroom (>= 0.4.0) passes
+    # .opts(color=) through its private run() channel into run(color=), so a
+    # hosted env-reading tool obeys the per-call decision — the argv half
+    # always did; the environment half needed run(color=) on this side and
+    # the passthrough on theirs.
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    monkeypatch.delenv("FORCE_COLOR", raising=False)
+
+    def tasks(reg):
+        @reg.task
+        def probe(mode: Literal["auto", "always", "never"]):
+            out = tools.python.opts(color=mode)("-c", _READ_ENV)
+            print(out.stdout.strip())
+
+    _, _, results = drive(tasks, "probe always")  # monochrome run, forced call
+    assert "FC=1 NC=None" in results[0].steps[0].stdout
+    _, _, results = drive(tasks, "probe never", force_color=True)
+    assert "FC=None NC=1" in results[0].steps[0].stdout
+
+
 def test_run_color_merges_on_top_of_an_explicit_env():
     # env= replaces wholesale; color= then paints that replacement, so the
     # two compose instead of the last one winning outright.
