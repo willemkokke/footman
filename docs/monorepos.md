@@ -3,7 +3,7 @@
 ## The task cascade
 
 In a monorepo you rarely want one giant tasks file. Footman collects every
-`tasks.py` from the **repo root** (the nearest `.git` above you) down to your
+`tasks.py` from the **repo root** (the nearest checkout above you) down to your
 current directory and merges them into one command set:
 
 ```text
@@ -25,10 +25,12 @@ Standing in `services/api`, `fm` sees `build*` (the local override), `test`,
     The walk goes up from your current directory and stops at a **ceiling**,
     then collects downward. The rules, in order:
 
-    1. **The ceiling is the nearest `.git` at or above your cwd.** That is the
-       repo edge, and where both the task cascade and the [config
-       search](#configuration) start.
-    2. **No `.git`? The nearest ancestor holding a project marker** — a
+    1. **The ceiling is the nearest checkout at or above your cwd** — a
+       `.git`, `.jj`, `.hg` or `.svn` directory. That is the repo edge, and
+       where both the task cascade and the [config search](#configuration)
+       start. footman only looks for the directory; it never runs your
+       version-control tool or reads its metadata.
+    2. **No checkout? The nearest ancestor holding a project marker** — a
        `pyproject.toml`, a `footman.toml`, or a `tasks.py` — is the ceiling
        instead, so a single-package checkout with no VCS still has a sensible
        top.

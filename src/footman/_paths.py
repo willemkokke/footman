@@ -14,11 +14,15 @@ from pathlib import Path
 
 # Ancestor markers that identify the project root. The manifest cache is keyed
 # by cwd, but these still bound a lone-file lookup when there is no repo root.
-PROJECT_MARKERS = ("pyproject.toml", "footman.toml", ".git", "tasks.py")
+# Files footman itself reads, plus this brand's config file, which
+# `find_project_root` appends — no VCS entry belongs here, see below.
+PROJECT_MARKERS = ("pyproject.toml", "tasks.py")
 
 # Marks the ceiling of the upward walk — the repo root where the task cascade
-# starts and the config search stops. `.git` is the natural monorepo edge.
-REPO_MARKERS = (".git",)
+# starts and the config search stops: the version-control boundary, whichever
+# system drew it. footman never runs these tools or reads their metadata; it
+# notices a directory entry, which is why supporting four costs nothing.
+REPO_MARKERS = (".git", ".jj", ".hg", ".svn")
 
 # Default name of the tasks file, looked for in every folder of the cascade.
 DEFAULT_TASKS_FILE = "tasks.py"
@@ -37,10 +41,16 @@ def find_project_root(start: Path | None = None) -> Path:
 
 
 def find_repo_root(start: Path | None = None) -> Path:
-    """Ceiling of the cascade: nearest ancestor with a repo marker (`.git`).
+    """Ceiling of the cascade: nearest ancestor with a `REPO_MARKERS` entry.
+
+    Git, Jujutsu, Mercurial and Subversion all draw the same boundary, and
+    footman only ever asks whether the directory is there — it runs none of
+    these tools and reads none of their metadata.
 
     Falls back to `find_project_root` when there is no VCS boundary, so a
-    single-package checkout still has a sensible top.
+    single-package checkout still has a sensible top. That fallback is also
+    why no VCS marker belongs in `PROJECT_MARKERS`: by the time it runs,
+    every ancestor has already been searched for every one of them.
     """
     start = (start or Path.cwd()).resolve()
     for directory in (start, *start.parents):

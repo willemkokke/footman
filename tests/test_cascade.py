@@ -28,6 +28,35 @@ def test_find_repo_root_without_git_falls_back(tmp_path):
     assert _paths.find_repo_root(deep) == tmp_path  # via find_project_root
 
 
+@pytest.mark.parametrize("marker", [".git", ".jj", ".hg", ".svn"])
+def test_find_repo_root_stops_at_any_vcs(tmp_path, marker):
+    # Every version-control boundary is the same boundary. jj's
+    # non-colocated mode has no `.git` at all, so before this a jj checkout
+    # fell through to the packaging fallback and took its ceiling from the
+    # nearest pyproject.toml — in a monorepo, the wrong directory.
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
+    repo = tmp_path / "repo"
+    (repo / marker).mkdir(parents=True)
+    deep = repo / "a" / "b"
+    deep.mkdir(parents=True)
+    assert _paths.find_repo_root(deep) == repo
+
+
+def test_no_vcs_marker_is_a_project_marker(tmp_path):
+    # `find_project_root` only ever runs as `find_repo_root`'s fallback, by
+    # which point every ancestor has been searched for every VCS marker — so
+    # one listed in PROJECT_MARKERS too would be unreachable code.
+    assert not set(_paths.PROJECT_MARKERS) & set(_paths.REPO_MARKERS)
+    # The marker goes in a *parent*: `find_project_root` returns `start` when
+    # nothing matched, so asking at the marker's own directory cannot tell
+    # "matched here" from "matched nothing".
+    repo = tmp_path / "vcs-only"
+    (repo / ".git").mkdir(parents=True)
+    deep = repo / "a" / "b"
+    deep.mkdir(parents=True)
+    assert _paths.find_project_root(deep) == deep  # not `repo`
+
+
 def test_footman_toml_marks_a_project_root(tmp_path):
     # F43: a footman.toml-only root (e.g. a Docker context with .git ignored) is
     # a project root, discoverable from a subdirectory.
