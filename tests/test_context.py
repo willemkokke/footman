@@ -15,7 +15,15 @@ from footman import _manifest
 from footman._executor import run_chain
 from footman._split import split_chain
 from footman._step import step
-from footman.context import Context, RunFailed, parallel, passthrough, run, use_context
+from footman.context import (
+    Context,
+    Invocation,
+    RunFailed,
+    parallel,
+    passthrough,
+    run,
+    use_context,
+)
 from footman.params import Many, Secret, ask, suggest
 from footman.registry import Group
 
@@ -134,6 +142,65 @@ def test_run_forces_color_env_for_a_child(monkeypatch):
     assert _child_env("show", force_color=True) == "FC=1 NC=None"
     assert _child_env("show", no_color=True) == "FC=None NC=1"
     assert _child_env("show") == "FC=None NC=1"  # auto, no tty
+
+
+def test_run_color_overrides_the_run_ambient_per_call(monkeypatch):
+    # The per-call twin: explicit beats the run-wide decision in either
+    # direction, and auto changes nothing. Off is spelled as removal plus
+    # NO_COLOR, exactly like the run boundary's own publish.
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    monkeypatch.delenv("FORCE_COLOR", raising=False)
+
+    def tasks(reg):
+        @reg.task
+        def show(mode: str):
+            out = run([sys.executable, "-c", _READ_ENV], color=mode)
+            print(out.stdout.strip())
+
+    _, _, results = drive(tasks, "show always")  # monochrome run, forced call
+    assert "FC=1 NC=None" in results[0].steps[0].stdout
+    _, _, results = drive(tasks, "show never", force_color=True)
+    assert "FC=None NC=1" in results[0].steps[0].stdout
+    _, _, results = drive(tasks, "show auto", force_color=True)
+    assert "FC=1 NC=None" in results[0].steps[0].stdout
+
+
+def test_run_color_merges_on_top_of_an_explicit_env():
+    # env= replaces wholesale; color= then paints that replacement, so the
+    # two compose instead of the last one winning outright.
+    def tasks(reg):
+        @reg.task
+        def show():
+            out = run(
+                [sys.executable, "-c", _READ_ENV],
+                env={"NO_COLOR": "1"},
+                color="always",
+            )
+            print(out.stdout.strip())
+
+    _, _, results = drive(tasks, "show")
+    assert "FC=1 NC=None" in results[0].steps[0].stdout
+
+
+def test_run_color_reaches_the_in_process_lane(monkeypatch):
+    # toolroom's hosted in-process lane rides the same door: the overlay the
+    # callable reads through os.environ carries the per-call decision.
+    monkeypatch.setenv("NO_COLOR", "1")
+    seen = {}
+
+    def probe():
+        seen["fc"] = os.environ.get("FORCE_COLOR")
+        seen["nc"] = os.environ.get("NO_COLOR")
+        return 0
+
+    inv = Invocation(parts=(("prog", "probe"),), exact=("probe",))
+    run(probe, _show=inv, color="always")
+    assert seen == {"fc": "1", "nc": None}
+
+
+def test_run_color_refuses_an_unknown_mode():
+    with pytest.raises(ValueError, match=r"run\(color='blue'\) expects"):
+        run([sys.executable, "-c", "pass"], color="blue")
 
 
 def test_task_env_overrides_the_color_overlay(monkeypatch):

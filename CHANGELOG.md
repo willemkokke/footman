@@ -7,6 +7,28 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- **`run(color=)` — a per-call colour override for what the child emits.**
+  `"always"` forces the colour variables into this one child's environment,
+  `"never"` writes `NO_COLOR` and removes any inherited force variables, and
+  the default `"auto"` follows the run. Explicit beats ambient, so
+  `color="always"` holds under an exported `NO_COLOR`. This closes the second
+  half of per-call colour: a tool's own flags were always reachable per call
+  (toolroom builds them into the argv), but a tool that reads the
+  *environment* obeyed only the run-wide decision, because footman owns the
+  child's environment inside a run — now one keyword reaches both halves, on
+  the subprocess and in-process lanes alike.
+
+### Removed
+
+- **`context.color_on()`.** Its only caller was toolroom's hosted lane, and
+  toolroom 0.3.0 answers the colour question from the seam instead — the
+  environment for the ambient tier, its own `.opts(color=)` for the decided
+  one. The seam between the packages is now environment variables and
+  per-call options, with no code dependency in either direction; pair with
+  toolroom >= 0.3.0.
+
 ### Fixed
 
 - **A schema bump rewrites an unchanged tree's manifest.** The rewrite

@@ -1,4 +1,4 @@
-"""footman's own tasks — dogfooding the runner and its run()/tools helpers.
+"""footman's own tasks — dogfooding the runner, run(), and toolroom's handles.
 
 Run with ``fm <task>`` (or ``uv run fm <task>`` before it is installed).
 Chaining works: ``fm format lint --fix test``.

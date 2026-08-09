@@ -529,9 +529,9 @@ def test_required_dict_option_binds_and_is_enforced():
 
 
 def test_trailing_underscore_param_is_stripped_to_a_clean_flag():
-    # `sync_` (escaping a name collision, like the provision task's own param)
-    # renders as `--sync`/`--no-sync`, not `--sync-`, and binds back — matching
-    # the tools bridge, which already strips the escape underscore.
+    # `sync_` (the keyword/name-escape idiom) renders as `--sync`/`--no-sync`,
+    # not `--sync-`, and binds back — the same stripping toolroom's handles
+    # apply on their side of the seam.
     seen = {}
 
     def tasks(reg):

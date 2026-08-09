@@ -530,9 +530,9 @@ def cli_name(name: str) -> str:
     A *trailing* underscore is Python's keyword/name-escape idiom (`sync_` to
     avoid shadowing `sync`, `import_`, `class_`); it is stripped, so the flag
     reads `--sync`, not `--sync-`. This is the one place identifiers become CLI
-    tokens for task names, group names, *and* parameter flags — the `tools.*`
-    bridge already strips the same way, and routing every mapping through here
-    keeps the two from drifting apart again.
+    tokens for task names, group names, *and* parameter flags. (toolroom's
+    handles carry their own copy of this rule; parity is held by its
+    conformance suite against released footman, not by shared code.)
     """
     return name.rstrip("_").replace("_", "-")
 
@@ -608,7 +608,7 @@ def _empty_body(fn: object) -> bool:
 # The orchestration options `.opts()` can override, mapped to their task
 # attribute. These are *policy* (how a task runs), kept separate from the task's
 # own parameters (the *work*) — which is why they ride in `.opts()` rather than
-# the call, mirroring tools' `.opts()`.
+# the call, the same policy-beside-the-call split toolroom's handles draw.
 _OPTS_ATTRS = {
     "keep_going": _KEEP_GOING,
     "atomic": _ATOMIC,
@@ -714,8 +714,8 @@ class _Opted:
     options *for this use*, leaving the registered task untouched. It proxies the
     base transparently: same signature (via `__wrapped__`), same name, same call;
     only the overridden options differ. This is footman's policy-vs-work split —
-    the options ride beside the call, not inside its argument list — mirroring
-    the `.opts()` on `tools.*`.
+    the options ride beside the call, not inside its argument list — the same
+    split toolroom's handles draw with their `.opts()`.
     """
 
     _opted_base: Task | Group

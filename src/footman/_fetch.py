@@ -28,7 +28,8 @@ trust store and proxy semantics when an unrelated dependency appears.
 choice rather than a surprise.
 
 This is for build artifacts, not a general HTTP client. Anything exotic
-belongs in `tools.curl(...)`, which is right there.
+belongs in a real curl call — `run(["curl", ...])`, or toolroom's typed
+`curl(...)` handle.
 """
 
 from __future__ import annotations
@@ -219,7 +220,7 @@ def fetch(
     def deps():
         "Fetch the toolchain."
         archive = fetch(TOOLCHAIN_URL, sha256="9f86d0…")
-        tools.tar("-xzf", archive, "-C", "vendor")
+        run(["tar", "-xzf", archive, "-C", "vendor"])
     ```
 
     *into* copies the cached file to a path of your choosing (and
