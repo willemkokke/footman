@@ -272,8 +272,10 @@ def test_config_global_file_is_the_bottom_rung(tmp_path, monkeypatch):
 
 
 def test_config_global_default_location(tmp_path, monkeypatch):
-    # Without FOOTMAN_CONFIG, the file lives under XDG config home.
+    # Without FOOTMAN_CONFIG / FOOTMAN_CONFIG_DIR (the suite pins the latter
+    # for hermeticity), the file lives under XDG config home.
     monkeypatch.delenv("FOOTMAN_CONFIG", raising=False)
+    monkeypatch.delenv("FOOTMAN_CONFIG_DIR", raising=False)
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg"))
     spot = tmp_path / "xdg" / "footman" / "config.toml"
     spot.parent.mkdir(parents=True)

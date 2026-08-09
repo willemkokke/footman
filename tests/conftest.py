@@ -65,6 +65,14 @@ def _no_cache_override(monkeypatch, tmp_path_factory):
         "FOOTMAN_CONFIG",
         str(tmp_path_factory.getbasetemp() / "no-global-config.toml"),
     )
+    # And the config *directory*: the user tasks file resolves through it, so
+    # without this a developer's real ~/.config/footman/tasks.py would answer
+    # in every test that expects an empty cascade — an environment-dependent
+    # flake wearing a "no tasks file found" regression's face.
+    monkeypatch.setenv(
+        "FOOTMAN_CONFIG_DIR",
+        str(tmp_path_factory.getbasetemp() / "no-global-config-dir"),
+    )
     from footman import context
 
     context.seed_cmd_width(0)
