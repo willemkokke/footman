@@ -1466,13 +1466,6 @@ def test_also_queues_a_plain_callable_into_the_block():
     assert ran == ["straggler"]
 
 
-def test_also_is_retired_and_teaches_the_lift():
-    from footman import parallel
-
-    with pytest.raises(RuntimeError, match=r"earns a receipt too"):
-        parallel().also(print, "x")
-
-
 def test_queueing_an_item_outside_a_block_is_taught():
     from footman import parallel
 

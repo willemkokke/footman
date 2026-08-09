@@ -3157,22 +3157,6 @@ class Fanout(list[Result]):
         self._birth_token = _step_mod._born.set(self._births)
         return self
 
-    def also(self, call: Callable[..., Any], /, *args: Any, **kwargs: Any) -> Pending:
-        """Retired: the block runs tasks and steps, nothing anonymous.
-
-        Lift the code instead — a wrapper states intent, and the step it
-        makes earns a real receipt:
-
-            with parallel() as p:
-                build("web")
-                p(step(shutil.rmtree)(tmp, ignore_errors=True))
-        """
-        raise RuntimeError(
-            "parallel().also(...) is gone: the block runs tasks and steps, "
-            "nothing anonymous. Lift the call — p(step(fn)(args)) — and it "
-            "earns a receipt too."
-        )
-
     def __call__(self, item: _step.WorkItem[Any], /) -> Pending:
         """Queue a built step item for the block — the lifted counterpart of
         a task call, which queues itself."""
