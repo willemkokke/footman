@@ -770,6 +770,20 @@ def _plugins_report(reg: registry.Group) -> int:
 
     walk(reg, "", False)
 
+    # A plugin with no tasks still mounts — its hooks and options ride every
+    # run — and the tree walk cannot see it. Its contributions carry the
+    # identity the mount stamped.
+    riding: set[str] = set()
+    for kind, bucket in reg.contributions.items():
+        for item in bucket:
+            ident = (
+                item._mounted
+                if kind == "globals"
+                else getattr(item, registry._MOUNTED, None)
+            )
+            if isinstance(ident, str) and ident != registry._MANY_MOUNTS:
+                riding.add(ident)
+
     def described(addresses: list[str]) -> str:
         node: object = reg
         for part in addresses[0].split("."):
@@ -792,14 +806,14 @@ def _plugins_report(reg: registry.Group) -> int:
         except Exception:
             return ""
         if isinstance(node, registry.Group):
-            if node.help:
-                return node.help
             if not node.groups and len(node.tasks) == 1:
-                # A single-task splat: the task's own line is the answer.
+                # A single-task plugin: the task's own line beats the
+                # module docstring an anonymous capture carries as help.
                 (fn,) = node.tasks.values()
                 doc = (getattr(fn, "__doc__", "") or "").strip()
-                return doc.splitlines()[0] if doc else ""
-            return ""
+                if doc:
+                    return doc.splitlines()[0]
+            return node.help or ""
         doc = (getattr(node, "__doc__", "") or "").strip()
         return doc.splitlines()[0] if doc else ""
 
@@ -828,8 +842,18 @@ def _plugins_report(reg: registry.Group) -> int:
             desc = described(where) if where else advertised(ep.name)
             grouped.setdefault(dist_name, []).append((ep.name, "built in", desc))
         elif where:
+            # One landed node speaks for itself; a family mounted piecemeal
+            # speaks with its advertised voice — an arbitrary member's
+            # docstring must not stand for seven siblings.
+            desc = described(where) if len(where) == 1 else advertised(ep.name)
             grouped.setdefault(dist_name, []).append(
-                (ep.name, mount_points(where), described(where))
+                (ep.name, mount_points(where), desc)
+            )
+        elif ep.name in riding:
+            # Mounted with no tasks to land: hooks and options riding every
+            # run have no address to name, so the state is the plain word.
+            grouped.setdefault(dist_name, []).append(
+                (ep.name, "mounted", advertised(ep.name))
             )
         else:
             grouped.setdefault(dist_name, []).append((ep.name, "(not mounted)", ""))

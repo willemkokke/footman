@@ -18,7 +18,15 @@ versions may include breaking changes.
   advertises (the brand vouches for importing its own declarations) — and a
   plain unmounted entry shows its state alone, because importing unmounted
   third-party code could crash a listing. Long mount lists cap at three
-  addresses (`+N more`).
+  addresses (`+N more`), a family mounted piecemeal speaks with its
+  advertised help rather than an arbitrary member's docstring, and a
+  single-task plugin's line is the task's own.
+
+- **A plugin with no tasks reports `mounted`.** `footman.profile` lands
+  hooks and an option, no tasks — the report read only tree provenance and
+  called it `(not mounted)` while its contributions rode every run. The
+  mount now stamps every contribution with its entry-point identity, and a
+  riding plugin shows the plain word: there is nothing to say "at" about.
 
 ## [0.36.0] — 2026-08-09
 
