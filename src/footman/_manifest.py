@@ -422,26 +422,6 @@ def _field_spec(field: _coerce.Field, seen: tuple[Any, ...]) -> dict[str, Any]:
     return out
 
 
-def _reads_siblings(fn: Any) -> bool:
-    """Whether a `default(fn)` takes the sibling view — i.e. one positional
-    argument. Inspected rather than probed by call, the way `_wants_context`
-    decides the same question for `check(fn)`; duplicated here because the
-    executor imports this module and cannot be imported back."""
-    try:
-        params = inspect.signature(fn).parameters.values()
-    except (TypeError, ValueError):
-        return False
-    return any(
-        p.kind
-        in (
-            inspect.Parameter.VAR_POSITIONAL,
-            inspect.Parameter.POSITIONAL_ONLY,
-            inspect.Parameter.POSITIONAL_OR_KEYWORD,
-        )
-        for p in params
-    )
-
-
 def _marker_keys(
     spec: dict[str, Any],
     peeled: _coerce.Peeled,
@@ -484,7 +464,8 @@ def _marker_keys(
         # would actually use rather than a value baked whenever a cache was
         # last built. A raising computer is left to raise at bind time instead
         # of taking the whole tree's help down with it.
-        if _reads_siblings(peeled.default_fn.fn):
+        spec["computed"] = True  # help says so: a bare number reads arbitrary
+        if peeled.default_fn.reads_siblings:
             # It reads values only an invocation has, so there is nothing to
             # show — and the *declared* default must go too: it exists so a
             # plain Python call still binds, and printing that sentinel would

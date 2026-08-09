@@ -182,15 +182,15 @@ def resolve(root: Group, path: list[str]) -> Task:
 _MISSING = object()
 
 
-def _wants_context(fn: Any, over: int = 1) -> bool:
-    """True when *fn* accepts one positional argument beyond *over* — the
-    sibling parameters resolved so far.
+def _wants_context(fn: Any) -> bool:
+    """True when a validator accepts a second positional argument — the sibling
+    parameters coerced so far. Decided by *inspecting* the signature, never by
+    catching a `TypeError` from the call, so a real arity error raised inside the
+    validator is not mistaken for the one-argument form.
 
-    *over* is how many the marker passes anyway: `check(fn)` hands over a value,
-    so a contextual one takes two; `default(fn)` hands over nothing, so a
-    contextual one takes one. Decided by *inspecting* the signature, never by
-    catching a `TypeError` from the call, so a real arity error raised inside
-    the callable is not mistaken for the shorter form."""
+    (`default(fn)` asks the same question of itself at declaration time — see
+    `params.default.reads_siblings` — because the manifest needs the answer and
+    cannot import this module.)"""
     try:
         params = inspect.signature(fn).parameters.values()
     except (TypeError, ValueError):
@@ -201,7 +201,7 @@ def _wants_context(fn: Any, over: int = 1) -> bool:
             return True
         if p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD):
             positional += 1
-    return positional > over
+    return positional >= 2
 
 
 def _computed_default(marker: Any, params: dict[str, Any] | None = None) -> Any:
@@ -213,7 +213,7 @@ def _computed_default(marker: Any, params: dict[str, Any] | None = None) -> Any:
     is to its *left*, so a default can never depend on something not resolved
     yet.
     """
-    if _wants_context(marker.fn, 0):
+    if marker.reads_siblings:
         return marker.fn(MappingProxyType(dict(params) if params else {}))
     return marker.fn()
 

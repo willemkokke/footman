@@ -86,6 +86,25 @@ class suggest:
         self.strict = strict
 
 
+def _takes_an_argument(fn: Callable[..., Any]) -> bool:
+    """Whether *fn* accepts a positional argument — the sibling view."""
+    import inspect
+
+    try:
+        params = inspect.signature(fn).parameters.values()
+    except (TypeError, ValueError):
+        return False  # a builtin with no signature: treat as no-argument
+    return any(
+        p.kind
+        in (
+            inspect.Parameter.VAR_POSITIONAL,
+            inspect.Parameter.POSITIONAL_ONLY,
+            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+        )
+        for p in params
+    )
+
+
 class default:
     """Compute a parameter's default when the task runs, via `Annotated`:
 
@@ -123,12 +142,19 @@ class default:
     refused as a typed value is refused here too rather than smuggled in.
     """
 
-    __slots__ = ("fn",)
+    __slots__ = ("fn", "reads_siblings")
 
     fn: Callable[..., Any]
+    reads_siblings: bool
+    """Whether *fn* takes the sibling view. Decided once, here, because both the
+    binder and the manifest need the answer and the manifest cannot import the
+    binder — asking the marker beats asking the same question twice in two
+    modules. Inspected rather than probed by call, so a real arity error raised
+    inside *fn* is never mistaken for the no-argument form."""
 
     def __init__(self, fn: Callable[..., Any]) -> None:
         self.fn = fn
+        self.reads_siblings = _takes_an_argument(fn)
 
 
 # `Many[T]` is exactly `list[T]`: a parameter that is *always* a list — one or
