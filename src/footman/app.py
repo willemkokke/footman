@@ -39,16 +39,20 @@ from pathlib import Path
 from footman import __version__
 
 
-def _prefix_from(name: str) -> str:
-    """An environment-variable prefix from a display *name*.
+def _prefix_from(prog: str) -> str:
+    """An environment-variable prefix from the command name.
+
+    `prog`, not the display name: it is the word your users type, so
+    `acme` reading `ACME_CACHE_DIR` needs no explaining — and a command
+    name is already shell-safe, where a display name is free text that
+    would need sanitising to be a variable.
 
     Uppercased, every run of non-alphanumerics collapsed to one `_`, and a
-    leading digit padded — `"footman"` gives `FOOTMAN`, so footman's own
-    variables are exactly what they always were. Written with `str` methods
-    rather than `re`, which this import-light module should not pay for.
+    leading digit padded. Written with `str` methods rather than `re`,
+    which this import-light module should not pay for.
     """
     out: list[str] = []
-    for char in name:
+    for char in prog:
         if char.isalnum() and char.isascii():
             out.append(char.upper())
         elif out and out[-1] != "_":
@@ -83,19 +87,25 @@ class Brand:
     home=Path(os.environ.get("ACME_HOME", Path.home() / ".acme")) / "runner"
     ```
 
-    Left `None` (the default), locations fall back to XDG plus this brand's
-    own environment variables, exactly as footman has always behaved.
+    `<PREFIX>_HOME` overrides it at run time — `ACME_HOME` for `acme` —
+    which is how two installations run side by side under different
+    identities. Left `None` with that variable unset, locations fall back
+    to XDG, exactly as footman has always behaved.
 
-    `home_env` names an environment variable that overrides `home` when it
-    is set — for running two installations side by side under different
-    identities. You name it; footman never infers one, because a product's
-    own `*_HOME` usually means more than the runner's corner of it.
+    `env_prefix` is the namespace for **every** variable this CLI reads,
+    `<PREFIX>_HOME` included, and defaults to `prog` uppercased: the
+    command is `acme`, so the variables are `ACME_*`. A branded CLI reads
+    only its own prefix, so a stray `FOOTMAN_CACHE_DIR` can never move
+    someone else's product.
 
-    `env_prefix` is the namespace for this CLI's environment variables,
-    defaulting to `name` uppercased (`acme` reads `ACME_CACHE_DIR`). A
-    branded CLI reads **only** its own prefix: a stray `FOOTMAN_CACHE_DIR`
-    must never move someone else's product. Set it explicitly when your
-    display name would make an awkward or unstable prefix.
+    Set it explicitly for either of two reasons. **A terse command makes a
+    poor variable**: footman's own is `fm`, but its variables are
+    `FOOTMAN_*`, because `FOOTMAN_HOME` tells a reader who has never heard
+    of the tool what it belongs to and `FM_HOME` tells them nothing.
+    **Or the namespace collides with your product's own** — keeping it
+    clear is yours to arrange, so if `ACME_HOME` already means something
+    broader in your world, name this one `ACME_RUNNER` and compute `home`
+    from your own variable.
 
     `config_name` names both the standalone config file (`acme.toml`) and
     the table inside `pyproject.toml` (`[tool.acme]`), from one field so
@@ -108,29 +118,27 @@ class Brand:
     tasks_file: str = "tasks.py"
     dist: str | None = "footman"
     home: Path | None = None
-    home_env: str | None = None
     env_prefix: str | None = None
     config_name: str = "footman"
 
     @property
     def prefix(self) -> str:
-        """The environment-variable namespace — `env_prefix`, else from `name`."""
-        return self.env_prefix or _prefix_from(self.name)
+        """The environment-variable namespace — `env_prefix`, else from `prog`."""
+        return self.env_prefix or _prefix_from(self.prog)
 
     def env(self, suffix: str) -> str:
         """This brand's spelling of an environment variable: `ACME_CACHE_DIR`."""
         return f"{self.prefix}_{suffix}"
 
     def resolved_home(self) -> Path | None:
-        """`home_env`'s value when set, else `home`; `None` means XDG fallback.
+        """`<PREFIX>_HOME` when set, else `home`; `None` means XDG fallback.
 
         Read per invocation rather than cached, so two processes launched
         with different values genuinely get different homes.
         """
-        if self.home_env:
-            override = os.environ.get(self.home_env)
-            if override:
-                return Path(override).expanduser()
+        override = os.environ.get(self.env("HOME"))
+        if override:
+            return Path(override).expanduser()
         return self.home
 
     def config_file(self) -> str:
@@ -138,7 +146,11 @@ class Brand:
         return f"{self.config_name}.toml"
 
 
-DEFAULT_BRAND = Brand()
+# footman's command is `fm`, but its variables are `FOOTMAN_*` — not for
+# compatibility, but because `FOOTMAN_HOME` tells a reader who has never heard
+# of this tool what it belongs to, and is searchable. `FM_HOME` is neither.
+# A two-letter command is exactly when to pin a longer prefix.
+DEFAULT_BRAND = Brand(env_prefix="FOOTMAN")
 
 
 class App:
@@ -154,7 +166,6 @@ class App:
         tasks_file: str = "tasks.py",
         dist: str | None = None,
         home: Path | str | None = None,
-        home_env: str | None = None,
         env_prefix: str | None = None,
         config_name: str | None = None,
     ) -> None:
@@ -169,7 +180,6 @@ class App:
             tasks_file=tasks_file,
             dist=dist,
             home=Path(home).expanduser() if home is not None else None,
-            home_env=home_env,
             env_prefix=env_prefix,
             # Default to `name`, so a branded CLI's users write `acme.toml`
             # rather than a config file named after a dependency.

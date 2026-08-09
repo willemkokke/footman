@@ -237,9 +237,11 @@ def main(tasks_file: str | None = None) -> None:
     # dependencies must declare. A branded CLI passes its own.
     #
     # `home_env` makes stock footman an ordinary user of the same field a
-    # branded CLI uses: `FOOTMAN_HOME` relocates everything footman owns.
-    # Unset, locations fall back to XDG exactly as they always have.
-    raise SystemExit(App(dist="footman", home_env="FOOTMAN_HOME").run(argv))
+    # `env_prefix` is pinned rather than derived from `fm`: `FOOTMAN_HOME`
+    # says what it belongs to and is searchable, where `FM_HOME` is opaque.
+    # `FOOTMAN_HOME` then falls out of the same `<PREFIX>_HOME` rule every
+    # brand follows, rather than being a mechanism of its own.
+    raise SystemExit(App(dist="footman", env_prefix="FOOTMAN").run(argv))
 
 
 def __getattr__(name: str) -> object:
