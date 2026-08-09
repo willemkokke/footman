@@ -158,8 +158,13 @@ _GLOBAL_KIND = {name: kind for name, _, kind, _, _ in GLOBALS}
 _GLOBAL_KIND.update({alias: kind for _, alias, kind, _, _ in GLOBALS if alias})
 _CANON = {alias: name for name, alias, _, _, _ in GLOBALS if alias}
 _GLOBAL_HINT = {name: hint for name, _, _, hint, _ in GLOBALS if hint}
-# Options whose bare form is itself meaningful (`--install-completion` detects
-# the invoking shell), so a missing `=value` is not an error.
+# Globals whose bare form means something — `--describe` the whole tree,
+# `--install-completion` the shell you are in — declared by bracketing the
+# metavar. This is a global's version of a task option's `required`: a task
+# option may be named bare when absence is legal, and a global when its bare
+# mention has a reading. `--where` has none (there is no default task to point
+# at), so it still refuses, and a word behind it is still taught rather than
+# quietly becoming the task to run.
 _VALUE_OPTIONAL = frozenset(
     name for name, _, _, hint, _ in GLOBALS if hint and hint.startswith("[")
 )
@@ -394,13 +399,18 @@ def _parse_globals(
     self-contained (a value is `=`-attached), and the first bare word starts
     the task chain.
 
+    A global whose bare form has a reading may be named bare — `_VALUE_OPTIONAL`
+    says which, the same question a task option answers with `required`. One
+    without a reading still refuses: `--where` names a task to locate, and there
+    is no default task, so a word behind it is taught rather than quietly
+    becoming the task to run.
+
     *plugin* maps a pulled plugin's long options (`--env-file`) to their
     kinds — `option?` marks one whose bare form is itself meaningful
-    (`GlobalOption(bare=…)`), the `[SHELL]`-hint grammar footman's own
-    completion installers speak. *lenient* carries an unknown dash token
-    through untouched instead of refusing — the pre-discovery walk cannot
-    know the plugins yet, so the authoritative post-discovery parse is the
-    one that teaches.
+    (`GlobalOption(bare=…)`). *lenient* carries an unknown dash token through
+    untouched instead of refusing — the pre-discovery walk cannot know the
+    plugins yet, so the authoritative post-discovery parse is the one that
+    teaches.
     """
     known: dict[str, str] = dict(_GLOBAL_KIND)
     value_optional = set(_VALUE_OPTIONAL)

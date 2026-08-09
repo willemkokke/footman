@@ -132,8 +132,16 @@ def _globals_to_dict(tokens: list[str]) -> dict[str, object]:
         key = name.lstrip("-").replace("-", "_")
         if "=" in tok:  # a value attached by the splitter (--name=value)
             result[key] = tok.split("=", 1)[1]
-        else:  # a flag, or a value-optional option given bare
+        elif _split._GLOBAL_KIND.get(name) == "flag":
             result[key] = True
+        else:
+            # A value-taking global named bare. It carries presence and no
+            # value, so it reads as the empty string and the consumer resolves
+            # what that means — `--describe` the whole tree, `--color` the
+            # ambient decision. It used to read as `True`, which made every
+            # consumer test the *type* of the value to learn how it was
+            # spelled; that union is what this removes.
+            result[key] = ""
     return result
 
 
@@ -250,7 +258,7 @@ def _discover_files(
 
 
 def _format_value(value: object) -> str:
-    if value is True:
+    if value is True:  # a flag: its presence is the whole message
         return ""
     if isinstance(value, list):
         return "[" + ", ".join(str(v) for v in value) + "]"
@@ -765,7 +773,7 @@ def _describe_contract(tree: dict[str, Any], target: object, argv_rest: bool) ->
     JSON on stdout either way: like `--where`, the output already is the
     machine format, so `--json` adds nothing.
     """
-    if target is True:
+    if not target:  # named bare: the whole tree's contract
         if argv_rest:
             # `fm --describe check` reads as bare --describe plus a run of
             # `check` — surely not what was meant. Teach the `=` spelling
@@ -1079,13 +1087,13 @@ def _print_json(
 def _resolve_shell(shell: object, flag: str) -> str | None:
     """Resolve *shell* to a supported name for *flag*, or None after `_error`.
 
-    A bare flag (`shell is True`) detects the invoking shell; an explicit value
+    A bare mention (no value) detects the invoking shell; an explicit value
     is lowercased and de-aliased (`nu`→`nushell`, `powershell`→`pwsh`).
     """
     from footman import _shellcomp
 
     supported = "|".join(_shellcomp.SHELLS)
-    if shell is True:
+    if not shell:  # named bare: work out which shell is asking
         name = _shellcomp.detect_shell()
         if name is None:
             _error(
@@ -1109,7 +1117,7 @@ def _install_completion(shell: object) -> int:
     name = _resolve_shell(shell, "--install-completion")
     if name is None:
         return EX_USAGE
-    if shell is True:
+    if not shell:  # named bare: say which shell we worked out
         print(f"detected shell: {name}")
     try:
         lines = _shellcomp.install(name, _brand.prog)
@@ -1127,7 +1135,7 @@ def _uninstall_completion(shell: object) -> int:
     name = _resolve_shell(shell, "--uninstall-completion")
     if name is None:
         return EX_USAGE
-    if shell is True:
+    if not shell:  # named bare: say which shell we worked out
         print(f"detected shell: {name}")
     try:
         lines = _shellcomp.uninstall(name, _brand.prog)
@@ -1151,7 +1159,7 @@ def _setup_completion(shell: object) -> int:
     name = _resolve_shell(shell, "--setup-completion")
     if name is None:
         return EX_USAGE
-    if shell is True:
+    if not shell:  # named bare: say which shell we worked out
         print(f"detected shell: {name}", file=sys.stderr)
     print(_shellcomp.script_for(name, _brand.prog))
     return 0
@@ -1536,10 +1544,11 @@ def _run(
     for key, run_action in actions.items():
         if key in g and not wants_help:
             value = g.get(key)
-            if value is True and after < len(argv) and not argv[after].startswith("-"):
-                # A detached word behind the bare action is a value that
-                # failed to attach (`--install-completion zsh`): teach the
-                # `=` form — never act on the detected shell instead.
+            if not value and after < len(argv) and not argv[after].startswith("-"):
+                # A word behind the bare action has nowhere else to go — these
+                # end the invocation, so there is no task chain for it to be
+                # part of. Teach the `=` form rather than acting on the
+                # detected shell and leaving the word unexplained.
                 flag = "--" + key.replace("_", "-")
                 return _refuse(
                     bool(g.get("json")),

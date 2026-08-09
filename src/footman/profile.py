@@ -67,10 +67,15 @@ def arm(inv: footman.Invocation) -> None:
 
     Reads `inv.cli`, not `PROFILE.value`: the manifest refresh child runs
     this hook with no command line at all, and there the answer must be
-    "not profiling" rather than an unbound-value error."""
+    "not profiling" rather than an unbound-value error.
+
+    Asks whether the option was *mentioned*, not whether its value is truthy.
+    Those coincided only while a bare mention arrived as `True`; the question
+    was always presence, and a value can be empty and still have been asked
+    for."""
     global _child_dir
     _child_dir = None
-    if not inv.cli.get("profile"):
+    if "profile" not in inv.cli:
         return
     _child_dir = tempfile.mkdtemp(prefix="fm-profile-")
     # The single-threaded moment: what lands in the environment here is in
