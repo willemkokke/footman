@@ -7,6 +7,19 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Changed
+
+- **`--plugins` groups by distribution, and the Summary prints once.** The
+  entry-point record cannot carry a description, so every entry a package
+  ships used to repeat the same distribution Summary — four identical cells
+  for footman's own four. The Summary now heads the package's line; an
+  entry describes itself only where footman genuinely knows it — a mounted
+  entry from its landed tree, a declared built-in from the tree it
+  advertises (the brand vouches for importing its own declarations) — and a
+  plain unmounted entry shows its state alone, because importing unmounted
+  third-party code could crash a listing. Long mount lists cap at three
+  addresses (`+N more`).
+
 ## [0.36.0] — 2026-08-09
 
 ### Added

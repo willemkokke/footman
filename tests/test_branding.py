@@ -562,6 +562,20 @@ def test_the_plugins_report_shows_built_in(tmp_path, monkeypatch):
     assert "built in" in result.stdout
 
 
+def test_a_builtin_describes_itself_inside_a_project(tmp_path, monkeypatch):
+    # In a project the built-in is not landed, so its line comes from the
+    # tree it advertises — the brand vouches for importing its own — never
+    # from the distribution summary repeated beside every sibling.
+    _project(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
+    acme = Runner(App(name="acme", prog="acme", builtin=["footman.new"]))
+    result = acme.invoke("--plugins")
+    assert result.ok, result.stderr
+    assert "built in" in result.stdout
+    assert "Scaffold a tasks file" in result.stdout
+
+
 def test_two_projectless_directories_share_one_manifest(tmp_path, monkeypatch):
     # Hash-keyed by the brand, never the cwd: cold once per brand version,
     # not once per directory — and the file bakes no cwd (the collector's

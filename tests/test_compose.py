@@ -1076,7 +1076,11 @@ def test_provenance_is_stamped_and_reported(provider, tmp_path):
     assert "mounted at vendor" in result.stdout
 
 
-def test_unpulled_plugin_shows_dist_summary(provider, tmp_path):
+def test_unmounted_plugin_shows_state_and_the_dist_header_describes(provider, tmp_path):
+    # The Summary describes the *package*, so it prints once on the
+    # distribution's header line — never repeated identically beside every
+    # entry the package ships. An unmounted entry shows its state alone:
+    # importing unmounted code could crash a listing.
     project = tmp_path / "proj_unpulled"
     project.mkdir()
     (project / "pyproject.toml").write_text('[project]\nname="x"\n')
@@ -1085,6 +1089,8 @@ def test_unpulled_plugin_shows_dist_summary(provider, tmp_path):
     assert result.ok
     assert "shared" in result.stdout
     assert "(not mounted)" in result.stdout
+    summary = "A task runner with typed commands"
+    assert result.stdout.count(summary) == 1  # once, on footman's header
 
 
 def test_two_pulls_compose_one_subtree(provider, tmp_path, monkeypatch):
