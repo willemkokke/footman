@@ -86,6 +86,37 @@ class suggest:
         self.strict = strict
 
 
+class default:
+    """Compute a parameter's default when the task runs, via `Annotated`:
+
+    ```python
+    def install(shell: Annotated[str, default(detect_shell)] = ""): ...
+    ```
+
+    A Python default is evaluated once, at import — fine for a constant, wrong
+    for anything that depends on the machine, the environment or the clock.
+    `default(fn)` calls `fn()` at bind time instead, so `--help` and the run
+    agree and both are current.
+
+    It sits in the ladder just above the Python default — **CLI value > env >
+    `default(fn)` > the declared default** — and, like `env()`, it needs a
+    declared default to sit on: a plain Python call of the task, outside any
+    run, has to keep working.
+
+    The value is used as it comes back, not coerced: `fn()` returns a real
+    object, and coercion exists because the command line only has strings. It
+    still runs the annotation's validators, so a `default(fn)` that would be
+    refused as a typed value is refused here too rather than smuggled in.
+    """
+
+    __slots__ = ("fn",)
+
+    fn: Callable[[], Any]
+
+    def __init__(self, fn: Callable[[], Any]) -> None:
+        self.fn = fn
+
+
 # `Many[T]` is exactly `list[T]`: a parameter that is *always* a list — one or
 # more values, variadic when positional. It reads more intentfully than a bare
 # `list[T]` at a call site, but carries no runtime marker of its own.

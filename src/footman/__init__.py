@@ -72,6 +72,7 @@ if TYPE_CHECKING:
     from footman.params import ask as ask
     from footman.params import between as between
     from footman.params import check as check
+    from footman.params import default as default
     from footman.params import doc as doc
     from footman.params import env as env
     from footman.params import exists as exists
@@ -147,6 +148,7 @@ __all__ = [
     "console_lane",
     "cwd",
     "cwd_lane",
+    "default",
     "doc",
     "docstrings",
     "env",
@@ -297,6 +299,7 @@ def __getattr__(name: str) -> object:
         "between",
         "env",
         "check",
+        "default",
         "doc",
         "ask",
         "forward",

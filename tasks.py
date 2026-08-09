@@ -550,6 +550,7 @@ _API_SECTIONS: list[tuple[str, str, list[str]]] = [
             "between",
             "env",
             "check",
+            "default",
             "doc",
             "ask",
             "Secret",

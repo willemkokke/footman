@@ -10,8 +10,20 @@ import pytest
 from footman import _manifest
 from footman._executor import run_chain
 from footman._split import ChainError, split_chain
-from footman.params import between, check, env, exists, isdir, isfile
+from footman.params import between, check, default, env, exists, isdir, isfile
 from footman.registry import Group
+
+# Module level, or `from __future__ import annotations` leaves the name
+# unresolvable when the spec is built.
+_tag_calls: list[int] = []
+
+
+def _next_tag() -> str:
+    _tag_calls.append(len(_tag_calls) + 1)
+    return f"call-{len(_tag_calls)}"
+
+
+ComputedTag = Annotated[str, default(_next_tag)]
 
 
 def _even(v: int) -> None:
@@ -308,6 +320,37 @@ def test_env_list_comma_splits(monkeypatch):
     monkeypatch.setenv("TAGS", "a,b,c")
     run(tasks, "build")
     assert seen["tags"] == ["a", "b", "c"]
+
+
+def test_default_fn_is_computed_at_bind_not_import():
+    _tag_calls.clear()
+    seen: dict[str, Any] = {}
+
+    def tasks(reg):
+        @reg.task
+        def build(*, tag: ComputedTag = "") -> None:
+            seen["tag"] = tag
+
+    run(tasks, "build")
+    first = seen["tag"]
+    run(tasks, "build")
+    # A fresh answer per run, not one frozen at import — which is the whole
+    # reason to have it: a Python default could never say which shell this is.
+    assert seen["tag"] != first
+
+    run(tasks, "build --tag=explicit")
+    assert seen["tag"] == "explicit"  # the command line still outranks it
+
+
+def test_default_fn_without_a_declared_default_is_a_spec_error():
+    def tasks(reg):
+        @reg.task
+        def build(*, tag: ComputedTag) -> None: ...
+
+    # A plain Python call outside a run has to keep working, so the marker
+    # needs somewhere to fall — the same rule `env()` follows.
+    with pytest.raises(_manifest.SpecError, match="needs a declared default"):
+        build_tree(tasks)
 
 
 def test_env_without_default_is_a_spec_error():

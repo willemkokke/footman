@@ -747,6 +747,15 @@ def bind(
                     if value is not _MISSING:
                         kwargs[param.name] = value
                         continue
+                if peeled.default_fn is not None:
+                    # A default computed now rather than at import. Used as it
+                    # comes back — it is a real object, and coercion exists for
+                    # command-line strings — but still validated, so one that
+                    # would be refused as a typed value is refused here too.
+                    computed = peeled.default_fn.fn()
+                    _validate_explicit(computed, peeled, f"--{cli}", siblings)
+                    kwargs[param.name] = computed
+                    continue
                 # ask(): prompt for a required (defaultless) param nothing
                 # else filled — the prompt is the last resort.
                 if peeled.ask is not None and param.default is empty:
@@ -1087,6 +1096,12 @@ def bind_call(
                 # answers for nobody in particular.
                 bound.arguments[param.name] = value
                 continue
+        if peeled.default_fn is not None:
+            computed = peeled.default_fn.fn()
+            label = f"{name}({param.name}=…)"
+            _validate_explicit(computed, peeled, label, siblings)
+            bound.arguments[param.name] = computed  # inferred, so not `supplied`
+            continue
         if peeled.ask is not None and param.default is empty:
             cli = registry.cli_name(param.name)
             supplied.add(param.name)  # asked and answered
