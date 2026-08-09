@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from footman import App, Brand, __version__, _paths
 from footman._executor import EX_USAGE
+from footman.app import DEFAULT_BRAND
 from footman.testing import Runner
 
 
@@ -132,13 +133,20 @@ def _project(tmp_path, body: str = "") -> None:
     (tmp_path / "tasks.py").write_text(TASKS)
 
 
-def test_prefix_is_derived_from_the_display_name():
-    # `name`, not `prog`: footman's prog is `fm`, and deriving from it would
-    # rename every FOOTMAN_* variable that has ever worked.
-    assert Brand().prefix == "FOOTMAN"
-    assert Brand(name="acme").env("CACHE_DIR") == "ACME_CACHE_DIR"
-    assert Brand(name="Acme Devkit").prefix == "ACME_DEVKIT"
-    assert Brand(name="acme", env_prefix="ACME2").env("NO_GC") == "ACME2_NO_GC"
+def test_prefix_is_derived_from_the_command_name():
+    # `prog`: the word users type, and shell-safe by construction where a
+    # display name is free text.
+    assert Brand(prog="acme").env("CACHE_DIR") == "ACME_CACHE_DIR"
+    assert Brand(prog="acme-tool").prefix == "ACME_TOOL"
+    assert Brand(prog="acme", env_prefix="ACME2").env("NO_GC") == "ACME2_NO_GC"
+
+
+def test_stock_footman_pins_its_prefix():
+    # Not compatibility: `FOOTMAN_HOME` says what it belongs to and is
+    # searchable, where `FM_HOME` is opaque. A two-letter command is exactly
+    # when a brand should pin a longer prefix than its prog.
+    assert DEFAULT_BRAND.prefix == "FOOTMAN"
+    assert DEFAULT_BRAND.env("CACHE_DIR") == "FOOTMAN_CACHE_DIR"
 
 
 def test_a_home_holds_everything_the_cli_owns(tmp_path, monkeypatch):
@@ -171,34 +179,54 @@ def test_a_brand_reads_its_own_cache_variable(tmp_path, monkeypatch):
     assert list(theirs.glob("*.json"))  # the specific variable beats the home
 
 
-def test_home_env_overrides_the_home(tmp_path, monkeypatch):
-    # Two installations logged in as different identities, side by side.
+def test_prefix_home_overrides_the_home(tmp_path, monkeypatch):
+    # Two installations logged in as different identities, side by side —
+    # through the same prefix that governs every other variable.
     _project(tmp_path)
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setenv("ACME_RUNNER_HOME", str(tmp_path / "user-b"))
-    app = App(
-        name="acme", prog="acme", home=tmp_path / "user-a", home_env="ACME_RUNNER_HOME"
-    )
+    monkeypatch.setenv("ACME_HOME", str(tmp_path / "user-b"))
+    app = App(name="acme", prog="acme", home=tmp_path / "user-a")
     Runner(app).invoke("--list")
     assert list((tmp_path / "user-b" / "cache").glob("*.json"))
     assert not (tmp_path / "user-a").exists()
 
 
-def test_a_brand_does_not_pick_up_a_prefix_home_by_itself(tmp_path, monkeypatch):
-    # A product's own *_HOME names the product's world; the runner's corner
-    # of it is the brand's to choose, so footman must never infer one.
+def test_a_brand_can_hold_its_prefix_clear_of_its_own_variables(tmp_path, monkeypatch):
+    # `<PREFIX>_HOME` is read like everything else, so a product whose own
+    # `ACME_HOME` means something broader keeps the namespaces apart by
+    # naming this one — and computes `home` from its own variable.
     _project(tmp_path)
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setenv("ACME_HOME", str(tmp_path / "guessed"))
+    monkeypatch.setenv("ACME_HOME", str(tmp_path / "product-world"))
+    app = App(
+        name="acme",
+        prog="acme",
+        env_prefix="ACME_RUNNER",
+        home=tmp_path / "product-world" / "runner",
+    )
+    Runner(app).invoke("--list")
+    assert list((tmp_path / "product-world" / "runner" / "cache").glob("*.json"))
+    # ACME_HOME did not become the runner's home — ACME_RUNNER_HOME would have
+    assert not (tmp_path / "product-world" / "cache").exists()
+
+
+def test_another_brands_home_variable_is_ignored(tmp_path, monkeypatch):
+    # Only this CLI's own prefix is read — `<OTHER>_HOME` is someone else's.
+    _project(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FOOTMAN_HOME", str(tmp_path / "not-mine"))
     Runner(App(name="acme", prog="acme", home=tmp_path / "world")).invoke("--list")
-    assert not (tmp_path / "guessed").exists()
+    assert not (tmp_path / "not-mine").exists()
+    assert list((tmp_path / "world" / "cache").glob("*.json"))
 
 
 def test_footman_home_relocates_stock_footman(tmp_path, monkeypatch):
+    # Stock footman gets this from the same rule every brand follows —
+    # `<PREFIX>_HOME`, where its pinned prefix happens to be FOOTMAN.
     _project(tmp_path)
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("FOOTMAN_HOME", str(tmp_path / "fmhome"))
-    Runner(App(home_env="FOOTMAN_HOME")).invoke("--list")
+    Runner(App(env_prefix="FOOTMAN")).invoke("--list")
     assert list((tmp_path / "fmhome" / "cache").glob("*.json"))
 
 

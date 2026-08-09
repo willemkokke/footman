@@ -102,37 +102,56 @@ everything it keeps goes there — completion manifests, timing history, the
 collector's stamp, the user-level config file, and the user tasks file:
 
 ```python
-import os
 from pathlib import Path
 
-app = App(
-    name="Acme",
-    prog="acme",
-    home=Path(os.environ.get("ACME_HOME", Path.home() / ".acme")) / "runner",
-    home_env="ACME_RUNNER_HOME",
-)
+app = App(name="Acme", prog="acme", home=Path.home() / ".acme")
 ```
 
 **You** compute the path, so footman never has to guess at your product's
-layout — and it never reads `ACME_HOME` itself, because a product's own
-`*_HOME` usually means more than the runner's corner of it. `home_env` names a
-variable that overrides `home` when set, which is what lets two installations
-run side by side under different identities.
+layout. `ACME_HOME` overrides it at run time, which is what lets two
+installations run side by side under different identities.
 
-Left unset, locations fall back to `~/.cache` and `~/.config` as they always
-have.
+Left unset, with that variable unset too, locations fall back to `~/.cache` and
+`~/.config` as they always have.
 
 ## Environment variables follow the brand
 
-`acme` reads `ACME_CACHE_DIR`, `ACME_CONFIG`, `ACME_CASCADE`, `ACME_NO_GC` and
-`ACME_NO_UV` — never footman's. That isolation is the point: someone debugging
-`fm` with `FOOTMAN_CACHE_DIR` set must not silently relocate your product's
-cache. Error messages name your spelling too, so a user is never taught a
-variable that does nothing for them.
+`acme` reads `ACME_HOME`, `ACME_CACHE_DIR`, `ACME_CONFIG`, `ACME_CASCADE`,
+`ACME_NO_GC` and `ACME_NO_UV` — never footman's. That isolation is the point:
+someone debugging `fm` with `FOOTMAN_CACHE_DIR` set must not silently relocate
+your product's cache. Error messages name your spelling too, so a user is never
+taught a variable that does nothing for them.
 
-The prefix comes from `name`, uppercased. Set `env_prefix` when your display
-name would make an awkward one, or when you want it to stay put while the
-display name changes.
+The prefix is `prog` uppercased — the command is `acme`, so the variables are
+`ACME_*`. Set `env_prefix` when that isn't what you want, for either of two
+reasons.
+
+**A terse command makes a poor variable.** footman's own command is `fm`, but
+its variables are `FOOTMAN_*`: `FOOTMAN_HOME` tells a reader who has never
+heard of the tool what it belongs to, and is something they can search for.
+`FM_HOME` is neither. If your command is two or three letters, pin a longer
+prefix.
+
+!!! warning "The namespace is yours to keep clear"
+
+    Because `ACME_HOME` is read like every other variable, a product that
+    already uses `ACME_HOME` to mean something broader should give the runner
+    its own namespace and compute `home` from the product's variable:
+
+    ```python
+    import os
+    from pathlib import Path
+
+    app = App(
+        name="Acme",
+        prog="acme",
+        env_prefix="ACME_RUNNER",
+        home=Path(os.environ.get("ACME_HOME", Path.home() / ".acme")) / "runner",
+    )
+    ```
+
+    footman never guesses which of your variables is which — one prefix, and
+    where it points is your decision.
 
 ## Config files follow the brand too
 
