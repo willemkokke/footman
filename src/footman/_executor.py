@@ -711,6 +711,11 @@ def bind(
             continue
 
         cli = registry.cli_name(param.name)
+        if cli in seg.bare:
+            # Named without a value: the mention *is* the content. The ladder
+            # below still runs, so the value is whatever absence would have
+            # given — what changes is that someone asked for it.
+            supplied.add(param.name)
         if cli not in seg.values:
             # A forwarded value outranks env and the default, and may satisfy a
             # defaultless parameter too: `ask()` and `stdin` already do, and

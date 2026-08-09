@@ -25,8 +25,9 @@ parsed: the error path detects it and answers with the dotted spelling.
 
 from __future__ import annotations
 
+import contextlib
 import difflib
-from collections.abc import Iterable
+from collections.abc import Generator, Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -171,6 +172,12 @@ class Segment:
     task: str  # dotted path, e.g. "docs.build"
     path: list[str]  # ["docs", "build"]
     values: dict[str, Any] = field(default_factory=dict)  # cli-name -> value
+    bare: set[str] = field(default_factory=set)
+    """Options named without a value (`--profile`). They carry no value — the
+    binder runs the same ladder an absent option would — so what a bare mention
+    contributes is *presence*: the caller asked for this parameter and meant
+    whatever it would have got anyway, which `given()` reads and a value alone
+    cannot say."""
     variadic: list[str] = field(default_factory=list)
     passthrough: list[str] | None = None
     # Advisory stderr lines the app prints before running — `{prog}` is
@@ -353,6 +360,27 @@ def _expects_value(
             f"did you mean {given}={follower}?"
         )
     return f"{prefix}{given} expects a value, attached: {given}={hint}"
+
+
+@contextlib.contextmanager
+def _hint_attachment(bare: str | None, token: str) -> Generator[None]:
+    """Add the `=`-attachment hint to a failure caused by the token that rode
+    behind a bare mention.
+
+    The space form is not a value spelling in this grammar — `--mode` binds its
+    default and `strict` is simply the next token, which is the only reading
+    available — but it is still what a hand types out of habit. So when that
+    next token goes on to fail, the failure also says what was probably meant.
+    Never on a line that parses: a working invocation has nothing to
+    second-guess, and guessing at one would be footman overruling the tokens.
+    """
+    if bare is None:
+        yield
+        return
+    try:
+        yield
+    except ChainError as exc:
+        raise ChainError(f"{exc} — did you mean {bare}={token}?") from None
 
 
 def _parse_globals(
@@ -640,9 +668,15 @@ def split_chain(
     globals_, i = _parse_globals(argv, 0, plugin=plugin)
     segments: list[Segment] = []
     prev_group: tuple[str, dict[str, Any]] | None = None
+    # The option a bare mention just named, alive for exactly the token after
+    # it — including across a segment boundary, since a word with nowhere left
+    # to go in this segment is tried as the next task's name.
+    bare_before: str | None = None
 
     while i < len(argv):
-        task, path, group_node, i = _resolve_head(tree, argv, i, prev_group)
+        with _hint_attachment(bare_before, argv[i]):
+            task, path, group_node, i = _resolve_head(tree, argv, i, prev_group)
+        bare_before = None
         prev_group = (".".join(path), group_node) if group_node is not None else None
 
         opts = {
@@ -680,21 +714,31 @@ def split_chain(
                 i = len(argv)
                 break
             if tok.startswith("--"):
+                before = len(seg.bare)
                 i = _consume_option(seg, opts, argv, i)
-            elif filled < len(fixed):
-                _consume_positional(seg, tree, fixed[filled], tok)
-                filled += 1
-                i += 1
-            elif rest is not None:
-                if rest["kind"] == "variadic":
-                    _validate(seg.task, rest, tok)  # eager, like every positional
-                    seg.variadic.append(tok)
+                # Remember a bare mention for exactly one token. If the word
+                # after it goes on to fail, the failure gets the attachment
+                # hint — the space form is not a value spelling in this grammar,
+                # but it is still what a hand types out of habit, and a line
+                # that was going to error anyway can afford to say so.
+                bare_before = tok if len(seg.bare) > before else None
+                continue
+            with _hint_attachment(bare_before, tok):
+                if filled < len(fixed):
+                    _consume_positional(seg, tree, fixed[filled], tok)
+                    filled += 1
+                    i += 1
+                elif rest is not None:
+                    if rest["kind"] == "variadic":
+                        _validate(seg.task, rest, tok)  # eager, like a positional
+                        seg.variadic.append(tok)
+                    else:
+                        _consume_positional(seg, tree, rest, tok)
+                    rest_count += 1
+                    i += 1
                 else:
-                    _consume_positional(seg, tree, rest, tok)
-                rest_count += 1
-                i += 1
-            else:
-                break  # arity satisfied: the next word starts a new segment
+                    break  # arity satisfied: the next word starts a new segment
+            bare_before = None
 
         missing = [f"<{p['name']}>" for p in fixed[filled:] if not p.get("optional")]
         if rest is not None and rest["kind"] == "positional" and rest_count == 0:
@@ -759,16 +803,23 @@ def _consume_option(
         seg.values[cli] = not negated
         return i + 1
 
-    # value-bearing option: the value is always `=`-attached
+    # A value is always `=`-attached, so a bare mention is unambiguous: it
+    # cannot be reading the next token, because that spelling is not in this
+    # grammar. It is legal wherever absence is legal, and records no value —
+    # only presence. A *required* option has no absence to mean, so it still
+    # refuses, with the same teaching it always gave.
     if "=" not in tok:
-        follower = (
-            argv[i + 1]
-            if i + 1 < len(argv)
-            and argv[i + 1] not in ("--", "+")
-            and not argv[i + 1].startswith("-")
-            else None
-        )
-        raise ChainError(_expects_value(seg.task, name, "VALUE", follower))
+        if p.get("required"):
+            follower = (
+                argv[i + 1]
+                if i + 1 < len(argv)
+                and argv[i + 1] not in ("--", "+")
+                and not argv[i + 1].startswith("-")
+                else None
+            )
+            raise ChainError(_expects_value(seg.task, name, "VALUE", follower))
+        seg.bare.add(cli)
+        return i + 1
     value = tok.split("=", 1)[1]
     i += 1
     if p.get("mapping"):

@@ -55,6 +55,12 @@ def test_a_value_equal_to_the_default_is_still_given():
     assert _string_target("build --target=fallback") == ("fallback", True)
 
 
+def test_a_bare_mention_is_the_default_asked_for():
+    # The spelling the whole change exists to allow: `--target` with no value
+    # binds what absence would have bound, and says someone wanted it.
+    assert _string_target("build --target") == ("fallback", True)
+
+
 def test_a_flag_is_given_however_it_is_spelled():
     seen: list[tuple[bool, bool]] = []
 

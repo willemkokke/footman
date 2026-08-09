@@ -137,6 +137,31 @@ def test_option_equals_form(tree):
     assert seg.values == {"mode": "strict"}
 
 
+def test_a_bare_mention_records_presence_and_no_value(tree):
+    # `--mode` alone is legal wherever absence is: it carries no value, so the
+    # binder runs the same ladder it would with no mention at all. What it adds
+    # is that someone asked, which `given()` reads.
+    (seg,) = segs(tree, "lint --mode")
+    assert seg.values == {}
+    assert seg.bare == {"mode"}
+
+
+def test_a_bare_mention_before_a_passthrough(tree):
+    (seg,) = segs(tree, "lint --mode -- x")
+    assert seg.bare == {"mode"}
+    assert seg.passthrough == ["x"]
+
+
+def test_a_bare_mention_does_not_disturb_the_tokens_around_it(tree):
+    # Four independent decisions: the task, a bare option, a positional, then a
+    # word with nowhere left to go — which starts the next segment.
+    first, second = segs(tree, "deploy --version prod lint")
+    assert first.task == "deploy"
+    assert first.bare == {"version"}
+    assert first.values == {"env": "prod"}
+    assert second.task == "lint"
+
+
 def test_dash_leading_value_attaches(tree):
     # A value that starts with a dash parses trivially in attached form —
     # the case the space form could never express.
@@ -154,12 +179,10 @@ ERROR_CASES = [
     ("lint --mode=fast", "lint: --mode must be one of strict|loose (got 'fast')"),
     ("docs.serve --port=http", "docs.serve: --port expects an integer (got 'http')"),
     ("bench --timeout=fast", "bench: --timeout expects a number (got 'fast')"),
-    # A value is always `=`-attached. The space form is permanently taught —
-    # with the user's own value in the fix, never "unknown task 'strict'".
-    (
-        "lint --mode strict",
-        "lint: --mode takes its value attached — did you mean --mode=strict?",
-    ),
+    # A value is always `=`-attached, so the space form is two tokens: `--mode`
+    # binds its default and `strict` is read as the next task. That is the only
+    # reading available — but the line fails, so the failure carries the fix.
+    ("lint --mode strict", "did you mean --mode=strict?"),
     (
         "--color always lint",
         "--color takes its value attached — did you mean --color=always?",
@@ -170,7 +193,6 @@ ERROR_CASES = [
     ),
     ("-j 4 check", "-j takes its value attached — did you mean -j=4?"),
     # Bare with nothing attachable following: state the shape instead.
-    ("lint --mode", "lint: --mode expects a value, attached: --mode=VALUE"),
     ("--jobs check --fix", "--jobs takes its value attached"),
     ("--jobs", "--jobs expects a value, attached: --jobs=N"),
     ("--where lint", "--where takes its value attached — did you mean --where=lint?"),
@@ -233,7 +255,6 @@ ERROR_CASES = [
     ("--nope check", "unknown global option --nope"),
     ("--sequential=false lint", "--sequential is a flag and takes no value"),
     ("--json=0 lint", "--json is a flag and takes no value"),
-    ("lint --mode -- x", "lint: --mode expects a value, attached: --mode=VALUE"),
     ("chekc", "did you mean 'check'?"),  # unknown task → nearest name
     ("lint --fux", "did you mean '--fix'?"),  # unknown option → nearest option
     ("lint --mode=strikt", "did you mean 'strict'?"),  # unknown choice value
