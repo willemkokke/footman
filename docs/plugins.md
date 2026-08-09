@@ -100,8 +100,8 @@ that instead.
 
 ## Configuration
 
-`inv.config` carries the merged `[tool.footman]` table. The convention is
-one sub-table per plugin, named by the entry point:
+`inv.config` carries the merged settings table. The convention is one
+sub-table per plugin, named by the entry point:
 
 ```toml
 [tool.footman."acme.devkit"]
@@ -118,6 +118,21 @@ def configure(inv):
 
 The name is the identity users already typed in `plugin(...)`, so nothing
 new has to be learned or collided.
+
+!!! note "Under a branded CLI, the outer table is the brand's"
+
+    A [custom CLI](custom-cli.md) reads `[tool.acme]`, not `[tool.footman]` —
+    two branded runners in one repo keep their own settings instead of
+    fighting over one table. Your sub-table follows it, so the same plugin is
+    configured at `[tool.acme."acme.devkit"]` there. Write the outer name your
+    users' runner answers to; the inner one is yours either way.
+
+A sub-table is also what keeps plugins from colliding over settings: two
+plugins may both read a `region` key, because each reads its own. Their
+*flags* are a different namespace — `--region` is claimed once across the whole
+tree, and two plugins asking for it is a taught refusal naming both. So a
+plugin whose flag has to be `--acme-region` can still call the setting `region`
+inside its own section, where nothing else can see it.
 
 ## Optional dependencies
 
