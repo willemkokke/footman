@@ -464,11 +464,19 @@ def _marker_keys(
         # would actually use rather than a value baked whenever a cache was
         # last built. A raising computer is left to raise at bind time instead
         # of taking the whole tree's help down with it.
-        ok_computed, computed = False, None
-        with contextlib.suppress(Exception):  # help degrades; the run teaches
-            ok_computed, computed = _describe.jsonable(peeled.default_fn.fn())
-        if ok_computed:
-            spec["default"] = computed
+        spec["computed"] = True  # help says so: a bare number reads arbitrary
+        if peeled.default_fn.reads_siblings:
+            # It reads values only an invocation has, so there is nothing to
+            # show — and the *declared* default must go too: it exists so a
+            # plain Python call still binds, and printing that sentinel would
+            # advertise the very thing this marker replaces.
+            spec.pop("default", None)
+        else:
+            ok_computed, computed = False, None
+            with contextlib.suppress(Exception):  # help degrades; the run teaches
+                ok_computed, computed = _describe.jsonable(peeled.default_fn.fn())
+            if ok_computed:
+                spec["default"] = computed
     if peeled.env is not None:
         if spec.get("mapping"):
             raise SpecError(

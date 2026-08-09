@@ -25,6 +25,36 @@ def _next_tag() -> str:
 
 ComputedTag = Annotated[str, default(_next_tag)]
 
+# A default reading its left siblings: `shell` and the variadic `keys` both
+# precede `title` in the signature, so both are resolved by the time it runs.
+SiblingTitle = Annotated[
+    str, default(lambda p: f"{p['shell']} · {','.join(p['keys'])}")
+]
+
+EchoesTag = Annotated[str, default(lambda p: f"about {p['tag']}")]
+
+# A validator that records the sibling view it was handed, so a test can assert
+# on the view itself rather than on a message about it.
+_views: list[dict[str, Any]] = []
+
+
+def _record_view(_value: Any, params: dict[str, Any]) -> None:
+    _views.append(dict(params))
+
+
+Watched = Annotated[str, check(_record_view)]
+WatchedList = Annotated[list[str], check(_record_view)]
+
+
+ReadsRight = Annotated[str, check(lambda _v, p: p["later"])]
+GetsRight = Annotated[str, check(lambda _v, p: p.get("later"))]
+ReadsSelf = Annotated[str, check(lambda _v, p: p["me"])]
+ReadsNothing = Annotated[str, check(lambda _v, p: p["no_such_parameter"])]
+
+
+def _raises_type_error(_value: str) -> None:
+    raise TypeError("a bug inside the validator, not an arity mismatch")
+
 
 def _even(v: int) -> None:
     if v % 2:
@@ -342,6 +372,56 @@ def test_default_fn_is_computed_at_bind_not_import():
     assert seen["tag"] == "explicit"  # the command line still outranks it
 
 
+def test_default_fn_is_computed_for_a_body_call_too():
+    seen: dict[str, Any] = {}
+
+    def tasks(reg):
+        @reg.task
+        def build(*, tag: ComputedTag = "") -> None:
+            seen["tag"] = tag
+
+        @reg.task
+        def wrap() -> None:
+            build()
+
+    run(tasks, "wrap")
+    # A parameter whose only marker is `default(fn)` has nothing to validate,
+    # so it never entered the call plan and a body call skipped the ladder
+    # entirely — handing the body the sentinel the marker exists to replace.
+    # footman's own `docs.build` found this by calling `docs.shots`.
+    assert seen["tag"] != ""
+
+
+def test_default_fn_reads_its_left_siblings():
+    seen: dict[str, Any] = {}
+
+    def tasks(reg):
+        @reg.task
+        def cast(*keys: str, shell: str = "zsh", title: SiblingTitle = "") -> None:
+            seen["title"] = title
+
+    run(tasks, "cast a b")
+    assert seen["title"] == "zsh · a,b"  # shell and the variadic, both to its left
+    run(tasks, "cast --shell=fish")
+    assert seen["title"] == "fish · "
+    run(tasks, "cast --title=mine")
+    assert seen["title"] == "mine"  # an explicit value still outranks it
+
+
+def test_a_sibling_reading_default_is_not_shown_in_help():
+    # There is no invocation to read at manifest time, so help shows no default
+    # rather than one it would have to invent — and the *declared* one is a
+    # sentinel that exists so a plain Python call still binds, so printing it
+    # would advertise exactly what the marker replaces.
+    def tasks(reg):
+        @reg.task
+        def cast(*keys: str, shell: str = "zsh", title: SiblingTitle = "") -> None: ...
+
+    _, tree = build_tree(tasks)
+    spec = next(p for p in tree["tasks"]["cast"]["params"] if p["name"] == "title")
+    assert "default" not in spec
+
+
 def test_default_fn_without_a_declared_default_is_a_spec_error():
     def tasks(reg):
         @reg.task
@@ -526,6 +606,199 @@ def test_wants_context_handles_a_signatureless_callable(monkeypatch):
 
     monkeypatch.setattr(inspect, "signature", _no_signature)
     assert not _wants_context(lambda v, p: None)  # can't inspect -> plain one-arg
+
+
+# --- the sibling view: one answer, whichever way the task was reached -------------
+#
+# `check(fn)` and `default(fn)` both read it, and it is assembled differently on
+# each path — from `kwargs` plus the variadic on the command-line side, from
+# `bound.arguments` on the body-call side. Every test below pins the two paths
+# to the same answer, because the one bug this area has actually had was them
+# quietly disagreeing.
+
+
+def test_reaching_rightwards_is_taught_not_a_bare_key_error():
+    def tasks(reg):
+        @reg.task
+        def build(me: ReadsRight = "x", later: str = "z") -> None: ...
+
+    results = run(tasks, "build --me=x --later=given")
+    assert not results[0].ok
+    message = str(results[0].error)
+    # The parameter exists, so a typo is not the explanation — name the real
+    # constraint and the fix, rather than raising `KeyError: 'later'`.
+    assert "may only read parameters declared before it" in message
+    assert "Move 'later' above 'me'" in message
+
+
+def test_reaching_rightwards_through_get_is_taught_too():
+    # The dangerous spelling: a plain dict answered `.get()` with `None` and the
+    # run *succeeded*, feeding the body a value nobody chose.
+    def tasks(reg):
+        @reg.task
+        def build(me: GetsRight = "x", later: str = "z") -> None: ...
+
+    results = run(tasks, "build --me=x --later=given")
+    assert not results[0].ok
+    assert "comes after" in str(results[0].error)
+
+
+def test_reading_your_own_value_is_taught():
+    def tasks(reg):
+        @reg.task
+        def build(me: ReadsSelf = "x") -> None: ...
+
+    results = run(tasks, "build --me=x")
+    assert not results[0].ok
+    assert "cannot read its own value" in str(results[0].error)
+
+
+def test_an_unknown_name_is_still_an_ordinary_key_error():
+    # Only a *declared* parameter earns the taught message; a typo is a
+    # different mistake and keeps the mapping's own behaviour.
+    def tasks(reg):
+        @reg.task
+        def build(me: ReadsNothing = "x") -> None: ...
+
+    results = run(tasks, "build --me=x")
+    assert isinstance(results[0].error, KeyError)
+
+
+def test_a_check_runs_on_supplied_values_not_on_the_default():
+    _views.clear()
+
+    def tasks(reg):
+        @reg.task
+        def build(*, tag: Watched = "t") -> None: ...
+
+    run(tasks, "build")
+    assert _views == []  # nothing supplied it, so there is nothing to validate
+    run(tasks, "build --tag=t")
+    assert len(_views) == 1  # the same value, this time because someone said it
+
+
+def test_the_view_is_the_same_from_a_chain_and_from_a_body_call():
+    _views.clear()
+
+    def tasks(reg):
+        @reg.task
+        def build(*paths: str, mode: str = "fast", tag: Watched = "t") -> None: ...
+
+        @reg.task
+        def wrap() -> None:
+            build("a", "b", mode="slow", tag="t")
+
+    run(tasks, "build a b --mode=slow --tag=t")
+    run(tasks, "wrap")
+    assert _views[0] == _views[1] == {"paths": ("a", "b"), "mode": "slow"}
+
+
+def test_the_variadic_reaches_the_view_from_either_direction():
+    _views.clear()
+
+    def tasks(reg):
+        @reg.task
+        def build(*paths: str, tag: Watched = "t") -> None: ...
+
+        @reg.task
+        def wrap() -> None:
+            build("x", "y", tag="t")
+
+    run(tasks, "build a b --tag=t")
+    run(tasks, "wrap")
+    # `*args` lives outside `kwargs` on one path and inside `bound.arguments` on
+    # the other, so the same validator used to see the variadic from a call and
+    # an empty tuple from a chain.
+    assert [v["paths"] for v in _views] == [("a", "b"), ("x", "y")]
+
+
+def test_an_empty_variadic_is_an_empty_tuple_not_a_missing_key():
+    _views.clear()
+
+    def tasks(reg):
+        @reg.task
+        def build(*paths: str, tag: Watched = "t") -> None: ...
+
+    run(tasks, "build --tag=t")
+    assert _views[0]["paths"] == ()  # present and empty, never a KeyError
+
+
+def test_the_view_stops_at_the_reader():
+    _views.clear()
+
+    def tasks(reg):
+        @reg.task
+        def build(tag: Watched = "t", later: str = "z") -> None: ...
+
+    run(tasks, "build --tag=t --later=given")
+    # Leftward only: a value may not depend on one that has not been resolved,
+    # so `later` is absent even though the line supplied it.
+    assert "later" not in _views[0]
+
+
+def test_the_view_carries_a_sibling_a_computed_default_filled():
+    _views.clear()
+
+    def tasks(reg):
+        @reg.task
+        def build(*, tag: ComputedTag = "", note: Watched = "n") -> None: ...
+
+    run(tasks, "build --note=n")
+    # `default(fn)` resolves into `kwargs` before the next parameter binds, so
+    # what a later check reads is the computed value, not the sentinel.
+    assert _views[0]["tag"].startswith("call-")
+
+
+def test_a_computed_default_reads_a_sibling_a_computed_default_filled():
+    seen: dict[str, Any] = {}
+
+    def tasks(reg):
+        @reg.task
+        def build(*, tag: ComputedTag = "", note: EchoesTag = "") -> None:
+            seen["note"] = note
+
+    run(tasks, "build")
+    assert seen["note"].startswith("about call-")  # defaults chain leftward
+
+
+def test_the_view_is_read_only_from_a_body_call_too():
+    def tasks(reg):
+        @reg.task
+        def build(
+            a: str = "x", b: Annotated[str, check(_reject_mutation)] = "y"
+        ) -> None: ...
+
+        @reg.task
+        def wrap() -> None:
+            build(a="x", b="y")
+
+    assert run(tasks, "wrap")[0].ok
+
+
+def test_a_validators_own_type_error_is_not_read_as_the_other_arity():
+    # Arity is decided by inspecting the signature, never by calling and
+    # catching `TypeError` — or a genuine bug inside a one-argument validator
+    # would be silently retried as the two-argument form and vanish.
+    def tasks(reg):
+        @reg.task
+        def build(tag: Annotated[str, check(_raises_type_error)] = "t") -> None: ...
+
+    results = run(tasks, "build --tag=t")
+    assert not results[0].ok
+    assert isinstance(results[0].error, TypeError)
+
+
+def test_a_contextual_check_on_each_element_of_a_collection():
+    _views.clear()
+
+    def tasks(reg):
+        @reg.task
+        def build(env: str = "dev", tags: WatchedList | None = None) -> None: ...
+
+    run(tasks, "build --tags=a,b")
+    # Element-level, so once per value — and each sees the same siblings.
+    assert len(_views) == 2
+    assert all(v == {"env": "dev"} for v in _views)
 
 
 # --- manifest spec keys are additive ----------------------------------------------

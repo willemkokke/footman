@@ -86,6 +86,25 @@ class suggest:
         self.strict = strict
 
 
+def _takes_an_argument(fn: Callable[..., Any]) -> bool:
+    """Whether *fn* accepts a positional argument — the sibling view."""
+    import inspect
+
+    try:
+        params = inspect.signature(fn).parameters.values()
+    except (TypeError, ValueError):
+        return False  # a builtin with no signature: treat as no-argument
+    return any(
+        p.kind
+        in (
+            inspect.Parameter.VAR_POSITIONAL,
+            inspect.Parameter.POSITIONAL_ONLY,
+            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+        )
+        for p in params
+    )
+
+
 class default:
     """Compute a parameter's default when the task runs, via `Annotated`:
 
@@ -103,18 +122,42 @@ class default:
     declared default to sit on: a plain Python call of the task, outside any
     run, has to keep working.
 
+    Declare one positional argument and it receives the **sibling parameters**
+    resolved so far — the same courtesy `check(fn)` gets, and for the same
+    reason: a default is often a function of the inputs beside it.
+
+    ```python
+    def cast(*, shell: str = "zsh",
+             title: Annotated[str, default(lambda p: f"{p['shell']} · x")] = ""): ...
+    ```
+
+    Read-only, and only what is to its *left* in the signature. The view holds
+    *effective* values — what each parameter will actually be — and only a left
+    one has that yet, which is also why a cycle cannot be written down: the
+    signature fixes a total order and binding walks it. Reaching rightwards is
+    a taught error, through `p["x"]` and `p.get("x")` alike. `--help` cannot
+    show such a default — there is no invocation to read — so it shows none
+    rather than one it would have to invent.
+
     The value is used as it comes back, not coerced: `fn()` returns a real
     object, and coercion exists because the command line only has strings. It
     still runs the annotation's validators, so a `default(fn)` that would be
     refused as a typed value is refused here too rather than smuggled in.
     """
 
-    __slots__ = ("fn",)
+    __slots__ = ("fn", "reads_siblings")
 
-    fn: Callable[[], Any]
+    fn: Callable[..., Any]
+    reads_siblings: bool
+    """Whether *fn* takes the sibling view. Decided once, here, because both the
+    binder and the manifest need the answer and the manifest cannot import the
+    binder — asking the marker beats asking the same question twice in two
+    modules. Inspected rather than probed by call, so a real arity error raised
+    inside *fn* is never mistaken for the no-argument form."""
 
-    def __init__(self, fn: Callable[[], Any]) -> None:
+    def __init__(self, fn: Callable[..., Any]) -> None:
         self.fn = fn
+        self.reads_siblings = _takes_an_argument(fn)
 
 
 # `Many[T]` is exactly `list[T]`: a parameter that is *always* a list — one or

@@ -124,6 +124,18 @@ def test_globals_table_mirrors_the_grammar():
             # `--help` printed `--jobs=N`, so the page taught a spelling
             # the splitter refuses with exit 64.
             assert f"{name}={hint}" in line, f"{name}: hint must be `=`-attached"
+
+
+def test_globals_table_carries_defaults_from_the_grammar():
+    text = markdown.globals_table()
+    jobs = next(line for line in text.splitlines() if "--jobs=N" in line)
+    colour = next(line for line in text.splitlines() if "--color=WHEN" in line)
+    where = next(line for line in text.splitlines() if "--where=TASK" in line)
+    # Same source as `--help`, so the page cannot say one thing while the
+    # runner says another — the drift hand-written "(default: …)" prose had.
+    assert "(computed)" in jobs
+    assert "default: `auto`" in colour and "(computed)" not in colour
+    assert "default" not in where
     assert "{prog}" not in text  # placeholders always filled
 
 

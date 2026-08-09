@@ -217,8 +217,20 @@ def _mechanics(p: dict[str, Any]) -> str:
         bits.append(f"from ${var}")
     # A flag's default is already said twice over by the label and its
     # parenthetical, so printing it again would be noise.
-    if p["kind"] != "flag" and (shown := default_text(p)):
-        bits.append(f"default: {shown}")
+    if p["kind"] != "flag":
+        shown, computed = default_text(p), p.get("computed")
+        if shown and computed:
+            # `default: 13` reads as an arbitrary constant. Saying it is
+            # computed turns a number a reader might copy into one they know
+            # is theirs — the machine's cores, today's date, this shell.
+            bits.append(f"default: {shown} (computed)")
+        elif shown:
+            bits.append(f"default: {shown}")
+        elif computed:
+            # Computed from the other options, so there is no value to print
+            # here: only an invocation knows it. Say that much rather than
+            # nothing, or the parameter looks like it has no default at all.
+            bits.append("default computed")
     if p.get("required"):
         bits.append("required")
     return "; ".join(bits)

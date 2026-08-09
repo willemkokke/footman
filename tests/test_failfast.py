@@ -320,12 +320,17 @@ def test_fail_fast_kills_grandchildren_not_just_the_direct_child(tmp_path):
     segs = _segs(tree, "slow boom")
     run_plan(reg, segs, sequential=False)
 
+    # Wait for the *content*, not the file: creating it and writing the pid are
+    # two steps, so polling `exists()` can win the race and read an empty file —
+    # which it has, on a loaded free-threaded runner.
+    recorded = ""
     for _ in range(200):  # the grandchild records its pid as it starts
-        if pidfile.exists():
+        recorded = pidfile.read_text().strip() if pidfile.exists() else ""
+        if recorded:
             break
         time.sleep(0.02)
-    assert pidfile.exists(), "grandchild never started — the test isn't exercising it"
-    gc_pid = int(pidfile.read_text())
+    assert recorded, "grandchild never started — the test isn't exercising it"
+    gc_pid = int(recorded)
 
     def alive() -> bool:
         try:

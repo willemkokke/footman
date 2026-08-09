@@ -105,6 +105,45 @@ default to sit on, because a plain Python call of the task with no run around
 it has to keep working. `--help` prints what it computes, since the manifest is
 built on the execution path: what help shows is what this run would use.
 
+Declare one positional argument and it receives the **sibling parameters**
+resolved so far — the same courtesy `check(fn)` gets, because a default is
+often a function of the inputs beside it:
+
+<!-- example: fragment -->
+
+```python
+@task
+def cast(
+    *keys: str,
+    shell: str = "zsh",
+    title: Annotated[str, default(lambda p: f"{p['shell']} · completion")] = "",
+): ...
+```
+
+Read-only, and only what is to its *left* in the signature. The view holds
+*effective* values — what each parameter will actually be, from whichever rung
+of the ladder supplied it — and only a left parameter has one yet. That is also
+why a cycle cannot be written down: the signature fixes a total order and
+binding walks it, so nothing can depend on something unresolved.
+
+Reaching rightwards is a taught error rather than a silent surprise, through
+`p["later"]` and `p.get("later")` alike:
+
+```text
+'title' may only read parameters declared before it, and 'cmd' comes after
+— so it has no value yet. Move 'cmd' above 'title' in the signature.
+```
+
+`--help` shows no default for a sibling-reading one — there is no invocation to
+read — but it does say there is one, as `default computed`. A computed default
+that *can* be resolved is marked too, because a bare number reads as an
+arbitrary constant when it is really this machine's:
+
+```text
+  -j, --jobs=N       max parallel tasks; default: 13 (computed)
+      --color=WHEN   when to colour: always|never|auto; default: auto
+```
+
 ## What if I don't like annotating types?
 
 Then don't. Every rule above still holds, because the one that sorts a

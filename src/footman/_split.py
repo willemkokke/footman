@@ -113,7 +113,7 @@ def _default_jobs() -> int:
 # task parameter declares, in the form a static table can hold. `""` where the
 # reading exists but has no spelling of its own: `--describe` means "the whole
 # tree", `--install-completion` means "whichever shell is asking".
-GlobalDefault = str | Callable[[], str] | None
+GlobalDefault = str | Callable[[], object] | None
 GLOBALS: list[tuple[str, str | None, str, str | None, GlobalDefault, str]] = [
     ("--help", "-h", "flag", None, None, "help for {prog}, or the named group/task"),
     ("--version", "-V", "flag", None, None, "print the version and exit"),
@@ -165,7 +165,7 @@ GLOBALS: list[tuple[str, str | None, str, str | None, GlobalDefault, str]] = [
         "-j",
         "option",
         "N",
-        lambda: str(_default_jobs()),
+        _default_jobs,
         "max parallel tasks",
     ),
     ("--yes", "-y", "flag", None, None, "assume yes to every confirm() gate"),
@@ -267,7 +267,7 @@ _GLOBAL_DEFAULT = {name: d for name, _, _, _, d, _ in GLOBALS if d is not None}
 _VALUE_OPTIONAL = frozenset(_GLOBAL_DEFAULT)
 
 
-def global_default_text(name: str) -> str:
+def global_default(name: str) -> tuple[str, bool]:
     """A global's default, spelled the way the command line spells values, for
     `--help` to print — and resolved *now*, so a computed one says what this
     machine will actually do rather than what some other one would.
@@ -279,11 +279,16 @@ def global_default_text(name: str) -> str:
     """
     value = _GLOBAL_DEFAULT.get(name)
     if value is None:
-        return ""
+        return "", False
     # `isinstance(str)` rather than `callable()`: narrowing on the string side
     # leaves a concrete callable type, where `callable()` widens to "any
-    # callable at all" and cannot be called safely.
-    return value if isinstance(value, str) else value()
+    # callable at all" and cannot be called safely. Spelling the result is this
+    # function's job, not the computer's — so a table row is the plain function
+    # that already exists (`_default_jobs`), never a lambda wrapping it in
+    # `str()`.
+    if isinstance(value, str):
+        return value, False
+    return str(value()), True
 
 
 @dataclass

@@ -99,6 +99,23 @@ versions may include breaking changes.
   naming absence tells a reader less than silence does.
 - **`GlobalOption.given`**, the twin of `.value`, so a plugin can tell a global
   that was named from one that merely has a default.
+- **`--help` says when a default is computed.** `default: 13` reads as an
+  arbitrary constant when it is this machine's cores minus one, so a computed
+  one is marked — `default: 13 (computed)` — and one that reads its siblings,
+  which only an invocation knows, says `default computed` with no value.
+- **Reaching rightwards in a sibling view is taught.** A `check(fn)` or
+  `default(fn)` that asks for a parameter declared *after* it now gets a
+  message naming the constraint and the fix, through `p["x"]` and `p.get("x")`
+  alike. The second spelling used to answer `None` in silence and let the run
+  succeed, which fed the body a value nobody chose. Reading your own name is
+  named separately; an *undeclared* name stays an ordinary `KeyError`, because
+  a typo is a different mistake.
+- **A `default(fn)` may read its sibling parameters**, the way `check(fn)`
+  already could — declare one positional argument and it receives the values
+  resolved to its *left*, read-only. A default is often a function of the
+  inputs beside it: a window title from the command being screenshotted, a
+  report name from the target it describes. `--help` shows no default for one
+  of these, because there is no invocation to read.
 - **`ask()` works on a parameter that has a default**, which makes it safe to
   put on anything. The default becomes the *offer* — `version [patch]:`, Enter
   accepts — instead of a reason not to ask, and where nobody can be asked (off
@@ -141,6 +158,10 @@ versions may include breaking changes.
   question the same way instead of one keying on a bracketed metavar. `--jobs`
   and `--color` gain a bare form; `--where`, `-C`, `-f` and `--config` have no
   reading without a value and still refuse.
+- **A contextual `check(fn)` sees `*args` from the command line too.** The
+  variadic lives outside `kwargs` on that path and inside `bound.arguments` on
+  the body-call path, so the same validator saw the variadic from a Python call
+  and an empty tuple from a chain.
 - **An absent global option runs the same ladder a task parameter does** — env,
   then `default(fn)`, then the declared default. `env()` was accepted on a
   global's annotation and reached the manifest but was never applied, so the

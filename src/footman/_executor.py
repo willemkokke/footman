@@ -24,7 +24,7 @@ import os
 import threading
 import time
 import types as _types
-from collections.abc import Generator, Mapping, Sequence
+from collections.abc import Generator, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path, PurePath
 from types import MappingProxyType, SimpleNamespace
@@ -186,7 +186,11 @@ def _wants_context(fn: Any) -> bool:
     """True when a validator accepts a second positional argument — the sibling
     parameters coerced so far. Decided by *inspecting* the signature, never by
     catching a `TypeError` from the call, so a real arity error raised inside the
-    validator is not mistaken for the one-argument form."""
+    validator is not mistaken for the one-argument form.
+
+    (`default(fn)` asks the same question of itself at declaration time — see
+    `params.default.reads_siblings` — because the manifest needs the answer and
+    cannot import this module.)"""
     try:
         params = inspect.signature(fn).parameters.values()
     except (TypeError, ValueError):
@@ -200,8 +204,25 @@ def _wants_context(fn: Any) -> bool:
     return positional >= 2
 
 
+def _computed_default(marker: Any, params: Mapping[str, Any] | None = None) -> Any:
+    """Call a `default(fn)`, handing it the siblings when it asks for them.
+
+    The same courtesy `check(fn)` gets, for the same reason: a default is often
+    a function of the inputs beside it — a window title from the command being
+    shown, a report name from the target it describes. Read-only, and only what
+    is to its *left*, so a default can never depend on something not resolved
+    yet.
+    """
+    if marker.reads_siblings:
+        return marker.fn(params if params is not None else _EMPTY_VIEW)
+    return marker.fn()
+
+
 def _run_checks(
-    value: Any, peeled: _coerce.Peeled, label: str, params: dict[str, Any] | None = None
+    value: Any,
+    peeled: _coerce.Peeled,
+    label: str,
+    params: Mapping[str, Any] | None = None,
 ) -> Any:
     """Apply `check(fn)` validators to one coerced value (element-level).
 
@@ -209,13 +230,10 @@ def _run_checks(
     already coerced (those to its left in the signature), read-only — so it can
     validate against another input, e.g. a version against the current release of
     the package named in an earlier parameter."""
-    view: MappingProxyType[str, Any] | None = None
     for fn in peeled.checks:
         try:
             if _wants_context(fn):
-                if view is None:
-                    view = MappingProxyType(dict(params) if params else {})
-                fn(value, view)
+                fn(value, params if params is not None else _EMPTY_VIEW)
             else:
                 fn(value)
         except ValueError as exc:
@@ -259,7 +277,10 @@ def _validate_value(value: Any, peeled: _coerce.Peeled, label: str) -> Any:
 
 
 def _coerce_extra(
-    token: str, peeled: _coerce.Peeled, label: str, params: dict[str, Any] | None = None
+    token: str,
+    peeled: _coerce.Peeled,
+    label: str,
+    params: Mapping[str, Any] | None = None,
 ) -> Any:
     """Coerce + validate one token the splitter never validated (an env
     fallback or a `--` passthrough value): strict coercion, then the same
@@ -274,7 +295,7 @@ def _coerce_extra(
 def _env_value(
     param: inspect.Parameter,
     peeled: _coerce.Peeled,
-    params: dict[str, Any] | None = None,
+    params: Mapping[str, Any] | None = None,
 ) -> Any:
     """The env-fallback path for an absent option: CLI beats env beats default.
 
@@ -400,7 +421,7 @@ def _stdin_document(payload: bytes) -> dict[str, Any]:
 def _stdin_value(
     param: inspect.Parameter,
     peeled: _coerce.Peeled,
-    params: dict[str, Any] | None = None,
+    params: Mapping[str, Any] | None = None,
 ) -> Any:
     """The stdin path for an absent option: CLI beats stdin beats env.
 
@@ -517,7 +538,7 @@ def _prompt_param(
     cli: str,
     peeled: _coerce.Peeled,
     ctx: Context | None,
-    params: dict[str, Any] | None = None,
+    params: Mapping[str, Any] | None = None,
     default: Any = _MISSING,
 ) -> tuple[str, Any]:
     """Resolve an `ask()` parameter by prompting, coercing the answer through
@@ -624,22 +645,101 @@ def _prompt_param(
         return raw, value
 
 
+class _SiblingView(Mapping[str, Any]):
+    """The left-siblings mapping handed to a contextual `check` or `default`.
+
+    A plain dict answered the two ways of asking for an unavailable parameter
+    with a bare `KeyError` and a silent `None` — and the second is the bad one,
+    because a defensive `p.get("later")` then feeds the body a wrong value and
+    the run succeeds. Both spellings now teach.
+
+    Reaching *rightwards* is the mistake worth naming: the parameter exists, so
+    a typo is not the explanation, and the fix is to move it earlier in the
+    signature. Raising something other than `KeyError` is what makes `.get()`
+    say so too — `Mapping.get` only swallows `KeyError`.
+    """
+
+    __slots__ = ("_later", "_reader", "_values")
+
+    def __init__(
+        self, values: dict[str, Any], reader: str, later: frozenset[str]
+    ) -> None:
+        self._values = values
+        self._reader = reader
+        self._later = later
+
+    def __getitem__(self, key: str) -> Any:
+        if key in self._values:
+            return self._values[key]
+        if key == self._reader:
+            raise ValueError(
+                f"{self._reader!r} cannot read its own value — it is the one "
+                f"being resolved"
+            )
+        if key in self._later:
+            raise ValueError(
+                f"{self._reader!r} may only read parameters declared before it, "
+                f"and {key!r} comes after — so it has no value yet. Move "
+                f"{key!r} above {self._reader!r} in the signature."
+            )
+        raise KeyError(key)
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self._values)
+
+    def __len__(self) -> int:
+        return len(self._values)
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}({self._values!r})"
+
+
+_EMPTY_VIEW = _SiblingView({}, "", frozenset())
+
+
 def _left_siblings(
-    sig: inspect.Signature, current: inspect.Parameter, kwargs: dict[str, Any]
-) -> dict[str, Any]:
+    sig: inspect.Signature,
+    current: inspect.Parameter,
+    kwargs: dict[str, Any],
+    var_args: Sequence[Any] = (),
+) -> _SiblingView:
     """The effective values of the parameters to *current*'s left — a provided
     value where one was resolved, else the parameter's own default — so a
-    contextual `check` reads what the body will actually receive, never a copy of
-    the default that can drift out of sync."""
-    view: dict[str, Any] = {}
+    contextual `check` or `default` reads what the body will actually receive,
+    never a copy of the default that can drift out of sync.
+
+    **Leftward only, and that is the whole safety argument.** The signature
+    fixes a total order and binding walks it, so a value can only ever depend on
+    one already resolved: a cycle cannot be written down, and no command line
+    can vary the order. It is not that computed values are dangerous and
+    declared ones safe — the view holds *effective* values, and only a left
+    parameter has one yet. Offering a right one's declared default would serve
+    a different kind of thing under the same key, which is exactly the staleness
+    the effective-value rule exists to avoid.
+
+    *var_args* carries the `*args` values, which live outside `kwargs` on the
+    command-line path and so used to be missing from the view there while a body
+    call (whose `bound.arguments` holds them under the parameter's own name) saw
+    them — the same validator reading two different worlds depending on how the
+    task was reached.
+    """
+    values: dict[str, Any] = {}
+    later: set[str] = set()
+    seen_current = False
     for p in sig.parameters.values():
         if p.name == current.name:
-            break
-        if p.name in kwargs:
-            view[p.name] = kwargs[p.name]
+            seen_current = True
+            continue
+        if seen_current:
+            later.add(p.name)  # named, so reaching for it can be taught
+            continue
+        if p.kind is inspect.Parameter.VAR_POSITIONAL:
+            values[p.name] = tuple(kwargs.get(p.name, var_args))
+        elif p.name in kwargs:
+            values[p.name] = kwargs[p.name]
         elif p.default is not inspect.Parameter.empty:
-            view[p.name] = p.default
-    return view
+            values[p.name] = p.default
+    return _SiblingView(values, current.name, frozenset(later))
 
 
 def resolve_asks(fn: Task, seg: Segment, ctx: Context | None) -> None:
@@ -726,7 +826,7 @@ def bind(
     for param in sig.parameters.values():
         # The parameters bound to this one's left, at their effective values,
         # for a contextual check(fn, params).
-        siblings = _left_siblings(sig, param, kwargs)
+        siblings = _left_siblings(sig, param, kwargs, var_args)
         if param.kind is inspect.Parameter.VAR_POSITIONAL:
             extra = [*seg.variadic, *(seg.passthrough or [])]
             if param.annotation is empty:
@@ -779,7 +879,7 @@ def bind(
                     # comes back — it is a real object, and coercion exists for
                     # command-line strings — but still validated, so one that
                     # would be refused as a typed value is refused here too.
-                    computed = peeled.default_fn.fn()
+                    computed = _computed_default(peeled.default_fn, siblings)
                     _validate_explicit(computed, peeled, f"--{cli}", siblings)
                     kwargs[param.name] = computed
                     continue
@@ -1024,10 +1124,16 @@ def _call_plan(fn: Task) -> _CallPlan:
             or peeled.path_req is not None
             or _coerce.all_choices(peeled.element) is not None
         )
+        # Every source `bind` would consult for an omitted parameter, or a body
+        # call silently skips it and the body sees the sentinel default the
+        # marker was meant to replace. `ask()` counts whether or not there is a
+        # default now that a default is its *offer* rather than a reason not to
+        # ask; `default(fn)` counts because computing it is the whole point.
         sources = param.kind is not inspect.Parameter.VAR_POSITIONAL and (
             peeled.stdin is not None
             or peeled.env is not None
-            or (peeled.ask is not None and param.default is empty)
+            or peeled.ask is not None
+            or peeled.default_fn is not None
         )
         if validates or sources:
             entries.append(_PlanParam(param, peeled, validates, sources))
@@ -1037,7 +1143,7 @@ def _call_plan(fn: Task) -> _CallPlan:
 
 
 def _validate_explicit(
-    value: Any, peeled: _coerce.Peeled, label: str, siblings: dict[str, Any]
+    value: Any, peeled: _coerce.Peeled, label: str, siblings: Mapping[str, Any]
 ) -> None:
     """Validate a Python value a caller passed explicitly — the annotation is
     the contract however the task was asked for — without coercing it: the
@@ -1135,7 +1241,7 @@ def bind_call(
                 bound.arguments[param.name] = value
                 continue
         if peeled.default_fn is not None:
-            computed = peeled.default_fn.fn()
+            computed = _computed_default(peeled.default_fn, siblings)
             label = f"{name}({param.name}=…)"
             _validate_explicit(computed, peeled, label, siblings)
             bound.arguments[param.name] = computed  # inferred, so not `supplied`
@@ -1382,7 +1488,8 @@ def _absent_global(opt: Any) -> Any:
         if value is not _MISSING:
             return value
     if peeled.default_fn is not None:
-        return peeled.default_fn.fn()
+        # A global has no siblings by nature: nothing sits beside it.
+        return _computed_default(peeled.default_fn)
     return opt.default
 
 

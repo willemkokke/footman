@@ -254,6 +254,77 @@ A marker like `suggest()`, computing a default at bind rather than at import.
   for omitted parameters.
 - No snapshot caveat (see below).
 
+## The sibling view, and why leftward-only is the safety argument
+
+`check(fn)` could always take a second argument — the parameters resolved so
+far. `default(fn)` takes the same view from one argument, because a default is
+as often a function of its neighbours as a validator is.
+
+**The view holds *effective* values, and only a left parameter has one.** That
+one sentence is the whole design, and everything else follows from it:
+
+| given `probe(*rest, from_cli, from_env_or_default, me, to_my_right)` | the view `me` gets |
+| --- | --- |
+| `rest`, left, variadic | `('tail',)` |
+| `from_cli`, left, supplied | the supplied value — not its declared default |
+| `from_env_or_default`, left, unsupplied | its declared default, being what it will be |
+| `to_my_right`, right, *even when supplied* | **absent** |
+
+The obvious worry is cycles and evaluation order, and neither is reachable —
+not because they are guarded against, but because they cannot be written down.
+The signature fixes a total order and binding walks it, so a value can only
+depend on one already resolved. There is no order for a command line to vary.
+
+It is *not* "computed values are dangerous, declared ones are safe". Exposing a
+right-hand parameter's declared default would introduce no cycle at all, and
+would still be wrong: `to_my_right` above was supplied on the line, so serving
+`declared-c` under that key hands a reader a value the task will not receive.
+Same staleness, different door — which is also why the view must never fall
+back to declared defaults for *left* parameters that were supplied.
+
+### Detecting a violation
+
+Reaching rightwards used to fail two ways, and the quieter one was worse:
+
+    p["later"]      → KeyError: 'later'      # true, and teaches nothing
+    p.get("later")  → None                   # silent, and the run SUCCEEDS
+
+The second is the real hazard: a defensive `.get()` feeds the body a value
+nobody chose and nothing complains. The view is now a small `Mapping` that
+knows the parameter order, so both spellings teach:
+
+    'me' may only read parameters declared before it, and 'later' comes after
+    — so it has no value yet. Move 'later' above 'me' in the signature.
+
+Raising something other than `KeyError` is what reaches `.get()`, since
+`Mapping.get` swallows only that. Reading your own name is named separately
+("cannot read its own value"), and an *undeclared* name stays an ordinary
+`KeyError` — a typo is a different mistake and does not deserve advice about
+ordering.
+
+Detection is dynamic rather than static on purpose. Inspecting a lambda's
+constants for literal subscripts would catch `p["later"]` at import, earlier —
+but miss `p.get(name)`, computed keys and anything indirect, and a guard that
+half-holds is worse than one that holds at the moment of use.
+
+### Where else declaration order matters
+
+Worth knowing, because only the first was ever silent about violations:
+
+- the sibling view (`check`/`default`) — this section;
+- **positional consumption**: exact arity in declaration order, which is the
+  grammar itself (`render <template> <output>`);
+- **optional positionals must trail** (`_manifest.param_spec`) — refused at
+  spec time, since "which token is whose" would otherwise be unanswerable;
+- **positional-only parameters lead**, and `bind` moves that run into `*args`
+  in signature order;
+- **`ask()` front-loads its prompts in signature order**, so a person is asked
+  left to right;
+- **a grouped shape's slots** (`--size=800,600`) follow its field order.
+
+`forward_map` also walks the signature, but each value is independent there, so
+its order carries no meaning.
+
 ## `ask()` grows a default
 
 `ask()` today prompts only a parameter with **no** default — "a default is the
