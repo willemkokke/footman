@@ -31,6 +31,14 @@ versions may include breaking changes.
 
 ### Fixed
 
+- **A body callee's row carries only its own sections.** The three places a
+  child context was born each hand-listed which fields reset, and they had
+  drifted: a callee born from a body call shared its caller's `sections`
+  list, so its result row snapshotted profiling the caller recorded before
+  the call ever happened. One `Context.child()` birth serves every site now
+  — fresh identity and records, a copied environment, everything else
+  inherited — so the sites cannot drift apart again.
+
 - **A bare `--env-file` loads the default file, loudly.** It used to refuse
   with `--env-file: . does not exist` — the empty value a bare mention
   carries, read as a path. Presence is the question a bare mention answers:

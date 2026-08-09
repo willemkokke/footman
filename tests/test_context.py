@@ -144,6 +144,26 @@ def test_run_forces_color_env_for_a_child(monkeypatch):
     assert _child_env("show") == "FC=None NC=1"  # auto, no tty
 
 
+def test_a_parallel_childs_environ_write_stays_its_own():
+    # A child born inside parallel() owns a COPY of its parent's environment:
+    # an os.environ write scopes to the child (and what it spawns), never to
+    # the parent or a sibling — the environ router's own promise.
+    seen = {}
+
+    def tasks(reg):
+        @reg.task
+        def outer():
+            def writer():
+                os.environ["LEAKY"] = "1"
+
+            parallel(step(writer)())
+            seen["after"] = os.environ.get("LEAKY")
+
+    _, _, results = drive(tasks, "outer")
+    assert results[0].ok
+    assert seen == {"after": None}
+
+
 def test_run_color_overrides_the_run_ambient_per_call(monkeypatch):
     # The per-call twin: explicit beats the run-wide decision in either
     # direction, and auto changes nothing. Off is spelled as removal plus
