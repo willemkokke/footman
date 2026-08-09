@@ -9,6 +9,15 @@ versions may include breaking changes.
 
 ### Added
 
+- **The cascade stops at any version-control boundary, not only git.**
+  `REPO_MARKERS` now covers `.git`, `.jj`, `.hg` and `.svn`. footman runs none
+  of these tools and reads none of their metadata — it notices whether the
+  directory is there — which is why recognising four costs no more than one.
+  The gap was real rather than theoretical: Jujutsu's non-colocated mode has no
+  `.git` at all, so a jj checkout fell through to the packaging fallback and
+  took its cascade ceiling from the nearest `pyproject.toml`, which in a
+  monorepo is the wrong directory rather than merely a vaguer one.
+
 - **A branded CLI keeps its own things in its own place.** `App(home=…)` names a
   directory that holds everything the CLI owns — completion manifests, timing
   history, fetched files, the collector stamp, the user-level config file, and
