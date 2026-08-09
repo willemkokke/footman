@@ -1461,12 +1461,6 @@ class Group:
         `ctx.cwd` and every `run()`/tools subprocess follow it.
         """
 
-        if infinite and not progress:
-            # Not an error worth raising — infinite already implies it —
-            # but the pair is redundant, and saying so keeps the two
-            # concepts distinct: "never times" vs "never ends".
-            pass
-
         def register(fn: Callable[_P, _R_co]) -> TaskFn[_P, _R_co]:
             key = cli_name(name or task_name(fn))
             key = self._free_ephemeral_key(key)

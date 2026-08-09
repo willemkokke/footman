@@ -73,7 +73,7 @@ def _tag_of(t: Any) -> str | None:
 
 
 def _is_union(ann: Any) -> bool:
-    return typing.get_origin(ann) in (typing.Union, getattr(types, "UnionType", ()))
+    return typing.get_origin(ann) in (typing.Union, types.UnionType)
 
 
 def _strip_none(members: list[Any]) -> list[Any]:
@@ -493,13 +493,6 @@ def group_of(ann: Any) -> Group | None:
         sum(1 for f in fields if f.required),
         from_iterable=False,
     )
-
-
-def _is_record(ann: Any) -> bool:
-    """A shape whose annotations live on the class, not on `__init__`."""
-    import dataclasses
-
-    return dataclasses.is_dataclass(ann) or hasattr(ann, "_fields") or False
 
 
 def is_flag(element: Any) -> bool:

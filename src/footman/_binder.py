@@ -20,7 +20,6 @@ serialises the way out). Structural rules, in priority order:
 from __future__ import annotations
 
 import dataclasses
-import types
 import typing
 from typing import Any
 
@@ -80,7 +79,7 @@ def _strip(ann: Any) -> Any:
 
 def _optional_member(ann: Any) -> Any:
     """For `T | None`, the lone `T`; `None` when *ann* is not that shape."""
-    if typing.get_origin(ann) in (typing.Union, getattr(types, "UnionType", ())):
+    if _coerce._is_union(ann):
         members = [m for m in typing.get_args(ann) if m is not type(None)]
         if len(members) == 1 and len(typing.get_args(ann)) == 2:
             return members[0]

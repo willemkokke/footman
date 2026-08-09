@@ -274,14 +274,6 @@ def _discover_files(
 # --- rendering ---------------------------------------------------------------
 
 
-def _format_value(value: object) -> str:
-    if value is True:  # a flag: its presence is the whole message
-        return ""
-    if isinstance(value, list):
-        return "[" + ", ".join(str(v) for v in value) + "]"
-    return str(value)
-
-
 def _print_footer() -> None:
     footer = f"Run `{_brand.prog} --help <task>` for a task's options."
     print(f"\n{_describe.dim(footer, _color_out)}")
