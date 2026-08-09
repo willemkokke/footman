@@ -1429,18 +1429,33 @@ def bind_global_options(options: Sequence[Any], tokens: Sequence[str]) -> str | 
     anyway — which is what lets one declared value cover absent, named, and
     named-with-a-value.
 
+    Collections read exactly as a task option's do: mentions accumulate
+    (`--tag=a --tag=b`), each value comma-splits unless `nosplit`, a mapping
+    takes `KEY=VALUE` pairs. A bool answers to `--no-x` as well as `--x`,
+    last mention winning — the negation every task flag already has.
+
     An absent option runs the same ladder a task parameter's does, **env >
     `default(fn)` > the declared default**, through the very helpers `bind`
     uses. That marker was already accepted on a global's annotation and reached
     the manifest, so help would have advertised a fallback that never happened.
     """
     by_flag: dict[str, Any] = {}
+    negations: dict[str, Any] = {}
     for opt in options:
         by_flag.setdefault("--" + opt.name, opt)
+        if opt.annotation is bool:
+            negations.setdefault("--no-" + opt.name, opt)
     values: dict[str, Any] = {}
+    raws: dict[str, list[str]] = {}
     given: set[str] = set()
     for tok in tokens:
         name, eq, raw = tok.partition("=")
+        if (neg := negations.get(name)) is not None:
+            # `--no-x`: the caller asked, and asked for off. Last mention
+            # wins between the two spellings, same as repeating any scalar.
+            given.add(neg.name)
+            values[neg.name] = False
+            continue
         opt = by_flag.get(name)
         if opt is None:
             continue
@@ -1454,11 +1469,21 @@ def bind_global_options(options: Sequence[Any], tokens: Sequence[str]) -> str | 
             # gives a bare mention.
             continue
         peeled = _coerce.peel(opt.annotation)
+        if peeled.mapping or peeled.multiple:
+            # A collection assembles below, once every mention is in — the
+            # splitter's own accumulate-then-bind reading for a task option.
+            raws.setdefault(opt.name, []).append(raw)
+            continue
         try:
             values[opt.name] = _coerce_extra(raw, peeled, name)
         except ValueError as exc:
             return str(exc)
     for opt in by_flag.values():
+        if opt.name in raws:
+            try:
+                values[opt.name] = _assemble_global(opt, raws[opt.name])
+            except ValueError as exc:
+                return str(exc)
         opt._given = opt.name in given
         opt._frozen = True
         if opt.name in values:
@@ -1469,6 +1494,42 @@ def bind_global_options(options: Sequence[Any], tokens: Sequence[str]) -> str | 
             continue
         opt._value = _absent_global(opt)
     return None
+
+
+def _assemble_global(opt: Any, raws: list[str]) -> Any:
+    """A collection-valued global option from its accumulated `=`-attached
+    values — the reading a task option's stream gets. Each mention
+    comma-splits unless `nosplit`; a mapping takes `KEY=VALUE` pairs, keys
+    and values coerced separately (`dict[K, list[V]]` accumulates per key);
+    every part runs the same strict coercion and checks an env fallback
+    would, because the splitter never validated these tokens either."""
+    label = "--" + opt.name
+    peeled = _coerce.peel(opt.annotation)
+    parts: list[str] = []
+    for raw in raws:
+        if peeled.nosplit:
+            parts.append(raw)
+        else:
+            parts.extend([p for p in raw.split(",") if p] or [raw])
+    if not peeled.mapping:
+        return _container(
+            peeled, [_coerce_extra(p, peeled, label) for p in parts], label
+        )
+    result: dict[Any, Any] = {}
+    for part in parts:
+        if "=" not in part:
+            raise ValueError(f"{label} expects KEY=VALUE (got {part!r})")
+        key, value = part.split("=", 1)
+        try:
+            k = _coerce.coerce_token(key, peeled.key)
+        except ValueError as exc:
+            raise ValueError(f"{label} key {exc}") from exc
+        v = _coerce_extra(value, peeled, f"{label} value")
+        if peeled.value_multiple:
+            result.setdefault(k, []).append(v)
+        else:
+            result[k] = v
+    return result
 
 
 def _absent_global(opt: Any) -> Any:

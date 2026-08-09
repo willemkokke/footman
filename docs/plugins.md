@@ -98,6 +98,14 @@ Three outcomes from one declared value: absent, named, named with a value.
 wants the environment alone to count can say so, and one that does not can say
 that instead.
 
+Values read exactly as a task option's do. A collection accumulates its
+mentions and comma-splits each value — `--tag=a --tag=b` and `--tag=a,b` are
+the same `list[str]`, with `nosplit` opting out — and a `dict[K, V]` takes
+`KEY=VALUE` pairs. A `bool` answers to `--no-x` as well as `--x`, last
+mention winning, so turning a flag off needs no second declaration; the off
+spelling completes, counts as *given*, and is claimed in the collision law
+beside the flag itself.
+
 ## Configuration
 
 `inv.config` carries the merged settings table. The convention is one
