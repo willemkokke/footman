@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import contextlib
 import difflib
-from collections.abc import Generator, Iterable
+from collections.abc import Callable, Generator, Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -92,12 +92,29 @@ class ChainError(Exception):
     """A malformed command line, carrying a teaching message for the user."""
 
 
+def _default_jobs() -> int:
+    """The parallel width nobody chose, imported at the call rather than at
+    module scope — `_progress` takes `Segment` from here, so importing it up
+    top would close the cycle."""
+    from footman._progress import default_jobs
+
+    return default_jobs()
+
+
 # Global options bind to `fm` itself and must precede the first task name
 # (`--help`/`-h` is the one exception: anywhere before `--`, it wins).
 # (canonical, short alias, kind, value-hint, default, help). `default` is what
 # a bare mention means — `None` for an option that has no reading without a
 # value, which is the same question a task option answers with `required`.
-GLOBALS: list[tuple[str, str | None, str, str | None, str | None, str]] = [
+#
+# A literal where the default is a constant (`--color` → `auto`); a callable
+# where it depends on the machine, deferred because `_progress` imports from
+# here and a module-level import would close the cycle — the `default(fn)` a
+# task parameter declares, in the form a static table can hold. `""` where the
+# reading exists but has no spelling of its own: `--describe` means "the whole
+# tree", `--install-completion` means "whichever shell is asking".
+GlobalDefault = str | Callable[[], str] | None
+GLOBALS: list[tuple[str, str | None, str, str | None, GlobalDefault, str]] = [
     ("--help", "-h", "flag", None, None, "help for {prog}, or the named group/task"),
     ("--version", "-V", "flag", None, None, "print the version and exit"),
     ("--list", "-l", "flag", None, None, "list tasks (flat)"),
@@ -148,8 +165,8 @@ GLOBALS: list[tuple[str, str | None, str, str | None, str | None, str]] = [
         "-j",
         "option",
         "N",
-        "",
-        "max parallel tasks (default: cores - 1, never below 2)",
+        lambda: str(_default_jobs()),
+        "max parallel tasks",
     ),
     ("--yes", "-y", "flag", None, None, "assume yes to every confirm() gate"),
     (
@@ -168,8 +185,8 @@ GLOBALS: list[tuple[str, str | None, str, str | None, str | None, str]] = [
         None,
         "option",
         "WHEN",
-        "",
-        "when to colour: always|never|auto (default)",
+        "auto",
+        "when to colour: always|never|auto",
     ),
     (
         "--no-color",
@@ -248,6 +265,25 @@ _GLOBAL_HINT = {name: hint for name, _, _, hint, _, _ in GLOBALS if hint}
 # the task to run. The bracketed metavar is help notation now, not the rule.
 _GLOBAL_DEFAULT = {name: d for name, _, _, _, d, _ in GLOBALS if d is not None}
 _VALUE_OPTIONAL = frozenset(_GLOBAL_DEFAULT)
+
+
+def global_default_text(name: str) -> str:
+    """A global's default, spelled the way the command line spells values, for
+    `--help` to print — and resolved *now*, so a computed one says what this
+    machine will actually do rather than what some other one would.
+
+    Empty when there is nothing worth printing: an option that must be given a
+    value, or one whose bare form means something with no spelling of its own
+    (`--describe` is "the whole tree", `--install-completion` is "whichever
+    shell is asking"). Those two say it in their help text, where it reads.
+    """
+    value = _GLOBAL_DEFAULT.get(name)
+    if value is None:
+        return ""
+    # `isinstance(str)` rather than `callable()`: narrowing on the string side
+    # leaves a concrete callable type, where `callable()` widens to "any
+    # callable at all" and cannot be called safely.
+    return value if isinstance(value, str) else value()
 
 
 @dataclass

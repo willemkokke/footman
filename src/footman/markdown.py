@@ -79,7 +79,13 @@ def globals_table(*, prog: str = "fm") -> str:
         # a command line the runner refuses.
         main = f"`{name}={hint}`" if hint else f"`{name}`"
         label = f"`{alias}`, {main}" if alias else main
-        rows.append((label, _cell(help_text.replace("{prog}", prog))))
+        effect = help_text.replace("{prog}", prog)
+        # The default comes from the grammar too, so the page cannot say one
+        # thing while `--help` says another — the drift that hand-written
+        # "(default: …)" prose in a help string always ended in.
+        if shown := _split.global_default_text(name):
+            effect += f"; default: `{shown}`"
+        rows.append((label, _cell(effect)))
     width = max(len(label) for label, _ in rows)
     lines = [
         f"| {'option':<{width}} | effect |",

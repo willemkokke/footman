@@ -527,7 +527,13 @@ def _print_global_help(tree: dict[str, Any], show_hidden: bool = False) -> None:
             label += f"={hint}"  # values are always `=`-attached
         # `.replace` (not `.format`) so a help string containing braces can
         # never crash help output.
-        rows.append((label, help_text.replace("{prog}", prog)))
+        detail = help_text.replace("{prog}", prog)
+        # The same thing task parameters gained: say what you get when you say
+        # nothing. Computed defaults resolve here, so `--jobs` reports this
+        # machine's width rather than a number from the author's.
+        if shown := _split.global_default_text(name):
+            detail += f"; default: {shown}"
+        rows.append((label, detail))
     width = max(len(label) for label, _ in rows)
     for label, help_text in rows:
         pad = " " * (width - len(label))
