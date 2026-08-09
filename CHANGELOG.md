@@ -31,6 +31,13 @@ versions may include breaking changes.
 
 ### Fixed
 
+- **A bare `--env-file` loads the default file, loudly.** It used to refuse
+  with `--env-file: . does not exist` — the empty value a bare mention
+  carries, read as a path. Presence is the question a bare mention answers:
+  the default `.env` loads, and only when it is missing does the mention
+  refuse, where plain absence still shrugs. The default is declared on the
+  option now, so `--help` renders it instead of hand-written prose.
+
 - **A schema bump rewrites an unchanged tree's manifest.** The rewrite
   guard compared only the tree hash, so upgrading footman left every
   old-schema manifest on disk forever: each <kbd>Tab</kbd> refused it,
