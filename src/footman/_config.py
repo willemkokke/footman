@@ -25,9 +25,11 @@ from typing import Any
 from footman import _paths
 
 # Filenames read in each directory of the cascade. Within one directory the
-# dedicated `footman.toml` wins over `pyproject.toml`'s `[tool.footman]`.
+# dedicated file wins over `pyproject.toml`'s table. Both the dedicated
+# filename and the table name are the brand's — `acme.toml` and
+# `[tool.acme]` — so ask `_paths` rather than hard-coding footman's.
 PYPROJECT = "pyproject.toml"
-FOOTMAN_TOML = "footman.toml"
+FOOTMAN_TOML = "footman.toml"  # stock footman's; `_paths.config_basename()` per brand
 
 # Keys that only make sense in the user-level file: they govern shared,
 # machine-wide behaviour (the cache collector sweeps one cache for every
@@ -172,7 +174,10 @@ def cascade_mode(cli_path: str | None = None) -> str:
     explicit `--config` it is read from the user-level file alone, before
     any walk. An unknown value is a taught error, never a silent default.
     """
-    value, source = os.environ.get("FOOTMAN_CASCADE"), "FOOTMAN_CASCADE"
+    # This brand's spelling, in the read *and* in the error: naming
+    # `FOOTMAN_CASCADE` at an `acme` user teaches a variable that does nothing.
+    cascade_var = _paths.env_var("CASCADE")
+    value, source = os.environ.get(cascade_var), cascade_var
     if not value:
         path = Path(cli_path).expanduser() if cli_path else _paths.footman_config_file()
         try:
@@ -213,14 +218,17 @@ def _read_toml(path: Path, required: bool = False) -> dict[str, Any] | None:
 
 
 def _footman_table(path: Path, required: bool = False) -> dict[str, Any]:
-    """The footman settings in *path* — `[tool.footman]` for a pyproject,
-    the whole file for anything else. Empty dict if absent/unreadable."""
+    """The settings in *path* — `[tool.<name>]` for a pyproject, the whole
+    file for anything else. Empty dict if absent/unreadable.
+
+    The table is this brand's (`[tool.acme]`), so two branded CLIs in one
+    repo read their own settings instead of fighting over one table."""
     data = _read_toml(path, required=required)
     if data is None:
         return {}
     if path.name == PYPROJECT:
         tool = data.get("tool")
-        table = tool.get("footman") if isinstance(tool, dict) else None
+        table = tool.get(_paths.config_table()) if isinstance(tool, dict) else None
         return table if isinstance(table, dict) else {}
     return data
 
@@ -239,7 +247,7 @@ def _dir_config(
     don't) pointing at where the key belongs.
     """
     merged: dict[str, Any] = {}
-    for name in (PYPROJECT, FOOTMAN_TOML):
+    for name in (PYPROJECT, _paths.config_basename()):
         try:
             merged.update(_footman_table(directory / name))
         except ConfigError as exc:

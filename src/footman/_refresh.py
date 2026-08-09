@@ -48,10 +48,18 @@ def _maybe_reexec(files: list[Path], entry: str, *args: str) -> None:
         _script.reexec_child(python, ["-c", entry, *args])
 
 
-def refresh_cwd() -> None:
-    """Rebuild the current directory's completion manifest, swallowing errors."""
+def refresh_cwd(prefix: str = "", home: str = "", config_name: str = "") -> None:
+    """Rebuild the current directory's completion manifest, swallowing errors.
+
+    The three location words come from the parent (`_paths.child_args`): this
+    child inherits the environment but not the brand, so it is *told* where
+    the cache is rather than re-deriving it.
+    """
     # A detached background refresh must never crash or print.
     with contextlib.suppress(Exception):
+        from footman import _paths
+
+        _paths.configure_child(prefix, home, config_name)
         _rebuild()
 
 
@@ -74,7 +82,13 @@ def _rebuild() -> None:
     files = _paths.task_files(cwd, ceiling, name)
     if not files:
         return
-    _maybe_reexec(files, "from footman import _refresh; _refresh.refresh_cwd()")
+    # The re-executed child is a fresh interpreter, so it needs telling where
+    # the cache is exactly as the first child did.
+    _maybe_reexec(
+        files,
+        "import sys; from footman import _refresh; _refresh.refresh_cwd(*sys.argv[1:])",
+        *_paths.child_args(),
+    )
 
     # Mirror the app layer's cwd cascade build; plugin pulls are authored in
     # the tasks files themselves, so discovery alone rebuilds the whole tree.
@@ -85,10 +99,15 @@ def _rebuild() -> None:
     )
 
 
-def refresh_source(tasks_file: str) -> None:
+def refresh_source(
+    tasks_file: str, prefix: str = "", home: str = "", config_name: str = ""
+) -> None:
     """Rebuild one `-f <file>`'s (cwd, file) manifest, swallowing errors."""
     # A detached background rebuild must never crash or print.
     with contextlib.suppress(Exception):
+        from footman import _paths
+
+        _paths.configure_child(prefix, home, config_name)
         _rebuild_source(tasks_file)
 
 
@@ -104,8 +123,9 @@ def _rebuild_source(tasks_file: str) -> None:
     _maybe_reexec(
         [one],
         "import sys; from footman import _refresh; "
-        "_refresh.refresh_source(sys.argv[1])",
+        "_refresh.refresh_source(*sys.argv[1:])",
         tasks_file,  # the entry reads it back off argv
+        *_paths.child_args(),  # …and the locations behind it
     )
 
     # Mirror a real `-f` run (see _app._run): one file, no cascade, cached

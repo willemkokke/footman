@@ -220,6 +220,12 @@ def resolve_task_files(
         filename = cfg.get("tasks")
         name = filename if isinstance(filename, str) else _brand.tasks_file
         files = _paths.task_files(cwd, ceiling, name)
+        if not files and (user := _paths.user_tasks_file(name)) and user.is_file():
+            # A *fallback*, not a rung: your own tasks answer where a project
+            # has none, and a project's cascade wins outright — there is one
+            # way to get tasks into a project tree, and that is pulling them
+            # in a tasks file.
+            files = [user]
     return files, cfg
 
 
@@ -1225,7 +1231,7 @@ def _maybe_collect(cfg: dict[str, object]) -> None:
     *before* spawning, the refresh idiom: concurrent runs elect one
     collector, and a crashed child costs a day, not correctness.
     """
-    if cfg.get("gc") is False or os.environ.get("FOOTMAN_NO_GC"):
+    if cfg.get("gc") is False or os.environ.get(_paths.env_var("NO_GC")):
         return
     cache = _paths.footman_cache_dir()
     stamp = cache / "gc.stamp"
@@ -1409,7 +1415,9 @@ def _script_handoff(
     that declares dependencies but not the runner it imports, because that
     environment provably cannot run it.
     """
-    if os.environ.get("FOOTMAN_UV_REEXEC") or os.environ.get("FOOTMAN_NO_UV"):
+    if os.environ.get(_paths.env_var("UV_REEXEC")) or os.environ.get(
+        _paths.env_var("NO_UV")
+    ):
         return None
     source = _script_source(g, probe)
     if source is None:
@@ -1469,7 +1477,7 @@ def _script_handoff(
     python = found.stdout.strip()
     if found.returncode != 0 or not python:
         return None
-    os.environ["FOOTMAN_UV_REEXEC"] = "1"
+    os.environ[_paths.env_var("UV_REEXEC")] = "1"
     _reexec([python, "-m", "footman", *argv])
     return None  # unreachable: _reexec replaces or exits this process
 
@@ -1498,7 +1506,9 @@ def _uv_handoff(argv: list[str], g: dict[str, object]) -> int | None:
     The process is replaced through `_reexec`, which owns the POSIX /
     Windows difference.
     """
-    if os.environ.get("FOOTMAN_UV_REEXEC") or os.environ.get("FOOTMAN_NO_UV"):
+    if os.environ.get(_paths.env_var("UV_REEXEC")) or os.environ.get(
+        _paths.env_var("NO_UV")
+    ):
         return None
     try:
         probe = Path(str(g.get("directory") or Path.cwd())).resolve(strict=True)
@@ -1534,7 +1544,7 @@ def _uv_handoff(argv: list[str], g: dict[str, object]) -> int | None:
             f"{_brand.prog}: handing off to uv run --project {root}",
             file=sys.stderr,
         )
-    os.environ["FOOTMAN_UV_REEXEC"] = "1"
+    os.environ[_paths.env_var("UV_REEXEC")] = "1"
     _reexec([uv, "run", "--project", str(root), _brand.prog, *argv])
     return None  # unreachable: _reexec replaces or exits this process
 

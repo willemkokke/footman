@@ -94,3 +94,63 @@ script environment under `acme` too — and must list `acme-cli` among its
 dependencies, the way a footman one lists `footman`. Left unset, footman
 never guesses a distribution into a script environment: the rule stays out of
 your way, and your users' tasks files run exactly where they already did.
+
+## A home of your own
+
+Your CLI is a product; footman is a dependency inside it. Give it a `home` and
+everything it keeps goes there — completion manifests, timing history, the
+collector's stamp, the user-level config file, and the user tasks file:
+
+```python
+import os
+from pathlib import Path
+
+app = App(
+    name="Acme",
+    prog="acme",
+    home=Path(os.environ.get("ACME_HOME", Path.home() / ".acme")) / "runner",
+    home_env="ACME_RUNNER_HOME",
+)
+```
+
+**You** compute the path, so footman never has to guess at your product's
+layout — and it never reads `ACME_HOME` itself, because a product's own
+`*_HOME` usually means more than the runner's corner of it. `home_env` names a
+variable that overrides `home` when set, which is what lets two installations
+run side by side under different identities.
+
+Left unset, locations fall back to `~/.cache` and `~/.config` as they always
+have.
+
+## Environment variables follow the brand
+
+`acme` reads `ACME_CACHE_DIR`, `ACME_CONFIG`, `ACME_CASCADE`, `ACME_NO_GC` and
+`ACME_NO_UV` — never footman's. That isolation is the point: someone debugging
+`fm` with `FOOTMAN_CACHE_DIR` set must not silently relocate your product's
+cache. Error messages name your spelling too, so a user is never taught a
+variable that does nothing for them.
+
+The prefix comes from `name`, uppercased. Set `env_prefix` when your display
+name would make an awkward one, or when you want it to stay put while the
+display name changes.
+
+## Config files follow the brand too
+
+Your users write `acme.toml`, or a `[tool.acme]` table in `pyproject.toml` —
+not footman's. Both come from one field, so they cannot drift apart:
+
+```python
+app = App(name="Acme", prog="acme", config_name="acme")   # the default is `name`
+```
+
+Two branded CLIs can then live in one repository, each reading its own
+settings instead of fighting over a shared table.
+
+## Your users' own tasks
+
+With a home set, `<home>/tasks.py` (or whatever your `tasks_file` is called)
+holds a user's personal tasks, available wherever they have no project.
+
+It is a *fallback*, not a rung: the moment a project's cascade finds a tasks
+file, that cascade wins outright. There is one way to get tasks into a project
+tree — pull them in a tasks file — and this does not become a second one.

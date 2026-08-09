@@ -9,6 +9,31 @@ versions may include breaking changes.
 
 ### Added
 
+- **A branded CLI keeps its own things in its own place.** `App(home=…)` names a
+  directory that holds everything the CLI owns — completion manifests, timing
+  history, fetched files, the collector stamp, the user-level config file, and
+  the user tasks file. The brand computes the path, so footman never guesses at
+  a product's layout and never reads a product's own environment variable.
+  `home_env=` names a variable that overrides it, which is what lets two
+  installations run side by side under different identities. Unset, locations
+  fall back to `~/.cache` and `~/.config` exactly as before.
+- **Environment variables follow the brand.** A CLI named `acme` reads
+  `ACME_CACHE_DIR`, `ACME_CONFIG`, `ACME_CASCADE`, `ACME_NO_GC` and
+  `ACME_NO_UV`, and its error messages name those spellings rather than
+  teaching a variable that does nothing for its users. The prefix comes from
+  `name` (so footman's own is still `FOOTMAN_*`, unchanged); `env_prefix=`
+  overrides it. A branded CLI reads **only** its own prefix — debugging `fm`
+  with `FOOTMAN_CACHE_DIR` set can no longer relocate someone else's product.
+- **Config files follow the brand.** `App(config_name=…)`, defaulting to `name`,
+  gives `acme.toml` and `[tool.acme]` from one field so the two cannot drift.
+  Two branded CLIs can share a repository, each reading its own settings.
+- **`FOOTMAN_HOME` relocates stock footman**, through the same `home_env` field
+  a branded CLI uses — one mechanism rather than a special case.
+- **A user tasks file.** With a home set, `<home>/tasks.py` holds tasks
+  available wherever there is no project. It is a fallback, not a rung: a
+  project's cascade wins outright, so there is still exactly one way to get
+  tasks into a project tree.
+
 - **A bare mention of an option is legal, and means the caller asked for it.**
   `fm build --target` no longer errors. It binds exactly what absence would
   have bound — the same env/default ladder runs — and adds the one thing a

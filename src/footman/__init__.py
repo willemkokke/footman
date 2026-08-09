@@ -218,8 +218,13 @@ def main(tasks_file: str | None = None) -> None:
     argv = sys.argv[1:]
     if argv and argv[0] == "--complete":
         # Still first: the hot path answers before anything else is decided.
+        # `configure`'s defaults *are* stock footman's, so only the home has
+        # to be read here — and reading it through `_paths` keeps `footman.app`
+        # (and the dataclass machinery) off a TAB press.
+        from footman import _paths
         from footman._complete import complete_cli
 
+        _paths.configure(home=_paths.home_from_env("FOOTMAN_HOME"))
         raise SystemExit(complete_cli(argv[1:]))
     if tasks_file is not None and not any(
         a.startswith(("-f=", "--tasks-file=")) for a in argv
@@ -230,7 +235,11 @@ def main(tasks_file: str | None = None) -> None:
     # `dist` names the distribution this console script ships in — what a
     # project's lockfile pins, and what a tasks file carrying its own
     # dependencies must declare. A branded CLI passes its own.
-    raise SystemExit(App(dist="footman").run(argv))
+    #
+    # `home_env` makes stock footman an ordinary user of the same field a
+    # branded CLI uses: `FOOTMAN_HOME` relocates everything footman owns.
+    # Unset, locations fall back to XDG exactly as they always have.
+    raise SystemExit(App(dist="footman", home_env="FOOTMAN_HOME").run(argv))
 
 
 def __getattr__(name: str) -> object:

@@ -97,6 +97,27 @@ def tree(root: registry.Group) -> dict[str, Any]:
 
 
 @pytest.fixture(autouse=True)
+def _stock_brand_locations():
+    """Every test starts reading stock footman's locations.
+
+    `App.run` points `_paths` at its brand's world and deliberately does
+    *not* restore it: a real process runs one brand for its whole life, and
+    `run` may `execv` away before any restore could fire. Inside one xdist
+    worker that persistence leaks — a test driving `App(name="acme")` leaves
+    the config table set to `[tool.acme]`, and the next test to read a
+    `[tool.footman]` table gets nothing back, which surfaces as a setting
+    silently not applying rather than as an error. `Runner` restores around
+    each invocation; this does the same for tests that drive `App.run` or
+    `_app.run` directly.
+    """
+    from footman import _paths
+
+    before = _paths.child_args()
+    yield
+    _paths.configure_child(*before)
+
+
+@pytest.fixture(autouse=True)
 def _clean_abort_state():
     """Every test starts with the abort latch clear.
 
