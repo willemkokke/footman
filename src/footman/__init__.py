@@ -244,7 +244,9 @@ def main(tasks_file: str | None = None) -> None:
     # The stock pins — `FOOTMAN_*` variables, `footman.toml` config, the
     # long words a two-letter command cannot derive — are `App`'s own: any
     # `App` that keeps the `fm` command gets them, this one included.
-    raise SystemExit(App(dist="footman").run(argv))
+    # `fm new` in an empty directory: footman declares its own built-in,
+    # the same way any branded CLI would.
+    raise SystemExit(App(dist="footman", builtin=("footman.new",)).run(argv))
 
 
 def __getattr__(name: str) -> object:

@@ -1,0 +1,39 @@
+"""Scaffold a tasks file — `fm new`, the first thing in an empty directory.
+
+Brand-aware through the configured world: a branded CLI writes its own
+tasks filename and teaches its own command, so one implementation serves
+every runner. Stock footman declares it in `builtin=`, which is what makes
+`fm new` answer in a directory with no tasks at all — and inside a project
+the ordinary remedy applies: mount `footman.new` from the root tasks file
+to offer it there too.
+"""
+
+from __future__ import annotations
+
+from footman import _paths, context
+from footman.context import fail
+from footman.registry import task
+
+_SCAFFOLD = '''\
+from footman import task
+
+
+@task
+def hello(name: str = "world") -> None:
+    """Say hello — replace me with your first real task."""
+    print(f"hello {name}")
+'''
+
+
+@task
+def new() -> None:
+    """Write a starter tasks file in this directory."""
+    prog = context.current().prog
+    target = context.cwd() / _paths._tasks_file
+    if target.exists():
+        fail(
+            f"{target.name} already exists here — edit it instead, or run "
+            f"{prog} new somewhere empty"
+        )
+    target.write_text(_SCAFFOLD, encoding="utf-8")
+    print(f"wrote {target.name} — try: {prog} hello")

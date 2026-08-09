@@ -622,6 +622,40 @@ def test_tab_reads_the_global_manifest_outside_a_project(tmp_path, monkeypatch, 
     assert "docs" in capsys.readouterr().out
 
 
+def test_new_scaffolds_the_brands_file_and_the_scaffold_runs(tmp_path, monkeypatch):
+    # `fm new`, brand-aware: writes the brand's own filename, teaches the
+    # brand's own command, and what it writes genuinely loads and runs.
+    empty = tmp_path / "e"
+    empty.mkdir()
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / ".cache"))
+    monkeypatch.chdir(empty)
+    app = App(
+        name="acme", prog="acme", tasks_file="acmetasks.py", builtin=["footman.new"]
+    )
+    result = Runner(app).invoke("new")
+    assert result.ok, result.stderr
+    assert (empty / "acmetasks.py").is_file()
+    assert "acme hello" in result.stdout
+    ran = Runner(app).invoke("hello")
+    assert ran.ok, ran.stderr
+    assert "hello world" in ran.stdout
+
+
+def test_new_mounted_in_a_project_refuses_to_overwrite(tmp_path, monkeypatch):
+    # Inside a project the built-in is absent by design; the ordinary mount
+    # offers it — and then a directory that already has its file is refused,
+    # not clobbered.
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
+    (tmp_path / "tasks.py").write_text(
+        'from footman import plugin\n\nplugin("footman.new")\n'
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
+    result = Runner(App(name="acme", prog="acme")).invoke("new")
+    assert not result.ok
+    assert "already exists" in result.stderr
+
+
 def test_a_user_tasks_cwd_root_means_the_project_it_landed_in(tmp_path, monkeypatch):
     cfg = tmp_path / "cfg"
     (cfg / "acme").mkdir(parents=True)

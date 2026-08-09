@@ -32,6 +32,15 @@ versions may include breaking changes.
   earlier versions are rebuilt on the first press after an upgrade, never
   walked.
 
+- **`fm new` writes a starter tasks file** — the first thing to run in an
+  empty directory, and footman's own first built-in: the `fm` command
+  declares `builtin=("footman.new",)` exactly the way any branded CLI
+  would, which is why `fm new` answers where no tasks exist at all. It is
+  brand-aware through the configured world — a branded CLI scaffolds its
+  own filename and teaches its own command — and it refuses to overwrite a
+  file that is already there. Inside a project the ordinary remedy applies:
+  mount `footman.new` from the root tasks file to offer it there too.
+
 ### Changed
 
 - **BREAKING: the user tasks file is the cascade's outermost rung.** It used
