@@ -567,6 +567,24 @@ def test_help_shows_long_description_and_docstring_doc(project, capsys):
     assert "Args:" not in out  # the section header is structure, not prose
 
 
+def test_global_help_marks_a_computed_default(project, capsys):
+    assert _app.run(["--help"]) == 0
+    lines = capsys.readouterr().out.splitlines()
+    jobs = next(line for line in lines if "--jobs=N" in line)
+    colour = next(line for line in lines if "--color=WHEN" in line)
+    # A bare number reads as an arbitrary constant; it is this machine's cores
+    # minus one, and a reader who copies it should know that.
+    assert "(computed)" in jobs
+    assert "default: auto" in colour and "(computed)" not in colour
+
+
+def test_a_global_that_must_be_given_a_value_shows_no_default(project, capsys):
+    assert _app.run(["--help"]) == 0
+    lines = capsys.readouterr().out.splitlines()
+    where = next(line for line in lines if "--where=TASK" in line)
+    assert "default" not in where  # there is no default task to point at
+
+
 def test_help_shows_the_declared_default(project, capsys):
     # The manifest carried `default` all along and help never printed it, so a
     # reader had to run the task to find out what `--name` would be.

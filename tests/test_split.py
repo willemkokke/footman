@@ -170,6 +170,44 @@ def test_dash_leading_value_attaches(tree):
     assert seg.values == {"timeout": "-1.5"}
 
 
+def test_a_global_default_is_declared_beside_its_metavar():
+    from footman import _split
+
+    # A literal where the default is constant, nothing where the option has no
+    # reading without a value — which is the same question a task option
+    # answers with `required`.
+    assert _split.global_default("--color") == ("auto", False)
+    assert _split.global_default("--where") == ("", False)
+    assert _split.global_default("--directory") == ("", False)
+    # And `""` where the reading exists but has no spelling of its own.
+    assert _split.global_default("--describe") == ("", False)
+
+
+def test_a_computed_global_default_resolves_at_the_call_not_at_import():
+    from footman import _split
+
+    text, computed = _split.global_default("--jobs")
+    assert computed and text.isdigit()
+
+
+def test_a_computed_global_default_reports_this_machine(monkeypatch):
+    from footman import _progress, _split
+
+    # The point of computing it: `--help` must report the width *this* machine
+    # will use, not a number baked when the module was imported (or, worse,
+    # when someone else's manifest was written).
+    monkeypatch.setattr(_progress, "default_jobs", lambda: 99)
+    assert _split.global_default("--jobs") == ("99", True)
+
+
+def test_a_global_with_a_default_may_be_named_bare(tree):
+    # Bare-legal because it *has* a default — the same rule task options
+    # follow, read from the table instead of a signature.
+    assert globs(tree, "--jobs check") == ["--jobs"]
+    assert globs(tree, "--color check") == ["--color"]
+    assert [s.task for s in segs(tree, "--jobs check")] == ["check"]
+
+
 def test_where_global_takes_a_value(tree):
     assert globs(tree, "--where=docker.build") == ["--where=docker.build"]
     assert segs(tree, "--where=docker.build") == []
