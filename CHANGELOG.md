@@ -7,6 +7,20 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A branded CLI's tasks file marks a project root.** The project markers
+  carried a literal `tasks.py`, so a brand that renames it — `App(tasks_file=…)`
+  — had its own file go unrecognised. A project whose *only* marker was
+  `acmetasks.py` (no `pyproject.toml`, no checkout, no `acme.toml`) was not
+  found as a root, and the cascade started in the wrong directory: standing in
+  a subdirectory, the root's tasks were simply absent. Both brand-derived
+  filenames now mark a root, which is what `acme.toml` already did.
+
+  The tasks filename used here is the brand's, never the `tasks` config key
+  that can override it per project — that key lives in a config file, and
+  finding config needs the very ceiling this computes.
+
 ### Added
 
 - **The cascade stops at any version-control boundary, not only git.**

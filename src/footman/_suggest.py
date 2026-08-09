@@ -133,13 +133,13 @@ def main(argv: list[str]) -> int:
             g["tasks_file"], i = argv[i + 1], i + 2
         elif arg == "--config" and i + 1 < len(argv):
             g["config"], i = argv[i + 1], i + 2
-        elif arg == "--where" and i + 3 < len(argv):
+        elif arg == "--where" and i + 4 < len(argv):
             # This CLI's resolved locations, handed over by the hot path —
             # a child inherits the environment but not the brand.
             from footman import _paths
 
-            _paths.configure_child(*argv[i + 1 : i + 4])
-            i += 4
+            _paths.configure_child(*argv[i + 1 : i + 5])
+            i += 5
         else:
             i += 1
     try:

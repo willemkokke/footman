@@ -191,6 +191,7 @@ class App:
             prefix=self.brand.prefix,
             home=self.brand.resolved_home(),
             config_name=self.brand.config_name,
+            tasks_file=self.brand.tasks_file,
         )
         if args and args[0] == "--complete":
             from footman._complete import complete_cli

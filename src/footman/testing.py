@@ -192,6 +192,7 @@ class Runner:
                 prefix=self.app.brand.prefix,
                 home=self.app.brand.resolved_home(),
                 config_name=self.app.brand.config_name,
+                tasks_file=self.app.brand.tasks_file,
             )
             if isinstance(tasks, Group):
                 # One shared surface with the real CLI (help/version/list/tree/

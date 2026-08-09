@@ -241,6 +241,37 @@ def test_cascade_error_names_the_brands_variable(tmp_path, monkeypatch):
     assert "ACME_CASCADE" in result.stderr and "FOOTMAN_CASCADE" not in result.stderr
 
 
+def test_the_brands_tasks_file_marks_a_project_root(tmp_path, monkeypatch):
+    # The mirror of `acme.toml` marking one. A project whose *only* marker is
+    # the brand's tasks file — no pyproject.toml, no checkout, no acme.toml —
+    # is the "Docker context with .git ignored" shape, and before this the
+    # literal `tasks.py` in PROJECT_MARKERS meant an `acmetasks.py` root went
+    # unrecognised and the cascade started in the wrong directory.
+    before = _paths.child_args()
+    try:
+        _paths.configure(config_name="acme", tasks_file="acmetasks.py")
+        (tmp_path / "acmetasks.py").write_text(TASKS)
+        deep = tmp_path / "a" / "b"
+        deep.mkdir(parents=True)
+        assert _paths.find_project_root(deep) == tmp_path.resolve()
+        assert "acmetasks.py" in _paths.project_markers()
+        assert "tasks.py" not in _paths.project_markers()
+    finally:
+        _paths.configure_child(*before)
+
+
+def test_a_brands_tasks_file_reaches_the_cascade_ceiling(tmp_path, monkeypatch):
+    # End to end: the ceiling found above is what the cascade walks down from,
+    # so a task defined at that root is visible from a subdirectory.
+    (tmp_path / "acmetasks.py").write_text(TASKS)
+    deep = tmp_path / "pkg"
+    deep.mkdir()
+    monkeypatch.chdir(deep)
+    monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
+    app = App(name="acme", prog="acme", tasks_file="acmetasks.py")
+    assert "ship" in Runner(app).invoke("--list").stdout
+
+
 def test_the_user_tasks_file_answers_where_a_project_has_none(tmp_path, monkeypatch):
     home, empty = tmp_path / "world", tmp_path / "empty"
     home.mkdir()
@@ -270,8 +301,10 @@ def test_child_argv_carries_the_resolved_locations(tmp_path):
     # where the cache is rather than re-deriving it wrongly.
     before = _paths.child_args()
     try:
-        _paths.configure(prefix="ACME", home=tmp_path, config_name="acme")
-        assert _paths.child_args() == ["ACME", str(tmp_path), "acme"]
+        _paths.configure(
+            prefix="ACME", home=tmp_path, config_name="acme", tasks_file="acme.py"
+        )
+        assert _paths.child_args() == ["ACME", str(tmp_path), "acme", "acme.py"]
         _paths.configure_child(*_paths.child_args())
         assert _paths.env_var("NO_GC") == "ACME_NO_GC"
         assert _paths.footman_cache_dir() == tmp_path / "cache"

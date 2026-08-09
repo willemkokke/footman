@@ -48,18 +48,21 @@ def _maybe_reexec(files: list[Path], entry: str, *args: str) -> None:
         _script.reexec_child(python, ["-c", entry, *args])
 
 
-def refresh_cwd(prefix: str = "", home: str = "", config_name: str = "") -> None:
+def refresh_cwd(*where: str) -> None:
     """Rebuild the current directory's completion manifest, swallowing errors.
 
-    The three location words come from the parent (`_paths.child_args`): this
-    child inherits the environment but not the brand, so it is *told* where
-    the cache is rather than re-deriving it.
+    The location words come from the parent (`_paths.child_args`): this child
+    inherits the environment but not the brand, so it is *told* where the
+    cache is rather than re-deriving it. Taken as `*where` rather than named
+    parameters so the two sides cannot disagree about arity — this call is
+    inside `suppress`, where a `TypeError` would show up as a manifest that
+    silently never appears.
     """
     # A detached background refresh must never crash or print.
     with contextlib.suppress(Exception):
         from footman import _paths
 
-        _paths.configure_child(prefix, home, config_name)
+        _paths.configure_child(*where)
         _rebuild()
 
 
@@ -99,15 +102,17 @@ def _rebuild() -> None:
     )
 
 
-def refresh_source(
-    tasks_file: str, prefix: str = "", home: str = "", config_name: str = ""
-) -> None:
-    """Rebuild one `-f <file>`'s (cwd, file) manifest, swallowing errors."""
+def refresh_source(tasks_file: str, *where: str) -> None:
+    """Rebuild one `-f <file>`'s (cwd, file) manifest, swallowing errors.
+
+    `*where` for the same reason as `refresh_cwd`: an arity disagreement
+    inside `suppress` is a manifest that silently never appears.
+    """
     # A detached background rebuild must never crash or print.
     with contextlib.suppress(Exception):
         from footman import _paths
 
-        _paths.configure_child(prefix, home, config_name)
+        _paths.configure_child(*where)
         _rebuild_source(tasks_file)
 
 
