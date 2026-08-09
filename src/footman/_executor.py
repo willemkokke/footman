@@ -518,16 +518,29 @@ def _prompt_param(
     peeled: _coerce.Peeled,
     ctx: Context | None,
     params: dict[str, Any] | None = None,
+    default: Any = _MISSING,
 ) -> tuple[str, Any]:
-    """Resolve a defaultless `ask()` parameter by prompting, coercing the answer
-    through the same pipeline as a CLI token and re-asking on a bad value. Off a
-    terminal or under `--no-input`/`--json` it raises instead — the value must
-    then be supplied on the command line. Returns `(raw, value)`: the accepted
-    token and its coerced value — bind uses the value, the ask front-loader
-    records the raw token so binding re-runs the one pipeline."""
+    """Resolve an `ask()` parameter by prompting, coercing the answer through
+    the same pipeline as a CLI token and re-asking on a bad value.
+
+    *default* is the parameter's declared default, or `_MISSING` when it has
+    none. With one, the prompt offers it and Enter accepts — and where nobody
+    can be asked (off a terminal, `--no-input`, `--json`) it is simply used. So
+    `ask()` is safe on any parameter: a person gets asked, an unattended run
+    gets the default. Without one there is no other answer, so those cases still
+    raise.
+
+    A secret never shows its default — that would defeat the point — though
+    Enter still accepts it.
+
+    Returns `(raw, value)`: the accepted token and its coerced value — bind uses
+    the value, the ask front-loader records the raw token so binding re-runs the
+    one pipeline."""
     marker = peeled.ask
     assert marker is not None  # bind only calls this when ask() is present
     if (ctx is not None and ctx.no_input) or not context._stdin_is_tty():
+        if default is not _MISSING:
+            return "", default
         raise ValueError(
             f"--{cli} is required and nothing supplied it — pass --{cli} "
             f"(a terminal is needed to prompt; --no-input and --json never ask)."
@@ -589,9 +602,12 @@ def _prompt_param(
     if hints and len(hints) > 6:
         hints = [*hints[:6], "…"]
     hint = f" ({'/'.join(hints)})" if hints else ""
-    text = marker.prompt or f"{cli}{hint}: "
+    offered = f" [{default}]" if default is not _MISSING and not marker.secret else ""
+    text = marker.prompt or f"{cli}{hint}{offered}: "
     while True:
         raw = context._prompt_core(text, secret=marker.secret)
+        if not raw and default is not _MISSING:
+            return "", default  # Enter accepts what was offered
         if choices is not None and raw not in choices:
             note(f"  choose one of {', '.join(choices)}")
             continue
@@ -652,16 +668,27 @@ def resolve_asks(fn: Task, seg: Segment, ctx: Context | None) -> None:
         if cli in seg.values:
             continue
         peeled = _coerce.peel(param.annotation)
-        if peeled.ask is None or param.default is not empty:
-            continue
+        if peeled.ask is None or cli in seg.bare:
+            continue  # bare: the caller already said "the declared one"
         if peeled.completer is not None:
             continue  # a live suggest may need a prerequisite's effects
         if peeled.stdin is not None and _stdin_fillable(peeled):
             continue  # the piped payload fills it at bind time
         if peeled.env is not None and os.environ.get(peeled.env) is not None:
             continue  # the env variable fills it at bind time
-        raw, _value = _prompt_param(cli, peeled, ctx, None)
-        seg.values[cli] = raw
+        raw, _value = _prompt_param(
+            cli,
+            peeled,
+            ctx,
+            None,
+            _MISSING if param.default is empty else param.default,
+        )
+        if raw or param.default is empty:
+            seg.values[cli] = raw
+        else:
+            # Enter, or nobody to ask: the declared default stands, and
+            # recording nothing lets bind reach it by the ordinary route.
+            seg.bare.add(cli)
 
 
 def bind(
@@ -758,11 +785,22 @@ def bind(
                     continue
                 # ask(): prompt for a required (defaultless) param nothing
                 # else filled — the prompt is the last resort.
-                if peeled.ask is not None and param.default is empty:
-                    # Asked and answered: the caller supplied this one too,
-                    # just interactively rather than on the line.
-                    supplied.add(param.name)
-                    _, kwargs[param.name] = _prompt_param(cli, peeled, ctx, siblings)
+                if peeled.ask is not None and cli not in seg.bare:
+                    # A bare mention is the caller saying "the declared one" —
+                    # they have answered already, so asking again would be
+                    # footman not listening.
+                    asked, value = _prompt_param(
+                        cli,
+                        peeled,
+                        ctx,
+                        siblings,
+                        _MISSING if param.default is empty else param.default,
+                    )
+                    if asked or param.default is empty:
+                        # Answered by a person; a silent fall back to the
+                        # default in an unattended run is not someone asking.
+                        supplied.add(param.name)
+                    kwargs[param.name] = value
                     continue
                 if peeled.stdin is not None and param.default is empty:
                     # Required, reads stdin, and nothing supplied it. A taught
@@ -1102,12 +1140,18 @@ def bind_call(
             _validate_explicit(computed, peeled, label, siblings)
             bound.arguments[param.name] = computed  # inferred, so not `supplied`
             continue
-        if peeled.ask is not None and param.default is empty:
+        if peeled.ask is not None:
             cli = registry.cli_name(param.name)
-            supplied.add(param.name)  # asked and answered
-            _, bound.arguments[param.name] = _prompt_param(
-                cli, peeled, context._current.get(), siblings
+            asked, value = _prompt_param(
+                cli,
+                peeled,
+                context._current.get(),
+                siblings,
+                _MISSING if param.default is empty else param.default,
             )
+            if asked or param.default is empty:
+                supplied.add(param.name)  # asked and answered
+            bound.arguments[param.name] = value
     bound.apply_defaults()
     return bound.args, dict(bound.kwargs), frozenset(supplied)
 

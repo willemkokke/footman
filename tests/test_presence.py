@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import io
+import sys
 from typing import Annotated
 
 import pytest
@@ -9,7 +11,7 @@ import pytest
 from footman import _manifest, given
 from footman._executor import run_chain
 from footman._split import split_chain
-from footman.params import env, forward
+from footman.params import ask, env, forward
 from footman.registry import Group
 
 # Module-level, because `from __future__ import annotations` turns every
@@ -17,6 +19,7 @@ from footman.registry import Group
 # test or helper silently fails to resolve and the parameter falls back to text.
 Target = Annotated[str, env("BUILD_TARGET")]
 Fix = Annotated[bool, forward]
+Asked = Annotated[str, ask()]
 ForwardedTarget = Annotated[str, forward]
 
 
@@ -202,6 +205,26 @@ def test_forwarding_satisfies_a_defaultless_parameter():
     # Refusing this only pushed authors into giving `build.target` a default it
     # did not want, weakening its contract when run on its own.
     assert seen == {"target": "prod", "given": True}
+
+
+def test_a_bare_mention_skips_the_question(monkeypatch):
+    from footman import context
+
+    # Naming the option *is* an answer: asking again would be footman not
+    # listening. stdin would supply "typed" if a prompt ever fired.
+    monkeypatch.setattr(context, "_stdin_is_tty", lambda: True)
+    monkeypatch.setattr(sys, "stdin", io.StringIO("typed\n"))
+    monkeypatch.setattr(context, "real_stderr", io.StringIO)
+    seen: dict[str, object] = {}
+
+    def tasks(reg):
+        @reg.task
+        def release(*, version: Asked = "patch") -> None:
+            seen["value"] = version
+            seen["given"] = given("version")
+
+    _run(tasks, "release --version")
+    assert seen == {"value": "patch", "given": True}
 
 
 def test_given_outside_a_task_is_taught_not_false():

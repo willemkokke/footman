@@ -516,14 +516,23 @@ class ask:
     def release(version: Annotated[str, ask()]): ...
     ```
 
-    A *required* (defaultless) parameter marked `ask()` is prompted for when it
-    is not given on the command line and no `env` fills it — the answer runs
-    through the same coercion and validation as a CLI token, re-asking on a bad
-    value. Precedence stays CLI > env > default > prompt, so `ask()` only
-    prompts a parameter with **no default** (a default is the answer). Off a
-    terminal, under `--no-input`, or in `--json` it errors naming the flag
-    rather than hanging. `secret=True` hides the input (getpass); `prompt="…"`
-    overrides the question text.
+    A parameter marked `ask()` is prompted for when the command line does not
+    give it and no `env` fills it — the answer runs through the same coercion
+    and validation as a CLI token, re-asking on a bad value. Precedence is
+    **CLI > env > prompt (offering the default) > the default**.
+
+    A declared default becomes the *offer*: the prompt shows it, Enter accepts
+    it, and where nobody can be asked — off a terminal, under `--no-input`, in
+    `--json` — it is simply used. So `ask()` is safe on any parameter: a person
+    gets asked, an unattended run gets the default. Without a default there is
+    no other answer, so those cases error naming the flag rather than hanging.
+
+    Naming the option bare (`--version`) skips the question: the caller has
+    already said "the declared one", and asking again would be footman not
+    listening.
+
+    `secret=True` hides the input (getpass) and never shows the default, though
+    Enter still accepts it; `prompt="…"` overrides the question text.
     """
 
     __slots__ = ("prompt", "secret")

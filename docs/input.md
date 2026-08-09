@@ -31,13 +31,27 @@ def deploy(env: Annotated[Literal["staging", "prod"], ask()]): ...
 
 `fm release --version=1.2.3` uses the flag; `fm release` asks `version:` and
 runs the answer through coercion — a `Literal` is a typed choice, a bad value
-re-asks. The precedence is **CLI > `env` > default > prompt**: a default *is*
-the answer, so `ask()` only prompts a parameter that has none. (An `ask()`
+re-asks. The precedence is **CLI > `env` > prompt > default**. (An `ask()`
 parameter is a CLI-optional option, so it never becomes a required positional.)
 
-The safety is the point: off a terminal, under `--no-input`, or in `--json`,
-`ask()` **errors naming the flag** instead of hanging — an unattended run fails
-loudly, and CI passes the value as a flag like any other.
+A declared default becomes the **offer** rather than a reason not to ask:
+
+<!-- example: fragment -->
+
+```python
+@task
+def release(version: Annotated[str, ask()] = "patch"): ...
+```
+
+`fm release` asks `version [patch]:` and Enter takes `patch`. Naming the option
+bare — `fm release --version` — skips the question entirely, because the caller
+has already said "the declared one".
+
+The safety is the point. Off a terminal, under `--no-input`, or in `--json`,
+a parameter **with** a default quietly takes it, and one **without** *errors
+naming the flag* instead of hanging. So `ask()` is safe to put on anything: a
+person gets asked, an unattended run gets the default, and a value that has no
+default still fails loudly rather than waiting for someone who isn't there.
 
 ![Animated: fm release prompts version, the typed answer runs through coercion, and the release runs](_generated/shots/ask-cast.svg)
 

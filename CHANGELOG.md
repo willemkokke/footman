@@ -51,6 +51,13 @@ versions may include breaking changes.
   naming absence tells a reader less than silence does.
 - **`GlobalOption.given`**, the twin of `.value`, so a plugin can tell a global
   that was named from one that merely has a default.
+- **`ask()` works on a parameter that has a default**, which makes it safe to
+  put on anything. The default becomes the *offer* — `version [patch]:`, Enter
+  accepts — instead of a reason not to ask, and where nobody can be asked (off
+  a terminal, `--no-input`, `--json`) it is quietly used. A parameter with no
+  default still errors naming the flag, because there is no other answer. So a
+  person gets asked and an unattended run gets the default. Naming the option
+  bare skips the question: the caller has already said "the declared one".
 
 ### Changed
 
