@@ -20,8 +20,8 @@ def plugin_project(tmp_path, monkeypatch):
     (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
     (tmp_path / "tasks.py").write_text(
         "from footman import group, plugin, task\n"
-        "# pulled FIRST on purpose: the local group() below adopts the\n"
-        "# pulled docs group — order must not matter\n"
+        "# mounted FIRST on purpose: the local group() below adopts the\n"
+        "# mounted docs group — order must not matter\n"
         "plugin('footman.docs')\n"
         "\n"
         "@task\n"
@@ -41,7 +41,7 @@ def plugin_project(tmp_path, monkeypatch):
 
 
 def test_bare_import_never_loads_first_party_tasks():
-    # Hot-path guard: `import footman` must not pull the plugin package.
+    # Hot-path guard: `import footman` must not import the plugin package.
     probe = "import footman, sys; print('footman.tasks' in sys.modules)"
     out = subprocess.run(
         [sys.executable, "-c", probe], capture_output=True, text=True, check=True

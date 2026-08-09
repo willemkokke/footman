@@ -109,7 +109,7 @@ def _default_jobs() -> int:
 #
 # Declared as instances of the SAME class plugin globals use — one option
 # model — with core constructed off the registration carriage: core options
-# are not contributions riding a pull, they are the runner itself. The tuple
+# are not contributions riding a mount, they are the runner itself. The tuple
 # table below is a DERIVED VIEW of these declarations: `_parse_globals`,
 # help, and the docs table keep reading (canonical, alias, kind, hint,
 # default, help) rows, and the completion hot path's hardcoded mirror is
@@ -271,7 +271,7 @@ CORE_OPTIONS: tuple[_CoreOption, ...] = (
         default="",
         help="print task contracts as JSON",
     ),
-    _CoreOption("plugins", help="list installed footman.tasks plugins, pulled or not"),
+    _CoreOption("plugins", help="list installed footman.tasks plugins, mounted or not"),
     _CoreOption(
         "dry-run", alias="-n", help="rehearse: bodies run, footman's work is faked"
     ),
@@ -650,7 +650,7 @@ def _parse_globals(
     is no default task, so a word behind it is taught rather than quietly
     becoming the task to run.
 
-    *plugin* maps a pulled plugin's long options (`--env-file`) to their
+    *plugin* maps a mounted plugin's long options (`--env-file`) to their
     kinds: a bool contributes both its spellings as `flag`, and every
     value-taking one is `option?` — bare-legal, because presence is a reading
     its owner can always ask for (`.given`). *lenient* carries an unknown dash

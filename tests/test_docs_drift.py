@@ -365,7 +365,7 @@ def test_every_config_key_is_live_and_documented():
     # `backend`, so check the leaf — the part a `.get()` actually names.
     dead = [name for name, *_ in _config.KEYS if f'"{name.split(".")[-1]}"' not in src]
     assert not dead, f"_config.KEYS lists keys nothing reads: {dead}"
-    # The page must actually pull the generated table in; a hand-written
+    # The page must actually mount the generated table in; a hand-written
     # copy would drift the moment a key changed.
     page = (DOCS / "configuration.md").read_text(encoding="utf-8")
     assert '--8<-- "docs/_generated/config.md"' in page, (

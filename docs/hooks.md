@@ -336,7 +336,7 @@ A plugin whose behaviour is invocation-wide wants an invocation-wide switch —
 Constructing a `GlobalOption` **is** registering it: a module-level singleton
 in the provider, stamped with the module that defined it, riding the same
 carriage as lifecycle hooks — so it reaches a run only when its owner is
-pulled, and an unpulled owner's option is an unknown option, taught.
+mounted, and an unmounted owner's option is an unknown option, taught.
 
 ```python
 from pathlib import Path
@@ -371,7 +371,7 @@ between two plugins naming both owners.
 
 ## The built-in: `footman.env_files`
 
-The funnel plugin — one pull, one visible behaviour, a working example of
+The funnel plugin — one mount, one visible behaviour, a working example of
 everything above (a lifecycle hook, a `GlobalOption`, an optional
 dependency):
 
@@ -381,7 +381,7 @@ from footman.compose import plugin
 plugin("footman.env_files")
 ```
 
-Pulled, it loads `.env` from the invocation's directory at the run's
+Mounted, it loads `.env` from the invocation's directory at the run's
 single-threaded moment — before availability gates, so `@requires_env` sees
 it — with **env wins**: a key the real environment already carries is never
 overwritten, so a checkout cannot surprise a shell. `--env-file=PATH` names
@@ -389,7 +389,7 @@ another file (path-typed, so <kbd>Tab</kbd> offers files); a missing *named*
 file is a refusal, a missing default is nothing to do. Values are read by
 python-dotenv — an optional dependency the plugin imports lazily and teaches
 by name when absent — with interpolation off: a value is the text on its
-line. Unpulled, none of this exists, not even the option.
+line. Unmounted, none of this exists, not even the option.
 
 ## The caching contract, stated once
 

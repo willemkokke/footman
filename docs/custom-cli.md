@@ -233,4 +233,4 @@ have no project.
 
 It is a *fallback*, not a rung: the moment a project's cascade finds a tasks
 file, that cascade wins outright. There is one way to get tasks into a project
-tree — pull them in a tasks file — and this does not become a second one.
+tree — mount them in a tasks file — and this does not become a second one.

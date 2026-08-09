@@ -127,7 +127,7 @@ and scripts), and off a terminal without `--yes` the answer is no — footman
 never proceeds unasked.
 
 A task that asks for confirmation gets it **however it is reached**: named on
-the command line or pulled in as a `pre=`/`post=` prerequisite, the question
+the command line or mounted in as a `pre=`/`post=` prerequisite, the question
 comes up front with the run's other questions — one reference, one question,
 however many ways the plan reaches it. A body call is the one reach that
 cannot be known up front, so it asks at the moment of the call.

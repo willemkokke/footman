@@ -59,10 +59,10 @@ class _Node:
     keep_going: bool = False  # resolved failure policy for THIS node (per-subtree)
     shared: bool = True  # resolved sharing policy: may an earlier run satisfy it?
     # The group this default action was *reached through*, when known.
-    # Default-ness is parent-relative: a provider's default pulled into a
+    # Default-ness is parent-relative: a provider's default mounted into a
     # consumer group must fan out the group it landed in, not the one it was
     # declared on — task fns are shared between trees, so the declaration
-    # stamp cannot know where a pull placed it.
+    # stamp cannot know where a mount placed it.
     group: Group | None = None
 
 
@@ -142,7 +142,7 @@ def _build_dag(root: Group, segments: list[Segment]) -> list[_Node]:
     Explicit chain segments each get their own node, so each mention is its own
     request (`build web build api` builds twice — different arguments, different
     work). Shared pre/post prerequisites dedupe by task identity, so a
-    prerequisite pulled in twice is one node. Two requests that resolve to the
+    prerequisite mounted in twice is one node. Two requests that resolve to the
     same work are one execution whether they are two nodes, a node and a body
     call, or two calls: the second is answered by the first and reported as
     `shared`, unless the task (or the reference) declared `shared=False`. Node
@@ -285,7 +285,7 @@ def _build_dag(root: Group, segments: list[Segment]) -> list[_Node]:
         shared = resolve_inherited(sharing(fn), inherited=True)
         existing = dep_nodes.get(key) if shared else None
         if existing is not None and key not in seen_explicit:
-            # First explicit mention of a task already pulled in as a bare dep:
+            # First explicit mention of a task already mounted in as a bare dep:
             # adopt this segment's args instead of creating a duplicate.
             existing.seg = seg
             seen_explicit.add(key)

@@ -389,14 +389,14 @@ def test_local_definition_silently_beats_a_pull(provider):
     with registry.capture() as captured:
         compose.include("shared_tasks", only=["lint"])
 
-        @registry.task  # local def AFTER the pull shadows it just the same
+        @registry.task  # local def AFTER the mount shadows it just the same
         def lint(): ...
 
         assert captured.tasks["lint"] is lint
 
 
 def test_overlapping_repulls_clash_loudly_unless_override(provider):
-    # Imported-vs-imported: every pull is authored, so a clash is a bug with
+    # Imported-vs-imported: every mount is authored, so a clash is a bug with
     # a one-line fix — loud beats silently running the wrong task. The
     # message cites provenance.
     with registry.capture() as captured:
@@ -405,7 +405,7 @@ def test_overlapping_repulls_clash_loudly_unless_override(provider):
             compose.include("shared_tasks", only=["lint"])
         compose.include("shared_tasks", only=["lint"], override=True)
         assert "lint" in captured.tasks
-        # Disjoint re-pulls of one source (two filters) compose.
+        # Disjoint re-mounts of one source (two filters) compose.
         compose.include("shared_tasks", only=["fmt"])
         assert "fmt" in captured.tasks
 
@@ -520,7 +520,7 @@ def test_plugin_unknown_names_installed(provider):
 
 def test_pull_line_splats_an_anonymous_container(provider, tmp_path):
     # plugin("shared") resolves the entry point; the module capture's root is
-    # an anonymous container, so pulling it lands its *children* — the splat.
+    # an anonymous container, so mounting it lands its *children* — the splat.
     project = tmp_path / "proj2"
     project.mkdir()
     (project / "pyproject.toml").write_text('[project]\nname="x"\n')
@@ -670,7 +670,7 @@ def test_dotted_plugin_name_nests_and_shares_namespace(tmp_path, monkeypatch):
 
 
 def test_broken_plugin_pull_refuses(tmp_path, monkeypatch):
-    # F07 end-to-end: a broken pulled plugin is a clean refusal, not a raw
+    # F07 end-to-end: a broken mounted plugin is a clean refusal, not a raw
     # traceback on every invocation.
     _advertise(
         tmp_path,
@@ -812,7 +812,7 @@ def test_fork_copies_every_group_field():
         "tasks",
         "groups",
         "contributions",
-        "pulled_from",
+        "mounted_from",
     }
     # Hook kinds live inside `contributions`, one bucket per declared kind —
     # _fork copies the dict generically, so a new kind never touches it.
@@ -927,7 +927,7 @@ def test_include_runs_provider_hooks(tmp_path, monkeypatch):
 
 
 def test_include_of_a_hooks_only_module_is_a_valid_pull(tmp_path, monkeypatch):
-    # A lifecycle-only provider — hooks, not a single task — is a valid pull.
+    # A lifecycle-only provider — hooks, not a single task — is a valid mount.
     # Before the relaxation this include() refused with "no module-level
     # Group"; the module's whole contribution is what its hooks do.
     (tmp_path / "hooks_only.py").write_text(
@@ -960,7 +960,7 @@ def test_include_of_a_hooks_only_module_is_a_valid_pull(tmp_path, monkeypatch):
 
 def test_plugin_of_a_hooks_only_provider_is_a_valid_pull(tmp_path, monkeypatch):
     # The entry-point doorway accepts a lifecycle-only provider too, and the
-    # pull lands its contributions on the live root, not the grafted subtree.
+    # mount lands its contributions on the live root, not the grafted subtree.
     _advertise(
         tmp_path,
         monkeypatch,
@@ -977,7 +977,7 @@ def test_plugin_of_a_hooks_only_provider_is_a_valid_pull(tmp_path, monkeypatch):
         compose.plugin("hooksonly")
     assert captured.contributions["pre_tasks"]
     assert not captured.tasks and not captured.groups
-    # A second pull re-forks the memoised tree: the graft must drain the
+    # A second mount re-forks the memoised tree: the graft must drain the
     # fork's buckets, never the memo's, or the hook arrives only once.
     with registry.capture() as again:
         compose.plugin("hooksonly")
@@ -1035,7 +1035,7 @@ def test_pull_a_single_task_adopts_it(provider):
     with registry.capture() as captured:
         compose.include("shared_tasks.docs.build", into="site")
     assert "build" in captured.groups["site"].tasks
-    with pytest.raises(RegistrationError, match=r"pull it bare"):
+    with pytest.raises(RegistrationError, match=r"mount it bare"):
         compose.include("shared_tasks.fmt", only=["x"])
 
 
@@ -1073,7 +1073,7 @@ def test_provenance_is_stamped_and_reported(provider, tmp_path):
     result = Runner().invoke("--plugins", cwd=project)
     assert result.ok
     assert "shared" in result.stdout
-    assert "pulled at vendor" in result.stdout
+    assert "mounted at vendor" in result.stdout
 
 
 def test_unpulled_plugin_shows_dist_summary(provider, tmp_path):
@@ -1084,11 +1084,11 @@ def test_unpulled_plugin_shows_dist_summary(provider, tmp_path):
     result = Runner().invoke("--plugins", cwd=project)
     assert result.ok
     assert "shared" in result.stdout
-    assert "(not pulled)" in result.stdout
+    assert "(not mounted)" in result.stdout
 
 
 def test_two_pulls_compose_one_subtree(provider, tmp_path, monkeypatch):
-    # Two pulls into one target compose all the way down — group-vs-group is
+    # Two mounts into one target compose all the way down — group-vs-group is
     # never a clash, only a same-address leaf is.
     _advertise(
         tmp_path,
@@ -1154,10 +1154,10 @@ def test_module_docstring_becomes_container_help(tmp_path, monkeypatch):
 
 
 def test_adopted_default_fans_out_the_group_it_landed_in(tmp_path, monkeypatch):
-    # Default-ness is parent-relative: a provider's empty-body default pulled
+    # Default-ness is parent-relative: a provider's empty-body default mounted
     # into a consumer group fans out the group it LANDED in, not the one it
     # was declared on — the fn is shared, so the declaration stamp cannot
-    # know where the pull placed it.
+    # know where the mount placed it.
     _advertise(
         tmp_path,
         monkeypatch,
@@ -1241,11 +1241,11 @@ def test_default_survives_only_if_the_default_survives(tmp_path, monkeypatch):
 
 
 def test_local_group_adopts_a_pulled_one(provider):
-    # A local group() over a *pulled* group adopts it — claiming the name
-    # means adding to it, exactly what pulling after the definition
+    # A local group() over a *mounted* group adopts it — claiming the name
+    # means adding to it, exactly what mounting after the definition
     # produces. Either order: the union, local wins per leaf.
     with registry.capture() as captured:
-        compose.include("shared_tasks", only=["docs"])  # pull first
+        compose.include("shared_tasks", only=["docs"])  # mount first
 
         docs = registry.group("docs", help="Mine now")
 
@@ -1272,8 +1272,8 @@ def test_adopted_group_still_shadows_pulled_leaves(provider):
         docs = registry.group("docs")
 
         @docs.task
-        def build(): ...  # the same name as a pulled leaf: local wins
+        def build(): ...  # the same name as a mounted leaf: local wins
 
         got = captured.groups["docs"]
         assert got.tasks["build"] is build
-        assert "serve" in got.tasks  # the rest of the pull survives
+        assert "serve" in got.tasks  # the rest of the mount survives

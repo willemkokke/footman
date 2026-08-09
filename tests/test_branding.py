@@ -418,7 +418,7 @@ def test_the_cache_and_config_directories_must_differ(tmp_path, monkeypatch):
 
 def test_a_project_cascade_beats_the_user_tasks_file(tmp_path, monkeypatch):
     # A fallback, not a rung: there is one way to get tasks into a project
-    # tree, and that is pulling them in a tasks file.
+    # tree, and that is mounting them in a tasks file.
     cfg = tmp_path / "cfg"
     (cfg / "acme").mkdir(parents=True)
     (cfg / "acme" / "tasks.py").write_text(

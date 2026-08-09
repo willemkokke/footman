@@ -77,7 +77,7 @@ class GlobalOption:
     Constructing one **is** registering it: a module-level singleton in the
     provider, stamped with the module that defined it, riding the same
     carriage as lifecycle hooks — so it reaches a run only when its owner is
-    pulled, and an unpulled owner's option is an unknown option, taught.
+    mounted, and an unmounted owner's option is an unknown option, taught.
     Long-form only, and the value is `=`-attached like every option's.
 
         ENV_FILE = GlobalOption("env-file", Path, help="load this .env file")
@@ -111,7 +111,7 @@ class GlobalOption:
     __slots__ = (
         "_frozen",
         "_given",
-        "_pulled",
+        "_mounted",
         "_reads",
         "_section",
         "_value",
@@ -154,10 +154,10 @@ class GlobalOption:
         self.default = default if annotation is not bool else bool(default)
         self.config = config
         self.help = help
-        # Provenance the pull writes down (the entry-point identity), and
+        # Provenance the mount writes down (the entry-point identity), and
         # the config section resolved from it at discovery — the derivation
         # `config=` rides on.
-        self._pulled: str | None = None
+        self._mounted: str | None = None
         self._section: str | None = None
         # The DEFINING module, never the importing capture: what a collision
         # names, what pairing and provenance key on.
@@ -173,7 +173,7 @@ class GlobalOption:
 
     def _register(self) -> None:
         # The plugin carriage: constructing IS registering, so the option
-        # reaches a run exactly when its owner is pulled. Core's own
+        # reaches a run exactly when its owner is mounted. Core's own
         # declarations (`_split._CoreOption`) override this to stay off it —
         # they are not contributions, they are the runner, and the collision
         # law reads them from the derived grammar table instead.
@@ -249,10 +249,10 @@ _UNBOUND = object()
 
 _USES = "_footman_uses"
 
-# The pull writes this in place of an identity when one singleton is reached
-# through two *different* pulls: its derived section would depend on pull
+# The mount writes this in place of an identity when one singleton is reached
+# through two *different* mounts: its derived section would depend on mount
 # order, so a config-backed option carrying it must name a section instead.
-_MANY_PULLS = "<multiple pulls>"
+_MANY_MOUNTS = "<multiple mounts>"
 
 # Module name -> the config section that module's options claim, declared by
 # `config_section()` beside the options themselves. Keyed the way `owner` is
@@ -303,7 +303,7 @@ def validate_global_options(options: Sequence[GlobalOption]) -> str | None:
     claiming one name are refused naming both. A bool option also claims its
     `--no-x` spelling, so a literal `no-x` beside a bool `x` is a clash too —
     loud at discovery, never order-dependent at parse. The same singleton
-    reached through two pulls is one option, not a clash. Returns the
+    reached through two mounts is one option, not a clash. Returns the
     teaching message, or `None` when the set is sound."""
     from footman._split import _GLOBAL_KIND
 
@@ -329,7 +329,7 @@ def validate_global_options(options: Sequence[GlobalOption]) -> str | None:
                 return (
                     f"{flag} is claimed by both {other[0].owner}{other[1]} "
                     f"and {opt.owner}{derived} — two plugins, one spelling; "
-                    f"rename one, or pull only one of them"
+                    f"rename one, or mount only one of them"
                 )
             seen[flag] = (opt, derived)
     return _resolve_config_sections(options)
@@ -340,9 +340,9 @@ def _resolve_config_sections(options: Sequence[GlobalOption]) -> str | None:
     message for one that cannot have a single answer.
 
     Explicit `config_section(...)` wins; else the entry-point identity the
-    pull stamped, de-dotted (`acme.devkit` → `acme-devkit`). Nothing to
-    derive from, or two pulls disagreeing, is a refusal naming the remedy —
-    loud at discovery, never resolved by pull order. Two providers claiming
+    mount stamped, de-dotted (`acme.devkit` → `acme-devkit`). Nothing to
+    derive from, or two mounts disagreeing, is a refusal naming the remedy —
+    loud at discovery, never resolved by mount order. Two providers claiming
     one section refuse naming both, the flag-collision law's habit."""
     claimed: dict[str, GlobalOption] = {}
     for opt in options:
@@ -350,21 +350,21 @@ def _resolve_config_sections(options: Sequence[GlobalOption]) -> str | None:
             continue
         section = _CONFIG_SECTIONS.get(opt.owner)
         if section is None:
-            if opt._pulled is None:
+            if opt._mounted is None:
                 return (
                     f"--{opt.name} (from {opt.owner}) declares config= but "
                     f"nothing names its section — no entry point to derive "
                     f"one from; declare footman.config_section('...') in the "
                     f"defining module"
                 )
-            if opt._pulled == _MANY_PULLS:
+            if opt._mounted == _MANY_MOUNTS:
                 return (
                     f"--{opt.name} declares config= and is reached through "
-                    f"more than one pull, so its derived section would "
-                    f"depend on pull order — declare "
+                    f"more than one mount, so its derived section would "
+                    f"depend on mount order — declare "
                     f"footman.config_section('...') in the defining module"
                 )
-            section = opt._pulled.replace(".", "-")
+            section = opt._mounted.replace(".", "-")
         other = claimed.get(section)
         if other is not None and other.owner != opt.owner:
             return (
@@ -414,7 +414,7 @@ def orphan_global_options(root: Group) -> list[str]:
     seen: list[GlobalOption] = []
     for opt in root.contributions.get("globals", ()):
         if any(o is opt for o in seen):
-            continue  # the same singleton pulled twice is one option
+            continue  # the same singleton mounted twice is one option
         seen.append(opt)
         if opt.owner in hook_owners or id(opt) in declared:
             continue
@@ -440,7 +440,7 @@ _LANES = "_footman_lanes"
 _INTERACTIVE = "_footman_interactive"
 _PROGRESS = "_footman_progress"
 _CONFIRM = "_footman_confirm"
-_PULLED = "_footman_pulled_from"  # provenance: the plugin identity a pull stamped
+_MOUNTED = "_footman_mounted_from"  # provenance: the plugin identity a mount stamped
 _CWD = "_footman_cwd"
 _REL = "_footman_rel"
 _SERIAL = "_footman_serial"
@@ -1243,10 +1243,10 @@ class Group:
         self.contributions: dict[str, list[Any]] = {
             kind: [] for kind in CONTRIBUTION_KINDS
         }
-        # Provenance: the plugin identity that pulled this group in, or None
+        # Provenance: the plugin identity that mounted this group in, or None
         # for a locally-defined one. Collision messages cite it, `--plugins`
         # reports it, and "local silently wins" is decided by it.
-        self.pulled_from: str | None = None
+        self.mounted_from: str | None = None
 
     @property
     def default_task(self) -> Task | None:
@@ -1262,7 +1262,7 @@ class Group:
     def _stamp_default(self, fn: Task, interactive: bool) -> None:
         """The default-action validations and markers, one code path for
         every way a task can come to be named `default` — the decorator,
-        `@task(name="default")`, or a pull landing one here."""
+        `@task(name="default")`, or a mount landing one here."""
         fanout = _empty_body(fn)
         where = self.name if self.name != "root" else "the root group"
         if interactive and fanout:
@@ -1316,15 +1316,15 @@ class Group:
             raise RegistrationError(f"{where} already has a group named {key!r}")
 
     def _shadow_pulled(self, key: str) -> None:
-        """Make way for a *local* definition of *key*: a pulled entry yields
+        """Make way for a *local* definition of *key*: a mounted entry yields
         silently, whatever the file order — the cascade's "user names shadow
         plugins" principle, carried by provenance instead of ordering.
         Local-vs-local stays loud in `_claim`."""
         existing_task = self.tasks.get(key)
-        if existing_task is not None and pulled_from(existing_task) is not None:
+        if existing_task is not None and mounted_from(existing_task) is not None:
             del self.tasks[key]
         existing_group = self.groups.get(key)
-        if existing_group is not None and existing_group.pulled_from is not None:
+        if existing_group is not None and existing_group.mounted_from is not None:
             del self.groups[key]
 
     @overload
@@ -1528,11 +1528,11 @@ class Group:
                 f"@{self.name}.default, or name a task 'default'"
             )
         adopted = self.groups.get(key)
-        if adopted is not None and adopted.pulled_from is not None:
-            # A local definition over a *pulled* group adopts it rather than
+        if adopted is not None and adopted.mounted_from is not None:
+            # A local definition over a *mounted* group adopts it rather than
             # evicting it: claiming the name means adding to it — exactly
-            # what pulling after the definition produces. Local leaves still
-            # shadow pulled ones (task-level `_shadow_pulled`), so definition
+            # what mounting after the definition produces. Local leaves still
+            # shadow mounted ones (task-level `_shadow_pulled`), so definition
             # order stops mattering: either way the union, local wins per
             # leaf, and only the listing order follows the file.
             if help:
@@ -2040,8 +2040,8 @@ def post_deps(fn: Task) -> list[Task]:
     return getattr(fn, _POST, [])
 
 
-def pulled_from(node: Task | Group) -> str | None:
-    """The plugin identity that pulled *node* in, or None for local code.
+def mounted_from(node: Task | Group) -> str | None:
+    """The plugin identity that mounted *node* in, or None for local code.
 
     Groups carry it as a real field (each graft gets fresh Group objects);
     task functions carry it as a marker attribute — fns are shared between
@@ -2049,8 +2049,8 @@ def pulled_from(node: Task | Group) -> str | None:
     everywhere the same provider's fn lands.
     """
     if isinstance(node, Group):
-        return node.pulled_from
-    return getattr(node, _PULLED, None)
+        return node.mounted_from
+    return getattr(node, _MOUNTED, None)
 
 
 def default_group(fn: Task) -> Group | None:

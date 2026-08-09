@@ -93,7 +93,7 @@ def _rebuild() -> None:
         *_paths.child_args(),
     )
 
-    # Mirror the app layer's cwd cascade build; plugin pulls are authored in
+    # Mirror the app layer's cwd cascade build; plugin mounts are authored in
     # the tasks files themselves, so discovery alone rebuilds the whole tree.
     base = registry.Group("root")
     reg = _discover.load_tree(files, base=base)

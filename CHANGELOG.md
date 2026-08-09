@@ -7,6 +7,17 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Changed
+
+- **The composing verb is `mount`.** A plugin or module is *mounted* into
+  the tree — `plugin()` and `include()` are the mounting calls, and `into=`
+  is the mount point — where messages and docs used to say "pull", a word
+  git already owns and plugin systems don't use. The function names are
+  unchanged; what moves is the prose everywhere it speaks: `--plugins`
+  reports `mounted at …` / `(not mounted)`, the collision refusals say
+  "mount only one of them", and the composing page teaches the one verb
+  that carries both opt-in and placement.
+
 ## [0.35.0] — 2026-08-09
 
 ### Fixed

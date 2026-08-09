@@ -10,7 +10,7 @@ small API lets a task add its own timing to the same picture.
 
 ## The profile plugin
 
-Pull it like any plugin:
+Mount it like any plugin:
 
 <!-- example: fragment -->
 ```python

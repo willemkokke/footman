@@ -1,8 +1,8 @@
 """Write the run as a profiler trace — `fm --profile … check`, then open the
 file at ui.perfetto.dev (chrome://tracing and speedscope read it too).
 
-`plugin("footman.profile")` in a tasks file switches it on; unpulled, it is
-inert metadata like any other plugin. Pulled, `--profile` writes
+`plugin("footman.profile")` in a tasks file switches it on; unmounted, it is
+inert metadata like any other plugin. Mounted, `--profile` writes
 `fm-profile.json` in the invocation's directory and `--profile=FILE` chooses —
 Chrome Trace Event Format, stdlib `json` only, whole-file at `post_tasks`
 when every row is in.

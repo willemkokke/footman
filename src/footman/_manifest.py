@@ -136,7 +136,7 @@ def call_signature(fn: Any) -> inspect.Signature:
 def _unique_globals(root: Group) -> list[Any]:
     """The tree's plugin globals, deduped by identity, contribution order.
 
-    The same singleton pulled through two routes is one option; a name clash
+    The same singleton mounted through two routes is one option; a name clash
     between two different singletons was refused at discovery, before the
     manifest could bake either."""
     seen: list[Any] = []

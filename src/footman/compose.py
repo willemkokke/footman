@@ -1,11 +1,11 @@
 """Compose the task surface: two typed verbs over one engine.
 
-- `plugin("acme.devkit.lint")` pulls from an installed package's
+- `plugin("acme.devkit.lint")` mounts from an installed package's
   **`footman.tasks` entry point** — the console-script of task trees: a
   stable public identity for a Group the package offers, enumerable,
-  inert until pulled. The longest installed entry-point name is the
+  inert until mounted. The longest installed entry-point name is the
   identity; the rest of the string walks the advertised tree.
-- `include("mytasks.lint")` pulls from an **importable module** — the same
+- `include("mytasks.lint")` mounts from an **importable module** — the same
   grammar over your own reach: file-splitting, monorepo-local sharing.
   The longest importable prefix is imported (under a registry capture, so
   the provider's decorators can't leak); the rest walks the captured tree.
@@ -13,11 +13,11 @@
 The type tag lives in the verb: no string is ever resolved against both
 registries, so there is no precedence and no silent re-pointing when a new
 package lands. The model is Python imports — `plugin("acme.devkit.lint")`
-is `from acme_devkit import lint` for task trees; pulling a whole container
+is `from acme_devkit import lint` for task trees; mounting a whole container
 is the `import *`, safe here because local definitions silently win and
 imported-vs-imported clashes are loud.
 
-A pulled node lands under its **own name** (identity never becomes an
+A mounted node lands under its **own name** (identity never becomes an
 address); `into=` — a dotted address, auto-vivified — is the consumer's
 placement. Everything after resolution (walk, land, filter, merge) is one
 shared engine, and every imported node carries its provider identity as
@@ -35,7 +35,7 @@ from types import ModuleType
 from typing import Any
 
 from footman import registry
-from footman.registry import Group, RegistrationError, Task, pulled_from
+from footman.registry import Group, RegistrationError, Task, mounted_from
 
 ENTRY_POINT_GROUP = "footman.tasks"
 
@@ -105,7 +105,7 @@ def _import_source(dotted: str, *, allow_empty: bool = False) -> Group:
             ) from exc
     if captured.tasks or captured.groups or any(captured.contributions.values()):
         # Tasks, groups, or lifecycle contributions alone — a hooks-only
-        # provider (a `@pre_tasks` module) is a valid pull with no tree.
+        # provider (a `@pre_tasks` module) is a valid mount with no tree.
         tree = captured
     elif allow_empty:
         tree = captured  # an empty intermediate package: fine, walk on
@@ -145,20 +145,20 @@ def _fork(tree: Group) -> Group:
     # `test_compose`'s field census fails the moment a new Group field is
     # added but not copied here.
     fork.contributions = {k: list(b) for k, b in tree.contributions.items()}
-    fork.pulled_from = tree.pulled_from
+    fork.mounted_from = tree.mounted_from
     return fork
 
 
 def _stamp(node: Group, identity: str) -> None:
-    """Record *identity* as provenance on every node of a pulled tree.
+    """Record *identity* as provenance on every node of a mounted tree.
 
-    Groups carry it as a field (each pull grafts fresh Group objects); task
+    Groups carry it as a field (each mount grafts fresh Group objects); task
     fns carry the marker attribute — they are shared between forks, and the
     identity is the same everywhere the same provider's fn lands.
     """
-    node.pulled_from = identity
+    node.mounted_from = identity
     for fn in node.tasks.values():
-        setattr(fn, registry._PULLED, identity)
+        setattr(fn, registry._MOUNTED, identity)
     for sub in node.groups.values():
         _stamp(sub, identity)
 
@@ -243,7 +243,7 @@ def _resolve_plugin(source: str) -> tuple[str, Group | Task]:
     The longest installed entry-point name that prefixes *source* is the
     identity; the remainder walks the advertised tree. When a *shorter*
     installed prefix would also resolve fully, both readings are named on
-    stderr — a new package must never silently re-point an existing pull.
+    stderr — a new package must never silently re-point an existing mount.
     """
     from importlib.metadata import entry_points
 
@@ -337,11 +337,11 @@ def _vivify_into(into: str | Group | None, verb: str) -> Group:
         if seg == "default" or not seg or any(c.isspace() for c in seg):
             # `into=` names a *group* to graft into; `default` is task-typed
             # by definition, and empty/whitespace segments are not addresses.
-            # For a provider's default, pull it by address instead:
+            # For a provider's default, mount it by address instead:
             # plugin("acme.linters.default", into="lint").
             raise RegistrationError(
                 f"{verb}(into={into!r}): {addr!r} cannot name a group — "
-                f"'default' is a task; to adopt a provider's default, pull "
+                f"'default' is a task; to adopt a provider's default, mount "
                 f'it directly: {verb}("…​.default", into="<group>")'
                 if seg == "default"
                 else f"{verb}(into={into!r}): {addr!r} is not a legal group address"
@@ -360,12 +360,12 @@ def _vivify_into(into: str | Group | None, verb: str) -> Group:
 
 
 def _merge_group(dst: Group, src: Group, *, override: bool, at: str) -> None:
-    """The one recursive leaf merge: two pulls into one subtree compose all
+    """The one recursive leaf merge: two mounts into one subtree compose all
     the way down; only a same-address leaf conflicts.
 
     Local-vs-imported: the local leaf silently wins, whatever the order.
     Imported-vs-imported (a task-vs-task or type clash): loud unless
-    `override=True` — every pull is authored, so a clash is a bug with a
+    `override=True` — every mount is authored, so a clash is a bug with a
     one-line fix (`exclude=`/`into=`), and loud beats silently running the
     wrong task.
     """
@@ -373,22 +373,22 @@ def _merge_group(dst: Group, src: Group, *, override: bool, at: str) -> None:
     def clash(name: str, theirs: Task | Group) -> None:
         addr = f"{at}.{name}" if at else name
         raise RegistrationError(
-            f"{addr!r} claimed by both {pulled_from(theirs)!r} and "
-            f"{src.pulled_from!r} — exclude= one side, retarget with into=, "
-            f"or pass override=True to take the later pull's"
+            f"{addr!r} claimed by both {mounted_from(theirs)!r} and "
+            f"{src.mounted_from!r} — exclude= one side, retarget with into=, "
+            f"or pass override=True to take the later mount's"
         )
 
     for name, fn in src.tasks.items():
         existing_t = dst.tasks.get(name)
         existing_g = dst.groups.get(name)
         if existing_t is not None:
-            if pulled_from(existing_t) is None:  # local silently wins
+            if mounted_from(existing_t) is None:  # local silently wins
                 continue
             if not override:
                 clash(name, existing_t)
             dst.tasks[name] = fn
         elif existing_g is not None:
-            if existing_g.pulled_from is None:  # local group beats a pulled task
+            if existing_g.mounted_from is None:  # local group beats a mounted task
                 continue
             if not override:
                 clash(name, existing_g)
@@ -400,7 +400,7 @@ def _merge_group(dst: Group, src: Group, *, override: bool, at: str) -> None:
         existing_t = dst.tasks.get(name)
         existing_g = dst.groups.get(name)
         if existing_t is not None:
-            if pulled_from(existing_t) is None:
+            if mounted_from(existing_t) is None:
                 continue
             if not override:
                 clash(name, existing_t)
@@ -408,7 +408,7 @@ def _merge_group(dst: Group, src: Group, *, override: bool, at: str) -> None:
             dst.groups[name] = sub
         elif existing_g is not None:
             # Group-vs-group is composition, never a clash: recurse. This is
-            # what lets two pulls (or a pull and a local group) share one
+            # what lets two mounts (or a mount and a local group) share one
             # namespace all the way down.
             _merge_group(
                 existing_g, sub, override=override, at=f"{at}.{name}" if at else name
@@ -424,7 +424,7 @@ def _validate_filter(node: Group, address: str, verb: str) -> None:
     for pos, seg in enumerate(address.split(".")):
         last = pos == len(address.split(".")) - 1
         walked.append(seg)
-        parent = ".".join(walked[:-1]) or "the pulled node"
+        parent = ".".join(walked[:-1]) or "the mounted node"
         if seg in current.groups:
             current = current.groups[seg]
             continue
@@ -501,7 +501,7 @@ def _drop_empty(node: Group) -> None:
 def _prune(
     node: Group, only: tuple[str, ...], exclude: tuple[str, ...], verb: str
 ) -> None:
-    """Apply `only=`/`exclude=` to the pulled node — full dotted addresses,
+    """Apply `only=`/`exclude=` to the mounted node — full dotted addresses,
     matched exactly (no globs: the whole-group spelling `only=["docs"]` *is*
     the glob). Grafting a nested address materialises its path — the
     intermediate groups are the source's own forked copies — and
@@ -520,7 +520,7 @@ def _prune(
     _drop_empty(node)
 
 
-def _pull(
+def _mount(
     verb: str,
     identity: str,
     node: Group | Task,
@@ -539,12 +539,12 @@ def _pull(
         if only or exclude:
             raise RegistrationError(
                 f"{verb}(): only=/exclude= filter a group's children, and "
-                f"{landing_name!r} is a task — pull it bare"
+                f"{landing_name!r} is a task — mount it bare"
             )
-        setattr(node, registry._PULLED, identity)
+        setattr(node, registry._MOUNTED, identity)
         wrapper = Group("root")
         wrapper.tasks[landing_name] = node
-        wrapper.pulled_from = identity
+        wrapper.mounted_from = identity
         _merge_group(target, wrapper, override=override, at="")
         return target
 
@@ -558,20 +558,20 @@ def _pull(
         if kind == "globals" and verb == "plugin":
             for opt in bucket:
                 # The entry-point identity, written down for the config
-                # section derivation — the pull always knew it, it just
+                # section derivation — the mount always knew it, it just
                 # never said so. One singleton reached through two
-                # *different* pulls has no single derivation, and records
+                # *different* mounts has no single derivation, and records
                 # that instead (config= on it then refuses, naming the fix).
-                if opt._pulled is None:
-                    opt._pulled = identity
-                elif opt._pulled != identity:
-                    opt._pulled = registry._MANY_PULLS
+                if opt._mounted is None:
+                    opt._mounted = identity
+                elif opt._mounted != identity:
+                    opt._mounted = registry._MANY_MOUNTS
         registry.root.contributions[kind].extend(bucket)
         bucket.clear()
     if fork.name == "root":
-        # An anonymous container (a module capture's root): pulling it lands
+        # An anonymous container (a module capture's root): mounting it lands
         # its *children* — the splat, `import *` for task trees. A devkit
-        # update that adds a group just appears on the next pull.
+        # update that adds a group just appears on the next mount.
         _merge_group(target, fork, override=override, at="")
         return target
     # A named node lands under its own name; identity never becomes an
@@ -579,7 +579,7 @@ def _pull(
     # clobbering it — an existing task of that name is the usual leaf clash.
     wrapper = Group("root")
     wrapper.groups[fork.name] = fork
-    wrapper.pulled_from = identity
+    wrapper.mounted_from = identity
     _merge_group(target, wrapper, override=override, at="")
     return target
 
@@ -593,7 +593,7 @@ def plugin(
     exclude: tuple[str, ...] | list[str] = (),
     override: bool = False,
 ) -> Group:
-    """Pull a task tree from an installed package's `footman.tasks` entry
+    """Mount a task tree from an installed package's `footman.tasks` entry
     point — **entry points only**; for your own modules use `include()`.
 
     ```python
@@ -606,12 +606,12 @@ def plugin(
 
     The longest installed entry-point name is the *identity* (consumed at
     resolve time, retained as provenance); the rest of the string walks the
-    advertised tree. The pulled node lands under its **own name** — `into=`
+    advertised tree. The mounted node lands under its **own name** — `into=`
     (a dotted address, created on demand) is the consumer's placement, and
     there is no rename. Returns the group grafted into.
     """
     identity, node = _resolve_plugin(source)
-    return _pull(
+    return _mount(
         "plugin",
         identity,
         node,
@@ -632,7 +632,7 @@ def include(
     exclude: tuple[str, ...] | list[str] = (),
     override: bool = False,
 ) -> Group:
-    """Pull a task tree from an importable module — **modules only**; for an
+    """Mount a task tree from an importable module — **modules only**; for an
     installed package's advertised tasks use `plugin()`.
 
     ```python
@@ -660,7 +660,7 @@ def include(
     else:
         identity, node = _resolve_module(source)
         landing = source.rsplit(".", 1)[-1]
-    return _pull(
+    return _mount(
         "include",
         identity,
         node,

@@ -206,7 +206,7 @@ have their own page: [Asking for input](input.md).
 ## Dependencies with `pre` / `post`
 
 Declare prerequisites and follow-ups on the task; footman schedules them (a
-prerequisite pulled in twice runs once) and skips a task whose prerequisite
+prerequisite mounted in twice runs once) and skips a task whose prerequisite
 failed:
 
 <!-- example: revision -->

@@ -146,24 +146,24 @@ def check(): ...
 
 ## Two typed verbs over one engine
 
-Composition is two sibling verbs. Where a pull comes from differs; what
+Composition is two sibling verbs. Where a mount comes from differs; what
 happens after it — walk, land, filter, merge — is identical:
 
-- **`plugin("acme.devkit.lint")`** pulls from an installed package's
+- **`plugin("acme.devkit.lint")`** mounts from an installed package's
   **`footman.tasks` entry point** — the console-script of task trees: a
   stable public identity for a Group the package offers, enumerable,
-  inert until pulled.
-- **`include("mytasks.lint")`** pulls from an **importable module** — the
+  inert until mounted.
+- **`include("mytasks.lint")`** mounts from an **importable module** — the
   same grammar over your own reach: file-splitting, monorepo-local sharing.
 
 The type tag lives in the verb, so no string is ever resolved against both
 registries — there is no precedence and no silent re-pointing when a new
 package lands. The model is Python imports: `plugin("acme.devkit.lint")` is
-`from acme_devkit import lint` for task trees; pulling a whole container is
+`from acme_devkit import lint` for task trees; mounting a whole container is
 the `import *` — safe here, because your own definitions silently win and
 imported-vs-imported clashes are loud.
 
-## Pulling from your own modules — `include()`
+## Mounting from your own modules — `include()`
 
 <!-- example: fragment -->
 ```python
@@ -177,21 +177,21 @@ include("mkdocs_helpers.tasks", into="docs")     # namespaced: fm docs.…
 
 The longest importable prefix is imported inside a registry capture (the
 provider's decorators can't leak into your tree); the rest of the string
-walks the captured tree, so `include("mytasks.lint")` pulls one group out
-of a module the way an import pulls one name. Then the engine grafts:
+walks the captured tree, so `include("mytasks.lint")` mounts one group out
+of a module the way an import mounts one name. Then the engine grafts:
 
 - **A node lands under its own name.** `include("mytasks.lint")` → `fm
-  lint`. A whole module is an anonymous container, so pulling it lands its
+  lint`. A whole module is an anonymous container, so mounting it lands its
   *children* — the splat. `into=` (a dotted address, created on demand) is
   your placement; there is no rename.
 - **Your names win, silently** — a task or group you define shadows a
-  pulled one of the same name, whatever the file order, exactly as nearer
+  mounted one of the same name, whatever the file order, exactly as nearer
   cascade files shadow farther ones.
-- **Pull-vs-pull clashes are loud** — a same-address leaf from two pulls
-  raises, citing both providers; pass `override=True` when the later pull
-  should win. Group-vs-group is composition, never a clash: two pulls into
+- **Mount-vs-mount clashes are loud** — a same-address leaf from two mounts
+  raises, citing both providers; pass `override=True` when the later mount
+  should win. Group-vs-group is composition, never a clash: two mounts into
   one subtree merge all the way down.
-- **Filters take full dotted addresses**, relative to the pulled node —
+- **Filters take full dotted addresses**, relative to the mounted node —
   `only=["docs.build", "fmt"]` grafts one nested task and one flat one,
   materialising the path (the intermediate groups are the source's own
   copies, help text riding along). Matching is exact; the whole-group
@@ -206,7 +206,7 @@ of a module the way an import pulls one name. Then the engine grafts:
   this project, not the provider's install location.
 - `--where=lint` still points at the provider's source, so provenance is
   one flag away — and `fm --plugins` lists every installed entry point,
-  pulled or not, with where it landed.
+  mounted or not, with where it landed.
 
 Two idioms worth knowing. Renaming a single task needs no machinery at all —
 `@task` returns plain functions, so `task(name="fmt")(shared.fmt)` re-exports
@@ -252,7 +252,7 @@ runs. (`find_spec` is import-free for a top-level distribution; a deeply
 dotted name like `google.cloud.storage` imports its parent packages, so name
 the top-level dist where you can.)
 
-## Pulling from installed packages — `plugin()`
+## Mounting from installed packages — `plugin()`
 
 A package publishes a `Group` under the `footman.tasks` entry point:
 
@@ -276,7 +276,7 @@ def build(strict: bool = True): ...
 def deploy(version: str): ...
 ```
 
-And a project **opts in** with a pull line in its tasks file:
+And a project **opts in** with a mount line in its tasks file:
 
 <!-- example: fragment -->
 ```python
@@ -290,25 +290,25 @@ plugin("acme.devkit")                        # a container of groups: the splat
 
 The longest installed entry-point name is the **identity** — consumed at
 resolve time, retained as provenance — and the rest of the string walks the
-advertised tree, dot by dot. The pulled node lands under
+advertised tree, dot by dot. The mounted node lands under
 its **own name**: the identity (`acme.mkdocs`) never becomes an address,
 and placement is always yours (`into=`). A provider advertising a whole
 container of groups splats them — one line adopts a devkit, and a devkit
-update that adds a group just appears on the next pull.
+update that adds a group just appears on the next mount.
 
 Design choices you can rely on:
 
 - **Never auto-loaded.** `pip install something` growing your command
   surface unasked is a supply-chain surprise; the task surface stays
   reproducible from the files in your repo. The `importlib.metadata` scan
-  runs only when a pull line asks for it, only on the execution path — the
+  runs only when a mount line asks for it, only on the execution path — the
   completion hot path never changes, and footman stays zero-dependency.
 - **A missing plugin is a crisp error** naming the entry points that *are*
   installed — a typo or a missing install should read as one. `fm
-  --plugins` lists them all, marked pulled-or-not and where they landed,
-  so "installed but nobody pulled it" is visible.
-- **Your names win.** A task or group you define shadows a pulled one of
-  the same name silently; two pulls clashing at one leaf is loud, and the
+  --plugins` lists them all, marked mounted-or-not and where they landed,
+  so "installed but nobody mounted it" is visible.
+- **Your names win.** A task or group you define shadows a mounted one of
+  the same name silently; two mounts clashing at one leaf is loud, and the
   message cites both identities.
 - **Publisher convention:** advertise either one named group (an ecosystem
   plugin) or a container of groups (a devkit — it splats). Loose tasks in
@@ -318,7 +318,7 @@ Design choices you can rely on:
   design.
 
 Footman's own tooling follows the same rule — built-ins are ordinary,
-opt-in plugins. This repo's tasks.py pulls its first-party
+opt-in plugins. This repo's tasks.py mounts its first-party
 plugin: `plugin("footman.docs", into="footman")` is [your tasks,
 documented](taskdocs.md) (`fm docs.page` / `site`). A branded CLI writes `into="acme.tools"` instead — branding is a
 one-line authoring choice, not framework machinery. A naming symmetry to
