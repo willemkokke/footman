@@ -551,7 +551,7 @@ def iso_cascade(tmp_path, monkeypatch):
 def test_cascade_default_walks_to_the_repo_root(tmp_path, monkeypatch, iso_cascade):
     _, repo, pkg = _three_level_tree(tmp_path)
     monkeypatch.chdir(pkg)
-    files, _ = _app.resolve_task_files({})
+    files = _app.resolve_task_files({}).files
     assert files == [repo / "tasks.py", pkg / "tasks.py"]
 
 
@@ -559,7 +559,7 @@ def test_cascade_none_limits_discovery_to_the_cwd(tmp_path, monkeypatch, iso_cas
     _, _, pkg = _three_level_tree(tmp_path)
     monkeypatch.setenv("FOOTMAN_CASCADE", "none")
     monkeypatch.chdir(pkg)
-    files, _ = _app.resolve_task_files({})
+    files = _app.resolve_task_files({}).files
     assert files == [pkg / "tasks.py"]
 
 
@@ -569,7 +569,7 @@ def test_cascade_filesystem_crosses_the_repo_boundary(
     outer, repo, pkg = _three_level_tree(tmp_path)
     monkeypatch.setenv("FOOTMAN_CASCADE", "filesystem")
     monkeypatch.chdir(pkg)
-    files, _ = _app.resolve_task_files({})
+    files = _app.resolve_task_files({}).files
     assert files[-3:] == [outer / "tasks.py", repo / "tasks.py", pkg / "tasks.py"]
 
 
@@ -577,7 +577,7 @@ def test_cascade_key_reads_from_the_user_level_file(tmp_path, monkeypatch, iso_c
     _, _, pkg = _three_level_tree(tmp_path)
     (tmp_path / "global.toml").write_text("cascade = 'none'\n", encoding="utf-8")
     monkeypatch.chdir(pkg)
-    files, _ = _app.resolve_task_files({})
+    files = _app.resolve_task_files({}).files
     assert files == [pkg / "tasks.py"]
 
 
@@ -586,7 +586,7 @@ def test_cascade_env_overrides_the_config_key(tmp_path, monkeypatch, iso_cascade
     (tmp_path / "global.toml").write_text("cascade = 'filesystem'\n", encoding="utf-8")
     monkeypatch.setenv("FOOTMAN_CASCADE", "none")
     monkeypatch.chdir(pkg)
-    files, _ = _app.resolve_task_files({})
+    files = _app.resolve_task_files({}).files
     assert files == [pkg / "tasks.py"]
 
 
@@ -594,7 +594,7 @@ def test_cascade_in_a_project_file_is_stripped(tmp_path, monkeypatch, iso_cascad
     outer, repo, pkg = _three_level_tree(tmp_path)
     (repo / "footman.toml").write_text("cascade = 'filesystem'\n", encoding="utf-8")
     monkeypatch.chdir(pkg)
-    files, _ = _app.resolve_task_files({})
+    files = _app.resolve_task_files({}).files
     assert outer / "tasks.py" not in files  # a project key cannot widen the walk
 
 
@@ -602,10 +602,10 @@ def test_cascade_config_search_follows_the_mode(tmp_path, monkeypatch, iso_casca
     outer, _, pkg = _three_level_tree(tmp_path)
     (outer / "footman.toml").write_text("color = 'never'\n", encoding="utf-8")
     monkeypatch.chdir(pkg)
-    _, cfg = _app.resolve_task_files({})
+    cfg = _app.resolve_task_files({}).cfg
     assert "color" not in cfg  # above the repo: invisible under the default walk
     monkeypatch.setenv("FOOTMAN_CASCADE", "filesystem")
-    _, cfg = _app.resolve_task_files({})
+    cfg = _app.resolve_task_files({}).cfg
     assert cfg["color"] == "never"  # one walk governs config and task files
 
 

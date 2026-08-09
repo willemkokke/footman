@@ -18,7 +18,7 @@ import time
 import tomllib
 from collections.abc import Callable, Iterator, Sequence
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 from footman import (
     _coerce,
@@ -163,26 +163,46 @@ def _config_arg(g: dict[str, object]) -> str | None:
     return value if isinstance(value, str) else None
 
 
+class Discovery(NamedTuple):
+    """What one discovery walk found — resolved once, shared verbatim by the
+    run, the handoff probe, and the completion child, so they cannot
+    disagree about what loads."""
+
+    files: list[Path]
+    """Everything `load_tree` mounts, outermost rung first: the user tasks
+    file when present, then the project cascade root-down. Nearest wins on
+    a name, so a project task shadows a same-named user task — the reading
+    the cascade always had, extended one rung outward."""
+    cfg: dict[str, object]
+    root: str
+    """The project cascade's top — and `""` outside a project. The user
+    rung never claims it: a root is the *project's* top, and footman
+    invents none where there is no project ("empty means global mode")."""
+    user: Path | None
+    """The user tasks file, when it joined `files`."""
+
+
 def resolve_task_files(
     g: dict[str, object],
     *,
     on_warning: Callable[[str], None] | None = None,
     on_note: Callable[[str], None] | None = None,
     cwd: Path | None = None,
-) -> tuple[list[Path], dict[str, object]]:
-    """The task files and merged config for the cwd + globals — the pure core of
-    `_discover_files`, shared with the completion subprocess (`_suggest`) so both
-    discover exactly the same tasks.
+) -> Discovery:
+    """The task files, merged config, and project root for the cwd + globals
+    — the pure core of `_discover_files`, shared with the completion
+    subprocess (`_suggest`) so both discover exactly the same tasks.
 
-    `-f/--tasks-file` loads exactly one file, no cascade; otherwise every
-    `tasks.py` along the cascade walk down to the cwd. The walk's reach is
-    the cascade mode (user-level `cascade` key, `FOOTMAN_CASCADE` override):
-    the cwd alone (`none`), the repo root (`repo`, default), or the whole
-    ancestor path (`filesystem`) — and config search follows the same walk,
-    so the two cascades stay one concept. Raises `_config.ConfigError` on a
-    bad `--config` or an unknown cascade mode (`_config.CascadeError`); an
-    empty file list means nothing matched. The caller owns how either
-    outcome is surfaced.
+    `-f/--tasks-file` loads exactly one file, no cascade and no user rung
+    (total control); otherwise the user tasks file leads as the cascade's
+    outermost rung, then every `tasks.py` along the walk down to the cwd.
+    The walk's reach is the cascade mode (user-level `cascade` key,
+    `FOOTMAN_CASCADE` override): the cwd alone (`none`), the repo root
+    (`repo`, default), or the whole ancestor path (`filesystem`) — and
+    config search follows the same walk, so the two cascades stay one
+    concept. Raises `_config.ConfigError` on a bad `--config` or an unknown
+    cascade mode (`_config.CascadeError`); an empty `files` means nothing
+    matched. The caller owns how either outcome is surfaced.
 
     *cwd* answers from somewhere other than the process directory: the
     handoff resolves against its `-C` probe *before* the chdir happens, and
@@ -209,31 +229,35 @@ def resolve_task_files(
         if not one.is_absolute():
             one = cwd / one  # identical to the plain relative read when cwd is the cwd
         files = [one] if one.is_file() else []
-    else:
-        filename = cfg.get("tasks")
-        name = filename if isinstance(filename, str) else _brand.tasks_file
-        files = _paths.task_files(cwd, ceiling, name)
-        if not files and (user := _paths.user_tasks_file(name)) and user.is_file():
-            # A *fallback*, not a rung: your own tasks answer where a project
-            # has none, and a project's cascade wins outright — there is one
-            # way to get tasks into a project tree, and that is mounting them
-            # in a tasks file.
-            files = [user]
-    return files, cfg
+        return Discovery(files, cfg, str(files[0].parent) if files else "", None)
+    filename = cfg.get("tasks")
+    name = filename if isinstance(filename, str) else _brand.tasks_file
+    files = _paths.task_files(cwd, ceiling, name)
+    root = str(files[0].parent) if files else ""
+    user = _paths.user_tasks_file(name)
+    if user.is_file():
+        # The cascade's outermost rung: personal tasks ride everywhere, and
+        # anything nearer shadows them — project > user, the nearest-wins
+        # reading the cascade already has, extended one rung outward. A
+        # project that wants a personal task's name owns it; `inherited()`
+        # still reaches what it shadowed.
+        return Discovery([user, *files], cfg, root, user)
+    return Discovery(files, cfg, root, None)
 
 
 def _discover_files(
     g: dict[str, object], wants_help: bool, bare: bool
-) -> tuple[list[Path], dict[str, object]] | int:
+) -> Discovery | int:
     """Resolve the task files to load and the merged config for this cwd.
 
     `-f/--tasks-file` is the escape hatch: it loads exactly one file, no
-    cascade. Otherwise footman collects every `tasks.py` from the repo root
-    (the `.git` ceiling) down to the cwd. Returns `(files, config)` or, when
-    nothing was found, the exit code to return (0 for a listing, 2 otherwise).
+    cascade. Otherwise the user rung leads and footman collects every
+    `tasks.py` from the repo root (the `.git` ceiling) down to the cwd.
+    Returns the `Discovery` or, when nothing was found, the exit code to
+    return (0 for a listing, 2 otherwise).
     """
     try:
-        files, cfg = resolve_task_files(
+        found = resolve_task_files(
             g,
             on_warning=_error,
             on_note=_error if g.get("verbose") else None,
@@ -245,9 +269,10 @@ def _discover_files(
     except _config.ConfigError as exc:
         return _refuse(bool(g.get("json")), f"--config: {exc}")
 
-    if files:
-        return files, cfg
+    if found.files:
+        return found
 
+    cfg = found.cfg
     looked = g.get("tasks_file") or cfg.get("tasks") or _brand.tasks_file
     if wants_help:
         # A stuck newcomer asking for help should see the globals (-f/-C are the
@@ -1376,10 +1401,15 @@ def _script_source(g: dict[str, object], probe: Path) -> Path | None:
     it — and quiet, because the real run repeats every warning.
     """
     try:
-        files, _cfg = resolve_task_files(g, on_warning=lambda _: None, cwd=probe)
+        found = resolve_task_files(g, on_warning=lambda _: None, cwd=probe)
     except (_config.ConfigError, _config.CascadeError):
         return None  # the real run reports these properly
-    return files[0] if len(files) == 1 else None
+    # The user rung never disables a project's script environment: project
+    # files answer first, and only a machine with nothing but the user file
+    # runs THAT file's environment — it is a tasks file like any other.
+    project = [f for f in found.files if f != found.user]
+    candidates = project or ([found.user] if found.user else [])
+    return candidates[0] if len(candidates) == 1 else None
 
 
 def _script_handoff(
@@ -1628,7 +1658,7 @@ def _execute(
     found = _discover_files(g, wants_help, bare=after_globals >= len(argv))
     if isinstance(found, int):
         return found
-    files, cfg = found
+    files, cfg = found.files, found.cfg
     json_mode = bool(g.get("json"))
 
     base = registry.Group("root")
@@ -1648,7 +1678,9 @@ def _execute(
     inv = invocation.Invocation(
         cli=g,
         config=cfg,
-        root=str(files[0].parent) if files else "",
+        # The project cascade's top — never the user rung's directory. `""`
+        # is global mode: footman invents no root where there is no project.
+        root=found.root,
         cwd=os.getcwd(),
     )
     try:
@@ -1706,8 +1738,11 @@ def _execute(
     except _manifest.ManifestError as exc:  # broken completer, bad markers, …
         return _refuse(json_mode, str(exc))
 
-    # The `root` policy token's target: the highest cascade file's directory.
-    root_dir = str(files[0].parent) if files else ""
+    # The `root` policy token's target: the project cascade's top, never the
+    # user rung's directory — a personal task's `cwd="root"` means the
+    # project it landed in, and outside one the empty root exhausts the
+    # ladder to the invocation directory.
+    root_dir = found.root
     # Arm the per-task lifecycle for exactly this run: every execution —
     # segment, prerequisite, fan-out member, body call — reaches the same
     # ladder through `run_bound`, and the frozen invocation rides along.

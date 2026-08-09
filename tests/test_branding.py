@@ -416,19 +416,82 @@ def test_the_cache_and_config_directories_must_differ(tmp_path, monkeypatch):
     assert "ACME_CACHE_DIR" in result.stderr and "ACME_CONFIG_DIR" in result.stderr
 
 
-def test_a_project_cascade_beats_the_user_tasks_file(tmp_path, monkeypatch):
-    # A fallback, not a rung: there is one way to get tasks into a project
-    # tree, and that is mounting them in a tasks file.
+def test_the_user_rung_merges_and_the_project_shadows(tmp_path, monkeypatch):
+    # The cascade's outermost rung: personal tasks ride into a project, and
+    # a project task shadows a same-named one — project > user, the
+    # nearest-wins reading the cascade always had, one rung further out.
     cfg = tmp_path / "cfg"
     (cfg / "acme").mkdir(parents=True)
     (cfg / "acme" / "tasks.py").write_text(
-        'from footman import task\n\n@task\ndef mine():\n    "Personal."\n'
+        'from footman import task\n\n@task\ndef mine():\n    "Personal."\n\n'
+        '@task\ndef ship():\n    "Shadowed by the project."\n'
     )
     monkeypatch.setenv("XDG_CONFIG_HOME", str(cfg))
     _project(tmp_path)
     monkeypatch.chdir(tmp_path)
     out = Runner(App(name="acme", prog="acme")).invoke("--list").stdout
-    assert "ship" in out and "mine" not in out
+    assert "mine" in out  # the personal task is present in the project tree
+    assert "Ship it." in out  # the project's ship wins the name
+    assert "Shadowed by the project." not in out
+
+
+def test_the_user_rung_claims_no_root(tmp_path, monkeypatch):
+    # Outside a project, inv.root stays "" — footman invents no root — and
+    # the cwd policies read the one-cwd rule: `root` exhausts the ladder to
+    # the invocation directory, `taskfile` is the file's real home (the
+    # config dir). The shipped fallback accidentally made the config dir the
+    # root, which no personal task ever meant.
+    import textwrap as _tw
+
+    cfg, somewhere = tmp_path / "cfg", tmp_path / "somewhere"
+    (cfg / "acme").mkdir(parents=True)
+    somewhere.mkdir()
+    (cfg / "acme" / "tasks.py").write_text(
+        _tw.dedent(
+            """
+            import footman
+            from footman import pre_tasks, task
+
+            @pre_tasks
+            def show(inv):
+                print(f"root={inv.root!r}")
+
+            @task(cwd="root")
+            def where_root():
+                print(f"root-cwd={footman.cwd()}")
+
+            @task(cwd="taskfile")
+            def where_file():
+                print(f"file-cwd={footman.cwd()}")
+            """
+        )
+    )
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(cfg))
+    monkeypatch.chdir(somewhere)
+    acme = Runner(App(name="acme", prog="acme"))
+    rooted = acme.invoke("where-root")
+    assert rooted.ok, rooted.stderr
+    assert "root=''" in rooted.stdout
+    assert f"root-cwd={somewhere.resolve()}" in rooted.stdout
+    filed = acme.invoke("where-file")
+    assert f"file-cwd={(cfg / 'acme').resolve()}" in filed.stdout
+
+
+def test_a_user_tasks_cwd_root_means_the_project_it_landed_in(tmp_path, monkeypatch):
+    cfg = tmp_path / "cfg"
+    (cfg / "acme").mkdir(parents=True)
+    (cfg / "acme" / "tasks.py").write_text(
+        "import footman\nfrom footman import task\n\n"
+        '@task(cwd="root")\ndef whereami():\n    print(f"at={footman.cwd()}")\n'
+    )
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(cfg))
+    _project(tmp_path)
+    sub = tmp_path / "sub"
+    sub.mkdir()
+    monkeypatch.chdir(sub)
+    result = Runner(App(name="acme", prog="acme")).invoke("whereami")
+    assert result.ok, result.stderr
+    assert f"at={tmp_path.resolve()}" in result.stdout
 
 
 def test_child_argv_carries_the_resolved_locations(tmp_path):
