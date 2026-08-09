@@ -54,6 +54,7 @@ class _Node:
     state: str = "pending"  # pending / running / done / skipped
     result: _executor.TaskResult | None = None
     forwarded: dict[str, Any] = field(default_factory=dict)  # `forward`ed values in
+    forwarded_given: set[str] = field(default_factory=set)  # …which were asked for
     forward_targets: list[_Node] = field(default_factory=list)  # …and out
     keep_going: bool = False  # resolved failure policy for THIS node (per-subtree)
     shared: bool = True  # resolved sharing policy: may an earlier run satisfy it?
@@ -184,7 +185,9 @@ def _build_dag(root: Group, segments: list[Segment]) -> list[_Node]:
 
     splits: dict[object, _Node] = {}
 
-    def _thread(owner: _Node, dep: _Node, fmap: dict[str, Any]) -> None:
+    def _thread(
+        owner: _Node, dep: _Node, fmap: dict[str, Any], fgiven: frozenset[str]
+    ) -> None:
         # A forwarded value reaches only a dispatched task that *declares* the
         # parameter (partial reach). Two dispatchers sending different values
         # to a shared prerequisite are asking for different WORK: one identity
@@ -198,33 +201,49 @@ def _build_dag(root: Group, segments: list[Segment]) -> list[_Node]:
         wanted = {name: value for name, value in fmap.items() if name in declared}
         if not wanted:
             return
+        asked = fgiven & wanted.keys()
+        # Compatible with what is already threaded: a name the dep has not seen
+        # has nothing to disagree with, and one it has must match on *both*
+        # channels — the same value asked for and merely defaulted are different
+        # requests wherever the callee reads `given()`.
         if all(
-            name not in dep.forwarded or dep.forwarded[name] == value
+            name not in dep.forwarded
+            or (
+                dep.forwarded[name] == value
+                and (name in dep.forwarded_given) == (name in asked)
+            )
             for name, value in wanted.items()
         ):
             dep.forwarded.update(wanted)
+            dep.forwarded_given.update(asked)
             return
         # The split: this dispatcher's resolved arguments name their own node.
         # Same-argument dispatchers share the split (the plan key mirrors the
-        # execution key's normal form: declaration + frozen resolved values).
+        # execution key's normal form: declaration + frozen resolved values,
+        # plus which of them were asked for — two dispatchers sending the same
+        # value, one because it was typed and one because it was defaulted, are
+        # asking for different work wherever the callee reads `given()`).
         frozen = tuple(
             (name, _futures._freeze(wanted[name])) for name in sorted(wanted)
         )
-        split_key = (_dep_key(dep.fn), frozen)
+        split_key = (_dep_key(dep.fn), frozen, frozenset(asked))
         clone = splits.get(split_key)
         if clone is None:
             clone = new_node(dep.fn, dep.seg, dep.shared)
             clone.group = dep.group
             clone.deps = set(dep.deps)
             clone.forwarded = dict(wanted)
+            clone.forwarded_given = set(asked)
             clone.forward_targets = list(dep.forward_targets)
             clone.keep_going = dep.keep_going
             splits[split_key] = clone
             # The clone forwards onward with its own values, so its subtree
             # sees what THIS request meant.
-            clone_map = _executor.forward_map(clone.fn, clone.seg, clone.forwarded)
+            clone_map, clone_given = _executor.forward_map(
+                clone.fn, clone.seg, clone.forwarded, frozenset(clone.forwarded_given)
+            )
             for target in clone.forward_targets:
-                _thread(clone, target, clone_map)
+                _thread(clone, target, clone_map, clone_given)
         if dep.key in owner.deps:  # a pre: the owner now waits on the clone
             owner.deps.discard(dep.key)
             owner.deps.add(clone.key)
@@ -284,9 +303,11 @@ def _build_dag(root: Group, segments: list[Segment]) -> list[_Node]:
     # into its surfaces. It runs after segment adoption above, so each node's seg
     # (hence its forward map) is final.
     for node in reversed(_toposort(nodes)):
-        fmap = _executor.forward_map(node.fn, node.seg, node.forwarded)
+        fmap, fgiven = _executor.forward_map(
+            node.fn, node.seg, node.forwarded, frozenset(node.forwarded_given)
+        )
         for target in list(node.forward_targets):
-            _thread(node, target, fmap)
+            _thread(node, target, fmap, fgiven)
     # Addresses, once the plan is final: creation order IS request order as
     # written (segments, then dependencies as declared, then splits), so the
     # names are deterministic across runs and hosts.
@@ -886,7 +907,9 @@ def _run_sequential(
             hint = f"{node.seg.task} runs until you stop it — Ctrl-C"
             err.write(_describe.dim(hint, True) + "\n")
             err.flush()
-        node.result = _executor.run_task(node.fn, node.seg, ctx, node.forwarded)
+        node.result = _executor.run_task(
+            node.fn, node.seg, ctx, node.forwarded, frozenset(node.forwarded_given)
+        )
         if node.result.seq is None or node.seq is None:
             node.result.seq = node.seq
         else:  # a shared row keeps its above-the-record floor
@@ -974,7 +997,9 @@ def _run_parallel(
             # parallel pool: the arbiter's console lane guarantees one owner,
             # and captured siblings' flushes queue on the gate below.
             ctx.sink = ctx.err_sink = None
-        n.result = _executor.run_task(n.fn, n.seg, ctx, n.forwarded)
+        n.result = _executor.run_task(
+            n.fn, n.seg, ctx, n.forwarded, frozenset(n.forwarded_given)
+        )
         if n.result.seq is None or n.seq is None:
             n.result.seq = n.seq
         else:  # a shared row keeps its above-the-record floor

@@ -9,13 +9,15 @@ import pytest
 from footman import _manifest, given
 from footman._executor import run_chain
 from footman._split import split_chain
-from footman.params import env
+from footman.params import env, forward
 from footman.registry import Group
 
 # Module-level, because `from __future__ import annotations` turns every
 # annotation into a string resolved against module globals — a name local to a
 # test or helper silently fails to resolve and the parameter falls back to text.
 Target = Annotated[str, env("BUILD_TARGET")]
+Fix = Annotated[bool, forward]
+ForwardedTarget = Annotated[str, forward]
 
 
 def _run(build_tasks, line):
@@ -146,6 +148,54 @@ def test_the_same_value_asked_for_and_not_is_two_pieces_of_work():
     # them identical — and the second is answered by the first, silently doing
     # the wrong thing for a body that branches on presence.
     assert calls == [False, True]
+
+
+def _forwarding_tasks(reg):
+    @reg.task
+    def build(*, fix: bool = False) -> None:
+        _forwarded["build"] = (fix, given("fix"))
+
+    @reg.task(pre=[build])
+    def check(*, fix: Fix = False) -> None:
+        _forwarded["check"] = (fix, given("fix"))
+
+
+_forwarded: dict[str, tuple[bool, bool]] = {}
+
+
+def test_a_forwarded_value_carries_whether_anyone_asked_for_it():
+    _forwarded.clear()
+    _run(_forwarding_tasks, "check --fix")
+    # Both channels reach the prerequisite: the value, and the fact that a
+    # person asked for it — so `given` reads the same sentence at both depths.
+    assert _forwarded == {"build": (True, True), "check": (True, True)}
+
+
+def test_a_forwarded_default_arrives_without_a_claim_that_it_was_asked_for():
+    _forwarded.clear()
+    _run(_forwarding_tasks, "check")
+    # The value still travels — forwarding only what was asked for would strip
+    # env-sourced values and leave prerequisites on their own defaults.
+    assert _forwarded == {"build": (False, False), "check": (False, False)}
+
+
+def test_forwarding_satisfies_a_defaultless_parameter():
+    seen: dict[str, object] = {}
+
+    def tasks(reg):
+        @reg.task
+        def build(*, target: str) -> None:  # required: no default to fall back on
+            seen["target"] = target
+            seen["given"] = given("target")
+
+        @reg.task(pre=[build])
+        def check(*, target: ForwardedTarget) -> None:
+            pass
+
+    _run(tasks, "check --target=prod")
+    # Refusing this only pushed authors into giving `build.target` a default it
+    # did not want, weakening its contract when run on its own.
+    assert seen == {"target": "prod", "given": True}
 
 
 def test_given_outside_a_task_is_taught_not_false():

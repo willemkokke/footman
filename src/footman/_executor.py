@@ -669,6 +669,7 @@ def bind(
     fn: Task,
     ctx: Context | None = None,
     forwarded: dict[str, Any] | None = None,
+    forwarded_given: frozenset[str] = frozenset(),
 ) -> tuple[list[Any], dict[str, Any], frozenset[str]]:
     """Turn a segment's string values into `(*args, **kwargs)` for *fn*.
 
@@ -678,9 +679,9 @@ def bind(
     fall back to their `env()` variable before their default.
 
     *forwarded* carries values a dispatching task passed down via the `forward`
-    marker. Precedence is CLI value > forwarded > env > default: a forwarded
-    value overrides only a parameter that *has* a default (it never rescues a
-    required one — a prerequisite must still be independently runnable).
+    marker, and *forwarded_given* which of them its own caller asked for.
+    Precedence is CLI value > forwarded > env > default, and a forwarded value
+    can satisfy a defaultless parameter as well as a defaulted one.
 
     The third return is the **presence set**: the parameters the caller
     supplied, as opposed to the ones footman inferred. A CLI value counts (bare
@@ -711,13 +712,15 @@ def bind(
 
         cli = registry.cli_name(param.name)
         if cli not in seg.values:
-            # A forwarded value overrides a defaulted parameter (never a
-            # required one — the guard on `param.default`), ahead of env/default.
-            if (
-                forwarded is not None
-                and param.name in forwarded
-                and param.default is not empty
-            ):
+            # A forwarded value outranks env and the default, and may satisfy a
+            # defaultless parameter too: `ask()` and `stdin` already do, and
+            # refusing here only pushed authors into giving the receiving
+            # parameter a default it did not want — weakening its contract when
+            # the task is run on its own, to work around a rule meant to protect
+            # exactly that.
+            if forwarded is not None and param.name in forwarded:
+                if param.name in forwarded_given:
+                    supplied.add(param.name)  # someone asked, further upstream
                 kwargs[param.name] = forwarded[param.name]
                 continue
             if param.annotation is not empty:
@@ -861,33 +864,54 @@ def bind(
 
 
 def forward_map(
-    fn: Task, seg: Segment, received: dict[str, Any] | None = None
-) -> dict[str, Any]:
+    fn: Task,
+    seg: Segment,
+    received: dict[str, Any] | None = None,
+    received_given: frozenset[str] = frozenset(),
+) -> tuple[dict[str, Any], frozenset[str]]:
     """The `forward`-marked parameter values *fn* passes to what it dispatches.
 
     Read from the segment's CLI value or the parameter's default — never by
-    prompting, so building the map is side-effect free. Only defaulted
-    parameters contribute; a required one is never forwarded (matching `bind`).
+    prompting, so building the map is side-effect free. A defaultless parameter
+    contributes when the line carried one: it has a value, and refusing to pass
+    it on would only push authors into giving the receiving end a default it
+    does not want.
 
     A value *fn* itself *received* via forwarding wins over its segment/default,
     so a forwarded value chains through a callee that re-declares the marker.
+
+    Returns `(values, given)` — **two channels**. The value always travels, so
+    what a prerequisite receives is unchanged; presence travels beside it, so
+    `given()` reads the same sentence in a task, a `pre_task` and a `post_task`.
+    Forwarding only the values someone asked for would have been the simpler
+    rule and is wrong: it drops `env()`-sourced values, leaving a prerequisite
+    on its own default when the environment plainly said otherwise.
     """
     sig = resolved_signature(fn)
     empty = inspect.Parameter.empty
     out: dict[str, Any] = {}
+    asked: set[str] = set()
     for param in sig.parameters.values():
-        if param.annotation is empty or param.default is empty:
+        if param.annotation is empty:
             continue
         peeled = _coerce.peel(param.annotation)
         if not peeled.forward:
             continue
         if received is not None and param.name in received:
             out[param.name] = received[param.name]
+            if param.name in received_given:
+                asked.add(param.name)
             continue
         cli = registry.cli_name(param.name)
         if cli not in seg.values:
+            if param.default is empty:
+                # Nothing to send: no token on the line and no default to fall
+                # back on. Its value will come from env/ask when *fn* binds,
+                # which is after this map is built.
+                continue
             out[param.name] = param.default
             continue
+        asked.add(param.name)  # named on the dispatcher's own segment
         raw = seg.values[cli]
         if isinstance(raw, bool):
             out[param.name] = raw
@@ -898,7 +922,7 @@ def forward_map(
             )
         else:
             out[param.name] = _coerce.coerce_one(raw, peeled.element)
-    return out
+    return out, frozenset(asked)
 
 
 @dataclass(frozen=True)
@@ -1704,7 +1728,11 @@ def _exit_task_hooks(
 
 
 def run_task(
-    fn: Task, seg: Segment, ctx: Context, forwarded: dict[str, Any] | None = None
+    fn: Task,
+    seg: Segment,
+    ctx: Context,
+    forwarded: dict[str, Any] | None = None,
+    forwarded_given: frozenset[str] = frozenset(),
 ) -> TaskResult:
     """Bind *seg* to *fn* and run it within *ctx* (contextvar set for run()).
 
@@ -1738,7 +1766,7 @@ def run_task(
             _exit_task_hooks(life, handle, result)
             return result
         try:
-            args, kwargs, ctx.given = bind(seg, fn, ctx, forwarded)
+            args, kwargs, ctx.given = bind(seg, fn, ctx, forwarded, forwarded_given)
         except ChainError:
             raise  # e.g. passthrough with no *args — reported by the app layer
         except Exception as exc:  # a coercion failure (custom-type constructor)
