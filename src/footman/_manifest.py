@@ -1035,6 +1035,12 @@ def sync_manifest(
     cached = load_manifest(path)
     if (
         cached is None
+        # An upgrade bumps the schema with the tree unchanged, so the hash
+        # alone says "nothing to do" — and the old-schema file then lives
+        # forever, every TAB refusing it, spawning a rebuild that "succeeds"
+        # without writing, and paying the full cold bound. The schema is
+        # part of what the file IS, not part of what it describes.
+        or cached.get("schema") != SCHEMA_VERSION
         or cached.get("hash") != fresh["hash"]
         or cached.get("completion_max_age") != completion_max_age
         or cached.get("cwd") != fresh.get("cwd")
