@@ -90,8 +90,17 @@ KEYS: tuple[tuple[str, str, str, str], ...] = (
         "progress",
         "`true` / `false`",
         "`true`",
-        "`false` permanently disables the progress bar, the eta line, and "
-        "timing capture.",
+        "`false` disables the progress bar, the eta line, and timing capture; "
+        "`--progress` turns them back on for one invocation.",
+    ),
+    (
+        "input",
+        "`true` / `false`",
+        "`true`",
+        "`false` makes this project never prompt: a `confirm()` gate fails and "
+        "an `ask()` without a default errors, rather than waiting for someone. "
+        "`--input` allows prompting for one invocation, `--no-input` refuses "
+        "it for one.",
     ),
     (
         "uv",

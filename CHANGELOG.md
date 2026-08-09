@@ -79,6 +79,12 @@ versions may include breaking changes.
   answered silently by the wrong execution. Nothing else about identity moves:
   different values already keyed differently, and positional-versus-keyword
   spelling still names one execution.
+- **Every boolean config key now has both CLI spellings**, so a project setting
+  is a default rather than a one-way door. Five could only be set in one
+  direction: `sequential` and `sort` had no `--no-` counterpart, `progress` had
+  no `--progress` (its own documentation said `false` disabled the bar
+  *permanently*), `uv` had no flag at all, and `input` was not a config key.
+  All five resolve through one rule — **CLI > config > the default**.
 - **An absent global option runs the same ladder a task parameter does** — env,
   then `default(fn)`, then the declared default. `env()` was accepted on a
   global's annotation and reached the manifest but was never applied, so the

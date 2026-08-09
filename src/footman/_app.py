@@ -145,6 +145,24 @@ def _globals_to_dict(tokens: list[str]) -> dict[str, object]:
     return result
 
 
+def _switch(
+    g: dict[str, object], cfg: dict[str, Any], name: str, default: bool
+) -> bool:
+    """A boolean policy resolved once: **CLI > config > the default**.
+
+    Every boolean config key has both CLI spellings, `--x` and `--no-x`, so a
+    project setting can always be countermanded for one invocation. Without the
+    counter-spelling, config could only ever be a one-way door — which is why
+    the `progress` key was documented as disabling the bar *permanently*.
+    """
+    if g.get(name):  # `--x`
+        return True
+    if g.get("no_" + name):  # `--no-x`
+        return False
+    value = cfg.get(name)
+    return default if not isinstance(value, bool) else value
+
+
 def _config_arg(g: dict[str, object]) -> str | None:
     """The --config global as the string it is (or None) — the globals dict
     is object-valued, and this is the one place that narrows it."""
@@ -1405,7 +1423,7 @@ def _script_handoff(
         )
     except _config.ConfigError:
         return None  # the real run reports the broken --config properly
-    if cfg.get("uv") is False:
+    if not _switch(g, cfg, "uv", True):
         return None
     if _brand.dist is None:
         # A branded runner can't know which distribution ships it, so it
@@ -1503,7 +1521,7 @@ def _uv_handoff(argv: list[str], g: dict[str, object]) -> int | None:
         )
     except _config.ConfigError:
         return None  # the real run reports the broken --config properly
-    if cfg.get("uv") is False:
+    if not _switch(g, cfg, "uv", True):
         return None
     if g.get("verbose"):
         print(
@@ -1732,7 +1750,7 @@ def _run_tree(
         sort_cfg = _config.sort_listing(cfg)
     except _config.ConfigError as exc:
         return _refuse(json_mode, str(exc))
-    if g.get("sort") or sort_cfg:
+    if _switch(g, cfg, "sort", sort_cfg):
         tree = _describe.sort_tree(tree)
 
     show_hidden = bool(g.get("all"))
@@ -1813,7 +1831,7 @@ def _run_tree(
     # recorded run() calls, tools, deferred steps — is faked into honest
     # plan-line receipts. The report shapes (--json included) are the plan.
     dry_run = bool(g.get("dry_run"))
-    sequential = bool(g.get("sequential")) or bool(cfg.get("sequential"))
+    sequential = _switch(g, cfg, "sequential", False)
 
     # The parallel width: -j/--jobs wins, then config `jobs`, then the
     # cores-minus-one default. Caps both engines (the scheduler's pool and
@@ -1881,21 +1899,20 @@ def _run_tree(
         # Interactivity globals: --yes auto-answers confirm() gates, --no-input
         # refuses to prompt (a required prompt errors instead of hanging).
         "assume_yes": bool(g.get("yes")),
-        "no_input": bool(g.get("no_input")),
+        "no_input": not _switch(g, cfg, "input", True),
         # The rehearsal switch: bodies run, footman's own work is faked.
         "dry_run": dry_run,
     }
 
-    # The timing story: --no-progress (one run) or `progress = false` in
-    # config (permanently) turns the whole apparatus off. A run is
+    # The timing story: `--no-progress` or `progress = false` in config turns
+    # the whole apparatus off, and `--progress` turns it back on for one run —
+    # config is a default, never a one-way door. A run is
     # *predictable* when it's on, every task consented, and this is the real
     # cascade (-f runs pollute no cache, times included) — only then do we
     # estimate from history and record the outcome.
     # A rehearsal is near-instant and teaches nothing about durations: no
     # bar, no eta, and (below) no recorded timing to pollute the history.
-    progress_on = (
-        not g.get("no_progress") and cfg.get("progress") is not False and not dry_run
-    )
+    progress_on = _switch(g, cfg, "progress", True) and not dry_run
     predictable = (
         progress_on
         and not g.get("tasks_file")
