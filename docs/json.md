@@ -482,7 +482,7 @@ on a refusal would pass `all(.ok)` vacuously:
 fm --json check | jq -e '.error == null and ([.items[] | select(.task)] | all(.ok))'
 ```
 
-Pull one task's data out of a pipeline:
+Mount one task's data out of a pipeline:
 
 ```sh
 fm --json coverage | jq -r '.items[] | select(.task == "coverage").returned.percent'

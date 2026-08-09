@@ -22,7 +22,7 @@ EnvRegion = Annotated[str, env("BUILD_REGION")]
 
 def _adopt(reg: Group, *args, **kwargs) -> GlobalOption:
     """Construct an option and move it onto *reg* — the test-local stand-in
-    for the pull that carries a provider's contributions into the tree."""
+    for the mount that carries a provider's contributions into the tree."""
     opt = GlobalOption(*args, **kwargs)
     registry.root.contributions["globals"].remove(opt)
     reg.contributions["globals"].append(opt)
@@ -73,7 +73,7 @@ def test_a_bad_value_is_a_taught_refusal():
 
 
 def test_an_unpulled_option_is_an_unknown_global():
-    reg = Group("root")  # nothing pulled: the name reaches no run
+    reg = Group("root")  # nothing mounted: the name reaches no run
 
     @reg.task
     def build(): ...
@@ -637,11 +637,11 @@ def test_a_broken_plugin_config_value_teaches_with_the_keys_address(tmp_path):
 
 
 def test_the_section_derives_from_the_pulled_entry_point():
-    # `acme.devkit` de-dots to `acme-devkit` — the pull stamps the identity,
+    # `acme.devkit` de-dots to `acme-devkit` — the mount stamps the identity,
     # the derivation reads it, and `config="key"` renames one option's key.
     reg = Group("root")
     opt = _adopt(reg, "region", str, default="eu", config="zone")
-    opt._pulled = "acme.devkit"
+    opt._mounted = "acme.devkit"
 
     @reg.task(uses=[opt])
     def build():
@@ -668,24 +668,24 @@ def test_config_without_a_section_source_is_refused():
 def test_config_through_two_pulls_is_refused():
     reg = Group("root")
     opt = _adopt(reg, "region", str, default="eu", config=True)
-    opt._pulled = registry._MANY_PULLS
+    opt._mounted = registry._MANY_MOUNTS
 
     @reg.task
     def build(): ...
 
     result = Runner().invoke("build", tasks=reg)
     assert not result.ok
-    assert "more than one pull" in result.stderr
+    assert "more than one mount" in result.stderr
 
 
 def test_two_providers_one_section_is_refused():
     # `acme.devkit` and `acme-devkit` de-dot to one section: loud at
-    # discovery naming both, never resolved by pull order.
+    # discovery naming both, never resolved by mount order.
     reg = Group("root")
     first = _adopt(reg, "region", str, default="eu", config=True)
     second = _adopt(reg, "zone", str, default="eu", config=True)
     first.owner, second.owner = "acme.devkit", "other.kit"
-    first._pulled, second._pulled = "acme.devkit", "acme-devkit"
+    first._mounted, second._mounted = "acme.devkit", "acme-devkit"
 
     @reg.task
     def build(): ...

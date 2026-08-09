@@ -216,7 +216,7 @@ def resolve_task_files(
         if not files and (user := _paths.user_tasks_file(name)) and user.is_file():
             # A *fallback*, not a rung: your own tasks answer where a project
             # has none, and a project's cascade wins outright — there is one
-            # way to get tasks into a project tree, and that is pulling them
+            # way to get tasks into a project tree, and that is mounting them
             # in a tasks file.
             files = [user]
     return files, cfg
@@ -637,10 +637,10 @@ def _print_help(
 
 
 def _plugins_report(reg: registry.Group) -> int:
-    """`--plugins`: installed `footman.tasks` entry points, pulled or not.
+    """`--plugins`: installed `footman.tasks` entry points, mounted or not.
 
-    "Installed but nobody pulled it" becomes visible. Descriptions are
-    two-tier: a pulled plugin shows its landed tree's own help; an unpulled
+    "Installed but nobody mounted it" becomes visible. Descriptions are
+    two-tier: a mounted plugin shows its landed tree's own help; an unmounted
     one shows its distribution's Summary (the entry-point record itself
     cannot carry a description — the packaging spec is strictly
     `name = "module:attr"`), read from metadata with zero imports.
@@ -657,14 +657,14 @@ def _plugins_report(reg: registry.Group) -> int:
     landed: dict[str, list[str]] = {}
 
     def walk(node: registry.Group, prefix: str, inside: bool) -> None:
-        # Report the top-most pulled node per identity — its whole subtree
+        # Report the top-most mounted node per identity — its whole subtree
         # shares the provenance, and the top is the copy-paste address.
         for name, fn in node.tasks.items():
-            ident = registry.pulled_from(fn)
+            ident = registry.mounted_from(fn)
             if ident is not None and not inside:
                 landed.setdefault(ident, []).append(f"{prefix}{name}")
         for name, sub in node.groups.items():
-            ident = sub.pulled_from
+            ident = sub.mounted_from
             if ident is not None and not inside:
                 landed.setdefault(ident, []).append(f"{prefix}{name}")
             walk(sub, f"{prefix}{name}.", inside or ident is not None)
@@ -689,12 +689,12 @@ def _plugins_report(reg: registry.Group) -> int:
         where = landed.get(ep.name)
         if where:
             rows.append(
-                (ep.name, f"pulled at {', '.join(sorted(where))}", described(where))
+                (ep.name, f"mounted at {', '.join(sorted(where))}", described(where))
             )
         else:
             meta = getattr(ep.dist, "metadata", None)
             summary = (meta.get("Summary", "") if meta else "") or ""
-            rows.append((ep.name, "(not pulled)", summary))
+            rows.append((ep.name, "(not mounted)", summary))
     name_w = max(len(name) for name, _, _ in rows)
     state_w = max(len(state) for _, state, _ in rows)
     on = _color_out
@@ -1634,13 +1634,13 @@ def _execute(
     base = registry.Group("root")
     plugins_cfg = cfg.get("plugins")
     if plugins_cfg and not isinstance(plugins_cfg, dict):
-        # The old list-valued key died with the composition rework: pulls are
+        # The old list-valued key died with the composition rework: mounts are
         # authored in tasks.py, where placement, filtering, and overrides
         # live. A *table* is the reserved sections child instead —
         # `[tool.footman.plugins.<section>]` holds a provider's own settings.
         return _refuse(
             json_mode,
-            "the [tool.footman] plugins key was removed — pull plugins from "
+            "the [tool.footman] plugins key was removed — mount plugins from "
             'tasks.py instead: plugin("footman.docs", into="footman") '
             "(footman.compose.plugin; see the composing docs)",
         )
@@ -1944,7 +1944,7 @@ def _run_tree(
     if g.get("fail_fast"):
         cli_keep_going = False
 
-    # A pulled plugin's globals bind now — after every listing exit,
+    # A mounted plugin's globals bind now — after every listing exit,
     # before anything runs — and freeze for the run; `.value` answers from
     # here. Released by the caller's finally, so an outside-a-run read goes
     # back to teaching.

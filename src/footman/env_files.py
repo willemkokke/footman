@@ -1,6 +1,6 @@
-"""Load a .env file into the run's environment — pulled, never ambient.
+"""Load a .env file into the run's environment — mounted, never ambient.
 
-`plugin("footman.env_files")` in a tasks file switches it on; unpulled, it is
+`plugin("footman.env_files")` in a tasks file switches it on; unmounted, it is
 inert metadata like any other plugin. At the invocation's single-threaded
 moment the file is read and every key the environment does not already carry
 is set — **env wins**, so a real environment variable always beats the file,
@@ -44,7 +44,7 @@ def load(inv: footman.Invocation) -> None:
         footman.fail(
             "plugin('footman.env_files') needs the python-dotenv package — "
             "add it to the project's environment (uv add python-dotenv), "
-            "or drop the pull"
+            "or drop the mount"
         )
     for key, value in dotenv_values(path, interpolate=False).items():
         if value is not None:

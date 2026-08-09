@@ -41,9 +41,9 @@ def wire(inv):
 ```
 
 Importing this module registers everything in it — decorators and
-`GlobalOption` constructions alike. When footman pulls it, that import runs
-inside a **registry capture**, so nothing leaks into the puller's tree except
-what the pull grafts deliberately.
+`GlobalOption` constructions alike. When footman mounts it, that import runs
+inside a **registry capture**, so nothing leaks into the consumer's tree except
+what the mount grafts deliberately.
 
 ## The entry point
 
@@ -61,7 +61,7 @@ module target contributes whatever the module registers — which is how a
 provider. Footman's own `footman.docs`,
 `footman.env_files` and `footman.profile` are declared exactly this way.
 
-## Being pulled
+## Being mounted
 
 An installed plugin is inert metadata until a tasks file says otherwise:
 
@@ -74,9 +74,9 @@ plugin("acme.devkit", into="acme")     # fm acme.deploy
 
 Everything follows the composing rules from there: the user's own names win
 silently, two plugins clashing on one address is loud, provenance is
-stamped, and `fm --plugins` lists what is installed against what is pulled.
+stamped, and `fm --plugins` lists what is installed against what is mounted.
 A `GlobalOption` exists on the command line exactly when its owner is
-pulled; unpulled, it is an unknown option, taught.
+mounted; unmounted, it is an unknown option, taught.
 
 An option may be named without a value: `--profile` beside
 `--profile=out.json`. A bare mention carries no value — `.value` is whatever
@@ -154,7 +154,7 @@ across the whole tree, and two plugins asking for it is a taught refusal
 naming both. So a plugin whose flag has to be `--acme-region` can still call
 the setting `region` inside its own section, where nothing else can see it —
 and two providers whose sections would collide are refused at discovery
-naming both, never resolved by pull order.
+naming both, never resolved by mount order.
 
 A hook that wants settings with no CLI surface at all still reads
 `inv.config` directly — its own section under `plugins.` is the convention
@@ -171,8 +171,8 @@ surface:
   reason, runnable the moment the package appears.
 - A *hook* has no task to gate, so it imports lazily and teaches at the
   moment it is asked to act — `footman.env_files` does exactly this with
-  python-dotenv: pulled and missing its dependency, the run refuses naming
-  the package and the pull; unpulled, silence.
+  python-dotenv: mounted and missing its dependency, the run refuses naming
+  the package and the mount; unmounted, silence.
 
 ## The determinism rule
 
@@ -185,7 +185,7 @@ in real invocations.
 
 ## Testing a plugin
 
-`Runner` drives the real pull path end to end — a tasks file that pulls
+`Runner` drives the real mount path end to end — a tasks file that mounts
 you, a tmp directory, assertions on the report:
 
 ```python

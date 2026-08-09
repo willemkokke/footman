@@ -131,7 +131,7 @@ PUSH_EXEMPT = [
     "git push origin v0.31.0 --tags",
     # A mention is not a push; a non-push git command is not this guard's.
     'rg "git push" | cat',
-    "git pull",
+    "git mount",
 ]
 
 

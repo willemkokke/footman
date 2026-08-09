@@ -27,9 +27,9 @@ routes it untouched.
 [roadmap](roadmap.md) — but it stays off by default and never becomes a
 dependency.)
 
-## Pull it
+## Mount it
 
-The plugin pulls like any other — one line in your tasks file:
+The plugin mounts like any other — one line in your tasks file:
 
 ```python
 from footman import plugin
@@ -38,7 +38,7 @@ plugin("footman.docs", into="footman")
 ```
 
 That's also the one-line demo of the [plugin system](composing.md): the
-entry point is the identity, `into=` is your placement, and after the pull
+entry point is the identity, `into=` is your placement, and after the mount
 `fm --list` shows `docs.page` and `docs.site`. (Cherry-pick
 with `only=`, or drop the `into=` to land the `docs` group at top level.)
 

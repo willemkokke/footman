@@ -232,8 +232,8 @@ def _composition_returns_groups() -> None:
 
     grafted = include("shared_tasks", only=["lint"])
     assert_type(grafted, Group)
-    pulled = plugin("footman.docs", into="docs")
-    assert_type(pulled, Group)
+    mounted = plugin("footman.docs", into="docs")
+    assert_type(mounted, Group)
 
 
 def _testing_surface() -> None:

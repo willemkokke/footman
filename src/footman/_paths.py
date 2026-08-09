@@ -322,7 +322,7 @@ def user_tasks_file(filename: str = DEFAULT_TASKS_FILE) -> Path:
     writing rather than anything the brand places — and both move together
     under `<PREFIX>_CONFIG_DIR`. It is a *fallback*, not a rung: a project's
     cascade wins outright, because there is one way to get tasks into a
-    project tree and that is pulling them in a tasks file.
+    project tree and that is mounting them in a tasks file.
     """
     return footman_config_dir() / filename
 

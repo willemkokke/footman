@@ -34,7 +34,7 @@ if TYPE_CHECKING:
     from typing import Any
 
 # Hardcoded mirror of split.GLOBALS — the hot path can't import split (it
-# would pull the whole package). `test_completion_globals_mirror_split`
+# would mount the whole package). `test_completion_globals_mirror_split`
 # rebuilds this FROM split.GLOBALS, so renaming a global fails CI. The
 # grammar is lexical — every value is `=`-attached, every dash token
 # self-contained — so the walk needs no arity: only the names (to suggest)
@@ -376,7 +376,7 @@ def complete(tree: dict[str, Any], words: list[str]) -> list[str]:
             None,
         )
         if entry is not None:
-            # A pulled plugin's global completes from its baked entry — the
+            # A mounted plugin's global completes from its baked entry — the
             # same shapes a task parameter bakes, answered the same way. A
             # comma-splitting value mid-list completes its tail item alone,
             # the typed head riding every candidate.

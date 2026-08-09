@@ -65,8 +65,8 @@ def _values(param: str, path: list[str], g: dict[str, object]) -> list[str]:
     if not files or not path:
         return []
     _maybe_reexec(files)  # before any user code is imported
-    # Plugin pulls are authored in the tasks files, so discovery alone
-    # rebuilds the whole tree — a completer on a pulled task included.
+    # Plugin mounts are authored in the tasks files, so discovery alone
+    # rebuilds the whole tree — a completer on a mounted task included.
     base = registry.Group("root")
     root = _discover.load_tree(files, base=base)
 
@@ -95,7 +95,7 @@ def _global_values(name: str, g: dict[str, object]) -> list[str]:
     The globals ride the tree's contributions, so the same discovery that
     finds a task's completer finds an option's: rediscover, match the cli
     name, peel the annotation, run what it carries. Any miss — no tasks
-    file, an unpulled owner, a plain option — is an empty list."""
+    file, an unmounted owner, a plain option — is an empty list."""
     from footman import _app, _coerce, _discover, registry
 
     files, _cfg = _app.resolve_task_files(g, on_warning=lambda *a: None, on_note=None)
