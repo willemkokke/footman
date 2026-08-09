@@ -113,7 +113,7 @@ def _default_jobs() -> int:
 # task parameter declares, in the form a static table can hold. `""` where the
 # reading exists but has no spelling of its own: `--describe` means "the whole
 # tree", `--install-completion` means "whichever shell is asking".
-GlobalDefault = str | Callable[[], str] | None
+GlobalDefault = str | Callable[[], object] | None
 GLOBALS: list[tuple[str, str | None, str, str | None, GlobalDefault, str]] = [
     ("--help", "-h", "flag", None, None, "help for {prog}, or the named group/task"),
     ("--version", "-V", "flag", None, None, "print the version and exit"),
@@ -165,7 +165,7 @@ GLOBALS: list[tuple[str, str | None, str, str | None, GlobalDefault, str]] = [
         "-j",
         "option",
         "N",
-        lambda: str(_default_jobs()),
+        _default_jobs,
         "max parallel tasks",
     ),
     ("--yes", "-y", "flag", None, None, "assume yes to every confirm() gate"),
@@ -282,8 +282,11 @@ def global_default_text(name: str) -> str:
         return ""
     # `isinstance(str)` rather than `callable()`: narrowing on the string side
     # leaves a concrete callable type, where `callable()` widens to "any
-    # callable at all" and cannot be called safely.
-    return value if isinstance(value, str) else value()
+    # callable at all" and cannot be called safely. Spelling the result is this
+    # function's job, not the computer's — so a table row is the plain function
+    # that already exists (`_default_jobs`), never a lambda wrapping it in
+    # `str()`.
+    return value if isinstance(value, str) else str(value())
 
 
 @dataclass

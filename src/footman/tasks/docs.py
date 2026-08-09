@@ -32,10 +32,15 @@ from footman import (
 from footman.params import between, default, doc
 from footman.registry import Group, requires, requires_dep
 
-_invoking_cli = default(lambda: context.current().prog)
-"""The default for every `prog`/`cmd` parameter here: the CLI that invoked
-us, so a branded runner documents itself. Resolved when the task runs — it
-is a property of the invocation, which is exactly what an import-time
+
+def invoking_prog() -> str:
+    """The name the CLI was invoked as, so a branded runner documents itself."""
+    return context.current().prog
+
+
+_invoking_cli = default(invoking_prog)
+"""The default for every `prog`/`cmd` parameter here. Resolved when the task
+runs — it is a property of the invocation, which is exactly what an import-time
 default cannot see, and what `--help` now prints instead of prose."""
 
 
