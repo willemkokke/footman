@@ -418,13 +418,10 @@ def call(task: Any, args: tuple[Any, ...], kwargs: dict[str, Any]) -> Any:
     )
     if handle is not None:
         post_error = _executor._exit_task_hooks(life, handle, row)
-        if post_error is not None:
-            row.ok = False
-            row.code = post_error.code if isinstance(post_error, context.Failed) else 1
-            row.error = post_error
-            row.state = ""  # it no longer reads as a clean share
+        folded = _executor.fold_post_error(row, post_error, clear_state=True)
+        if folded is not None:
             _record(row)
-            raise post_error
+            raise folded
     _record(row)
     return value
 

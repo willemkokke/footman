@@ -240,6 +240,21 @@ class GlobalOption:
             f"it — say @task(uses=[...]) so its help and provenance show it",
         )
 
+    def _as_parameter(self) -> Any:
+        """This option as the synthetic keyword-only parameter the task-side
+        machinery reasons about — the ONE construction, so the manifest's
+        description (`_global_spec`) and the binder's absent-option ladder
+        (`_absent_global`) can never drift apart; both used to hand-build
+        their own copy."""
+        import inspect
+
+        return inspect.Parameter(
+            self.name.replace("-", "_"),
+            inspect.Parameter.KEYWORD_ONLY,
+            annotation=self.annotation,
+            default=self.default,
+        )
+
     def __repr__(self) -> str:
         state = repr(self._value) if self._frozen else "unbound"
         return f"<GlobalOption --{self.name} from {self.owner}: {state}>"

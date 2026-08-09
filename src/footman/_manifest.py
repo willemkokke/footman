@@ -150,13 +150,10 @@ def _global_spec(opt: Any, memo: dict[int, list[str]]) -> dict[str, Any]:
     """One manifest entry for a plugin's global option — described by the
     same machinery as a task parameter, so choices, path-typed file
     completion and `suggest()` come along by construction."""
-    synthetic = inspect.Parameter(
-        opt.name.replace("-", "_"),
-        inspect.Parameter.KEYWORD_ONLY,
-        annotation=opt.annotation,
-        default=opt.default if opt.annotation is not bool else bool(opt.default),
-    )
-    spec = _finish(param_spec(synthetic), memo)
+    # The option builds its own synthetic parameter — one construction,
+    # shared with the binder's absent-option ladder. (A bool default is
+    # already normalised at declaration, by GlobalOption itself.)
+    spec = _finish(param_spec(opt._as_parameter()), memo)
     spec["name"] = opt.name  # the cli spelling is the identity
     if opt.help:
         spec["help"] = opt.help
