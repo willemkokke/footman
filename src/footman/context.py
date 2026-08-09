@@ -1880,6 +1880,12 @@ def _process_state(env: dict[str, str]) -> Generator[None]:
     restored on exit — exactly the shape of the output router's own
     fallback. The common case (no overlay) is lock-free either way.
 
+    The patch *replaces* rather than updates: *env* is a whole environment
+    (`dict(ctx.env)`, or the caller's `env=`), the same wholesale meaning
+    `env=` has on the subprocess and router lanes — and replacement is what
+    lets an absent key mean absent, which `color="never"` spells by
+    *removing* the force variables rather than writing `"0"`.
+
     The process **cwd** is never touched: footman does not chdir. A call
     that needs a different directory runs as a subprocess (explicit `cwd=`,
     fully parallel) — `_run_callable` raises the taught error for the
@@ -1891,6 +1897,7 @@ def _process_state(env: dict[str, str]) -> Generator[None]:
     with _state_lock:
         saved_env = os.environ.copy()
         try:
+            os.environ.clear()
             os.environ.update(env)
             yield
         finally:
@@ -2306,15 +2313,6 @@ def _colored(ctx: Context) -> bool:
     return ctx.tty and "NO_COLOR" not in os.environ
 
 
-def color_on() -> bool:
-    """Whether the current run emits colour — the tools bridge asks this to
-    decide whether to force a tool's own `--color` flag (for the few that
-    ignore the environment). A plain call outside a run reads a default
-    (monochrome) context, so a bare `tools.git.diff()` in a script adds
-    nothing."""
-    return _colored(current())
-
-
 # Every colour variable footman speaks. `color_environment` clears the whole set
 # before setting a direction, so forcing colour *off* is the *absence* of
 # FORCE_COLOR, not `FORCE_COLOR=0` — some tools (ruff) read the mere presence of
@@ -2632,6 +2630,7 @@ def run(
     title: str | None = None,
     pre_record: Callable[[ResultView], None] | None = None,
     env: dict[str, str] | None = None,
+    color: str = "auto",
     cwd: str | Path | None = None,
     rel: str | Path | None = None,
     encoding: str | None = "utf-8",
@@ -2663,6 +2662,17 @@ def run(
     inheriting the live process cwd, an in-process callable runs under it —
     for a call that touches no paths while its task keeps `ctx.cwd`
     everywhere else.
+
+    `color=` decides what this one child emits: `"always"` forces the colour
+    variables into its environment, `"never"` writes `NO_COLOR` and *removes*
+    any inherited force variables (a tool reading mere presence would honour
+    one straight past `NO_COLOR`), and the default `"auto"` follows the run's
+    own decision. Explicit beats ambient, so `color="always"` holds under an
+    exported `NO_COLOR`. It merges on top of `env=` when both are given, and
+    the in-process lane's overlay reads it too — so a per-call colour reaches
+    both halves of a tool's colour, its flags and its environment, through
+    one door. footman's own chrome (the step lines) stays on the run-wide
+    decision: this is about the child's bytes, not the frame around them.
 
     **`recorded=False` runs this call off the record.** A call is a *step*
     by default: it earns a receipt line, a row in `--json`, a `recording()`
@@ -2703,6 +2713,22 @@ def run(
     `title` still wins; a direct `run([...])` is unaffected.
     """
     ctx = current()
+    if color not in ("auto", "never", "always"):
+        raise ValueError(
+            f"run(color={color!r}) expects one of auto|never|always — "
+            f"auto follows the run's own decision"
+        )
+    if color != "auto":
+        # The per-call twin of the run boundary's publish: the same tri-state
+        # applied to this one child's environment — a private dict, no process
+        # global, so it is thread-safe by construction. Off means REMOVING the
+        # inherited force variables, never writing "0": some tools honour mere
+        # presence straight past NO_COLOR.
+        painted_env = dict(env) if env is not None else dict(ctx.env)
+        for key in _COLOR_VARS:
+            painted_env.pop(key, None)
+        painted_env.update(color_env(color == "always"))
+        env = painted_env
     if (strict or clean) and not shell:
         # strict/clean harden a *shell* run — they mean nothing shell-free, and a
         # silent no-op would be exactly the surprise footman avoids elsewhere.
@@ -2727,7 +2753,7 @@ def run(
             "feed it, or pass the value as an argument"
         )
     out = sys.stdout
-    color = _colored(ctx)
+    paint = _colored(ctx)
     if _show is not None and title is None:
         # `label` (recorded as .command, and the step-line receipt) is always
         # the normalised form, so a recording() assertion never depends on
@@ -2735,14 +2761,14 @@ def run(
         # the exact spelling under --verbose; .raw always carries it.
         label = _show.text(exact=False)
         raw = _show.text(exact=True)
-        shown = _show.painted(color=color, exact=ctx.verbose)
+        shown = _show.painted(color=paint, exact=ctx.verbose)
         shown_plain = _show.text(exact=ctx.verbose)
         # The bridge already separated the argv; keep it for `to_argv()`.
         tokens = tuple(_show.exact)
     else:
         label = title or _label(cmd, args)
         raw = _exact(cmd, args)
-        shown = _dim(label, color)
+        shown = _dim(label, paint)
         shown_plain = label
         # A list `run()` has its tokens apart; a command *string* does not,
         # and splitting one back is platform-dependent guesswork — `to_argv()`
@@ -2769,7 +2795,7 @@ def run(
         )
         ctx.steps.append(result)
         if not ctx.quiet:
-            out.write(f"$ {shown if color else shown_plain}\n")
+            out.write(f"$ {shown if paint else shown_plain}\n")
         return result
 
     if title is not None and not recorded:
