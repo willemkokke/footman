@@ -68,6 +68,27 @@ def test_a_named_file_loads_and_a_missing_one_refuses(tmp_path, monkeypatch):
     assert "missing.env does not exist" in result.stderr
 
 
+def test_a_bare_mention_loads_the_default_loudly(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("TOKEN", raising=False)
+    src = _project(tmp_path, "TOKEN=from-file\n")
+    result = Runner().invoke("--env-file show", tasks=src)
+    assert result.ok, result.stderr
+    assert "TOKEN=from-file" in result.stdout
+
+
+def test_a_bare_mention_with_no_default_refuses_by_its_real_name(tmp_path, monkeypatch):
+    # Asking for the default out loud is still asking: plain absence shrugs,
+    # the bare mention refuses — and names the file it looked for, never the
+    # "." that Path("") used to smuggle in.
+    monkeypatch.chdir(tmp_path)
+    src = _project(tmp_path, None)
+    result = Runner().invoke("--env-file show", tasks=src)
+    assert not result.ok
+    assert ".env does not exist" in result.stderr
+    assert ": . does not exist" not in result.stderr
+
+
 def test_no_file_is_nothing_to_do(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.delenv("TOKEN", raising=False)
