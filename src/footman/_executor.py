@@ -1098,8 +1098,6 @@ class _CallPlan:
     entries: tuple[_PlanParam, ...]  # in signature order
 
 
-# Keyed by the body's id — one entry per decoration, alive for the process
-# because the registry holds every task. Two threads racing on a first call
 _CALL_PLAN = "_footman_call_plan"
 
 

@@ -651,11 +651,12 @@ def _parse_globals(
     becoming the task to run.
 
     *plugin* maps a pulled plugin's long options (`--env-file`) to their
-    kinds — `option?` marks one whose bare form is itself meaningful
-    (`GlobalOption(bare=…)`). *lenient* carries an unknown dash token through
-    untouched instead of refusing — the pre-discovery walk cannot know the
-    plugins yet, so the authoritative post-discovery parse is the one that
-    teaches.
+    kinds: a bool contributes both its spellings as `flag`, and every
+    value-taking one is `option?` — bare-legal, because presence is a reading
+    its owner can always ask for (`.given`). *lenient* carries an unknown dash
+    token through untouched instead of refusing — the pre-discovery walk
+    cannot know the plugins yet, so the authoritative post-discovery parse is
+    the one that teaches.
     """
     known: dict[str, str] = dict(_GLOBAL_KIND)
     value_optional = set(_VALUE_OPTIONAL)
