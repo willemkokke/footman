@@ -239,3 +239,33 @@ The rung claims no root. Outside a project `inv.root` is empty and a
 file's real home, the config directory. Inside a project, `root` is that
 project's top, exactly as for every other task. `-f` stays total control:
 exactly the named file, no rung.
+
+## Tasks built into the product
+
+Outside a project, a branded CLI used to be empty — and the tasks someone
+needs *before* a project exists (log in, create a project) were exactly the
+unreachable ones. `builtin=` names the surface your CLI offers with no
+project at all:
+
+```python
+app = App(name="Acme", prog="acme", dist="acme-cli",
+          builtin=["acme.global"])
+```
+
+The names are `footman.tasks` entry points — strings, never live objects,
+because the background refresh child rebuilds completion manifests in a bare
+process where a name travels and an object cannot. The ladder is
+**project > user > built-in**: with no project task files the built-ins are
+the base of the tree and the user tasks file overlays them; the moment a
+project's cascade finds a tasks file, the base is not there at all. Nothing
+is privileged and nothing is lost — the set is an ordinary entry point, so a
+project that wants those tasks mounts them like any other:
+`plugin("acme.global")`, with `into=`/`only=`/`exclude=` as usual. Naming a
+built-in inside a project teaches exactly that mount, and `--plugins`
+reports the set as `built in`.
+
+Curate a small global surface — *what does this CLI offer someone with no
+project?* — rather than aiming `builtin=` at the everyday tasks, whose
+probes assume a checkout and would fail strangely without one. Outside a
+project every task runs where the command was typed, exactly as the user
+rung does.

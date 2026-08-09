@@ -83,6 +83,12 @@ def _rebuild() -> None:
         filename = baked if isinstance(baked, str) else _paths.DEFAULT_TASKS_FILE
     name = filename
     files = _paths.task_files(cwd, ceiling, name)
+    user = _paths.user_tasks_file(name)
+    if user.is_file():
+        # The cascade's outermost rung rides here too: the child must
+        # rebuild exactly the tree the run serves, or a background refresh
+        # strips personal tasks from the completions it answers.
+        files = [user, *files]
     if not files:
         return
     # The re-executed child is a fresh interpreter, so it needs telling where
