@@ -126,15 +126,19 @@ def test_globals_table_mirrors_the_grammar():
             assert f"{name}={hint}" in line, f"{name}: hint must be `=`-attached"
 
 
-def test_globals_table_carries_defaults_from_the_grammar():
+def test_globals_table_carries_defaults_from_the_grammar(monkeypatch):
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    monkeypatch.delenv("FORCE_COLOR", raising=False)
     text = markdown.globals_table()
     jobs = next(line for line in text.splitlines() if "--jobs=N" in line)
     colour = next(line for line in text.splitlines() if "--color=WHEN" in line)
     where = next(line for line in text.splitlines() if "--where=TASK" in line)
     # Same source as `--help`, so the page cannot say one thing while the
     # runner says another — the drift hand-written "(default: …)" prose had.
+    # Colour's default is computed (it reads NO_COLOR/FORCE_COLOR), so with a
+    # clean environment the page says auto, and says it worked for it.
     assert "(computed)" in jobs
-    assert "default: `auto`" in colour and "(computed)" not in colour
+    assert "default: `auto` (computed)" in colour
     assert "default" not in where
     assert "{prog}" not in text  # placeholders always filled
 

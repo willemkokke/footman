@@ -201,6 +201,27 @@ versions may include breaking changes.
   All five resolve through one rule — **CLI > config > the default** — and two
   guards keep it that way: every boolean project key must have both spellings,
   and every key resolved from config must appear in the reference table.
+- **Core's own globals resolve through the one ladder** — CLI > `env()` >
+  config > `default(fn)` > declared, the same machine a plugin's options
+  use, and the second resolution system (the hand-rolled jobs and colour
+  ladders, the boolean switch helper) is gone. On the surface:
+
+  - **Bad values get the pipeline's taught errors.** `--jobs=abc` answers
+    `--jobs expects an integer`, `--jobs=0` answers `must be at least 1`,
+    `--color=sepia` answers `must be one of always|never|auto` — one wording
+    per mistake, shared with every task parameter, and refused eagerly even
+    when a listing would have exited first.
+  - **A broken config value refuses with the same teaching, on every
+    invocation.** `jobs = 0` in config used to be silently ignored; the
+    `sort` key's validate-even-when-`--sort`-decides rule now covers every
+    config-backed option, spelled `config key 'jobs' must be at least 1`.
+  - **`--color`'s default is computed, and says so.** `NO_COLOR` and
+    `FORCE_COLOR` live in the declared default — the bottom rung — so
+    `--help` shows `default: auto (computed)` and answers for this
+    environment. An explicit `--color=` or a project's `color` key outranks
+    them, exactly as before: they speak for the terminal in general, not
+    for this invocation.
+
 - **A global is bare-legal exactly when it has a default**, declared in the
   grammar table beside its metavar. That is the same rule task options follow
   (absence is legal when there is a default), so both surfaces now answer the

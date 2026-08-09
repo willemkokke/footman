@@ -268,7 +268,14 @@ def _validate_value(value: Any, peeled: _coerce.Peeled, label: str) -> Any:
         if (lo is not None and not (value >= lo)) or (
             hi is not None and not (value <= hi)
         ):
-            raise ValueError(f"{label} must be between {lo} and {hi} (got {value!r})")
+            expect = (
+                f"at least {lo}"
+                if hi is None
+                else f"at most {hi}"
+                if lo is None
+                else f"between {lo} and {hi}"
+            )
+            raise ValueError(f"{label} must be {expect} (got {value!r})")
     if peeled.path_req is not None and isinstance(value, PurePath):
         tests = {"exists": Path.exists, "file": Path.is_file, "dir": Path.is_dir}
         if not tests[peeled.path_req](Path(value)):
@@ -1415,8 +1422,14 @@ def _serial_globals(ctx: Context) -> Generator[None]:
         ctx.serial_active = False
 
 
-def bind_global_options(options: Sequence[Any], tokens: Sequence[str]) -> str | None:
-    """Deliver the parsed leading globals to their owning plugin options.
+def bind_global_options(
+    options: Sequence[Any],
+    tokens: Sequence[str],
+    *,
+    config: Mapping[str, Any] | None = None,
+) -> str | None:
+    """Deliver the parsed leading globals to their owning options — a
+    plugin's, and core's own ladder-bearing declarations alike.
 
     Every option gets a value for the run — a flag's presence, an option's
     coerced `=`-attached value, or what an absent one falls back to — and
@@ -1434,11 +1447,22 @@ def bind_global_options(options: Sequence[Any], tokens: Sequence[str]) -> str | 
     takes `KEY=VALUE` pairs. A bool answers to `--no-x` as well as `--x`,
     last mention winning — the negation every task flag already has.
 
-    An absent option runs the same ladder a task parameter's does, **env >
-    `default(fn)` > the declared default**, through the very helpers `bind`
-    uses. That marker was already accepted on a global's annotation and reached
-    the manifest, so help would have advertised a fallback that never happened.
+    An absent option runs the one ladder, **env > config > `default(fn)` >
+    the declared default**, through the very helpers `bind` uses. The config
+    rung reads *config* for an option declaring `config=True`, coerced
+    through the same pipeline — and a present key is validated even when a
+    token already decides, so a broken config value teaches on every
+    invocation, not only the ones it would steer. Config-sourced is not
+    `given`, exactly as env-sourced is not.
     """
+    cfg_values: dict[str, Any] = {}
+    if config:
+        for opt in options:
+            if getattr(opt, "config", False) and opt.name in config:
+                try:
+                    cfg_values[opt.name] = _config_value(opt, config[opt.name])
+                except ValueError as exc:
+                    return str(exc)
     by_flag: dict[str, Any] = {}
     negations: dict[str, Any] = {}
     for opt in options:
@@ -1489,11 +1513,24 @@ def bind_global_options(options: Sequence[Any], tokens: Sequence[str]) -> str | 
         if opt.name in values:
             opt._value = values[opt.name]
             continue
-        if opt.annotation is bool:
-            opt._value = False
-            continue
-        opt._value = _absent_global(opt)
+        opt._value = _absent_global(opt, cfg_values.get(opt.name, _MISSING))
     return None
+
+
+def _config_value(opt: Any, raw: object) -> Any:
+    """One config value through the option's own pipeline, so a bad TOML
+    value is taught rather than silently wrong. TOML types narrow first —
+    a bool key must hold a bool, a value option must not hold one — then
+    the string pipeline runs the same coercion, bounds and choices a CLI
+    token gets."""
+    label = f"config key '{opt.name}'"
+    if opt.annotation is bool:
+        if isinstance(raw, bool):
+            return raw
+        raise ValueError(f"{label} expects true or false (got {raw!r})")
+    if isinstance(raw, bool):
+        raise ValueError(f"{label} expects a value, not true/false (got {raw!r})")
+    return _coerce_extra(str(raw), _coerce.peel(opt.annotation), label)
 
 
 def _assemble_global(opt: Any, raws: list[str]) -> Any:
@@ -1532,11 +1569,14 @@ def _assemble_global(opt: Any, raws: list[str]) -> Any:
     return result
 
 
-def _absent_global(opt: Any) -> Any:
-    """A global option's value when the line carried none: env, then a computed
-    default, then the declared one — the ladder `bind` runs for a task
-    parameter, on the synthetic parameter `_global_spec` already builds for the
-    manifest, so the two cannot drift into different answers."""
+def _absent_global(opt: Any, cfg: Any = _MISSING) -> Any:
+    """A global option's value when the line carried none: env, then config,
+    then a computed default, then the declared one — the ladder `bind` runs
+    for a task parameter, on the synthetic parameter `_global_spec` already
+    builds for the manifest, so the two cannot drift into different answers.
+    *cfg* arrives pre-coerced (`_config_value`); an exported variable still
+    outranks it, because a variable aims at this invocation and a project
+    setting at every one."""
     peeled = _coerce.peel(opt.annotation)
     param = inspect.Parameter(
         opt.name.replace("-", "_"),
@@ -1548,6 +1588,8 @@ def _absent_global(opt: Any) -> Any:
         value = _env_value(param, peeled)
         if value is not _MISSING:
             return value
+    if cfg is not _MISSING:
+        return cfg
     if peeled.default_fn is not None:
         # A global has no siblings by nature: nothing sits beside it.
         return _computed_default(peeled.default_fn)

@@ -597,15 +597,19 @@ def test_one_source_drives_both_the_help_and_the_run(project, capsys, monkeypatc
     assert seen.get("jobs") == 7
 
 
-def test_global_help_marks_a_computed_default(project, capsys):
+def test_global_help_marks_a_computed_default(project, capsys, monkeypatch):
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    monkeypatch.delenv("FORCE_COLOR", raising=False)
     assert _app.run(["--help"]) == 0
     lines = capsys.readouterr().out.splitlines()
     jobs = next(line for line in lines if "--jobs=N" in line)
     colour = next(line for line in lines if "--color=WHEN" in line)
     # A bare number reads as an arbitrary constant; it is this machine's cores
-    # minus one, and a reader who copies it should know that.
+    # minus one, and a reader who copies it should know that. Colour's default
+    # is computed too — it reads NO_COLOR/FORCE_COLOR — so with a clean
+    # environment it answers auto, and says it worked for the answer.
     assert "(computed)" in jobs
-    assert "default: auto" in colour and "(computed)" not in colour
+    assert "default: auto (computed)" in colour
 
 
 def test_a_global_that_must_be_given_a_value_shows_no_default(project, capsys):
@@ -876,12 +880,69 @@ def test_config_progress_false_turns_it_off_permanently(project, capsys):
 
 
 def test_jobs_flag_validates_and_runs(project, capsys):
+    # The parameter pipeline's own taught refusals — `between(1, None)` for
+    # the floor, coercion for the type — not hand-rolled ones.
     assert _app.run(["--jobs=0", "hi"]) == EX_USAGE
-    assert "positive integer" in capsys.readouterr().err
+    assert "--jobs must be at least 1" in capsys.readouterr().err
     assert _app.run(["-j=abc", "hi"]) == EX_USAGE
-    assert "positive integer" in capsys.readouterr().err
+    assert "--jobs expects an integer" in capsys.readouterr().err
     assert _app.run(["-j=2", "hi"]) == 0
     assert "hello world" in capsys.readouterr().out
+
+
+def test_config_sets_the_width_and_the_line_outranks_it(project, monkeypatch):
+    (project / "pyproject.toml").write_text(
+        "[project]\nname='x'\n[tool.footman]\njobs = 2\n"
+    )
+    seen: dict[str, object] = {}
+    monkeypatch.setattr(
+        _app._schedule, "run_plan", lambda *a, **k: seen.update(k) or []
+    )
+    assert _app.run(["hi"]) == 0
+    assert seen.get("jobs") == 2  # the config rung, coerced and bounded
+    assert _app.run(["-j=3", "hi"]) == 0
+    assert seen.get("jobs") == 3  # the line outranks config
+
+
+def test_a_broken_config_width_teaches_even_when_the_line_decides(project, capsys):
+    # The sort rule, generalised to the whole ladder: a present config key is
+    # validated on every invocation, not only the ones it would steer.
+    (project / "pyproject.toml").write_text(
+        "[project]\nname='x'\n[tool.footman]\njobs = 0\n"
+    )
+    assert _app.run(["hi"]) == EX_USAGE
+    assert "config key 'jobs' must be at least 1" in capsys.readouterr().err
+    assert _app.run(["-j=2", "hi"]) == EX_USAGE
+    assert "config key 'jobs'" in capsys.readouterr().err
+
+
+def test_config_sets_the_colour_and_the_line_outranks_it(project, capsys):
+    (project / "pyproject.toml").write_text(
+        "[project]\nname='x'\n[tool.footman]\ncolor = 'always'\n"
+    )
+    assert _app.run(["--list"]) == 0
+    assert "\033" in capsys.readouterr().out  # painted though not a tty
+    assert _app.run(["--color=never", "--list"]) == 0
+    assert "\033" not in capsys.readouterr().out
+    (project / "pyproject.toml").write_text(
+        "[project]\nname='x'\n[tool.footman]\ncolor = 'sepia'\n"
+    )
+    assert _app.run(["--list"]) == EX_USAGE
+    assert "config key 'color' must be one of" in capsys.readouterr().err
+
+
+def test_config_goes_sequential_and_the_negation_undoes_it(project, monkeypatch):
+    (project / "pyproject.toml").write_text(
+        "[project]\nname='x'\n[tool.footman]\nsequential = true\n"
+    )
+    seen: dict[str, object] = {}
+    monkeypatch.setattr(
+        _app._schedule, "run_plan", lambda *a, **k: seen.update(k) or []
+    )
+    assert _app.run(["hi"]) == 0
+    assert seen.get("sequential") is True
+    assert _app.run(["--no-sequential", "hi"]) == 0
+    assert seen.get("sequential") is False  # `--no-x` countermands config
 
 
 def test_jobs_changes_the_timing_key(project):
@@ -1155,21 +1216,24 @@ def test_no_color_flag_wins_even_on_a_tty(project, monkeypatch):
 
 
 def test_resolve_color_precedence(monkeypatch):
-    # CLI > --no-color > config > env(NO_COLOR/FORCE_COLOR) > auto.
+    # CLI > --no-color > the bound ladder (config > declared default, which
+    # reads NO_COLOR/FORCE_COLOR). This is the unbound half — the pre-run
+    # paint, where config does not exist yet; the config rung is pinned end
+    # to end in test_config_sets_the_colour_and_the_line_outranks_it.
     monkeypatch.delenv("NO_COLOR", raising=False)
     monkeypatch.delenv("FORCE_COLOR", raising=False)
-    assert _app._resolve_color({"color": "always"}, {"color": "never"}) == "always"
-    assert _app._resolve_color({"no_color": True}, {"color": "always"}) == "never"
-    assert _app._resolve_color({}, {"color": "never"}) == "never"
-    assert _app._resolve_color({}, None) == "auto"
+    assert _app._resolve_color({"color": "always"}) == "always"
+    assert _app._resolve_color({"color": "always", "no_color": True}) == "always"
+    assert _app._resolve_color({"no_color": True}) == "never"
+    assert _app._resolve_color({}) == "auto"
     monkeypatch.setenv("NO_COLOR", "1")
-    assert _app._resolve_color({}, None) == "never"  # env below config, above auto
-    assert _app._resolve_color({"color": "always"}, None) == "always"  # cli still wins
+    assert _app._resolve_color({}) == "never"
+    assert _app._resolve_color({"color": "always"}) == "always"  # cli still wins
     monkeypatch.delenv("NO_COLOR")
     monkeypatch.setenv("FORCE_COLOR", "1")
-    assert _app._resolve_color({}, None) == "always"
+    assert _app._resolve_color({}) == "always"
     monkeypatch.setenv("FORCE_COLOR", "0")  # 0 disables — falls through to auto
-    assert _app._resolve_color({}, None) == "auto"
+    assert _app._resolve_color({}) == "auto"
 
 
 def test_color_always_paints_when_piped(project, capsys):
@@ -1193,7 +1257,7 @@ def test_color_never_is_byte_clean_on_a_tty(project, monkeypatch):
 
 def test_color_rejects_an_unknown_value(project, capsys):
     assert _app.run(["--color=technicolor", "--list"]) == EX_USAGE
-    assert "--color expects one of auto|always|never" in capsys.readouterr().err
+    assert "--color must be one of always|never|auto" in capsys.readouterr().err
 
 
 def test_force_color_env_paints_when_piped(project, monkeypatch, capsys):
@@ -1688,7 +1752,7 @@ def test_sort_orders_the_json_catalog(unsorted_project, capsys):
 def test_sort_must_be_a_boolean(unsorted_project, capsys):
     unsorted_project("sort = 'yes'")
     assert _app.run(["--list"]) == EX_USAGE
-    assert "`sort` expects true" in capsys.readouterr().err
+    assert "config key 'sort' expects true or false" in capsys.readouterr().err
 
 
 def test_sort_never_reorders_the_run(unsorted_project, capsys):
@@ -1707,7 +1771,7 @@ def test_sort_flag_orders_one_invocation(unsorted_project, capsys):
 def test_sort_flag_never_masks_a_broken_config_value(unsorted_project, capsys):
     unsorted_project("sort = 'yes'")
     assert _app.run(["--sort", "--list"]) == EX_USAGE
-    assert "`sort` expects true" in capsys.readouterr().err
+    assert "config key 'sort' expects true or false" in capsys.readouterr().err
 
 
 _HIDDEN_TASKS = """
