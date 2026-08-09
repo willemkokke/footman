@@ -589,25 +589,25 @@ def test_every_boolean_config_key_has_both_cli_spellings():
     ]
     assert not missing, (
         f"boolean config keys with no way to countermand them from the command "
-        f"line: {missing}. Add the flag to _split.GLOBALS and resolve it "
-        f"through `_switch`, so config stays a default."
+        f"line: {missing}. Declare the option paired in _split (both spellings "
+        f"derive from one declaration), so config stays a default."
     )
 
 
-def test_every_switch_resolves_a_documented_config_key():
-    """`_switch(g, cfg, "name", …)` reads `[tool.footman] name`, so every name
-    it is called with has to be a documented key.
+def test_every_config_backed_option_resolves_a_documented_key():
+    """A `config=True` declaration reads `[tool.footman] <name>`, so every
+    name declared config-backed has to be a documented key.
 
     The `KEYS` table exists because `cwd` went undocumented for four releases.
     It is read *by the docs*, and nothing read it against the code — which is
     how a live key could go unlisted all over again.
     """
     from footman._config import KEYS
+    from footman._split import CORE_OPTIONS
 
-    source = (ROOT / "src" / "footman" / "_app.py").read_text(encoding="utf-8")
-    used = set(re.findall(r'_switch\(\s*g,\s*cfg,\s*"([a-z_]+)"', source))
+    used = {o.name for o in CORE_OPTIONS if o.config}
     documented = {name for name, *_ in KEYS}
-    assert used, "the _switch call-site scan matched nothing — the guard is inert"
+    assert used, "no core declaration is config-backed — the guard is inert"
     assert used <= documented, (
         f"resolved from config but absent from the KEYS table, so absent from "
         f"the reference page: {sorted(used - documented)}"

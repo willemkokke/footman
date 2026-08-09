@@ -170,13 +170,16 @@ def test_dash_leading_value_attaches(tree):
     assert seg.values == {"timeout": "-1.5"}
 
 
-def test_a_global_default_is_declared_beside_its_metavar():
+def test_a_global_default_is_declared_beside_its_metavar(monkeypatch):
     from footman import _split
 
     # A literal where the default is constant, nothing where the option has no
     # reading without a value — which is the same question a task option
     # answers with `required`.
-    assert _split.global_default("--color") == ("auto", False)
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    monkeypatch.delenv("FORCE_COLOR", raising=False)
+    # Computed: the declared default reads the ambient protocol variables.
+    assert _split.global_default("--color") == ("auto", True)
     # `None` where the option must be given a value at all.
     assert _split.global_default("--where") == (None, False)
     assert _split.global_default("--directory") == (None, False)

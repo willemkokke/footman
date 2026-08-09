@@ -52,32 +52,25 @@ _color_err: bool = False
 _COLOR_MODES = ("auto", "always", "never")
 
 
-def _resolve_color(g: dict[str, object], cfg: dict[str, object] | None = None) -> str:
+def _resolve_color(g: dict[str, object], *, bound: bool = False) -> str:
     """The run-wide colour mode: `auto` | `always` | `never`.
 
     Precedence, highest first: an explicit `--color=…` / `--no-color` on the
-    command line, then `[tool.footman] color`, then the environment
-    (`NO_COLOR` → never, `FORCE_COLOR` → always), else `auto`. An unrecognised
-    value is ignored at that rung (validated loudly on the run path); `cfg` is
-    absent for the pre-run colouring of `--version`/errors, present for the run.
+    command line, then the option's own ladder — the `color` config key, then
+    the declared computed default, which reads the ambient protocol
+    variables (`NO_COLOR` → never, `FORCE_COLOR` → always), else `auto`.
+    *bound* is False for the pre-run colouring of `--version`/errors, where
+    no config exists yet and the declared default answers directly; the run
+    path re-resolves bound and repaints.
     """
     cli = g.get("color")
     if isinstance(cli, str) and cli in _COLOR_MODES:
         return cli
     if g.get("no_color"):
         return "never"
-    if cfg is not None:
-        cfg_color = cfg.get("color")
-        if isinstance(cfg_color, str) and cfg_color in _COLOR_MODES:
-            return cfg_color
-    if "NO_COLOR" in os.environ:
-        return "never"
-    forced = os.environ.get("FORCE_COLOR")
-    if forced not in (None, "", "0"):
-        return "always"
-    # The grammar table's declared default, so `--help` and this ladder cannot
-    # name different modes.
-    return str(_split.global_default("--color")[0])
+    if bound:
+        return str(_split.COLOR.value)
+    return _split._color_from_env()
 
 
 def _set_colors(mode: str) -> None:
@@ -147,22 +140,20 @@ def _globals_to_dict(tokens: list[str]) -> dict[str, object]:
     return result
 
 
-def _switch(
-    g: dict[str, object], cfg: dict[str, Any], name: str, default: bool
-) -> bool:
-    """A boolean policy resolved once: **CLI > config > the default**.
+def _uv_wanted(g: dict[str, object], cfg: dict[str, Any]) -> bool:
+    """`--uv` / `--no-uv` / the `uv` config key, resolved lexically:
+    **CLI > config > on by default**.
 
-    Every boolean config key has both CLI spellings, `--x` and `--no-x`, so a
-    project setting can always be countermanded for one invocation. Without the
-    counter-spelling, config could only ever be a one-way door — which is why
-    the `progress` key was documented as disabling the bar *permanently*.
+    The one config-backed option read before any bind: the uv handoff runs
+    first and may replace this process, so `_split.UV`'s declared ladder
+    cannot answer yet. Same order, hand-held — the stated early consumer.
     """
-    if g.get(name):  # `--x`
+    if g.get("uv"):
         return True
-    if g.get("no_" + name):  # `--no-x`
+    if g.get("no_uv"):
         return False
-    value = cfg.get(name)
-    return default if not isinstance(value, bool) else value
+    value = cfg.get("uv")
+    return True if not isinstance(value, bool) else value
 
 
 def _config_arg(g: dict[str, object]) -> str | None:
@@ -1440,7 +1431,7 @@ def _script_handoff(
         )
     except _config.ConfigError:
         return None  # the real run reports the broken --config properly
-    if not _switch(g, cfg, "uv", True):
+    if not _uv_wanted(g, cfg):
         return None
     if _brand.dist is None:
         # A branded runner can't know which distribution ships it, so it
@@ -1540,7 +1531,7 @@ def _uv_handoff(argv: list[str], g: dict[str, object]) -> int | None:
         )
     except _config.ConfigError:
         return None  # the real run reports the broken --config properly
-    if not _switch(g, cfg, "uv", True):
+    if not _uv_wanted(g, cfg):
         return None
     if g.get("verbose"):
         print(
@@ -1730,7 +1721,12 @@ def _execute(
         code = _run_tree(reg, tree, argv, cfg, collect, root_dir=root_dir)
     finally:
         _executor.clear_lifecycle()
-        registry.release_global_options(reg.contributions["globals"])
+        # Core's ladder instances release with the plugins': they are
+        # module-level singletons, and a Runner drives many runs in one
+        # process — an outside-a-run read goes back to teaching.
+        registry.release_global_options(
+            (*_split.CORE_LADDER, *reg.contributions["globals"])
+        )
     # After the run, so it never adds latency before the user's command —
     # and after the uv handoff by construction (the handoff replaced this
     # process back in _run), so a pinned project's own footman collects.
@@ -1753,32 +1749,32 @@ def _run_tree(
     so both honour `--help`/`--version`/`--list`/`--tree`/`--json` identically.
     Globals are re-derived from `argv` (already validated upstream).
     """
-    g = _globals_to_dict(_split._parse_globals(argv, 0, lenient=True)[0])
+    pre_globals, _ = _split._parse_globals(argv, 0, lenient=True)
+    g = _globals_to_dict(pre_globals)
     json_mode = bool(g.get("json"))
 
-    # `""` is a bare `--color`, which names the default rather than a mode, so
-    # it has nothing here to be wrong about.
-    cli_color = g.get("color")
-    if isinstance(cli_color, str) and cli_color and cli_color not in _COLOR_MODES:
-        return _refuse(
-            json_mode,
-            f"--color expects one of {'|'.join(_COLOR_MODES)} (got {cli_color!r})",
+    # Core's ladder-bearing options bind first — before the colour repaint,
+    # the sort, and the listings, which all read them. One machine with the
+    # plugin bind below; a bad value (`--jobs=abc`, `--color=hi`) or a broken
+    # config key refuses here, even when a listing would have exited first —
+    # eager, like every other parse refusal. Broken config teaches on every
+    # invocation, not only the ones it would steer.
+    if (
+        bad := _executor.bind_global_options(
+            _split.CORE_LADDER, pre_globals, config=cfg
         )
-    # Config can set the mode too, so re-resolve now that cfg is in hand and
-    # repaint footman's own chrome to match (the pre-run call saw CLI+env only).
-    color_mode = _resolve_color(g, cfg)
+    ) is not None:
+        return _refuse(json_mode, bad)
+    # Config can set the mode too, so re-resolve now that the ladder is in
+    # hand and repaint footman's own chrome to match (the pre-run call saw
+    # CLI + environment only).
+    color_mode = _resolve_color(g, bound=True)
     _set_colors(color_mode)
 
     # Presentation only: the sorted copy feeds every human-facing walk
     # (--list, --tree, help, the --json catalog). The run resolves through
-    # the registry, so execution order never follows this setting. The
-    # config key is validated even when --sort already decides, so a broken
-    # value teaches on every invocation, not just unflagged ones.
-    try:
-        sort_cfg = _config.sort_listing(cfg)
-    except _config.ConfigError as exc:
-        return _refuse(json_mode, str(exc))
-    if _switch(g, cfg, "sort", sort_cfg):
+    # the registry, so execution order never follows this setting.
+    if _split.SORT.value:
         tree = _describe.sort_tree(tree)
 
     show_hidden = bool(g.get("all"))
@@ -1859,35 +1855,16 @@ def _run_tree(
     # recorded run() calls, tools, deferred steps — is faked into honest
     # plan-line receipts. The report shapes (--json included) are the plan.
     dry_run = bool(g.get("dry_run"))
-    sequential = _switch(g, cfg, "sequential", False)
+    sequential = bool(_split.SEQUENTIAL.value)
 
-    # The parallel width: -j/--jobs wins, then config `jobs`, then the
-    # cores-minus-one default. Caps both engines (the scheduler's pool and
-    # parallel() in task bodies) and is part of the timing key — a -j2 run
-    # has a genuinely different duration distribution.
-    # `g["jobs"]` is `""` for a bare `--jobs`, which asks for the default out
-    # loud — so it falls through here rather than being parsed as a width.
-    if g.get("jobs"):
-        try:
-            jobs = int(str(g["jobs"]))
-        except ValueError:
-            jobs = 0
-        if jobs < 1:
-            return _refuse(
-                json_mode,
-                f"--jobs expects a positive integer (got {g['jobs']!r})",
-            )
-    elif (
-        isinstance(cfg_jobs := cfg.get("jobs"), int)
-        and not isinstance(cfg_jobs, bool)
-        and cfg_jobs >= 1
-    ):
-        jobs = cfg_jobs
-    else:
-        # The grammar table's own default, not a second call to the same
-        # function: what `--help` prints and what the run uses are one value,
-        # so they cannot drift into describing different runs.
-        jobs = int(_split.global_default("--jobs")[0])
+    # The parallel width, from the one ladder: -j/--jobs wins, then config
+    # `jobs`, then the declared computed default (cores minus one) — bound
+    # above, so what `--help` prints and what the run caps at come from one
+    # declaration, and a bad width (`--jobs=abc`, `--jobs=0`, `jobs = 0` in
+    # config) was already a taught refusal. Caps both engines (the
+    # scheduler's pool and parallel() in task bodies) and is part of the
+    # timing key — a -j2 run has a genuinely different duration distribution.
+    jobs = int(_split.JOBS.value)
 
     fetch_cfg = cfg.get("fetch")
     backend = fetch_cfg.get("backend") if isinstance(fetch_cfg, dict) else None
@@ -1932,7 +1909,7 @@ def _run_tree(
         # Interactivity globals: --yes auto-answers confirm() gates, --no-input
         # refuses to prompt (a required prompt errors instead of hanging).
         "assume_yes": bool(g.get("yes")),
-        "no_input": not _switch(g, cfg, "input", True),
+        "no_input": not _split.INPUT.value,
         # The rehearsal switch: bodies run, footman's own work is faked.
         "dry_run": dry_run,
     }
@@ -1945,7 +1922,7 @@ def _run_tree(
     # estimate from history and record the outcome.
     # A rehearsal is near-instant and teaches nothing about durations: no
     # bar, no eta, and (below) no recorded timing to pollute the history.
-    progress_on = _switch(g, cfg, "progress", True) and not dry_run
+    progress_on = bool(_split.PROGRESS.value) and not dry_run
     predictable = (
         progress_on
         # Synthetic runs pollute no cache, times included: `-f` runs and
@@ -2097,4 +2074,6 @@ def run_group(
         return _run_tree(root, tree, argv, {}, collect, record_times=False)
     finally:
         _executor.clear_lifecycle()
-        registry.release_global_options(root.contributions["globals"])
+        registry.release_global_options(
+            (*_split.CORE_LADDER, *root.contributions["globals"])
+        )

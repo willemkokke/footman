@@ -23,8 +23,11 @@ key:
    *replaces* the user file and the config cascade entirely (the tasks side
    has the same escape hatch, `-f/--tasks-file`). You said exactly what
    applies.
-5. **Environment variables** — `FOOTMAN_NO_UV`, `NO_COLOR`,
-   `FOOTMAN_CACHE_DIR`, and friends always beat file config.
+5. **Environment variables** — `FOOTMAN_NO_UV`, `FOOTMAN_CACHE_DIR`, and
+   friends always beat file config. (`NO_COLOR` and `FORCE_COLOR` are
+   gentler: they are `--color`'s *default* — a project's `color` key or an
+   explicit `--color=` outranks them, because they speak for the terminal
+   in general, not for this invocation.)
 6. **Command-line flags** — `-s`, `-j`, `--no-progress`… always win.
 
 The cascade is what makes monorepos comfortable: a package deep in the

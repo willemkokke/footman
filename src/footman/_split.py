@@ -27,12 +27,15 @@ from __future__ import annotations
 
 import contextlib
 import difflib
+import os
 from collections.abc import Callable, Generator, Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any, Literal
 
 from footman import _coerce, registry
+from footman.params import between as _between
+from footman.params import default as _computed
 
 
 def _close1(a: str, b: str) -> bool:
@@ -127,12 +130,15 @@ class _CoreOption(registry.GlobalOption):
 
     Carries what the grammar needs beyond the plugin surface: the short
     alias (core's namespace, closed to plugins on purpose), the value hint,
-    static choices for the hot-path mirror to pin against, and `_REQUIRED`
-    where a bare mention has no reading. A `bool` annotation is a flag;
-    anything else takes an `=`-attached value, exactly as for plugins.
+    `config=True` for an option whose config key of the same name sets its
+    default, a paired off-spelling's help for a bool that answers to
+    `--no-x`, and `_REQUIRED` where a bare mention has no reading. Choices
+    derive from a `Literal` annotation, so the hot-path mirror pins against
+    the one source. A `bool` annotation is a flag; anything else takes an
+    `=`-attached value, exactly as for plugins.
     """
 
-    __slots__ = ("alias", "choices", "hint")
+    __slots__ = ("alias", "choices", "config", "hint", "paired_off_help")
 
     def __init__(
         self,
@@ -142,11 +148,18 @@ class _CoreOption(registry.GlobalOption):
         alias: str | None = None,
         hint: str | None = None,
         default: Any = None,
-        choices: tuple[str, ...] | None = None,
+        config: bool = False,
+        paired_off_help: str | None = None,
         help: str = "",
     ) -> None:
         self.alias = alias
         self.hint = hint
+        self.config = config
+        self.paired_off_help = paired_off_help
+        choices = None
+        if annotation is not bool:
+            found = _coerce.all_choices(_coerce.peel(annotation).element)
+            choices = tuple(found) if found else None
         self.choices = choices
         super().__init__(name, annotation, default=default, help=help)
 
@@ -154,20 +167,92 @@ class _CoreOption(registry.GlobalOption):
         """Off the carriage — see the class docstring."""
 
 
+def _color_from_env() -> str:
+    """`--color`'s declared default: the ambient protocol variables, else
+    `auto`. `NO_COLOR` set (to anything) means never; `FORCE_COLOR` set and
+    non-zero means always. Living in the *default* rung is what keeps the
+    ladder honest — an explicit `--color=` or a project's `color` key
+    outranks the environment, because the specific beats the general."""
+    if "NO_COLOR" in os.environ:
+        return "never"
+    forced = os.environ.get("FORCE_COLOR")
+    if forced not in (None, "", "0"):
+        return "always"
+    return "auto"
+
+
+# The ladder-bearing options, named: their values resolve at bind — CLI >
+# `env()` > config > `default(fn)` > declared — and `_app` reads the
+# instances (`JOBS.value`), where pure presence flags stay on the parsed
+# token dict. A paired bool declares once and derives both spellings; its
+# declared default is real (`INPUT` is on unless told otherwise). `UV` is
+# config-backed but consumed lexically: the uv handoff runs before any bind
+# (it may replace this process) — the one stated early consumer here.
+SORT = _CoreOption(
+    "sort",
+    config=True,
+    help="list tasks alphabetically (default: as defined)",
+    paired_off_help="list tasks in definition order",
+)
+SEQUENTIAL = _CoreOption(
+    "sequential",
+    alias="-s",
+    config=True,
+    help="run one at a time, parallel() blocks included",
+    paired_off_help="run in parallel (undo config)",
+)
+JOBS = _CoreOption(
+    "jobs",
+    Annotated[int, _between(1, None), _computed(_default_jobs)],
+    alias="-j",
+    hint="N",
+    config=True,
+    help="max parallel tasks",
+)
+INPUT = _CoreOption(
+    "input",
+    default=True,
+    config=True,
+    help="allow prompting (undo config)",
+    paired_off_help="never prompt; error if input is required",
+)
+COLOR = _CoreOption(
+    "color",
+    Annotated[Literal["always", "never", "auto"], _computed(_color_from_env)],
+    hint="WHEN",
+    config=True,
+    help="when to colour: always|never|auto",
+)
+PROGRESS = _CoreOption(
+    "progress",
+    default=True,
+    config=True,
+    help="progress bar, eta and timing (undo config)",
+    paired_off_help="no progress bar, eta, or timing capture",
+)
+UV = _CoreOption(
+    "uv",
+    default=True,
+    config=True,
+    help="take the uv handoffs (undo config)",
+    paired_off_help="skip the uv handoffs for this run",
+)
+
+# What `bind_global_options` resolves for a run (`UV` stays lexical, above).
+CORE_LADDER: tuple[_CoreOption, ...] = (JOBS, COLOR, SORT, SEQUENTIAL, INPUT, PROGRESS)
+
 # `default` is what a bare mention means — `_REQUIRED` for an option with no
 # reading without a value (the question a task option answers with
-# `required`). A literal where the default is a constant (`--color` →
-# `auto`); a callable where it depends on the machine (`_default_jobs`,
-# deferred because `_progress` imports from here); `""` where the reading
-# exists but has no spelling of its own: `--describe` means "the whole
-# tree", `--install-completion` means "whichever shell is asking".
+# `required`); a literal where it is a constant; the annotation's
+# `default(fn)` where it is computed (`--jobs`, `--color`); `""` where the
+# reading exists but has no spelling of its own: `--describe` means "the
+# whole tree", `--install-completion` means "whichever shell is asking".
 CORE_OPTIONS: tuple[_CoreOption, ...] = (
     _CoreOption("help", alias="-h", help="help for {prog}, or the named group/task"),
     _CoreOption("version", alias="-V", help="print the version and exit"),
     _CoreOption("list", alias="-l", help="list tasks (flat)"),
     _CoreOption("tree", help="list tasks grouped by command group"),
-    _CoreOption("sort", help="list tasks alphabetically (default: as defined)"),
-    _CoreOption("no-sort", help="list tasks in definition order"),
+    SORT,
     _CoreOption("all", alias="-a", help="include hidden tasks in the listings"),
     _CoreOption(
         "where",
@@ -189,36 +274,16 @@ CORE_OPTIONS: tuple[_CoreOption, ...] = (
     ),
     _CoreOption("keep-going", alias="-k", help="run every branch even if one fails"),
     _CoreOption("fail-fast", help="stop at the first failure"),
-    _CoreOption(
-        "sequential", alias="-s", help="run one at a time, parallel() blocks included"
-    ),
-    _CoreOption("no-sequential", help="run in parallel (undo config)"),
-    _CoreOption(
-        "jobs",
-        str,
-        alias="-j",
-        hint="N",
-        default=_default_jobs,
-        help="max parallel tasks",
-    ),
+    SEQUENTIAL,
+    JOBS,
     _CoreOption("yes", alias="-y", help="assume yes to every confirm() gate"),
-    _CoreOption("no-input", help="never prompt; error if input is required"),
-    _CoreOption("input", help="allow prompting (undo config)"),
+    INPUT,
     _CoreOption("quiet", alias="-q", help="suppress the per-task summary"),
     _CoreOption("verbose", alias="-v", help="replay captured output even on success"),
-    _CoreOption(
-        "color",
-        str,
-        hint="WHEN",
-        default="auto",
-        choices=("always", "never", "auto"),
-        help="when to colour: always|never|auto",
-    ),
+    COLOR,
     _CoreOption("no-color", help="disable ANSI colour (same as --color=never)"),
-    _CoreOption("no-progress", help="no progress bar, eta, or timing capture"),
-    _CoreOption("progress", help="progress bar, eta and timing (undo config)"),
-    _CoreOption("no-uv", help="skip the uv handoffs for this run"),
-    _CoreOption("uv", help="take the uv handoffs (undo config)"),
+    PROGRESS,
+    UV,
     _CoreOption("json", help="stdout is one JSON document (captures output)"),
     _CoreOption("timings", help="show per-task durations"),
     _CoreOption(
@@ -274,17 +339,37 @@ CORE_OPTIONS: tuple[_CoreOption, ...] = (
 GlobalDefault = str | Callable[[], object] | None
 
 
-def _row(o: _CoreOption) -> tuple[str, str | None, str, str | None, GlobalDefault, str]:
-    """One declaration as the grammar table's row. Flags derive a `None`
-    default — the column answers "what does a bare mention of a *value*
-    option mean", and a flag's bare form is simply the flag."""
-    kind = "flag" if o.annotation is bool else "option"
-    default = None if o.annotation is bool or o.default is _REQUIRED else o.default
-    return (f"--{o.name}", o.alias, kind, o.hint, default, o.help)
+def _rows(
+    o: _CoreOption,
+) -> list[tuple[str, str | None, str, str | None, GlobalDefault, str]]:
+    """A declaration as grammar-table rows — two for a paired bool, the
+    spelling that acts leading (`--no-x` first when the default is on).
+    Flags derive a `None` default: the column answers "what does a bare
+    mention of a *value* option mean", and a flag's bare form is simply the
+    flag. A value option's column is its declared literal, else the
+    `default(fn)` its annotation carries — one source for `--help` and the
+    run alike."""
+    if o.annotation is bool:
+        on = (f"--{o.name}", o.alias, "flag", None, None, o.help)
+        if o.paired_off_help is None:
+            return [on]
+        off = (f"--no-{o.name}", None, "flag", None, None, o.paired_off_help)
+        return [off, on] if o.default else [on, off]
+    default: GlobalDefault
+    if o.default is _REQUIRED:
+        default = None
+    elif o.default is None:
+        marker = _coerce.peel(o.annotation).default_fn
+        # The marker's own fn, unwrapped: a global has no siblings for a
+        # computed default to read, so the zero-arg call is the contract.
+        default = None if marker is None else marker.fn
+    else:
+        default = o.default
+    return [(f"--{o.name}", o.alias, "option", o.hint, default, o.help)]
 
 
 GLOBALS: list[tuple[str, str | None, str, str | None, GlobalDefault, str]] = [
-    _row(o) for o in CORE_OPTIONS
+    row for o in CORE_OPTIONS for row in _rows(o)
 ]
 _GLOBAL_KIND = {name: kind for name, _, kind, _, _, _ in GLOBALS}
 _GLOBAL_KIND.update({alias: kind for _, alias, kind, _, _, _ in GLOBALS if alias})
