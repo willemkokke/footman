@@ -1,5 +1,7 @@
-"""Write the run as a profiler trace — `fm --profile … check`, then open the
-file at ui.perfetto.dev (chrome://tracing and speedscope read it too).
+"""Write the run as a profiler trace — `fm --profile … check`.
+
+Open the file at ui.perfetto.dev (chrome://tracing and speedscope read it
+too).
 
 `plugin("footman.profile")` in a tasks file switches it on; unmounted, it is
 inert metadata like any other plugin. Mounted, `--profile` writes

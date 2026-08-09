@@ -573,7 +573,44 @@ def test_a_builtin_describes_itself_inside_a_project(tmp_path, monkeypatch):
     result = acme.invoke("--plugins")
     assert result.ok, result.stderr
     assert "built in" in result.stdout
-    assert "Scaffold a tasks file" in result.stdout
+    # The single task's own line, not the module docstring the anonymous
+    # capture carries as help — one voice, and no stacked em-dashes.
+    assert "Write a starter tasks file in this directory." in result.stdout
+
+
+def test_a_plugin_with_no_tasks_still_reports_mounted(tmp_path, monkeypatch):
+    # footman.profile lands hooks and an option, no tasks — the tree walk
+    # sees nothing, and the report used to call it "(not mounted)" while its
+    # contributions rode every run. The mount stamps every bucket now, and
+    # the state is the plain word: nothing to say "at" about.
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
+    (tmp_path / "tasks.py").write_text(
+        'from footman import plugin\n\nplugin("footman.profile")\n'
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
+    result = Runner(App(name="acme", prog="acme")).invoke("--plugins")
+    assert result.ok, result.stderr
+    assert "mounted" in result.stdout
+    assert "Write the run as a profiler trace" in result.stdout
+    assert "(not mounted)" in result.stdout  # env_files, genuinely unmounted
+
+
+def test_a_family_mounted_piecemeal_speaks_with_its_own_voice(tmp_path, monkeypatch):
+    # Two pieces of one family land as two top-most nodes; an arbitrary
+    # member's docstring must not stand for its siblings, so the row speaks
+    # with the family's advertised help instead.
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
+    (tmp_path / "tasks.py").write_text(
+        "from footman import plugin\n\n"
+        'plugin("footman.docs.page")\nplugin("footman.docs.site")\n'
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
+    result = Runner(App(name="acme", prog="acme")).invoke("--plugins")
+    assert result.ok, result.stderr
+    assert "mounted at page, site" in result.stdout
+    assert "Generate markdown docs for this project's tasks" in result.stdout
 
 
 def test_two_projectless_directories_share_one_manifest(tmp_path, monkeypatch):

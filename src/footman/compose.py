@@ -555,17 +555,24 @@ def _mount(
     # (a `@pre_tasks` hook edits the tree in place), so they belong on the live
     # root that discovery collects from, never the grafted subtree.
     for kind, bucket in fork.contributions.items():
-        if kind == "globals" and verb == "plugin":
-            for opt in bucket:
-                # The entry-point identity, written down for the config
-                # section derivation — the mount always knew it, it just
-                # never said so. One singleton reached through two
-                # *different* mounts has no single derivation, and records
-                # that instead (config= on it then refuses, naming the fix).
-                if opt._mounted is None:
-                    opt._mounted = identity
-                elif opt._mounted != identity:
-                    opt._mounted = registry._MANY_MOUNTS
+        if verb == "plugin":
+            for item in bucket:
+                # The entry-point identity, written down on every
+                # contribution — the mount always knew it, it just never
+                # said so. Options carry it for the config section
+                # derivation; hooks carry it so a plugin with no tasks at
+                # all still reports as mounted (`--plugins` read only tree
+                # provenance once, and called a riding plugin "(not
+                # mounted)"). One singleton reached through two *different*
+                # mounts has no single identity, and records that instead
+                # (config= on an option then refuses, naming the fix).
+                if kind == "globals":
+                    if item._mounted is None:
+                        item._mounted = identity
+                    elif item._mounted != identity:
+                        item._mounted = registry._MANY_MOUNTS
+                elif getattr(item, registry._MOUNTED, None) is None:
+                    setattr(item, registry._MOUNTED, identity)
         registry.root.contributions[kind].extend(bucket)
         bucket.clear()
     if fork.name == "root":
