@@ -1306,6 +1306,30 @@ def _call(
     return 0, returned, None
 
 
+def fold_post_error(
+    result: TaskResult,
+    post_error: BaseException | None,
+    *,
+    clear_state: bool = False,
+) -> BaseException | None:
+    """Fold a post-hook failure into an otherwise-green result — the one
+    spelling of "an observer that crashed must not pass silently", which
+    three sites used to carry by hand. A deliberate veto (`fail()`) keeps
+    its own code, never 0; anything else reads 1. *clear_state* drops a
+    `shared` badge — a share a post failed no longer reads as clean.
+    Returns the folded error for the caller's error channel, `None` when
+    there was nothing to fold or the result already carried its own story.
+    """
+    if post_error is None or not result.ok:
+        return None
+    result.ok = False
+    result.code = post_error.code if isinstance(post_error, context.Failed) else 1
+    result.error = post_error
+    if clear_state:
+        result.state = ""
+    return post_error
+
+
 class Unavailable(Exception):
     """A `@requires`-gated task was asked to run; the message is the reason."""
 
@@ -1588,18 +1612,14 @@ def _assemble_global(opt: Any, raws: list[str]) -> Any:
 def _absent_global(opt: Any, cfg: Any = _MISSING) -> Any:
     """A global option's value when the line carried none: env, then config,
     then a computed default, then the declared one — the ladder `bind` runs
-    for a task parameter, on the synthetic parameter `_global_spec` already
-    builds for the manifest, so the two cannot drift into different answers.
+    for a task parameter, on the one synthetic parameter the option itself
+    builds (`_as_parameter`, the same construction `_global_spec` describes),
+    so the two cannot drift into different answers.
     *cfg* arrives pre-coerced (`_config_value`); an exported variable still
     outranks it, because a variable aims at this invocation and a project
     setting at every one."""
     peeled = _coerce.peel(opt.annotation)
-    param = inspect.Parameter(
-        opt.name.replace("-", "_"),
-        inspect.Parameter.KEYWORD_ONLY,
-        annotation=opt.annotation,
-        default=opt.default,
-    )
+    param = opt._as_parameter()
     if peeled.env is not None:
         value = _env_value(param, peeled)
         if value is not _MISSING:
@@ -2171,14 +2191,9 @@ def run_bound(
             result = _futures.shared_result(seg.task, value, cell.record)
             result.address = ctx.address  # the reference row is this request's
         if handle is not None:
-            post_error = _exit_task_hooks(life, handle, result)
-            if post_error is not None and result.ok:
-                result.ok = False
-                result.code = (
-                    post_error.code if isinstance(post_error, context.Failed) else 1
-                )
-                result.error = post_error
-                result.state = ""  # it no longer reads as a clean share
+            fold_post_error(
+                result, _exit_task_hooks(life, handle, result), clear_state=True
+            )
         return result
 
     plain_args = args  # the caller-visible arguments, before ctx is injected
@@ -2334,17 +2349,8 @@ def run_bound(
         result.audit = audit
     if handle is not None:
         post_error = _exit_task_hooks(life, handle, result)
-        if post_error is not None and result.ok:
-            # An observer that crashed must not pass silently: the task
-            # fails, named, exactly as a raising pre would have failed it.
-            # A deliberate veto (fail() from the hook) keeps its own code —
-            # never 0, fail() refuses that spelling.
-            result.ok = False
-            result.code = (
-                post_error.code if isinstance(post_error, context.Failed) else 1
-            )
-            result.error = post_error
-            error = post_error
+        if (folded := fold_post_error(result, post_error)) is not None:
+            error = folded
     # The body's return, snapshotted the moment it was handed over: what
     # a dependent or a body-caller receives is what the annotation promised,
     # whatever a reporter later does to the *reported* result. Resolved after

@@ -1409,32 +1409,20 @@ def _maybe_collect(cfg: dict[str, object], skip_stem: str) -> None:
 
 
 def _spawn_gc(cache: Path, skip_stem: str) -> None:
-    """Detach the collector child — `_complete`'s refresh spawn, verbatim."""
-    cmd = [
-        sys.executable,
-        "-c",
-        "from footman import _gc; _gc.main()",
-        str(cache),
-        skip_stem,
-    ]
-    null = subprocess.DEVNULL
-    try:
-        if _WINDOWS:
-            # CREATE_NO_WINDOW, not DETACHED_PROCESS — see `_spawn_refresh`
-            # in `_complete`: the Windows 11 default-terminal handoff gives
-            # a console-less child a visible terminal window.
-            flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(
-                subprocess, "CREATE_NEW_PROCESS_GROUP", 0
-            )
-            subprocess.Popen(
-                cmd, stdin=null, stdout=null, stderr=null, creationflags=flags
-            )
-        else:
-            subprocess.Popen(
-                cmd, stdin=null, stdout=null, stderr=null, start_new_session=True
-            )
-    except OSError:
-        return  # a background collector must never break a run
+    """Detach the collector child through `_complete.detach` — one copy of
+    the background-child dance, where its Windows story is pinned by tests,
+    instead of the drift-prone verbatim twin this used to carry."""
+    from footman import _complete
+
+    _complete.detach(
+        [
+            sys.executable,
+            "-c",
+            "from footman import _gc; _gc.main()",
+            str(cache),
+            skip_stem,
+        ]
+    )
 
 
 def _find_uv() -> str | None:

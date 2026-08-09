@@ -140,6 +140,39 @@ def _choice_tokens(p: dict[str, Any], partial: str) -> list[str]:
     return [head + c for c in p.get("choices", []) if c not in given]
 
 
+def _attached_value(
+    p: dict[str, Any],
+    optname: str,
+    valpart: str,
+    bash_split: bool,
+    path: list[str],
+) -> list[str]:
+    """Candidates for an attached `--opt=value` partial — one answer for a
+    task option and a mounted plugin's global (its baked entry has the same
+    shapes), which used to be two verbatim copies of this walk.
+
+    A comma-splitting value mid-list completes its tail item alone, the
+    typed head riding every candidate; a path value hands off to the
+    shell's file completion; a dynamic completer recomputes fresh, its
+    emission prefix chosen by the shell's word shape. *path* is the segment
+    path a task option rides with — empty for a global, which `_suggest`
+    reads as "address the option by name".
+    """
+    head, cur = _csv_head(p, valpart)
+    if "path" in p.get("types", []):
+        return [_FILES_CSV] if head else [_FILES]
+    if p.get("dynamic"):  # recompute fresh, never the baked snapshot
+        prefix = head if bash_split else f"{optname}={head}"
+        return [_DYNAMIC, cur, prefix, p["name"], *path]
+    given = valpart.split(",")[:-1] if head else []
+    choices = [c for c in p.get("choices", ()) if c.startswith(cur) and c not in given]
+    return (
+        [head + c for c in choices]
+        if bash_split
+        else [f"{optname}={head}{c}" for c in choices]
+    )
+
+
 def _consume_globals(prior: list[str]) -> list[str]:
     """Strip the leading global options; the rest is the task chain.
 
@@ -377,26 +410,8 @@ def complete(tree: dict[str, Any], words: list[str]) -> list[str]:
         )
         if entry is not None:
             # A mounted plugin's global completes from its baked entry — the
-            # same shapes a task parameter bakes, answered the same way. A
-            # comma-splitting value mid-list completes its tail item alone,
-            # the typed head riding every candidate.
-            head, cur = _csv_head(entry, valpart)
-            if "path" in entry.get("types", []):
-                return [_FILES_CSV] if head else [_FILES]
-            if entry.get("dynamic"):  # recompute fresh, never the baked snapshot
-                prefix = head if bash_split else f"{optname}={head}"
-                return [_DYNAMIC, cur, prefix, entry["name"]]
-            given = valpart.split(",")[:-1] if head else []
-            choices = [
-                c
-                for c in entry.get("choices", ())
-                if c.startswith(cur) and c not in given
-            ]
-            return (
-                [head + c for c in choices]
-                if bash_split
-                else [f"{optname}={head}{c}" for c in choices]
-            )
+            # same shapes a task parameter bakes, answered by the same walk.
+            return _attached_value(entry, optname, valpart, bash_split, [])
         choices = [c for c in _GLOBAL_CHOICES.get(optname, ()) if c.startswith(valpart)]
         return choices if bash_split else [f"{optname}={c}" for c in choices]
 
@@ -497,25 +512,7 @@ def complete(tree: dict[str, Any], words: list[str]) -> list[str]:
         optname, _, valpart = partial.partition("=")
         opt = seg.opts.get(optname)
         if opt is not None and opt["kind"] == "option":
-            # A comma-splitting value mid-list completes its tail item
-            # alone; the typed head rides every candidate back.
-            head, cur = _csv_head(opt, valpart)
-            if "path" in opt.get("types", []):
-                return [_FILES_CSV] if head else [_FILES]
-            if opt.get("dynamic"):  # recompute fresh, never the baked snapshot
-                prefix = head if bash_split else f"{optname}={head}"
-                return [_DYNAMIC, cur, prefix, opt["name"], *path]
-            given = valpart.split(",")[:-1] if head else []
-            choices = [
-                c
-                for c in opt.get("choices", [])
-                if c.startswith(cur) and c not in given
-            ]
-            return (
-                [head + c for c in choices]
-                if bash_split
-                else [f"{optname}={head}{c}" for c in choices]
-            )
+            return _attached_value(opt, optname, valpart, bash_split, path)
 
     # A path-typed positional (or trailing consumer): once the partial is a
     # value being typed rather than an option, hand it to native file
@@ -619,6 +616,17 @@ def _spawn_refresh(override: str | None = None) -> None:
             "_refresh.refresh_cwd(*sys.argv[1:])"
         )
         cmd = [sys.executable, "-c", script, *where]
+    detach(cmd)
+
+
+def detach(cmd: list[str]) -> None:
+    """Spawn *cmd* fully detached, swallowing failure — the one copy of the
+    background-child dance, shared with the collector's spawn in `_app` (a
+    background child must never break the foreground that spawned it).
+
+    Stdlib-only, like everything here, so both the hot path and the
+    execution path may call it.
+    """
     null = subprocess.DEVNULL
     try:
         if os.name == "nt":
@@ -639,7 +647,7 @@ def _spawn_refresh(override: str | None = None) -> None:
                 cmd, stdin=null, stdout=null, stderr=null, start_new_session=True
             )
     except OSError:
-        return  # a background refresh must never break completion
+        return  # a detached child must never break what spawned it
 
 
 def _cold_build(manifest: str, override: str | None) -> dict[str, Any] | None:
