@@ -192,7 +192,7 @@ class Runner:
                 prefix=self.app.brand.prefix,
                 cache_dir=self.app.brand.cache_dir,
                 data_dir=self.app.brand.data_dir,
-                config_name=self.app.brand.config_name,
+                config_name=self.app.brand.config_stem,
                 tasks_file=self.app.brand.tasks_file,
             )
             if isinstance(tasks, Group):

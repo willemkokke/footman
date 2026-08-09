@@ -239,12 +239,10 @@ def main(tasks_file: str | None = None) -> None:
     # project's lockfile pins, and what a tasks file carrying its own
     # dependencies must declare. A branded CLI passes its own.
     #
-    # `home_env` makes stock footman an ordinary user of the same field a
-    # `env_prefix` is pinned rather than derived from `fm`: `FOOTMAN_HOME`
-    # says what it belongs to and is searchable, where `FM_HOME` is opaque.
-    # `FOOTMAN_HOME` then falls out of the same `<PREFIX>_HOME` rule every
-    # brand follows, rather than being a mechanism of its own.
-    raise SystemExit(App(dist="footman", env_prefix="FOOTMAN").run(argv))
+    # The stock pins — `FOOTMAN_*` variables, `footman.toml` config, the
+    # long words a two-letter command cannot derive — are `App`'s own: any
+    # `App` that keeps the `fm` command gets them, this one included.
+    raise SystemExit(App(dist="footman").run(argv))
 
 
 def __getattr__(name: str) -> object:

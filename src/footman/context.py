@@ -891,7 +891,8 @@ def data_dir() -> Path:
 
     Durable and machine-local — credentials, tokens, generated assets. The
     collector never touches it, which is the whole difference from
-    `cache_dir()`.
+    `cache_dir()`. Created owner-only (`0o700`), like `~/.ssh`, because
+    credentials are exactly what it is documented to hold.
 
     ```python
     (footman.data_dir() / "credentials.json").write_text(token)
@@ -899,18 +900,25 @@ def data_dir() -> Path:
     """
     from footman import _paths
 
-    return _make(_paths.footman_data_dir())
+    return _make(_paths.footman_data_dir(), mode=0o700)
 
 
-def _make(path: Path) -> Path:
+def _make(path: Path, mode: int | None = None) -> Path:
     """Return *path*, having made sure it exists.
 
     The accessors create rather than merely resolve: every caller would
     otherwise write the same `mkdir`, and forgetting it fails at the write
     rather than here. `_paths` itself stays resolution-only — it is on the
     completion hot path, which must not touch the disk.
+
+    *mode* hardens the leaf at creation time only: a directory that already
+    exists keeps whatever permissions its owner gave it, parents follow the
+    umask as usual, and Windows ignores the bits.
     """
-    path.mkdir(parents=True, exist_ok=True)
+    if mode is None:
+        path.mkdir(parents=True, exist_ok=True)
+    else:
+        path.mkdir(mode=mode, parents=True, exist_ok=True)
     return path
 
 

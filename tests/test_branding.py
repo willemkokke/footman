@@ -6,6 +6,9 @@ dogfoods the same harness users are told to test their branded CLIs with.
 
 from __future__ import annotations
 
+import os
+import stat
+
 from footman import App, Brand, __version__, _paths
 from footman._executor import EX_USAGE
 from footman.app import DEFAULT_BRAND
@@ -115,7 +118,15 @@ def test_brand_tasks_file_rides_in_the_manifest(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
     Runner(App(prog="acme", tasks_file="acmetasks.py")).invoke("--list")
-    baked = json.loads(_paths.manifest_path(tmp_path).read_text(encoding="utf-8"))
+    # In the brand's own cache corner — `.cache/acme/`, from the config stem
+    # deriving from prog. (`.cache/footman/` here used to be the accident of
+    # `config_name` defaulting to the display name.)
+    manifest = next(
+        p
+        for p in (tmp_path / ".cache" / "acme").glob("*.json")
+        if not p.name.endswith(".times.json")
+    )
+    baked = json.loads(manifest.read_text(encoding="utf-8"))
     assert baked["tasks_file"] == "acmetasks.py"
 
 
@@ -142,11 +153,40 @@ def test_prefix_is_derived_from_the_command_name():
 
 
 def test_stock_footman_pins_its_prefix():
-    # Not compatibility: `FOOTMAN_HOME` says what it belongs to and is
-    # searchable, where `FM_HOME` is opaque. A two-letter command is exactly
-    # when a brand should pin a longer prefix than its prog.
+    # Not compatibility: `FOOTMAN_CACHE_DIR` says what it belongs to and is
+    # searchable, where `FM_CACHE_DIR` is opaque. A two-letter command is
+    # exactly when a brand should pin a longer prefix than its prog.
     assert DEFAULT_BRAND.prefix == "FOOTMAN"
     assert DEFAULT_BRAND.env("CACHE_DIR") == "FOOTMAN_CACHE_DIR"
+
+
+def test_config_name_derives_from_prog():
+    # The machine word, exactly as the env prefix does — never the display
+    # name, which is free text: `[tool.Acme]` from `name="Acme"` was a
+    # silent misconfig for every user the docs taught `[tool.acme]`.
+    b = Brand(name="Acme", prog="acme")
+    assert b.config_stem == "acme"
+    assert b.config_file() == "acme.toml"
+    assert App(name="Acme", prog="acme").brand.config_stem == "acme"
+    assert Brand(prog="acme", config_name="acme-runner").config_stem == "acme-runner"
+
+
+def test_stock_footman_pins_its_config_name():
+    # The config twin of the pinned prefix: `footman.toml`, not `fm.toml`.
+    assert DEFAULT_BRAND.config_stem == "footman"
+    assert DEFAULT_BRAND.config_file() == "footman.toml"
+
+
+def test_a_bare_app_is_stock_footman():
+    # Keeping the `fm` command keeps the stock pins: a test-harness
+    # `App(tasks_file=...)` reads `[tool.footman]` and `FOOTMAN_*` exactly
+    # like the `fm` on PATH — not a derived `[tool.fm]` nobody writes.
+    brand = App(tasks_file="jobs.py").brand
+    assert brand.config_stem == "footman"
+    assert brand.prefix == "FOOTMAN"
+    # Moving `prog` ends the pins, and the brand derives from its command.
+    assert App(prog="acme").brand.config_stem == "acme"
+    assert App(prog="acme").brand.prefix == "ACME"
 
 
 def test_the_two_folders_are_placed_independently(tmp_path, monkeypatch):
@@ -211,6 +251,11 @@ def test_the_accessors_create_the_directory(tmp_path, monkeypatch):
         )
         assert footman.cache_dir().is_dir()
         assert footman.data_dir().is_dir()
+        if os.name == "posix":
+            # The data directory holds credentials, so its leaf is created
+            # owner-only, like `~/.ssh`. Creation-time only — an existing
+            # directory keeps whatever its owner gave it.
+            assert stat.S_IMODE(footman.data_dir().stat().st_mode) == 0o700
     finally:
         _paths.configure_child(*before)
 

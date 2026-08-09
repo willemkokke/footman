@@ -1745,6 +1745,7 @@ def _run_tree(
     cfg: dict[str, object],
     collect: list[_executor.TaskResult] | None,
     root_dir: str = "",
+    record_times: bool = True,
 ) -> int:
     """The post-manifest tail: help/where/split/list/tree/dry-run/run/report.
 
@@ -1947,6 +1948,11 @@ def _run_tree(
     progress_on = _switch(g, cfg, "progress", True) and not dry_run
     predictable = (
         progress_on
+        # Synthetic runs pollute no cache, times included: `-f` runs and
+        # in-memory trees (`run_group`) both estimate nothing and record
+        # nothing, or a consumer's Runner-driven test suite would write
+        # timing history into the real user cache.
+        and record_times
         and not g.get("tasks_file")
         and _schedule.dag_wants_progress(reg, segments)
     )
@@ -2088,7 +2094,7 @@ def run_group(
         _error(f"warning: {orphan}")
     _executor.install_lifecycle(inv, root.contributions)
     try:
-        return _run_tree(root, tree, argv, {}, collect)
+        return _run_tree(root, tree, argv, {}, collect, record_times=False)
     finally:
         _executor.clear_lifecycle()
         registry.release_global_options(root.contributions["globals"])

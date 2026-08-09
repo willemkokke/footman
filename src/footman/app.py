@@ -82,8 +82,9 @@ class Brand:
     layout:
 
     ```python
-    cache_dir=Path(os.environ["ACME_HOME"]) / ".cache" / "acme-cli",
-    data_dir=Path(os.environ["ACME_HOME"]) / "acme-cli",
+    acme_home = Path(os.environ.get("ACME_HOME", Path.home() / ".acme"))
+    cache_dir=acme_home / ".cache" / "acme-cli",
+    data_dir=acme_home / "acme-cli",
     ```
 
     They are not anchored to each other — put them wherever each belongs in
@@ -113,12 +114,18 @@ class Brand:
     nothing. **Or the namespace collides with your product's own** —
     keeping it clear is yours to arrange.
 
-    `config_name` names both the standalone config file (`acme.toml`) and
-    the table inside `pyproject.toml` (`[tool.acme]`), from one field so
-    the two cannot drift apart. The *user-level* config file is not placed
-    by the brand: it stays at `<config home>/<name>/config.toml`, where a
-    user looks for their own settings, with `<PREFIX>_CONFIG` naming
-    another.
+    `config_name` names the standalone config file (`acme.toml`), the table
+    inside `pyproject.toml` (`[tool.acme]`), and the user-level config
+    corner (`~/.config/acme/`), from one field so the three cannot drift
+    apart. It defaults to `prog` — the machine word your users already type,
+    the same rule the env prefix follows — never the display name, which is
+    free text (`[tool."Acme DevKit"]` is nothing anyone would write, and a
+    capitalised table is one nobody would find). Set it when the identity
+    your users should write isn't the command: footman's own command is
+    `fm`, but its config is `footman.toml`, pinned for the same reason its
+    variables are `FOOTMAN_*`. The *user-level* config file is not placed
+    by the brand: it stays at `~/.config/acme/config.toml`, where a user
+    looks for their own settings, with `<PREFIX>_CONFIG` naming another.
     """
 
     name: str = "footman"
@@ -129,12 +136,18 @@ class Brand:
     cache_dir: Path | None = None
     data_dir: Path | None = None
     env_prefix: str | None = None
-    config_name: str = "footman"
+    config_name: str | None = None
 
     @property
     def prefix(self) -> str:
         """The environment-variable namespace — `env_prefix`, else from `prog`."""
         return self.env_prefix or _prefix_from(self.prog)
+
+    @property
+    def config_stem(self) -> str:
+        """The config identity — `config_name`, else `prog`: the `acme` of
+        `acme.toml`, `[tool.acme]` and `~/.config/acme/`."""
+        return self.config_name or self.prog
 
     def env(self, suffix: str) -> str:
         """This brand's spelling of an environment variable: `ACME_CACHE_DIR`."""
@@ -142,18 +155,27 @@ class Brand:
 
     def config_file(self) -> str:
         """This brand's standalone config filename — `acme.toml`."""
-        return f"{self.config_name}.toml"
+        return f"{self.config_stem}.toml"
 
 
-# footman's command is `fm`, but its variables are `FOOTMAN_*` — not for
-# compatibility, but because `FOOTMAN_HOME` tells a reader who has never heard
-# of this tool what it belongs to, and is searchable. `FM_HOME` is neither.
-# A two-letter command is exactly when to pin a longer prefix.
-DEFAULT_BRAND = Brand(env_prefix="FOOTMAN")
+# footman's command is `fm`, but its variables are `FOOTMAN_*` and its config
+# is `footman.toml` — not for compatibility, but because `FOOTMAN_CACHE_DIR`
+# and `[tool.footman]` tell a reader who has never heard of this tool what
+# they belong to, and can be searched for. `FM_CACHE_DIR` and `fm.toml` are
+# neither. A two-letter command is exactly when to pin the longer words.
+DEFAULT_BRAND = Brand(env_prefix="FOOTMAN", config_name="footman")
 
 
 class App:
-    """A branded footman CLI — call `run` from your console-script entry."""
+    """A branded footman CLI — call `run` from your console-script entry.
+
+    One `App` serves a process: `run` points module-level state (the brand,
+    its locations) at this brand and deliberately never restores it — a
+    process runs one brand, and `run` may not return at all (the uv handoff
+    re-execs). Driving two brands from one process is supported only through
+    `footman.testing.Runner`, which saves and restores around each
+    invocation.
+    """
 
     brand: Brand
 
@@ -169,6 +191,16 @@ class App:
         env_prefix: str | None = None,
         config_name: str | None = None,
     ) -> None:
+        # The stock pins: an `App` that kept the `fm` command *is* stock
+        # footman, and stock pins the long words its two-letter command
+        # cannot derive — `FOOTMAN_*` variables, `footman.toml` config. The
+        # moment `prog` moves, the pins stop applying and a brand derives
+        # from its own command (pin `env_prefix=` / `config_name=` to
+        # differ). Without this, a bare `App()` would read `FM_CONFIG` and
+        # `[tool.fm]` while the `fm` on PATH reads footman's.
+        if prog == "fm":
+            env_prefix = env_prefix or "FOOTMAN"
+            config_name = config_name or "footman"
         # `dist` is opt-in for a branded CLI: footman cannot guess which
         # distribution ships someone else's runner, and a wrong guess would
         # hand a user's invocation to an environment without it. Unset, the
@@ -182,9 +214,7 @@ class App:
             cache_dir=Path(cache_dir).expanduser() if cache_dir is not None else None,
             data_dir=Path(data_dir).expanduser() if data_dir is not None else None,
             env_prefix=env_prefix,
-            # Default to `name`, so a branded CLI's users write `acme.toml`
-            # rather than a config file named after a dependency.
-            config_name=config_name if config_name is not None else name,
+            config_name=config_name,
         )
 
     def run(self, argv: list[str] | None = None) -> int:
@@ -202,7 +232,7 @@ class App:
             prefix=self.brand.prefix,
             cache_dir=self.brand.cache_dir,
             data_dir=self.brand.data_dir,
-            config_name=self.brand.config_name,
+            config_name=self.brand.config_stem,
             tasks_file=self.brand.tasks_file,
         )
         if args and args[0] == "--complete":
