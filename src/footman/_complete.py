@@ -597,15 +597,24 @@ def _spawn_refresh(override: str | None = None) -> None:
     # override set → rebuild that one -f file's (cwd, file) manifest; else the
     # cwd cascade. The path rides as an argv word (not baked into the -c script),
     # so a path with spaces or quotes needs no escaping.
+    # The brand's resolved locations ride along as argv words too: the child
+    # inherits the environment but not the brand, and must write this CLI's
+    # cache rather than stock footman's.
+    from footman import _paths
+
+    where = _paths.child_args()
     if override:
         script = (
             "import sys; from footman import _refresh; "
-            "_refresh.refresh_source(sys.argv[1])"
+            "_refresh.refresh_source(*sys.argv[1:])"
         )
-        cmd = [sys.executable, "-c", script, override]
+        cmd = [sys.executable, "-c", script, override, *where]
     else:
-        script = "from footman import _refresh; _refresh.refresh_cwd()"
-        cmd = [sys.executable, "-c", script]
+        script = (
+            "import sys; from footman import _refresh; "
+            "_refresh.refresh_cwd(*sys.argv[1:])"
+        )
+        cmd = [sys.executable, "-c", script, *where]
     null = subprocess.DEVNULL
     try:
         if os.name == "nt":
@@ -712,7 +721,11 @@ def _fresh_dynamic(param: str, path: list[str], args: list[str]) -> list[str] | 
     *path* addresses a plugin's global option by name — a task parameter
     always rides with the segment path that reached it.
     """
-    cmd = [sys.executable, "-m", "footman._suggest"]
+    from footman import _paths
+
+    # Same reasoning as the refresh child: it is told this CLI's locations
+    # rather than re-deriving them from an environment it shares with others.
+    cmd = [sys.executable, "-m", "footman._suggest", "--where", *_paths.child_args()]
     if path:
         cmd += ["--param", param]
         for name in path:

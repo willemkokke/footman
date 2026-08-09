@@ -11,7 +11,7 @@ from unittest import mock
 
 import pytest
 
-from footman import _complete, _manifest, registry, task
+from footman import _complete, _manifest, _paths, registry, task
 from footman._complete import _tasks_file_from, complete, complete_cli
 from footman.params import Many, doc, nosplit, suggest
 
@@ -730,11 +730,15 @@ def test_child_argv_mirrors_the_real_spawn():
     plain = _child_argv()
     assert plain is not None
     assert plain[0] == sys.executable and plain[1] == "-c"
-    assert "_refresh.refresh_cwd()" in plain[2]
+    assert "_refresh.refresh_cwd(*sys.argv[1:])" in plain[2]
+    # …and the brand's resolved locations behind it, so the detached child
+    # writes this CLI's cache rather than stock footman's.
+    assert plain[3:] == _paths.child_args()
 
     override = _child_argv("other.py")
     assert override is not None
-    assert "_refresh.refresh_source" in override[2] and override[-1] == "other.py"
+    assert "_refresh.refresh_source" in override[2]
+    assert override[3] == "other.py" and override[4:] == _paths.child_args()
 
 
 def test_cold_evidence_reports_the_childs_own_words(tmp_path, monkeypatch):
@@ -762,7 +766,7 @@ def test_cold_evidence_reports_the_childs_own_words(tmp_path, monkeypatch):
     assert "child sees cwd=elsewhere" in report  # the child's own words
     assert "ImportError: no footman" in report
     assert "child exit 1" in report
-    assert "_refresh.refresh_cwd()" in report
+    assert "_refresh.refresh_cwd(*sys.argv[1:])" in report
     # Paths land verbatim. A `repr` (an f-string over a list, json.dumps)
     # doubles every backslash, and this report is read on Windows.
     assert sys.executable in report

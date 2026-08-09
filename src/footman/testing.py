@@ -100,10 +100,18 @@ class InvokeResult:
 
 @contextlib.contextmanager
 def _isolated(cwd: Path | None) -> Generator[None]:
-    """A throwaway completion cache (and optional cwd) for one invocation."""
+    """A throwaway completion cache (and optional cwd) for one invocation.
+
+    The configured locations are restored too: `App.run` points `_paths` at
+    its brand's world, and a test driving two brands in one process must not
+    leave the second reading the first's.
+    """
+    from footman import _paths
+
     with tempfile.TemporaryDirectory(prefix="footman-test-") as tmp:
         old = os.environ.get("XDG_CACHE_HOME")
         os.environ["XDG_CACHE_HOME"] = tmp
+        where = _paths.child_args()
         try:
             if cwd is not None:
                 with contextlib.chdir(cwd):
@@ -111,6 +119,7 @@ def _isolated(cwd: Path | None) -> Generator[None]:
             else:
                 yield
         finally:
+            _paths.configure_child(*where)
             if old is None:
                 os.environ.pop("XDG_CACHE_HOME", None)
             else:
@@ -174,6 +183,16 @@ class Runner:
             contextlib.redirect_stdout(out),
             contextlib.redirect_stderr(err),
         ):
+            # `App.run` is bypassed below, so point the locations at this
+            # brand's world here — the same thing a real entry point does
+            # before anything reads a path.
+            from footman import _paths
+
+            _paths.configure(
+                prefix=self.app.brand.prefix,
+                home=self.app.brand.resolved_home(),
+                config_name=self.app.brand.config_name,
+            )
             if isinstance(tasks, Group):
                 # One shared surface with the real CLI (help/version/list/tree/
                 # json all honoured) — no drifting Group-mode re-implementation.

@@ -27,8 +27,11 @@ DEFAULT_TASKS_FILE = "tasks.py"
 def find_project_root(start: Path | None = None) -> Path:
     """Nearest ancestor of *start* (default: cwd) containing a project marker."""
     start = (start or Path.cwd()).resolve()
+    # This brand's config file counts too — `acme.toml` marks an `acme`
+    # project root exactly as `footman.toml` marks footman's.
+    markers = (*PROJECT_MARKERS, config_basename())
     for directory in (start, *start.parents):
-        if any((directory / marker).exists() for marker in PROJECT_MARKERS):
+        if any((directory / marker).exists() for marker in markers):
             return directory
     return start
 
@@ -68,6 +71,83 @@ def task_files(
     return [f for d in dir_chain(cwd, ceiling) if (f := d / filename).is_file()]
 
 
+# The brand's locations, set once by `App.run` before anything reads them —
+# the same module-global shape `_app._brand` uses for the brand's *names*.
+# Plain strings and a path, never a `Brand`: this module is imported on every
+# TAB press and must not reach for the framework.
+_prefix = "FOOTMAN"
+_home: Path | None = None
+_config_name = "footman"
+
+
+def configure(
+    *,
+    prefix: str = "FOOTMAN",
+    home: Path | None = None,
+    config_name: str = "footman",
+) -> None:
+    """Point every location at one brand's world.
+
+    *home* is where that CLI keeps what it owns; `None` keeps the XDG
+    fallback. *prefix* namespaces the environment variables, so a stray
+    `FOOTMAN_CACHE_DIR` cannot move another product's cache. Detached
+    children are handed the resolved values rather than re-deriving them.
+    """
+    global _prefix, _home, _config_name
+    _prefix, _home, _config_name = prefix, home, config_name
+
+
+def child_args() -> list[str]:
+    """The configured locations as argv words for a detached child.
+
+    Children inherit the environment but not the brand, and re-deriving a
+    home from the environment would be re-deriving it *wrongly* — the brand
+    computed it. So the parent hands over resolved values instead, and the
+    child never reads a variable of its own.
+    """
+    return [_prefix, str(_home) if _home is not None else "", _config_name]
+
+
+def configure_child(prefix: str = "", home: str = "", config_name: str = "") -> None:
+    """The other side of `child_args` — empty strings mean stock defaults."""
+    configure(
+        prefix=prefix or "FOOTMAN",
+        home=Path(home) if home else None,
+        config_name=config_name or "footman",
+    )
+
+
+def home_from_env(var: str) -> Path | None:
+    """A home read from environment variable *var*, or `None` when unset."""
+    value = os.environ.get(var)
+    return Path(value).expanduser() if value else None
+
+
+def env_prefix() -> str:
+    """The configured environment-variable prefix."""
+    return _prefix
+
+
+def env_var(suffix: str) -> str:
+    """The configured spelling of a variable: `ACME_CACHE_DIR`."""
+    return f"{_prefix}_{suffix}"
+
+
+def brand_home() -> Path | None:
+    """The configured home, or `None` when locations fall back to XDG."""
+    return _home
+
+
+def config_basename() -> str:
+    """The standalone config filename for this brand — `acme.toml`."""
+    return f"{_config_name}.toml"
+
+
+def config_table() -> str:
+    """The `pyproject.toml` table for this brand — the `acme` in `[tool.acme]`."""
+    return _config_name
+
+
 def cache_home() -> Path:
     """Base cache directory, honouring `XDG_CACHE_HOME`."""
     xdg = os.environ.get("XDG_CACHE_HOME")
@@ -86,24 +166,47 @@ def config_home() -> Path:
 
 
 def footman_config_file() -> Path:
-    """The user-level config file: `$FOOTMAN_CONFIG` when set (a file path,
-    since this is one file — unlike `FOOTMAN_CACHE_DIR`'s directory), else
-    `<config home>/footman/config.toml`. The bottom rung of the precedence
-    ladder: project config cascades over it, `--config` replaces it."""
-    override = os.environ.get("FOOTMAN_CONFIG")
+    """The user-level config file, most specific answer first: this brand's
+    `<PREFIX>_CONFIG` (a file path, since this is one file — unlike
+    `<PREFIX>_CACHE_DIR`'s directory), then `<home>/config.toml` when the
+    brand set a home, else `<config home>/<name>/config.toml`.
+
+    The bottom rung of the precedence ladder: project config cascades over
+    it, `--config` replaces it."""
+    override = os.environ.get(env_var("CONFIG"))
     if override:
         return Path(override).expanduser()
-    return config_home() / "footman" / "config.toml"
+    if _home is not None:
+        return _home / "config.toml"
+    return config_home() / _config_name / "config.toml"
 
 
 def footman_cache_dir() -> Path:
-    """footman's own cache directory: `$FOOTMAN_CACHE_DIR` when set, else
-    `<cache home>/footman`. One override moves every footman cache —
-    completion manifests and timing history alike — and the completion hot
-    path resolves through here too, so TAB follows it with no re-install.
+    """This CLI's cache directory, most specific answer first: its own
+    `<PREFIX>_CACHE_DIR`, then `<home>/cache` when the brand set a home,
+    else `<cache home>/<name>`.
+
+    One override moves every cache — completion manifests and timing history
+    alike — and the completion hot path resolves through here too, so TAB
+    follows it with no re-install.
     """
-    override = os.environ.get("FOOTMAN_CACHE_DIR")
-    return Path(override) if override else cache_home() / "footman"
+    override = os.environ.get(env_var("CACHE_DIR"))
+    if override:
+        return Path(override)
+    if _home is not None:
+        return _home / "cache"
+    return cache_home() / _config_name
+
+
+def user_tasks_file(filename: str = DEFAULT_TASKS_FILE) -> Path | None:
+    """This CLI's user-level tasks file, or `None` when it has no home.
+
+    `<home>/<tasks_file>` — your own tasks, without a project. It is a
+    *fallback*, not a rung: a project's cascade wins outright, because there
+    is one way to get tasks into a project tree and that is pulling them in
+    a tasks file.
+    """
+    return None if _home is None else _home / filename
 
 
 def _dir_key(key_dir: Path) -> str:

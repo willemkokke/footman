@@ -21,6 +21,8 @@ import tomllib
 from pathlib import Path
 from typing import Any
 
+from footman import _paths
+
 # The reference regex from PEP 723, verbatim: a comment block fenced by
 # `# /// script` and `# ///`, every line a comment.
 _BLOCK = re.compile(
@@ -147,7 +149,9 @@ def child_python(file: Path) -> str | None:
     child either completes from what it can import, or (as it always has)
     quietly builds nothing.
     """
-    if os.environ.get("FOOTMAN_UV_REEXEC") or os.environ.get("FOOTMAN_NO_UV"):
+    if os.environ.get(_paths.env_var("UV_REEXEC")) or os.environ.get(
+        _paths.env_var("NO_UV")
+    ):
         return None
     meta, _warning = read_block(file)
     if meta is None or not meta.get("dependencies"):
@@ -179,6 +183,6 @@ def reexec_child(python: str, args: list[str]) -> None:
     door. Failure to exec is not an error worth making: the caller's own
     guard swallows it and the child carries on in place.
     """
-    os.environ["FOOTMAN_UV_REEXEC"] = "1"
+    os.environ[_paths.env_var("UV_REEXEC")] = "1"
     os.environ.pop("VIRTUAL_ENV", None)  # the script env is not the active one
     os.execv(python, [python, *args])

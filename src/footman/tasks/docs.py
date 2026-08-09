@@ -599,7 +599,7 @@ def _boot_shell(
     env = {
         "HOME": str(scratch),
         "XDG_CONFIG_HOME": str(scratch),
-        "FOOTMAN_CACHE_DIR": str(_paths.footman_cache_dir()),
+        _paths.env_var("CACHE_DIR"): str(_paths.footman_cache_dir()),
     }
     # A system rc (/etc/zsh/*, /etc/profile) may rebuild PATH and lose the
     # venv that owns *prog* \u2014 then the rc's `eval "$(prog \u2026)"` silently

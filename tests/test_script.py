@@ -226,7 +226,10 @@ def test_the_children_reexec_the_same_entry_they_are_spawned_with():
 
     spawn = inspect.getsource(_complete._spawn_refresh)
     child = inspect.getsource(_refresh)
-    for entry in ("_refresh.refresh_cwd()", "_refresh.refresh_source(sys.argv[1])"):
+    for entry in (
+        "_refresh.refresh_cwd(*sys.argv[1:])",
+        "_refresh.refresh_source(*sys.argv[1:])",
+    ):
         assert entry in spawn, entry
         assert entry in child, entry
 
