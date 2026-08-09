@@ -103,6 +103,20 @@ class default:
     declared default to sit on: a plain Python call of the task, outside any
     run, has to keep working.
 
+    Declare one positional argument and it receives the **sibling parameters**
+    resolved so far — the same courtesy `check(fn)` gets, and for the same
+    reason: a default is often a function of the inputs beside it.
+
+    ```python
+    def cast(*, shell: str = "zsh",
+             title: Annotated[str, default(lambda p: f"{p['shell']} · x")] = ""): ...
+    ```
+
+    Read-only, and only what is to its *left* in the signature, so a default can
+    never depend on something not resolved yet. `--help` cannot show such a
+    default — there is no invocation to read — so it shows none rather than one
+    it would have to invent.
+
     The value is used as it comes back, not coerced: `fn()` returns a real
     object, and coercion exists because the command line only has strings. It
     still runs the annotation's validators, so a `default(fn)` that would be
@@ -111,9 +125,9 @@ class default:
 
     __slots__ = ("fn",)
 
-    fn: Callable[[], Any]
+    fn: Callable[..., Any]
 
-    def __init__(self, fn: Callable[[], Any]) -> None:
+    def __init__(self, fn: Callable[..., Any]) -> None:
         self.fn = fn
 
 

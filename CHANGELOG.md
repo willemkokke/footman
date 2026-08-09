@@ -51,6 +51,12 @@ versions may include breaking changes.
   naming absence tells a reader less than silence does.
 - **`GlobalOption.given`**, the twin of `.value`, so a plugin can tell a global
   that was named from one that merely has a default.
+- **A `default(fn)` may read its sibling parameters**, the way `check(fn)`
+  already could — declare one positional argument and it receives the values
+  resolved to its *left*, read-only. A default is often a function of the
+  inputs beside it: a window title from the command being screenshotted, a
+  report name from the target it describes. `--help` shows no default for one
+  of these, because there is no invocation to read.
 - **`ask()` works on a parameter that has a default**, which makes it safe to
   put on anything. The default becomes the *offer* — `version [patch]:`, Enter
   accepts — instead of a reason not to ask, and where nobody can be asked (off
@@ -93,6 +99,10 @@ versions may include breaking changes.
   question the same way instead of one keying on a bracketed metavar. `--jobs`
   and `--color` gain a bare form; `--where`, `-C`, `-f` and `--config` have no
   reading without a value and still refuse.
+- **A contextual `check(fn)` sees `*args` from the command line too.** The
+  variadic lives outside `kwargs` on that path and inside `bound.arguments` on
+  the body-call path, so the same validator saw the variadic from a Python call
+  and an empty tuple from a chain.
 - **An absent global option runs the same ladder a task parameter does** — env,
   then `default(fn)`, then the declared default. `env()` was accepted on a
   global's annotation and reached the manifest but was never applied, so the

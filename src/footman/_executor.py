@@ -182,11 +182,15 @@ def resolve(root: Group, path: list[str]) -> Task:
 _MISSING = object()
 
 
-def _wants_context(fn: Any) -> bool:
-    """True when a validator accepts a second positional argument — the sibling
-    parameters coerced so far. Decided by *inspecting* the signature, never by
-    catching a `TypeError` from the call, so a real arity error raised inside the
-    validator is not mistaken for the one-argument form."""
+def _wants_context(fn: Any, over: int = 1) -> bool:
+    """True when *fn* accepts one positional argument beyond *over* — the
+    sibling parameters resolved so far.
+
+    *over* is how many the marker passes anyway: `check(fn)` hands over a value,
+    so a contextual one takes two; `default(fn)` hands over nothing, so a
+    contextual one takes one. Decided by *inspecting* the signature, never by
+    catching a `TypeError` from the call, so a real arity error raised inside
+    the callable is not mistaken for the shorter form."""
     try:
         params = inspect.signature(fn).parameters.values()
     except (TypeError, ValueError):
@@ -197,7 +201,21 @@ def _wants_context(fn: Any) -> bool:
             return True
         if p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD):
             positional += 1
-    return positional >= 2
+    return positional > over
+
+
+def _computed_default(marker: Any, params: dict[str, Any] | None = None) -> Any:
+    """Call a `default(fn)`, handing it the siblings when it asks for them.
+
+    The same courtesy `check(fn)` gets, for the same reason: a default is often
+    a function of the inputs beside it — a window title from the command being
+    shown, a report name from the target it describes. Read-only, and only what
+    is to its *left*, so a default can never depend on something not resolved
+    yet.
+    """
+    if _wants_context(marker.fn, 0):
+        return marker.fn(MappingProxyType(dict(params) if params else {}))
+    return marker.fn()
 
 
 def _run_checks(
@@ -625,17 +643,29 @@ def _prompt_param(
 
 
 def _left_siblings(
-    sig: inspect.Signature, current: inspect.Parameter, kwargs: dict[str, Any]
+    sig: inspect.Signature,
+    current: inspect.Parameter,
+    kwargs: dict[str, Any],
+    var_args: Sequence[Any] = (),
 ) -> dict[str, Any]:
     """The effective values of the parameters to *current*'s left — a provided
     value where one was resolved, else the parameter's own default — so a
-    contextual `check` reads what the body will actually receive, never a copy of
-    the default that can drift out of sync."""
+    contextual `check` or `default` reads what the body will actually receive,
+    never a copy of the default that can drift out of sync.
+
+    *var_args* carries the `*args` values, which live outside `kwargs` on the
+    command-line path and so used to be missing from the view there while a body
+    call (whose `bound.arguments` holds them under the parameter's own name) saw
+    them — the same validator reading two different worlds depending on how the
+    task was reached.
+    """
     view: dict[str, Any] = {}
     for p in sig.parameters.values():
         if p.name == current.name:
             break
-        if p.name in kwargs:
+        if p.kind is inspect.Parameter.VAR_POSITIONAL:
+            view[p.name] = tuple(kwargs.get(p.name, var_args))
+        elif p.name in kwargs:
             view[p.name] = kwargs[p.name]
         elif p.default is not inspect.Parameter.empty:
             view[p.name] = p.default
@@ -726,7 +756,7 @@ def bind(
     for param in sig.parameters.values():
         # The parameters bound to this one's left, at their effective values,
         # for a contextual check(fn, params).
-        siblings = _left_siblings(sig, param, kwargs)
+        siblings = _left_siblings(sig, param, kwargs, var_args)
         if param.kind is inspect.Parameter.VAR_POSITIONAL:
             extra = [*seg.variadic, *(seg.passthrough or [])]
             if param.annotation is empty:
@@ -779,7 +809,7 @@ def bind(
                     # comes back — it is a real object, and coercion exists for
                     # command-line strings — but still validated, so one that
                     # would be refused as a typed value is refused here too.
-                    computed = peeled.default_fn.fn()
+                    computed = _computed_default(peeled.default_fn, siblings)
                     _validate_explicit(computed, peeled, f"--{cli}", siblings)
                     kwargs[param.name] = computed
                     continue
@@ -1141,7 +1171,7 @@ def bind_call(
                 bound.arguments[param.name] = value
                 continue
         if peeled.default_fn is not None:
-            computed = peeled.default_fn.fn()
+            computed = _computed_default(peeled.default_fn, siblings)
             label = f"{name}({param.name}=…)"
             _validate_explicit(computed, peeled, label, siblings)
             bound.arguments[param.name] = computed  # inferred, so not `supplied`
@@ -1388,7 +1418,8 @@ def _absent_global(opt: Any) -> Any:
         if value is not _MISSING:
             return value
     if peeled.default_fn is not None:
-        return peeled.default_fn.fn()
+        # A global has no siblings by nature: nothing sits beside it.
+        return _computed_default(peeled.default_fn)
     return opt.default
 
 

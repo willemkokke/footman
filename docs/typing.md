@@ -105,6 +105,26 @@ default to sit on, because a plain Python call of the task with no run around
 it has to keep working. `--help` prints what it computes, since the manifest is
 built on the execution path: what help shows is what this run would use.
 
+Declare one positional argument and it receives the **sibling parameters**
+resolved so far — the same courtesy `check(fn)` gets, because a default is
+often a function of the inputs beside it:
+
+<!-- example: fragment -->
+
+```python
+@task
+def cast(
+    *keys: str,
+    shell: str = "zsh",
+    title: Annotated[str, default(lambda p: f"{p['shell']} · completion")] = "",
+): ...
+```
+
+Read-only, and only what is to its *left* in the signature, so a default can
+never depend on something not resolved yet. `--help` shows no default for one
+of these — there is no invocation to read, and a guess would be worse than
+silence.
+
 ## What if I don't like annotating types?
 
 Then don't. Every rule above still holds, because the one that sorts a

@@ -175,9 +175,15 @@ def reduce_frames(raw: str) -> str:
 def shots(
     *argv: str,
     out: Annotated[Path, doc("the SVG file to write")],
-    title: Annotated[str, doc("window title; empty takes the command line")] = "",
     width: Annotated[int, between(40, 200), doc("terminal columns")] = 72,
     cmd: Annotated[str, _invoking_cli, doc("executable to run")] = "",
+    # After `cmd`, deliberately: a default reads only what is to its left, and
+    # this one is the command line it is about to screenshot.
+    title: Annotated[
+        str,
+        default(lambda p: " ".join([p["cmd"], *p["argv"]])),
+        doc("window title"),
+    ] = "",
 ) -> list[str]:
     """Run the CLI on a pseudo-terminal and save a framed SVG screenshot.
 
@@ -234,8 +240,7 @@ def shots(
     console = Console(record=True, width=width, file=io.StringIO(), force_terminal=True)
     console.print(Text.from_ansi(capture.rstrip("\n")))
     out.parent.mkdir(parents=True, exist_ok=True)
-    line = " ".join([prog, *argv])
-    out.write_text(console.export_svg(title=title or line), encoding="utf-8")
+    out.write_text(console.export_svg(title=title), encoding="utf-8")
     print(f"wrote {out}")
     return [str(out)]
 
@@ -691,7 +696,13 @@ def cast(
         Literal["zsh", "bash", "fish", "pwsh", "nushell"],
         doc("interactive shell to drive"),
     ] = "zsh",
-    title: Annotated[str, doc("window title; empty takes '<shell> · completion'")] = "",
+    title: Annotated[
+        str,
+        # `shell` is declared to the left, so it is resolved by the time this
+        # runs — which is the whole reason a default may read its siblings.
+        default(lambda p: f"{p['shell']} · completion"),
+        doc("window title"),
+    ] = "",
     width: Annotated[int, between(40, 200), doc("terminal columns")] = 72,
     height: Annotated[int, between(4, 50), doc("terminal rows")] = 14,
     prog: Annotated[str, _invoking_cli, doc("CLI whose completion is installed")] = "",
@@ -757,7 +768,6 @@ def cast(
     from rich.console import Console
     from rich.text import Text
 
-    label = title or f"{shell} · completion"
     svgs: list[str] = []
     for i, (_, grid) in enumerate(frames):
         console = Console(
@@ -768,7 +778,7 @@ def cast(
             for ch, style in row:
                 text.append(ch, style or None)
             console.print(text)
-        svgs.append(console.export_svg(title=label, unique_id=f"cf{i}"))
+        svgs.append(console.export_svg(title=title, unique_id=f"cf{i}"))
     start = frames[0][0]
     times = [t - start for t, _ in frames]
     out.parent.mkdir(parents=True, exist_ok=True)

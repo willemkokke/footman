@@ -25,6 +25,21 @@ def _next_tag() -> str:
 
 ComputedTag = Annotated[str, default(_next_tag)]
 
+# A default reading its left siblings: `shell` and the variadic `keys` both
+# precede `title` in the signature, so both are resolved by the time it runs.
+SiblingTitle = Annotated[
+    str, default(lambda p: f"{p['shell']} · {','.join(p['keys'])}")
+]
+
+_seen_paths: list[tuple[str, ...]] = []
+
+
+def _watch_paths(_value: str, params: dict[str, object]) -> None:
+    _seen_paths.append(tuple(params["paths"]))  # type: ignore[arg-type]
+
+
+WatchedMode = Annotated[str, check(_watch_paths)]
+
 
 def _even(v: int) -> None:
     if v % 2:
@@ -360,6 +375,55 @@ def test_default_fn_is_computed_for_a_body_call_too():
     # entirely — handing the body the sentinel the marker exists to replace.
     # footman's own `docs.build` found this by calling `docs.shots`.
     assert seen["tag"] != ""
+
+
+def test_default_fn_reads_its_left_siblings():
+    seen: dict[str, Any] = {}
+
+    def tasks(reg):
+        @reg.task
+        def cast(*keys: str, shell: str = "zsh", title: SiblingTitle = "") -> None:
+            seen["title"] = title
+
+    run(tasks, "cast a b")
+    assert seen["title"] == "zsh · a,b"  # shell and the variadic, both to its left
+    run(tasks, "cast --shell=fish")
+    assert seen["title"] == "fish · "
+    run(tasks, "cast --title=mine")
+    assert seen["title"] == "mine"  # an explicit value still outranks it
+
+
+def test_a_sibling_reading_default_is_not_shown_in_help():
+    # There is no invocation to read at manifest time, so help shows no default
+    # rather than one it would have to invent — and the *declared* one is a
+    # sentinel that exists so a plain Python call still binds, so printing it
+    # would advertise exactly what the marker replaces.
+    def tasks(reg):
+        @reg.task
+        def cast(*keys: str, shell: str = "zsh", title: SiblingTitle = "") -> None: ...
+
+    _, tree = build_tree(tasks)
+    spec = next(p for p in tree["tasks"]["cast"]["params"] if p["name"] == "title")
+    assert "default" not in spec
+
+
+def test_the_variadic_reaches_the_sibling_view_from_either_direction():
+    _seen_paths.clear()
+
+    def tasks(reg):
+        @reg.task
+        def build(*paths: str, mode: WatchedMode = "fast") -> None: ...
+
+        @reg.task
+        def wrap() -> None:
+            build("x", "y", mode="slow")
+
+    run(tasks, "build a b --mode=slow")
+    run(tasks, "wrap")
+    # `*args` lives outside `kwargs` on the command-line path and inside
+    # `bound.arguments` on the body-call path, so the same contextual validator
+    # used to see the variadic from a call and an empty tuple from a chain.
+    assert _seen_paths == [("a", "b"), ("x", "y")]
 
 
 def test_default_fn_without_a_declared_default_is_a_spec_error():
