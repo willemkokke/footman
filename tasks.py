@@ -495,7 +495,13 @@ _API_SECTIONS: list[tuple[str, str, list[str]]] = [
         ["cwd", "chdir", "Lane", "lane", "cwd_lane", "console_lane"],
     ),
     ("Fetching", "", ["fetch", "FetchError"]),
-    ("The task context", "", ["Context", "use_context"]),
+    (
+        "The task context",
+        "`given()` answers whether the caller supplied a parameter or footman "
+        "filled it in — the difference between asking for the default and "
+        "having no opinion, which the value alone cannot tell you.",
+        ["Context", "given", "use_context"],
+    ),
     ("Composing tasks", "", ["include", "plugin", "capture"]),
     (
         "The invocation, and editing the discovered tree",

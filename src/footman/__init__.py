@@ -44,6 +44,7 @@ if TYPE_CHECKING:
     from footman.context import confirm as confirm
     from footman.context import cwd as cwd
     from footman.context import fail as fail
+    from footman.context import given as given
     from footman.context import inherited as inherited
     from footman.context import mark as mark
     from footman.context import parallel as parallel
@@ -153,6 +154,7 @@ __all__ = [
     "fail",
     "fetch",
     "forward",
+    "given",
     "group",
     "hidden",
     "include",
@@ -323,6 +325,7 @@ def __getattr__(name: str) -> object:
         "ResultView",
         "AuditEntry",
         "inherited",
+        "given",
         "passthrough",
         "progress",
         "prompt",

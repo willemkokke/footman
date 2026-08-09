@@ -669,7 +669,7 @@ def bind(
     fn: Task,
     ctx: Context | None = None,
     forwarded: dict[str, Any] | None = None,
-) -> tuple[list[Any], dict[str, Any]]:
+) -> tuple[list[Any], dict[str, Any], frozenset[str]]:
     """Turn a segment's string values into `(*args, **kwargs)` for *fn*.
 
     Coercion (union member selection, list handling, one-or-many collapse) goes
@@ -681,11 +681,19 @@ def bind(
     marker. Precedence is CLI value > forwarded > env > default: a forwarded
     value overrides only a parameter that *has* a default (it never rescues a
     required one — a prerequisite must still be independently runnable).
+
+    The third return is the **presence set**: the parameters the caller
+    supplied, as opposed to the ones footman inferred. A CLI value counts (bare
+    or attached — naming an option is asking for it), so does a piped `stdin`
+    payload and an answered `ask()` prompt; an `env()` fallback and a default do
+    not, because nobody asked for those. `Context.given` is stamped from it, and
+    it is what lets a task tell "the default one, please" from "no opinion".
     """
     sig = resolved_signature(fn)
     empty = inspect.Parameter.empty
     var_args: list[Any] = []
     kwargs: dict[str, Any] = {}
+    supplied: set[str] = set()
 
     for param in sig.parameters.values():
         # The parameters bound to this one's left, at their effective values,
@@ -720,6 +728,10 @@ def bind(
                 if peeled.stdin is not None:
                     value = _stdin_value(param, peeled, siblings)
                     if value is not _MISSING:
+                        # A piped payload is the caller handing the value over,
+                        # so it counts as supplied — unlike the env fallback
+                        # below, which is ambient and answers for nobody.
+                        supplied.add(param.name)
                         kwargs[param.name] = value
                         continue
                 if peeled.env is not None:
@@ -730,6 +742,9 @@ def bind(
                 # ask(): prompt for a required (defaultless) param nothing
                 # else filled — the prompt is the last resort.
                 if peeled.ask is not None and param.default is empty:
+                    # Asked and answered: the caller supplied this one too,
+                    # just interactively rather than on the line.
+                    supplied.add(param.name)
                     _, kwargs[param.name] = _prompt_param(cli, peeled, ctx, siblings)
                     continue
                 if peeled.stdin is not None and param.default is empty:
@@ -761,6 +776,9 @@ def bind(
                         f"pass --{cli}"
                     )
             continue
+        # Named on the line — with a value or bare, both of which are the
+        # caller asking for this parameter rather than footman inferring it.
+        supplied.add(param.name)
         raw = seg.values[cli]
         if isinstance(raw, bool):  # a flag, already resolved by the splitter
             kwargs[param.name] = raw
@@ -839,7 +857,7 @@ def bind(
 
     # `--` passthrough always has a home now: a task's *args, and/or the run
     # context (`passthrough()` / `ctx.passthrough`). So it is never an error.
-    return [*pos, *var_args], kwargs
+    return [*pos, *var_args], kwargs, frozenset(supplied)
 
 
 def forward_map(
@@ -971,7 +989,7 @@ def _validate_explicit(
 
 def bind_call(
     fn: Task, args: tuple[Any, ...], kwargs: dict[str, Any]
-) -> tuple[tuple[Any, ...], dict[str, Any]]:
+) -> tuple[tuple[Any, ...], dict[str, Any], frozenset[str]]:
     """A body call's arguments through the same ladder `bind` runs.
 
     The handle sees the call before Python applies defaults, so an omitted
@@ -984,14 +1002,27 @@ def bind_call(
     Called before the work key is computed, so identity reads the values the
     body will actually receive: a segment, a prerequisite and a body call
     that resolve to the same values are one piece of work.
+
+    The third return is the **presence set**, the same one `bind` produces from
+    a segment — so `build(profile=<the default>)` and `fm build --profile` say
+    the same thing about their caller, and `build()` and `fm build` say the same
+    thing about theirs. `bind_partial` is what makes it knowable: it records
+    only what was passed, and it runs before `apply_defaults()` fills the rest.
     """
     plan = _call_plan(fn)
-    if not plan.entries:
-        return args, kwargs
     try:
         bound = plan.sig.bind_partial(*args, **kwargs)
     except TypeError:
-        return args, kwargs  # won't bind: let the call raise where it is made
+        # Won't bind: let the call raise where it is made, and claim nothing
+        # about presence for arguments we could not match to parameters.
+        return args, kwargs, frozenset()
+    # Bound before anything fills a gap: the one moment on this path where what
+    # the caller named is distinguishable from what footman is about to infer.
+    # Read ahead of the `entries` shortcut, because a task with nothing to
+    # validate and no sources to consult still has a caller with intentions.
+    supplied: set[str] = set(bound.arguments)
+    if not plan.entries:
+        return args, kwargs, frozenset(supplied)
     name = getattr(fn, "__name__", str(fn))
     empty = inspect.Parameter.empty
     for entry in plan.entries:
@@ -1015,20 +1046,24 @@ def bind_call(
         if peeled.stdin is not None:
             value = _stdin_value(param, peeled, siblings)
             if value is not _MISSING:
+                supplied.add(param.name)  # piped in: handed over, not inferred
                 bound.arguments[param.name] = value
                 continue
         if peeled.env is not None:
             value = _env_value(param, peeled, siblings)
             if value is not _MISSING:
+                # Deliberately not `supplied`: the environment is ambient, and
+                # answers for nobody in particular.
                 bound.arguments[param.name] = value
                 continue
         if peeled.ask is not None and param.default is empty:
             cli = registry.cli_name(param.name)
+            supplied.add(param.name)  # asked and answered
             _, bound.arguments[param.name] = _prompt_param(
                 cli, peeled, context._current.get(), siblings
             )
     bound.apply_defaults()
-    return bound.args, dict(bound.kwargs)
+    return bound.args, dict(bound.kwargs), frozenset(supplied)
 
 
 def _call(
@@ -1701,7 +1736,7 @@ def run_task(
             _exit_task_hooks(life, handle, result)
             return result
         try:
-            args, kwargs = bind(seg, fn, ctx, forwarded)
+            args, kwargs, ctx.given = bind(seg, fn, ctx, forwarded)
         except ChainError:
             raise  # e.g. passthrough with no *args — reported by the app layer
         except Exception as exc:  # a coercion failure (custom-type constructor)

@@ -568,6 +568,19 @@ class Context:
     fn: Any = None
     """The running task's own function — what `inherited()` reads to find
     the task this one shadows. `None` outside a run."""
+    given: frozenset[str] = frozenset()
+    """The parameter names *the caller supplied* — named on the command line,
+    passed as a keyword by a body call, or answered at an `ask()` prompt. What
+    the `given()` function reads.
+
+    Its complement is everything footman inferred rather than was told: an
+    `env()` fallback, a `default(fn)`, the declared default. That split is the
+    whole point — a value and the fact that someone asked for it are two
+    different things, and only the second can distinguish `--profile` (write
+    the default file) from no `--profile` at all (write nothing).
+
+    Empty outside a run, and never inherited: a child task's set is its own,
+    stamped where its context is built."""
     name_width: int = 0
     """The widest sibling task name, so step-line columns align."""
     passthrough: list[str] = field(default_factory=list)
@@ -891,6 +904,57 @@ def use_context(ctx: Context | None = None) -> Generator[Context]:
 def passthrough() -> list[str]:
     """Arguments after `--` on the command line, for the running task."""
     return list(current().passthrough)
+
+
+def given(name: str) -> bool:
+    """Whether the caller supplied *name*, as opposed to footman inferring it.
+
+    ```python
+    @task
+    def build(*, profile: Path = Path("build-profile.json")):
+        if given("profile"):   # `fm build --profile` writes the default file;
+            trace_to(profile)  # `fm build` writes nothing at all
+    ```
+
+    True when the parameter was named on the command line (with or without a
+    value — `--profile` alone means its default, and means it on purpose),
+    passed as a keyword by a body call, or answered at an `ask()` prompt. False
+    when the value came from an `env()` fallback, a `default(fn)`, or the
+    declared default, because nobody asked for those.
+
+    That distinction is the only way to tell "the default one, please" from "no
+    opinion", which a value alone cannot express: both hand you the same path.
+
+    *name* is the **parameter** name, not its flag spelling — `dry_run`, not
+    `--dry-run`. Naming something the running task has no parameter for is an
+    error rather than a silent `False`, since a typo would otherwise read as a
+    perfectly ordinary "not given".
+    """
+    ctx = _current.get()
+    if ctx is None or not ctx.in_task or ctx.fn is None:
+        raise RuntimeError(
+            f"given({name!r}) has no answer here — presence is decided when a "
+            f"task's arguments are bound, so call it inside a task body during "
+            f"a run"
+        )
+    from footman import _manifest
+
+    known = {
+        p.name
+        for p in _manifest.call_signature(ctx.fn).parameters.values()
+        if p.kind is not inspect.Parameter.VAR_KEYWORD
+    }
+    if name not in known:
+        listed = ", ".join(sorted(known)) or "(none)"
+        dashed = name.replace("-", "_")
+        hint = (
+            f" — did you mean {dashed!r}?" if dashed != name and dashed in known else ""
+        )
+        raise ValueError(
+            f"given({name!r}): {ctx.task or 'this task'} has no parameter "
+            f"{name!r}{hint} (it has: {listed})"
+        )
+    return name in ctx.given
 
 
 def progress(done: int, total: int = 0) -> None:

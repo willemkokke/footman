@@ -313,7 +313,7 @@ def call(task: Any, args: tuple[Any, ...], kwargs: dict[str, Any]) -> Any:
         token = context._current.set(child)
         child.in_task = True
         try:
-            args, kwargs = _executor.bind_call(task, args, kwargs)
+            args, kwargs, supplied = _executor.bind_call(task, args, kwargs)
         except Exception as exc:
             result = _executor._result(seg, _executor.EX_USAGE, None, exc, 0.0)
             result.seq = seq
@@ -322,12 +322,20 @@ def call(task: Any, args: tuple[Any, ...], kwargs: dict[str, Any]) -> Any:
             raise
         finally:
             context._current.reset(token)
+        child.given = supplied
     else:
-        args, kwargs = _executor.bind_call(task, args, kwargs)
+        args, kwargs, supplied = _executor.bind_call(task, args, kwargs)
     key = _key(task, args, kwargs)
     if key is None:  # arguments with no frozen form: honest work every time
         return _run_now(
-            task, args, kwargs, seg=seg, child=child, handle=handle, seq=seq
+            task,
+            args,
+            kwargs,
+            seg=seg,
+            child=child,
+            handle=handle,
+            seq=seq,
+            given=supplied,
         )
     if unshared(task):
         # Asked for unshared: it neither reads a cell nor becomes one. Its
@@ -343,6 +351,7 @@ def call(task: Any, args: tuple[Any, ...], kwargs: dict[str, Any]) -> Any:
             child=child,
             handle=handle,
             seq=seq,
+            given=supplied,
         )
 
     me = threading.get_ident()
@@ -361,6 +370,7 @@ def call(task: Any, args: tuple[Any, ...], kwargs: dict[str, Any]) -> Any:
                 handle=handle,
                 cell=cell,
                 seq=seq,
+                given=supplied,
             )
         except BaseException as exc:
             cell.future.set_exception(exc)
@@ -653,6 +663,7 @@ def _run_now(
     handle: Any = None,
     cell: Any = None,
     seq: int | None = None,
+    given: frozenset[str] = frozenset(),
 ) -> Any:
     """Run *task* here and now with full task semantics, and return its value.
 
@@ -693,6 +704,10 @@ def _run_now(
         )
     else:
         buf = child.sink
+    # Presence is the callee's own, never the caller's: `dataclasses.replace`
+    # copies every field, so a child born from a parent that was given `--agent`
+    # would otherwise inherit the claim that *it* was given one.
+    child.given = given
     # Unsharedness propagates: what this callee asks for is asked the same
     # way, unless that task declares its own answer.
     child.shared = parent.shared and shared
