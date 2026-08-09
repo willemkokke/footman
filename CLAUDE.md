@@ -67,22 +67,41 @@ length is 88; target `py311`; type-checker is basedpyright.
 ```
 src/footman/
   __init__.py     lazy re-exports + main() (dispatches --complete first)
+  __main__.py     `python -m footman`
   _complete.py    completion hot path (stdlib only, no framework import)
   _refresh.py     detached stale-while-revalidate manifest rebuild
+  _suggest.py     completion child: rerun one dynamic completer fresh
   _shellcomp.py   shell completion installers (bash/zsh/fish/pwsh/nushell)
+  _paths.py       brand-scoped locations (cache/data/config) — import-light
+  app.py          App / Brand: a branded CLI's names, version, and folders
   _app.py         execution path: _run → _execute → _run_tree / run_group
-  registry.py     @task / group() decorators, capture()
+  _script.py      PEP 723 script blocks + the uv handoff argvs
+  _config.py      the config cascade ([tool.<brand>], <brand>.toml, user-level)
   _discover.py    the monorepo tasks.py cascade (per-file import isolation)
   compose.py      include() / plugin() (footman.tasks entry points)
+  registry.py     @task / group() decorators, GlobalOption, capture()
   _manifest.py    introspect tasks → serialisable manifest (baked completer output)
-  _split.py       CLI grammar: globals + chain splitting; GLOBALS is the source of truth
+  _split.py       CLI grammar: CORE_OPTIONS declarations + chain splitting
   _coerce.py      type coercion (unions, choices, markers)
+  _binder.py      bind a JSON/stdin payload to a typed shape
   params.py       public markers: suggest, Many, nosplit, between, env, check, exists…
-  context.py      run(), parallel(), the stdout/stderr router
-  _executor.py    bind + run one task
-  _schedule.py    the DAG scheduler (parallel/sequential, live progress line)
-  _config.py      [tool.footman] discovery
+  context.py      run(), parallel(), Context, the stdout/stderr router
+  _globals.py     process-globals routers (environ/argv/stdin) + the arbiter lanes
+  _executor.py    bind + run one task; lifecycle hooks; global-option binding
+  _futures.py     body calls as run-scoped futures (the once-cell)
+  _schedule.py    the DAG scheduler (parallel/sequential, confirm gates)
+  _step.py        step(): lifted work items + the generator pump
+  _progress.py    the live status line, eta estimation, timing history
+  _describe.py    help/describe phrasing, shared with the markdown exporter
+  _fetch.py       fetch(): cached downloads (urllib/curl backends)
+  _gc.py          the cache collector (age-swept manifests + timings)
+  invocation.py   the frozen Invocation hooks receive
+  profile.py      first-party plugin: --profile (Perfetto traces)
+  env_files.py    first-party plugin: --env-file loading
+  docstrings.py   docstring parsing (summary / params / returns)
+  markdown.py     the docs exporter (task tables from the manifest)
   testing.py      Runner (in-process CLI) + recording()
+  pytest_plugin.py  pytest fixtures over testing.py
 docs/             Zensical (mkdocs-like) site
 notes/            design plans, `YYYYMMDD-` prefixed — tracked, never published
 tasks.py          footman's own tasks — the gate is `fm check`
