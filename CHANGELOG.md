@@ -22,6 +22,14 @@ versions may include breaking changes.
 
 ### Removed
 
+- **`Fanout.also`, the teaching tombstone.** The method existed only to
+  raise "parallel().also(...) is gone" — kept from the ban on anonymous
+  work while muscle memory caught up. Pre-1.0 with no external users,
+  current-state clarity wins: an `AttributeError` says the method does not
+  exist, which is the truth. (The `[tool.footman] plugins` config-key
+  refusal deliberately stays: config keys fail silent, so that one still
+  earns its keep.)
+
 - **`context.color_on()`.** Its only caller was toolroom's hosted lane, and
   toolroom 0.3.0 answers the colour question from the seam instead — the
   environment for the ambient tier, its own `.opts(color=)` for the decided
