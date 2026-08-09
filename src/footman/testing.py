@@ -194,6 +194,9 @@ class Runner:
                 data_dir=self.app.brand.data_dir,
                 config_name=self.app.brand.config_stem,
                 tasks_file=self.app.brand.tasks_file,
+                prog=self.app.brand.prog,
+                brand_version=self.app.brand.version,
+                builtin=self.app.brand.builtin,
             )
             if isinstance(tasks, Group):
                 # One shared surface with the real CLI (help/version/list/tree/

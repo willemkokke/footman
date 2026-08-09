@@ -23,6 +23,15 @@ versions may include breaking changes.
   uninstalled entry point is refused naming the brand; `--plugins` reports
   the set as `built in`.
 
+  Completion follows. Outside a project, <kbd>Tab</kbd> answers from one
+  manifest shared by every project-less directory — keyed by the brand, its
+  version, and the builtin names, never by cwd — so the cache is cold once
+  per brand upgrade rather than once per directory, and the first press in
+  a fresh directory still answers (the detached child rebuilds the shared
+  manifest from the baked names). The manifest schema is now 5; caches from
+  earlier versions are rebuilt on the first press after an upgrade, never
+  walked.
+
 ### Changed
 
 - **BREAKING: the user tasks file is the cascade's outermost rung.** It used

@@ -67,7 +67,7 @@ _DYNAMIC = "\x00dynamic"  # internal sentinel: a dynamic completer, recompute fr
 # A cache written by a different footman gets rebuilt, never walked: the first
 # TAB after an upgrade serves correct candidates instead of a traceback.
 # `test_completion_schema_mirrors_manifest` keeps the two from drifting.
-_SCHEMA = 4
+_SCHEMA = 5
 _DYNAMIC_TIMEOUT = 2.0  # seconds to wait for a fresh dynamic completer subprocess
 _COLD_TIMEOUT = 3.0  # seconds to wait for a first-time cwd manifest build
 _SHELLS = ("bash", "zsh", "fish", "pwsh", "nushell")
@@ -729,7 +729,17 @@ def _fresh_dynamic(param: str, path: list[str], args: list[str]) -> list[str] | 
 
     # Same reasoning as the refresh child: it is told this CLI's locations
     # rather than re-deriving them from an environment it shares with others.
-    cmd = [sys.executable, "-m", "footman._suggest", "--where", *_paths.child_args()]
+    # Length-prefixed, so the flags that follow can never be eaten when the
+    # word count grows — the arity drifted once per release until it was.
+    where = _paths.child_args()
+    cmd = [
+        sys.executable,
+        "-m",
+        "footman._suggest",
+        "--where",
+        str(len(where)),
+        *where,
+    ]
     if path:
         cmd += ["--param", param]
         for name in path:
@@ -787,11 +797,23 @@ def complete_cli(args: list[str]) -> int:
         # (the resolver signals it below). A finished `-f file <TAB>` still keys
         # by the pair.
         override = _tasks_file_from(args[:-1])
-        manifest = str(
-            _paths.source_manifest_path(Path.cwd(), Path(override))
-            if override
-            else _paths.cwd_manifest_path()
-        )
+        if override:
+            manifest = str(_paths.source_manifest_path(Path.cwd(), Path(override)))
+        else:
+            manifest = str(_paths.cwd_manifest_path())
+            if not Path(manifest).is_file() and _paths.builtin():
+                # No warm cwd manifest and the brand has built-ins: one walk
+                # decides whether this is global mode, whose manifest every
+                # project-less directory shares (cold once per brand version,
+                # not once per directory). Only on the miss path — a warm
+                # directory never pays the walk, and stock footman (no
+                # built-ins) never reaches it at all.
+                cwd = Path.cwd()
+                files = _paths.task_files(
+                    cwd, _paths.find_repo_root(cwd), _paths._tasks_file
+                )
+                if not files:
+                    manifest = str(_paths.global_manifest_path())
 
     data = _load_manifest(manifest)
     if (

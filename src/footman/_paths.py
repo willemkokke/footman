@@ -105,6 +105,9 @@ _cache_dir: Path | None = None
 _data_dir: Path | None = None
 _config_name = "footman"
 _tasks_file = DEFAULT_TASKS_FILE
+_prog = "fm"
+_brand_version = ""
+_builtin: tuple[str, ...] = ()
 
 
 class LocationError(Exception):
@@ -118,6 +121,9 @@ def configure(
     data_dir: Path | None = None,
     config_name: str = "footman",
     tasks_file: str = DEFAULT_TASKS_FILE,
+    prog: str = "fm",
+    brand_version: str = "",
+    builtin: tuple[str, ...] = (),
 ) -> None:
     """Point this CLI's locations at one brand's world.
 
@@ -126,12 +132,21 @@ def configure(
     namespaces the environment variables, so a stray `FOOTMAN_CACHE_DIR`
     cannot move another product's cache. *config_name* and *tasks_file* name
     the files this brand's users write, which are also what mark a project
-    root. Detached children are handed the resolved values rather than
-    re-deriving them.
+    root. *prog*, *brand_version* and *builtin* key the global-mode manifest
+    — the tree they determine is the same in every project-less directory.
+    Detached children are handed the resolved values rather than re-deriving
+    them.
     """
     global _prefix, _cache_dir, _data_dir, _config_name, _tasks_file
+    global _prog, _brand_version, _builtin
     _prefix, _cache_dir, _data_dir = prefix, cache_dir, data_dir
     _config_name, _tasks_file = config_name, tasks_file
+    _prog, _brand_version, _builtin = prog, brand_version, builtin
+
+
+def builtin() -> tuple[str, ...]:
+    """The brand's declared built-in entry points (empty for stock)."""
+    return _builtin
 
 
 def child_args() -> list[str]:
@@ -148,6 +163,9 @@ def child_args() -> list[str]:
         str(_data_dir) if _data_dir is not None else "",
         _config_name,
         _tasks_file,
+        _prog,
+        _brand_version,
+        ",".join(_builtin),
     ]
 
 
@@ -157,6 +175,9 @@ def configure_child(
     data_dir: str = "",
     config_name: str = "",
     tasks_file: str = "",
+    prog: str = "",
+    brand_version: str = "",
+    builtin_csv: str = "",
 ) -> None:
     """The other side of `child_args` — empty strings mean stock defaults."""
     configure(
@@ -165,6 +186,9 @@ def configure_child(
         data_dir=Path(data_dir) if data_dir else None,
         config_name=config_name or "footman",
         tasks_file=tasks_file or DEFAULT_TASKS_FILE,
+        prog=prog or "fm",
+        brand_version=brand_version,
+        builtin=tuple(n for n in builtin_csv.split(",") if n),
     )
 
 
@@ -361,3 +385,19 @@ def source_manifest_path(cwd: Path, tasks_file: Path) -> Path:
 def cwd_manifest_path() -> Path:
     """Manifest path for the current directory (both hot and cold paths agree)."""
     return manifest_path(Path.cwd())
+
+
+def global_manifest_path() -> Path:
+    """Manifest path for global mode — no project task files, the tree from
+    the brand's built-ins with the user rung over them.
+
+    Keyed by what determines that tree — prog, the brand's version, the
+    sorted builtin names — never by cwd: every project-less directory shares
+    one manifest, so the cache is cold once per brand version rather than
+    once per directory. The user tasks file needs no place in the key; it is
+    machine-global too, and staleness handles its edits.
+    """
+    key = hashlib.sha256(
+        "\0".join([_prog, _brand_version, *sorted(_builtin)]).encode("utf-8")
+    ).hexdigest()[:16]
+    return footman_cache_dir() / f"global-{key}.json"

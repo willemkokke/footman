@@ -248,6 +248,9 @@ class App:
             data_dir=self.brand.data_dir,
             config_name=self.brand.config_stem,
             tasks_file=self.brand.tasks_file,
+            prog=self.brand.prog,
+            brand_version=self.brand.version,
+            builtin=self.brand.builtin,
         )
         if args and args[0] == "--complete":
             from footman._complete import complete_cli
