@@ -32,7 +32,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from footman import _coerce
+from footman import _coerce, registry
 
 
 def _close1(a: str, b: str) -> bool:
@@ -103,155 +103,188 @@ def _default_jobs() -> int:
 
 # Global options bind to `fm` itself and must precede the first task name
 # (`--help`/`-h` is the one exception: anywhere before `--`, it wins).
-# (canonical, short alias, kind, value-hint, default, help). `default` is what
-# a bare mention means — `None` for an option that has no reading without a
-# value, which is the same question a task option answers with `required`.
 #
-# A literal where the default is a constant (`--color` → `auto`); a callable
-# where it depends on the machine, deferred because `_progress` imports from
-# here and a module-level import would close the cycle — the `default(fn)` a
-# task parameter declares, in the form a static table can hold. `""` where the
-# reading exists but has no spelling of its own: `--describe` means "the whole
+# Declared as instances of the SAME class plugin globals use — one option
+# model — with core constructed off the registration carriage: core options
+# are not contributions riding a pull, they are the runner itself. The tuple
+# table below is a DERIVED VIEW of these declarations: `_parse_globals`,
+# help, and the docs table keep reading (canonical, alias, kind, hint,
+# default, help) rows, and the completion hot path's hardcoded mirror is
+# pinned against the declarations in CI.
+
+_REQUIRED = object()
+# No-default marker for a core declaration: the option has no reading without
+# a value (`--where` names a task to locate, and there is no default task),
+# so its bare mention refuses and teaches the attachment. Distinct from a
+# plugin option's `default=None`, which IS a value — absence hands the owner
+# `None`, and the bare form is legal by construction.
+
+
+class _CoreOption(registry.GlobalOption):
+    """A core global's declaration — the plugin class, constructed off the
+    carriage (`_register` is a no-op): the collision law must see core as
+    "footman's own" through the derived table, not refuse it against itself.
+
+    Carries what the grammar needs beyond the plugin surface: the short
+    alias (core's namespace, closed to plugins on purpose), the value hint,
+    static choices for the hot-path mirror to pin against, and `_REQUIRED`
+    where a bare mention has no reading. A `bool` annotation is a flag;
+    anything else takes an `=`-attached value, exactly as for plugins.
+    """
+
+    __slots__ = ("alias", "choices", "hint")
+
+    def __init__(
+        self,
+        name: str,
+        annotation: Any = bool,
+        *,
+        alias: str | None = None,
+        hint: str | None = None,
+        default: Any = None,
+        choices: tuple[str, ...] | None = None,
+        help: str = "",
+    ) -> None:
+        self.alias = alias
+        self.hint = hint
+        self.choices = choices
+        super().__init__(name, annotation, default=default, help=help)
+
+    def _register(self) -> None:
+        """Off the carriage — see the class docstring."""
+
+
+# `default` is what a bare mention means — `_REQUIRED` for an option with no
+# reading without a value (the question a task option answers with
+# `required`). A literal where the default is a constant (`--color` →
+# `auto`); a callable where it depends on the machine (`_default_jobs`,
+# deferred because `_progress` imports from here); `""` where the reading
+# exists but has no spelling of its own: `--describe` means "the whole
 # tree", `--install-completion` means "whichever shell is asking".
-GlobalDefault = str | Callable[[], object] | None
-GLOBALS: list[tuple[str, str | None, str, str | None, GlobalDefault, str]] = [
-    ("--help", "-h", "flag", None, None, "help for {prog}, or the named group/task"),
-    ("--version", "-V", "flag", None, None, "print the version and exit"),
-    ("--list", "-l", "flag", None, None, "list tasks (flat)"),
-    ("--tree", None, "flag", None, None, "list tasks grouped by command group"),
-    (
-        "--sort",
-        None,
-        "flag",
-        None,
-        None,
-        "list tasks alphabetically (default: as defined)",
+CORE_OPTIONS: tuple[_CoreOption, ...] = (
+    _CoreOption("help", alias="-h", help="help for {prog}, or the named group/task"),
+    _CoreOption("version", alias="-V", help="print the version and exit"),
+    _CoreOption("list", alias="-l", help="list tasks (flat)"),
+    _CoreOption("tree", help="list tasks grouped by command group"),
+    _CoreOption("sort", help="list tasks alphabetically (default: as defined)"),
+    _CoreOption("no-sort", help="list tasks in definition order"),
+    _CoreOption("all", alias="-a", help="include hidden tasks in the listings"),
+    _CoreOption(
+        "where",
+        str,
+        hint="TASK",
+        default=_REQUIRED,
+        help="print the task's source file:line",
     ),
-    ("--no-sort", None, "flag", None, None, "list tasks in definition order"),
-    ("--all", "-a", "flag", None, None, "include hidden tasks in the listings"),
-    ("--where", None, "option", "TASK", None, "print the task's source file:line"),
-    # The bracketed hint marks the value optional: bare `--describe` dumps
-    # the whole tree's contract; a group address answers for its subtree.
-    ("--describe", None, "option", "[ADDR]", "", "print task contracts as JSON"),
-    (
-        "--plugins",
-        None,
-        "flag",
-        None,
-        None,
-        "list installed footman.tasks plugins, pulled or not",
+    _CoreOption(
+        "describe",
+        str,
+        hint="[ADDR]",
+        default="",
+        help="print task contracts as JSON",
     ),
-    (
-        "--dry-run",
-        "-n",
-        "flag",
-        None,
-        None,
-        "rehearse: bodies run, footman's work is faked",
+    _CoreOption("plugins", help="list installed footman.tasks plugins, pulled or not"),
+    _CoreOption(
+        "dry-run", alias="-n", help="rehearse: bodies run, footman's work is faked"
     ),
-    ("--keep-going", "-k", "flag", None, None, "run every branch even if one fails"),
-    ("--fail-fast", None, "flag", None, None, "stop at the first failure"),
-    (
-        "--sequential",
-        "-s",
-        "flag",
-        None,
-        None,
-        "run one at a time, parallel() blocks included",
+    _CoreOption("keep-going", alias="-k", help="run every branch even if one fails"),
+    _CoreOption("fail-fast", help="stop at the first failure"),
+    _CoreOption(
+        "sequential", alias="-s", help="run one at a time, parallel() blocks included"
     ),
-    ("--no-sequential", None, "flag", None, None, "run in parallel (undo config)"),
-    (
-        "--jobs",
-        "-j",
-        "option",
-        "N",
-        _default_jobs,
-        "max parallel tasks",
+    _CoreOption("no-sequential", help="run in parallel (undo config)"),
+    _CoreOption(
+        "jobs",
+        str,
+        alias="-j",
+        hint="N",
+        default=_default_jobs,
+        help="max parallel tasks",
     ),
-    ("--yes", "-y", "flag", None, None, "assume yes to every confirm() gate"),
-    (
-        "--no-input",
-        None,
-        "flag",
-        None,
-        None,
-        "never prompt; error if input is required",
+    _CoreOption("yes", alias="-y", help="assume yes to every confirm() gate"),
+    _CoreOption("no-input", help="never prompt; error if input is required"),
+    _CoreOption("input", help="allow prompting (undo config)"),
+    _CoreOption("quiet", alias="-q", help="suppress the per-task summary"),
+    _CoreOption("verbose", alias="-v", help="replay captured output even on success"),
+    _CoreOption(
+        "color",
+        str,
+        hint="WHEN",
+        default="auto",
+        choices=("always", "never", "auto"),
+        help="when to colour: always|never|auto",
     ),
-    ("--input", None, "flag", None, None, "allow prompting (undo config)"),
-    ("--quiet", "-q", "flag", None, None, "suppress the per-task summary"),
-    ("--verbose", "-v", "flag", None, None, "replay captured output even on success"),
-    (
-        "--color",
-        None,
-        "option",
-        "WHEN",
-        "auto",
-        "when to colour: always|never|auto",
+    _CoreOption("no-color", help="disable ANSI colour (same as --color=never)"),
+    _CoreOption("no-progress", help="no progress bar, eta, or timing capture"),
+    _CoreOption("progress", help="progress bar, eta and timing (undo config)"),
+    _CoreOption("no-uv", help="skip the uv handoffs for this run"),
+    _CoreOption("uv", help="take the uv handoffs (undo config)"),
+    _CoreOption("json", help="stdout is one JSON document (captures output)"),
+    _CoreOption("timings", help="show per-task durations"),
+    _CoreOption(
+        "directory",
+        str,
+        alias="-C",
+        hint="PATH",
+        default=_REQUIRED,
+        help="run as if launched from PATH",
     ),
-    (
-        "--no-color",
-        None,
-        "flag",
-        None,
-        None,
-        "disable ANSI colour (same as --color=never)",
+    _CoreOption(
+        "tasks-file",
+        str,
+        alias="-f",
+        hint="PATH",
+        default=_REQUIRED,
+        help="only this tasks file, no tasks cascade",
     ),
-    (
-        "--no-progress",
-        None,
-        "flag",
-        None,
-        None,
-        "no progress bar, eta, or timing capture",
-    ),
-    (
-        "--progress",
-        None,
-        "flag",
-        None,
-        None,
-        "progress bar, eta and timing (undo config)",
-    ),
-    ("--no-uv", None, "flag", None, None, "skip the uv handoffs for this run"),
-    ("--uv", None, "flag", None, None, "take the uv handoffs (undo config)"),
-    (
-        "--json",
-        None,
-        "flag",
-        None,
-        None,
-        "stdout is one JSON document (captures output)",
-    ),
-    ("--timings", None, "flag", None, None, "show per-task durations"),
-    ("--directory", "-C", "option", "PATH", None, "run as if launched from PATH"),
-    (
-        "--tasks-file",
-        "-f",
-        "option",
-        "PATH",
-        None,
-        "only this tasks file, no tasks cascade",
-    ),
-    (
-        "--config",
-        None,
-        "option",
-        "PATH",
-        None,
-        "only this config file, no config cascade",
+    _CoreOption(
+        "config",
+        str,
+        hint="PATH",
+        default=_REQUIRED,
+        help="only this config file, no config cascade",
     ),
     # The bracketed hint marks the value optional: bare `--install-completion`
-    # / `--setup-completion` detect the invoking shell.
-    ("--install-completion", None, "option", "[SHELL]", "", "install shell completion"),
-    ("--setup-completion", None, "option", "[SHELL]", "", "print completion for eval"),
-    (
-        "--uninstall-completion",
-        None,
-        "option",
-        "[SHELL]",
-        "",
-        "remove the completion hook",
+    # / `--setup-completion` detect the invoking shell. Their choices are
+    # `_shellcomp.SHELLS` — pinned there by the mirror test, not duplicated
+    # into a third copy here.
+    _CoreOption(
+        "install-completion",
+        str,
+        hint="[SHELL]",
+        default="",
+        help="install shell completion",
     ),
+    _CoreOption(
+        "setup-completion",
+        str,
+        hint="[SHELL]",
+        default="",
+        help="print completion for eval",
+    ),
+    _CoreOption(
+        "uninstall-completion",
+        str,
+        hint="[SHELL]",
+        default="",
+        help="remove the completion hook",
+    ),
+)
+
+GlobalDefault = str | Callable[[], object] | None
+
+
+def _row(o: _CoreOption) -> tuple[str, str | None, str, str | None, GlobalDefault, str]:
+    """One declaration as the grammar table's row. Flags derive a `None`
+    default — the column answers "what does a bare mention of a *value*
+    option mean", and a flag's bare form is simply the flag."""
+    kind = "flag" if o.annotation is bool else "option"
+    default = None if o.annotation is bool or o.default is _REQUIRED else o.default
+    return (f"--{o.name}", o.alias, kind, o.hint, default, o.help)
+
+
+GLOBALS: list[tuple[str, str | None, str, str | None, GlobalDefault, str]] = [
+    _row(o) for o in CORE_OPTIONS
 ]
 _GLOBAL_KIND = {name: kind for name, _, kind, _, _, _ in GLOBALS}
 _GLOBAL_KIND.update({alias: kind for _, alias, kind, _, _, _ in GLOBALS if alias})

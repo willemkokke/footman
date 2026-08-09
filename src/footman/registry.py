@@ -141,6 +141,14 @@ class GlobalOption:
         self._given = False
         self._frozen = False
         self._reads: set[str] = set()
+        self._register()
+
+    def _register(self) -> None:
+        # The plugin carriage: constructing IS registering, so the option
+        # reaches a run exactly when its owner is pulled. Core's own
+        # declarations (`_split._CoreOption`) override this to stay off it —
+        # they are not contributions, they are the runner, and the collision
+        # law reads them from the derived grammar table instead.
         root.contributions["globals"].append(self)
 
     @property

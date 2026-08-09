@@ -363,18 +363,31 @@ def test_globals_not_offered_past_a_group_or_task(tree):
 
 
 def test_completion_globals_mirror_split():
-    # Drift pin: the hot-path arity mirror must match _split.GLOBALS exactly, so
-    # renaming or re-typing a global fails CI instead of silently misparsing.
+    # Drift pin: the hot-path mirror must match the core declarations exactly,
+    # so renaming, re-typing, re-hinting or re-choicing a global fails CI
+    # instead of silently misparsing. Names, files AND choices — a mirror only
+    # pinned by name is how `--color`'s choices could drift without a red test.
     from footman import _complete, _shellcomp, _split
 
     names: set[str] = set()
-    for name, alias, _kind, _hint, _default, _help in _split.GLOBALS:
-        names |= {name} | ({alias} if alias else set())
+    path_valued: set[str] = set()
+    for name, alias, _kind, hint, _default, _help in _split.GLOBALS:
+        spellings = {name} | ({alias} if alias else set())
+        names |= spellings
+        if hint == "PATH":
+            path_valued |= spellings
     assert names == _complete._GLOBALS
-    assert _complete._GLOBAL_FILES <= _complete._GLOBALS
-    assert set(_complete._GLOBAL_CHOICES) <= names
-    assert _complete._GLOBAL_CHOICES["--install-completion"] == tuple(_shellcomp.SHELLS)
-    assert _complete._GLOBAL_CHOICES["--setup-completion"] == tuple(_shellcomp.SHELLS)
+    # File completion is exactly the PATH-hinted options, every spelling.
+    assert path_valued == _complete._GLOBAL_FILES
+    # Choices: the declarations' own, plus the shell trio pinned to the one
+    # list `_shellcomp` owns (never duplicated into the declarations).
+    declared = {f"--{o.name}": o.choices for o in _split.CORE_OPTIONS if o.choices}
+    shell_valued = {n for n, _a, _k, h, _d, _h in _split.GLOBALS if h == "[SHELL]"}
+    assert set(_complete._GLOBAL_CHOICES) == set(declared) | shell_valued
+    for flag, choices in declared.items():
+        assert _complete._GLOBAL_CHOICES[flag] == choices
+    for flag in shell_valued:
+        assert _complete._GLOBAL_CHOICES[flag] == tuple(_shellcomp.SHELLS)
 
 
 # --- -f/--tasks-file completion (keyed by cwd + file) -------------------------
