@@ -135,13 +135,17 @@ def main(argv: list[str]) -> int:
             g["tasks_file"], i = argv[i + 1], i + 2
         elif arg == "--config" and i + 1 < len(argv):
             g["config"], i = argv[i + 1], i + 2
-        elif arg == "--where" and i + 5 < len(argv):
-            # This CLI's resolved locations, handed over by the hot path —
-            # a child inherits the environment but not the brand.
+        elif arg == "--where" and i + 1 < len(argv):
+            # This CLI's resolved locations (and brand context), handed over
+            # by the hot path — a child inherits the environment but not the
+            # brand. Length-prefixed: the count leads the words, so growing
+            # `child_args` can never eat the flags that follow — the arity
+            # drifted once per release until it was written down.
             from footman import _paths
 
-            _paths.configure_child(*argv[i + 1 : i + 6])
-            i += 6
+            count = int(argv[i + 1])
+            _paths.configure_child(*argv[i + 2 : i + 2 + count])
+            i += 2 + count
         else:
             i += 1
     try:

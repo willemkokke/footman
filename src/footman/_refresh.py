@@ -82,14 +82,15 @@ def _rebuild() -> None:
         baked = cached.get("tasks_file") if isinstance(cached, dict) else None
         filename = baked if isinstance(baked, str) else _paths.DEFAULT_TASKS_FILE
     name = filename
-    files = _paths.task_files(cwd, ceiling, name)
+    project_files = _paths.task_files(cwd, ceiling, name)
+    files = project_files
     user = _paths.user_tasks_file(name)
     if user.is_file():
         # The cascade's outermost rung rides here too: the child must
         # rebuild exactly the tree the run serves, or a background refresh
         # strips personal tasks from the completions it answers.
         files = [user, *files]
-    if not files:
+    if not files and not _paths.builtin():
         return
     # The re-executed child is a fresh interpreter, so it needs telling where
     # the cache is exactly as the first child did.
@@ -99,9 +100,31 @@ def _rebuild() -> None:
         *_paths.child_args(),
     )
 
+    base = registry.Group("root")
+    if not project_files:
+        # Global mode: mount the brand's built-ins as the base — exactly as
+        # the run does — with the user rung over them, and write the shared
+        # global manifest. Keyed by the brand rather than the cwd, so this
+        # one build warms every project-less directory.
+        from footman import compose
+
+        with registry.capture() as base:
+            for entry in _paths.builtin():
+                compose.plugin(entry)
+        reg = _discover.load_tree(files, base=base)
+        _manifest.sync_manifest(
+            reg,
+            cwd,
+            completion_max_age=_config.completion_max_age(cfg),
+            tasks_file=name,
+            path=_paths.global_manifest_path(),
+            bake_cwd=False,
+            builtin=_paths.builtin(),
+        )
+        return
+
     # Mirror the app layer's cwd cascade build; plugin mounts are authored in
     # the tasks files themselves, so discovery alone rebuilds the whole tree.
-    base = registry.Group("root")
     reg = _discover.load_tree(files, base=base)
     _manifest.sync_manifest(
         reg, cwd, completion_max_age=_config.completion_max_age(cfg), tasks_file=name

@@ -269,3 +269,7 @@ project?* — rather than aiming `builtin=` at the everyday tasks, whose
 probes assume a checkout and would fail strangely without one. Outside a
 project every task runs where the command was typed, exactly as the user
 rung does.
+
+Completion follows: outside a project, <kbd>Tab</kbd> answers from one
+manifest shared by every project-less directory, keyed by the brand and its
+version — cold once per upgrade, not once per directory.

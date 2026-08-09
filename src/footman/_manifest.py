@@ -41,7 +41,7 @@ from footman.context import context_param_name
 from footman.params import suggest
 from footman.registry import Group
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 
 class ManifestError(Exception):
@@ -1000,6 +1000,8 @@ def sync_manifest(
     completion_max_age: int | None = None,
     tasks_file: str | None = None,
     path: Path | None = None,
+    bake_cwd: bool = True,
+    builtin: tuple[str, ...] = (),
 ) -> dict[str, Any]:
     """Build the fresh manifest and rewrite the cache only on a hash change.
 
@@ -1011,10 +1013,17 @@ def sync_manifest(
     effect.
     """
     fresh = build_manifest(root, completion_max_age=completion_max_age)
-    # The directory this manifest describes, baked in (additive) so the
-    # cache collector can tell a deleted project's leftovers from a living
-    # one's without guessing from hashes.
-    fresh["cwd"] = str(key_dir)
+    if bake_cwd:
+        # The directory this manifest describes, baked in (additive) so the
+        # cache collector can tell a deleted project's leftovers from a
+        # living one's without guessing from hashes. The global manifest
+        # bakes none — it describes no directory, so the collector's idle
+        # sweep owns it rather than the deleted-project rule.
+        fresh["cwd"] = str(key_dir)
+    if builtin:
+        # What the refresh child rebuilds the global tree from: the entry-
+        # point names, which travel where live objects cannot.
+        fresh["builtin"] = sorted(builtin)
     if tasks_file:
         # Additive, like `cwd`: the background refresh reads it back, so a
         # branded CLI's custom filename survives a refresh it can't attend.
@@ -1028,7 +1037,7 @@ def sync_manifest(
         cached is None
         or cached.get("hash") != fresh["hash"]
         or cached.get("completion_max_age") != completion_max_age
-        or cached.get("cwd") != fresh["cwd"]
+        or cached.get("cwd") != fresh.get("cwd")
         or cached.get("tasks_file") != fresh.get("tasks_file")
     ):
         write_manifest(fresh, path)

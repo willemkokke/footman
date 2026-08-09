@@ -1306,8 +1306,12 @@ _WINDOWS = os.name == "nt"  # decided at import; a constant tests can steer
 GC_INTERVAL_S = 24 * 3600
 
 
-def _maybe_collect(cfg: dict[str, object]) -> None:
+def _maybe_collect(cfg: dict[str, object], skip_stem: str) -> None:
     """At most daily, and never on a fresh cache, spawn the collector.
+
+    *skip_stem* names this invocation's own manifest — the cwd's, or the
+    shared global one in global mode — so the sweep never eats the file the
+    run just wrote.
 
     A missing stamp is *planted*, not acted on — the first run a cache ever
     sees schedules collection for tomorrow, so short-lived caches (a test
@@ -1330,7 +1334,7 @@ def _maybe_collect(cfg: dict[str, object]) -> None:
         return
     with contextlib.suppress(OSError):
         stamp.touch()
-    _spawn_gc(cache, _paths.manifest_path(Path.cwd()).stem)
+    _spawn_gc(cache, skip_stem)
 
 
 def _spawn_gc(cache: Path, skip_stem: str) -> None:
@@ -1808,6 +1812,24 @@ def _execute(
                 tasks_file=override,
                 path=_paths.source_manifest_path(Path.cwd(), Path(override)),
             )["tree"]
+        elif not found.root:
+            # Global mode: one manifest for every project-less directory,
+            # keyed by the brand rather than the cwd — cold once per brand
+            # version, not once per directory. No baked cwd (the collector's
+            # idle sweep owns it), and the builtin names ride so the refresh
+            # child can rebuild a tree it cannot otherwise know.
+            cfg_tasks = cfg.get("tasks")
+            tree = _manifest.sync_manifest(
+                reg,
+                Path.cwd(),
+                completion_max_age=_config.completion_max_age(cfg),
+                tasks_file=cfg_tasks
+                if isinstance(cfg_tasks, str)
+                else _brand.tasks_file,
+                path=_paths.global_manifest_path(),
+                bake_cwd=False,
+                builtin=_brand.builtin,
+            )["tree"]
         else:
             cfg_tasks = cfg.get("tasks")
             tree = _manifest.sync_manifest(
@@ -1843,7 +1865,14 @@ def _execute(
     # After the run, so it never adds latency before the user's command —
     # and after the uv handoff by construction (the handoff replaced this
     # process back in _run), so a pinned project's own footman collects.
-    _maybe_collect(cfg)
+    _maybe_collect(
+        cfg,
+        skip_stem=(
+            _paths.global_manifest_path().stem
+            if not found.root and not g.get("tasks_file")
+            else _paths.manifest_path(Path.cwd()).stem
+        ),
+    )
     return code
 
 

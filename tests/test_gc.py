@@ -91,7 +91,7 @@ def _trigger(tmp_path, monkeypatch, cfg=None):
     monkeypatch.delenv("FOOTMAN_NO_GC", raising=False)
     spawns: list[tuple[Path, str]] = []
     monkeypatch.setattr(_app, "_spawn_gc", lambda c, s: spawns.append((c, s)))
-    _app._maybe_collect(cfg or {})
+    _app._maybe_collect(cfg or {}, skip_stem="")
     return cache, spawns
 
 
@@ -127,7 +127,7 @@ def test_trigger_off_switches(tmp_path, monkeypatch):
     monkeypatch.setenv("FOOTMAN_NO_GC", "1")
     cache = tmp_path / "cache2"
     monkeypatch.setattr(_paths, "footman_cache_dir", lambda: cache)
-    _app._maybe_collect({})
+    _app._maybe_collect({}, skip_stem="")
     assert not cache.exists()  # fully off: not even a stamp
 
 
@@ -148,7 +148,7 @@ def test_collector_runs_for_real_as_a_detached_child(tmp_path, monkeypatch):
     then = time.time() - 2 * 86400  # yesterday's stamp: due for collection
     os.utime(stamp, (then, then))
 
-    _app._maybe_collect({})  # spawns the real detached child
+    _app._maybe_collect({}, skip_stem="")  # spawns the real detached child
 
     # Poll for BOTH files of the pair: the child unlinks them sequentially
     # (manifest, then times), so watching the manifest alone can wake in the

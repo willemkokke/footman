@@ -562,6 +562,66 @@ def test_the_plugins_report_shows_built_in(tmp_path, monkeypatch):
     assert "built in" in result.stdout
 
 
+def test_two_projectless_directories_share_one_manifest(tmp_path, monkeypatch):
+    # Hash-keyed by the brand, never the cwd: cold once per brand version,
+    # not once per directory — and the file bakes no cwd (the collector's
+    # idle sweep owns it) but does bake the builtin names the refresh child
+    # rebuilds from.
+    import json as _json
+
+    a, b = tmp_path / "a", tmp_path / "b"
+    a.mkdir()
+    b.mkdir()
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / ".cache"))
+    # Through the real door (`App.run` syncs manifests; the in-memory
+    # `Runner` path deliberately writes nothing).
+    app = App(name="acme", prog="acme", version="1.0", builtin=["footman.docs"])
+    monkeypatch.chdir(a)
+    assert app.run(["--list"]) == 0
+    monkeypatch.chdir(b)
+    assert app.run(["--list"]) == 0
+    cache = tmp_path / ".cache" / "acme"
+    manifests = [p for p in cache.glob("*.json") if not p.name.endswith(".times.json")]
+    assert len(manifests) == 1
+    assert manifests[0].name.startswith("global-")
+    data = _json.loads(manifests[0].read_text(encoding="utf-8"))
+    assert "cwd" not in data
+    assert data["builtin"] == ["footman.docs"]
+
+
+def test_the_brand_version_changes_the_global_key(tmp_path, monkeypatch):
+    # An upgrade can change the tree, so the version is part of the key.
+    empty = tmp_path / "e"
+    empty.mkdir()
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / ".cache"))
+    monkeypatch.chdir(empty)
+    one = App(name="acme", prog="acme", version="1.0", builtin=["footman.docs"])
+    two = App(name="acme", prog="acme", version="2.0", builtin=["footman.docs"])
+    assert one.run(["--list"]) == 0
+    assert two.run(["--list"]) == 0
+    cache = tmp_path / ".cache" / "acme"
+    assert len(list(cache.glob("global-*.json"))) == 2
+
+
+def test_tab_reads_the_global_manifest_outside_a_project(tmp_path, monkeypatch, capsys):
+    # The hot path's one walk on a cwd-manifest miss: no project files means
+    # the shared global manifest answers — the same file the run just wrote.
+    empty = tmp_path / "e"
+    empty.mkdir()
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / ".cache"))
+    monkeypatch.chdir(empty)
+    app = App(name="acme", prog="acme", version="1.0", builtin=["footman.docs"])
+    assert app.run(["--list"]) == 0  # writes the global manifest, warm read
+    capsys.readouterr()  # drop the listing; the completion output is the test
+    from footman._complete import complete_cli
+
+    # `App.run` configured the brand's world and never restores (by design);
+    # the autouse fixture restores after the test. The hot path walks once,
+    # finds no project files, and serves the shared global manifest.
+    assert complete_cli(["do"]) == 0
+    assert "docs" in capsys.readouterr().out
+
+
 def test_a_user_tasks_cwd_root_means_the_project_it_landed_in(tmp_path, monkeypatch):
     cfg = tmp_path / "cfg"
     (cfg / "acme").mkdir(parents=True)
@@ -598,6 +658,9 @@ def test_child_argv_carries_the_resolved_locations(tmp_path):
             str(data),
             "acme",
             "acme.py",
+            "fm",
+            "",
+            "",
         ]
         _paths.configure_child(*_paths.child_args())
         assert _paths.env_var("NO_GC") == "ACME_NO_GC"
