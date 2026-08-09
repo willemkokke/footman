@@ -19,7 +19,8 @@ cookbook:
 ## Write a tasks file
 
 Tasks are plain functions. A `@task` decorator registers one; a `group()` opens
-a nested command group. Put them in a `tasks.py` at your project root:
+a nested command group. `fm new` writes a starter file in the directory you
+run it from, or put a `tasks.py` at your project root yourself:
 
 ```python
 from footman import task, group
