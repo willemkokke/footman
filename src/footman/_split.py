@@ -267,28 +267,31 @@ _GLOBAL_DEFAULT = {name: d for name, _, _, _, d, _ in GLOBALS if d is not None}
 _VALUE_OPTIONAL = frozenset(_GLOBAL_DEFAULT)
 
 
-def global_default(name: str) -> tuple[str, bool]:
-    """A global's default, spelled the way the command line spells values, for
-    `--help` to print — and resolved *now*, so a computed one says what this
-    machine will actually do rather than what some other one would.
+def global_default(name: str) -> tuple[Any, bool]:
+    """A global's default **value**, and whether it was computed — resolved
+    *now*, so a computed one answers for this machine rather than whichever one
+    last wrote a manifest.
 
-    Empty when there is nothing worth printing: an option that must be given a
-    value, or one whose bare form means something with no spelling of its own
+    The one source for both readings of a default: what `--help` prints, and
+    what the run actually uses when nothing supplied the option. Those used to
+    be derived separately — the table said `--jobs` meant cores-minus-one while
+    `_app` independently called `default_jobs()` — which agreed only for as long
+    as nobody edited one of them.
+
+    `None` when there is no default at all (the option must be given a value);
+    `""` where the bare form has a reading with no spelling of its own
     (`--describe` is "the whole tree", `--install-completion` is "whichever
-    shell is asking"). Those two say it in their help text, where it reads.
+    shell is asking"), which those two say in their help text instead.
     """
     value = _GLOBAL_DEFAULT.get(name)
     if value is None:
-        return "", False
+        return None, False
     # `isinstance(str)` rather than `callable()`: narrowing on the string side
     # leaves a concrete callable type, where `callable()` widens to "any
-    # callable at all" and cannot be called safely. Spelling the result is this
-    # function's job, not the computer's — so a table row is the plain function
-    # that already exists (`_default_jobs`), never a lambda wrapping it in
-    # `str()`.
+    # callable at all" and cannot be called safely.
     if isinstance(value, str):
         return value, False
-    return str(value()), True
+    return value(), True
 
 
 @dataclass

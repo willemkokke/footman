@@ -567,6 +567,36 @@ def test_help_shows_long_description_and_docstring_doc(project, capsys):
     assert "Args:" not in out  # the section header is structure, not prose
 
 
+def test_a_bare_valued_global_runs_on_its_default(project, capsys):
+    # The splitter accepted `--jobs` bare and `_app` then parsed `''` as a
+    # width and refused with exit 64 — the grammar and the runner holding two
+    # ideas of what a bare mention means.
+    assert _app.run(["--jobs", "hi"]) == 0
+    assert "hello world" in capsys.readouterr().out
+    assert _app.run(["--color", "hi"]) == 0
+    assert "hello world" in capsys.readouterr().out
+
+
+def test_one_source_drives_both_the_help_and_the_run(project, capsys, monkeypatch):
+    from footman import _progress
+
+    monkeypatch.setattr(_progress, "default_jobs", lambda: 7)
+    assert _app.run(["--help"]) == 0
+    jobs_line = next(
+        line for line in capsys.readouterr().out.splitlines() if "--jobs=N" in line
+    )
+    assert "default: 7 (computed)" in jobs_line
+
+    seen: dict[str, object] = {}
+    monkeypatch.setattr(
+        _app._schedule, "run_plan", lambda *a, **k: seen.update(k) or []
+    )
+    _app.run(["hi"])
+    # The number help printed is the number the run caps at — one value, so a
+    # page cannot describe a run that never happens.
+    assert seen.get("jobs") == 7
+
+
 def test_global_help_marks_a_computed_default(project, capsys):
     assert _app.run(["--help"]) == 0
     lines = capsys.readouterr().out.splitlines()
