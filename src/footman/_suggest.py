@@ -61,7 +61,8 @@ def _values(param: str, path: list[str], g: dict[str, object]) -> list[str]:
     """
     from footman import _app, _coerce, _discover, _manifest, registry
 
-    files, _cfg = _app.resolve_task_files(g, on_warning=lambda *a: None, on_note=None)
+    found = _app.resolve_task_files(g, on_warning=lambda *a: None, on_note=None)
+    files = found.files
     if not files or not path:
         return []
     _maybe_reexec(files)  # before any user code is imported
@@ -98,7 +99,8 @@ def _global_values(name: str, g: dict[str, object]) -> list[str]:
     file, an unmounted owner, a plain option — is an empty list."""
     from footman import _app, _coerce, _discover, registry
 
-    files, _cfg = _app.resolve_task_files(g, on_warning=lambda *a: None, on_note=None)
+    found = _app.resolve_task_files(g, on_warning=lambda *a: None, on_note=None)
+    files = found.files
     if not files:
         return []
     _maybe_reexec(files)  # before any user code is imported

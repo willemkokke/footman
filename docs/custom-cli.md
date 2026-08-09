@@ -228,9 +228,14 @@ other application along; `ACME_CONFIG` names a single file, finer still.
 ## Your users' own tasks
 
 `~/.config/acme/tasks.py` — beside that config file, and moving with it under
-`ACME_CONFIG_DIR` — holds a user's personal tasks, available wherever they
-have no project.
+`ACME_CONFIG_DIR` — holds a user's personal tasks. It is the cascade's
+**outermost rung**: personal tasks ride everywhere, inside projects and out,
+and anything nearer shadows them. A project task that shares a name wins —
+the nearest-wins reading the cascade already has, one rung further out — and
+`--where` points at whichever definition answered.
 
-It is a *fallback*, not a rung: the moment a project's cascade finds a tasks
-file, that cascade wins outright. There is one way to get tasks into a project
-tree — mount them in a tasks file — and this does not become a second one.
+The rung claims no root. Outside a project `inv.root` is empty and a
+`cwd="root"` task runs where the command was typed; `cwd="taskfile"` is the
+file's real home, the config directory. Inside a project, `root` is that
+project's top, exactly as for every other task. `-f` stays total control:
+exactly the named file, no rung.

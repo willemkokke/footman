@@ -9,6 +9,19 @@ versions may include breaking changes.
 
 ### Changed
 
+- **BREAKING: the user tasks file is the cascade's outermost rung.** It used
+  to answer only where a project had none; personal tasks now ride
+  everywhere — into projects too — and anything nearer shadows them, the
+  nearest-wins reading the cascade always had, one rung further out. A
+  uniform project surface stays personally extendable without touching the
+  repo. The rung claims no root: outside a project `inv.root` is `""` and a
+  `cwd="root"` task runs where the command was typed — the fallback had
+  accidentally made the config directory the root, which no personal task
+  ever meant — while `cwd="taskfile"` is the config directory, the file's
+  real home. `-f` stays total control, no rung; and a single-file project's
+  PEP 723 script environment still engages, because the script rule reads
+  project files first.
+
 - **The composing verb is `mount`.** A plugin or module is *mounted* into
   the tree — `plugin()` and `include()` are the mounting calls, and `into=`
   is the mount point — where messages and docs used to say "pull", a word
