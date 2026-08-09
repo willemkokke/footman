@@ -77,7 +77,7 @@ dev = [
     "uv",
     # The typed tool surfaces footman's own tasks run through — the spun-out
     # bridge, dogfooding the hosted lane. Dev-only: footman ships zero deps.
-    "toolroom>=0.3.0",
+    "toolroom>=0.4.0",
     "pytest>=8.0",
     # For the env_files plugin's tests only — the plugin itself imports it
     # lazily and teaches by name when absent; never a runtime dependency.
