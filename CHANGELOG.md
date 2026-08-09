@@ -7,6 +7,18 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A schema bump rewrites an unchanged tree's manifest.** The rewrite
+  guard compared only the tree hash, so upgrading footman left every
+  old-schema manifest on disk forever: each <kbd>Tab</kbd> refused it,
+  spawned a rebuild that "succeeded" without writing — the fresh manifest
+  hashed identically — and paid the full cold bound. Three seconds per
+  keystroke, in every previously-visited directory, until the tree happened
+  to change. The schema is part of what the file *is*, not part of what it
+  describes, and now joins the guard; each directory heals on its first
+  rebuild after this fix.
+
 ### Changed
 
 - **`--plugins` groups by distribution, and the Summary prints once.** The

@@ -376,6 +376,28 @@ def test_sync_rewrites_only_on_hash_change(root, tmp_path, monkeypatch):
     assert len(writes) == 2
 
 
+def test_a_schema_bump_rewrites_an_unchanged_tree(root, tmp_path, monkeypatch):
+    # An upgrade bumps the schema while the tree (and so the hash) stands
+    # still. The rewrite guard compared only the hash, so the old-schema
+    # file lived forever: every TAB refused it, spawned a rebuild that
+    # "succeeded" without writing, and paid the full cold bound — in every
+    # directory on the machine, on every keystroke, until the tree changed.
+    import json
+
+    monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path)
+    project = tmp_path / "proj"
+    project.mkdir()
+    _manifest.sync_manifest(root, project)
+    path = _paths.manifest_path(project)
+    aged = json.loads(path.read_text(encoding="utf-8"))
+    aged["schema"] = _manifest.SCHEMA_VERSION - 1  # yesterday's footman wrote it
+    path.write_text(json.dumps(aged), encoding="utf-8")
+
+    _manifest.sync_manifest(root, project)  # same tree, same hash
+    now = json.loads(path.read_text(encoding="utf-8"))
+    assert now["schema"] == _manifest.SCHEMA_VERSION
+
+
 def test_sync_bakes_the_cwd_and_upgrades_manifests_without_it(
     root, tmp_path, monkeypatch
 ):
