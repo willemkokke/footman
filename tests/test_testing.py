@@ -287,3 +287,23 @@ def test_fm_record_fixture_captures_steps(fm_record):
 
     build()
     assert fm_record[0].command == "cargo build --release"
+
+
+def test_an_in_memory_run_records_no_timing_history(tmp_path, monkeypatch):
+    # A synthetic tree pollutes no cache, times included — the rule `-f`
+    # runs already follow. Left unguarded, every Runner drive in a
+    # consumer's test suite wrote `*.times.json` (keyed by an ephemeral
+    # pytest cwd) into the real user cache, and mkdir'd it to do so.
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
+    # Force the estimate/record gate open so the guard is what's tested,
+    # not whether this tiny tree happened to consent to progress.
+    monkeypatch.setattr("footman._schedule.dag_wants_progress", lambda *a: True)
+    root = Group("root")
+
+    @root.task
+    def hi():
+        "Say hello."
+
+    result = Runner(App(name="acme", prog="acme")).invoke("hi", tasks=root)
+    assert result.exit_code == 0
+    assert not list(tmp_path.rglob("*.times.json"))
