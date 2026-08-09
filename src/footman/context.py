@@ -86,7 +86,8 @@ def _audit_entry(moment: _Moment, actor: str, code: int | None) -> AuditEntry:
 
 
 class Argv(list[str]):
-    """A command line built but not run — `tools.git.push.argv(force=True)`.
+    """A command line built but not run — what `Result.to_argv()` hands back
+    (and what a builder like toolroom's `git.push.argv(force=True)` makes).
 
     An ordinary `list[str]` everywhere in Python: it indexes, slices,
     iterates, compares and prints exactly like the list it is, and `run(cmd)`
@@ -107,9 +108,10 @@ class Argv(list[str]):
     Linux box still comes back POSIX-quoted (which is why neither method is
     the local-platform `_shell_quote`).
 
-    Lives here beside `Result` rather than in the bridge because `run()`
-    accepts one and `Result.to_argv()` returns one, and the bridge is the
-    layer that imports this one.
+    Lives here beside `Result` because `run()` accepts one and
+    `Result.to_argv()` returns one. toolroom carries its own twin of this
+    class on purpose — the seam between the packages speaks plain
+    `list[str]`, so neither ever imports the other's.
     """
 
     __slots__ = ()
@@ -207,7 +209,7 @@ class Result(int):
             r.to_argv()          # ["git", "commit", "-m", "ship 1.2.0"]
             r.to_argv().posix()  # "git commit -m 'ship 1.2.0'"
 
-        Named apart from the bridge's `.argv` on purpose: this one describes
+        Named apart from toolroom's `.argv` builders on purpose: this one describes
         a call that has **already run**, so `git.push().argv(…)` — meaning to
         *build* a command line — is an `AttributeError` rather than a push
         that quietly happened. For the same reason the two can differ by one
@@ -220,7 +222,7 @@ class Result(int):
                 f"spawned command has separable tokens — an in-process call, a "
                 f"Python callable, or a `run()` given a command *string* never "
                 f"had them apart. Pass a list (`run(['git', 'push'])`) or use "
-                f"the tools bridge, whose calls always record their argv."
+                f"a toolroom handle, whose calls always record their argv."
             )
         return Argv(self._tokens)
 
@@ -939,8 +941,8 @@ def use_context(ctx: Context | None = None) -> Generator[Context]:
     """Install *ctx* as the current run context for the duration of the block.
 
     The public seam for calling tasks from other Python code — tests included:
-    `run()` and `tools.*` inside the block read this context instead of a
-    fresh default. `footman.testing.recording` builds on it.
+    `run()` and hosted toolroom calls inside the block read this context
+    instead of a fresh default. `footman.testing.recording` builds on it.
 
     ```python
     with use_context(Context(env={"CI": "1"})) as ctx:
@@ -1170,8 +1172,8 @@ class CommandNotFound(FileNotFoundError):
     catching it. Deliberately *not* a `RunFailed`, and not silenced by
     `nofail=True`: there is no exit code to interpret, because no command
     ran — the environment is missing the tool, or the name is misspelled
-    (which the tools bridge cannot catch at attribute time: `tools.<name>`
-    mints a Tool for any spelling). Carries `.command`."""
+    (which a toolroom handle cannot catch at attribute time: it mints a
+    Tool for any spelling). Carries `.command`."""
 
     def __init__(self, command: str) -> None:
         self.command = command
@@ -1684,7 +1686,7 @@ def routing() -> Generator[tuple[TextIO, TextIO]]:
     Both streams proxy through the running task's sink, so an in-process tool's
     stderr is captured alongside its stdout (matching the merged subprocess
     capture) instead of leaking to the terminal. The routers are *stacked*, not
-    reset to None: a nested run — e.g. `tools.pytest(in_process=True)` driving
+    reset to None: a nested run — e.g. toolroom's `pytest(in_process=True)` driving
     the shipped `fm` fixture — restores the outer routers on exit, so the outer
     run's capture keeps working afterwards.
     """
@@ -1723,7 +1725,7 @@ def _is_code(value: Any) -> bool:
 class Invocation:
     """What a `run()` call *is*, apart from how it's spelled to execute.
 
-    The `tools.*` bridge builds one of these so `run()` can show a readable,
+    toolroom's bridge builds one of these so `run()` can show a readable,
     syntax-highlighted command line — options in separated form, tagged by
     role — while executing whatever the tool actually needs (attached flags,
     or an in-process callable). `parts` is the normalised, human form;
@@ -2692,10 +2694,10 @@ def run(
     In-process work is a **step** now: `run()` runs commands. Lift a
     callable instead — `@step` / `step(fn, title=…)` builds an item that
     earns a receipt, and `with step("…"):` records a block where it
-    stands. (The tools bridge keeps its in-process lane through its own
+    stands. (toolroom keeps its in-process lane through its own
     private channel.)
 
-    `_show` is an internal channel from the `tools.*` bridge: a structured
+    `_show` is an internal channel from toolroom's bridge: a structured
     view of the call, so the shown command line can be normalised and
     role-coloured while execution runs whatever the tool needs. An explicit
     `title` still wins; a direct `run([...])` is unaffected.
@@ -2717,7 +2719,7 @@ def run(
             "earns a real receipt."
         )
     if input is not None and callable(cmd):
-        # Reached only through the tools bridge's in-process lane: a
+        # Reached only through toolroom's in-process lane: a
         # subprocess has a stdin to feed, a Python call does not.
         raise TypeError(
             "run(input=…) feeds a subprocess's standard input, and an "
@@ -2819,7 +2821,7 @@ def run(
             # A Python callable cannot be interrupted safely — there is no
             # process to signal and no safe way to unwind another thread — so
             # a bound footman cannot honour is refused rather than ignored.
-            # The tools bridge demotes an in-process *tool* to its subprocess
+            # toolroom demotes an in-process *tool* to its subprocess
             # twin instead, exactly as it does for a foreign cwd.
             raise ValueError(
                 "run(timeout=…) needs a process to bound, and this call runs "

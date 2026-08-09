@@ -63,8 +63,9 @@ __all__ = [
 def recording(**overrides: Any) -> Generator[list[Result]]:
     """Capture the commands a block would `run()` — silently, not executing.
 
-    Yields the live step list; each `run()`/`tools.*` call inside the block
-    appends a `Result` instead of executing. In-process callables passed to
+    Yields the live step list; each `run()` call inside the block — hosted
+    toolroom calls included — appends a `Result` instead of executing.
+    In-process callables passed to
     `run()` are skipped too — that is the point, but worth knowing. Keyword
     overrides go to the underlying `Context` (e.g. `env={...}`).
     """

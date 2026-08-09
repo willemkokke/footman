@@ -162,9 +162,10 @@ testpaths = ["tests"]
 # single test serially (live `-s`, `--pdb`, `-x` ordering), override with `-n0`.
 #
 # `worksteal` rather than xdist's default `load`, because this suite's test
-# durations are wildly uneven: test_shellcomp drives five real shells, the
-# toolspec and provision tests shell out to real binaries, and everything
-# else is microseconds. `load` hands out chunks up front, so one worker holds
+# durations are wildly uneven: test_shellcomp drives five real shells and
+# everything else is microseconds. (Measured before the tool suites moved to
+# toolroom; the shell tail still dominates, so the choice stands.)
+# `load` hands out chunks up front, so one worker holds
 # the slow tail while the rest idle; `worksteal` moves work to whoever is
 # free. Measured locally, twice each: 20s load, 15s worksteal, 32s loadfile —
 # loadfile being worst because it pins whole files, and the heavy files are

@@ -648,7 +648,7 @@ class _ArgvProxy(list[str]):
 
 def argv_override(args: list[str]) -> Any:
     """A context manager giving this thread its own `sys.argv` view for the
-    block — served by the argv router, lock-free. The tools bridge wraps a
+    block — served by the argv router, lock-free. toolroom's bridge wraps a
     legacy zero-argument `main()` in one, so those calls parallelise like
     their argument-accepting siblings."""
     import contextlib
