@@ -14,9 +14,9 @@ from pathlib import Path
 
 # Ancestor markers that identify the project root. The manifest cache is keyed
 # by cwd, but these still bound a lone-file lookup when there is no repo root.
-# Files footman itself reads, plus this brand's config file, which
-# `find_project_root` appends — no VCS entry belongs here, see below.
-PROJECT_MARKERS = ("pyproject.toml", "tasks.py")
+# Only the brand-independent one lives here; `project_markers()` adds this
+# brand's config and tasks filenames. No VCS entry belongs here, see below.
+PROJECT_MARKERS = ("pyproject.toml",)
 
 # Marks the ceiling of the upward walk — the repo root where the task cascade
 # starts and the config search stops: the version-control boundary, whichever
@@ -28,12 +28,27 @@ REPO_MARKERS = (".git", ".jj", ".hg", ".svn")
 DEFAULT_TASKS_FILE = "tasks.py"
 
 
+def project_markers() -> tuple[str, ...]:
+    """The files that mark a project root — exactly the files footman reads.
+
+    Two of the three are this brand's: `acme.toml` marks an `acme` project
+    root as `footman.toml` marks footman's, and `acmetasks.py` marks one as
+    `tasks.py` does.
+
+    The tasks filename here is the **brand's**, never the `tasks` config key
+    that can override it per project. That is not an oversight: the key
+    lives in a config file, and finding config needs the ceiling this
+    function is in the middle of computing. A brand default is the only
+    answer available this early, and any project reachable through the
+    config key has a config file marking its root anyway.
+    """
+    return (*PROJECT_MARKERS, config_basename(), _tasks_file)
+
+
 def find_project_root(start: Path | None = None) -> Path:
     """Nearest ancestor of *start* (default: cwd) containing a project marker."""
     start = (start or Path.cwd()).resolve()
-    # This brand's config file counts too — `acme.toml` marks an `acme`
-    # project root exactly as `footman.toml` marks footman's.
-    markers = (*PROJECT_MARKERS, config_basename())
+    markers = project_markers()
     for directory in (start, *start.parents):
         if any((directory / marker).exists() for marker in markers):
             return directory
@@ -88,6 +103,7 @@ def task_files(
 _prefix = "FOOTMAN"
 _home: Path | None = None
 _config_name = "footman"
+_tasks_file = DEFAULT_TASKS_FILE
 
 
 def configure(
@@ -95,16 +111,20 @@ def configure(
     prefix: str = "FOOTMAN",
     home: Path | None = None,
     config_name: str = "footman",
+    tasks_file: str = DEFAULT_TASKS_FILE,
 ) -> None:
     """Point every location at one brand's world.
 
     *home* is where that CLI keeps what it owns; `None` keeps the XDG
     fallback. *prefix* namespaces the environment variables, so a stray
-    `FOOTMAN_CACHE_DIR` cannot move another product's cache. Detached
-    children are handed the resolved values rather than re-deriving them.
+    `FOOTMAN_CACHE_DIR` cannot move another product's cache. *config_name*
+    and *tasks_file* name the files this brand's users write, which are also
+    what mark a project root. Detached children are handed the resolved
+    values rather than re-deriving them.
     """
-    global _prefix, _home, _config_name
-    _prefix, _home, _config_name = prefix, home, config_name
+    global _prefix, _home, _config_name, _tasks_file
+    _prefix, _home = prefix, home
+    _config_name, _tasks_file = config_name, tasks_file
 
 
 def child_args() -> list[str]:
@@ -115,15 +135,23 @@ def child_args() -> list[str]:
     computed it. So the parent hands over resolved values instead, and the
     child never reads a variable of its own.
     """
-    return [_prefix, str(_home) if _home is not None else "", _config_name]
+    return [
+        _prefix,
+        str(_home) if _home is not None else "",
+        _config_name,
+        _tasks_file,
+    ]
 
 
-def configure_child(prefix: str = "", home: str = "", config_name: str = "") -> None:
+def configure_child(
+    prefix: str = "", home: str = "", config_name: str = "", tasks_file: str = ""
+) -> None:
     """The other side of `child_args` — empty strings mean stock defaults."""
     configure(
         prefix=prefix or "FOOTMAN",
         home=Path(home) if home else None,
         config_name=config_name or "footman",
+        tasks_file=tasks_file or DEFAULT_TASKS_FILE,
     )
 
 
