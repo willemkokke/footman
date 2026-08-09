@@ -1,7 +1,10 @@
 # One option model — core globals stop being a dialect
 
-*Status: proposed 2026-08-09 — awaiting the go. Nothing built. Land #367
-first; this note assumes `global_default` returning values, not renderings.*
+*Status: **LANDED 2026-08-09** — built the same day it was ruled on, as
+PRs #371 (declare + derive), #372 (plugin binding parity, a lead-in this
+note had dropped), #373 (the one ladder; `_switch` dies), and #374 (plugin
+config sections), with #367 landed first as required. "What the build
+changed" at the bottom records where reality disagreed with the plan.*
 
 ## The itch
 
@@ -198,3 +201,35 @@ section against what `inv.config` indexing finds — never one half alone.
 - **Env vars for core globals** — nothing asked for them; brand-aware naming
   (`ACME_JOBS`?) has no good answer; the ladder makes them declarable later
   without ceremony.
+
+## What the build changed
+
+Five places where building it disagreed with planning it.
+
+- **A REQUIRED sentinel, not a shared `None`.** The plan said "bare-legal
+  iff the default column is non-None" and left the mechanism unstated: a
+  plugin's `default=None` IS a value (absence hands the owner `None`), while
+  four core rows have no default at all. `_split._REQUIRED` is the
+  distinction, and the rule holds with no plugin/core exception.
+- **Two latent plugin bugs led the build**, restored from the bare-mentions
+  note after this plan dropped them: a `list`/`dict` global bound last-wins
+  with commas kept, and a bool had no `--no-x`. Fixed first (PR #372) — the
+  parity they establish is what "bind like a task option" then meant.
+- **`--uv` stays lexical.** The plan listed the uv handoff among the staged
+  early consumers and still counted `uv` in the seven config-backed options;
+  building it showed both handoff probes read throwaway configs *before any
+  bind exists* and may replace the process. `UV` declares `config=True` for
+  the table and the guards; `_uv_wanted` resolves it by hand, the one stated
+  early consumer.
+- **`KEYS` derivation shrank on contact a second time, and became a guard.**
+  The first shrink (bare-mentions build): six keys have no CLI surface. The
+  second: a computed default (`cores - 1`) has no machine-independent
+  rendering a docs page could bake, and the reference prose is deliberately
+  richer than flag help. What landed pins exactly the derivable agreement —
+  key exists, bool values/defaults, choice lists — and leaves the prose
+  editorial (`test_the_keys_table_agrees_with_the_declarations`).
+- **The removed-`plugins`-key tombstone nearly ate the namespace.** The
+  reserved `plugins.` child parses as a `plugins` table in the merged
+  config, and the tombstone refused on truthiness. It now refuses only
+  non-table values, keeping the old key's teaching while the new namespace
+  lives beside it — found by the first end-to-end test, not foresight.

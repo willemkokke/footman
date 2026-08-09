@@ -594,6 +594,36 @@ def test_every_boolean_config_key_has_both_cli_spellings():
     )
 
 
+def test_the_keys_table_agrees_with_the_declarations():
+    """The mechanical half of a config-backed KEYS row — that the key exists,
+    a bool's values and default, a choice-typed option's choices — comes from
+    the declaration, and the table may not disagree.
+
+    Derivation proper was tried twice and shrank on contact both times: six
+    keys have no CLI surface at all, and a computed default (`cores - 1`) has
+    no machine-independent rendering a docs page could bake. So the prose
+    stays editorial — the reference page explains more than a flag's
+    one-liner can — and this guard pins exactly the agreement that IS
+    derivable."""
+    from footman._config import KEYS
+    from footman._split import CORE_OPTIONS
+
+    rows = {name: (values, default) for name, values, default, _ in KEYS}
+    backed = {o.name: o for o in CORE_OPTIONS if o.config}
+    missing = sorted(set(backed) - set(rows))
+    assert not missing, f"config-backed options absent from the KEYS table: {missing}"
+    for name, opt in backed.items():
+        values, default = rows[name]
+        if opt.annotation is bool:
+            assert values == "`true` / `false`", (name, values)
+            assert default == f"`{'true' if opt.default else 'false'}`", (
+                name,
+                default,
+            )
+        elif opt.choices:
+            assert values == " / ".join(f"`{c}`" for c in opt.choices), (name, values)
+
+
 def test_every_config_backed_option_resolves_a_documented_key():
     """A `config=True` declaration reads `[tool.footman] <name>`, so every
     name declared config-backed has to be a documented key.
