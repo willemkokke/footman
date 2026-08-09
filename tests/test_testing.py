@@ -108,7 +108,7 @@ def test_runner_group_failure_is_returned_not_raised():
 def test_runner_group_chain_error_teaches():
     result = Runner().invoke("nope", tasks=_demo_group())
     assert result.exit_code == EX_USAGE
-    assert "expected a task name" in result.stderr
+    assert "no task named" in result.stderr
 
 
 def test_runner_group_dry_run_matches_cli_semantics():

@@ -252,7 +252,7 @@ def test_fail_reason_reaches_json(project, capsys):
 
 def test_unknown_task_is_teaching_error(project, capsys):
     assert _app.run(["nope"]) == EX_USAGE
-    assert "expected a task name" in capsys.readouterr().err
+    assert "no task named" in capsys.readouterr().err
 
 
 def test_where(project, capsys):
@@ -873,9 +873,9 @@ def test_json_refusal_envelope(project, capsys):
     payload = json.loads(captured.out)
     assert payload["schema"] == 1
     assert payload["error"]["code"] == EX_USAGE
-    assert "expected a task name" in payload["error"]["message"]
+    assert "no task named" in payload["error"]["message"]
     assert payload["items"] == []
-    assert "expected a task name" in captured.err  # stderr keeps the human copy
+    assert "no task named" in captured.err  # stderr keeps the human copy
 
 
 def test_json_refusal_on_unknown_global(project, capsys):

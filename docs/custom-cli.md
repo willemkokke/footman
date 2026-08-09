@@ -44,7 +44,7 @@ $ acme --version
 Acme 1.4.0
 
 $ acme nonexistent-task
-acme: expected a task name, got 'nonexistent-task' (know: build, test, deploy)
+acme: no task named 'nonexistent-task' (know: build, test, deploy)
 ```
 
 ## Where the two names show up

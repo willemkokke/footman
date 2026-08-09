@@ -572,10 +572,12 @@ def _resolve_head(
         hint = _did_you_mean(token, flat_addresses(tree))
         scope = f"{'.'.join(path)} has" if path else "know"
         known = ", ".join(_children(node, f"{'.'.join(path)}." if path else ""))
+        # One lead for both branches. They used to differ — "no task at" for a
+        # dotted address, "expected a task name, got" at the root — but the
+        # scope clause after already carries that distinction (`docs has:` vs
+        # `know:`), and someone who typed `docs.sevre` thinks of it as a name.
         raise ChainError(
-            f"no task at {bad!r}{hint} ({scope}: {known})"
-            if path
-            else f"expected a task name, got {token!r}{hint} ({scope}: {known})"
+            f"no task named {(bad if path else token)!r}{hint} ({scope}: {known})"
         )
 
     # The whole token named a group. Runnable — one with `@group.default` —

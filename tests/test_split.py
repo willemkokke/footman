@@ -237,7 +237,7 @@ ERROR_CASES = [
     ("docs..serve", "'docs..serve' is not a task address"),
     (".docs", "'.docs' is not a task address"),
     ("check.deep", "'check' is a task, not a group — nothing lives beneath it"),
-    ("docs.sevre", "no task at 'docs.sevre' — did you mean 'docs.serve'?"),
+    ("docs.sevre", "no task named 'docs.sevre' — did you mean 'docs.serve'?"),
     # A misplaced global names the real problem — position — not "unknown".
     (
         "--json lint --quiet",
