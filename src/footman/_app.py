@@ -521,7 +521,7 @@ def _print_global_help(tree: dict[str, Any], show_hidden: bool = False) -> None:
     print(f"usage: {_describe.paint_cli(parts, _color_out)}")
     print(f"\n{_describe.bold('globals (before the first task):', _color_out)}")
     rows = []
-    for name, alias, _kind, hint, help_text in _split.GLOBALS:
+    for name, alias, _kind, hint, _default, help_text in _split.GLOBALS:
         label = f"{alias}, {name}" if alias else f"    {name}"
         if hint:
             label += f"={hint}"  # values are always `=`-attached

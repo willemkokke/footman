@@ -94,86 +94,160 @@ class ChainError(Exception):
 
 # Global options bind to `fm` itself and must precede the first task name
 # (`--help`/`-h` is the one exception: anywhere before `--`, it wins).
-# (canonical, short alias, kind, value-hint, help)
-GLOBALS: list[tuple[str, str | None, str, str | None, str]] = [
-    ("--help", "-h", "flag", None, "help for {prog}, or the named group/task"),
-    ("--version", "-V", "flag", None, "print the version and exit"),
-    ("--list", "-l", "flag", None, "list tasks (flat)"),
-    ("--tree", None, "flag", None, "list tasks grouped by command group"),
-    ("--sort", None, "flag", None, "list tasks alphabetically (default: as defined)"),
-    ("--no-sort", None, "flag", None, "list tasks in definition order"),
-    ("--all", "-a", "flag", None, "include hidden tasks in the listings"),
-    ("--where", None, "option", "TASK", "print the task's source file:line"),
+# (canonical, short alias, kind, value-hint, default, help). `default` is what
+# a bare mention means — `None` for an option that has no reading without a
+# value, which is the same question a task option answers with `required`.
+GLOBALS: list[tuple[str, str | None, str, str | None, str | None, str]] = [
+    ("--help", "-h", "flag", None, None, "help for {prog}, or the named group/task"),
+    ("--version", "-V", "flag", None, None, "print the version and exit"),
+    ("--list", "-l", "flag", None, None, "list tasks (flat)"),
+    ("--tree", None, "flag", None, None, "list tasks grouped by command group"),
+    (
+        "--sort",
+        None,
+        "flag",
+        None,
+        None,
+        "list tasks alphabetically (default: as defined)",
+    ),
+    ("--no-sort", None, "flag", None, None, "list tasks in definition order"),
+    ("--all", "-a", "flag", None, None, "include hidden tasks in the listings"),
+    ("--where", None, "option", "TASK", None, "print the task's source file:line"),
     # The bracketed hint marks the value optional: bare `--describe` dumps
     # the whole tree's contract; a group address answers for its subtree.
-    ("--describe", None, "option", "[ADDR]", "print task contracts as JSON"),
+    ("--describe", None, "option", "[ADDR]", "", "print task contracts as JSON"),
     (
         "--plugins",
         None,
         "flag",
         None,
+        None,
         "list installed footman.tasks plugins, pulled or not",
     ),
-    ("--dry-run", "-n", "flag", None, "rehearse: bodies run, footman's work is faked"),
-    ("--keep-going", "-k", "flag", None, "run every branch even if one fails"),
-    ("--fail-fast", None, "flag", None, "stop at the first failure"),
+    (
+        "--dry-run",
+        "-n",
+        "flag",
+        None,
+        None,
+        "rehearse: bodies run, footman's work is faked",
+    ),
+    ("--keep-going", "-k", "flag", None, None, "run every branch even if one fails"),
+    ("--fail-fast", None, "flag", None, None, "stop at the first failure"),
     (
         "--sequential",
         "-s",
         "flag",
         None,
+        None,
         "run one at a time, parallel() blocks included",
     ),
-    ("--no-sequential", None, "flag", None, "run in parallel (undo config)"),
+    ("--no-sequential", None, "flag", None, None, "run in parallel (undo config)"),
     (
         "--jobs",
         "-j",
         "option",
         "N",
+        "",
         "max parallel tasks (default: cores - 1, never below 2)",
     ),
-    ("--yes", "-y", "flag", None, "assume yes to every confirm() gate"),
-    ("--no-input", None, "flag", None, "never prompt; error if input is required"),
-    ("--input", None, "flag", None, "allow prompting (undo config)"),
-    ("--quiet", "-q", "flag", None, "suppress the per-task summary"),
-    ("--verbose", "-v", "flag", None, "replay captured output even on success"),
-    ("--color", None, "option", "WHEN", "when to colour: always|never|auto (default)"),
-    ("--no-color", None, "flag", None, "disable ANSI colour (same as --color=never)"),
-    ("--no-progress", None, "flag", None, "no progress bar, eta, or timing capture"),
-    ("--progress", None, "flag", None, "progress bar, eta and timing (undo config)"),
-    ("--no-uv", None, "flag", None, "skip the uv handoffs for this run"),
-    ("--uv", None, "flag", None, "take the uv handoffs (undo config)"),
-    ("--json", None, "flag", None, "stdout is one JSON document (captures output)"),
-    ("--timings", None, "flag", None, "show per-task durations"),
-    ("--directory", "-C", "option", "PATH", "run as if launched from PATH"),
-    ("--tasks-file", "-f", "option", "PATH", "only this tasks file, no tasks cascade"),
-    ("--config", None, "option", "PATH", "only this config file, no config cascade"),
+    ("--yes", "-y", "flag", None, None, "assume yes to every confirm() gate"),
+    (
+        "--no-input",
+        None,
+        "flag",
+        None,
+        None,
+        "never prompt; error if input is required",
+    ),
+    ("--input", None, "flag", None, None, "allow prompting (undo config)"),
+    ("--quiet", "-q", "flag", None, None, "suppress the per-task summary"),
+    ("--verbose", "-v", "flag", None, None, "replay captured output even on success"),
+    (
+        "--color",
+        None,
+        "option",
+        "WHEN",
+        "",
+        "when to colour: always|never|auto (default)",
+    ),
+    (
+        "--no-color",
+        None,
+        "flag",
+        None,
+        None,
+        "disable ANSI colour (same as --color=never)",
+    ),
+    (
+        "--no-progress",
+        None,
+        "flag",
+        None,
+        None,
+        "no progress bar, eta, or timing capture",
+    ),
+    (
+        "--progress",
+        None,
+        "flag",
+        None,
+        None,
+        "progress bar, eta and timing (undo config)",
+    ),
+    ("--no-uv", None, "flag", None, None, "skip the uv handoffs for this run"),
+    ("--uv", None, "flag", None, None, "take the uv handoffs (undo config)"),
+    (
+        "--json",
+        None,
+        "flag",
+        None,
+        None,
+        "stdout is one JSON document (captures output)",
+    ),
+    ("--timings", None, "flag", None, None, "show per-task durations"),
+    ("--directory", "-C", "option", "PATH", None, "run as if launched from PATH"),
+    (
+        "--tasks-file",
+        "-f",
+        "option",
+        "PATH",
+        None,
+        "only this tasks file, no tasks cascade",
+    ),
+    (
+        "--config",
+        None,
+        "option",
+        "PATH",
+        None,
+        "only this config file, no config cascade",
+    ),
     # The bracketed hint marks the value optional: bare `--install-completion`
     # / `--setup-completion` detect the invoking shell.
-    ("--install-completion", None, "option", "[SHELL]", "install shell completion"),
-    ("--setup-completion", None, "option", "[SHELL]", "print completion for eval"),
+    ("--install-completion", None, "option", "[SHELL]", "", "install shell completion"),
+    ("--setup-completion", None, "option", "[SHELL]", "", "print completion for eval"),
     (
         "--uninstall-completion",
         None,
         "option",
         "[SHELL]",
+        "",
         "remove the completion hook",
     ),
 ]
-_GLOBAL_KIND = {name: kind for name, _, kind, _, _ in GLOBALS}
-_GLOBAL_KIND.update({alias: kind for _, alias, kind, _, _ in GLOBALS if alias})
-_CANON = {alias: name for name, alias, _, _, _ in GLOBALS if alias}
-_GLOBAL_HINT = {name: hint for name, _, _, hint, _ in GLOBALS if hint}
-# Globals whose bare form means something — `--describe` the whole tree,
-# `--install-completion` the shell you are in — declared by bracketing the
-# metavar. This is a global's version of a task option's `required`: a task
-# option may be named bare when absence is legal, and a global when its bare
-# mention has a reading. `--where` has none (there is no default task to point
-# at), so it still refuses, and a word behind it is still taught rather than
-# quietly becoming the task to run.
-_VALUE_OPTIONAL = frozenset(
-    name for name, _, _, hint, _ in GLOBALS if hint and hint.startswith("[")
-)
+_GLOBAL_KIND = {name: kind for name, _, kind, _, _, _ in GLOBALS}
+_GLOBAL_KIND.update({alias: kind for _, alias, kind, _, _, _ in GLOBALS if alias})
+_CANON = {alias: name for name, alias, _, _, _, _ in GLOBALS if alias}
+_GLOBAL_HINT = {name: hint for name, _, _, hint, _, _ in GLOBALS if hint}
+# A global may be named bare exactly when it has a default — something for the
+# mention to mean. That is the same question a task option answers with
+# `required`, asked of the table instead of a signature: `--describe` and the
+# completion trio have readings, `--where` names a task to locate and there is
+# no default task, so a word behind it is taught rather than quietly becoming
+# the task to run. The bracketed metavar is help notation now, not the rule.
+_GLOBAL_DEFAULT = {name: d for name, _, _, _, d, _ in GLOBALS if d is not None}
+_VALUE_OPTIONAL = frozenset(_GLOBAL_DEFAULT)
 
 
 @dataclass

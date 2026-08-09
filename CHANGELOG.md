@@ -84,7 +84,15 @@ versions may include breaking changes.
   direction: `sequential` and `sort` had no `--no-` counterpart, `progress` had
   no `--progress` (its own documentation said `false` disabled the bar
   *permanently*), `uv` had no flag at all, and `input` was not a config key.
-  All five resolve through one rule — **CLI > config > the default**.
+  All five resolve through one rule — **CLI > config > the default** — and two
+  guards keep it that way: every boolean project key must have both spellings,
+  and every key resolved from config must appear in the reference table.
+- **A global is bare-legal exactly when it has a default**, declared in the
+  grammar table beside its metavar. That is the same rule task options follow
+  (absence is legal when there is a default), so both surfaces now answer the
+  question the same way instead of one keying on a bracketed metavar. `--jobs`
+  and `--color` gain a bare form; `--where`, `-C`, `-f` and `--config` have no
+  reading without a value and still refuse.
 - **An absent global option runs the same ladder a task parameter does** — env,
   then `default(fn)`, then the declared default. `env()` was accepted on a
   global's annotation and reached the manifest but was never applied, so the

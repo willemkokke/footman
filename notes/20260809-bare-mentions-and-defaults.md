@@ -399,9 +399,11 @@ the string in `_split.py`, one assertion in `test_split.py`, three in
 docstrings are unguarded. Fixing the line here; widening the guard is its own
 change.
 
-## Next: config-backed globals
+## Config-backed globals
 
-Sequenced deliberately *after* this change, not folded in.
+Sequenced after this change, then **folded in** at Willem's call. It did not
+land in the shape planned below — see "What the build changed" for why the
+derived-`KEYS` idea does not survive contact with the table.
 
 **Every boolean config key should have both CLI spellings**, and five don't:
 
@@ -456,32 +458,49 @@ is already correct.
 
 Four places where writing it disagreed with planning it.
 
-### Globals are not all bare-legal after all
+### Globals are bare-legal when they have a default — not unconditionally
 
-The plan said `_VALUE_OPTIONAL` would go and every value-taking global would
-become bare-legal, on the grounds that a task option is bare-legal whenever
-absence is legal and absence is always legal for a global. Built, that let
-`fm --where lint` parse as a bare `--where` followed by a task — **silently
-running lint** instead of teaching the attachment.
+I read "every value-taking global becomes bare-legal" as *remove the parser
+restriction*, deleted `_VALUE_OPTIONAL` and its refusal outright, and found
+`fm --where lint` parsing as a bare `--where` followed by a task — **silently
+running lint** instead of teaching the attachment. `--where` names a task to
+locate and there is no default task, so its bare mention has no reading.
 
-`--where` names a task to locate, and there is no default task, so its bare
-form has no reading at all. `_VALUE_OPTIONAL` stays, and it turns out to be the
-*same* question a task option answers with `required`, asked in the vocabulary
-each has: a task option may be named bare when absence is legal, a global when
-its bare mention means something. The bracketed metavar (`[SHELL]`, `[ADDR]`)
-is how the table declares it.
+Willem meant *if it has a default*, which is the same rule the task side
+follows and (with the default column, above) the same words: **bare-legal iff
+there is a default.** `_VALUE_OPTIONAL` stays, derived from that column.
 
 Plugin globals *are* all bare-legal, because their owner can always ask
 `.given` — so the reading exists by construction.
 
-### The GLOBALS default column moved to the follow-on
+### The GLOBALS default column, and why deferring it was the mistake
 
-The five one-way config keys got a `_switch(g, cfg, name, default)` helper
-instead: **CLI > config > the declared default**, replacing three hand-written
-spellings of that idea. A default *column* only earns its place once config
-backing is declared rather than wired, which is exactly the follow-on — adding
-it now would have meant a column of empty strings and half the next change,
-built badly.
+Deferred at first, on the grounds that a column of mostly-empty strings only
+earns its place once config backing is declared. That reasoning was wrong, and
+Willem caught it: **"every value-taking global becomes bare-legal" always meant
+"if it has a default"** — and the column is what makes "has a default"
+expressible in a static table. Without it there was nothing to key the rule on,
+so the bracketed metavar stood in as a proxy, which is why the rule ended up
+sounding like *two* vocabularies.
+
+With the column in, it is one rule on both surfaces: **bare-legal iff there is
+a default**. The bracket goes back to being help notation. Two globals change
+hands — `--jobs` and `--color` have defaults and are now bare-legal, where the
+bracket-proxy refused them.
+
+### The derived `KEYS` table does not survive contact
+
+The plan had `KEYS` *derived* from the globals that declare config backing, so
+there would be no second list to drift. Six keys have no CLI counterpart at all
+(`tasks`, `cwd`, `gc`, `cascade`, `fetch`, `shell`), so derivation would have
+produced a half-derived, half-hand-written table — worse than either.
+
+What landed instead is the guard, in both directions: every boolean *project*
+config key has `--x` and `--no-x`, and every `_switch(g, cfg, "name", …)` names
+a documented key. It found a sixth one-way key by itself — `gc` — which turned
+out to be exempt rather than broken, because `USER_LEVEL_KEYS` govern
+machine-wide behaviour and "for this invocation" is not a thing they can mean.
+The guard forced that distinction to be stated rather than assumed.
 
 ### Presence in the work key has one visible consequence
 

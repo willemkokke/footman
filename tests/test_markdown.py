@@ -115,7 +115,7 @@ def test_globals_table_mirrors_the_grammar():
     text = markdown.globals_table()
     lines = text.splitlines()
     assert len(lines) == len(_split.GLOBALS) + 2  # header + rule + one row each
-    for (name, alias, _kind, hint, _help), line in zip(_split.GLOBALS, lines[2:]):
+    for (name, alias, _kind, hint, _d, _help), line in zip(_split.GLOBALS, lines[2:]):
         assert f"`{name}" in line
         if alias:
             assert f"`{alias}`" in line

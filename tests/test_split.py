@@ -183,18 +183,12 @@ ERROR_CASES = [
     # binds its default and `strict` is read as the next task. That is the only
     # reading available — but the line fails, so the failure carries the fix.
     ("lint --mode strict", "did you mean --mode=strict?"),
-    (
-        "--color always lint",
-        "--color takes its value attached — did you mean --color=always?",
-    ),
-    (
-        "--jobs 4 check",
-        "--jobs takes its value attached — did you mean --jobs=4?",
-    ),
-    ("-j 4 check", "-j takes its value attached — did you mean -j=4?"),
+    ("--color always lint", "did you mean --color=always?"),
+    # `--jobs` has a default, so a bare mention is legal and means it — but
+    # `4` then has nowhere to go, and the failure carries the fix.
+    ("--jobs 4 check", "did you mean --jobs=4?"),
+    ("-j 4 check", "did you mean -j=4?"),
     # Bare with nothing attachable following: state the shape instead.
-    ("--jobs check --fix", "--jobs takes its value attached"),
-    ("--jobs", "--jobs expects a value, attached: --jobs=N"),
     ("--where lint", "--where takes its value attached — did you mean --where=lint?"),
     # A value-optional global is valid bare — but a detached value behind it
     # still teaches the attachment, never "unknown task 'zsh'".

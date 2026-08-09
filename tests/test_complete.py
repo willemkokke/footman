@@ -368,7 +368,7 @@ def test_completion_globals_mirror_split():
     from footman import _complete, _shellcomp, _split
 
     names: set[str] = set()
-    for name, alias, _kind, _hint, _help in _split.GLOBALS:
+    for name, alias, _kind, _hint, _default, _help in _split.GLOBALS:
         names |= {name} | ({alias} if alias else set())
     assert names == _complete._GLOBALS
     assert _complete._GLOBAL_FILES <= _complete._GLOBALS

@@ -73,7 +73,7 @@ def globals_table(*, prog: str = "fm") -> str:
     from footman import _split
 
     rows = []
-    for name, alias, _kind, hint, help_text in _split.GLOBALS:
+    for name, alias, _kind, hint, _default, help_text in _split.GLOBALS:
         # `=`-attached, exactly as `--help` prints it: a value is always
         # attached in this grammar, so notation that shows a space teaches
         # a command line the runner refuses.
