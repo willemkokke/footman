@@ -177,8 +177,9 @@ def test_a_global_default_is_declared_beside_its_metavar():
     # reading without a value — which is the same question a task option
     # answers with `required`.
     assert _split.global_default("--color") == ("auto", False)
-    assert _split.global_default("--where") == ("", False)
-    assert _split.global_default("--directory") == ("", False)
+    # `None` where the option must be given a value at all.
+    assert _split.global_default("--where") == (None, False)
+    assert _split.global_default("--directory") == (None, False)
     # And `""` where the reading exists but has no spelling of its own.
     assert _split.global_default("--describe") == ("", False)
 
@@ -186,8 +187,9 @@ def test_a_global_default_is_declared_beside_its_metavar():
 def test_a_computed_global_default_resolves_at_the_call_not_at_import():
     from footman import _split
 
-    text, computed = _split.global_default("--jobs")
-    assert computed and text.isdigit()
+    value, computed = _split.global_default("--jobs")
+    # The raw value, not a rendering of it: this is what the *run* uses.
+    assert computed and isinstance(value, int) and value >= 2
 
 
 def test_a_computed_global_default_reports_this_machine(monkeypatch):
@@ -197,7 +199,7 @@ def test_a_computed_global_default_reports_this_machine(monkeypatch):
     # will use, not a number baked when the module was imported (or, worse,
     # when someone else's manifest was written).
     monkeypatch.setattr(_progress, "default_jobs", lambda: 99)
-    assert _split.global_default("--jobs") == ("99", True)
+    assert _split.global_default("--jobs") == (99, True)
 
 
 def test_a_global_with_a_default_may_be_named_bare(tree):

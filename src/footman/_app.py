@@ -75,7 +75,9 @@ def _resolve_color(g: dict[str, object], cfg: dict[str, object] | None = None) -
     forced = os.environ.get("FORCE_COLOR")
     if forced not in (None, "", "0"):
         return "always"
-    return "auto"
+    # The grammar table's declared default, so `--help` and this ladder cannot
+    # name different modes.
+    return str(_split.global_default("--color")[0])
 
 
 def _set_colors(mode: str) -> None:
@@ -538,7 +540,7 @@ def _print_global_help(tree: dict[str, Any], show_hidden: bool = False) -> None:
         # nothing. Computed defaults resolve here, so `--jobs` reports this
         # machine's width rather than a number from the author's.
         shown, computed = _split.global_default(name)
-        if shown:
+        if shown:  # `None` (must be given) and `""` (no spelling) both stay quiet
             detail += f"; default: {shown}{' (computed)' if computed else ''}"
         rows.append((label, detail))
     width = max(len(label) for label, _ in rows)
@@ -1753,8 +1755,10 @@ def _run_tree(
     g = _globals_to_dict(_split._parse_globals(argv, 0, lenient=True)[0])
     json_mode = bool(g.get("json"))
 
+    # `""` is a bare `--color`, which names the default rather than a mode, so
+    # it has nothing here to be wrong about.
     cli_color = g.get("color")
-    if isinstance(cli_color, str) and cli_color not in _COLOR_MODES:
+    if isinstance(cli_color, str) and cli_color and cli_color not in _COLOR_MODES:
         return _refuse(
             json_mode,
             f"--color expects one of {'|'.join(_COLOR_MODES)} (got {cli_color!r})",
@@ -1860,7 +1864,9 @@ def _run_tree(
     # cores-minus-one default. Caps both engines (the scheduler's pool and
     # parallel() in task bodies) and is part of the timing key — a -j2 run
     # has a genuinely different duration distribution.
-    if g.get("jobs") is not None:
+    # `g["jobs"]` is `""` for a bare `--jobs`, which asks for the default out
+    # loud — so it falls through here rather than being parsed as a width.
+    if g.get("jobs"):
         try:
             jobs = int(str(g["jobs"]))
         except ValueError:
@@ -1877,7 +1883,10 @@ def _run_tree(
     ):
         jobs = cfg_jobs
     else:
-        jobs = _progress.default_jobs()
+        # The grammar table's own default, not a second call to the same
+        # function: what `--help` prints and what the run uses are one value,
+        # so they cannot drift into describing different runs.
+        jobs = int(_split.global_default("--jobs")[0])
 
     fetch_cfg = cfg.get("fetch")
     backend = fetch_cfg.get("backend") if isinstance(fetch_cfg, dict) else None
