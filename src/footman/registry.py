@@ -1261,10 +1261,20 @@ class TaskDecorator(Protocol):
 
 
 class GroupFactory(Protocol):
-    """The static shape of the module-level `group` factory (`Group.group`)."""
+    """The static shape of the module-level `group` factory (`Group.group`).
+
+    Every parameter `Group.group` takes belongs here, or the module-level
+    spelling type-checks differently from the method one — which is exactly
+    what a "static shape of" protocol exists to prevent.
+    `test_group_factory_matches_group_group` holds the two together.
+    """
 
     def __call__(
-        self, name: str, help: str = "", hidden: bool | None = None
+        self,
+        name: str,
+        help: str = "",
+        hidden: bool | None = None,
+        needs_project: bool | None = None,
     ) -> Group: ...
 
 

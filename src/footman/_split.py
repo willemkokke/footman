@@ -1079,6 +1079,10 @@ def _resolve_head(
     # wins — every child keeps its dotted spelling), otherwise it opens a
     # fresh head on the next pass.
     if "default" in node:
+        if node["default"].get("needs_project"):
+            # The bare spelling of a task that needs one — refused for the
+            # same reason and in the same words as `fm lint.default`.
+            raise ChainError(_needs_project(".".join(path)))
         return node["default"], path, node, i + 1
 
     # A namespace group is never a segment target. Before refusing, look

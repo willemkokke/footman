@@ -7,6 +7,24 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A runnable group's bare name honours `needs_project`.** `fm lint` and
+  `fm lint.default` are one action with two spellings, and outside a project
+  they answered opposite ways — the explicit one refused while the bare one
+  ran, printing the very fiction the marker exists to end. Sealing was never
+  at fault: the default *task* was marked correctly, but the group node had
+  no answer for the listing, completion and dispatch paths to read. The
+  group now takes its answer from its default, stamped once where `hidden`
+  already resolves the same way. Derived, not inherited — a sibling keeps
+  its own answer, so `lint.version` stays reachable when `fm lint` is not.
+- **`group(…, needs_project=…)` type-checks at the module level.**
+  `GroupFactory.__call__` is documented as "the static shape of
+  `Group.group`" and had not gained the parameter, so the module-level
+  spelling failed type checking while the method form passed. Runtime was
+  unaffected; typed consumers were blocked. A signature census now holds
+  the two together.
+
 ## [0.39.0] — 2026-08-10
 
 ### Added
