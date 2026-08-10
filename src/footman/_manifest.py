@@ -1012,12 +1012,24 @@ def _node(
     # specs, and fan-out is a property of this default, not of the function)
     # so listings can *say* what an undocumented default does.
     if g.default_task is not None:
-        node["default"] = _hide(
-            _task_node(g.default_task, memo, bake=bake),
-            registry.declared_hidden(g.default_task),
-            mine,
+        node["default"] = _scoped(
+            _hide(
+                _task_node(g.default_task, memo, bake=bake),
+                registry.declared_hidden(g.default_task),
+                mine,
+            ),
+            g.default_task,
+            here,
+            project,
         )
         node["default_fanout"] = registry.fans_out(g.default_task)
+        # The bare group name IS this action's other spelling, so the group
+        # answers whatever its default answers — stamped here, once, rather
+        # than taught to each of the listing, completion and dispatch paths.
+        # `hidden` already resolves this way a few lines up; this is the same
+        # rule, and without it `fm lint` ran while `fm lint.default` refused.
+        if node["default"].get("needs_project"):
+            node["needs_project"] = True
     return node
 
 
