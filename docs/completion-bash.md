@@ -1,13 +1,17 @@
 # Completion on bash
 
-This is a recording of a real bash session — the completion hook loaded the way the
-next section describes, <kbd>Tab</kbd> <kbd>Tab</kbd> listing the
-candidates (bash's default reveals the list on the second press; one
-press completes as far as the match reaches), a prefix completing.
-Regenerated from a live shell on every docs build, so it cannot drift
-from what your terminal will do:
+This is a recording of a real bash session — the completion hook loaded
+the way the next section describes, then four <kbd>Tab</kbd> presses: the task menu, a prefix completed, a
+task's options with what each one does, and a group descended by its
+dotted address. Every shell's page records the *same* session, so the
+pages differ only where the shells do. Regenerated from a live shell on
+every docs build, so it cannot drift from what your terminal will do:
 
-![Animated: fm TAB TAB lists the tasks in bash, che TAB completes to check](_generated/shots/bash-cast.svg)
+bash's default reveals the candidate list on the *second* press (one
+press completes as far as the match reaches), which is why the
+recording presses twice where the others press once.
+
+![Animated: fm TAB TAB lists every task, bui TAB completes to build, --TAB TAB lists its options, and deploy. TAB descends the group](_generated/shots/bash-cast.svg)
 
 bash's list is names only — readline has no description column, so the
 one-line docstrings that zsh, fish, PowerShell, and nushell render next

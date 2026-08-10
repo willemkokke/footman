@@ -267,6 +267,20 @@ _KEY_TOKENS = {
     "<SPACE>": b" ",
     "<BACKSPACE>": b"\x7f",
     "<CTRL-C>": b"\x03",
+    # PSReadLine's menu swallows Ctrl-C while it is open — the line survives
+    # and the next keystrokes land *inside* it (`fm build -- fm deploy.` ran
+    # together in one recording). Escape dismisses the menu first, so the
+    # cancel that follows reaches the line.
+    "<ESC>": b"\x1b",
+    # Arrows, so a cast can *walk* a completion menu rather than only open
+    # one. PowerShell's MenuComplete grid, nushell's menu and fish's pager
+    # are all navigable by default, and a still frame of a menu says much
+    # less than a selection moving through it. The CSI sequences a terminal
+    # sends, which is what the pty is being handed.
+    "<UP>": b"\x1b[A",
+    "<DOWN>": b"\x1b[B",
+    "<RIGHT>": b"\x1b[C",
+    "<LEFT>": b"\x1b[D",
 }
 
 
@@ -283,9 +297,10 @@ def keystrokes(script: tuple[str, ...]) -> list[tuple[float, bytes]]:
 
     Each script argument is either literal text — typed one character at a
     time at a human-ish cadence — or a token: `<TAB>`, `<ENTER>`, `<SPACE>`,
-    `<BACKSPACE>`, `<CTRL-C>`, `<WAIT>` (pause 0.8 s), `<WAIT:ms>`, or
-    `<SETTLE>` (wait until output stops changing — timing-independent, for a
-    prompt whose render time you can't predict).
+    `<BACKSPACE>`, `<CTRL-C>`, the arrows `<UP>`/`<DOWN>`/`<LEFT>`/`<RIGHT>`
+    (for walking a shell's completion menu), `<WAIT>` (pause 0.8 s),
+    `<WAIT:ms>`, or `<SETTLE>` (wait until output stops changing —
+    timing-independent, for a prompt whose render time you can't predict).
     """
     sends: list[tuple[float, bytes]] = []
     for part in script:

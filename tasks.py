@@ -225,6 +225,63 @@ def _scaffold_suggest_demo() -> str:
     return str(demo)
 
 
+def _scaffold_completion_demo() -> str:
+    """The project every completion cast is recorded against.
+
+    One small CLI, so the five recordings differ only in *shell behaviour* —
+    which is the whole reason to show five. Recording against footman's own
+    tasks.py meant the casts drifted whenever the gate did, and the tasks a
+    reader saw were ones only this repo has.
+
+    It carries what the casts need to show: documented options (a
+    description column has to have something to put in it), a nested group
+    (dotted addressing), and a `Literal` (value completion).
+    """
+    import tempfile
+    from pathlib import Path
+
+    demo = Path(tempfile.gettempdir()) / "footman-completion-demo"
+    demo.mkdir(parents=True, exist_ok=True)
+    (demo / "pyproject.toml").write_text("[project]\nname = 'demo'\n", encoding="utf-8")
+    (demo / "tasks.py").write_text(
+        "from typing import Literal\n"
+        "from footman import group, task\n\n"
+        "@task\n"
+        "def build(release: bool = False, jobs: int = 4):\n"
+        '    """Compile and bundle.\n\n'
+        "    Args:\n"
+        "        release: optimise and strip symbols\n"
+        "        jobs: parallel compile jobs\n"
+        '    """\n\n'
+        "@task\n"
+        "def test(watch: bool = False, marker: str = ''):\n"
+        '    """Run the test suite.\n\n'
+        "    Args:\n"
+        "        watch: re-run on every file change\n"
+        "        marker: only tests carrying this marker\n"
+        '    """\n\n'
+        "@task\n"
+        "def lint(fix: bool = False):\n"
+        '    """Check style and types.\n\n'
+        "    Args:\n"
+        "        fix: apply safe fixes in place\n"
+        '    """\n\n'
+        'deploy = group("deploy", help="Ship it somewhere")\n\n'
+        "@deploy.task\n"
+        "def staging():\n"
+        '    "Deploy to staging."\n\n'
+        "@deploy.task\n"
+        "def prod(region: Literal['eu', 'us', 'ap'] = 'eu'):\n"
+        '    """Deploy to production.\n\n'
+        "    Args:\n"
+        "        region: which region to ship to\n"
+        '    """\n',
+        encoding="utf-8",
+    )
+    run("fm --list", cwd=str(demo), capture=True)  # warm the manifest TAB serves
+    return str(demo)
+
+
 def _scaffold_interactive_demo() -> str:
     """A scratch project with one task per interactive shape — an `ask()`
     parameter, a `confirm=` gate, and an `interactive=True` wizard — so
@@ -725,44 +782,59 @@ def docs_build(check: bool = False):  # pragma: no cover — see below
     taskdocs_shots("--tree", out=shot / "tree.svg", width=100)
     taskdocs_shots("--help", out=shot / "help.svg", width=100)
     taskdocs_shots("format", "lint", out=shot / "run.svg", width=72)
-    # The animated one: a real zsh session — TAB menu, prefix-complete,
-    # then `fm check` actually running. Same regeneration rule: the docs
+    # The animated ones: five real shells, one script, one demo project, so
+    # the recordings differ only in shell behaviour — which is the entire
+    # reason to show five. Same regeneration rule as the stills: the docs
     # play what the CLI does, because they are recordings of it doing it.
     from footman.tasks.docs import cast as taskdocs_cast
 
-    taskdocs_cast(
-        "fm ",
-        "<TAB>",
-        "<WAIT>",
-        "che",
-        "<TAB>",
-        "<WAIT:600>",
-        "<ENTER>",
-        "<WAIT:2500>",
-        out=shot / "zsh-cast.svg",
-        shell="zsh",
-        width=80,
-        height=16,
-    )
-    # The other four shells: menu, then prefix-complete. Each shell's own
-    # real menu — fish's pager, PSReadLine's MenuComplete grid, nushell's
-    # completion menu, bash's candidate list. Vanilla bash reveals the
-    # list on the *second* TAB (the first just rings the bell), and the
-    # recording shows default behaviour, not a tuned readline.
-    for sh in ("bash", "fish", "pwsh", "nushell"):
-        first_tab = ("<TAB>", "<TAB>") if sh == "bash" else ("<TAB>",)
+    demo = Path(_scaffold_completion_demo())
+    for sh in ("zsh", "bash", "fish", "pwsh", "nushell"):
+        # Two per-shell adjustments, both about *default* behaviour rather
+        # than a tuned config nobody reading this has:
+        #
+        # Vanilla bash reveals the candidate list on the SECOND Tab — the
+        # first only rings the bell — so it presses twice everywhere the
+        # script means "show me".
+        tab = ("<TAB>", "<TAB>") if sh == "bash" else ("<TAB>",)
+        # PSReadLine's menu swallows Ctrl-C while it is open, so the line
+        # survived and the next keystrokes landed inside it — one recording
+        # ended on `fm build -- fm deploy.release`. Escape closes the menu
+        # first, and then the cancel reaches the line.
+        clear = ("<ESC>", "<CTRL-C>") if sh == "pwsh" else ("<CTRL-C>",)
+        out = shot / f"{sh}-cast.svg"
         taskdocs_cast(
+            # Every task, each with its summary.
             "fm ",
-            *first_tab,
+            *tab,
             "<WAIT>",
-            "che",
+            # Prefix-complete to one of them.
+            "bui",
             "<TAB>",
-            "<WAIT:800>",
-            out=shot / f"{sh}-cast.svg",
+            "<WAIT:600>",
+            # Its options — and what each one does.
+            " --",
+            *tab,
+            "<WAIT>",
+            # Descend a group by its dotted address.
+            *clear,
+            "fm deploy.",
+            *tab,
+            "<WAIT>",
+            out=out,
             shell=sh,
             width=80,
-            height=16,
+            height=18,
+            cwd=demo,
         )
+        # A cast whose keystrokes raced the shell still renders a valid SVG,
+        # just a mute one. Pin the beats every shell can show; descriptions
+        # are checked only where the shell has a column for them (bash has
+        # none, pwsh puts them in a tooltip).
+        beats = ["build", "deploy", "--release", "--jobs", "deploy.staging"]
+        if sh in ("zsh", "fish", "nushell"):
+            beats += ["Compileandbundle", "optimiseandstripsymbols"]
+        _assert_cast_captured(out, beats)
     # Dynamic completion, recorded against typing.md's own example (the
     # demo project's tasks.py is extracted from the page): TAB offers the
     # values a plain function returned, and TAB again walks the menu.

@@ -140,13 +140,22 @@ fm format lint --fix <TAB>         # completes within the chain
 Group names, task names, flags, options, and both static and
 [dynamic](typing.md#dynamic-completion) value sets all complete. Where a shell
 can show them — zsh, fish, and nushell render a description column, pwsh a
-tooltip — task and group names carry their one-line docstring, so holding
+tooltip — **every word footman offers carries its own line**, so holding
 <kbd>Tab</kbd> teaches the whole CLI:
 
 ```text
-build   — compile and bundle
-deploy  — ship to an environment
+build      — compile and bundle
+deploy     — ship to an environment
+--fix      — apply safe fixes in place
+--jobs     — max parallel tasks
+--env-file — the .env file to load
 ```
+
+A task or group name shows its one-line docstring, an option shows its
+[`doc("…")`](typing.md) line (or the `Args:` entry it came from), a global
+shows what `--help` says about it, and a plugin's global shows the `help=`
+it declared. Nothing is written twice for the sake of completion: the words
+are the ones already on the page.
 
 ## File paths
 

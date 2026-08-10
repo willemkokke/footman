@@ -335,17 +335,18 @@ def test_leading_flag_global_then_task(tree):
 
 
 def test_root_flag_partial_offers_globals(tree):
-    # A flag-shaped partial at the root offers fm's own globals.
-    dd = complete(tree, ["--"])
+    # A flag-shaped partial at the root offers fm's own globals — each with
+    # its own line beside it now, so `_names` is what asks about the names.
+    dd = _names(complete(tree, ["--"]))
     assert {"--help", "--list", "--install-completion", "--config"} <= set(dd)
-    assert complete(tree, ["--inst"]) == ["--install-completion"]
+    assert _names(complete(tree, ["--inst"])) == ["--install-completion"]
     # A single dash reaches the short aliases too.
-    assert {"-C", "-h", "-s"} <= set(complete(tree, ["-"]))
+    assert {"-C", "-h", "-s"} <= set(_names(complete(tree, ["-"])))
 
 
 def test_root_globals_offered_after_a_leading_global(tree):
     # `fm -s --<TAB>` — -s is consumed, more globals are still on offer.
-    assert "--json" in complete(tree, ["-s", "--"])
+    assert "--json" in _names(complete(tree, ["-s", "--"]))
 
 
 def test_bare_tab_omits_globals(tree):
@@ -358,8 +359,8 @@ def test_bare_tab_omits_globals(tree):
 def test_globals_not_offered_past_a_group_or_task(tree):
     # Globals bind before the first task; a flag partial inside a group or after
     # a task is not a global position.
-    assert "--help" not in complete(tree, ["docs", "--"])
-    assert "--help" not in complete(tree, ["lint", "--"])
+    assert "--help" not in _names(complete(tree, ["docs", "--"]))
+    assert "--help" not in _names(complete(tree, ["lint", "--"]))
 
 
 def test_completion_globals_mirror_split():
@@ -1103,3 +1104,129 @@ def test_complete_cli_exits_csv_files_mid_list(tmp_path, capsys):
     rc = complete_cli(["--manifest", str(m), "--", "lint", "--paths=a,"])
     assert rc == _EXIT_FILES_CSV
     assert capsys.readouterr().out == ""
+
+
+# --- every offered word says what it does ------------------------------------
+#
+# zsh and fish render `value\tdescription` into a right-aligned column and
+# honour the user's own list-colors. Three emitters used to drop text footman
+# already had, so a Tab on a flag listed names and nothing else.
+
+
+def _described(offered: list[str]) -> dict[str, str]:
+    """`{candidate: description}` — the wire format, unpacked."""
+    pairs: list[tuple[str, str]] = []
+    for line in offered:
+        name, _, summary = line.partition("\t")
+        pairs.append((name, summary))
+    return dict(pairs)
+
+
+def _declared(flag: str) -> str:
+    """What `CORE_OPTIONS` says about *flag* — the source, not the copy."""
+    from footman import _split
+
+    return next(h for n, _a, _k, _hi, _d, h in _split.GLOBALS if n == flag)
+
+
+def test_a_core_globals_words_ride_in_the_manifest():
+    """`_complete` may not import `_split`, so it knows the core flags by name
+    and nothing else. Mirroring thirty-five help strings there as well would
+    duplicate the one thing that rots; the words travel in the manifest the
+    hot path already reads, written from the table that declares them."""
+    reg = registry.Group("root")
+
+    @reg.task
+    def build(): ...
+
+    tree = _manifest.build_manifest(reg)["tree"]
+    offered = _described(complete(tree, ["--jo"]))
+    assert offered["--jobs"], "a core global arrived with no description"
+    assert offered["--jobs"] == _declared("--jobs")
+
+
+def test_an_alias_carries_its_long_forms_words():
+    # `-j` and `--jobs` are one option. A column that says what it does beats
+    # one that says it has two spellings.
+    reg = registry.Group("root")
+
+    @reg.task
+    def build(): ...
+
+    tree = _manifest.build_manifest(reg)["tree"]
+    assert _described(complete(tree, ["-j"]))["-j"] == _declared("--jobs")
+
+
+def test_prog_is_substituted_before_it_reaches_a_shell():
+    # `--help`'s line is written with a `{prog}` placeholder for the brand to
+    # fill. Unsubstituted, a Tab would offer "help for {prog}" in braces.
+    reg = registry.Group("root")
+
+    @reg.task
+    def build(): ...
+
+    tree = _manifest.build_manifest(reg)["tree"]
+    described = _described(complete(tree, ["--h"]))["--help"]
+    assert "{prog}" not in described
+    assert "help for fm" in described
+
+
+def test_a_plugin_global_offers_the_help_it_declared():
+    """The manifest has carried this text all along — `_global_spec` writes
+    `spec["help"]` — and the emitter dropped it on the floor."""
+    from footman import compose
+
+    reg = registry.Group("root")
+    with registry.capture() as captured:
+        compose.plugin("footman.env_files", into=captured)
+    for opt in captured.contributions["globals"]:
+        reg.contributions["globals"].append(opt)
+
+    @reg.task
+    def build(): ...
+
+    tree = _manifest.build_manifest(reg)["tree"]
+    assert _described(complete(tree, ["--env"]))["--env-file"] == (
+        "the .env file to load"
+    )
+
+
+def test_the_off_spelling_says_what_it_turns_off():
+    """A bool global answers to `--no-x` too, and the splitter accepts it — so
+    completion offers it. One option read from the other end, so it carries
+    the same line rather than none."""
+    from footman import GlobalOption
+
+    reg = registry.Group("root")
+    with registry.capture() as captured:
+        GlobalOption("telemetry", bool, default=True, help="send usage pings")
+    for opt in captured.contributions["globals"]:
+        reg.contributions["globals"].append(opt)
+
+    @reg.task
+    def build(): ...
+
+    tree = _manifest.build_manifest(reg)["tree"]
+    assert _described(complete(tree, ["--no-tele"]))["--no-telemetry"] == (
+        "send usage pings"
+    )
+
+
+def test_a_runnable_groups_default_options_are_described_too():
+    """The same parameters, reached through the group instead of the task —
+    `fm ci --<Tab>` was the one option position still answering bare."""
+    reg = registry.Group("root")
+    ci = reg.group("ci")
+
+    @ci.default
+    def run_all(strict: bool = False):
+        """Run the whole suite.
+
+        Args:
+            strict: fail on the first warning
+        """
+
+    tree = _manifest.build_manifest(reg)["tree"]
+    assert _described(complete(tree, ["ci", "-"])) == {
+        "--strict": "fail on the first warning"
+    }
