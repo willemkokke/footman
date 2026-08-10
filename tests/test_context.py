@@ -223,6 +223,79 @@ def test_run_color_merges_on_top_of_an_explicit_env():
     assert "FC=1 NC=None" in results[0].steps[0].stdout
 
 
+def test_a_steps_color_reaches_everything_the_body_calls(monkeypatch):
+    # The whole point of putting colour on a step rather than on each call:
+    # one decision, at the boundary of a body, that every run() inside it and
+    # every tool it hosts reads — without threading a keyword through each.
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    monkeypatch.delenv("FORCE_COLOR", raising=False)
+
+    def tasks(reg):
+        @step
+        def build():
+            first = run([sys.executable, "-c", _READ_ENV])
+            second = tools.python("-c", _READ_ENV)
+            print(first.stdout.strip(), "|", second.stdout.strip())
+
+        @reg.task
+        def outer():
+            build.opts(color="always")()()  # build the item, then run it
+
+    _, _, results = drive(tasks, "outer")  # a monochrome run, forced step
+    # The two children the body spawned — the plain run() and the hosted
+    # tool — neither of them told about colour by its own call site. (The
+    # step's own record holds the body's print, which quotes both.)
+    children = [s.stdout.strip() for s in results[0].steps if "|" not in s.stdout]
+    assert children == ["FC=1 NC=None", "FC=1 NC=None"], results[0].steps
+    assert "NC=1" not in "".join(s.stdout for s in results[0].steps)
+
+
+def test_a_steps_color_is_the_same_tri_state_run_takes(monkeypatch):
+    monkeypatch.setenv("FORCE_COLOR", "1")
+
+    def tasks(reg):
+        @step
+        def probe():
+            print(run([sys.executable, "-c", _READ_ENV]).stdout.strip())
+
+        @reg.task
+        def never():
+            probe.opts(color="never")()()
+
+        @reg.task
+        def auto():
+            probe.opts(color="auto")()()
+
+    _, _, results = drive(tasks, "never")
+    assert "FC=None NC=1" in results[0].steps[0].stdout
+    _, _, results = drive(tasks, "auto", force_color=True)
+    assert "FC=1 NC=None" in results[0].steps[0].stdout
+
+
+def test_a_steps_color_merges_on_top_of_its_env():
+    # Same composition rule as run(): env= replaces wholesale, color= then
+    # paints that replacement, so neither silently wins outright.
+    def tasks(reg):
+        @step
+        def probe():
+            print(run([sys.executable, "-c", _READ_ENV]).stdout.strip())
+
+        @reg.task
+        def outer():
+            probe.opts(env={"NO_COLOR": "1"}, color="always")()()
+
+    _, _, results = drive(tasks, "outer")
+    assert "FC=1 NC=None" in results[0].steps[0].stdout
+
+
+def test_a_bad_step_color_is_refused_like_a_bad_run_color():
+    @step
+    def probe(): ...
+
+    with pytest.raises(ValueError, match=r"expects one of auto\|never\|always"):
+        probe.opts(color="yes")
+
+
 def test_run_color_reaches_the_in_process_lane(monkeypatch):
     # toolroom's hosted in-process lane rides the same door: the overlay the
     # callable reads through os.environ carries the per-call decision.

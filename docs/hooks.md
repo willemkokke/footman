@@ -391,7 +391,23 @@ someone asked for one — named or bare — while a missing default nobody
 mentioned is simply nothing to do. Values are read by
 python-dotenv — an optional dependency the plugin imports lazily and teaches
 by name when absent — with interpolation off: a value is the text on its
-line. Unmounted, none of this exists, not even the option.
+line. Unmounted, none of this exists, not even the option — but typing
+`--env-file` anyway is answered by name rather than as a spelling mistake:
+
+```console
+$ fm --env-file=.env build
+fm: --env-file comes from footman.env_files, which this project has not
+mounted — add plugin("footman.env_files") to tasks.py
+```
+
+footman finds that answer by loading the plugins **its own distribution
+ships** and reading what globals they declare — nothing lists the flags, so
+a new first-party option is taught the day it ships. A
+[branded CLI](custom-cli.md) gets the same treatment for the plugins *its*
+distribution provides, as soon as it names one with `dist=`. It stops at the
+package boundary: a third-party plugin's flag keeps the plain "unknown
+global option", because reaching it would mean importing, on a typo, code
+the project deliberately did not mount.
 
 ## The caching contract, stated once
 

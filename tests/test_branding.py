@@ -756,3 +756,38 @@ def test_child_argv_carries_the_resolved_locations(tmp_path):
         assert _paths.footman_cache_dir() == _paths.cache_home() / "footman"
     finally:
         _paths.configure_child(*before)
+
+
+def test_a_brand_teaches_the_plugins_its_own_distribution_ships(tmp_path):
+    """A distribution ships several plugins; a tasks file mounts some of
+    them. A flag from one of the others must not read as a spelling
+    mistake — for a branded CLI exactly as for footman's own, since the
+    answer is scanned from whatever `dist` names rather than listed."""
+    from footman import _split
+
+    (tmp_path / "tasks.py").write_text(
+        "from footman import task\n\n@task\ndef go(): ...\n"
+    )
+    _split._OWN_FLAGS.clear()
+    acme = Runner(App(name="Acme", prog="acme", version="1.4.0", dist="footman"))
+    result = acme.invoke("--env-file=.env go", cwd=tmp_path)
+    assert result.exit_code == EX_USAGE
+    assert "--env-file comes from footman.env_files" in result.stderr
+    assert 'add plugin("footman.env_files")' in result.stderr
+
+
+def test_a_brand_whose_distribution_ships_no_plugins_teaches_nothing(tmp_path):
+    """`dist` is the permission slip, and it only ever unlocks the brand's
+    OWN package: a third party's flag keeps the plain answer, because
+    teaching it would mean importing, on a typo, code this project
+    deliberately did not mount."""
+    from footman import _split
+
+    (tmp_path / "tasks.py").write_text(
+        "from footman import task\n\n@task\ndef go(): ...\n"
+    )
+    _split._OWN_FLAGS.clear()
+    acme = Runner(App(name="Acme", prog="acme", version="1.4.0", dist="acme-cli"))
+    result = acme.invoke("--env-file=.env go", cwd=tmp_path)
+    assert result.exit_code == EX_USAGE
+    assert "unknown global option --env-file" in result.stderr

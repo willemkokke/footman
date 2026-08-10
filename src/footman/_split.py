@@ -123,7 +123,7 @@ def _unknown_global(
                 f"{name} combines short options, which footman does not read "
                 f"— write them apart: {spelled}"
             )
-    if provider := _FROM_PLUGIN.get(name):
+    if provider := _own_plugin_flags().get(name):
         # Not unknown — unmounted. The generic sentence sends someone hunting
         # for a spelling mistake in a flag they spelled correctly.
         return (
@@ -469,15 +469,67 @@ _GLOBAL_HINT = {name: hint for name, _, _, hint, _, _ in GLOBALS if hint}
 _GLOBAL_DEFAULT = {name: d for name, _, _, _, d, _ in GLOBALS if d is not None}
 _VALUE_OPTIONAL = frozenset(_GLOBAL_DEFAULT)
 
-# Flags that are not globals but *would* be, had their provider been mounted.
-# Consulted only when a refusal is already certain, so this stays a table of
-# strings rather than an import: naming a plugin here must never load it.
-# `test_split.py` mounts each one and checks it still declares the flag, so
-# the table cannot quietly go stale.
-_FROM_PLUGIN = {
-    "--env-file": "footman.env_files",
-    "--profile": "footman.profile",
-}
+# Flag -> entry point, for globals that *would* exist had their provider been
+# mounted. Memoised per distribution, and never touched on a path that is not
+# already refusing (see `_own_plugin_flags`).
+_OWN_FLAGS: dict[str, dict[str, str]] = {}
+
+
+def _own_plugin_flags() -> dict[str, str]:
+    """Every global option the running brand's **own** distribution ships,
+    as flag -> entry-point name, whether or not this project mounted it.
+
+    An entry point cannot advertise its options: the packaging spec is
+    strictly `name = "module:attr"`, and a `GlobalOption` registers itself
+    by being *constructed*, which happens when its module is imported. So
+    the only way to learn an unmounted plugin's flags is to import it —
+    which footman will do for the distribution that ships the CLI itself,
+    and for no other. A typo must never run code a project deliberately
+    left unmounted, and a brand vouches for what it packages.
+
+    That covers the case this exists for: a distribution ships several
+    plugins, a tasks file mounts some of them, and a flag from one of the
+    others reads as a spelling mistake. It is beyond reach for third-party
+    plugins, which keep the plain "unknown global option" answer.
+
+    Called only once a refusal is certain, so the imports never touch a
+    successful run; memoised per distribution, so a process pays once. Every
+    failure — no `dist` on the brand, an entry point that will not import —
+    is simply a flag this cannot teach.
+    """
+    from footman import _app
+
+    dist = _app._brand.dist
+    if not dist:
+        return {}  # a custom brand that never named its package
+    if (cached := _OWN_FLAGS.get(dist)) is not None:
+        return cached
+    found: dict[str, str] = {}
+    try:
+        from importlib.metadata import entry_points
+
+        from footman import compose
+
+        for ep in entry_points(group=compose.ENTRY_POINT_GROUP):
+            meta = getattr(ep.dist, "metadata", None)
+            if not meta or meta.get("Name", "") != dist:
+                continue
+            try:
+                # The SAME door mounting uses, not a raw `ep.load()`. A module
+                # imports once per process, so whoever calls `load()` first
+                # gets the only capture in which its declarations fire —
+                # `_load_entry_point` memoises that tree for everyone after.
+                # Scanning around it would spend a plugin's one import on an
+                # error message and leave the real mount with nothing.
+                tree = compose._load_entry_point(ep.name)
+            except Exception:
+                continue  # a plugin that will not load teaches nothing
+            for opt in tree.contributions["globals"]:
+                found.setdefault("--" + opt.name, ep.name)
+    except Exception:
+        found = {}
+    _OWN_FLAGS[dist] = found
+    return found
 
 
 def global_default(name: str) -> tuple[Any, bool]:

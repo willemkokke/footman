@@ -164,8 +164,14 @@ without counting anything. Hand it to `parallel(clean(), archive("dist"))`
 built item to run it right here. Either way it earns a full record — a
 receipt with a real duration, captured output, a place in `--json` — and
 the maker carries the step's policy: `.opts(timeout=…, capture=…,
-recorded=…, title=…, pre_record=…)` per use, `@clean.pre_record` for its
-reviewer and `@clean.post_step` to watch its sealed record, permanently.
+recorded=…, title=…, env=…, color=…, pre_record=…)` per use,
+`@clean.pre_record` for its reviewer and `@clean.post_step` to watch its
+sealed record, permanently.
+
+`color=` is the same `auto|never|always` [`run()`](tools.md) takes, applied
+to the environment the whole step body runs under — so every command it
+spawns and every in-process tool it calls reads one decision, without
+threading a keyword through each of them.
 
 A step can also be a generator, which buys two things with one keyword:
 

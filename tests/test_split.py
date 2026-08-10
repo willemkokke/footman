@@ -374,16 +374,81 @@ def test_an_unmounted_plugin_flag_teaches_its_mount(tree):
         split_chain(tree, ["--profile", "check"])
 
 
-def test_the_plugin_flag_table_cannot_go_stale():
-    """`_FROM_PLUGIN` names providers as strings so a refusal never imports
-    one. Mount each and check the flag it promises is really declared."""
+def test_the_scan_finds_every_flag_the_brands_own_distribution_ships():
+    """Discovered, not listed: nothing names `--env-file` or `--profile`
+    anywhere in footman's source but the plugins that declare them, so a
+    new first-party global is taught the day it ships."""
+    from footman import _split
+
+    _split._OWN_FLAGS.clear()
+    found = _split._own_plugin_flags()
+    assert found["--env-file"] == "footman.env_files"
+    assert found["--profile"] == "footman.profile"
+
+
+def test_the_scan_answers_the_same_once_the_modules_are_imported():
+    """A module imports once per process, so its declarations fire in exactly
+    one capture — whoever called `load()` first. The scan goes through
+    `_load_entry_point`, which memoises that tree, so the answer does not
+    depend on who got there first."""
+    import footman.env_files
+    import footman.profile
+    from footman import _split
+
+    assert footman.env_files and footman.profile  # imported, on purpose
+
+    _split._OWN_FLAGS.clear()
+    assert _split._own_plugin_flags()["--env-file"] == "footman.env_files"
+
+
+def test_scanning_does_not_spend_the_import_a_real_mount_needs():
+    """The scan must not cost a plugin its one import. Going around
+    `_load_entry_point` with a raw `ep.load()` did exactly that: the module
+    body ran inside the scan's own capture, nothing was memoised, and the
+    mount that came afterwards landed a plugin with no options at all —
+    four `test_env_files` failures that only appeared when the scan happened
+    to run first in a worker."""
     from footman import _split, compose, registry
 
-    for flag, provider in _split._FROM_PLUGIN.items():
-        with registry.capture() as captured:
-            compose.plugin(provider, into=captured)
-        declared = {"--" + g.name for g in captured.contributions["globals"]}
-        assert flag in declared, f"{provider} no longer declares {flag}"
+    _split._OWN_FLAGS.clear()
+    assert "--env-file" in _split._own_plugin_flags()
+
+    # A GlobalOption registers where the mount's capture can see it, which is
+    # the thing a spent import silently takes away.
+    with registry.capture() as captured:
+        compose.plugin("footman.env_files", into=captured)
+    assert [g.name for g in captured.contributions["globals"]] == ["env-file"]
+
+
+def test_a_brand_that_names_no_distribution_scans_nothing(monkeypatch):
+    """`dist` is the permission slip. Without one there is no package footman
+    may vouch for, so it imports nothing and teaches nothing — rather than
+    guessing at some other distribution's plugins."""
+    import dataclasses
+
+    from footman import _app, _split
+
+    monkeypatch.setattr(_app, "_brand", dataclasses.replace(_app._brand, dist=None))
+    _split._OWN_FLAGS.clear()
+    assert _split._own_plugin_flags() == {}
+    with pytest.raises(ChainError, match=r"unknown global option --env-file"):
+        split_chain(
+            _manifest.build_manifest(Group("root"))["tree"], ["--env-file=.env"]
+        )
+
+
+def test_a_third_partys_flag_stays_plainly_unknown(monkeypatch):
+    """The line footman will not cross: teaching a flag it does not ship
+    would mean importing, on a typo, code the project chose not to mount."""
+    import dataclasses
+
+    from footman import _app, _split
+
+    monkeypatch.setattr(
+        _app, "_brand", dataclasses.replace(_app._brand, dist="some-other-package")
+    )
+    _split._OWN_FLAGS.clear()
+    assert _split._own_plugin_flags() == {}
 
 
 def test_one_word_too_many_reads_as_arity_not_a_bad_address(tree):

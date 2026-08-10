@@ -7,6 +7,30 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- **`step(...).opts(color=…)`** — the same `auto|never|always` `run()` takes,
+  applied to the environment the whole step body runs under. One decision at
+  the boundary of a body, read by every command it spawns and every
+  in-process tool it hosts, instead of the same keyword threaded through each
+  call. It composes with `env=` the way `run()` does: `env=` replaces
+  wholesale, `color=` then paints that replacement.
+
+### Changed
+
+- **An unmounted plugin's flag is now discovered, not listed.** 0.38.1 taught
+  `--env-file` and `--profile` from a hardcoded table of two. footman now
+  loads the plugins **its own distribution ships** and reads what globals
+  they declare, so a new first-party option is taught the day it ships and
+  nothing can go stale. A branded CLI gets the same
+  feature for the plugins its own distribution provides, as soon as it names
+  one with `dist=` — the case this is really for, since a distribution can
+  ship several plugins and a tasks file may mount only some of them. The
+  scan runs only once a refusal is certain, is memoised per distribution,
+  and stops at the package boundary: a third party's flag keeps the plain
+  "unknown global option", because reaching it would mean importing, on a
+  typo, code the project deliberately did not mount.
+
 ## [0.38.1] — 2026-08-10
 
 ### Changed
