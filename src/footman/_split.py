@@ -123,7 +123,7 @@ def _unknown_global(
                 f"{name} combines short options, which footman does not read "
                 f"— write them apart: {spelled}"
             )
-    if provider := _FROM_PLUGIN.get(name):
+    if provider := _own_plugin_flags().get(name):
         # Not unknown — unmounted. The generic sentence sends someone hunting
         # for a spelling mistake in a flag they spelled correctly.
         return (
@@ -469,15 +469,84 @@ _GLOBAL_HINT = {name: hint for name, _, _, hint, _, _ in GLOBALS if hint}
 _GLOBAL_DEFAULT = {name: d for name, _, _, _, d, _ in GLOBALS if d is not None}
 _VALUE_OPTIONAL = frozenset(_GLOBAL_DEFAULT)
 
-# Flags that are not globals but *would* be, had their provider been mounted.
-# Consulted only when a refusal is already certain, so this stays a table of
-# strings rather than an import: naming a plugin here must never load it.
-# `test_split.py` mounts each one and checks it still declares the flag, so
-# the table cannot quietly go stale.
-_FROM_PLUGIN = {
-    "--env-file": "footman.env_files",
-    "--profile": "footman.profile",
-}
+# Flag -> entry point, for globals that *would* exist had their provider been
+# mounted. Memoised per brand distribution, and never touched on a path that
+# is not already refusing (see `_own_plugin_flags`).
+_OWN_FLAGS: dict[str, dict[str, str]] = {}
+
+
+def _vouched_distributions() -> set[str]:
+    """The packages footman will import to answer for a flag nobody mounted.
+
+    Two, and never a third. **footman's own** — `--profile` and
+    `--env-file` are the framework's, they are useful to every runner built
+    on it, and it is already imported by definition. And **the brand's**,
+    when a branded CLI named one with `dist=`: a distribution vouches for
+    what it packages.
+
+    Everything else stays shut. Teaching a third party's flag would mean
+    importing, on a typo, code the project deliberately did not mount.
+    """
+    from footman import _app
+    from footman.app import DEFAULT_BRAND
+
+    # DEFAULT_BRAND is where footman states its own distribution; reading it
+    # here keeps the two from drifting apart.
+    return {dist for dist in (DEFAULT_BRAND.dist, _app._brand.dist) if dist}
+
+
+def _own_plugin_flags() -> dict[str, str]:
+    """Every global option the vouched distributions ship, as flag ->
+    entry-point name, whether or not this project mounted any of them.
+
+    An entry point cannot advertise its options: the packaging spec is
+    strictly `name = "module:attr"`, and a `GlobalOption` registers itself
+    by being *constructed*, which happens when its module is imported. So
+    the only way to learn an unmounted plugin's flags is to import it, and
+    `_vouched_distributions` is the whole list footman will do that for.
+
+    That covers the case this exists for: a distribution ships several
+    plugins, a tasks file mounts some of them, and a flag from one of the
+    others reads as a spelling mistake — for a branded CLI's own plugins
+    and for footman's alike.
+
+    Called only once a refusal is certain, so the imports never touch a
+    successful run; memoised, so a process pays once. Every failure — an
+    entry point that will not import, a brand whose package ships none — is
+    simply a flag this cannot teach.
+    """
+    from footman import _app
+
+    key = _app._brand.dist or ""
+    if (cached := _OWN_FLAGS.get(key)) is not None:
+        return cached
+    found: dict[str, str] = {}
+    try:
+        from importlib.metadata import entry_points
+
+        from footman import compose
+
+        vouched = _vouched_distributions()
+        for ep in entry_points(group=compose.ENTRY_POINT_GROUP):
+            meta = getattr(ep.dist, "metadata", None)
+            if not meta or meta.get("Name", "") not in vouched:
+                continue
+            try:
+                # The SAME door mounting uses, not a raw `ep.load()`. A module
+                # imports once per process, so whoever calls `load()` first
+                # gets the only capture in which its declarations fire —
+                # `_load_entry_point` memoises that tree for everyone after.
+                # Scanning around it would spend a plugin's one import on an
+                # error message and leave the real mount with nothing.
+                tree = compose._load_entry_point(ep.name)
+            except Exception:
+                continue  # a plugin that will not load teaches nothing
+            for opt in tree.contributions["globals"]:
+                found.setdefault("--" + opt.name, ep.name)
+    except Exception:
+        found = {}
+    _OWN_FLAGS[key] = found
+    return found
 
 
 def global_default(name: str) -> tuple[Any, bool]:

@@ -756,3 +756,57 @@ def test_child_argv_carries_the_resolved_locations(tmp_path):
         assert _paths.footman_cache_dir() == _paths.cache_home() / "footman"
     finally:
         _paths.configure_child(*before)
+
+
+def test_a_brand_teaches_footmans_plugins_without_naming_a_distribution(tmp_path):
+    """`--profile` and `--env-file` are the framework's, and every runner
+    built on footman has footman installed — so a branded CLI teaches them
+    whether or not it ever set `dist=`. Basic env loading and a profiler are
+    exactly what someone reaches for first."""
+    from footman import _split
+
+    (tmp_path / "tasks.py").write_text(
+        "from footman import task\n\n@task\ndef go(): ...\n"
+    )
+    _split._OWN_FLAGS.clear()
+    acme = Runner(App(name="Acme", prog="acme", version="1.4.0"))
+    result = acme.invoke("--env-file=.env go", cwd=tmp_path)
+    assert result.exit_code == EX_USAGE
+    assert result.stderr.startswith("acme: ")
+    assert "--env-file comes from footman.env_files" in result.stderr
+    assert 'add plugin("footman.env_files")' in result.stderr
+
+
+def test_a_brand_that_names_its_distribution_teaches_its_own_plugins_too(tmp_path):
+    """The case `dist=` unlocks: a distribution ships several plugins, a
+    tasks file mounts some of them, and a flag from one of the others must
+    not read as a spelling mistake. Nothing lists those flags — they are
+    scanned from whatever `dist` names, so a brand's new plugin is taught the
+    day it ships. (Standing in for a brand's own package here: footman's,
+    named as if it were the brand's own.)"""
+    from footman import _split
+
+    (tmp_path / "tasks.py").write_text(
+        "from footman import task\n\n@task\ndef go(): ...\n"
+    )
+    _split._OWN_FLAGS.clear()
+    acme = Runner(App(name="Acme", prog="acme", version="1.4.0", dist="footman"))
+    result = acme.invoke("--profile go", cwd=tmp_path)
+    assert result.exit_code == EX_USAGE
+    assert "--profile comes from footman.profile" in result.stderr
+
+
+def test_a_brand_never_speaks_for_a_third_partys_flag(tmp_path):
+    """Where it stops. A flag from a package neither footman nor the brand
+    ships keeps the plain answer, because teaching it would mean importing,
+    on a typo, code this project deliberately did not mount."""
+    from footman import _split
+
+    (tmp_path / "tasks.py").write_text(
+        "from footman import task\n\n@task\ndef go(): ...\n"
+    )
+    _split._OWN_FLAGS.clear()
+    acme = Runner(App(name="Acme", prog="acme", version="1.4.0", dist="acme-cli"))
+    result = acme.invoke("--tf-workspace=prod go", cwd=tmp_path)
+    assert result.exit_code == EX_USAGE
+    assert "unknown global option --tf-workspace" in result.stderr

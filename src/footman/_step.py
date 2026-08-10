@@ -51,7 +51,16 @@ _born: ContextVar[list[WorkItem[Any]] | None] = ContextVar(
 # The closed policy vocabulary a step maker's `.opts()` accepts — execution
 # policy only: a step is anonymous, so boundary policy (confirm, gates,
 # sharing) has no request boundary to resolve at and is not spellable here.
-_STEP_OPTS = ("title", "capture", "recorded", "timeout", "env", "lanes", "pre_record")
+_STEP_OPTS = (
+    "title",
+    "capture",
+    "recorded",
+    "timeout",
+    "env",
+    "color",
+    "lanes",
+    "pre_record",
+)
 
 
 class WorkItem(Generic[R_co]):
@@ -133,6 +142,13 @@ class StepFn(Generic[P, R_co]):
                 f"step .opts() got unknown option(s) {unknown}; valid options "
                 f"are {valid}. A step is anonymous, so boundary policy "
                 f"(confirm, sharing, gates) needs a declared task to live on."
+            )
+        if (color := overrides.get("color", "auto")) not in ("auto", "never", "always"):
+            # The same tri-state `run(color=)` takes, refused the same way:
+            # one vocabulary for colour wherever a caller decides it.
+            raise ValueError(
+                f"step .opts(color={color!r}) expects one of auto|never|always "
+                f"— auto follows the run's own decision"
             )
         if overrides.get("lanes") is not None:
             from footman.registry import validate_lanes
@@ -258,6 +274,7 @@ def _pump(item: WorkItem[Any]) -> Any:
     recorded: bool = o.get("recorded", True)
     timeout: float | None = o.get("timeout")
     env: dict[str, str] | None = o.get("env")
+    color: str = o.get("color", "auto")
     lanes: tuple[Any, ...] = tuple(o.get("lanes", ()))
     if any(getattr(ln, "name", "") == "console" for ln in lanes):
         raise TypeError(
@@ -329,9 +346,18 @@ def _pump(item: WorkItem[Any]) -> Any:
     from footman import _globals
 
     overlay = dict(env) if env is not None else dict(ctx.env)
+    if color != "auto":
+        # The same door `run(color=)` opens, on the work item that wraps a
+        # whole body: the tri-state lands in the environment this step runs
+        # under, so anything it calls — a nested run(), an in-process tool
+        # reading the variables — sees one decision. Off means REMOVING the
+        # inherited force variables, never writing "0".
+        for key in _context._COLOR_VARS:
+            overlay.pop(key, None)
+        overlay.update(_context.color_env(color == "always"))
     if _globals.active():
         state: Any = _context._env_overlay(ctx, overlay)
-    elif env is not None:
+    elif env is not None or color != "auto":
         state = _context._process_state(overlay)
     else:
         state = nullcontext()
