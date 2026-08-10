@@ -2730,6 +2730,20 @@ def run(
     `title` still wins; a direct `run([...])` is unaffected.
     """
     ctx = current()
+    if args and not callable(cmd):
+        # The subprocess-style spelling this door does not have. The extra
+        # arguments only ever reached the *label*, so the child ran without
+        # them and said so in green: `run("echo", "hi")` printed nothing and
+        # passed, `run("sh", "-c", "exit 1")` ran a bare shell that sat on
+        # the caller's terminal. Silence is the one thing that must not
+        # happen here, so it is a refusal naming the spelling that works.
+        meant = [cmd, *args] if isinstance(cmd, str) else [*cmd, *args]
+        spelled = ", ".join(repr(str(token)) for token in meant)
+        raise TypeError(
+            f"run() takes one command — a string, or a list of tokens — and "
+            f"the {len(args)} after it would be dropped rather than passed "
+            f"to it. Put them in the list: run([{spelled}])"
+        )
     if color not in ("auto", "never", "always"):
         raise ValueError(
             f"run(color={color!r}) expects one of auto|never|always — "

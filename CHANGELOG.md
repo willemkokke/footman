@@ -23,6 +23,14 @@ versions may include breaking changes.
   so immediately rather than spawning a build that can only come back empty.
   Measured on a home-like directory: 3,052 ms and no candidates, now 141 ms
   cold and 28 ms warm, with the built-ins offered.
+- **`run("tool", "arg")` is refused instead of silently dropping the
+  argument.** `run()` takes one command — a string or a list of tokens — but
+  the subprocess-style spelling was accepted and the extras only ever reached
+  the *label*: `run("echo", "hi")` printed nothing and passed green, and
+  `run("sh", "-c", "…")` ran a bare shell that sat on the caller's terminal
+  while its receipt read ok. It now raises a `TypeError` naming the spelling
+  that works, `run(["sh", "-c", "…"])` — the same refusal a shell operator in
+  a shell-free `run()` already gets.
 
 - **A group's default lists once.** `--list` showed a runnable group twice —
   the bare `lint` row, described by its default, and the `lint.default`

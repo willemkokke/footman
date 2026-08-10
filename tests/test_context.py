@@ -2354,6 +2354,23 @@ def test_run_refuses_a_bare_callable_and_teaches_the_lift():
         run(lambda: 0, timeout=5)
 
 
+def test_run_refuses_trailing_arguments_it_would_have_dropped():
+    # The subprocess-style spelling this door does not have: the extras only
+    # ever reached the label, so `run("echo", "hi")` passed green having
+    # printed nothing, and `run("sh", "-c", …)` ran a bare shell on the
+    # caller's terminal. Refused now, naming the spelling that works.
+    from footman.context import Context, use_context
+
+    with use_context(Context()):
+        with pytest.raises(TypeError, match=r"run\(\['echo', 'hi'\]\)"):
+            run("echo", "hi")
+        with pytest.raises(TypeError, match=r"run\(\['sh', '-c', 'exit 1'\]\)"):
+            run("sh", "-c", "exit 1")
+        # A list command with extras teaches the joined list too.
+        with pytest.raises(TypeError, match=r"run\(\['git', 'log', '-1'\]\)"):
+            run(["git", "log"], "-1")
+
+
 def test_run_input_feeds_the_childs_stdin():
     # The write side of the process boundary: the payload arrives whole and
     # the pipe closes, so a child reading to EOF finishes rather than hangs.
