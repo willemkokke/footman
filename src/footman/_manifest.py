@@ -937,6 +937,25 @@ def _task_node(
     return node
 
 
+def _scoped(
+    node: dict[str, Any], fn: Any, inherited: bool | None, project: bool
+) -> dict[str, Any]:
+    """Stamp `needs_project` on a task that does not belong here.
+
+    Resolved at build time, where the mode is known, so every reader
+    downstream — listing, help, completion, the address resolver — asks one
+    flat question instead of each re-deriving "am I in a project". Inside a
+    project nothing is ever stamped: both scopes include being in one, which
+    is why the question only arises outside.
+    """
+    if project:
+        return node
+    own = registry.declared_needs_project(fn)
+    if own if own is not None else bool(inherited):
+        node["needs_project"] = True
+    return node
+
+
 def _hide(node: dict[str, Any], own: bool | None, inherited: bool) -> dict[str, Any]:
     """Stamp the resolved `hidden` onto a task node: its own answer if it gave
     one, otherwise the group's. Additive — absent means listed."""
@@ -951,6 +970,8 @@ def _node(
     hidden: bool = False,
     *,
     bake: bool = False,
+    needs_project: bool | None = None,
+    project: bool = True,
 ) -> dict[str, Any]:
     # `hidden` is resolved here, where the tree structure is: a node that never
     # declared one inherits its group's answer, so hiding a subtree is said once
@@ -961,16 +982,25 @@ def _node(
     if own is None and g.default_task is not None:
         own = registry.declared_hidden(g.default_task)
     mine = hidden if own is None else own
+    # The same inheritance for scope, one line down: a group's answer covers
+    # its subtree, a child overrides it, and silence asks whoever encloses it.
+    here = g.needs_project if g.needs_project is not None else needs_project
     node: dict[str, Any] = {
         "help": g.help,
         "tasks": {
-            name: _hide(
-                _task_node(fn, memo, bake=bake), registry.declared_hidden(fn), mine
+            name: _scoped(
+                _hide(
+                    _task_node(fn, memo, bake=bake), registry.declared_hidden(fn), mine
+                ),
+                fn,
+                here,
+                project,
             )
             for name, fn in g.tasks.items()
         },
         "groups": {
-            name: _node(sub, memo, mine, bake=bake) for name, sub in g.groups.items()
+            name: _node(sub, memo, mine, bake=bake, needs_project=here, project=project)
+            for name, sub in g.groups.items()
         },
     }
     if mine:
@@ -1002,8 +1032,14 @@ def build_manifest(
     *,
     completion_max_age: int | None = None,
     bake_completers: bool = False,
+    project: bool = True,
 ) -> dict[str, Any]:
     """Introspect *root* into a serialisable manifest dict.
+
+    *project* says whether this manifest describes a directory that has one.
+    It is the only place the question is asked: tasks that need a project are
+    stamped `needs_project` here, so listing, help, completion and the address
+    resolver each read one flat flag rather than re-deriving the mode.
 
     *completion_max_age* (seconds, or `None` to disable) is baked in so the
     stdlib-only completion hot path can decide whether to trigger a background
@@ -1018,7 +1054,7 @@ def build_manifest(
     docs exporter, which renders every parameter it can find into a page.
     """
     memo: dict[int, list[str]] = {}
-    tree = _node(root, memo, bake=bake_completers)
+    tree = _node(root, memo, bake=bake_completers, project=project)
     tree["globals"] = [
         _global_spec(opt, memo, bake=bake_completers) for opt in _unique_globals(root)
     ]
@@ -1116,6 +1152,7 @@ def sync_manifest(
     path: Path | None = None,
     bake_cwd: bool = True,
     builtin: tuple[str, ...] = (),
+    project: bool = True,
 ) -> dict[str, Any]:
     """Build the fresh manifest and rewrite the cache only on a hash change.
 
@@ -1126,7 +1163,7 @@ def sync_manifest(
     changed *completion_max_age* also forces a rewrite so a config edit takes
     effect.
     """
-    fresh = build_manifest(root, completion_max_age=completion_max_age)
+    fresh = build_manifest(root, completion_max_age=completion_max_age, project=project)
     if bake_cwd:
         # The directory this manifest describes, baked in (additive) so the
         # cache collector can tell a deleted project's leftovers from a

@@ -8,8 +8,9 @@ from __future__ import annotations
 
 import os
 import stat
+from pathlib import Path
 
-from footman import App, Brand, __version__, _paths
+from footman import App, Brand, __version__, _paths, registry
 from footman._executor import EX_USAGE
 from footman.app import DEFAULT_BRAND
 from footman.testing import Runner
@@ -479,15 +480,15 @@ def test_the_user_rung_claims_no_root(tmp_path, monkeypatch):
 
 def test_builtin_tasks_answer_where_nothing_else_does(tmp_path, monkeypatch):
     # Global mode: no project, no user file — the brand's built-ins are the
-    # tree. `footman.docs` is a real installed entry point, so this is the
-    # whole path: resolve, mount, list.
+    # tree. `footman.new` is a real installed entry point that declares
+    # `needs_project=False`, so this is the whole path: resolve, mount, list.
     empty = tmp_path / "empty"
     empty.mkdir()
     monkeypatch.chdir(empty)
     monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
-    acme = Runner(App(name="acme", prog="acme", builtin=["footman.docs"]))
+    acme = Runner(App(name="acme", prog="acme", builtin=["footman.new"]))
     out = acme.invoke("--list").stdout
-    assert "docs" in out
+    assert "new" in out
 
 
 def test_no_builtin_and_no_files_keeps_todays_refusal(tmp_path, monkeypatch):
@@ -535,9 +536,9 @@ def test_the_user_rung_overlays_the_builtins(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_CONFIG_HOME", str(cfg))
     monkeypatch.chdir(empty)
     monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
-    acme = Runner(App(name="acme", prog="acme", builtin=["footman.docs"]))
+    acme = Runner(App(name="acme", prog="acme", builtin=["footman.new"]))
     out = acme.invoke("--list").stdout
-    assert "mine" in out and "docs" in out
+    assert "mine" in out and "new" in out
 
 
 def test_an_uninstalled_builtin_refuses_naming_the_brand(tmp_path, monkeypatch):
@@ -661,7 +662,7 @@ def test_tab_reads_the_global_manifest_outside_a_project(tmp_path, monkeypatch, 
     empty.mkdir()
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / ".cache"))
     monkeypatch.chdir(empty)
-    app = App(name="acme", prog="acme", version="1.0", builtin=["footman.docs"])
+    app = App(name="acme", prog="acme", version="1.0", builtin=["footman.new"])
     assert app.run(["--list"]) == 0  # writes the global manifest, warm read
     capsys.readouterr()  # drop the listing; the completion output is the test
     from footman._complete import complete_cli
@@ -669,8 +670,8 @@ def test_tab_reads_the_global_manifest_outside_a_project(tmp_path, monkeypatch, 
     # `App.run` configured the brand's world and never restores (by design);
     # the autouse fixture restores after the test. The hot path walks once,
     # finds no project files, and serves the shared global manifest.
-    assert complete_cli(["do"]) == 0
-    assert "docs" in capsys.readouterr().out
+    assert complete_cli(["ne"]) == 0
+    assert "new" in capsys.readouterr().out
 
 
 def test_new_scaffolds_the_brands_file_and_the_scaffold_runs(tmp_path, monkeypatch):
@@ -848,3 +849,154 @@ def test_a_branded_run_does_not_decide_what_the_next_one_teaches(tmp_path):
     assert result.exit_code == EX_USAGE
     assert result.stderr.startswith("fm: ")
     assert "--env-file comes from footman.env_files" in result.stderr
+
+
+# --- needs_project: what survives outside a project ---------------------------
+#
+# The bug this exists for is not a noisy listing. A project task invoked
+# without a project *succeeded and lied* — `files` printing nothing as though
+# the project had none, `coverage` reporting no stamp yet, both exiting 0.
+# Listing and completion happen before any body or hook runs, so nothing
+# downstream can filter them, and footman already owns "is there a project".
+
+PERSONAL = (
+    "from footman import task\n\n"
+    "@task\n"
+    "def scratch():\n"
+    '    "Rides everywhere."\n\n'
+    "@task(needs_project=True)\n"
+    "def sync_repo():\n"
+    '    "Needs a checkout."\n'
+)
+
+
+def _user_rung(tmp_path: Path, monkeypatch, body: str = PERSONAL) -> Path:
+    """A brand with a personal tasks file and a built-in set, standing in an
+    empty directory."""
+    cfg = tmp_path / "cfg"
+    (cfg / "acme").mkdir(parents=True)
+    (cfg / "acme" / "tasks.py").write_text(body, encoding="utf-8")
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(cfg))
+    monkeypatch.chdir(empty)
+    monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
+    return empty
+
+
+def test_a_personal_task_can_require_a_project(tmp_path, monkeypatch):
+    """The user rung participates: someone can write a personal task that
+    needs a checkout and have it stay out of the way everywhere else."""
+    _user_rung(tmp_path, monkeypatch)
+    acme = Runner(App(name="acme", prog="acme", builtin=["footman.new"]))
+    out = acme.invoke("--list").stdout
+    assert "scratch" in out
+    assert "sync-repo" not in out
+
+
+def test_a_personal_task_rides_everywhere_unless_it_says_otherwise(
+    tmp_path, monkeypatch
+):
+    """The rung's promise, unchanged: silence means everywhere. A default of
+    "needs a project" would have deleted every existing personal task from
+    every project-less directory."""
+    _user_rung(tmp_path, monkeypatch)
+    out = Runner(App(name="acme", prog="acme")).invoke("--list").stdout
+    assert "scratch" in out
+
+
+def test_a_project_task_is_refused_by_name_not_404ed(tmp_path, monkeypatch):
+    """The whole point of marking rather than dropping: "no task named" would
+    be a lie — it exists, it has nowhere to stand. Whoever typed it is most
+    often a tool in the wrong directory, so the answer says where it looked."""
+    empty = _user_rung(tmp_path, monkeypatch)
+    result = Runner(App(name="acme", prog="acme")).invoke("sync-repo")
+    assert result.exit_code == EX_USAGE
+    assert "sync-repo needs a project" in result.stderr
+    assert "no tasks.py found here" in result.stderr
+    assert str(empty) in result.stderr
+
+
+def test_a_task_that_needs_a_project_is_never_suggested(tmp_path, monkeypatch):
+    """A did-you-mean is a thing to try next. Proposing a name that can only
+    refuse is worse than proposing nothing."""
+    _user_rung(tmp_path, monkeypatch)
+    result = Runner(App(name="acme", prog="acme")).invoke("sync-rep")
+    assert "sync-repo" not in result.stderr
+
+
+def test_inside_a_project_nothing_is_hidden(tmp_path, monkeypatch):
+    """Both answers include being inside a project, which is why the question
+    only arises outside one — and why no rung needs a rule of its own."""
+    cfg = tmp_path / "cfg"
+    (cfg / "acme").mkdir(parents=True)
+    (cfg / "acme" / "tasks.py").write_text(PERSONAL, encoding="utf-8")
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    (proj / "pyproject.toml").write_text("[project]\nname='x'\n")
+    (proj / "tasks.py").write_text(
+        "from footman import task\n\n@task\ndef build():\n    'Build.'\n"
+    )
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(cfg))
+    monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
+    out = Runner(App(name="acme", prog="acme")).invoke("--list", cwd=proj).stdout
+    assert "scratch" in out and "sync-repo" in out and "build" in out
+
+
+def test_a_brands_builtins_need_a_project_unless_they_say_otherwise(
+    tmp_path, monkeypatch
+):
+    """The built-in set's default is the opposite of the user rung's, and each
+    is that rung's own promise: a package declared `builtin=` exposes nothing
+    outside a project until a task says it makes sense there. `footman.docs`
+    builds a project's docs; `footman.new` writes the first tasks file."""
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    monkeypatch.chdir(empty)
+    monkeypatch.setattr(_paths, "cache_home", lambda: tmp_path / ".cache")
+    acme = Runner(
+        App(name="acme", prog="acme", builtin=["footman.docs", "footman.new"])
+    )
+    out = acme.invoke("--list").stdout
+    assert "new" in out
+    assert "docs" not in out
+
+
+def test_a_group_answers_for_its_subtree(tmp_path, monkeypatch):
+    """One line covers a subtree, and a child can still say otherwise — the
+    same tri-state `hidden` has."""
+    body = (
+        "from footman import group, task\n\n"
+        'ci = group("ci", needs_project=True)\n\n'
+        "@ci.task\n"
+        "def lint():\n"
+        '    "Lint."\n\n'
+        "@ci.task(needs_project=False)\n"
+        "def version():\n"
+        '    "Print the version."\n'
+    )
+    _user_rung(tmp_path, monkeypatch, body)
+    out = Runner(App(name="acme", prog="acme")).invoke("--list").stdout
+    assert "ci.lint" not in out
+    assert "ci.version" in out
+
+
+def test_completion_never_spells_out_what_cannot_run(tmp_path, monkeypatch):
+    """Completion is the other half: listing is prose a human reads, but a
+    spelled-out address is an offer, and this one footman cannot honour."""
+    _user_rung(tmp_path, monkeypatch)
+    Runner(App(name="acme", prog="acme")).invoke("--list")  # warm the manifest
+    from footman._complete import complete
+    from footman._manifest import build_manifest
+
+    reg = registry.Group("root")
+
+    @reg.task(needs_project=True)
+    def deploy(): ...
+
+    @reg.task
+    def scratch(): ...
+
+    tree = build_manifest(reg, project=False)["tree"]
+    offered = {c.split("\t", 1)[0] for c in complete(tree, [""])}
+    assert offered == {"scratch"}

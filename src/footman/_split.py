@@ -151,6 +151,24 @@ def _unknown_global(
     return f"unknown global option {name} (global options go before the first task)"
 
 
+def _needs_project(dotted: str) -> str:
+    """Why a real task refuses from here — resolved only once it has.
+
+    The generic form on purpose: footman knows the task needs a project and
+    that this directory is not one, and it does not know what a particular
+    brand would have you do about it. It names the file it looked for, which
+    is the fact that actually resolves the confusion, because the reader is
+    usually a tool that started in the wrong directory rather than a person
+    wondering how to make a project.
+    """
+    from footman import _app
+
+    return (
+        f"{dotted} needs a project — no {_app._brand.tasks_file} found here "
+        f"or in any parent of {os.getcwd()}"
+    )
+
+
 def _misplaced_global(token: str) -> str | None:
     """The teaching message when *token* is really one of the GLOBALS.
 
@@ -905,12 +923,16 @@ def flat_addresses(tree: dict[str, Any]) -> list[str]:
 
     The one index behind did-you-mean suggestions for a mistyped address —
     everything in it is copy-paste-runnable, so a suggestion can never
-    propose a bare namespace group.
+    propose a bare namespace group, and never one that needs a project when
+    there is none. A suggestion is a thing to try next; offering a name that
+    can only refuse is worse than offering nothing.
     """
     out: list[str] = []
 
     def walk(node: dict[str, Any], prefix: str) -> None:
-        for name in node["tasks"]:
+        for name, spec in node["tasks"].items():
+            if spec.get("needs_project"):
+                continue
             out.append(prefix + name)
         for name, sub in node["groups"].items():
             if "default" in sub:
@@ -924,9 +946,15 @@ def flat_addresses(tree: dict[str, Any]) -> list[str]:
 def _children(node: dict[str, Any], prefix: str) -> list[str]:
     """A node's children as addresses for a "know:" listing — groups keep a
     trailing dot (`docs.`), the `ls -F` idiom, so descend-vs-run is visible;
-    tasks are bare and copy-paste-runnable."""
+    tasks are bare and copy-paste-runnable.
+
+    What needs a project is left out where there is none, for the same reason
+    the listings leave it out: this is the set of things you could type here,
+    and those are not among them."""
     return [f"{prefix}{name}." for name in node["groups"]] + [
-        f"{prefix}{name}" for name in node["tasks"]
+        f"{prefix}{name}"
+        for name, spec in node["tasks"].items()
+        if not spec.get("needs_project")
     ]
 
 
@@ -980,6 +1008,12 @@ def _resolve_head(
                     f"{token!r}: {dotted!r} is a task, not a group — "
                     f"nothing lives beneath it"
                 )
+            if node["tasks"][part].get("needs_project"):
+                # Found, and refused for the true reason. "No task named" would
+                # be a lie — the task exists, it just has nowhere to stand — and
+                # whoever typed this is most often a tool in the wrong
+                # directory, which is exactly what the answer should say.
+                raise ChainError(_needs_project(".".join(path)))
             return node["tasks"][part], path, None, i + 1
         # Unknown segment. At the very start this may be a misplaced global,
         # or a child of the runnable group that led the previous segment

@@ -264,11 +264,44 @@ project that wants those tasks mounts them like any other:
 built-in inside a project teaches exactly that mount, and `--plugins`
 reports the set as `built in`.
 
-Curate a small global surface — *what does this CLI offer someone with no
-project?* — rather than aiming `builtin=` at the everyday tasks, whose
-probes assume a checkout and would fail strangely without one. Outside a
-project every task runs where the command was typed, exactly as the user
-rung does.
+**A built-in task needs a project unless it says otherwise.** That is the
+default because most of what a CLI ships does: `deploy` without a checkout
+is not a shorter `deploy`, it is a task that exits 0 having done nothing —
+a listing shows the noise, but the real damage is the confident fiction.
+Declare the exceptions:
+
+```python
+@task(needs_project=False)
+def whoami():
+    """Who am I logged in as? — answerable from anywhere."""
+```
+
+Outside a project, a task that needs one is **not listed, not completed,
+and not suggested** — and asking for it by name is refused with the reason
+rather than a "no task named", because it does exist:
+
+```console
+$ acme deploy
+acme: deploy needs a project — no tasks.py found here or in any parent of /tmp
+```
+
+That message is aimed at what usually types it: a tool that started in the
+wrong directory. It says where footman looked, which is the fact that
+resolves the confusion.
+
+`group("ci", needs_project=True)` answers for a whole subtree, and a child
+may still say `needs_project=False` — the tri-state `hidden` has. The
+question is only ever asked *outside* a project: both answers include being
+inside one, so this can never hide anything from a project.
+
+The **user rung defaults the other way**: a personal task rides everywhere
+unless it says `needs_project=True`, because that is what a personal tasks
+file is for. Each rung's default is its own promise — a package declared
+`builtin=` exposes nothing until a task opts in; a file someone wrote for
+themselves is theirs everywhere until they opt out.
+
+Outside a project every task runs where the command was typed, exactly as
+the user rung does.
 
 Completion follows: outside a project, <kbd>Tab</kbd> answers from one
 manifest shared by every project-less directory, keyed by the brand and its

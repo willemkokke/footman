@@ -250,14 +250,18 @@ def _has_any(node: dict[str, Any]) -> bool:
     `hidden` is not the question. It keeps a task out of the *listings*, the
     prose a human reads to learn what a repo does; completion is the other
     thing — you are already typing a name, and a machine-facing address is
-    exactly the one worth being spelled for you. So the only group TAB skips
-    is one with nothing under it at all, which would complete to a dead end.
-    Dict reads over the manifest a TAB already loaded: the hot path imports
-    no framework.
+    exactly the one worth being spelled for you.
+
+    `needs_project` is a different question and does count: the manifest was
+    built where there is no project, so a task marked here cannot run from
+    here, and completing to it would spell out a name that only refuses. So
+    the groups TAB skips are the empty ones and the ones with nothing
+    runnable left. Dict reads over the manifest a TAB already loaded: the hot
+    path imports no framework.
     """
-    if node.get("default") is not None:
+    if node.get("default") is not None and not node["default"].get("needs_project"):
         return True
-    if node["tasks"]:
+    if any(not spec.get("needs_project") for spec in node["tasks"].values()):
         return True
     return any(_has_any(sub) for sub in node["groups"].values())
 
@@ -307,6 +311,8 @@ def _leaf_fallback(tree: dict[str, Any], partial: str) -> list[str]:
 
     def walk(node: dict[str, Any], prefix: str) -> None:
         for name, spec in node["tasks"].items():
+            if spec.get("needs_project"):
+                continue  # nothing here can run it; completing to it teases
             if prefix and name.startswith(partial):
                 out.append(_cand(f"{prefix}{name}", spec.get("help", "")))
         for name, sub in node["groups"].items():
@@ -393,11 +399,16 @@ def _address_candidates(tree: dict[str, Any], partial: str) -> list[str]:
             for child, spec in sub["tasks"].items():
                 if child == "default":
                     continue  # the bare row above IS this action
+                if spec.get("needs_project"):
+                    continue
                 out.append(_cand(f"{prefix}{name}.{child}", spec.get("help", "")))
         else:
             out.append(_cand(f"{prefix}{name}.", sub["help"]))
     for name in tasks:
-        out.append(_cand(f"{prefix}{name}", node["tasks"][name].get("help", "")))
+        spec = node["tasks"][name]
+        if spec.get("needs_project"):
+            continue
+        out.append(_cand(f"{prefix}{name}", spec.get("help", "")))
     if not out and not bases and leaf:
         return _leaf_fallback(tree, leaf)
     return out

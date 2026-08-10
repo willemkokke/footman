@@ -102,6 +102,9 @@ def _rebuild() -> None:
         with registry.capture() as base:
             for entry in _paths.builtin():
                 compose.plugin(entry)
+        # Same sealing the app layer does, for the same reason — this child
+        # rebuilds the very manifest that answers TAB outside a project.
+        registry.seal_needs_project(base)
         reg = _discover.load_tree(files, base=base)
         _manifest.sync_manifest(
             reg,
@@ -111,6 +114,7 @@ def _rebuild() -> None:
             path=_paths.global_manifest_path(),
             bake_cwd=False,
             builtin=_paths.builtin(),
+            project=False,
         )
         return
 
