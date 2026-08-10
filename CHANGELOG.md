@@ -20,6 +20,12 @@ versions may include breaking changes.
 - **`needs_project` is in the `@task(…)` reference**, beside `hidden` and the
   rest, instead of only in the branded-CLI page where it was first written —
   along with `group(…, needs_project=True)` for a whole subtree.
+- **CI builds the docs on docs-only pull requests.** The strict site build was
+  gated on `code == 'true'` alongside the heavy code jobs, so a change under
+  `docs/` skipped it — while the Docs workflow, which only triggers on push to
+  `main`, did not run either. Nothing checked the docs on precisely the pull
+  requests most able to break them, and a broken page surfaced after merge as
+  a failed Pages deploy. It now runs on every pull request.
 
 ## [0.39.1] — 2026-08-10
 

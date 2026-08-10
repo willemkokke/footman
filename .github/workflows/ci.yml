@@ -254,7 +254,16 @@ jobs:
   docs:
     name: docs build (strict)
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    # Deliberately NOT gated on `code`, unlike every other heavy job: this is
+    # the only thing that builds the site, and a docs-only PR is exactly when
+    # it matters most. It was gated, so a change to docs/ skipped it here
+    # while `docs.yml` — which only triggers on push to main — did not run
+    # either: nothing checked the docs on the PRs most able to break them,
+    # and a broken page surfaced after merge as a failed Pages deploy.
+    #
+    # It stays on for code changes too, because the site embeds generated
+    # content (task tables, the globals and config references, the recorded
+    # casts), so a source change can break the build with no docs edit at all.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
