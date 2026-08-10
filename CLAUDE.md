@@ -7,7 +7,7 @@ Guidance for Claude Code (and any agent) working in this repo.
 A task runner: typed Python function signatures become real CLI flags and
 positionals, modules become nested command groups, independent tasks run in
 parallel by default, and shell completion answers from a cached JSON manifest in
-~20 ms **without importing your code**. Ships two console scripts, `footman` and
+~30 ms **without importing your code**. Ships two console scripts, `footman` and
 `fm`. **Zero runtime dependencies** (standard library only). Python 3.11+.
 Pre-1.0 and moving fast — the API, decorator surface, manifest format, and CLI
 grammar may break without a deprecation cycle.

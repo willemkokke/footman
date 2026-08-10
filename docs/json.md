@@ -261,8 +261,8 @@ $ fm --describe=affected
 The document is built for pinning: tasks sort by address (invariant to
 declaration order), hidden tasks are included and marked (`"hidden":
 true` — a machine is exactly who calls them), availability is left out
-(it varies per machine), and a dynamic completer's baked choices are
-dropped from the params (runtime data, not contract). The rendered
+(it varies per machine), and a dynamic completer's values are left out
+of the params (runtime data, not contract). The rendered
 schema is itself **contract, not presentation** — snapshots pin it, so a
 rendering change is envelope-grade and belongs in the changelog.
 

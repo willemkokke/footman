@@ -56,7 +56,7 @@ machinery are all standard library — and the dividend is that
 `uv add --dev footman` cannot change what your project depends on.
 
 **A keystroke never imports your code.** Completion answers from a baked
-file — one read, one JSON parse, a tree walk, ~25 ms — and `main()`
+file — one read, one JSON parse, a tree walk, ~30 ms — and `main()`
 checks for `--complete` before importing even footman itself. Your tasks
 file, its imports, its heavy dependencies: none of it runs on a
 <kbd>Tab</kbd>. The budget survives the only way budgets do — every
