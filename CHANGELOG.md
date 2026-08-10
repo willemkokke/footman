@@ -9,6 +9,13 @@ versions may include breaking changes.
 
 ### Fixed
 
+- **A group's default lists once.** `--list` showed a runnable group twice —
+  the bare `lint` row, described by its default, and the `lint.default`
+  child: one action wearing two lines, and `--tree` and group help repeated
+  the shape. Listings show the bare row alone now. The address itself loses
+  nothing: `fm lint.default` still runs, still completes, still appears in
+  `--describe`, and a typo of it still gets the real spelling back.
+
 - **A mounted global after a task name is taught by name.** `fm build
   --audit` said `unknown option --audit` where a core global in the same
   position already said "goes before the first task name" — one teaching
