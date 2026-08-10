@@ -55,6 +55,8 @@ def test_a_wide_task_name_aligns_its_step_column(tmp_path):
     """A run's step lines pad the task-name column so siblings align. Padded
     by `len()`, a CJK name pushed its own line two cells right of every
     other — the column visibly bent around it."""
+    # Explicit encoding: `write_text` defaults to the locale codepage, and
+    # Windows' cp1252 cannot hold the very characters this test is about.
     (tmp_path / "tasks.py").write_text(
         textwrap.dedent(
             """
@@ -68,7 +70,8 @@ def test_a_wide_task_name_aligns_its_step_column(tmp_path):
             def lint():
                 run(["python", "-c", "pass"])
             """
-        )
+        ),
+        encoding="utf-8",
     )
     result = Runner().invoke("-v -s 构建 lint", cwd=tmp_path)
     assert result.ok, result.stderr

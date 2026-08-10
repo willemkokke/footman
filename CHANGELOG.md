@@ -7,6 +7,16 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Changed
+
+- **The cold-cache <kbd>Tab</kbd> waits a second, not three.** A first-time
+  manifest build measures ~100–150 ms (footman's own fat `tasks.py`
+  included), so the old bound only ever came into play for a tasks file that
+  imports something heavy at module level — and there a three-second freeze
+  reads as a broken shell. The build is detached and lands anyway, so the
+  shorter cap trades a hang for a blank first <kbd>Tab</kbd> and an instant
+  second one.
+
 ### Fixed
 
 - **Columns are measured in terminal cells, not in characters.** Every
