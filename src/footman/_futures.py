@@ -34,7 +34,6 @@ from __future__ import annotations
 import io
 import itertools
 import threading
-from concurrent.futures import Future
 from contextlib import contextmanager
 from contextvars import ContextVar
 from typing import TYPE_CHECKING, Any
@@ -44,6 +43,7 @@ from footman._split import ChainError
 
 if TYPE_CHECKING:
     from collections.abc import Generator
+    from concurrent.futures import Future
 
     from footman._executor import TaskResult
 
@@ -59,6 +59,12 @@ class _Cell:
     __slots__ = ("future", "label", "owner", "record")
 
     def __init__(self, owner: int, label: str) -> None:
+        # Imported here, not at module scope: `concurrent.futures` drags
+        # `logging` (through `traceback`) for ~5.6 ms, and a line that never
+        # claims a cell — `--list`, `--help`, a refusal — has no use for
+        # either. A run that does claim one pays a dict lookup.
+        from concurrent.futures import Future
+
         self.future: Future[Any] = Future()
         self.owner = owner  # the thread that claimed it (for the wait graph)
         self.label = label
