@@ -81,3 +81,32 @@ def test_a_wide_task_name_aligns_its_step_column(tmp_path):
     # disagree for 构建, and the terminal only ever sees the first.
     starts = {display_width(ln[: ln.index("python")]) for ln in steps}
     assert len(starts) == 1, steps  # one column, whatever the name is made of
+
+
+def test_the_run_summary_column_aligns_too(tmp_path):
+    """The step lines and the closing summary are two different columns in
+    two different modules, and each learns its own width. The summary's
+    learner was the last one still counting characters."""
+    (tmp_path / "tasks.py").write_text(
+        textwrap.dedent(
+            """
+            from footman import task
+
+            @task(name="构建")
+            def build(): ...
+
+            @task
+            def lint(): ...
+
+            @task(name="🚀deploy")
+            def deploy(): ...
+            """
+        ),
+        encoding="utf-8",
+    )
+    result = Runner().invoke("-s 构建 lint 🚀deploy", cwd=tmp_path)
+    assert result.ok, result.stderr
+    rows = [ln for ln in result.stderr.splitlines() if ln.startswith("ok ")]
+    assert len(rows) == 3, result.stderr
+    starts = {display_width(ln[: ln.index("(")]) for ln in rows}
+    assert len(starts) == 1, rows

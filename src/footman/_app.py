@@ -1100,7 +1100,7 @@ def _print_summary(
     # Each receipt is task-shaped (mark · name · time), the same grid as the
     # step lines above it, with the name in cyan — same family, one rank up.
     color = _color_err
-    width = max((len(r.task) for r in results), default=0)
+    width = max((_describe.display_width(r.task) for r in results), default=0)
     for result in results:
         ok = result.ok
         cancelled = result.cancelled
