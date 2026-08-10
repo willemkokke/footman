@@ -12,7 +12,7 @@ title: A typed task runner with instant completion
 A task runner with the soul of [duty](https://pawamoy.github.io/duty/) and the
 UX of [typer](https://typer.tiangolo.com/): typed function signatures become
 real flags and positionals, modules become nested command groups, and shell
-completion answers from a cached manifest in **~25 ms — without importing your
+completion answers from a cached manifest in **~30 ms — without importing your
 code**.
 
 Annotations are how you get the most out of it, not the price of entry: a
@@ -52,7 +52,7 @@ decorator ergonomics — and footman keeps those ideas. Where it pushes is the
 parts that compound:
 
 - Completion answers from a cache instead of re-importing your whole project
-  on every <kbd>Tab</kbd> — ~15× faster, measured.
+  on every <kbd>Tab</kbd> — ~13× faster, measured.
 - Types and choices validate eagerly, including unions and dynamic value
   sets, with errors that teach.
 - Modules become nested command groups, and task signatures carry no `ctx`

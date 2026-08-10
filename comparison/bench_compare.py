@@ -59,8 +59,19 @@ TOOLS = {
 }
 
 
+# Every runner here loads exactly one task file: its own, in its own directory.
+# footman's default is a *cascade* — every tasks.py from the repo root down —
+# and these bench projects live inside footman's own repo, so left alone
+# footman would also import the repo's real tasks.py (plugin mounts, a toolroom
+# import: ~38 ms no other runner pays here) and the table would be measuring
+# this checkout rather than the runner. `cascade = "none"` scopes it to the
+# bench directory, which is the like-for-like shape.
+ISOLATE = {"FOOTMAN_CASCADE": "none"}
+
+
 def run_once(cmd, cwd, cost):
     env = dict(os.environ, COMPARISON_IMPORT_COST=str(cost))
+    env.update(ISOLATE)
     start = time.perf_counter()
     proc = subprocess.run(cmd, cwd=cwd, env=env, capture_output=True, text=True)
     return (time.perf_counter() - start) * 1000, proc

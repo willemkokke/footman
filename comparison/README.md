@@ -19,6 +19,26 @@ uv run --group comparison python comparison/bench_compare.py
 
 ## Timing (measured, not assumed)
 
+**Read this first: most of what follows is academic.** Your test suite takes
+thirty seconds; your linter takes four; a docker build takes minutes. Against
+that, every runner on this page is a rounding error, and a dozen milliseconds
+between them changes nothing about your day. Nobody should choose a task
+runner on the launch-overhead table, and we are not asking you to.
+
+One number here is different, and it is the reason this page exists:
+**completion latency**. A <kbd>Tab</kbd> press happens between your fingers
+and your thought, dozens of times an hour, and it is the one place where a
+task runner's own cost is the *whole* cost — there is no real work behind it
+to hide in. 30 ms feels instant; 360 ms feels like the shell is thinking, and
+you stop pressing <kbd>Tab</kbd>. That difference is architectural, not a
+matter of tuning: a runner that re-imports your project to answer a keystroke
+cannot get there from here, and one that reads a cached manifest cannot lose.
+
+So: the **Δ import** column below is the finding. The launch and orchestration
+tables are included for honesty — a page that showed only its best number
+would deserve the suspicion — and because the orchestration gap *does* grow
+teeth once the steps are real (four two-second checks, not four sleeps).
+
 Cold-process wall time, mean of 15 fresh processes each (M-series Mac, CPython
 3.13). The **Δ import** column is the decisive part: it is completion time with
 a 0.25 s project-import cost minus completion time with none. A runner that
@@ -27,17 +47,17 @@ shows ~0.
 
 | runner  | completion (per TAB) | Δ import | re-imports per TAB?      | `--list` |
 | ------- | -------------------: | -------: | ------------------------ | -------: |
-| footman |            **23 ms** |    ~0 ms | **no** (cached manifest) |   313 ms |
-| duty    |               346 ms |   286 ms | **yes**                  |   343 ms |
-| invoke  |               360 ms |   289 ms | **yes**                  |   355 ms |
-| poe     |                45 ms |    ~0 ms | no (reads TOML)          |    51 ms |
+| footman |            **28 ms** |     2 ms | **no** (cached manifest) |   340 ms |
+| duty    |               363 ms |   276 ms | **yes**                  |   341 ms |
+| invoke  |               387 ms |   289 ms | **yes**                  |   353 ms |
+| poe     |                61 ms |     5 ms | no (reads TOML)          |    91 ms |
 
 Reading it:
 
 - **duty and invoke re-import the project on every TAB.** This is measured
   here, independently — duty's `completions.bash` calls `duty --complete`, which
   loads `duties.py` (and therefore the whole project) before answering. The
-  286 ms delta is that import. At completion time footman is **~15× faster**.
+  276 ms delta is that import. At completion time footman is **~13× faster**.
 - **footman pays the import cost too — but only on the execution path.** Its
   `--list` is 313 ms, right alongside the others, because listing runs your
   code. Completion is the only thing that must be instant, and it is: it reads a
@@ -56,12 +76,18 @@ includes the project import the Python-based runners pay on every run.
 
 | runner  | framework overhead (@0) | with project import (@0.25 s) |
 | ------- | ----------------------: | ----------------------------: |
-| footman |                   38 ms |                        313 ms |
-| typer   |                   40 ms |                        320 ms |
-| duty    |                   69 ms |                        348 ms |
-| poe     |                   76 ms |                         67 ms |
-| invoke  |                   78 ms |                        356 ms |
+| typer   |                   75 ms |                        331 ms |
+| duty    |                   75 ms |                        354 ms |
+| footman |                   82 ms |                        346 ms |
+| invoke  |                   87 ms |                        363 ms |
+| poe     |                   93 ms |                         85 ms |
 
+- **On launch overhead the Python runners are a near-tie**, and footman sits in
+  the middle of it: a dozen milliseconds separate typer, duty, footman and
+  invoke, which is within the run-to-run spread on a laptop. footman spends
+  its share on things the others do not do at all — reading the config
+  cascade, resolving the task tree it will parse the command line against —
+  and that is the trade, not a win to claim.
 - On execution *with* a real project, everyone who imports Python tasks pays for
   it (~0.25 s here) — footman included. Execution is dominated by your project;
   **completion is the path where the architecture matters.**
@@ -82,13 +108,14 @@ Floors: 0.5 s parallel, 2.0 s serial. Reproduce with
 
 | runner  | composition                    | wall (mean) | overhead over floor |
 | ------- | ------------------------------ | ----------: | ------------------: |
-| footman | parallel (pre-deps, *default*) |  **563 ms** |               63 ms |
-| poe     | parallel (`parallel` task)     |      625 ms |              125 ms |
-| typer   | serial (no orchestration)      |     2092 ms |               92 ms |
-| duty    | serial (pre-duties)            |     2120 ms |              120 ms |
-| invoke  | serial (pre-tasks)             |     2146 ms |              146 ms |
+| footman | parallel (pre-deps, *default*) |  **615 ms** |              115 ms |
+| poe     | parallel (`parallel` task)     |      642 ms |              142 ms |
+| typer   | serial (no orchestration)      |     2083 ms |               83 ms |
+| duty    | serial (pre-duties)            |     2138 ms |              138 ms |
+| invoke  | serial (pre-tasks)             |     2138 ms |              138 ms |
 
-- **The gap that matters is 4×, and it isn't overhead — it's architecture.**
+- **The gap that matters is ~3.5×, and it isn't overhead — it's architecture**
+  (4× before overhead: a 0.5 s parallel floor against a 2.0 s serial one).
   duty and invoke run pre-tasks serially (no parallel option exists to turn
   on); the same four steps cost the sum instead of the max.
 - **poe genuinely has parallelism** (a dedicated `parallel` task type since
@@ -112,7 +139,7 @@ cold-process import cost over the bare-interpreter baseline (warm `.pyc`):
 
 typer's import genuinely is ~6–7× heavier — the reputation is real. (typer 0.27
 ships its own parser + `rich` + `shellingham`; it no longer depends on `click`.)
-Yet the full no-op *launch* above is nearly tied (footman 38 ms, typer 40 ms):
+Yet the full no-op *launch* above is a near-tie across the Python runners (typer and duty 75 ms, footman 82 ms, invoke 87 ms):
 footman spends its budget on real work (manifest sync + parse + bind) while typer
 spends it on imports. So footman didn't "get bad" on launch — it's on par per
 command. typer's weight resurfaces where it **compounds**, not on a single call:
@@ -245,7 +272,7 @@ bare required positionals — so those are *not* where footman pulls ahead.
 footman's verified edges over current duty are: no `ctx` boilerplate, native
 nested groups, **eager choice/type validation** (duty accepts an invalid
 `Literal` value; footman rejects it), `Literal`/`Enum`-driven completion, and
-completion that doesn't re-import your project (~15× faster per TAB).
+completion that doesn't re-import your project (~13× faster per TAB).
 
 **Where footman is still behind:** shell-completion installers aren't wired yet
 (the resolver works via `fm --complete`), and typer's `--help` formatting is

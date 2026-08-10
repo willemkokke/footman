@@ -1519,23 +1519,26 @@ def _inside(venv: Path) -> bool:
     return False
 
 
-def _pinning_project(probe: Path) -> Path | None:
-    """The nearest ancestor whose `uv.lock` pins footman, or None.
+def _locked_project(probe: Path) -> Path | None:
+    """The nearest ancestor holding a `uv.lock` — one existence walk, no read."""
+    return next((p for p in (probe, *probe.parents) if (p / "uv.lock").is_file()), None)
 
-    This is the question "has a project declared what the runner means
-    here?" — the uv.lock handoff's own precondition, and the thing that
-    makes a tasks file's script block none of this run's business.
+
+def _pins_the_runner(root: Path) -> bool:
+    """Whether *root*'s lockfile pins this runner — the question that decides
+    whether the invocation belongs to that project's environment.
+
+    Reading the lock is the expensive half (a real project's `uv.lock` is
+    megabytes of TOML: ~21 ms measured here), so the caller asks this only
+    once the cheap answers are exhausted.
     """
-    root = next((p for p in (probe, *probe.parents) if (p / "uv.lock").is_file()), None)
-    if root is None:
-        return None
     try:
         with open(root / "uv.lock", "rb") as fh:
             lock = tomllib.load(fh)
     except (OSError, tomllib.TOMLDecodeError):
-        return None
+        return False
     dist = _brand.dist or "footman"
-    return root if any(p.get("name") == dist for p in lock.get("package", [])) else None
+    return any(p.get("name") == dist for p in lock.get("package", []))
 
 
 def _note_ignored_block(g: dict[str, object], probe: Path) -> None:
@@ -1700,9 +1703,18 @@ def _uv_handoff(argv: list[str], g: dict[str, object]) -> int | None:
         probe = Path(str(g.get("directory") or Path.cwd())).resolve(strict=True)
     except OSError:
         return None  # a missing -C target: _run's own error path reports it
+    root = _locked_project(probe)
+    if root is not None and _inside(root / ".venv") and not g.get("verbose"):
+        # Already running out of that project's environment, which is the
+        # overwhelmingly common case — and the one answer that needs no
+        # lockfile read at all. Asked first, because reading a real
+        # project's `uv.lock` costs ~21 ms and every invocation paid it
+        # just to conclude it was already home. Under `-v` the full walk
+        # runs anyway: its note about an ignored script block is exactly
+        # what someone asking to see everything is asking for.
+        return None
     uv = _find_uv()
-    root = _pinning_project(probe)
-    if root is None:
+    if root is None or not _pins_the_runner(root):
         # Nobody has declared what the runner means here, so a tasks file
         # may declare it for itself.
         return _script_handoff(argv, g, probe, uv)
@@ -1711,7 +1723,7 @@ def _uv_handoff(argv: list[str], g: dict[str, object]) -> int | None:
     # not a warning, not a refusal; visible under -v and nowhere else.
     _note_ignored_block(g, probe)
     if _inside(root / ".venv"):
-        return None  # already the project's environment
+        return None  # already the project's environment (the -v path lands here)
     if uv is None:
         return None
     try:
