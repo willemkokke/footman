@@ -1315,10 +1315,14 @@ def cmd_width() -> int:
 
 
 def _observe_cmd(label: str) -> int:
-    """Return the padding width for *label*, learning as labels stream by."""
+    """Return the padding width for *label*, learning as labels stream by.
+
+    In terminal cells, like every other column — a `step("构建镜像")` is
+    four characters and eight cells wide."""
+    from footman._describe import display_width
+
     global _cmd_width
-    if len(label) > _cmd_width:
-        _cmd_width = len(label)
+    _cmd_width = max(_cmd_width, display_width(label))
     return _cmd_width
 
 
@@ -2406,12 +2410,16 @@ def _name_col(ctx: Context) -> str:
     """
     if not ctx.task:
         return ""
-    padded = f"{ctx.task:<{max(ctx.name_width, len(ctx.task))}}"
+    from footman import _describe
+
+    wide = max(ctx.name_width, _describe.display_width(ctx.task))
+    padded = _describe.pad_to(ctx.task, wide)
     return (f"\033[1m{padded}\033[0m" if _colored(ctx) else padded) + "  "
 
 
 def _step_line(ctx: Context, ok: bool, label: str, duration: float) -> str:
     """One completed step: mark · name · dimmed command · aligned time."""
+    from footman._describe import pad_to
     from footman._progress import fmt_secs
 
     color = _colored(ctx)
@@ -2421,10 +2429,10 @@ def _step_line(ctx: Context, ok: bool, label: str, duration: float) -> str:
     # of this chain (a warm run aligns from its first line), learned as a
     # running max on a cold one. Never the terminal edge: that reads absurd
     # on wide terminals.
-    label = f"{label:<{_observe_cmd(label)}}"
+    label = pad_to(label, _observe_cmd(label))
 
     if not ctx.tty:
-        return f"{'ok' if ok else 'FAIL':<4} {name}{label}  {time_text}\n"
+        return f"{pad_to('ok' if ok else 'FAIL', 4)} {name}{label}  {time_text}\n"
 
     mark = (
         ("\033[32m✓\033[0m" if ok else "\033[31m✗\033[0m")

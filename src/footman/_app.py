@@ -416,7 +416,7 @@ def _print_two_band(rows: list[tuple[str, int, str]]) -> None:
 def _address_band(rows: list[tuple[str, str]]) -> list[tuple[str, int, str]]:
     """Two-band rows for a flat address listing (`--list`, group help)."""
     return [
-        (f"  {_styled_name(name)}", 2 + len(name), help_text)
+        (f"  {_styled_name(name)}", 2 + _describe.display_width(name), help_text)
         for name, help_text in rows
     ]
 
@@ -493,10 +493,10 @@ def _print_param_rows(params: list[dict[str, Any]], heading: str) -> None:
         mech = _describe.dim(mech, on) if mech else ""
         detail = "; ".join(bit for bit in (doc, mech) if bit)
         rows.append((_describe.param_label(p), detail))
-    width = max(len(label) for label, _ in rows)
+    width = max(_describe.display_width(label) for label, _ in rows)
     print(f"\n{_describe.bold(f'{heading}:', on)}")
     for label, detail in rows:
-        pad = " " * (width - len(label))
+        pad = " " * (width - _describe.display_width(label))
         print(f"  {_describe.bold(label, on)}{pad}  {detail}".rstrip())
 
 
@@ -674,9 +674,9 @@ def _print_global_help(tree: dict[str, Any], show_hidden: bool = False) -> None:
         # composition with the docs table (`_describe.global_default_suffix`).
         detail += _describe.global_default_suffix(name)
         rows.append((label, detail))
-    width = max(len(label) for label, _ in rows)
+    width = max(_describe.display_width(label) for label, _ in rows)
     for label, help_text in rows:
-        pad = " " * (width - len(label))
+        pad = " " * (width - _describe.display_width(label))
         print(f"  {_describe.bold(label, _color_out)}{pad}  {help_text}")
     print()
     _print_list(tree, show_hidden)
@@ -917,8 +917,8 @@ def _plugins_report(reg: registry.Group) -> int:
         else:
             grouped.setdefault(dist_name, []).append((ep.name, "(not mounted)", ""))
     every = [row for rows in grouped.values() for row in rows]
-    name_w = max(len(name) for name, _, _ in every)
-    state_w = max(len(state) for _, state, _ in every)
+    name_w = max(_describe.display_width(name) for name, _, _ in every)
+    state_w = max(_describe.display_width(state) for _, state, _ in every)
     on = _color_out
     for dist_name in sorted(grouped):
         version, summary = dists[dist_name]
@@ -928,8 +928,8 @@ def _plugins_report(reg: registry.Group) -> int:
         print(header)
         for name, state, desc in grouped[dist_name]:
             line = (
-                f"  {name}{' ' * (name_w - len(name))}"
-                f"  {state}{' ' * (state_w - len(state))}"
+                f"  {_describe.pad_to(name, name_w)}"
+                f"  {_describe.pad_to(state, state_w)}"
             )
             if desc:
                 line += f"  {_describe.dim(f'— {desc}', on)}"
@@ -1118,7 +1118,7 @@ def _print_summary(
                 mark = "\033[33m○\033[0m"  # cut off by fail-fast, not a failure
             else:
                 mark = "\033[31m✗\033[0m"
-            name = f"\033[1;36m{result.task:<{width}}\033[0m"
+            name = _describe.bold_cyan(_describe.pad_to(result.task, width), True)
         else:
             word = "ok" if ok else ("cut" if cancelled else "FAIL")
             if state == "shared":
@@ -1126,7 +1126,7 @@ def _print_summary(
             elif state == "skipped":
                 word = "skip"
             mark = f"{word:<4}"
-            name = f"{result.task:<{width}}"
+            name = _describe.pad_to(result.task, width)
         if state == "shared":
             timing = "(already run this run)"
         elif state == "skipped":
