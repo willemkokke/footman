@@ -65,6 +65,22 @@ class SpecError(ManifestError):
     """A parameter's markers are inconsistent (e.g. `env()` with no default)."""
 
 
+_SIGNATURE = "_footman_signature"
+_CALL_SIGNATURE = "_footman_call_signature"
+
+
+def _memo(fn: Any, attr: str) -> tuple[Any, inspect.Signature | None]:
+    """The body to stamp a signature memo on, and the memo already there.
+
+    Keyed on the **body**, through `task_body`, so a handle, an `.opts()`
+    reference and the bare function share one answer — they share one
+    signature by construction (`__wrapped__` runs the whole way down). A
+    callable that refuses attributes (a builtin) simply never memoises.
+    """
+    body = registry.task_body(fn)
+    return body, getattr(body, attr, None)
+
+
 def resolved_signature(fn: Any) -> inspect.Signature:
     """Signature of *fn* with string annotations evaluated to real types.
 
@@ -74,11 +90,26 @@ def resolved_signature(fn: Any) -> inspect.Signature:
     that cannot resolve raises for the whole signature — so on failure each
     annotation is evaluated on its own: one broken parameter degrades to
     pass-through text, and the rest keep their types, choices and completion.
+
+    Memoised on the function, the `_footman_*` house pattern: the answer is a
+    pure function of a function object whose annotations are fixed by the
+    time anything asks (discovery imports a module whole before a task in it
+    can run), and the ask is *hot* — every execution path asks about a task
+    around eight times, at ~68 µs a call on a string-annotated file, and the
+    manifest asks once more per task. The memo dies with the function it is
+    stamped on, and discovery's per-file isolation mints fresh functions on
+    every load, so it cannot outlive what it describes.
     """
+    body, cached = _memo(fn, _SIGNATURE)
+    if cached is not None:
+        return cached
     try:
-        return inspect.signature(fn, eval_str=True)
+        sig = inspect.signature(fn, eval_str=True)
     except (NameError, TypeError, AttributeError):
-        return _partially_resolved(fn)
+        sig = _partially_resolved(fn)
+    with contextlib.suppress(AttributeError, TypeError):
+        setattr(body, _SIGNATURE, sig)
+    return sig
 
 
 def _partially_resolved(fn: Any) -> inspect.Signature:
@@ -123,14 +154,22 @@ def call_signature(fn: Any) -> inspect.Signature:
     context parameter. A body call never passes `ctx` — `run_bound` injects it
     at the task boundary — so binding a call's arguments against the declared
     signature would land the first positional value in the `ctx` slot.
+
+    Memoised beside `resolved_signature`, for the same reason and with the
+    same lifetime: `given()` and the futures memo ask per call, not per run.
     """
+    body, cached = _memo(fn, _CALL_SIGNATURE)
+    if cached is not None:
+        return cached
     sig = resolved_signature(fn)
     name = context_param_name(sig)
-    if name is None:
-        return sig
-    return sig.replace(
-        parameters=[p for p in sig.parameters.values() if p.name != name]
-    )
+    if name is not None:
+        sig = sig.replace(
+            parameters=[p for p in sig.parameters.values() if p.name != name]
+        )
+    with contextlib.suppress(AttributeError, TypeError):
+        setattr(body, _CALL_SIGNATURE, sig)
+    return sig
 
 
 def _unique_globals(root: Group) -> list[Any]:
