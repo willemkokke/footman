@@ -72,6 +72,22 @@ def test_a_bad_value_is_a_taught_refusal():
     assert "--level" in result.stderr
 
 
+def test_a_misplaced_plugin_global_is_taught_by_name():
+    # A mounted global after a task name gets the same position teaching a
+    # core global gets there — not the generic unknown-option shrug.
+    reg = Group("root")
+    _adopt(reg, "audit")
+
+    @reg.task
+    def build(): ...
+
+    result = Runner().invoke("build --audit", tasks=reg)
+    assert not result.ok
+    assert "--audit is a global option" in result.stderr
+    assert "before the first task name" in result.stderr
+    assert "unknown option" not in result.stderr
+
+
 def test_an_unpulled_option_is_an_unknown_global():
     reg = Group("root")  # nothing mounted: the name reaches no run
 

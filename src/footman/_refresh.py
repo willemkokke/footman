@@ -67,11 +67,11 @@ def _rebuild() -> None:
     cfg = _config.load_config(cwd, ceiling)
     filename = cfg.get("tasks")
     if not isinstance(filename, str):
-        # A branded CLI's default filename isn't knowable here — but the
-        # manifest this child refreshes baked it in.
-        cached = _manifest.load_manifest(_paths.manifest_path(cwd))
-        baked = cached.get("tasks_file") if isinstance(cached, dict) else None
-        filename = baked if isinstance(baked, str) else _paths.DEFAULT_TASKS_FILE
+        # The brand's default filename rode in on the spawn (`child_args`
+        # hands it over; `configure_child` installed it), so the child asks
+        # `_paths` — the peek at the cached manifest's baked `tasks_file`
+        # predated that handoff and could serve a stale answer.
+        filename = _paths.tasks_file_name()
     name = filename
     project_files = _paths.task_files(cwd, ceiling, name)
     files = project_files
