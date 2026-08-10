@@ -2153,6 +2153,10 @@ def _run_tree(
         "root_dir": root_dir,
         "invoked_dir": str(Path.cwd()),
         "quiet": bool(g.get("quiet")),
+        # Every step has a row in the envelope, so footman's own receipt
+        # lines would only arrive twice — once as chrome inside a task's
+        # `output` string, once as the fields a reader actually parses.
+        "machine_read": json_mode,
         "verbose": bool(g.get("verbose")),
         # The resolved tri-state, split into the two Context bits: `never` stops
         # all colour, `always` forces it past a non-terminal (the scheduler still

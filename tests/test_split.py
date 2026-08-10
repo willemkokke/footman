@@ -337,3 +337,91 @@ def test_a_grouped_shape_is_refused_before_anything_runs():
     with pytest.raises(ChainError, match=r"leaves 1 over"):
         split_chain(tree, ["route", "--points=1,2", "--points=3"])
     split_chain(tree, ["route", "--points=1,2", "--points=3,4"])  # whole: fine
+
+
+def test_a_task_option_written_where_globals_live_points_right(tree):
+    # The generic sentence sends someone LEFT ("globals go before the first
+    # task") when the fix is to move the word RIGHT, past the task that owns
+    # it. Name that task — the one they typed, when they typed one.
+    with pytest.raises(ChainError) as excinfo:
+        split_chain(tree, ["--fix", "lint"])
+    message = str(excinfo.value)
+    assert "--fix is an option of lint, not a global" in message
+    assert "it goes after the task name: lint --fix" in message
+
+
+def test_several_owners_and_none_typed_lists_them(tree):
+    # --fix belongs to both format and lint; with neither on the line there
+    # is nothing to name, so the answer lists rather than guesses.
+    with pytest.raises(ChainError) as excinfo:
+        split_chain(tree, ["--fix", "check"])
+    message = str(excinfo.value)
+    assert "--fix is a task option, not a global" in message
+    assert "it goes after the task that takes it (" in message
+    assert "lint" in message
+
+
+def test_an_unmounted_plugin_flag_teaches_its_mount(tree):
+    # Spelled perfectly, refused anyway: "unknown" sends someone hunting for
+    # a typo that isn't there. The flag exists — the plugin isn't mounted.
+    with pytest.raises(ChainError) as excinfo:
+        split_chain(tree, ["--env-file=.env", "check"])
+    message = str(excinfo.value)
+    assert "--env-file comes from footman.env_files" in message
+    assert 'add plugin("footman.env_files") to tasks.py' in message
+
+    with pytest.raises(ChainError, match=r"--profile comes from footman\.profile"):
+        split_chain(tree, ["--profile", "check"])
+
+
+def test_the_plugin_flag_table_cannot_go_stale():
+    """`_FROM_PLUGIN` names providers as strings so a refusal never imports
+    one. Mount each and check the flag it promises is really declared."""
+    from footman import _split, compose, registry
+
+    for flag, provider in _split._FROM_PLUGIN.items():
+        with registry.capture() as captured:
+            compose.plugin(provider, into=captured)
+        declared = {"--" + g.name for g in captured.contributions["globals"]}
+        assert flag in declared, f"{provider} no longer declares {flag}"
+
+
+def test_one_word_too_many_reads_as_arity_not_a_bad_address(tree):
+    # `fm render a b spare` is far more often a hand that typed one argument
+    # too many than a misspelled task name — both readings, likeliest first.
+    with pytest.raises(ChainError) as excinfo:
+        split_chain(tree, ["render", "page.md", "out.html", "spare"])
+    message = str(excinfo.value)
+    assert "no task named 'spare'" in message
+    assert "or one argument too many for render, which takes 2 arguments" in message
+
+
+def test_a_task_that_takes_no_arguments_says_none(tree):
+    with pytest.raises(ChainError) as excinfo:
+        split_chain(tree, ["check", "spare"])
+    assert "one argument too many for check, which takes none" in str(excinfo.value)
+
+
+def test_a_near_miss_address_keeps_the_spelling_reading(tree):
+    # A word close to a task name gets the suggestion, not the arity clause:
+    # two competing "did you mean"s in one sentence teach nothing.
+    with pytest.raises(ChainError) as excinfo:
+        split_chain(tree, ["render", "page.md", "out.html", "chekc"])
+    message = str(excinfo.value)
+    assert "did you mean 'check'?" in message
+    assert "too many" not in message
+
+
+def test_the_arity_clause_names_the_task_that_just_filled_up(tree):
+    # A real chain after a filled task is still a chain — and when a later
+    # word fails, the clause speaks for the task it followed, not for
+    # whichever one filled up earliest.
+    assert [s.task for s in segs(tree, "render page.md out.html check")] == [
+        "render",
+        "check",
+    ]
+    with pytest.raises(ChainError) as excinfo:
+        split_chain(tree, ["render", "page.md", "out.html", "check", "zzzzzzzz"])
+    message = str(excinfo.value)
+    assert "too many for check, which takes none" in message
+    assert "too many for render" not in message

@@ -739,3 +739,28 @@ def test_a_group_without_a_default_is_untouched():
     tree = _manifest.build_manifest(reg)["tree"]
     names = [address for address, _ in _describe.iter_tasks(tree)]
     assert names == ["db.migrate", "db.alpha"]  # declaration order, as before
+
+
+def test_a_runnable_group_completes_itself_once():
+    """`lint` and `lint.default` are one action wearing two addresses. The
+    listings deduped it; completion kept offering the pair, so a TAB at the
+    top level showed the same action twice in different words."""
+    from footman._complete import complete
+
+    reg = Group("root")
+    lint = reg.group("lint")
+
+    @lint.task
+    def markdown(fix: bool = False): ...
+
+    @lint.default
+    def lint_all():
+        """Lint everything."""
+
+    tree = _manifest.build_manifest(reg)["tree"]
+    offered = {c.split("\t")[0] for c in complete(tree, [""])}
+    assert {"lint", "lint.markdown"} <= offered
+    assert "lint.default" not in offered
+    # Descending is a different question: at `lint.` the bare row is off the
+    # screen, so `lint.default` is the only spelling of that action left.
+    assert "lint.default" in {c.split("\t")[0] for c in complete(tree, ["lint."])}

@@ -581,6 +581,7 @@ def _gate_node_confirms(
             )
         if not answers[key]:
             n.result = _not_confirmed(n.seg)
+            n.result.address = n.address
             n.result.seq = n.seq
             n.state = "done"
 
@@ -883,7 +884,14 @@ def _run_plan(
             n.result.eligible = max(finishes)
     skipped = [
         _executor.TaskResult(
-            task=n.seg.task, ok=False, state="skipped", blocked_by=_blocked_by(n)
+            task=n.seg.task,
+            # Addresses are assigned when the plan is final, not when a task
+            # runs — so a row that never ran still has one, and `blocked_by`
+            # and `after` point at names a reader can look up.
+            address=n.address,
+            ok=False,
+            state="skipped",
+            blocked_by=_blocked_by(n),
         )
         for n in ordered
         if n.result is None and n.seg.task not in already

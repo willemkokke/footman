@@ -28,7 +28,7 @@ from __future__ import annotations
 import contextlib
 import difflib
 import os
-from collections.abc import Callable, Generator, Iterable
+from collections.abc import Callable, Generator, Iterable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Annotated, Any, Literal
@@ -75,7 +75,34 @@ def _did_you_mean(word: str, known: Iterable[str]) -> str:
     return f" — did you mean {close[0]!r}?" if close else ""
 
 
-def _unknown_global(name: str, known: dict[str, str]) -> str:
+def _owners_of(tree: dict[str, Any], flag: str) -> list[str]:
+    """Every task address whose own options include *flag*.
+
+    Walked only when a refusal is already certain, so the common path
+    never pays for it."""
+    found: list[str] = []
+
+    def walk(node: dict[str, Any], prefix: str) -> None:
+        for name, task in node["tasks"].items():
+            if any(
+                "--" + str(p["name"]) == flag
+                for p in task["params"]
+                if p["kind"] in ("flag", "option")
+            ):
+                found.append(f"{prefix}{name}")
+        for name, sub in node["groups"].items():
+            walk(sub, f"{prefix}{name}.")
+
+    walk(tree, "")
+    return found
+
+
+def _unknown_global(
+    name: str,
+    known: dict[str, str],
+    tree: dict[str, Any] | None = None,
+    rest: Sequence[str] = (),
+) -> str:
     """The teaching for a dash token that is not a global option.
 
     Two shapes are muscle memory rather than typos, and both deserve their
@@ -96,6 +123,31 @@ def _unknown_global(name: str, known: dict[str, str]) -> str:
                 f"{name} combines short options, which footman does not read "
                 f"— write them apart: {spelled}"
             )
+    if provider := _FROM_PLUGIN.get(name):
+        # Not unknown — unmounted. The generic sentence sends someone hunting
+        # for a spelling mistake in a flag they spelled correctly.
+        return (
+            f"{name} comes from {provider}, which this project has not "
+            f'mounted — add plugin("{provider}") to tasks.py'
+        )
+    if tree is not None and (owners := _owners_of(tree, name)):
+        # Not a global at all: a task option, written where globals live.
+        # The generic hint points the wrong way here — the fix is to move it
+        # RIGHT, past the task that owns it. Name the task they actually
+        # typed when one of the owners is in the line; several owners and
+        # none of them typed is the only case that has to stay a list.
+        typed = [owner for owner in owners if owner in rest]
+        whose = typed[0] if typed else owners[0] if len(owners) == 1 else ""
+        if whose:
+            return (
+                f"{name} is an option of {whose}, not a global — it goes "
+                f"after the task name: {whose} {name}"
+            )
+        listed = ", ".join(owners[:3]) + (", …" if len(owners) > 3 else "")
+        return (
+            f"{name} is a task option, not a global — it goes after the task "
+            f"that takes it ({listed})"
+        )
     return f"unknown global option {name} (global options go before the first task)"
 
 
@@ -417,6 +469,16 @@ _GLOBAL_HINT = {name: hint for name, _, _, hint, _, _ in GLOBALS if hint}
 _GLOBAL_DEFAULT = {name: d for name, _, _, _, d, _ in GLOBALS if d is not None}
 _VALUE_OPTIONAL = frozenset(_GLOBAL_DEFAULT)
 
+# Flags that are not globals but *would* be, had their provider been mounted.
+# Consulted only when a refusal is already certain, so this stays a table of
+# strings rather than an import: naming a plugin here must never load it.
+# `test_split.py` mounts each one and checks it still declares the flag, so
+# the table cannot quietly go stale.
+_FROM_PLUGIN = {
+    "--env-file": "footman.env_files",
+    "--profile": "footman.profile",
+}
+
 
 def global_default(name: str) -> tuple[Any, bool]:
     """A global's default **value**, and whether it was computed — resolved
@@ -711,6 +773,7 @@ def _parse_globals(
     argv: list[str],
     i: int,
     *,
+    tree: dict[str, Any] | None = None,
     plugin: dict[str, str] | None = None,
     lenient: bool = False,
 ) -> tuple[list[str], int]:
@@ -749,7 +812,7 @@ def _parse_globals(
                 globals_.append(argv[i])
                 i += 1
                 continue
-            raise ChainError(_unknown_global(name, known))
+            raise ChainError(_unknown_global(name, known, tree, argv[i + 1 :]))
         canon = _CANON.get(name, name)
         if known[name] == "flag" and "=" in argv[i]:
             raise ChainError(f"{canon} is a flag and takes no value")
@@ -803,6 +866,7 @@ def _resolve_head(
     argv: list[str],
     i: int,
     prev_group: tuple[str, dict[str, Any]] | None,
+    spent: tuple[str, int] | None = None,
 ) -> tuple[dict[str, Any], list[str], dict[str, Any] | None, int]:
     """Resolve segment head `argv[i]` — one dotted address — to its task.
 
@@ -888,8 +952,19 @@ def _resolve_head(
         # dotted address, "expected a task name, got" at the root — but the
         # scope clause after already carries that distinction (`docs has:` vs
         # `know:`), and someone who typed `docs.sevre` thinks of it as a name.
+        # A word that is no task, arriving right after a task whose
+        # positionals are already full, is far more often one argument too
+        # many than a misspelled address — say so, without dropping the
+        # address reading, since only the author knows which they meant.
+        arity = ""
+        if spent is not None and not hint:
+            who, takes = spent
+            counted = f"{takes} argument{'s' if takes != 1 else ''}"
+            arity = f" — or one argument too many for {who}, which takes "
+            arity += counted if takes else "none"
         err = ChainError(
-            f"no task named {(bad if path else token)!r}{hint} ({scope}: {known})"
+            f"no task named {(bad if path else token)!r}{hint} "
+            f"({scope}: {known}){arity}"
         )
         err.unknown = token
         raise err
@@ -999,9 +1074,11 @@ def split_chain(
             # Every value-taking plugin global may be named bare: presence
             # is a reading on its own, since the owner can ask `.given`.
             plugin["--" + g["name"]] = "option?"
-    globals_, i = _parse_globals(argv, 0, plugin=plugin)
+    globals_, i = _parse_globals(argv, 0, tree=tree, plugin=plugin)
     segments: list[Segment] = []
     prev_group: tuple[str, dict[str, Any]] | None = None
+    # The task whose positionals just filled up, alive for one token.
+    spent: tuple[str, int] | None = None
     # The option a bare mention just named, alive for exactly the token after
     # it — including across a segment boundary, since a word with nowhere left
     # to go in this segment is tried as the next task's name.
@@ -1009,7 +1086,8 @@ def split_chain(
 
     while i < len(argv):
         with _hint_attachment(bare_before, argv[i]):
-            task, path, group_node, i = _resolve_head(tree, argv, i, prev_group)
+            task, path, group_node, i = _resolve_head(tree, argv, i, prev_group, spent)
+        spent = None
         bare_before = None
         prev_group = (".".join(path), group_node) if group_node is not None else None
 
@@ -1072,7 +1150,12 @@ def split_chain(
                     rest_count += 1
                     i += 1
                 else:
-                    break  # arity satisfied: the next word starts a new segment
+                    # Arity satisfied: the next word starts a new segment —
+                    # or is an argument this task had no room for, which the
+                    # address refusal gets to say if the word turns out to
+                    # name nothing.
+                    spent = (seg.task, len(fixed))
+                    break
             bare_before = None
 
         missing = [f"<{p['name']}>" for p in fixed[filled:] if not p.get("optional")]
