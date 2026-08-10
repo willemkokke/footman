@@ -1,12 +1,13 @@
 # Completion on fish
 
-This is a recording of a real fish session — the completion hook loaded the way
-the next section describes, <kbd>Tab</kbd> opening fish's pager with
-each task's description, a prefix completing. Regenerated from a live
-shell on every docs build, so it cannot drift from what your terminal
-will do:
+This is a recording of a real fish session — the completion hook loaded
+the way the next section describes, then four <kbd>Tab</kbd> presses: the task menu, a prefix completed, a
+task's options with what each one does, and a group descended by its
+dotted address. Every shell's page records the *same* session, so the
+pages differ only where the shells do. Regenerated from a live shell on
+every docs build, so it cannot drift from what your terminal will do:
 
-![Animated: fm TAB opens fish's pager with task descriptions, che TAB completes to check](_generated/shots/fish-cast.svg)
+![Animated: fm TAB lists every task with its summary in fish's pager, bui TAB completes to build, --TAB shows its described options, and deploy. TAB descends the group](_generated/shots/fish-cast.svg)
 
 ## Install
 

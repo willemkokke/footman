@@ -1,12 +1,17 @@
 # Completion on PowerShell
 
-This is a recording of a real pwsh session — the completion hook loaded the way
-the next section describes, with <kbd>Tab</kbd> bound to
-`MenuComplete`: the grid menu with each task's description as the
-tooltip line. Regenerated from a live shell on every docs build, so
-it cannot drift from what your terminal will do:
+This is a recording of a real pwsh session — the completion hook loaded
+the way the next section describes, with <kbd>Tab</kbd> bound to
+`MenuComplete`, then four <kbd>Tab</kbd> presses: the task menu, a prefix completed, a
+task's options with what each one does, and a group descended by its
+dotted address. Every shell's page records the *same* session, so the
+pages differ only where the shells do. Regenerated from a live shell on
+every docs build, so it cannot drift from what your terminal will do:
 
-![Animated: fm TAB opens PSReadLine's MenuComplete grid with tooltips, che TAB completes to check](_generated/shots/pwsh-cast.svg)
+PSReadLine shows each candidate's description as the tooltip line
+under the grid rather than in a column beside it.
+
+![Animated: fm TAB opens PSReadLine's completion menu of tasks, bui TAB completes to build, --TAB shows its options, and deploy. TAB descends the group](_generated/shots/pwsh-cast.svg)
 
 ## Install
 

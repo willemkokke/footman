@@ -1,11 +1,14 @@
 # Completion on zsh
 
 This is a recording of a real zsh session — the hook installed the way the
-next section describes, <kbd>Tab</kbd> pressed for the menu, a prefix
-completed, the task run. It is regenerated from a live shell on every docs
-build, so it cannot drift from what your terminal will do:
+next section describes, then four <kbd>Tab</kbd> presses: the task menu, a
+prefix completed, a task's options with what each one does, and a group
+descended by its dotted address. Every shell's page records the *same*
+session, so the pages differ only where the shells do. It is regenerated
+from a live shell on every docs build, so it cannot drift from what your
+terminal will do:
 
-![Animated: fm TAB shows the task menu with descriptions, che TAB completes to check, and fm check runs to green receipts](_generated/shots/zsh-cast.svg)
+![Animated: fm TAB lists every task with its summary, bui TAB completes to build, --TAB shows its options each with what it does, and deploy. TAB descends the group](_generated/shots/zsh-cast.svg)
 
 ## Install
 
