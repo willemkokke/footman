@@ -197,6 +197,16 @@ def env_prefix() -> str:
     return _prefix
 
 
+def tasks_file_name() -> str:
+    """The brand's tasks filename, as `configure`/`configure_child` set it.
+
+    The refresh child reads it here: `child_args` hands the resolved value
+    over on spawn, so a branded default IS knowable in the child — the old
+    peek at the cached manifest's baked `tasks_file` predated that handoff.
+    """
+    return _tasks_file
+
+
 def env_var(suffix: str) -> str:
     """The configured spelling of a variable: `ACME_CACHE_DIR`."""
     return f"{_prefix}_{suffix}"

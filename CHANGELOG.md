@@ -7,6 +7,13 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A mounted global after a task name is taught by name.** `fm build
+  --audit` said `unknown option --audit` where a core global in the same
+  position already said "goes before the first task name" — one teaching
+  for both now, the last place core and plugin options spoke differently.
+
 ## [0.37.0] — 2026-08-10
 
 ### Added

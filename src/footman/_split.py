@@ -993,7 +993,7 @@ def split_chain(
                 break
             if tok.startswith("--"):
                 before = len(seg.bare)
-                i = _consume_option(seg, opts, argv, i)
+                i = _consume_option(seg, opts, argv, i, frozenset(plugin))
                 # Remember a bare mention for exactly one token. If the word
                 # after it goes on to fail, the failure gets the attachment
                 # hint — the space form is not a value spelling in this grammar,
@@ -1052,7 +1052,11 @@ def split_chain(
 
 
 def _consume_option(
-    seg: Segment, opts: dict[str, dict[str, Any]], argv: list[str], i: int
+    seg: Segment,
+    opts: dict[str, dict[str, Any]],
+    argv: list[str],
+    i: int,
+    plugin_flags: frozenset[str] = frozenset(),
 ) -> int:
     tok = argv[i]
     name = tok.split("=", 1)[0]
@@ -1065,6 +1069,15 @@ def _consume_option(
     if p is None:
         if (misplaced := _misplaced_global(name)) is not None:
             raise ChainError(f"{seg.task}: {misplaced}")
+        if name in plugin_flags:
+            # A mounted plugin's global after a task name is the same position
+            # mistake a core global makes there — teach it by name, the way
+            # `_misplaced_global` does for core, instead of the generic
+            # unknown-option shrug the plugin side used to get.
+            raise ChainError(
+                f"{seg.task}: {name} is a global option — it goes before "
+                f"the first task name"
+            )
         forms = list(opts) + [
             f"--no-{opts[k]['name']}" for k in opts if opts[k]["kind"] == "flag"
         ]
