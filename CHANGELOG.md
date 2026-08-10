@@ -7,6 +7,8 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+## [0.38.1] — 2026-08-10
+
 ### Changed
 
 - **The cold-cache <kbd>Tab</kbd> waits a second, not three.** A first-time
@@ -4510,7 +4512,8 @@ versions may include breaking changes.
 
 - Placeholder release claiming the `footman` name on PyPI. Not tagged in git.
 
-[Unreleased]: https://github.com/willemkokke/footman/compare/v0.38.0...HEAD
+[Unreleased]: https://github.com/willemkokke/footman/compare/v0.38.1...HEAD
+[0.38.1]: https://github.com/willemkokke/footman/compare/v0.38.0...v0.38.1
 [0.38.0]: https://github.com/willemkokke/footman/compare/v0.37.0...v0.38.0
 [0.37.0]: https://github.com/willemkokke/footman/compare/v0.36.0...v0.37.0
 [0.36.0]: https://github.com/willemkokke/footman/compare/v0.35.0...v0.36.0
