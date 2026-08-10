@@ -110,6 +110,15 @@ if TYPE_CHECKING:
     from footman.testing import recording as recording
 
 __version__ = "0.37.0"
+
+BUILTIN = ("footman.new",)
+"""Stock footman's built-in task providers — what a project-less `fm` offers.
+
+Named here, beside `main()`, because BOTH doors need it: the `App` the
+execution path builds, and the `--complete` dispatch, which configures
+`_paths` with it before the hot path decides whether this directory has a
+global tree. A branded CLI passes its own through `App(builtin=…)`.
+"""
 __all__ = [
     "App",
     "Arg",
@@ -223,13 +232,19 @@ def main(tasks_file: str | None = None) -> None:
 
     argv = sys.argv[1:]
     if argv and argv[0] == "--complete":
-        # Still first: the hot path answers before anything else is decided.
-        # No `configure` call — `_paths`' module defaults *are* stock
-        # footman's locations, and the environment overrides resolve inside
-        # them. That keeps `footman.app` (and the dataclass machinery) off a
-        # TAB press entirely.
+        # Still first: the hot path answers before anything else is decided,
+        # and `footman.app` (with its dataclass machinery) stays off a TAB
+        # press entirely. `_paths`' module defaults *are* stock footman's
+        # locations — except the built-ins, which live on the `App` below
+        # and no default can know. Telling `_paths` about them is two
+        # attribute writes, and without it the hot path cannot see that a
+        # project-less directory has a global tree at all: the fallback is
+        # skipped, the refresh child writes nothing, and every TAB in a
+        # directory like $HOME pays the full cold bound for empty output.
+        from footman import _paths
         from footman._complete import complete_cli
 
+        _paths.configure(builtin=BUILTIN)
         raise SystemExit(complete_cli(argv[1:]))
     if tasks_file is not None and not any(
         a.startswith(("-f=", "--tasks-file=")) for a in argv
@@ -246,7 +261,7 @@ def main(tasks_file: str | None = None) -> None:
     # `App` that keeps the `fm` command gets them, this one included.
     # `fm new` in an empty directory: footman declares its own built-in,
     # the same way any branded CLI would.
-    raise SystemExit(App(dist="footman", builtin=("footman.new",)).run(argv))
+    raise SystemExit(App(dist="footman", builtin=BUILTIN).run(argv))
 
 
 def __getattr__(name: str) -> object:

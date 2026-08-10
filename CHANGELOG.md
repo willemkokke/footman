@@ -9,6 +9,21 @@ versions may include breaking changes.
 
 ### Fixed
 
+- **<kbd>Tab</kbd> in a directory with no tasks answers at once.** It used to
+  stall the full three-second cold bound and come back empty — every time,
+  with nothing ever cached to make the next one different. Which made the
+  most common place to press it, a home directory, the slowest. Three faults
+  compounded: the completion dispatch never told `_paths` about the brand's
+  built-ins, so the hot path could not see that a project-less directory has
+  a global tree at all; the fallback to that tree was skipped; and the
+  rebuild child, asked to build nothing, wrote nothing. The dispatch now
+  carries the built-ins, and one walk on the cache-miss path decides what the
+  directory is: a project builds its cascade, a project-less one serves the
+  shared global tree, and a directory with genuinely nothing to complete says
+  so immediately rather than spawning a build that can only come back empty.
+  Measured on a home-like directory: 3,052 ms and no candidates, now 141 ms
+  cold and 28 ms warm, with the built-ins offered.
+
 - **A group's default lists once.** `--list` showed a runnable group twice —
   the bare `lint` row, described by its default, and the `lint.default`
   child: one action wearing two lines, and `--tree` and group help repeated
