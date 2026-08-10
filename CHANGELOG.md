@@ -7,6 +7,8 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+## [0.37.0] — 2026-08-10
+
 ### Added
 
 - **`run(color=)` — a per-call colour override for what the child emits.**
@@ -4369,7 +4371,8 @@ versions may include breaking changes.
 
 - Placeholder release claiming the `footman` name on PyPI. Not tagged in git.
 
-[Unreleased]: https://github.com/willemkokke/footman/compare/v0.36.0...HEAD
+[Unreleased]: https://github.com/willemkokke/footman/compare/v0.37.0...HEAD
+[0.37.0]: https://github.com/willemkokke/footman/compare/v0.36.0...v0.37.0
 [0.36.0]: https://github.com/willemkokke/footman/compare/v0.35.0...v0.36.0
 [0.35.0]: https://github.com/willemkokke/footman/compare/v0.34.0...v0.35.0
 [0.34.0]: https://github.com/willemkokke/footman/compare/v0.33.0...v0.34.0
