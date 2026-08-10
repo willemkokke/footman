@@ -431,6 +431,28 @@ def test_unknown_global(project, capsys):
     assert "unknown global option" in capsys.readouterr().err
 
 
+def test_a_short_option_wearing_its_value_is_taught(project, capsys):
+    # `make -j4` muscle memory. The spaced form (`-j 4`) already teaches the
+    # attached spelling; the glued one now gets the same sentence, so one
+    # canonical form is taught from whichever way a hand reaches for it.
+    assert _app.run(["-j1", "hi"]) == EX_USAGE
+    err = capsys.readouterr().err
+    assert "-j takes its value attached" in err and "did you mean -j=1?" in err
+
+
+def test_combined_shorts_are_taught_apart(project, capsys):
+    assert _app.run(["-sq", "hi"]) == EX_USAGE
+    err = capsys.readouterr().err
+    assert "combines short options" in err and "write them apart: -s -q" in err
+
+
+def test_a_genuine_short_typo_stays_unknown(project, capsys):
+    # Not every dash token is one of those two habits — a real typo keeps
+    # the plain answer instead of being bent into a suggestion.
+    assert _app.run(["-zzq", "hi"]) == EX_USAGE
+    assert "unknown global option -zz" in capsys.readouterr().err
+
+
 def test_passthrough_without_varargs_is_accepted(project, capsys):
     assert _app.run(["hi", "--", "x"]) == 0  # available via passthrough(), not an error
     assert "hello world" in capsys.readouterr().out

@@ -30,6 +30,23 @@ versions may include breaking changes.
 
 ### Fixed
 
+- **The two short-option habits are taught, not shrugged at.** `fm -j1` said
+  `unknown global option -j1 (global options go before the first task)` —
+  which misdiagnosed it twice over: `-j` exists, and it *was* before the task.
+  A short option wearing its value now gets the same sentence the spaced form
+  already got, `-j takes its value attached — did you mean -j=1?`, so one
+  canonical spelling is taught from whichever way a hand reaches for it. And
+  `fm -sq` says footman does not combine short options, naming them apart
+  (`-s -q`), instead of reading `-sq` as a name nobody wrote. A genuine typo
+  still gets the plain unknown-option answer.
+
+- **A hook that chooses to stop speaks for itself.** A `fail("…")` from a
+  lifecycle hook was prefixed with the machinery that ran it — `@pre_tasks
+  'load': --env-file: … does not exist` — putting plumbing in front of a
+  sentence written for a person. The reason now stands alone; a hook that
+  *crashed* is still named, because there the machinery is what a reader
+  needs.
+
 - **<kbd>Tab</kbd> in a directory with no tasks answers at once.** It used to
   stall the full three-second cold bound and come back empty — every time,
   with nothing ever cached to make the next one different. Which made the

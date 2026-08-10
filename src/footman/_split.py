@@ -75,6 +75,30 @@ def _did_you_mean(word: str, known: Iterable[str]) -> str:
     return f" — did you mean {close[0]!r}?" if close else ""
 
 
+def _unknown_global(name: str, known: dict[str, str]) -> str:
+    """The teaching for a dash token that is not a global option.
+
+    Two shapes are muscle memory rather than typos, and both deserve their
+    own sentence instead of "unknown option". A short option wearing its
+    value (`-j1`, the `make -j4` habit) gets the same teaching the spaced
+    form already gets — one canonical spelling, taught from whichever way a
+    hand reaches for it. Combined shorts (`-sq`) get told that footman does
+    not combine them, rather than being read as a name nobody wrote.
+    """
+    if len(name) > 2 and name[0] == "-" and name[1] != "-":
+        head, tail = name[:2], name[2:]
+        kind = known.get(head)
+        if kind == "option":
+            return f"{head} takes its value attached — did you mean {head}={tail}?"
+        if kind == "flag" and all(f"-{c}" in known for c in name[1:]):
+            spelled = " ".join(f"-{c}" for c in name[1:])
+            return (
+                f"{name} combines short options, which footman does not read "
+                f"— write them apart: {spelled}"
+            )
+    return f"unknown global option {name} (global options go before the first task)"
+
+
 def _misplaced_global(token: str) -> str | None:
     """The teaching message when *token* is really one of the GLOBALS.
 
@@ -725,10 +749,7 @@ def _parse_globals(
                 globals_.append(argv[i])
                 i += 1
                 continue
-            raise ChainError(
-                f"unknown global option {name} "
-                f"(global options go before the first task)"
-            )
+            raise ChainError(_unknown_global(name, known))
         canon = _CANON.get(name, name)
         if known[name] == "flag" and "=" in argv[i]:
             raise ChainError(f"{canon} is a flag and takes no value")
