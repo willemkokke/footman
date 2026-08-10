@@ -115,3 +115,59 @@ def test_leaves_are_parse_safe():
     assert _leaf("prepared 3 fixtures") == "prepared-3-fixtures"
     assert _leaf("make target#2") == "make-target-2"  # ordinals stay ours
     assert _leaf("///") == "step"  # never empty
+
+
+def test_a_row_that_never_ran_still_has_its_address(tmp_path):
+    """Addresses are assigned when the plan is final, not when a task runs.
+    A skipped row used to arrive with `address: ""`, which broke the one
+    lookup the envelope promises: `blocked_by` and `after` name addresses,
+    and an empty one matches nothing."""
+    (tmp_path / "tasks.py").write_text(
+        textwrap.dedent(
+            """
+            from footman import task
+
+            @task
+            def build():
+                raise SystemExit(3)
+
+            @task(pre=[build])
+            def publish(): ...
+            """
+        )
+    )
+    result = Runner().invoke("--json publish", cwd=tmp_path)
+    assert not result.ok
+    rows = {i["task"]: i for i in json.loads(result.stdout)["items"] if "task" in i}
+    assert rows["publish"]["state"] == "skipped"
+    assert rows["publish"]["address"] == "publish"
+    assert rows["publish"]["blocked_by"] == rows["build"]["address"]
+
+
+def test_the_envelope_carries_task_output_and_not_footman_chrome(tmp_path):
+    """A failing step used to print its receipt line into the task's capture
+    buffer, so `output` arrived as `"FAIL build  echo hi  (0.0s)\n"` — a
+    human's line, in a machine's field, duplicating the step row right below
+    it. A body's own prints are what the buffer is for, and they stay."""
+    (tmp_path / "tasks.py").write_text(
+        textwrap.dedent(
+            """
+            from footman import run, task
+
+            @task
+            def build():
+                print("a body's own words")
+                run(["python", "-c", "raise SystemExit(2)"])
+            """
+        )
+    )
+    result = Runner().invoke("--json build", cwd=tmp_path)
+    assert not result.ok
+    items = json.loads(result.stdout)["items"]
+    (row,) = [i for i in items if "task" in i]
+    assert row["output"] == "a body's own words\n"
+    assert "FAIL" not in row["output"]
+    # The receipt itself is not lost — it is the step's own row, in fields.
+    (step_row,) = [i for i in items if "command" in i]
+    assert step_row["code"] == 2
+    assert step_row["address"].startswith("build/")

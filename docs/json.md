@@ -56,8 +56,10 @@ Top-level, `total_ms` is wall-clock for the whole run — the human summary's
 `took` line, as a number.
 
 A **task row** carries `task` (the dotted name), its request address
-(`address`), `ok`, `code`, `duration_ms`, `output` (all captured text),
-`error` (`null`, or the exception as a string) — and, when the task returns
+(`address`), `ok`, `code`, `duration_ms`, `output` (what the body itself
+printed — footman's own receipt lines stay out, since every step already
+has a row of its own below), `error` (`null`, or the exception as a
+string) — and, when the task returns
 a value, `returned`. Its steps follow it in the list, one item per
 [`run()`, tool, or `step()`](tools.md) call: `command`, the request
 address, `code`, `duration_ms`, split `stdout`/`stderr`, the `audit` (the

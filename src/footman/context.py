@@ -540,6 +540,12 @@ class Context:
     command line paints, for a pipe into `less -R`. Gated off under capture
     (`--json`), where ANSI would corrupt the envelope. Never sets the live
     cursor affordances `tty` governs — those still need a real terminal."""
+    machine_read: bool = False
+    """`--json`: the envelope is the report. footman's own receipt chrome —
+    the step line, the replayed output block, the audit trail — is left out
+    of the buffer, because every one of those already has a field on the
+    step's own row. Task *output* still lands there: a body's prints are
+    what the buffer is for."""
     prog: str = "fm"
     """The invoking CLI's command name — a branded CLI's own `prog`, so
     tasks (the taskdocs plugin, say) can speak the brand's name."""
@@ -3043,7 +3049,12 @@ def run(
     # --verbose (and for uncaptured, live steps, whose output needs its
     # label) — and ALWAYS when it failed. Green is collapsible; failure is
     # never hidden.
-    if recorded and not ctx.quiet and (ctx.verbose or not capture or code != 0):
+    if (
+        recorded
+        and not ctx.quiet
+        and not ctx.machine_read
+        and (ctx.verbose or not capture or code != 0)
+    ):
         ok = code == 0
         prefix = "\r\033[K" if ctx.tty and live else ""
         out.write(f"{prefix}{_step_line(ctx, ok, label, duration)}")

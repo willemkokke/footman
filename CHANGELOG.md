@@ -7,6 +7,44 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A task's option written where globals live now points the right way.**
+  `fm --fix lint` answered "unknown global option `--fix` (global options go
+  before the first task)", which sends someone *left* when the fix is to move
+  the word *right*: the option belongs to a task, and it goes after that
+  task's name. footman now says which task owns it — the one on the line,
+  when the line names one — and shows the spelling that works:
+  `--fix is an option of lint, not a global — it goes after the task name:
+  lint --fix`.
+- **An unmounted plugin's flag says so instead of "unknown".**
+  `fm --env-file=.env build` in a project that never mounted the plugin read
+  as a misspelling, sending someone hunting for a typo in a flag they spelled
+  correctly. Both first-party flags now name their provider and the line that
+  turns them on: `--env-file comes from footman.env_files, which this project
+  has not mounted — add plugin("footman.env_files") to tasks.py`.
+- **One argument too many reads as arity, not as a bad task name.**
+  `fm render page.md out.html spare` answered only "no task named 'spare'".
+  A word that names nothing, arriving right after a task whose positionals
+  are full, is far more often one argument too many — so the answer carries
+  both readings, likeliest first: `… — or one argument too many for render,
+  which takes 2 arguments`. A word close to a real task name keeps the
+  spelling suggestion instead; two competing "did you mean"s teach nothing.
+- **Completion offers a runnable group once.** `ci` and `ci.default` are one
+  action wearing two addresses, and the top-level <kbd>Tab</kbd> listed both.
+  Listings deduped this in 0.37.0; completion now matches. Descending is a
+  different question — at `ci.` the bare row is off the screen, so
+  `ci.default` stays offered there.
+- **`--json` rows carry only what the task printed.** A failing step wrote
+  its human receipt line into the task's capture buffer, so `output` arrived
+  as `"FAIL build  echo hi  (0.0s)\n"` — a human's line in a machine's field,
+  duplicating the step row directly below it. Under `--json` that chrome is
+  left out; a body's own prints still land there.
+- **A skipped row knows its own address.** Addresses are assigned when the
+  plan is final, not when a task runs, but a row that never ran arrived with
+  `address: ""` — which broke the one lookup the envelope promises, since
+  `blocked_by` and `after` name addresses and an empty one matches nothing.
+
 ## [0.38.0] — 2026-08-10
 
 ### Changed

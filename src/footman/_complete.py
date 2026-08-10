@@ -362,6 +362,8 @@ def _address_candidates(tree: dict[str, Any], partial: str) -> list[str]:
             for child, csub in sub["groups"].items():
                 out.append(_cand(f"{prefix}{name}.{child}.", csub["help"]))
             for child, spec in sub["tasks"].items():
+                if child == "default":
+                    continue  # the bare row above IS this action
                 out.append(_cand(f"{prefix}{name}.{child}", spec.get("help", "")))
         else:
             out.append(_cand(f"{prefix}{name}.", sub["help"]))
