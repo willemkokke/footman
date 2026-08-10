@@ -999,7 +999,12 @@ def test_cast_completes_in_every_posix_shell(shell: str, home, tmp_path, monkeyp
     assert _app.run(["--list"]) == 0  # warm the manifest TAB will serve
     dest = tmp_path / "cast.svg"
     line = ["footman.docs.cast", f"--out={dest}", f"--shell={shell}"]
-    line += ["--width=70", "--height=12", "--", "fm li", "<TAB>", "<WAIT:2500>"]
+    # `<SETTLE>` rather than a fixed wait: it holds until the shell's output
+    # goes quiet, so a loaded runner that takes longer than any number we
+    # could pick still lands on the completed line. A 2.5 s guess failed
+    # exactly once in fifteen jobs — pwsh on a busy macOS box — and a
+    # recording whose keystroke raced the shell is what `<SETTLE>` exists for.
+    line += ["--width=70", "--height=12", "--", "fm li", "<TAB>", "<SETTLE>"]
     assert _app.run(line) == 0
     svg = dest.read_text(encoding="utf-8")
     text = _re.sub(r"&#160;", "", _re.sub(r"<[^>]+>", "", svg))
