@@ -581,13 +581,20 @@ environment is read.
 
 `suggest` attaches a completer — a function that returns live values (git
 branches, deploy targets, the shares below). Footman runs it **fresh** each time
-you complete that value, in a short-lived subprocess, rather than serving a copy
-baked into the manifest: a value you <kbd>Tab</kbd> to answer a build-critical
-question must be current, not a snapshot from your last run. The recompute is
-bounded and isolated, so a slow or failing completer degrades to no candidates —
-never the old values, never a hung keystroke. This holds for *every* completer,
-whether or not the task owns the terminal (`interactive=True`); a real run
-validates the value you pass against the same live call.
+you complete that value, in a short-lived subprocess: a value you <kbd>Tab</kbd>
+to answer a build-critical question must be current, so nothing keeps a copy to
+serve you instead. The recompute is bounded and isolated, so a slow or failing
+completer degrades to no candidates — never the old values, never a hung
+keystroke. This holds for *every* completer, whether or not the task owns the
+terminal (`interactive=True`); a real run validates the value you pass against
+the same live call.
+
+A completer runs only where its values are wanted — the parameter whose value
+is being completed or validated, and the options `--help` is printing. A line
+that never mentions the parameter never calls it, so a completer that shells
+out costs nothing on an unrelated task. `--help` shows the values it found and
+marks them `(dynamic)`, the way a computed default is marked `(computed)`:
+what you are reading is this moment's answer, not a fixed set.
 
 ```python
 from typing import Annotated

@@ -42,7 +42,9 @@ in-process execution, and why nothing is transcribed per tool — are
 
 ## `run()`
 
-- Takes a command (string or list). In-process work is a step —
+- Takes **one** command: a string, or a list of tokens. Arguments live inside
+  the list — `run(["sh", "-c", script])`, not `run("sh", "-c", script)`, which
+  is refused rather than dropping them. In-process work is a step —
   `step(fn)(…)` — never a `run()` argument.
 - Raises on a non-zero exit; `nofail=True` returns the code instead.
 - Answers with a `Result` — the exit code (the value *is* the code),
@@ -50,6 +52,11 @@ in-process execution, and why nothing is transcribed per tool — are
   expired), and `.to_argv()` — the command back as raw tokens, re-quotable
   for whichever shell will actually parse them.
 - Honours `--dry-run` (prints the command instead of running it).
+- Takes the run's colour decision by default, and `color="always"`/`"never"`
+  overrides it for one child — forcing the colour variables into that
+  command's environment, or writing `NO_COLOR` and removing any inherited
+  force. An explicit choice beats the ambient one, so `color="always"` holds
+  under an exported `NO_COLOR`.
 - Records a step for [`--json`](json.md) (command, code, duration, captured
   output); `capture=False` lets output through unbuffered and records an
   empty capture — for serve-style tasks that must not buffer.

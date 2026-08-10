@@ -385,8 +385,10 @@ Mounted, it loads `.env` from the invocation's directory at the run's
 single-threaded moment — before availability gates, so `@requires_env` sees
 it — with **env wins**: a key the real environment already carries is never
 overwritten, so a checkout cannot surprise a shell. `--env-file=PATH` names
-another file (path-typed, so <kbd>Tab</kbd> offers files); a missing *named*
-file is a refusal, a missing default is nothing to do. Values are read by
+another file (path-typed, so <kbd>Tab</kbd> offers files), and a bare
+`--env-file` asks for the default out loud. A missing file refuses whenever
+someone asked for one — named or bare — while a missing default nobody
+mentioned is simply nothing to do. Values are read by
 python-dotenv — an optional dependency the plugin imports lazily and teaches
 by name when absent — with interpolation off: a value is the text on its
 line. Unmounted, none of this exists, not even the option.

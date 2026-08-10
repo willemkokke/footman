@@ -16,10 +16,10 @@ one, because it's the exact command the installed completion hooks run:
 | ------------------------------------------ | -----: |
 | interpreter startup (floor)                | 17 ms  |
 | standalone resolver (`python -S`)          | 22 ms  |
-| `python -m footman --complete`             | 23 ms  |
+| `python -m footman --complete`             | 28 ms  |
 | `fm --complete` (the installed hook path)  | 24 ms  |
 
-So the honest headline is **~25 ms per <kbd>Tab</kbd>** for a structural answer
+So the honest headline is **~30 ms per <kbd>Tab</kbd>** for a structural answer
 — task names, options, `Literal` choices — of which ~17 ms is Python starting up
 at all. A [dynamic completer](#dynamic-completions-are-recomputed-fresh) or the
 [first build in a fresh directory](#keeping-the-cache-current) costs more, by
@@ -33,7 +33,7 @@ the command surface actually changed. Reproduce with
 Footman's `main()` checks for `--complete` **before importing the framework or
 your tasks**, dispatching straight to the stdlib-only resolver. A bare
 `import footman` pays for nothing but the entry module. That is why completion is
-~15× faster than runners that re-import your project on every keystroke. When a
+~13× faster than runners that re-import your project on every keystroke. When a
 live value is genuinely needed — a dynamic completer, or the first build in a
 fresh directory — footman *spawns* a subprocess for it rather than importing on
 the hot path, so even then the keystroke stays stdlib-only and can't hang on
@@ -43,9 +43,9 @@ your code.
 
 A [dynamic completer](typing.md#dynamic-completion) (`suggest(fn)`) queries live
 state — git branches, release candidates, deploy targets. When <kbd>Tab</kbd>
-lands on one, footman runs that completer **fresh** in a short-lived subprocess
-rather than serving the value baked into the manifest: answering a build-critical
-question from a stale snapshot is a bug, not a speed-up. The recompute is bounded
+lands on one, footman runs that completer **fresh** in a short-lived subprocess:
+answering a build-critical question from a stale snapshot is a bug, not a
+speed-up, so the manifest holds no snapshot to serve. The recompute is bounded
 (a couple of seconds) and isolated, so a slow or failing completer degrades to
 *no* candidates — never a hung keystroke, and never the old values.
 
@@ -66,7 +66,7 @@ spawns a **detached** rebuild for next time (stale-while-revalidate) — a warm
 ``` mermaid
 graph LR
   tab["Tab press"] --> fresh{cache fresh?}
-  fresh -->|yes| answer["cached answer, ~25 ms"]
+  fresh -->|yes| answer["cached answer, ~30 ms"]
   fresh -->|"no, stale"| serve["serve cached answer now"]
   serve --> rebuild["spawn detached rebuild"]
   rebuild --> nexttime["fresh for the next Tab"]

@@ -44,17 +44,17 @@ you see the whole ~0.25 s; answer from a cache and you see roughly nothing.
 
 | runner  | completion (per <kbd>Tab</kbd>) | Δ import | re-imports every <kbd>Tab</kbd>? |
 | ------- | -------------------: | -------: | ------------------------ |
-| footman |            **23 ms** |    ~0 ms | no — cached manifest     |
-| poe     |                45 ms |    ~0 ms | no — reads TOML          |
-| duty    |               346 ms |   286 ms | yes                      |
-| invoke  |               360 ms |   289 ms | yes                      |
+| footman |            **28 ms** |     2 ms | no — cached manifest     |
+| poe     |                61 ms |     5 ms | no — reads TOML          |
+| duty    |               363 ms |   276 ms | yes                      |
+| invoke  |               387 ms |   289 ms | yes                      |
 
 duty and invoke reload your whole project on every <kbd>Tab</kbd> — their completion
 scripts call the tool, which imports your tasks before it can answer. Footman
 reads a cached JSON manifest instead, so the hot path imports nothing (a dynamic
 completer or the first build in a fresh directory spawns a bounded subprocess),
-and it lands about 15× faster. It pays the same import cost as everyone else,
-just on the execution path: `fm --list` is ~313 ms, right there with the pack.
+and it lands about 13× faster. It pays the same import cost as everyone else,
+just on the execution path: `fm --list` is ~340 ms, right there with the pack.
 Completion is the one moment that has to feel instant, so that's the moment I
 optimised. poe is quick here too, for the honest reason that its tasks are TOML
 strings with no Python to load — which is also the rest of this page.
@@ -71,14 +71,14 @@ a tool that supports parallelism gets to use it. Reproduce with
 
 | runner  | composition                    | wall (mean) |
 | ------- | ------------------------------ | ----------: |
-| footman | parallel (pre-deps, *default*) |  **563 ms** |
-| poe     | parallel (`parallel` task)     |      625 ms |
-| typer   | sequential (no orchestration)  |     2092 ms |
-| duty    | sequential (pre-duties)        |     2120 ms |
-| invoke  | sequential (pre-tasks)         |     2146 ms |
+| footman | parallel (pre-deps, *default*) |  **615 ms** |
+| poe     | parallel (`parallel` task)     |      642 ms |
+| typer   | sequential (no orchestration)  |     2083 ms |
+| duty    | sequential (pre-duties)        |     2138 ms |
+| invoke  | sequential (pre-tasks)         |     2138 ms |
 
 The floors are 0.5 s parallel and 2.0 s sequential, so everyone's *overhead*
-is a rounding error — the 4× gap is architecture, not dispatch speed. duty and
+is a rounding error — the ~3.5× gap is architecture, not dispatch speed. duty and
 invoke run prerequisites one at a time and have no parallel switch to flip; the
 same four steps simply cost the sum instead of the max. poe genuinely ticks
 this box (a dedicated `parallel` task type — credit where due); the
