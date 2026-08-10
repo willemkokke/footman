@@ -30,22 +30,13 @@ if TYPE_CHECKING:  # runtime imports stay deferred: this child spawns cheap
 
 
 def _maybe_reexec(files: list[Path], entry: str, *args: str) -> None:
-    """Continue this rebuild inside a script file's own environment.
-
-    Only for a single file that declares dependencies, and only when uv can
-    reach that environment offline (`_script.child_python` never touches the
-    network) — otherwise this returns and the child rebuilds in place,
-    exactly as it always did. The re-executed child runs the same one-liner
-    *entry*, so the two spawn shapes stay identical apart from the
-    interpreter.
-    """
-    if len(files) != 1:
-        return  # a cascade has no single environment to be right about
+    """Continue this rebuild inside a script file's own environment — the
+    rule lives in `_script.maybe_reexec`, shared with the suggest child.
+    The re-executed child runs the same one-liner *entry*, so the two spawn
+    shapes stay identical apart from the interpreter."""
     from footman import _script
 
-    python = _script.child_python(files[0])
-    if python is not None:
-        _script.reexec_child(python, ["-c", entry, *args])
+    _script.maybe_reexec(files, ["-c", entry, *args])
 
 
 def refresh_cwd(*where: str) -> None:

@@ -25,20 +25,13 @@ if TYPE_CHECKING:  # runtime imports stay deferred: the TAB path spawns cheap
 
 
 def _maybe_reexec(files: list[Path]) -> None:
-    """Continue in a script file's own environment, when it already exists.
-
-    A completer on a tasks file that carries its own dependencies needs
-    that file's world to import at all. Same rule as the refresh child:
-    never build one here (a keystroke must not reach for the network), and
-    when there is nothing to re-exec into, carry on in place.
-    """
-    if len(files) != 1:
-        return
+    """Continue in a script file's own environment, when it already exists —
+    a completer on a tasks file that carries its own dependencies needs
+    that file's world to import at all. The rule lives in
+    `_script.maybe_reexec`, shared with the refresh child."""
     from footman import _script
 
-    python = _script.child_python(files[0])
-    if python is not None:
-        _script.reexec_child(python, ["-m", "footman._suggest", *sys.argv[1:]])
+    _script.maybe_reexec(files, ["-m", "footman._suggest", *sys.argv[1:]])
 
 
 def _fresh(completer: Any) -> list[str]:
