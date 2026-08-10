@@ -186,3 +186,17 @@ def reexec_child(python: str, args: list[str]) -> None:
     os.environ[_paths.env_var("UV_REEXEC")] = "1"
     os.environ.pop("VIRTUAL_ENV", None)  # the script env is not the active one
     os.execv(python, [python, *args])
+
+
+def maybe_reexec(files: list[Path], argv: list[str]) -> None:
+    """Continue in a script file's own environment, when one already exists —
+    the rule both completion children (`_suggest`, `_refresh`) share, kept
+    here so it cannot drift: only a single file has an environment to be
+    right about, `child_python` never touches the network (a keystroke must
+    not), and with nothing to re-exec into the caller carries on in place.
+    """
+    if len(files) != 1:
+        return  # a cascade has no single environment to be right about
+    python = child_python(files[0])
+    if python is not None:
+        reexec_child(python, argv)

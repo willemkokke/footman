@@ -2002,18 +2002,8 @@ def _run_callable(
         if not capture:
             return _call_for_code(cmd, args), "", ""
         out_buf, err_buf = io.StringIO(), io.StringIO()
-        if _router is not None:
-            saved_out, saved_err = ctx.sink, ctx.err_sink
-            ctx.sink, ctx.err_sink = out_buf, err_buf
-            try:
-                code = _call_for_code(cmd, args)
-            finally:
-                ctx.sink, ctx.err_sink = saved_out, saved_err
-            return code, out_buf.getvalue(), err_buf.getvalue()
-        with (
-            contextlib.redirect_stdout(out_buf),
-            contextlib.redirect_stderr(err_buf),
-        ):
+        # The dual capture strategy lives once, in `_captured_streams`.
+        with _captured_streams(out_buf, err_buf):
             code = _call_for_code(cmd, args)
         return code, out_buf.getvalue(), err_buf.getvalue()
 
@@ -2070,10 +2060,10 @@ def _child_address(parent: Context, label: str) -> str:
 
 @contextlib.contextmanager
 def _captured_streams(out_buf: io.StringIO, err_buf: io.StringIO) -> Generator[None]:
-    """Capture this thread's stdout/stderr into the two buffers — the same
-    dual strategy `_run_callable` uses: a thread-confined sink swap under
-    the router (parallel-safe), the classic global redirect outside a
-    routed run. The step pump drives generator items through this."""
+    """Capture this thread's stdout/stderr into the two buffers — THE dual
+    capture strategy: a thread-confined sink swap under the router
+    (parallel-safe), the classic global redirect outside a routed run.
+    `_run_callable` and the step pump both drive through here."""
     ctx = current()
     if _router is not None:
         saved_out, saved_err = ctx.sink, ctx.err_sink

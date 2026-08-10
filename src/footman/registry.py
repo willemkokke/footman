@@ -662,22 +662,29 @@ class TaskOpts(TypedDict, total=False):
     exclusive: bool
 
 
-def work_key(fn: Task) -> tuple[int, frozenset[tuple[str, Any]]]:
-    """The identity of the *work* a reference names: the task and its policy,
-    with sharing left out.
+def work_key(
+    fn: Task, *, include_shared: bool = False
+) -> tuple[int, frozenset[tuple[str, Any]]]:
+    """The one `(id, frozenset)` identity every dedup reads — the futures
+    memo and the DAG's node key were two spellings of this same shape.
 
-    Nearly the DAG's dedup key (`schedule._dep_key`), and for the same reason —
-    a different policy is a genuinely different invocation, so a bare reference
-    and an `.opts(atomic=True)` one are two pieces of work and both run. The one
-    override deliberately excluded is `shared` itself: it says "do not reuse an
-    answer", not "this is different work", and folding it in would put an
-    unshared request in a bucket of its own where no later request could ever
-    find its result.
+    A different policy is a genuinely different invocation, so a bare
+    reference and an `.opts(atomic=True)` one are two pieces of work and
+    both run; an empty `.opts()` collapses onto the bare task by
+    construction. The default *excludes* the `shared` override: it says "do
+    not reuse an answer", not "this is different work", and folding it in
+    would put an unshared request in a bucket of its own where no later
+    request could ever find its result. The DAG's key (*include_shared*)
+    keeps it in — there, a differently-shared reference is a distinct node.
     """
     if isinstance(fn, _Opted):
         base = object.__getattribute__(fn, "_opted_base")
         overrides = object.__getattribute__(fn, "_opted_overrides")
-        work = {k: v for k, v in overrides.items() if k != _SHARED}
+        work = (
+            overrides
+            if include_shared
+            else {k: v for k, v in overrides.items() if k != _SHARED}
+        )
         return (id(base), frozenset(work.items()))
     return (id(fn), frozenset())
 
@@ -794,9 +801,7 @@ class _Opted:
         The proxy's internals stay behind this method, so the scheduler never
         reaches into them for identity. (`.opts()` never nests — it merges onto
         the base — so `_opted_base` is always the ultimate task, never `_Opted`.)"""
-        base = object.__getattribute__(self, "_opted_base")
-        overrides = object.__getattribute__(self, "_opted_overrides")
-        return (id(base), frozenset(overrides.items()))
+        return work_key(self, include_shared=True)
 
 
 class _TaskFn:

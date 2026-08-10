@@ -40,6 +40,7 @@ from footman.registry import (
     task_confirm,
     task_name,
     wants_progress,
+    work_key,
 )
 
 
@@ -82,8 +83,9 @@ def _dep_key(fn: Task) -> tuple[int, frozenset[tuple[str, Any]]]:
     `.opts()` (no override at all) collapses onto the bare task by construction,
     with no int-vs-tuple asymmetry. Identical policies share a node (a shared
     prerequisite still runs once); a genuinely different policy is a distinct
-    node. The override identity itself lives in `_Opted._dedup_key`."""
-    return fn._dedup_key() if isinstance(fn, _Opted) else (id(fn), frozenset())
+    node. One shape with the futures memo: `registry.work_key`, sharing
+    included — a differently-shared reference is a distinct node here."""
+    return work_key(fn, include_shared=True)
 
 
 def resolve_inherited(declared: bool | None, inherited: bool) -> bool:
@@ -512,16 +514,32 @@ def _gate_confirms(
             continue
         key = _dep_key(fn)
         if key not in answers:
-            answers[key] = (
-                assume_yes
-                or (dry_run and _dry_confirm(seg.task, message))
-                or _ask_confirm(message, no_input=no_input)
+            answers[key] = _answer_confirm(
+                seg.task,
+                message,
+                assume_yes=assume_yes,
+                no_input=no_input,
+                dry_run=dry_run,
             )
         if answers[key]:
             kept.append(seg)
         else:
             denied.append(_not_confirmed(seg))
     return kept, denied, answers
+
+
+def _answer_confirm(
+    task: str, message: str, *, assume_yes: bool, no_input: bool, dry_run: bool
+) -> bool:
+    """The one confirm ladder, whichever moment asks — a segment gate, a
+    node gate, a body call: `--yes` answers first, a rehearsal assumes yes
+    out loud, and only then is a human asked. Three sites used to spell it
+    separately."""
+    return (
+        assume_yes
+        or (dry_run and _dry_confirm(task, message))
+        or _ask_confirm(message, no_input=no_input)
+    )
 
 
 def _dry_confirm(task: str, message: str) -> bool:
@@ -555,10 +573,12 @@ def _gate_node_confirms(
             continue
         key = _dep_key(n.fn)
         if key not in answers:
-            answers[key] = (
-                assume_yes
-                or (dry_run and _dry_confirm(n.seg.task, message))
-                or _ask_confirm(message, no_input=no_input)
+            answers[key] = _answer_confirm(
+                n.seg.task,
+                message,
+                assume_yes=assume_yes,
+                no_input=no_input,
+                dry_run=dry_run,
             )
         if not answers[key]:
             n.result = _not_confirmed(n.seg)
@@ -630,12 +650,15 @@ def confirm_gate(
     task that asks for confirmation gets it however it was reached.
     """
     message = task_confirm(fn)
-    if not message or ctx.assume_yes:
+    if not message:
         return None
-    if ctx.dry_run:
-        _dry_confirm(seg.task, message)
-        return None
-    if _ask_confirm(message, no_input=ctx.no_input):
+    if _answer_confirm(
+        seg.task,
+        message,
+        assume_yes=ctx.assume_yes,
+        no_input=ctx.no_input,
+        dry_run=ctx.dry_run,
+    ):
         return None
     return _not_confirmed(seg)
 
