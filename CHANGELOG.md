@@ -20,16 +20,18 @@ versions may include breaking changes.
 
 - **An unmounted plugin's flag is now discovered, not listed.** 0.38.1 taught
   `--env-file` and `--profile` from a hardcoded table of two. footman now
-  loads the plugins **its own distribution ships** and reads what globals
-  they declare, so a new first-party option is taught the day it ships and
-  nothing can go stale. A branded CLI gets the same
-  feature for the plugins its own distribution provides, as soon as it names
-  one with `dist=` — the case this is really for, since a distribution can
-  ship several plugins and a tasks file may mount only some of them. The
-  scan runs only once a refusal is certain, is memoised per distribution,
-  and stops at the package boundary: a third party's flag keeps the plain
-  "unknown global option", because reaching it would mean importing, on a
-  typo, code the project deliberately did not mount.
+  loads the plugins it is willing to speak for and reads what globals they
+  declare, so a new option is taught the day it ships and nothing can go
+  stale. Two packages qualify: **footman's own** — those two flags belong to
+  the framework, are useful to anything built on it, and footman is imported
+  by definition, so a branded CLI teaches them too, whether or not it ever
+  named a distribution — and **the brand's**, once a branded CLI names one
+  with `dist=`, which is the case worth having: a distribution can ship
+  several plugins while a tasks file mounts only some of them. The scan runs
+  only once a refusal is certain and is memoised, so a successful run never
+  pays for it. Everything else keeps the plain "unknown global option":
+  reaching a third party's flag would mean importing, on a typo, code the
+  project deliberately did not mount.
 
 ## [0.38.1] — 2026-08-10
 

@@ -470,39 +470,55 @@ _GLOBAL_DEFAULT = {name: d for name, _, _, _, d, _ in GLOBALS if d is not None}
 _VALUE_OPTIONAL = frozenset(_GLOBAL_DEFAULT)
 
 # Flag -> entry point, for globals that *would* exist had their provider been
-# mounted. Memoised per distribution, and never touched on a path that is not
-# already refusing (see `_own_plugin_flags`).
+# mounted. Memoised per brand distribution, and never touched on a path that
+# is not already refusing (see `_own_plugin_flags`).
 _OWN_FLAGS: dict[str, dict[str, str]] = {}
 
 
+def _vouched_distributions() -> set[str]:
+    """The packages footman will import to answer for a flag nobody mounted.
+
+    Two, and never a third. **footman's own** — `--profile` and
+    `--env-file` are the framework's, they are useful to every runner built
+    on it, and it is already imported by definition. And **the brand's**,
+    when a branded CLI named one with `dist=`: a distribution vouches for
+    what it packages.
+
+    Everything else stays shut. Teaching a third party's flag would mean
+    importing, on a typo, code the project deliberately did not mount.
+    """
+    from footman import _app
+    from footman.app import DEFAULT_BRAND
+
+    # DEFAULT_BRAND is where footman states its own distribution; reading it
+    # here keeps the two from drifting apart.
+    return {dist for dist in (DEFAULT_BRAND.dist, _app._brand.dist) if dist}
+
+
 def _own_plugin_flags() -> dict[str, str]:
-    """Every global option the running brand's **own** distribution ships,
-    as flag -> entry-point name, whether or not this project mounted it.
+    """Every global option the vouched distributions ship, as flag ->
+    entry-point name, whether or not this project mounted any of them.
 
     An entry point cannot advertise its options: the packaging spec is
     strictly `name = "module:attr"`, and a `GlobalOption` registers itself
     by being *constructed*, which happens when its module is imported. So
-    the only way to learn an unmounted plugin's flags is to import it —
-    which footman will do for the distribution that ships the CLI itself,
-    and for no other. A typo must never run code a project deliberately
-    left unmounted, and a brand vouches for what it packages.
+    the only way to learn an unmounted plugin's flags is to import it, and
+    `_vouched_distributions` is the whole list footman will do that for.
 
     That covers the case this exists for: a distribution ships several
     plugins, a tasks file mounts some of them, and a flag from one of the
-    others reads as a spelling mistake. It is beyond reach for third-party
-    plugins, which keep the plain "unknown global option" answer.
+    others reads as a spelling mistake — for a branded CLI's own plugins
+    and for footman's alike.
 
     Called only once a refusal is certain, so the imports never touch a
-    successful run; memoised per distribution, so a process pays once. Every
-    failure — no `dist` on the brand, an entry point that will not import —
-    is simply a flag this cannot teach.
+    successful run; memoised, so a process pays once. Every failure — an
+    entry point that will not import, a brand whose package ships none — is
+    simply a flag this cannot teach.
     """
     from footman import _app
 
-    dist = _app._brand.dist
-    if not dist:
-        return {}  # a custom brand that never named its package
-    if (cached := _OWN_FLAGS.get(dist)) is not None:
+    key = _app._brand.dist or ""
+    if (cached := _OWN_FLAGS.get(key)) is not None:
         return cached
     found: dict[str, str] = {}
     try:
@@ -510,9 +526,10 @@ def _own_plugin_flags() -> dict[str, str]:
 
         from footman import compose
 
+        vouched = _vouched_distributions()
         for ep in entry_points(group=compose.ENTRY_POINT_GROUP):
             meta = getattr(ep.dist, "metadata", None)
-            if not meta or meta.get("Name", "") != dist:
+            if not meta or meta.get("Name", "") not in vouched:
                 continue
             try:
                 # The SAME door mounting uses, not a raw `ep.load()`. A module
@@ -528,7 +545,7 @@ def _own_plugin_flags() -> dict[str, str]:
                 found.setdefault("--" + opt.name, ep.name)
     except Exception:
         found = {}
-    _OWN_FLAGS[dist] = found
+    _OWN_FLAGS[key] = found
     return found
 
 

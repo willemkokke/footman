@@ -361,7 +361,28 @@ def test_several_owners_and_none_typed_lists_them(tree):
     assert "lint" in message
 
 
-def test_an_unmounted_plugin_flag_teaches_its_mount(tree):
+@pytest.fixture
+def brand_dist(monkeypatch):
+    """Point `_brand` at a chosen distribution, and clear the scan's memo.
+
+    Both are process-global, and `_run` sets `_brand` **without restoring
+    it** — so one `Runner(App(dist=…))` anywhere earlier in a worker decides
+    what a later test sees. Three macOS jobs found that the hard way. Pin
+    what these tests are about, so the answer is the code's and not the test
+    order's."""
+    import dataclasses
+
+    from footman import _app, _split
+
+    def use(dist: str | None) -> None:
+        monkeypatch.setattr(_app, "_brand", dataclasses.replace(_app._brand, dist=dist))
+        _split._OWN_FLAGS.clear()
+
+    use("footman")
+    return use
+
+
+def test_an_unmounted_plugin_flag_teaches_its_mount(tree, brand_dist):
     # Spelled perfectly, refused anyway: "unknown" sends someone hunting for
     # a typo that isn't there. The flag exists — the plugin isn't mounted.
     with pytest.raises(ChainError) as excinfo:
@@ -374,19 +395,18 @@ def test_an_unmounted_plugin_flag_teaches_its_mount(tree):
         split_chain(tree, ["--profile", "check"])
 
 
-def test_the_scan_finds_every_flag_the_brands_own_distribution_ships():
+def test_the_scan_finds_every_flag_a_vouched_distribution_ships(brand_dist):
     """Discovered, not listed: nothing names `--env-file` or `--profile`
     anywhere in footman's source but the plugins that declare them, so a
     new first-party global is taught the day it ships."""
     from footman import _split
 
-    _split._OWN_FLAGS.clear()
     found = _split._own_plugin_flags()
     assert found["--env-file"] == "footman.env_files"
     assert found["--profile"] == "footman.profile"
 
 
-def test_the_scan_answers_the_same_once_the_modules_are_imported():
+def test_the_scan_answers_the_same_once_the_modules_are_imported(brand_dist):
     """A module imports once per process, so its declarations fire in exactly
     one capture — whoever called `load()` first. The scan goes through
     `_load_entry_point`, which memoises that tree, so the answer does not
@@ -396,12 +416,10 @@ def test_the_scan_answers_the_same_once_the_modules_are_imported():
     from footman import _split
 
     assert footman.env_files and footman.profile  # imported, on purpose
-
-    _split._OWN_FLAGS.clear()
     assert _split._own_plugin_flags()["--env-file"] == "footman.env_files"
 
 
-def test_scanning_does_not_spend_the_import_a_real_mount_needs():
+def test_scanning_does_not_spend_the_import_a_real_mount_needs(brand_dist):
     """The scan must not cost a plugin its one import. Going around
     `_load_entry_point` with a raw `ep.load()` did exactly that: the module
     body ran inside the scan's own capture, nothing was memoised, and the
@@ -410,7 +428,6 @@ def test_scanning_does_not_spend_the_import_a_real_mount_needs():
     to run first in a worker."""
     from footman import _split, compose, registry
 
-    _split._OWN_FLAGS.clear()
     assert "--env-file" in _split._own_plugin_flags()
 
     # A GlobalOption registers where the mount's capture can see it, which is
@@ -420,35 +437,34 @@ def test_scanning_does_not_spend_the_import_a_real_mount_needs():
     assert [g.name for g in captured.contributions["globals"]] == ["env-file"]
 
 
-def test_a_brand_that_names_no_distribution_scans_nothing(monkeypatch):
-    """`dist` is the permission slip. Without one there is no package footman
-    may vouch for, so it imports nothing and teaches nothing — rather than
-    guessing at some other distribution's plugins."""
-    import dataclasses
+def test_footmans_own_plugins_are_taught_whatever_the_brand_is(brand_dist):
+    """`--profile` and `--env-file` are the framework's, useful to every
+    runner built on it, and footman is imported by definition — so a brand
+    gets them taught whether or not it ever named a distribution of its
+    own."""
+    from footman import _split
 
-    from footman import _app, _split
-
-    monkeypatch.setattr(_app, "_brand", dataclasses.replace(_app._brand, dist=None))
-    _split._OWN_FLAGS.clear()
-    assert _split._own_plugin_flags() == {}
-    with pytest.raises(ChainError, match=r"unknown global option --env-file"):
-        split_chain(
-            _manifest.build_manifest(Group("root"))["tree"], ["--env-file=.env"]
-        )
+    for dist in (None, "acme-cli", "footman"):
+        brand_dist(dist)
+        found = _split._own_plugin_flags()
+        assert found["--profile"] == "footman.profile", dist
+        assert found["--env-file"] == "footman.env_files", dist
 
 
-def test_a_third_partys_flag_stays_plainly_unknown(monkeypatch):
-    """The line footman will not cross: teaching a flag it does not ship
+def test_a_third_partys_flag_stays_plainly_unknown(brand_dist):
+    """The line footman will not cross. A distribution it neither ships nor
+    was vouched for by the brand keeps the plain answer: teaching that flag
     would mean importing, on a typo, code the project chose not to mount."""
-    import dataclasses
+    from footman import _split
 
-    from footman import _app, _split
-
-    monkeypatch.setattr(
-        _app, "_brand", dataclasses.replace(_app._brand, dist="some-other-package")
-    )
-    _split._OWN_FLAGS.clear()
-    assert _split._own_plugin_flags() == {}
+    brand_dist("acme-cli")
+    found = _split._own_plugin_flags()
+    # Everything discovered came from a package footman may speak for.
+    assert set(found.values()) == {"footman.env_files", "footman.profile"}
+    with pytest.raises(ChainError, match=r"unknown global option --tf-workspace"):
+        split_chain(
+            _manifest.build_manifest(Group("root"))["tree"], ["--tf-workspace=prod"]
+        )
 
 
 def test_one_word_too_many_reads_as_arity_not_a_bad_address(tree):
