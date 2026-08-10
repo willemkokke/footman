@@ -7,6 +7,8 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+## [0.39.0] — 2026-08-10
+
 ### Added
 
 - **`@task(needs_project=…)`, and a built-in task needs one by default.** A
@@ -4607,7 +4609,8 @@ versions may include breaking changes.
 
 - Placeholder release claiming the `footman` name on PyPI. Not tagged in git.
 
-[Unreleased]: https://github.com/willemkokke/footman/compare/v0.38.1...HEAD
+[Unreleased]: https://github.com/willemkokke/footman/compare/v0.39.0...HEAD
+[0.39.0]: https://github.com/willemkokke/footman/compare/v0.38.1...v0.39.0
 [0.38.1]: https://github.com/willemkokke/footman/compare/v0.38.0...v0.38.1
 [0.38.0]: https://github.com/willemkokke/footman/compare/v0.37.0...v0.38.0
 [0.37.0]: https://github.com/willemkokke/footman/compare/v0.36.0...v0.37.0
