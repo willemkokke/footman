@@ -422,7 +422,9 @@ def _address_band(rows: list[tuple[str, str]]) -> list[tuple[str, int, str]]:
 
 
 def _print_list(tree: dict[str, Any], show_hidden: bool = False) -> None:
-    rows = list(_describe.iter_tasks(tree, show_hidden=show_hidden))
+    rows = list(
+        _describe.iter_tasks(tree, show_hidden=show_hidden, dedupe_defaults=True)
+    )
     if not rows:
         print("No tasks defined.")
         return
@@ -431,7 +433,7 @@ def _print_list(tree: dict[str, Any], show_hidden: bool = False) -> None:
 
 
 def _print_tree(node: dict[str, Any], show_hidden: bool = False) -> None:
-    rows = list(_describe.walk(node, show_hidden=show_hidden))
+    rows = list(_describe.walk(node, show_hidden=show_hidden, dedupe_defaults=True))
     if not rows:
         # Mirror _print_list rather than printing zero bytes and exiting 0.
         print("No tasks defined.")
@@ -573,7 +575,16 @@ def _print_group_help(
         print(f"\n  {node['help']}")
     if default:
         print(_describe.dim("\n  runs its default when no task is named", on))
-    rows = list(_describe.iter_tasks(node, f"{dotted}.", show_hidden=show_hidden))
+    # `covered`: the bare-group row inserted below stands in for `default`.
+    rows = list(
+        _describe.iter_tasks(
+            node,
+            f"{dotted}.",
+            show_hidden=show_hidden,
+            dedupe_defaults=True,
+            covered=bool(default),
+        )
+    )
     if default:
         # The bare-group spelling is itself a runnable, listed address —
         # described by its default action (docstring, or generated).

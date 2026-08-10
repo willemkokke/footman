@@ -671,6 +671,30 @@ def test_default_is_listed_and_completes_dotted():
     assert "lint.default" in offered
 
 
+def test_a_listing_shows_one_row_per_action():
+    # `lint` and `lint.default` run the same thing, so the flat listing shows
+    # one row — the bare group, described by its default. The raw walk keeps
+    # the address (the did-you-mean index owes an answer for every typeable
+    # spelling), so this is the listings' dedupe mode, not a removal.
+    from footman import _describe
+
+    reg = Group("root")
+    lint = reg.group("lint")
+
+    @lint.task
+    def python(): ...
+
+    @lint.default
+    def everything():
+        """Run every linter."""
+
+    tree = _manifest.build_manifest(reg)["tree"]
+    listed = [a for a, _ in _describe.iter_tasks(tree, dedupe_defaults=True)]
+    assert listed == ["lint", "lint.python"]
+    index = [a for a, _ in _describe.iter_tasks(tree, show_hidden=True)]
+    assert "lint.default" in index  # the typo index keeps the spelling
+
+
 def test_the_default_is_listed_first_however_late_it_was_declared():
     # The default *is* the group — `fm db` runs it and the group's own row is
     # described by it — so where the author happened to write it must not

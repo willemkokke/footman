@@ -422,6 +422,8 @@ def walk(
     depth: int = 0,
     *,
     show_hidden: bool = False,
+    dedupe_defaults: bool = False,
+    _covered: bool = False,
 ) -> Iterator[tuple[int, str, str, str, str]]:
     """The one traversal every human listing reads — `--list`, `--tree`, group
     help, and the did-you-mean index.
@@ -433,8 +435,17 @@ def walk(
     one and false of the other. *show_hidden* — `--all`, and the did-you-mean
     index, which owes an answer about every address a human can type — keeps
     the hidden rows in.
+
+    *dedupe_defaults* is the listings' rule: a runnable group's bare row IS
+    its default action, so the `x.default` child row would be one action
+    wearing two lines — skipped wherever the bare row was just emitted
+    (*_covered* carries that fact into the recursion). The did-you-mean
+    index leaves it off: `x.default` is an address a human can type, and a
+    typo of it deserves the real spelling back.
     """
     for name, task in ordered_tasks(node).items():
+        if _covered and name == "default":
+            continue  # the caller's bare-group row already says this
         if listed(task, show_hidden=show_hidden):
             yield depth, f"{prefix}{name}", name, task_line(task), "task"
     for name, sub in node["groups"].items():
@@ -455,16 +466,34 @@ def walk(
             default_line(sub) if runnable else sub["help"],
             "runnable-group" if runnable else "group",
         )
-        yield from walk(sub, f"{prefix}{name}.", depth + 1, show_hidden=show_hidden)
+        yield from walk(
+            sub,
+            f"{prefix}{name}.",
+            depth + 1,
+            show_hidden=show_hidden,
+            dedupe_defaults=dedupe_defaults,
+            _covered=dedupe_defaults and runnable,
+        )
 
 
 def iter_tasks(
-    node: dict[str, Any], prefix: str = "", *, show_hidden: bool = False
+    node: dict[str, Any],
+    prefix: str = "",
+    *,
+    show_hidden: bool = False,
+    dedupe_defaults: bool = False,
+    covered: bool = False,
 ) -> Iterator[tuple[str, str]]:
     """`walk()` as the flat listing sees it: `(address, help)` for everything
-    you can actually type, headings dropped."""
+    you can actually type, headings dropped. *covered* says the caller has
+    already shown a row standing in for *node*'s own `default` (group help
+    inserts the bare-group row itself)."""
     for _depth, address, _leaf, help_text, kind in walk(
-        node, prefix, show_hidden=show_hidden
+        node,
+        prefix,
+        show_hidden=show_hidden,
+        dedupe_defaults=dedupe_defaults,
+        _covered=dedupe_defaults and covered,
     ):
         if kind != "group":
             yield address, help_text
