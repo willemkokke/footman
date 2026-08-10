@@ -664,7 +664,7 @@ def _resolve_lenient(tree: dict[str, Any], token: str) -> tuple[str, list[str]] 
 
 
 def _help_targets(
-    tree: dict[str, Any], argv: list[str]
+    tree: dict[str, Any], argv: list[str], after: int
 ) -> tuple[list[tuple[str, list[str]]], list[str]]:
     """Group/task addresses mentioned on a `--help` line, resolved leniently —
     plus the bare words that resolved to nothing, so the caller can refuse a
@@ -675,10 +675,9 @@ def _help_targets(
     dotted addresses only and skips every other token (option-shaped tokens
     and, once a target is found, its argument values).
     """
-    _, i = _split._parse_globals(argv, 0, lenient=True)
     targets: list[tuple[str, list[str]]] = []
     strays: list[str] = []
-    for tok in argv[i:]:
+    for tok in argv[after:]:
         if tok == "--":
             break
         if tok.startswith("-"):
@@ -692,7 +691,7 @@ def _help_targets(
 
 
 def _print_help(
-    tree: dict[str, Any], argv: list[str], show_hidden: bool = False
+    tree: dict[str, Any], argv: list[str], after: int, show_hidden: bool = False
 ) -> int:
     """`--help` alone covers fm itself; with names, the named groups/tasks.
 
@@ -701,7 +700,7 @@ def _print_help(
     teaching nothing. With at least one real target found, extra bare words
     stay lenient: they are argument values, not typos.
     """
-    targets, strays = _help_targets(tree, argv)
+    targets, strays = _help_targets(tree, argv, after)
     if not targets:
         if strays:
             # Every address a human can type, hidden included: the index
@@ -1760,7 +1759,7 @@ def _run(
         return code
 
     if not g.get("directory"):
-        return _execute(argv, g, wants_help, collect)
+        return _execute(argv, g, pre_globals, after, wants_help, collect)
 
     # -C must not permanently move the process (a `Runner.invoke` shares the
     # host pytest's cwd): chdir, run, then restore in a finally. The original
@@ -1771,7 +1770,7 @@ def _run(
     except OSError as exc:
         return _refuse(bool(g.get("json")), f"-C {g['directory']}: {exc}")
     try:
-        return _execute(argv, g, wants_help, collect)
+        return _execute(argv, g, pre_globals, after, wants_help, collect)
     finally:
         with contextlib.suppress(OSError):
             os.chdir(saved_cwd)
@@ -1780,6 +1779,8 @@ def _run(
 def _execute(
     argv: list[str],
     g: dict[str, object],
+    pre_globals: list[str],
+    after: int,
     wants_help: bool,
     collect: list[_executor.TaskResult] | None,
 ) -> int:
@@ -1787,11 +1788,12 @@ def _execute(
 
     Everything after globals/`--version`/`--install-completion`/`-C`: the
     disk-backed half that `run_group` (in-memory) deliberately skips.
+    *g* and *after* are the entry point's one lenient parse, passed down —
+    argv is never re-parsed on the way in.
     """
     # "Bare" means no chain was asked for — globals-only lines (`fm --json`,
     # `fm -k`) are listing-shaped, exactly like they are when tasks exist.
-    _, after_globals = _split._parse_globals(argv, 0, lenient=True)
-    found = _discover_files(g, wants_help, bare=after_globals >= len(argv))
+    found = _discover_files(g, wants_help, bare=after >= len(argv))
     if isinstance(found, int):
         return found
     files, cfg = found.files, found.cfg
@@ -1912,7 +1914,9 @@ def _execute(
     # ladder through `run_bound`, and the frozen invocation rides along.
     _executor.install_lifecycle(inv, reg.contributions)
     try:
-        code = _run_tree(reg, tree, argv, cfg, collect, root_dir=root_dir)
+        code = _run_tree(
+            reg, tree, argv, cfg, collect, g, pre_globals, after, root_dir=root_dir
+        )
     finally:
         _executor.clear_lifecycle()
         # Core's ladder instances release with the plugins': they are
@@ -1941,6 +1945,9 @@ def _run_tree(
     argv: list[str],
     cfg: dict[str, object],
     collect: list[_executor.TaskResult] | None,
+    g: dict[str, object],
+    pre_globals: list[str],
+    after: int,
     root_dir: str = "",
     record_times: bool = True,
 ) -> int:
@@ -1948,10 +1955,8 @@ def _run_tree(
 
     Shared by the disk path (`_execute`) and the in-memory path (`run_group`),
     so both honour `--help`/`--version`/`--list`/`--tree`/`--json` identically.
-    Globals are re-derived from `argv` (already validated upstream).
+    *g* and *after* ride down from the entry point's one lenient parse.
     """
-    pre_globals, _ = _split._parse_globals(argv, 0, lenient=True)
-    g = _globals_to_dict(pre_globals)
     json_mode = bool(g.get("json"))
 
     # Core's ladder-bearing options bind first — before the colour repaint,
@@ -1981,7 +1986,7 @@ def _run_tree(
     show_hidden = bool(g.get("all"))
 
     if _wants_help(argv):
-        return _print_help(tree, argv, show_hidden)
+        return _print_help(tree, argv, after, show_hidden)
 
     if g.get("plugins"):
         return _plugins_report(reg)
@@ -1992,8 +1997,7 @@ def _run_tree(
         return _where(reg, tree, str(g["where"]))
 
     if (describe := g.get("describe")) is not None:
-        _, after_globals = _split._parse_globals(argv, 0, lenient=True)
-        return _describe_contract(tree, describe, after_globals < len(argv))
+        return _describe_contract(tree, describe, after < len(argv))
 
     try:
         globals_, segments = _split.split_chain(tree, argv)
@@ -2256,7 +2260,7 @@ def run_group(
     global _brand
     _brand = brand
     try:
-        pre_globals, _ = _split._parse_globals(argv, 0, lenient=True)
+        pre_globals, after = _split._parse_globals(argv, 0, lenient=True)
     except _split.ChainError as exc:
         return _refuse(_wants_json(argv), str(exc))
     g = _globals_to_dict(pre_globals)
@@ -2279,7 +2283,9 @@ def run_group(
         _error(f"warning: {orphan}")
     _executor.install_lifecycle(inv, root.contributions)
     try:
-        return _run_tree(root, tree, argv, {}, collect, record_times=False)
+        return _run_tree(
+            root, tree, argv, {}, collect, g, pre_globals, after, record_times=False
+        )
     finally:
         _executor.clear_lifecycle()
         registry.release_global_options(

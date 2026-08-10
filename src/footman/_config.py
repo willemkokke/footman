@@ -29,7 +29,6 @@ from footman import _paths
 # filename and the table name are the brand's — `acme.toml` and
 # `[tool.acme]` — so ask `_paths` rather than hard-coding footman's.
 PYPROJECT = "pyproject.toml"
-FOOTMAN_TOML = "footman.toml"  # stock footman's; `_paths.config_basename()` per brand
 
 # Keys that only make sense in the user-level file: they govern shared,
 # machine-wide behaviour (the cache collector sweeps one cache for every
