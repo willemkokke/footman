@@ -185,20 +185,9 @@ class Runner:
             contextlib.redirect_stderr(err),
         ):
             # `App.run` is bypassed below, so point the locations at this
-            # brand's world here — the same thing a real entry point does
+            # brand's world here — the same call a real entry point makes
             # before anything reads a path.
-            from footman import _paths
-
-            _paths.configure(
-                prefix=self.app.brand.prefix,
-                cache_dir=self.app.brand.cache_dir,
-                data_dir=self.app.brand.data_dir,
-                config_name=self.app.brand.config_stem,
-                tasks_file=self.app.brand.tasks_file,
-                prog=self.app.brand.prog,
-                brand_version=self.app.brand.version,
-                builtin=self.app.brand.builtin,
-            )
+            self.app.brand.install()
             if isinstance(tasks, Group):
                 # One shared surface with the real CLI (help/version/list/tree/
                 # json all honoured) — no drifting Group-mode re-implementation.

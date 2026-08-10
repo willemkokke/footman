@@ -600,6 +600,17 @@ def _check_arity(
         raise ChainError(f"{where}: {label} takes {want} — got {count}")
 
 
+def _follower(argv: list[str], i: int) -> str | None:
+    """The bare word right after position *i*, when one rode behind a
+    value-bearing option — the token the attachment teaching names. `--`,
+    `+` and dash tokens are not values-in-waiting, so they read as None.
+    One lookahead for both refusal sites (globals and task options)."""
+    nxt = argv[i + 1] if i + 1 < len(argv) else None
+    if nxt is None or nxt in ("--", "+") or nxt.startswith("-"):
+        return None
+    return nxt
+
+
 def _expects_value(
     where: str | None, given: str, hint: str, follower: str | None
 ) -> str:
@@ -693,15 +704,10 @@ def _parse_globals(
             and "=" not in argv[i]
             and canon not in value_optional
         ):
-            follower = (
-                argv[i + 1]
-                if i + 1 < len(argv)
-                and argv[i + 1] not in ("--", "+")
-                and not argv[i + 1].startswith("-")
-                else None
-            )
             raise ChainError(
-                _expects_value(None, name, _GLOBAL_HINT.get(canon, "VALUE"), follower)
+                _expects_value(
+                    None, name, _GLOBAL_HINT.get(canon, "VALUE"), _follower(argv, i)
+                )
             )
         globals_.append(canon + argv[i][len(name) :])
         i += 1
@@ -1082,14 +1088,9 @@ def _consume_option(
     # refuses, with the same teaching it always gave.
     if "=" not in tok:
         if p.get("required"):
-            follower = (
-                argv[i + 1]
-                if i + 1 < len(argv)
-                and argv[i + 1] not in ("--", "+")
-                and not argv[i + 1].startswith("-")
-                else None
+            raise ChainError(
+                _expects_value(seg.task, name, "VALUE", _follower(argv, i))
             )
-            raise ChainError(_expects_value(seg.task, name, "VALUE", follower))
         seg.bare.add(cli)
         return i + 1
     value = tok.split("=", 1)[1]

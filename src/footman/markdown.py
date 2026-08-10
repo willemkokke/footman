@@ -82,10 +82,9 @@ def globals_table(*, prog: str = "fm") -> str:
         effect = help_text.replace("{prog}", prog)
         # The default comes from the grammar too, so the page cannot say one
         # thing while `--help` says another — the drift that hand-written
-        # "(default: …)" prose in a help string always ended in.
-        shown, computed = _split.global_default(name)
-        if shown:
-            effect += f"; default: `{shown}`" + (" (computed)" if computed else "")
+        # "(default: …)" prose in a help string always ended in. The suffix
+        # is composed once, shared with `--help` itself.
+        effect += _describe.global_default_suffix(name, code=True)
         rows.append((label, _cell(effect)))
     width = max(len(label) for label, _ in rows)
     lines = [

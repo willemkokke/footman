@@ -478,6 +478,26 @@ def _last_of_each_branch(rows: Sequence[tuple[Any, ...]]) -> list[bool]:
     return flags
 
 
+def _print_param_rows(params: list[dict[str, Any]], heading: str) -> None:
+    """One two-band parameter listing — task help and group help draw the
+    same rows (author's words bright, mechanics dimmed beneath), and used
+    to carry the loop twice."""
+    if not params:
+        return
+    on = _color_out
+    rows = []
+    for p in params:
+        doc, mech = _describe.param_detail_parts(p)
+        mech = _describe.dim(mech, on) if mech else ""
+        detail = "; ".join(bit for bit in (doc, mech) if bit)
+        rows.append((_describe.param_label(p), detail))
+    width = max(len(label) for label, _ in rows)
+    print(f"\n{_describe.bold(f'{heading}:', on)}")
+    for label, detail in rows:
+        pad = " " * (width - len(label))
+        print(f"  {_describe.bold(label, on)}{pad}  {detail}".rstrip())
+
+
 def _print_task_help(
     tree: dict[str, Any], path: list[str], show_hidden: bool = False
 ) -> None:
@@ -504,21 +524,8 @@ def _print_task_help(
     shown = _describe.listed_params(task, show_hidden=show_hidden)
     positionals = [p for p in shown if p["kind"] in ("positional", "variadic")]
     options = [p for p in shown if p["kind"] in ("flag", "option")]
-    for title, params in (("positionals", positionals), ("options", options)):
-        if not params:
-            continue
-        rows = []
-        for p in params:
-            doc, mech = _describe.param_detail_parts(p)
-            # The author's words stay bright; the mechanics dim beneath them.
-            mech = _describe.dim(mech, on) if mech else ""
-            detail = "; ".join(bit for bit in (doc, mech) if bit)
-            rows.append((_describe.param_label(p), detail))
-        width = max(len(label) for label, _ in rows)
-        print(f"\n{_describe.bold(f'{title}:', on)}")
-        for label, detail in rows:
-            pad = " " * (width - len(label))
-            print(f"  {_describe.bold(label, on)}{pad}  {detail}".rstrip())
+    _print_param_rows(positionals, "positionals")
+    _print_param_rows(options, "options")
     returned = task.get("returned")
     returned_doc = task.get("returned_doc", "")
     if returned is not None or returned_doc:
@@ -578,18 +585,7 @@ def _print_group_help(
         _describe.listed_params(default, show_hidden=show_hidden) if default else []
     )
     options = [p for p in params if p["kind"] in ("flag", "option")]
-    if options:
-        rows2 = []
-        for p in options:
-            doc, mech = _describe.param_detail_parts(p)
-            mech = _describe.dim(mech, on) if mech else ""
-            detail = "; ".join(bit for bit in (doc, mech) if bit)
-            rows2.append((_describe.param_label(p), detail))
-        width2 = max(len(label) for label, _ in rows2)
-        print(f"\n{_describe.bold('options:', on)}")
-        for label, detail in rows2:
-            pad = " " * (width2 - len(label))
-            print(f"  {_describe.bold(label, on)}{pad}  {detail}".rstrip())
+    _print_param_rows(options, "options")
 
 
 def _print_global_help(tree: dict[str, Any], show_hidden: bool = False) -> None:
@@ -613,10 +609,9 @@ def _print_global_help(tree: dict[str, Any], show_hidden: bool = False) -> None:
         detail = help_text.replace("{prog}", prog)
         # The same thing task parameters gained: say what you get when you say
         # nothing. Computed defaults resolve here, so `--jobs` reports this
-        # machine's width rather than a number from the author's.
-        shown, computed = _split.global_default(name)
-        if shown:  # `None` (must be given) and `""` (no spelling) both stay quiet
-            detail += f"; default: {shown}{' (computed)' if computed else ''}"
+        # machine's width rather than a number from the author's. One
+        # composition with the docs table (`_describe.global_default_suffix`).
+        detail += _describe.global_default_suffix(name)
         rows.append((label, detail))
     width = max(len(label) for label, _ in rows)
     for label, help_text in rows:
@@ -1295,57 +1290,32 @@ def _resolve_shell(shell: object, flag: str) -> str | None:
     return name
 
 
-def _install_completion(shell: object) -> int:
-    from footman import _shellcomp
-
-    name = _resolve_shell(shell, "--install-completion")
-    if name is None:
-        return EX_USAGE
-    if not shell:  # named bare: say which shell we worked out
-        print(f"detected shell: {name}")
-    try:
-        lines = _shellcomp.install(name, _brand.prog)
-    except _shellcomp.InstallError as exc:
-        _error(f"--install-completion {name}: {exc}")
-        return EX_USAGE
-    for line in lines:
-        print(line)
-    return 0
-
-
-def _uninstall_completion(shell: object) -> int:
-    from footman import _shellcomp
-
-    name = _resolve_shell(shell, "--uninstall-completion")
-    if name is None:
-        return EX_USAGE
-    if not shell:  # named bare: say which shell we worked out
-        print(f"detected shell: {name}")
-    try:
-        lines = _shellcomp.uninstall(name, _brand.prog)
-    except _shellcomp.InstallError as exc:
-        _error(f"--uninstall-completion {name}: {exc}")
-        return EX_USAGE
-    for line in lines:
-        print(line)
-    return 0
-
-
-def _setup_completion(shell: object) -> int:
-    """Print the completion hook to stdout, for the current session only.
-
-    `eval "$(prog --setup-completion zsh)"` enables completion without touching
-    any rc file. A bare flag detects the shell; the detection note goes to
-    stderr so stdout stays clean for `eval`.
+def _completion_action(key: str, shell: object) -> int:
+    """The completion trio, one body: install and uninstall touch rc files
+    and echo what they did; setup prints the hook for `eval` (so its
+    detection note goes to stderr — stdout must stay clean). A bare flag
+    detects the invoking shell and says which one it worked out.
     """
     from footman import _shellcomp
 
-    name = _resolve_shell(shell, "--setup-completion")
+    flag = "--" + key.replace("_", "-")
+    name = _resolve_shell(shell, flag)
     if name is None:
         return EX_USAGE
+    setup = key == "setup_completion"
     if not shell:  # named bare: say which shell we worked out
-        print(f"detected shell: {name}", file=sys.stderr)
-    print(_shellcomp.script_for(name, _brand.prog))
+        print(f"detected shell: {name}", file=sys.stderr if setup else sys.stdout)
+    if setup:
+        print(_shellcomp.script_for(name, _brand.prog))
+        return 0
+    act = _shellcomp.install if key == "install_completion" else _shellcomp.uninstall
+    try:
+        lines = act(name, _brand.prog)
+    except _shellcomp.InstallError as exc:
+        _error(f"{flag} {name}: {exc}")
+        return EX_USAGE
+    for line in lines:
+        print(line)
     return 0
 
 
@@ -1727,12 +1697,7 @@ def _run(
         return _print_version(bool(g.get("json")))
     # Asking for help must never touch the filesystem: `--install-completion
     # fish --help` used to write rc files before printing anything.
-    actions: dict[str, Callable[[object], int]] = {
-        "install_completion": _install_completion,
-        "setup_completion": _setup_completion,
-        "uninstall_completion": _uninstall_completion,
-    }
-    for key, run_action in actions.items():
+    for key in ("install_completion", "setup_completion", "uninstall_completion"):
         if key in g and not wants_help:
             value = g.get(key)
             if not value and after < len(argv) and not argv[after].startswith("-"):
@@ -1745,7 +1710,7 @@ def _run(
                     bool(g.get("json")),
                     _split._expects_value(None, flag, "[SHELL]", argv[after]),
                 )
-            return run_action(value)
+            return _completion_action(key, value)
 
     # May replace the process (POSIX) or exit with the child's code
     # (Windows); returns quietly whenever the handoff doesn't apply.

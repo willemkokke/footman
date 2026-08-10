@@ -258,6 +258,16 @@ def script_for(shell: str, prog: str) -> str:
     return _TEMPLATES[shell].format(prog=prog, fn=fn)
 
 
+# The BOMs footman recognises, with the (decode, append) encodings each
+# implies — ONE table, read by the sniffer and the uninstaller's rewrite: a
+# fourth encoding added to one and not the other would corrupt uninstall.
+_BOM_ENCODINGS = (
+    (b"\xef\xbb\xbf", "utf-8-sig", "utf-8"),
+    (b"\xff\xfe", "utf-16", "utf-16-le"),
+    (b"\xfe\xff", "utf-16", "utf-16-be"),
+)
+
+
 def _sniff_encoding(raw: bytes) -> tuple[str, str]:
     """(decode, append) encodings for rc bytes, sniffed from any leading BOM.
 
@@ -265,12 +275,9 @@ def _sniff_encoding(raw: bytes) -> tuple[str, str]:
     inject a second BOM mid-file. With no BOM, prefer UTF-8 and fall back to
     latin-1, which round-trips arbitrary bytes rather than raising.
     """
-    if raw.startswith(b"\xef\xbb\xbf"):
-        return "utf-8-sig", "utf-8"
-    if raw.startswith(b"\xff\xfe"):
-        return "utf-16", "utf-16-le"
-    if raw.startswith(b"\xfe\xff"):
-        return "utf-16", "utf-16-be"
+    for bom, decode, append in _BOM_ENCODINGS:
+        if raw.startswith(bom):
+            return decode, append
     try:
         raw.decode("utf-8")
     except UnicodeDecodeError:
@@ -333,7 +340,7 @@ def _remove_once(rc: Path, line: str) -> bool:
     existing = raw.decode(read_enc, errors="replace")
     if line not in existing:
         return False
-    boms = (b"\xef\xbb\xbf", b"\xff\xfe", b"\xfe\xff")
+    boms = tuple(bom for bom, _, _ in _BOM_ENCODINGS)
     bom = next((b for b in boms if raw.startswith(b)), b"")
     kept = [ln for ln in existing.splitlines() if ln.strip() != line.strip()]
     body = "\n".join(kept) + ("\n" if kept else "")
