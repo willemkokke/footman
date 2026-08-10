@@ -265,6 +265,10 @@ def _base_tree(names: tuple[str, ...], json_mode: bool) -> registry.Group | int:
                     f"{_brand.name} declares built-in tasks from {name!r}, "
                     f"which did not mount: {exc}",
                 )
+    # Before the cascade overlays the user's own tasks into this group: after
+    # that, nothing tells the brand's tasks from the person's, and the two
+    # have opposite defaults.
+    registry.seal_needs_project(base)
     return base
 
 
@@ -1932,6 +1936,9 @@ def _execute(
                 path=_paths.global_manifest_path(),
                 bake_cwd=False,
                 builtin=_brand.builtin,
+                # No project here — the one place the question is asked, so
+                # every reader downstream just checks `needs_project`.
+                project=False,
             )["tree"]
         else:
             cfg_tasks = cfg.get("tasks")

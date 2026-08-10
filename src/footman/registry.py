@@ -450,6 +450,31 @@ _KEEP_GOING = "_footman_keep_going"
 _ATOMIC = "_footman_atomic"
 _INFINITE = "_footman_infinite"
 _SHARED = "_footman_shared"
+_NEEDS_PROJECT = "_footman_needs_project"
+"""Does this task need a project? Asked **only where there is no one**.
+
+A branded CLI's `builtin=` set is mounted exactly where discovery found no
+project, and most of what such a CLI ships means nothing there: `deploy`
+without a checkout is not a shorter `deploy`, it is a lie that exits 0.
+
+`needs_project=True` says so: outside a project the task is not listed, not
+completed, and refused *by name* when asked for — never a "no task named"
+404, because the task does exist, it just needs somewhere to stand.
+
+A boolean, not a three-way `scope=`, because the axis really is unary: both
+answers include being *inside* a project, so this can never hide anything
+from one. That is why the question only arises outside, and why the rung a
+task arrived from needs no rule of its own.
+
+Tri-state like `hidden`: `None` inherits the enclosing group, so one line
+covers a subtree and a child can still say otherwise. The two rungs differ
+only in their default, and each default is that rung's own promise — a
+package declared `builtin=` exposes nothing outside a project until a task
+says it makes sense there (`seal_scope`), while a person's own tasks file
+rides everywhere unless they say otherwise.
+"""
+
+
 _HIDDEN = "_footman_hidden"
 _LANES = "_footman_lanes"
 _INTERACTIVE = "_footman_interactive"
@@ -923,6 +948,7 @@ def _apply_policy(
     serial: bool = False,
     exclusive: bool = False,
     hidden: bool | None = None,
+    needs_project: bool | None = None,
     lanes: Sequence[Any] = (),
 ) -> None:
     """Stamp a task's `_footman_*` policy attributes onto *fn*.
@@ -946,6 +972,11 @@ def _apply_policy(
         # so `hidden=False` on a child of a hidden group is a real override
         # rather than indistinguishable from silence.
         setattr(fn, _HIDDEN, hidden)
+    if needs_project is not None:
+        # Tri-state for the same reason `hidden` is: unset inherits, so
+        # `needs_project=False` on a child of a project-scoped group is a real
+        # override rather than indistinguishable from silence.
+        setattr(fn, _NEEDS_PROJECT, needs_project)
     if confirm:
         setattr(fn, _CONFIRM, confirm)
     if interactive:
@@ -1223,6 +1254,7 @@ class TaskDecorator(Protocol):
         serial: bool = False,
         exclusive: bool = False,
         hidden: bool | None = None,
+        needs_project: bool | None = None,
         lanes: Sequence[Lane] = (),
         uses: Sequence[GlobalOption] = (),
     ) -> Callable[[Callable[_P, _R_co]], TaskFn[_P, _R_co]]: ...
@@ -1247,13 +1279,23 @@ class HookRegistrar(Protocol):
 class Group:
     """A node in the command tree: named tasks and nested sub-groups."""
 
-    def __init__(self, name: str, help: str = "", hidden: bool | None = None) -> None:
+    def __init__(
+        self,
+        name: str,
+        help: str = "",
+        hidden: bool | None = None,
+        needs_project: bool | None = None,
+    ) -> None:
         self.name = name
         self.help = help
         # Tri-state, like a task's: unset inherits the enclosing group's
         # answer, so a hidden subtree needs saying once at its root and a
         # child can still opt back into the listings with `hidden=False`.
         self.hidden = hidden
+        # The same tri-state, for the same reason:
+        # `group("ci", needs_project=True)` answers for everything under it,
+        # and a child can still say otherwise. `None` asks whoever encloses.
+        self.needs_project = needs_project
         self.tasks: dict[str, Task] = {}
         self.groups: dict[str, Group] = {}
         # Lifecycle contributions, one bucket per hook kind (root registry
@@ -1369,6 +1411,7 @@ class Group:
         serial: bool = False,
         exclusive: bool = False,
         hidden: bool | None = None,
+        needs_project: bool | None = None,
         lanes: Sequence[Lane] = (),
         uses: Sequence[GlobalOption] = (),
     ) -> Callable[[Callable[_P, _R_co]], TaskFn[_P, _R_co]]: ...
@@ -1392,6 +1435,7 @@ class Group:
         serial: bool = False,
         exclusive: bool = False,
         hidden: bool | None = None,
+        needs_project: bool | None = None,
         lanes: Sequence[Lane] = (),
         uses: Sequence[GlobalOption] = (),
     ) -> Task | Callable[[Task], Task]:
@@ -1508,6 +1552,7 @@ class Group:
                 serial=serial,
                 exclusive=exclusive,
                 hidden=hidden,
+                needs_project=needs_project,
                 lanes=lanes,
             )
             if uses:
@@ -1529,12 +1574,23 @@ class Group:
 
         return register(fn) if fn is not None else register
 
-    def group(self, name: str, help: str = "", hidden: bool | None = None) -> Group:
+    def group(
+        self,
+        name: str,
+        help: str = "",
+        hidden: bool | None = None,
+        needs_project: bool | None = None,
+    ) -> Group:
         """Create and register a nested command group, returning it.
 
         `hidden=True` keeps the whole subtree out of the human listings
         (`--list`, `--tree`, help — `--all` shows them) while leaving every
         address in it callable and completable — see `@task(hidden=…)`.
+
+        `needs_project=True` says the whole subtree needs one: outside a
+        project it is not listed, not completed, and refused by name. A
+        child may still say `needs_project=False` — the same tri-state
+        `hidden` has.
         """
         key = cli_name(name)
         if key == "default":
@@ -1559,10 +1615,12 @@ class Group:
                 adopted.help = help
             if hidden is not None:
                 adopted.hidden = hidden
+            if needs_project is not None:
+                adopted.needs_project = needs_project
             return adopted
         self._shadow_pulled(key)
         self._claim(key)
-        sub = Group(key, help, hidden)
+        sub = Group(key, help, hidden, needs_project)
         self.groups[key] = sub
         return sub
 
@@ -1885,6 +1943,7 @@ class Group:
         serial: bool = False,
         exclusive: bool = False,
         hidden: bool | None = None,
+        needs_project: bool | None = None,
     ) -> Callable[[Callable[_P, _R_co]], TaskFn[_P, _R_co]]: ...
 
     def default(
@@ -1905,6 +1964,7 @@ class Group:
         serial: bool = False,
         exclusive: bool = False,
         hidden: bool | None = None,
+        needs_project: bool | None = None,
     ) -> Task | Callable[[Task], Task]:
         """Register *fn* as this group's default action — what a bare
         `fm <group>` runs, and what the group returns when called.
@@ -1955,6 +2015,7 @@ class Group:
                 serial=serial,
                 exclusive=exclusive,
                 hidden=hidden,
+                needs_project=needs_project,
             )
             self.tasks["default"] = task
             return cast("TaskFn[_P, _R_co]", task)
@@ -2142,6 +2203,39 @@ def declared_hidden(fn: Task) -> bool | None:
     """
     value = getattr(fn, _HIDDEN, None)
     return value if value is None else bool(value)
+
+
+def declared_needs_project(fn: Task) -> bool | None:
+    """*fn*'s own answer to "do I need a project?", or `None` when it never
+    said — so the enclosing group answers for it, exactly as `hidden` does."""
+    value = getattr(fn, _NEEDS_PROJECT, None)
+    return value if value is None else bool(value)
+
+
+def seal_needs_project(group: Group, default: bool = True) -> None:
+    """Give every unmarked task in *group* an explicit scope.
+
+    Called on the brand's built-in set the moment it is assembled, because
+    that is the only place the answer is known: a package declared `builtin=`
+    exposes nothing outside a project until a task says it makes sense there.
+
+    It has to happen *before* the cascade merges, not after. The user's own
+    tasks file is overlaid into this very group, and once merged nothing in
+    the tree distinguishes "the brand shipped this" from "the person wrote
+    this" by position — while their defaults are opposites: the built-in set
+    defaults to needing a project, a personal tasks file rides everywhere.
+    Sealing here means everything downstream reads one resolved value.
+    """
+
+    def walk(node: Group, inherited: bool | None) -> None:
+        mine = node.needs_project if node.needs_project is not None else inherited
+        for fn in node.tasks.values():
+            if declared_needs_project(fn) is None:
+                setattr(fn, _NEEDS_PROJECT, default if mine is None else mine)
+        for sub in node.groups.values():
+            walk(sub, mine)
+
+    walk(group, group.needs_project)
 
 
 def is_interactive(fn: Task) -> bool:

@@ -449,11 +449,15 @@ def default_line(node: dict[str, Any]) -> str:
 def listed(node: dict[str, Any], *, show_hidden: bool = False) -> bool:
     """Whether a task or group node belongs in a human listing.
 
-    `hidden` is the only thing that takes one out — a task nobody is meant to
-    read about. It stays callable, still completes, and shows up under `--json`
-    marked, because a machine is exactly who calls it. *show_hidden* is
-    `--all`: the listing asked to see everything.
+    Two things take one out, and they are different in kind. `hidden` is a
+    task nobody is meant to *read about*: it stays callable, still completes,
+    shows up under `--json` marked, and `--all` reveals it — because a machine
+    is exactly who calls it. `needs_project` is a task that does not belong
+    *here at all*: nothing outside a project can run it, so listing it would
+    be an offer footman cannot honour, and `--all` does not bring it back.
     """
+    if node.get("needs_project"):
+        return False
     return show_hidden or not node.get("hidden")
 
 

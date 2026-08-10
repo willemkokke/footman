@@ -9,6 +9,28 @@ versions may include breaking changes.
 
 ### Added
 
+- **`@task(needs_project=…)`, and a built-in task needs one by default.** A
+  branded CLI's `builtin=` set is mounted exactly where discovery found no
+  project, and most of what such a CLI ships means nothing there — so it ran
+  anyway and *lied*: a `files` task printing nothing as though the project
+  had none, a `coverage` task reporting no stamp yet, both exiting 0. Listing
+  and completion happen before any body or hook runs, so nothing downstream
+  could filter them, and footman already owns the "is there a project"
+  predicate.
+
+  Outside a project a task that needs one is not listed, not completed and
+  not suggested — and asking for it by name is **refused with the reason**
+  rather than 404'd, because the task does exist:
+  `deploy needs a project — no tasks.py found here or in any parent of /tmp`.
+  The message names where footman looked, because what usually types it is a
+  tool that started in the wrong directory.
+
+  `group("ci", needs_project=True)` covers a subtree and a child may still
+  say otherwise — the tri-state `hidden` has. The question is only ever asked
+  *outside* a project, so this can never hide anything from one. The **user
+  rung defaults the other way**: a personal task rides everywhere unless it
+  says `needs_project=True`. Each default is that rung's own promise.
+
 - **`matching("*.json")` narrows a path value's <kbd>Tab</kbd>.** A `Path`
   parameter hands off to the shell's own file completion — footman answers
   from a cached manifest and never touches the filesystem — and this is what

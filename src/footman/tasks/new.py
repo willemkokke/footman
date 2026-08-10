@@ -25,7 +25,10 @@ def hello(name: str = "world") -> None:
 '''
 
 
-@task
+# The built-in set defaults to needing a project; this is the one task that
+# does not — writing the first tasks file is precisely what you do where
+# there is no project yet.
+@task(needs_project=False)
 def new() -> None:
     """Write a starter tasks file in this directory."""
     prog = context.current().prog
