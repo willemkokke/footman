@@ -103,16 +103,23 @@ class InvokeResult:
 def _isolated(cwd: Path | None) -> Generator[None]:
     """A throwaway completion cache (and optional cwd) for one invocation.
 
-    The configured locations are restored too: `App.run` points `_paths` at
-    its brand's world, and a test driving two brands in one process must not
-    leave the second reading the first's.
+    **The brand and its locations are restored too.** A real entry point runs
+    one brand and deliberately never puts the module globals back — the
+    process *is* that CLI, and `run` may not even return (the uv handoff
+    re-execs). A test process is the one place that isn't true: it drives
+    many brands in a row, and the next one must not read the last one's
+    world. `_paths` was already restored here; `_app._brand` was not, so
+    whichever `Runner(App(...))` ran first in a pytest-xdist worker silently
+    decided what every later test saw — three macOS jobs failed on that, and
+    only three, because the workers happened to order things differently.
     """
-    from footman import _paths
+    from footman import _app, _paths
 
     with tempfile.TemporaryDirectory(prefix="footman-test-") as tmp:
         old = os.environ.get("XDG_CACHE_HOME")
         os.environ["XDG_CACHE_HOME"] = tmp
         where = _paths.child_args()
+        brand = _app._brand
         try:
             if cwd is not None:
                 with contextlib.chdir(cwd):
@@ -120,6 +127,7 @@ def _isolated(cwd: Path | None) -> Generator[None]:
             else:
                 yield
         finally:
+            _app._brand = brand
             _paths.configure_child(*where)
             if old is None:
                 os.environ.pop("XDG_CACHE_HOME", None)

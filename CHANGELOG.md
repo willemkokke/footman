@@ -7,6 +7,17 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Fixed
+
+- **`Runner` puts the brand back after every invocation.** A real entry point
+  runs one brand and deliberately never restores the module globals — the
+  process *is* that CLI. A test process is the one place that isn't true, and
+  `Runner` is documented as saving and restoring around each invocation. It
+  did that for the brand's *locations* and not for the brand itself, so
+  whichever `Runner(App(...))` ran first in a pytest-xdist worker silently
+  decided what every later test in that worker saw. Anyone testing a branded
+  CLI alongside another had a test order deciding their results.
+
 ### Added
 
 - **`step(...).opts(color=…)`** — the same `auto|never|always` `run()` takes,

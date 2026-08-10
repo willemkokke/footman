@@ -179,6 +179,12 @@ def test_acme_teaches_with_its_own_name(tmp_path):
     assert result.stderr.startswith("acme:")
 ```
 
+Each invocation puts the brand — and the folders it reads — back when it
+finishes, so a suite can drive several brands in a row and a bare `Runner()`
+after a branded one is still stock footman. A real entry point does the
+opposite on purpose (a process *is* one CLI, and `run` may never return), so
+this restoring is the harness's job and only the harness's.
+
 ## CI notes
 
 - Cache isolation is automatic — parallel test runs can't fight over the
