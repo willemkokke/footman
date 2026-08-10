@@ -909,7 +909,7 @@ def _run_sequential(
 ) -> None:
     done: dict[int, bool] = {}
     failed = False
-    width = max((len(n.seg.task) for n in nodes), default=0)
+    width = max((_describe.display_width(n.seg.task) for n in nodes), default=0)
     for node in _toposort(nodes):
         if node.result is not None:  # answered before the run: a denied confirm
             done[node.key] = node.result.ok
@@ -991,7 +991,7 @@ def _run_parallel(
     lock = threading.Lock()
     # A confirm denied before the run is already a failure on the board.
     failed = any(n.result is not None and not n.result.ok for n in nodes)
-    width = max((len(n.seg.task) for n in nodes), default=0)
+    width = max((_describe.display_width(n.seg.task) for n in nodes), default=0)
 
     def dep_ok(n: _Node) -> bool:
         return all(

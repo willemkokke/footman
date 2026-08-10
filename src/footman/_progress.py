@@ -369,5 +369,11 @@ class StatusLine:
             if len(self.running) > 4:
                 names += " ..."
             line += f"  running: {names}"
+        from footman._describe import fit
+
+        # The line carries ANSI when a failure is counted, so `len()` reads
+        # nine cells too many and a raw slice can cut an escape in half —
+        # leaving the terminal painted red by a line that never finished
+        # saying so.
         width = shutil.get_terminal_size((80, 24)).columns - 1
-        return line if len(line) <= width else line[:width]
+        return fit(line, width)

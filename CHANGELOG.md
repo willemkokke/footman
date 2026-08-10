@@ -7,8 +7,32 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Changed
+
+- **The cold-cache <kbd>Tab</kbd> waits a second, not three.** A first-time
+  manifest build measures ~100–150 ms (footman's own fat `tasks.py`
+  included), so the old bound only ever came into play for a tasks file that
+  imports something heavy at module level — and there a three-second freeze
+  reads as a broken shell. The build is detached and lands anyway, so the
+  shorter cap trades a hang for a blank first <kbd>Tab</kbd> and an instant
+  second one.
+
 ### Fixed
 
+- **Columns are measured in terminal cells, not in characters.** Every
+  aligned surface — `--list`, `--help`, `--plugins`, the step lines, the run
+  summary — padded with `len()`, which answers a different question in three
+  ways at once: an escape sequence is bytes the terminal eats rather than
+  shows, a combining mark rides on the character before it, and an
+  East-Asian character or emoji takes two cells. A task named `构建` or a
+  `step("🚀 deploy")` bent the column around itself. One helper now answers
+  for all of them, with a fast path so plain ASCII costs what it did before.
+- **A truncated status line can no longer leave the terminal painted.** The
+  live line carries ANSI once it counts a failure, so it measured nine cells
+  too wide and a raw slice could cut an escape in half — printing its tail as
+  gibberish, or leaving everything after it red. It now cuts on what shows,
+  never inside an escape or a wide character, and closes whatever styling was
+  still open.
 - **A task's option written where globals live now points the right way.**
   `fm --fix lint` answered "unknown global option `--fix` (global options go
   before the first task)", which sends someone *left* when the fix is to move

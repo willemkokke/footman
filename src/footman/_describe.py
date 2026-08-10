@@ -13,6 +13,8 @@ import datetime
 import decimal
 import enum
 import json
+import re
+import unicodedata
 import uuid
 from collections.abc import Callable, Iterator
 from pathlib import PurePath
@@ -73,6 +75,74 @@ def bold_cyan(text: str, on: bool) -> str:
 
 def red(text: str, on: bool) -> str:
     return f"\033[31m{text}\033[0m" if on else text
+
+
+# --- columns ------------------------------------------------------------------
+# Every aligned surface asks the same question — how wide is this on screen? —
+# and `len()` answers a different one, in three ways at once: an escape
+# sequence is bytes the terminal eats rather than shows, a combining mark
+# rides on the character before it, and an East-Asian wide character (or an
+# emoji) takes two cells. One helper, so a column is a column everywhere.
+
+_ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+
+
+def _cell(ch: str) -> int:
+    if unicodedata.category(ch) in ("Mn", "Me", "Cf"):
+        return 0  # combining marks and format codes ride on their neighbour
+    return 2 if unicodedata.east_asian_width(ch) in ("W", "F") else 1
+
+
+def display_width(text: str) -> int:
+    """How many terminal cells *text* occupies."""
+    if text.isascii() and "\033" not in text:
+        # Plain ASCII is one cell per character and carries no escapes — two
+        # C-speed checks so the common case (every column footman prints
+        # about itself) costs what `len()` cost before.
+        return len(text)
+    return sum(_cell(ch) for ch in _ANSI.sub("", text))
+
+
+def pad_to(text: str, width: int) -> str:
+    """*text* followed by spaces up to *width* cells — `str.ljust` counting
+    what the terminal counts."""
+    return text + " " * max(width - display_width(text), 0)
+
+
+def fit(text: str, width: int) -> str:
+    """*text* cut to *width* cells, escape sequences kept whole.
+
+    Never cuts inside an escape (which would print its tail as literal
+    gibberish) and never splits a wide character down the middle; whatever
+    styling was still open at the cut is closed, so a truncated status line
+    cannot leave the terminal wearing a colour nobody chose.
+    """
+    if display_width(text) <= width:
+        return text
+    out: list[str] = []
+    used = 0
+    styled = False
+
+    def take(run: str) -> bool:
+        nonlocal used
+        for ch in run:
+            cells = _cell(ch)
+            if used + cells > width:
+                return True
+            out.append(ch)
+            used += cells
+        return False
+
+    pos = 0
+    for match in _ANSI.finditer(text):
+        if take(text[pos : match.start()]):
+            break
+        out.append(match.group())
+        styled = match.group() != "\033[0m"
+        pos = match.end()
+    else:
+        take(text[pos:])
+    return "".join(out) + ("\033[0m" if styled else "")
 
 
 def value_hint(p: dict[str, Any]) -> str:

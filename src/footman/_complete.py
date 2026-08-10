@@ -69,7 +69,14 @@ _DYNAMIC = "\x00dynamic"  # internal sentinel: a dynamic completer, recompute fr
 # `test_completion_schema_mirrors_manifest` keeps the two from drifting.
 _SCHEMA = 5
 _DYNAMIC_TIMEOUT = 2.0  # seconds to wait for a fresh dynamic completer subprocess
-_COLD_TIMEOUT = 3.0  # seconds to wait for a first-time cwd manifest build
+# Seconds to wait for a first-time cwd manifest build. A cold build measures
+# ~100-150 ms — footman's own fat tasks.py included — so this is roughly
+# seven times the slowest thing measured, and the projects it still cannot
+# cover are the ones importing something heavy at module level. There the
+# shorter bound is the kinder failure: a first TAB that answers nothing and a
+# second one that answers instantly (the build was detached and lands
+# anyway), rather than a shell that appears to hang for three seconds.
+_COLD_TIMEOUT = 1.0
 _SHELLS = ("bash", "zsh", "fish", "pwsh", "nushell")
 _GLOBAL_CHOICES = {
     "--install-completion": _SHELLS,
