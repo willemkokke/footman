@@ -7,6 +7,29 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- **`matching("*.json")` narrows a path value's <kbd>Tab</kbd>.** A `Path`
+  parameter hands off to the shell's own file completion — footman answers
+  from a cached manifest and never touches the filesystem — and this is what
+  it hands *along*: the pattern the shell filters by. `--env-file` now offers
+  `.env`, `.env.local`, `.env.production` instead of every file in the
+  directory, and `--profile` offers `*.json`; both declare it themselves.
+  Directories always come along, or a match one level down would be
+  unreachable, and it is completion only — a path typed anyway still binds.
+
+  bash, zsh, fish and pwsh all narrow. **nushell does not**: filtering there
+  means returning a list of footman's own, which replaces its built-in file
+  completion outright and loses directory descent. fish shows dotfiles once
+  you type the leading `.`, which is fish's behaviour for every command.
+
+- **`step(...).opts(color=…)`** — the same `auto|never|always` `run()` takes,
+  applied to the environment the whole step body runs under. One decision at
+  the boundary of a body, read by every command it spawns and every
+  in-process tool it hosts, instead of the same keyword threaded through each
+  call. It composes with `env=` the way `run()` does: `env=` replaces
+  wholesale, `color=` then paints that replacement.
+
 ### Changed
 
 - **Every word completion offers now says what it does.** Task and group
@@ -41,6 +64,13 @@ versions may include breaking changes.
 
 ### Fixed
 
+- **An attached path value completes on PowerShell at all.** The hook handed
+  the whole `--env-file=` token to `CompleteFilename`, which looked for a
+  file by that literal name and found none — so `--opt=<Tab>` on a path
+  completed to silence. The head through the `=` is stripped for the walk and
+  put back on each candidate, the same reading the comma-separated branch
+  beside it already used.
+
 - **`Runner` puts the brand back after every invocation.** A real entry point
   runs one brand and deliberately never restores the module globals — the
   process *is* that CLI. A test process is the one place that isn't true, and
@@ -49,15 +79,6 @@ versions may include breaking changes.
   whichever `Runner(App(...))` ran first in a pytest-xdist worker silently
   decided what every later test in that worker saw. Anyone testing a branded
   CLI alongside another had a test order deciding their results.
-
-### Added
-
-- **`step(...).opts(color=…)`** — the same `auto|never|always` `run()` takes,
-  applied to the environment the whole step body runs under. One decision at
-  the boundary of a body, read by every command it spawns and every
-  in-process tool it hosts, instead of the same keyword threaded through each
-  call. It composes with `env=` the way `run()` does: `env=` replaces
-  wholesale, `color=` then paints that replacement.
 
 ## [0.38.1] — 2026-08-10
 

@@ -1153,3 +1153,36 @@ def test_bash_install_and_uninstall_agree_on_the_rc_line(home):
     assert "source" in (home / ".bashrc").read_text()
     _shellcomp.uninstall("bash", "fm")
     assert "source" not in (home / ".bashrc").read_text()
+
+
+# A `matching()` glob arrives as one line of stdout beside exit 100. Four of
+# the five hooks narrow their file walk by it; nushell deliberately does not
+# (filtering means returning a list of our own, which replaces its built-in
+# file completion outright and loses directory descent).
+_GLOB_FILTER = {
+    "bash": "compgen -f -X",
+    "zsh": "_files -g",
+    "fish": "basename",
+    "pwsh": "-like $glob",
+}
+
+
+@pytest.mark.parametrize("shell", sorted(_GLOB_FILTER))
+def test_hook_narrows_a_path_value_by_the_glob(shell):
+    body = _shellcomp.script_for(shell, "fm")
+    assert _GLOB_FILTER[shell] in body
+
+
+def test_nushell_says_why_it_does_not_filter():
+    body = _shellcomp.script_for("nushell", "fm")
+    assert "losing directory descent" in body
+
+
+@pytest.mark.parametrize("shell", ("bash", "pwsh"))
+def test_hook_reattaches_the_head_of_an_attached_path_value(shell):
+    """`--env-file=<Tab>`: the head through the `=` has to be stripped before
+    the filename walk and put back on each candidate. pwsh handed the whole
+    token to `CompleteFilename`, which looked for a file by that literal
+    name — so an attached path value completed to silence there."""
+    body = _shellcomp.script_for(shell, "fm")
+    assert "$head" in body

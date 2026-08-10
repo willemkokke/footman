@@ -488,6 +488,10 @@ def _marker_keys(
         spec["doc"] = peeled.doc
     if peeled.path_req is not None:
         spec["path"] = peeled.path_req
+    if peeled.glob is not None:
+        # Completion only: the pattern the shell's own file completion filters
+        # by. Never a validation rule — see `matching`.
+        spec["glob"] = peeled.glob
     if peeled.bounds is not None:
         lo, hi = peeled.bounds
         if lo is not None:

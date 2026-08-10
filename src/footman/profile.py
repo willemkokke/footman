@@ -41,15 +41,16 @@ import tempfile
 import threading
 import time
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
 import footman
-from footman import GlobalOption, context
+from footman import GlobalOption, context, matching
 from footman._executor import reported_state
 
 PROFILE = GlobalOption(
     "profile",
-    Path,
+    # A trace is JSON, and Tab offering every file in the tree helped nobody.
+    Annotated[Path, matching("*.json")],
     default=Path("fm-profile.json"),
     help="write the run as a trace for ui.perfetto.dev",
 )

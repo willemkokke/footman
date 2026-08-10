@@ -22,12 +22,18 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import Annotated
 
 import footman
-from footman import GlobalOption
+from footman import GlobalOption, matching
 
 ENV_FILE = GlobalOption(
-    "env-file", Path, default=Path(".env"), help="the .env file to load"
+    "env-file",
+    # `.env`, `.env.local`, `.env.production` — the family, rather than every
+    # file in the directory. Completion only: a path typed anyway still binds.
+    Annotated[Path, matching(".env*")],
+    default=Path(".env"),
+    help="the .env file to load",
 )
 
 

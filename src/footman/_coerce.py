@@ -31,6 +31,7 @@ from footman.params import (
     check,
     doc,
     env,
+    matching,
     suggest,
 )
 from footman.params import _arg as _ARG
@@ -105,6 +106,7 @@ class Peeled:
     key: Any = None  # mapping key type
     value_multiple: bool = False  # mapping value is a list (dict[K, list[E]])
     path_req: str | None = None  # exists / file / dir requirement on a Path
+    glob: str | None = None  # matching(): narrow Tab to names like this
     bounds: tuple[float | None, float | None] | None = None  # inclusive lo/hi
     env: str | None = None  # environment-variable fallback
     checks: tuple[Any, ...] = ()  # post-coercion validators (check(fn))
@@ -125,6 +127,7 @@ class _Markers(TypedDict):
     `**markers` unpack checks against the dataclass's own field types."""
 
     path_req: str | None
+    glob: str | None
     bounds: tuple[float | None, float | None] | None
     env: str | None
     checks: tuple[Any, ...]
@@ -164,6 +167,7 @@ def peel(ann: Any) -> Peeled:
     completer: suggest | None = None
     is_nosplit = False
     path_req: str | None = None
+    glob: str | None = None
     bounds: tuple[float | None, float | None] | None = None
     env_var: str | None = None
     checks: tuple[Any, ...] = ()
@@ -189,6 +193,8 @@ def peel(ann: Any) -> Peeled:
                     is_nosplit = True
                 elif isinstance(mark, PathRequirement):
                     path_req = mark.kind
+                elif isinstance(mark, matching):
+                    glob = mark.pattern
                 elif isinstance(mark, between):
                     bounds = (mark.lo, mark.hi)
                 elif isinstance(mark, range):
@@ -243,6 +249,7 @@ def peel(ann: Any) -> Peeled:
 
     markers: _Markers = {
         "path_req": path_req,
+        "glob": glob,
         "bounds": bounds,
         "env": env_var,
         "checks": checks,

@@ -614,6 +614,7 @@ _API_SECTIONS: list[tuple[str, str, list[str]]] = [
             "Exists",
             "IsFile",
             "IsDir",
+            "matching",
             "between",
             "env",
             "check",

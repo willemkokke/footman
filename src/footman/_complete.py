@@ -62,6 +62,8 @@ _FILES = "\x00files"  # internal sentinel: complete() -> complete_cli()
 _EXIT_FILES = 100  # complete_cli exit code the hooks read as "complete files"
 _FILES_CSV = "\x00files-csv"  # a comma-splitting path value, mid-list
 _EXIT_FILES_CSV = 101  # "complete files after the last comma" exit code
+
+
 _DYNAMIC = "\x00dynamic"  # internal sentinel: a dynamic completer, recompute fresh
 # Mirror of manifest.SCHEMA_VERSION — the hot path can't import manifest.py.
 # A cache written by a different footman gets rebuilt, never walked: the first
@@ -133,6 +135,26 @@ def _csv_head(p: dict[str, Any], value: str) -> tuple[str, str]:
     return "", value
 
 
+def _files_sentinel(p: dict[str, Any], head: str) -> str:
+    """The hand-off sentinel for a path value, carrying any `matching()` glob.
+
+    footman never touches the filesystem to complete a path — it answers from
+    a cached manifest — so the shell's own file completion does the walking.
+    The glob rides out with the signal so the shell can narrow what it walks:
+    `complete_cli` prints it on stdout beside exit 100/101, and a hook reads
+    "one line of stdout with exit 100" as "files matching this". An empty
+    stdout is every file, which is what every hook did before there was a
+    pattern to send — so an older hook against a newer footman degrades to
+    exactly its old behaviour rather than breaking.
+    """
+    base = _FILES_CSV if head else _FILES
+    glob = p.get("glob")
+    # Tab-separated, not concatenated: `_FILES_CSV` starts with `_FILES`, so
+    # a glob beginning "-csv" would otherwise turn a plain path value into a
+    # comma-splitting one. The reader compares the tag exactly.
+    return f"{base}\t{glob}" if isinstance(glob, str) and glob else base
+
+
 def _choice_tokens(p: dict[str, Any], partial: str) -> list[str]:
     """*p*'s choice values as whole completion tokens against *partial*.
 
@@ -167,7 +189,7 @@ def _attached_value(
     """
     head, cur = _csv_head(p, valpart)
     if "path" in p.get("types", []):
-        return [_FILES_CSV] if head else [_FILES]
+        return [_files_sentinel(p, head)]
     if p.get("dynamic"):  # recompute fresh, never the baked snapshot
         prefix = head if bash_split else f"{optname}={head}"
         return [_DYNAMIC, cur, prefix, p["name"], *path]
@@ -543,7 +565,7 @@ def complete(tree: dict[str, Any], words: list[str]) -> list[str]:
         if pending is not None:
             head, cur = _csv_head(pending, partial)
             if "path" in pending.get("types", []):
-                return [_FILES_CSV] if head else [_FILES]
+                return [_files_sentinel(pending, head)]
             if pending.get("dynamic"):  # recompute fresh, never the baked snapshot
                 return [_DYNAMIC, cur, head, pending["name"], *path]
 
@@ -864,17 +886,21 @@ def complete_cli(args: list[str]) -> int:
         ):
             return 0  # cold and couldn't build in time — stay silent and fast
     out = complete(data["tree"], args)
-    if out == [_FILES]:
-        # A path value: print nothing, and signal the hook to complete files.
+    if len(out) == 1 and out[0].split("\t", 1)[0] in (_FILES, _FILES_CSV):
+        # A path value: signal the hook to complete files. `_FILES_CSV` means
+        # after the last comma. (Only ever raised with a comma already typed,
+        # so a hook from an older install — which knows just 100 — degrades to
+        # the silence it always showed there.)
+        #
+        # Whatever follows the sentinel is a `matching()` glob for the shell
+        # to filter by; nothing follows it when the parameter declared none,
+        # which is the every-file hand-off every hook already knew.
+        tag, _, glob = out[0].partition("\t")
+        csv = tag == _FILES_CSV
+        if glob:
+            sys.stdout.write(glob + "\n")
         _maybe_refresh(manifest, data)
-        return _EXIT_FILES
-    if out == [_FILES_CSV]:
-        # A comma-splitting path value mid-list: signal the hook to complete
-        # files after the last comma. (Only ever raised with a comma already
-        # typed, so a hook from an older install — which knows just 100 —
-        # degrades to the silence it always showed there.)
-        _maybe_refresh(manifest, data)
-        return _EXIT_FILES_CSV
+        return _EXIT_FILES_CSV if csv else _EXIT_FILES
     if out and out[0] == _DYNAMIC:
         # A dynamic completer: recompute it fresh in a subprocess rather than
         # serve the manifest's baked snapshot — a build-critical answer must not
