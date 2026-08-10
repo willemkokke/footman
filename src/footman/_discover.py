@@ -47,12 +47,16 @@ class HookError(Exception):
         self.original = original
         from footman import context
 
-        detail = (
-            str(original) or f"{type(original).__name__}"
-            if context._is_deliberate_stop(original)
-            else f"{type(original).__name__}: {original}"
-        )
-        super().__init__(f"@{kind} {name!r}: {detail}")
+        if context._is_deliberate_stop(original):
+            # A hook that *chose* to stop is talking to the user, and its
+            # reason is the whole message — naming the hook in front of it
+            # leaks machinery into a sentence someone wrote for a person
+            # ("@pre_tasks 'load': --env-file: … does not exist"). A hook
+            # that *crashed* still gets named, because then the machinery
+            # is exactly what a reader needs.
+            super().__init__(str(original) or type(original).__name__)
+            return
+        super().__init__(f"@{kind} {name!r}: {type(original).__name__}: {original}")
 
 
 def _import_file(path: Path, index: int) -> Group:
