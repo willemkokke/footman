@@ -7,6 +7,38 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Changed
+
+- **Every word completion offers now says what it does.** Task and group
+  names always carried their docstring, and a task's own options their
+  `doc("…")` line — but three emitters dropped text footman already had, so a
+  <kbd>Tab</kbd> on a flag listed bare names. Now footman's own globals
+  (`--jobs — max parallel tasks`), a plugin's globals (the `help=` it
+  declared, which the manifest had been carrying all along), and a runnable
+  group's default options all describe themselves. zsh and fish right-align
+  these into a column and colour them by the user's own settings, so the
+  shells were always ready for it.
+
+  The core globals' words ride in the manifest rather than being mirrored
+  into the completion hot path a second time — prose is the thing that
+  rots, and `CORE_OPTIONS` stays the one place they are written. Manifest
+  schema 6; a warm <kbd>Tab</kbd> still measures ~28 ms.
+
+- **An unmounted plugin's flag is now discovered, not listed.** 0.38.1 taught
+  `--env-file` and `--profile` from a hardcoded table of two. footman now
+  loads the plugins it is willing to speak for and reads what globals they
+  declare, so a new option is taught the day it ships and nothing can go
+  stale. Two packages qualify: **footman's own** — those two flags belong to
+  the framework, are useful to anything built on it, and footman is imported
+  by definition, so a branded CLI teaches them too, whether or not it ever
+  named a distribution — and **the brand's**, once a branded CLI names one
+  with `dist=`, which is the case worth having: a distribution can ship
+  several plugins while a tasks file mounts only some of them. The scan runs
+  only once a refusal is certain and is memoised, so a successful run never
+  pays for it. Everything else keeps the plain "unknown global option":
+  reaching a third party's flag would mean importing, on a typo, code the
+  project deliberately did not mount.
+
 ### Fixed
 
 - **`Runner` puts the brand back after every invocation.** A real entry point
@@ -26,23 +58,6 @@ versions may include breaking changes.
   in-process tool it hosts, instead of the same keyword threaded through each
   call. It composes with `env=` the way `run()` does: `env=` replaces
   wholesale, `color=` then paints that replacement.
-
-### Changed
-
-- **An unmounted plugin's flag is now discovered, not listed.** 0.38.1 taught
-  `--env-file` and `--profile` from a hardcoded table of two. footman now
-  loads the plugins it is willing to speak for and reads what globals they
-  declare, so a new option is taught the day it ships and nothing can go
-  stale. Two packages qualify: **footman's own** — those two flags belong to
-  the framework, are useful to anything built on it, and footman is imported
-  by definition, so a branded CLI teaches them too, whether or not it ever
-  named a distribution — and **the brand's**, once a branded CLI names one
-  with `dist=`, which is the case worth having: a distribution can ship
-  several plugins while a tasks file mounts only some of them. The scan runs
-  only once a refusal is certain and is memoised, so a successful run never
-  pays for it. Everything else keeps the plain "unknown global option":
-  reaching a third party's flag would mean importing, on a typo, code the
-  project deliberately did not mount.
 
 ## [0.38.1] — 2026-08-10
 

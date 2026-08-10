@@ -67,7 +67,7 @@ _DYNAMIC = "\x00dynamic"  # internal sentinel: a dynamic completer, recompute fr
 # A cache written by a different footman gets rebuilt, never walked: the first
 # TAB after an upgrade serves correct candidates instead of a traceback.
 # `test_completion_schema_mirrors_manifest` keeps the two from drifting.
-_SCHEMA = 5
+_SCHEMA = 6
 _DYNAMIC_TIMEOUT = 2.0  # seconds to wait for a fresh dynamic completer subprocess
 # Seconds to wait for a first-time cwd manifest build. A cold build measures
 # ~100-150 ms — footman's own fat tasks.py included — so this is roughly
@@ -484,7 +484,7 @@ def complete(tree: dict[str, Any], words: list[str]) -> list[str]:
             if "default" not in node:
                 return []
             out = [
-                "--" + p["name"]
+                _cand("--" + p["name"], p.get("doc", ""))
                 for p in node["default"]["params"]
                 if p["kind"] in ("flag", "option")
                 and ("--" + p["name"]).startswith(partial)
@@ -500,16 +500,27 @@ def complete(tree: dict[str, Any], words: list[str]) -> list[str]:
         # preceded). A bare `<TAB>` still lists only tasks — globals would be
         # noise there.
         if not prior and partial.startswith("-"):
-            out += [g for g in sorted(_GLOBALS) if g.startswith(partial)]
+            # The core flags are this module's own frozenset (it may not import
+            # `_split`), but their words ride in the manifest — `_manifest`
+            # writes them from the one table that declares them.
+            said = tree.get("global_help")
+            lines: dict[str, str] = said if isinstance(said, dict) else {}
+            out += [
+                _cand(g, lines.get(g, ""))
+                for g in sorted(_GLOBALS)
+                if g.startswith(partial)
+            ]
             for g in tree.get("globals", ()):
+                summary = str(g.get("help", ""))
                 if (flag := "--" + g["name"]).startswith(partial):
-                    out.append(flag)
+                    out.append(_cand(flag, summary))
                 # A bool answers to `--no-x` too — offer the off spelling
-                # exactly as the splitter accepts it.
+                # exactly as the splitter accepts it, described by what it
+                # turns off: one option, read from the other end.
                 if g["kind"] == "flag" and (
                     (no := "--no-" + g["name"]).startswith(partial)
                 ):
-                    out.append(no)
+                    out.append(_cand(no, summary))
         return out
 
     # An attached `--opt=value` partial: the one value position the grammar
@@ -562,14 +573,8 @@ def complete(tree: dict[str, Any], words: list[str]) -> list[str]:
             seen.setdefault(c)
     # An option carries its doc("...") text when the task author wrote one;
     # choice values stay bare; next-segment addresses arrive pre-described.
-    # Same tab-separated wire format either way.
-    out = []
-    for c in seen:
-        p = seg.opts.get(c)
-        if p is not None and p.get("doc"):
-            out.append(f"{c}\t{p['doc']}")
-        else:
-            out.append(c)
+    # Same tab-separated wire format either way — `_cand` is that format.
+    out = [_cand(c, (seg.opts.get(c) or {}).get("doc", "")) for c in seen]
     return out + next_heads
 
 

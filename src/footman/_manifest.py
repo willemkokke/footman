@@ -41,7 +41,7 @@ from footman.context import context_param_name
 from footman.params import suggest
 from footman.registry import Group
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 
 class ManifestError(Exception):
@@ -1018,11 +1018,43 @@ def build_manifest(
     tree["globals"] = [
         _global_spec(opt, memo, bake=bake_completers) for opt in _unique_globals(root)
     ]
+    tree["global_help"] = _core_global_help()
     return {
         "schema": SCHEMA_VERSION,
         "hash": tree_hash(tree),
         "completion_max_age": completion_max_age,
         "tree": tree,
+    }
+
+
+def _core_global_help() -> dict[str, str]:
+    """`--flag -> one line`, for footman's own globals.
+
+    The completion hot path knows the core flags by name (its own frozenset
+    mirror — it may not import `_split`), but a name with no words beside it
+    is the difference between a Tab that teaches and a Tab that lists. Rather
+    than mirror thirty-five help strings into `_complete` as well — prose is
+    exactly what rots — the words ride in the manifest the hot path already
+    reads and parses. `CORE_OPTIONS` stays the one place they are written.
+
+    Aliases carry their long form's line: `-j` and `--jobs` are one option,
+    and a reader scanning a column wants to know what it does, not that it
+    has two spellings.
+
+    `{prog}` is substituted here, the way `--help` substitutes it when it
+    renders the same table — a manifest belongs to one brand (its path is
+    brand-scoped and it already bakes `tasks_file`), so the brand's own
+    command name is the honest thing to store. Left raw, a Tab would offer
+    "help for {prog}" in braces.
+    """
+    from footman import _app, _split
+
+    return {
+        flag: help_text.replace("{prog}", _app._brand.prog)
+        for name, alias, _kind, _hint, _default, help_text in _split.GLOBALS
+        if help_text
+        for flag in (name, alias)
+        if flag
     }
 
 
