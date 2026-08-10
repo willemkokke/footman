@@ -7,6 +7,26 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Documentation
+
+- **The personal tasks file is documented where the cascade is.**
+  `~/.config/footman/tasks.py` has always ridden everywhere, but it appeared
+  only on the page about building a *branded* CLI — so "The task cascade"
+  described the walk as repo-root-down and stopped, leaving readers with an
+  incomplete model. It now names the outer rung, and a new **Personal tasks**
+  section covers the file, `project > user`, and marking the ones that need a
+  checkout with `needs_project=True`. Config already documented its user rung;
+  tasks now do too.
+- **`needs_project` is in the `@task(…)` reference**, beside `hidden` and the
+  rest, instead of only in the branded-CLI page where it was first written —
+  along with `group(…, needs_project=True)` for a whole subtree.
+- **CI builds the docs on docs-only pull requests.** The strict site build was
+  gated on `code == 'true'` alongside the heavy code jobs, so a change under
+  `docs/` skipped it — while the Docs workflow, which only triggers on push to
+  `main`, did not run either. Nothing checked the docs on precisely the pull
+  requests most able to break them, and a broken page surfaced after merge as
+  a failed Pages deploy. It now runs on every pull request.
+
 ## [0.39.1] — 2026-08-10
 
 ### Fixed

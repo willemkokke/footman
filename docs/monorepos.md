@@ -20,6 +20,10 @@ Standing in `services/api`, `fm` sees `build*` (the local override), `test`,
 - a **group present at both levels merges** — its tasks are overlaid the same
   way.
 
+There is one rung further out than the repo root: your own
+[personal tasks file](#personal-tasks), which every project sees and any
+project may shadow.
+
 !!! note "How footman finds the top of the cascade"
 
     The walk goes up from your current directory and stops at a **ceiling**,
@@ -45,6 +49,59 @@ Standing in `services/api`, `fm` sees `build*` (the local override), `test`,
     is the user-level `cascade` key — `none`, `repo` (the default above), or
     `filesystem` — with `FOOTMAN_CASCADE` as the per-invocation override; see
     [Configuration](configuration.md#keys).
+
+## Personal tasks
+
+The cascade has an outermost rung above the repo root: **`~/.config/footman/tasks.py`**
+(honouring `XDG_CONFIG_HOME`). Tasks you write there ride everywhere — inside
+every project, and in directories that are no project at all:
+
+```python
+# ~/.config/footman/tasks.py
+from footman import run, task
+
+
+@task
+def scratch():
+    """Spin up a throwaway venv here."""
+    run(["uv", "venv", ".scratch"])
+```
+
+```console
+$ cd ~/anywhere && fm scratch      # works; there is no project in sight
+```
+
+It is the same cascade, extended one rung outward, so the rule you already
+know applies: **project > user**. A project that wants the name owns it, and
+`inherited()` still reaches the personal task it shadowed —
+[Composing tasks](composing.md) has the mechanics.
+
+### When a personal task needs a project
+
+Some personal tasks only make sense in a checkout. Say so, and footman keeps
+them out of the way everywhere else:
+
+```python
+@task(needs_project=True)
+def sync_upstream():
+    """Rebase onto upstream/main."""
+    run(["git", "fetch", "upstream"])
+```
+
+Outside a project that task is not listed, not completed, and not offered as
+a did-you-mean — and asking for it by name is refused with the reason rather
+than a "no task named", because it does exist:
+
+```console
+$ cd /tmp && fm sync-upstream
+fm: sync-upstream needs a project — no tasks.py found here or in any parent of /tmp
+```
+
+Silence means "rides everywhere", which is what a personal tasks file is for
+— so nothing you already wrote changes. (A [branded CLI](custom-cli.md)
+defaults its *built-in* set the other way round, because a package declared
+`builtin=` mostly ships tasks that need a project. Each default is that
+rung's own promise.)
 
 ## Where a task runs
 
