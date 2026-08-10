@@ -185,14 +185,16 @@ def _unique_globals(root: Group) -> list[Any]:
     return seen
 
 
-def _global_spec(opt: Any, memo: dict[int, list[str]]) -> dict[str, Any]:
+def _global_spec(
+    opt: Any, memo: dict[int, list[str]], *, bake: bool = False
+) -> dict[str, Any]:
     """One manifest entry for a plugin's global option — described by the
     same machinery as a task parameter, so choices, path-typed file
     completion and `suggest()` come along by construction."""
     # The option builds its own synthetic parameter — one construction,
     # shared with the binder's absent-option ladder. (A bool default is
     # already normalised at declaration, by GlobalOption itself.)
-    spec = _finish(param_spec(opt._as_parameter()), memo)
+    spec = _finish(param_spec(opt._as_parameter()), memo, bake=bake)
     spec["name"] = opt.name  # the cli spelling is the identity
     if opt.help:
         spec["help"] = opt.help
@@ -377,8 +379,11 @@ def param_spec(param: inspect.Parameter) -> dict[str, Any]:
         if peeled.nosplit:
             spec["nosplit"] = True
     if peeled.completer is not None:
+        # No `choices` key at all unless someone bakes one: *absent* means
+        # "nobody has asked yet", which is what lets validation and help
+        # resolve live, while a baked `[]` keeps its old meaning — the
+        # completer ran and genuinely offered nothing.
         spec["dynamic"] = {"strict": peeled.completer.strict}
-        spec["choices"] = []
         spec["_completer"] = peeled.completer
         return spec
 
@@ -784,12 +789,23 @@ def _run_completer(completer: suggest, memo: dict[int, list[str]]) -> list[str]:
     return memo[key]
 
 
-def _finish(spec: dict[str, Any], memo: dict[int, list[str]]) -> dict[str, Any]:
+def _finish(
+    spec: dict[str, Any], memo: dict[int, list[str]], *, bake: bool = False
+) -> dict[str, Any]:
+    """Drop the transient completer, baking its choices only when asked.
+
+    *bake* is for a surface that renders every parameter it can find and has
+    nowhere to resolve later — the docs exporter. Everywhere else the
+    completer stays unrun: the command line resolves the one parameter it is
+    validating, help resolves the ones it prints, and a <kbd>Tab</kbd>
+    recomputes fresh anyway. Running them all on every invocation is what
+    made an unrelated `fm build` shell out to a git-branch completer.
+    """
     completer = spec.pop("_completer", None)
     if spec.get("secret"):
         spec.pop("choices", None)  # never bake a secret's values
         completer = None
-    if completer is not None:
+    if completer is not None and bake:
         spec["choices"] = _run_completer(completer, memo)
     return spec
 
@@ -808,7 +824,9 @@ def _source_of(fn: Any) -> str:
     return f"{code.co_filename}:{code.co_firstlineno}"
 
 
-def _task_node(fn: Any, memo: dict[int, list[str]]) -> dict[str, Any]:
+def _task_node(
+    fn: Any, memo: dict[int, list[str]], *, bake: bool = False
+) -> dict[str, Any]:
     sig = resolved_signature(fn)
     infinite = registry.is_infinite(fn)
     interactive = registry.is_interactive(fn)
@@ -817,7 +835,7 @@ def _task_node(fn: Any, memo: dict[int, list[str]]) -> dict[str, Any]:
     ctx_name = context_param_name(sig)  # the injected ctx param is not a CLI arg
     parsed = docstrings.parse(inspect.getdoc(fn))
     params = [
-        _finish(param_spec(p), memo)
+        _finish(param_spec(p), memo, bake=bake)
         for p in sig.parameters.values()
         if p.name != ctx_name
     ]
@@ -876,7 +894,9 @@ def _task_node(fn: Any, memo: dict[int, list[str]]) -> dict[str, Any]:
         # the task this one shadows, so `--help` can show the call
         # `inherited()` will make.
         node["shadows"] = {
-            "params": [_finish(param_spec(p), memo) for p in _cli_params(previous)],
+            "params": [
+                _finish(param_spec(p), memo, bake=bake) for p in _cli_params(previous)
+            ],
             "where": _source_of(previous),
         }
     declares, _inner = _coerce.emitted(sig.return_annotation)
@@ -921,7 +941,13 @@ def _hide(node: dict[str, Any], own: bool | None, inherited: bool) -> dict[str, 
     return node
 
 
-def _node(g: Group, memo: dict[int, list[str]], hidden: bool = False) -> dict[str, Any]:
+def _node(
+    g: Group,
+    memo: dict[int, list[str]],
+    hidden: bool = False,
+    *,
+    bake: bool = False,
+) -> dict[str, Any]:
     # `hidden` is resolved here, where the tree structure is: a node that never
     # declared one inherits its group's answer, so hiding a subtree is said once
     # at the root and `hidden=False` on a child is a real way back. The group's
@@ -934,10 +960,14 @@ def _node(g: Group, memo: dict[int, list[str]], hidden: bool = False) -> dict[st
     node: dict[str, Any] = {
         "help": g.help,
         "tasks": {
-            name: _hide(_task_node(fn, memo), registry.declared_hidden(fn), mine)
+            name: _hide(
+                _task_node(fn, memo, bake=bake), registry.declared_hidden(fn), mine
+            )
             for name, fn in g.tasks.items()
         },
-        "groups": {name: _node(sub, memo, mine) for name, sub in g.groups.items()},
+        "groups": {
+            name: _node(sub, memo, mine, bake=bake) for name, sub in g.groups.items()
+        },
     }
     if mine:
         node["hidden"] = True  # additive: listings skip it, the address still runs
@@ -949,7 +979,7 @@ def _node(g: Group, memo: dict[int, list[str]], hidden: bool = False) -> dict[st
     # so listings can *say* what an undocumented default does.
     if g.default_task is not None:
         node["default"] = _hide(
-            _task_node(g.default_task, memo),
+            _task_node(g.default_task, memo, bake=bake),
             registry.declared_hidden(g.default_task),
             mine,
         )
@@ -964,18 +994,30 @@ def tree_hash(tree: dict[str, Any]) -> str:
 
 
 def build_manifest(
-    root: Group, *, completion_max_age: int | None = None
+    root: Group,
+    *,
+    completion_max_age: int | None = None,
+    bake_completers: bool = False,
 ) -> dict[str, Any]:
     """Introspect *root* into a serialisable manifest dict.
 
-    Dynamic completers run here (once each, deduped) — this is the execution
-    path, so paying to refresh their cached choices is free. *completion_max_age*
-    (seconds, or `None` to disable) is baked in so the stdlib-only completion hot
-    path can decide whether to trigger a background refresh without reading config.
+    *completion_max_age* (seconds, or `None` to disable) is baked in so the
+    stdlib-only completion hot path can decide whether to trigger a background
+    refresh without reading config.
+
+    Dynamic completers do **not** run here. They used to — every invocation
+    executed every `suggest()` function in the tree, so a git-branch completer
+    on one task shelled out on every `fm anything` — and nothing needed it:
+    a <kbd>Tab</kbd> recomputes fresh, the command line resolves the one
+    parameter whose value it validates, and help resolves the ones it prints.
+    *bake_completers* is for the surface with nowhere to resolve later: the
+    docs exporter, which renders every parameter it can find into a page.
     """
-    tree = _node(root, {})
     memo: dict[int, list[str]] = {}
-    tree["globals"] = [_global_spec(opt, memo) for opt in _unique_globals(root)]
+    tree = _node(root, memo, bake=bake_completers)
+    tree["globals"] = [
+        _global_spec(opt, memo, bake=bake_completers) for opt in _unique_globals(root)
+    ]
     return {
         "schema": SCHEMA_VERSION,
         "hash": tree_hash(tree),

@@ -10,7 +10,7 @@ from typing import Annotated, Any, NamedTuple
 
 import pytest
 
-from footman import _manifest
+from footman import _app, _manifest
 from footman._coerce import peel
 from footman._complete import complete
 from footman._describe import example_parts, listed_params, usage_parts
@@ -77,7 +77,9 @@ class Spot:
 
 def run(build, line):
     reg, tree = build_tree(build)
-    _, segments = split_chain(tree, line.split())
+    # The resolver the app builds, so a dynamic parameter validates here
+    # exactly as it does on the real path (nothing bakes choices now).
+    _, segments = split_chain(tree, line.split(), _app._choices_resolver(reg))
     return run_chain(reg, segments)
 
 
@@ -454,7 +456,10 @@ def test_dynamic_choices_baked_but_completion_defers():
 
     _, tree = build_tree(tasks)
     spec = tree["tasks"]["build"]["params"][0]
-    assert spec["choices"] == ["alpha", "beta"]  # baked as the fallback snapshot
+    # Nothing bakes: an absent `choices` says "nobody has asked yet", which
+    # is what lets validation and help resolve live and keeps an unrelated
+    # invocation from running this completer at all.
+    assert "choices" not in spec
     assert spec["dynamic"] == {"strict": True}
     # Completion no longer serves the baked snapshot: it defers to a fresh
     # recompute (a subprocess, exercised end to end in test_complete),
@@ -478,6 +483,72 @@ def test_dynamic_strict_validation_rejects_unknown():
 
     with pytest.raises(ChainError, match="must be one of alpha"):
         run(tasks, "build nope")
+
+
+def test_a_completer_runs_only_where_its_values_are_wanted(tmp_path, monkeypatch):
+    # The whole point of not baking: an invocation that never needs a
+    # parameter's values never runs its completer. Before, every `fm
+    # anything` ran every completer in the tree.
+    from footman.testing import Runner
+
+    monkeypatch.setenv("FOOTMAN_CACHE_DIR", str(tmp_path / "cache"))
+    calls = tmp_path / "calls"
+    calls.write_text("")
+    src = tmp_path / "tasks.py"
+    src.write_text(
+        "from __future__ import annotations\n"
+        "from typing import Annotated\n"
+        "from pathlib import Path\n"
+        "from footman import task\n"
+        "from footman.params import suggest\n\n"
+        f"LOG = Path({str(calls)!r})\n\n\n"
+        "def branches() -> list[str]:\n"
+        "    LOG.write_text(LOG.read_text() + 'x')\n"
+        "    return ['main', 'dev']\n\n\n"
+        "@task\n"
+        "def deploy(branch: Annotated[str, suggest(branches)] = 'main'):\n"
+        "    'Deploy.'\n\n\n"
+        "@task\n"
+        "def build():\n"
+        "    'Unrelated.'\n"
+    )
+
+    def ran(line: str) -> int:
+        calls.write_text("")
+        result = Runner().invoke(line, tasks=src)
+        assert result.ok or "must be one of" in result.stderr, result.stderr
+        return len(calls.read_text())
+
+    assert ran("build") == 0  # another task's line
+    assert ran("--list") == 0  # a listing shows no values
+    assert ran("--help build") == 0  # a page that does not print them
+    assert ran("deploy") == 0  # the option was never given
+    assert ran("--help deploy") == 1  # the page prints this one
+    assert ran("deploy --branch=dev") == 1  # a value to validate
+    assert ran("deploy --branch=nope") == 1  # …and to refuse
+
+
+def test_help_shows_dynamic_values_and_says_they_are_dynamic(tmp_path, monkeypatch):
+    # Willem's ruling: show the values, and mark them dynamic the way a
+    # computed default is marked — so nobody reads the list as fixed.
+    from footman.testing import Runner
+
+    monkeypatch.setenv("FOOTMAN_CACHE_DIR", str(tmp_path / "cache"))
+    src = tmp_path / "tasks.py"
+    src.write_text(
+        "from __future__ import annotations\n"
+        "from typing import Annotated\n"
+        "from footman import task\n"
+        "from footman.params import suggest\n\n\n"
+        "def branches() -> list[str]:\n"
+        "    return ['main', 'dev']\n\n\n"
+        "@task\n"
+        "def deploy(branch: Annotated[str, suggest(branches)] = 'main'):\n"
+        "    'Deploy.'\n"
+    )
+    out = Runner().invoke("--help deploy", tasks=src).stdout
+    assert "usage: fm deploy [--branch={main|dev}]" in out
+    assert "one of main|dev (dynamic)" in out
 
 
 def test_dynamic_soft_allows_anything():
@@ -656,7 +727,10 @@ def test_completer_deduped_per_build():
     reg = Group("root")
     tasks(reg)
     _manifest.build_manifest(reg)
-    assert _DEDUP_CALLS == [1]  # one call despite two params sharing the completer
+    assert _DEDUP_CALLS == []  # the ordinary build runs no completer at all
+
+    _manifest.build_manifest(reg, bake_completers=True)
+    assert _DEDUP_CALLS == [1]  # baking: one call despite two params sharing it
 
 
 def test_broken_strict_completer_fails_the_build():
@@ -664,8 +738,15 @@ def test_broken_strict_completer_fails_the_build():
         @reg.task
         def build(project: Annotated[str, suggest(lambda: 1 / 0)]): ...
 
+    # The build itself no longer runs completers, so the taught refusal
+    # surfaces where the values are actually wanted: the docs bake, and the
+    # command line that needs them to validate a value.
     with pytest.raises(_manifest.CompleterError, match="ZeroDivisionError"):
-        build_tree(tasks)
+        reg = Group("root")
+        tasks(reg)
+        _manifest.build_manifest(reg, bake_completers=True)
+    with pytest.raises(_manifest.CompleterError, match="ZeroDivisionError"):
+        run(tasks, "build anything")
 
 
 def test_broken_soft_completer_degrades_to_no_candidates():
@@ -675,9 +756,16 @@ def test_broken_soft_completer_degrades_to_no_candidates():
             project: Annotated[str, suggest(lambda: 1 / 0, strict=False)],
         ): ...
 
-    _, tree = build_tree(tasks)
-    spec = tree["tasks"]["build"]["params"][0]
+    # A soft completer that raises degrades to no candidates — and now that
+    # the ordinary build runs nothing, that shows where the values are
+    # wanted: baking it yields `[]`, and a run takes any value regardless.
+    reg = Group("root")
+    tasks(reg)
+    spec = _manifest.build_manifest(reg, bake_completers=True)["tree"]["tasks"][
+        "build"
+    ]["params"][0]
     assert spec["choices"] == []  # empty -> soft (validation allows anything)
+    run(tasks, "build whatever")
 
 
 # --- bool as a real token type (collections, dicts, unions) ------------------

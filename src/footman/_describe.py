@@ -177,7 +177,11 @@ def _mechanics(p: dict[str, Any]) -> str:
             bits.append(f"flag (--no-{p['name']} to disable)")
     choices = p.get("choices")
     if choices:
-        bits.append("one of " + "|".join(choices))
+        # A dynamic parameter's values are what its completer answered just
+        # now, not a fixed set — say so, the way a computed default does, so
+        # nobody reads this list as the law of the task.
+        listed = "one of " + "|".join(choices)
+        bits.append(f"{listed} (dynamic)" if p.get("dynamic") else listed)
     elif p.get("types"):
         bits.append(" or ".join(TYPE_WORD.get(str(t), str(t)) for t in p["types"]))
     if p.get("mapping"):

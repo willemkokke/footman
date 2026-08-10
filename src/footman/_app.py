@@ -500,8 +500,48 @@ def _print_param_rows(params: list[dict[str, Any]], heading: str) -> None:
         print(f"  {_describe.bold(label, on)}{pad}  {detail}".rstrip())
 
 
+def _choices_resolver(reg: registry.Group) -> _split.ChoicesFor:
+    """Answer a dynamic parameter's choices live, from the registry.
+
+    The completers no longer run when the manifest is built — nothing needed
+    them there — so the surfaces that *do* need values ask for them one
+    parameter at a time: the splitter for the value it is validating, help
+    for the options it is about to print. Memoised per invocation, so a
+    parameter asked twice runs its completer once, and a completer nobody's
+    line touches never runs at all.
+    """
+    from footman import _coerce
+
+    seen: dict[tuple[str, str], list[str] | None] = {}
+
+    def resolve(address: str, param: str) -> list[str] | None:
+        key = (address, param)
+        if key in seen:
+            return seen[key]
+        found: list[str] | None = None
+        try:
+            fn = _executor.resolve(reg, address.split("."))
+        except (KeyError, IndexError):
+            fn = None
+        if fn is not None:
+            for declared in _manifest.resolved_signature(fn).parameters.values():
+                if registry.cli_name(declared.name) != param:
+                    continue
+                completer = _coerce.peel(declared.annotation).completer
+                if completer is not None:
+                    found = _manifest._run_completer(completer, {})
+                break
+        seen[key] = found
+        return found
+
+    return resolve
+
+
 def _print_task_help(
-    tree: dict[str, Any], path: list[str], show_hidden: bool = False
+    tree: dict[str, Any],
+    path: list[str],
+    show_hidden: bool = False,
+    choices_for: _split.ChoicesFor | None = None,
 ) -> None:
     # All phrasing (labels, details, examples) lives in `_describe`, shared
     # with the markdown exporter so help text and pages can never drift.
@@ -510,6 +550,12 @@ def _print_task_help(
         node = node["groups"][name]
     task = node["tasks"][path[-1]]
     on = _color_out
+    # Resolve before anything renders — the synopsis shows value shapes too.
+    # Only what this page prints: doing it here, after the listing filter,
+    # is what keeps `fm --help build` from running another task's completer.
+    shown = _describe.listed_params(task, show_hidden=show_hidden)
+    for spec in shown:
+        _split.live_choices(".".join(path), spec, choices_for)
     usage = _describe.paint_cli(
         _describe.usage_parts(_brand.prog, path, task, show_hidden=show_hidden), on
     )
@@ -523,7 +569,6 @@ def _print_task_help(
         print(_describe.dim("\n  runs until you stop it — Ctrl-C", on))
     if task.get("disabled"):
         print(_describe.dim(f"\n  unavailable here: {task['disabled']}", on))
-    shown = _describe.listed_params(task, show_hidden=show_hidden)
     positionals = [p for p in shown if p["kind"] in ("positional", "variadic")]
     options = [p for p in shown if p["kind"] in ("flag", "option")]
     _print_param_rows(positionals, "positionals")
@@ -558,7 +603,10 @@ def _print_task_help(
 
 
 def _print_group_help(
-    tree: dict[str, Any], path: list[str], show_hidden: bool = False
+    tree: dict[str, Any],
+    path: list[str],
+    show_hidden: bool = False,
+    choices_for: _split.ChoicesFor | None = None,
 ) -> None:
     node = tree
     for name in path:
@@ -595,6 +643,8 @@ def _print_group_help(
     params = (
         _describe.listed_params(default, show_hidden=show_hidden) if default else []
     )
+    for spec in params:  # the default's own options, and only those
+        _split.live_choices(f"{dotted}.default", spec, choices_for)
     options = [p for p in params if p["kind"] in ("flag", "option")]
     _print_param_rows(options, "options")
 
@@ -697,7 +747,11 @@ def _help_targets(
 
 
 def _print_help(
-    tree: dict[str, Any], argv: list[str], after: int, show_hidden: bool = False
+    tree: dict[str, Any],
+    argv: list[str],
+    after: int,
+    show_hidden: bool = False,
+    choices_for: _split.ChoicesFor | None = None,
 ) -> int:
     """`--help` alone covers fm itself; with names, the named groups/tasks.
 
@@ -727,9 +781,9 @@ def _print_help(
         if index:
             print()
         if kind == "task":
-            _print_task_help(tree, path, show_hidden)
+            _print_task_help(tree, path, show_hidden, choices_for)
         else:
-            _print_group_help(tree, path, show_hidden)
+            _print_group_help(tree, path, show_hidden, choices_for)
     return 0
 
 
@@ -1961,8 +2015,9 @@ def _run_tree(
 
     show_hidden = bool(g.get("all"))
 
+    live = _choices_resolver(reg)
     if _wants_help(argv):
-        return _print_help(tree, argv, after, show_hidden)
+        return _print_help(tree, argv, after, show_hidden, live)
 
     if g.get("plugins"):
         return _plugins_report(reg)
@@ -1976,7 +2031,7 @@ def _run_tree(
         return _describe_contract(tree, describe, after < len(argv))
 
     try:
-        globals_, segments = _split.split_chain(tree, argv)
+        globals_, segments = _split.split_chain(tree, argv, live)
     except _split.ChainError as exc:
         message = str(exc)
         if exc.unknown and _brand.builtin and root_dir:
@@ -1984,6 +2039,13 @@ def _run_tree(
             # reads as a command that vanished — teach the mount instead.
             message += _builtin_remedy(exc.unknown)
         return _refuse(json_mode, message)
+    except _manifest.CompleterError as exc:
+        # A strict completer raised while the line was being validated. It
+        # used to surface from the manifest build, before any line was read;
+        # now it surfaces where its values were actually needed — same taught
+        # message, and a broken completer on one task no longer refuses every
+        # other task's invocation.
+        return _refuse(json_mode, str(exc))
 
     # A task whose signature claims stdout (`-> Stdout[T]`) makes this a
     # *document run*: stdout carries exactly the addressed task's return
