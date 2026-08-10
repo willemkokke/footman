@@ -536,7 +536,40 @@ def _check_bounds(
         raise ChainError(f"{where}: {label} must be {expect} (got {value!r})")
 
 
-def _validate(where: str, p: dict[str, Any], value: str, at: int = 0) -> None:
+ChoicesFor = Callable[[str, str], "list[str] | None"]
+"""How the app resolves a dynamic parameter's choices, live: given the task's
+dotted address and the parameter's CLI name, the values its `suggest()`
+completer offers right now, or `None` when it cannot be asked."""
+
+
+def live_choices(
+    where: str, p: dict[str, Any], choices_for: ChoicesFor | None
+) -> list[str] | None:
+    """A parameter's choices, resolving a dynamic one the first time a value
+    actually needs them.
+
+    Nothing bakes these any more, so `choices` absent means "nobody asked
+    yet" and a present `[]` still means "the completer ran and offered
+    nothing" — the reading `_suggest_only` has always had. The resolved list
+    is written back into the spec, which is this invocation's own dict, so a
+    repeated option (`--tag=a --tag=b`) asks the completer once.
+    """
+    if "choices" in p or p.get("dynamic") is None or choices_for is None:
+        return p.get("choices")
+    fresh = choices_for(where, str(p["name"]))
+    if fresh is None:
+        return None
+    p["choices"] = fresh
+    return fresh
+
+
+def _validate(
+    where: str,
+    p: dict[str, Any],
+    value: str,
+    at: int = 0,
+    choices_for: ChoicesFor | None = None,
+) -> None:
     """Eagerly validate a choice/typed value; raise a taught error if wrong.
 
     *at* is the value's index in the stream, which only matters to a grouped
@@ -565,7 +598,7 @@ def _validate(where: str, p: dict[str, Any], value: str, at: int = 0) -> None:
         where,
         label,
         value,
-        choices=p.get("choices"),
+        choices=live_choices(where, p, choices_for),
         types=p.get("types"),
         dynamic=p.get("dynamic"),
         path=p.get("path"),
@@ -930,7 +963,9 @@ def _default_notes(
 
 
 def split_chain(
-    tree: dict[str, Any], argv: list[str]
+    tree: dict[str, Any],
+    argv: list[str],
+    choices_for: ChoicesFor | None = None,
 ) -> tuple[list[str], list[Segment]]:
     """Split *argv* into leading globals and a list of resolved segments."""
     plugin: dict[str, str] = {}
@@ -993,7 +1028,7 @@ def split_chain(
                 break
             if tok.startswith("--"):
                 before = len(seg.bare)
-                i = _consume_option(seg, opts, argv, i, frozenset(plugin))
+                i = _consume_option(seg, opts, argv, i, frozenset(plugin), choices_for)
                 # Remember a bare mention for exactly one token. If the word
                 # after it goes on to fail, the failure gets the attachment
                 # hint — the space form is not a value spelling in this grammar,
@@ -1003,15 +1038,16 @@ def split_chain(
                 continue
             with _hint_attachment(bare_before, tok):
                 if filled < len(fixed):
-                    _consume_positional(seg, tree, fixed[filled], tok)
+                    _consume_positional(seg, tree, fixed[filled], tok, choices_for)
                     filled += 1
                     i += 1
                 elif rest is not None:
                     if rest["kind"] == "variadic":
-                        _validate(seg.task, rest, tok)  # eager, like a positional
+                        # eager, like a positional
+                        _validate(seg.task, rest, tok, choices_for=choices_for)
                         seg.variadic.append(tok)
                     else:
-                        _consume_positional(seg, tree, rest, tok)
+                        _consume_positional(seg, tree, rest, tok, choices_for)
                     rest_count += 1
                     i += 1
                 else:
@@ -1057,6 +1093,7 @@ def _consume_option(
     argv: list[str],
     i: int,
     plugin_flags: frozenset[str] = frozenset(),
+    choices_for: ChoicesFor | None = None,
 ) -> int:
     tok = argv[i]
     name = tok.split("=", 1)[0]
@@ -1113,10 +1150,16 @@ def _consume_option(
             _consume_pair(seg, p, cli, pair)
     elif p.get("multiple"):
         for part in _values(p, value):
-            _validate(seg.task, p, part, at=len(seg.values.get(cli, ())))
+            _validate(
+                seg.task,
+                p,
+                part,
+                at=len(seg.values.get(cli, ())),
+                choices_for=choices_for,
+            )
             seg.values.setdefault(cli, []).append(part)
     else:
-        _validate(seg.task, p, value)
+        _validate(seg.task, p, value, choices_for=choices_for)
         seg.values[cli] = value
     return i
 
@@ -1170,24 +1213,31 @@ def _is_address(tree: dict[str, Any], tok: str) -> bool:
 
 
 def _consume_positional(
-    seg: Segment, tree: dict[str, Any], p: dict[str, Any], tok: str
+    seg: Segment,
+    tree: dict[str, Any],
+    p: dict[str, Any],
+    tok: str,
+    choices_for: ChoicesFor | None = None,
 ) -> None:
+    # Resolve first, so a dynamic positional gets the same "that looks like
+    # the next task" reading a static one does.
+    known = live_choices(seg.task, p, choices_for)
     if (
-        "choices" in p
-        and tok not in p["choices"]
-        and not _suggest_only(p["choices"], p.get("dynamic"))
+        known is not None
+        and tok not in known
+        and not _suggest_only(known, p.get("dynamic"))
         and not (p.get("types") and _coerce.coerce_scalar(tok, p["types"])[0])
         and _is_address(tree, tok)
     ):
         raise ChainError(
             f"{seg.task}: <{p['name']}> must be one of "
-            f"{'|'.join(p['choices'])} — {tok!r} looks like the next task; "
+            f"{'|'.join(known)} — {tok!r} looks like the next task; "
             f"did you forget <{p['name']}>?"
         )
     if p.get("multiple"):
         for part in _values(p, tok):
-            _validate(seg.task, p, part)
+            _validate(seg.task, p, part, choices_for=choices_for)
             seg.values.setdefault(p["name"], []).append(part)
     else:
-        _validate(seg.task, p, tok)
+        _validate(seg.task, p, tok, choices_for=choices_for)
         seg.values[p["name"]] = tok

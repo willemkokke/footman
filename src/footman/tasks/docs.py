@@ -67,7 +67,9 @@ def _project_tree(include_self: bool) -> dict[str, Any]:
     reg = _discover.load_tree(files, base=base)
     if not include_self:
         _prune_first_party(reg)
-    tree: dict[str, Any] = _manifest.build_manifest(reg)["tree"]
+    # The one surface that bakes: a page renders every parameter's choices and
+    # has no reader to resolve them later, so the completers run here.
+    tree: dict[str, Any] = _manifest.build_manifest(reg, bake_completers=True)["tree"]
     if _config.sort_listing(cfg):  # the pages follow the same one setting
         tree = _describe.sort_tree(tree)
     return tree

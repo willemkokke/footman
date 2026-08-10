@@ -7,6 +7,27 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Changed
+
+- **A `suggest()` completer runs where its values are wanted, and nowhere
+  else.** Every invocation used to run every completer in the tree, because
+  the manifest baked their choices on the way past: a git-branch completer on
+  one task shelled out on `fm build`, on `fm --list`, on every run of
+  everything. Nothing needed that — a <kbd>Tab</kbd> already recomputes fresh,
+  ignoring the bake entirely. Now the command line resolves the one parameter
+  whose value it is validating, `--help` resolves the ones it prints (and only
+  those: `fm --help build` never touches another task's completer), the docs
+  exporter still bakes because a page has no reader to resolve later, and a
+  line that mentions neither runs nothing. Validation is *more* exact than
+  before — it asks the completer now, rather than trusting a snapshot taken
+  earlier in the same process — and a broken strict completer surfaces where
+  its values were needed instead of refusing every other task's invocation.
+
+- **`--help` says when a choice list is dynamic.** A `suggest()` parameter
+  shows its values in the synopsis and the option row, marked `(dynamic)` the
+  way a computed default is marked `(computed)` — the list is what the
+  completer answered just now, not the law of the task.
+
 ### Fixed
 
 - **<kbd>Tab</kbd> in a directory with no tasks answers at once.** It used to
