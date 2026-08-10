@@ -17,7 +17,6 @@ import os
 import sys
 import threading
 import time
-from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from dataclasses import dataclass, field
 from itertools import count
 from typing import Any, TextIO
@@ -1042,6 +1041,11 @@ def _run_parallel(
                     status.notify(blob)
                 real.write(blob)
                 real.flush()
+
+    # Imported at the pool, not at module scope: `concurrent.futures` costs
+    # ~5.9 ms (it drags `logging` through `traceback`), and a line that never
+    # runs a plan — `--list`, `--help`, a refusal — should not pay it.
+    from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 
     with ThreadPoolExecutor(
         max_workers=jobs if jobs > 0 else None, thread_name_prefix="fm-worker"
