@@ -365,11 +365,12 @@ def test_several_owners_and_none_typed_lists_them(tree):
 def brand_dist(monkeypatch):
     """Point `_brand` at a chosen distribution, and clear the scan's memo.
 
-    Both are process-global, and `_run` sets `_brand` **without restoring
-    it** — so one `Runner(App(dist=…))` anywhere earlier in a worker decides
-    what a later test sees. Three macOS jobs found that the hard way. Pin
-    what these tests are about, so the answer is the code's and not the test
-    order's."""
+    Both are process-global. `Runner` now puts the brand back after every
+    invocation (it always restored `_paths`, never `_brand`, and three macOS
+    jobs found that the hard way), so these tests no longer *depend* on the
+    pin — but they still state the distribution they are about rather than
+    inheriting whatever the process happens to hold, and the memo has to be
+    cleared to ask the question twice."""
     import dataclasses
 
     from footman import _app, _split

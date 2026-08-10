@@ -187,6 +187,16 @@ def _walk_subpath(
 def _load_entry_point(name: str) -> Group:
     """Load the installed `footman.tasks` entry point *name* to its Group.
 
+    **The only place that may call `ep.load()`.** A module imports once per
+    process, so its `@task` decorators and `GlobalOption` constructions fire
+    inside exactly one `registry.capture()` — whoever called `load()` first.
+    Every later `load()` re-resolves the cached module, runs no body, and
+    captures nothing, which is why `_module_trees` memoises the tree the one
+    real import produced. A second call site spends that import on itself and
+    leaves the next caller holding a plugin with no tasks and no options: it
+    happened, from a scan built to *describe* a plugin, and cost four tests
+    that only failed when the scan happened to run first.
+
     Raises `RegistrationError` with a taught message for the failure shapes
     that matter: claimed by two distributions, an import-time crash (a
     missing optional dep must not dump a traceback on every `--help`), or an

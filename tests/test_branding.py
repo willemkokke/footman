@@ -810,3 +810,41 @@ def test_a_brand_never_speaks_for_a_third_partys_flag(tmp_path):
     result = acme.invoke("--tf-workspace=prod go", cwd=tmp_path)
     assert result.exit_code == EX_USAGE
     assert "unknown global option --tf-workspace" in result.stderr
+
+
+def test_an_invocation_puts_the_brand_back(tmp_path):
+    """A real entry point runs one brand and never restores the module
+    globals — the process *is* that CLI. A test process is the one place
+    that isn't true, and `Runner` is documented as saving and restoring
+    around each invocation. It did that for `_paths` and not for `_brand`,
+    so whichever branded `Runner` ran first in an xdist worker silently
+    decided what every later test saw."""
+    from footman import _app
+
+    (tmp_path / "tasks.py").write_text(
+        "from footman import task\n\n@task\ndef go(): ...\n"
+    )
+    before = _app._brand
+    Runner(App(name="Acme", prog="acme", version="1.4.0", dist="acme-cli")).invoke(
+        "go", cwd=tmp_path
+    )
+    assert _app._brand is before
+
+
+def test_a_branded_run_does_not_decide_what_the_next_one_teaches(tmp_path):
+    """The leak with its consequence attached: an acme-branded invocation
+    used to leave `dist="acme-cli"` behind, so the next caller — stock
+    footman here — scanned a package it does not ship and taught nothing."""
+    from footman import _split
+
+    (tmp_path / "tasks.py").write_text(
+        "from footman import task\n\n@task\ndef go(): ...\n"
+    )
+    Runner(App(name="Acme", prog="acme", version="1.4.0", dist="acme-cli")).invoke(
+        "go", cwd=tmp_path
+    )
+    _split._OWN_FLAGS.clear()
+    result = Runner().invoke("--env-file=.env go", cwd=tmp_path)
+    assert result.exit_code == EX_USAGE
+    assert result.stderr.startswith("fm: ")
+    assert "--env-file comes from footman.env_files" in result.stderr
