@@ -771,3 +771,18 @@ def jsonable(value: Any) -> tuple[bool, Any]:
         return True, json.loads(json.dumps(redact(value), default=json_default))
     except (TypeError, ValueError):
         return False, None
+
+
+def global_default_suffix(name: str, *, code: bool = False) -> str:
+    """The `; default: …` tail a global's help line carries — one composition
+    for `--help` and the docs table, so the two spellings cannot drift.
+    Empty when there is nothing to print: no default at all, or a bare
+    reading with no spelling of its own. *code* wraps the value in backticks
+    for a markdown cell."""
+    from footman import _split
+
+    shown, computed = _split.global_default(name)
+    if not shown:
+        return ""
+    value = f"`{shown}`" if code else str(shown)
+    return f"; default: {value}{' (computed)' if computed else ''}"

@@ -169,6 +169,24 @@ class Brand:
         """This brand's standalone config filename — `acme.toml`."""
         return f"{self.config_stem}.toml"
 
+    def install(self) -> None:
+        """Point the process's locations at this brand — the one call the
+        real entry (`App.run`) and the embedded harness (`Runner.invoke`)
+        both make, so the two can never configure different worlds (they
+        once each listed the fields by hand, and grew apart by three)."""
+        from footman import _paths
+
+        _paths.configure(
+            prefix=self.prefix,
+            cache_dir=self.cache_dir,
+            data_dir=self.data_dir,
+            config_name=self.config_stem,
+            tasks_file=self.tasks_file,
+            prog=self.prog,
+            brand_version=self.version,
+            builtin=self.builtin,
+        )
+
 
 # footman's command is `fm`, but its variables are `FOOTMAN_*` and its config
 # is `footman.toml` — not for compatibility, but because `FOOTMAN_CACHE_DIR`
@@ -240,18 +258,7 @@ class App:
         args = list(sys.argv[1:] if argv is None else argv)
         # Locations first, and on both paths: the completion hot path reads
         # this brand's cache exactly as the execution path writes it.
-        from footman import _paths
-
-        _paths.configure(
-            prefix=self.brand.prefix,
-            cache_dir=self.brand.cache_dir,
-            data_dir=self.brand.data_dir,
-            config_name=self.brand.config_stem,
-            tasks_file=self.brand.tasks_file,
-            prog=self.brand.prog,
-            brand_version=self.brand.version,
-            builtin=self.brand.builtin,
-        )
+        self.brand.install()
         if args and args[0] == "--complete":
             from footman._complete import complete_cli
 
