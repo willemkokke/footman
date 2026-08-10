@@ -809,18 +809,26 @@ def complete_cli(args: list[str]) -> int:
             manifest = str(_paths.source_manifest_path(Path.cwd(), Path(override)))
         else:
             manifest = str(_paths.cwd_manifest_path())
-            if not Path(manifest).is_file() and _paths.builtin():
-                # No warm cwd manifest and the brand has built-ins: one walk
-                # decides whether this is global mode, whose manifest every
-                # project-less directory shares (cold once per brand version,
-                # not once per directory). Only on the miss path — a warm
-                # directory never pays the walk, and stock footman (no
-                # built-ins) never reaches it at all.
+            if not Path(manifest).is_file():
+                # No warm cwd manifest: one walk decides what this directory
+                # even is. A project's first TAB builds its own cascade
+                # below. A project-less one is global mode — whose manifest
+                # every such directory shares, cold once per brand version
+                # rather than once per directory — when the brand has
+                # built-ins or the user keeps a tasks file; with neither
+                # there is nothing here to complete, and saying so instantly
+                # beats spawning a build that can only come back empty after
+                # the full cold bound. Only on the miss path: a warm
+                # directory never pays the walk.
                 cwd = Path.cwd()
-                files = _paths.task_files(
-                    cwd, _paths.find_repo_root(cwd), _paths._tasks_file
-                )
+                name = _paths.tasks_file_name()
+                files = _paths.task_files(cwd, _paths.find_repo_root(cwd), name)
                 if not files:
+                    if (
+                        not _paths.builtin()
+                        and not _paths.user_tasks_file(name).is_file()
+                    ):
+                        return 0
                     manifest = str(_paths.global_manifest_path())
 
     data = _load_manifest(manifest)

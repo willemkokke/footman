@@ -710,6 +710,43 @@ def test_cold_f_cache_builds_and_serves(tmp_path, monkeypatch, capsys):
     assert "ship" in out, _cold_evidence(tmp_path / "cache", "other.py")
 
 
+def test_a_task_less_directory_answers_at_once(tmp_path, monkeypatch):
+    # $HOME is where `fm <TAB>` gets typed most, and there is nothing there to
+    # complete: no project cascade, no user tasks file, no built-ins. Say so
+    # instantly — never spawn a builder that can only come back empty after
+    # the full cold bound, which is what made every such TAB cost 3 seconds.
+    from footman import _complete
+
+    monkeypatch.setenv("FOOTMAN_CACHE_DIR", str(tmp_path / "cache"))
+    monkeypatch.setenv("FOOTMAN_CONFIG_DIR", str(tmp_path / "config"))
+    _paths.configure(builtin=())
+    bare = tmp_path / "bare"
+    bare.mkdir()
+    monkeypatch.chdir(bare)
+    spawned: list[object] = []
+    monkeypatch.setattr(_complete, "_spawn_refresh", lambda o=None: spawned.append(o))
+
+    started = time.monotonic()
+    assert _complete.complete_cli(["--", ""]) == 0
+    assert not spawned  # nothing to build, so nothing was asked to build
+    assert time.monotonic() - started < 0.5  # nowhere near _COLD_TIMEOUT
+
+
+def test_a_task_less_directory_serves_the_builtins(tmp_path, monkeypatch, capsys):
+    # With built-ins declared, the same directory is *global mode*: the walk
+    # finds no project, so the shared global manifest answers — one build for
+    # every project-less directory, not one per directory.
+    monkeypatch.setenv("FOOTMAN_CACHE_DIR", str(tmp_path / "cache"))
+    monkeypatch.setenv("FOOTMAN_CONFIG_DIR", str(tmp_path / "config"))
+    _paths.configure(builtin=("footman.new",))
+    bare = tmp_path / "bare"
+    bare.mkdir()
+    monkeypatch.chdir(bare)
+
+    complete_cli(["--", ""])
+    assert "new" in capsys.readouterr().out.split()
+
+
 def test_cold_build_times_out_to_none(tmp_path, monkeypatch):
     from footman import _complete
 
