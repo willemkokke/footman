@@ -999,7 +999,12 @@ def test_cast_completes_in_every_posix_shell(shell: str, home, tmp_path, monkeyp
     assert _app.run(["--list"]) == 0  # warm the manifest TAB will serve
     dest = tmp_path / "cast.svg"
     line = ["footman.docs.cast", f"--out={dest}", f"--shell={shell}"]
-    line += ["--width=70", "--height=12", "--", "fm li", "<TAB>", "<WAIT:2500>"]
+    # `<SETTLE>` rather than a fixed wait: it holds until the shell's output
+    # goes quiet, so a loaded runner that takes longer than any number we
+    # could pick still lands on the completed line. A 2.5 s guess failed
+    # exactly once in fifteen jobs — pwsh on a busy macOS box — and a
+    # recording whose keystroke raced the shell is what `<SETTLE>` exists for.
+    line += ["--width=70", "--height=12", "--", "fm li", "<TAB>", "<SETTLE>"]
     assert _app.run(line) == 0
     svg = dest.read_text(encoding="utf-8")
     text = _re.sub(r"&#160;", "", _re.sub(r"<[^>]+>", "", svg))
@@ -1153,3 +1158,36 @@ def test_bash_install_and_uninstall_agree_on_the_rc_line(home):
     assert "source" in (home / ".bashrc").read_text()
     _shellcomp.uninstall("bash", "fm")
     assert "source" not in (home / ".bashrc").read_text()
+
+
+# A `matching()` glob arrives as one line of stdout beside exit 100. Four of
+# the five hooks narrow their file walk by it; nushell deliberately does not
+# (filtering means returning a list of our own, which replaces its built-in
+# file completion outright and loses directory descent).
+_GLOB_FILTER = {
+    "bash": "compgen -f -X",
+    "zsh": "_files -g",
+    "fish": "basename",
+    "pwsh": "-like $glob",
+}
+
+
+@pytest.mark.parametrize("shell", sorted(_GLOB_FILTER))
+def test_hook_narrows_a_path_value_by_the_glob(shell):
+    body = _shellcomp.script_for(shell, "fm")
+    assert _GLOB_FILTER[shell] in body
+
+
+def test_nushell_says_why_it_does_not_filter():
+    body = _shellcomp.script_for("nushell", "fm")
+    assert "losing directory descent" in body
+
+
+@pytest.mark.parametrize("shell", ("bash", "pwsh"))
+def test_hook_reattaches_the_head_of_an_attached_path_value(shell):
+    """`--env-file=<Tab>`: the head through the `=` has to be stripped before
+    the filename walk and put back on each candidate. pwsh handed the whole
+    token to `CompleteFilename`, which looked for a file by that literal
+    name — so an attached path value completed to silence there."""
+    body = _shellcomp.script_for(shell, "fm")
+    assert "$head" in body

@@ -82,6 +82,7 @@ if TYPE_CHECKING:
     from footman.params import hidden as hidden
     from footman.params import isdir as isdir
     from footman.params import isfile as isfile
+    from footman.params import matching as matching
     from footman.params import nosplit as nosplit
     from footman.params import stdin as stdin
     from footman.params import stdout as stdout
@@ -182,6 +183,7 @@ __all__ = [
     "main",
     "mark",
     "markdown",
+    "matching",
     "nosplit",
     "parallel",
     "passthrough",
@@ -328,6 +330,7 @@ def __getattr__(name: str) -> object:
         "exists",
         "isfile",
         "isdir",
+        "matching",
         "between",
         "env",
         "check",

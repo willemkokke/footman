@@ -13,7 +13,7 @@ import pytest
 
 from footman import _complete, _manifest, _paths, registry, task
 from footman._complete import _tasks_file_from, complete, complete_cli
-from footman.params import Many, doc, nosplit, suggest
+from footman.params import Many, doc, matching, nosplit, suggest
 
 
 @pytest.fixture(autouse=True)
@@ -1230,3 +1230,87 @@ def test_a_runnable_groups_default_options_are_described_too():
     assert _described(complete(tree, ["ci", "-"])) == {
         "--strict": "fail on the first warning"
     }
+
+
+# --- matching(): a path value's glob rides out to the shell -------------------
+
+
+def test_a_path_value_hands_off_its_glob():
+    """footman never walks the filesystem to complete a path — the shell
+    does. `matching()` is what rides along, so the shell narrows what it
+    walks instead of offering every file in the directory."""
+    reg = registry.Group("root")
+
+    @reg.task
+    def load(env_file: Annotated[Path, matching(".env*")] = Path(".env")): ...
+
+    tree = _manifest.build_manifest(reg)["tree"]
+    (out,) = complete(tree, ["load", "--env-file="])
+    assert out == _complete._FILES + "\t.env*"
+
+
+def test_a_path_value_without_one_hands_off_exactly_as_before():
+    reg = registry.Group("root")
+
+    @reg.task
+    def load(any_file: Path = Path("x")): ...
+
+    tree = _manifest.build_manifest(reg)["tree"]
+    assert complete(tree, ["load", "--any-file="]) == [_complete._FILES]
+
+
+def test_the_glob_survives_a_comma_splitting_value():
+    # Mid-list, the hand-off is the CSV one — and still carries the pattern.
+    reg = registry.Group("root")
+
+    @reg.task
+    def load(paths: Annotated[list[Path], matching("*.json")] = ()): ...  # type: ignore[assignment]
+
+    tree = _manifest.build_manifest(reg)["tree"]
+    (out,) = complete(tree, ["load", "--paths=a.json,"])
+    assert out == _complete._FILES_CSV + "\t*.json"
+
+
+def test_a_glob_beginning_with_csv_is_not_read_as_a_comma_value():
+    """`_FILES_CSV` starts with `_FILES`, so a concatenated encoding would
+    turn `matching("-csv*")` on a plain path into a comma-splitting
+    hand-off. The tag is compared exactly instead."""
+    reg = registry.Group("root")
+
+    @reg.task
+    def load(f: Annotated[Path, matching("-csv*")] = Path("x")): ...
+
+    tree = _manifest.build_manifest(reg)["tree"]
+    (out,) = complete(tree, ["load", "--f="])
+    assert out.split("\t", 1)[0] == _complete._FILES
+
+
+def test_the_glob_reaches_the_wire_as_stdout_beside_exit_100(tmp_path, capsys):
+    """The contract every hook reads: exit 100 says "a path value", and one
+    line of stdout is the pattern to filter by. No stdout means every file —
+    what each hook already did before there was a pattern to send, so an
+    older hook against a newer footman keeps its old behaviour."""
+    import json
+
+    reg = registry.Group("root")
+
+    @reg.task
+    def load(env_file: Annotated[Path, matching(".env*")] = Path(".env")): ...
+
+    @reg.task
+    def plain(any_file: Path = Path("x")): ...
+
+    m = tmp_path / "m.json"
+    m.write_text(json.dumps(_manifest.build_manifest(reg)), encoding="utf-8")
+
+    assert (
+        complete_cli(["--manifest", str(m), "--", "load", "--env-file="])
+        == _complete._EXIT_FILES
+    )
+    assert capsys.readouterr().out.strip() == ".env*"
+
+    assert (
+        complete_cli(["--manifest", str(m), "--", "plain", "--any-file="])
+        == _complete._EXIT_FILES
+    )
+    assert capsys.readouterr().out == ""

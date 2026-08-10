@@ -334,6 +334,42 @@ isdir: Final[PathRequirement] = PathRequirement("dir", "isdir")
 """Require a `Path` parameter to name an existing *directory* (see `exists`)."""
 
 
+class matching:
+    """Narrow a `Path` parameter's <kbd>Tab</kbd> completion to a glob:
+
+    ```python
+    def load(env_file: Annotated[Path, matching(".env*")] = Path(".env")): ...
+    ```
+
+    footman cannot complete paths itself — it answers from a cached manifest
+    and never touches the filesystem — so a path value is handed to the
+    shell's own file completion. This is what it hands *along*: the pattern
+    the shell filters by, so `--env-file` offers `.env` and `.env.local`
+    rather than every file in the directory.
+
+    Directories are always offered whatever the pattern says, or a match one
+    level down would be unreachable. The glob matches the file's *name*
+    (`*.json`, not `**/*.json`) — the vocabulary all five shells share.
+
+    **Completion only.** It narrows what <kbd>Tab</kbd> shows; it does not
+    reject a value typed anyway — that is `check()`'s job, or
+    `exists`/`isfile`'s. A completion filter that quietly became validation
+    would refuse the perfectly good path someone pasted.
+    """
+
+    __slots__ = ("pattern",)
+
+    pattern: str
+
+    def __init__(self, pattern: str) -> None:
+        if not pattern:
+            raise ValueError("matching() needs a glob, e.g. matching('*.json')")
+        self.pattern = pattern
+
+    def __repr__(self) -> str:
+        return f"matching({self.pattern!r})"
+
+
 Exists = Annotated[Path, exists]
 """Shorthand for `Annotated[Path, exists]` — `target: Exists` requires the path
 to exist. Type-fixed to `Path`; use `Annotated` directly for a `list[Path]`."""

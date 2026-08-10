@@ -57,9 +57,35 @@ _{fn}_complete() {{
     local out ret
     out=$({prog} --complete -- "${{words[@]}}" 2>/dev/null)
     ret=$?
-    # Exit 100 = a path value: leave COMPREPLY empty and let `-o default`
-    # (below) hand off to readline's filename completion — works on bash 3.2.
-    (( ret == 100 )) && return 0
+    # Exit 100 = a path value. With no stdout that is "every file": leave
+    # COMPREPLY empty and let `-o default` (below) hand off to readline's
+    # filename completion — works on bash 3.2. One line of stdout is a
+    # `matching()` glob, and readline cannot be told about one, so build the
+    # list here instead. Directories come along whatever the pattern says, or
+    # a match one level down would be unreachable.
+    if (( ret == 100 )); then
+        [[ -n $out ]] || return 0
+        # A `matching()` glob, and readline cannot be told about one — so
+        # build the list here. The head through the last `=` stays put and
+        # rides every candidate, exactly as the comma branch below does:
+        # whether bash split the word there depends on COMP_WORDBREAKS, and
+        # this reading is right either way. Directories come along whatever
+        # the pattern says, or a match one level down is unreachable.
+        local cur=${{COMP_WORDS[COMP_CWORD]}} glob=${{out%%$'\\n'*}}
+        local head="" tail=$cur f
+        [[ $cur == *=* ]] && {{ head="${{cur%=*}}="; tail="${{cur##*=}}"; }}
+        compopt +o default 2>/dev/null
+        while IFS= read -r f; do
+            [[ -n $f ]] || continue
+            [[ -d $f ]] && f+=/
+            printf -v f '%q' "$f"
+            COMPREPLY+=("$head$f")
+        done < <(compgen -d -- "$tail"; compgen -f -X "!$glob" -- "$tail")
+        # A lone directory keeps the cursor in place for its children.
+        (( ${{#COMPREPLY[@]}} == 1 )) && [[ ${{COMPREPLY[0]}} == */ ]] && \\
+            compopt -o nospace 2>/dev/null
+        return 0
+    fi
     if (( ret == 101 )); then
         # Exit 101 = a comma-splitting path value mid-list (`--paths=a,b`):
         # readline would match the whole word, comma and all, so complete
@@ -116,7 +142,13 @@ _{fn}_complete() {{
     # Exit 100 = a path value: defer to zsh's own file completion, which
     # honours the user's file colours and list settings. compset strips an
     # attached `--opt=` prefix first so the value part completes in place.
-    (( ret == 100 )) && {{ compset -P '*='; _files; return; }}
+    # One line of stdout is a `matching()` glob — `_files -g` narrows to it
+    # and still offers directories, so a match one level down stays reachable.
+    (( ret == 100 )) && {{
+        compset -P '*='
+        if [[ -n $raw ]]; then _files -g "${{raw%%$'\\n'*}}"; else _files; fi
+        return
+    }}
     # Exit 101 = a comma-splitting path value mid-list: strip through the
     # last `=` or comma too, so each list item completes as its own path.
     (( ret == 101 )) && {{ compset -P '*[=,]'; _files; return; }}
@@ -150,12 +182,29 @@ function __{fn}_complete
     if test $ret -eq 100
         set -l tok (commandline -ct)
         set -l pre (string match -r -- '^-[^=]*=' $tok)
+        set -l paths
         if test -n "$pre"
-            __fish_complete_path (string replace -- $pre '' $tok) | \\
-                string replace -r -- '^' $pre
+            set paths (__fish_complete_path (string replace -- $pre '' $tok))
         else
-            __fish_complete_path $tok
+            set paths (__fish_complete_path $tok)
         end
+        # One line of stdout is a `matching()` glob. Keep directories
+        # whatever it says — a match one level down has to stay reachable —
+        # and otherwise keep only names the pattern matches. Each candidate
+        # is `path\\tdescription`, so match on the path half alone.
+        if set -q out[1]
+            set -l keep
+            for cand in $paths
+                set -l p (string split -m 1 \\t -- $cand)[1]
+                if string match -q -- '*/' $p
+                    set -a keep $cand
+                else if string match -q -- $out[1] (basename $p)
+                    set -a keep $cand
+                end
+            end
+            set paths $keep
+        end
+        printf '%s\\n' $paths | string replace -r -- '^' "$pre"
     else if test $ret -eq 101
         # Exit 101 = a comma-splitting path value mid-list: the head through
         # the last `=` or comma stays, the tail completes as its own path,
@@ -187,9 +236,30 @@ Register-ArgumentCompleter -Native -CommandName {prog} -ScriptBlock {{
     $empty = if ($wordToComplete -eq '') {{ '--empty-partial' }} else {{ $null }}
     $out = @(& {prog} --complete $empty -- @words 2>$null)
     if ($LASTEXITCODE -eq 100) {{
-        # A path value: defer to PowerShell's own filename completion.
-        return [System.Management.Automation.CompletionCompleters]::CompleteFilename(
-            $wordToComplete)
+        # A path value: defer to PowerShell's own filename completion. The
+        # head through the last `=` is stripped first and re-attached on each
+        # candidate — `CompleteFilename('--env-file=')` looks for a file by
+        # that literal name and finds nothing, so an attached `--opt=path`
+        # completed to silence here until this was written. Same reading the
+        # comma branch below already used.
+        $m = [regex]::Match($wordToComplete, '^(.*=)?(.*)$')
+        $head = $m.Groups[1].Value
+        $files = [System.Management.Automation.CompletionCompleters]::CompleteFilename(
+            $m.Groups[2].Value)
+        # One line of stdout is a `matching()` glob. Containers come along
+        # whatever it says, or a match one level down is unreachable.
+        if ($out.Count -gt 0 -and $out[0]) {{
+            $glob = $out[0]
+            $files = $files | Where-Object {{
+                $_.ResultType -eq 'ProviderContainer' -or
+                (Split-Path -Leaf $_.CompletionText.Trim("'", '"')) -like $glob
+            }}
+        }}
+        return $files | ForEach-Object {{
+            [System.Management.Automation.CompletionResult]::new(
+                $head + $_.CompletionText, $head + $_.ListItemText,
+                $_.ResultType, $_.ToolTip)
+        }}
     }}
     if ($LASTEXITCODE -eq 101) {{
         # A comma-splitting path value mid-list: the head through the last
@@ -228,6 +298,13 @@ $env.config.completions.external.completer = {{|spans|
             # (101 marks a comma-splitting value mid-list; a version-stable
             # comma-aware spelling isn't available, so nushell completes the
             # first list item only.)
+            #
+            # A `matching()` glob arrives on stdout and is deliberately NOT
+            # applied here: filtering would mean returning a list of our own,
+            # and that list replaces nushell's file completion outright —
+            # losing directory descent, and with it any match below the
+            # current directory. An unfiltered walk that reaches every file
+            # beats a filtered one that reaches only this directory's.
             null
         }} else {{
             # Split `value<tab>description` into a record so nushell renders the

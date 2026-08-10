@@ -157,6 +157,42 @@ shows what `--help` says about it, and a plugin's global shows the `help=`
 it declared. Nothing is written twice for the sake of completion: the words
 are the ones already on the page.
 
+## Narrowing a path value
+
+A `Path` parameter hands off to the shell's own file completion — footman
+answers from a cached manifest and never touches the filesystem. `matching()`
+is what it hands *along*: the pattern the shell filters by.
+
+```python
+from pathlib import Path
+from typing import Annotated
+from footman import matching, task
+
+@task
+def load(env_file: Annotated[Path, matching(".env*")] = Path(".env")): ...
+```
+
+`fm load --env-file=<Tab>` then offers `.env`, `.env.local`,
+`.env.production` — not every file in the directory. footman's own
+`--env-file` and `--profile` declare theirs this way.
+
+Directories are always offered whatever the pattern says, or a match one
+level down would be unreachable. The glob matches the file's *name*
+(`*.json`, not `**/*.json`) — the vocabulary all five shells share.
+
+It is **completion only.** A path typed anyway still binds: narrowing what
+<kbd>Tab</kbd> shows is a convenience, and a filter that quietly became
+validation would refuse the perfectly good path someone pasted. Use
+[`exists`/`isfile`](typing.md) or `check()` when you mean a rule.
+
+Two shells have their own say. fish does not offer dotfiles until you type
+the leading `.`, so `.env*` shows once you do — that is fish's behaviour for
+every command, not footman's. And **nushell is not filtered**: narrowing
+there means returning a list of footman's own, which replaces nushell's
+built-in file completion outright and loses directory descent — an
+unfiltered walk that reaches every file beats a filtered one that reaches
+only this directory's.
+
 ## File paths
 
 A value that takes a filesystem path completes files — footman hands off to
