@@ -7,18 +7,22 @@
 
 /* max-width is set per figure from the recording's own viewBox, so swapping
  * the <img> for the player changes nothing about the page's layout. */
-.cast {
-  /* Explicit, not shrink-to-fit. An inline <svg> carrying only a viewBox
-   * contributes no intrinsic width, so a shrink-to-fit figure collapses to
-   * the natural width of the control bar and drags the recording down with
-   * it. The recording is vector text, so filling the column costs nothing
-   * and it is never capped at its recorded pixel width. */
+/* `.md-typeset` on these two, not because they need the scope but because
+ * they have to outrank the theme's own `.md-typeset figure`, which sets
+ * `width: fit-content`. An inline <svg> carrying only a viewBox contributes
+ * no intrinsic width, so a shrink-to-fit figure collapses to its widest
+ * child — the control bar — and drags the recording down with it. A bare
+ * `.cast` rule loses that fight on specificity and silently does nothing,
+ * which is exactly what it did. The recording is vector text, so filling
+ * the column costs nothing. */
+.md-typeset .cast {
   display: block;
   width: 100%;
+  max-width: 100%;
   margin: 1em 0;
 }
 
-.cast-stage svg {
+.md-typeset .cast-stage svg {
   display: block;
   width: 100%;
   height: auto;

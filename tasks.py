@@ -424,6 +424,44 @@ def _bash_renders_value_menus() -> bool:
     return bash.installed_version() >= (4,)
 
 
+def _record_cast(
+    *keys: str,
+    beats: list[str],
+    out: Path,
+    shell: Literal["zsh", "bash", "fish", "pwsh", "nushell"],
+    width: int,
+    height: int,
+    cwd: Path,
+) -> None:
+    """Record a cast, and re-record it once if the interaction went missing.
+
+    `cast()` already retries a session that produced *no* frames — a shell
+    too cold to draw anything inside one settle window. It cannot retry the
+    other failure, because it looks identical to success: a session that
+    boots, misses the keystrokes, and renders a perfectly valid SVG of a
+    prompt sitting there. Only the caller knows what the recording was
+    supposed to contain, so only the caller can tell the two apart.
+
+    That failure took down a docs build on a loaded runner — pwsh, whose
+    .NET startup is the slowest of the five — and a failed docs build means
+    the published site silently stays stale. Cheap insurance: the happy path
+    pays nothing, and a mute capture costs one more recording instead of the
+    whole build.
+    """
+    from footman.tasks.docs import cast as taskdocs_cast
+
+    for attempt in (1, 2):
+        taskdocs_cast(*keys, out=out, shell=shell, width=width, height=height, cwd=cwd)
+        try:
+            _assert_cast_captured(out, beats)
+        except RuntimeError:
+            if attempt == 2:
+                raise
+            print(f"note: {out.name} came back mute — re-recording once")
+            continue
+        return
+
+
 def _assert_cast_captured(svg: Path, needles: list[str]) -> None:
     """A cast whose answer landed too early (a timing regression) still renders
     a valid SVG — just without the interaction. Strip the markup and fail the
@@ -914,7 +952,14 @@ def docs_build(check: bool = False):  # pragma: no cover — see below
         # first, and then the cancel reaches the line.
         clear = ("<ESC>", "<CTRL-C>") if sh == "pwsh" else ("<CTRL-C>",)
         out = shot / f"{sh}-cast.svg"
-        taskdocs_cast(
+        # A cast whose keystrokes raced the shell still renders a valid SVG,
+        # just a mute one. Pin the beats every shell can show; descriptions
+        # are checked only where the shell has a column for them (bash has
+        # none, pwsh puts them in a tooltip).
+        beats = ["build", "deploy", "--release", "--jobs", "deploy.staging"]
+        if sh in ("zsh", "fish", "nushell"):
+            beats += ["Compileandbundle", "optimiseandstripsymbols"]
+        _record_cast(
             # Every task, each with its summary.
             "fm ",
             *tab,
@@ -932,20 +977,13 @@ def docs_build(check: bool = False):  # pragma: no cover — see below
             "fm deploy.",
             *tab,
             "<WAIT>",
+            beats=beats,
             out=out,
             shell=sh,
             width=80,
             height=18,
             cwd=demo,
         )
-        # A cast whose keystrokes raced the shell still renders a valid SVG,
-        # just a mute one. Pin the beats every shell can show; descriptions
-        # are checked only where the shell has a column for them (bash has
-        # none, pwsh puts them in a tooltip).
-        beats = ["build", "deploy", "--release", "--jobs", "deploy.staging"]
-        if sh in ("zsh", "fish", "nushell"):
-            beats += ["Compileandbundle", "optimiseandstripsymbols"]
-        _assert_cast_captured(out, beats)
     # The front page's recording, one per shell behind a tab. It shows the
     # beat the per-shell pages above cannot: `--branch` completes to the
     # real branches of a real git repo, because its candidates are computed
@@ -964,7 +1002,14 @@ def docs_build(check: bool = False):  # pragma: no cover — see below
         # `*-cast.svg` is the convention the docs' player keys on: any
         # recording ending that way gets play/pause/scrub, a still does not.
         out = shot / f"hero-{sh}-cast.svg"
-        taskdocs_cast(
+        # "deploy" and "feat/typed-flags" are typed by the script, so they
+        # prove nothing about the menus. `fix/completion-cache` is never
+        # typed: it can only appear if the branch completer actually
+        # answered. Assert the real beat, not the echo.
+        beats = ["deploy", "build", "test"]
+        if sh != "bash" or _bash_renders_value_menus():
+            beats += ["fix/completion-cache", "release/v0.40.0"]
+        _record_cast(
             # Every menu gets a beat long enough to read. The default wait is
             # ~0.6s, which is all the life a fish menu gets: fish dismisses
             # its pager on the next keystroke, so the branch list flashed
@@ -986,21 +1031,13 @@ def docs_build(check: bool = False):  # pragma: no cover — see below
             "feat/typed-flags --region=",
             *tab,
             "<WAIT:2500>",
+            beats=beats,
             out=out,
             shell=sh,
             width=84,
             height=16,
             cwd=hero,
         )
-        # "deploy" and "feat/typed-flags" are typed by the script, so they
-        # prove nothing about the menus. `fix/completion-cache` is never
-        # typed: it can only appear if the branch completer actually
-        # answered. Assert the real beat, not the echo.
-        #
-        beats = ["deploy", "build", "test"]
-        if sh != "bash" or _bash_renders_value_menus():
-            beats += ["fix/completion-cache", "release/v0.40.0"]
-        _assert_cast_captured(out, beats)
     # Dynamic completion, recorded against typing.md's own example (the
     # demo project's tasks.py is extracted from the page): TAB offers the
     # values a plain function returned, and TAB again walks the menu.

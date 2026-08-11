@@ -33,9 +33,12 @@ versions may include breaking changes.
   cast inside a closed tab is `display: none`, so its CSS animations do not
   exist yet and there was nothing to attach play/pause/scrub to. They are
   now wired the first time each recording is shown.
-- **Recordings fill the column.** They were capped at the pixel width they
-  were recorded at, which on a wide page left them sitting at the width of
-  their own control bar.
+- **Recordings fill the column.** An inline `<svg>` carrying only a viewBox
+  contributes no intrinsic width, so the theme's `.md-typeset figure`
+  (`width: fit-content`) collapsed the figure to its widest child — the
+  control bar — and dragged the recording down with it. The rule that was
+  supposed to fix this lost on specificity and silently did nothing; it is
+  now scoped to outrank the theme's.
 - **Menus stay on screen long enough to read.** The default beat is ~0.6s,
   which is the entire visible life of a fish menu — fish dismisses its pager
   on the next keystroke, so the front page appeared to jump straight from
