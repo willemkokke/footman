@@ -400,6 +400,30 @@ def _scaffold_interactive_demo() -> str:
     return str(demo)
 
 
+def _bash_renders_value_menus() -> bool:
+    """Whether the bash on PATH draws candidates after `--opt=`.
+
+    bash 3.2 — which is what macOS ships, and still the default `/bin/bash`
+    there — does not, so a hero recording made on a stock Mac shows the
+    typed line and no menu. bash 4+ (Homebrew's, and every Linux runner's)
+    does. The completion itself is fine either way: footman answers every
+    argv shape bash sends, verified against the resolver directly.
+
+    So the beat is asserted where the shell can show it, rather than
+    dropped everywhere to accommodate the oldest bash in the room.
+    """
+    import shutil
+
+    from toolroom import bash
+
+    if shutil.which("bash") is None:
+        return False
+    # toolroom asks the binary itself and reads the answer with the same
+    # parser its stub extractor uses, outside the task context — so a
+    # dry run or a recording() cannot answer this one for us.
+    return bash.installed_version() >= (4,)
+
+
 def _assert_cast_captured(svg: Path, needles: list[str]) -> None:
     """A cast whose answer landed too early (a timing regression) still renders
     a valid SVG — just without the interaction. Strip the markup and fail the
@@ -966,13 +990,8 @@ def docs_build(check: bool = False):  # pragma: no cover — see below
         # typed: it can only appear if the branch completer actually
         # answered. Assert the real beat, not the echo.
         #
-        # bash is exempt from the value menus, and only from those: it draws
-        # the task menu like everything else, but macOS ships bash 3.2, where
-        # the candidates after `--opt=` do not render. footman answers that
-        # shape correctly for every argv bash sends (verified against the
-        # resolver directly), so this is the shell, not the runner.
         beats = ["deploy", "build", "test"]
-        if sh != "bash":
+        if sh != "bash" or _bash_renders_value_menus():
             beats += ["fix/completion-cache", "release/v0.40.0"]
         _assert_cast_captured(out, beats)
     # Dynamic completion, recorded against typing.md's own example (the
