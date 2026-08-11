@@ -10,7 +10,7 @@ import dataclasses
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from toolroom import (
     basedpyright,
@@ -278,6 +278,92 @@ def _scaffold_completion_demo() -> str:
         '    """\n',
         encoding="utf-8",
     )
+    run("fm --list", cwd=str(demo), capture=True)  # warm the manifest TAB serves
+    return str(demo)
+
+
+def _scaffold_hero_demo() -> str:
+    """The project the front page's recording is made against.
+
+    Its point is the one thing a TOML-configured runner cannot do: a
+    parameter whose candidates are *computed*. `branch` completes to the
+    real branches of a real git repo, so the recording shows footman asking
+    git rather than reading a list somebody typed out. It is a git repo for
+    that reason alone — the branches have to be real for the demo to be
+    honest.
+    """
+    import shutil
+    import subprocess
+    import tempfile
+    from pathlib import Path
+
+    demo = Path(tempfile.gettempdir()) / "footman-hero-demo"
+    shutil.rmtree(demo, ignore_errors=True)
+    demo.mkdir(parents=True, exist_ok=True)
+    (demo / "pyproject.toml").write_text("[project]\nname = 'demo'\n", encoding="utf-8")
+    (demo / "tasks.py").write_text(
+        '''import subprocess
+from typing import Annotated, Literal
+
+from footman import doc, suggest, task
+
+
+def branches() -> list[str]:
+    """Every branch in this repo - asked of git, not written down."""
+    out = subprocess.run(
+        ["git", "branch", "--format=%(refname:short)"],
+        capture_output=True,
+        text=True,
+    ).stdout
+    return out.split()
+
+
+@task
+def deploy(
+    branch: Annotated[str, suggest(branches), doc("branch to ship")] = "main",
+    region: Annotated[Literal["eu", "us", "ap"], doc("region")] = "eu",
+):
+    """Ship a branch to a region."""
+
+
+@task
+def build(release: bool = False, jobs: int = 4):
+    """Compile and bundle.
+
+    Args:
+        release: optimise and strip symbols
+        jobs: parallel compile jobs
+    """
+
+
+@task
+def test(watch: bool = False):
+    """Run the test suite.
+
+    Args:
+        watch: re-run on every file change
+    """
+''',
+        encoding="utf-8",
+    )
+    git = ["git", "-C", str(demo)]
+    subprocess.run([*git, "init", "-q", "-b", "main"], check=True)
+    subprocess.run([*git, "add", "-A"], check=True)
+    subprocess.run(
+        [
+            *git,
+            "-c",
+            "user.email=demo@example.com",
+            "-c",
+            "user.name=demo",
+            "commit",
+            "-qm",
+            "demo",
+        ],
+        check=True,
+    )
+    for branch in ("feat/typed-flags", "fix/completion-cache", "release/v0.40.0"):
+        subprocess.run([*git, "branch", branch], check=True)
     run("fm --list", cwd=str(demo), capture=True)  # warm the manifest TAB serves
     return str(demo)
 
@@ -835,6 +921,59 @@ def docs_build(check: bool = False):  # pragma: no cover — see below
         beats = ["build", "deploy", "--release", "--jobs", "deploy.staging"]
         if sh in ("zsh", "fish", "nushell"):
             beats += ["Compileandbundle", "optimiseandstripsymbols"]
+        _assert_cast_captured(out, beats)
+    # The front page's recording, one per shell behind a tab. It shows the
+    # beat the per-shell pages above cannot: `--branch` completes to the
+    # real branches of a real git repo, because its candidates are computed
+    # by a function rather than listed in a config file.
+    hero = Path(_scaffold_hero_demo())
+    # fish leads because the tab order decides the front page's default.
+    hero_shells: tuple[Literal["zsh", "bash", "fish", "pwsh", "nushell"], ...] = (
+        "fish",
+        "zsh",
+        "bash",
+        "pwsh",
+        "nushell",
+    )
+    for sh in hero_shells:
+        tab = ("<TAB>", "<TAB>") if sh == "bash" else ("<TAB>",)
+        # `*-cast.svg` is the convention the docs' player keys on: any
+        # recording ending that way gets play/pause/scrub, a still does not.
+        out = shot / f"hero-{sh}-cast.svg"
+        taskdocs_cast(
+            # The task surface, each task with its summary.
+            "fm ",
+            *tab,
+            "<WAIT>",
+            # The computed one: real branches, asked of git on the spot.
+            # `--opt=` is what puts the cursor in value position — with a
+            # space the resolver is still offering options, not values.
+            "deploy --branch=",
+            *tab,
+            "<WAIT>",
+            # And a Literal, validated straight from the signature.
+            "feat/typed-flags --region=",
+            *tab,
+            "<WAIT>",
+            out=out,
+            shell=sh,
+            width=84,
+            height=16,
+            cwd=hero,
+        )
+        # "deploy" and "feat/typed-flags" are typed by the script, so they
+        # prove nothing about the menus. `fix/completion-cache` is never
+        # typed: it can only appear if the branch completer actually
+        # answered. Assert the real beat, not the echo.
+        #
+        # bash is exempt from the value menus, and only from those: it draws
+        # the task menu like everything else, but macOS ships bash 3.2, where
+        # the candidates after `--opt=` do not render. footman answers that
+        # shape correctly for every argv bash sends (verified against the
+        # resolver directly), so this is the shell, not the runner.
+        beats = ["deploy", "build", "test"]
+        if sh != "bash":
+            beats += ["fix/completion-cache", "release/v0.40.0"]
         _assert_cast_captured(out, beats)
     # Dynamic completion, recorded against typing.md's own example (the
     # demo project's tasks.py is extracted from the page): TAB offers the

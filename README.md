@@ -13,8 +13,9 @@ dependencies. Python 3.11+.
 > **Beta.** footman is pre-1.0: the surface is settling, but minor versions
 > may still include breaking changes — always called out in the
 > [changelog](CHANGELOG.md), never in a patch release. Pin the minor
-> (`footman~=0.39.0`) if you build on it. The written stability promise
-> lands with 1.0 — the road there is in [ROADMAP.md](ROADMAP.md).
+> (`footman~=0.39.0`) if you build on it. What is covered, what is internal,
+> and what has to be true before 1.0 are written down in the
+> [stability promise](https://willemkokke.github.io/footman/stability/).
 
 ## Why
 

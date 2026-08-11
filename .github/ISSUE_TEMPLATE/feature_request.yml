@@ -1,0 +1,34 @@
+name: Idea or feature request
+description: Something footman should do and doesn't
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Worth a look first: the
+        [roadmap](https://github.com/willemkokke/footman/blob/main/ROADMAP.md)
+        carries what's planned, what shipped, and a short list of things
+        that are deliberately never happening (with reasons). If your idea
+        is on that last list, argue with the reason — it has been reversed
+        before.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What are you trying to do, and where does footman get in the way?
+    validations:
+      required: true
+
+  - type: textarea
+    id: shape
+    attributes:
+      label: What you imagine it looking like
+      description: Rough is fine — a signature, a command line, a config key.
+      render: python
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you're doing instead today
+      description: Including "nothing" or "a shell script", which are useful answers.

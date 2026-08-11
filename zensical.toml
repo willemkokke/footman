@@ -12,7 +12,6 @@ Copyright &copy; 2026 Willem Kokke — MIT licensed
 nav = [
   { "Home" = "index.md" },
   { "Getting started" = "getting-started.md" },
-  { "Playground" = "playground.md" },
   { "Guide" = [
     { "Basics" = [
       { "Typed signatures" = "typing.md" },
@@ -34,6 +33,15 @@ nav = [
       { "Type-checking your tasks" = "typechecking.md" },
       { "Custom CLI" = "custom-cli.md" },
     ] },
+    { "Completion" = [
+      { "How it works" = "completion.md" },
+      { "bash" = "completion-bash.md" },
+      { "zsh" = "completion-zsh.md" },
+      { "fish" = "completion-fish.md" },
+      { "PowerShell" = "completion-pwsh.md" },
+      { "nushell" = "completion-nushell.md" },
+      { "Shell differences" = "completion-differences.md" },
+    ] },
   ] },
   { "Foundations" = [
     { "Start here" = "foundations.md" },
@@ -46,15 +54,6 @@ nav = [
     { "Deadlocks" = "foundations-deadlocks.md" },
     { "The four globals, two regimes" = "foundations-regimes.md" },
   ] },
-  { "Completion" = [
-    { "How it works" = "completion.md" },
-    { "bash" = "completion-bash.md" },
-    { "zsh" = "completion-zsh.md" },
-    { "fish" = "completion-fish.md" },
-    { "PowerShell" = "completion-pwsh.md" },
-    { "nushell" = "completion-nushell.md" },
-    { "Shell differences" = "completion-differences.md" },
-  ] },
   { "Machine use" = [
     { "Pipelines" = "pipelines.md" },
     { "JSON output" = "json.md" },
@@ -65,6 +64,7 @@ nav = [
   { "About" = [
     { "Comparison" = "comparison.md" },
     { "Migrating" = "migrating.md" },
+    { "Stability promise" = "stability.md" },
     { "Coverage" = "coverage.md" },
     { "Changelog" = "changelog.md" },
     { "Roadmap" = "roadmap.md" },
@@ -78,13 +78,17 @@ nav = [
     { "Troubleshooting" = "troubleshooting.md" },
     { "Errors & notes" = "_generated/errors.md" },
   ] },
+  { "Playground" = "playground.md" },
 ]
 
 # The playground: Pyodide-backed live editor + per-example "run it there"
 # links. One module script on every page; it no-ops where nothing applies.
-extra_css = ["assets/playground.css"]
+extra_css = ["assets/playground.css", "assets/casts.css"]
 extra_javascript = [
   { path = "assets/playground.js", type = "module", defer = true },
+  # Inlines each animated cast and hangs play/pause/scrub off it, so a
+  # recording can be replayed without reloading the page.
+  { path = "assets/casts.js", type = "module", defer = true },
 ]
 
 [project.plugins.mkdocstrings.handlers.python]
