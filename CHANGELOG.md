@@ -50,10 +50,13 @@ versions may include breaking changes.
 - **The homepage says what toolroom is.** The README's first code block
   imported from it and no page explained the name, so a reader met
   `from toolroom import ruff` with no idea whether it was required. Both now
-  say what it does, that it began as part of footman and was spun out
-  because it releases on a decoupled train and is separately useful, and
-  that footman neither depends on it nor imports it — a stub decides whether
-  your editor can help, never whether a call works.
+  say what it does — it wraps *any* command-line program, with keyword
+  arguments becoming flags, and ships generated type hints for common ones
+  so an editor knows their flags — and that the hints only decide whether
+  your editor can help, never whether a call works. It began as part of
+  footman and was spun out because it releases on its own schedule, and
+  because type hinted command-line calls are useful without a task runner.
+  footman does not depend on it and never imports it.
 
 - **The personal tasks file is documented where the cascade is.**
   `~/.config/footman/tasks.py` has always ridden everywhere, but it appeared

@@ -139,9 +139,8 @@ Head to [Getting started](getting-started.md) to go deeper.
 
 Tasks mostly run other programs, and `run("ruff check src --fix")` is a
 string your editor cannot help you with.
-[toolroom](https://willemkokke.github.io/toolroom/) gives those calls typed
-handles instead, with completion and signatures generated from each tool's
-own metadata:
+[toolroom](https://willemkokke.github.io/toolroom/) makes those calls
+Python:
 
 <!-- example: fragment -->
 ```python
@@ -154,13 +153,21 @@ def lint(fix: bool = False):
     ruff.check("src", fix=fix)
 ```
 
-It began as part of footman and was spun out as its own library for two
-reasons: it releases on a **decoupled train**, so a stub reading never holds
-up a footman release — and it is **separately useful**, with nothing about
-it that needs a task runner.
+It wraps **any** command-line program, not a fixed list — keyword arguments
+become flags, so `toolroom.terraform("plan", var_file="prod.tfvars")` runs
+terraform whether or not toolroom has ever heard of terraform.
 
-So footman neither depends on it nor imports it, and it is not part of
-getting started — [`run()`](tools.md) is always there. A stub only decides
-whether your editor can help, never whether a call works:
-`toolroom.terraform("plan")` runs exactly like `toolroom.ruff.check()`,
-whether or not a stub has ever heard of your tool.
+For a number of common tools it also ships **type hints**, generated from
+each tool's own metadata, so your editor knows that `ruff check` takes
+`--fix` and what that does. The hints only decide whether your editor can
+help. They never decide whether a call works: a tool without them runs
+exactly the same, and one whose flags have moved on costs you a stale
+suggestion rather than a broken build.
+
+It began as part of footman and was spun out as its own library for two
+reasons. It releases on its own schedule. And other people might want type
+hinted, documented command-line calls without having to use footman for
+anything.
+
+footman does not depend on it and never imports it — plain
+[`run()`](tools.md) is always there, and nothing on this page needs it.
