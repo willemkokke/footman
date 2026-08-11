@@ -191,6 +191,31 @@ def test_options_and_choices_have_no_description(tree):
     assert "\t" not in "".join(complete(tree, ["lint", "--mode="]))
 
 
+def test_a_valued_option_offers_both_of_its_spellings(tree):
+    """Both shapes are legal and the menu shows both.
+
+    `--mode` is the bare mention that stands for the option's default;
+    `--mode=` is the only way to pass a value, because every value in this
+    grammar is attached. Offering the bare name alone made the value path —
+    and any dynamic completer behind it — reachable only by knowing to type
+    `=` first, which is the internal knowledge completion exists to spare.
+    """
+    assert complete(tree, ["lint", "--mo"]) == ["--mode", "--mode="]
+
+
+def test_a_flag_has_one_spelling(tree):
+    """A flag takes no value at either default — `--fix=true` is a taught
+    refusal and `--no-fix` is the off spelling — so no `=` is offered."""
+    assert complete(tree, ["lint", "--f"]) == ["--fix"]
+    assert "--fix=" not in complete(tree, ["lint", ""])
+
+
+def test_the_equals_spelling_still_reaches_the_values(tree):
+    """The pair is a menu change, not a grammar change: taking the `=` row
+    and pressing TAB again resolves the value exactly as before."""
+    assert set(complete(tree, ["lint", "--mode="])) == {"--mode=strict", "--mode=loose"}
+
+
 def test_doc_marker_becomes_option_description():
     # An option with a doc("...") marker completes with a description column,
     # exactly like task names do.
@@ -248,7 +273,7 @@ def test_a_bare_group_word_is_a_dead_end(tree):
 
 def test_task_options(tree):
     out = _names(complete(tree, ["lint", ""]))
-    assert {"--fix", "--mode", "--paths"} <= set(out)
+    assert {"--fix", "--mode=", "--paths="} <= set(out)
     assert "check" in out  # separator-free chains: the next task completes too
     assert complete(tree, ["lint", "--"]) != []  # option-shaped partial: options only
     assert all(c.startswith("--") for c in complete(tree, ["lint", "--"]))
@@ -268,7 +293,7 @@ def test_nested_option_value_choices(tree):
 
 def test_positional_choices_offered_alongside_options(tree):
     out = complete(tree, ["deploy", ""])
-    assert "--version" in out
+    assert "--version=" in out
     assert {"dev", "staging", "prod"} <= set(out)
 
 
@@ -831,7 +856,9 @@ def test_cold_evidence_reports_the_childs_own_words(tmp_path, monkeypatch):
 def test_second_segment_options_are_the_second_tasks(tree):
     # `check` has no --mode; the --mo must complete against lint's options.
     out = complete(tree, ["check", "lint", "--mo"])
-    assert out == ["--mode"]
+    # Both spellings: the bare mention that stands for the default, and the
+    # `=` that is the only way to pass a value.
+    assert out == ["--mode", "--mode="]
 
 
 def test_next_task_name_completes_after_a_chain(tree):
@@ -862,7 +889,7 @@ def test_given_options_are_not_reoffered(tree):
     # `fm lint --fix <TAB>` must not suggest --fix again — a flag binds once.
     out = complete(tree, ["lint", "--fix", ""])
     assert "--fix" not in out
-    assert "--mode" in out  # the unused ones remain
+    assert "--mode=" in out  # the unused ones remain
     assert complete(tree, ["lint", "--fix", "--f"]) == []
 
 
@@ -874,7 +901,7 @@ def test_negated_flag_counts_as_used(tree):
 def test_repeatable_options_stay_offered(tree):
     # --paths is list-valued: repeating it is the grammar, keep offering it.
     out = complete(tree, ["lint", "--paths=a", ""])
-    assert "--paths" in out
+    assert "--paths=" in out
 
 
 def test_used_options_reset_per_segment(tree):
@@ -1186,7 +1213,7 @@ def test_a_plugin_global_offers_the_help_it_declared():
     def build(): ...
 
     tree = _manifest.build_manifest(reg)["tree"]
-    assert _described(complete(tree, ["--env"]))["--env-file"] == (
+    assert _described(complete(tree, ["--env"]))["--env-file="] == (
         "the .env file to load"
     )
 

@@ -133,9 +133,23 @@ match) are collected in [Shell differences](completion-differences.md).
 Completion is aware of the whole command line, not just the first word:
 
 ```sh
-fm workspace.mount --share <TAB>   # main  scratch  archive
+fm workspace.mount --share=<TAB>   # main  scratch  archive
 fm format lint --fix <TAB>         # completes within the chain
 ```
+
+Note the `=`. Every value in footman's grammar is attached, so `--share=` is
+where a value goes — and completing an option offers **both** of its
+spellings, so you never have to know that in advance:
+
+```text
+--share      — which share to mount
+--share=     — which share to mount
+```
+
+Take the bare one to mean "use its default" (a
+[bare mention](orchestration.md)); take the `=` one and press <kbd>Tab</kbd>
+again to pick a value. A flag has one spelling only — it takes no value, and
+`--no-fix` is how you turn one off.
 
 Group names, task names, flags, options, and both static and
 [dynamic](typing.md#dynamic-completion) value sets all complete. Where a shell

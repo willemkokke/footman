@@ -276,6 +276,24 @@ def _cand(address: str, summary: str) -> str:
     return f"{address}\t{summary}" if summary else address
 
 
+def _opt_tokens(name: str, spec: dict[str, Any]) -> list[str]:
+    """The spellings of one option, as the menu should offer them.
+
+    A value-taking option has two legal shapes and the menu shows both:
+    `--opt`, the bare mention that stands for its default, and `--opt=`,
+    which is the *only* way to pass a value, because every value in this
+    grammar is attached. Offering the bare name alone left the value path
+    undiscoverable — a dynamic completer's candidates could only be reached
+    by knowing to type `=` first, which is exactly the internal knowledge
+    completion exists to spare you. Offering `--opt=` alone would have hidden
+    bare mention, which is a feature, not an accident.
+
+    A flag takes no value at either default — `--fix=true` is a taught
+    refusal and `--no-fix` is the off spelling — so it has one shape only.
+    """
+    return [name, f"{name}="] if spec.get("kind") == "option" else [name]
+
+
 def _walk_address(
     tree: dict[str, Any], token: str
 ) -> tuple[str, dict[str, Any], list[str]] | None:
@@ -517,10 +535,11 @@ def complete(tree: dict[str, Any], words: list[str]) -> list[str]:
             if "default" not in node:
                 return []
             out = [
-                _cand("--" + p["name"], p.get("doc", ""))
+                _cand(token, p.get("doc", ""))
                 for p in node["default"]["params"]
                 if p["kind"] in ("flag", "option")
                 and ("--" + p["name"]).startswith(partial)
+                for token in _opt_tokens("--" + p["name"], p)
             ]
             if not partial.startswith("-"):
                 out += _address_candidates(tree, partial)
@@ -546,7 +565,7 @@ def complete(tree: dict[str, Any], words: list[str]) -> list[str]:
             for g in tree.get("globals", ()):
                 summary = str(g.get("help", ""))
                 if (flag := "--" + g["name"]).startswith(partial):
-                    out.append(_cand(flag, summary))
+                    out += [_cand(t, summary) for t in _opt_tokens(flag, g)]
                 # A bool answers to `--no-x` too — offer the off spelling
                 # exactly as the splitter accepts it, described by what it
                 # turns off: one option, read from the other end.
@@ -607,8 +626,14 @@ def complete(tree: dict[str, Any], words: list[str]) -> list[str]:
     # An option carries its doc("...") text when the task author wrote one;
     # choice values stay bare; next-segment addresses arrive pre-described.
     # Same tab-separated wire format either way — `_cand` is that format.
-    out = [_cand(c, (seg.opts.get(c) or {}).get("doc", "")) for c in seen]
-    return out + next_heads
+    rows: list[str] = []
+    for c in seen:
+        spec = seg.opts.get(c)
+        if spec is None:  # a choice value, `+`, or a next-segment address
+            rows.append(_cand(c, ""))
+            continue
+        rows += [_cand(t, spec.get("doc", "")) for t in _opt_tokens(c, spec)]
+    return rows + next_heads
 
 
 def _load_manifest(path: str) -> dict[str, Any] | None:

@@ -7,6 +7,29 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Changed
+
+- **Completing an option offers both of its spellings.** `--bra<Tab>` now
+  answers `--branch` *and* `--branch=`. Every value in this grammar is
+  attached, so `--opt=` is the only way to pass one — and completion never
+  said so. The value path, including any
+  [`suggest()`](https://willemkokke.github.io/footman/typing/#dynamic-completion)
+  completer behind it, was reachable only by knowing to type `=` first,
+  which is exactly the internal knowledge completion exists to spare you.
+  Both rows carry the option's `doc("…")` line: take the bare one to mean
+  "use its default", take the `=` one and press <kbd>Tab</kbd> again to pick
+  a value. Flags are unchanged and keep their single spelling — a flag takes
+  no value at either default (`--fix=true` is a refusal), and `--no-fix` is
+  still the off spelling. Verified through all five shells' own completion
+  engines, bash included, where `=` is a word-break character.
+
+### Fixed
+
+- **The docs no longer advertise a spelling the grammar rejects.** Two pages
+  showed `fm workspace.mount --share <TAB>` completing to a value list. With
+  a space, that offers the task's *other* options and the next chain head —
+  the value form is `--share=`. Both now show the `=`.
+
 ### Documentation
 
 - **The personal tasks file is documented where the cascade is.**
