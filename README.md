@@ -71,6 +71,17 @@ fm: deploy: <target> must be one of dev|staging|prod (got 'produ') — did you m
 $ fm --install-completion               # detects your shell; TAB answers in ~30 ms
 ```
 
+> [!NOTE]
+> That `from toolroom import …` is optional.
+> [toolroom](https://willemkokke.github.io/toolroom/) gives the programs your
+> tasks call typed handles instead of strings, with completion generated from
+> each tool's own metadata. It began as part of footman and was spun out
+> because it releases on a decoupled train — a stub reading never holds up a
+> footman release — and because it is separately useful without a task runner
+> at all. footman neither depends on it nor imports it; plain `run("…")` is
+> always there, and a stub only decides whether your editor can help, never
+> whether a call works.
+
 ### One file, dependencies included
 
 A tasks file can declare what it needs inline

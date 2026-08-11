@@ -965,20 +965,27 @@ def docs_build(check: bool = False):  # pragma: no cover — see below
         # recording ending that way gets play/pause/scrub, a still does not.
         out = shot / f"hero-{sh}-cast.svg"
         taskdocs_cast(
+            # Every menu gets a beat long enough to read. The default wait is
+            # ~0.6s, which is all the life a fish menu gets: fish dismisses
+            # its pager on the next keystroke, so the branch list flashed
+            # once and the recording appeared to jump straight from `--bra`
+            # to the finished line. zsh keeps its menu up while you type and
+            # hid the problem.
+            #
             # The task surface, each task with its summary.
             "fm ",
             *tab,
-            "<WAIT>",
+            "<WAIT:2000>",
             # The computed one: real branches, asked of git on the spot.
             # `--opt=` is what puts the cursor in value position — with a
             # space the resolver is still offering options, not values.
             "deploy --branch=",
             *tab,
-            "<WAIT>",
+            "<WAIT:2500>",
             # And a Literal, validated straight from the signature.
             "feat/typed-flags --region=",
             *tab,
-            "<WAIT>",
+            "<WAIT:2500>",
             out=out,
             shell=sh,
             width=84,

@@ -80,25 +80,37 @@ async function enhance(img) {
   stage.appendChild(document.importNode(svg, true));
   figure.appendChild(stage);
 
-  // An <img> takes its intrinsic size from the viewBox; an inline <svg> with
-  // no width/height does not, and would stretch to whatever the column
-  // gives it. Pin the figure to the recording's own width so replacing the
-  // image changes nothing about the layout.
-  const box = (svg.getAttribute("viewBox") || "").split(/[\s,]+/);
-  if (box.length === 4 && Number(box[2])) {
-    figure.style.maxWidth = `${Number(box[2])}px`;
-  }
 
   img.replaceWith(figure);
+
+  // A recording inside a closed tab is `display: none`, so its CSS
+  // animations do not exist yet and getAnimations() finds nothing to drive.
+  // Wiring the controls has to wait until the tab is actually opened —
+  // otherwise only the tab that happens to be open on page load gets them.
+  if (!wire(figure)) {
+    const seen = new IntersectionObserver((entries) => {
+      if (entries.some((e) => e.isIntersecting) && wire(figure)) {
+        seen.disconnect();
+      }
+    });
+    seen.observe(figure);
+  }
+}
+
+/* Hang the controls off an inlined recording. Returns false when the
+ * animations are not live yet (a hidden tab), so the caller can retry. */
+function wire(figure) {
+  if (figure.dataset.wired) return true;
 
   const animations = figure.getAnimations
     ? figure.getAnimations({ subtree: true })
     : [];
-  if (!animations.length) return; // still animating on its own; leave it be
+  if (!animations.length) return false; // hidden, or animating on its own
 
   const timing = animations[0].effect.getComputedTiming();
   const cycle = Number(timing.duration) || 0;
-  if (!cycle) return;
+  if (!cycle) return false;
+  figure.dataset.wired = "1";
 
   /* ---- controls ---- */
 
@@ -223,6 +235,7 @@ async function enhance(img) {
   } else {
     play();
   }
+  return true;
 }
 
 onEachPage(() => {

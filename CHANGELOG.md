@@ -29,8 +29,28 @@ versions may include breaking changes.
   showed `fm workspace.mount --share <TAB>` completing to a value list. With
   a space, that offers the task's *other* options and the next chain head —
   the value form is `--share=`. Both now show the `=`.
+- **Every recording gets its controls, not just the one on the open tab.** A
+  cast inside a closed tab is `display: none`, so its CSS animations do not
+  exist yet and there was nothing to attach play/pause/scrub to. They are
+  now wired the first time each recording is shown.
+- **Recordings fill the column.** They were capped at the pixel width they
+  were recorded at, which on a wide page left them sitting at the width of
+  their own control bar.
+- **Menus stay on screen long enough to read.** The default beat is ~0.6s,
+  which is the entire visible life of a fish menu — fish dismisses its pager
+  on the next keystroke, so the front page appeared to jump straight from
+  `--bra` to a finished command line. zsh keeps its menu up while you type,
+  which hid it.
 
 ### Documentation
+
+- **The homepage says what toolroom is.** The README's first code block
+  imported from it and no page explained the name, so a reader met
+  `from toolroom import ruff` with no idea whether it was required. Both now
+  say what it does, that it began as part of footman and was spun out
+  because it releases on a decoupled train and is separately useful, and
+  that footman neither depends on it nor imports it — a stub decides whether
+  your editor can help, never whether a call works.
 
 - **The personal tasks file is documented where the cascade is.**
   `~/.config/footman/tasks.py` has always ridden everywhere, but it appeared
