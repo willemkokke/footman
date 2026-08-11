@@ -9,9 +9,10 @@
  * the <img> for the player changes nothing about the page's layout. */
 .cast {
   /* Explicit, not shrink-to-fit. An inline <svg> carrying only a viewBox
-   * contributes no intrinsic width, so a shrink-to-fit figure collapsed to
-   * the natural width of the control bar and dragged the recording down
-   * with it. max-width (set per figure from the viewBox) still caps it. */
+   * contributes no intrinsic width, so a shrink-to-fit figure collapses to
+   * the natural width of the control bar and drags the recording down with
+   * it. The recording is vector text, so filling the column costs nothing
+   * and it is never capped at its recorded pixel width. */
   display: block;
   width: 100%;
   margin: 1em 0;
