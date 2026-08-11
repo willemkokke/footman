@@ -1,0 +1,81 @@
+name: Bug report
+description: Something footman does that it shouldn't
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time. The version and shell fields below are
+        the two that most often decide the answer — completion in
+        particular behaves differently in every shell.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you ran, what you expected, and what you got instead.
+      placeholder: |
+        $ fm lint test
+        ...
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: footman version
+      description: Output of `fm --version`.
+      placeholder: "footman 0.40.0"
+    validations:
+      required: true
+
+  - type: input
+    id: python
+    attributes:
+      label: Python version
+      placeholder: "3.13.1"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - macOS
+        - Linux
+        - Windows
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: shell
+    attributes:
+      label: Shell
+      description: Only matters for completion bugs — pick "not relevant" otherwise.
+      options:
+        - not relevant
+        - zsh
+        - bash
+        - fish
+        - PowerShell
+        - nushell
+        - other
+    validations:
+      required: true
+
+  - type: textarea
+    id: tasks
+    attributes:
+      label: The smallest tasks.py that shows it
+      description: If you can reduce it, this is the single most useful thing in the report.
+      render: python
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: |
+        Tracebacks, `--json` output, or `fm --dry-run` for a scheduling
+        question. Paste freely.

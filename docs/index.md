@@ -15,6 +15,35 @@ real flags and positionals, modules become nested command groups, and shell
 completion answers from a cached manifest in **~30 ms — without importing your
 code**.
 
+=== "fish"
+
+    ![Animated: fm TAB lists every task with its summary, deploy --branch TAB completes to the repository's real git branches, and --region TAB offers the values the signature declares](_generated/shots/hero-fish-cast.svg)
+
+=== "zsh"
+
+    ![Animated: fm TAB lists every task with its summary, deploy --branch TAB completes to the repository's real git branches, and --region TAB offers the values the signature declares](_generated/shots/hero-zsh-cast.svg)
+
+=== "bash"
+
+    ![Animated: fm TAB lists every task with its summary, deploy --branch TAB completes to the repository's real git branches, and --region TAB offers the values the signature declares](_generated/shots/hero-bash-cast.svg)
+
+=== "PowerShell"
+
+    ![Animated: fm TAB lists every task with its summary, deploy --branch TAB completes to the repository's real git branches, and --region TAB offers the values the signature declares](_generated/shots/hero-pwsh-cast.svg)
+
+=== "nushell"
+
+    ![Animated: fm TAB lists every task with its summary, deploy --branch TAB completes to the repository's real git branches, and --region TAB offers the values the signature declares](_generated/shots/hero-nushell-cast.svg)
+
+Real sessions, not mock-ups — recorded from live shells on every docs build,
+in all five shells footman supports. Three <kbd>Tab</kbd> presses: the task
+menu, then `--branch`, which completes to **this repository's actual git
+branches** because its candidates come from a function, not a list someone
+typed out; then `--region`, whose values come straight from the signature's
+`Literal`. The menus arrive at keystroke speed because footman answers them
+from a cached manifest instead of importing your project.
+[How that works](completion.md).
+
 Annotations are how you get the most out of it, not the price of entry: a
 plain `def deploy(target, port=8000)` is already a working command with a
 positional, a typed option, and completion. [Annotate when you want
@@ -23,7 +52,7 @@ more](typing.md#what-if-i-dont-like-annotating-types).
 ```sh
 fm lint --fix
 fm format lint --fix test          # a chain: three tasks, no separator
-fm workspace.mount --share <TAB>   # main  scratch  archive
+fm workspace.mount --share=<TAB>   # main  scratch  archive
 ```
 
 ![fm --tree in a terminal: tasks grouped by command group, bold names, one-line help](_generated/shots/tree.svg)
@@ -38,8 +67,9 @@ prints.)
     footman is pre-1.0: the surface is settling, but minor versions may still
     include breaking changes — always called out in the
     [changelog](changelog.md), never in a patch release. Pin the minor
-    (`footman~=0.39.0`) if you build on it. The written stability promise
-    lands with 1.0 — the road there is on the [roadmap](roadmap.md).
+    (`footman~=0.39.0`) if you build on it. What is covered, what is
+    internal, and what has to be true before 1.0 are written down in the
+    [stability promise](stability.md).
 
 --8<-- "docs/_generated/latest-changes.md"
 

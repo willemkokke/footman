@@ -380,6 +380,23 @@ def test_pwsh_missing_is_a_taught_error(home, tmp_path, monkeypatch, capsys):
 # so nothing skips silently there)
 
 
+def _assert_both_spellings(stdout: str) -> None:
+    """A valued option reaches the shell in both of its legal shapes.
+
+    `--paths` is the bare mention standing for the default; `--paths=` is
+    the only way to pass a value, since every value in this grammar is
+    attached. Asserted per shell because each one splits, quotes and
+    re-attaches candidates differently — bash alone splits on `=`.
+
+    `--fix` is a flag: it takes no value at either default, so it must
+    never arrive carrying an `=`.
+    """
+    words = stdout.split()
+    assert "--paths" in words, stdout
+    assert "--paths=" in words, stdout
+    assert "--fix=" not in words, stdout
+
+
 @pytest.fixture
 def fm_project_dir(home, tmp_path, monkeypatch):
     """A tiny project with a built manifest, plus the venv bin for PATH."""
@@ -449,6 +466,11 @@ def test_bash_completion_functional(home, fm_project_dir):
         "COMP_WORDS=(fm docs.); COMP_CWORD=1\n"
         "_fm_complete\n"
         'printf "%s\\n" "${COMPREPLY[@]}"\n'
+        # The `=` pair, in the one shell whose COMP_WORDBREAKS contains `=`:
+        # if quoting or word-splitting eats the suffix, it dies here.
+        "COMP_WORDS=(fm lint --p); COMP_CWORD=2\n"
+        "_fm_complete\n"
+        'printf "%s\\n" "${COMPREPLY[@]}"\n'
     )
     out = subprocess.run(
         [bash, "-c", body],
@@ -463,6 +485,7 @@ def test_bash_completion_functional(home, fm_project_dir):
     assert "lint" in out.stdout.splitlines()
     assert "Lint." not in out.stdout
     assert "--fix" in out.stdout.split()  # the bash-3.2 slice regression case
+    _assert_both_spellings(out.stdout)
     # Path-style descent: `fm docs.<TAB>` answers full dotted addresses; `.`
     # is not in COMP_WORDBREAKS, so bash inserts them whole.
     assert {"docs.serve", "docs.build"} <= set(out.stdout.split())
@@ -497,6 +520,7 @@ def test_zsh_completion_functional(home, fm_project_dir):
     )
     assert out.returncode == 0, out.stderr
     assert "--fix" in out.stdout.split()  # empty current word survives quoting
+    _assert_both_spellings(out.stdout)
     assert "Lint." in out.stdout  # 11.2: the description column reaches zsh
     # Path-style descent through the same quoting path.
     assert "docs.serve" in out.stdout and "docs.build" in out.stdout
@@ -515,6 +539,7 @@ def test_fish_completion_functional(home, fm_project_dir):
         'complete -C "fm lint --f"\n'
         'complete -C "fm docs."\n'
         'complete -C "fm do"\n'
+        'complete -C "fm lint --p"\n'  # the `=` pair through fish's own engine
     )
     out = subprocess.run(
         ["fish", "-c", body],
@@ -527,6 +552,7 @@ def test_fish_completion_functional(home, fm_project_dir):
     assert "lint" in out.stdout.split()
     assert "--fix" in out.stdout.split()
     assert "Lint." in out.stdout  # 11.2: fish renders the tab-separated description
+    _assert_both_spellings(out.stdout)
     # Path-style descent, and the unique-namespace skip-ahead: `fm do` matches
     # only the docs group, so fish (which appends a space after a unique
     # match) is handed the children as full addresses instead of a lone
@@ -792,8 +818,10 @@ def test_nushell_completion_functional(home, tmp_path, monkeypatch):
     """The generated hook, sourced and invoked by a real nushell."""
     (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
     (tmp_path / "tasks.py").write_text(
+        "from pathlib import Path\n"
         "from footman import group, task\n\n"
-        '@task\ndef lint(fix: bool = False):\n    "Lint."\n\n'
+        "@task\ndef lint(fix: bool = False, paths: list[Path] | None = None):\n"
+        '    "Lint."\n\n'
         'docs = group("docs", help="Docs")\n\n'
         '@docs.task\ndef serve():\n    "Serve."\n\n'
         '@docs.task\ndef build():\n    "Build."\n'
@@ -831,6 +859,7 @@ def test_nushell_completion_functional(home, tmp_path, monkeypatch):
     assert out.returncode == 0, out.stderr
     assert "lint=Lint." in out.stdout.split()  # value carries its description
     assert "--fix" in out.stdout.split()  # a bare option value still completes
+    _assert_both_spellings(out.stdout)
     # Path-style descent: full dotted addresses, so even nushell's
     # space-after-unique behaviour lands the cursor after a complete address.
     assert {"docs.serve", "docs.build"} <= set(out.stdout.split())
@@ -868,6 +897,10 @@ def test_pwsh_completion_functional(home, tmp_path, monkeypatch):
         "$r.CompletionMatches | ForEach-Object CompletionText; "
         "$r = [System.Management.Automation.CommandCompletion]::CompleteInput("
         f'"{csv_line}", {len(csv_line)}, $null); '
+        "$r.CompletionMatches | ForEach-Object CompletionText; "
+        # The `=` pair, through PowerShell's own completion engine.
+        "$r = [System.Management.Automation.CommandCompletion]::CompleteInput("
+        '"fm lint --p", 11, $null); '
         "$r.CompletionMatches | ForEach-Object CompletionText"
     )
     out = subprocess.run(
@@ -880,6 +913,7 @@ def test_pwsh_completion_functional(home, tmp_path, monkeypatch):
     assert out.returncode == 0, out.stderr
     assert "lint" in out.stdout.split()
     assert {"docs.serve", "docs.build"} <= set(out.stdout.split())
+    assert {"--paths", "--paths="} <= set(out.stdout.split()), out.stdout
     # Mid-list in a comma-splitting path value: the tail completes. How much
     # of the head PowerShell hands the completer varies with its tokeniser
     # (a bare comma parses as an array), so pin only the completed tail.
