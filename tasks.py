@@ -432,6 +432,7 @@ def _record_cast(
     width: int,
     height: int,
     cwd: Path,
+    pace: float = 1.2,
 ) -> None:
     """Record a cast, and re-record it once if the interaction went missing.
 
@@ -451,7 +452,15 @@ def _record_cast(
     from footman.tasks.docs import cast as taskdocs_cast
 
     for attempt in (1, 2):
-        taskdocs_cast(*keys, out=out, shell=shell, width=width, height=height, cwd=cwd)
+        taskdocs_cast(
+            *keys,
+            out=out,
+            shell=shell,
+            width=width,
+            height=height,
+            cwd=cwd,
+            pace=pace,
+        )
         try:
             _assert_cast_captured(out, beats)
         except RuntimeError:
@@ -997,40 +1006,79 @@ def docs_build(check: bool = False):  # pragma: no cover — see below
         "pwsh",
         "nushell",
     )
+    # What a shell needs after a completion is taken, before the next token
+    # can be typed. fish, zsh and bash insert a space themselves; nushell
+    # does not, so `deploy` and `-` ran together into one token that
+    # completed nothing. PSReadLine leaves its menu open and lets the next
+    # key *replace* the selection — `-` wiped `deploy` off the line — so it
+    # needs the menu accepted first, which is what Right does.
+    accept: dict[str, tuple[str, ...]] = {
+        "nushell": ("<SPACE>",),
+        "pwsh": ("<RIGHT>", "<SPACE>"),
+    }
     for sh in hero_shells:
-        tab = ("<TAB>", "<TAB>") if sh == "bash" else ("<TAB>",)
+        tab = ("<TAB>",)
+        # Taking a value out of the menu, spelled the way each shell means
+        # it. fish and zsh walk and insert as the selection moves; pwsh
+        # lists the *values* only once a character narrows them, so it
+        # narrows first and then walks its grid; nushell shows the menu but
+        # commits nothing until Enter, which selects rather than submits
+        # while a menu is open; bash does not walk at all, so it takes the
+        # prefix route — which shows the filtering as well.
+        pick = {
+            "fish": (*tab, *tab),
+            "zsh": (*tab, *tab),
+            "pwsh": ("f", *tab, *tab),
+            "nushell": (*tab, "<DOWN>", "<ENTER>"),
+        }.get(sh, ("f", *tab, "i", *tab))
+        pick_region = {
+            "fish": tab,
+            "zsh": tab,
+            "nushell": (*tab, "<DOWN>", "<ENTER>"),
+        }.get(sh, ("u", *tab))
         # `*-cast.svg` is the convention the docs' player keys on: any
         # recording ending that way gets play/pause/scrub, a still does not.
         out = shot / f"hero-{sh}-cast.svg"
-        # "deploy" and "feat/typed-flags" are typed by the script, so they
-        # prove nothing about the menus. `fix/completion-cache` is never
-        # typed: it can only appear if the branch completer actually
-        # answered. Assert the real beat, not the echo.
+        # `deploy` is typed, so it proves nothing about the menus.
+        # `fix/completion-cache` and the regions never are: they can only
+        # appear if the completer answered. Assert the beat, not the echo.
         beats = ["deploy", "build", "test"]
         if sh != "bash" or _bash_renders_value_menus():
-            beats += ["fix/completion-cache", "release/v0.40.0"]
+            beats += ["feat/typed-flags", "fix/completion-cache"]
         _record_cast(
-            # Every menu gets a beat long enough to read. The default wait is
-            # ~0.6s, which is all the life a fish menu gets: fish dismisses
-            # its pager on the next keystroke, so the branch list flashed
-            # once and the recording appeared to jump straight from `--bra`
-            # to the finished line. zsh keeps its menu up while you type and
-            # hid the problem.
-            #
+            # Nothing is typed out in full: every token on the line arrives
+            # by completion, and the longest thing typed is two characters.
             # The task surface, each task with its summary.
             "fm ",
             *tab,
-            "<WAIT:2000>",
-            # The computed one: real branches, asked of git on the spot.
-            # `--opt=` is what puts the cursor in value position — with a
-            # space the resolver is still offering options, not values.
-            "deploy --branch=",
+            # The task, by prefix — deterministic whatever order a shell
+            # lists in, which is the shell's choice and not ours.
+            "de",
             *tab,
-            "<WAIT:2500>",
-            # And a Literal, validated straight from the signature.
-            "feat/typed-flags --region=",
+            *accept.get(sh, ()),
+            # What it takes. `-` keeps the menu to options: with the task's
+            # arity satisfied, a bare Tab also offers the next task in the
+            # chain, which is true but not what this beat is about.
+            "-",
             *tab,
-            "<WAIT:2500>",
+            # One option, both spellings — a value is `=`-attached.
+            "b",
+            *tab,
+            # Its values: every branch in the repo, asked of git on the spot.
+            "=",
+            *tab,
+            # Take one, then a Literal straight from the signature. Both
+            # dashes on `--r`: the candidates are `--region`/`--region=`, so
+            # `-r` is a prefix of neither — the beat above only reaches `b`
+            # because `-`+Tab expanded the common `--` first.
+            *pick,
+            *accept.get(sh, ()),
+            "--r",
+            *tab,
+            "=",
+            *tab,
+            *pick_region,
+            pace=0.75,
             beats=beats,
             out=out,
             shell=sh,

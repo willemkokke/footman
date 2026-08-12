@@ -200,7 +200,12 @@ def test_a_valued_option_offers_both_of_its_spellings(tree):
     and any dynamic completer behind it — reachable only by knowing to type
     `=` first, which is the internal knowledge completion exists to spare.
     """
-    assert complete(tree, ["lint", "--mo"]) == ["--mode", "--mode="]
+    # And they must not read as the same row twice: the bare one names the
+    # value it stands for, which is the whole difference between them.
+    assert complete(tree, ["lint", "--mo"]) == [
+        "--mode\tdefault: loose",
+        "--mode=",
+    ]
 
 
 def test_a_flag_has_one_spelling(tree):
@@ -858,7 +863,7 @@ def test_second_segment_options_are_the_second_tasks(tree):
     out = complete(tree, ["check", "lint", "--mo"])
     # Both spellings: the bare mention that stands for the default, and the
     # `=` that is the only way to pass a value.
-    assert out == ["--mode", "--mode="]
+    assert [c.split("\t", 1)[0] for c in out] == ["--mode", "--mode="]
 
 
 def test_next_task_name_completes_after_a_chain(tree):

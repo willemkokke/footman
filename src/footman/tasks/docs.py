@@ -16,7 +16,7 @@ import subprocess
 import sys
 from collections.abc import Callable
 from pathlib import Path
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, NamedTuple
 
 from footman import (
     _config,
@@ -289,11 +289,54 @@ _KEY_TOKENS = {
 # a prompt whose render time you can't predict is waited on, not guessed at.
 _SETTLE = -1.0
 _SETTLE_GAP = 0.5  # seconds of silence that count as "settled"
+# The same idea between events: after a key, the capture waits for the shell
+# to stop redrawing and takes the frame there. Shorter than _SETTLE_GAP —
+# this runs after every single key, and a shell answering a keystroke is far
+# quicker than one rendering a prompt from cold.
+_SNAP_GAP = 0.18
+# How long to give a key that draws nothing at all before taking its frame
+# anyway. Longer than _SNAP_GAP because it has to outlast the pause while a
+# shell shells out to answer a Tab.
+_SNAP_IDLE = 1.2
 _SETTLE_MAX = 10.0  # hard cap: fire anyway, so a never-quiet stream can't hang
 
 
-def keystrokes(script: tuple[str, ...]) -> list[tuple[float, bytes]]:
-    """Compile a cast script into (delay-before-send, bytes) steps.
+# How a key is captioned in the recording's corner. A reader watching a
+# completion menu appear needs to know whether a human pressed Tab or simply
+# typed — the terminal itself shows neither. Arrows get their glyph; the rest
+# get the name printed on the key.
+_KEY_CAPTIONS = {
+    "<TAB>": "Tab",
+    "<ENTER>": "Enter",
+    "<SPACE>": "Space",
+    "<BACKSPACE>": "Backspace",
+    "<ESC>": "Esc",
+    "<CTRL-C>": "Ctrl-C",
+    "<UP>": "↑",
+    "<DOWN>": "↓",
+    "<LEFT>": "←",
+    "<RIGHT>": "→",
+}
+
+
+class Send(NamedTuple):
+    """One write into the pty, and what the recording should make of it.
+
+    *snap* marks the end of a script step: the pty loop waits there for the
+    shell to finish responding and the recording takes one frame. Everything
+    between snaps — the characters of a typed word — goes in without being
+    filmed, so a recording is a sequence of *events* rather than a sampling
+    of a redraw.
+    """
+
+    delay: float
+    data: bytes
+    caption: str
+    snap: bool
+
+
+def keystrokes(script: tuple[str, ...]) -> list[Send]:
+    """Compile a cast script into (delay-before-send, bytes, caption) steps.
 
     Each script argument is either literal text — typed one character at a
     time at a human-ish cadence — or a token: `<TAB>`, `<ENTER>`, `<SPACE>`,
@@ -301,19 +344,34 @@ def keystrokes(script: tuple[str, ...]) -> list[tuple[float, bytes]]:
     (for walking a shell's completion menu), `<WAIT>` (pause 0.8 s),
     `<WAIT:ms>`, or `<SETTLE>` (wait until output stops changing —
     timing-independent, for a prompt whose render time you can't predict).
+
+    The caption is what the recording shows in its corner for that step:
+    a key's name, the character typed, or empty for a pause — a wait carries
+    no caption of its own, so the key that opened a menu stays legible for
+    as long as the menu is on screen.
     """
-    sends: list[tuple[float, bytes]] = []
+    sends: list[Send] = []
     for part in script:
         if part in _KEY_TOKENS:
-            sends.append((0.3, _KEY_TOKENS[part]))
+            sends.append(
+                Send(0.3, _KEY_TOKENS[part], _KEY_CAPTIONS.get(part, part), True)
+            )
         elif part == "<SETTLE>":
-            sends.append((_SETTLE, b""))
+            sends.append(Send(_SETTLE, b"", "", False))
         elif part == "<WAIT>":
-            sends.append((0.8, b""))
+            sends.append(Send(0.8, b"", "", False))
         elif part.startswith("<WAIT:") and part.endswith(">"):
-            sends.append((int(part[6:-1]) / 1000.0, b""))
+            sends.append(Send(int(part[6:-1]) / 1000.0, b"", "", False))
         else:
-            sends.extend((0.07, ch.encode("utf-8")) for ch in part)
+            # Typed text is one event, not one per letter: the frame that
+            # matters is the finished word, and a frame per character is
+            # what made a recording read as a flicker. The characters still
+            # go in one at a time, so the shell sees ordinary typing.
+            chars = list(part)
+            sends.extend(
+                Send(0.02, ch.encode("utf-8"), part, i == len(chars) - 1)
+                for i, ch in enumerate(chars)
+            )
     return sends
 
 
@@ -335,6 +393,49 @@ _DSR = re.compile(rb"\x1b\[6n")
 # doesn't consume them, so their payload (fish's XTGETTCAP capability
 # names, hex-encoded) would render as stray text for one frame.
 _DCS = re.compile(r"\x1bP.*?(?:\x1b\\|\x07)", re.S)
+# CSI sequences with a *private* marker — `ESC [ > … m`, `ESC [ ? … m`. They
+# are modes, not styling: `ESC[>4;2m` is modifyOtherKeys, which fish and
+# nushell turn on at startup. pyte ignores the marker and reads the
+# parameters as SGR, so that one turns on underline (4) and `ESC[>1m` turns
+# on bold — and every cell drawn afterwards inherits them. That is what
+# underlined a recording's prompt in shells that emit no underline at all,
+# and why the whole listing looked ruled. Dropped before the emulator sees
+# them; pyte handles the non-`m` private sequences (`ESC[?2004h`) correctly.
+_PRIVATE_SGR = re.compile(r"\x1b\[[<=>?][\d;:]*m")
+
+
+class _Descs:
+    """Strip DCS replies from a stream that arrives in pieces.
+
+    The pattern has to see a whole sequence, and a pty hands back whatever
+    happened to be readable — so a reply split across two reads was stripped
+    from neither half, and its debris went to the terminal emulator as text.
+    pyte then parsed the fragments: a capability answer landing across a read
+    boundary set attributes nothing had asked for, and every cell drawn
+    afterwards inherited them. That is what underlined a recording's prompt
+    in shells that never emit an underline at all.
+
+    So the tail of a possibly-incomplete sequence is held back and prepended
+    to the next read, exactly as the query answerer already does.
+    """
+
+    __slots__ = ("_tail",)
+
+    def __init__(self) -> None:
+        self._tail = ""
+
+    def feed(self, text: str) -> str:
+        buf = _PRIVATE_SGR.sub("", _DCS.sub("", self._tail + text))
+        start = buf.rfind("\x1bP")
+        if start == -1:
+            self._tail = ""
+            return buf
+        # A sequence that never terminates must not grow without bound: past
+        # a sane length it is not a reply, it is a stuck stream.
+        self._tail = buf[start:] if len(buf) - start < 4096 else ""
+        return buf[:start]
+
+
 _OSC_COLOUR = re.compile(rb"\x1b\](1[012]);\?(?:\x07|\x1b\\)")
 
 
@@ -375,12 +476,13 @@ def _pty_session(
     *,
     width: int,
     height: int,
-    sends: list[tuple[float, bytes]],
+    sends: list[Send],
     settle: float,
     env_extra: dict[str, str] | None = None,
     keep_echo: bool = False,
     cwd: Path | None = None,
     answer_cursor: bool = True,
+    key_log: list[tuple[float, str]] | None = None,
 ) -> list[tuple[float, bytes]]:
     """Run *argv* on a pty, play the keystroke script, and record
     (elapsed-seconds, bytes) chunks until output has settled."""
@@ -436,6 +538,7 @@ def _pty_session(
     queue = list(sends)
     tracker = pyte.Screen(width, height)
     tracker_stream = pyte.Stream(tracker)
+    descs = _Descs()
     pending = b""  # tail kept so a query split across reads still matches
     # Typing begins only after the boot has *settled*: keys written before
     # the line editor exists are half-echoed raw and eaten (a TAB pressed
@@ -446,11 +549,38 @@ def _pty_session(
     next_at: float | None = None
     last_output = start  # for <SETTLE>: when the pty last emitted anything
     deadline = None if queue else start + settle
+    # Set between writing a snap step and the shell going quiet after it:
+    # while it holds a caption, no further keys go in and the frame for that
+    # event has not been marked yet.
+    awaiting: str | None = None
+    awaiting_since = start
     try:
         while True:
             now = _time.monotonic()
-            if queue and next_at is not None:
-                if queue[0][0] < 0:
+            # Silence straight after a key does not mean the shell has
+            # finished — it usually means it has not started. A Tab sends the
+            # shell off to run `--complete` in a subprocess, and the quiet
+            # while it does that is longer than the quiet after it finishes
+            # painting. So a frame is taken once output has *arrived and then
+            # stopped*; a key that genuinely draws nothing falls through on
+            # the idle bound instead.
+            answered = last_output > awaiting_since
+            if awaiting is not None and (
+                (answered and now - last_output >= _SNAP_GAP)
+                or (not answered and now - awaiting_since >= _SNAP_IDLE)
+                or now - awaiting_since >= _SETTLE_MAX
+            ):
+                if key_log is not None:
+                    key_log.append((now - start, awaiting))
+                awaiting = None
+                if queue:
+                    nd = queue[0].delay
+                    next_at = now if nd < 0 else now + nd
+                else:
+                    next_at = now
+                    deadline = now + settle
+            if awaiting is None and queue and next_at is not None:
+                if queue[0].delay < 0:
                     # A <SETTLE> step (negative delay) waits for a prompt to
                     # finish rendering: output quiet for _SETTLE_GAP *and* the
                     # cursor sitting past column 0 — a prompt on the line, not
@@ -466,11 +596,21 @@ def _pty_session(
                     ready = now >= next_at
                 if ready:
                     typing_started = True
-                    _, data = queue.pop(0)
-                    if data:
-                        os.write(master, data)
+                    step = queue.pop(0)
+                    if step.data:
+                        os.write(master, step.data)
+                    if step.snap:
+                        # One event, one frame. Nothing more is sent until
+                        # the shell has finished answering this key, and the
+                        # frame is taken at that settled state — so a fast
+                        # machine and a loaded runner record the same frames
+                        # and only the wall clock differs, which playback
+                        # throws away anyway.
+                        awaiting = step.caption
+                        awaiting_since = now
+                        continue
                     if queue:
-                        nd = queue[0][0]
+                        nd = queue[0].delay
                         next_at = now if nd < 0 else now + nd
                     else:
                         next_at = now
@@ -485,7 +625,7 @@ def _pty_session(
                     break
                 last_output = _time.monotonic()
                 chunks.append((last_output - start, data))
-                tracker_stream.feed(_DCS.sub("", data.decode("utf-8", "replace")))
+                tracker_stream.feed(descs.feed(data.decode("utf-8", "replace")))
                 buf = pending + data
                 _answer_queries(
                     buf,
@@ -496,7 +636,7 @@ def _pty_session(
                 )
                 pending = buf[-64:]
                 if not typing_started and queue:
-                    nd = queue[0][0]
+                    nd = queue[0].delay
                     next_at = last_output if nd < 0 else last_output + 0.5 + nd
                 if deadline is not None:  # let late repaints settle too
                     deadline = last_output + settle
@@ -523,17 +663,88 @@ def _cell_style(char: Any) -> str:
         bits.append("italic")
     if char.underscore:
         bits.append("underline")
+
+    def named(attr: str) -> str:
+        # pyte names ansi colours ("red") and spells the rest as bare
+        # 6-digit hex ("87d7ff") — rich wants a `#` on the hex form.
+        return f"#{attr}" if _HEX6.fullmatch(attr) else _BRIGHT.sub(r"bright_\1", attr)
+
+    fg = named(char.fg) if char.fg and char.fg != "default" else _SVG_FG
+    bg = named(char.bg) if char.bg and char.bg != "default" else _SVG_BG
     if char.reverse:
-        bits.append("reverse")
-    for attr, prefix in ((char.fg, ""), (char.bg, "on ")):
-        if attr and attr != "default":
-            # pyte names ansi colours ("red") and spells the rest as bare
-            # 6-digit hex ("87d7ff") — rich wants a `#` on the hex form.
-            longhand = (
-                f"#{attr}" if _HEX6.fullmatch(attr) else _BRIGHT.sub(r"bright_\1", attr)
-            )
-            bits.append(f"{prefix}{longhand}")
+        # Swapped here, with concrete colours, rather than left to rich's
+        # `reverse`. On the SVG export that painted the background but not
+        # the text, so a selected menu entry — which is how zsh's
+        # `menu select` marks its choice — came out as a solid block with
+        # its own text invisible inside it.
+        fg, bg = bg, fg
+    if bg != _SVG_BG and _contrast(fg, bg) < 4.5:
+        # Text too close in tone to its own background is not text. Shells
+        # paint a highlight by setting one half of the pair and trusting the
+        # terminal's default for the other — a menu selection with an
+        # explicit light background and a default (light) foreground came out
+        # as a solid block with its text hidden inside it. Exact equality was
+        # far too narrow a test, and so was "nearly equal": PSReadLine's
+        # selected row came out at 2.34:1, which is not the same colour by any
+        # measure and is still unreadable at terminal sizes — it reads as a
+        # blank white bar until you select the text. The bar is WCAG AA for
+        # body text; below it, take whichever of the palette's two ends the
+        # background is furthest from.
+        #
+        # Only where a background was actually painted. Dim text on the
+        # ordinary background is *meant* to be low contrast — that is what
+        # fish's grey autosuggestion is — and rescuing it would render it as
+        # ordinary typed characters, which is the bug the bright-colour test
+        # guards against.
+        fg = _SVG_BG if _contrast(_SVG_BG, bg) > _contrast(_SVG_FG, bg) else _SVG_FG
+    if fg != _SVG_FG:
+        bits.append(fg)
+    if bg != _SVG_BG:
+        bits.append(f"on {bg}")
     return " ".join(bits)
+
+
+def _event_screens(
+    chunks: list[tuple[float, bytes]],
+    key_log: list[tuple[float, str]],
+    *,
+    width: int,
+    height: int,
+) -> list[tuple[str, list[list[tuple[str, str]]]]]:
+    """One screen per event: the settled state after each key, captioned.
+
+    The alternative — a frame per output chunk — records how a shell happened
+    to redraw rather than what it did. Menus that a shell paints and clears
+    within one chunk vanish; a shell that paints in bursts loses keystrokes
+    into a single frame; and the same script gives a different recording on a
+    loaded machine. Playing back one frame per keypress at a fixed pace
+    removes all of that: the wall clock only decided *when* the shell went
+    quiet, never what is on screen.
+    """
+    import pyte
+
+    screen = pyte.Screen(width, height)
+    stream = pyte.Stream(screen)
+    descs = _Descs()
+    frames: list[tuple[str, list[list[tuple[str, str]]]]] = []
+    fed = 0
+    for at, caption in key_log:
+        while fed < len(chunks) and chunks[fed][0] <= at:
+            stream.feed(descs.feed(chunks[fed][1].decode("utf-8", "replace")))
+            fed += 1
+        frames.append(
+            (
+                caption,
+                [
+                    [
+                        (screen.buffer[y][x].data, _cell_style(screen.buffer[y][x]))
+                        for x in range(width)
+                    ]
+                    for y in range(height)
+                ],
+            )
+        )
+    return frames
 
 
 def _screens(
@@ -547,8 +758,9 @@ def _screens(
     stream = pyte.Stream(screen)
     frames: list[tuple[float, list[list[tuple[str, str]]]]] = []
     last: list[list[tuple[str, str]]] | None = None
+    descs = _Descs()
     for t, data in chunks:
-        stream.feed(_DCS.sub("", data.decode("utf-8", "replace")))
+        stream.feed(descs.feed(data.decode("utf-8", "replace")))
         snap = [
             [
                 (cell.data, _cell_style(cell))
@@ -572,34 +784,155 @@ _HEX6 = re.compile(r"[0-9a-fA-F]{6}")
 # renders dim text in the normal foreground. That is how fish's grey
 # autosuggestion came to look like characters typed into the prompt.
 _BRIGHT = re.compile(r"^bright([a-z]+)$")
+# rich's own SVG export palette, named here so a reversed cell can be swapped
+# to concrete colours: "default" means these two, and a swap has to say which
+# colour it landed on rather than leave it to be resolved later.
+_SVG_FG = "#c5c8c6"
+_SVG_BG = "#292929"
+_LUMA: dict[str, float] = {}
+
+
+def _luminance(colour: str) -> float:
+    """Relative luminance, 0 (black) to 1 (white).
+
+    Resolved through **rich's own export palette**, never a table of our own.
+    That theme is not the one the names suggest: its ANSI `black` is `#4b4e55`
+    and its `white` is `#c5c8c6`. Weighing a private approximation instead
+    said a selected menu row was black-on-white — near-perfect contrast — when
+    what rich painted was dark grey on light grey at 2.34:1, which reads as a
+    blank bar until you select the text.
+    """
+    if colour not in _LUMA:
+        from rich.color import Color
+        from rich.terminal_theme import SVG_EXPORT_THEME
+
+        try:
+            triplet = Color.parse(colour).get_truecolor(SVG_EXPORT_THEME)
+            rgb = (triplet.red, triplet.green, triplet.blue)
+        except Exception:  # an unparseable name should not fail a recording
+            rgb = (128, 128, 128)
+        r, g, b = (c / 255 for c in rgb)
+        _LUMA[colour] = 0.2126 * r + 0.7152 * g + 0.0722 * b
+    return _LUMA[colour]
+
+
+def _contrast(one: str, two: str) -> float:
+    """WCAG-style contrast ratio, 1 (identical) to 21 (black on white)."""
+    a, b = sorted((_luminance(one), _luminance(two)), reverse=True)
+    return (a + 0.05) / (b + 0.05)
+
+
+def _caption_at(key_log: list[tuple[float, str]], when: float) -> str:
+    """The key caption in force at *when* — the most recent one pressed.
+
+    It persists rather than blinking off, because the interesting moment is
+    the one *after* the key: Tab is pressed, and the menu it opened sits
+    there for a second while the caption explains where it came from.
+    """
+    caption = ""
+    for at, text in key_log:
+        if at <= when + 1e-6:
+            caption = text
+        else:
+            break
+    return caption
+
+
+# rich centres the window title at y=27; the caption sits on that line at
+# the other end of the chrome, right-aligned a little in from the edge.
+_SVG_OPEN = re.compile(r"<svg[^>]*viewBox=\"0 0 ([\d.]+) [\d.]+\"[^>]*>")
+_CAPTION_INSET = 30.0
+
+
+def _with_caption(svg: str, caption: str, uid: str) -> str:
+    """Draw *caption* in the recording's top-right corner.
+
+    A terminal shows what a keystroke *did*, never that one happened — so a
+    completion menu appearing out of a still line reads as magic rather than
+    as Tab. The caption is added here, per frame, rather than by the shell:
+    nothing in the session has to know it is being filmed.
+    """
+    if not caption:
+        return svg
+    match = _SVG_OPEN.search(svg)
+    if match is None:  # unknown geometry: a caption in the wrong place is worse
+        return svg
+    x = float(match.group(1)) - _CAPTION_INSET
+    text = (
+        f'<text class="{uid}-title" fill="#c5c8c6" text-anchor="end" '
+        f'x="{x:.1f}" y="27">{_xml_escape(caption)}</text>'
+    )
+    return svg.replace("</svg>", f"{text}</svg>", 1)
+
+
+def _xml_escape(text: str) -> str:
+    return (
+        text.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+    )
+
+
 _SVG_SHELL = re.compile(r"^\s*<svg[^>]*>|</svg>\s*$")
 
 
-def compose_animation(svgs: list[str], times: list[float], *, hold: float = 1.6) -> str:
+def compose_animation(
+    svgs: list[str], times: list[float], *, hold: float = 1.6, prefix: str = "cf"
+) -> str:
     """Stack per-frame SVGs into one, cycled by CSS keyframes.
 
     Each frame plays over its captured window; the last holds for *hold*
     seconds before the loop restarts. `step-end` opacity keeps the switch
     discrete, and every frame carries its own opaque background, so the
     topmost visible frame is the whole picture.
+
+    *prefix* names this recording's classes and keyframes, and **must be
+    unique per recording on a page**. An inlined SVG's `<style>` is not
+    scoped to it: put five recordings on one page under the same names and
+    the last one's rules win for all of them — every cast animating to
+    another's timings, and every cell painted in another's palette. That is
+    why five recordings each correct on their own were wrong together.
     """
     total = times[-1] + hold
     head = svgs[0]
     match = re.search(r"<svg[^>]*>", head)
     shell_open = match.group(0) if match else "<svg>"
-    css: list[str] = [".cast-frame{opacity:0}"]
+    # `visibility` alongside `opacity`, because a frame at opacity 0 is still
+    # *there*: it hit-tests, so devtools' Inspect lands on the last frame
+    # wherever you click, and its text joins any selection — so copying a
+    # line out of a recording returns text from frames nobody can see. Both
+    # sent two separate diagnoses down the wrong path. `visibility` is
+    # animatable and steps discretely, which is exactly what is wanted here.
+    css: list[str] = [".cast-frame{opacity:0;visibility:hidden}"]
     body: list[str] = []
     for i, (svg, t) in enumerate(zip(svgs, times, strict=True)):
         a = 100.0 * t / total
         b = 100.0 * (times[i + 1] / total) if i + 1 < len(times) else 100.0
-        window = f"{a:.3f}%{{opacity:1}}" if a > 0 else "0%{opacity:1}"
-        off = f"{b:.3f}%{{opacity:0}}" if b < 100.0 else ""
-        pre = "0%{opacity:0}" if a > 0 else ""
-        css.append(f"@keyframes cf{i}{{{pre}{window}{off}}}")
-        css.append(f".cf{i}{{animation:cf{i} {total:.3f}s step-end infinite}}")
+        on = "opacity:1;visibility:visible"
+        gone = "opacity:0;visibility:hidden"
+        window = f"{a:.3f}%{{{on}}}" if a > 0 else f"0%{{{on}}}"
+        off = f"{b:.3f}%{{{gone}}}" if b < 100.0 else ""
+        pre = f"0%{{{gone}}}" if a > 0 else ""
+        css.append(f"@keyframes {prefix}{i}{{{pre}{window}{off}}}")
+        css.append(
+            f".{prefix}{i}{{animation:{prefix}{i} {total:.3f}s step-end infinite}}"
+        )
         inner = _SVG_SHELL.sub("", svg.strip())
-        body.append(f'<g class="cast-frame cf{i}">{inner}</g>')
+        body.append(f'<g class="cast-frame {prefix}{i}">{inner}</g>')
     style = f"<style>{''.join(css)}</style>"
+    # The frame boundaries, in milliseconds, stated rather than left to be
+    # re-derived. The docs' player steps a reader through a recording one
+    # keypress at a time, and reading these back out of the keyframes meant
+    # parsing CSS whose shape varies — the final frame has no closing
+    # `opacity:0` because it holds until the loop — which silently cost that
+    # last frame. Whoever writes the timeline should publish it.
+    stamps = ",".join(f"{t * 1000:.0f}" for t in times)
+    shell_open = shell_open.replace(
+        "<svg",
+        f'<svg data-cast-frames="{stamps}" data-cast-total="{total * 1000:.0f}"',
+        1,
+    )
     return f"{shell_open}{style}{''.join(body)}</svg>"
 
 
@@ -639,6 +972,25 @@ def _boot_shell(
             f"path=({bin_dir!r} $path)\n"
             "PROMPT='%F{green}\u276f%f '\n"
             "autoload -Uz compinit && compinit -u\n"
+            # Menu selection, so Tab *walks* the candidates instead of only
+            # listing them \u2014 the same story pwsh's MenuComplete binding
+            # records. It is one documented line rather than a tuned setup,
+            # and the completion page says so: a recording must not promise
+            # a terminal the reader cannot have.
+            "zstyle ':completion:*' menu select\n"
+            # LIST_AMBIGUOUS suppresses the listing whenever a Tab managed to
+            # extend the common prefix — so `-`<Tab> inserted `--` and showed
+            # nothing, and the next character was typed without the reader
+            # ever seeing that an option existed. Off, the candidates appear
+            # with the prefix, which is the point of pressing Tab.
+            "unsetopt LIST_AMBIGUOUS\n"
+            # ...but without underlining half the screen while it is up.
+            # zle_highlight's defaults underline the region zle considers
+            # "special" during menu selection, which in a recording came out
+            # as a rule under every row — the selected entry's standout is
+            # the highlight worth keeping.
+            "zle_highlight=(region:standout special:standout suffix:none "
+            "isearch:none paste:none)\n"
             f'eval "$({prog} --setup-completion=zsh)"\n',
             encoding="utf-8",
         )
@@ -658,6 +1010,14 @@ def _boot_shell(
         rc.write_text(
             f'PATH="{bin_dir}:$PATH"\n'
             "PS1='\\[\\e[32m\\]\u276f\\[\\e[0m\\] '\n"
+            # Vanilla bash rings the bell on the first Tab and only lists on
+            # the second, so a recording had to press twice for every menu \u2014
+            # which in an event-per-keypress capture spends two frames
+            # saying what the other shells say in one. `show-all-if-ambiguous`
+            # is readline's own one-line setting for exactly this, the same
+            # class of documented tweak as zsh's `menu select` and pwsh's
+            # MenuComplete binding.
+            "bind 'set show-all-if-ambiguous on'\n"
             f'eval "$({prog} --setup-completion=bash)"\n',
             encoding="utf-8",
         )
@@ -731,7 +1091,9 @@ def cast(
     cwd: Annotated[
         Path | None, doc("directory the shell starts in; empty takes here")
     ] = None,
-    max_frames: Annotated[int, between(2, 120), doc("frame budget")] = 60,
+    pace: Annotated[
+        float, between(0.2, 5.0), doc("seconds each keypress stays on screen")
+    ] = 1.2,
 ) -> list[str]:
     """Record an animated SVG of a real interactive shell session.
 
@@ -760,13 +1122,16 @@ def cast(
         # a dead session. Retry once with a much longer settle before
         # declaring failure; the happy path pays nothing extra.
         frames = []
+        key_log: list[tuple[float, str]] = []
         for settle in (1.5, 5.0):
+            key_log.clear()  # a retry re-plays the script; keep only its keys
             chunks = _pty_session(
                 argv,
                 width=width,
                 height=height,
                 sends=keystrokes(keys),
                 settle=settle,
+                key_log=key_log,
                 env_extra=env_extra,
                 # bash: readline honours the tty's echo flag and types
                 # invisibly without it — and bash sends no queries, so
@@ -775,23 +1140,28 @@ def cast(
                 cwd=cwd,
                 answer_cursor=shell in _NEEDS_CURSOR_REPLY,
             )
-            frames = _screens(chunks, width=width, height=height)
+            frames = _event_screens(chunks, key_log, width=width, height=height)
             if frames:
                 break
     if not frames:
         raise RuntimeError(f"the {shell} session produced no output")
-    if len(frames) > max_frames:  # keep first/last, thin the middle evenly
-        keep = {0, len(frames) - 1}
-        keep.update(
-            round(i * (len(frames) - 1) / (max_frames - 1)) for i in range(max_frames)
-        )
-        frames = [f for i, f in enumerate(frames) if i in keep]
+    # No thinning: every frame is an event the script asked for, so dropping
+    # one drops a keypress from the story rather than a redundant redraw.
 
     from rich.console import Console
     from rich.text import Text
 
+    # Every class and keyframe this file defines is namespaced by the file's
+    # own name. rich's ids are unique within one export, not between two —
+    # and an inlined SVG's <style> is not scoped to that SVG, so five
+    # recordings on one page all defined `.cf0`, `.cf7-r3`, `@keyframes cf0`
+    # and the last one in the document won for every one of them: casts
+    # animating to another recording's timings, cells painted in another's
+    # palette. Each was correct alone and wrong together.
+    uid = re.sub(r"[^A-Za-z0-9_-]", "-", out.stem) or "cast"
+
     svgs: list[str] = []
-    for i, (_, grid) in enumerate(frames):
+    for i, (caption, grid) in enumerate(frames):
         console = Console(
             record=True, width=width, file=io.StringIO(), force_terminal=True
         )
@@ -800,11 +1170,27 @@ def cast(
             for ch, style in row:
                 text.append(ch, style or None)
             console.print(text)
-        svgs.append(console.export_svg(title=title, unique_id=f"cf{i}"))
-    start = frames[0][0]
-    times = [t - start for t, _ in frames]
+        svgs.append(
+            _with_caption(
+                console.export_svg(title=title, unique_id=f"{uid}-cf{i}"),
+                caption,
+                f"{uid}-cf{i}",
+            )
+        )
+    # A fixed beat per event, not the timing of the capture. What the machine
+    # was doing while it recorded is not part of the story, and pacing on it
+    # made a shell's own quirks — fish clearing its pager, pwsh painting in
+    # bursts — decide how long a reader got to look at each step.
+    times = [i * pace for i in range(len(frames))]
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(compose_animation(svgs, times), encoding="utf-8")
+    # The last frame gets a beat exactly like every other one. The default
+    # hold is longer, which made sense when frames ran at the capture's own
+    # timing and the end needed marking — under a fixed pace it is just the
+    # recording sitting still before it loops.
+    out.write_text(
+        compose_animation(svgs, times, hold=pace, prefix=f"{uid}-cf"),
+        encoding="utf-8",
+    )
     print(f"wrote {out} ({len(frames)} frames)")
     return [str(out)]
 

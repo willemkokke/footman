@@ -276,8 +276,8 @@ def _cand(address: str, summary: str) -> str:
     return f"{address}\t{summary}" if summary else address
 
 
-def _opt_tokens(name: str, spec: dict[str, Any]) -> list[str]:
-    """The spellings of one option, as the menu should offer them.
+def _opt_rows(name: str, spec: dict[str, Any], doc: str) -> list[tuple[str, str]]:
+    """The spellings of one option, each with the text that tells them apart.
 
     A value-taking option has two legal shapes and the menu shows both:
     `--opt`, the bare mention that stands for its default, and `--opt=`,
@@ -288,10 +288,26 @@ def _opt_tokens(name: str, spec: dict[str, Any]) -> list[str]:
     completion exists to spare you. Offering `--opt=` alone would have hidden
     bare mention, which is a feature, not an accident.
 
+    They must not read as the same row twice, though. With one shared
+    `doc("…")` between them the menu showed a duplicate with nothing to
+    choose by — the first question anyone asked of it was why it was listed
+    twice. So the bare one names the value it stands for, which is the
+    difference, and is worth knowing on its own.
+
     A flag takes no value at either default — `--fix=true` is a taught
     refusal and `--no-fix` is the off spelling — so it has one shape only.
     """
-    return [name, f"{name}="] if spec.get("kind") == "option" else [name]
+    if spec.get("kind") != "option":
+        return [(name, doc)]
+    default = spec.get("default")
+    # Only when there is something to name: an empty or absent default says
+    # nothing, and "default: " is worse than silence.
+    shown = "" if default is None or default == "" else f"default: {default}"
+    # Just the default, not the doc as well. The `=` row sits directly
+    # beside it carrying the description, so repeating it there only made
+    # the rows long enough to break a two-column menu onto one — and shells
+    # that wrap descriptions in brackets nested them.
+    return [(name, shown or doc), (f"{name}=", doc)]
 
 
 def _walk_address(
@@ -535,11 +551,11 @@ def complete(tree: dict[str, Any], words: list[str]) -> list[str]:
             if "default" not in node:
                 return []
             out = [
-                _cand(token, p.get("doc", ""))
+                _cand(token, text)
                 for p in node["default"]["params"]
                 if p["kind"] in ("flag", "option")
                 and ("--" + p["name"]).startswith(partial)
-                for token in _opt_tokens("--" + p["name"], p)
+                for token, text in _opt_rows("--" + p["name"], p, p.get("doc", ""))
             ]
             if not partial.startswith("-"):
                 out += _address_candidates(tree, partial)
@@ -565,7 +581,7 @@ def complete(tree: dict[str, Any], words: list[str]) -> list[str]:
             for g in tree.get("globals", ()):
                 summary = str(g.get("help", ""))
                 if (flag := "--" + g["name"]).startswith(partial):
-                    out += [_cand(t, summary) for t in _opt_tokens(flag, g)]
+                    out += [_cand(t, d) for t, d in _opt_rows(flag, g, summary)]
                 # A bool answers to `--no-x` too — offer the off spelling
                 # exactly as the splitter accepts it, described by what it
                 # turns off: one option, read from the other end.
@@ -632,7 +648,7 @@ def complete(tree: dict[str, Any], words: list[str]) -> list[str]:
         if spec is None:  # a choice value, `+`, or a next-segment address
             rows.append(_cand(c, ""))
             continue
-        rows += [_cand(t, spec.get("doc", "")) for t in _opt_tokens(c, spec)]
+        rows += [_cand(t, d) for t, d in _opt_rows(c, spec, spec.get("doc", ""))]
     return rows + next_heads
 
 

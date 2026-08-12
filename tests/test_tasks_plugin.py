@@ -198,9 +198,15 @@ def test_keystrokes_compiles_text_and_tokens():
     from footman.tasks.docs import _SETTLE, keystrokes
 
     sends = keystrokes(("hi", "<TAB>", "<WAIT:500>", "<SETTLE>", "<ENTER>"))
-    assert [data for _, data in sends] == [b"h", b"i", b"\t", b"", b"", b"\r"]
-    assert sends[3][0] == 0.5  # <WAIT:500> is a half-second pause, no bytes
-    assert sends[4][0] == _SETTLE  # <SETTLE> waits for output to quiet, no bytes
+    assert [s.data for s in sends] == [b"h", b"i", b"\t", b"", b"", b"\r"]
+    assert sends[3].delay == 0.5  # <WAIT:500> is a half-second pause, no bytes
+    assert sends[4].delay == _SETTLE  # <SETTLE> waits for output to quiet
+
+    # A recording is a sequence of events, and `snap` marks where one ends:
+    # the typed word "hi" is one frame, not two, and a pause is not a frame
+    # at all — so the key that opened a menu stays captioned while it is up.
+    assert [s.snap for s in sends] == [False, True, True, False, False, True]
+    assert [s.caption for s in sends] == ["hi", "hi", "Tab", "", "", "Enter"]
 
 
 def test_compose_animation_windows_and_shell():
@@ -208,11 +214,23 @@ def test_compose_animation_windows_and_shell():
 
     svgs = ['<svg width="9">A</svg>', '<svg width="9">B</svg>']
     out = compose_animation(svgs, [0.0, 1.0], hold=1.0)
-    assert out.startswith('<svg width="9">') and out.endswith("</svg>")
+    assert out.startswith("<svg ") and 'width="9"' in out and out.endswith("</svg>")
     assert '<g class="cast-frame cf0">A</g>' in out
     assert '<g class="cast-frame cf1">B</g>' in out
-    assert "@keyframes cf0{0%{opacity:1}50.000%{opacity:0}}" in out
+    # visibility rides with opacity: a frame at opacity 0 still hit-tests and
+    # still joins a text selection, so devtools and copy-paste both reported
+    # on frames nobody could see.
+    assert (
+        "@keyframes cf0{0%{opacity:1;visibility:visible}"
+        "50.000%{opacity:0;visibility:hidden}}" in out
+    )
     assert "step-end infinite" in out
+    # The frame boundaries are stated, not left to be re-derived: the docs'
+    # player steps a reader through one keypress at a time, and the last
+    # frame's keyframe carries no closing `opacity:0` (it holds until the
+    # loop), so parsing them back out of the CSS lost it.
+    assert 'data-cast-frames="0,1000"' in out
+    assert 'data-cast-total="2000"' in out
 
 
 def test_cast_lists_unavailable_without_pyte(plugin_project, capsys, monkeypatch):
