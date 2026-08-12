@@ -603,7 +603,21 @@ def _pty_session(
                         now - last_output >= _SETTLE_GAP and tracker.cursor.x > 0
                     ) or now - next_at >= _SETTLE_MAX
                 else:
-                    ready = now >= next_at
+                    # Before the *first* key, a prompt has to be on the line —
+                    # not merely a lull. A boot's last act is often silent:
+                    # pwsh's rc ends by running `--setup-completion`, a Python
+                    # subprocess that prints nothing to the terminal, so
+                    # "output has stopped" arrives while completion is still
+                    # being registered. Typing into that gap gives a session
+                    # whose keys echo and whose Tab is bound to nothing —
+                    # which is what a loaded runner recorded while a warm
+                    # laptop never did. Capped, so a prompt that genuinely
+                    # ends at column 0 cannot hang the recording.
+                    ready = now >= next_at and (
+                        typing_started
+                        or tracker.cursor.x > 0
+                        or now - start >= _SETTLE_MAX
+                    )
                 if ready:
                     typing_started = True
                     step = queue.pop(0)
