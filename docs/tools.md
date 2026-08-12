@@ -86,7 +86,7 @@ Like `run()`, a fetch **is a step**: `--dry-run` prints it without touching the
 network, `recording()` asserts on it in tests, [`--json`](json.md) carries it,
 and its byte counts feed the [progress bar](progress.md). A second run
 revalidates with the server (ETag / `If-None-Match`) — a `304` costs one round
-trip and keeps "cached" honest — and `sha256=` refuses anything that arrived
+trip and keeps "cached" true — and `sha256=` refuses anything that arrived
 wrong. The backend is stdlib `urllib` by default (zero dependencies, and the
 only one that can report bytes as they arrive); `curl`, `httpx`, `requests`, or
 `auto` are available when named in `[fetch]` config, for a corporate proxy whose

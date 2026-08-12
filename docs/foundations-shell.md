@@ -29,7 +29,7 @@ A task runner spawns programs all day, and silently inserting a shell into
 every spawn would mean inheriting its whole interpretation layer —
 injection hazards, platform quoting, startup files — for the many calls
 that never wanted it. Not inserting one means a command with `|` in it
-would *silently* not pipe. Both silent options are wrong; the honest design
+would *silently* not pipe. Both silent options are wrong; the right design
 is to make the choice explicit.
 
 ## What footman does about it

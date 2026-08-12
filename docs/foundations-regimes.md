@@ -20,8 +20,8 @@ by one page and one footman answer:
 **The parallel regime** is the default: process globals are nobody's, every
 task carries its own data, children are handed their world at spawn, and
 the guards turn each classic mistake into a lesson — `os.chdir` errors,
-environment writes scope with a note, a bare `input()` names the honest
-spellings. Nothing blocks, so nothing deadlocks.
+environment writes scope with a note, a bare `input()` names the spellings
+that work. Nothing blocks, so nothing deadlocks.
 
 **The declared regime** is for the tasks that genuinely need a real
 shared thing — and it is one ladder, each rung claiming strictly more

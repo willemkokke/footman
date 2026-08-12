@@ -1,6 +1,6 @@
 # Migrating
 
-Coming from another runner? Each section below is the shortest honest path
+Coming from another runner? Each section below is the shortest path
 in — what carries over, what you gain, and what you give up. The measured
 head-to-head behind these claims is on the [Comparison](comparison.md) page.
 

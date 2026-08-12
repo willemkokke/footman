@@ -464,7 +464,7 @@ their own, so serialising the *task* forgoes almost nothing.
 
 ### The benchmark that needs a quiet machine
 
-`exclusive=True` is the honest full drain — nothing else in flight:
+`exclusive=True` is the real full drain — nothing else in flight:
 
 ```python
 @task(exclusive=True)
@@ -663,7 +663,7 @@ def index(path: Path):
         progress(done, total)                # the explicit form
 ```
 
-Counted beats estimated, so a reporting task is honest on its *first*
+Counted beats estimated, so a reporting task is exact on its *first*
 run, where the estimator would still be gathering samples. The full
 story — the live status line, the timing history, the off switches — is on
 [Progress & timing](progress.md).
@@ -696,7 +696,7 @@ def vendor():
 
 A second run revalidates with the server (ETag / `If-None-Match`)
 instead of re-downloading; a `304` costs one round trip and keeps
-"cached" honest. `sha256=` refuses anything that arrived wrong, which is
+"cached" true. `sha256=` refuses anything that arrived wrong, which is
 what makes the task reproducible. And a fetch *is a step*: `--dry-run`
 prints it without touching the network, `recording()` asserts on it in
 tests, `--json` carries it, and it appears in the step lines beside your

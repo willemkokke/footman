@@ -156,7 +156,7 @@ with step("prepare") as s:    # 2. record a block, where it stands
 archive = step(make_archive, title="archive")   # 3. wrap someone else's
 ```
 
-One honesty note, learned from Python itself: **calling a lifted function
+One note, learned from Python itself: **calling a lifted function
 builds its step, it doesn't run it** — `clean()` hands you a bound piece
 of work ready to schedule, the same way `range(10)` hands you a range
 without counting anything. Hand it to `parallel(clean(), archive("dist"))`

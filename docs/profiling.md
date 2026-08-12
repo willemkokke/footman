@@ -2,8 +2,8 @@
 
 A run already records where its time went — when each task started and
 finished, which worker ran it, how long it queued for one, which lanes
-serialised it, every `run()` step inside it. That record exists for
-honesty, not profiling — it is the ledger [the design](design.md) commits
+serialised it, every `run()` step inside it. That record exists because
+it is the ledger [the design](design.md) commits
 to — so a trace costs nothing new. The `footman.profile` plugin
 writes all of that as one trace file that profiler UIs read directly, and a
 small API lets a task add its own timing to the same picture.

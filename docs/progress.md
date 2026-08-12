@@ -1,6 +1,6 @@
 # Progress & timing
 
-Every run gets an honest live status line, and footman learns how long your
+Every run gets a live status line, and footman learns how long your
 tasks take so it can show a real progress bar — no configuration, no
 instrumentation. When a task knows its *own* progress (23 of 150 migrations),
 it can report that and the bar fills from the truth. This page gathers the
@@ -15,7 +15,7 @@ from a real terminal:
 
 On a TTY, every run keeps one live status line on stderr: a **progress
 bar** when footman has seen this exact invocation enough to estimate
-honestly — five recent green runs with a steady spread; the bar fills
+reliably — five recent green runs with a steady spread; the bar fills
 against the history's 90th percentile and labels elapsed vs. typical
 time — and a bouncing pulse with elapsed time when it hasn't. Both
 parallel engines feed the same line, so a chain and a `parallel()` inside
@@ -25,10 +25,10 @@ prerequisite, a body call, a `parallel()` child — and a step item that
 runs no task counts as the one piece of work it is. So the same fan-out
 written `parallel(build)` or `parallel(step(lambda: build("web"))())`
 counts the same: how you spell a call never changes the total. The bar
-can count honestly because nothing anonymous runs — footman owns every
+can count exactly because nothing anonymous runs — footman owns every
 unit, so the total is a fact, not a guess. It always clears itself before any output lands, so
 blocks and live step lines stay clean. Without a TTY, a confident
-estimate prints once as `eta ~5.8s` on stderr instead — the same honesty,
+estimate prints once as `eta ~5.8s` on stderr instead — the same information,
 one line.
 
 Green runs teach: wall totals are stored per invocation shape and
@@ -67,7 +67,7 @@ def index(path: Path):
         progress(done, total)                # the explicit form
 ```
 
-Counted beats estimated, so a reporting task is honest on its *first*
+Counted beats estimated, so a reporting task is exact on its *first*
 run, where the estimator would still be gathering samples. A reporter
 contributes a fractional unit to the run's bar — three tasks done and a
 fourth halfway is 3.5/4 — so a chain of reporters fills smoothly and a

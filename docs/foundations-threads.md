@@ -21,7 +21,7 @@ code runs unchanged, just faster — footman's CI runs them.)
 
 A task body spends its life waiting on the tools it spawns — pytest, a
 compiler, a bundler. Those are separate *processes*, each free to use as
-many cores as it likes, no GIL anywhere between them. So the honest
+many cores as it likes, no GIL anywhere between them. So the right
 architecture is exactly footman's: **threads conduct, processes work**.
 Thread-per-task gives cheap fan-out, shared scheduling, dynamic DAGs
 (a body can compute arguments and dispatch more work — closures and all,

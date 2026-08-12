@@ -56,14 +56,14 @@ completer or the first build in a fresh directory spawns a bounded subprocess),
 and it lands about 13× faster. It pays the same import cost as everyone else,
 just on the execution path: `fm --list` is ~340 ms, right there with the pack.
 Completion is the one moment that has to feel instant, so that's the moment I
-optimised. poe is quick here too, for the honest reason that its tasks are TOML
+optimised. poe is quick here too, for the simple reason that its tasks are TOML
 strings with no Python to load — which is also the rest of this page.
 
 ## The same `check`, composed five ways
 
 Completion is the moment that has to feel instant; `check` is the command you
 actually run fifty times a day. So: four check steps, each an identical
-in-process 0.5 s sleep (the honest stand-in for an I/O-bound tool run — a
+in-process 0.5 s sleep (a fair stand-in for an I/O-bound tool run — a
 real lint step spawns a subprocess and waits, which parallelises exactly like
 a sleep), composed the way each tool wants you to. Fairness cuts both ways —
 a tool that supports parallelism gets to use it. Reproduce with
@@ -91,7 +91,7 @@ written the scheduler yourself.
 ## Is "just write a typer app" too heavy?
 
 Genuine question, because typer is lovely and a completely reasonable choice — if
-you're building a user-facing CLI rather than a task runner, honestly, reach for
+you're building a user-facing CLI rather than a task runner, reach for
 typer. It's also footman's closest relative here: typed signatures, real flags,
 `Enum`/`Literal` validation, nested apps. The only thing I measured was startup,
 because typer has a reputation for being heavy:
@@ -112,7 +112,7 @@ where footman is answering from cache. Not a knock on typer; just a different jo
 ## Feature matrix
 
 The list is footman's own feature set, so the left column is green by
-construction — the honest content is in the other columns.
+construction — the real content is in the other columns.
 
 | capability                                  | footman | typer   | duty          | invoke        | poe      |
 | ------------------------------------------- | :-----: | :-----: | ------------- | ------------- | -------- |

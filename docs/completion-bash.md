@@ -74,7 +74,7 @@ $ fm dep<TAB>          →  fm deploy
 $ fm deploy <TAB>      →  dev  staging  prod
 ```
 
-The honest limitation: **bash's completion protocol has no description
+The limitation: **bash's completion protocol has no description
 column.** Where zsh, fish, and nushell show each task's one-line docstring
 next to its name, bash can only display bare words — so footman strips the
 descriptions before handing candidates over. If the described column is the

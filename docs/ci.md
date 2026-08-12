@@ -84,7 +84,7 @@ milliseconds with a taught message, not after twenty minutes of setup.
 ## Agents
 
 Everything above is what coding agents want too: one command, structured
-results, captured output, honest exit codes. A paste-ready instructions
+results, captured output, real exit codes. A paste-ready instructions
 snippet and edit/stop hook recipes live on [AI agents](agents.md). Three
 commands to know:
 

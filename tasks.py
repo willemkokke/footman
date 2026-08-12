@@ -1301,7 +1301,7 @@ def pre_bash(event: Annotated[HookEvent, stdin]) -> None:
     check && echo done | tail` stays legal; quoted spans are data, so `rg "fm
     check" | head` passes. Nudges, not a sandbox: `grep` destroys a verdict
     just as well, and `--force` is still force — widening either guard
-    starts eating honest commands.
+    starts eating ordinary commands.
     """
     segments = re.split(r";|&&|\|\|", event.tool_input.command)
     blind = [_QUOTED.sub('""', segment) for segment in segments]

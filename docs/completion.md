@@ -19,7 +19,7 @@ one, because it's the exact command the installed completion hooks run:
 | `python -m footman --complete`             | 28 ms  |
 | `fm --complete` (the installed hook path)  | 24 ms  |
 
-So the honest headline is **~30 ms per <kbd>Tab</kbd>** for a structural answer
+So the headline is **~30 ms per <kbd>Tab</kbd>** for a structural answer
 — task names, options, `Literal` choices — of which ~17 ms is Python starting up
 at all. A [dynamic completer](#dynamic-completions-are-recomputed-fresh) or the
 [first build in a fresh directory](#keeping-the-cache-current) costs more, by

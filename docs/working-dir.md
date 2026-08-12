@@ -137,7 +137,7 @@ as `run()` would spawn it, with a one-time note. Explicit arguments always
 win (`env={}` stays a deliberately clean environment), and the `unmanaged`
 token switches the filling off entirely. `os.fork` and `multiprocessing`
 draw a note rather than help — an in-process worker inherits the *real*
-environment, so the serial lane below is the honest home for them.
+environment, so the serial lane below is the right home for them.
 
 ## When a task really needs the process to itself
 
@@ -224,7 +224,7 @@ mutated. An `interactive=True` task owns it for its duration: it runs on
 the real stdio while the parallel pool keeps running around it, captured;
 a sibling that finishes mid-prompt has its output held until the terminal
 frees, so nothing lands across your typing. A bare `input()` in a plain
-parallel task is an error naming the two honest spellings: declare the
+parallel task is an error naming the two spellings that work: declare the
 value with `ask()`, or mark the task `interactive=True`. (A *piped* stdin
 is different again: a parameter marked `stdin` binds it at the boundary,
 before any task runs, so the pipe's payload reaches bodies as data and the

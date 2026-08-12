@@ -572,7 +572,7 @@ same loudness a broken annotation gets. The parser itself is public and
 standalone (`footman.docstrings.parse`) if you want structured docstrings
 for your own tooling.
 
-One honest asymmetry to know about: path and bounds violations on the command
+One asymmetry to know about: path and bounds violations on the command
 line are caught *eagerly* (before anything runs); the same violations in an
 env-supplied value are caught at binding time, because that's when the
 environment is read.

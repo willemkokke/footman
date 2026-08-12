@@ -87,8 +87,8 @@ The full history lives in the [changelog](changelog.md).
 ## Why
 
 `duty` gets a lot right — the `run()` capture model, the
-decorator ergonomics — and footman keeps those ideas. It pushes on the parts
-you meet every day:
+decorator ergonomics — and footman keeps those ideas. It tries to improve on
+the parts you meet every day:
 
 - Completion answers from a cache instead of re-importing your whole project
   on every <kbd>Tab</kbd> — ~13× faster, measured.

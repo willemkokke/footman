@@ -163,7 +163,7 @@ with step("prepare fixtures"):   # 2. record a block of your own code
 docs = step(build_docs, title="docs")   # 3. wrap an existing function
 ```
 
-One honesty note, learned from Python itself: calling a step function
+One note, learned from Python itself: calling a step function
 **builds** the step, it doesn't run it. `clean()` hands you a piece of
 work ready to be scheduled — the same way `range(10)` hands you a range
 without counting anything yet. The type checker knows the difference,
@@ -252,7 +252,7 @@ timed — with no receipt. It exists for exactly this: how a task learns
 something. It is *not* for hiding real work, and it does not exist at
 the task level at all: a task is declared, and declared work is part of
 the run's public accounting. If a whole task shouldn't be in the story,
-the honest fix is to not run it — an `if` statement — never to run it
+the fix is to not run it — an `if` statement — never to run it
 invisibly.
 
 And the reverse — a record with no work behind it — cannot be written at
@@ -277,7 +277,7 @@ files — reasonable for a linter, wrong for this gate, where "I fixed
 your files" is success. The old workaround was ugly: run the tool off
 the record, inspect its output by hand, then print a receipt manually —
 which meant the report showed a record with a fake duration and no
-honest connection to the work. Two lies to express one true sentence:
+real connection to the work. Two lies to express one true sentence:
 *"this tool's idea of failure is not mine."*
 
 The design answer is a **review window**. Between a step finishing and
@@ -302,7 +302,7 @@ reviews the code alone); it may set the title and the code, and `ok`
 follows the code so the two can never disagree; a reviewer that raises
 *fails* the step with its error — a broken reviewer is a broken gate,
 not a shrug. A reviewer may also rewrite the *reported* return value —
-the summary a report shows, useful when the honest value is a secret or
+the summary a report shows, useful when the real value is a secret or
 a wall of text — but never the value handed to the code that asked for
 the work. A redaction is a display decision, and display decisions do
 not change what a program computed with. Reviewers stack from the inside out — the one written
@@ -368,7 +368,7 @@ reads like this:
 }
 ```
 
-Read it top to bottom: the tool honestly exited 1, a named reviewer
+Read it top to bottom: the tool exited 1, a named reviewer
 turned that into a green 0, a named observer failed it anyway for being
 slow. Three actors, three moments, nothing hidden. And when anything
 fails — a tool, a reviewer, an observer, even the argument-binding
