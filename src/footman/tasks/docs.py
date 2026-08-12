@@ -295,9 +295,12 @@ _SETTLE_GAP = 0.5  # seconds of silence that count as "settled"
 # quicker than one rendering a prompt from cold.
 _SNAP_GAP = 0.18
 # How long to give a key that draws nothing at all before taking its frame
-# anyway. Longer than _SNAP_GAP because it has to outlast the pause while a
-# shell shells out to answer a Tab.
-_SNAP_IDLE = 1.2
+# anyway. Far longer than _SNAP_GAP, because it has to outlast the pause
+# while a shell shells out to answer a Tab — and the first Tab of a pwsh
+# session pays for .NET's JIT on top, which on a loaded CI runner took longer
+# than a second and had the frame taken before the menu arrived. Only a key
+# that draws *nothing* waits this long; once output starts, _SNAP_GAP decides.
+_SNAP_IDLE = 4.0
 _SETTLE_MAX = 10.0  # hard cap: fire anyway, so a never-quiet stream can't hang
 
 
