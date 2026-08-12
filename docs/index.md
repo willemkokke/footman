@@ -36,13 +36,22 @@ code**.
     ![Animated: fm TAB lists every task with its summary, deploy --branch TAB completes to the repository's real git branches, and --region TAB offers the values the signature declares](_generated/shots/hero-nushell-cast.svg)
 
 Real sessions, not mock-ups — recorded from live shells on every docs build,
-in all five shells footman supports. Three <kbd>Tab</kbd> presses: the task
-menu, then `--branch`, which completes to **this repository's actual git
-branches** because its candidates come from a function, not a list someone
-typed out; then `--region`, whose values come straight from the signature's
-`Literal`. The menus arrive at keystroke speed because footman answers them
-from a cached manifest instead of importing your project.
-[How that works](completion.md).
+in all five shells footman supports, one frame per keypress. Nothing above is
+typed out in full: every token on that line arrives by pressing
+<kbd>Tab</kbd>, and the longest thing typed is two characters. `--branch`
+completes to **this repository's actual git branches**, because its
+candidates come from a function rather than a list someone wrote down; then
+`--region` offers what the signature's `Literal` declares. The menus arrive
+at keystroke speed because footman answers them from a cached manifest
+instead of importing your project. [How that works](completion.md).
+
+Each recording shows its shell at its best, which for three of them means one
+line of setup — zsh's `menu select`, bash's `show-all-if-ambiguous`,
+PowerShell's `MenuComplete`. Each shell's page
+([zsh](completion-zsh.md), [bash](completion-bash.md),
+[PowerShell](completion-pwsh.md)) says which line and why. What footman
+supplies is the same everywhere: the candidates, their descriptions, and the
+values behind them.
 
 Annotations are how you get the most out of it, not the price of entry: a
 plain `def deploy(target, port=8000)` is already a working command with a

@@ -13,6 +13,19 @@ under the grid rather than in a column beside it.
 
 ![Animated: fm TAB opens PSReadLine's completion menu of tasks, bui TAB completes to build, --TAB shows its options, and deploy. TAB descends the group](_generated/shots/pwsh-cast.svg)
 
+!!! note "One binding the recording assumes"
+
+    <kbd>Tab</kbd> cycles completions inline by default; the grid with
+    tooltips is `MenuComplete`, which is the completion story worth watching:
+
+    ```powershell
+    Set-PSReadLineKeyHandler -Key Tab -Function MenuComplete
+    ```
+
+    Put it in your `$PROFILE` to keep it. One PSReadLine habit worth knowing
+    while the menu is open: the next key you press *replaces* the selection,
+    so take the entry you want with <kbd>→</kbd> before typing the next word.
+
 ## Install
 
 ```console

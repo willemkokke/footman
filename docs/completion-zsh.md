@@ -10,6 +10,22 @@ terminal will do:
 
 ![Animated: fm TAB lists every task with its summary, bui TAB completes to build, --TAB shows its options each with what it does, and deploy. TAB descends the group](_generated/shots/zsh-cast.svg)
 
+!!! note "Two zsh settings the recording assumes"
+
+    The recording is a stock zsh apart from two lines, so that what it shows
+    is zsh at its best rather than zsh out of the box:
+
+    ```sh
+    zstyle ':completion:*' menu select   # Tab walks the candidates
+    unsetopt LIST_AMBIGUOUS              # ...and lists them even when Tab
+                                         #    could extend the prefix
+    ```
+
+    Without the first, Tab lists but does not move a selection through the
+    list. Without the second, a Tab that manages to complete a common prefix
+    shows you nothing — `fm deploy -`<kbd>Tab</kbd> silently becomes `--`
+    and the options stay hidden until you press again.
+
 ## Install
 
 ```console

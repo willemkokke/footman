@@ -22,6 +22,26 @@ versions may include breaking changes.
   no value at either default (`--fix=true` is a refusal), and `--no-fix` is
   still the off spelling. Verified through all five shells' own completion
   engines, bash included, where `=` is a word-break character.
+- **The bare spelling names the value it stands for.** With one `doc("…")`
+  shared between the pair, the menu showed what looked like the same row
+  twice with nothing to choose by — the first question anyone asked of it
+  was why it was listed twice. `--branch` now reads `default: main`, which
+  is both the difference between the two and something completion never
+  told you before; `--branch=` keeps the description. The default was
+  already in the manifest.
+- **`docs.cast` records one frame per keypress, played at a fixed pace.**
+  It sampled the terminal as it redrew, so what a recording contained
+  depended on how the machine happened to be feeling: menus a shell painted
+  and cleared inside one chunk vanished, a shell that paints in bursts lost
+  keystrokes into a single frame, and a loaded runner produced a different
+  recording from the same script. A frame is now taken after each key, once
+  the shell has answered *and gone quiet* — the distinction that makes it
+  work, since silence straight after a keypress usually means the shell has
+  not started. **`max_frames` is replaced by `pace`** (seconds per keypress,
+  default 1.2): there is no frame budget to spend when every frame is an
+  event the script asked for. Recordings also caption the key that produced
+  each frame, because a terminal shows what a keystroke did and never that
+  one happened.
 
 ### Fixed
 
@@ -39,11 +59,51 @@ versions may include breaking changes.
   control bar — and dragged the recording down with it. The rule that was
   supposed to fix this lost on specificity and silently did nothing; it is
   now scoped to outrank the theme's.
-- **Menus stay on screen long enough to read.** The default beat is ~0.6s,
-  which is the entire visible life of a fish menu — fish dismisses its pager
-  on the next keystroke, so the front page appeared to jump straight from
-  `--bra` to a finished command line. zsh keeps its menu up while you type,
-  which hid it.
+- **Recordings no longer repaint each other.** Five casts on one page were
+  each correct alone and wrong together: rich's `unique_id` is unique within
+  one export but not between two, and an inlined SVG's `<style>` is not
+  scoped to that SVG — so every recording defined `.cf0`, `.cf7-r3` and
+  `@keyframes cf0`, and the last one in the document won for all of them.
+  Cells were painted in another recording's palette, casts animated to
+  another's timings, and frames from two recordings showed at once. Every
+  class and keyframe is now namespaced by the file it belongs to.
+- **An underline no longer leaks across a whole recording.** pyte reads a
+  *private* CSI sequence as an ordinary SGR: `ESC[>4;2m` is modifyOtherKeys,
+  which fish and nushell enable at startup, and the `>` is ignored so
+  parameter 4 sets underline — which every cell drawn afterwards inherited.
+  That underlined the prompt in shells that emit no underline at all.
+  `ESC[>1m` set bold the same way. Both are dropped before the emulator
+  sees them.
+- **A terminal reply split across two reads no longer corrupts the screen.**
+  DCS replies were stripped per read, so one arriving in halves was stripped
+  from neither and its debris reached the emulator as text — and as
+  attributes. The stripper now carries its tail between reads, as the query
+  answerer beside it already did.
+- **A highlighted row is readable.** Reverse video was passed to rich as an
+  attribute, and its SVG export painted the background without flipping the
+  text, so a selected menu entry came out as a solid block with its own text
+  hidden inside it. Contrast was then weighed against a private table of
+  ANSI colours rather than rich's export palette — where `black` is
+  `#4b4e55` and `white` is `#c5c8c6` — so a selected row measured as
+  black-on-white while what rich painted was 2.34:1, a bar that reads as
+  blank until you select the text. Reverse is resolved to concrete colours
+  before rich sees it, and luminance now comes from the palette doing the
+  painting, with WCAG AA as the bar.
+- **Hidden frames are hidden.** A frame at `opacity: 0` is still there: it
+  hit-tests, so devtools' Inspect landed on the last frame wherever you
+  clicked, and its text joined any selection, so copying a line out of a
+  recording returned text from frames nobody could see. Frames now step
+  `visibility` alongside `opacity`.
+- **The player steps by frame.** The last frame could not be reached — the
+  stamp naming the boundaries was read off the wrong element, and seeking to
+  a boundary landed a fraction before the switch, because the animation's own
+  boundaries are percentages rounded to three decimals. Dragging to the end
+  showed the *first* frame, since the end of the cycle is also its start.
+  The scrubber is indexed by frame rather than by milliseconds and reads
+  `n / N`, which is what a recording of keypresses actually measures. The
+  player also re-queries its animations instead of caching them: one that
+  started late kept its own clock, drifted, and put two frames on screen at
+  once.
 
 ### Documentation
 
