@@ -1,7 +1,7 @@
 # Comparison
 
-How footman stacks up against the Python task runners I measured it against —
-the same seven-task surface (`lint`, `format`, `typecheck`, `test`, `check`,
+How footman stacks up against the Python task runners I measured it against,
+on the same seven-task surface (`lint`, `format`, `typecheck`, `test`, `check`,
 `dist build`, `dist clean`) written five ways. The runnable head-to-head lives in
 the repo's [`comparison/`](https://github.com/willemkokke/footman/tree/main/comparison)
 directory; reproduce the numbers with
@@ -15,19 +15,19 @@ Measured on duty 1.9.0, invoke 3.0.3, poethepoet 0.48.0, typer 0.27.0, CPython
 
     Every number and checkmark here was checked against the tools themselves,
     on the same seven tasks. If any of it is wrong or has become unfair to a
-    tool, [open an issue](https://github.com/willemkokke/footman/issues) —
+    tool, [open an issue](https://github.com/willemkokke/footman/issues) and
     it will be fixed.
 
 ## First, some love for duty
 
 Before any table makes footman look clever: I've been running my projects on
 [duty](https://pawamoy.github.io/duty/) for nearly two years, and it's been a
-pleasure the whole way. Footman exists *because* of duty — the `ctx.run` capture
+pleasure the whole way. Footman exists *because* of duty: the `ctx.run` capture
 model, the lazy tool wrappers, the decorator ergonomics are all ideas I'm
 happily standing on. This is a "here's what I wanted to tweak," not a takedown.
 Its `tools` library in particular is the direct inspiration for footman's: it
 is where I got the idea that a task runner should ship typed wrappers for the
-tools you actually call. Footman's take separates the two halves duty fuses —
+tools you actually call. Footman's take separates the two halves duty fuses:
 wrapping a command-line utility is generic, and the type hints are a layer
 generated on top. So the code reads the same whether or not a stub has heard
 of your tool: `toolroom.terraform("plan")` runs exactly like
@@ -49,24 +49,24 @@ you see the whole ~0.25 s; answer from a cache and you see roughly nothing.
 | duty    |               363 ms |   276 ms | yes                      |
 | invoke  |               387 ms |   289 ms | yes                      |
 
-duty and invoke reload your whole project on every <kbd>Tab</kbd> — their completion
-scripts call the tool, which imports your tasks before it can answer. Footman
+duty and invoke reload your whole project on every <kbd>Tab</kbd>, because their
+completion scripts call the tool, which imports your tasks before it can answer. Footman
 reads a cached JSON manifest instead, so the hot path imports nothing (a dynamic
 completer or the first build in a fresh directory spawns a bounded subprocess),
 and it lands about 13× faster. It pays the same import cost as everyone else,
 just on the execution path: `fm --list` is ~340 ms, right there with the pack.
 Completion is the one moment that has to feel instant, so that's the moment I
 optimised. poe is quick here too, for the simple reason that its tasks are TOML
-strings with no Python to load — which is also the rest of this page.
+strings with no Python to load, which is also the rest of this page.
 
 ## The same `check`, composed five ways
 
 Completion is the moment that has to feel instant; `check` is the command you
 actually run fifty times a day. So: four check steps, each an identical
-in-process 0.5 s sleep (a fair stand-in for an I/O-bound tool run — a
+in-process 0.5 s sleep (a fair stand-in for an I/O-bound tool run: a
 real lint step spawns a subprocess and waits, which parallelises exactly like
-a sleep), composed the way each tool wants you to. Fairness cuts both ways —
-a tool that supports parallelism gets to use it. Reproduce with
+a sleep), composed the way each tool wants you to. Fairness cuts both ways,
+so a tool that supports parallelism gets to use it. Reproduce with
 `uv run --group comparison python comparison/bench_check.py`.
 
 | runner  | composition                    | wall (mean) |
@@ -78,19 +78,19 @@ a tool that supports parallelism gets to use it. Reproduce with
 | invoke  | sequential (pre-tasks)         |     2138 ms |
 
 The floors are 0.5 s parallel and 2.0 s sequential, so everyone's *overhead*
-is a rounding error — the ~3.5× gap is architecture, not dispatch speed. duty and
+is a rounding error: the ~3.5× gap is architecture, not dispatch speed. duty and
 invoke run prerequisites one at a time and have no parallel switch to flip; the
 same four steps simply cost the sum instead of the max. poe genuinely ticks
-this box (a dedicated `parallel` task type — credit where due); the
+this box (a dedicated `parallel` task type, credit where due); the
 difference is spelling. In poe you declare a parallel composite per case; in
 footman `pre=[fmt, lint, typecheck, test]` is parallel *by default* and goes
-sequential only when you ask (`-s`). And typer hands you nothing here — four
+sequential only when you ask (`-s`). And typer hands you nothing here: four
 calls in a row, unless you hand-roll a thread pool, at which point you've
 written the scheduler yourself.
 
 ## Is "just write a typer app" too heavy?
 
-Genuine question, because typer is lovely and a completely reasonable choice — if
+Genuine question, because typer is lovely and a completely reasonable choice. If
 you're building a user-facing CLI rather than a task runner, reach for
 typer. It's also footman's closest relative here: typed signatures, real flags,
 `Enum`/`Literal` validation, nested apps. The only thing I measured was startup,
@@ -101,18 +101,18 @@ because typer has a reputation for being heavy:
 | `import footman` |                     **+4 ms** |
 | `import typer`   |                    **+24 ms** |
 
-typer's import really is ~6× heavier — it ships its own parser plus `rich` and
+typer's import really is ~6× heavier: it ships its own parser plus `rich` and
 `shellingham`. (Reproduce with
 `uv run --group comparison python scripts/bench_import.py`.) On a single launch you'd never notice (footman ~38 ms, typer
 ~40 ms; footman just spends its milliseconds on parsing instead of importing).
 The difference only shows up when a typer app does completion, because that
-re-runs the app — paying the typer import *and* your project import on every <kbd>Tab</kbd>,
+re-runs the app, paying the typer import *and* your project import on every <kbd>Tab</kbd>,
 where footman is answering from cache. Not a knock on typer; just a different job.
 
 ## Feature matrix
 
 The list is footman's own feature set, so the left column is green by
-construction — the real content is in the other columns.
+construction, so the real content is in the other columns.
 
 | capability                                  | footman | typer   | duty          | invoke        | poe      |
 | ------------------------------------------- | :-----: | :-----: | ------------- | ------------- | -------- |

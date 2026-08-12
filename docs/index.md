@@ -35,7 +35,7 @@ code**.
 
     ![Animated: fm TAB lists every task with its summary, deploy --branch TAB completes to the repository's real git branches, and --region TAB offers the values the signature declares](_generated/shots/hero-nushell-cast.svg)
 
-Real sessions, not mock-ups — recorded from live shells on every docs build,
+Real sessions, not mock-ups: recorded from live shells on every docs build,
 in all five shells footman supports, one frame per keypress. Nothing above is
 typed out in full: every token on that line arrives by pressing
 <kbd>Tab</kbd>, and the longest thing typed is two characters. `--branch`
@@ -46,7 +46,7 @@ at keystroke speed because footman answers them from a cached manifest
 instead of importing your project. [How that works](completion.md).
 
 Each recording shows its shell at its best, which for three of them means one
-line of setup — zsh's `menu select`, bash's `show-all-if-ambiguous`,
+line of setup: zsh's `menu select`, bash's `show-all-if-ambiguous`,
 PowerShell's `MenuComplete`. Each shell's page
 ([zsh](completion-zsh.md), [bash](completion-bash.md),
 [PowerShell](completion-pwsh.md)) says which line and why. What footman
@@ -67,14 +67,14 @@ fm workspace.mount --share=<TAB>   # main  scratch  archive
 ![fm --tree in a terminal: tasks grouped by command group, bold names, one-line help](_generated/shots/tree.svg)
 
 Ships two console scripts: `footman` and the two-letter `fm`. (That
-screenshot is generated from the real CLI on every docs build — like every
+screenshot is generated from the real CLI on every docs build. Like every
 terminal image on this site, it cannot drift from what footman actually
 prints.)
 
 !!! note "Beta"
 
     footman is pre-1.0: the surface is settling, but minor versions may still
-    include breaking changes — always called out in the
+    include breaking changes, always called out in the
     [changelog](changelog.md), never in a patch release. Pin the minor
     (`footman~=0.39.0`) if you build on it. What is covered, what is
     internal, and what has to be true before 1.0 are written down in the
@@ -91,18 +91,18 @@ decorator ergonomics — and footman keeps those ideas. It tries to improve on
 the parts you meet every day:
 
 - Completion answers from a cache instead of re-importing your whole project
-  on every <kbd>Tab</kbd> — ~13× faster, measured.
+  on every <kbd>Tab</kbd>: ~13× faster, measured.
 - Types and choices validate eagerly, including unions and dynamic value
   sets, with errors that teach.
 - Modules become nested command groups, and task signatures carry no `ctx`
   boilerplate.
 - Independent tasks run in parallel by default, scheduled from the chain and
-  each task's `pre`/`post` dependencies — duty and invoke run these one at a
+  each task's `pre`/`post` dependencies; duty and invoke run these one at a
   time.
 - A monorepo task cascade merges a `tasks.py` per directory, from the repo root
   down to where you stand.
 
-The receipts live in the [comparison](comparison.md) — a measured
+The receipts live in the [comparison](comparison.md): a measured
 head-to-head against duty, invoke, poe, and typer, every number reproducible
 from the repo's `comparison/` directory.
 
@@ -162,7 +162,7 @@ def lint(fix: bool = False):
     ruff.check("src", fix=fix)
 ```
 
-It wraps **any** command-line program, not a fixed list — keyword arguments
+It wraps **any** command-line program, not a fixed list: keyword arguments
 become flags, so `toolroom.terraform("plan", var_file="prod.tfvars")` runs
 terraform whether or not toolroom has ever heard of terraform.
 
@@ -178,5 +178,5 @@ reasons. It releases on its own schedule. And other people might want type
 hinted, documented command-line calls without having to use footman for
 anything.
 
-footman does not depend on it and never imports it — plain
+footman does not depend on it and never imports it. Plain
 [`run()`](tools.md) is always there, and nothing on this page needs it.

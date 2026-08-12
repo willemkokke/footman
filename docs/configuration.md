@@ -6,7 +6,7 @@ no config exists at all. Everything on this page is optional.
 
 ## The precedence ladder
 
-From weakest to strongest — each rung overrides the ones below it, key by
+From weakest to strongest, each rung overriding the ones below it, key by
 key:
 
 1. **Built-in defaults.** No config, full behaviour.
@@ -17,7 +17,7 @@ key:
 3. **The project cascade** — walking from the repo root down to your
    current directory, each directory may contribute settings; nearer directories
    override farther ones. Within one directory, a standalone `footman.toml`
-   overrides `[tool.footman]` in `pyproject.toml` — the customary
+   overrides `[tool.footman]` in `pyproject.toml`, the customary
    dedicated-file-wins rule.
 4. **`--config=PATH`** — total control over config: the named file
    *replaces* the user file and the config cascade entirely (the tasks side
@@ -25,14 +25,14 @@ key:
    applies.
 5. **Environment variables** — `FOOTMAN_NO_UV`, `FOOTMAN_CACHE_DIR`, and
    friends always beat file config. (`NO_COLOR` and `FORCE_COLOR` are
-   gentler: they are `--color`'s *default* — a project's `color` key or an
+   gentler: they are `--color`'s *default*, and a project's `color` key or an
    explicit `--color=` outranks them, because they speak for the terminal
    in general, not for this invocation.)
 6. **Command-line flags** — `-s`, `-j`, `--no-progress`… always win.
 
 The cascade is what makes monorepos comfortable: a package deep in the
 tree can carry a two-line `footman.toml` that adjusts behaviour for that
-subtree only —
+subtree only:
 
 ```toml
 # services/deep/package/footman.toml — this subtree runs inside the
@@ -40,7 +40,7 @@ subtree only —
 uv = false
 ```
 
-— while the repo root's `pyproject.toml` sets the shared defaults.
+The repo root's `pyproject.toml` still sets the shared defaults.
 
 ## The files
 
@@ -66,7 +66,7 @@ older footman.
 ## Keys
 
 Every key the runner recognises, rendered from its own list on each docs
-build — so this table can neither invent a key nor miss one:
+build, so this table can neither invent a key nor miss one:
 
 --8<-- "docs/_generated/config.md"
 
@@ -79,7 +79,7 @@ build — so this table can neither invent a key nor miss one:
 | `FOOTMAN_NO_UV`     | Disables both uv handoffs (project and script environment), regardless of any config. |
 | `FOOTMAN_NO_GC`     | Disables the cache collector, regardless of any config. |
 | `FOOTMAN_CASCADE`   | Overrides the `cascade` key for one invocation (`none` / `repo` / `filesystem`). |
-| `NO_COLOR` / `TERM=dumb` | Disable ANSI styling — for footman and for every tool it spawns, which footman tells to stay monochrome too. |
+| `NO_COLOR` / `TERM=dumb` | Disable ANSI styling, for footman and for every tool it spawns, which footman tells to stay monochrome too. |
 | `FORCE_COLOR`       | Force ANSI styling on, even piped (below `--color` and `[tool.footman] color` in the ladder). |
 
 See also [Monorepos & config](monorepos.md) for how the tasks cascade

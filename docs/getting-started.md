@@ -12,7 +12,7 @@ puts two console scripts on your `PATH`: `footman` and the two-letter `fm`.
 You can also install it once, globally (`uv tool install "footman[uv]"`),
 and still type plain `fm` everywhere: a project whose lockfile pins footman
 runs its own pinned copy, and a standalone tasks file can carry its own
-dependencies inline. The full rules — and the opt-out — live in the
+dependencies inline. The full rules, and the opt-out, live in the
 cookbook:
 [a tasks file that carries its own dependencies](cookbook.md#a-tasks-file-that-carries-its-own-dependencies).
 
@@ -43,16 +43,16 @@ def serve(port: int = 8000):
     ...
 ```
 
-The docstring's **first line** is the task's help text — it shows up in
+The docstring's **first line** is the task's help text: it shows up in
 `fm --list`, `fm --help <task>`, and your shell's completion menu. Document
-parameters there too: an `Args:` section (Google, NumPy, or Sphinx style —
+parameters there too: an `Args:` section (Google, NumPy, or Sphinx style,
 see [typed signatures](typing.md#or-just-write-a-docstring)) puts help on
 each option in `--help` and in completion.
 
 The command name is the function name with underscores turned into hyphens
 (`add_word` → `add-word`). A module of functions becomes a flat set of commands;
 each `group()` opens a nested command group. A nested task's address is one
-dotted token — `fm docs.serve`, the same spelling everywhere: running,
+dotted token: `fm docs.serve`, the same spelling everywhere for running,
 `--help`, `--where`, and completion (typing `fm docs serve` gets a one-line
 correction, not a guess).
 
@@ -70,16 +70,16 @@ The signature *is* the CLI: `fix: bool = False` becomes a `--fix` flag,
 default becomes a required positional. See
 [Typed signatures](typing.md) for the full mapping.
 
-`fm --help` documents the runner itself — captured here from a real
-terminal, regenerated on every docs build:
+`fm --help` documents the runner itself, captured here from a real
+terminal and regenerated on every docs build:
 
 ![fm --help: the usage line, the globals table, and the task listing, coloured](_generated/shots/help.svg)
 
 ## Chain several tasks
 
-List more than one task on a line and footman runs them as a chain — no
+List more than one task on a line and footman runs them as a chain, with no
 separator needed. The *manifest* (footman's cached description of your task
-tree — the same file that powers completion) tells the parser every task's
+tree, the same file that powers completion) tells the parser every task's
 exact shape, which is what makes the split deterministic:
 
 ```sh
@@ -87,7 +87,7 @@ fm format lint --fix test
 ```
 
 A chain reads without a manual: a bare word is a task (or a positional
-value), `--x` is a flag, and an option's value is always `=`-attached —
+value), `--x` is a flag, and an option's value is always `=`-attached, as in
 `fm lint --mode=strict test`, shorts included (`-j=4`). A value across a
 space refuses with the fix spelled out: `--mode strict` answers
 "did you mean `--mode=strict`?".
@@ -116,11 +116,11 @@ $ git tag v1.2.0
 $ git push origin v1.2.0
 ```
 
-Because bodies run, your own inline code runs too — it was never
-footman's to fake. Anything you hand to `run()` is exactly what a
+Because bodies run, your own inline code runs too; it was never footman's
+to fake. Anything you hand to `run()` is exactly what a
 rehearsal fakes, which is one more reason to hand commands to it. Yes/no
 gates are assumed yes (with a note saying so), and prompts take their
-defaults — a rehearsal is unattended by nature.
+defaults, because a rehearsal is unattended by nature.
 
 ## Four words you'll meet everywhere
 

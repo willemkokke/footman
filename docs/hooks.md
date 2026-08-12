@@ -6,7 +6,7 @@ body, record, report — exposed under stable names. A plugin rides the same
 moments every chain segment already passes through, which is why the rules
 below never special-case "plugin work": there is no such thing, only work.
 
-[Composing the task surface](composing.md) covers where tasks come from —
+[Composing the task surface](composing.md) covers where tasks come from:
 hiding, `include()`, `plugin()`. This page is what runs *around* them: the
 run-wide and per-task hook family, hooks that live on one task's handle,
 and a plugin's own global options.
@@ -36,7 +36,7 @@ def gate_deploys(inv):
 
 The hook is handed the **`Invocation`**: what this `fm` line is doing, and the
 one object every lifecycle hook sees. `inv.tasks` is a `Tasks` view of the
-merged tree — iterate it for every task, or index it by command-line name
+merged tree: iterate it for every task, or index it by command-line name
 (`inv.tasks["deploy-web"]`). Each task comes back as a `TaskView`:
 
 - **wiring** — `t.name`, `t.group` (the owning group, or `None` at top level),
@@ -47,10 +47,10 @@ merged tree — iterate it for every task, or index it by command-line name
   `t.shadowed` (the task it overrides one level up), `t.shadow_chain`, and
   `t.source_file`;
 - **edits** — `t.add_pre(…)`, `t.add_post(…)`, `t.disable("reason")`, and
-  `t.set_opts(…)` (permanent, tree-wide policy — the discovery-time counterpart
-  to a per-use `.opts()`).
+  `t.set_opts(…)` (permanent, tree-wide policy, the discovery-time
+  counterpart to a per-use `.opts()`).
 
-`t.fn` is the underlying function if you need to reach past the view — which
+`t.fn` is the underlying function if you need to reach past the view, which
 deliberately keeps footman's private task attributes out of your hooks.
 
 Provenance lets a hook decide by *where* a task came from. To gate every
@@ -66,20 +66,20 @@ def gate_infra(inv):
 
 Because the hook runs **at discovery**, its edits are part of the plan, not
 a runtime surprise: an added `pre` runs and shows in `fm <task> --dry-run`, and
-a disabled task drops from `--list`, `--help`, and <kbd>Tab</kbd> completion —
+a disabled task drops from `--list`, `--help`, and <kbd>Tab</kbd> completion,
 exactly as if you had written it into the task.
 
 In a [monorepo](monorepos.md), a **root** `tasks.py` can edit a subdirectory's
 tasks, because the hook sees the whole merged tree. When several files in the
-cascade each register a hook, they run in **cascade order** — root first,
-the directory nearest your cwd last, each seeing the previous edits — the same
-"local overrides global" precedence the cascade itself uses, so a subdirectory
-refines what root did.
+cascade each register a hook, they run in **cascade order**: root first, the
+directory nearest your cwd last, each seeing the previous edits. That is the
+same "local overrides global" precedence the cascade itself uses, so a
+subdirectory refines what root did.
 
 ## Around every task: `@pre_task` and `@post_task`
 
 Where `@pre_tasks` runs once over the plan, the per-task pair runs around
-every **execution** — a chain segment, a prerequisite, a fan-out member, a
+every **execution**: a chain segment, a prerequisite, a fan-out member and a
 body call all count the same. `pre_task(inv, task)` fires after binding, so
 it sees the arguments the body actually receives; `post_task(inv, task,
 result)` fires after the body, whatever the outcome. Both run on the task's
@@ -104,45 +104,47 @@ write through:
 - **`task.name`** — the address the task was reached through; **`task.args`**
   — the bound arguments, defaults included, read-only; **`task.source_hash`**
   — a digest of the task's own body (a tripwire, not an identity: `None` when
-  the source can't be read, and shallow — it covers nothing the body calls).
+  the source can't be read, and shallow: it covers nothing the body calls).
 - **`task.state`** — scratch private to *your plugin and this execution*,
   delivered back to your `post_task`. Another plugin's hooks cannot see it,
   and the next execution starts clean.
 - **`task.env`** — the task's own environment: `run()` hands it to
   every subprocess, and in-body `os.environ` reads see it. Never write
-  `os.environ` from a per-task hook — that is shared with every parallel
-  sibling; `inv` is frozen here for the same reason.
+  `os.environ` from a per-task hook, because that is shared with every
+  parallel sibling; `inv` is frozen here for the same reason.
 
 `result` reads everything — `ok`, `code`, `returned`, `error`, `duration`,
 `output`, `steps` — and writes nothing: **observers see, never judge**. The
-record was sealed when the review window closed, and every write there —
-title, code, the reported value via `set_returned` — belongs to a
+record was sealed when the review window closed, and every write there
+(title, code, the reported value via `set_returned`) belongs to a
 `pre_record` reviewer, where it is attributed in the record's audit.
 `set_returned` rewrites the *report* only. Dependents and body callers
-always receive the body's own return — a redaction or a summary never
-changes what a program computed with — and the untouched value stays
+always receive the body's own return, since a redaction or a summary never
+changes what a program computed with, and the untouched value stays
 readable beside the reported one as `result.body_returned`. An
 observer that finds a problem is not powerless: `footman.fail(reason,
 code)` from a `post_task` hook fails the task with the hook's own code, the
 failure named and the moment recorded. A `shared` row reports what the
-execution's sealed record reported — a shared answer is the record reused —
-so a review's rewrite covers the shares automatically.
+execution's sealed record reported: a shared answer is the record reused, so
+a review's rewrite covers the shares automatically.
 
 Pres run in plugin order and posts unwind in reverse, so the first plugin in
 speaks last. The post is the **task-finished event**: once an execution
-reaches the body stage, every registered `post_task` fires when it concludes
-— whether or not that plugin registered a `pre_task`, and however any pre
-fared — so a span opened in a pre always closes, even when another plugin's
-pre killed the task. Failures are loud and named: a raising `pre_task` fails
+reaches the body stage, every registered `post_task` fires when it concludes,
+whether or not that plugin registered a `pre_task` and however any pre fared,
+so a span opened in a pre always closes, even when another plugin's pre
+killed the task. Failures are loud and named: a raising `pre_task` fails
 the task like a failed prerequisite (the body never runs), and a raising
-`post_task` fails an otherwise-green task — a reporter that crashed must not
-pass silently. A `--dry-run` rehearses — bodies run, so the hooks fire exactly as they would live; only footman's own recorded work is faked.
+`post_task` fails an otherwise-green task, because a reporter that crashed
+must not pass silently. A `--dry-run` rehearses: bodies run, so the hooks
+fire exactly as they would live, and only footman's own recorded work is
+faked.
 
 **The pair is per request; only the body is shared.** A request satisfied by
-an execution the run already performed still gets the whole lifecycle — its
+an execution the run already performed still gets the whole lifecycle: its
 `pre_task` fires post-bind, before the wait, and its `post_task` closes it
-with the `shared` row — so pairing never depends on sharing, and a span
-opened for a request always closes. `result.state == "shared"` is how a
+with the `shared` row. Pairing never depends on sharing, so a span opened
+for a request always closes. `result.state == "shared"` is how a
 reporter that cares tells a share from a run; one that doesn't care never
 has to think about it.
 
@@ -150,7 +152,7 @@ has to think about it.
 
 One moment sits earlier still. `pre_bind(inv, task)` fires before the task's
 parameters are bound, so what it writes into `task.env` is what `env()`
-fallbacks resolve, what coercion sees, and what `check(fn)` validators read —
+fallbacks resolve, what coercion sees, and what `check(fn)` validators read. It is
 the one moment a plugin can influence what the body will be handed:
 
 <!-- example: fragment -->
@@ -163,15 +165,15 @@ def credentials(inv, task):
 def deploy(token: Annotated[str, env("DEPLOY_TOKEN")] = ""): ...
 ```
 
-Nothing is bound yet, so `task.args` is not readable here — read values in
+Nothing is bound yet, so `task.args` is not readable here; read values in
 `pre_task`, the post-bind moment. The same handle carries through the whole
 lifecycle (`pre_bind → bind → pre_task → body → post_task`), so state set at
 `pre_bind` is there at `post_task`. A body call binds like a segment, and its
 binding sees the same injected environment.
 
-One boundary fact, stated plainly: **a bind failure still fires the posts**
-— the attempt concluded, a bind-time span needs closing — with the refusal
-as the result. Everything else follows the one rule above: the lifecycle is per
+One boundary fact, stated plainly: **a bind failure still fires the posts**,
+with the refusal as the result. The attempt concluded, and a bind-time span
+needs closing. Everything else follows the one rule above: the lifecycle is per
 request, only the body is shared.
 
 The window the lifecycle runs in is the task's managed window, opened before
@@ -184,7 +186,7 @@ menus, `confirm=` — use the real terminal and are never caught.
 
 The closing bookend to `@pre_tasks`: once per invocation, on the main
 thread, after every task has concluded and *before* the summary or the
-`--json` envelope prints — so a rewrite a hook makes through a result view
+`--json` envelope prints, so a rewrite a hook makes through a result view
 is what gets reported. The invocation now carries the whole story:
 
 <!-- example: fragment -->
@@ -196,19 +198,18 @@ def digest(inv):
                f"{inv.total_ms:.0f} ms")
 ```
 
-`inv.results` is every row, in the order the work was created — executions,
-`shared` rows,
-refusals, and `skipped` nodes (`inv.skipped` is that subset). This is the
+`inv.results` is every row, in the order the work was created: executions,
+`shared` rows, refusals, and `skipped` nodes (`inv.skipped` is that subset). This is the
 moment that sees what never ran: a `post_task` reporter only meets requests
 whose lifecycle opened, so the run-level view is where "what didn't happen"
-becomes visible. Under `--json` anything a hook prints goes to stderr — the
-envelope owns stdout. Hooks run in cascade order; a raising hook is named
+becomes visible. Under `--json` anything a hook prints goes to stderr,
+because the envelope owns stdout. Hooks run in cascade order; a raising hook is named
 and fails the invocation, exactly as a crashing reporter should.
 
 ### Which moments may call a task
 
 The four **per-task** moments run inside the run, so a task called from one
-is a request like any other — its own row, sharing with the rest, the same
+is a request like any other: its own row, sharing with the rest, the same
 refusals a body call gets (a `serial=` task, or one that would wait on
 itself, is taught rather than deadlocked):
 
@@ -247,14 +248,14 @@ def span(inv, task):
     s.end(ok=result.ok, took=result.duration)
 ```
 
-`wrap_task` is sugar over the pair — it enters at the `pre_task` moment and
-is resumed with the `ResultView` — so every rule above is its rule too: per
+`wrap_task` is sugar over the pair. It enters at the `pre_task` moment and
+is resumed with the `ResultView`, so every rule above is its rule too: per
 request (a request satisfied by an execution the run already performed is
 resumed with its `shared` row), reverse unwinding, a raising half failing
 the task, named. The names say it: a `pre_` hook runs *before* its
 moment; a `wrap_` hook *enters at* its moment and rides to the end.
 
-The one thing `wrap_task` cannot see is a task that failed to **bind** — its
+The one thing `wrap_task` cannot see is a task that failed to **bind**: its
 anchor moment never fires, so there is no generator to unwind. `wrap_bind`
 enters at the bind boundary, takes two yields, and closes even then:
 
@@ -275,20 +276,20 @@ A failed bind arrives as the failure raised at the first yield, so the
 Yield-count violations are taught, naming the wrapper: `wrap_task` takes
 exactly one, `wrap_bind` exactly two. Spans pair per execution, even
 nested ones: a body call with a different binding runs its execution
-inline, inside the caller's, and each span closes with its own record —
-the inner first, the outer still.
+inline, inside the caller's, and each span closes with its own record, the
+inner first, the outer still.
 
 One more contract, stated for the future: a pre hook's **return value is
-reserved** — the moment where a pre supplies the task's result and the body
+reserved**: the moment where a pre supplies the task's result and the body
 is skipped belongs to a later cache. Today a returned value gets a note and
 is ignored; state belongs on `task.state`. (A wrapper never touches the
 channel: its `yield` is the moment itself.)
 
 ## Hooks that live on the task
 
-Plugin hooks are deliberately **global** — they see every task, which is
-right for concerns with no task knowledge in them: a tracing exporter, a
-timing collector, a CI annotator. A rule about *one* task belongs on that
+Plugin hooks are deliberately **global**: they see every task, which is
+right for concerns with no task knowledge in them, like a tracing exporter,
+a timing collector, or a CI annotator. A rule about *one* task belongs on that
 task, and every task's handle carries its own lifecycle for exactly this:
 
 ```python
@@ -312,8 +313,8 @@ def budget(result):
 
 The line between the two channels is one sentence: the moment a global hook
 would say "if this is task X", it belongs on X. Everything else follows
-the shapes above: attachment is permanent — the task changes for every
-requester, wherever the attaching module was imported from — and each
+the shapes above: attachment is permanent (the task changes for every
+requester, wherever the attaching module was imported from), and each
 attacher returns the hook unchanged, so the decorators stack and the
 functions stay plain callables. The task's own hooks need no arguments a
 plugin hook would (the task is the handle's own): `pre_bind` and
@@ -322,20 +323,20 @@ the sealed record. `@build.wrap_task` and `@build.wrap_bind` mirror the
 plugin wrappers, one task at a time.
 
 Plugins remain the outer ring: their pres run first and their posts run
-last, so a task's own hooks nest closest to the body — and the handle
+last, so a task's own hooks nest closest to the body, and the handle
 channel fires whether or not any plugin is registered. Reviewers compose
 inside-out wherever they were attached: stacked `@pre_record` decorators
 first (nearest the `def` leading), handle attachments in the order they
-were made, a per-call `.opts(pre_record=…)` always last — the use site
+were made, a per-call `.opts(pre_record=…)` always last, so the use site
 keeps the final word.
 
 ## A plugin's own globals: `GlobalOption`
 
-A plugin whose behaviour is invocation-wide wants an invocation-wide switch —
+A plugin whose behaviour is invocation-wide wants an invocation-wide switch:
 `--env-file=…` beside `--jobs=…`, not a flag repeated on every task.
 Constructing a `GlobalOption` **is** registering it: a module-level singleton
 in the provider, stamped with the module that defined it, riding the same
-carriage as lifecycle hooks — so it reaches a run only when its owner is
+carriage as lifecycle hooks, so it reaches a run only when its owner is
 mounted, and an unmounted owner's option is an unknown option, taught.
 
 ```python
@@ -347,7 +348,7 @@ AUDIT = GlobalOption("audit", help="report, change nothing")   # bool → a flag
 ```
 
 The value is `=`-attached like every option's, long-form only, coerced and
-validated through the same pipeline as a task parameter — `Literal` choices,
+validated through the same pipeline as a task parameter: `Literal` choices,
 `Path` file completion, bounds and dynamic `suggest()` choices all work,
 because the manifest describes it with the same machinery and <kbd>Tab</kbd>
 answers from that (a dynamic completer is recomputed fresh at the keystroke,
@@ -364,15 +365,15 @@ dependency in the manifest for help and agents: the task's `--help` ends
 with `reads --env-file (from footman.env_files)`. An undeclared read still
 works, with a note naming the fix; a declared option the task finished
 without reading is an advisory under `--verbose`. And an option nothing is
-wired to read at all — no lifecycle hook from its owner, no declaring task —
+wired to read at all (no lifecycle hook from its owner, no declaring task)
 draws a warning at discovery, because a switch nobody answers to is dead
 weight. Names collide loudly: with footman's own globals naming footman,
 between two plugins naming both owners.
 
 ## The built-in: `footman.env_files`
 
-The funnel plugin — one mount, one visible behaviour, a working example of
-everything above (a lifecycle hook, a `GlobalOption`, an optional
+The funnel plugin: one mount, one visible behaviour, and a working example
+of everything above (a lifecycle hook, a `GlobalOption`, an optional
 dependency):
 
 ```python
@@ -387,11 +388,11 @@ it — with **env wins**: a key the real environment already carries is never
 overwritten, so a checkout cannot surprise a shell. `--env-file=PATH` names
 another file (path-typed, so <kbd>Tab</kbd> offers files), and a bare
 `--env-file` asks for the default out loud. A missing file refuses whenever
-someone asked for one — named or bare — while a missing default nobody
+someone asked for one, named or bare, while a missing default nobody
 mentioned is simply nothing to do. Values are read by
 python-dotenv — an optional dependency the plugin imports lazily and teaches
 by name when absent — with interpolation off: a value is the text on its
-line. Unmounted, none of this exists, not even the option — but typing
+line. Unmounted, none of this exists, not even the option, but typing
 `--env-file` anyway is answered by name rather than as a spelling mistake:
 
 ```console
@@ -401,13 +402,13 @@ mounted — add plugin("footman.env_files") to tasks.py
 ```
 
 footman finds that answer by loading the plugins it is willing to speak for
-and reading what globals they declare — nothing lists the flags anywhere, so
+and reading what globals they declare. Nothing lists the flags anywhere, so
 a new option is taught the day it ships. Two packages qualify, and never a
 third:
 
 - **footman's own.** `--env-file` and `--profile` belong to the framework,
   they are useful to anything built on it, and footman is imported by
-  definition — so a [branded CLI](custom-cli.md) teaches them too, whether or
+  definition, so a [branded CLI](custom-cli.md) teaches them too, whether or
   not it ever named a distribution.
 - **the brand's**, once a branded CLI names one with `dist=`. That is the
   case worth having: a distribution ships several plugins, a tasks file
@@ -422,6 +423,6 @@ did not mount.
 
 Hiding, `include()`, `plugin()`, and `@pre_tasks` all resolve at
 import/manifest-build time, so what completion offers reflects the *last real
-run* — the same contract dynamic `suggest()` choices have always had.
+run*, the same contract dynamic `suggest()` choices have always had.
 Availability (`@requires`) is the one thing never trusted from the cache: it
 re-checks live at the moment of execution.

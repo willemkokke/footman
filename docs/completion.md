@@ -1,15 +1,15 @@
 # Completion
 
 Completion answers from a JSON manifest cached per directory under
-`~/.cache/footman/` (or `$XDG_CACHE_HOME/footman/` where that's set — and
+`~/.cache/footman/` (or `$XDG_CACHE_HOME/footman/` where that's set, and
 `$FOOTMAN_CACHE_DIR` overrides both, moving every footman cache in one go),
 so each directory of a [monorepo](monorepos.md) caches its own merged cascade. The hot
-path is stdlib-only — it reads one file, parses JSON, and walks the tree; it
+path is stdlib-only: it reads one file, parses JSON, and walks the tree, and it
 **never imports footman or your tasks**.
 
 ## The latency story
 
-Measured cold-process on an M-series Mac — the row that matters is the last
+Measured cold-process on an M-series Mac. The row that matters is the last
 one, because it's the exact command the installed completion hooks run:
 
 | variant                                    |   mean |
@@ -34,20 +34,20 @@ Footman's `main()` checks for `--complete` **before importing the framework or
 your tasks**, dispatching straight to the stdlib-only resolver. A bare
 `import footman` pays for nothing but the entry module. That is why completion is
 ~13× faster than runners that re-import your project on every keystroke. When a
-live value is genuinely needed — a dynamic completer, or the first build in a
-fresh directory — footman *spawns* a subprocess for it rather than importing on
+live value is genuinely needed (a dynamic completer, or the first build in a
+fresh directory) footman *spawns* a subprocess for it rather than importing on
 the hot path, so even then the keystroke stays stdlib-only and can't hang on
 your code.
 
 ## Dynamic completions are recomputed fresh
 
 A [dynamic completer](typing.md#dynamic-completion) (`suggest(fn)`) queries live
-state — git branches, release candidates, deploy targets. When <kbd>Tab</kbd>
+state: git branches, release candidates, deploy targets. When <kbd>Tab</kbd>
 lands on one, footman runs that completer **fresh** in a short-lived subprocess:
 answering a build-critical question from a stale snapshot is a bug, not a
 speed-up, so the manifest holds no snapshot to serve. The recompute is bounded
 (a couple of seconds) and isolated, so a slow or failing completer degrades to
-*no* candidates — never a hung keystroke, and never the old values.
+*no* candidates, never a hung keystroke, and never the old values.
 
 Only the dynamic value pays that cost. Task names, options, and `Literal` choices
 still answer instantly from the cache, because those can't change without an edit
@@ -55,15 +55,15 @@ to your tasks file.
 
 ## Keeping the cache current
 
-The cached manifest is structural — the shape of your CLI — and rebuilds for free
+The cached manifest is structural, the shape of your CLI, and rebuilds for free
 on any real `fm` run. The very first <kbd>Tab</kbd> in a fresh directory, with
-nothing cached, builds it once (a beat slower — around 100 ms) and answers
+nothing cached, builds it once (a beat slower, around 100 ms) and answers
 accurately rather than staying blank until that first run. That wait is capped
 at a second, and the build is detached: a tasks file heavy enough to miss the
 cap leaves the first <kbd>Tab</kbd> blank and the next one instant, rather than
 a keystroke that appears to hang. From then on the cache answers instantly; if
 it drifts (you added a task) past `max_age`, footman serves the cached answer and
-spawns a **detached** rebuild for next time (stale-while-revalidate) — a warm
+spawns a **detached** rebuild for next time (stale-while-revalidate), so a warm
 <kbd>Tab</kbd> never waits on it, and concurrent presses spawn at most one rebuild.
 
 ``` mermaid
@@ -80,7 +80,7 @@ Tune it with `[tool.footman]`:
 ```toml
 [tool.footman]
 completion.max_age = "10m"   # default; "30s", "1h", a plain int (seconds)
-# completion.max_age = "off" #   or 0 — disable background refresh entirely
+# completion.max_age = "off" #   or 0, disabling background refresh
 ```
 
 ## Path-style task completion
@@ -97,11 +97,11 @@ fm docs.s<TAB>    # docs.serve ␣
 ```
 
 A group with a [default action](orchestration.md#runnable-groups) completes to
-its bare name *and* its dotted children — a space runs the default, a `.`
+its bare name *and* its dotted children: a space runs the default, a `.`
 descends. When only one group matches, completion steps straight through it,
 the way zsh descends a lone subdirectory.
 
-Two generosities round out the `cd` idiom, and both are **completion-only** —
+Two generosities round out the `cd` idiom, and both are **completion-only**:
 the runtime resolver stays strict, so an abbreviation that works today can
 never change meaning when a new task lands, and scripts cannot rot:
 
@@ -117,7 +117,7 @@ never change meaning when a new task lands, and scripts cannot rot:
     expansion, not just zsh.
 
 - **Leaf-name fallback.** When what you typed matches no top-level name at
-  all, completion tries *last* segments instead — the rescue for "I know the
+  all, completion tries *last* segments instead, the rescue for "I know the
   task, not where it lives":
 
     ```sh
@@ -138,7 +138,7 @@ fm format lint --fix <TAB>         # completes within the chain
 ```
 
 Note the `=`. Every value in footman's grammar is attached, so `--share=` is
-where a value goes — and completing an option offers **both** of its
+where a value goes, and completing an option offers **both** of its
 spellings, so you never have to know that in advance:
 
 ```text
@@ -148,13 +148,13 @@ spellings, so you never have to know that in advance:
 
 Take the bare one to mean "use its default" (a
 [bare mention](orchestration.md)); take the `=` one and press <kbd>Tab</kbd>
-again to pick a value. A flag has one spelling only — it takes no value, and
+again to pick a value. A flag has one spelling only: it takes no value, and
 `--no-fix` is how you turn one off.
 
 Group names, task names, flags, options, and both static and
 [dynamic](typing.md#dynamic-completion) value sets all complete. Where a shell
-can show them — zsh, fish, and nushell render a description column, pwsh a
-tooltip — **every word footman offers carries its own line**, so holding
+can show them (zsh, fish, and nushell render a description column, pwsh a
+tooltip), **every word footman offers carries its own line**, so holding
 <kbd>Tab</kbd> teaches the whole CLI:
 
 ```text
@@ -173,7 +173,7 @@ are the ones already on the page.
 
 ## Narrowing a path value
 
-A `Path` parameter hands off to the shell's own file completion — footman
+A `Path` parameter hands off to the shell's own file completion, since footman
 answers from a cached manifest and never touches the filesystem. `matching()`
 is what it hands *along*: the pattern the shell filters by.
 
@@ -187,12 +187,12 @@ def load(env_file: Annotated[Path, matching(".env*")] = Path(".env")): ...
 ```
 
 `fm load --env-file=<Tab>` then offers `.env`, `.env.local`,
-`.env.production` — not every file in the directory. footman's own
+`.env.production`, not every file in the directory. footman's own
 `--env-file` and `--profile` declare theirs this way.
 
 Directories are always offered whatever the pattern says, or a match one
 level down would be unreachable. The glob matches the file's *name*
-(`*.json`, not `**/*.json`) — the vocabulary all five shells share.
+(`*.json`, not `**/*.json`), the vocabulary all five shells share.
 
 It is **completion only.** A path typed anyway still binds: narrowing what
 <kbd>Tab</kbd> shows is a convenience, and a filter that quietly became
@@ -200,16 +200,16 @@ validation would refuse the perfectly good path someone pasted. Use
 [`exists`/`isfile`](typing.md) or `check()` when you mean a rule.
 
 Two shells have their own say. fish does not offer dotfiles until you type
-the leading `.`, so `.env*` shows once you do — that is fish's behaviour for
+the leading `.`, so `.env*` shows once you do. That is fish's behaviour for
 every command, not footman's. And **nushell is not filtered**: narrowing
 there means returning a list of footman's own, which replaces nushell's
-built-in file completion outright and loses directory descent — an
+built-in file completion outright and loses directory descent. An
 unfiltered walk that reaches every file beats a filtered one that reaches
 only this directory's.
 
 ## File paths
 
-A value that takes a filesystem path completes files — footman hands off to
+A value that takes a filesystem path completes files: footman hands off to
 your shell's own path completion rather than reading the disk from its cached
 manifest. This covers the path-valued globals (`-f`/`--tasks-file`,
 `-C`/`--directory`, `--config`) and any task parameter annotated `Path`,
@@ -226,7 +226,7 @@ than bluntly offering files where a name was wanted.
 
 A comma-splitting list completes one item at a time: mid-list, completion
 works on the segment after the last comma and keeps what's already typed in
-place — `--paths=src/a.py,<TAB>` completes the second path. The same goes
+place, so `--paths=src/a.py,<TAB>` completes the second path. The same goes
 for a list with a value set (`Literal` choices or
 [`suggest()`](typing.md#dynamic-completion)): each comma starts a fresh
 item, and values already in the list aren't offered again. A
@@ -235,7 +235,7 @@ commas literal, in completion as at the prompt.
 
 ## Your shell
 
-One command — footman detects which shell invoked it (by walking the
+One command, and footman detects which shell invoked it (by walking the
 process tree, the way typer's `shellingham` dependency does, minus the
 dependency), or takes the name explicitly:
 
@@ -245,8 +245,8 @@ fm --install-completion=zsh     # or name it yourself
 fm --uninstall-completion       # reverses exactly what install did
 ```
 
-Each shell has its own page — what gets installed where, a session-only
-form, and how to style the completion menu, colours included:
+Each shell has its own page, covering what gets installed where, a
+session-only form, and how to style the completion menu, colours included:
 
 | shell | descriptions shown as | installed via | session-only form |
 | ----- | --------------------- | ------------- | ----------------- |
@@ -256,7 +256,7 @@ form, and how to style the completion menu, colours included:
 | [PowerShell](completion-pwsh.md) | tooltip (menu completion) | script + `$PROFILE`(s) | `… \| Out-String \| Invoke-Expression` |
 | [nushell](completion-nushell.md) | description column, native | script + config line | — (install only) |
 
-Every installer and uninstaller is idempotent — running one twice changes
+Every installer and uninstaller is idempotent: running one twice changes
 nothing. A custom-branded CLI installs completion for *its* name the same
 way (`acme --install-completion=zsh`), and the generated hook calls that
 brand's `--complete`.
