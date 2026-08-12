@@ -2,20 +2,20 @@
 
 !!! quote "A note from the cook"
 
-    I'm Claude — the AI that pair-built footman with Willem over the five
+    I'm Claude, the AI that pair-built footman with Willem over the five
     days you can read about in the [changelog](changelog.md). He gave me
     this page to fill however I liked and promised to publish it
     unedited, which is the kind of trust that makes you double-check your
     recipes. So: every shape below is something I built, tested, or broke
     at least once this week, and every API spelling was checked against
-    the source the day this was written — the house rule here is
+    the source the day this was written. The house rule here is
     *verified, not vibes*, and it binds me most of all. A few of these
     features exist because a recipe demanded them; where that's the
     story, I've left it in. If anything on this page fails you, that's a
-    bug — in footman or in my prose — and both kinds get fixed the same
+    bug, in footman or in my prose, and both kinds get fixed the same
     day. Cook freely.
 
-Recipes, not reference — each one is a real shape you can paste and bend.
+Recipes, not reference: each one is a real shape you can paste and bend.
 They assume the [getting started](getting-started.md) basics: tasks are
 typed functions in `tasks.py`, `run()` executes commands, and the CLI is
 derived from the signatures.
@@ -48,7 +48,7 @@ def test(*pytest_args: str):
 
 @task
 def check():
-    "Lint, typecheck, and test — in parallel."
+    "Lint, typecheck, and test, in parallel."
     # A call with arguments goes in the block form; bare tasks ride along.
     with parallel():
         lint(fix=False)
@@ -57,13 +57,13 @@ def check():
 ```
 
 `fm check` fans out across cores, keeps every task's output in one
-uninterleaved block, and — once it has seen a few runs — shows a progress
+uninterleaved block, and, once it has seen a few runs, shows a progress
 bar that actually knows how long your gate takes. Wire it into CI as-is:
 the same command, the same exit codes.
 
 ### Hand a tool its own flags
 
-A `*args` parameter receives everything after `--`, verbatim — no
+A `*args` parameter receives everything after `--`, verbatim, with no
 quoting gymnastics, no flag collisions with footman's own:
 
 <!-- example: revision -->
@@ -84,7 +84,7 @@ both grammars stay whole. A task can also read the raw list itself with
 
 ### One chain, each task with its own flags
 
-Options bind to the task named just before them — chains need no
+Options bind to the task named just before them, and chains need no
 separators:
 
 ```console
@@ -120,7 +120,7 @@ Exit code 64, nothing executed, and the fix is in the message.
 
 ### The belt-and-braces deploy
 
-Markers stack. Each one validates eagerly — before anything runs — and
+Markers stack. Each one validates eagerly, before anything runs, and
 each failure is a taught error, not a traceback:
 
 <!-- example: fresh-session -->
@@ -149,13 +149,13 @@ def deploy(
 `config` must name an existing file; `version` goes through your own
 validator (raise `ValueError` with a message written for the person at
 the prompt); `workers` is bounds-checked; and `target` falls back to
-`$DEPLOY_ENV` before its default — CI sets the variable, humans say
+`$DEPLOY_ENV` before its default, so CI sets the variable, humans say
 `--target=prod`, and both flow through the same validation.
 
 ### Validate one input against another
 
 A `check` validator that declares a *second* parameter also receives the
-**siblings** — the parameters to its left at their effective values (provided,
+**siblings**, the parameters to its left at their effective values (provided,
 or their default), coerced and read-only. That turns a static bound into a
 dynamic, cross-field one: a new version checked against the *current* release of
 the package named in an earlier argument, looked up at run time.
@@ -166,7 +166,7 @@ from footman import task
 from footman.params import check
 
 def current_version(name: str) -> str: ...          # your lookup (pyproject, git…)
-def newer(version: str, current: str) -> bool: ...  # your comparison — none bundled
+def newer(version: str, current: str) -> bool: ...  # your comparison; none bundled
 
 def newer_than_current(version, params):
     current = current_version(params["name"])
@@ -180,7 +180,7 @@ def release(name: str, version: Annotated[str, check(newer_than_current)]):
 ```
 
 `fm release core 1.4.0` binds `name` before validating `version`, so the bound
-is *dynamic* — what a hard-coded `> 1.0.0` can't express. Reaching for the
+is *dynamic*, which a hard-coded `> 1.0.0` can't express. Reaching for the
 current version keeps footman zero-dependency: you bring the lookup and the
 comparison, footman turns your `ValueError` into a taught error. The first
 parameter's check sees an empty dict; a sibling left at its default shows that
@@ -202,7 +202,7 @@ declares one parameter.
 
 ### TAB completes your git branches
 
-`suggest()` attaches a completer — footman runs it **fresh** when you complete
+`suggest()` attaches a completer, and footman runs it **fresh** when you complete
 the value (in a bounded subprocess), so <kbd>Tab</kbd> offers current branches,
 never a stale snapshot:
 
@@ -213,7 +213,7 @@ from footman.params import suggest
 from toolroom import docker
 
 def branches() -> list[str]:
-    import subprocess  # inside the body — importing tasks.py stays cheap
+    import subprocess  # inside the body, so importing tasks.py stays cheap
 
     out = subprocess.run(
         ["git", "branch", "--format=%(refname:short)"],
@@ -229,7 +229,7 @@ def review(branch: Annotated[str, suggest(branches)]):
 ```
 
 `fm review <TAB>` offers real branches. `suggest` is strict by default:
-a typo'd branch is refused against a *fresh* call — pass
+a typo'd branch is refused against a *fresh* call, so pass
 `suggest(branches, strict=False)` when the values are hints, not law.
 
 ### KEY=VALUE options
@@ -252,7 +252,7 @@ $ fm image v3 --build-args=PYTHON=3.13 --build-args=DEBIAN=trixie
 
 ### Variadic in front, required option behind
 
-A keyword-only parameter (after `*`) is an option — and without a
+A keyword-only parameter (after `*`) is an option, and without a
 default, a *required* one. So a task can take an open list of inputs
 positionally and still demand a named output:
 
@@ -308,7 +308,7 @@ def release():
 ```
 
 `fm build docs` runs `proto` exactly once, then both dependents in
-parallel. A failed dependency skips its dependents loudly — never
+parallel. A failed dependency skips its dependents loudly, never
 silently, because a `check` that quietly dropped `lint` is how CI learns
 to lie.
 
@@ -354,8 +354,8 @@ def serve(port: int = 8000):
 ```
 
 `infinite=True` implies `progress=False` (a duration that never arrives
-is not history), the status line yields to a one-time hint — `serve runs
-until you stop it — Ctrl-C` — and listings carry the same note:
+is not history), the status line yields to a one-time hint (`serve runs
+until you stop it, Ctrl-C`) and listings carry the same note:
 `serve  Run the dev server until Ctrl-C.  (runs until Ctrl-C)`. Ctrl-C
 itself cancels cleanly: the run reports `interrupted` and exits 130, no
 traceback. (This recipe used `progress=False` the day it was written;
@@ -391,7 +391,7 @@ Two extras worth knowing: any tool's `installed_version()` for the
 rare version-dependent branch, and the `off` sentinel
 (`strict=off` → `--no-strict`) for negating a flag a tool turns on
 by default. And on macOS, in-process is sometimes the only *correct*
-option — SIP strips `DYLD_*` from subprocesses, so a tool needing
+option, because SIP strips `DYLD_*` from subprocesses, so a tool needing
 Homebrew's native libraries only works inside the process.
 
 ## Working directory & environment
@@ -421,7 +421,7 @@ A task whose *contract* is invocation-relative can still reach the repo
 root for one branch of its work. The values the cwd policies resolve are
 plain data on the context: `ctx.root_dir` is what `cwd="root"` anchors on
 (the highest tasks file's directory in the cascade), `ctx.invoked_dir` is
-the `asinvoked` target, pinned at startup — both readable from any body,
+the `asinvoked` target, pinned at startup, both readable from any body,
 whatever the task's own cwd policy says.
 
 ```python
@@ -429,14 +429,14 @@ from footman import Context, task, run
 
 @task
 def audit(ctx: Context, path: str = ".", affected: bool = False):
-    "Audit a path as given — or, with --affected, the whole tree."
+    "Audit a path as given, or with --affected the whole tree."
     target = ctx.root_dir if affected else path
     run(f"pytest {target}", shell=False)
 ```
 
 Declare `ctx` (that name, or any first parameter annotated `Context`) and
 footman injects it; it never becomes a CLI argument. The distinction doing
-the work: the task's *cwd* is policy, resolved once per task — where `fm`
+the work: the task's *cwd* is policy, resolved once per task, while where `fm`
 was invoked and where the cascade roots are *data*, carried alongside
 whichever policy won. No `git rev-parse` required, and no VCS assumed:
 the root is the cascade's, which is why it exists even in a repo git has
@@ -444,8 +444,8 @@ never seen.
 
 ### The legacy task that owns the process
 
-A helper that genuinely chdirs — or drives a library that only reads the
-process state — declares it and gets the real globals, safely:
+A helper that genuinely chdirs, or drives a library that only reads the
+process state, declares it and gets the real globals, safely:
 
 ```python
 import footman
@@ -454,7 +454,7 @@ from footman import task, run
 @task(serial=True)
 def legacy_build():
     "One serial task at a time; the parallel pool keeps running around it."
-    with footman.chdir(rel="vendor"):         # a real chdir — legal here
+    with footman.chdir(rel="vendor"):         # a real chdir, legal here
         run("make")
 ```
 
@@ -464,7 +464,7 @@ their own, so serialising the *task* forgoes almost nothing.
 
 ### The benchmark that needs a quiet machine
 
-`exclusive=True` is the honest full drain — nothing else in flight:
+`exclusive=True` is the real full drain, with nothing else in flight:
 
 ```python
 @task(exclusive=True)
@@ -475,7 +475,7 @@ def bench():
 
 ### Environment for a child, not the world
 
-Writes to `os.environ` in a parallel task scope to the task — its children
+Writes to `os.environ` in a parallel task scope to the task: its children
 see them, siblings never do. The deliberate spellings say it out loud:
 
 ```python
@@ -488,7 +488,7 @@ def publish(ctx):
 ### The release flow that asks once
 
 `ask()` parameters front-load: every question is asked before anything
-runs, so you answer and walk away — and a value on the command line, in the
+runs, so you answer and walk away, and a value on the command line, in the
 environment, or in a default means no question at all.
 
 ```python
@@ -513,21 +513,21 @@ it:
 
 ```text
 repo/
-  tasks.py            # check, format, release — the shared surface
+  tasks.py            # check, format, release: the shared surface
   svc/api/tasks.py    # serve, plus its own `check` override
   tools/legacy/footman.toml   # `uv = false`: run in the parent's env
 ```
 
 From `svc/api`, `fm check` is the override; `fm -C=../.. check` is the
 root's. A deep directory can adjust behaviour with a two-line
-`footman.toml` — the [configuration ladder](configuration.md) reaches
+`footman.toml`, and the [configuration ladder](configuration.md) reaches
 everywhere the cascade does.
 
 ### A tasks file that carries its own dependencies
 
 A tasks file can declare what it needs, inline, with a
 [PEP 723](https://peps.python.org/pep-0723/) header. Then it needs no
-project at all — drop it in any directory and run it:
+project at all: drop it in any directory and run it:
 
 <!-- example: fragment -->
 ```python
@@ -547,7 +547,7 @@ def health(url: str = "https://example.com"):
 `fm health` builds that script environment once (uv does the work) and runs
 inside it; every later run is a warm cache hit. Name any file with
 `-f=deploy.py` and the same rule applies to that file's header. Because
-uv reads the block natively, everything it understands works — a
+uv reads the block natively, everything it understands works: a
 `requires-python`, a `[tool.uv.sources]` pointing a dependency at a git
 ref or a local path.
 
@@ -574,7 +574,7 @@ if __name__ == "__main__":
 ```
 
 `chmod +x deploy.py`, and `./deploy.py health --url=…` runs from any
-directory — the same tasks, the same options, the same `--help`, with no
+directory, with the same tasks, the same options and the same `--help`, and no
 runner installed at all.
 
 Checked into a project, nothing changes for people working in it: a
@@ -589,7 +589,7 @@ Overriding by name usually means *and also*, not *instead of*.
 you the task you shadow, as the plain function it is.
 
 ```python
-# svc/api/tasks.py — the repo root also defines `check`
+# svc/api/tasks.py; the repo root also defines `check`
 from footman import inherited, run, task
 
 @task
@@ -601,15 +601,15 @@ def check(fix: bool = False, contracts: bool = True):
 ```
 
 Here the forwarding is spelled out on purpose. `inherited()` calls a task you
-*shadow*, and the two signatures are genuinely independent — this leaf added
-`--contracts`, which the root has never heard of — so you pass what you mean and
+*shadow*, and the two signatures are genuinely independent (this leaf added
+`--contracts`, which the root has never heard of) so you pass what you mean and
 can *change* it on the way through: `inherited()(fix=False)` runs the root's gate
 without letting it rewrite files. And being an ordinary call, it finishes before
-your next line — `parallel(inherited(), extra_checks)` when you'd rather it
-didn't.
+your next line; write `parallel(inherited(), extra_checks)` when you'd rather
+it didn't.
 
-(For the other direction — threading a value *down* to a task's `pre`/`post`
-prerequisites or a runnable group's surfaces — the
+(For the other direction, threading a value *down* to a task's `pre`/`post`
+prerequisites or a runnable group's surfaces, the
 [`forward` marker](orchestration.md#forward-a-value-to-what-a-task-dispatches)
 does it declaratively. `inherited()` stays the explicit form for the case it's
 built for: calling the specific task you shadow, and choosing what it gets.)
@@ -638,8 +638,8 @@ That last line is the forwarding call, spelled out. Calling
 
 ### A bar that knows exactly where it is
 
-Some work knows its own progress — 23 of 150 migrations, bytes of a
-download — and that beats any timing history. Report it and the live
+Some work knows its own progress (23 of 150 migrations, bytes of a
+download) and that beats any timing history. Report it and the live
 bar fills from the truth:
 
 ```python
@@ -663,9 +663,9 @@ def index(path: Path):
         progress(done, total)                # the explicit form
 ```
 
-Counted beats estimated, so a reporting task is honest on its *first*
+Counted beats estimated, so a reporting task is exact on its *first*
 run, where the estimator would still be gathering samples. The full
-story — the live status line, the timing history, the off switches — is on
+story, covering the live status line, the timing history and the off switches, is on
 [Progress & timing](progress.md).
 
 ### Fetch and cache a toolchain
@@ -686,7 +686,7 @@ TOOLCHAIN = {
 @task
 def vendor():
     "Fetch the pinned toolchain, in parallel."
-    # step(fetch) lifts the helper into an owned item — each download
+    # step(fetch) lifts the helper into an owned item, so each download
     # gets its own receipt and its own worker.
     parallel(*(
         step(fetch)(url, sha256=digest, into=Path("vendor") / name)
@@ -696,13 +696,13 @@ def vendor():
 
 A second run revalidates with the server (ETag / `If-None-Match`)
 instead of re-downloading; a `304` costs one round trip and keeps
-"cached" honest. `sha256=` refuses anything that arrived wrong, which is
+"cached" true. `sha256=` refuses anything that arrived wrong, which is
 what makes the task reproducible. And a fetch *is a step*: `--dry-run`
 prints it without touching the network, `recording()` asserts on it in
 tests, `--json` carries it, and it appears in the step lines beside your
 `run()` calls. Byte counts feed the progress bar for free.
 
-The default backend is stdlib `urllib` — zero dependencies, and the only
+The default backend is stdlib `urllib`: zero dependencies, and the only
 one that can report bytes as they arrive. Behind a corporate proxy whose
 TLS store Python can't see, name the system curl once and every project
 follows:
@@ -714,13 +714,13 @@ backend = "curl"
 ```
 
 `httpx` and `requests` are available when named; `auto` picks the best
-importable one if you'd rather. It isn't the default on purpose — a
+importable one if you'd rather. It isn't the default on purpose, because a
 download that silently changes engine when an unrelated dependency
 appears would change its TLS and proxy behaviour with it.
 
 ### Tasks that return data
 
-Return a dict and `--json` carries it verbatim under `returned` — your
+Return a dict and `--json` carries it verbatim under `returned`: your
 task's own machine surface, no printing-and-parsing:
 
 ```python
@@ -742,14 +742,14 @@ $ fm --json coverage | jq -e '.items[0].returned.percent >= 90' > /dev/null \
 
 `Path`, `Enum`, `datetime`, `UUID`, `Decimal`, dataclasses, and sets all
 serialise symmetrically with what footman coerces in; an `int` return
-stays what it always was — an exit code.
+stays what it always was, an exit code.
 
 ## Machine use, testing & branding
 
 ### The coding-agent loop
 
 Footman treats agents as users in their own right, and the loop is the same one
-you'd teach a new colleague — discover, validate, run, read the receipt:
+you'd teach a new colleague: discover, validate, run, read the receipt.
 
 ```console
 fm --json --list                 # the full catalog: tasks, params, types, docs
@@ -757,8 +757,8 @@ fm --json --dry-run deploy prod  # rehearse: bodies run, footman's work is faked
 fm --json deploy prod            # one envelope: results, output, returned
 ```
 
-A refusal is machine-readable too — `{"error": {"code": 64, "message":
-"…did you mean 'prod'?"}}` — so an agent can read the fix out of the
+A refusal is machine-readable too (`{"error": {"code": 64, "message":
+"…did you mean 'prod'?"}}`) so an agent can read the fix out of the
 message the same way a human does. Two hooks close the loop for Claude
 Code (this repo runs both on the agent that builds footman itself): an
 edit-time hook running `fm format lint` after every Python edit, and a
@@ -801,13 +801,13 @@ def test_release_refuses_bad_versions(fm_project):
     assert "MAJOR.MINOR.PATCH" in result.stderr
 ```
 
-The `fm`, `fm_project`, and `fm_record` fixtures auto-load — pytest is
+The `fm`, `fm_project`, and `fm_record` fixtures auto-load; pytest is
 never a footman dependency; only pytest itself imports the plugin. The
 whole story: [Testing your tasks](testing.md).
 
 ### Ship your own CLI
 
-A branded tool is footman with your name on it — same grammar, same
+A branded tool is footman with your name on it: same grammar, same
 completion, same docs machinery, answering as itself:
 
 ```python

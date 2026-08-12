@@ -197,7 +197,7 @@ def test_completion_offers_and_completes_plugin_globals():
     def build(): ...
 
     tree = _manifest.build_manifest(reg)["tree"]
-    names = complete(tree, ["--l"])
+    names = [c.split("\t", 1)[0] for c in complete(tree, ["--l"])]
     assert "--lint-mode" in names
     values = complete(tree, ["--lint-mode=s"])
     assert values == ["--lint-mode=strict"] or values == ["strict"]
@@ -538,9 +538,12 @@ def test_a_negation_completes_beside_its_flag():
     def build(): ...
 
     tree = _manifest.build_manifest(reg)["tree"]
-    names = complete(tree, ["--"])
+    names = [c.split("\t", 1)[0] for c in complete(tree, ["--"])]
     assert "--audit" in names and "--no-audit" in names
-    assert "--level" in names and "--no-level" not in names
+    # A valued global offers both spellings and no `--no-` (that is a flag's
+    # off switch); a flag offers `--no-` and no `=`.
+    assert "--level" in names and "--level=" in names
+    assert "--no-level" not in names and "--audit=" not in names
 
 
 def test_a_literal_no_x_beside_a_bool_x_is_refused():

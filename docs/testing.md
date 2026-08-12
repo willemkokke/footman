@@ -1,15 +1,15 @@
 # Testing your tasks
 
-Tasks are code, so they deserve tests — and a task runner that makes you
-choose between "run it for real" and "don't test it" hasn't finished its job.
+Tasks are code, so they deserve tests. A task runner that makes you choose
+between "run it for real" and "don't test it" hasn't finished its job.
 Footman gives you three altitudes, each a thin layer over the previous one.
 Everything on this page is stdlib-only footman; the pytest fixtures at the
 end auto-load when footman and pytest share an environment.
 
 ## Tasks are just functions
 
-`@task` returns your function untouched — no wrapper, no argparse object. The
-first altitude of testing is therefore plain Python:
+`@task` returns your function untouched. No wrapper, no argparse object, so
+the first altitude of testing is plain Python:
 
 <!-- example: fragment -->
 ```python
@@ -24,8 +24,8 @@ commands, you usually want the next altitude instead.
 
 ## Assert commands, don't run them
 
-`recording()` captures every command a block would run — silently, executing
-nothing — and hands you the steps to assert on:
+`recording()` captures every command a block would run, silently and without
+executing any of them, then hands you the steps to assert on:
 
 <!-- example: fragment -->
 ```python
@@ -41,14 +41,14 @@ def test_release_tags_and_pushes():
     ]
 ```
 
-This works for the tool handles too — every one funnels through `run()`. One
-caveat, stated out loud: steps are faked under recording just like
-commands — a `step(fn)(…)` or a `fetch()` produces a receipt, not an
-effect — while the body's own inline Python still runs for real. Remember
-it when a task mixes subprocesses with in-process work.
+This works for the tool handles too, since every one funnels through `run()`.
+One caveat, stated out loud: steps are faked under recording just like
+commands. A `step(fn)(…)` or a `fetch()` produces a receipt rather than an
+effect, while the body's own inline Python still runs for real. Remember it
+when a task mixes subprocesses with in-process work.
 
 Under the hood this is `Context(dry_run=True, quiet=True)` installed with
-`use_context()` — both public, so you can compose your own variants:
+`use_context()`. Both are public, so you can compose your own variants:
 
 <!-- example: fragment -->
 ```python
@@ -61,7 +61,7 @@ with use_context(Context(env={**os.environ, "CI": "1"})) as ctx:
 assert ctx.steps[-1].code == 0
 ```
 
-`Context.env` is the task's *whole* environment, not a diff — spread
+`Context.env` is the task's *whole* environment, not a diff. Spread
 `os.environ` in unless an empty world is the point.
 
 ## Drive the CLI
@@ -81,22 +81,22 @@ def test_the_check_pipeline(tmp_path):
 `Runner.invoke` returns an `InvokeResult` (named apart from the run-step
 `Result` that `run()` returns) carrying `exit_code`, `stdout`, `stderr`, the
 structured `results: list[TaskResult]` (one per executed task, dependency
-order), and an `ok` shorthand. Each `TaskResult` exposes the task's return value as
-`.returned` — the same value `--json` publishes — so asserting on a task's
-data needs no JSON parsing at all. `.returned` is the *reported* value,
-the one a `pre_record` reviewer may have rewritten with `set_returned`;
-the body's own return — the value dependents and body callers received —
-rides beside it as `.body_returned`, so a test can assert on either
-channel, or on the fact that a reviewer separated them. Taught errors land in `result.stderr` with exit code 64 —
-assert on them like any other product surface. The completion cache is
-isolated per invocation automatically, so tests never touch your real one —
-that falls out of manifests keying per directory, not from test-only
-machinery.
+order), and an `ok` shorthand. Each `TaskResult` exposes the task's return
+value as `.returned`, the same value `--json` publishes, so asserting on a
+task's data needs no JSON parsing at all. `.returned` is the *reported*
+value, the one a `pre_record` reviewer may have rewritten with
+`set_returned`. The body's own return, the value dependents and body callers
+received, rides beside it as `.body_returned`, so a test can assert on
+either channel, or on the fact that a reviewer separated them. Taught errors
+land in `result.stderr` with exit code 64; assert on them like any other
+product surface. The completion cache is isolated per invocation
+automatically, so tests never touch your real one. That falls out of
+manifests keying per directory, not from test-only machinery.
 
 For a task that reads the pipe, `stdin=` *is* the pipe:
 `Runner().invoke("hooks.stop", stdin='{"stop_hook_active": true}')` binds
-exactly as `fm hooks.stop < fixture.json` would — and leaving it off means
-"a terminal", so a test never reads the harness's own stream.
+exactly as `fm hooks.stop < fixture.json` would. Leaving it off means "a
+terminal", so a test never reads the harness's own stream.
 
 Point it at a task surface three ways:
 
@@ -110,7 +110,8 @@ Runner().invoke("build", tasks=my_group)           # an in-memory Group, no file
 ## The pytest fixtures
 
 Installing footman next to pytest auto-loads three fixtures (`pytest11`
-entry point — nothing to enable, and pytest is never a footman dependency):
+entry point, so there is nothing to enable, and pytest is never a footman
+dependency):
 
 ```python
 def test_release_dry(fm_project):
@@ -140,7 +141,7 @@ def test_release_records_the_tag(fm_record):
 - **`fm_record`** — a recording context for the whole test; steps append as
   task code runs.
 
-Footman's own suite uses these fixtures and `Runner` — the harness tests the
+Footman's own suite uses these fixtures and `Runner`. The harness tests the
 framework that ships it, which is the strongest claim a testing story can
 make about itself.
 
@@ -161,12 +162,12 @@ def test_check_pipeline_shape(fm):
     assert commands == ["ruff check .", "pytest -q"]
 ```
 
-`--dry-run` output stays human-oriented — snapshot it within a pinned version
+`--dry-run` output stays human-oriented. Snapshot it within a pinned version
 if you like, but there is no cross-version promise there.
 
 ## Testing a branded CLI
 
-A custom `App` tests exactly like `fm` — hand it to the `Runner` and every
+A custom `App` tests exactly like `fm`. Hand it to the `Runner` and every
 user-facing string carries your brand, including the error prefix:
 
 ```python
@@ -179,21 +180,22 @@ def test_acme_teaches_with_its_own_name(tmp_path):
     assert result.stderr.startswith("acme:")
 ```
 
-Each invocation puts the brand — and the folders it reads — back when it
-finishes, so a suite can drive several brands in a row and a bare `Runner()`
+Each invocation puts the brand back when it finishes, along with the folders
+it reads, so a suite can drive several brands in a row and a bare `Runner()`
 after a branded one is still stock footman. A real entry point does the
 opposite on purpose (a process *is* one CLI, and `run` may never return), so
 this restoring is the harness's job and only the harness's.
 
 ## CI notes
 
-- Cache isolation is automatic — parallel test runs can't fight over the
+- Cache isolation is automatic, so parallel test runs can't fight over the
   completion manifest.
 - `Runner.invoke` never raises on task failure; the code is in the `InvokeResult`.
   `KeyboardInterrupt` passes through, as it should.
 - Embedded invocations never hand off to uv: the re-exec that keeps the real
   CLI on a project's pinned footman is disabled inside `invoke`, so the test
-  process is never replaced — even when the suite runs from an interpreter
+  process is never replaced, even when the suite runs from an interpreter
   outside the project venv (`uv run --with …`, tox-style envs).
 - Chained/parallel semantics (`-s`, `-k`) work through `invoke` exactly as on
-  the real command line — test the orchestration you actually run in CI.
+  the real command line, so you can test the orchestration you actually run
+  in CI.

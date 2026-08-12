@@ -65,7 +65,7 @@ Two conditions, and only one of them is in my hands:
 The first I can schedule. The second is why this page defines the promise
 rather than making it. footman is already the core orchestrator where I
 work, migrated off duty, so the surface is under daily load on real builds
-— that is what makes writing this down honest rather than aspirational. But
+— that is what makes writing this down a description rather than an aspiration. But
 everyone running it so far arrived through me, and a design's worst
 assumptions are the ones its author cannot see. A stability guarantee is a
 claim about strangers' code; it should wait until some strangers have

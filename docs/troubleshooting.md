@@ -2,7 +2,7 @@
 
 Footman treats error messages as product surface: every one names the
 culprit, states the expectation, and proposes the fix. This page is the
-catalogue — each example below is real output, not paraphrase. If you ever
+catalogue. Each example below is real output, not paraphrase. If you ever
 hit a raw Python traceback instead of one of these, that's a footman bug;
 please report it.
 
@@ -17,7 +17,7 @@ The shape is always `prog: task: what — hint`. The prefix is the brand
 (`fm`, or your own CLI's name), so in a chain of tools you know who's
 talking.
 
-## Parse errors — exit 64, nothing has run
+## Parse errors: exit 64, nothing has run
 
 The splitter validates the whole command line against the manifest before
 executing anything, so a typo never half-runs a chain.
@@ -40,11 +40,11 @@ executing anything, so a typo never half-runs a chain.
 
 One asymmetry worth knowing: constraints on **env-supplied** values
 (`env("VAR")` fallbacks) are enforced at binding time rather than parse
-time — the parser never sees your environment — so those surface as a
+time (the parser never sees your environment), so those surface as a
 failed task result with the same wording, plus the source:
 `--jobs (from $JOBS) must be between 1 and 32 (got 99)`.
 
-## Tasks-file errors — your `tasks.py` needs attention
+## Tasks-file errors: your `tasks.py` needs attention
 
 | You'll see | It means | The fix |
 | ---------- | -------- | ------- |
@@ -60,10 +60,10 @@ failed task result with the same wording, plus the source:
 | `plugin 'mkdocs': failed to import (ModuleNotFoundError: ...)` | the plugin is installed but its own import failed (a missing optional dep) | install what the plugin needs, or drop it — footman names the cause, never a traceback |
 
 A parameter whose annotation footman can't use (an unresolved name, a
-value) emits a `UserWarning` — values pass through as plain text until you
+value) emits a `UserWarning`, and values pass through as plain text until you
 fix the annotation.
 
-## Run-time errors — a task went wrong
+## Run-time errors: a task went wrong
 
 | You'll see | It means |
 | ---------- | -------- |
@@ -77,22 +77,22 @@ fix the annotation.
 
 In a chain, a failed task's dependents are skipped; `-k/--keep-going` runs
 every independent branch anyway. Output from parallel tasks never
-interleaves — each task's buffer is flushed as one block to stdout, while
+interleaves: each task's buffer is flushed as one block to stdout, while
 the `ok`/`FAIL` summary itself is stderr commentary.
 
 ## Config errors
 
 A malformed **discovered** config (a `pyproject.toml` or `footman.toml` in
-the cascade) warns and is skipped — one broken file between the repo root
-and your cwd must not brick every invocation:
+the cascade) warns and is skipped, because one broken file between the repo
+root and your cwd must not brick every invocation:
 
 ```console
 fm: ignoring malformed config: /repo/footman.toml: Expected '=' after a key in a key/value pair (at line 1, column 5)
 ```
 
 A file you named **explicitly** with `--config` is a hard error (exit 64) when
-it's malformed, unreadable, or missing — you asked for that file on purpose, so
-a typo like `--config=prod.tmol` is reported (`--config: prod.tmol: no such
+it's malformed, unreadable, or missing. You asked for that file on purpose,
+so a typo like `--config=prod.tmol` is reported (`--config: prod.tmol: no such
 file`), never silently ignored.
 
 ## Timing estimates
@@ -101,10 +101,10 @@ The progress bar's estimates come from `*.times.json` files beside the
 completion manifests (`~/.cache/footman/`, or wherever
 `$FOOTMAN_CACHE_DIR` points). The cache also tends itself: at most once
 a day, the cache collector removes pairs whose directory no longer
-exists and pairs idle for 90 days — everything in the cache rebuilds on
+exists and pairs idle for 90 days. Everything in the cache rebuilds on
 the next run, so collection can never lose anything that matters.
 Delete files by hand to reset a stale history, or
-turn the whole apparatus off — `--no-progress` for a run,
+turn the whole apparatus off: `--no-progress` for a run,
 `progress = false` in `[tool.footman]` for good.
 
 ## Exit codes
@@ -114,4 +114,4 @@ while binding** — a parse, tasks-file, config, or availability problem, and
 nothing ran — and any other non-zero code is the first failing task's own.
 The full table is part of the machine contract:
 [JSON output § exit codes](json.md#exit-codes). `--json` consumers get the
-same story per task in the envelope — `ok`, `code`, `error`.
+same story per task in the envelope: `ok`, `code`, `error`.

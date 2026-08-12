@@ -10,7 +10,7 @@
 ## The concept
 
 A **deadlock** is a circle of waiting: A holds something B needs while
-waiting for something B holds. Nobody errs, nobody crashes — everything
+waiting for something B holds. Nobody errs, nobody crashes: everything
 simply stops, forever, with no stack trace pointing anywhere. That silence
 is what makes deadlocks worse than crashes: a crash tells you where; a
 deadlock tells you nothing.
@@ -18,7 +18,7 @@ deadlock tells you nothing.
 The ingredient that matters most in practice is **hold-and-wait**: taking
 a resource, then blocking for another while still holding the first. Code
 that never waits while holding cannot complete the circle. The strongest
-designs don't detect deadlocks — they make one of the ingredients
+designs don't detect deadlocks; they make one of the ingredients
 impossible.
 
 ## A worked example: how a careful design still deadlocks
@@ -30,20 +30,20 @@ leave; a fan-out child re-targeting under its parent's hold is detected and
 refused. Every rule is individually sound. Composing two of them is fatal:
 
 1. A parent takes the lock at directory `A`, then fans out children and
-   waits for them — legal.
-2. A child joins the hold at `A` (same target — "not even a conflict") —
-   legal.
+   waits for them. Legal.
+2. A child joins the hold at `A` (same target, "not even a conflict").
+   Legal.
 3. The child then nests a block for directory `B`: an escalation, which
    waits for its co-holders to leave. Its co-holder is the parent. The
    parent is waiting for the child.
 
-A certain, silent deadlock built from two blessed moves — and since most
+A certain, silent deadlock built from two blessed moves, and since most
 projects point every task at one directory, that setup is the *common
 case*, not a corner. No detection rule fires, because each rule is checked
 at the moment of one move, and the circle only exists across both.
 
 Footman changes the ingredient instead. Serialisation is **declared on the
-task and granted at the task boundary**, before the body runs — the
+task and granted at the task boundary**, before the body runs, so the
 scheduler *orders* claims instead of letting bodies contend mid-flight. A
 resource acquired only at boundaries can always be scheduled; hold-and-wait
 needs a mid-body wait, and there is none. Lineage makes the fan-out case

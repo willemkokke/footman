@@ -20,8 +20,8 @@ dependencies. Python 3.11+.
 ## Why
 
 `duty` gets a lot right — the `run()` capture model, the decorator
-ergonomics — and footman keeps those ideas. Where it pushes is the parts
-that compound: completion served from a cache instead of re-importing your
+ergonomics — and footman keeps those ideas. It tries to improve on the parts
+you meet every day: completion served from a cache instead of re-importing your
 project on every <kbd>Tab</kbd> (~13× faster, measured), eager type and choice
 validation with errors that teach, a DAG scheduler that runs independent
 tasks concurrently (the same four-step `check` lands ~3.5× sooner than duty
@@ -73,14 +73,18 @@ $ fm --install-completion               # detects your shell; TAB answers in ~30
 
 > [!NOTE]
 > That `from toolroom import …` is optional.
-> [toolroom](https://willemkokke.github.io/toolroom/) gives the programs your
-> tasks call typed handles instead of strings, with completion generated from
-> each tool's own metadata. It began as part of footman and was spun out
-> because it releases on a decoupled train — a stub reading never holds up a
-> footman release — and because it is separately useful without a task runner
-> at all. footman neither depends on it nor imports it; plain `run("…")` is
-> always there, and a stub only decides whether your editor can help, never
-> whether a call works.
+> [toolroom](https://willemkokke.github.io/toolroom/) makes command-line
+> calls Python: it wraps **any** program, not a fixed list, with keyword
+> arguments becoming flags — `toolroom.terraform("plan")` runs whether or
+> not toolroom has heard of terraform. For common tools it also ships type
+> hints generated from each tool's own metadata, so your editor knows the
+> flags and what they do; the hints only decide whether your editor can
+> help, never whether a call works.
+>
+> It began as part of footman and was spun out for two reasons: it releases
+> on its own schedule, and other people might want type hinted, documented
+> command-line calls without using footman. footman does not depend on it
+> and never imports it — plain `run("…")` is always there.
 
 ### One file, dependencies included
 

@@ -1,10 +1,10 @@
 # Profiling a run
 
-A run already records where its time went — when each task started and
+A run already records where its time went: when each task started and
 finished, which worker ran it, how long it queued for one, which lanes
-serialised it, every `run()` step inside it. That record exists for
-honesty, not profiling — it is the ledger [the design](design.md) commits
-to — so a trace costs nothing new. The `footman.profile` plugin
+serialised it, every `run()` step inside it. That record exists because
+it is the ledger [the design](design.md) commits
+to, so a trace costs nothing new. The `footman.profile` plugin
 writes all of that as one trace file that profiler UIs read directly, and a
 small API lets a task add its own timing to the same picture.
 
@@ -28,7 +28,7 @@ profile: /work/project/fm-profile.json
 ok   check  (12.4s)
 ```
 
-Open the file at [ui.perfetto.dev](https://ui.perfetto.dev) — drag it onto
+Open the file at [ui.perfetto.dev](https://ui.perfetto.dev) by dragging it onto
 the page. `chrome://tracing` and [speedscope](https://speedscope.app) read
 it too: the format is Chrome Trace Event JSON, the same file Bazel's
 `--profile`, Clang's `-ftime-trace` and TypeScript's `--generateTrace`
@@ -39,18 +39,18 @@ What you see:
 - **One track per worker**, named (`fm-worker_0`, …), a slice per task.
   Parallelism is the picture: stacked lanes, wide gaps where something
   serialised.
-- **Queue time in the slice's details** — `queue_ms`, how long the task sat
+- **Queue time in the slice's details**, as `queue_ms`: how long the task sat
   ready waiting for a free worker. It is not drawn as a bar: during that
   wait the task had no worker, and every worker's row is truthfully showing
   what it was busy with.
-- **Lane waits at the head of the slot** — a claim that genuinely stalled
+- **Lane waits at the head of the slot.** A claim that genuinely stalled
   shows as its own slice (`lane: cspell-cache`) before the body's time.
 - **Every `run()` step nested inside its task**, and the task's own
   [sections](#timing-inside-a-task) beside them.
 - **A dependency arrow per plan edge**, so the critical path is traceable
   by eye.
-- Work that genuinely overlaps on one timeline — a `parallel()` block's
-  children, a stream's windows — renders as async spans instead of stacked
+- Work that genuinely overlaps on one timeline (a `parallel()` block's
+  children, a stream's windows) renders as async spans instead of stacked
   slices. The trace never rearranges time to make a prettier picture.
 
 The last slice is the writer itself: `profile: write`, the serialisation
@@ -76,11 +76,11 @@ def check(affected: bool = False):
         _check_one(t)
 ```
 
-`section()` times a block on the task's own timeline — nested blocks nest,
+`section()` times a block on the task's own timeline: nested blocks nest,
 and the slice appears inside the task's span exactly where it happened.
 `mark()` drops a labelled instant, no duration.
 
-Work that *overlaps* — several waits in flight at once — belongs on a
+Work that *overlaps*, with several waits in flight at once, belongs on a
 **stream**, a named parallel timeline under the task where overlap is legal.
 `footman.stream(name)` returns a `Stream`; sections on it come in two
 forms:
@@ -96,17 +96,17 @@ def await_ci(ref: str):
         ci.section(c.name, start=c.started_at, end=c.completed_at)
 ```
 
-The retroactive form takes what a CI API reports — `datetime`s, or epoch
-seconds — and places the window by wall clock, which may be before the task
+The retroactive form takes what a CI API reports (`datetime`s, or epoch
+seconds) and places the window by wall clock, which may be before the task
 started, or before the run did. The profile shows the checks' *real*
 timelines, not the shape of the polling loop that discovered them.
 
 A stream handle remembers its task, so a helper thread the body spawned may
 record through a handle made in the body. `section()` and `mark()` read the
-running task from the calling thread, so they belong in the body itself —
+running task from the calling thread, so they belong in the body itself;
 outside a task, all three are a taught error.
 
-Each record is a `Section` — name, start, duration, stream — and the
+Each record is a `Section` (name, start, duration, stream) and the
 `--json` envelope carries them per task row, so the same data feeds scripts
 as feeds the picture (see [JSON output](json.md)). The plugin is one
 consumer of the records, not their owner: they are there whether or not a
@@ -115,10 +115,10 @@ profile is written.
 ## What a child process can add
 
 A run's children often know their own time far more finely than the parent
-can see — a test runner knows every test, a build knows every translation
+can see: a test runner knows every test, a build knows every translation
 unit. A profiled run opens a door for them: `FM_PROFILE_DIR` is exported to
 every task's environment, and any process may drop Chrome-trace fragments
-there — `*.json`, either `{"traceEvents": […]}` or a bare event array, with
+there, as `*.json`, either `{"traceEvents": […]}` or a bare event array, with
 `ts` in **epoch microseconds** and its own `pid`. The writer sweeps the
 directory, shifts every fragment onto the run's clock, and embeds each
 child as its own process group beside `fm`'s tracks. A malformed drop is
@@ -137,12 +137,12 @@ ok   check  (21.2s)
 ```
 
 opens with every individual test on the timeline, under a `pytest` process
-group — xdist workers as named tracks, so the suite's own parallelism is
+group, with xdist workers as named tracks, so the suite's own parallelism is
 as visible as the runner's. A pytest that is not a profiled run's child
 pays one environment read and does nothing.
 
 The convention is deliberately tool-agnostic: anything that can write JSON
-can join — a `cargo build --timings` converter, a `clang -ftime-trace`
+can join: a `cargo build --timings` converter, a `clang -ftime-trace`
 copy step, a script of your own. Drop the file, keep your `pid`, spell
 `ts` in epoch microseconds, and the run's profile carries your timeline
 where it happened.

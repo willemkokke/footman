@@ -2,8 +2,8 @@
 
 Footman is a library first: `fm` and `footman` are the default-branded
 instance of a public `App`. Point your own console script at an `App` carrying
-your project's names and version, and every message the user sees — errors,
-`--version`, hints — uses *your* branding instead of footman's.
+your project's names and version, and every message the user sees (errors,
+`--version`, hints) uses *your* branding instead of footman's.
 
 This is how you ship an internal tool under its own name (say `acme`) that is
 still footman underneath.
@@ -26,8 +26,8 @@ def main() -> None:
 
 A brand can also rename the tasks file its users write:
 `App(..., tasks_file="acmetasks.py")`. Per-project config (the `tasks` key,
-in *your* brand's table — see below) still overrides it, and background
-completion refreshes honour it — the filename rides inside the cached
+in *your* brand's table, see below) still overrides it, and background
+completion refreshes honour it, because the filename rides inside the cached
 manifest.
 
 Register it as a console script in your package:
@@ -54,7 +54,7 @@ acme: no task named 'nonexistent-task' (know: build, test, deploy)
 | ----------- | ----------------------------------------------------------- |
 | `name`      | the `--version` banner and any display heading (long name)  |
 | `prog`      | the error prefix (`acme: …`) and the completion hint (short) |
-| `version`   | the `--version` output — your project's version             |
+| `version`   | the `--version` output, your project's version              |
 
 `version` is optional; omit it and footman's own version is used.
 
@@ -62,26 +62,26 @@ acme: no task named 'nonexistent-task' (know: build, test, deploy)
 
 Your branded CLI discovers tasks exactly like `fm`: the
 [`tasks.py` cascade](monorepos.md) from the repo root down to the current
-directory. Completion works through your binary too —
-`acme --complete …` — and stays on the same stdlib-only fast path, because
+directory. Completion works through your binary too, as
+`acme --complete …`, and stays on the same stdlib-only fast path, because
 `App.run()` handles `--complete` before importing the framework.
 
 !!! tip "Keep completion fast"
 
     If your entry-point module imports heavy code at the top (your task
     definitions, third-party libraries), you pay that cost on every
-    <kbd>Tab</kbd>. Keep `acme/cli.py` lean — build the `App` and nothing else —
-    and let the `tasks.py` cascade carry the tasks.
+    <kbd>Tab</kbd>. Keep `acme/cli.py` lean, building the `App` and nothing
+    else, and let the `tasks.py` cascade carry the tasks.
 
 ## The uv handoff follows the brand
 
 A globally installed branded CLI hands off exactly as `fm` does: when the
 project's `uv.lock` pins footman and you aren't inside its interpreter environment,
-the handoff re-execs the *(branded)* footman you invoked — `acme` hands
+the handoff re-execs the *(branded)* footman you invoked: `acme` hands
 off to the project's own `acme`, never to `fm`. The prog you typed is the
 prog that runs; only the version moves.
 
-The second rule — a tasks file that declares its own dependencies — needs
+The second rule, a tasks file that declares its own dependencies, needs
 one thing more, because it has to know which distribution ships *your*
 runner:
 
@@ -91,7 +91,7 @@ app = App(name="Acme", prog="acme", version="1.4.0", dist="acme-cli")
 
 With `dist` set, a tasks file carrying a
 [PEP 723](https://peps.python.org/pep-0723/) header runs in its own
-script environment under `acme` too — and must list `acme-cli` among its
+script environment under `acme` too, and must list `acme-cli` among its
 dependencies, the way a footman one lists `footman`. Left unset, footman
 never guesses a distribution into a script environment: the rule stays out of
 your way, and your users' tasks files run exactly where they already did.
@@ -112,7 +112,7 @@ app = App(
 )
 ```
 
-**Cache** is derived data — completion manifests, timing history, the
+**Cache** is derived data: completion manifests, timing history, the
 collector's stamp. It is safe to delete, and footman's collector sweeps it by
 age. **Data** is durable and machine-local: credentials, tokens, generated
 assets. Nothing ever collects it.
@@ -163,19 +163,19 @@ def index():
 ```
 
 Both create the directory if it isn't there, so a task never writes a `mkdir`
-of its own — and neither knows or cares whether the two share a parent.
+of its own, and neither knows or cares whether the two share a parent.
 
 ## Environment variables follow the brand
 
 `acme` reads `ACME_CACHE_DIR`, `ACME_DATA_DIR`, `ACME_CONFIG_DIR`,
-`ACME_CONFIG`, `ACME_CASCADE`, `ACME_NO_GC` and `ACME_NO_UV` — never footman's.
+`ACME_CONFIG`, `ACME_CASCADE`, `ACME_NO_GC` and `ACME_NO_UV`, never footman's.
 That isolation is the point: someone debugging `fm` with `FOOTMAN_CACHE_DIR`
 set must not silently relocate your product's cache. Error messages name your
 spelling too, so a user is never taught a variable that does nothing for them.
 
 !!! note "XDG is honoured, and never scrubbed"
 
-    The `XDG_*` variables move the *defaults* — a user who set
+    The `XDG_*` variables move the *defaults*: a user who set
     `XDG_CONFIG_HOME` in their profile asked every application to relocate,
     and `acme` follows like the rest. The brand's placements and the
     `ACME_*` variables outrank it, because the specific beats the general.
@@ -184,7 +184,7 @@ spelling too, so a user is never taught a variable that does nothing for them.
     of them. The only environment footman touches in a child is its own
     `ACME_*` namespace.
 
-The prefix is `prog` uppercased — the command is `acme`, so the variables are
+The prefix is `prog` uppercased, so the command is `acme` and the variables are
 `ACME_*`. Set `env_prefix` when that isn't what you want, for either of two
 reasons.
 
@@ -195,7 +195,7 @@ heard of the tool what it belongs to, and is something they can search for.
 prefix.
 
 **Or the namespace collides with your product's own.** Keeping it clear is
-yours to arrange — footman never guesses which of your variables is which:
+yours to arrange, because footman never guesses which of your variables is which:
 
 ```python
 app = App(name="Acme", prog="acme", env_prefix="ACME_RUNNER")
@@ -203,7 +203,7 @@ app = App(name="Acme", prog="acme", env_prefix="ACME_RUNNER")
 
 ## Config files follow the brand too
 
-Your users write `acme.toml`, or a `[tool.acme]` table in `pyproject.toml` —
+Your users write `acme.toml`, or a `[tool.acme]` table in `pyproject.toml`,
 not footman's. Both come from one field, so they cannot drift apart:
 
 ```python
@@ -213,7 +213,7 @@ app = App(name="Acme", prog="acme")   # config_name defaults to prog: `acme`
 Two branded CLIs can then live in one repository, each reading its own
 settings instead of fighting over a shared table.
 
-`config_name` is the machine word, the same rule the env prefix follows —
+`config_name` is the machine word, the same rule the env prefix follows, and
 never the display name, which is free text nobody would type into a TOML
 table. Set it when the identity your users should write isn't the command:
 footman's own command is `fm`, but its config is `footman.toml` /
@@ -221,18 +221,18 @@ footman's own command is `fm`, but its config is `footman.toml` /
 
 The *user-level* config file is deliberately not yours to place. It stays at
 `~/.config/acme/config.toml`, where a user looks for their own settings.
-`ACME_CONFIG_DIR` relocates that corner — the config file and the user tasks
-file together — without touching `XDG_CONFIG_HOME`, which would drag every
+`ACME_CONFIG_DIR` relocates that corner, the config file and the user tasks
+file together, without touching `XDG_CONFIG_HOME`, which would drag every
 other application along; `ACME_CONFIG` names a single file, finer still.
 
 ## Your users' own tasks
 
-`~/.config/acme/tasks.py` — beside that config file, and moving with it under
-`ACME_CONFIG_DIR` — holds a user's personal tasks. It is the cascade's
+`~/.config/acme/tasks.py`, beside that config file and moving with it under
+`ACME_CONFIG_DIR`, holds a user's personal tasks. It is the cascade's
 **outermost rung**: personal tasks ride everywhere, inside projects and out,
-and anything nearer shadows them. A project task that shares a name wins —
-the nearest-wins reading the cascade already has, one rung further out — and
-`--where` points at whichever definition answered.
+and anything nearer shadows them. A project task that shares a name wins,
+the nearest-wins reading the cascade already has taken one rung further out,
+and `--where` points at whichever definition answered.
 
 The rung claims no root. Outside a project `inv.root` is empty and a
 `cwd="root"` task runs where the command was typed; `cwd="taskfile"` is the
@@ -242,7 +242,7 @@ exactly the named file, no rung.
 
 ## Tasks built into the product
 
-Outside a project, a branded CLI used to be empty — and the tasks someone
+Outside a project, a branded CLI used to be empty, and the tasks someone
 needs *before* a project exists (log in, create a project) were exactly the
 unreachable ones. `builtin=` names the surface your CLI offers with no
 project at all:
@@ -252,13 +252,13 @@ app = App(name="Acme", prog="acme", dist="acme-cli",
           builtin=["acme.global"])
 ```
 
-The names are `footman.tasks` entry points — strings, never live objects,
+The names are `footman.tasks` entry points: strings, never live objects,
 because the background refresh child rebuilds completion manifests in a bare
 process where a name travels and an object cannot. The ladder is
 **project > user > built-in**: with no project task files the built-ins are
 the base of the tree and the user tasks file overlays them; the moment a
 project's cascade finds a tasks file, the base is not there at all. Nothing
-is privileged and nothing is lost — the set is an ordinary entry point, so a
+is privileged and nothing is lost, since the set is an ordinary entry point, so a
 project that wants those tasks mounts them like any other:
 `plugin("acme.global")`, with `into=`/`only=`/`exclude=` as usual. Naming a
 built-in inside a project teaches exactly that mount, and `--plugins`
@@ -266,18 +266,18 @@ reports the set as `built in`.
 
 **A built-in task needs a project unless it says otherwise.** That is the
 default because most of what a CLI ships does: `deploy` without a checkout
-is not a shorter `deploy`, it is a task that exits 0 having done nothing —
-a listing shows the noise, but the real damage is the confident fiction.
+is not a shorter `deploy`, it is a task that exits 0 having done nothing.
+A listing shows the noise, but the real damage is the confident fiction.
 Declare the exceptions:
 
 ```python
 @task(needs_project=False)
 def whoami():
-    """Who am I logged in as? — answerable from anywhere."""
+    """Who am I logged in as? Answerable from anywhere."""
 ```
 
 Outside a project, a task that needs one is **not listed, not completed,
-and not suggested** — and asking for it by name is refused with the reason
+and not suggested**, and asking for it by name is refused with the reason
 rather than a "no task named", because it does exist:
 
 ```console
@@ -290,13 +290,13 @@ wrong directory. It says where footman looked, which is the fact that
 resolves the confusion.
 
 `group("ci", needs_project=True)` answers for a whole subtree, and a child
-may still say `needs_project=False` — the tri-state `hidden` has. The
+may still say `needs_project=False`, the tri-state `hidden` has. The
 question is only ever asked *outside* a project: both answers include being
 inside one, so this can never hide anything from a project.
 
 The **user rung defaults the other way**: a personal task rides everywhere
 unless it says `needs_project=True`, because that is what a personal tasks
-file is for. Each rung's default is its own promise — a package declared
+file is for. Each rung's default is its own promise: a package declared
 `builtin=` exposes nothing until a task opts in; a file someone wrote for
 themselves is theirs everywhere until they opt out.
 
@@ -305,4 +305,4 @@ the user rung does.
 
 Completion follows: outside a project, <kbd>Tab</kbd> answers from one
 manifest shared by every project-less directory, keyed by the brand and its
-version — cold once per upgrade, not once per directory.
+version, so it is cold once per upgrade, not once per directory.
