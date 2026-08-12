@@ -20,8 +20,8 @@ dependencies. Python 3.11+.
 ## Why
 
 `duty` gets a lot right — the `run()` capture model, the decorator
-ergonomics — and footman keeps those ideas. Where it pushes is the parts
-that compound: completion served from a cache instead of re-importing your
+ergonomics — and footman keeps those ideas. It pushes on the parts you meet
+every day: completion served from a cache instead of re-importing your
 project on every <kbd>Tab</kbd> (~13× faster, measured), eager type and choice
 validation with errors that teach, a DAG scheduler that runs independent
 tasks concurrently (the same four-step `check` lands ~3.5× sooner than duty
