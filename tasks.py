@@ -1036,6 +1036,9 @@ def docs_build(check: bool = False):  # pragma: no cover — see below
             "zsh": tab,
             "nushell": (*tab, "<DOWN>", "<ENTER>"),
         }.get(sh, ("u", *tab))
+        # What ends a menu so the *next* Tab asks again rather than filtering
+        # what is already listed. Only PSReadLine keeps a session like that.
+        close = ("<SPACE>", "<BACKSPACE>") if sh == "pwsh" else ()
         # `*-cast.svg` is the convention the docs' player keys on: any
         # recording ending that way gets play/pause/scrub, a still does not.
         out = shot / f"hero-{sh}-cast.svg"
@@ -1064,6 +1067,14 @@ def docs_build(check: bool = False):  # pragma: no cover — see below
             # One option, both spellings — a value is `=`-attached.
             "b",
             *tab,
+            # Close the menu before typing the `=`. PSReadLine does not
+            # re-ask on the next keystroke: a character typed into an open
+            # menu filters the candidates it already holds, so `=` narrowed
+            # `--branch`/`--branch=` to one entry and footman was never asked
+            # for the branch values at all. Space accepts and closes it;
+            # Backspace takes back the space, leaving the token whole.
+            # (Right accepts the *selection*, and Escape reverts — measured.)
+            *close,
             # Its values: every branch in the repo, asked of git on the spot.
             "=",
             *tab,
@@ -1075,6 +1086,7 @@ def docs_build(check: bool = False):  # pragma: no cover — see below
             *accept.get(sh, ()),
             "--r",
             *tab,
+            *close,
             "=",
             *tab,
             *pick_region,
