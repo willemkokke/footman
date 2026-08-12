@@ -294,13 +294,13 @@ _SETTLE_GAP = 0.5  # seconds of silence that count as "settled"
 # this runs after every single key, and a shell answering a keystroke is far
 # quicker than one rendering a prompt from cold.
 _SNAP_GAP = 0.18
-# How long to give a key that draws nothing at all before taking its frame
-# anyway. Far longer than _SNAP_GAP, because it has to outlast the pause
-# while a shell shells out to answer a Tab — and the first Tab of a pwsh
-# session pays for .NET's JIT on top, which on a loaded CI runner took longer
-# than a second and had the frame taken before the menu arrived. Only a key
-# that draws *nothing* waits this long; once output starts, _SNAP_GAP decides.
-_SNAP_IDLE = 4.0
+# How long an ordinary key gets to draw nothing at all before its frame is
+# taken anyway: a character either echoes promptly or never will. A Tab is
+# given _SETTLE_MAX instead — it is the key that sends a shell away to
+# compute, and the first Tab of a pwsh session pays for .NET's JIT on top,
+# which on a loaded runner outlasted any bound worth applying to a keystroke.
+# Once output starts, _SNAP_GAP decides for both.
+_SNAP_IDLE = 1.5
 _SETTLE_MAX = 10.0  # hard cap: fire anyway, so a never-quiet stream can't hang
 
 
@@ -557,6 +557,7 @@ def _pty_session(
     # event has not been marked yet.
     awaiting: str | None = None
     awaiting_since = start
+    awaiting_bound = _SNAP_IDLE
     try:
         while True:
             now = _time.monotonic()
@@ -570,7 +571,7 @@ def _pty_session(
             answered = last_output > awaiting_since
             if awaiting is not None and (
                 (answered and now - last_output >= _SNAP_GAP)
-                or (not answered and now - awaiting_since >= _SNAP_IDLE)
+                or (not answered and now - awaiting_since >= awaiting_bound)
                 or now - awaiting_since >= _SETTLE_MAX
             ):
                 if key_log is not None:
@@ -611,6 +612,16 @@ def _pty_session(
                         # throws away anyway.
                         awaiting = step.caption
                         awaiting_since = now
+                        # How long this key gets to draw *nothing at all*
+                        # before its frame is taken anyway. A Tab is the one
+                        # key that reliably sends the shell away to compute —
+                        # a subprocess, and on a cold pwsh the JIT as well —
+                        # so it is given the full settle. An ordinary
+                        # character either echoes at once or never will, and
+                        # waiting on it only makes every recording slower.
+                        awaiting_bound = (
+                            _SETTLE_MAX if step.data == b"\t" else _SNAP_IDLE
+                        )
                         continue
                     if queue:
                         nd = queue[0].delay
