@@ -1,15 +1,15 @@
 # Asking for input
 
-Most values should be flags — typed, completable, and CI-safe. But some runs
+Most values should be flags: typed, completable, and CI-safe. But some runs
 genuinely need to ask the person at the keyboard: a version string, a
 production confirmation, a pick from a list computed at run time. Footman has
-three shapes for it, and all three are **CI-safe by construction** — off a
+three shapes for it, and all three are **CI-safe by construction**: off a
 terminal they fail loudly or take a supplied answer, never hang. (A fourth
-input is not a question at all: a document piped in on stdin — the last
-section below.)
+input is not a question at all: a document piped in on stdin, which is the
+last section below.)
 
 A bare `input()` doesn't work in a task: its prompt goes to stdout, which
-footman buffers so parallel output can't interleave — so the prompt is
+footman buffers so parallel output can't interleave, so the prompt is
 swallowed and the task looks hung. Reach for one of these instead.
 
 ## Ask for a value: `ask()`
@@ -30,7 +30,7 @@ def deploy(env: Annotated[Literal["staging", "prod"], ask()]): ...
 ```
 
 `fm release --version=1.2.3` uses the flag; `fm release` asks `version:` and
-runs the answer through coercion — a `Literal` is a typed choice, a bad value
+runs the answer through coercion: a `Literal` is a typed choice, a bad value
 re-asks. The precedence is **CLI > `env` > prompt > default**. (An `ask()`
 parameter is a CLI-optional option, so it never becomes a required positional.)
 
@@ -44,7 +44,7 @@ def release(version: Annotated[str, ask()] = "patch"): ...
 ```
 
 `fm release` asks `version [patch]:` and Enter takes `patch`. Naming the option
-bare — `fm release --version` — skips the question entirely, because the caller
+bare, as `fm release --version`, skips the question entirely, because the caller
 has already said "the declared one".
 
 The safety is the point. Off a terminal, under `--no-input`, or in `--json`,
@@ -57,7 +57,7 @@ default still fails loudly rather than waiting for someone who isn't there.
 
 ## Secrets: `Secret` and `secret=True`
 
-Two halves of the same idea — how a value is *collected*, and how it is
+Two halves of the same idea: how a value is *collected*, and how it is
 *shown*.
 
 `secret=True` is the collection half: `ask(secret=True)` on a parameter, or
@@ -75,7 +75,7 @@ def publish(token: Secret): ...        # a flag or env() value, still redacted
 ```
 
 `Secret` is the display half, and it stands alone: annotate any parameter
-with it and whatever fills it — a flag, an `env()` fallback, a default —
+with it and whatever fills it (a flag, an `env()` fallback, a default)
 redacts wherever footman *shows* it. Its repr is `Secret('***')`, so
 tracebacks, logs and debuggers can't leak it, and structured surfaces
 serialise it as `***`: the `--json` envelope, a `Stdout[…]` document, baked
@@ -89,7 +89,7 @@ string operation on it yields a plain one:
 ```python
 @task
 def env_export(token: Secret) -> Stdout[str]:
-    return f"export TOKEN={token}"     # emits the real value — no switch needed
+    return f"export TOKEN={token}"     # emits the real value; no switch needed
 ```
 
 That is what makes footman usable as a filter for a task whose *job* is to
@@ -107,7 +107,7 @@ def creds(token: Secret) -> Stdout[dict]:
     return {"token": token.reveal()}   # deliberate; a plain str from here on
 ```
 
-`reveal()` exists so that intent is greppable — every deliberate exposure in
+`reveal()` exists so that intent is greppable: every deliberate exposure in
 a codebase is one search away, which no global "don't redact" option could
 give you.
 
@@ -123,12 +123,12 @@ def deploy(): ...
 
 Deny it and the task never runs, the run exits non-zero, and anything that
 depended on it skips, blamed on the denial. `--yes` auto-answers it (for CI
-and scripts), and off a terminal without `--yes` the answer is no — footman
-never proceeds unasked.
+and scripts), and off a terminal without `--yes` the answer is no, because
+footman never proceeds unasked.
 
 A task that asks for confirmation gets it **however it is reached**: named on
 the command line or mounted in as a `pre=`/`post=` prerequisite, the question
-comes up front with the run's other questions — one reference, one question,
+comes up front with the run's other questions: one reference, one question,
 however many ways the plan reaches it. A body call is the one reach that
 cannot be known up front, so it asks at the moment of the call.
 
@@ -139,7 +139,7 @@ cannot be known up front, so it asks at the moment of the call.
 `prompt()`, `confirm()`, and `select()` ask mid-task, but they are **guarded**:
 called inside an ordinary task they raise a taught error, because the prompt
 would be swallowed by the capture buffer or race a parallel sibling. A task that
-genuinely runs a wizard or a REPL declares itself interactive — it then owns the
+genuinely runs a wizard or a REPL declares itself interactive, and then owns the
 real terminal, uncaptured, with sole stdio:
 
 ```python

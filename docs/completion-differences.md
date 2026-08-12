@@ -1,7 +1,7 @@
 # Shell differences
 
 All five shells get the same candidates from the same resolver, and footman
-leans on candidate *shape* — never on any one shell's options — so path-style
+leans on candidate *shape*, never on any one shell's options, so path-style
 completion works everywhere. What differs is how each shell renders and
 inserts those candidates. This page lists the differences you can actually
 observe; nothing here changes what completes, only how it looks and feels.
@@ -10,11 +10,11 @@ observe; nothing here changes what completes, only how it looks and feels.
 
 The resolver emits `name<TAB>summary` per candidate.
 
-- **zsh, fish, nushell** render the summary — zsh and fish as a description
+- **zsh, fish, nushell** render the summary: zsh and fish as a description
   column, nushell in its completion menu.
 - **pwsh** shows the summary as a tooltip.
 - **bash** has no description column; it keeps the name and drops the rest.
-  This is why a group candidate always carries its trailing dot (`docs.`) —
+  This is why a group candidate always carries its trailing dot (`docs.`):
   in bash the dot *is* the descend-vs-run signal.
 
 ## The space after a unique match
@@ -28,8 +28,8 @@ Footman sidesteps the disagreement by never *needing* a no-space flag: when
 your prefix matches a single namespace group, the resolver answers with the
 group's children as full addresses (`fm do<TAB>` → `docs.build`,
 `docs.serve`), so the candidate set stays non-unique and every shell holds
-the cursor in-word. In the worst case — a space lands after `fm docs.`
-anyway — running it answers with the group's tasks, so nothing strands.
+the cursor in-word. In the worst case, where a space lands after `fm docs.`
+anyway, running it answers with the group's tasks, so nothing strands.
 
 ## Menus and selection
 
@@ -46,13 +46,13 @@ anyway — running it answers with the group's tasks, so nothing strands.
   but it explains stray `=` tokens if you ever watch `fm --complete` traffic.
 - No shell footman supports word-breaks on `.`, which is what makes the
   dotted address one completion unit everywhere. (This is also why the
-  separator is a dot and not the `:` some task runners use — `:` *is* a
+  separator is a dot and not the `:` some task runners use: `:` *is* a
   word-break character in bash's default `COMP_WORDBREAKS`.)
 
 ## File paths
 
 Path-valued positions hand off to each shell's own file completion, so
-path candidates always look native — dirs get `/`, quoting matches your
+path candidates always look native: dirs get `/`, quoting matches your
 shell, and remote/fancy path plugins keep working.
 
 Mid-list in a comma-splitting path value (`--paths=a,<TAB>`), bash, zsh,

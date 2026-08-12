@@ -67,9 +67,8 @@ fm workspace.mount --share=<TAB>   # main  scratch  archive
 ![fm --tree in a terminal: tasks grouped by command group, bold names, one-line help](_generated/shots/tree.svg)
 
 Ships two console scripts: `footman` and the two-letter `fm`. (That
-screenshot is generated from the real CLI on every docs build. Like every
-terminal image on this site, it cannot drift from what footman actually
-prints.)
+screenshot is generated from the real CLI, like every terminal image on
+this site.)
 
 !!! note "Beta"
 
@@ -179,4 +178,5 @@ hinted, documented command-line calls without having to use footman for
 anything.
 
 footman does not depend on it and never imports it. Plain
-[`run()`](tools.md) is always there, and nothing on this page needs it.
+[`run()`](tools.md) is there regardless, and nothing on this page needs
+toolroom.

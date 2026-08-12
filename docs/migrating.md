@@ -1,12 +1,12 @@
 # Migrating
 
 Coming from another runner? Each section below is the shortest path
-in — what carries over, what you gain, and what you give up. The measured
+in: what carries over, what you gain, and what you give up. The measured
 head-to-head behind these claims is on the [Comparison](comparison.md) page.
 
 ## From duty
 
-The gentlest move — it's the family footman grew up in. Drop the `ctx`
+The gentlest move, since it's the family footman grew up in. Drop the `ctx`
 parameter and shell out through `run()`:
 
 <!-- example: fragment -->
@@ -33,7 +33,7 @@ footman uses `--fix`.
 
 ## From invoke
 
-Drop the `c` parameter and delete the manual `Collection` wiring — in footman a
+Drop the `c` parameter and delete the manual `Collection` wiring: in footman a
 module *is* a group and `group()` opens a nested one:
 
 <!-- example: fragment -->
@@ -52,17 +52,17 @@ def build(): ...
 
 ## From typer
 
-Your typed signatures port almost verbatim — footman reads the same annotations.
+Your typed signatures port almost verbatim, because footman reads the same annotations.
 Delete the app object and the per-parameter `typer.Option`/`Argument` wrappers;
 use plain defaults plus footman's `Annotated` markers (`suggest`, `Many`,
 `nosplit`) where you need them. `typer.Typer()` + `add_typer(sub)` → a module or
 a `group()`. You'll trade typer's polished `--help` for cached completion, zero
-dependencies, and separator-free chaining — a fair swap for a task runner, though
+dependencies, and separator-free chaining, a fair swap for a task runner, though
 if you're shipping a CLI to users, typer's help is worth staying for.
 
 ## From poe
 
-Move each TOML task into a Python function — you swap declarative strings for
+Move each TOML task into a Python function, swapping declarative strings for
 real Python, types, and validation:
 
 ```toml
@@ -88,14 +88,14 @@ pay the project import only on execution, never on completion.
 
 Recipes become `@task` functions and shell lines become `run(...)`; you keep
 chaining and gain parallel-by-default execution and typed arguments. What you
-give up is the file-target / up-to-date model — footman runs commands, it isn't a
+give up is the file-target / up-to-date model: footman runs commands, it isn't a
 build system (see `doit` for that niche).
 
 ## Other runners
 
 Not covered above, and why: **taskipy** (pyproject shell aliases, no
 Python-function tasks), **doit** (a proper build system with file-target and
-up-to-date tracking — a different game), **nox** / **tox** (environment and
+up-to-date tracking, a different game), **nox** / **tox** (environment and
 test-matrix orchestration), and the non-Python **just** / **go-task** / **mise**
 / **make** (great UX and completion, no Python dynamism). `uv`'s own task support
 is [in design](https://github.com/astral-sh/uv/issues/5903) and will cover the

@@ -13,17 +13,17 @@ Every process has one **working directory** (cwd): the directory that
 relative paths resolve against. `open("notes.txt")` means "`notes.txt` in
 the cwd"; `Path("dist") / "app.zip"` only becomes a real location once the
 cwd says where `dist` is. A child process **inherits** its parent's cwd at
-spawn — or is handed a different one, which is the parent's single
+spawn, or is handed a different one, which is the parent's single
 race-free chance to choose for it.
 
-`os.chdir()` moves the cwd — *for the whole process*. Every thread, every
+`os.chdir()` moves the cwd, *for the whole process*. Every thread, every
 relative path anywhere in the program, every subsequently spawned child:
 all of them re-anchor at once. There is no per-thread cwd; the previous
 page explains why not.
 
 One sharp edge worth knowing even outside footman: **"starts with a slash"
-does not mean absolute**. On Windows, `Path("/x")` has no drive letter —
-it is *anchored* but not absolute — and joining it onto a base does not
+does not mean absolute**. On Windows, `Path("/x")` has no drive letter and
+is *anchored* but not absolute, and joining it onto a base does not
 append, it **replaces** the base's whole path portion: `C:/base / "/x"`
 is `C:/x`. That is why every `rel=` in footman rejects anchored paths, not
 just absolute ones.
@@ -41,24 +41,24 @@ the cwd or not. One global quietly costs all the parallelism.
 
 The task's directory becomes **data**: `ctx.cwd`, resolved once per task by
 a small policy ladder (where the task's file lives by default; overridable
-per definition, per use, per call — the
+per definition, per use, per call; the
 [Guide page](working-dir.md) has the table). Subprocesses receive it at
 spawn. Nothing chdirs.
 
 For code inside the task body:
 
-- **`footman.cwd()`** is the blessed base for path arithmetic —
+- **`footman.cwd()`** is the blessed base for path arithmetic:
   `footman.cwd() / "dist"` is this task's `dist`, whatever the process cwd
   happens to be.
-- **`os.chdir` in a parallel task is a taught error** — the cwd belongs to
+- **`os.chdir` in a parallel task is a taught error**, because the cwd belongs to
   nobody there. The error names the exits: mark the task `serial=True`
   (one owner at a time, overlapping the pool, where a *real* chdir via
   `footman.chdir()` is legal again), or build paths from `footman.cwd()`.
-- **`os.getcwd` earns a one-time note** pointing at `footman.cwd()` — in a
+- **`os.getcwd` earns a one-time note** pointing at `footman.cwd()`, since in a
   parallel run the process cwd can be anyone's, so reading it is usually a
   question answered wrong.
 - An in-process tool call that needs a *different* directory than the live
-  process cwd runs as its subprocess twin instead — right directory, still
+  process cwd runs as its subprocess twin instead: right directory, still
   parallel, only the startup saving lost.
 
 ## The one rule
