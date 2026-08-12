@@ -558,6 +558,7 @@ def _pty_session(
     awaiting: str | None = None
     awaiting_since = start
     awaiting_bound = _SNAP_IDLE
+    awaiting_screen: tuple[str, ...] = ()
     try:
         while True:
             now = _time.monotonic()
@@ -565,10 +566,16 @@ def _pty_session(
             # finished — it usually means it has not started. A Tab sends the
             # shell off to run `--complete` in a subprocess, and the quiet
             # while it does that is longer than the quiet after it finishes
-            # painting. So a frame is taken once output has *arrived and then
-            # stopped*; a key that genuinely draws nothing falls through on
-            # the idle bound instead.
-            answered = last_output > awaiting_since
+            # painting. So a frame is taken once the *screen has changed* and
+            # then gone quiet; a key that genuinely draws nothing falls
+            # through on the idle bound instead.
+            #
+            # Screen, not bytes. Counting any output as the answer let a
+            # keystroke's own echo — or a terminal query pwsh fires the
+            # instant Tab is pressed — end the wait before the completion it
+            # was waiting for had been computed, so the recording showed a
+            # prompt with nothing completed on it.
+            answered = tuple(tracker.display) != awaiting_screen
             if awaiting is not None and (
                 (answered and now - last_output >= _SNAP_GAP)
                 or (not answered and now - awaiting_since >= awaiting_bound)
@@ -612,6 +619,7 @@ def _pty_session(
                         # throws away anyway.
                         awaiting = step.caption
                         awaiting_since = now
+                        awaiting_screen = tuple(tracker.display)
                         # How long this key gets to draw *nothing at all*
                         # before its frame is taken anyway. A Tab is the one
                         # key that reliably sends the shell away to compute —
