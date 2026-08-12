@@ -1,6 +1,6 @@
 # Typed signatures
 
-Footman reads your function signature and turns it into a CLI — the same idea
+Footman reads your function signature and turns it into a CLI, the same idea
 typer popularised, applied to a task runner. Types are validated *eagerly*, at
 parse time, with taught error messages.
 
@@ -20,27 +20,27 @@ parse time, with taught error messages.
 | `*cmd: str`                     | variadic trailing passthrough                       |
 
 **The rule behind the table: the default decides.** A parameter with **no
-default** is a **required positional** — a bare word on the line fills it
+default** is a **required positional**: a bare word on the line fills it
 (`fm greet Ada`). A parameter **with a default** is an **option** you pass by
 name (`--mode=loose`), or, for a `bool`, a `--flag`/`--no-flag` switch. That is
 the whole distinction: give a parameter a default and it moves from the
 command line's *positions* to its *flags*. The container types layer arity on
-top — `list[T]`/`Many[T]` take one-or-many (a positional one needs at least
-one), and `*args` sweeps up the variadic tail — but the default is still what
+top: `list[T]`/`Many[T]` take one-or-many (a positional one needs at least
+one), and `*args` sweeps up the variadic tail. But the default is still what
 sorts each parameter into a position or a flag.
 
 !!! note "One reserved parameter name: `help`"
 
     A parameter named `help` is the one name the signature can't turn into a
-    working option. It would map to `--help` — but `--help` (and `-h`) is
+    working option. It would map to `--help`, but `--help` (and `-h`) is
     intercepted **anywhere before `--`** and turns the whole line into a help
     request that never executes anything, so the flag is *shown*, never bound to
     your parameter. Every other global name is free to reuse: the rest
     (`--json`, `--version`, `-s`, `-j`, …) must come before the first task, so
-    `fm deploy --json` binds `--json` to `deploy`, not to footman — only
+    `fm deploy --json` binds `--json` to `deploy`, not to footman; only
     `--help`/`-h` win wherever they land on the line. It's the single reserved
     name, and the collision is the harmless kind (help prints instead of the
-    task running); rename the parameter — `show_help`, `explain` — to get a real
+    task running). Rename the parameter (`show_help`, `explain`) to get a real
     flag.
 
 ## Naming an option without a value
@@ -53,8 +53,8 @@ fm build                 # the default, with no opinion expressed
 fm build --target=prod   # a value
 ```
 
-A bare `--target` binds exactly what absence would have bound — the same
-`env()`-then-default ladder runs — so on its own it changes nothing. What it
+A bare `--target` binds exactly what absence would have bound, since the same
+`env()`-then-default ladder runs, so on its own it changes nothing. What it
 adds is that somebody named it, which `given()` reports:
 
 <!-- example: fragment -->
@@ -71,15 +71,15 @@ def build(*, profile: Path = Path("build-profile.json")):
 
 `fm build` writes no trace. `fm build --profile` writes the declared default.
 `fm build --profile=other.json` writes there. Three outcomes from one declared
-default — a value alone could never separate the first two, because both hand
+default. A value alone could never separate the first two, because both hand
 the body the same path.
 
 **Supplied means the caller**: an option on the line (bare or attached), a
 keyword on a body call, a piped `stdin` payload, an answered `ask()` prompt.
 **Not supplied means footman worked it out**: an `env()` fallback, which is
 ambient and answers for nobody in particular, or the declared default. A body
-call says the same thing a command line does — `build(profile=…)` reads as
-given, `build()` does not — and a called task never inherits its caller's
+call says the same thing a command line does (`build(profile=…)` reads as
+given, `build()` does not) and a called task never inherits its caller's
 answer.
 
 A parameter with no default has no absence to mean, so naming it bare is still
@@ -87,7 +87,7 @@ the taught `=`-attachment error.
 
 ## A default computed when the task runs
 
-A Python default is evaluated once, when the module is imported — fine for a
+A Python default is evaluated once, when the module is imported: fine for a
 constant, wrong for anything that depends on the machine, the environment or
 the clock. `default(fn)` calls `fn()` at bind time instead:
 
@@ -99,14 +99,14 @@ def install(*, shell: Annotated[str, default(detect_shell)] = ""):
     ...
 ```
 
-It sits one rung above the declared default — **CLI value > `env()` >
-`default(fn)` > the declared default** — and, like `env()`, needs a declared
+It sits one rung above the declared default (**CLI value > `env()` >
+`default(fn)` > the declared default**) and, like `env()`, needs a declared
 default to sit on, because a plain Python call of the task with no run around
 it has to keep working. `--help` prints what it computes, since the manifest is
 built on the execution path: what help shows is what this run would use.
 
 Declare one positional argument and it receives the **sibling parameters**
-resolved so far — the same courtesy `check(fn)` gets, because a default is
+resolved so far, the same courtesy `check(fn)` gets, because a default is
 often a function of the inputs beside it:
 
 <!-- example: fragment -->
@@ -121,8 +121,8 @@ def cast(
 ```
 
 Read-only, and only what is to its *left* in the signature. The view holds
-*effective* values — what each parameter will actually be, from whichever rung
-of the ladder supplied it — and only a left parameter has one yet. That is also
+*effective* values, what each parameter will actually be from whichever rung
+of the ladder supplied it, and only a left parameter has one yet. That is also
 why a cycle cannot be written down: the signature fixes a total order and
 binding walks it, so nothing can depend on something unresolved.
 
@@ -134,8 +134,8 @@ Reaching rightwards is a taught error rather than a silent surprise, through
 — so it has no value yet. Move 'cmd' above 'title' in the signature.
 ```
 
-`--help` shows no default for a sibling-reading one — there is no invocation to
-read — but it does say there is one, as `default computed`. A computed default
+`--help` shows no default for a sibling-reading one, since there is no
+invocation to read, but it does say there is one, as `default computed`. A computed default
 that *can* be resolved is marked too, because a bare number reads as an
 arbitrary constant when it is really this machine's:
 
@@ -160,7 +160,7 @@ def ship(target, port=8000, ratio=1.5, name="web", verbose=False):
 ```
 
 `fm ship prod --port=9000 --verbose` gives you a required positional, three
-options, and a `--verbose`/`--no-verbose` flag pair — completed, listed, and
+options, and a `--verbose`/`--no-verbose` flag pair, completed, listed, and
 documented like any other task. The four basic types read from their
 defaults: `port` arrives as an `int`, `ratio` as a `float`, `name` as a
 `str`, and a `bool` default becomes a flag. Passing `--port=abc` is refused
@@ -175,7 +175,7 @@ def stamp(out=None, paths=(), tags=["docs"]):
 ```
 
 A `None` default names no type, and a container's default says nothing about
-what belongs *in* it — so footman infers nothing and hands the value over as
+what belongs *in* it, so footman infers nothing and hands the value over as
 typed on the command line. That is deliberate: the rule is to infer exactly
 where Python's own inference is definite, which is also exactly where a type
 checker reading your file agrees. Anything less certain would be a guess, and
@@ -199,7 +199,7 @@ get a good CLI out of a plain function.
 ## Unions and one-or-many values
 
 A parameter can accept a union of types; footman validates the value against the
-union and coerces it by specificity — the most specific member that accepts the
+union and coerces it by specificity: the most specific member that accepts the
 value wins (`int` → `float` → `Path` → `str`, with `str` as the universal
 fallback):
 
@@ -210,7 +210,7 @@ from footman import task
 def scale(factor: int | float): ...
 ```
 
-`Many[T]` is exactly `list[T]` — a parameter that accepts one or more values and
+`Many[T]` is exactly `list[T]`: a parameter that accepts one or more values and
 is **always a list**, even for a single value (it reads more intentfully than a
 bare `list[T]` at a positional). Required when positional, so at least one value
 must be given:
@@ -224,7 +224,7 @@ def build(targets: Many[str]): ...   # fm build web     -> ["web"]
 ```
 
 `set[T]`, `frozenset[T]` and `tuple[T, ...]` accept values exactly the same
-way. They differ only in the container your function receives — which is the
+way. They differ only in the container your function receives, which is the
 point of naming one:
 
 ```python
@@ -257,7 +257,7 @@ def notify(lines: NoSplit[list[str]]): ...
 # fm notify --lines="Smith, John" --lines="Doe, Jane"  -> two names, commas kept
 ```
 
-`NoSplit[list[str]]` is shorthand for `Annotated[list[str], nosplit]` — the
+`NoSplit[list[str]]` is shorthand for `Annotated[list[str], nosplit]`: the
 same marker, less to type. Every bare marker has a subscript form like this;
 [Terse aliases](#terse-aliases-and-forwarding) below has the full set and the
 rule for which markers can have one.
@@ -268,7 +268,7 @@ declared arity takes it in groups of that size, which is the next section.
 ## Dictionaries
 
 `dict[K, V]` maps `KEY=VALUE` pairs, and it composes with the rest of the type
-system — `dict[str, int | str]`, and even `dict[str, list[...]]`:
+system: `dict[str, int | str]`, and even `dict[str, list[...]]`:
 
 ```python
 @task
@@ -278,7 +278,7 @@ def env(vars: dict[str, int | str]): ...   # fm env --vars=port=8080 --vars=name
 ## Fixed-arity values
 
 A shape that declares how many fields it has takes that many values from one
-option. Prefer a `NamedTuple` — it names its fields, and the names do real
+option. Prefer a `NamedTuple`: it names its fields, and the names do real
 work:
 
 ```python
@@ -316,7 +316,7 @@ $ fm route --points=1,2,3
 fm: route: --points takes values in groups of 2 (x,y) — got 3, which leaves 1 over
 ```
 
-**A plain `tuple[int, int]` behaves identically** — same grouping, same
+**A plain `tuple[int, int]` behaves identically**: same grouping, same
 chunking, same refusals. Only the messages are poorer, because a plain tuple
 has no field names to report with:
 
@@ -328,8 +328,8 @@ fm: render: --size: value 2 expects an integer (got 'tall')  # tuple[int, int]
 
 That is the whole argument for preferring the named form.
 
-A dataclass, or any class with an annotated `__init__`, works the same way —
-the constructor's parameters are the fields:
+A dataclass, or any class with an annotated `__init__`, works the same way,
+with the constructor's parameters as the fields:
 
 ```python
 from dataclasses import dataclass
@@ -347,10 +347,10 @@ def open_(window: Window = Window("footman")): ...   # fm open --window=Docs,102
 
 When a shape has optional fields, the count settles it: `Window` above takes
 one value or two, and `--window=Docs` leaves `width` at its default. `--help`
-says so — `1 to 2 values`.
+says so: `1 to 2 values`.
 
 Inside a *container* that flexibility goes away: every field must be given.
-One group can let the count settle it, but two cannot —
+One group can let the count settle it, but two cannot:
 `--windows=Docs,1024,Notes` could be one window and a second one, or two
 windows of one field each, and guessing is what this design refuses to do. So
 a container groups by the full arity and says so:
@@ -369,14 +369,14 @@ A shape only takes a command-line spelling when **one token can fill each of
 its fields**. Two things put a shape out of reach, both with somewhere to go:
 
 - **A field that is itself a shape or a collection.** `Line(start: Point, end:
-  Point)` has no comma spelling — nothing in `--line=1,2,3,4` says which pair
+  Point)` has no comma spelling, since nothing in `--line=1,2,3,4` says which pair
   is the start. Pipe it as JSON instead: a nested document binds in full.
 - **An untyped or `*args` constructor.** Footman groups a shape it can *type*;
   a constructor that describes none of its parameters is not one, and keeps
   the single-token `T(value)` form below.
 
 Both are pipe-able today, and `fm --describe` prints the exact JSON a task
-expects — see [JSON](json.md#the-shape-a-pipe-expects).
+expects; see [JSON](json.md#the-shape-a-pipe-expects).
 
 ## The same annotation, whichever channel
 
@@ -387,7 +387,7 @@ command line and a JSON document on stdin are two spellings of one contract:
 either way.
 
 Where they differ is only in what a spelling can *express*. A command line has
-commas; JSON has brackets — so a shape holding another shape has no
+commas; JSON has brackets, so a shape holding another shape has no
 command-line form and is pipe-only, and a shape whose fields are all scalars
 has both. Nothing is silently downgraded in either direction: a shape footman
 cannot honour on a channel says so.
@@ -396,7 +396,7 @@ cannot honour on a channel says so.
 
 ## Custom types
 
-Any type footman can construct from a **single token** works — it is called
+Any type footman can construct from a **single token** works, and it is called
 with that token. `datetime` uses `fromisoformat`; everything else is
 constructed as `T(value)`:
 
@@ -416,7 +416,7 @@ filled from a group instead.
 ## Validation markers
 
 Eager, taught validation is the whole pitch, so constraints ride in
-`Annotated` — the same idiom as `suggest` and `nosplit`:
+`Annotated`, the same idiom as `suggest` and `nosplit`:
 
 ```python
 from pathlib import Path
@@ -443,19 +443,19 @@ fm: deploy: --jobs must be between 1 and 32 (got '99')
 $ DEPLOY_ENV=prod fm deploy app.toml      # target == "prod"
 ```
 
-- **Paths** — `exists`, `isfile`, `isdir` require the value to name something
+- **Paths.** `exists`, `isfile`, `isdir` require the value to name something
   real on disk; validated at parse time like a bad choice would be.
-- **Bounds** — `between(lo, hi)` is inclusive; either end may be `None`. A
+- **Bounds.** `between(lo, hi)` is inclusive; either end may be `None`. A
   bare `range(0, 8)` also works for ints, with Python's half-open semantics
   (`0` through `7`; the end is excluded, exactly as in a `for` loop).
-- **Env fallbacks** — `env("VAR")` fills an *absent* option from the
+- **Env fallbacks.** `env("VAR")` fills an *absent* option from the
   environment; the value flows through the same coercion, bounds, and checks
-  a command-line token would (just at binding time — the parser never sees
+  a command-line token would (just at binding time, since the parser never sees
   the environment). Only valid on a parameter with a default, because a
   fallback needs somewhere to fall.
-- **Custom validators** — `check(fn)` runs after coercion, per element for
+- **Custom validators.** `check(fn)` runs after coercion, per element for
   collections; raise `ValueError` with a message written for the user.
-- **Help text** — `doc("…")` puts one line of your own words on a
+- **Help text.** `doc("…")` puts one line of your own words on a
   parameter. It leads the option's line in `fm --help <task>`, becomes the
   option's description in shells that render one (zsh, fish, nushell,
   PowerShell tooltips), and rides along in the `fm --json --list` catalog.
@@ -464,23 +464,23 @@ $ DEPLOY_ENV=prod fm deploy app.toml      # target == "prod"
 
 ## Terse aliases, and forwarding
 
-A **bare** marker — one that takes no arguments — has a `Name[T]` shorthand, the
+A **bare** marker, one that takes no arguments, has a `Name[T]` shorthand, the
 way `Many[T]` reads better than `list[T]`:
 
 - `NoSplit[list[str]]` ≡ `Annotated[list[str], nosplit]`.
-- `Exists`, `IsFile`, `IsDir` ≡ `Annotated[Path, exists/isfile/isdir]` — bare,
+- `Exists`, `IsFile`, `IsDir` ≡ `Annotated[Path, exists/isfile/isdir]`: bare,
   no subscript, since the type is always `Path`: `def rm(target: Exists)`.
 - `Forward[T]` ≡ `Annotated[T, forward]`.
 - `Hidden[T]` ≡ `Annotated[T, hidden]`.
 
 Arg-taking markers (`suggest`, `between`, `env`, `check`, `doc`, `ask`) keep the
-full `Annotated[...]` form — their value can't ride in a type subscript.
+full `Annotated[...]` form, because their value can't ride in a type subscript.
 
-The `forward` marker is an orchestration tool — it threads a value onward to
-the tasks this one dispatches — and is covered in
+The `forward` marker is an orchestration tool that threads a value onward to
+the tasks this one dispatches, and is covered in
 [Chaining & parallelism](orchestration.md#forward-a-value-to-what-a-task-dispatches).
 Markers compose by listing them: `Annotated[bool, ask("Fix?"), forward]` both
-prompts for the value and forwards it — one prompt at the top, the answer
+prompts for the value and forwards it: one prompt at the top, the answer
 flowing down.
 
 ## Keeping a parameter out of the listings
@@ -498,15 +498,15 @@ def publish(target: str, legacy: Annotated[str, hidden] = ""):
     """Ship it."""
 ```
 
-`fm --help publish` shows `<target>` and stops there — no `--legacy`, and the
+`fm --help publish` shows `<target>` and stops there: no `--legacy`, and the
 synthesised example does not use it. Everything else about it is unchanged:
 it still binds, it still completes when you type `--l<TAB>`, and
 `fm --describe` carries it marked `"hidden": true` rather than dropping it.
 `fm --all --help publish` lists it.
 
 That is the same rule `hidden=True` follows on a task, one level down. Hiding
-and completing are different questions — a long machine-facing flag is the one
-you most want spelled for you — and a machine reading the contract is exactly
+and completing are different questions. A long machine-facing flag is the one
+you most want spelled for you, and a machine reading the contract is exactly
 who is meant to still find it.
 
 For a deprecated flag you keep working but stop advertising, a debug switch, or
@@ -514,7 +514,7 @@ a flag a wrapper script passes.
 
 ## Or just write a docstring
 
-Footman reads the parameter docs you already write — Google, NumPy, and
+Footman reads the parameter docs you already write, in Google, NumPy, and
 Sphinx styles, auto-detected per docstring. Everything a `doc("…")` marker
 feeds (help lines, completion descriptions, the catalog) fills from the
 docstring instead, the body between the summary and the section renders in
@@ -567,7 +567,7 @@ always wins over a docstring entry for the same parameter:
         """
     ```
 
-A docstring entry that names no real parameter earns a `UserWarning` — the
+A docstring entry that names no real parameter earns a `UserWarning`, the
 same loudness a broken annotation gets. The parser itself is public and
 standalone (`footman.docstrings.parse`) if you want structured docstrings
 for your own tooling.
@@ -579,17 +579,17 @@ environment is read.
 
 ## Dynamic completion
 
-`suggest` attaches a completer — a function that returns live values (git
+`suggest` attaches a completer: a function that returns live values (git
 branches, deploy targets, the shares below). Footman runs it **fresh** each time
 you complete that value, in a short-lived subprocess: a value you <kbd>Tab</kbd>
 to answer a build-critical question must be current, so nothing keeps a copy to
 serve you instead. The recompute is bounded and isolated, so a slow or failing
-completer degrades to no candidates — never the old values, never a hung
+completer degrades to no candidates, never the old values, never a hung
 keystroke. This holds for *every* completer, whether or not the task owns the
 terminal (`interactive=True`); a real run validates the value you pass against
 the same live call.
 
-A completer runs only where its values are wanted — the parameter whose value
+A completer runs only where its values are wanted: the parameter whose value
 is being completed or validated, and the options `--help` is printing. A line
 that never mentions the parameter never calls it, so a completer that shells
 out costs nothing on an unrelated task. `--help` shows the values it found and
@@ -608,7 +608,7 @@ def mount(share: Annotated[str, suggest(shares)]): ...
 ```
 
 Keep a completer's imports **inside its body**, the way footman keeps optional
-dependencies out of a task's import path. Loading your tasks file stays cheap —
+dependencies out of a task's import path. Loading your tasks file stays cheap;
 the completer's cost (a subprocess, a network round-trip) is paid only when it
 runs, not every time the file is imported:
 
