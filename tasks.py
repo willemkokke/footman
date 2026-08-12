@@ -289,63 +289,31 @@ def _scaffold_hero_demo() -> str:
     parameter whose candidates are *computed*. `branch` completes to the
     real branches of a real git repo, so the recording shows footman asking
     git rather than reading a list somebody typed out. It is a git repo for
-    that reason alone — the branches have to be real for the demo to be
-    honest.
+    that reason alone: the branches have to be real for the demo to mean
+    anything.
+
+    The tasks file is the one printed above the recordings on the front
+    page, read from the page itself, so the code a reader copies is the
+    code the shells were driven against. The same construction typing.md's
+    dynamic-completion cast uses.
     """
+    import re
     import shutil
     import subprocess
     import tempfile
     from pathlib import Path
 
+    page = Path("docs/index.md").read_text(encoding="utf-8")
+    marker = "<!-- hero-demo:"
+    assert marker in page, "index.md lost its hero-demo marker"
+    code = re.search(r"```python\n(.*?)```", page.split(marker, 1)[1], re.S)
+    assert code is not None, "the hero-demo marker no longer leads a python block"
+
     demo = Path(tempfile.gettempdir()) / "footman-hero-demo"
     shutil.rmtree(demo, ignore_errors=True)
     demo.mkdir(parents=True, exist_ok=True)
     (demo / "pyproject.toml").write_text("[project]\nname = 'demo'\n", encoding="utf-8")
-    (demo / "tasks.py").write_text(
-        '''import subprocess
-from typing import Annotated, Literal
-
-from footman import doc, suggest, task
-
-
-def branches() -> list[str]:
-    """Every branch in this repo - asked of git, not written down."""
-    out = subprocess.run(
-        ["git", "branch", "--format=%(refname:short)"],
-        capture_output=True,
-        text=True,
-    ).stdout
-    return out.split()
-
-
-@task
-def deploy(
-    branch: Annotated[str, suggest(branches), doc("branch to ship")] = "main",
-    region: Annotated[Literal["eu", "us", "ap"], doc("region")] = "eu",
-):
-    """Ship a branch to a region."""
-
-
-@task
-def build(release: bool = False, jobs: int = 4):
-    """Compile and bundle.
-
-    Args:
-        release: optimise and strip symbols
-        jobs: parallel compile jobs
-    """
-
-
-@task
-def test(watch: bool = False):
-    """Run the test suite.
-
-    Args:
-        watch: re-run on every file change
-    """
-''',
-        encoding="utf-8",
-    )
+    (demo / "tasks.py").write_text(code.group(1), encoding="utf-8")
     git = ["git", "-C", str(demo)]
     subprocess.run([*git, "init", "-q", "-b", "main"], check=True)
     subprocess.run([*git, "add", "-A"], check=True)

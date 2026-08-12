@@ -15,6 +15,51 @@ real flags and positionals, modules become nested command groups, and shell
 completion answers from a cached manifest in **~30 ms — without importing your
 code**.
 
+Here is the whole project behind the recording below. No CLI framework, no
+argument parser, no completion script: three functions, and the annotations
+that say what their parameters are.
+
+<!-- hero-demo: the recordings below are made against exactly this file -->
+```python
+# tasks.py
+from typing import Annotated, Literal
+
+from footman import doc, suggest, task
+from toolroom import git
+
+
+def branches() -> list[str]:
+    "Every branch in this repo, asked of git rather than written down."
+    return git.branch(format="%(refname:short)").stdout.split()
+
+
+@task
+def deploy(
+    branch: Annotated[str, suggest(branches), doc("branch to ship")] = "main",
+    region: Annotated[Literal["eu", "us", "ap"], doc("region")] = "eu",
+):
+    "Ship a branch to a region."
+
+
+@task
+def build(release: bool = False, jobs: int = 4):
+    """Compile and bundle.
+
+    Args:
+        release: optimise and strip symbols
+        jobs: parallel compile jobs
+    """
+
+
+@task
+def test(watch: bool = False):
+    """Run the test suite.
+
+    Args:
+        watch: re-run on every file change
+    """
+```
+
 === "fish"
 
     ![Animated: fm TAB lists every task with its summary, deploy --branch TAB completes to the repository's real git branches, and --region TAB offers the values the signature declares](_generated/shots/hero-fish-cast.svg)
