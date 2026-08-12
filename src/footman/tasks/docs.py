@@ -541,7 +541,6 @@ def _pty_session(
     queue = list(sends)
     tracker = pyte.Screen(width, height)
     tracker_stream = pyte.Stream(tracker)
-    descs = _Descs()
     pending = b""  # tail kept so a query split across reads still matches
     # Typing begins only after the boot has *settled*: keys written before
     # the line editor exists are half-echoed raw and eaten (a TAB pressed
@@ -647,7 +646,14 @@ def _pty_session(
                     break
                 last_output = _time.monotonic()
                 chunks.append((last_output - start, data))
-                tracker_stream.feed(descs.feed(data.decode("utf-8", "replace")))
+                # Per chunk, deliberately: this screen exists to answer the
+                # shell's cursor-position queries *live*, and the stateful
+                # stripper holds back a possibly-incomplete tail — which
+                # leaves the tracker a read behind and answers PSReadLine
+                # with a stale cursor, after which it stops completing at
+                # all. Debris from a split DCS costs this screen nothing; it
+                # is never rendered. The frames get the careful stripping.
+                tracker_stream.feed(_DCS.sub("", data.decode("utf-8", "replace")))
                 buf = pending + data
                 _answer_queries(
                     buf,
