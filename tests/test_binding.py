@@ -5,13 +5,15 @@ from __future__ import annotations
 import enum
 import uuid
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 
 import pytest
 
 from footman import _manifest
 from footman._executor import run_chain
 from footman._split import ChainError, split_chain
+from footman.context import Context
+from footman.params import env
 from footman.registry import Group
 
 
@@ -161,6 +163,158 @@ def test_variadic_plus_passthrough():
 
     _run(tasks, "run pytest -x -- --maxfail 1")
     assert seen["cmd"] == ("pytest", "-x", "--maxfail", "1")
+
+
+# --- parameters declared before *args -------------------------------------------
+#
+# Python's calling convention: once a call passes anything positionally into
+# *args, every parameter declared before it must be filled positionally too.
+# The executor binds named parameters as keywords, so each of these shapes
+# either collided ("got multiple values") or — worse — silently shifted the
+# variadic values leftward into the named slots.
+
+
+def test_named_params_bind_beside_variadic_values():
+    """The loud face: `config`/`version` bound as keywords collided with the
+    variadic values passed positionally before them."""
+    seen: dict[str, object] = {}
+
+    def tasks(reg):
+        @reg.task
+        def deploy(config: Path, version: str, *overlays: Path):
+            seen.update(config=config, version=version, overlays=overlays)
+
+    _, results = _run(tasks, "deploy a.toml 1.2.3 b.toml c.toml")
+    assert results[0].ok, results[0].error
+    assert seen == {
+        "config": Path("a.toml"),
+        "version": "1.2.3",
+        "overlays": (Path("b.toml"), Path("c.toml")),
+    }
+
+
+def test_a_defaulted_param_keeps_its_default_beside_variadic_values():
+    """The silent face: with `marker` absent from the call, the first
+    variadic value shifted into it — wrong data under a green exit."""
+    seen: dict[str, object] = {}
+
+    def tasks(reg):
+        @reg.task
+        def suite(marker: str = "", *pytest_args):
+            seen.update(marker=marker, pytest_args=pytest_args)
+
+    _, results = _run(tasks, "suite x y")
+    assert results[0].ok, results[0].error
+    assert seen == {"marker": "", "pytest_args": ("x", "y")}
+
+
+def test_passthrough_lands_in_varargs_not_a_named_param():
+    """`--` passthrough always has a home in a task's *args — it must never
+    bind a named parameter instead. This is getting-started's own example
+    (`def test(marker="", *pytest_args)`): `-- -q -x` gave marker='-q'."""
+    seen: dict[str, object] = {}
+
+    def tasks(reg):
+        @reg.task
+        def suite(marker: str = "", *pytest_args):
+            seen.update(marker=marker, pytest_args=pytest_args)
+
+    _, results = _run(tasks, "suite -- -q -x")
+    assert results[0].ok, results[0].error
+    assert seen == {"marker": "", "pytest_args": ("-q", "-x")}
+
+
+def test_a_supplied_option_binds_beside_variadic_values():
+    seen: dict[str, object] = {}
+
+    def tasks(reg):
+        @reg.task
+        def suite(marker: str = "", *pytest_args):
+            seen.update(marker=marker, pytest_args=pytest_args)
+
+    _, results = _run(tasks, "suite --marker=slow x y")
+    assert results[0].ok, results[0].error
+    assert seen == {"marker": "slow", "pytest_args": ("x", "y")}
+
+
+def test_positional_only_then_named_then_varargs():
+    """A leading positional-only run was already passed positionally; a named
+    parameter after it still collided with the variadic values."""
+    seen: dict[str, object] = {}
+
+    def tasks(reg):
+        @reg.task
+        def mixed(config: Path, /, version: str, *overlays: Path):
+            seen.update(config=config, version=version, overlays=overlays)
+
+    _, results = _run(tasks, "mixed a.toml 1.2.3 b.toml")
+    assert results[0].ok, results[0].error
+    assert seen == {
+        "config": Path("a.toml"),
+        "version": "1.2.3",
+        "overlays": (Path("b.toml"),),
+    }
+
+
+def test_a_skipped_defaulted_param_is_filled_to_reach_varargs():
+    """`second` was not supplied, but the call must still fill its slot (with
+    the default) for the variadic values to land in *rest."""
+    seen: dict[str, object] = {}
+
+    def tasks(reg):
+        @reg.task
+        def wrap(first: str, second: str = "kept", *rest: str):
+            seen.update(first=first, second=second, rest=rest)
+
+    _, results = _run(tasks, "wrap one r1 r2")
+    assert results[0].ok, results[0].error
+    assert seen == {"first": "one", "second": "kept", "rest": ("r1", "r2")}
+
+
+def test_an_env_fallback_binds_beside_variadic_values(monkeypatch):
+    """env() fills the parameter without a CLI mention — the same keyword
+    collision, reached without typing the option."""
+    monkeypatch.setenv("SUITE_MARKER", "slow")
+    seen: dict[str, object] = {}
+
+    def tasks(reg):
+        @reg.task
+        def suite(marker: Annotated[str, env("SUITE_MARKER")] = "", *pytest_args):
+            seen.update(marker=marker, pytest_args=pytest_args)
+
+    _, results = _run(tasks, "suite x y")
+    assert results[0].ok, results[0].error
+    assert seen == {"marker": "slow", "pytest_args": ("x", "y")}
+
+
+def test_keyword_only_options_stay_keyword_beside_varargs():
+    """Parameters after *args are keyword-only and must stay keywords — only
+    the ones before it move to positional."""
+    seen: dict[str, object] = {}
+
+    def tasks(reg):
+        @reg.task
+        def suite(first: str, *rest: str, flag: bool = False):
+            seen.update(first=first, rest=rest, flag=flag)
+
+    _, results = _run(tasks, "suite x y --flag")
+    assert results[0].ok, results[0].error
+    assert seen == {"first": "x", "rest": ("y",), "flag": True}
+
+
+def test_ctx_named_params_and_varargs_together():
+    """run_task injects ctx as the first positional itself, so the drain must
+    skip its slot and still fill the named ones after it."""
+    seen: dict[str, object] = {}
+
+    def tasks(reg):
+        @reg.task
+        def deploy(ctx: Context, version: str, *extras: str):
+            seen.update(ctx=type(ctx).__name__, version=version, extras=extras)
+
+    _, results = _run(tasks, "deploy 1.2.3 e1 e2")
+    assert results[0].ok, results[0].error
+    assert seen == {"ctx": "Context", "version": "1.2.3", "extras": ("e1", "e2")}
 
 
 def test_passthrough_without_varargs_reaches_context():

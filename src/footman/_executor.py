@@ -997,17 +997,27 @@ def bind(
                 _coerce.coerce_one(raw, peeled.element), peeled, label, siblings
             )
 
-    # Positional-only params (`def build(target, /)`) cannot be passed by
-    # keyword, so move the leading run of them out of kwargs into positional
-    # args, in signature order. A defaultless one is splitter-enforced present,
-    # so a `hole` (a skipped optional) is only ever filled by an existing
-    # default and never leaves a gap before a supplied later param.
+    # The parameters that must be passed positionally, in signature order.
+    # Positional-only ones (`def build(target, /)`) always — they cannot be
+    # passed by keyword. And once there are variadic values, *everything*
+    # declared before `*args`: Python only reaches `*args` after every
+    # earlier slot is filled positionally, so a keyword left behind either
+    # collides with the variadic values ("got multiple values for…") or —
+    # absent, relying on its default — silently swallows them. A defaultless
+    # one is splitter-enforced present, so a `hole` (a skipped optional) is
+    # only ever filled by an existing default and never leaves a gap before
+    # a value that must land after it.
     pos: list[Any] = []
     hole: list[Any] = []
     ctx_name = context_param_name(sig)
     for param in sig.parameters.values():
-        if param.kind is not inspect.Parameter.POSITIONAL_ONLY:
-            break  # positional-only params always lead the signature
+        if param.kind is not inspect.Parameter.POSITIONAL_ONLY and not var_args:
+            break  # nothing to reach past them — keywords serve the rest
+        if param.kind not in (
+            inspect.Parameter.POSITIONAL_ONLY,
+            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+        ):
+            break  # `*args` itself; keyword-only stays keyword
         if param.name == ctx_name:
             continue  # run_task injects ctx as the first positional itself
         if param.name in kwargs:
@@ -1016,6 +1026,8 @@ def bind(
             pos.append(kwargs.pop(param.name))
         elif param.default is not empty:
             hole.append(param.default)
+    if var_args:
+        pos += hole  # every slot before *args is filled to reach it
 
     # `--` passthrough always has a home now: a task's *args, and/or the run
     # context (`passthrough()` / `ctx.passthrough`). So it is never an error.
