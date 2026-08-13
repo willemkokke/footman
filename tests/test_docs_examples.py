@@ -275,8 +275,11 @@ def _js_default_files() -> dict[str, str]:
     return dict(re.findall(r'"([^"]+)": `(.*?)`,', match.group(1), re.S))
 
 
-def _playground_invoke(tmp_path: Path, line: str) -> tuple[int, str]:
-    """Drive the shipped browser driver over the shipped default files.
+def _playground_invoke(
+    tmp_path: Path, line: str, files: dict[str, str] | None = None
+) -> tuple[int, str]:
+    """Drive the shipped browser driver — over the shipped default files, or
+    over *files* when a rehearsal needs an editor state of its own.
 
     The exact BOOTSTRAP text runs in CPython under `_FM_PLAYGROUND_SIM`, in
     a subprocess because it monkeypatches `subprocess.Popen` process-wide.
@@ -284,8 +287,9 @@ def _playground_invoke(tmp_path: Path, line: str) -> tuple[int, str]:
     keyword the simulated child does not take breaks every task in the page
     — and nothing else exercises it, since Pyodide is not a test dependency.
     """
-    files = _js_default_files()
-    assert set(files) == {"tasks.py", "test_demo.py"}, files
+    if files is None:
+        files = _js_default_files()
+        assert set(files) == {"tasks.py", "test_demo.py"}, files
     probe = tmp_path / "probe.py"
     probe.write_text(
         _js_bootstrap()
@@ -333,6 +337,49 @@ def test_playground_default_sample_spells_its_tools(tmp_path: Path):
     ):
         _, output = _playground_invoke(tmp_path, line)
         assert command in output, output
+
+
+def test_playground_path_requirements_pass(tmp_path: Path):
+    """A path requirement passes in the sandbox: the page's filesystem holds
+    only the editor's files, so the cookbook's `Annotated[Path, isfile]`
+    example would otherwise refuse before anything ran. Both seats are
+    dummied — the splitter's eager CLI-token check and the executor's late
+    one (variadic values) — while the rest of the validation ladder stays
+    real: the `check(fn)` beside it still refuses."""
+    tasks = """\
+from pathlib import Path
+from typing import Annotated
+from footman import task
+from footman.params import check, isfile
+
+def semver(value: str) -> None:
+    import re
+    if not re.fullmatch(r"\\d+\\.\\d+\\.\\d+", value):
+        raise ValueError(f"expected MAJOR.MINOR.PATCH, got {value!r}")
+
+@task
+def deploy(config: Annotated[Path, isfile],
+           version: Annotated[str, check(semver)]):
+    "Roll out."
+    print(config, version)
+
+@task
+def overlay(*paths: Annotated[Path, isfile]):
+    "Apply overlays."
+    print(*paths)
+"""
+    files = {"tasks.py": tasks}
+    code, output = _playground_invoke(
+        tmp_path, "-s deploy missing.toml 1.2.3", files=files
+    )
+    assert code == 0, output
+    code, output = _playground_invoke(tmp_path, "-s overlay a.toml b.toml", files=files)
+    assert code == 0, output
+    code, output = _playground_invoke(
+        tmp_path, "-s deploy missing.toml not-a-version", files=files
+    )
+    assert code != 0, output
+    assert "MAJOR.MINOR.PATCH" in output, output
 
 
 def test_example_markers_are_spent():

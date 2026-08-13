@@ -7,8 +7,10 @@
  *
  * Execution model: the browser cannot spawn processes or threads, so the
  * driver installs a sandbox — subprocess children are simulated (exit 0,
- * output labelled `[simulated]`), runs are sequential (`-s`), and
- * parallel() degrades to inline calls. In-process tools are the
+ * output labelled `[simulated]`), runs are sequential (`-s`),
+ * parallel() degrades to inline calls, and path requirements
+ * (exists/isfile/isdir) pass unchecked, since the page's filesystem
+ * holds only the editor's files. In-process tools are the
  * exception: pytest really runs, inside the page, through the tools
  * bridge. The playground page discloses all of this.
  */
@@ -289,6 +291,32 @@ if sys.platform == "emscripten" or os.environ.get("_FM_PLAYGROUND_SIM"):
 
     footman.context.parallel = _inline_parallel
     footman.__dict__["parallel"] = _inline_parallel
+
+    # The page's filesystem holds only the editor's files, so a path
+    # requirement (exists / isfile / isdir) could hardly ever be met — an
+    # example like Annotated[Path, isfile] would refuse before anything
+    # ran. Simulate it the way children are simulated: the check passes;
+    # the rest of the validation ladder (types, choices, bounds, check(fn))
+    # stays real. Two seats, same funnel: the splitter validates CLI
+    # tokens eagerly, the executor validates what the splitter never saw
+    # (env fallbacks, variadic and passthrough values).
+    import dataclasses
+    import footman._executor
+    import footman._split
+
+    def _fm_path_passes(where, label, value, req):
+        pass
+
+    footman._split._check_path = _fm_path_passes
+
+    _fm_real_validate = footman._executor._validate_value
+
+    def _fm_validate_sans_path(value, peeled, label):
+        if peeled.path_req is not None:
+            peeled = dataclasses.replace(peeled, path_req=None)
+        return _fm_real_validate(value, peeled, label)
+
+    footman._executor._validate_value = _fm_validate_sans_path
 
 def _fm_sandbox_line(line):
     words = line.split()

@@ -13,10 +13,12 @@ machine, and nothing you type leaves it.
 
 The browser sandbox, said plainly: it has no processes and one thread, so
 every `run("…")` child is **simulated** — it succeeds and its output says
-`[simulated]` — and runs are sequential. Everything else is the real
-thing: parsing, eager validation, taught errors, scheduling, `--json`,
-`--dry-run` plans — and **`fm test` runs the real pytest**, on toolroom's
-in-process path, right here in the page. A browser has no processes to
+`[simulated]` — and runs are sequential. The page's filesystem holds only
+the editor's files, so a path requirement (`exists`/`isfile`/`isdir`)
+**passes without looking** — nothing it could ask for is there. Everything
+else is the real thing: parsing, eager validation, taught errors,
+scheduling, `--json`, `--dry-run` plans — and **`fm test` runs the real
+pytest**, on toolroom's in-process path, right here in the page. A browser has no processes to
 spawn, so the page is that path's proof by extremes: a true twin,
 not a fallback. The prompt completes
 too: press <kbd>Tab</kbd> and the candidates come from the same manifest

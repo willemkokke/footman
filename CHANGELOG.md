@@ -104,6 +104,18 @@ versions may include breaking changes.
   player also re-queries its animations instead of caching them: one that
   started late kept its own clock, drifted, and put two frames on screen at
   once.
+- **A path-required example runs in the playground.** The page's filesystem
+  holds only the editor's files, so a parameter marked `exists`, `isfile`,
+  or `isdir` — the cookbook's belt-and-braces deploy, brought over by its
+  own "run it there" link — refused every value before the task ran: there
+  was nothing on disk for the check to find. The sandbox now simulates path
+  requirements the way it simulates children — the check passes, and the
+  rest of the validation ladder (types, choices, bounds, `check(fn)`) stays
+  real — at both of the check's seats: the splitter's eager CLI-token
+  validation and the executor's late one (env fallbacks, variadic values).
+  The playground page discloses it beside the other simulations, and a
+  rehearsal drives the shipped driver over a path-required task in CPython
+  under `_FM_PLAYGROUND_SIM`.
 
 ### Documentation
 
