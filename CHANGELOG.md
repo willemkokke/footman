@@ -45,6 +45,22 @@ versions may include breaking changes.
 
 ### Fixed
 
+- **A named parameter and `*args` can share a signature.** The call the
+  executor assembled passed named parameters as keywords and variadic values
+  positionally — but Python only reaches `*args` after every slot declared
+  before it is filled positionally. Any plain parameter before `*args`
+  therefore broke the call the moment variadic (or `--` passthrough) values
+  arrived, in one of two ways. Supplied — on the line, or filled by `env()`,
+  `ask()`, a forwarded value, or a computed default — it collided:
+  `TypeError: got multiple values for argument`. Absent, resting on its
+  default, it failed *silently*: the first variadic values shifted left into
+  the named slots, so `def test(marker="", *pytest_args)` — getting-started's
+  own example — ran `fm test -- -q -x` with `marker='-q'`, wrong data under
+  a green exit. Every parameter before `*args` is now emitted positionally
+  when variadic values are present, in signature order, a skipped optional's
+  slot filled by its default; keyword-only parameters after `*args` keep
+  their keywords, and `--` passthrough lands where the docs always said it
+  would — in the task's `*args`, never in a named parameter.
 - **The docs no longer advertise a spelling the grammar rejects.** Two pages
   showed `fm workspace.mount --share <TAB>` completing to a value list. With
   a space, that offers the task's *other* options and the next chain head —
