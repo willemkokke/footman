@@ -83,7 +83,7 @@ nav = [
 
 # The playground: Pyodide-backed live editor + per-example "run it there"
 # links. One module script on every page; it no-ops where nothing applies.
-extra_css = ["assets/playground.css", "assets/casts.css"]
+extra_css = ["assets/palette.css", "assets/playground.css", "assets/casts.css"]
 extra_javascript = [
   { path = "assets/playground.js", type = "module", defer = true },
   # Inlines each animated cast and hangs play/pause/scrub off it, so a
@@ -145,18 +145,24 @@ features = [
 # toggle cycle — Material's automatic-mode pattern.
 [[project.theme.palette]]
 media = "(prefers-color-scheme)"
+# A near-black header in both schemes, so the green logo and accent read
+# the same way the recordings do. Green cannot be the header colour itself:
+# white on #98a84b measures 2.61:1.
+primary = "black"
 toggle.icon = "lucide/sun-moon"
 toggle.name = "Switch to light mode"
 
 [[project.theme.palette]]
 media = "(prefers-color-scheme: light)"
 scheme = "default"
+primary = "black"
 toggle.icon = "lucide/sun"
 toggle.name = "Switch to dark mode"
 
 [[project.theme.palette]]
 media = "(prefers-color-scheme: dark)"
 scheme = "slate"
+primary = "black"
 toggle.icon = "lucide/moon"
 toggle.name = "Switch to system preference"
 

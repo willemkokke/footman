@@ -1,0 +1,54 @@
+/*
+  The accent, in two greens.
+
+  The colour comes from the recordings: #98a84b is the prompt glyph in every
+  cast on the site, and the bell on the link-preview card. Using it as the
+  site's accent means a reader meets one colour, whether they arrive through
+  a shared link, a recording, or the docs themselves.
+
+  It cannot be one green, though. Measured as WCAG AA:
+
+      #98a84b on #292929 (dark chrome)   5.57:1  passes
+      #98a84b on white                   2.61:1  fails
+      #5f6f2a on white                   5.54:1  passes
+
+  So dark mode gets the terminal green exactly, and light mode gets it
+  darkened until it is legible. They read as the same colour family, which
+  is all the coherence needs to be. The site follows the visitor's OS by
+  default, so both are load-bearing — the maintainer browsing in dark mode
+  never sees the light-mode value, which is precisely why it is written down
+  here rather than eyeballed.
+*/
+
+:root,
+[data-md-color-scheme="default"] {
+  --fm-accent: #5f6f2a;
+  --md-accent-fg-color: #5f6f2a;
+  --md-accent-fg-color--transparent: rgba(95, 111, 42, 0.1);
+  --md-typeset-a-color: #5f6f2a;
+
+  /*
+    Off-white rather than #fff. A full-white page of long-form technical
+    prose is glare, and this site is mostly long-form technical prose.
+    Measured on this background: body text 15.35:1, the light-mode green
+    link 4.99:1 — both comfortably past AA, so the softening costs no
+    legibility.
+  */
+  --md-default-bg-color: #f4f3ef;
+}
+
+[data-md-color-scheme="slate"] {
+  --fm-accent: #98a84b;
+  --md-accent-fg-color: #98a84b;
+  --md-accent-fg-color--transparent: rgba(152, 168, 75, 0.1);
+  --md-typeset-a-color: #98a84b;
+}
+
+/*
+  The header logo, the same lucide concierge-bell the card carries. The
+  header is dark in both schemes, so the bell takes the terminal green in
+  both — the value that was measured against dark chrome.
+*/
+.md-header__button.md-logo :is(img, svg) {
+  color: #98a84b;
+}
