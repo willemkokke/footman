@@ -115,6 +115,10 @@ heading_level = 2
 
 [project.theme]
 language = "en"
+# One template override, `overrides/main.html`: the link-preview meta tags.
+# Zensical ships no social-card plugin, so a posted URL renders as a bare
+# link without them.
+custom_dir = "overrides"
 # The concierge bell: you ring, the footman runs the errand. Same lucide
 # family as the palette toggles; the favicon is the identical glyph.
 icon.logo = "lucide/concierge-bell"
