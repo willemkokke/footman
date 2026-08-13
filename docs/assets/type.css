@@ -1,0 +1,22 @@
+/*
+  Code ligatures, on.
+
+  The theme ships `font-variant-ligatures: none` on
+  `.md-typeset code, .md-typeset kbd, .md-typeset pre`, so naming a
+  ligature font in the config is not enough on its own — the glyphs are
+  fetched and then suppressed. This turns them back on for the same three
+  selectors, and nowhere else.
+
+  `kbd` is deliberately left out below: a key legend is a picture of a
+  physical key, and joining characters inside one would be a small lie.
+*/
+
+.md-typeset code,
+.md-typeset pre,
+.md-typeset pre code {
+  font-variant-ligatures: contextual common-ligatures;
+}
+
+.md-typeset kbd {
+  font-variant-ligatures: none;
+}
