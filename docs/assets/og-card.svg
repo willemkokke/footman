@@ -29,7 +29,7 @@
         font-size="76" font-weight="700" fill="#f2f3f4" letter-spacing="-1">footman</text>
 
   <text x="74" y="196" font-family="Helvetica Neue, Helvetica, Arial, sans-serif"
-        font-size="35" fill="#9aa0a6">Typed Python functions become a real CLI.</text>
+        font-size="35" fill="#9aa0a6">A <tspan fill="#c5c8c6" font-weight="600">Python task runner</tspan>: typed functions become a real CLI.</text>
   <text x="74" y="240" font-family="Helvetica Neue, Helvetica, Arial, sans-serif"
         font-size="35" fill="#9aa0a6">Shell completion answers in <tspan fill="#c5c8c6" font-weight="600">~30 ms</tspan>, without importing your code.</text>
 
