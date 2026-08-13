@@ -33,8 +33,13 @@
     Measured on this background: body text 15.35:1, the light-mode green
     link 4.99:1 — both comfortably past AA, so the softening costs no
     legibility.
+
+    The `--light` variant is a separate value, not derived from the one
+    above, and the theme paints the sticky header with it. Left alone it
+    stays #ffffffb3 and the header is a white bar over a softened page.
   */
   --md-default-bg-color: #f4f3ef;
+  --md-default-bg-color--light: rgba(244, 243, 239, 0.72);
 }
 
 [data-md-color-scheme="slate"] {
@@ -45,10 +50,32 @@
 }
 
 /*
-  The header logo, the same lucide concierge-bell the card carries. The
-  header is dark in both schemes, so the bell takes the terminal green in
-  both — the value that was measured against dark chrome.
+  The header, one step above the page rather than level with it.
+
+  Softening the page alone left header, tabs and content as a single flat
+  slab: the theme's own separator is `#0000000d`, black at 5%, which is
+  invisible against off-white, and it only paints once you scroll. So the
+  edge comes from tone instead — the bar sits a little lighter than the
+  page it floats over, which is the ordinary way light-mode surfaces read
+  as raised, with the hairline firmed up enough to be seen.
+
+  Light mode only. The dark scheme puts its header *below* the page in
+  lightness, which is that theme's own convention and reads fine.
+*/
+[data-md-color-scheme="default"] .md-header {
+  background-color: rgba(251, 250, 248, 0.88);
+  box-shadow: 0 0.05rem 0 rgba(0, 0, 0, 0.09);
+}
+
+/*
+  The header logo, the same lucide concierge-bell the card carries.
+
+  This theme paints the header from the default background rather than from
+  the primary colour, so the bar is light in light mode and dark in dark
+  mode — which means the bell has to change with it. The terminal green
+  measures 2.61:1 against a light bar, so it takes the per-scheme accent
+  instead: darkened in light mode, exact in dark.
 */
 .md-header__button.md-logo :is(img, svg) {
-  color: #98a84b;
+  color: var(--fm-accent);
 }

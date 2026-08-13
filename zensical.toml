@@ -154,24 +154,18 @@ features = [
 # toggle cycle — Material's automatic-mode pattern.
 [[project.theme.palette]]
 media = "(prefers-color-scheme)"
-# A near-black header in both schemes, so the green logo and accent read
-# the same way the recordings do. Green cannot be the header colour itself:
-# white on #98a84b measures 2.61:1.
-primary = "black"
 toggle.icon = "lucide/sun-moon"
 toggle.name = "Switch to light mode"
 
 [[project.theme.palette]]
 media = "(prefers-color-scheme: light)"
 scheme = "default"
-primary = "black"
 toggle.icon = "lucide/sun"
 toggle.name = "Switch to dark mode"
 
 [[project.theme.palette]]
 media = "(prefers-color-scheme: dark)"
 scheme = "slate"
-primary = "black"
 toggle.icon = "lucide/moon"
 toggle.name = "Switch to system preference"
 
