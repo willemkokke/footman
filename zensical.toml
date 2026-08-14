@@ -120,8 +120,9 @@ heading_level = 2
 
 [project.theme]
 language = "en"
-# Fira Code for code, with ligatures in fenced blocks only — see
-# assets/type.css. Inline code in prose keeps the theme's plain glyphs.
+# Fira Code for code, with ligatures in Python blocks only — see
+# assets/type.css. Inline code in prose keeps the theme's plain glyphs, and
+# so do terminal transcripts: a shell does not draw `!=` as `≠`.
 font.text = "Inter"
 font.code = "Fira Code"
 # One template override, `overrides/main.html`: the link-preview meta tags.
