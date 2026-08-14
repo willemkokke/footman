@@ -65,8 +65,10 @@ not just the words: type `deploy prod --regions=eu,` and press
   <div class="fmp-pane fmp-output-pane">
     <div class="fmp-toolbar">
       <span class="fmp-prompt">fm</span>
-      <input id="fmp-args" spellcheck="false" autocomplete="off"
-        autocapitalize="off" aria-label="fm command line" />
+      <input id="fmp-args" list="fmp-commands" spellcheck="false"
+        autocomplete="off" autocapitalize="off"
+        aria-label="fm command line" />
+      <datalist id="fmp-commands"></datalist>
       <button id="fmp-run" disabled>Run</button>
       <button id="fmp-clear" type="button" class="fmp-secondary"
         title="Clear the transcript">Clear</button>

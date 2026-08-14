@@ -195,12 +195,35 @@
   font-family: "Fira Code", var(--md-code-font-family);
   font-size: 0.64rem;
   font-weight: 400;
+  /* Buttons centre their text by default — a long line that wraps must
+   * read as a command, not float mid-pill. */
+  text-align: left;
 }
 
 #fm-playground #fmp-complete button span,
 #fm-playground #fmp-chips button span {
   color: var(--md-default-fg-color--light);
   font-family: var(--md-text-font-family, inherit);
+}
+
+/* Command chips read as prompt lines — outlined, with the prompt's own
+ * `fm` in front — where completion candidates stay filled menu pills.
+ * Two different offers, two different looks. */
+
+#fm-playground #fmp-chips button {
+  background: transparent;
+  border: 0.05rem solid var(--md-default-fg-color--lightest);
+  border-radius: 0.2rem;
+}
+
+#fm-playground #fmp-chips button::before {
+  content: "fm";
+  color: var(--md-accent-fg-color);
+  font-weight: 700;
+}
+
+#fm-playground #fmp-chips button:hover {
+  border-color: var(--md-accent-fg-color);
 }
 
 /* The gallery bar: the example menu, its reset, and the blurb — one row
