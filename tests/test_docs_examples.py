@@ -404,8 +404,15 @@ GALLERY_FEATURES = {
     "pre-tasks scheduled into a gate": "basics/gate",
     "keep-going collects every failure": "basics/gate",
     "dry-run shows the built command": "basics/gate",
+    "typed coercion and choices teach": "typing/coercion",
     "stacked validation markers teach": "validation/deploy",
     "passthrough lands in *args": "variadic/bench",
+    "prerequisites and chains": "scheduling/pipeline",
+    "run() and shell pipelines": "tools/shell",
+    "stdin binding and structured returns": "results/stdin-json",
+    "the config cascade": "config/cascade",
+    "include() mounts shared tasks": "compose/include",
+    "grammar-aware completion": "completion/grammar",
 }
 
 
@@ -420,6 +427,9 @@ def test_gallery_entries_are_wellformed():
         for name, lines in example["files"].items():
             assert isinstance(lines, list), (example["id"], name)
             assert all(isinstance(line, str) for line in lines), (example["id"], name)
+        packages = example.get("packages", [])
+        assert isinstance(packages, list), example["id"]
+        assert all(isinstance(p, str) and p for p in packages), example["id"]
         assert example["commands"], example["id"]
         for command in example["commands"]:
             assert command["line"] and command["note"], (example["id"], command)

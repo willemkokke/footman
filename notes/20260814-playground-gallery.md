@@ -127,13 +127,48 @@ Out of scope, disclosed on the page: PEP 723 re-exec (no processes),
 
 ## Phases
 
-1. **Mechanics** — CM6, dynamic tabs, ANSI pane, transcript.
+1. **Mechanics** — CM6, dynamic tabs, ANSI pane, transcript. LANDED
+   (#429, #430; then the palette unification and the quiet pytest.ini).
 2. **Gallery** — registry, dropdown, chips, fragment interplay,
-   rehearsal + coverage-guard tests.
+   rehearsal + coverage-guard tests. LANDED (#431), seeded with Basics /
+   Validation / Variadic.
 3. **Content & sandbox** — the ten categories; shell dummy; stdin tab;
-   the two spikes (dynamic completion, ask()).
+   the spikes (dynamic completion, ask(), editor completion); and a
+   **`packages` field per registry entry** (Willem 2026-08-14):
+   micropip deps an example declares, installed on its first run the way
+   pytest already is — each example carries its own install cost and the
+   default page stays light. The rehearsal harness needs the same
+   packages in the docs test group, so CI proves each one works in
+   CPython before it ships.
 4. **Stretch** — branded-prompt example (`App(...)` renames the prompt),
    monorepo cascade tabs, simulated `fetch()`.
+
+## Live-tool menu (parked, all liked — sequence undecided)
+
+Everything pure-Python (or Pyodide-built) runs REAL in the page, like
+pytest. Candidates, roughly by wow-per-effort: coverage + pytest-cov
+(real missed lines in the browser); hypothesis (a property test finds
+the fizzbuzz counterexample live); black / isort `--check --diff` (and
+with **FS→editor sync-back** after a run, a formatter visibly rewrites
+the open tab — an enabler worth building on its own); pyflakes /
+pycodestyle (real linting where ruff, being Rust, cannot); doctest and
+unittest (stdlib, zero install); rich (colour tables through the ANSI
+transcript; the `@requires_dep` pattern exists); timeit + statistics (a
+bench that really measures); ast (a ten-line custom check — no tool
+needed, a task is a function); sqlite3 + csv + json pipelines (pairs
+with the stdin tab and `Stdout[T]`/`--json`). Not worth chasing: mypy
+(wasm-slow), numpy/pandas (heavy, off-topic), anything Rust/binary
+with no Pyodide build (ruff, uv).
+
+## The released-wheel gap (learned 2026-08-14)
+
+The page installs footman FROM PYPI; the rehearsals run the SOURCE
+TREE. The variadic example shipped green against source and broke in
+the browser against 0.39.1, which predated the #428 executor fix —
+v0.40.0 exists because of it. Standing constraint: **gallery examples
+may only depend on released behaviour**, or must wait for the release
+that carries their fix. Candidate guard for phase 3: a rehearsal
+variant that drives the gallery against the released wheel in a venv.
 
 ## Decided
 

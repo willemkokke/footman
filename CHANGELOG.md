@@ -7,6 +7,21 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Documentation
+
+- **The playground gallery covers every category.** Ten groups in the
+  dropdown — Basics, Typing, Validation, Variadic, Scheduling, Tools,
+  Results, Config, Composition, Completion — each example with command
+  chips whose exit codes and output are asserted in CI. The sandbox grew
+  three abilities to make them honest: a tab named `stdin` is the run's
+  **pipe** (its text feeds stdin-bound parameters and is never written to
+  disk, so the Results example ships a prepopulated JSON payload),
+  `run(shell=True)` resolves to a stand-in shell (the simulated child
+  never executes it, so the pipeline example runs), and an example can
+  declare **`packages`** — micropip installs fetched on its first run,
+  the way pytest always was, so each example carries its own install
+  cost and the page stays light.
+
 ## [0.40.0] - 2026-08-14
 
 ### Changed

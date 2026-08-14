@@ -8,9 +8,11 @@
  * Execution model: the browser cannot spawn processes or threads, so the
  * driver installs a sandbox — subprocess children are simulated (exit 0,
  * output labelled `[simulated]`), runs are sequential (`-s`),
- * parallel() degrades to inline calls, and path requirements
- * (exists/isfile/isdir) pass unchecked, since the page's filesystem
- * holds only the editor's files. In-process tools are the
+ * parallel() degrades to inline calls, run(shell=...) resolves to a
+ * stand-in interpreter (the simulated child never executes it), and
+ * path requirements (exists/isfile/isdir) pass unchecked, since the
+ * page's filesystem holds only the editor's files. A tab named stdin
+ * is the run's pipe, never a file on disk. In-process tools are the
  * exception: pytest really runs, inside the page, through the tools
  * bridge. The playground page discloses all of this.
  */
@@ -299,6 +301,20 @@ if sys.platform == "emscripten" or os.environ.get("_FM_PLAYGROUND_SIM"):
     footman.context.parallel = _inline_parallel
     footman.__dict__["parallel"] = _inline_parallel
 
+    # The browser has no shells to find, and the simulated child never
+    # executes its argv — so run(shell=...) resolves to a stand-in
+    # interpreter prefix instead of refusing. The pipeline examples run;
+    # what they would have executed shows as the simulated line.
+    def _fm_resolve_shell(kind, policy="posix"):
+        return ["/bin/sh", "-c"]
+
+    footman.context._resolve_shell = _fm_resolve_shell
+
+    # include("module") in an example imports a sibling editor tab; make
+    # the working directory importable the way a terminal's usually is.
+    if "" not in sys.path:
+        sys.path.insert(0, "")
+
     # The page's filesystem holds only the editor's files, so a path
     # requirement (exists / isfile / isdir) could hardly ever be met — an
     # example like Annotated[Path, isfile] would refuse before anything
@@ -342,6 +358,10 @@ def _fm_invoke(files_json, line, columns=80):
     # footman's own wrapping and pytest's ruler bars fit the pane.
     os.environ["COLUMNS"] = str(int(columns))
     files = json.loads(files_json)
+    # A tab named stdin is the pipe, not a file: its text feeds the
+    # invocation's stdin (so Stdin[...] parameters bind from it) and is
+    # never written to disk. An empty tab means no pipe at all.
+    stdin_text = files.pop("stdin", None)
     if sys.platform == "emscripten" or os.environ.get("_FM_PLAYGROUND_SIM"):
         # A quiet pytest.ini, so the sample's pytest call needs no plugin
         # incantations: no:cacheprovider keeps .pytest_cache out of the
@@ -357,7 +377,11 @@ def _fm_invoke(files_json, line, columns=80):
         Path(name).write_text(content, encoding="utf-8")
     try:
         from footman.testing import Runner
-        result = Runner().invoke(_fm_sandbox_line(line), tasks=Path("tasks.py"))
+        result = Runner().invoke(
+            _fm_sandbox_line(line),
+            tasks=Path("tasks.py"),
+            stdin=stdin_text if stdin_text else None,
+        )
         return json.dumps({
             "exit_code": result.exit_code,
             "stdout": result.stdout,
@@ -439,7 +463,6 @@ function joinedFiles(entry) {
 }
 
 let pyodideReady = null; // one load per browser tab, kept across instant nav
-let pytestReady = null;
 
 function loadRuntime(status) {
   if (!pyodideReady) {
@@ -461,18 +484,31 @@ function loadRuntime(status) {
   return pyodideReady;
 }
 
-function ensurePytest(pyodide, status) {
-  if (!pytestReady) {
-    pytestReady = (async () => {
-      status("installing pytest — first test run only…");
-      const micropip = pyodide.pyimport("micropip");
-      await micropip.install("pytest");
-    })();
-    pytestReady.catch(() => {
-      pytestReady = null;
-    });
-  }
-  return pytestReady;
+/* Per-example micropip installs: an entry's `packages` are fetched on
+ * its first run (the way pytest always was), so each example carries its
+ * own install cost and the default page stays light. One promise per
+ * package per loaded runtime; a failed install may be retried. */
+const packagesReady = new Map();
+
+function ensurePackages(pyodide, names, status) {
+  return Promise.all(
+    names.map((name) => {
+      if (!packagesReady.has(name)) {
+        packagesReady.set(
+          name,
+          (async () => {
+            status(`installing ${name} — first use only…`);
+            const micropip = pyodide.pyimport("micropip");
+            await micropip.install(name);
+          })().catch((err) => {
+            packagesReady.delete(name);
+            throw err;
+          }),
+        );
+      }
+      return packagesReady.get(name);
+    }),
+  );
 }
 
 /* The output pane renders footman's own SGR colours (the sandbox forces
@@ -854,8 +890,12 @@ function initPlayground() {
     try {
       syncFiles();
       const pyodide = await loadRuntime(setStatus);
+      // The example's declared packages, plus the pytest fallback for
+      // hand-typed code and docs fragments that never declared anything.
+      const wanted = new Set(gallery.get(currentId)?.packages ?? []);
       const everything = Object.values(files).join("\n") + "\n" + args.value;
-      if (/\bpytest\b/.test(everything)) await ensurePytest(pyodide, setStatus);
+      if (/\bpytest\b/.test(everything)) wanted.add("pytest");
+      if (wanted.size) await ensurePackages(pyodide, [...wanted], setStatus);
       setStatus("running…");
       const invoke = pyodide.globals.get("_fm_invoke");
       const raw = invoke(JSON.stringify(files), args.value, measureColumns());
