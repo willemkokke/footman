@@ -477,7 +477,13 @@ def _fm_editor_complete(files_json, source, line, column):
     try:
         import jedi
     except Exception:
+        if os.environ.get("_FM_PLAYGROUND_SIM"):
+            traceback.print_exc(file=sys.stderr)
         return json.dumps([])
+    if os.environ.get("_FM_PLAYGROUND_SIM"):
+        sys.stderr.write(
+            "jedi " + jedi.__version__ + " on " + sys.version.split()[0] + chr(10)
+        )
     files = json.loads(files_json)
     files.pop("stdin", None)
     for name, content in files.items():
