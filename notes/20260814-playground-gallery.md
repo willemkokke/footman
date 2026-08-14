@@ -87,6 +87,16 @@ a feature has no example — "cover everything" enforced, not aspirational.
   (`js.prompt()` first; an in-page modal needs async and can come later).
   SPIKE: find the seam `_prompt_param` reads through, and whatever the
   Runner's interactive guard needs to consider the page a terminal.
+- **Editor completion from the interpreter** (Willem: wants it, with
+  docstring help — "would make the toolroom integration really cool"):
+  CodeMirror's stock completer offered every keyword, builtin, and
+  buffer word, so it is OFF (the bundle ships a curated setup without
+  it). The real one asks the interpreter that is already in the page —
+  jedi via micropip over the editor's buffer, with footman and toolroom
+  importable, so `ruff.che<Tab>` completes from the actual typed stubs
+  and carries their docstrings; the same source can feed signature help
+  on hover. SPIKE: jedi-in-Pyodide cost (install size, per-keystroke
+  latency — likely debounce + first-use install alongside pytest's).
 
 Out of scope, disclosed on the page: PEP 723 re-exec (no processes),
 `fetch()` (no cross-origin network), the profile plugin.

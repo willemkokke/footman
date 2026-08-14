@@ -567,25 +567,24 @@ function initPlayground() {
 
   /* CodeMirror, if it arrives. `syncFiles` reads through `editor`, so a
    * mid-session upgrade keeps the same files; the textarea stays in the
-   * DOM as the fallback and simply hides. The dark theme is chosen once
-   * at mount from the site's palette — the site stores an explicit
-   * choice and reloads on toggle, so a live mismatch is a corner we
-   * accept over re-mounting the editor. */
+   * DOM as the fallback and simply hides. */
   (async () => {
     try {
-      const { basicSetup, EditorView, python, vscodeDark, vscodeLight } =
+      const { footmanSetup, EditorView, python, footmanTheme } =
         await import(CM_URL.href);
       const host = document.createElement("div");
       host.className = "fmp-cm";
       code.after(host);
-      const dark = document.body.getAttribute("data-md-color-scheme") === "slate";
       const view = new EditorView({
         doc: editor.get(),
         parent: host,
         extensions: [
-          basicSetup,
+          footmanSetup,
           python(),
-          dark ? vscodeDark : vscodeLight,
+          // The bundle's theme colours via the site's --md-code-hl-*
+          // variables: the editor matches every Pygments block on the
+          // site and follows the palette toggle live, no re-mount.
+          footmanTheme,
           EditorView.updateListener.of((update) => {
             if (update.docChanged) files[currentFile] = update.state.doc.toString();
           }),

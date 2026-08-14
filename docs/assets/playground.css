@@ -11,6 +11,40 @@
   font-display: swap;
 }
 
+/* One palette for all code on the site. The playground's editor is
+ * themed through the same --md-code-hl-* variables zensical's Pygments
+ * blocks use, so overriding them here re-skins BOTH at once. The values
+ * are VS Code's (Light+ / Dark+), one per zensical role — remove this
+ * block and everything falls back to zensical's own palette, still in
+ * lockstep. */
+
+:root,
+[data-md-color-scheme="default"] {
+  --md-code-hl-keyword-color: #0000ff;
+  --md-code-hl-string-color: #a31515;
+  --md-code-hl-number-color: #098658;
+  --md-code-hl-comment-color: #008000;
+  --md-code-hl-function-color: #795e26;
+  --md-code-hl-name-color: #001080;
+  --md-code-hl-constant-color: #0070c1;
+  --md-code-hl-special-color: #af00db;
+  --md-code-hl-operator-color: #24292f;
+  --md-code-hl-punctuation-color: #24292f;
+}
+
+[data-md-color-scheme="slate"] {
+  --md-code-hl-keyword-color: #569cd6;
+  --md-code-hl-string-color: #ce9178;
+  --md-code-hl-number-color: #b5cea8;
+  --md-code-hl-comment-color: #6a9955;
+  --md-code-hl-function-color: #dcdcaa;
+  --md-code-hl-name-color: #9cdcfe;
+  --md-code-hl-constant-color: #4fc1ff;
+  --md-code-hl-special-color: #c586c0;
+  --md-code-hl-operator-color: #d4d4d4;
+  --md-code-hl-punctuation-color: #d4d4d4;
+}
+
 #fm-playground {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
