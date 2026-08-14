@@ -18,7 +18,10 @@ the editor's files, so a path requirement (`exists`/`isfile`/`isdir`)
 **passes without looking** — nothing it could ask for is there. Everything
 else is the real thing: parsing, eager validation, taught errors,
 scheduling, `--json`, `--dry-run` plans — and **`fm test` runs the real
-pytest**, on toolroom's in-process path, right here in the page. A browser has no processes to
+pytest**, on toolroom's in-process path, right here in the page (the page
+provides a quiet `pytest.ini` that keeps pytest's cache files and
+footman's own pytest plugin out of the run; add your own tab to
+override it). A browser has no processes to
 spawn, so the page is that path's proof by extremes: a true twin,
 not a fallback. The prompt completes
 too: press <kbd>Tab</kbd> and the candidates come from the same manifest
