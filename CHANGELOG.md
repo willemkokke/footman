@@ -135,6 +135,23 @@ versions may include breaking changes.
 
 ### Documentation
 
+- **The playground edits like an editor and reads like a terminal.** The
+  textarea upgrades to CodeMirror — Python syntax highlighting, the
+  site's light and dark palettes, the same Tab-indents and
+  Cmd/Ctrl-Enter-runs — and falls back to the plain textarea if the
+  editor fails to load. CodeMirror ships **vendored as one bundle**
+  (recipe in `vendor/codemirror/`): loading it as separate CDN modules
+  was tried and fails — each `+esm` entry point got its own
+  `@codemirror/state` instance, and CodeMirror rejects extensions whose
+  `instanceof` checks cross instances — and one bundle is one instance
+  set by construction, with no second runtime CDN. The output pane is
+  now a **session transcript**: every run appends its prompt line and
+  output instead of replacing the pane, rendered in footman's own
+  colours (the sandbox forces `--color=always` and the page maps the
+  SGR codes it emits), with a Clear button to start over. The editor's
+  tab bar is generated from the session's files rather than hardcoded
+  to two — groundwork for the example gallery
+  (`notes/20260814-playground-gallery.md`).
 - **The homepage says what toolroom is.** The README's first code block
   imported from it and no page explained the name, so a reader met
   `from toolroom import ruff` with no idea whether it was required. Both now

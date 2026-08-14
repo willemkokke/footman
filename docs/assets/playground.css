@@ -111,6 +111,16 @@
   cursor: default;
 }
 
+#fm-playground button.fmp-secondary {
+  background: transparent;
+  color: var(--md-default-fg-color--light);
+  font-weight: 400;
+}
+
+#fm-playground button.fmp-secondary:hover {
+  color: var(--md-accent-fg-color);
+}
+
 #fm-playground #fmp-complete {
   display: flex;
   flex-wrap: wrap;
@@ -136,15 +146,123 @@
   font-family: var(--md-text-font-family, inherit);
 }
 
-#fm-playground pre {
+#fm-playground #fmp-out {
   flex: 1;
   margin: 0;
   padding: 0.8rem;
   overflow: auto;
   background: transparent;
   color: var(--md-code-fg-color);
+  font-family: var(--md-code-font-family);
   font-size: 0.7rem;
   line-height: 1.5;
+}
+
+/* The transcript: one block per run, its prompt line echoed above its
+ * output, the way the terminal it stands in for would show it. */
+
+#fm-playground .fmp-run + .fmp-run {
+  margin-top: 0.8rem;
+}
+
+#fm-playground .fmp-echo {
+  font-weight: 700;
+}
+
+#fm-playground .fmp-echo span {
+  color: var(--md-accent-fg-color);
+}
+
+#fm-playground .fmp-run-out {
+  margin: 0;
+  padding: 0;
+  overflow-x: auto;
+  background: transparent;
+  color: inherit;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+/* footman's own SGR colours, light palette first, the slate palette
+ * below. Bold/dim/italic/underline are palette-free. */
+
+#fm-playground .fmp-a-b { font-weight: 700; }
+#fm-playground .fmp-a-d { opacity: 0.6; }
+#fm-playground .fmp-a-i { font-style: italic; }
+#fm-playground .fmp-a-u { text-decoration: underline; }
+
+#fm-playground .fmp-a-f0 { color: #24292f; }
+#fm-playground .fmp-a-f1 { color: #c0392b; }
+#fm-playground .fmp-a-f2 { color: #1a7f37; }
+#fm-playground .fmp-a-f3 { color: #9a6700; }
+#fm-playground .fmp-a-f4 { color: #0969da; }
+#fm-playground .fmp-a-f5 { color: #8250df; }
+#fm-playground .fmp-a-f6 { color: #1b7c83; }
+#fm-playground .fmp-a-f7 { color: #6e7781; }
+#fm-playground .fmp-a-f8 { color: #57606a; }
+#fm-playground .fmp-a-f9 { color: #e5484d; }
+#fm-playground .fmp-a-f10 { color: #2da44e; }
+#fm-playground .fmp-a-f11 { color: #bf8700; }
+#fm-playground .fmp-a-f12 { color: #218bff; }
+#fm-playground .fmp-a-f13 { color: #a475f9; }
+#fm-playground .fmp-a-f14 { color: #339da4; }
+#fm-playground .fmp-a-f15 { color: #8c959f; }
+
+[data-md-color-scheme="slate"] #fm-playground .fmp-a-f0 { color: #c9d1d9; }
+[data-md-color-scheme="slate"] #fm-playground .fmp-a-f1 { color: #ff7b72; }
+[data-md-color-scheme="slate"] #fm-playground .fmp-a-f2 { color: #3fb950; }
+[data-md-color-scheme="slate"] #fm-playground .fmp-a-f3 { color: #d29922; }
+[data-md-color-scheme="slate"] #fm-playground .fmp-a-f4 { color: #58a6ff; }
+[data-md-color-scheme="slate"] #fm-playground .fmp-a-f5 { color: #bc8cff; }
+[data-md-color-scheme="slate"] #fm-playground .fmp-a-f6 { color: #39c5cf; }
+[data-md-color-scheme="slate"] #fm-playground .fmp-a-f7 { color: #8b949e; }
+[data-md-color-scheme="slate"] #fm-playground .fmp-a-f8 { color: #6e7681; }
+[data-md-color-scheme="slate"] #fm-playground .fmp-a-f9 { color: #ffa198; }
+[data-md-color-scheme="slate"] #fm-playground .fmp-a-f10 { color: #56d364; }
+[data-md-color-scheme="slate"] #fm-playground .fmp-a-f11 { color: #e3b341; }
+[data-md-color-scheme="slate"] #fm-playground .fmp-a-f12 { color: #79c0ff; }
+[data-md-color-scheme="slate"] #fm-playground .fmp-a-f13 { color: #d2a8ff; }
+[data-md-color-scheme="slate"] #fm-playground .fmp-a-f14 { color: #56d4dd; }
+[data-md-color-scheme="slate"] #fm-playground .fmp-a-f15 { color: #b1bac4; }
+
+/* CodeMirror, when its import lands: it replaces the textarea visually
+ * and inherits the pane's type scale. Until then (or if the CDN fails)
+ * the textarea is the editor, exactly as before. */
+
+#fm-playground .fmp-cm {
+  display: none;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+#fm-playground.fmp-cm-on .fmp-cm {
+  display: block;
+}
+
+#fm-playground.fmp-cm-on textarea {
+  display: none;
+}
+
+#fm-playground .cm-editor {
+  height: 100%;
+  background: transparent;
+  font-size: 0.7rem;
+}
+
+#fm-playground .cm-editor.cm-focused {
+  outline: none;
+}
+
+#fm-playground .cm-scroller {
+  font-family: var(--md-code-font-family);
+  line-height: 1.5;
+}
+
+#fm-playground .cm-gutters {
+  background: transparent;
+  border-right: 0.05rem solid var(--md-default-fg-color--lightest);
+  color: var(--md-default-fg-color--light);
 }
 
 #fm-playground .fmp-status {

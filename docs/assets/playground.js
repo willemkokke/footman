@@ -16,6 +16,14 @@
  */
 
 const PYODIDE_URL = "https://cdn.jsdelivr.net/pyodide/v314.0.3/full/pyodide.mjs";
+/* CodeMirror, vendored: one bundle, built from the pinned recipe in
+ * vendor/codemirror/ (repo root). Loading it as separate CDN modules was tried
+ * and measurably fails — each +esm entry point got its own
+ * @codemirror/state instance, and CM rejects extensions whose instanceof
+ * checks cross instances. Self-hosted also means the editor needs no
+ * second CDN. Imported only on the playground page, only when it inits;
+ * if the import fails the textarea stays, exactly as before. */
+const CM_URL = new URL("vendor/codemirror.js", import.meta.url);
 const SITE_ROOT = new URL("..", import.meta.url); // …/assets/ -> site root
 const FRAGMENT_MARK = "example: fragment";
 const FRESH_MARK = "example: fresh-session";
@@ -320,8 +328,13 @@ if sys.platform == "emscripten" or os.environ.get("_FM_PLAYGROUND_SIM"):
 
 def _fm_sandbox_line(line):
     words = line.split()
-    if sys.platform == "emscripten" and "-s" not in words and "--sequential" not in words:
-        return "-s " + line
+    if sys.platform == "emscripten":
+        if "-s" not in words and "--sequential" not in words:
+            line = "-s " + line
+        # The pane renders SGR codes; without a tty the tri-state --color
+        # would resolve to never and the transcript would be monochrome.
+        if not any(w.startswith("--color") for w in words):
+            line = "--color=always " + line
     return line
 
 def _fm_invoke(files_json, line, columns=80):
@@ -426,6 +439,60 @@ function ensurePytest(pyodide, status) {
   return pytestReady;
 }
 
+/* The output pane renders footman's own SGR colours (the sandbox forces
+ * --color=always). Only the styling SGRs footman and pytest emit are
+ * mapped — bold/dim/italic/underline and the 16 fg colours — everything
+ * else, extended colours included, is consumed and dropped, and any
+ * non-SGR escape is stripped rather than shown. */
+function ansiFragment(text) {
+  const frag = document.createDocumentFragment();
+  const escape = /\x1b\[([0-9;]*)m|\x1b\[[0-9;?]*[A-Za-z]/g;
+  let state = { bold: false, dim: false, italic: false, underline: false, fg: null };
+  let last = 0;
+  const flush = (upto) => {
+    if (upto <= last) return;
+    const chunk = text.slice(last, upto);
+    const cls = [];
+    if (state.bold) cls.push("fmp-a-b");
+    if (state.dim) cls.push("fmp-a-d");
+    if (state.italic) cls.push("fmp-a-i");
+    if (state.underline) cls.push("fmp-a-u");
+    if (state.fg !== null) cls.push(`fmp-a-f${state.fg}`);
+    if (cls.length) {
+      const span = document.createElement("span");
+      span.className = cls.join(" ");
+      span.textContent = chunk;
+      frag.appendChild(span);
+    } else {
+      frag.appendChild(document.createTextNode(chunk));
+    }
+  };
+  for (const m of text.matchAll(escape)) {
+    flush(m.index);
+    last = m.index + m[0].length;
+    if (m[1] === undefined) continue; // not an SGR: stripped, never shown
+    const codes = m[1] === "" ? [0] : m[1].split(";").map(Number);
+    for (let i = 0; i < codes.length; i++) {
+      const c = codes[i];
+      if (c === 0) {
+        state = { bold: false, dim: false, italic: false, underline: false, fg: null };
+      } else if (c === 1) state.bold = true;
+      else if (c === 2) state.dim = true;
+      else if (c === 3) state.italic = true;
+      else if (c === 4) state.underline = true;
+      else if (c === 22) state.bold = state.dim = false;
+      else if (c === 23) state.italic = false;
+      else if (c === 24) state.underline = false;
+      else if (c >= 30 && c <= 37) state.fg = c - 30;
+      else if (c >= 90 && c <= 97) state.fg = c - 90 + 8;
+      else if (c === 39) state.fg = null;
+      else if (c === 38 || c === 48) i += codes[i + 1] === 5 ? 2 : 4;
+    }
+  }
+  flush(text.length);
+  return frag;
+}
+
 function initPlayground() {
   const root = document.getElementById("fm-playground");
   if (!root || root.dataset.fmpInit) return;
@@ -434,16 +501,28 @@ function initPlayground() {
   const code = document.getElementById("fmp-code");
   const args = document.getElementById("fmp-args");
   const runBtn = document.getElementById("fmp-run");
+  const clearBtn = document.getElementById("fmp-clear");
   const out = document.getElementById("fmp-out");
   const status = document.getElementById("fmp-status");
-  const tabs = [...root.querySelectorAll(".fmp-tab")];
+  const tabBar = root.querySelector(".fmp-label");
   const setStatus = (text) => {
     status.textContent = text;
   };
 
-  /* Two files, one textarea: the tab bar decides which one it shows. */
+  /* One editor, many files: the tab bar decides which one it shows. The
+   * editor starts as the plain textarea and upgrades to CodeMirror when
+   * (if) the import lands — everything else talks to `editor`, never to
+   * either widget directly. */
   const files = { ...DEFAULT_FILES };
   let currentFile = "tasks.py";
+
+  let editor = {
+    get: () => code.value,
+    set: (text) => {
+      code.value = text;
+    },
+    focus: () => code.focus(),
+  };
 
   // Prefill tasks.py from a "run it there" link, if one brought us here.
   const hash = new URLSearchParams(window.location.hash.slice(1));
@@ -453,27 +532,98 @@ function initPlayground() {
     /* a malformed fragment keeps the default */
   }
   args.value = hash.get("cmd") || DEFAULT_ARGS;
-  code.value = files[currentFile];
   runBtn.disabled = false;
 
   function syncFiles() {
-    files[currentFile] = code.value;
+    files[currentFile] = editor.get();
+  }
+
+  function renderTabs() {
+    tabBar.replaceChildren();
+    for (const name of Object.keys(files)) {
+      const tab = document.createElement("button");
+      tab.type = "button";
+      tab.className = "fmp-tab";
+      tab.setAttribute("role", "tab");
+      tab.textContent = name;
+      tab.classList.toggle("fmp-tab-active", name === currentFile);
+      tab.addEventListener("click", () => showFile(name));
+      tabBar.appendChild(tab);
+    }
   }
 
   function showFile(name) {
     syncFiles();
     currentFile = name;
-    code.value = files[name];
-    for (const tab of tabs) {
-      tab.classList.toggle("fmp-tab-active", tab.dataset.file === name);
+    editor.set(files[name]);
+    for (const tab of tabBar.children) {
+      tab.classList.toggle("fmp-tab-active", tab.textContent === name);
     }
-    code.focus();
+    editor.focus();
   }
 
-  for (const tab of tabs) {
-    tab.addEventListener("click", () => showFile(tab.dataset.file));
-  }
-  showFile(currentFile);
+  editor.set(files[currentFile]);
+  renderTabs();
+
+  /* CodeMirror, if it arrives. `syncFiles` reads through `editor`, so a
+   * mid-session upgrade keeps the same files; the textarea stays in the
+   * DOM as the fallback and simply hides. The dark theme is chosen once
+   * at mount from the site's palette — the site stores an explicit
+   * choice and reloads on toggle, so a live mismatch is a corner we
+   * accept over re-mounting the editor. */
+  (async () => {
+    try {
+      const { basicSetup, EditorView, python, oneDark } = await import(CM_URL.href);
+      const host = document.createElement("div");
+      host.className = "fmp-cm";
+      code.after(host);
+      const dark = document.body.getAttribute("data-md-color-scheme") === "slate";
+      const view = new EditorView({
+        doc: editor.get(),
+        parent: host,
+        extensions: [
+          basicSetup,
+          python(),
+          ...(dark ? [oneDark] : []),
+          EditorView.updateListener.of((update) => {
+            if (update.docChanged) files[currentFile] = update.state.doc.toString();
+          }),
+          EditorView.domEventHandlers({
+            keydown: (event, v) => {
+              if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+                event.preventDefault();
+                run();
+                return true;
+              }
+              if (event.key === "Tab" && !event.shiftKey) {
+                // Four spaces, like the textarea — never a focus escape.
+                event.preventDefault();
+                const { from, to } = v.state.selection.main;
+                v.dispatch({
+                  changes: { from, to, insert: "    " },
+                  selection: { anchor: from + 4 },
+                });
+                return true;
+              }
+              return false;
+            },
+          }),
+        ],
+      });
+      editor = {
+        get: () => view.state.doc.toString(),
+        set: (text) => {
+          view.dispatch({
+            changes: { from: 0, to: view.state.doc.length, insert: text },
+          });
+        },
+        focus: () => view.focus(),
+      };
+      root.classList.add("fmp-cm-on");
+    } catch (err) {
+      console.warn("footman playground editor:", err); // the textarea remains
+    }
+  })();
 
   code.addEventListener("keydown", (event) => {
     if (event.key === "Tab") {
@@ -494,6 +644,27 @@ function initPlayground() {
   });
   args.addEventListener("input", hideCandidates);
   runBtn.addEventListener("click", run);
+  clearBtn.addEventListener("click", () => out.replaceChildren());
+
+  /* The pane is a session transcript: every run appends its prompt line
+   * and output, like the terminal it stands in for. Clear starts over. */
+  function appendRun(line, body, failed) {
+    const entry = document.createElement("div");
+    entry.className = "fmp-run" + (failed ? " fmp-run-failed" : "");
+    const echo = document.createElement("div");
+    echo.className = "fmp-echo";
+    const promptEl = document.createElement("span");
+    promptEl.textContent = "fm ";
+    echo.appendChild(promptEl);
+    echo.appendChild(document.createTextNode(line));
+    entry.appendChild(echo);
+    const body_el = document.createElement("pre");
+    body_el.className = "fmp-run-out";
+    body_el.appendChild(ansiFragment(body));
+    entry.appendChild(body_el);
+    out.appendChild(entry);
+    out.scrollTop = out.scrollHeight;
+  }
 
   function measureColumns() {
     // The pane's width in character cells of the actual code font.
@@ -524,14 +695,15 @@ function initPlayground() {
       const raw = invoke(JSON.stringify(files), args.value, measureColumns());
       invoke.destroy?.();
       const result = JSON.parse(raw);
-      out.textContent =
+      let body =
         (result.stdout || "") +
         (result.stderr ? (result.stdout ? "\n" : "") + result.stderr : "");
-      if (!out.textContent.trim()) out.textContent = "(no output)";
+      if (!body.trim()) body = "(no output)";
+      appendRun(args.value, body, result.exit_code !== 0);
       setStatus(`exit code ${result.exit_code}`);
       status.classList.toggle("fmp-status-failed", result.exit_code !== 0);
     } catch (err) {
-      out.textContent = String(err);
+      appendRun(args.value, String(err), true);
       setStatus("the runtime failed to load — check your connection and retry");
     } finally {
       running = false;
