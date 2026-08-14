@@ -65,15 +65,16 @@ not just the words: type `deploy prod --regions=eu,` and press
   <div class="fmp-pane fmp-output-pane">
     <div class="fmp-toolbar">
       <span class="fmp-prompt">fm</span>
-      <input id="fmp-args" list="fmp-commands" spellcheck="false"
+      <input id="fmp-args" spellcheck="false"
         autocomplete="off" autocapitalize="off"
         aria-label="fm command line" />
-      <datalist id="fmp-commands"></datalist>
+      <button id="fmp-menu" type="button" class="fmp-secondary" hidden
+        title="The example's commands" aria-label="curated commands">▾</button>
       <button id="fmp-run" disabled>Run</button>
       <button id="fmp-clear" type="button" class="fmp-secondary"
         title="Clear the transcript">Clear</button>
+      <div id="fmp-cmdmenu" hidden></div>
     </div>
-    <div id="fmp-chips" hidden></div>
     <div id="fmp-complete" hidden></div>
     <div id="fmp-out" aria-live="polite"></div>
     <div class="fmp-status" id="fmp-status">Python loads when you first run —
