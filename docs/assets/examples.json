@@ -424,7 +424,7 @@
       "id": "completion/grammar",
       "title": "Completion knows the grammar",
       "category": "Completion",
-      "blurb": "Press Tab in the prompt: choices come from the Literal, and a list completes item by item after each comma.",
+      "blurb": "Press Tab in the prompt: choices come from the Literal, a set completes item by item after each comma — and folds repeats, just as Tab stops offering what you typed.",
       "files": {
         "tasks.py": [
           "from typing import Literal",
@@ -432,9 +432,9 @@
           "",
           "@task",
           "def deploy(target: Literal[\"dev\", \"staging\", \"prod\"],",
-          "           regions: list[Literal[\"eu\", \"us\", \"ap\"]] | None = None):",
+          "           regions: set[Literal[\"eu\", \"us\", \"ap\"]] | None = None):",
           "    \"Type deploy <Tab>, then --regions=eu,<Tab>.\"",
-          "    print(f\"{target=} {regions=}\")"
+          "    print(f\"{target=} regions={sorted(regions or [])}\")"
         ]
       },
       "commands": [
@@ -442,7 +442,13 @@
           "line": "deploy staging --regions=eu,ap",
           "note": "what Tab was steering you toward",
           "exit": 0,
-          "shows": ["regions=['eu', 'ap']"]
+          "shows": ["regions=['ap', 'eu']"]
+        },
+        {
+          "line": "deploy prod --regions=eu --regions=ap,eu",
+          "note": "repeats extend the value; the set folds duplicates",
+          "exit": 0,
+          "shows": ["regions=['ap', 'eu']"]
         },
         {
           "line": "deploy produ",
