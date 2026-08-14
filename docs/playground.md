@@ -38,6 +38,12 @@ not just the words: type `deploy prod --regions=eu,` and press
 <kbd>Tab</kbd> to watch a comma-separated list complete item by item.
 
 <div id="fm-playground" markdown="0">
+  <div class="fmp-gallery" hidden>
+    <select id="fmp-example" aria-label="example"></select>
+    <button id="fmp-reset" type="button" class="fmp-secondary"
+      title="Restore this example's files">Reset</button>
+    <span id="fmp-blurb"></span>
+  </div>
   <div class="fmp-pane fmp-editor-pane">
     <div class="fmp-label" role="tablist"></div>
     <textarea id="fmp-code" spellcheck="false" autocomplete="off"
@@ -52,6 +58,7 @@ not just the words: type `deploy prod --regions=eu,` and press
       <button id="fmp-clear" type="button" class="fmp-secondary"
         title="Clear the transcript">Clear</button>
     </div>
+    <div id="fmp-chips" hidden></div>
     <div id="fmp-complete" hidden></div>
     <div id="fmp-out" aria-live="polite"></div>
     <div class="fmp-status" id="fmp-status">Python loads when you first run —

@@ -412,6 +412,32 @@ def _fm_complete(code, line):
     return json.dumps(out)
 `;
 
+/* ---------- the example gallery ---------- */
+
+/* Curated examples live in examples.json beside this file — dual-read:
+ * the page fetches it, the docs tests drive every command line of every
+ * entry through the shipped driver in CPython. Files are stored as line
+ * arrays (readable JSON) and joined here. */
+
+const DOCS_ENTRY_ID = "__docs";
+
+async function loadExamples() {
+  try {
+    const res = await fetch(new URL("examples.json", import.meta.url));
+    if (!res.ok) return null;
+    const data = await res.json();
+    return Array.isArray(data.examples) && data.examples.length ? data.examples : null;
+  } catch {
+    return null; // no gallery — the page still works as a single sample
+  }
+}
+
+function joinedFiles(entry) {
+  return Object.fromEntries(
+    Object.entries(entry.files).map(([name, lines]) => [name, lines.join("\n") + "\n"]),
+  );
+}
+
 let pyodideReady = null; // one load per browser tab, kept across instant nav
 let pytestReady = null;
 
@@ -515,6 +541,11 @@ function initPlayground() {
   const out = document.getElementById("fmp-out");
   const status = document.getElementById("fmp-status");
   const tabBar = root.querySelector(".fmp-label");
+  const galleryBar = root.querySelector(".fmp-gallery");
+  const select = document.getElementById("fmp-example");
+  const resetBtn = document.getElementById("fmp-reset");
+  const blurb = document.getElementById("fmp-blurb");
+  const chips = document.getElementById("fmp-chips");
   const setStatus = (text) => {
     status.textContent = text;
   };
@@ -523,7 +554,7 @@ function initPlayground() {
    * editor starts as the plain textarea and upgrades to CodeMirror when
    * (if) the import lands — everything else talks to `editor`, never to
    * either widget directly. */
-  const files = { ...DEFAULT_FILES };
+  let files = { ...DEFAULT_FILES };
   let currentFile = "tasks.py";
 
   let editor = {
@@ -574,6 +605,131 @@ function initPlayground() {
 
   editor.set(files[currentFile]);
   renderTabs();
+
+  /* The gallery: a dropdown of curated examples, each with its own file
+   * set and a row of command chips. Switching swaps the editor in place —
+   * same page, same loaded Pyodide. Edits are remembered per example for
+   * the visit; Reset restores the pristine files. */
+
+  const gallery = new Map(); // id -> {title, category, blurb, commands, files}
+  const edits = new Map(); // id -> this visit's edited files
+  let currentId = null;
+
+  function replaceFiles(next) {
+    files = { ...next };
+    currentFile = Object.keys(files)[0];
+    renderTabs();
+    editor.set(files[currentFile]);
+  }
+
+  function renderChips(commands) {
+    chips.replaceChildren();
+    for (const command of commands ?? []) {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      const strong = document.createElement("strong");
+      strong.textContent = command.line;
+      chip.appendChild(strong);
+      if (command.note) {
+        const dim = document.createElement("span");
+        dim.textContent = command.note;
+        chip.appendChild(dim);
+      }
+      chip.addEventListener("click", () => {
+        args.value = command.line;
+        hideCandidates();
+        args.focus();
+      });
+      chips.appendChild(chip);
+    }
+    chips.hidden = !(commands ?? []).length;
+  }
+
+  function adoptEntry(entry) {
+    blurb.textContent = entry.blurb ?? "";
+    renderChips(entry.commands);
+    select.value = entry.id;
+  }
+
+  function switchTo(id) {
+    const entry = gallery.get(id);
+    if (!entry || id === currentId) return;
+    if (currentId !== null) {
+      syncFiles();
+      edits.set(currentId, { ...files });
+    }
+    currentId = id;
+    replaceFiles(edits.get(id) ?? entry.files);
+    args.value = entry.commands?.[0]?.line ?? "--list";
+    hideCandidates();
+    adoptEntry(entry);
+    if (id !== DOCS_ENTRY_ID) {
+      history.replaceState(null, "", "#example=" + encodeURIComponent(id));
+    }
+  }
+
+  function populateSelect() {
+    select.replaceChildren();
+    const docs = gallery.get(DOCS_ENTRY_ID);
+    if (docs) select.appendChild(new Option(docs.title, docs.id));
+    const groups = new Map(); // category -> its optgroup, in first-seen order
+    for (const entry of gallery.values()) {
+      if (entry.id === DOCS_ENTRY_ID) continue;
+      if (!groups.has(entry.category)) {
+        const group = document.createElement("optgroup");
+        group.label = entry.category;
+        groups.set(entry.category, group);
+        select.appendChild(group);
+      }
+      groups.get(entry.category).appendChild(new Option(entry.title, entry.id));
+    }
+  }
+
+  select.addEventListener("change", () => switchTo(select.value));
+  resetBtn.addEventListener("click", () => {
+    const entry = gallery.get(currentId);
+    if (!entry) return;
+    edits.delete(currentId);
+    replaceFiles(entry.files);
+    args.value = entry.commands?.[0]?.line ?? args.value;
+  });
+
+  loadExamples().then((examples) => {
+    if (!examples) return; // fetch failed: today's single-sample page
+    for (const entry of examples) {
+      gallery.set(entry.id, { ...entry, files: joinedFiles(entry) });
+    }
+    const fromDocs = hash.has("code");
+    if (fromDocs) {
+      // The run-it-there fragment is its own entry, wrapping the files
+      // already in the editor — switching away and back keeps it.
+      gallery.set(DOCS_ENTRY_ID, {
+        id: DOCS_ENTRY_ID,
+        title: "From the docs page",
+        category: null,
+        blurb: "What the run-it-there link brought over. The menu has more.",
+        commands: [],
+        files: { ...files },
+      });
+    }
+    populateSelect();
+    const asked = hash.get("example");
+    const wanted = fromDocs
+      ? DOCS_ENTRY_ID
+      : asked && gallery.has(asked)
+        ? asked
+        : examples[0].id;
+    const entry = gallery.get(wanted);
+    currentId = wanted;
+    if (!fromDocs && wanted !== examples[0].id) {
+      // A deep link to a non-default example: its files replace the
+      // default sample the page opened with.
+      replaceFiles(entry.files);
+      args.value = hash.get("cmd") || entry.commands?.[0]?.line || DEFAULT_ARGS;
+    }
+    adoptEntry(entry);
+    galleryBar.hidden = false;
+  });
 
   /* CodeMirror, if it arrives. `syncFiles` reads through `editor`, so a
    * mid-session upgrade keeps the same files; the textarea stays in the

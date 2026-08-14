@@ -170,7 +170,8 @@
   color: var(--md-accent-fg-color);
 }
 
-#fm-playground #fmp-complete {
+#fm-playground #fmp-complete,
+#fm-playground #fmp-chips {
   display: flex;
   flex-wrap: wrap;
   gap: 0.2rem;
@@ -178,7 +179,13 @@
   border-bottom: 0.05rem solid var(--md-default-fg-color--lightest);
 }
 
-#fm-playground #fmp-complete button {
+#fm-playground #fmp-complete[hidden],
+#fm-playground #fmp-chips[hidden] {
+  display: none;
+}
+
+#fm-playground #fmp-complete button,
+#fm-playground #fmp-chips button {
   display: inline-flex;
   align-items: baseline;
   gap: 0.4rem;
@@ -190,9 +197,46 @@
   font-weight: 400;
 }
 
-#fm-playground #fmp-complete button span {
+#fm-playground #fmp-complete button span,
+#fm-playground #fmp-chips button span {
   color: var(--md-default-fg-color--light);
   font-family: var(--md-text-font-family, inherit);
+}
+
+/* The gallery bar: the example menu, its reset, and the blurb — one row
+ * spanning both panes. */
+
+#fm-playground .fmp-gallery {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+#fm-playground .fmp-gallery[hidden] {
+  display: none;
+}
+
+#fm-playground .fmp-gallery select {
+  max-width: 55%;
+  padding: 0.2rem 0.4rem;
+  border: 0.05rem solid var(--md-default-fg-color--lightest);
+  border-radius: 0.2rem;
+  background: var(--md-code-bg-color);
+  color: var(--md-code-fg-color);
+  font-family: "Fira Code", var(--md-code-font-family);
+  font-size: 0.7rem;
+}
+
+#fm-playground #fmp-blurb {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.64rem;
+  color: var(--md-default-fg-color--light);
 }
 
 #fm-playground #fmp-out {
