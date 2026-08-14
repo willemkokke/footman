@@ -1328,8 +1328,21 @@ def test_bash_glues_the_cursor_on_a_continuable_value(home, fm_csv_project_dir):
 
     from footman.tasks.docs import _boot_shell, _pty_session, keystrokes
 
-    if _bash_exe() is None:
+    if (bash := _bash_exe()) is None:
         pytest.skip("bash is not installed")
+    # macOS ships bash 3.2, which has no compopt (the space stays — the
+    # documented degradation) and passes COMP_WORDS unsplit while readline
+    # still breaks the completion word at `=`, so an attached value doubles
+    # its prefix there with or without this feature. The interactive proof
+    # belongs to the bash that has the mechanism.
+    major = subprocess.run(
+        [bash, "-c", "echo ${BASH_VERSINFO[0]}"],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    ).stdout.strip()
+    if not major.isdigit() or int(major) < 4:
+        pytest.skip("bash 3.2 has no compopt; it keeps its trailing space")
     with tempfile.TemporaryDirectory() as scratch:
         argv, env = _boot_shell("bash", "fm", Path(scratch))
         chunks = _pty_session(
