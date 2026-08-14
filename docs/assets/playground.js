@@ -833,6 +833,17 @@ function initPlayground() {
   }
 
   function renderChips(commands) {
+    // The prompt is also a combobox: the same command lines ride a
+    // datalist, so the input's own dropdown offers them (with the note
+    // as the browser's secondary text) while staying free-typeable.
+    const datalist = document.getElementById("fmp-commands");
+    datalist.replaceChildren();
+    for (const command of commands ?? []) {
+      const option = document.createElement("option");
+      option.value = command.line;
+      if (command.note) option.label = command.note;
+      datalist.appendChild(option);
+    }
     chips.replaceChildren();
     for (const command of commands ?? []) {
       const chip = document.createElement("button");
