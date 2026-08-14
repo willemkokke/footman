@@ -43,8 +43,7 @@ def lint(fix: bool = False):
 @task(serial=True)   # in-process pytest touches the process globals
 def test():
     "Run the tests — real pytest, in your browser."
-    # a list repeats the flag: -p no:cacheprovider -p no:footman
-    pytest("-q", "test_demo.py", p=["no:cacheprovider", "no:footman"])
+    pytest("-q", "test_demo.py")
 
 @task
 def deploy(target: Literal["dev", "staging", "prod"],
@@ -343,6 +342,17 @@ def _fm_invoke(files_json, line, columns=80):
     # footman's own wrapping and pytest's ruler bars fit the pane.
     os.environ["COLUMNS"] = str(int(columns))
     files = json.loads(files_json)
+    if sys.platform == "emscripten" or os.environ.get("_FM_PLAYGROUND_SIM"):
+        # A quiet pytest.ini, so the sample's pytest call needs no plugin
+        # incantations: no:cacheprovider keeps .pytest_cache out of the
+        # page's filesystem (and stale last-failed state out of reruns),
+        # no:footman keeps footman's own auto-loaded pytest plugin from
+        # joining a run that is already inside a footman task. An explicit
+        # pytest.ini in the editor wins over this default.
+        files.setdefault(
+            "pytest.ini",
+            "[pytest]" + chr(10) + "addopts = -p no:cacheprovider -p no:footman" + chr(10),
+        )
     for name, content in files.items():
         Path(name).write_text(content, encoding="utf-8")
     try:
