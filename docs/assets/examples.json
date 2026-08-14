@@ -424,17 +424,33 @@
       "id": "completion/grammar",
       "title": "Completion knows the grammar",
       "category": "Completion",
-      "blurb": "Press Tab in the prompt: choices come from the Literal, a set completes item by item after each comma — and folds repeats, just as Tab stops offering what you typed.",
+      "blurb": "Press Tab: choices come from the Literal, a set completes item by item and folds repeats — and switch's completer reads branches.txt live. Edit that tab, Tab again.",
       "files": {
         "tasks.py": [
-          "from typing import Literal",
+          "from pathlib import Path",
+          "from typing import Annotated, Literal",
           "from footman import task",
+          "from footman.params import suggest",
           "",
           "@task",
           "def deploy(target: Literal[\"dev\", \"staging\", \"prod\"],",
           "           regions: set[Literal[\"eu\", \"us\", \"ap\"]] | None = None):",
           "    \"Type deploy <Tab>, then --regions=eu,<Tab>.\"",
-          "    print(f\"{target=} regions={sorted(regions or [])}\")"
+          "    print(f\"{target=} regions={sorted(regions or [])}\")",
+          "",
+          "def _branches():",
+          "    return Path(\"branches.txt\").read_text().split()",
+          "",
+          "@task",
+          "def switch(branch: Annotated[str, suggest(_branches)]):",
+          "    \"Type switch <Tab> — the completer reads branches.txt just now.\"",
+          "    print(f\"switching to {branch}\")"
+        ],
+        "branches.txt": [
+          "main",
+          "develop",
+          "feature/gallery",
+          "release/v0.40.0"
         ]
       },
       "commands": [
@@ -449,6 +465,12 @@
           "note": "repeats extend the value; the set folds duplicates",
           "exit": 0,
           "shows": ["regions=['ap', 'eu']"]
+        },
+        {
+          "line": "switch feature/gallery",
+          "note": "what the dynamic completer was offering",
+          "exit": 0,
+          "shows": ["switching to feature/gallery"]
         },
         {
           "line": "deploy produ",

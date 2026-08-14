@@ -470,6 +470,56 @@ def test_gallery_command_lines_run_as_promised(tmp_path, example, command):
         assert marker in output, (marker, output)
 
 
+def _playground_complete(tmp_path: Path, files: dict[str, str], line: str) -> list[str]:
+    """Drive the shipped completion driver — the page's Tab — in CPython."""
+    probe = tmp_path / "complete_probe.py"
+    probe.write_text(
+        _js_bootstrap()
+        + "\nimport sys\n"
+        + "print(_fm_complete(sys.argv[1], sys.argv[2]))\n",
+        encoding="utf-8",
+    )
+    work = Path(tempfile.mkdtemp(dir=tmp_path))
+    out = subprocess.run(
+        [sys.executable, str(probe), json.dumps(files), line],
+        capture_output=True,
+        text=True,
+        timeout=120,
+        cwd=work,
+        env={**os.environ, "_FM_PLAYGROUND_SIM": "1"},
+        check=False,
+    )
+    assert out.returncode == 0, out.stderr
+    answer: list[str] = json.loads(out.stdout)
+    return [c.split("\t")[0] for c in answer]
+
+
+def test_playground_dynamic_completion_answers_fresh(tmp_path: Path):
+    """A suggest() completer runs in the page — the stand-in for the
+    _suggest child a real shell respawns — and reads the editor's files
+    as they are NOW: two Tabs over different branches.txt contents answer
+    differently, which is the whole point of a dynamic completer."""
+    entry = next(e for e in _GALLERY if e["id"] == "completion/grammar")
+    files = {n: "\n".join(lines) + "\n" for n, lines in entry["files"].items()}
+
+    first = _playground_complete(tmp_path, files, "switch ")
+    assert "feature/gallery" in first, first
+
+    edited = dict(files)
+    edited["branches.txt"] = "hotfix/one\nhotfix/two\n"
+    second = _playground_complete(tmp_path, edited, "switch hot")
+    assert second == ["hotfix/one", "hotfix/two"], second
+
+    # The static grammar still answers, and a path value still defers to
+    # a real shell's file completion (an empty answer, never candidates).
+    static = _playground_complete(tmp_path, files, "deploy staging --regions=e")
+    assert any("eu" in c for c in static), static
+    deploy = next(e for e in _GALLERY if e["id"] == "validation/deploy")
+    vfiles = {n: "\n".join(lines) + "\n" for n, lines in deploy["files"].items()}
+    handoff = _playground_complete(tmp_path, vfiles, "deploy conf")
+    assert handoff == [], handoff
+
+
 def test_example_markers_are_spent():
     """Every example marker sits directly above a ```python fence — a
     marker that drifted away from its fence would silently stop exempting

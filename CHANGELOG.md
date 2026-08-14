@@ -9,6 +9,18 @@ versions may include breaking changes.
 
 ### Documentation
 
+- **Dynamic completion works in the playground.** A `suggest()`
+  completer used to hit the recompute sentinel and answer nothing — that
+  protocol respawns a `_suggest` child, and the page has no processes.
+  The interpreter holding the user's code is the page itself, so Tab now
+  runs the completer fresh in place, mirroring the child exactly: same
+  walk to the owner, same muting of its chatter, same
+  prefix-plus-filtered-values emission. The editor's other tabs are
+  written before completing, so a completer that reads a file sees what
+  the editor says *now* — the Completion example's `switch` task
+  completes branches from a `branches.txt` tab, and editing the tab
+  changes the next Tab's answer. File handoffs still answer nothing: the
+  page has no filename completion to hand off to.
 - **The playground gallery covers every category.** Ten groups in the
   dropdown — Basics, Typing, Validation, Variadic, Scheduling, Tools,
   Results, Config, Composition, Completion — each example with command

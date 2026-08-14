@@ -29,7 +29,9 @@ override it). A browser has no processes to
 spawn, so the page is that path's proof by extremes: a true twin,
 not a fallback. The prompt completes
 too: press <kbd>Tab</kbd> and the candidates come from the same manifest
-walk a shell completion hook consults, rebuilt from whatever the editor says.
+walk a shell completion hook consults, rebuilt from whatever the editor
+says — and a dynamic `suggest()` completer runs **fresh on every Tab**,
+in the page, exactly as a shell would respawn it.
 
 The output pane is a session transcript: every run appends its prompt
 line and output, in footman's own colours, and **Clear** starts over.
