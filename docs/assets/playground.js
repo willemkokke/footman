@@ -494,6 +494,9 @@ def _fm_editor_complete(files_json, source, line, column):
         )
         found = script.complete(int(line), int(column))
     except Exception:
+        # The page degrades to no candidates; the rehearsal says why.
+        if os.environ.get("_FM_PLAYGROUND_SIM"):
+            traceback.print_exc(file=sys.stderr)
         return json.dumps([])
     out = []
     for c in found[:50]:

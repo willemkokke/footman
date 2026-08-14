@@ -540,7 +540,7 @@ def test_playground_dynamic_completion_answers_fresh(tmp_path: Path):
 
 def _editor_complete(
     tmp_path: Path, source: str, line: int, column: int
-) -> list[dict[str, Any]]:
+) -> tuple[list[dict[str, Any]], str]:
     """Drive the shipped editor completer in CPython. The source travels
     by file — an argv carrying a literal newline does not survive the
     Windows CreateProcess round-trip intact."""
@@ -567,22 +567,24 @@ def _editor_complete(
     )
     assert out.returncode == 0, out.stderr
     answer: list[dict[str, Any]] = json.loads(out.stdout)
-    return answer
+    return answer, out.stderr
 
 
 def test_playground_editor_completion_carries_docstrings(tmp_path: Path):
     """The editor's completion asks jedi over the buffer with footman and
     toolroom importable — so a toolroom handle completes its real methods
-    and carries their docstrings, which is the whole point."""
-    got = _editor_complete(tmp_path, "import json\njson.du", 2, 7)
+    and carries their docstrings, which is the whole point. (The shipped
+    completer swallows failures — the page must degrade to no candidates —
+    but under SIM it prints the traceback, carried into the messages here.)"""
+    got, err = _editor_complete(tmp_path, "import json\njson.du", 2, 7)
     labels = [c["label"] for c in got]
-    assert "dump" in labels and "dumps" in labels, labels
+    assert "dump" in labels and "dumps" in labels, (labels, err)
     dump = next(c for c in got if c["label"] == "dump")
     assert "info" in dump and "obj" in dump["info"], dump
 
-    got = _editor_complete(tmp_path, "from toolroom import ruff\nruff.che", 2, 8)
+    got, err = _editor_complete(tmp_path, "from toolroom import ruff\nruff.che", 2, 8)
     labels = [c["label"] for c in got]
-    assert "check" in labels, labels
+    assert "check" in labels, (labels, err)
 
 
 def test_example_markers_are_spent():
