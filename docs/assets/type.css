@@ -1,0 +1,32 @@
+/*
+  Ligatures in code blocks, not in prose.
+
+  The theme ships `font-variant-ligatures: none` on
+  `.md-typeset code, .md-typeset kbd, .md-typeset pre`, which is the right
+  default for two of those three. Inline code in running prose is a thing
+  the reader is about to type, so it should show the characters on their
+  keyboard rather than a glyph standing in for them. A fenced block is a
+  different act of reading — it is code, looked at as code, and Fira Code's
+  ligatures are the reason to choose the face.
+
+  Worth knowing which spellings this actually moves, since it is easy to
+  assume the wrong ones: Fira Code ligates `->`, `-->`, `!=`, `>=`, `::`,
+  `//` and friends. It does *not* touch `--` before a letter, so every
+  `--flag` on this site renders as plain characters either way — the
+  difference shows up in Python examples, not in command lines.
+
+  So the exception is narrow: fenced blocks only, and `kbd` and inline
+  `code` keep the theme's default untouched.
+
+  `font-feature-settings` is set alongside, not instead. The theme puts
+  `font-feature-settings: "kern"` on these elements, and that is the
+  low-level OpenType control — where it and `font-variant-ligatures`
+  disagree it wins, so `calt` (the feature driving Fira Code's ligatures)
+  has to be named explicitly or it stays suppressed.
+*/
+
+.md-typeset pre,
+.md-typeset pre > code {
+  font-variant-ligatures: contextual common-ligatures;
+  font-feature-settings: "kern", "calt" 1;
+}

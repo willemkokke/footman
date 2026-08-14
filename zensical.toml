@@ -85,6 +85,7 @@ nav = [
 # links. One module script on every page; it no-ops where nothing applies.
 extra_css = [
   "assets/palette.css",
+  "assets/type.css",
   "assets/playground.css",
   "assets/casts.css",
 ]
@@ -119,9 +120,8 @@ heading_level = 2
 
 [project.theme]
 language = "en"
-# Fira Code for code. Its ligatures stay off: the theme disables them, and
-# a doc that teaches an exact command line should show the characters you
-# type rather than glyphs standing in for them.
+# Fira Code for code, with ligatures in fenced blocks only — see
+# assets/type.css. Inline code in prose keeps the theme's plain glyphs.
 font.text = "Inter"
 font.code = "Fira Code"
 # One template override, `overrides/main.html`: the link-preview meta tags.
