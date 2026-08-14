@@ -84,11 +84,20 @@ a feature has no example — "cover everything" enforced, not aspirational.
   against the released 0.40.0 wheel. File-handoff sentinels still answer
   nothing (no filename completion to hand off to). The Completion
   example's `switch` completes from a `branches.txt` tab, live.
-- **ask() prompts** (Willem: make them usable): Pyodide calls JS
-  synchronously, so the prompt seam can route to the browser
-  (`js.prompt()` first; an in-page modal needs async and can come later).
-  SPIKE: find the seam `_prompt_param` reads through, and whatever the
-  Runner's interactive guard needs to consider the page a terminal.
+- **ask() prompts** — LANDED (spike 2, 2026-08-14): the seams are
+  `context._stdin_is_tty` (the gate every prompt consults) and the
+  `real_stdin`/`real_stderr` pair — the sandbox's stand-in stream's
+  readline() IS one `js.window.prompt()`, with everything the framework
+  wrote to the real stderr since the last read (the question, a menu's
+  numbered lines) becoming the dialog text. Cancel reads as EOF, so a
+  defaultless ask fails with footman's own taught message. getpass is
+  patched for secrets (unmasked in a dialog — disclosed). Under
+  `_FM_PLAYGROUND_SIM` the answers come from a canned queue
+  (`_FM_PLAYGROUND_PROMPTS`), so rehearsals drive the same seam; gallery
+  commands may declare `prompts`. The Input example (`release`) shows
+  ask-when-unanswered and supplied-means-silent. Verified against the
+  released 0.40.0 wheel. An in-page modal (instead of the native
+  dialog) remains possible later; the seam stays.
 - **Editor completion from the interpreter** (Willem: wants it, with
   docstring help — "would make the toolroom integration really cool"):
   CodeMirror's stock completer offered every keyword, builtin, and

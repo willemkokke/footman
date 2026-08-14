@@ -27,6 +27,20 @@ versions may include breaking changes.
 
 ### Documentation
 
+- **Prompts work in the playground.** `ask()`, `prompt()`, `confirm()`,
+  and `select()` used to fall to defaults or refuse — no terminal, no
+  one to ask. The page is the terminal now: the sandbox's stand-in for
+  the real stdin answers each read with a **browser dialog**, whose text
+  is whatever the framework wrote to the real stderr since the last
+  read — a question arrives as the question, a `select()` menu arrives
+  with its numbered lines. Cancel reads as end-of-input, so a
+  defaultless `ask()` fails with footman's own taught message instead of
+  looping; a secret is typed unmasked into the dialog (disclosed — a
+  playground, not a vault) and still round-trips as a `Secret`. Gallery
+  commands can declare `prompts` — canned answers the rehearsals feed
+  through the same seam, so the asked path is CI-tested end to end. A
+  new Input example shows both halves: run `release` bare and the page
+  asks; supply the values and nobody is asked.
 - **Dynamic completion works in the playground.** A `suggest()`
   completer used to hit the recompute sentinel and answer nothing — that
   protocol respawns a `_suggest` child, and the page has no processes.

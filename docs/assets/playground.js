@@ -315,6 +315,70 @@ if sys.platform == "emscripten" or os.environ.get("_FM_PLAYGROUND_SIM"):
     if "" not in sys.path:
         sys.path.insert(0, "")
 
+    # ask()/prompt()/confirm()/select() work: the page IS the terminal.
+    # footman's prompts gate on a tty and read the real stdin; here the
+    # real stdin's readline() is one browser prompt, and the text the
+    # framework wrote to the real stderr since the last read (the
+    # question, a menu's numbered lines) becomes that dialog's text.
+    # Cancel reads as EOF, so a defaultless ask fails with footman's own
+    # taught message instead of looping. Under _FM_PLAYGROUND_SIM the
+    # answers come from a canned queue, so rehearsals drive the SAME
+    # seam deterministically. isatty on the out-stream stays False,
+    # which keeps the live status line out of the dialog text.
+    import getpass
+
+    _fm_prompt_queue = []
+    if os.environ.get("_FM_PLAYGROUND_PROMPTS"):
+        _fm_prompt_queue = json.loads(os.environ["_FM_PLAYGROUND_PROMPTS"])
+    _fm_console = {"buf": ""}
+
+    class _FMTerminalOut:
+        def write(self, text):
+            _fm_console["buf"] += text
+            return len(text)
+
+        def flush(self):
+            pass
+
+        def isatty(self):
+            return False
+
+    class _FMStdin:
+        def isatty(self):
+            return True
+
+        def readline(self):
+            text = _fm_console["buf"].strip() or "footman asks:"
+            _fm_console["buf"] = ""
+            if sys.platform == "emscripten":
+                import js
+
+                answer = js.window.prompt(text)
+                if answer is None:
+                    return ""  # cancel reads as EOF
+                return answer + chr(10)
+            if _fm_prompt_queue:
+                return str(_fm_prompt_queue.pop(0)) + chr(10)
+            return ""  # no canned answer left: EOF, the taught refusal
+
+    _fm_terminal_out = _FMTerminalOut()
+    _fm_terminal_in = _FMStdin()
+    footman.context._stdin_is_tty = lambda: True
+    footman.context.real_stdin = lambda: _fm_terminal_in
+    footman.context.real_stderr = lambda: _fm_terminal_out
+
+    def _fm_getpass(prompt="", stream=None):
+        # A secret prompt: the browser dialog cannot mask typing, so the
+        # value is visible while typed -- the page is a playground, not a
+        # vault. It still round-trips as a Secret.
+        _fm_console["buf"] += prompt
+        line = _fm_terminal_in.readline()
+        if line == "":
+            raise EOFError
+        return line.rstrip(chr(10))
+
+    getpass.getpass = _fm_getpass
+
     # The page's filesystem holds only the editor's files, so a path
     # requirement (exists / isfile / isdir) could hardly ever be met — an
     # example like Annotated[Path, isfile] would refuse before anything

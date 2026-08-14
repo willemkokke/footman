@@ -31,7 +31,11 @@ not a fallback. The prompt completes
 too: press <kbd>Tab</kbd> and the candidates come from the same manifest
 walk a shell completion hook consults, rebuilt from whatever the editor
 says — and a dynamic `suggest()` completer runs **fresh on every Tab**,
-in the page, exactly as a shell would respawn it.
+in the page, exactly as a shell would respawn it. Prompts work too:
+`ask()`, `prompt()`, `confirm()`, and `select()` open a **browser
+dialog** standing in for the terminal — a menu's numbered lines become
+the dialog text, Cancel reads as end-of-input, and a secret is typed
+unmasked (this is a playground, not a vault).
 
 The output pane is a session transcript: every run appends its prompt
 line and output, in footman's own colours, and **Clear** starts over.
