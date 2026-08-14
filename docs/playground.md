@@ -24,6 +24,9 @@ not a fallback. The prompt completes
 too: press <kbd>Tab</kbd> and the candidates come from the same manifest
 walk a shell completion hook consults, rebuilt from whatever the editor says.
 
+The output pane is a session transcript: every run appends its prompt
+line and output, in footman's own colours, and **Clear** starts over.
+
 Press **Run**. The gate fails — one of the tests is wrong on purpose.
 Read pytest's diff, fix `fizzbuzz` (or the test), and run it green. Then
 try `-k check audit` to watch keep-going collect every failure, and
@@ -33,10 +36,7 @@ not just the words: type `deploy prod --regions=eu,` and press
 
 <div id="fm-playground" markdown="0">
   <div class="fmp-pane fmp-editor-pane">
-    <div class="fmp-label" role="tablist">
-      <button class="fmp-tab" role="tab" data-file="tasks.py">tasks.py</button>
-      <button class="fmp-tab" role="tab" data-file="test_demo.py">test_demo.py</button>
-    </div>
+    <div class="fmp-label" role="tablist"></div>
     <textarea id="fmp-code" spellcheck="false" autocomplete="off"
       autocapitalize="off" aria-label="editor"></textarea>
   </div>
@@ -46,9 +46,11 @@ not just the words: type `deploy prod --regions=eu,` and press
       <input id="fmp-args" spellcheck="false" autocomplete="off"
         autocapitalize="off" aria-label="fm command line" />
       <button id="fmp-run" disabled>Run</button>
+      <button id="fmp-clear" type="button" class="fmp-secondary"
+        title="Clear the transcript">Clear</button>
     </div>
     <div id="fmp-complete" hidden></div>
-    <pre id="fmp-out" aria-live="polite"></pre>
+    <div id="fmp-out" aria-live="polite"></div>
     <div class="fmp-status" id="fmp-status">Python loads when you first run —
       a few seconds and ~15&nbsp;MB, once per visit.</div>
   </div>
