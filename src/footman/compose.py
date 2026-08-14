@@ -46,22 +46,67 @@ _module_trees: dict[str, Group] = {}
 
 
 def _tree_of_module(module: ModuleType) -> Group:
-    """The task tree of an already-imported module: the memo, or a taught no.
+    """The task tree of an already-imported module: the memo, a rebuild, or
+    a taught no.
 
     A module imported *outside* `include()` already ran its decorators
-    against whatever registry was live — its tree cannot be reconstructed,
-    and re-executing the module would double every side effect. The answer
-    is guidance, not guesswork.
+    against whatever registry was live, and re-executing it would double
+    every side effect. A contributions-only module (hooks and options, no
+    tasks) can still be rebuilt from its own namespace; a module that
+    defined tasks cannot, and the answer is guidance, not guesswork.
     """
     name = module.__name__
     if name in _module_trees:
         return _module_trees[name]
+    if (rebuilt := _reconstruct(module)) is not None:
+        _module_trees[name] = rebuilt
+        return rebuilt
     raise RegistrationError(
         f"include({name!r}): the module was already imported outside "
         f"include(), so its tasks were never captured — call include() "
         f"before anything else imports it, or have the module expose an "
         f"explicit Group and pass that instead"
     )
+
+
+def _reconstruct(module: ModuleType) -> Group | None:
+    """Rebuild an already-imported, contributions-only module's tree from
+    its own namespace — or `None` for a module this cannot speak for.
+
+    The import that should have fired inside a proper load's capture is
+    spent, and the capture it actually fired in is gone (it happened: a
+    bare `import footman.env_files` anywhere in the process left the scan
+    unable to see `--env-file`, an order-dependent flake in the suite and a
+    dead end for any later mount). But the declarations survive as
+    module-level names, each carrying its own receipt: a `GlobalOption` is
+    stamped with its defining module (`owner`), and a hook decorator writes
+    the (kind, item) pairs it registered on the decorated fn
+    (`registry._CONTRIBUTED`) — the exact objects, wrappers included.
+    Module-level names are as far as this can see, which is the documented
+    provider convention. Tasks and groups don't reconstruct — their
+    registration is the tree structure itself — so any sign of either (a
+    `Group`, a `@task`-stamped fn) keeps the caller's taught refusal.
+    """
+    name = module.__name__
+    tree = Group("root")
+    seen: set[int] = set()
+    for value in vars(module).values():
+        if isinstance(value, Group) or hasattr(value, registry._PRE):
+            return None
+        if id(value) in seen:
+            continue  # one declaration, however many names it goes by
+        seen.add(id(value))
+        if isinstance(value, registry.GlobalOption):
+            if value.owner == name:
+                tree.contributions["globals"].append(value)
+        elif getattr(value, "__module__", None) == name:
+            for kind, item in getattr(value, registry._CONTRIBUTED, ()):
+                tree.contributions[kind].append(item)
+    if not any(tree.contributions.values()):
+        return None
+    if (module.__doc__ or "").strip():
+        tree.help = (module.__doc__ or "").strip().splitlines()[0]
+    return tree
 
 
 def _adopt_explicit_group(module: ModuleType) -> Group:
@@ -234,10 +279,15 @@ def _load_entry_point(name: str) -> Group:
             return captured
         # Registered nothing at module level. Reuse a memoised tree if a prior
         # resolve captured one (the entry point re-`load()`s the cached module,
-        # so decorators no longer fire and `captured` comes back empty);
-        # otherwise adopt the module's single explicit Group.
+        # so decorators no longer fire and `captured` comes back empty); rebuild
+        # from the module's namespace when a bare import spent the one real
+        # import before any proper load could capture it; otherwise adopt the
+        # module's single explicit Group.
         if module_name in _module_trees:
             return _module_trees[module_name]
+        if (rebuilt := _reconstruct(loaded)) is not None:
+            _module_trees[module_name] = rebuilt
+            return rebuilt
         tree = _adopt_explicit_group(loaded)
         _module_trees[module_name] = tree
         return tree

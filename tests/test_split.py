@@ -411,13 +411,34 @@ def test_the_scan_answers_the_same_once_the_modules_are_imported(brand_dist):
     """A module imports once per process, so its declarations fire in exactly
     one capture — whoever called `load()` first. The scan goes through
     `_load_entry_point`, which memoises that tree, so the answer does not
-    depend on who got there first."""
+    depend on who got there first — including when nobody proper got there
+    at all: on a worker where these bare imports were the process's first
+    touch of the modules, the import was spent outside any capture, and
+    this very test blinded the scan for its whole worker (the 2026-08-14
+    flake). The load now rebuilds a spent module from its own namespace."""
     import footman.env_files
     import footman.profile
     from footman import _split
 
     assert footman.env_files and footman.profile  # imported, on purpose
     assert _split._own_plugin_flags()["--env-file"] == "footman.env_files"
+
+
+def test_a_spent_import_does_not_blind_the_scan(brand_dist, monkeypatch):
+    """The flake, pinned deterministically: delete the memo for an
+    already-imported plugin module and the scan is exactly where a worker
+    stood after a bare `import footman.env_files` beat every proper load —
+    `load()` captures nothing, there is no tree to reuse, and the scan used
+    to drop the flag for the rest of the process. It must rebuild instead,
+    whatever this worker happened to run first."""
+    import footman.env_files
+    from footman import _split, compose
+
+    assert footman.env_files  # imported — possibly bare, possibly first
+    monkeypatch.delitem(compose._module_trees, "footman.env_files", raising=False)
+    found = _split._own_plugin_flags()
+    assert found["--env-file"] == "footman.env_files"
+    assert found["--profile"] == "footman.profile"
 
 
 def test_scanning_does_not_spend_the_import_a_real_mount_needs(brand_dist):

@@ -7,6 +7,24 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A bare import of a plugin module no longer spends its declarations.**
+  A provider module registers by import-time side effect (a `GlobalOption`
+  construction, a hook decorator), and a module imports once per process —
+  so a plain `import footman.env_files` anywhere before the first proper
+  load left every later `plugin()` mount and the unknown-flag scan with an
+  empty capture and nothing to reuse: the mount refused with a misleading
+  message, and the scan silently stopped teaching `--env-file`. The
+  declarations survive in the module's own namespace, so footman now
+  rebuilds a contributions-only module's tree from there: a `GlobalOption`
+  carries its defining module, and each hook decorator records what it
+  registered on the decorated function, wrapper pairs included. Modules
+  that define tasks or groups keep the taught refusal — a task tree cannot
+  be rebuilt from names alone. This was also the suite's worker-ordering
+  flake: four `test_split` scan tests failed together whenever their own
+  bare imports ran first on a fresh worker.
+
 ### Documentation
 
 - **The playground gallery covers every category.** Ten groups in the

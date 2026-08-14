@@ -720,6 +720,65 @@ def test_plugin_explicit_group_module_is_adopted(tmp_path, monkeypatch):
 # just the raising.
 
 
+def test_a_spent_import_still_mounts_its_contributions(monkeypatch):
+    """A bare `import footman.profile` before any proper load used to spend
+    the module's one import: the entry point's later `load()` captured
+    nothing, so the mount refused and the flag scan went blind — the
+    worker-ordering flake of 2026-08-14. The declarations survive as
+    module-level names, so the load rebuilds them: options and hooks both.
+    Deleting the memo recreates the spent state whatever this worker ran
+    first."""
+    import footman.profile
+
+    assert footman.profile  # imported — possibly bare, possibly first
+    monkeypatch.delitem(compose._module_trees, "footman.profile", raising=False)
+    with registry.capture() as captured:
+        compose.plugin("footman.profile")
+    assert [g.name for g in captured.contributions["globals"]] == ["profile"]
+    assert [f.__name__ for f in captured.contributions["pre_tasks"]] == ["arm"]
+    assert [f.__name__ for f in captured.contributions["post_tasks"]] == ["write"]
+
+
+def test_include_rebuilds_a_bare_imported_hooks_only_module(tmp_path, monkeypatch):
+    """include() parity for the rebuild: a contributions-only module caught
+    by a bare import is not a dead end — its options carry their defining
+    module and its hooks carry what their decorators registered, wrapper
+    pairs included, so the tree comes back from the module's namespace."""
+    (tmp_path / "hooks_only.py").write_text(
+        textwrap.dedent(
+            """
+            '''Hooks-only provider.'''
+
+            import footman
+            from footman import GlobalOption
+
+            VERBOSE = GlobalOption("hooks-verbose", help="say more")
+
+            @footman.pre_tasks
+            def announce(inv):
+                pass
+
+            @footman.wrap_task
+            def span(inv, task):
+                result = yield
+            """
+        )
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.delitem(sys.modules, "hooks_only", raising=False)
+    with registry.capture():
+        # The wrong way, on purpose — and inside a throwaway capture, so the
+        # spent declarations land somewhere include() never gets to see.
+        import hooks_only  # type: ignore[import-not-found]
+
+    with registry.capture() as captured:
+        compose.include(hooks_only)
+    assert [g.name for g in captured.contributions["globals"]] == ["hooks-verbose"]
+    assert [f.__name__ for f in captured.contributions["pre_tasks"]] == ["announce"]
+    assert [f.__name__ for f in captured.contributions["pre_task"]] == ["span"]
+    assert [f.__name__ for f in captured.contributions["post_task"]] == ["span"]
+
+
 def test_include_of_a_pre_imported_module_teaches(tmp_path, monkeypatch):
     """A module already imported outside include() never had its tasks
     captured — re-executing it would double every side effect, so footman

@@ -1,6 +1,43 @@
 # The plugin-scan memo flake — investigation brief
 
-OPEN — nothing fixed. A worker-ordering flake in the suite, observed
+**ANSWERED AND FIXED, same day (2026-08-14).** Hypothesis 1 was right,
+and the polluting test was the flakiest place imaginable:
+`test_the_scan_answers_the_same_once_the_modules_are_imported` itself.
+Its own module-level-looking `import footman.env_files` /
+`import footman.profile` (test_split.py, inside the test body) were the
+smoking imports — on a worker where that test was the process's *first*
+touch of the modules, the bare import ran the module bodies outside any
+proper load's capture, so `_load_entry_point` later found an empty
+capture, no `_module_trees` memo, no module-level `Group` to adopt, and
+raised — which the scan swallows per-entry-point. The test then blinded
+its whole worker: the memo can't heal (the import is spent for the
+process), so every later scan test on that worker failed too. Running
+the single test alone in a fresh process (`pytest
+tests/test_split.py::test_the_scan_answers_the_same… -n0`) reproduced
+it deterministically, first try. `--profile` survived in the observed
+run because some earlier test on gw9 had already properly loaded
+`footman.profile` (memoised) while nothing had yet loaded
+`footman.env_files`.
+
+The fix is the note's first direction, with the module's own namespace
+as the "side table": a spent module's declarations survive as
+module-level names — a `GlobalOption` is stamped with its defining
+module (`owner`), and each hook decorator now writes the (kind, item)
+pairs it registered on the decorated fn (`registry._CONTRIBUTED`,
+wrapper objects included). `compose._reconstruct` rebuilds a
+contributions-only tree from `vars(module)`; both doors use it
+(`_load_entry_point` for `plugin()`/the scan, `_tree_of_module` for
+`include()`). Any sign of tasks or groups (a `Group` in the namespace,
+a `@task`-stamped fn) keeps the taught refusal — a task tree cannot be
+rebuilt from names alone. One-option-model invariants hold: the scan
+still goes only through `_load_entry_point`, reconstruction hands out
+the same singletons a real capture would, and the `_mounted`/config
+derivation stamps are untouched. Three regression tests pin the spent
+state deterministically (delete the memo for an already-imported
+module) and all fail on the unfixed code. The rest of this note is the
+original brief, kept as written.
+
+A worker-ordering flake in the suite, observed
 once locally on 2026-08-14; it will eventually red a CI run. Handoff
 for a session to root-cause. **Read
 `notes/20260809-one-option-model.md` first** — this is its territory

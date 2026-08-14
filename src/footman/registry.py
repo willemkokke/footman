@@ -70,6 +70,24 @@ CONTRIBUTION_KINDS: tuple[str, ...] = (
     "globals",
 )
 
+_CONTRIBUTED = "_footman_contributed"
+"""The (kind, item) pairs a hook decorator registered, written on the
+decorated fn. A module imported outside any proper load has spent its
+decorators against a registry that is gone, but the decorated functions
+still sit in the module's namespace — this marker is what lets
+`compose._reconstruct` rebuild the contributions from there, wrapper
+objects included."""
+
+
+def _note_contribution(fn: Any, kind: str, item: Any) -> None:
+    """Record on *fn* that decorating it registered *item* under *kind*.
+
+    The ledger is faithful, not deduplicated: decorating twice registers
+    twice, and the ledger says so. A callable that refuses attributes
+    simply never reconstructs."""
+    with contextlib.suppress(AttributeError, TypeError):
+        fn.__dict__.setdefault(_CONTRIBUTED, []).append((kind, item))
+
 
 class GlobalOption:
     """A plugin's own global option — `--env-file=PATH` beside `--jobs=N`.
@@ -1669,6 +1687,7 @@ class Group:
         """
         _check_hook_arity("pre_tasks", fn, 1)
         self.contributions["pre_tasks"].append(fn)
+        _note_contribution(fn, "pre_tasks", fn)
         return fn
 
     def pre_bind(self, fn: _F) -> _F:
@@ -1691,6 +1710,7 @@ class Group:
         """
         _check_hook_arity("pre_bind", fn, 2)
         self.contributions["pre_bind"].append(fn)
+        _note_contribution(fn, "pre_bind", fn)
         return fn
 
     def post_tasks(self, fn: _F) -> _F:
@@ -1718,6 +1738,7 @@ class Group:
         """
         _check_hook_arity("post_tasks", fn, 1)
         self.contributions["post_tasks"].append(fn)
+        _note_contribution(fn, "post_tasks", fn)
         return fn
 
     def wrap_task(self, fn: _F) -> _F:
@@ -1781,6 +1802,8 @@ class Group:
 
         self.contributions["pre_task"].append(_pre)
         self.contributions["post_task"].append(_post)
+        _note_contribution(fn, "pre_task", _pre)
+        _note_contribution(fn, "post_task", _post)
         return fn
 
     def wrap_bind(self, fn: _F) -> _F:
@@ -1874,6 +1897,9 @@ class Group:
         self.contributions["pre_bind"].append(_bind_pre)
         self.contributions["pre_task"].append(_pre)
         self.contributions["post_task"].append(_post)
+        _note_contribution(fn, "pre_bind", _bind_pre)
+        _note_contribution(fn, "pre_task", _pre)
+        _note_contribution(fn, "post_task", _post)
         return fn
 
     def pre_task(self, fn: _F) -> _F:
@@ -1905,6 +1931,7 @@ class Group:
         """
         _check_hook_arity("pre_task", fn, 2)
         self.contributions["pre_task"].append(fn)
+        _note_contribution(fn, "pre_task", fn)
         return fn
 
     def post_task(self, fn: _F) -> _F:
@@ -1930,6 +1957,7 @@ class Group:
         """
         _check_hook_arity("post_task", fn, 3)
         self.contributions["post_task"].append(fn)
+        _note_contribution(fn, "post_task", fn)
         return fn
 
     @overload
