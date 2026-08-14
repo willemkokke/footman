@@ -76,12 +76,14 @@ a feature has no example — "cover everything" enforced, not aspirational.
 - **stdin as a file tab** (Willem: yes): a `stdin` tab, prepopulated with
   JSON payloads by examples that bind from the boundary; `_fm_invoke`
   passes its content as the invocation's stdin. Empty tab = no pipe.
-- **Dynamic completion** (Willem: make it work): in a real shell the
-  manifest bakes a sentinel and `_suggest.py` respawns to run the
-  completer fresh; in the page the interpreter holding the tasks is right
-  there, so Tab can run the `suggest()` function in-process instead of
-  refusing on the sentinel. SPIKE: read `_suggest`'s protocol and mirror
-  its semantics (fresh values per Tab, no baking) without the child.
+- **Dynamic completion** — LANDED (spike 1, 2026-08-14): `_fm_complete`
+  takes the whole files payload (writes the non-tasks tabs first, so a
+  file-reading completer sees the editor's now), and on the `_DYNAMIC`
+  sentinel mirrors the `_suggest` child in place — same owner walk, same
+  chatter muting, same prefix + partial-filtered emission. Verified
+  against the released 0.40.0 wheel. File-handoff sentinels still answer
+  nothing (no filename completion to hand off to). The Completion
+  example's `switch` completes from a `branches.txt` tab, live.
 - **ask() prompts** (Willem: make them usable): Pyodide calls JS
   synchronously, so the prompt seam can route to the browser
   (`js.prompt()` first; an in-page modal needs async and can come later).

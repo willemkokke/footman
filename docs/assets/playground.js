@@ -403,15 +403,60 @@ def _fm_invoke(files_json, line, columns=80):
             if file and str(Path(file).resolve()) in written:
                 del sys.modules[mod_name]
 
-_fm_manifest = {"code": None, "tree": None}
+_fm_manifest = {"code": None, "tree": None, "root": None}
 
-def _fm_complete(code, line):
-    # The real completion hot path over the editor's tasks.py: build the
-    # manifest tree once per source text, then every Tab is a pure walk —
-    # the same complete() a shell hook consults.
+def _fm_dynamic(root, partial, prefix, param, seg_path):
+    # A dynamic completer, run fresh — the page's stand-in for the
+    # _suggest child a real shell would respawn. Same walk, same muting,
+    # same emission: prefix + value, filtered by the typed partial; any
+    # miss answers nothing, never an error. "Fresh" is simply a call
+    # here, because the interpreter holding the user's code is this one.
+    import contextlib, inspect, io
+    from footman import _coerce, _manifest as manifest, registry
+    completer = None
+    if seg_path:
+        node = root
+        for name in seg_path[:-1]:
+            node = node.groups.get(name) if node else None
+        task = node.tasks.get(seg_path[-1]) if node else None
+        if task is not None:
+            for p in manifest.resolved_signature(task).parameters.values():
+                if registry.cli_name(p.name) != param:
+                    continue
+                if p.annotation is inspect.Parameter.empty:
+                    continue
+                completer = _coerce.peel(p.annotation).completer
+                break
+    else:
+        for opt in root.contributions.get("globals", ()):
+            if opt.name == param:
+                completer = _coerce.peel(opt.annotation).completer
+                break
+    if completer is None:
+        return []
+    try:
+        sink_out, sink_err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(sink_out), contextlib.redirect_stderr(sink_err):
+            values = [str(v) for v in completer.fn()]
+    except Exception:
+        return []
+    return [prefix + v for v in values if v.startswith(partial)]
+
+def _fm_complete(files_json, line):
+    # The real completion hot path over the editor's files: build the
+    # manifest tree once per tasks.py text, then every Tab is a pure walk —
+    # the same complete() a shell hook consults. The other tabs are
+    # written first, so a dynamic completer that reads a file sees what
+    # the editor says now, not what the last Run left behind.
     import types
     from footman import _manifest as manifest, registry
-    from footman._complete import complete
+    from footman._complete import _DYNAMIC, complete
+    files = json.loads(files_json)
+    files.pop("stdin", None)  # the pipe, not a file
+    code = files.get("tasks.py", "")
+    for name, content in files.items():
+        if name != "tasks.py":
+            Path(name).write_text(content, encoding="utf-8")
     if _fm_manifest["code"] != code:
         module = types.ModuleType("tasks")
         sys.modules["tasks"] = module
@@ -419,6 +464,7 @@ def _fm_complete(code, line):
             with registry.capture() as root:
                 exec(compile(code, "tasks.py", "exec"), module.__dict__)
             _fm_manifest["tree"] = manifest.build_manifest(root)["tree"]
+            _fm_manifest["root"] = root
             _fm_manifest["code"] = code
         except Exception:
             return json.dumps([])
@@ -428,10 +474,13 @@ def _fm_complete(code, line):
     if not line or line.endswith(" "):
         words.append("")
     out = complete(_fm_manifest["tree"], words)
+    if out and out[0] == _DYNAMIC:
+        return json.dumps(
+            _fm_dynamic(_fm_manifest["root"], out[1], out[2], out[3], out[4:])
+        )
     if out and out[0].startswith(chr(0)):
-        # A sentinel answer (file handoff, dynamic recompute) needs a real
-        # shell; the elements after the marker are protocol payload — a
-        # partial and an emission prefix — not candidates.
+        # A file handoff needs a real shell's filename completion; the
+        # elements after the marker are protocol payload, not candidates.
         return json.dumps([])
     return json.dumps(out)
 `;
@@ -954,7 +1003,7 @@ function initPlayground() {
       setStatus("ready");
       const fn = pyodide.globals.get("_fm_complete");
       const cursor = args.selectionStart ?? args.value.length;
-      const raw = fn(files["tasks.py"], args.value.slice(0, cursor));
+      const raw = fn(JSON.stringify(files), args.value.slice(0, cursor));
       fn.destroy?.();
       const candidates = JSON.parse(raw);
       const names = candidates.map((c) => c.split("\t")[0]);
