@@ -135,6 +135,20 @@ versions may include breaking changes.
 
 ### Documentation
 
+- **The playground is a gallery.** A dropdown of curated examples, grouped
+  by category, each with its own files in the editor tabs and a row of
+  **command chips** under the prompt — every chip a command line chosen to
+  show one thing, its note saying what. Switching examples swaps the
+  editor in place, so the loaded Python is reused; edits are remembered
+  per example for the visit, and Reset restores the pristine files.
+  Entries are linkable (`#example=<id>`), and a "run it there" fragment
+  from a docs page appears as its own entry beside the curated ones. The
+  registry (`docs/assets/examples.json`) is dual-read: the page fetches
+  it, and the docs tests drive **every command line of every entry**
+  through the shipped driver — asserting exit codes and output — plus a
+  feature-coverage guard that fails when a listed feature has no live
+  example. Seeded with Basics, Validation, and Variadic; the categories
+  grow from here.
 - **The playground edits like an editor and reads like a terminal.** The
   textarea upgrades to CodeMirror — Python syntax highlighting, Tab
   indents, Cmd/Ctrl-Enter runs — and falls back to the plain textarea if

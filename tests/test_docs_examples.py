@@ -382,6 +382,84 @@ def overlay(*paths: Annotated[Path, isfile]):
     assert "MAJOR.MINOR.PATCH" in output, output
 
 
+# --- the example gallery -----------------------------------------------------
+#
+# docs/assets/examples.json is dual-read: the playground page fetches it for
+# its dropdown, these tests drive every command line of every entry through
+# the shipped driver. An example that stops doing what its chip promises
+# fails here, not in a visitor's browser.
+
+
+def _gallery_examples():
+    data = json.loads((DOCS / "assets" / "examples.json").read_text(encoding="utf-8"))
+    return data["examples"]
+
+
+_GALLERY = _gallery_examples()
+
+GALLERY_FEATURES = {
+    # feature -> the example that demonstrates it. The gallery grows toward
+    # covering every feature; a feature listed here without a live example
+    # fails, so coverage is enforced, not aspirational.
+    "pre-tasks scheduled into a gate": "basics/gate",
+    "keep-going collects every failure": "basics/gate",
+    "dry-run shows the built command": "basics/gate",
+    "stacked validation markers teach": "validation/deploy",
+    "passthrough lands in *args": "variadic/bench",
+}
+
+
+def test_gallery_entries_are_wellformed():
+    ids = [example["id"] for example in _GALLERY]
+    assert len(ids) == len(set(ids)), "duplicate example ids"
+    for example in _GALLERY:
+        assert example["title"] and example["category"] and example["blurb"], example[
+            "id"
+        ]
+        assert example["files"], example["id"]
+        for name, lines in example["files"].items():
+            assert isinstance(lines, list), (example["id"], name)
+            assert all(isinstance(line, str) for line in lines), (example["id"], name)
+        assert example["commands"], example["id"]
+        for command in example["commands"]:
+            assert command["line"] and command["note"], (example["id"], command)
+            assert isinstance(command["exit"], int), (example["id"], command)
+            assert command["shows"], (example["id"], command)
+
+
+def test_gallery_features_have_examples():
+    ids = {example["id"] for example in _GALLERY}
+    for feature, example_id in GALLERY_FEATURES.items():
+        assert example_id in ids, f"{feature!r} points at missing {example_id!r}"
+
+
+def test_gallery_gate_is_the_default_sample():
+    """The dropdown's first entry IS the page's built-in sample — the
+    fallback when examples.json cannot be fetched. Drift here would show
+    two different "default" states depending on how the page loaded."""
+    gate = _GALLERY[0]
+    joined = {n: "\n".join(lines) + "\n" for n, lines in gate["files"].items()}
+    assert joined == _js_default_files()
+    match = re.search(r'^const DEFAULT_ARGS = "(.*)";$', _js_source(), re.M)
+    assert match, "playground.js no longer defines DEFAULT_ARGS"
+    assert gate["commands"][0]["line"] == match.group(1)
+
+
+@pytest.mark.parametrize(
+    ("example", "command"),
+    [(e, c) for e in _GALLERY for c in e["commands"]],
+    ids=[f"{e['id']}:{c['line']}" for e in _GALLERY for c in e["commands"]],
+)
+def test_gallery_command_lines_run_as_promised(tmp_path, example, command):
+    """Every command chip of every entry, driven exactly as the page runs
+    it (the leading `-s` mirrors the sandbox's own injection)."""
+    files = {n: "\n".join(lines) + "\n" for n, lines in example["files"].items()}
+    code, output = _playground_invoke(tmp_path, "-s " + command["line"], files=files)
+    assert code == command["exit"], output
+    for marker in command["shows"]:
+        assert marker in output, (marker, output)
+
+
 def test_example_markers_are_spent():
     """Every example marker sits directly above a ```python fence — a
     marker that drifted away from its fence would silently stop exempting
