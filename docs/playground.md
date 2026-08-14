@@ -35,7 +35,10 @@ in the page, exactly as a shell would respawn it. Prompts work too:
 `ask()`, `prompt()`, `confirm()`, and `select()` open a **browser
 dialog** standing in for the terminal — a menu's numbered lines become
 the dialog text, Cancel reads as end-of-input, and a secret is typed
-unmasked (this is a playground, not a vault).
+unmasked (this is a playground, not a vault). The **editor** completes
+too: type `.` after a toolroom handle (or press <kbd>Ctrl-Space</kbd>
+anywhere) and the menu comes from the interpreter — real methods from
+the typed stubs, docstrings included.
 
 The output pane is a session transcript: every run appends its prompt
 line and output, in footman's own colours, and **Clear** starts over.

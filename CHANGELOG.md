@@ -45,6 +45,18 @@ versions may include breaking changes.
 
 ### Documentation
 
+- **The playground's editor completes from the interpreter.** Type `.`
+  after a toolroom handle — or press Ctrl-Space anywhere — and the menu
+  comes from jedi over the buffer, with footman and toolroom importable:
+  a handle completes its **real methods from the typed stubs, docstrings
+  riding along** as the info panel. Typing never waits on Python: the
+  source fires by itself only right after a dot, and a typed dot never
+  starts the runtime download — only an explicit Ctrl-Space may pay that
+  cost. jedi installs on first use, like pytest. (The completer runs
+  jedi in its in-process environment: the default environment inference
+  shells out to a python subprocess for `sys.path`, which the sandbox's
+  simulated child would answer with nonsense and the browser cannot
+  answer at all.)
 - **Prompts work in the playground.** `ask()`, `prompt()`, `confirm()`,
   and `select()` used to fall to defaults or refuse — no terminal, no
   one to ask. The page is the terminal now: the sandbox's stand-in for

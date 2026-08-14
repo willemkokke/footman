@@ -98,16 +98,19 @@ a feature has no example — "cover everything" enforced, not aspirational.
   ask-when-unanswered and supplied-means-silent. Verified against the
   released 0.40.0 wheel. An in-page modal (instead of the native
   dialog) remains possible later; the seam stays.
-- **Editor completion from the interpreter** (Willem: wants it, with
-  docstring help — "would make the toolroom integration really cool"):
-  CodeMirror's stock completer offered every keyword, builtin, and
-  buffer word, so it is OFF (the bundle ships a curated setup without
-  it). The real one asks the interpreter that is already in the page —
-  jedi via micropip over the editor's buffer, with footman and toolroom
-  importable, so `ruff.che<Tab>` completes from the actual typed stubs
-  and carries their docstrings; the same source can feed signature help
-  on hover. SPIKE: jedi-in-Pyodide cost (install size, per-keystroke
-  latency — likely debounce + first-use install alongside pytest's).
+- **Editor completion from the interpreter** — LANDED (spike 3,
+  2026-08-14): `autocompletion({override})` wired back into the mount
+  with a source that asks jedi over the buffer (footman and toolroom
+  importable — `ruff.che` completes from the actual typed stubs,
+  docstrings riding as the CM info panel). Latency tamed by triggering:
+  auto only right after a `.` (and never before the runtime is loaded —
+  a typed dot must not start the Pyodide download), Ctrl-Space anywhere
+  and it may pay the load. jedi installs on first use through the
+  `packages` machinery. GOTCHA encoded in a comment + test: jedi's
+  default environment inference shells out to a python subprocess for
+  sys.path — the simulated child feeds it garbage and the browser has
+  none — so the source uses `jedi.InterpreterEnvironment()`. Signature
+  help on hover remains a possible later layer over the same source.
 
 Out of scope, disclosed on the page: PEP 723 re-exec (no processes),
 `fetch()` (no cross-origin network), the profile plugin.

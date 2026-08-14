@@ -13,7 +13,12 @@
  * zensical's Pygments-class → variable mapping (.k → keyword, .nd → the
  * decorator @ → keyword, .nf/.nc → function, .kc → name, …). */
 
-import { closeBrackets, closeBracketsKeymap } from "@codemirror/autocomplete";
+import {
+  autocompletion,
+  closeBrackets,
+  closeBracketsKeymap,
+  completionKeymap,
+} from "@codemirror/autocomplete";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import {
   bracketMatching,
@@ -41,9 +46,9 @@ import { tags as t } from "@lezer/highlight";
 
 /* codemirror's basicSetup minus autocompletion: the stock completer
  * offers every keyword, builtin, and buffer word — noise, not help.
- * Real completion is planned to come from the interpreter that is
- * already in the page (footman and toolroom importable, docstrings and
- * all); until then the editor simply doesn't guess. */
+ * The playground wires autocompletion() back in with an override source
+ * that asks the interpreter in the page (footman and toolroom
+ * importable, docstrings and all); the pieces are re-exported below. */
 export const footmanSetup = [
   lineNumbers(),
   highlightActiveLineGutter(),
@@ -147,5 +152,6 @@ const colours = HighlightStyle.define([
 
 export const footmanTheme = [chrome, syntaxHighlighting(colours)];
 
+export { autocompletion, completionKeymap } from "@codemirror/autocomplete";
 export { python } from "@codemirror/lang-python";
-export { EditorView } from "@codemirror/view";
+export { EditorView, keymap } from "@codemirror/view";
