@@ -20,5 +20,12 @@ Commit the regenerated `docs/assets/vendor/codemirror.js` together with
 the pin change. `node_modules/` stays untracked; `package-lock.json` is
 tracked so the build reproduces.
 
-CodeMirror is MIT-licensed (© Marijn Haverbeke and contributors,
-https://codemirror.net). The bundle carries a banner saying so.
+The build also copies `docs/assets/vendor/FiraCode-VF.woff2` — the
+editor's and the terminal pane's typeface, ligatures included — from the
+`firacode` package.
+
+Licences: CodeMirror is MIT (© Marijn Haverbeke and contributors,
+https://codemirror.net); the VS Code highlight theme
+(`@uiw/codemirror-theme-vscode`) is MIT; Fira Code is OFL-1.1
+(© The Fira Code Project Authors). The bundle carries a banner naming
+the MIT parts.

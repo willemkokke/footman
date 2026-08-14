@@ -4,12 +4,14 @@
   "description": "Build recipe for docs/assets/vendor/codemirror.js — see README.md",
   "type": "module",
   "scripts": {
-    "build": "esbuild entry.js --bundle --format=esm --minify --banner:js=\"/* CodeMirror 6 (MIT) — bundled for the footman playground; see docs/vendor/codemirror/README.md */\" --outfile=../../docs/assets/vendor/codemirror.js"
+    "build": "esbuild entry.js --bundle --format=esm --minify --banner:js=\"/* CodeMirror 6 (MIT) + @uiw vscode theme (MIT) — bundled for the footman playground; see vendor/codemirror/README.md */\" --outfile=../../docs/assets/vendor/codemirror.js && cp node_modules/firacode/distr/woff2/FiraCode-VF.woff2 ../../docs/assets/vendor/FiraCode-VF.woff2"
   },
   "dependencies": {
+    "@babel/runtime": "8.0.0",
     "@codemirror/lang-python": "6.2.1",
-    "@codemirror/theme-one-dark": "6.1.3",
-    "codemirror": "6.0.2"
+    "@uiw/codemirror-theme-vscode": "4.25.11",
+    "codemirror": "6.0.2",
+    "firacode": "6.2.0"
   },
   "devDependencies": {
     "esbuild": "0.25.9"

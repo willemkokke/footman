@@ -136,10 +136,13 @@ versions may include breaking changes.
 ### Documentation
 
 - **The playground edits like an editor and reads like a terminal.** The
-  textarea upgrades to CodeMirror — Python syntax highlighting, the
-  site's light and dark palettes, the same Tab-indents and
-  Cmd/Ctrl-Enter-runs — and falls back to the plain textarea if the
-  editor fails to load. CodeMirror ships **vendored as one bundle**
+  textarea upgrades to CodeMirror — Python syntax highlighting in VS
+  Code's light and dark themes, following the site's palette, with the
+  same Tab-indents and Cmd/Ctrl-Enter-runs — and falls back to the plain
+  textarea if the editor fails to load. Both panes are set in **Fira
+  Code** (vendored, ligatures on), and both stop growing at a screenful
+  and scroll inside instead, so a long pytest failure is a scroll, not a
+  wall. CodeMirror ships **vendored as one bundle**
   (recipe in `vendor/codemirror/`): loading it as separate CDN modules
   was tried and fails — each `+esm` entry point got its own
   `@codemirror/state` instance, and CodeMirror rejects extensions whose

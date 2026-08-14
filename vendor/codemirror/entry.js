@@ -6,6 +6,6 @@
  * in extension set"). One bundle, one instance set, by construction. */
 
 export { python } from "@codemirror/lang-python";
-export { oneDark } from "@codemirror/theme-one-dark";
 export { EditorView } from "@codemirror/view";
+export { vscodeDark, vscodeLight } from "@uiw/codemirror-theme-vscode";
 export { basicSetup } from "codemirror";

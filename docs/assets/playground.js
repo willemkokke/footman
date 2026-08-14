@@ -573,7 +573,8 @@ function initPlayground() {
    * accept over re-mounting the editor. */
   (async () => {
     try {
-      const { basicSetup, EditorView, python, oneDark } = await import(CM_URL.href);
+      const { basicSetup, EditorView, python, vscodeDark, vscodeLight } =
+        await import(CM_URL.href);
       const host = document.createElement("div");
       host.className = "fmp-cm";
       code.after(host);
@@ -584,7 +585,7 @@ function initPlayground() {
         extensions: [
           basicSetup,
           python(),
-          ...(dark ? [oneDark] : []),
+          dark ? vscodeDark : vscodeLight,
           EditorView.updateListener.of((update) => {
             if (update.docChanged) files[currentFile] = update.state.doc.toString();
           }),

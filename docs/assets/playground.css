@@ -1,6 +1,16 @@
 /* The footman playground, styled with Material's own variables so both
  * palettes just work. Two panes side by side, stacked on narrow screens. */
 
+/* Fira Code, vendored beside the editor bundle (OFL, see
+ * vendor/codemirror/README.md). The variable font carries every weight
+ * the pane uses; ligatures are its default 'calt' behaviour. */
+@font-face {
+  font-family: "Fira Code";
+  src: url("vendor/FiraCode-VF.woff2") format("woff2-variations");
+  font-weight: 300 700;
+  font-display: swap;
+}
+
 #fm-playground {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -18,6 +28,10 @@
   display: flex;
   flex-direction: column;
   min-height: 24rem;
+  /* Grow with content up to a screenful, then the editor and the
+   * transcript scroll inside their pane instead of growing the page —
+   * a run of failing tests stays a scroll, not a wall. */
+  max-height: min(75vh, 44rem);
   border: 0.05rem solid var(--md-default-fg-color--lightest);
   border-radius: 0.2rem;
   background: var(--md-code-bg-color);
@@ -37,7 +51,7 @@
   border-radius: 0.2rem 0.2rem 0 0;
   background: transparent;
   color: var(--md-default-fg-color--light);
-  font-family: var(--md-code-font-family);
+  font-family: "Fira Code", var(--md-code-font-family);
   font-size: 0.64rem;
   cursor: pointer;
 }
@@ -49,12 +63,13 @@
 
 #fm-playground textarea {
   flex: 1;
+  min-height: 0;
   padding: 0.8rem;
   border: 0;
   resize: vertical;
   background: transparent;
   color: var(--md-code-fg-color);
-  font-family: var(--md-code-font-family);
+  font-family: "Fira Code", var(--md-code-font-family);
   font-size: 0.7rem;
   line-height: 1.5;
   white-space: pre;
@@ -74,7 +89,7 @@
 }
 
 #fm-playground .fmp-prompt {
-  font-family: var(--md-code-font-family);
+  font-family: "Fira Code", var(--md-code-font-family);
   font-size: 0.7rem;
   font-weight: 700;
   color: var(--md-accent-fg-color);
@@ -87,7 +102,7 @@
   border: 0;
   background: transparent;
   color: var(--md-code-fg-color);
-  font-family: var(--md-code-font-family);
+  font-family: "Fira Code", var(--md-code-font-family);
   font-size: 0.7rem;
 }
 
@@ -136,7 +151,7 @@
   padding: 0.15rem 0.5rem;
   background: var(--md-default-fg-color--lightest);
   color: var(--md-code-fg-color);
-  font-family: var(--md-code-font-family);
+  font-family: "Fira Code", var(--md-code-font-family);
   font-size: 0.64rem;
   font-weight: 400;
 }
@@ -148,12 +163,13 @@
 
 #fm-playground #fmp-out {
   flex: 1;
+  min-height: 0;
   margin: 0;
   padding: 0.8rem;
   overflow: auto;
   background: transparent;
   color: var(--md-code-fg-color);
-  font-family: var(--md-code-font-family);
+  font-family: "Fira Code", var(--md-code-font-family);
   font-size: 0.7rem;
   line-height: 1.5;
 }
@@ -244,9 +260,12 @@
   display: none;
 }
 
+/* Sizing and type only — background and gutter colours belong to the
+ * vscode theme in the bundle, which paints light or dark to match the
+ * site's palette. */
+
 #fm-playground .cm-editor {
   height: 100%;
-  background: transparent;
   font-size: 0.7rem;
 }
 
@@ -255,14 +274,8 @@
 }
 
 #fm-playground .cm-scroller {
-  font-family: var(--md-code-font-family);
+  font-family: "Fira Code", var(--md-code-font-family);
   line-height: 1.5;
-}
-
-#fm-playground .cm-gutters {
-  background: transparent;
-  border-right: 0.05rem solid var(--md-default-fg-color--lightest);
-  color: var(--md-default-fg-color--light);
 }
 
 #fm-playground .fmp-status {
