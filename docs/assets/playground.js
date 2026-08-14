@@ -761,7 +761,8 @@ function initPlayground() {
   const select = document.getElementById("fmp-example");
   const resetBtn = document.getElementById("fmp-reset");
   const blurb = document.getElementById("fmp-blurb");
-  const chips = document.getElementById("fmp-chips");
+  const menuBtn = document.getElementById("fmp-menu");
+  const cmdMenu = document.getElementById("fmp-cmdmenu");
   const setStatus = (text) => {
     status.textContent = text;
   };
@@ -838,43 +839,48 @@ function initPlayground() {
     editor.set(files[currentFile]);
   }
 
-  function renderChips(commands) {
-    // The prompt is also a combobox: the same command lines ride a
-    // datalist, so the input's own dropdown offers them (with the note
-    // as the browser's secondary text) while staying free-typeable.
-    const datalist = document.getElementById("fmp-commands");
-    datalist.replaceChildren();
-    for (const command of commands ?? []) {
-      const option = document.createElement("option");
-      option.value = command.line;
-      if (command.note) option.label = command.note;
-      datalist.appendChild(option);
-    }
-    chips.replaceChildren();
-    for (const command of commands ?? []) {
-      const chip = document.createElement("button");
-      chip.type = "button";
+  /* The curated commands, one click away, always all of them: the ▾ on
+   * the prompt opens a menu of every command the example ships — never
+   * filtered by what is typed — and picking one fills the prompt. */
+
+  function renderCommandMenu(commands) {
+    cmdMenu.replaceChildren();
+    const list = commands ?? [];
+    menuBtn.hidden = !list.length;
+    cmdMenu.hidden = true;
+    for (const command of list) {
+      const item = document.createElement("button");
+      item.type = "button";
       const strong = document.createElement("strong");
       strong.textContent = command.line;
-      chip.appendChild(strong);
+      item.appendChild(strong);
       if (command.note) {
         const dim = document.createElement("span");
         dim.textContent = command.note;
-        chip.appendChild(dim);
+        item.appendChild(dim);
       }
-      chip.addEventListener("click", () => {
+      item.addEventListener("click", () => {
         args.value = command.line;
+        cmdMenu.hidden = true;
         hideCandidates();
         args.focus();
       });
-      chips.appendChild(chip);
+      cmdMenu.appendChild(item);
     }
-    chips.hidden = !(commands ?? []).length;
   }
+
+  menuBtn.addEventListener("click", () => {
+    cmdMenu.hidden = !cmdMenu.hidden;
+  });
+  document.addEventListener("mousedown", (event) => {
+    if (cmdMenu.hidden) return;
+    if (cmdMenu.contains(event.target) || menuBtn.contains(event.target)) return;
+    cmdMenu.hidden = true;
+  });
 
   function adoptEntry(entry) {
     blurb.textContent = entry.blurb ?? "";
-    renderChips(entry.commands);
+    renderCommandMenu(entry.commands);
     select.value = entry.id;
   }
 
@@ -1078,7 +1084,10 @@ function initPlayground() {
       event.preventDefault();
       completeArgs();
     }
-    if (event.key === "Escape") hideCandidates();
+    if (event.key === "Escape") {
+      hideCandidates();
+      cmdMenu.hidden = true;
+    }
   });
   args.addEventListener("input", hideCandidates);
   runBtn.addEventListener("click", run);

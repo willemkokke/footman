@@ -170,8 +170,7 @@
   color: var(--md-accent-fg-color);
 }
 
-#fm-playground #fmp-complete,
-#fm-playground #fmp-chips {
+#fm-playground #fmp-complete {
   display: flex;
   flex-wrap: wrap;
   gap: 0.2rem;
@@ -179,13 +178,11 @@
   border-bottom: 0.05rem solid var(--md-default-fg-color--lightest);
 }
 
-#fm-playground #fmp-complete[hidden],
-#fm-playground #fmp-chips[hidden] {
+#fm-playground #fmp-complete[hidden] {
   display: none;
 }
 
-#fm-playground #fmp-complete button,
-#fm-playground #fmp-chips button {
+#fm-playground #fmp-complete button {
   display: inline-flex;
   align-items: baseline;
   gap: 0.4rem;
@@ -200,30 +197,71 @@
   text-align: left;
 }
 
-#fm-playground #fmp-complete button span,
-#fm-playground #fmp-chips button span {
+#fm-playground #fmp-complete button span {
   color: var(--md-default-fg-color--light);
   font-family: var(--md-text-font-family, inherit);
 }
 
-/* Command chips read as prompt lines — outlined, with the prompt's own
- * `fm` in front — where completion candidates stay filled menu pills.
- * Two different offers, two different looks. */
+/* The curated-commands menu: the ▾ beside the prompt drops the whole
+ * list — every command the example ships, never filtered by what is
+ * typed — each row a prompt line with its note on the right. */
 
-#fm-playground #fmp-chips button {
-  background: transparent;
-  border: 0.05rem solid var(--md-default-fg-color--lightest);
-  border-radius: 0.2rem;
+#fm-playground .fmp-toolbar {
+  position: relative;
 }
 
-#fm-playground #fmp-chips button::before {
+#fm-playground #fmp-cmdmenu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  max-height: 18rem;
+  overflow: auto;
+  background: var(--md-code-bg-color);
+  border: 0.05rem solid var(--md-default-fg-color--lightest);
+  border-top: 0;
+  border-radius: 0 0 0.2rem 0.2rem;
+  box-shadow: 0 0.3rem 0.8rem rgba(0, 0, 0, 0.25);
+}
+
+#fm-playground #fmp-cmdmenu[hidden] {
+  display: none;
+}
+
+#fm-playground #fmp-cmdmenu button {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  padding: 0.35rem 0.6rem;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--md-code-fg-color);
+  font-family: "Fira Code", var(--md-code-font-family);
+  font-size: 0.64rem;
+  font-weight: 400;
+  text-align: left;
+}
+
+#fm-playground #fmp-cmdmenu button::before {
   content: "fm";
   color: var(--md-accent-fg-color);
   font-weight: 700;
 }
 
-#fm-playground #fmp-chips button:hover {
-  border-color: var(--md-accent-fg-color);
+#fm-playground #fmp-cmdmenu button:hover {
+  background: var(--md-default-fg-color--lightest);
+}
+
+#fm-playground #fmp-cmdmenu button span {
+  margin-left: auto;
+  padding-left: 0.8rem;
+  color: var(--md-default-fg-color--light);
+  font-family: var(--md-text-font-family, inherit);
+  text-align: right;
 }
 
 /* The gallery bar: the example menu, its reset, and the blurb — one row
