@@ -58,6 +58,7 @@ import tempfile
 import types
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -537,22 +538,26 @@ def test_playground_dynamic_completion_answers_fresh(tmp_path: Path):
     assert handoff == [], handoff
 
 
-def test_playground_editor_completion_carries_docstrings(tmp_path: Path):
-    """The editor's completion asks jedi over the buffer with footman and
-    toolroom importable — so a toolroom handle completes its real methods
-    and carries their docstrings, which is the whole point."""
+def _editor_complete(
+    tmp_path: Path, source: str, line: int, column: int
+) -> list[dict[str, Any]]:
+    """Drive the shipped editor completer in CPython. The source travels
+    by file — an argv carrying a literal newline does not survive the
+    Windows CreateProcess round-trip intact."""
     probe = tmp_path / "editor_probe.py"
     probe.write_text(
         _js_bootstrap()
-        + "\nimport sys\n"
+        + "\nimport sys\nfrom pathlib import Path as _P\n"
         + "a = sys.argv\n"
-        + "print(_fm_editor_complete(a[1], a[2], a[3], a[4]))\n",
+        + "src = _P(a[2]).read_text(encoding='utf-8')\n"
+        + "print(_fm_editor_complete(a[1], src, a[3], a[4]))\n",
         encoding="utf-8",
     )
-    source = "import json\njson.du"
+    src = tmp_path / "buffer.py"
+    src.write_text(source, encoding="utf-8")
     work = Path(tempfile.mkdtemp(dir=tmp_path))
     out = subprocess.run(
-        [sys.executable, str(probe), "{}", source, "2", "7"],
+        [sys.executable, str(probe), "{}", str(src), str(line), str(column)],
         capture_output=True,
         text=True,
         timeout=120,
@@ -561,24 +566,21 @@ def test_playground_editor_completion_carries_docstrings(tmp_path: Path):
         check=False,
     )
     assert out.returncode == 0, out.stderr
-    got = json.loads(out.stdout)
+    answer: list[dict[str, Any]] = json.loads(out.stdout)
+    return answer
+
+
+def test_playground_editor_completion_carries_docstrings(tmp_path: Path):
+    """The editor's completion asks jedi over the buffer with footman and
+    toolroom importable — so a toolroom handle completes its real methods
+    and carries their docstrings, which is the whole point."""
+    got = _editor_complete(tmp_path, "import json\njson.du", 2, 7)
     labels = [c["label"] for c in got]
     assert "dump" in labels and "dumps" in labels, labels
     dump = next(c for c in got if c["label"] == "dump")
     assert "info" in dump and "obj" in dump["info"], dump
 
-    source = "from toolroom import ruff\nruff.che"
-    out = subprocess.run(
-        [sys.executable, str(probe), "{}", source, "2", "8"],
-        capture_output=True,
-        text=True,
-        timeout=120,
-        cwd=work,
-        env={**os.environ, "_FM_PLAYGROUND_SIM": "1"},
-        check=False,
-    )
-    assert out.returncode == 0, out.stderr
-    got = json.loads(out.stdout)
+    got = _editor_complete(tmp_path, "from toolroom import ruff\nruff.che", 2, 8)
     labels = [c["label"] for c in got]
     assert "check" in labels, labels
 
