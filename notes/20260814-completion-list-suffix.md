@@ -1,6 +1,18 @@
 # Completion suffix for comma-continuable values — investigation brief
 
-OPEN — nothing built. Handoff for a session to design and (if ruled in)
+**BUILT — ruled in and shipped the same day (2026-08-14).** Willem ruled
+"let's go" on the proposal as written, all four opens resolved as
+recommended: bash takes the nospace trade, fish rides the candidate-side
+comma, dynamic values are in v1, and the names are `_MORE` /
+`\x00more` / `_EXIT_MORE = 102`. The design below is what was built,
+with one precision found during the build: a *dynamic positional* is
+marked from its first element too — that branch returns a pure
+`_DYNAMIC` reply (never the mixed menu), so the purity argument that
+marks attached values from the first element applies to it unchanged.
+The CHANGELOG carries what shipped; this note keeps the measurements
+and the reasoning.
+
+Original brief: handoff for a session to design and (if ruled in)
 build the lane. Willem's constraint, verbatim in spirit: **no
 playground-only behaviour** — the feature exists only if at least one
 real shell delivers it; the playground then mirrors the same signal.
@@ -8,9 +20,7 @@ real shell delivers it; the playground then mirrors the same signal.
 **2026-08-14, later the same day: every per-shell mechanism below is now
 MEASURED** (real interactive shells on a pty, minimal completers mirroring
 the hooks' shapes — zsh 5.9, bash 5.3, fish 4.8, nushell 0.114, pwsh 7.5).
-The measurements rewrote the itch — two of the five shells never had it —
-and a full design is proposed below ("The design (proposed)"). Awaiting
-Willem's ruling on the opens at the bottom; nothing is built.
+The measurements rewrote the itch — two of the five shells never had it.
 
 ## The itch
 

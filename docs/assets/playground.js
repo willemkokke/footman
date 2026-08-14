@@ -538,15 +538,21 @@ def _fm_complete(files_json, line):
     if not line or line.endswith(" "):
         words.append("")
     out = complete(_fm_manifest["tree"], words)
+    # The comma-continuation marker (exit 102 on a real shell) rides to the
+    # page as a leading element the JS strips into its glue. Compared
+    # literally — never imported — so the released wheel behind this page
+    # keeps completing whether or not it knows the marker yet.
+    more = [chr(0) + "more"] if out and out[0] == chr(0) + "more" else []
+    if more:
+        out = out[1:]
     if out and out[0] == _DYNAMIC:
-        return json.dumps(
-            _fm_dynamic(_fm_manifest["root"], out[1], out[2], out[3], out[4:])
-        )
+        fresh = _fm_dynamic(_fm_manifest["root"], out[1], out[2], out[3], out[4:])
+        return json.dumps(more + fresh if fresh else [])
     if out and out[0].startswith(chr(0)):
         # A file handoff needs a real shell's filename completion; the
         # elements after the marker are protocol payload, not candidates.
         return json.dumps([])
-    return json.dumps(out)
+    return json.dumps(more + out if out else [])
 `;
 
 /* ---------- the example gallery ---------- */
@@ -1040,12 +1046,15 @@ function initPlayground() {
     strip.replaceChildren();
   }
 
-  function insertCompletion(name) {
+  function insertCompletion(name, glued) {
     const cursor = args.selectionStart ?? args.value.length;
     const before = args.value.slice(0, cursor);
     const after = args.value.slice(cursor);
     const partial = before.match(/\S*$/)[0];
-    const glue = name.endsWith("=") ? "" : " ";
+    // `glued` mirrors the resolver's comma-continuation marker (exit 102 on
+    // a real shell): more list items may follow, so the comma is the next
+    // keystroke, not a deletion — the same reading bash/pwsh/nushell give it.
+    const glue = glued || name.endsWith("=") ? "" : " ";
     const head = before.slice(0, before.length - partial.length) + name + glue;
     args.value = head + after;
     args.selectionStart = args.selectionEnd = head.length;
@@ -1070,11 +1079,13 @@ function initPlayground() {
       const raw = fn(JSON.stringify(files), args.value.slice(0, cursor));
       fn.destroy?.();
       const candidates = JSON.parse(raw);
+      const glued = candidates[0] === "\u0000more";
+      if (glued) candidates.shift();
       const names = candidates.map((c) => c.split("\t")[0]);
       hideCandidates();
       if (!names.length) return;
       if (names.length === 1) {
-        insertCompletion(names[0]);
+        insertCompletion(names[0], glued);
         return;
       }
       const partial = args.value.slice(0, cursor).match(/\S*$/)[0];
@@ -1104,7 +1115,7 @@ function initPlayground() {
         // mousedown, not click: the input keeps focus and the strip stays.
         button.addEventListener("mousedown", (event) => {
           event.preventDefault();
-          insertCompletion(name);
+          insertCompletion(name, glued);
           hideCandidates();
         });
         strip.appendChild(button);

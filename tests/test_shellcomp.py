@@ -1194,6 +1194,161 @@ def test_bash_install_and_uninstall_agree_on_the_rc_line(home):
     assert "source" not in (home / ".bashrc").read_text()
 
 
+# --- exit 102: a comma-continuable value completes glued -------------------------
+# The resolver marks a reply whose candidates are elements of a comma-splitting
+# value by exiting 102 (candidates stay clean on stdout). zsh appends an
+# auto-removable ',' suffix, bash glues the cursor with nospace, fish rides
+# the comma on each candidate; pwsh and nushell never appended a space in the
+# first place, so 102 needs no reading there.
+
+_MORE_IDIOM = {
+    "zsh": "sfx=(-q -S ',')",
+    "bash": "(( ret == 102 )) && compopt -o nospace",
+    "fish": "test $ret -eq 102",
+}
+
+
+@pytest.mark.parametrize("shell", sorted(_MORE_IDIOM))
+def test_hook_glues_a_continuable_list_reply(shell):
+    body = _shellcomp.script_for(shell, "fm")
+    assert "102" in body
+    assert _MORE_IDIOM[shell] in body
+
+
+@pytest.mark.parametrize("shell", ("pwsh", "nushell"))
+def test_no_space_shells_need_no_102_branch(shell):
+    # Their insertion is already glued, and an unknown exit code falls
+    # through to the normal stdout parse — which is exactly the behaviour
+    # wanted, so the hooks stay untouched on purpose.
+    assert "102" not in _shellcomp.script_for(shell, "fm")
+
+
+@pytest.fixture
+def fm_csv_project_dir(home, tmp_path, monkeypatch):
+    """A project whose task takes a comma-splitting choices value."""
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\n")
+    (tmp_path / "tasks.py").write_text(
+        "from typing import Literal\n"
+        "from footman import task\n\n"
+        "@task\n"
+        "def deploy(regions: list[Literal['eu', 'us', 'ap']] | None = None):\n"
+        '    "Deploy."\n'
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("XDG_CACHE_HOME", str(home / ".cache"))
+    assert _app.run(["--list"]) == 0  # builds the manifest the hot path serves
+    return tmp_path
+
+
+@_posix_shell
+@pytest.mark.skipif(shutil.which("fish") is None, reason="fish not installed")
+def test_fish_rides_the_comma_on_a_continuable_value(home, fm_csv_project_dir):
+    """Exit 102 through fish's own engine: each candidate carries the comma,
+    which fish inserts with no trailing space (its measured native rule for
+    comma-ending completions)."""
+    script = home / "completion.fish"
+    script.write_text(_shellcomp.script_for("fish", "fm"), encoding="utf-8")
+    body = (
+        f"set -gx PATH {VENV_BIN} $PATH\n"
+        f'source "{script}"\n'
+        'complete -C "fm deploy --regions=e"\n'
+        'complete -C "fm deploy --regions=eu,"\n'
+        'complete -C "fm de"\n'
+    )
+    out = subprocess.run(
+        ["fish", "-c", body],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        cwd=fm_csv_project_dir,
+    )
+    assert out.returncode == 0, out.stderr
+    assert "--regions=eu," in out.stdout  # the first element already rides it
+    assert "--regions=eu,us," in out.stdout  # and mid-list chains
+    assert "--regions=eu,eu," not in out.stdout  # the typed item is not re-offered
+    # An unmarked reply (a task name) stays comma-free.
+    assert "deploy," not in out.stdout
+
+
+def _frames_text(chunks, width: int, height: int) -> list[str]:
+    """Every rendered frame as plain text, so a transient state (the comma
+    before zsh's auto-remove takes it back off) can be asserted alongside
+    the final line."""
+    from footman.tasks.docs import _screens
+
+    frames = _screens(chunks, width=width, height=height)
+    return [
+        "\n".join("".join(ch for ch, _ in row).rstrip() for row in rows)
+        for _, rows in frames
+    ]
+
+
+_needs_cast_deps = pytest.mark.skipif(
+    importlib.util.find_spec("rich") is None
+    or importlib.util.find_spec("pyte") is None,
+    reason="rich+pyte (the shots group) not installed",
+)
+
+
+@_posix_shell
+@_needs_cast_deps
+@pytest.mark.skipif(shutil.which("zsh") is None, reason="zsh not installed")
+def test_zsh_inserts_an_auto_removable_comma(home, fm_csv_project_dir):
+    """The real hook in a real interactive zsh: accepting an element writes
+    the comma as a suffix, and typing a space takes it back off."""
+    import tempfile
+
+    from footman.tasks.docs import _boot_shell, _pty_session, keystrokes
+
+    with tempfile.TemporaryDirectory() as scratch:
+        argv, env = _boot_shell("zsh", "fm", Path(scratch))
+        chunks = _pty_session(
+            argv,
+            width=90,
+            height=14,
+            sends=keystrokes(
+                ("fm deploy --regions=e", "<TAB>", "<WAIT:2500>", " X", "<SETTLE>")
+            ),
+            settle=1.5,
+            env_extra=env,
+            cwd=fm_csv_project_dir,
+        )
+    frames = _frames_text(chunks, width=90, height=14)
+    assert frames, "the pty session rendered nothing"
+    assert any("--regions=eu," in f for f in frames)  # the suffix landed
+    assert "--regions=eu X" in frames[-1]  # ...and the space removed it
+
+
+@_posix_shell
+@_needs_cast_deps
+def test_bash_glues_the_cursor_on_a_continuable_value(home, fm_csv_project_dir):
+    """The real hook in a real interactive bash: exit 102 sets nospace, so
+    the next keystroke lands right after the accepted element."""
+    import tempfile
+
+    from footman.tasks.docs import _boot_shell, _pty_session, keystrokes
+
+    if _bash_exe() is None:
+        pytest.skip("bash is not installed")
+    with tempfile.TemporaryDirectory() as scratch:
+        argv, env = _boot_shell("bash", "fm", Path(scratch))
+        chunks = _pty_session(
+            argv,
+            width=90,
+            height=14,
+            sends=keystrokes(
+                ("fm deploy --regions=e", "<TAB>", "<WAIT:2500>", "X", "<SETTLE>")
+            ),
+            settle=1.5,
+            env_extra=env,
+            keep_echo=True,  # readline honours the tty's echo flag
+            cwd=fm_csv_project_dir,
+        )
+    frames = _frames_text(chunks, width=90, height=14)
+    assert frames, "the pty session rendered nothing"
+    assert "--regions=euX" in frames[-1]  # glued: no trailing space to delete
+
+
 # A `matching()` glob arrives as one line of stdout beside exit 100. Four of
 # the five hooks narrow their file walk by it; nushell deliberately does not
 # (filtering means returning a list of our own, which replaces its built-in

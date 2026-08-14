@@ -62,6 +62,16 @@ _FILES = "\x00files"  # internal sentinel: complete() -> complete_cli()
 _EXIT_FILES = 100  # complete_cli exit code the hooks read as "complete files"
 _FILES_CSV = "\x00files-csv"  # a comma-splitting path value, mid-list
 _EXIT_FILES_CSV = 101  # "complete files after the last comma" exit code
+# A leading marker on an otherwise-normal reply: the candidates are elements
+# of a comma-splitting value, so more items may follow. `complete_cli` strips
+# it into exit 102 and each hook applies its native spelling — zsh an
+# auto-removable `,` suffix, bash `nospace`, fish a candidate-side comma; a
+# hook that doesn't know 102 parses stdout exactly as before. Marked on
+# shape (`multiple` and not `nosplit`), never on items remaining: duplicates
+# are legal (a list holds what you put in it), so "remaining" was never the
+# question, and zsh takes an unwanted comma back off anyway.
+_MORE = "\x00more"
+_EXIT_MORE = 102  # "insert glued: more items may follow" exit code
 
 
 _DYNAMIC = "\x00dynamic"  # internal sentinel: a dynamic completer, recompute fresh
@@ -190,16 +200,21 @@ def _attached_value(
     head, cur = _csv_head(p, valpart)
     if "path" in p.get("types", []):
         return [_files_sentinel(p, head)]
+    # The value reply is pure — nothing but this value's candidates — so a
+    # comma-splitting shape marks it continuable from the first element.
+    csv = bool(p.get("multiple")) and not p.get("nosplit")
     if p.get("dynamic"):  # recompute fresh, never the baked snapshot
         prefix = head if bash_split else f"{optname}={head}"
-        return [_DYNAMIC, cur, prefix, p["name"], *path]
+        out = [_DYNAMIC, cur, prefix, p["name"], *path]
+        return [_MORE, *out] if csv else out
     given = valpart.split(",")[:-1] if head else []
     choices = [c for c in p.get("choices", ()) if c.startswith(cur) and c not in given]
-    return (
+    out = (
         [head + c for c in choices]
         if bash_split
         else [f"{optname}={head}{c}" for c in choices]
     )
+    return [_MORE, *out] if csv and out else out
 
 
 def _consume_globals(prior: list[str]) -> list[str]:
@@ -613,7 +628,11 @@ def complete(tree: dict[str, Any], words: list[str]) -> list[str]:
             if "path" in pending.get("types", []):
                 return [_files_sentinel(pending, head)]
             if pending.get("dynamic"):  # recompute fresh, never the baked snapshot
-                return [_DYNAMIC, cur, head, pending["name"], *path]
+                out = [_DYNAMIC, cur, head, pending["name"], *path]
+                # Pure like the attached branch, so shape alone marks it.
+                if pending.get("multiple") and not pending.get("nosplit"):
+                    return [_MORE, *out]
+                return out
 
     # Option position: this task's flags/options — minus the ones already
     # given, unless the param legitimately repeats — plus what the next bare
@@ -625,14 +644,17 @@ def complete(tree: dict[str, Any], words: list[str]) -> list[str]:
         if name not in seg.used or p.get("multiple") or p.get("mapping")
     ]
     next_heads: list[str] = []
+    consuming: dict[str, Any] | None = None  # the positional the menu feeds
     if seg.filled < len(seg.fixed):
-        candidates += _choice_tokens(seg.fixed[seg.filled], partial)
-        if seg.fixed[seg.filled].get("optional") and not partial.startswith("-"):
+        consuming = seg.fixed[seg.filled]
+        candidates += _choice_tokens(consuming, partial)
+        if consuming.get("optional") and not partial.startswith("-"):
             # The boundary documents itself: an optional positional's slot
             # offers `+` — run without it, the next word starts a task.
             candidates.append("+")
     elif seg.rest is not None:
-        candidates += _choice_tokens(seg.rest, partial)
+        consuming = seg.rest
+        candidates += _choice_tokens(consuming, partial)
     elif not partial.startswith("-"):
         next_heads = _address_candidates(tree, partial)
     seen: dict[str, None] = {}
@@ -649,6 +671,12 @@ def complete(tree: dict[str, Any], words: list[str]) -> list[str]:
             rows.append(_cand(c, ""))
             continue
         rows += [_cand(t, d) for t, d in _opt_rows(c, spec, spec.get("doc", ""))]
+    # A positional's first element shares this menu with option rows, so it
+    # stays unmarked — a per-reply signal must not glue those. Mid-list the
+    # menu is provably pure (no option name can prefix-match a partial that
+    # holds a comma), and the non-empty csv head says exactly that.
+    if rows and consuming is not None and _csv_head(consuming, partial)[0]:
+        return [_MORE, *rows, *next_heads]
     return rows + next_heads
 
 
@@ -938,6 +966,12 @@ def complete_cli(args: list[str]) -> int:
         ):
             return 0  # cold and couldn't build in time — stay silent and fast
     out = complete(data["tree"], args)
+    # The continuation marker leaves as an exit code, so the candidates on
+    # stdout stay clean for every hook — including the ones that have never
+    # heard of 102 and just parse them.
+    more = bool(out) and out[0] == _MORE
+    if more:
+        out = out[1:]
     if len(out) == 1 and out[0].split("\t", 1)[0] in (_FILES, _FILES_CSV):
         # A path value: signal the hook to complete files. `_FILES_CSV` means
         # after the last comma. (Only ever raised with a comma already typed,
@@ -964,10 +998,10 @@ def complete_cli(args: list[str]) -> int:
         if fresh is not None:
             _emit([prefix + c for c in fresh if c.startswith(partial)])
         _maybe_refresh(manifest, data)
-        return 0
+        return _EXIT_MORE if more else 0
     _emit(out)
     _maybe_refresh(manifest, data)  # SWR: refresh the baked fallback + structural set
-    return 0
+    return _EXIT_MORE if more else 0
 
 
 def main() -> int:
