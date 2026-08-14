@@ -13,9 +13,13 @@ machine, and nothing you type leaves it.
 
 The browser sandbox, said plainly: it has no processes and one thread, so
 every `run("…")` child is **simulated** — it succeeds and its output says
-`[simulated]` — and runs are sequential. The page's filesystem holds only
-the editor's files, so a path requirement (`exists`/`isfile`/`isdir`)
-**passes without looking** — nothing it could ask for is there. Everything
+`[simulated]` — and runs are sequential. `run(shell=True)` resolves to a
+stand-in shell, since the simulated child never executes it. The page's
+filesystem holds only the editor's files, so a path requirement
+(`exists`/`isfile`/`isdir`) **passes without looking** — nothing it could
+ask for is there. A tab named `stdin` is the pipe, not a file: its text
+feeds the run's stdin, and stdin-bound parameters read it exactly as they
+would a real pipe. Everything
 else is the real thing: parsing, eager validation, taught errors,
 scheduling, `--json`, `--dry-run` plans — and **`fm test` runs the real
 pytest**, on toolroom's in-process path, right here in the page (the page
