@@ -1072,24 +1072,34 @@ def test_nosplit_value_keeps_commas_literal_in_completion():
 
 
 def test_csv_choice_option_completes_the_tail_item():
+    from footman._complete import _MORE
+
     tree = _csv_tree()
     # Whole-token shells re-attach the head; the typed item is not re-offered.
+    # The reply leads with the continuation marker: these candidates are
+    # elements of a comma-splitting value, so more may follow.
     assert set(complete(tree, ["lint", "--tags=alpha,"])) == {
+        _MORE,
         "--tags=alpha,beta",
         "--tags=alpha,gamma",
     }
-    assert complete(tree, ["lint", "--tags=alpha,g"]) == ["--tags=alpha,gamma"]
+    assert complete(tree, ["lint", "--tags=alpha,g"]) == [_MORE, "--tags=alpha,gamma"]
     # bash's `=`-split word completes bare values, the head still attached.
-    assert complete(tree, ["lint", "--tags", "=", "alpha,g"]) == ["alpha,gamma"]
+    assert complete(tree, ["lint", "--tags", "=", "alpha,g"]) == [
+        _MORE,
+        "alpha,gamma",
+    ]
 
 
 def test_csv_dynamic_option_recomputes_the_tail():
-    from footman._complete import _DYNAMIC
+    from footman._complete import _DYNAMIC, _MORE
 
     tree = _csv_tree()
     # The typed head folds into the emission prefix; the fresh recompute
-    # filters on the tail item alone.
+    # filters on the tail item alone. The continuation marker composes with
+    # the dynamic sentinel — a dynamic list value is comma-continuable too.
     assert complete(tree, ["lint", "--projects=alpha,b"]) == [
+        _MORE,
         _DYNAMIC,
         "b",
         "--projects=alpha,",
@@ -1097,6 +1107,7 @@ def test_csv_dynamic_option_recomputes_the_tail():
         "lint",
     ]
     assert complete(tree, ["lint", "--projects", "=", "alpha,b"]) == [
+        _MORE,
         _DYNAMIC,
         "b",
         "alpha,",
@@ -1114,10 +1125,129 @@ def test_csv_path_positional_signals_csv_files():
 
 
 def test_csv_choice_positional_completes_the_tail_item():
+    from footman._complete import _MORE
+
     tree = _csv_tree()
     out = complete(tree, ["stage", "dev,"])
     assert "dev,prod" in out
     assert "dev,dev" not in out  # the typed item is not re-offered
+    assert out[0] == _MORE  # mid-list the menu is pure, so it is marked
+
+
+# --- the continuation marker: where it rides and where it must not ------------
+#
+# `\x00more` leads a reply whose candidates are elements of a comma-splitting
+# value — `complete_cli` strips it into exit 102, the playground into its
+# glue. Marked on shape (`multiple` and not `nosplit`), never on items
+# remaining; and only on replies that are provably pure value menus.
+
+
+def test_csv_choice_option_marked_from_the_first_element():
+    from footman._complete import _MORE
+
+    tree = _csv_tree()
+    # The attached reply is pure — nothing but this value's candidates — so
+    # the first element is already continuable.
+    out = complete(tree, ["lint", "--tags="])
+    assert out[0] == _MORE
+    assert set(out[1:]) == {"--tags=alpha", "--tags=beta", "--tags=gamma"}
+
+
+def test_scalar_choice_value_is_never_marked():
+    from footman._complete import _MORE
+
+    with registry.capture() as root:
+
+        @task
+        def paint(colour: Literal["red", "green"] = "red"):
+            "Paint."
+
+    tree = _manifest.build_manifest(root)["tree"]
+    assert _MORE not in complete(tree, ["paint", "--colour="])
+    assert _MORE not in complete(tree, ["paint", "--colour=r"])
+
+
+def test_nosplit_value_is_never_marked():
+    from footman._complete import _MORE
+
+    tree = _csv_tree()
+    # nosplit: commas are part of the value, so there is no list to continue.
+    assert _MORE not in complete(tree, ["lint", "--names=a"])
+    assert _MORE not in complete(tree, ["lint", "--names=a,b"])
+
+
+def test_positional_first_element_is_not_marked():
+    from footman._complete import _MORE
+
+    with registry.capture() as root:
+
+        @task
+        def stage(envs: Many[Literal["dev", "prod"]], fix: bool = False):
+            "Stage."
+
+    tree = _manifest.build_manifest(root)["tree"]
+    # The first element of a positional shares its menu with option rows —
+    # a per-reply marker must not glue those. Mid-list the menu is pure.
+    out = complete(tree, ["stage", ""])
+    assert _MORE not in out
+    assert "dev" in out and "--fix" in out  # the mixed menu, proven mixed
+    assert complete(tree, ["stage", "dev,"])[0] == _MORE  # pure mid-list
+
+
+def test_empty_reply_is_not_marked():
+    from footman._complete import _MORE
+
+    tree = _csv_tree()
+    # Everything already given: nothing to offer, so nothing to mark.
+    assert _MORE not in complete(tree, ["lint", "--tags=alpha,beta,gamma,"])
+
+
+def test_csv_files_stay_a_files_signal_not_a_marked_reply():
+    from footman._complete import _FILES_CSV, _MORE
+
+    tree = _csv_tree()
+    # Path values keep their own protocol (exit 100/101): the shell walks
+    # the filesystem there, and the hooks' file branches already glue.
+    out = complete(tree, ["lint", "--paths=src,"])
+    assert out == [_FILES_CSV]
+    assert _MORE not in out
+
+
+def test_complete_cli_exits_more_with_clean_candidates(tmp_path, capsys):
+    import json
+
+    from footman._complete import _EXIT_MORE
+
+    with registry.capture() as root:
+
+        @task
+        def stage(envs: Many[Literal["dev", "prod"]]):
+            "Stage."
+
+    m = tmp_path / "m.json"
+    m.write_text(json.dumps(_manifest.build_manifest(root)))
+    rc = complete_cli(["--manifest", str(m), "--", "stage", "dev,"])
+    assert rc == _EXIT_MORE
+    out = capsys.readouterr().out
+    # The marker leaves as the exit code alone: stdout is candidates only,
+    # so a hook that has never heard of 102 parses them exactly as before.
+    assert out.splitlines() == ["dev,prod"]
+    assert chr(0) not in out
+
+
+def test_complete_cli_unmarked_reply_still_exits_zero(tmp_path, capsys):
+    import json
+
+    with registry.capture() as root:
+
+        @task
+        def stage(envs: Many[Literal["dev", "prod"]]):
+            "Stage."
+
+    m = tmp_path / "m.json"
+    m.write_text(json.dumps(_manifest.build_manifest(root)))
+    assert complete_cli(["--manifest", str(m), "--", "sta"]) == 0
+    assert "stage" in capsys.readouterr().out
 
 
 def test_complete_cli_exits_csv_files_mid_list(tmp_path, capsys):

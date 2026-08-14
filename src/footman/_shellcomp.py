@@ -110,6 +110,11 @@ _{fn}_complete() {{
     # blunt fallback — no regression, it already behaved that way.
     compopt +o default 2>/dev/null
     [[ -n $out ]] || return 0
+    # Exit 102 = the candidates continue a comma-splitting value: glue the
+    # cursor (no trailing space), so the comma — or the closing space — is
+    # the next keystroke instead of a deletion. bash 3.2 has no compopt and
+    # keeps the space, exactly as before.
+    (( ret == 102 )) && compopt -o nospace 2>/dev/null
     # Read one candidate per line and %q-quote each, so a candidate like *.md or
     # "a b" is inserted literally — never pathname-expanded the way a
     # split-and-glob command substitution into the array would. bash has no
@@ -133,7 +138,7 @@ if ! typeset -f compdef >/dev/null 2>&1; then
     autoload -Uz compinit && compinit -u
 fi
 _{fn}_complete() {{
-    local -a items
+    local -a items sfx
     local raw line ret
     # (@) + quotes keeps the empty current word when the cursor follows a
     # space — unquoted expansion would drop it.
@@ -163,7 +168,12 @@ _{fn}_complete() {{
             items+=("$line")
         fi
     done
-    (( ${{#items}} )) && _describe -t {fn} '{prog}' items
+    # Exit 102 = the candidates continue a comma-splitting value: append the
+    # comma as an auto-removable suffix (extra compadd options ride through
+    # _describe) — accepting `eu` writes `eu,`, and a space or Enter takes
+    # the comma back off.
+    (( ret == 102 )) && sfx=(-q -S ',')
+    (( ${{#items}} )) && _describe -t {fn} '{prog}' items $sfx
 }}
 compdef _{fn}_complete {prog}
 """
@@ -217,6 +227,12 @@ function __{fn}_complete
         else
             __fish_complete_path $tok
         end
+    else if test $ret -eq 102; and set -q out[1]
+        # Exit 102 = the candidates continue a comma-splitting value: fish
+        # inserts a candidate that ends in a comma with no trailing space,
+        # so the comma rides each value half and the next element is one
+        # Tab away. The description (after the tab) stays untouched.
+        printf '%s\\n' $out | string replace -r -- '^([^\\t]*)' '$1,'
     else if set -q out[1]
         printf '%s\n' $out
     end

@@ -60,3 +60,21 @@ fish, and pwsh complete the segment after the last comma with the typed
 items kept in place. nushell's external-completer protocol has no
 version-stable way to rewrite part of a token, so it completes the first
 item natively and stays silent after a comma.
+
+## Continuing a list
+
+Accepting one item of a comma-splitting value doesn't end the list, and
+each shell continues it in its own accent:
+
+- **zsh** writes the comma as a removable suffix: accept `eu`, get
+  `--regions=eu,`, and Tab chains straight into the next item — while a
+  space or ++enter++ takes the comma back off, so stopping costs nothing.
+- **bash** holds the cursor right after the accepted item (no trailing
+  space), so the comma — or the closing space — is your next keystroke.
+  The elderly bash 3.2 that macOS ships has no `compopt` and keeps its
+  trailing space, exactly as before.
+- **fish** carries the comma on each candidate: its pager shows
+  `--regions=eu,` and inserts it with the cursor glued. A comma left on
+  the final item is harmless — the value parses the same without it.
+- **pwsh** and **nushell** already land the cursor right after every
+  completion they insert, which is this behaviour by default.

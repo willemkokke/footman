@@ -233,6 +233,15 @@ item, and values already in the list aren't offered again. A
 [`nosplit`](typing.md#comma-splitting-and-nosplit) parameter keeps its
 commas literal, in completion as at the prompt.
 
+Accepting an item doesn't end the list. footman tells the shell the value
+can continue, and each shell says so in its own accent: zsh writes the
+comma for you as a removable suffix — accept `eu` and get `--regions=eu,`,
+Tab again for the next item, while a space or ++enter++ takes the comma
+back off; bash leaves the cursor right after the item, so the comma (or
+the closing space) is your next keystroke instead of a deletion; fish
+carries the comma on each candidate it inserts. pwsh and nushell already
+land the cursor right after any completion, which is exactly this.
+
 ## Your shell
 
 One command, and footman detects which shell invoked it (by walking the

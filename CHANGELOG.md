@@ -7,6 +7,24 @@ versions may include breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- **Completing a list item no longer ends the list.** Accepting an element
+  of a comma-splitting value (`--regions=e<TAB>`) used to plant a trailing
+  space, so continuing the list meant deleting it and typing the comma.
+  The resolver now marks such a reply with exit code `102` — candidates on
+  stdout stay exactly as before, so hooks and resolvers of different ages
+  degrade to the old behaviour cleanly — and each hook answers in its
+  shell's own accent: **zsh** appends the comma as a removable suffix
+  (accept `eu`, get `--regions=eu,`; a space or Enter takes it back off),
+  **bash** glues the cursor so the comma is the next keystroke, and
+  **fish** rides the comma on each inserted candidate. pwsh and nushell
+  already glue every completion and are untouched. Applies to choice
+  values, `suggest()` completers, and mid-list positionals alike; `nosplit`
+  values and path values keep their own protocols. The playground prompt
+  reads the same marker. Reinstall or re-`eval` your hook
+  (`fm --install-completion`) to pick the new behaviour up.
+
 ### Fixed
 
 - **A bare import of a plugin module no longer spends its declarations.**
